@@ -1,0 +1,83 @@
+name: Release adapters
+
+# Publish each adapter as an immutable, content-addressed registry
+# artifact (RFC-48 D4/D6). Tagging `v<x.y.z>` cuts a release; each adapter
+# carries its own RFC-47 semver in its `adapter.yaml.version`, which is
+# the published `(name, version)` identity.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  # Canonical first-party registry host. Must match the namespace mapping
+  # `specify -> <host>` that `specify init` writes into a consumer's
+  # `.specify/wasm-pkg.toml`, so a published `specify:<name>@<ver>`
+  # resolves back here. Override via repository variable for a mirror.
+  REGISTRY: ${{ vars.SPECIFY_REGISTRY || 'augentic.io' }}
+  REGISTRY_NAMESPACE: specify
+
+jobs:
+  publish:
+    name: Publish adapter artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout adapters
+        uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip2
+      - uses: Swatinem/rust-cache@v2
+
+      # RFC-49 T5 cross-repo seam: the platform owns the `specify` binary
+      # that packs/publishes/verifies the artifact.
+      - name: Checkout platform binary source
+        uses: actions/checkout@v4
+        with:
+          repository: augentic/specify-cli
+          ref: main
+          path: .platform
+
+      - name: Build specify
+        working-directory: .platform
+        run: cargo build --release -p specify --locked
+
+      - name: Build, publish, and verify each adapter
+        shell: bash
+        env:
+          SPECIFY: ${{ github.workspace }}/.platform/target/release/specify
+          # `specify adapter publish` reads registry credentials from the
+          # environment (bearer SPECIFY_REGISTRY_TOKEN, else basic
+          # SPECIFY_REGISTRY_USERNAME/_PASSWORD).
+          SPECIFY_REGISTRY_USERNAME: ${{ secrets.SPECIFY_REGISTRY_USERNAME }}
+          SPECIFY_REGISTRY_PASSWORD: ${{ secrets.SPECIFY_REGISTRY_PASSWORD }}
+          SPECIFY_REGISTRY_TOKEN: ${{ secrets.SPECIFY_REGISTRY_TOKEN }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for dir in adapters/targets/*/ adapters/sources/*/; do
+            [ -f "${dir}adapter.yaml" ] || continue
+            name="$(basename "${dir}")"
+            version="$(sed -n 's/^version:[[:space:]]*"\{0,1\}\([^"[:space:]]*\)"\{0,1\}.*/\1/p' "${dir}adapter.yaml" | head -1)"
+            if [ -z "${version}" ]; then
+              echo "::error::no version in ${dir}adapter.yaml"; exit 1
+            fi
+            ref="${REGISTRY}/${REGISTRY_NAMESPACE}/${name}:${version}"
+            echo "::group::${name}@${version} -> ${ref}"
+            # Recompile the committed adapter.wasm for adapters that bundle
+            # an extension; prose-only adapters pack without one.
+            if [ -d "${dir}extension" ]; then
+              "${SPECIFY}" adapter build --path "${dir}" --refresh-extension
+            else
+              "${SPECIFY}" adapter build --path "${dir}"
+            fi
+            "${SPECIFY}" adapter publish --path "${dir}" --reference "${ref}"
+            echo "::endgroup::"
+          done

@@ -1,0 +1,55 @@
+[workspace]
+resolver = "3"
+members = [
+    "adapters/targets/contracts/extension",
+    "adapters/targets/vectis/extension",
+    "shared/vectis-shell-detect",
+]
+
+# The Specify adapters repo (RFC-48 / RFC-49 T6). Each bundled adapter
+# co-locates its WASI extension crate under `adapters/**/extension/`; the
+# extension wasm builds here and is committed beside `adapter.yaml` as the
+# adapter's `adapter.wasm`. `shared/` holds the host-and-extension shared
+# crates forked from the platform repo (RFC-48 step-8 one-time fork).
+
+[workspace.package]
+authors = ["Augentic"]
+edition = "2024"
+homepage = "https://augentic.io"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/augentic/specify-adapters"
+rust-version = "1.93"
+version = "0.4.0"
+publish = false
+
+[workspace.dependencies]
+clap = { version = "4", features = ["derive", "env"] }
+jsonschema = { version = "0.46", default-features = false }
+semver = "1"
+serde = { version = "1", features = ["derive"] }
+serde-saphyr = "0.0.26"
+serde_json = "1"
+sha2 = "0.11"
+thiserror = "2"
+toml = "1"
+assert_cmd = "2"
+tempfile = "3"
+resvg = { version = "0.47", default-features = false }
+usvg = { version = "0.47", default-features = false }
+tiny-skia = { version = "0.12", default-features = false }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+
+[workspace.lints.rust]
+# Leaner lint posture than the platform workspace. The vectis scaffold tests
+# legitimately call `std::env::set_var` (now unsafe in 2024), so we cannot
+# forbid `unsafe_code` outright; production paths in these crates never reach
+# for `unsafe` blocks regardless.
+unused_extern_crates = "warn"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+
+[profile.release]
+lto = true
+opt-level = 2
+strip = true
