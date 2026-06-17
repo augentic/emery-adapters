@@ -70,3 +70,8 @@ jobs:
 
       - name: Lint adapters against the platform contract
         run: .platform/target/release/specify lint framework --framework-root .
+
+      - name: adapter build smoke (C1 regression guard)
+        run: |
+          .platform/target/release/specify adapter build --path adapters/targets/contracts --dry-run
+          .platform/target/release/specify adapter build --path adapters/targets/vectis --dry-run
