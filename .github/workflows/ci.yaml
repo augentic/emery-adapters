@@ -46,7 +46,7 @@ jobs:
           set -euo pipefail
           branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME:-main}}"
           if git ls-remote --exit-code --heads \
-            https://github.com/augentic/specify-cli "${branch}" >/dev/null 2>&1; then
+            https://github.com/augentic/specify "${branch}" >/dev/null 2>&1; then
             echo "ref=${branch}" >> "${GITHUB_OUTPUT}"
           else
             echo "ref=main" >> "${GITHUB_OUTPUT}"
@@ -55,23 +55,23 @@ jobs:
       - name: Checkout platform binary source
         uses: actions/checkout@v4
         with:
-          repository: augentic/specify-cli
+          repository: augentic/specify
           ref: ${{ steps.platform.outputs.ref }}
           path: .platform
 
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: .platform
+          workspaces: .platform/cli
 
       - name: Build specify
-        working-directory: .platform
+        working-directory: .platform/cli
         run: cargo build --release -p specify --locked
 
       - name: Lint adapters against the platform contract
-        run: .platform/target/release/specify lint framework --framework-root .
+        run: .platform/cli/target/release/specify lint framework --framework-root .
 
       - name: adapter build smoke (C1 regression guard)
         run: |
-          .platform/target/release/specify adapter build --path adapters/targets/contracts --dry-run
-          .platform/target/release/specify adapter build --path adapters/targets/vectis --dry-run
+          .platform/cli/target/release/specify adapter build --path adapters/targets/contracts --dry-run
+          .platform/cli/target/release/specify adapter build --path adapters/targets/vectis --dry-run

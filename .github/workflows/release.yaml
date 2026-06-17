@@ -41,18 +41,18 @@ jobs:
       - name: Checkout platform binary source
         uses: actions/checkout@v4
         with:
-          repository: augentic/specify-cli
+          repository: augentic/specify
           ref: main
           path: .platform
 
       - name: Build specify
-        working-directory: .platform
+        working-directory: .platform/cli
         run: cargo build --release -p specify --locked
 
       - name: Build, publish, and verify each adapter
         shell: bash
         env:
-          SPECIFY: ${{ github.workspace }}/.platform/target/release/specify
+          SPECIFY: ${{ github.workspace }}/.platform/cli/target/release/specify
           # `specify adapter publish` reads registry credentials from the
           # environment (bearer SPECIFY_REGISTRY_TOKEN, else basic
           # SPECIFY_REGISTRY_USERNAME/_PASSWORD).
