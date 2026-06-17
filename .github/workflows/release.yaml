@@ -46,13 +46,13 @@ jobs:
           path: .platform
 
       - name: Build specify
-        working-directory: .platform/cli
+        working-directory: .platform/engine
         run: cargo build --release -p specify --locked
 
       - name: Build, publish, and verify each adapter
         shell: bash
         env:
-          SPECIFY: ${{ github.workspace }}/.platform/cli/target/release/specify
+          SPECIFY: ${{ github.workspace }}/.platform/engine/target/release/specify
           # `specify adapter publish` reads registry credentials from the
           # environment (bearer SPECIFY_REGISTRY_TOKEN, else basic
           # SPECIFY_REGISTRY_USERNAME/_PASSWORD).

@@ -62,16 +62,16 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: .platform/cli
+          workspaces: .platform/engine
 
       - name: Build specify
-        working-directory: .platform/cli
+        working-directory: .platform/engine
         run: cargo build --release -p specify --locked
 
       - name: Lint adapters against the platform contract
-        run: .platform/cli/target/release/specify lint framework --framework-root .
+        run: .platform/engine/target/release/specify lint framework --framework-root .
 
       - name: adapter build smoke (C1 regression guard)
         run: |
-          .platform/cli/target/release/specify adapter build --path adapters/targets/contracts --dry-run
-          .platform/cli/target/release/specify adapter build --path adapters/targets/vectis --dry-run
+          .platform/engine/target/release/specify adapter build --path adapters/targets/contracts --dry-run
+          .platform/engine/target/release/specify adapter build --path adapters/targets/vectis --dry-run
