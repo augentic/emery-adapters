@@ -23,7 +23,7 @@ Delta-spec merging, baseline coherence validation, lifecycle transition, and the
 Before invoking `specify slice merge`, re-run the deterministic validator against the staged slice contents so an invalid `composition.yaml` blocks the merge:
 
 ```bash
-specify tool run vectis -- validate composition
+specify extension run vectis -- validate composition
 ```
 
 The validator discovers `${SLICE_DIR}/composition.yaml` first (slice-local takes precedence) and auto-invokes `tokens` / `assets` modes against any sibling `tokens.yaml` / `assets.yaml`. Errors are blocking — surface the report verbatim and stop. Warnings forward into the operator-facing summary but do not block. When the slice is core-only (no `composition.yaml` in `${SLICE_DIR}`), the validator exits cleanly without performing the wired-mode checks.
@@ -42,7 +42,7 @@ Review every UI input delta alongside the spec / design / task changes in the `s
 After `specify slice merge` exits zero, re-run the deterministic validator against the merged baseline:
 
 ```bash
-specify tool run vectis -- validate composition
+specify extension run vectis -- validate composition
 ```
 
 The validator discovers the now-merged baseline `composition.yaml` and auto-invokes `tokens` / `assets` modes against any sibling `tokens.yaml` / `assets.yaml`. Run this even when the current slice did not generate any platform code, because later shell work will consume the merged baseline input set. Validation findings trigger a stop hint with `failure-kind: post-merge-validator`; warnings flow into the operator-facing summary; clean runs are silent.

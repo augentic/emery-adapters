@@ -9,7 +9,7 @@ Follow the [`/spec:merge` skill](../../../../plugins/spec/skills/merge/SKILL.md)
 After `specify slice merge` exits zero (i.e. the slice's `contracts/` deltas have been promoted into root `contracts/` and the lifecycle has transitioned to `merged`), run the declared tool against the now-updated baseline:
 
 ```bash
-specify tool run contract -- "$PROJECT_ROOT/contracts" --format json > /tmp/contract-findings.json
+specify extension run contract -- "$PROJECT_ROOT/contracts" --format json > /tmp/contract-findings.json
 case $? in
   0) ;;  # clean — baseline is well-formed
   1) ;;  # findings present — emit stop hint with `failure-kind: post-merge-validator`
@@ -37,7 +37,7 @@ The JSON envelope is the canonical shape callers parse. Field reference (matches
 }
 ```
 
-When the slice does not touch `contracts/` at all (e.g. a planning-metadata-only contracts slice), still run the validator after merge — the baseline as a whole must remain well-formed, and the tool is cheap on a clean baseline. When `contracts/` is absent entirely, `specify tool run` exits `2` before or during validator invocation; emit a stop hint with `failure-kind: post-merge-validator`.
+When the slice does not touch `contracts/` at all (e.g. a planning-metadata-only contracts slice), still run the validator after merge — the baseline as a whole must remain well-formed, and the tool is cheap on a clean baseline. When `contracts/` is absent entirely, `specify extension run` exits `2` before or during validator invocation; emit a stop hint with `failure-kind: post-merge-validator`.
 
 If the operator pipeline (CI annotations, dashboards, `specify lint`) needs to re-surface envelope findings as `LintFinding` records (see `schemas/diagnostics/diagnostic.schema.json` and [`../references/report-shape.md`](../references/report-shape.md#relationship-to-lintfinding)), the mapping is: `findings[].rule-id` → `rule-id`, `findings[].path` → `location.path`, `target-adapter: contracts`, and the contract-domain payload (`detail`, any compatibility classification such as `additive` / `breaking` / `ambiguous` / `unverifiable`) lives inside `evidence.kind: structured` with the contract data under `evidence.data`. The closed `LintFinding` severity enum (`critical` / `important` / `suggestion` / `optional`) is separate from any compatibility classification — classifiers remain contract-domain evidence fields.
 

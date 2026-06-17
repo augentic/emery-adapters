@@ -40,7 +40,7 @@ All phase sub-briefs assume these symbols are resolved by `/spec:build` before t
 
 Every slice carries the full app platform set from `project.yaml.platforms` (stamped verbatim into `proposal.md ## Platforms` by synthesis). Each slice signifies core + all declared shell work; build determines the **actual per-platform work**:
 
-- **create** — the shell tree is absent on disk → the bootstrap slice's build runs `specify tool run vectis -- scaffold <platform> <APP_NAME> [--caps <csv>]` to stand up the minimum shell. Only `core`, `ios`, and `android` have scaffold support today.
+- **create** — the shell tree is absent on disk → the bootstrap slice's build runs `specify extension run vectis -- scaffold <platform> <APP_NAME> [--caps <csv>]` to stand up the minimum shell. Only `core`, `ios`, and `android` have scaffold support today.
 - **update** — the shell tree exists → diff core types against existing code and apply targeted edits (the normal feature-slice path).
 - **no-op** — the platform is in scope but the slice introduces no changes for that shell (skip the sub-brief).
 
@@ -81,7 +81,7 @@ bindings:
 5. (When `android` is in scope) Load [`build/android/write.md`](build/android/write.md) — generate / update the Compose shell, then its verify loop.
 6. Load [`build/core/review.md`](build/core/review.md) and, when in-scope, [`build/ios/review.md`](build/ios/review.md) and [`build/android/review.md`](build/android/review.md). Reviewers run in parallel.
 7. Run § Consolidate review findings.
-8. **Shell verify gate.** Run `specify tool run vectis -- verify --mode verify "${PROJECT_DIR}"`. A missing or empty tree for any supported declared platform (`core`, `ios`, `android`) forces `status: failure`. `web` and `desktop` are valid tokens but have no on-disk interpretation yet — the tool emits a `platform-not-yet-supported` info finding and treats them as present.
+8. **Shell verify gate.** Run `specify extension run vectis -- verify --mode verify "${PROJECT_DIR}"`. A missing or empty tree for any supported declared platform (`core`, `ios`, `android`) forces `status: failure`. `web` and `desktop` are valid tokens but have no on-disk interpretation yet — the tool emits a `platform-not-yet-supported` info finding and treats them as present.
 9. Mark `tasks.md` checkboxes complete as each phase lands, then write the build report (§ Build report). The brief never transitions the slice — the CLI's `--phase finalize` validates the report and owns the `Refined → Built` transition.
 
 ## § Sub-agent delegation contract
@@ -117,7 +117,7 @@ Per [Standards layer](../references/spec-runtime/standards-layer-snippet.md), de
 
 ## § Template / version-pin drift handling
 
-The Vectis scaffold tool (`specify tool run vectis -- scaffold ...`) is render-only and ships with embedded version pins. Upstream bumps (Crux core, uniffi, AGP / Gradle, cargo-swift, Xcode) can break a freshly rendered scaffold even when the rest of the slice is correct. Detect this when a verify-repair loop fails repeatedly with cargo / Gradle / Xcode errors that look like API renames, missing imports, or toolchain mismatches rather than feature-level bugs. When detected, do **not** auto-fix in-band: record the failing combo (caps + shells), the failing host step, and the load-bearing error line, then mark the build outcome as `deferred` with a template-drift signal. The operator opens a separate slice rooted in the CLI repo to bump the embedded `versions.toml`.
+The Vectis scaffold tool (`specify extension run vectis -- scaffold ...`) is render-only and ships with embedded version pins. Upstream bumps (Crux core, uniffi, AGP / Gradle, cargo-swift, Xcode) can break a freshly rendered scaffold even when the rest of the slice is correct. Detect this when a verify-repair loop fails repeatedly with cargo / Gradle / Xcode errors that look like API renames, missing imports, or toolchain mismatches rather than feature-level bugs. When detected, do **not** auto-fix in-band: record the failing combo (caps + shells), the failing host step, and the load-bearing error line, then mark the build outcome as `deferred` with a template-drift signal. The operator opens a separate slice rooted in the CLI repo to bump the embedded `versions.toml`.
 
 Symptom triage table: [`../references/known-drift.md`](../references/known-drift.md) — start here before escalating; if the reproduced failure matches a listed item, the operator can route directly to that item's playbook in the host-side template-updater workflow.
 
@@ -165,6 +165,6 @@ Each `findings[]` item validates against `schemas/diagnostics/diagnostic.schema.
 
 ## Notes for downstream phases
 
-- **`composition.yaml` is a build output.** It lives at `${SLICE_DIR}/composition.yaml` after this brief succeeds; the merge brief lands it into the baseline alongside the code. Operator-curated `tokens.yaml` / `assets.yaml` are also read by `merge`; the merge brief re-runs `specify tool run vectis -- validate composition` against the merged baseline so cross-artifact regressions are caught even when the current slice only touched code.
+- **`composition.yaml` is a build output.** It lives at `${SLICE_DIR}/composition.yaml` after this brief succeeds; the merge brief lands it into the baseline alongside the code. Operator-curated `tokens.yaml` / `assets.yaml` are also read by `merge`; the merge brief re-runs `specify extension run vectis -- validate composition` against the merged baseline so cross-artifact regressions are caught even when the current slice only touched code.
 - **Do not write `composition.yaml` into `.specify/specs/`.** That is `specify slice merge`'s job, atomically, alongside the spec / design deltas.
 - **Operator-curated inputs.** `tokens.yaml` and `assets.yaml` updates accompany the slice when the operator edits them; the merge brief promotes those edits into `design-system/tokens.yaml` / `design-system/assets.yaml` (or slice-local equivalents) using the same delta merge path as the spec deltas. The component catalog (`CATALOG_PATH`) is project-level and not slice-local; it is read as-is at build time and does not participate in the merge delta path.

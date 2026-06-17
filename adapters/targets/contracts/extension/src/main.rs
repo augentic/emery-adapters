@@ -115,7 +115,7 @@ fn main() -> ExitCode {
 
 /// No-op `schema` handler — the contract tool declares no embedded
 /// schemas. Returns exit 2 with a structured error body so the host
-/// CLI's `specify tool schema` can report the absence uniformly.
+/// CLI's `specify extension schema` can report the absence uniformly.
 fn schema_stub(name: Option<&str>) -> ExitCode {
     let body = serde_json::json!({
         "error": "no-schemas-declared",

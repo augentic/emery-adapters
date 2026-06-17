@@ -63,7 +63,7 @@ Write via the stage → validate → rename sequence used by every Vectis produc
 ```bash
 COMP="${SLICE_DIR}/composition.yaml"
 write_yaml "${COMP}.tmp"
-specify tool run vectis -- validate composition "${COMP}.tmp"
+specify extension run vectis -- validate composition "${COMP}.tmp"
 mv "${COMP}.tmp" "${COMP}"
 ```
 
@@ -76,7 +76,7 @@ When the slice has no UI surface at all, this step writes no `composition.yaml`.
 After regenerating, re-run the deterministic validator against the merged input set:
 
 ```bash
-specify tool run vectis -- validate composition
+specify extension run vectis -- validate composition
 ```
 
 That single call covers:

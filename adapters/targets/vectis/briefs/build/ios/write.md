@@ -8,7 +8,7 @@ The SwiftUI patterns, Crux iOS shell anatomy, token templates, and design-system
 
 Inspect `${IOS_SHELL_DIR}` for any `.swift` files:
 
-- No Swift files → **create mode**: scaffold with `specify tool run vectis -- scaffold ios <APP_NAME> [--caps <csv>]`, then enter update mode.
+- No Swift files → **create mode**: scaffold with `specify extension run vectis -- scaffold ios <APP_NAME> [--caps <csv>]`, then enter update mode.
 - Swift files present → **update mode**: diff core types against existing Swift code and apply targeted edits.
 
 Spawn the writer sub-agent with `mode: create|update` and `skip_verification: true`; the dedicated verify sub-agent (§ Verify) runs afterward.
@@ -19,7 +19,7 @@ Spawn the writer sub-agent with `mode: create|update` and `skip_verification: tr
 2. **Diff core and UI artifacts.** Classify changes to `Effect`s, ViewModel variants, per-page view-struct fields, `Event`s, `Route`s, token categories, assets, components, and any legacy `VectisDesign` references (the latter are forbidden — remove on sight).
 3. **Apply core / view updates.** Edit `Core.swift` (the Crux bridge — effect handlers, serialization protocol), `ContentView.swift` (root branching on the `ViewModel` enum), per-screen views under `iOS/<APP_NAME>/Views/`, navigation wiring, Inject hot-reload boilerplate, and build config with targeted changes only. Patterns: [`ios/shell-pattern.md`](../../../references/ios/shell-pattern.md), [`ios/view-patterns.md`](../../../references/ios/view-patterns.md).
 4. **Refresh generated UI surfaces.** Regenerate shell-local `iOS/<APP_NAME>/Theme/` (theme code derived from `tokens.yaml`, HIG fallback when `tokens.yaml` is absent — full templates: [`ios/token-templates.md`](../../../references/ios/token-templates.md)), `iOS/<APP_NAME>/Components/` (one named SwiftUI view per `component: <slug>` directive in `composition.yaml`, PascalCased — `task-row` → `TaskRowView`), and `iOS/<APP_NAME>/Resources/Assets.xcassets/`. Preserve operator-owned files. Design-system integration depth: [`ios/design-system-integration.md`](../../../references/ios/design-system-integration.md).
-   - **Materialize gate.** `specify slice build --phase prepare` runs `vectis materialize assets` for in-scope ids with missing `sources.ios` pins; operators may also run `specify tool run vectis -- materialize assets` manually after editing canonical masters under `design-system/assets/`. Committed trees under `design-system/assets/exports/ios/` are the copy source — never read canonical `source:` SVG/PNG at write time.
+   - **Materialize gate.** `specify slice build --phase prepare` runs `vectis materialize assets` for in-scope ids with missing `sources.ios` pins; operators may also run `specify extension run vectis -- materialize assets` manually after editing canonical masters under `design-system/assets/`. Committed trees under `design-system/assets/exports/ios/` are the copy source — never read canonical `source:` SVG/PNG at write time.
    - **Copy from `exports/ios/`.** Resolve the effective `assets.yaml` (slice-local `.specify/slices/<name>/assets.yaml` when present, else `design-system/assets.yaml`). For each composition-referenced asset id:
      - `kind: symbol` — emit `Image(systemName: symbols.ios)` at the call site; **no** imageset copy.
      - `role: app-icon` — copy `assets/exports/ios/app-icon/AppIcon.appiconset/` into `Resources/Assets.xcassets/AppIcon.appiconset/`.

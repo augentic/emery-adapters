@@ -129,7 +129,7 @@ deltas. After merge, the same paths become root `contracts/` baseline files.
   working tree after `/spec:build`, and (when merge is run) in the baseline
   `contracts/` tree after `/spec:merge`.
 - `contract-validator-clean`: the build's contract verifier (the `contract`
-  WASI tool, run as `specify tool run contract -- "$PROJECT_ROOT/contracts" --format json`)
+  WASI tool, run as `specify extension run contract -- "$PROJECT_ROOT/contracts" --format json`)
   exits `0` with no findings and no manual-review warnings on the produced
   artifacts.
 

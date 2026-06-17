@@ -5,7 +5,7 @@
 //!
 //! Housing these primitives in the carve-out preserves the
 //! adapter-extension invariant: an adapter's logic is reachable from the
-//! host only through `specify tool run <name>`.
+//! host only through `specify extension run <name>`.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
