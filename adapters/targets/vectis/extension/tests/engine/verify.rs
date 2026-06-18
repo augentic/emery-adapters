@@ -63,7 +63,8 @@ fn write_app_icon_assets(root: &Path, source_rel: Option<&str>) {
     std::fs::write(design.join("assets.yaml"), content).expect("write assets.yaml");
     if let Some(rel) = source_rel {
         let path = design.join(rel);
-        std::fs::create_dir_all(path.parent().expect("source parent")).expect("mkdir source parent");
+        std::fs::create_dir_all(path.parent().expect("source parent"))
+            .expect("mkdir source parent");
         std::fs::write(&path, "<svg/>").expect("write source svg");
     }
 }
