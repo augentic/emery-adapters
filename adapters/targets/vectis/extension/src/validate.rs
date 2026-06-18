@@ -67,18 +67,6 @@ pub(crate) mod engine;
 
 pub use engine::{find_project_root, run};
 
-/// Hidden re-exports for integration tests under `crates/vectis/tests/`.
-/// These items are not part of the stable public API; they exist so the
-/// per-mode test suites can exercise the internal resolver and
-/// validator helpers without duplicating fixtures.
-#[doc(hidden)]
-pub mod __test_internals {
-    pub use crate::validate::engine::{
-        assets_validator, composition_validator, discover_artifact, expand_path_template,
-        find_project_root, paths_for_key, resolve_default_path_with_root, tokens_validator,
-    };
-}
-
 /// Render a validation outcome as pretty-printed JSON, without a trailing
 /// newline, and return the process exit code that should accompany it.
 #[must_use]

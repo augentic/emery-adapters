@@ -4,7 +4,6 @@
 use std::path::PathBuf;
 
 use serde_json::Value;
-use specify_vectis::validate::__test_internals::composition_validator;
 use specify_vectis::validate::error::VectisError;
 use specify_vectis::validate::{ValidateArgs as Args, ValidateMode, run};
 
@@ -162,11 +161,6 @@ fn run_layout(content: &str) -> Value {
         path: Some(file.path().to_path_buf()),
     };
     run(&args).expect("run succeeds")
-}
-
-#[test]
-fn embedded_composition_schema_compiles() {
-    composition_validator().expect("embedded composition.schema.json must compile");
 }
 
 /// Acceptance bullet 1: Appendix C's `layout.yaml` validates cleanly.

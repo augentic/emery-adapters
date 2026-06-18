@@ -108,6 +108,36 @@ fn omitted_path_uses_default_root() {
 }
 
 #[test]
+fn default_root_walks_up_from_nested_cwd() {
+    // No PROJECT_DIR: default resolution must walk up from the process
+    // CWD to the nearest `.specify/` root, then resolve the slice-local
+    // layout against that root. A child process owns its own CWD, so
+    // this exercises the walk-up without mutating the test process.
+    let tmp = tempdir().unwrap();
+    let slice_dir = tmp.path().join(".specify/slices/active");
+    std::fs::create_dir_all(&slice_dir).expect("mkdir slice");
+    std::fs::write(slice_dir.join("layout.yaml"), "version: 1\nscreens: {}\n")
+        .expect("write layout.yaml");
+    let nested = tmp.path().join("a/b/c");
+    std::fs::create_dir_all(&nested).expect("mkdir nested cwd");
+
+    let assert = vectis_validate()
+        .env_remove("PROJECT_DIR")
+        .current_dir(&nested)
+        .arg("layout")
+        .assert()
+        .success();
+    let value = parse_json(&assert.get_output().stdout);
+
+    assert_eq!(value["mode"], "layout");
+    let resolved = value["path"].as_str().expect("path is a string");
+    assert!(
+        resolved.ends_with(".specify/slices/active/layout.yaml"),
+        "expected CWD walk-up to the .specify root, got: {resolved}"
+    );
+}
+
+#[test]
 fn all_mode_recurses_findings_exit_code() {
     let tmp = tempdir().unwrap();
     let design = tmp.path().join("design-system");

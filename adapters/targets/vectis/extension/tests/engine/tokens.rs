@@ -4,7 +4,6 @@
 use std::path::PathBuf;
 
 use serde_json::Value;
-use specify_vectis::validate::__test_internals::{assets_validator, tokens_validator};
 use specify_vectis::validate::error::VectisError;
 use specify_vectis::validate::{ValidateArgs as Args, ValidateMode, run};
 
@@ -113,16 +112,6 @@ opacity:
   disabled: 0.38
   scrim: 0.4
 "##;
-
-#[test]
-fn embedded_tokens_schema_compiles() {
-    tokens_validator().expect("embedded tokens.schema.json must compile");
-}
-
-#[test]
-fn embedded_assets_schema_compiles() {
-    assets_validator().expect("embedded assets.schema.json must compile");
-}
 
 #[test]
 fn appendix_d_validates() {

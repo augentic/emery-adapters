@@ -30,12 +30,9 @@ use std::path::Path;
 
 pub use assets::collect_asset_references;
 pub use assets::exports::imageset_has_materialized_content;
-pub use paths::{
-    discover_artifact, expand_path_template, find_project_root, paths_for_key,
-    resolve_default_path_with_root,
-};
+pub use paths::{discover_artifact, find_project_root, resolve_default_path_with_root};
 use serde_json::Value;
-pub use shared::{assets_validator, composition_validator, parse_yaml_file, tokens_validator};
+pub use shared::parse_yaml_file;
 
 use crate::validate::error::VectisError;
 use crate::validate::{ValidateArgs, ValidateMode};

@@ -1,172 +1,98 @@
 //! Path-resolver and `validate all` integration tests.
 
 use serde_json::Value;
-use specify_vectis::validate::__test_internals::{
-    discover_artifact, expand_path_template, find_project_root, paths_for_key,
-    resolve_default_path_with_root,
-};
 use specify_vectis::validate::{ValidateArgs as Args, ValidateMode, run};
 
 use crate::engine_support::{
     write_assets_project, write_project_yaml, write_specify_project, write_specs_composition,
 };
 
-/// `find_project_root` walks up from a starting path until it finds a
-/// `.specify/` ancestor. A starting path that is itself the project
-/// root resolves cleanly; a starting path nested under the root walks
-/// up to find it. A path with no Specify ancestor returns `None`.
-#[test]
-fn find_project_root_walks_up_to_specify_dir() {
-    let tmp = write_specify_project();
-    let nested = tmp.path().join("a/b/c");
-    std::fs::create_dir_all(&nested).expect("mkdir nested");
-
-    assert_eq!(find_project_root(tmp.path()).as_deref(), Some(tmp.path()));
-    assert_eq!(find_project_root(&nested).as_deref(), Some(tmp.path()));
-    let file = nested.join("file.yaml");
-    std::fs::write(&file, b"version: 1\n").expect("write file");
-    assert_eq!(find_project_root(&file).as_deref(), Some(tmp.path()));
-
-    let bare = tempfile::tempdir().expect("tempdir");
-    assert!(find_project_root(bare.path()).is_none());
+/// Run `validate all` against `root` and return the combined envelope.
+fn run_all(root: &std::path::Path) -> Value {
+    run(&Args {
+        mode: ValidateMode::All,
+        path: Some(root.to_path_buf()),
+    })
+    .expect("run all succeeds")
 }
 
-/// `paths_for_key` returns the canonical resolution order for known
-/// keys and an empty candidate list for unknown keys.
-#[test]
-fn paths_for_key_returns_embedded_canonical_order() {
-    let tokens = paths_for_key("tokens");
-    assert_eq!(
-        tokens,
-        vec![
-            ".specify/slices/<name>/tokens.yaml".to_string(),
-            "design-system/tokens.yaml".to_string(),
-        ]
-    );
-
-    assert!(paths_for_key("components").is_empty());
+/// Fetch the per-mode `report` object for `mode` from an `all` envelope.
+fn report_for<'a>(envelope: &'a Value, mode: &str) -> &'a Value {
+    let results = envelope["results"].as_array().expect("results array");
+    let entry = results
+        .iter()
+        .find(|entry| entry["mode"] == mode)
+        .unwrap_or_else(|| panic!("missing {mode} sub-report: {envelope}"));
+    &entry["report"]
 }
 
-/// `expand_path_template` substitutes `<name>` against every
-/// directory under `.specify/slices/`, sorted alphabetically.
-/// Templates without `<name>` resolve to a single absolute path
-/// rooted at the project root. Templates with `<name>` against a
-/// project that has no `.specify/slices/` directory resolve to an
-/// empty list so the caller skips to the next template.
+/// `validate all` resolves the change-local `layout.yaml` ahead of the
+/// project-shape `design-system/layout.yaml` when both exist. The
+/// resolved input rides each sub-report's `path`, so the change-local
+/// precedence is observable through the public surface without reaching
+/// into the resolver.
 #[test]
-fn expand_path_template_handles_name_substitution() {
-    let tmp = write_specify_project();
-    let slices_dir = tmp.path().join(".specify/slices");
-    std::fs::create_dir_all(slices_dir.join("zeta")).expect("mkdir zeta");
-    std::fs::create_dir_all(slices_dir.join("alpha")).expect("mkdir alpha");
-
-    let with_name = expand_path_template(".specify/slices/<name>/layout.yaml", tmp.path());
-    assert_eq!(with_name.len(), 2);
-    assert!(with_name[0].ends_with(".specify/slices/alpha/layout.yaml"));
-    assert!(with_name[1].ends_with(".specify/slices/zeta/layout.yaml"));
-
-    let without_name = expand_path_template("design-system/layout.yaml", tmp.path());
-    assert_eq!(without_name.len(), 1);
-    assert!(without_name[0].ends_with("design-system/layout.yaml"));
-
-    let empty = tempfile::tempdir().expect("tempdir");
-    let no_changes = expand_path_template(".specify/slices/<name>/x.yaml", empty.path());
-    assert!(no_changes.is_empty());
-}
-
-/// The default-path resolver's primary acceptance bullet: when no
-/// `[path]` is supplied, `validate layout` discovers
-/// `.specify/slices/<active>/layout.yaml` first (the `change_local`
-/// template) before falling back to `design-system/layout.yaml` (the
-/// `project` template).
-#[test]
-fn resolve_default_path_prefers_change_local() {
+fn all_prefers_change_local_layout() {
     let tmp = write_specify_project();
     let change_dir = tmp.path().join(".specify/slices/active");
     std::fs::create_dir_all(&change_dir).expect("mkdir change");
     std::fs::write(change_dir.join("layout.yaml"), "version: 1\nscreens: {}\n")
-        .expect("write layout.yaml");
+        .expect("write change-local layout.yaml");
     let design = tmp.path().join("design-system");
     std::fs::create_dir_all(&design).expect("mkdir design-system");
     std::fs::write(design.join("layout.yaml"), "version: 1\nscreens: {}\n")
         .expect("write design-system/layout.yaml");
 
-    let resolved = resolve_default_path_with_root(ValidateMode::Layout, tmp.path());
+    let envelope = run_all(tmp.path());
+    let layout = report_for(&envelope, "layout");
+    assert!(layout.get("skipped").is_none(), "change-local layout MUST resolve: {layout}");
+    let resolved = layout["path"].as_str().expect("layout path string");
     assert!(
         resolved.ends_with(".specify/slices/active/layout.yaml"),
-        "expected change-local resolution, got: {}",
-        resolved.display(),
+        "expected change-local resolution, got: {resolved}"
     );
 }
 
-/// When the change-local file is absent but the project-shape exists,
-/// `validate layout` falls back to `design-system/`.
+/// When no change-local file exists, `validate all` falls back to the
+/// project-shape `design-system/tokens.yaml`, observed via the tokens
+/// sub-report's resolved `path`.
 #[test]
-fn resolve_default_path_falls_back_when_missing() {
+fn all_falls_back_to_design_system_tokens() {
     let tmp = write_specify_project();
     let design = tmp.path().join("design-system");
     std::fs::create_dir_all(&design).expect("mkdir design-system");
     std::fs::write(design.join("tokens.yaml"), "version: 1\n").expect("write tokens.yaml");
 
-    let resolved = resolve_default_path_with_root(ValidateMode::Tokens, tmp.path());
+    let envelope = run_all(tmp.path());
+    let tokens = report_for(&envelope, "tokens");
+    assert!(tokens.get("skipped").is_none(), "design-system tokens MUST resolve: {tokens}");
+    let resolved = tokens["path"].as_str().expect("tokens path string");
     assert!(
         resolved.ends_with("design-system/tokens.yaml"),
-        "expected project-shape resolution, got: {}",
-        resolved.display(),
+        "expected project-shape resolution, got: {resolved}"
     );
 }
 
-/// When neither template resolves, the resolver returns the last
-/// candidate (the project / baseline shape) so the caller's
-/// "<file>.yaml not readable" error names the most operator-friendly
-/// path.
+/// The `<name>` slice template expands against every directory under
+/// `.specify/slices/` in alphabetical order, and the first existing
+/// file wins. With both `alpha` and `zeta` carrying a `tokens.yaml`,
+/// `validate all` resolves the `alpha` copy.
 #[test]
-fn resolve_default_path_last_candidate() {
+fn all_resolves_alphabetically_first_slice() {
     let tmp = write_specify_project();
-    let layout = resolve_default_path_with_root(ValidateMode::Layout, tmp.path());
-    assert!(
-        layout.ends_with("design-system/layout.yaml"),
-        "expected design-system/layout.yaml fallback, got: {}",
-        layout.display(),
-    );
-    let composition = resolve_default_path_with_root(ValidateMode::Composition, tmp.path());
-    assert!(
-        composition.ends_with(".specify/specs/composition.yaml"),
-        "expected baseline composition fallback, got: {}",
-        composition.display(),
-    );
-}
+    let slices = tmp.path().join(".specify/slices");
+    for name in ["zeta", "alpha"] {
+        let dir = slices.join(name);
+        std::fs::create_dir_all(&dir).expect("mkdir slice");
+        std::fs::write(dir.join("tokens.yaml"), "version: 1\n").expect("write slice tokens.yaml");
+    }
 
-/// `discover_artifact` is the cross-artifact discovery helper. It
-/// returns `Some(path)` only when the file is actually on disk --
-/// never the "best guess" fallback path the per-mode resolver
-/// returns. This pins that contract distinction: `Some` means "we
-/// found it"; `None` means "no sibling was found, skip cross-artifact
-/// resolution".
-#[test]
-fn discover_artifact_returns_some_only_for_existing_files() {
-    let tmp = write_specify_project();
-    let comp_dir = tmp.path().join(".specify/specs");
-    std::fs::create_dir_all(&comp_dir).expect("mkdir specs");
-    std::fs::write(comp_dir.join("composition.yaml"), "version: 1\nscreens: {}\n")
-        .expect("write composition.yaml");
-    let assets_path = tmp.path().join("design-system/assets.yaml");
-    std::fs::create_dir_all(assets_path.parent().expect("parent")).expect("mkdir design-system");
-    std::fs::write(&assets_path, "version: 1\nassets: {}\n").expect("write assets.yaml");
-
-    let found = discover_artifact(&assets_path, ValidateMode::Composition);
+    let envelope = run_all(tmp.path());
+    let tokens = report_for(&envelope, "tokens");
+    let resolved = tokens["path"].as_str().expect("tokens path string");
     assert!(
-        found.as_deref().is_some_and(|p| p.ends_with(".specify/specs/composition.yaml")),
-        "expected composition discovery to succeed, got: {found:?}",
-    );
-
-    let missing = discover_artifact(&assets_path, ValidateMode::Tokens);
-    assert!(missing.is_none(), "expected tokens discovery to return None, got: {missing:?}");
-
-    let bare = tempfile::tempdir().expect("tempdir");
-    assert!(
-        discover_artifact(bare.path(), ValidateMode::Composition).is_none(),
-        "expected None for non-Specify starting paths"
+        resolved.ends_with(".specify/slices/alpha/tokens.yaml"),
+        "expected alphabetically-first slice resolution, got: {resolved}"
     );
 }
 
@@ -251,6 +177,22 @@ fn all_envelope_skips_missing_inputs_without_failing() {
             "[{skipped_mode}] errors must stay empty: {report}"
         );
     }
+
+    // Skipped sub-reports still name the last-candidate fallback path
+    // (the project / baseline shape), so the operator-facing "not
+    // readable" location stays the friendliest one.
+    let layout_path = by_mode["layout"]["report"]["path"].as_str().expect("layout path string");
+    assert!(
+        layout_path.ends_with("design-system/layout.yaml"),
+        "expected design-system/layout.yaml fallback, got: {layout_path}"
+    );
+    let composition_path =
+        by_mode["composition"]["report"]["path"].as_str().expect("composition path string");
+    assert!(
+        composition_path.ends_with(".specify/specs/composition.yaml"),
+        "expected baseline composition fallback, got: {composition_path}"
+    );
+
     let tokens_report = &by_mode["tokens"]["report"];
     assert!(
         tokens_report.get("skipped").is_none(),
