@@ -1,17 +1,19 @@
 //! `specify-contract` — standalone validator binary for the contracts
 //! adapter.
 //!
-//! ## Carve-out from workspace standards
+//! ## Carve-out from the host CLI runtime
 //!
-//! This crate is a deliberate carve-out from the workspace's
-//! `Render` / `emit` / `specify-error` discipline. It builds a
-//! self-contained `wasm32-wasip2` artifact distributed independently
-//! of the `specify` runtime binary, so it owns its own JSON envelope, exit-code
-//! mapping, and error rendering rather than routing through the shared
-//! CLI plumbing. Future changes here MUST preserve that boundary —
-//! do not introduce a dependency on `specify-error`, `Render`, or the
-//! `output::emit` dispatcher; those couplings would re-attach this
-//! tool to the host CLI's release cadence.
+//! This crate shares the adapters workspace's full toolchain and lint
+//! posture — the inherited `[workspace.lints]`, nightly `rustfmt`, and the
+//! `cargo make ci` gate — like every other member. What it deliberately
+//! does *not* share is the platform `specify` binary's runtime plumbing: it
+//! builds a self-contained `wasm32-wasip2` artifact distributed
+//! independently of that binary, so it owns its own JSON envelope, exit-code
+//! mapping, and error rendering rather than routing through the host CLI's
+//! `Render` / `emit` / `specify-error` discipline. Future changes here MUST
+//! preserve that boundary — do not introduce a dependency on `specify-error`,
+//! `Render`, or the `output::emit` dispatcher; those couplings would
+//! re-attach this tool to the host CLI's release cadence.
 //!
 //! Wraps the in-crate [`validate::validate_baseline`] to surface
 //! the contract Validation checks (`SemVer` `info.version`,
@@ -129,7 +131,7 @@ fn schema_stub(name: Option<&str>) -> ExitCode {
     ExitCode::from(EXIT_INVOCATION_ERROR)
 }
 
-fn run(baseline_dir: &std::path::Path, format: OutputFormat) -> ExitCode {
+fn run(baseline_dir: &Path, format: OutputFormat) -> ExitCode {
     if let Err(message) = baseline_directory_error(baseline_dir) {
         eprintln!("{message}");
         return ExitCode::from(EXIT_INVOCATION_ERROR);
@@ -209,7 +211,7 @@ struct FindingPayload {
     detail: String,
 }
 
-fn baseline_directory_error(baseline_dir: &std::path::Path) -> Result<(), String> {
+fn baseline_directory_error(baseline_dir: &Path) -> Result<(), String> {
     std::fs::read_dir(baseline_dir).map(|_| ()).map_err(|err| match err.kind() {
         std::io::ErrorKind::NotFound => {
             format!("error: baseline directory does not exist: {}", baseline_dir.display())

@@ -1,7 +1,7 @@
 //! `validate assets` — schema validation plus cross-artifact checks.
 
 mod app_icon;
-pub(crate) mod exports;
+pub mod exports;
 mod platforms;
 
 use std::path::Path;
@@ -23,8 +23,7 @@ use crate::validate::error::VectisError;
 /// unreadable, and [`VectisError::Internal`] if the embedded schema
 /// fails to compile.
 pub(super) fn validate(path: Option<&Path>) -> Result<Value, VectisError> {
-    let target = path
-        .map_or_else(|| resolve_default_path(ValidateMode::Assets), std::path::Path::to_path_buf);
+    let target = path.map_or_else(|| resolve_default_path(ValidateMode::Assets), Path::to_path_buf);
 
     let source = std::fs::read_to_string(&target).map_err(|err| VectisError::InvalidProject {
         message: format!("assets.yaml not readable at {}: {err}", target.display()),
@@ -365,12 +364,12 @@ const fn raster_densities(plat: &str) -> &'static [&'static str] {
     }
 }
 
-pub(crate) struct AssetRef {
+pub struct AssetRef {
     pub(crate) id: String,
     pub(super) path: String,
 }
 
-pub(crate) fn collect_asset_references(value: &Value) -> Vec<AssetRef> {
+pub fn collect_asset_references(value: &Value) -> Vec<AssetRef> {
     let mut refs = Vec::new();
     walk_node(value, "", &mut refs);
     refs

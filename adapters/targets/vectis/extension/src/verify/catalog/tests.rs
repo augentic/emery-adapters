@@ -118,8 +118,10 @@ fn present_shell_catalog_entries_emit_no_findings() {
     std::fs::write(&drawable, b"PNG").expect("write android png");
 
     let findings = catalog_findings(tmp.path(), &["ios".to_string(), "android".to_string()]);
-    let errors: Vec<_> = findings.iter().filter(|f| f["severity"] == "error").collect();
-    assert!(errors.is_empty(), "expected clean catalog: {findings:?}");
+    assert!(
+        !findings.iter().any(|f| f["severity"] == "error"),
+        "expected clean catalog: {findings:?}"
+    );
 }
 
 #[test]

@@ -103,8 +103,7 @@ assets:
     assert!(launcher.contains("adaptive-icon"));
     assert!(launcher.contains("ic_launcher_foreground"));
 
-    let background =
-        fs::read_to_string(root.join("values/ic_launcher_background.xml")).unwrap();
+    let background = fs::read_to_string(root.join("values/ic_launcher_background.xml")).unwrap();
     assert!(background.contains("ic_launcher_background"));
 }
 
@@ -137,10 +136,7 @@ assets:
     let value = parse_json(&assert.get_output().stdout);
     let errors = value["errors"].as_array().expect("errors");
     assert!(errors.iter().any(|entry| {
-        entry["message"]
-            .as_str()
-            .unwrap_or("")
-            .contains("assets-app-icon-source-invalid")
+        entry["message"].as_str().unwrap_or("").contains("assets-app-icon-source-invalid")
     }));
 }
 
@@ -173,9 +169,6 @@ assets:
     let value = parse_json(&assert.get_output().stdout);
     let errors = value["errors"].as_array().expect("errors");
     assert!(errors.iter().any(|entry| {
-        entry["message"]
-            .as_str()
-            .unwrap_or("")
-            .contains("assets-app-icon-source-invalid")
+        entry["message"].as_str().unwrap_or("").contains("assets-app-icon-source-invalid")
     }));
 }

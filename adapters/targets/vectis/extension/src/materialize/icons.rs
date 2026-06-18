@@ -9,7 +9,9 @@ use std::path::Path;
 use serde_json::{Value, json};
 use usvg::Tree;
 
-use crate::materialize::paths::{Platform, export_layout, ios_imageset_dir, resolve_under_assets_dir};
+use crate::materialize::paths::{
+    Platform, export_layout, ios_imageset_dir, resolve_under_assets_dir,
+};
 use crate::materialize::svg::parse_icon_svg;
 
 /// Materialize every in-scope `role: icon` / `role: decorative` vector entry.
@@ -29,7 +31,10 @@ pub fn materialize_icon_vectors(
         let svg_bytes = match std::fs::read(&source_path) {
             Ok(bytes) => bytes,
             Err(err) => {
-                errors.push(asset_error(asset_id, &format!("source not readable at {source_rel}: {err}")));
+                errors.push(asset_error(
+                    asset_id,
+                    &format!("source not readable at {source_rel}: {err}"),
+                ));
                 continue;
             }
         };
@@ -80,45 +85,37 @@ pub fn materialize_icon_vectors(
 }
 
 fn materialize_for_platform(
-    tree: &Tree, asset_id: &str, platform: Platform, assets_dir: &Path, layout: &crate::materialize::paths::ExportLayout,
-    dry_run: bool,
+    tree: &Tree, asset_id: &str, platform: Platform, assets_dir: &Path,
+    layout: &crate::materialize::paths::ExportLayout, dry_run: bool,
 ) -> Result<Vec<Value>, String> {
     let mut written = Vec::new();
     match platform {
         Platform::Ios => {
-            let imageset_dir =
-                resolve_under_assets_dir(assets_dir, &ios_imageset_dir(asset_id));
+            let imageset_dir = resolve_under_assets_dir(assets_dir, &ios_imageset_dir(asset_id));
             if dry_run {
                 for artifact in &layout.artifacts {
                     written.push(materialized_entry(asset_id, platform, artifact));
                 }
                 return Ok(written);
             }
-            ios::write_imageset(tree, asset_id, &imageset_dir, dry_run).map_err(|err| {
-                format!("asset `{asset_id}`: iOS export failed: {err}")
-            })?;
+            ios::write_imageset(tree, asset_id, &imageset_dir, dry_run)
+                .map_err(|err| format!("asset `{asset_id}`: iOS export failed: {err}"))?;
             for artifact in &layout.artifacts {
                 written.push(materialized_entry(asset_id, platform, artifact));
             }
         }
         Platform::Android => {
-            let xml_rel = layout
-                .pin
-                .as_str();
+            let xml_rel = layout.pin.as_str();
             let xml_path = resolve_under_assets_dir(assets_dir, xml_rel);
-            let drawable_name = xml_path
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or(asset_id);
+            let drawable_name = xml_path.file_stem().and_then(|s| s.to_str()).unwrap_or(asset_id);
             if dry_run {
                 for artifact in &layout.artifacts {
                     written.push(materialized_entry(asset_id, platform, artifact));
                 }
                 return Ok(written);
             }
-            android::write_vector_drawable(tree, drawable_name, &xml_path).map_err(|err| {
-                format!("asset `{asset_id}`: Android export failed: {err}")
-            })?;
+            android::write_vector_drawable(tree, drawable_name, &xml_path)
+                .map_err(|err| format!("asset `{asset_id}`: Android export failed: {err}"))?;
             for artifact in &layout.artifacts {
                 written.push(materialized_entry(asset_id, platform, artifact));
             }
@@ -133,10 +130,12 @@ fn is_icon_vector_entry(entry: &Value) -> bool {
     matches!(role, Some("icon" | "decorative")) && kind == Some("vector")
 }
 
-pub(crate) fn active_platform_pin(entry: &Value, platform: &str, assets_dir: &Path) -> Option<String> {
+pub(crate) fn active_platform_pin(
+    entry: &Value, platform: &str, assets_dir: &Path,
+) -> Option<String> {
     let pin = entry.get("sources")?.get(platform)?.as_str()?;
     let path = assets_dir.join(pin);
-    if path.exists() { Some(pin.to_string()) } else { None }
+    path.exists().then(|| pin.to_string())
 }
 
 pub(crate) fn materialized_entry(asset_id: &str, platform: Platform, path: &str) -> Value {
@@ -156,10 +155,11 @@ pub(crate) fn asset_error(asset_id: &str, message: &str) -> Value {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::fs;
 
     use tempfile::tempdir;
+
+    use super::*;
 
     const TRIANGLE: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
   <path fill="#010203" d="M12 2L2 22h20z"/>

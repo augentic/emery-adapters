@@ -3,7 +3,8 @@
 use std::io::Cursor;
 use std::path::Path;
 
-use image::{ImageFormat, Rgba, RgbaImage, imageops::FilterType};
+use image::imageops::FilterType;
+use image::{ImageFormat, Rgba, RgbaImage};
 use serde_json::Value;
 
 use crate::materialize::paths::{ANDROID_DENSITIES, android_density_factor};
@@ -34,20 +35,11 @@ pub fn write_android_export(
     }
 
     std::fs::create_dir_all(export_root).map_err(|err| {
-        format!(
-            "Android app-icon export failed at {}: {err}",
-            export_root.display()
-        )
+        format!("Android app-icon export failed at {}: {err}", export_root.display())
     })?;
 
-    write_xml(
-        &export_root.join("mipmap-anydpi-v26/ic_launcher.xml"),
-        IC_LAUNCHER_XML,
-    )?;
-    write_xml(
-        &export_root.join("mipmap-anydpi-v26/ic_launcher_round.xml"),
-        IC_LAUNCHER_ROUND_XML,
-    )?;
+    write_xml(&export_root.join("mipmap-anydpi-v26/ic_launcher.xml"), IC_LAUNCHER_XML)?;
+    write_xml(&export_root.join("mipmap-anydpi-v26/ic_launcher_round.xml"), IC_LAUNCHER_ROUND_XML)?;
     write_background_xml(&export_root.join("values/ic_launcher_background.xml"), background_hex)?;
 
     for density in ANDROID_DENSITIES {
@@ -62,10 +54,7 @@ pub fn write_android_export(
         let legacy_size = scaled_dp(LEGACY_LAUNCHER_DP, factor);
         let bg = parse_hex_color(background_hex).unwrap_or([255, 255, 255]);
         let legacy = compose_legacy(canvas, legacy_size, bg);
-        write_png(
-            &export_root.join(format!("mipmap-{density}/ic_launcher.png")),
-            &legacy,
-        )?;
+        write_png(&export_root.join(format!("mipmap-{density}/ic_launcher.png")), &legacy)?;
     }
 
     Ok(())
@@ -97,8 +86,7 @@ fn compose_foreground(canvas: &RgbaImage, output_size: u32) -> RgbaImage {
 }
 
 fn compose_legacy(canvas: &RgbaImage, output_size: u32, bg: [u8; 3]) -> RgbaImage {
-    let mut out =
-        RgbaImage::from_pixel(output_size, output_size, Rgba([bg[0], bg[1], bg[2], 255]));
+    let mut out = RgbaImage::from_pixel(output_size, output_size, Rgba([bg[0], bg[1], bg[2], 255]));
     let fg = scale_centered_on_transparent(canvas, output_size);
     image::imageops::overlay(&mut out, &fg, 0, 0);
     out
@@ -163,9 +151,8 @@ fn write_xml(path: &Path, body: &str) -> Result<(), String> {
             format!("Android app-icon mkdir failed at {}: {err}", parent.display())
         })?;
     }
-    std::fs::write(path, body.as_bytes()).map_err(|err| {
-        format!("Android app-icon write failed at {}: {err}", path.display())
-    })
+    std::fs::write(path, body.as_bytes())
+        .map_err(|err| format!("Android app-icon write failed at {}: {err}", path.display()))
 }
 
 fn write_png(path: &Path, image: &RgbaImage) -> Result<(), String> {
@@ -178,9 +165,8 @@ fn write_png(path: &Path, image: &RgbaImage) -> Result<(), String> {
     image
         .write_to(&mut Cursor::new(&mut bytes), ImageFormat::Png)
         .map_err(|err| format!("Android app-icon PNG encode failed: {err}"))?;
-    std::fs::write(path, bytes).map_err(|err| {
-        format!("Android app-icon write failed at {}: {err}", path.display())
-    })
+    std::fs::write(path, bytes)
+        .map_err(|err| format!("Android app-icon write failed at {}: {err}", path.display()))
 }
 
 fn parse_hex_color(hex: &str) -> Option<[u8; 3]> {
@@ -196,11 +182,12 @@ fn parse_hex_color(hex: &str) -> Option<[u8; 3]> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::fs;
 
     use image::Rgba;
     use tempfile::tempdir;
+
+    use super::*;
 
     #[test]
     fn adaptive_xml_is_well_formed() {
@@ -228,10 +215,7 @@ mod tests {
     fn resolve_background_defaults_without_tint() {
         let tmp = tempdir().expect("tempdir");
         let entry = serde_json::json!({});
-        assert_eq!(
-            resolve_launcher_background(&entry, tmp.path()),
-            DEFAULT_BACKGROUND
-        );
+        assert_eq!(resolve_launcher_background(&entry, tmp.path()), DEFAULT_BACKGROUND);
     }
 
     #[test]

@@ -51,8 +51,10 @@ fn verify_all_present_exits_clean() {
     let result = run(&args).expect("verify should succeed");
     let findings = result["findings"].as_array().expect("findings array");
 
-    let errors: Vec<&Value> = findings.iter().filter(|f| f["severity"] == "error").collect();
-    assert!(errors.is_empty(), "expected no error findings: {result}");
+    assert!(
+        !findings.iter().any(|f| f["severity"] == "error"),
+        "expected no error findings: {result}"
+    );
     assert_eq!(verify_exit_code(&result), 0);
 }
 
@@ -89,8 +91,10 @@ fn verify_web_desktop_emit_info_not_error() {
     let result = run(&args).expect("verify should succeed");
     let findings = result["findings"].as_array().expect("findings array");
 
-    let errors: Vec<&Value> = findings.iter().filter(|f| f["severity"] == "error").collect();
-    assert!(errors.is_empty(), "web/desktop should not produce errors: {result}");
+    assert!(
+        !findings.iter().any(|f| f["severity"] == "error"),
+        "web/desktop should not produce errors: {result}"
+    );
 
     let infos: Vec<&Value> = findings.iter().filter(|f| f["severity"] == "info").collect();
     assert_eq!(infos.len(), 2);
@@ -255,7 +259,7 @@ fn render_json_verify_clean_exits_zero() {
         mode: VerifyMode::Verify,
         path: Some(tmp.path().to_path_buf()),
     };
-    let (json, code) = super::render_json(run(&args));
+    let (json, code) = render_json(run(&args));
     assert_eq!(code, 0);
     let value: Value = serde_json::from_str(&json).expect("valid JSON");
     assert_eq!(value["mode"], "verify");
@@ -271,7 +275,7 @@ fn render_json_verify_miss_exits_one() {
         mode: VerifyMode::Verify,
         path: Some(tmp.path().to_path_buf()),
     };
-    let (json, code) = super::render_json(run(&args));
+    let (json, code) = render_json(run(&args));
     assert_eq!(code, 1);
     let value: Value = serde_json::from_str(&json).expect("valid JSON");
     assert_eq!(value["mode"], "verify");
@@ -285,7 +289,7 @@ fn render_json_error_exits_two() {
         mode: VerifyMode::Verify,
         path: Some(tmp.path().to_path_buf()),
     };
-    let (json, code) = super::render_json(run(&args));
+    let (json, code) = render_json(run(&args));
     assert_eq!(code, 2);
     let value: Value = serde_json::from_str(&json).expect("valid JSON");
     assert_eq!(value["error"], "invalid-project");
@@ -347,9 +351,10 @@ fn verify_catalog_missing_imageset_exits_one() {
     let result = run(&args).expect("verify should succeed");
     let findings = result["findings"].as_array().expect("findings array");
 
-    let catalog_errors: Vec<&Value> =
-        findings.iter().filter(|f| f["id"] == "shell-catalog-entry-missing").collect();
-    assert!(!catalog_errors.is_empty(), "expected shell catalog finding: {result}");
+    assert!(
+        findings.iter().any(|f| f["id"] == "shell-catalog-entry-missing"),
+        "expected shell catalog finding: {result}"
+    );
     assert_eq!(verify_exit_code(&result), 1);
 }
 
@@ -379,8 +384,10 @@ fn verify_catalog_present_imageset_exits_clean() {
     let result = run(&args).expect("verify should succeed");
     let findings = result["findings"].as_array().expect("findings array");
 
-    let errors: Vec<&Value> = findings.iter().filter(|f| f["severity"] == "error").collect();
-    assert!(errors.is_empty(), "expected no catalog errors: {result}");
+    assert!(
+        !findings.iter().any(|f| f["severity"] == "error"),
+        "expected no catalog errors: {result}"
+    );
     assert_eq!(verify_exit_code(&result), 0);
 }
 

@@ -23,10 +23,7 @@ pub const LAUNCHER_CANVAS_SIZE: u32 = 1024;
 pub fn decode_to_launcher_canvas(
     source_path: &Path, source_rel: &str, asset_id: &str,
 ) -> Result<RgbaImage, String> {
-    let ext = source_path
-        .extension()
-        .and_then(|value| value.to_str())
-        .map(str::to_ascii_lowercase);
+    let ext = source_path.extension().and_then(|value| value.to_str()).map(str::to_ascii_lowercase);
 
     match ext.as_deref() {
         Some("svg") => decode_svg_canvas(source_path, source_rel, asset_id),
@@ -48,21 +45,16 @@ fn decode_svg_canvas(
         )
     })?;
     let tree = Tree::from_data(&bytes, &usvg::Options::default()).map_err(|err| {
-        format!(
-            "assets-app-icon-source-invalid: app-icon `{asset_id}` SVG decode failed: {err}"
-        )
+        format!("assets-app-icon-source-invalid: app-icon `{asset_id}` SVG decode failed: {err}")
     })?;
-    let png = render_tree_to_png(&tree, LAUNCHER_CANVAS_SIZE, LAUNCHER_CANVAS_SIZE).map_err(
-        |err| {
+    let png =
+        render_tree_to_png(&tree, LAUNCHER_CANVAS_SIZE, LAUNCHER_CANVAS_SIZE).map_err(|err| {
             format!(
                 "assets-app-icon-source-invalid: app-icon `{asset_id}` SVG rasterize failed: {err}"
             )
-        },
-    )?;
+        })?;
     let image = image::load_from_memory(&png).map_err(|err| {
-        format!(
-            "assets-app-icon-source-invalid: app-icon `{asset_id}` SVG rasterize failed: {err}"
-        )
+        format!("assets-app-icon-source-invalid: app-icon `{asset_id}` SVG rasterize failed: {err}")
     })?;
     Ok(flatten_to_opaque(image.to_rgba8()))
 }
@@ -123,10 +115,9 @@ fn decode_raster_canvas(
 fn raster_has_alpha(image: &DynamicImage) -> bool {
     match image {
         DynamicImage::ImageLuma8(_) | DynamicImage::ImageRgb8(_) => false,
-        DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_) => image
-            .to_rgba8()
-            .pixels()
-            .any(|pixel| pixel[3] < 255),
+        DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_) => {
+            image.to_rgba8().pixels().any(|pixel| pixel[3] < 255)
+        }
         _ => image.to_rgba8().pixels().any(|pixel| pixel[3] < 255),
     }
 }
@@ -146,7 +137,7 @@ fn flatten_to_opaque(mut canvas: RgbaImage) -> RgbaImage {
 }
 
 fn blend_channel(foreground: u8, alpha: f32) -> u8 {
-    let blended = (f32::from(foreground) * alpha) + (255.0 * (1.0 - alpha));
+    let blended = 255.0_f32.mul_add(1.0 - alpha, f32::from(foreground) * alpha);
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
@@ -159,11 +150,12 @@ fn blend_channel(foreground: u8, alpha: f32) -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::fs;
 
     use image::{ImageFormat, Rgba, RgbaImage};
     use tempfile::tempdir;
+
+    use super::*;
 
     const SQUARE_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
   <rect width="1024" height="1024" fill="#336699"/>

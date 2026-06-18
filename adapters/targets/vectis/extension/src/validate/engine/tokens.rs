@@ -27,8 +27,7 @@ use crate::validate::error::VectisError;
 /// unreadable, and [`VectisError::Internal`] if the embedded schema
 /// fails to compile.
 pub(super) fn validate(path: Option<&Path>) -> Result<Value, VectisError> {
-    let target = path
-        .map_or_else(|| resolve_default_path(ValidateMode::Tokens), std::path::Path::to_path_buf);
+    let target = path.map_or_else(|| resolve_default_path(ValidateMode::Tokens), Path::to_path_buf);
 
     let source = std::fs::read_to_string(&target).map_err(|err| VectisError::InvalidProject {
         message: format!("tokens.yaml not readable at {}: {err}", target.display()),

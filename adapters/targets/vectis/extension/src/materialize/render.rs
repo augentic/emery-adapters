@@ -30,9 +30,7 @@ pub fn render_tree_to_png(tree: &Tree, out_width: u32, out_height: u32) -> Resul
 
     resvg::render(tree, transform, &mut pixmap.as_mut());
 
-    pixmap
-        .encode_png()
-        .map_err(|err| format!("PNG encode failed: {err}"))
+    pixmap.encode_png().map_err(|err| format!("PNG encode failed: {err}"))
 }
 
 /// Pixel dimensions for a 1× logical SVG canvas scaled by `factor`.

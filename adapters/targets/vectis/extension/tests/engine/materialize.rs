@@ -126,9 +126,12 @@ assets:
     let assets_path = design.join("assets.yaml");
     fs::write(&assets_path, yaml).unwrap();
 
-    fs::write(design.join("assets/chevron-right.svg"), r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+    fs::write(
+        design.join("assets/chevron-right.svg"),
+        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
   <path fill="#ff0000" d="M2 2h20v20H2z"/>
-</svg>"##)
+</svg>"##,
+    )
     .unwrap();
 
     let assert = vectis_materialize()

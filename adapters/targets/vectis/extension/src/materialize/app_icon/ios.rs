@@ -24,10 +24,7 @@ pub fn write_appiconset(canvas: &RgbaImage, appiconset_dir: &Path) -> Result<(),
     }
 
     std::fs::create_dir_all(appiconset_dir).map_err(|err| {
-        format!(
-            "AppIcon.appiconset write failed at {}: {err}",
-            appiconset_dir.display()
-        )
+        format!("AppIcon.appiconset write failed at {}: {err}", appiconset_dir.display())
     })?;
 
     let png_path = appiconset_dir.join(APPICON_PNG_NAME);
@@ -35,9 +32,8 @@ pub fn write_appiconset(canvas: &RgbaImage, appiconset_dir: &Path) -> Result<(),
     canvas
         .write_to(&mut Cursor::new(&mut png_bytes), image::ImageFormat::Png)
         .map_err(|err| format!("AppIcon.png encode failed: {err}"))?;
-    std::fs::write(&png_path, png_bytes).map_err(|err| {
-        format!("AppIcon.png write failed at {}: {err}", png_path.display())
-    })?;
+    std::fs::write(&png_path, png_bytes)
+        .map_err(|err| format!("AppIcon.png write failed at {}: {err}", png_path.display()))?;
 
     let contents = json!({
         "images": [
@@ -54,23 +50,23 @@ pub fn write_appiconset(canvas: &RgbaImage, appiconset_dir: &Path) -> Result<(),
         }
     });
     let contents_path = appiconset_dir.join("Contents.json");
-    std::fs::write(
-        &contents_path,
-        serde_json::to_vec_pretty(&contents).expect("contents json"),
-    )
-    .map_err(|err| format!("Contents.json write failed at {}: {err}", contents_path.display()))?;
+    std::fs::write(&contents_path, serde_json::to_vec_pretty(&contents).expect("contents json"))
+        .map_err(|err| {
+            format!("Contents.json write failed at {}: {err}", contents_path.display())
+        })?;
 
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::fs;
 
     use image::Rgba;
     use serde_json::Value;
     use tempfile::tempdir;
+
+    use super::*;
 
     #[test]
     fn appiconset_writes_actool_friendly_layout() {

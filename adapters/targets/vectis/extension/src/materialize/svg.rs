@@ -19,7 +19,7 @@ pub struct ParsedSvg {
 /// unsupported features (gradients, text, filters, embedded images, …).
 pub fn parse_icon_svg(svg_bytes: &[u8], asset_id: &str) -> Result<ParsedSvg, String> {
     let opt = usvg::Options::default();
-    let tree = usvg::Tree::from_data(svg_bytes, &opt)
+    let tree = Tree::from_data(svg_bytes, &opt)
         .map_err(|err| format!("asset `{asset_id}`: SVG parse failed: {err}"))?;
 
     validate_profile(&tree, asset_id)?;
@@ -60,7 +60,9 @@ fn walk_profile(group: &usvg::Group, asset_id: &str) -> Result<(), String> {
             Node::Group(nested) => walk_profile(nested, asset_id)?,
             Node::Path(path) => validate_path(path, asset_id)?,
             Node::Image(_) => {
-                return Err(format!("asset `{asset_id}`: embedded raster images are not supported"));
+                return Err(format!(
+                    "asset `{asset_id}`: embedded raster images are not supported"
+                ));
             }
             Node::Text(_) => {
                 return Err(format!("asset `{asset_id}`: text nodes are not supported"));

@@ -35,7 +35,8 @@ pub fn write_imageset(
             continue;
         }
 
-        let factor = ios_scale_factor(scale).ok_or_else(|| format!("unsupported iOS scale `{scale}`"))?;
+        let factor =
+            ios_scale_factor(scale).ok_or_else(|| format!("unsupported iOS scale `{scale}`"))?;
         let (width, height) = scaled_dimensions(tree, factor);
         let png = render_tree_to_png(tree, width, height)?;
         let out_path = resolve_under_assets_dir(assets_dir, &rel);
@@ -58,11 +59,8 @@ pub fn write_imageset(
             }
         });
         let contents_path = resolve_under_assets_dir(assets_dir, &contents_rel);
-        std::fs::write(
-            contents_path,
-            serde_json::to_vec_pretty(&contents).expect("contents json"),
-        )
-        .map_err(|err| err.to_string())?;
+        std::fs::write(contents_path, serde_json::to_vec_pretty(&contents).expect("contents json"))
+            .map_err(|err| err.to_string())?;
     }
 
     Ok(written)

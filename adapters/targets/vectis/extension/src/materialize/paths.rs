@@ -41,41 +41,33 @@ pub fn ios_scale_factor(scale: &str) -> Option<f32> {
 /// iOS imageset PNG filename for a raster export (`1x` omits the `@` suffix).
 #[must_use]
 pub fn ios_raster_filename(asset_id: &str, scale: &str) -> String {
-    if scale == "1x" {
-        format!("{asset_id}.png")
-    } else {
-        format!("{asset_id}@{scale}.png")
-    }
+    if scale == "1x" { format!("{asset_id}.png") } else { format!("{asset_id}@{scale}.png") }
 }
 
 /// Design-system-relative path for one iOS raster artifact inside an imageset.
 #[must_use]
 pub fn ios_raster_artifact_rel(asset_id: &str, scale: &str) -> String {
-    format!(
-        "{}/{}",
-        ios_imageset_dir(asset_id),
-        ios_raster_filename(asset_id, scale)
-    )
+    format!("{}/{}", ios_imageset_dir(asset_id), ios_raster_filename(asset_id, scale))
 }
 
 /// Design-system-relative path for one Android raster drawable PNG.
 #[must_use]
 pub fn android_raster_artifact_rel(asset_id: &str, density: &str) -> String {
     let snake = kebab_to_snake(asset_id);
-    format!(
-        "{}/drawable-{density}/{snake}.png",
-        exports_root(Platform::Android)
-    )
+    format!("{}/drawable-{density}/{snake}.png", exports_root(Platform::Android))
 }
 
 /// Target platform for export path computation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Platform {
+    /// iOS export tree (`Assets.xcassets`, PDF imagesets).
     Ios,
+    /// Android export tree (`res/drawable-*`, vector drawables).
     Android,
 }
 
 impl Platform {
+    /// Lowercase wire token for this platform (`"ios"` / `"android"`).
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -84,6 +76,7 @@ impl Platform {
         }
     }
 
+    /// Parse a platform from its lowercase wire token; `None` if unrecognised.
     #[must_use]
     pub fn parse(token: &str) -> Option<Self> {
         match token {
@@ -114,7 +107,9 @@ pub fn kebab_to_snake(id: &str) -> String {
 /// Returns `None` for roles/kinds that do not auto-convert from a canonical
 /// master (`symbol`, `photo`, raster UI icons without `source:`, etc.).
 #[must_use]
-pub fn export_layout(role: &str, kind: &str, platform: Platform, asset_id: &str) -> Option<ExportLayout> {
+pub fn export_layout(
+    role: &str, kind: &str, platform: Platform, asset_id: &str,
+) -> Option<ExportLayout> {
     let materialize_role = resolve_materialize_role(role, kind)?;
     Some(match materialize_role {
         MaterializeRole::IconVector => icon_vector_layout(platform, asset_id),
@@ -164,7 +159,10 @@ fn icon_vector_layout(platform: Platform, asset_id: &str) -> ExportLayout {
         Platform::Android => {
             let snake = kebab_to_snake(asset_id);
             let xml = format!("{}/drawable/{snake}.xml", exports_root(platform));
-            ExportLayout { pin: xml.clone(), artifacts: vec![xml] }
+            ExportLayout {
+                pin: xml.clone(),
+                artifacts: vec![xml],
+            }
         }
     }
 }
@@ -198,10 +196,7 @@ fn app_icon_layout(platform: Platform) -> ExportLayout {
             let root = format!("{}/app-icon/AppIcon.appiconset", exports_root(platform));
             ExportLayout {
                 pin: root.clone(),
-                artifacts: vec![
-                    format!("{root}/Contents.json"),
-                    format!("{root}/AppIcon.png"),
-                ],
+                artifacts: vec![format!("{root}/Contents.json"), format!("{root}/AppIcon.png")],
             }
         }
         Platform::Android => {
@@ -215,7 +210,7 @@ fn app_icon_layout(platform: Platform) -> ExportLayout {
                 artifacts.push(format!("{root}/drawable-{density}/ic_launcher_foreground.png"));
                 artifacts.push(format!("{root}/mipmap-{density}/ic_launcher.png"));
             }
-            ExportLayout { pin: root.clone(), artifacts }
+            ExportLayout { pin: root, artifacts }
         }
     }
 }
@@ -238,12 +233,9 @@ mod tests {
 
     #[test]
     fn icon_vector_ios_paths() {
-        let layout = export_layout("icon", "vector", Platform::Ios, "settings")
-            .expect("icon vector ios");
-        assert_eq!(
-            layout.pin,
-            "assets/exports/ios/settings.imageset/settings.pdf"
-        );
+        let layout =
+            export_layout("icon", "vector", Platform::Ios, "settings").expect("icon vector ios");
+        assert_eq!(layout.pin, "assets/exports/ios/settings.imageset/settings.pdf");
         assert_eq!(
             layout.artifacts,
             vec![
@@ -257,10 +249,7 @@ mod tests {
     fn icon_vector_android_paths() {
         let layout = export_layout("icon", "vector", Platform::Android, "chevron-right")
             .expect("icon vector android");
-        assert_eq!(
-            layout.pin,
-            "assets/exports/android/drawable/chevron_right.xml"
-        );
+        assert_eq!(layout.pin, "assets/exports/android/drawable/chevron_right.xml");
         assert_eq!(layout.artifacts, vec![layout.pin.clone()]);
     }
 
@@ -268,8 +257,7 @@ mod tests {
     fn decorative_vector_follows_icon_paths() {
         let ios = export_layout("decorative", "vector", Platform::Ios, "sparkle")
             .expect("decorative ios");
-        let icon = export_layout("icon", "vector", Platform::Ios, "sparkle")
-            .expect("icon ios");
+        let icon = export_layout("icon", "vector", Platform::Ios, "sparkle").expect("icon ios");
         assert_eq!(ios, icon);
     }
 
@@ -310,13 +298,9 @@ mod tests {
 
     #[test]
     fn illustration_android_paths() {
-        let layout =
-            export_layout("illustration", "vector", Platform::Android, "onboarding-hero")
-                .expect("illustration android");
-        assert_eq!(
-            layout.pin,
-            "assets/exports/android/drawable-xxxhdpi/onboarding_hero.png"
-        );
+        let layout = export_layout("illustration", "vector", Platform::Android, "onboarding-hero")
+            .expect("illustration android");
+        assert_eq!(layout.pin, "assets/exports/android/drawable-xxxhdpi/onboarding_hero.png");
         assert_eq!(
             layout.artifacts,
             vec![
@@ -331,12 +315,9 @@ mod tests {
 
     #[test]
     fn app_icon_export_roots() {
-        let ios = export_layout("app-icon", "vector", Platform::Ios, "app-icon")
-            .expect("app-icon ios");
-        assert_eq!(
-            ios.pin,
-            "assets/exports/ios/app-icon/AppIcon.appiconset"
-        );
+        let ios =
+            export_layout("app-icon", "vector", Platform::Ios, "app-icon").expect("app-icon ios");
+        assert_eq!(ios.pin, "assets/exports/ios/app-icon/AppIcon.appiconset");
         assert_eq!(
             ios.artifacts,
             vec![
@@ -349,9 +330,9 @@ mod tests {
             .expect("app-icon android");
         assert_eq!(android.pin, "assets/exports/android/app-icon");
         assert_eq!(android.artifacts.len(), 13);
-        assert!(android
-            .artifacts
-            .contains(&"assets/exports/android/app-icon/mipmap-anydpi-v26/ic_launcher.xml".to_string()));
+        assert!(android.artifacts.contains(
+            &"assets/exports/android/app-icon/mipmap-anydpi-v26/ic_launcher.xml".to_string()
+        ));
         assert!(android.artifacts.iter().any(|path| path.contains("drawable-mdpi")));
         assert!(android.artifacts.iter().any(|path| path.contains("mipmap-xxxhdpi")));
     }

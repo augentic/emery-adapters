@@ -7,26 +7,53 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  # The extension crates + the forked shared/ crate. Mirrors the lean
-  # carve-out posture the tools had in the platform repo's wasi-tools/
-  # workspace before extraction (RFC-48 D10).
+  # The two adapter extension crates (contracts + vectis). Full Rust
+  # workspace gate via `cargo make ci`, matching the platform engine's
+  # toolchain posture (RFC-48 D10).
   workspace:
     name: workspace
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      # Full-parallelism nextest profile; local runs keep the bounded
+      # default so macOS does not choke on the integration subprocesses.
+      NEXTEST_PROFILE: ci
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+
+      # The stable toolchain is pinned by rust-toolchain.toml; nightly
+      # rustfmt is additionally needed for the `fmt-check` gate, which runs
+      # `cargo +nightly fmt --all -- --check`.
+      - name: Install nightly rustfmt
+        uses: dtolnay/rust-toolchain@nightly
         with:
-          components: clippy
+          components: rustfmt
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rust-src, rustfmt
+          targets: wasm32-wasip2
+
       - uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
-      - name: Test
-        run: cargo test --workspace
+          cache-on-failure: true
+
+      - name: Install cargo tooling
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-make,cargo-nextest,cargo-deny,cargo-vet
+
+      # Full Rust workspace gate: fmt-check, clippy, nextest, doctests,
+      # doc, vet, deny.
+      - name: Rust workspace CI
+        run: cargo make ci
 
   # RFC-49 T5: the only remaining cross-repo seam. Build the platform
   # `specify` binary (branch-matched, falling back to main) and lint the

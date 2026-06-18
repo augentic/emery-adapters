@@ -31,10 +31,30 @@ jobs:
       - name: Checkout adapters
         uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
+      # The stable toolchain is pinned by rust-toolchain.toml; nightly
+      # rustfmt backs the `fmt-check` arm of the pre-publish gate below.
+      - name: Install nightly rustfmt
+        uses: dtolnay/rust-toolchain@nightly
         with:
+          components: rustfmt
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rust-src, rustfmt
           targets: wasm32-wasip2
       - uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo tooling
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-make,cargo-nextest
+
+      # Guard against publishing immutable artifacts from a broken tree:
+      # fmt-check + clippy + nextest + doctests + doc (the lighter pre-commit
+      # subset; vet/deny stay on the per-push CI gate).
+      - name: Pre-publish workspace check
+        run: cargo make check
 
       # RFC-49 T5 cross-repo seam: the platform owns the `specify` binary
       # that packs/publishes/verifies the artifact.

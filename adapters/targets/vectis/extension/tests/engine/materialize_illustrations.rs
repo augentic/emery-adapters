@@ -44,8 +44,7 @@ assets:
     assert_eq!(value["errors"].as_array().map(Vec::len), Some(0));
 
     let ios_2x = design.join("assets/exports/ios/onboarding-hero.imageset/onboarding-hero@2x.png");
-    let android_mdpi =
-        design.join("assets/exports/android/drawable-mdpi/onboarding_hero.png");
+    let android_mdpi = design.join("assets/exports/android/drawable-mdpi/onboarding_hero.png");
     assert!(ios_2x.is_file() && android_mdpi.is_file());
 
     let img_2x = ImageReader::open(&ios_2x).unwrap().decode().unwrap();

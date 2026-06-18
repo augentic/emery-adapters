@@ -77,10 +77,10 @@ pub fn run(args: &VerifyArgs) -> Result<Value, VectisError> {
     }
 }
 
-/// Render a `(success | error)` result as pretty-printed JSON with
-/// exit code. Both modes exit 1 when any `error`-severity finding is
-/// present (a missing supported shell, or an unsatisfiable launcher
-/// `app-icon`), and 0 otherwise.
+/// Render a `(success | error)` result as pretty-printed JSON with exit code.
+///
+/// Both modes exit 1 when any `error`-severity finding is present (a missing
+/// supported shell, or an unsatisfiable launcher `app-icon`), and 0 otherwise.
 #[must_use]
 pub fn render_json(outcome: Result<Value, VectisError>) -> (String, u8) {
     match outcome {
@@ -132,8 +132,8 @@ fn load_platforms(project_root: &Path) -> Result<Vec<String>, VectisError> {
     // there is no root-level `project.yaml` in a Specify project.
     let config_path = project_root.join(".specify").join("project.yaml");
     let source =
-        std::fs::read_to_string(&config_path).map_err(|_| VectisError::InvalidProject {
-            message: format!("project.yaml not readable at {}", config_path.display()),
+        std::fs::read_to_string(&config_path).map_err(|err| VectisError::InvalidProject {
+            message: format!("project.yaml not readable at {}: {err}", config_path.display()),
         })?;
     let doc: Value =
         serde_saphyr::from_str(&source).map_err(|err| VectisError::InvalidProject {

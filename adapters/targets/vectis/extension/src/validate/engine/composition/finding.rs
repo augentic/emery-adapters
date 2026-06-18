@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 /// One composition-mode finding: a JSON-Pointer-shaped `path` into the
 /// offending document and an operator-facing `message`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Finding {
+pub struct Finding {
     /// JSON Pointer into the validated document (`""` for whole-file).
     pub(crate) path: String,
     /// Operator-facing description of the violation.
@@ -34,6 +34,6 @@ impl From<Finding> for Value {
 }
 
 /// Project a typed finding list into the envelope's JSON array items.
-pub(crate) fn to_values(findings: Vec<Finding>) -> Vec<Value> {
+pub fn to_values(findings: Vec<Finding>) -> Vec<Value> {
     findings.into_iter().map(Value::from).collect()
 }

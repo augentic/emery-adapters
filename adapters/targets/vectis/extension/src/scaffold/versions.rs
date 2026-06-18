@@ -76,7 +76,7 @@ pub struct Android {
 }
 
 /// iOS pins. Empty today, but part of the complete version-file shape.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
 #[expect(
     clippy::empty_structs_with_brackets,
     reason = "Brackets keep the struct shape symmetric with siblings; a future iOS pin lands here."

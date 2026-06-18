@@ -14,12 +14,12 @@ mod infer;
 mod layout;
 #[path = "engine/materialize.rs"]
 mod materialize;
-#[path = "engine/materialize_illustrations.rs"]
-mod materialize_illustrations;
-#[path = "engine/materialize_app_icon.rs"]
-mod materialize_app_icon;
 #[path = "engine/materialize_acceptance_fixture.rs"]
 mod materialize_acceptance_fixture;
+#[path = "engine/materialize_app_icon.rs"]
+mod materialize_app_icon;
+#[path = "engine/materialize_illustrations.rs"]
+mod materialize_illustrations;
 #[path = "engine/paths.rs"]
 mod paths;
 #[path = "engine/tokens.rs"]

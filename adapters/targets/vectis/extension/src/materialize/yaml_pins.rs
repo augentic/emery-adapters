@@ -5,8 +5,8 @@ use std::path::Path;
 
 use serde_json::{Map, Value};
 
-use crate::materialize::paths::{Platform, export_layout};
 use crate::VectisError;
+use crate::materialize::paths::{Platform, export_layout};
 
 /// One platform slot whose export was written from `source:` in this invocation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -68,9 +68,7 @@ pub fn apply_auto_pins(instance: &mut Value, pins: &[AutoPin]) {
         let Some(entry) = assets.get_mut(&pin.asset_id).and_then(Value::as_object_mut) else {
             continue;
         };
-        let sources = entry
-            .entry("sources")
-            .or_insert_with(|| Value::Object(Map::new()));
+        let sources = entry.entry("sources").or_insert_with(|| Value::Object(Map::new()));
         if let Some(sources_obj) = sources.as_object_mut()
             && !sources_obj.contains_key(&pin.platform)
         {
@@ -117,8 +115,9 @@ fn atomic_bytes_write(path: &Path, bytes: &[u8]) -> Result<(), VectisError> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use serde_json::json;
+
+    use super::*;
 
     #[test]
     fn collect_auto_pins_dedupes_artifact_entries() {
@@ -145,10 +144,7 @@ mod tests {
 
         let pins = collect_auto_pins(&materialized, &assets);
         assert_eq!(pins.len(), 1);
-        assert_eq!(
-            pins[0].path,
-            "assets/exports/ios/settings.imageset/settings.pdf"
-        );
+        assert_eq!(pins[0].path, "assets/exports/ios/settings.imageset/settings.pdf");
     }
 
     #[test]
@@ -182,10 +178,7 @@ mod tests {
         apply_auto_pins(&mut instance, &pins);
 
         let sources = &instance["assets"]["settings"]["sources"];
-        assert_eq!(
-            sources["ios"],
-            "assets/exports/ios/settings.imageset/settings.pdf"
-        );
+        assert_eq!(sources["ios"], "assets/exports/ios/settings.imageset/settings.pdf");
         assert_eq!(sources["android"], "assets/exports/android/drawable/settings.xml");
     }
 }

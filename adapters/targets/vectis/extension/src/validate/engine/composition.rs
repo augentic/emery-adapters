@@ -9,14 +9,14 @@
 mod catalog;
 mod finding;
 mod refs;
-pub(crate) mod structural_identity;
+pub mod structural_identity;
 
 use std::path::Path;
 
 use serde_json::{Value, json};
 
-pub(crate) use self::finding::Finding;
-pub(crate) use self::structural_identity::{
+pub use self::finding::Finding;
+pub use self::structural_identity::{
     Skeleton, build_group_skeleton, check_structural_identity, fingerprint, skeleton_to_json,
 };
 use super::paths::{discover_artifact, discover_catalog, resolve_default_path};
@@ -69,10 +69,8 @@ use crate::validate::error::VectisError;
 /// `composition.yaml` (a core-only project has none by design), the
 /// mode exits cleanly with a `skipped` envelope instead of erroring.
 pub(super) fn validate(path: Option<&Path>) -> Result<Value, VectisError> {
-    let target = path.map_or_else(
-        || resolve_default_path(ValidateMode::Composition),
-        std::path::Path::to_path_buf,
-    );
+    let target =
+        path.map_or_else(|| resolve_default_path(ValidateMode::Composition), Path::to_path_buf);
 
     if path.is_none() && !target.exists() {
         return Ok(json!({
@@ -116,14 +114,14 @@ pub(super) fn validate(path: Option<&Path>) -> Result<Value, VectisError> {
             let tokens_sibling = discover_artifact(&target, ValidateMode::Tokens);
             let assets_sibling = discover_artifact(&target, ValidateMode::Assets);
 
-            if let Some(ref tokens_path) = tokens_sibling {
+            if let Some(tokens_path) = &tokens_sibling {
                 let report = run_inner(ValidateMode::Tokens, tokens_path)?;
                 results.push(json!({
                     "mode": ValidateMode::Tokens.as_str(),
                     "report": report,
                 }));
             }
-            if let Some(ref assets_path) = assets_sibling {
+            if let Some(assets_path) = &assets_sibling {
                 let report = run_inner(ValidateMode::Assets, assets_path)?;
                 results.push(json!({
                     "mode": ValidateMode::Assets.as_str(),
@@ -139,12 +137,12 @@ pub(super) fn validate(path: Option<&Path>) -> Result<Value, VectisError> {
             // tokens.yaml / assets.yaml"; the auto-invoke catches
             // "tokens.yaml / assets.yaml is itself structurally
             // broken".
-            if let Some(ref tokens_path) = tokens_sibling
+            if let Some(tokens_path) = &tokens_sibling
                 && let Some(tokens_value) = parse_yaml_file(tokens_path)
             {
                 refs::resolve_token_references(&instance, &tokens_value, &mut errors);
             }
-            if let Some(ref assets_path) = assets_sibling
+            if let Some(assets_path) = &assets_sibling
                 && let Some(assets_value) = parse_yaml_file(assets_path)
             {
                 refs::resolve_asset_references(&instance, &assets_value, &mut errors);
@@ -159,7 +157,7 @@ pub(super) fn validate(path: Option<&Path>) -> Result<Value, VectisError> {
             // Unlike tokens/assets (which are auto-invoked and report
             // their own parse errors), the catalog has no sibling
             // validator — report read/parse failures explicitly.
-            if let Some(ref catalog_path) = discover_catalog(&target) {
+            if let Some(catalog_path) = &discover_catalog(&target) {
                 match catalog::parse_catalog_file(catalog_path) {
                     Ok(catalog_value) => {
                         catalog::check_catalog_cross_references(

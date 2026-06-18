@@ -14,18 +14,17 @@ mod yaml_pins;
 
 use std::path::{Path, PathBuf};
 
+use app_icon::materialize_app_icons;
 use clap::{Args as ClapArgs, Subcommand};
+use icons::materialize_icon_vectors;
+use illustrations::materialize_illustration_vectors;
+use raster_copy::materialize_photo_rasters;
 use serde_json::{Value, json};
+use yaml_pins::{apply_auto_pins, atomic_yaml_write, collect_auto_pins, serialise_yaml};
 
 use crate::validate::engine::resolve_default_path_with_root;
 use crate::validate::{ValidateMode, find_project_root};
 use crate::{VectisError, render_json as render_value};
-
-use app_icon::materialize_app_icons;
-use icons::materialize_icon_vectors;
-use illustrations::materialize_illustration_vectors;
-use raster_copy::materialize_photo_rasters;
-use yaml_pins::{apply_auto_pins, atomic_yaml_write, collect_auto_pins, serialise_yaml};
 
 /// Nested targets under `vectis materialize`.
 #[derive(Subcommand, Debug, Clone, PartialEq, Eq)]
@@ -169,14 +168,7 @@ fn run_assets(args: &AssetsArgs) -> Result<Value, VectisError> {
         }
     }
 
-    Ok(build_summary(
-        &path,
-        args.dry_run,
-        &platforms,
-        &materialized,
-        &skipped_pins,
-        &errors,
-    ))
+    Ok(build_summary(&path, args.dry_run, &platforms, &materialized, &skipped_pins, &errors))
 }
 
 fn resolve_assets_path(path: Option<&Path>) -> PathBuf {

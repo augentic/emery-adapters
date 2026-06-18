@@ -36,7 +36,7 @@ struct ComponentInstance {
 /// (`*-when` keys' *condition values* are wiring; their *presence*
 /// participates in skeleton identity.)
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub(crate) enum Skeleton {
+pub enum Skeleton {
     /// A leaf item identified by its single property key (e.g.
     /// `text`, `icon-button`, `checkbox`, `image`). Item leaf
     /// properties are deliberately ignored.
@@ -50,9 +50,7 @@ pub(crate) enum Skeleton {
 /// Walk a YAML sub-tree (typically the `screens` value) and validate
 /// the structural-identity rule for every `component: <slug>`
 /// directive present. Shared between layout mode and composition mode.
-pub(crate) fn check_structural_identity(
-    node: &Value, json_path: &str, errors: &mut Vec<Finding>,
-) {
+pub fn check_structural_identity(node: &Value, json_path: &str, errors: &mut Vec<Finding>) {
     let mut instances: Vec<ComponentInstance> = Vec::new();
     walk_for_components(node, json_path, false, &mut instances);
 
@@ -129,7 +127,7 @@ fn walk_for_components(
 /// the same `*-when`-keyed props (in any author order) compare equal.
 /// Children are derived from the `items:` array; missing `items`
 /// (schema-invalid) becomes an empty children list.
-pub(crate) fn build_group_skeleton(group_props: &Value) -> Skeleton {
+pub fn build_group_skeleton(group_props: &Value) -> Skeleton {
     let mut when_keys: Vec<String> = group_props
         .as_object()
         .map(|m| m.keys().filter(|k| k.ends_with("-when") && k.len() > 5).cloned().collect())
@@ -159,7 +157,7 @@ pub(crate) fn build_group_skeleton(group_props: &Value) -> Skeleton {
 /// Schema-invalid shapes (zero or multi-key objects) collapse to a
 /// stable `<unknown>` placeholder so the schema validator's own
 /// findings remain the authoritative diagnostic.
-pub(crate) fn build_node_skeleton(node: &Value) -> Skeleton {
+pub fn build_node_skeleton(node: &Value) -> Skeleton {
     let Some(map) = node.as_object() else {
         return Skeleton::Item(String::from("<unknown>"));
     };
@@ -184,7 +182,7 @@ pub(crate) fn build_node_skeleton(node: &Value) -> Skeleton {
 /// The fingerprint *string* is required only where a stable cross-process
 /// key is needed (the candidate-cache entry and the bind-time collision
 /// suffix); in-process clustering can key on the `Skeleton` directly.
-pub(crate) fn fingerprint(skeleton: &Skeleton) -> String {
+pub fn fingerprint(skeleton: &Skeleton) -> String {
     let mut canonical = String::new();
     encode_skeleton(skeleton, &mut canonical);
     let digest = Sha256::digest(canonical.as_bytes());
@@ -233,7 +231,7 @@ fn encode_skeleton(skeleton: &Skeleton, buf: &mut String) {
 /// the `infer` report carries as the cluster's representative skeleton.
 /// Mirrors the [`encode_skeleton`] grammar in structured form so the
 /// build skill can read the shape it must name.
-pub(crate) fn skeleton_to_json(skeleton: &Skeleton) -> Value {
+pub fn skeleton_to_json(skeleton: &Skeleton) -> Value {
     match skeleton {
         Skeleton::Item(kind) => json!({ "item": kind }),
         Skeleton::Group { when_keys, items } => json!({

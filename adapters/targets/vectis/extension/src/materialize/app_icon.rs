@@ -6,12 +6,11 @@ mod ios;
 
 use std::path::Path;
 
+pub use canvas::{LAUNCHER_CANVAS_SIZE, decode_to_launcher_canvas};
 use serde_json::{Value, json};
 
 use crate::materialize::icons::{active_platform_pin, asset_error, materialized_entry};
 use crate::materialize::paths::{Platform, export_layout, resolve_under_assets_dir};
-
-pub use canvas::{LAUNCHER_CANVAS_SIZE, decode_to_launcher_canvas};
 
 /// Materialize `role: app-icon` entries with a canonical `source:` master.
 pub fn materialize_app_icons(
@@ -57,14 +56,9 @@ pub fn materialize_app_icons(
 
             let result = match platform {
                 Platform::Ios => materialize_ios(asset_id, assets_dir, &layout, &canvas, dry_run),
-                Platform::Android => materialize_android(
-                    asset_id,
-                    entry,
-                    assets_dir,
-                    &layout,
-                    &canvas,
-                    dry_run,
-                ),
+                Platform::Android => {
+                    materialize_android(asset_id, entry, assets_dir, &layout, &canvas, dry_run)
+                }
             };
             match result {
                 Ok(written) => materialized.extend(written),
@@ -87,9 +81,8 @@ fn materialize_ios(
     }
 
     let appiconset_dir = resolve_under_assets_dir(assets_dir, &layout.pin);
-    ios::write_appiconset(canvas, &appiconset_dir).map_err(|err| {
-        format!("asset `{asset_id}`: iOS app-icon export failed: {err}")
-    })?;
+    ios::write_appiconset(canvas, &appiconset_dir)
+        .map_err(|err| format!("asset `{asset_id}`: iOS app-icon export failed: {err}"))?;
 
     Ok(layout
         .artifacts
@@ -112,9 +105,8 @@ fn materialize_android(
 
     let export_root = resolve_under_assets_dir(assets_dir, &layout.pin);
     let background = android::resolve_launcher_background(entry, assets_dir);
-    android::write_android_export(canvas, &background, &export_root).map_err(|err| {
-        format!("asset `{asset_id}`: Android app-icon export failed: {err}")
-    })?;
+    android::write_android_export(canvas, &background, &export_root)
+        .map_err(|err| format!("asset `{asset_id}`: Android app-icon export failed: {err}"))?;
 
     Ok(layout
         .artifacts
@@ -125,11 +117,12 @@ fn materialize_android(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::fs;
 
     use image::{ImageFormat, Rgba, RgbaImage};
     use tempfile::tempdir;
+
+    use super::*;
 
     const SQUARE_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
   <rect width="1024" height="1024" fill="#112233"/>
@@ -174,7 +167,7 @@ assets:
         let png = appiconset.join(ios::APPICON_PNG_NAME);
         let contents = appiconset.join("Contents.json");
         assert!(png.is_file() && contents.is_file());
-        assert!(serde_json::from_slice::<Value>(&fs::read(&contents).expect("read")).is_ok());
+        serde_json::from_slice::<Value>(&fs::read(&contents).expect("read")).unwrap();
 
         let decoded = image::ImageReader::open(&png).expect("open").decode().expect("decode");
         assert_eq!(decoded.width(), 1024);
@@ -346,10 +339,7 @@ assets:
         );
         assert_eq!(errors.len(), 1);
         assert!(
-            errors[0]["message"]
-                .as_str()
-                .unwrap_or("")
-                .contains("assets-app-icon-source-invalid")
+            errors[0]["message"].as_str().unwrap_or("").contains("assets-app-icon-source-invalid")
         );
     }
 }

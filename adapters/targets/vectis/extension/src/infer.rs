@@ -135,7 +135,7 @@ pub fn run(args: &InferArgs) -> Result<Value, VectisError> {
 
     let mut occurrences: Vec<GroupOccurrence> = Vec::new();
     collect_baseline_groups(&instance, &mut occurrences);
-    if let Some(ref cache_dir) = args.candidate_cache
+    if let Some(cache_dir) = &args.candidate_cache
         && cache_dir.is_dir()
     {
         collect_cached_groups(cache_dir, &mut occurrences);
@@ -144,11 +144,8 @@ pub fn run(args: &InferArgs) -> Result<Value, VectisError> {
     // Step 0: register a pinned binding per operator part,
     // fingerprinted at read time through the single normaliser — so the
     // pin is byte-comparable with discovered fingerprints by construction.
-    let pins = if let Some(ref parts_path) = args.parts {
-        collect_part_pins(parts_path)
-    } else {
-        Vec::new()
-    };
+    let pins =
+        args.parts.as_ref().map_or_else(Vec::new, |parts_path| collect_part_pins(parts_path));
 
     // Fingerprints actually present in the baseline/cache, used to split
     // matched pins (promoted + named) from unmatched pins (reported).
@@ -179,6 +176,7 @@ pub fn run(args: &InferArgs) -> Result<Value, VectisError> {
 }
 
 /// Render an inference outcome as pretty-printed JSON with an exit code.
+///
 /// A successful report always exits 0 — it is informational; runtime
 /// errors carry the typed-error payload and the error's own exit code.
 #[must_use]
@@ -451,7 +449,7 @@ fn cluster(
                 );
             }
             let mut entry = json!({
-                "fingerprint": fp.clone(),
+                "fingerprint": fp,
                 "occurrences": c.screens.len(),
                 "screens": c.screens.into_iter().collect::<Vec<_>>(),
                 "skeleton": skeleton_to_json(&c.skeleton),

@@ -4,7 +4,7 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use crate::materialize::paths::{export_layout, kebab_to_snake, Platform};
+use crate::materialize::paths::{Platform, export_layout, kebab_to_snake};
 
 /// Whether a composition-referenced asset has a committed export on
 /// disk for `platform` without a `sources.<platform>` pin.
@@ -20,10 +20,7 @@ pub(super) fn conventional_export_exists(
     if let Some(plat) = Platform::parse(platform)
         && let Some(layout) = export_layout(role, kind, plat, id)
     {
-        return layout
-            .artifacts
-            .iter()
-            .any(|rel| assets_dir.join(rel).is_file());
+        return layout.artifacts.iter().any(|rel| assets_dir.join(rel).is_file());
     }
     conventional_raster_export_exists(assets_dir, id, kind, platform)
 }
@@ -65,17 +62,17 @@ fn conventional_raster_export_exists(
 }
 
 /// Path A for vector inventory: canonical `source:` exists on disk.
-pub(super) fn vector_source_materializable(assets_dir: &Path, entry: &serde_json::Value) -> bool {
+pub(super) fn vector_source_materializable(assets_dir: &Path, entry: &Value) -> bool {
     entry
         .get("source")
-        .and_then(serde_json::Value::as_str)
+        .and_then(Value::as_str)
         .is_some_and(|source| assets_dir.join(source).is_file())
 }
 
 /// Whether an iOS imageset directory carries materialized content.
 ///
 /// `Contents.json` alone does not satisfy export presence (RFC §6.3).
-pub(crate) fn imageset_has_materialized_content(dir: &Path) -> bool {
+pub fn imageset_has_materialized_content(dir: &Path) -> bool {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return false;
     };
@@ -87,8 +84,9 @@ pub(crate) fn imageset_has_materialized_content(dir: &Path) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use serde_json::json;
+
+    use super::*;
 
     #[test]
     fn icon_vector_android_export_matches_materialize_layout() {
@@ -136,4 +134,3 @@ mod tests {
         assert!(conventional_export_exists(design, "hero", "raster", "android", &entry));
     }
 }
-

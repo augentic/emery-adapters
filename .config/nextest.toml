@@ -1,0 +1,20 @@
+# Nextest behavior for the adapters workspace.
+
+[profile.default]
+# Bound total fan-out so the subprocess-heavy CLI integration suites
+# (each forks a binary per case) cannot oversubscribe CPU / file
+# descriptors on macOS. A flat `4` keeps local runs safe regardless of
+# core count; override ad hoc with `--test-threads N`. CI opts into full
+# parallelism via the `ci` profile below.
+test-threads = 4
+# Flag hangs instead of letting a test sit forever; four periods without
+# progress terminates the test.
+slow-timeout = { period = "60s", terminate-after = 4 }
+# Tests are deterministic; a flake is a bug, never retry it away.
+retries = 0
+
+[profile.ci]
+# CI runs on Linux, where subprocess fan-out is cheap, so use every core.
+test-threads = "num-cpus"
+failure-output = "immediate-final"
+fail-fast = false

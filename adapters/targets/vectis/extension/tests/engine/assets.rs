@@ -877,9 +877,7 @@ screens:
     .expect("materialize succeeds");
 
     assert!(
-        design
-            .join("assets/exports/ios/chevron-right.imageset/chevron-right.pdf")
-            .is_file(),
+        design.join("assets/exports/ios/chevron-right.imageset/chevron-right.pdf").is_file(),
         "ios export should exist after materialize"
     );
 

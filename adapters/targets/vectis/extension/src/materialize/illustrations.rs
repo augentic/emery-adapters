@@ -8,7 +8,9 @@ use std::path::Path;
 use serde_json::{Value, json};
 
 use crate::materialize::icons::{active_platform_pin, asset_error, materialized_entry};
-use crate::materialize::paths::{Platform, export_layout, ios_imageset_dir, resolve_under_assets_dir};
+use crate::materialize::paths::{
+    Platform, export_layout, ios_imageset_dir, resolve_under_assets_dir,
+};
 use crate::materialize::svg::parse_icon_svg;
 
 /// Materialize every in-scope `role: illustration` vector entry from `source:`.
@@ -28,7 +30,10 @@ pub fn materialize_illustration_vectors(
         let svg_bytes = match std::fs::read(&source_path) {
             Ok(bytes) => bytes,
             Err(err) => {
-                errors.push(asset_error(asset_id, &format!("source not readable at {source_rel}: {err}")));
+                errors.push(asset_error(
+                    asset_id,
+                    &format!("source not readable at {source_rel}: {err}"),
+                ));
                 continue;
             }
         };
@@ -105,11 +110,12 @@ fn is_illustration_vector_entry(entry: &Value) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::fs;
 
     use image::ImageReader;
     use tempfile::tempdir;
+
+    use super::*;
 
     const TRIANGLE: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
   <path fill="#010203" d="M12 2L2 22h20z"/>
@@ -149,10 +155,11 @@ assets:
         );
         assert!(errors.is_empty(), "unexpected errors: {errors:?}");
 
-        let ios_2x = design.join("assets/exports/ios/onboarding-hero.imageset/onboarding-hero@2x.png");
-        let ios_3x = design.join("assets/exports/ios/onboarding-hero.imageset/onboarding-hero@3x.png");
-        let android_mdpi =
-            design.join("assets/exports/android/drawable-mdpi/onboarding_hero.png");
+        let ios_2x =
+            design.join("assets/exports/ios/onboarding-hero.imageset/onboarding-hero@2x.png");
+        let ios_3x =
+            design.join("assets/exports/ios/onboarding-hero.imageset/onboarding-hero@3x.png");
+        let android_mdpi = design.join("assets/exports/android/drawable-mdpi/onboarding_hero.png");
         let android_xxxhdpi =
             design.join("assets/exports/android/drawable-xxxhdpi/onboarding_hero.png");
 

@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+publish.workspace = true
 description = "Standalone validator for the contracts adapter — SemVer + info.x-specify-id + cross-project uniqueness checks"
 categories = ["development-tools", "command-line-utilities"]
 keywords = ["specify", "contracts", "validate", "openapi", "asyncapi"]

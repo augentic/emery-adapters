@@ -6,8 +6,8 @@ use serde_json::{Value, json};
 
 use crate::materialize::icons::{asset_error, materialized_entry};
 use crate::materialize::paths::{
-    ANDROID_DENSITIES, IOS_RASTER_SCALES, Platform, android_raster_artifact_rel,
-    ios_imageset_dir, ios_raster_artifact_rel, ios_raster_filename, resolve_under_assets_dir,
+    ANDROID_DENSITIES, IOS_RASTER_SCALES, Platform, android_raster_artifact_rel, ios_imageset_dir,
+    ios_raster_artifact_rel, ios_raster_filename, resolve_under_assets_dir,
 };
 
 /// Copy per-density raster sources into conventional export paths for `role: photo`.
@@ -35,13 +35,7 @@ pub fn materialize_photo_rasters(
                 continue;
             };
 
-            match copy_platform_densities(
-                asset_id,
-                platform,
-                assets_dir,
-                density_map,
-                dry_run,
-            ) {
+            match copy_platform_densities(asset_id, platform, assets_dir, density_map, dry_run) {
                 Ok(written) => {
                     for path in written {
                         materialized.push(materialized_entry(asset_id, platform, &path));
@@ -89,7 +83,8 @@ fn copy_platform_densities(
             written.push(contents_rel.clone());
 
             if !dry_run {
-                let imageset_dir = resolve_under_assets_dir(assets_dir, &ios_imageset_dir(asset_id));
+                let imageset_dir =
+                    resolve_under_assets_dir(assets_dir, &ios_imageset_dir(asset_id));
                 std::fs::create_dir_all(&imageset_dir).map_err(|err| err.to_string())?;
                 let contents = json!({
                     "images": images,
@@ -132,18 +127,18 @@ fn copy_file(assets_dir: &Path, source_rel: &str, export_rel: &str) -> Result<()
     if let Some(parent) = dest_path.parent() {
         std::fs::create_dir_all(parent).map_err(|err| err.to_string())?;
     }
-    std::fs::copy(&source_path, &dest_path).map_err(|err| {
-        format!("copy `{source_rel}` → `{export_rel}` failed: {err}")
-    })?;
+    std::fs::copy(&source_path, &dest_path)
+        .map_err(|err| format!("copy `{source_rel}` → `{export_rel}` failed: {err}"))?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::fs;
 
     use tempfile::tempdir;
+
+    use super::*;
 
     fn write_png(path: &Path, width: u32, height: u32) {
         let img = image::RgbaImage::from_pixel(width, height, image::Rgba([1, 2, 3, 255]));

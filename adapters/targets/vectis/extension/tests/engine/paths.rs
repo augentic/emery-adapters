@@ -7,7 +7,9 @@ use specify_vectis::validate::__test_internals::{
 };
 use specify_vectis::validate::{ValidateArgs as Args, ValidateMode, run};
 
-use crate::engine_support::{write_assets_project, write_project_yaml, write_specs_composition, write_specify_project};
+use crate::engine_support::{
+    write_assets_project, write_project_yaml, write_specify_project, write_specs_composition,
+};
 
 /// `find_project_root` walks up from a starting path until it finds a
 /// `.specify/` ancestor. A starting path that is itself the project
@@ -317,7 +319,7 @@ screens:
     let design = tmp.path().join("design-system");
     std::fs::write(design.join("layout.yaml"), "version: 1\nscreens: {}\n").expect("layout");
     std::fs::write(design.join("tokens.yaml"), "version: 1\n").expect("tokens");
-    let _ = assets_path;
+    drop(assets_path);
 
     let envelope = run(&Args {
         mode: ValidateMode::All,

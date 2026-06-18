@@ -76,6 +76,12 @@ fn run() -> Result<(), String> {
         emit_assembly(&mut out, assembly, spec, &templates_root)?;
     }
 
+    // Each module emits a trailing `}\n\n` separator; collapse the final one so
+    // the generated file ends with a single newline and is rustfmt-clean.
+    while out.ends_with("\n\n") {
+        out.pop();
+    }
+
     if let Some(parent) = registry_out.parent() {
         fs::create_dir_all(parent).map_err(|err| format!("create {}: {err}", parent.display()))?;
     }
@@ -141,12 +147,12 @@ fn detect_orphans(assembly: &str, assembly_dir: &Path, spec: &AssemblySpec) -> R
 fn emit_assembly(
     out: &mut String, assembly: &str, spec: &AssemblySpec, templates_root: &Path,
 ) -> Result<(), String> {
-    let _ = writeln!(out, "pub(crate) mod {assembly} {{");
+    let _ = writeln!(out, "pub mod {assembly} {{");
     if spec.files.iter().any(|entry| entry.include_when.is_some()) {
         out.push_str("    use crate::scaffold::Capability;\n");
     }
     out.push_str("    use crate::scaffold::templates::{IncludeWhen, PathMode, TemplateEntry};\n\n");
-    out.push_str("    pub(crate) const ENTRIES: &[TemplateEntry] = &[\n");
+    out.push_str("    pub const ENTRIES: &[TemplateEntry] = &[\n");
 
     for entry in &spec.files {
         let source_path = templates_root.join(assembly).join(&entry.source);
@@ -182,17 +188,17 @@ fn path_mode_rust(path_mode: &str) -> &'static str {
 }
 
 fn include_when_rust(include_when: Option<&IncludeWhenSpec>) -> String {
-    match include_when {
-        None => "IncludeWhen::Always".to_string(),
-        Some(spec) => {
+    include_when.map_or_else(
+        || "IncludeWhen::Always".to_string(),
+        |spec| {
             let caps: Vec<String> = spec
                 .any_of
                 .iter()
                 .map(|tag| format!("Capability::{}", capability_variant(tag)))
                 .collect();
             format!("IncludeWhen::AnyOf(&[{}])", caps.join(", "))
-        }
-    }
+        },
+    )
 }
 
 fn capability_variant(tag: &str) -> &'static str {

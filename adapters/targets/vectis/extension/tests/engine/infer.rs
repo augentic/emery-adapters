@@ -560,7 +560,7 @@ screens:
 ";
     let (_tmp, path) = write_baseline(yaml);
     let args = InferArgs {
-        composition: path.clone(),
+        composition: path,
         candidate_cache: None,
         parts: None,
         min_occurrences: 3,

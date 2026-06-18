@@ -2,10 +2,10 @@
 
 use std::fmt::Write;
 
-use usvg::tiny_skia_path::{PathSegment, Point};
 use usvg::Tree;
+use usvg::tiny_skia_path::{PathSegment, Point};
 
-use crate::materialize::svg::{collect_paths, DrawablePath};
+use crate::materialize::svg::{DrawablePath, collect_paths};
 
 /// Write a single-page vector PDF for an icon imageset.
 ///
@@ -87,13 +87,14 @@ fn append_pdf_path(out: &mut String, path: &usvg::tiny_skia_path::Path, page_hei
 }
 
 fn quad_to_cubic(start: Point, control: Point, end: Point) -> (Point, Point, Point) {
+    const TWO_THIRDS: f32 = 2.0 / 3.0;
     let c1 = Point::from_xy(
-        start.x + (2.0 / 3.0) * (control.x - start.x),
-        start.y + (2.0 / 3.0) * (control.y - start.y),
+        TWO_THIRDS.mul_add(control.x - start.x, start.x),
+        TWO_THIRDS.mul_add(control.y - start.y, start.y),
     );
     let c2 = Point::from_xy(
-        end.x + (2.0 / 3.0) * (control.x - end.x),
-        end.y + (2.0 / 3.0) * (control.y - end.y),
+        TWO_THIRDS.mul_add(control.x - end.x, end.x),
+        TWO_THIRDS.mul_add(control.y - end.y, end.y),
     );
     (c1, c2, end)
 }
@@ -107,10 +108,7 @@ fn build_pdf(width: f32, height: f32, content: &str) -> Vec<u8> {
     let mut offsets = Vec::new();
 
     offsets.push(body.len());
-    let _ = write!(
-        body,
-        "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n"
-    );
+    let _ = write!(body, "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
 
     offsets.push(body.len());
     let _ = write!(body, "2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");

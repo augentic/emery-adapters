@@ -19,16 +19,30 @@ adapters/
     vectis/           # Crux cross-platform target (bundles the `vectis` extension)
   shared/             # shared references/rules forked from the platform repo;
                       # adapter `spec-runtime` / `agent-teams` symlinks resolve here
-shared/
-  vectis-shell-detect/  # stdlib-only Crux shell heuristics, forked from the platform
-Cargo.toml            # workspace: members = each `**/extension` crate + shared/vectis-shell-detect
+Cargo.toml            # workspace: members = each `**/extension` crate
 ```
+
+The Crux shell-detection heuristics the platform exposes as
+`specify-vectis-shell-detect` are forked inline into the vectis extension at
+`adapters/targets/vectis/extension/src/shell.rs` rather than as a separate
+workspace crate.
 
 ## Building the extensions
 
+The local gate mirrors CI — run it from the repo root:
+
 ```bash
-cargo build --workspace                                   # typecheck the extension crates
-cargo clippy --workspace --all-targets -- -D warnings     # lint posture (matches CI)
+cargo make check   # fmt-check + clippy + nextest + doctests + doc
+cargo make ci      # the full gate — adds cargo-vet + cargo-deny
+```
+
+The `fmt-check` arm shells out to nightly `rustfmt`, so a nightly toolchain
+plus the `cargo-make`, `cargo-nextest`, `cargo-deny`, and `cargo-vet` tools must
+be installed; the tasks are defined in `Makefile.toml`.
+
+Build the committed wasm32-wasip2 artifacts directly with:
+
+```bash
 cargo build --target wasm32-wasip2 --release -p specify-contract -p specify-vectis
 ```
 

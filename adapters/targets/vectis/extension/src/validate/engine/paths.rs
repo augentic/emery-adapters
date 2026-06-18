@@ -187,7 +187,7 @@ pub fn find_project_root(start: &Path) -> Option<PathBuf> {
 pub fn discover_catalog(start: &Path) -> Option<PathBuf> {
     let project_root = find_project_root(start)?;
     let path = project_root.join(".specify/design-system/components.yaml");
-    if path.is_file() { Some(path) } else { None }
+    path.is_file().then_some(path)
 }
 
 /// Map a [`ValidateMode`] to the `artifacts:` map key it resolves

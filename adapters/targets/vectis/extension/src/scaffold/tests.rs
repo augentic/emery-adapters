@@ -171,7 +171,7 @@ fn write_plan_merges_existing_gitignore() {
         .iter()
         .find(|file| file.relative_path == ".gitignore")
         .expect("core plan carries .gitignore");
-    super::runtime::merge_gitignore(&dir.path().join(".gitignore"), &gitignore_template.contents)
+    runtime::merge_gitignore(&dir.path().join(".gitignore"), &gitignore_template.contents)
         .expect("re-merge succeeds");
     let remerged = fs::read_to_string(dir.path().join(".gitignore")).unwrap();
     assert_eq!(merged, remerged, "second merge is a no-op");
@@ -212,6 +212,7 @@ fn run_writes_under_project_dir() {
     let _guard = env_lock();
     let dir = tempdir().unwrap();
     let previous = std::env::var_os("PROJECT_DIR");
+    #[expect(unsafe_code, reason = "edition-2024 set_var is unsafe; env_lock serializes access")]
     // SAFETY: this test serializes PROJECT_DIR mutation with `env_lock`.
     let () = unsafe { std::env::set_var("PROJECT_DIR", dir.path()) };
 
@@ -227,6 +228,10 @@ fn run_writes_under_project_dir() {
     assert_eq!(value["target"], "core");
     assert!(dir.path().join("shared/src/app.rs").is_file());
 
+    #[expect(
+        unsafe_code,
+        reason = "edition-2024 set_var/remove_var are unsafe; env_lock serializes access"
+    )]
     // SAFETY: this test serializes PROJECT_DIR mutation with `env_lock`.
     unsafe {
         match previous {
