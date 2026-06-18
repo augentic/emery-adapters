@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "targets/contracts/extension",
     "targets/vectis/extension",
+    "tools/rust-quality",
 ]
 
 # The Specify adapters repo (RFC-48 / RFC-49 T6). Each bundled adapter
