@@ -72,8 +72,9 @@ screens:
 // `verify_catalog_present_imageset_exits_clean`), and the android vector-icon
 // *satisfied* branch by `verify_catalog_skips_app_icon_dedups_and_ignores_unknown_refs`
 // (drawable xml present). The cases kept below — Contents.json-only imageset,
-// symbol-kind skip, android vector-icon *missing* — are private branches that
-// integration does not reach.
+// symbol-kind skip, android vector-icon *missing*, and the android
+// illustration density-raster *miss* — are private branches that integration
+// does not reach.
 #[test]
 fn contents_json_only_imageset_is_missing() {
     let tmp = tempdir().unwrap();
@@ -154,4 +155,23 @@ screens:
     assert_eq!(findings.len(), 1);
     assert_eq!(findings[0]["id"], "shell-catalog-entry-missing");
     assert!(findings[0]["message"].as_str().unwrap().contains("drawable/settings.xml"));
+}
+
+#[test]
+fn android_illustration_missing_density_raster_emits_finding() {
+    let tmp = tempdir().unwrap();
+    scaffold_project(tmp.path());
+    write_inventory(tmp.path());
+
+    // `empty-tasks-hero` is a `role: illustration` vector, so the android
+    // catalog probe falls through the vector-drawable arm to the density-raster
+    // search; with no `res/drawable-<density>/empty_tasks_hero.png` on disk it
+    // exhausts every density and reports the entry missing (the
+    // `android_shell_has_density_raster` no-match return).
+    let findings = catalog_findings(tmp.path(), &["android".to_string()]);
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0]["id"], "shell-catalog-entry-missing");
+    let message = findings[0]["message"].as_str().unwrap();
+    assert!(message.contains("empty-tasks-hero"));
+    assert!(message.contains("drawable-<density>"));
 }

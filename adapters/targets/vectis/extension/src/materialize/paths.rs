@@ -322,7 +322,7 @@ mod tests {
 
         for case in cases {
             let layout = export_layout(case.role, case.kind, case.platform, case.asset_id)
-                .unwrap_or_else(|| panic!("{}/{} {:?}", case.role, case.kind, case.platform));
+                .expect("declared layout case resolves");
             assert_eq!(layout.pin, case.pin, "{}/{}", case.role, case.kind);
             assert_eq!(
                 layout.artifacts,
