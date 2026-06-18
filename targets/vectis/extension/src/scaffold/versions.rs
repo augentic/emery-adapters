@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::scaffold::ScaffoldError;
 
 /// The raw text of the embedded defaults compiled into the scaffold renderer.
-const EMBEDDED_DEFAULTS: &str = include_str!("../../embedded/versions.toml");
+const EMBEDDED_DEFAULTS: &str = include_str!("../../versions.toml");
 
 /// Top-level pinned version document.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]

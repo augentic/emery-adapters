@@ -21,7 +21,7 @@ The umbrella decision for `tokens.yaml`, `assets.yaml`, `layout.yaml`,
 > bare `when:` (`stateEntry.when`) is part of the unwired subset and
 > is preserved.
 
-_Codified in: `crates/vectis/src/validate/engine/layout.rs::validate_layout`,
+_Codified in: `src/validate/engine/layout.rs::validate_layout`,
 `walk_unwired`, and `forbidden_wiring_key`._
 
 ### §E — Resolution checks live in the input validation gate
@@ -35,7 +35,7 @@ _Codified in: `crates/vectis/src/validate/engine/layout.rs::validate_layout`,
 > not generate noise.
 
 _Codified in:
-`crates/vectis/src/validate/engine/assets.rs::validate_assets`,
+`src/validate/engine/assets.rs::validate_assets`,
 `check_asset_files`, `check_platform_coverage`, and `check_file`._
 
 ### §F — V1 token-reference categories
@@ -49,7 +49,7 @@ _Codified in:
 > are deliberately excluded from V1 reference resolution.
 
 _Codified in:
-`crates/vectis/src/validate/engine/composition.rs::resolve_token_references`,
+`src/validate/engine/composition.rs::resolve_token_references`,
 `walk_token_refs`, `token_category_for_key`, and `check_token_ref`._
 
 ### §G — Structural-identity rule
@@ -65,7 +65,7 @@ _Codified in:
 > are exempt from base-equality.
 
 _Codified in:
-`crates/vectis/src/validate/engine/composition.rs::check_structural_identity`,
+`src/validate/engine/composition.rs::check_structural_identity`,
 `walk_for_components`, `build_group_skeleton`, `build_node_skeleton`,
 plus the `Skeleton` and `ComponentInstance` types. Layout mode
 reuses the same engine via `engine/layout.rs::validate_layout`._
@@ -88,7 +88,7 @@ reuses the same engine via `engine/layout.rs::validate_layout`._
 > run.
 
 _Codified in:
-`crates/vectis/src/validate/engine/paths.rs::{resolve_default_path,
+`src/validate/engine/paths.rs::{resolve_default_path,
 resolve_default_path_with_root, default_project_root,
 discover_artifact, find_project_root, paths_for_key,
 expand_path_template, EMBEDDED_ARTIFACT_PATHS}` and
@@ -103,32 +103,30 @@ expand_path_template, EMBEDDED_ARTIFACT_PATHS}` and
 > code helper picks up nested findings without extra plumbing.
 
 _Codified in:
-`crates/vectis/src/validate/engine/composition.rs::validate_composition`
+`src/validate/engine/composition.rs::validate_composition`
 (auto-invoke + cross-artifact resolution layer) and
 `engine/mod.rs::run_inner` (the re-entrant dispatch helper)._
 
 ### Appendix A — embedded `tokens.schema.json`
 
-> The embedded tokens schema is vendored from `specify` at
-> `adapters/vectis/tokens.schema.json`. The two copies stay in
-> lock-step: the upstream is canonical and any edit there must be
-> mirrored here byte-for-byte.
+> The embedded tokens schema is the tool-owned canonical
+> `schemas/tokens.schema.json` in this crate; there is no upstream
+> copy to mirror.
 
 _Codified in:
-`crates/vectis/src/validate/engine/shared.rs::TOKENS_SCHEMA_SOURCE`
+`src/validate/engine/shared.rs::TOKENS_SCHEMA_SOURCE`
 and `tokens_validator`._
 
 ### Appendix B — embedded `assets.schema.json`
 
-> The embedded assets schema is vendored from `specify` at
-> `adapters/vectis/assets.schema.json`. The order of platform
+> The embedded assets schema is the tool-owned canonical
+> `schemas/assets.schema.json` in this crate. The order of platform
 > densities (`1x`, `2x`, `3x` for iOS; `mdpi` … `xxxhdpi` for
 > Android) matches the schema's `propertyNames` and is the order
-> warnings render in. The same byte-identity discipline as the
-> tokens copy applies.
+> warnings render in.
 
 _Codified in:
-`crates/vectis/src/validate/engine/shared.rs::ASSETS_SCHEMA_SOURCE`,
+`src/validate/engine/shared.rs::ASSETS_SCHEMA_SOURCE`,
 `assets_validator`, and `engine/assets.rs::raster_densities`._
 
 ### Appendix C — example `layout.yaml`
@@ -136,36 +134,36 @@ _Codified in:
 > Pinned verbatim as the happy-path schema fixture; any future
 > drift surfaces in the layout-mode test suite first.
 
-_Codified in: `wasi-tools/vectis/tests/engine/layout.rs::APPENDIX_C_LAYOUT_YAML`._
+_Codified in: `tests/engine/layout.rs::APPENDIX_C_LAYOUT_YAML`._
 
 ### Appendix D — example `tokens.yaml`
 
 > Pinned verbatim as the happy-path tokens schema fixture; any
 > future drift surfaces in the tokens-mode test suite first.
 
-_Codified in: `wasi-tools/vectis/tests/engine/tokens.rs::APPENDIX_D_TOKENS_YAML`._
+_Codified in: `tests/engine/tokens.rs::APPENDIX_D_TOKENS_YAML`._
 
 ### Appendix E — example `assets.yaml`
 
 > Pinned verbatim as the happy-path assets schema fixture; any
 > future drift surfaces in the assets-mode test suite first.
 
-_Codified in: `wasi-tools/vectis/tests/engine/assets.rs::APPENDIX_E_ASSETS_YAML`._
+_Codified in: `tests/engine/assets.rs::APPENDIX_E_ASSETS_YAML`._
 
 ### Appendix F — patched `composition.schema.json`
 
-> The embedded composition schema is the upstream
-> `adapters/vectis/composition.schema.json` (in the `specify`
-> repo) with the F-patch applied. The schema is shared between
+> The embedded composition schema is the tool-owned canonical
+> `schemas/composition.schema.json` in this crate, with the F-patch
+> baked in. The schema is shared between
 > `layout` mode (unwired-subset runtime) and `composition` mode (full
 > lifecycle runtime). The F.2 patch's `component.not.enum` rejects
 > reserved slugs (`header`, `body`, `footer`, `fab`).
 
 _Codified in:
-`crates/vectis/src/validate/engine/shared.rs::COMPOSITION_SCHEMA_SOURCE`
+`src/validate/engine/shared.rs::COMPOSITION_SCHEMA_SOURCE`
 and `composition_validator`. Reserved-slug rejection is exercised by
 the layout- and composition-mode test suites under
-`crates/vectis/tests/`._
+`tests/`._
 
 ### §J — Conservative directive emission
 
@@ -173,7 +171,7 @@ the layout- and composition-mode test suites under
 > not require ≥2 instances. A single `component:` instance passes
 > silently because it has nothing to compare against.
 
-_Codified in: `crates/vectis/src/validate/engine/composition.rs::check_structural_identity`
+_Codified in: `src/validate/engine/composition.rs::check_structural_identity`
 (early-exit when `base.len() < 2`)._
 
 ## Wiring resolution rules
@@ -188,7 +186,7 @@ _Codified in: `crates/vectis/src/validate/engine/composition.rs::check_structura
 > reused by composition mode for asset-id resolution.
 
 _Codified in:
-`crates/vectis/src/validate/engine/composition.rs::validate_composition`
+`src/validate/engine/composition.rs::validate_composition`
 (deliberate deferral note) and
 `engine/assets.rs::collect_asset_references` (the shared walker
 composition mode reuses)._
@@ -202,7 +200,7 @@ composition mode reuses)._
 > and (for `all` / auto-invoke) `results: [...]`, and exits non-zero
 > only when a real sub-report carries errors.
 
-_Codified in: `crates/vectis/src/validate.rs` (the public
+_Codified in: `src/validate.rs` (the public
 `Args`, `ValidateMode`, `render_json`, and `validate_exit_code`
 surface) and `src/main.rs` (the binary entry point)._
 
@@ -243,9 +241,9 @@ Canonical spec: [`augentic/specify` `rfcs/rfc-46-asset-materialization.md`](http
 > Build-time substitution of platform glyphs for `vector` / `raster` ids is
 > forbidden.
 
-_Codified in: `wasi-tools/vectis/src/validate/engine/assets/` (export presence,
+_Codified in: `src/validate/engine/assets/` (export presence,
 `assets-materialization-missing`, `assets-app-icon-*`);
-`wasi-tools/vectis/src/materialize/` (CLI surface, report envelope,
+`src/materialize/` (CLI surface, report envelope,
 `paths.rs` export conventions, `icons/` SVG→PDF/VD XML, `illustrations/` SVG→PNG,
 `raster_copy.rs` photo density copy; pin auto-write lands R46-S21)._
 
@@ -269,7 +267,7 @@ factors:
 under `sources.<platform>` are copied byte-for-byte into the conventional
 `exports/<platform>/…` layout (`paths.rs`); no `resvg` pass.
 
-_Codified in: `wasi-tools/vectis/src/materialize/render.rs`,
+_Codified in: `src/materialize/render.rs`,
 `illustrations/`, `raster_copy.rs`, `paths::{ios_scale_factor,android_density_factor}`._
 
 ### §L — Bootstrap `app-icon` gate
@@ -309,7 +307,7 @@ host `src/runtime/commands/slice/build.rs` (prepare-phase dispatch + re-raise)._
 > configuration, keeping the WASI command surface deterministic
 > across hosts.
 
-_Codified in: `crates/vectis/src/scaffold/versions.rs::Versions::resolve`,
+_Codified in: `src/scaffold/versions.rs::Versions::resolve`,
 `load_required`, and `load_embedded`._
 
 ## JSON Pointer
@@ -322,7 +320,7 @@ _Codified in: `crates/vectis/src/scaffold/versions.rs::Versions::resolve`,
 > `~0` and `/` becomes `~1`.
 
 _Codified in:
-`crates/vectis/src/validate/engine/shared.rs::escape_pointer_token`
+`src/validate/engine/shared.rs::escape_pointer_token`
 and the path-construction call sites under `engine/assets.rs`,
 `engine/layout.rs`, and `engine/composition.rs`._
 

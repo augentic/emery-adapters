@@ -391,4 +391,4 @@ its own colors.
 
 - [Component Catalog](../spec-runtime/components.md) — shared component factoring workflow.
 - [Layout Inferer Contract](../layout-inferer-contract.md) — component directive and validation rules.
-- [Vectis runtime schemas](../../schemas/README.md) — tool-owned schema retrieval and validation commands.
+- [Vectis runtime schemas](../schemas.md) — tool-owned schema retrieval and validation commands.

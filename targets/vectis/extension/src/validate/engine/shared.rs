@@ -1,7 +1,7 @@
 //! Shared primitives: lazy-compiled validators and the JSON-Pointer /
 //! YAML helpers every per-mode handler reuses.
 //!
-//! The embedded schema sources themselves live in [`crate::embedded`];
+//! The embedded schema sources themselves live in [`crate::schema_source`];
 //! this module owns only the lazy `OnceLock` validators built from them.
 
 use std::path::Path;
@@ -10,7 +10,7 @@ use std::sync::OnceLock;
 use jsonschema::Validator;
 use serde_json::Value;
 
-use crate::embedded::{ASSETS_SCHEMA_SOURCE, COMPOSITION_SCHEMA_SOURCE, TOKENS_SCHEMA_SOURCE};
+use crate::schema_source::{ASSETS_SCHEMA_SOURCE, COMPOSITION_SCHEMA_SOURCE, TOKENS_SCHEMA_SOURCE};
 use crate::validate::error::VectisError;
 
 /// Lazily compiled tokens validator. Compiling once per process avoids

@@ -1,6 +1,6 @@
 //! `vectis schema` subcommand — print a tool-owned schema to stdout.
 
-use crate::embedded::{ASSETS_SCHEMA_SOURCE, COMPOSITION_SCHEMA_SOURCE, TOKENS_SCHEMA_SOURCE};
+use crate::schema_source::{ASSETS_SCHEMA_SOURCE, COMPOSITION_SCHEMA_SOURCE, TOKENS_SCHEMA_SOURCE};
 use crate::render_json;
 
 /// Known schema names and their embedded sources.

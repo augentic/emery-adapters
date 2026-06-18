@@ -29,7 +29,7 @@ serde_json      = "1.0"
 # in `vectis verify`. crux_core 0.17.0's `cli` feature transitively pins
 # `uniffi_bindgen = "=0.29.4"`, so mixing a 0.31 runtime (shared crate) with a
 # 0.29 bindgen (invoked via `crux_core::cli::bindgen` inside
-# `templates/vectis/core/codegen.rs`) fails with "unresolved module path
+# `templates/core/codegen.rs`) fails with "unresolved module path
 # shared::ffi". No version of Crux bumps bindgen to 0.31 today; this pair must
 # stay at 0.29.4 / 0.9 until either a newer Crux release tracks 0.31 bindgen or
 # the codegen template is rewritten to call uniffi_bindgen 0.31 directly (the

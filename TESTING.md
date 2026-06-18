@@ -4,7 +4,7 @@ Integration-first test posture for the `specify-adapters` extension crates (`spe
 
 ## Posture
 
-Use `cargo make test` rather than `cargo test`. It runs `cargo nextest run --all --all-features --no-tests=pass` under `RUSTFLAGS=-Dwarnings`, matching CI. `nextest` is mandatory: each extension's [`.config/nextest.toml`](../../.config/nextest.toml) caps fan-out at four subprocesses locally, and process isolation is what lets the CWD/env-mutating suites pass.
+Use `cargo make test` rather than `cargo test`. It runs `cargo nextest run --all --all-features --no-tests=pass` under `RUSTFLAGS=-Dwarnings`, matching CI. `nextest` is mandatory: it runs each test in its own process, and that isolation is what lets the CWD/env-mutating suites pass.
 
 Each extension splits its integration suite into two binaries, by reach:
 
@@ -30,7 +30,7 @@ Every behavior gets a home in exactly one layer. Decide the layer **before** wri
 
 ## Coverage is the brake on deletion
 
-`cargo llvm-cov` line/region coverage on still-live code is the safety net. The adapters [`Makefile.toml`](../../Makefile.toml) has no coverage task, so run it directly, per crate, before and after a reduction:
+`cargo llvm-cov` line/region coverage on still-live code is the safety net. The adapters [`Makefile.toml`](Makefile.toml) has no coverage task, so run it directly, per crate, before and after a reduction:
 
 ```bash
 cargo llvm-cov nextest -p specify-vectis --summary-only

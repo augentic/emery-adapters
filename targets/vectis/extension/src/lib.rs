@@ -29,12 +29,12 @@
 //! Each subcommand serialises its body directly; there is no shared
 //! envelope wrapper.
 
-mod embedded;
 mod error;
 pub mod infer;
 pub mod materialize;
 pub mod scaffold;
 pub mod schema;
+mod schema_source;
 mod shell;
 pub mod validate;
 pub mod verify;

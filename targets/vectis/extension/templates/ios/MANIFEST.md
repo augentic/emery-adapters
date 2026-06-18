@@ -1,9 +1,9 @@
 # iOS Assembly Template Manifest
 
 Human reference for the iOS assembly templates. The canonical source-to-target
-registry is [`../manifest.yaml`](../manifest.yaml) (`assemblies.ios`); `wasi-tools/vectis/build.rs` validates that manifest and emits the embedded `registry.rs` consumed by `specify extension run vectis -- scaffold ios`.
+registry is [`../manifest.yaml`](../manifest.yaml) (`assemblies.ios`); `build.rs` validates that manifest and emits the embedded `registry.rs` consumed by `specify extension run vectis -- scaffold ios`.
 
-Source filenames are flat under `templates/vectis/ios/`. Nested target paths (especially the `iOS/__APP_NAME__/...` segment) are declared in `manifest.yaml`. The `__APP_NAME__` segment in target paths is substituted by the engine when writing each file, the same as inside file contents (e.g. `__APP_NAME__App.swift` becomes `CounterApp.swift`).
+Source filenames are flat under `templates/ios/`. Nested target paths (especially the `iOS/__APP_NAME__/...` segment) are declared in `manifest.yaml`. The `__APP_NAME__` segment in target paths is substituted by the engine when writing each file, the same as inside file contents (e.g. `__APP_NAME__App.swift` becomes `CounterApp.swift`).
 
 Total: 7 files (matches the file manifest contract for iOS assembly).
 
@@ -52,7 +52,7 @@ Notes for chunk 7:
   file together; if not, both vanish.
 - The `sse` cap intentionally has no entry in `Core.swift` today. The render-
   only baseline of `app.rs` does not declare an `Effect::Sse(...)` variant
-  (see `templates/vectis/core/MANIFEST.md`'s "Notes for chunk 5/6"), so the
+  (see `templates/core/MANIFEST.md`'s "Notes for chunk 5/6"), so the
   Swift `Effect` enum produced by the codegen has no `.sse` case to handle.
   When chunk 6 decides whether to add the Rust-side variant, this manifest and
   `Core.swift` should grow a matching `<<<CAP:sse` block.
@@ -76,4 +76,4 @@ If hot-reload returns, it can be added as a cap-style toggle
 
 ## Self-check
 
-Orphan detection and file-count parity (7 files) run in `wasi-tools/vectis/build.rs` when the crate builds. After adding or renaming a template file, update [`../manifest.yaml`](../manifest.yaml) in the same change.
+Orphan detection and file-count parity (7 files) run in `build.rs` when the crate builds. After adding or renaming a template file, update [`../manifest.yaml`](../manifest.yaml) in the same change.

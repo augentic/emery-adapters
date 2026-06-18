@@ -22,6 +22,10 @@ The Vectis core / test / iOS / Android writer and reviewer orchestration lives i
 
 ## References
 
+### Runtime schemas
+
+- [`schemas.md`](schemas.md) — tool-owned JSON Schemas (`tokens`, `assets`, `composition`) and how to retrieve their bodies.
+
 ### Hard rules
 
 - [`hard-rules-core.md`](hard-rules-core.md) — Crux core hard rules.

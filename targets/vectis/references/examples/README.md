@@ -23,3 +23,10 @@ Index of the worked-example corpus for Vectis generation. Examples are numbered 
 | --- | --- |
 | [android/01-simple-counter.md](android/01-simple-counter.md) | The Android shell for the render-only counter. |
 | [android/02-http-counter.md](android/02-http-counter.md) | The Android shell for the HTTP counter. |
+
+## Sample artifacts
+
+| File | Purpose |
+| --- | --- |
+| [tokens.yaml](tokens.yaml) | Example operator-curated `tokens.yaml` design-token input. |
+| [assets.yaml](assets.yaml) | Example operator-curated `assets.yaml` asset-inventory input. |

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/augentic/specify-cli/schemas/vectis/template-manifest.schema.json",
+  "$id": "https://schemas.specify.dev/vectis/template-manifest.schema.json",
   "title": "Vectis template manifest",
-  "description": "Validates `templates/vectis/manifest.yaml`: the single source of truth for Vectis scaffold source-to-target mappings consumed by `wasi-tools/vectis/build.rs`.",
+  "description": "Validates `templates/manifest.yaml`: the single source of truth for Vectis scaffold source-to-target mappings consumed by the vectis extension's `build.rs`.",
   "type": "object",
   "required": ["schema-version", "assemblies"],
   "additionalProperties": false,
@@ -49,7 +49,7 @@
         "source": {
           "type": "string",
           "minLength": 1,
-          "description": "Basename under `templates/vectis/<assembly>/`."
+          "description": "Basename under `templates/<assembly>/`."
         },
         "target": {
           "type": "string",

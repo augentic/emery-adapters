@@ -1,9 +1,9 @@
 # Android Assembly Template Manifest
 
 Human reference for the Android assembly templates. The canonical source-to-target
-registry is [`../manifest.yaml`](../manifest.yaml) (`assemblies.android`); `wasi-tools/vectis/build.rs` validates that manifest and emits the embedded `registry.rs` consumed by `specify extension run vectis -- scaffold android`.
+registry is [`../manifest.yaml`](../manifest.yaml) (`assemblies.android`); `build.rs` validates that manifest and emits the embedded `registry.rs` consumed by `specify extension run vectis -- scaffold android`.
 
-Source filenames are flat under `templates/vectis/android/`. Nested target paths (especially `Android/app/src/main/java/__ANDROID_PACKAGE_PATH__/...`) are declared in `manifest.yaml`. The `__APP_NAME__` and `__ANDROID_PACKAGE_PATH__` segments in target paths are substituted when writing each file. `__ANDROID_PACKAGE_PATH__` is derived by replacing `.` with `/` in `__ANDROID_PACKAGE__` at file-write time; it does not appear in file contents.
+Source filenames are flat under `templates/android/`. Nested target paths (especially `Android/app/src/main/java/__ANDROID_PACKAGE_PATH__/...`) are declared in `manifest.yaml`. The `__APP_NAME__` and `__ANDROID_PACKAGE_PATH__` segments in target paths are substituted when writing each file. `__ANDROID_PACKAGE_PATH__` is derived by replacing `.` with `/` in `__ANDROID_PACKAGE__` at file-write time; it does not appear in file contents.
 
 Total: 19 files (matches the Android assembly file manifest).
 
@@ -92,7 +92,7 @@ Notes for chunk 8:
   arm needs**, all inside the same CAP marker. Kotlin `when` over a sealed
   interface is exhaustive, so adding a cap arm without the corresponding
   Effect variant in `app.rs` (or vice versa) is a compile error. The CAP
-  markers in `Core.kt` mirror the ones in `templates/vectis/core/app.rs`
+  markers in `Core.kt` mirror the ones in `templates/core/app.rs`
   exactly. The `http` block additionally adds `viewModelScope` / coroutine
   imports and the `resolveAndHandleEffects` helper -- they are not generic
   enough to live outside the marker.
@@ -164,4 +164,4 @@ landed during verification:
 
 ## Self-check
 
-Orphan detection and file-count parity (19 files) run in `wasi-tools/vectis/build.rs` when the crate builds. After adding or renaming a template file, update [`../manifest.yaml`](../manifest.yaml) in the same change.
+Orphan detection and file-count parity (19 files) run in `build.rs` when the crate builds. After adding or renaming a template file, update [`../manifest.yaml`](../manifest.yaml) in the same change.

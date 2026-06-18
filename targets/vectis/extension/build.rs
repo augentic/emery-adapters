@@ -1,4 +1,4 @@
-//! Codegen for Vectis scaffold template registries from `templates/vectis/manifest.yaml`.
+//! Codegen for Vectis scaffold template registries from `templates/manifest.yaml`.
 
 use std::collections::{BTreeSet, HashMap};
 use std::fmt::Write as _;
@@ -9,7 +9,7 @@ use jsonschema::Validator;
 use serde::Deserialize;
 
 const SCHEMA_VERSION: i64 = 1;
-const INCLUDE_STR_PREFIX: &str = "../../../templates/vectis";
+const INCLUDE_STR_PREFIX: &str = "../../../templates";
 const EXPECTED_COUNTS: &[(&str, usize)] = &[("core", 13), ("ios", 8), ("android", 23)];
 const ASSEMBLY_ORDER: &[&str] = &["core", "ios", "android"];
 const MANIFEST_IGNORED: &str = "MANIFEST.md";
@@ -23,13 +23,14 @@ fn main() {
 fn run() -> Result<(), String> {
     let manifest_dir =
         PathBuf::from(env::var("CARGO_MANIFEST_DIR").map_err(|err| err.to_string())?);
-    // Build inputs are co-located inside the extension crate (RFC-48
-    // step-8): `templates/vectis` + `schemas/vectis` sit beside this
-    // manifest, so the codegen anchor is the crate dir itself.
+    // Build inputs are co-located inside the extension crate: the
+    // `templates/` tree carries the scaffold sources plus its
+    // `manifest.yaml` and `manifest.schema.json`, so the codegen anchor
+    // is the crate dir itself.
     let repo_root = manifest_dir.clone();
-    let templates_root = repo_root.join("templates/vectis");
+    let templates_root = repo_root.join("templates");
     let manifest_path = templates_root.join("manifest.yaml");
-    let schema_path = repo_root.join("schemas/vectis/template-manifest.schema.json");
+    let schema_path = templates_root.join("manifest.schema.json");
     let registry_out = manifest_dir.join("src/scaffold/templates/registry.rs");
 
     println!("cargo:rerun-if-changed={}", manifest_path.display());

@@ -82,7 +82,7 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          for dir in adapters/targets/*/ adapters/sources/*/; do
+          for dir in targets/*/ sources/*/; do
             [ -f "${dir}adapter.yaml" ] || continue
             name="$(basename "${dir}")"
             version="$(sed -n 's/^version:[[:space:]]*"\{0,1\}\([^"[:space:]]*\)"\{0,1\}.*/\1/p' "${dir}adapter.yaml" | head -1)"

@@ -1,13 +1,13 @@
 [workspace]
 resolver = "3"
 members = [
-    "adapters/targets/contracts/extension",
-    "adapters/targets/vectis/extension",
+    "targets/contracts/extension",
+    "targets/vectis/extension",
 ]
 
 # The Specify adapters repo (RFC-48 / RFC-49 T6). Each bundled adapter
-# co-locates its WASI extension crate under `adapters/**/extension/`; the
-# extension wasm builds here and is committed beside `adapter.yaml` as the
+# co-locates its WASI extension crate under `{sources,targets}/**/extension/`;
+# the extension wasm builds here and is committed beside `adapter.yaml` as the
 # adapter's `adapter.wasm`.
 
 [workspace.package]

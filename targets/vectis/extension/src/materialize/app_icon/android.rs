@@ -14,9 +14,9 @@ const SAFE_ZONE_RATIO: f32 = 66.0 / ADAPTIVE_CANVAS_DP;
 const LEGACY_LAUNCHER_DP: f32 = 48.0;
 const DEFAULT_BACKGROUND: &str = "#FFFFFF";
 
-const IC_LAUNCHER_XML: &str = include_str!("../../../templates/vectis/android/ic_launcher.xml");
+const IC_LAUNCHER_XML: &str = include_str!("../../../templates/android/ic_launcher.xml");
 const IC_LAUNCHER_ROUND_XML: &str =
-    include_str!("../../../templates/vectis/android/ic_launcher_round.xml");
+    include_str!("../../../templates/android/ic_launcher_round.xml");
 
 /// Write the adaptive + legacy mipmap tree under an Android app-icon export root.
 ///
