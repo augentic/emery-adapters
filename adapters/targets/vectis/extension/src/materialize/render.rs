@@ -61,23 +61,21 @@ mod tests {
   <path fill="#010203" d="M12 2L2 22h20z"/>
 </svg>"##;
 
+    // `scaled_dimensions` scales the 24×24 viewBox by the requested factor and
+    // `render_tree_to_png` emits a PNG (magic header, non-trivial length) that
+    // is byte-identical across repeated renders of the same tree.
     #[test]
-    fn render_produces_png_with_expected_dimensions() {
+    fn render_tree_matrix() {
         let parsed = parse_icon_svg(TRIANGLE.as_bytes(), "tri").expect("parse");
         let (w, h) = scaled_dimensions(&parsed.tree, 2.0);
         assert_eq!((w, h), (48, 48));
-
         let png = render_tree_to_png(&parsed.tree, w, h).expect("render");
         assert!(png.starts_with(b"\x89PNG\r\n\x1a\n"));
         assert!(png.len() > 64);
-    }
 
-    #[test]
-    fn deterministic_output_for_fixed_input() {
-        let parsed = parse_icon_svg(TRIANGLE.as_bytes(), "tri").expect("parse");
-        let (w, h) = scaled_dimensions(&parsed.tree, 3.0);
-        let first = render_tree_to_png(&parsed.tree, w, h).expect("first");
-        let second = render_tree_to_png(&parsed.tree, w, h).expect("second");
+        let (w3, h3) = scaled_dimensions(&parsed.tree, 3.0);
+        let first = render_tree_to_png(&parsed.tree, w3, h3).expect("first");
+        let second = render_tree_to_png(&parsed.tree, w3, h3).expect("second");
         assert_eq!(first, second);
     }
 }

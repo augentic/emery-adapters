@@ -44,23 +44,39 @@ assets:
     assert_eq!(value["errors"].as_array().map(Vec::len), Some(0));
 
     let ios_2x = design.join("assets/exports/ios/onboarding-hero.imageset/onboarding-hero@2x.png");
+    let ios_3x = design.join("assets/exports/ios/onboarding-hero.imageset/onboarding-hero@3x.png");
     let android_mdpi = design.join("assets/exports/android/drawable-mdpi/onboarding_hero.png");
-    assert!(ios_2x.is_file() && android_mdpi.is_file());
+    let android_xxxhdpi =
+        design.join("assets/exports/android/drawable-xxxhdpi/onboarding_hero.png");
+    assert!(ios_2x.is_file() && ios_3x.is_file());
+    assert!(android_mdpi.is_file() && android_xxxhdpi.is_file());
 
+    // Re-homed from `src/materialize/illustrations.rs`: per-scale @2x/@3x and
+    // per-density mdpi/xxxhdpi raster dimensions.
     let img_2x = ImageReader::open(&ios_2x).unwrap().decode().unwrap();
-    assert_eq!(img_2x.width(), 48);
-    assert_eq!(img_2x.height(), 48);
+    assert_eq!((img_2x.width(), img_2x.height()), (48, 48));
+    let img_3x = ImageReader::open(&ios_3x).unwrap().decode().unwrap();
+    assert_eq!((img_3x.width(), img_3x.height()), (72, 72));
+    let img_mdpi = ImageReader::open(&android_mdpi).unwrap().decode().unwrap();
+    assert_eq!((img_mdpi.width(), img_mdpi.height()), (24, 24));
+    let img_xxxhdpi = ImageReader::open(&android_xxxhdpi).unwrap().decode().unwrap();
+    assert_eq!((img_xxxhdpi.width(), img_xxxhdpi.height()), (96, 96));
 }
 
+// Re-homed from `src/materialize/raster_copy.rs`: copy-only `role: photo`
+// per-density masters for both the ios imageset (`@2x`) and the android
+// drawable-density (`mdpi`) branches, asserting byte-identical copies. Running
+// without `--platform` materializes both platform slots.
 #[test]
 fn materialize_photo_copies_density_slots() {
     let tmp = tempdir().unwrap();
     let design = tmp.path().join("design-system");
-    fs::create_dir_all(design.join("assets")).unwrap();
+    fs::create_dir_all(design.join("assets/android")).unwrap();
 
-    let src = design.join("assets/hero@2x.png");
-    let img = image::RgbaImage::from_pixel(48, 48, image::Rgba([9, 8, 7, 255]));
-    img.save(&src).unwrap();
+    let ios_src = design.join("assets/hero@2x.png");
+    image::RgbaImage::from_pixel(48, 48, image::Rgba([9, 8, 7, 255])).save(&ios_src).unwrap();
+    let android_src = design.join("assets/android/hero-mdpi.png");
+    image::RgbaImage::from_pixel(24, 24, image::Rgba([9, 8, 7, 255])).save(&android_src).unwrap();
 
     let yaml = r#"version: 1
 assets:
@@ -71,19 +87,21 @@ assets:
     sources:
       ios:
         2x: assets/hero@2x.png
+      android:
+        mdpi: assets/android/hero-mdpi.png
 "#;
     let assets_path = design.join("assets.yaml");
     fs::write(&assets_path, yaml).unwrap();
 
-    let assert = vectis_materialize()
-        .args(["assets", "--platform", "ios"])
-        .arg(&assets_path)
-        .assert()
-        .success();
+    let assert = vectis_materialize().arg("assets").arg(&assets_path).assert().success();
     let value = parse_json(&assert.get_output().stdout);
     assert_eq!(value["errors"].as_array().map(Vec::len), Some(0));
 
-    let export = design.join("assets/exports/ios/hero.imageset/hero@2x.png");
-    assert!(export.is_file());
-    assert_eq!(fs::read(export).unwrap(), fs::read(src).unwrap());
+    let ios_export = design.join("assets/exports/ios/hero.imageset/hero@2x.png");
+    assert!(ios_export.is_file());
+    assert_eq!(fs::read(&ios_export).unwrap(), fs::read(&ios_src).unwrap());
+
+    let android_export = design.join("assets/exports/android/drawable-mdpi/hero.png");
+    assert!(android_export.is_file(), "android density slot copied");
+    assert_eq!(fs::read(&android_export).unwrap(), fs::read(&android_src).unwrap());
 }

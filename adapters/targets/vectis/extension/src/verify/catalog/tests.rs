@@ -66,24 +66,14 @@ screens:
     );
 }
 
-#[test]
-fn missing_ios_imageset_emits_finding() {
-    let tmp = tempdir().unwrap();
-    scaffold_project(tmp.path());
-    write_inventory(tmp.path());
-
-    let findings = catalog_findings(tmp.path(), &["ios".to_string(), "android".to_string()]);
-    let ios_errors: Vec<_> = findings
-        .iter()
-        .filter(|f| {
-            f["id"] == "shell-catalog-entry-missing"
-                && f["message"].as_str().unwrap().contains("ios")
-        })
-        .collect();
-    assert_eq!(ios_errors.len(), 1);
-    assert!(ios_errors[0]["message"].as_str().unwrap().contains("empty-tasks-hero"));
-}
-
+// The fully-missing-imageset finding and the all-present clean case are covered
+// end-to-end through `verify::run` by `tests/engine/verify.rs`
+// (`verify_catalog_missing_imageset_exits_one` /
+// `verify_catalog_present_imageset_exits_clean`), and the android vector-icon
+// *satisfied* branch by `verify_catalog_skips_app_icon_dedups_and_ignores_unknown_refs`
+// (drawable xml present). The cases kept below — Contents.json-only imageset,
+// symbol-kind skip, android vector-icon *missing* — are private branches that
+// integration does not reach.
 #[test]
 fn contents_json_only_imageset_is_missing() {
     let tmp = tempdir().unwrap();
@@ -98,30 +88,6 @@ fn contents_json_only_imageset_is_missing() {
     let findings = catalog_findings(tmp.path(), &["ios".to_string()]);
     assert_eq!(findings.len(), 1);
     assert_eq!(findings[0]["id"], "shell-catalog-entry-missing");
-}
-
-#[test]
-fn present_shell_catalog_entries_emit_no_findings() {
-    let tmp = tempdir().unwrap();
-    scaffold_project(tmp.path());
-    write_inventory(tmp.path());
-
-    let imageset =
-        tmp.path().join("iOS/TodoApp/Resources/Assets.xcassets/empty-tasks-hero.imageset");
-    std::fs::create_dir_all(&imageset).expect("mkdir imageset");
-    std::fs::write(imageset.join("empty-tasks-hero@3x.png"), b"PNG").expect("write png");
-    std::fs::write(imageset.join("Contents.json"), "{\"images\":[]}").expect("write json");
-
-    let drawable =
-        tmp.path().join("Android/app/src/main/res/drawable-xxxhdpi/empty_tasks_hero.png");
-    std::fs::create_dir_all(drawable.parent().unwrap()).expect("mkdir drawable");
-    std::fs::write(&drawable, b"PNG").expect("write android png");
-
-    let findings = catalog_findings(tmp.path(), &["ios".to_string(), "android".to_string()]);
-    assert!(
-        !findings.iter().any(|f| f["severity"] == "error"),
-        "expected clean catalog: {findings:?}"
-    );
 }
 
 #[test]
@@ -188,38 +154,4 @@ screens:
     assert_eq!(findings.len(), 1);
     assert_eq!(findings[0]["id"], "shell-catalog-entry-missing");
     assert!(findings[0]["message"].as_str().unwrap().contains("drawable/settings.xml"));
-}
-
-#[test]
-fn android_vector_icon_satisfied_by_drawable_xml() {
-    let tmp = tempdir().unwrap();
-    scaffold_project(tmp.path());
-    write_yaml(
-        &tmp.path().join("design-system/assets.yaml"),
-        r"
-version: 1
-assets:
-  settings:
-    kind: vector
-    role: icon
-    source: assets/settings.svg
-",
-    );
-    write_yaml(
-        &tmp.path().join(".specify/specs/composition.yaml"),
-        r"
-version: 1
-screens:
-  home:
-    body:
-      - icon-button:
-          icon: settings
-",
-    );
-    let xml = tmp.path().join("Android/app/src/main/res/drawable/settings.xml");
-    std::fs::create_dir_all(xml.parent().unwrap()).expect("mkdir drawable");
-    std::fs::write(&xml, "<vector/>").expect("write xml");
-
-    let findings = catalog_findings(tmp.path(), &["android".to_string()]);
-    assert!(findings.is_empty());
 }

@@ -196,8 +196,10 @@ mod tests {
         assert!(IC_LAUNCHER_ROUND_XML.contains("<adaptive-icon"));
     }
 
+    // `resolve_launcher_background` resolves a tint token to its light hex via
+    // tokens.yaml and falls back to `DEFAULT_BACKGROUND` when no tint is set.
     #[test]
-    fn resolve_background_uses_tint_token_light_variant() {
+    fn resolve_launcher_background_matrix() {
         let tmp = tempdir().expect("tempdir");
         let design = tmp.path().join("design-system");
         fs::create_dir_all(&design).expect("mkdir");
@@ -206,16 +208,14 @@ mod tests {
             "version: 1\ncolors:\n  brand:\n    light: \"#AABBCC\"\n    dark: \"#001122\"\n",
         )
         .expect("tokens");
-
-        let entry = serde_json::json!({ "tint": "brand" });
-        assert_eq!(resolve_launcher_background(&entry, &design), "#AABBCC");
-    }
-
-    #[test]
-    fn resolve_background_defaults_without_tint() {
-        let tmp = tempdir().expect("tempdir");
-        let entry = serde_json::json!({});
-        assert_eq!(resolve_launcher_background(&entry, tmp.path()), DEFAULT_BACKGROUND);
+        assert_eq!(
+            resolve_launcher_background(&serde_json::json!({ "tint": "brand" }), &design),
+            "#AABBCC"
+        );
+        assert_eq!(
+            resolve_launcher_background(&serde_json::json!({}), tmp.path()),
+            DEFAULT_BACKGROUND
+        );
     }
 
     #[test]

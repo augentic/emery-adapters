@@ -58,40 +58,7 @@ pub fn write_appiconset(canvas: &RgbaImage, appiconset_dir: &Path) -> Result<(),
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use std::fs;
-
-    use image::Rgba;
-    use serde_json::Value;
-    use tempfile::tempdir;
-
-    use super::*;
-
-    #[test]
-    fn appiconset_writes_actool_friendly_layout() {
-        let tmp = tempdir().expect("tempdir");
-        let dir = tmp.path().join("AppIcon.appiconset");
-        let canvas = RgbaImage::from_pixel(1024, 1024, Rgba([10, 20, 30, 255]));
-
-        write_appiconset(&canvas, &dir).expect("write");
-
-        let png = dir.join(APPICON_PNG_NAME);
-        let contents = dir.join("Contents.json");
-        assert!(png.is_file() && png.metadata().expect("meta").len() > 0);
-        assert!(contents.is_file());
-
-        let parsed: Value =
-            serde_json::from_slice(&fs::read(&contents).expect("read")).expect("json");
-        let images = parsed["images"].as_array().expect("images array");
-        assert_eq!(images.len(), 1);
-        assert_eq!(images[0]["filename"], APPICON_PNG_NAME);
-        assert_eq!(images[0]["idiom"], "universal");
-        assert_eq!(images[0]["platform"], "ios");
-        assert_eq!(images[0]["size"], "1024x1024");
-
-        let decoded = image::ImageReader::open(&png).expect("open").decode().expect("decode");
-        assert_eq!(decoded.width(), 1024);
-        assert_eq!(decoded.height(), 1024);
-    }
-}
+// `write_appiconset` lives in a private module (CLI-only reachable). Its
+// `AppIcon.png` + `Contents.json` layout — single universal 1024×1024 ios
+// image entry — is asserted end-to-end through the CLI by
+// `tests/engine/materialize_app_icon.rs::materialize_app_icon_ios_exports_exist`.

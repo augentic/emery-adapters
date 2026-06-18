@@ -22,6 +22,8 @@ mod materialize_app_icon;
 mod materialize_illustrations;
 #[path = "engine/paths.rs"]
 mod paths;
+#[path = "engine/scaffold.rs"]
+mod scaffold;
 #[path = "engine/tokens.rs"]
 mod tokens;
 #[path = "engine/verify.rs"]

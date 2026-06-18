@@ -88,49 +88,33 @@ mod tests {
 
     use super::*;
 
+    // `conventional_export_exists` accepts an android vector drawable xml and an
+    // android raster density png, and for an ios raster imageset requires a
+    // materialized file beyond Contents.json (which `imageset_has_materialized_content`
+    // alone reports false for).
     #[test]
-    fn icon_vector_android_export_matches_materialize_layout() {
+    fn conventional_export_matrix() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let design = tmp.path();
+
         let xml = design.join("assets/exports/android/drawable/chevron_right.xml");
         std::fs::create_dir_all(xml.parent().expect("parent")).expect("mkdir");
         std::fs::write(&xml, "<vector/>").expect("write");
-        let entry = json!({ "role": "icon", "kind": "vector" });
-        assert!(conventional_export_exists(design, "chevron-right", "vector", "android", &entry));
-    }
+        let icon = json!({ "role": "icon", "kind": "vector" });
+        assert!(conventional_export_exists(design, "chevron-right", "vector", "android", &icon));
 
-    #[test]
-    fn contents_json_only_imageset_is_not_materialized() {
-        let tmp = tempfile::tempdir().expect("tempdir");
-        let design = tmp.path();
         let imageset = design.join("assets/exports/ios/hero.imageset");
         std::fs::create_dir_all(&imageset).expect("mkdir");
         std::fs::write(imageset.join("Contents.json"), "{\"images\":[]}").expect("write json");
         assert!(!imageset_has_materialized_content(&imageset));
-    }
-
-    #[test]
-    fn raster_ios_imageset_requires_materialized_file() {
-        let tmp = tempfile::tempdir().expect("tempdir");
-        let design = tmp.path();
-        let imageset = design.join("assets/exports/ios/hero.imageset");
-        std::fs::create_dir_all(&imageset).expect("mkdir");
-        std::fs::write(imageset.join("Contents.json"), "{\"images\":[]}").expect("write json");
-        let entry = json!({ "role": "illustration", "kind": "raster" });
-        assert!(!conventional_export_exists(design, "hero", "raster", "ios", &entry));
-
+        let raster = json!({ "role": "illustration", "kind": "raster" });
+        assert!(!conventional_export_exists(design, "hero", "raster", "ios", &raster));
         std::fs::write(imageset.join("hero@3x.png"), b"PNG").expect("write png");
-        assert!(conventional_export_exists(design, "hero", "raster", "ios", &entry));
-    }
+        assert!(conventional_export_exists(design, "hero", "raster", "ios", &raster));
 
-    #[test]
-    fn raster_android_density_png_satisfies_export() {
-        let tmp = tempfile::tempdir().expect("tempdir");
-        let design = tmp.path();
         let png = design.join("assets/exports/android/drawable-mdpi/hero.png");
         std::fs::create_dir_all(png.parent().expect("parent")).expect("mkdir");
         std::fs::write(&png, b"PNG").expect("write");
-        let entry = json!({ "role": "illustration", "kind": "raster" });
-        assert!(conventional_export_exists(design, "hero", "raster", "android", &entry));
+        assert!(conventional_export_exists(design, "hero", "raster", "android", &raster));
     }
 }

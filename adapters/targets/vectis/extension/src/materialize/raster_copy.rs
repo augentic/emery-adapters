@@ -132,68 +132,9 @@ fn copy_file(assets_dir: &Path, source_rel: &str, export_rel: &str) -> Result<()
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use std::fs;
-
-    use tempfile::tempdir;
-
-    use super::*;
-
-    fn write_png(path: &Path, width: u32, height: u32) {
-        let img = image::RgbaImage::from_pixel(width, height, image::Rgba([1, 2, 3, 255]));
-        img.save(path).expect("save png");
-    }
-
-    #[test]
-    fn materialize_photo_copies_per_density_sources() {
-        let tmp = tempdir().expect("tempdir");
-        let design = tmp.path().join("design-system");
-        fs::create_dir_all(design.join("assets/android")).expect("assets dir");
-
-        write_png(&design.join("assets/hero@2x.png"), 48, 48);
-        write_png(&design.join("assets/hero@3x.png"), 72, 72);
-        write_png(&design.join("assets/android/hero-mdpi.png"), 24, 24);
-        write_png(&design.join("assets/android/hero-xxxhdpi.png"), 96, 96);
-
-        let yaml = r#"version: 1
-assets:
-  hero:
-    kind: raster
-    role: photo
-    alt: "Hero photo"
-    sources:
-      ios:
-        2x: assets/hero@2x.png
-        3x: assets/hero@3x.png
-      android:
-        mdpi: assets/android/hero-mdpi.png
-        xxxhdpi: assets/android/hero-xxxhdpi.png
-"#;
-        fs::write(design.join("assets.yaml"), yaml).expect("yaml");
-
-        let instance: Value = serde_saphyr::from_str(yaml).expect("parse yaml");
-        let assets = instance.get("assets").and_then(Value::as_object).expect("assets map");
-
-        let mut materialized = Vec::new();
-        let mut errors = Vec::new();
-        materialize_photo_rasters(
-            &design,
-            assets,
-            &["ios".into(), "android".into()],
-            false,
-            &mut materialized,
-            &mut errors,
-        );
-        assert!(errors.is_empty(), "unexpected errors: {errors:?}");
-
-        let ios_2x = design.join("assets/exports/ios/hero.imageset/hero@2x.png");
-        let android_mdpi = design.join("assets/exports/android/drawable-mdpi/hero.png");
-        assert!(ios_2x.is_file());
-        assert!(android_mdpi.is_file());
-
-        let copied = fs::read(&ios_2x).expect("read copied");
-        let original = fs::read(design.join("assets/hero@2x.png")).expect("read original");
-        assert_eq!(copied, original);
-    }
-}
+// `materialize_photo_rasters` (the copy-only `role: photo` funnel) is exercised
+// end-to-end through the CLI by
+// `tests/engine/materialize_illustrations.rs::materialize_photo_copies_density_slots`,
+// which materializes both the ios imageset (`@2x`) and the android
+// drawable-density (`mdpi`) slots and asserts byte-identical copies, so the
+// `src` unit was re-homed.

@@ -119,36 +119,24 @@ mod tests {
 
     use super::*;
 
+    // `collect_auto_pins` keeps one pin per (asset, platform) — the artifact
+    // entry wins over the sidecar Contents.json — and `apply_auto_pins` fills
+    // only absent platform slots, leaving an existing `ios` pin untouched while
+    // adding the missing `android` one.
     #[test]
-    fn collect_auto_pins_dedupes_artifact_entries() {
+    fn yaml_pins_matrix() {
         let assets = Map::from_iter([(
             "settings".to_string(),
-            json!({
-                "kind": "vector",
-                "role": "icon",
-                "source": "assets/settings.svg",
-            }),
+            json!({ "kind": "vector", "role": "icon", "source": "assets/settings.svg" }),
         )]);
         let materialized = vec![
-            json!({
-                "asset_id": "settings",
-                "platform": "ios",
-                "path": "assets/exports/ios/settings.imageset/settings.pdf",
-            }),
-            json!({
-                "asset_id": "settings",
-                "platform": "ios",
-                "path": "assets/exports/ios/settings.imageset/Contents.json",
-            }),
+            json!({ "asset_id": "settings", "platform": "ios", "path": "assets/exports/ios/settings.imageset/settings.pdf" }),
+            json!({ "asset_id": "settings", "platform": "ios", "path": "assets/exports/ios/settings.imageset/Contents.json" }),
         ];
-
         let pins = collect_auto_pins(&materialized, &assets);
         assert_eq!(pins.len(), 1);
         assert_eq!(pins[0].path, "assets/exports/ios/settings.imageset/settings.pdf");
-    }
 
-    #[test]
-    fn apply_auto_pins_fills_absent_platform_slots_only() {
         let mut instance = json!({
             "version": 1,
             "assets": {
@@ -156,13 +144,11 @@ mod tests {
                     "kind": "vector",
                     "role": "icon",
                     "source": "assets/settings.svg",
-                    "sources": {
-                        "ios": "assets/exports/ios/settings.imageset/settings.pdf"
-                    }
+                    "sources": { "ios": "assets/exports/ios/settings.imageset/settings.pdf" }
                 }
             }
         });
-        let pins = vec![
+        let slots = vec![
             AutoPin {
                 asset_id: "settings".into(),
                 platform: "ios".into(),
@@ -174,9 +160,7 @@ mod tests {
                 path: "assets/exports/android/drawable/settings.xml".into(),
             },
         ];
-
-        apply_auto_pins(&mut instance, &pins);
-
+        apply_auto_pins(&mut instance, &slots);
         let sources = &instance["assets"]["settings"]["sources"];
         assert_eq!(sources["ios"], "assets/exports/ios/settings.imageset/settings.pdf");
         assert_eq!(sources["android"], "assets/exports/android/drawable/settings.xml");

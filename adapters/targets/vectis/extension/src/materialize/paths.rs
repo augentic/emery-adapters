@@ -225,107 +225,122 @@ pub fn resolve_under_assets_dir(assets_dir: &Path, pin_rel: &str) -> PathBuf {
 mod tests {
     use super::*;
 
+    // `kebab_to_snake`, `ios_scale_factor`, `android_density_factor`, and
+    // `ios_raster_filename` are the scalar path helpers; one matrix pins the
+    // kebab→snake translation, every iOS/Android scale factor, and the
+    // imageset filename suffix convention (`1x` omits `@`).
     #[test]
-    fn kebab_to_snake_translates_drawable_ids() {
+    fn scale_and_filename_conventions() {
         assert_eq!(kebab_to_snake("onboarding-hero"), "onboarding_hero");
         assert_eq!(kebab_to_snake("settings"), "settings");
-    }
 
-    #[test]
-    fn icon_vector_ios_paths() {
-        let layout =
-            export_layout("icon", "vector", Platform::Ios, "settings").expect("icon vector ios");
-        assert_eq!(layout.pin, "assets/exports/ios/settings.imageset/settings.pdf");
-        assert_eq!(
-            layout.artifacts,
-            vec![
-                "assets/exports/ios/settings.imageset/settings.pdf".to_string(),
-                "assets/exports/ios/settings.imageset/Contents.json".to_string(),
-            ]
-        );
-    }
-
-    #[test]
-    fn icon_vector_android_paths() {
-        let layout = export_layout("icon", "vector", Platform::Android, "chevron-right")
-            .expect("icon vector android");
-        assert_eq!(layout.pin, "assets/exports/android/drawable/chevron_right.xml");
-        assert_eq!(layout.artifacts, vec![layout.pin.clone()]);
-    }
-
-    #[test]
-    fn decorative_vector_follows_icon_paths() {
-        let ios = export_layout("decorative", "vector", Platform::Ios, "sparkle")
-            .expect("decorative ios");
-        let icon = export_layout("icon", "vector", Platform::Ios, "sparkle").expect("icon ios");
-        assert_eq!(ios, icon);
-    }
-
-    #[test]
-    fn scale_factors_match_platform_conventions() {
         assert_eq!(ios_scale_factor("2x"), Some(2.0_f32));
         assert_eq!(ios_scale_factor("3x"), Some(3.0_f32));
-        assert_eq!(android_density_factor("mdpi"), Some(1.0_f32));
-        assert_eq!(android_density_factor("hdpi"), Some(1.5_f32));
-        assert_eq!(android_density_factor("xhdpi"), Some(2.0_f32));
-        assert_eq!(android_density_factor("xxhdpi"), Some(3.0_f32));
-        assert_eq!(android_density_factor("xxxhdpi"), Some(4.0_f32));
-    }
+        for (density, factor) in
+            [("mdpi", 1.0_f32), ("hdpi", 1.5), ("xhdpi", 2.0), ("xxhdpi", 3.0), ("xxxhdpi", 4.0)]
+        {
+            assert_eq!(android_density_factor(density), Some(factor), "{density}");
+        }
 
-    #[test]
-    fn ios_raster_filenames_follow_imageset_conventions() {
         assert_eq!(ios_raster_filename("hero", "1x"), "hero.png");
         assert_eq!(ios_raster_filename("hero", "2x"), "hero@2x.png");
     }
 
+    // `export_layout` resolves each (role, kind, platform) to its conventional
+    // pin + ordered artifact list. The deterministic full-list cases collapse
+    // into one table; `decorative/vector` aliases `icon/vector`, and the
+    // 13-artifact android app-icon tree is asserted by shape.
     #[test]
-    fn illustration_ios_paths() {
-        let layout = export_layout("illustration", "vector", Platform::Ios, "onboarding-hero")
-            .expect("illustration ios");
-        assert_eq!(
-            layout.pin,
-            "assets/exports/ios/onboarding-hero.imageset/onboarding-hero@3x.png"
-        );
-        assert_eq!(
-            layout.artifacts,
-            vec![
-                "assets/exports/ios/onboarding-hero.imageset/onboarding-hero@2x.png".to_string(),
-                "assets/exports/ios/onboarding-hero.imageset/onboarding-hero@3x.png".to_string(),
-                "assets/exports/ios/onboarding-hero.imageset/Contents.json".to_string(),
-            ]
-        );
-    }
+    fn export_layout_matrix() {
+        struct Case {
+            role: &'static str,
+            kind: &'static str,
+            platform: Platform,
+            asset_id: &'static str,
+            pin: &'static str,
+            artifacts: &'static [&'static str],
+        }
 
-    #[test]
-    fn illustration_android_paths() {
-        let layout = export_layout("illustration", "vector", Platform::Android, "onboarding-hero")
-            .expect("illustration android");
-        assert_eq!(layout.pin, "assets/exports/android/drawable-xxxhdpi/onboarding_hero.png");
-        assert_eq!(
-            layout.artifacts,
-            vec![
-                "assets/exports/android/drawable-mdpi/onboarding_hero.png".to_string(),
-                "assets/exports/android/drawable-hdpi/onboarding_hero.png".to_string(),
-                "assets/exports/android/drawable-xhdpi/onboarding_hero.png".to_string(),
-                "assets/exports/android/drawable-xxhdpi/onboarding_hero.png".to_string(),
-                "assets/exports/android/drawable-xxxhdpi/onboarding_hero.png".to_string(),
-            ]
-        );
-    }
+        let cases = [
+            Case {
+                role: "icon",
+                kind: "vector",
+                platform: Platform::Ios,
+                asset_id: "settings",
+                pin: "assets/exports/ios/settings.imageset/settings.pdf",
+                artifacts: &[
+                    "assets/exports/ios/settings.imageset/settings.pdf",
+                    "assets/exports/ios/settings.imageset/Contents.json",
+                ],
+            },
+            Case {
+                role: "icon",
+                kind: "vector",
+                platform: Platform::Android,
+                asset_id: "chevron-right",
+                pin: "assets/exports/android/drawable/chevron_right.xml",
+                artifacts: &["assets/exports/android/drawable/chevron_right.xml"],
+            },
+            Case {
+                role: "illustration",
+                kind: "vector",
+                platform: Platform::Ios,
+                asset_id: "onboarding-hero",
+                pin: "assets/exports/ios/onboarding-hero.imageset/onboarding-hero@3x.png",
+                artifacts: &[
+                    "assets/exports/ios/onboarding-hero.imageset/onboarding-hero@2x.png",
+                    "assets/exports/ios/onboarding-hero.imageset/onboarding-hero@3x.png",
+                    "assets/exports/ios/onboarding-hero.imageset/Contents.json",
+                ],
+            },
+            Case {
+                role: "illustration",
+                kind: "vector",
+                platform: Platform::Android,
+                asset_id: "onboarding-hero",
+                pin: "assets/exports/android/drawable-xxxhdpi/onboarding_hero.png",
+                artifacts: &[
+                    "assets/exports/android/drawable-mdpi/onboarding_hero.png",
+                    "assets/exports/android/drawable-hdpi/onboarding_hero.png",
+                    "assets/exports/android/drawable-xhdpi/onboarding_hero.png",
+                    "assets/exports/android/drawable-xxhdpi/onboarding_hero.png",
+                    "assets/exports/android/drawable-xxxhdpi/onboarding_hero.png",
+                ],
+            },
+            Case {
+                role: "app-icon",
+                kind: "vector",
+                platform: Platform::Ios,
+                asset_id: "app-icon",
+                pin: "assets/exports/ios/app-icon/AppIcon.appiconset",
+                artifacts: &[
+                    "assets/exports/ios/app-icon/AppIcon.appiconset/Contents.json",
+                    "assets/exports/ios/app-icon/AppIcon.appiconset/AppIcon.png",
+                ],
+            },
+        ];
 
-    #[test]
-    fn app_icon_export_roots() {
-        let ios =
-            export_layout("app-icon", "vector", Platform::Ios, "app-icon").expect("app-icon ios");
-        assert_eq!(ios.pin, "assets/exports/ios/app-icon/AppIcon.appiconset");
+        for case in cases {
+            let layout = export_layout(case.role, case.kind, case.platform, case.asset_id)
+                .unwrap_or_else(|| panic!("{}/{} {:?}", case.role, case.kind, case.platform));
+            assert_eq!(layout.pin, case.pin, "{}/{}", case.role, case.kind);
+            assert_eq!(
+                layout.artifacts,
+                case.artifacts.iter().map(ToString::to_string).collect::<Vec<_>>(),
+                "{}/{}",
+                case.role,
+                case.kind
+            );
+        }
+
+        // `decorative/vector` aliases `icon/vector` exactly.
         assert_eq!(
-            ios.artifacts,
-            vec![
-                "assets/exports/ios/app-icon/AppIcon.appiconset/Contents.json".to_string(),
-                "assets/exports/ios/app-icon/AppIcon.appiconset/AppIcon.png".to_string(),
-            ]
+            export_layout("decorative", "vector", Platform::Ios, "sparkle"),
+            export_layout("icon", "vector", Platform::Ios, "sparkle"),
         );
 
+        // The android app-icon tree fans out to 13 artifacts (anydpi xml +
+        // background + per-density foreground/launcher pngs).
         let android = export_layout("app-icon", "raster", Platform::Android, "app-icon")
             .expect("app-icon android");
         assert_eq!(android.pin, "assets/exports/android/app-icon");
@@ -337,6 +352,8 @@ mod tests {
         assert!(android.artifacts.iter().any(|path| path.contains("mipmap-xxxhdpi")));
     }
 
+    // Roles/kinds without a canonical master (`photo`, `symbol`, raster UI
+    // icons) do not auto-convert.
     #[test]
     fn unsupported_roles_return_none() {
         assert!(export_layout("photo", "raster", Platform::Ios, "hero").is_none());

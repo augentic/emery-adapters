@@ -215,28 +215,24 @@ mod tests {
   <path fill="#010203" d="M12 2L2 22h20z"/>
 </svg>"##;
 
+    // `parse_icon_svg` parses a clean icon (positive size) and `path_data_string`
+    // emits space-separated coords; an unsupported `<filter>` def is rejected
+    // with an error naming the asset and `filters`. The happy-path parse of this
+    // triangle is also covered end-to-end by
+    // `tests/engine/materialize.rs::materialize_icon_vector_exports_exist`.
     #[test]
-    fn parse_simple_icon_succeeds() {
-        let parsed = parse_icon_svg(TRIANGLE.as_bytes(), "settings").expect("parse");
-        assert!(parsed.tree.size().width() > 0.0);
-    }
-
-    #[test]
-    fn path_data_uses_space_separated_coords() {
+    fn svg_parse_matrix() {
         let parsed = parse_icon_svg(TRIANGLE.as_bytes(), "tri").expect("parse");
+        assert!(parsed.tree.size().width() > 0.0);
         let mut paths = Vec::new();
         collect_paths(parsed.tree.root(), &mut paths);
-        let path_data = path_data_string(&paths[0].geometry);
-        assert_eq!(path_data, "M12 2 L2 22 L22 22 Z");
-    }
+        assert_eq!(path_data_string(&paths[0].geometry), "M12 2 L2 22 L22 22 Z");
 
-    #[test]
-    fn filter_defs_are_rejected() {
-        let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+        let filtered = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
   <filter id="blur"><feGaussianBlur stdDeviation="2"/></filter>
   <rect width="24" height="24" filter="url(#blur)"/>
 </svg>"#;
-        let err = parse_icon_svg(svg.as_bytes(), "bad").unwrap_err();
+        let err = parse_icon_svg(filtered.as_bytes(), "bad").unwrap_err();
         assert!(err.contains("bad"));
         assert!(err.contains("filters"));
     }

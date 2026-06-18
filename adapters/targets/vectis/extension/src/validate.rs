@@ -105,52 +105,10 @@ pub fn validate_exit_code(value: &Value) -> u8 {
     u8::from(has_errors(value))
 }
 
-#[cfg(test)]
-mod tests {
-    use serde_json::json;
-
-    use super::*;
-
-    #[test]
-    fn render_success_payload_carries_mode_and_exits_clean() {
-        let (json, code) = render_json(Ok(json!({
-            "mode": "tokens",
-            "path": "tokens.yaml",
-            "errors": [],
-            "warnings": [],
-        })));
-
-        assert_eq!(code, 0);
-        let value: Value = serde_json::from_str(&json).expect("json body");
-        assert_eq!(value["mode"], "tokens");
-    }
-
-    #[test]
-    fn validate_exit_code_recurses_through_results_reports() {
-        let payload = json!({
-            "mode": "all",
-            "results": [{
-                "mode": "tokens",
-                "report": {
-                    "mode": "tokens",
-                    "errors": [{ "path": "/colors/bad", "message": "bad color" }],
-                    "warnings": [],
-                },
-            }],
-        });
-
-        assert_eq!(validate_exit_code(&payload), 1);
-    }
-
-    #[test]
-    fn runtime_errors_exit_two_with_typed_error_payload() {
-        let (json, code) = render_json(Err(VectisError::InvalidProject {
-            message: "tokens.yaml not readable".into(),
-        }));
-
-        assert_eq!(code, 2);
-        let value: Value = serde_json::from_str(&json).expect("json body");
-        assert_eq!(value["error"], "invalid-project");
-        assert_eq!(value["exit-code"], 2);
-    }
-}
+// `render_json` (success / typed-error envelope + exit code) and
+// `validate_exit_code` (recursion through the `all` results→report→errors tree)
+// are the CLI's dispatch surface, exercised end-to-end by `tests/cli.rs`
+// (`assets_clean_run_exits_zero` — exit 0; `missing_input_exits_two` — exit 2
+// with an `invalid-project` body) and `tests/engine/paths.rs`
+// (`all_envelope_propagates_sub_errors` — exit 1), so the `src` units were
+// deleted.

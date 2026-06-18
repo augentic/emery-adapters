@@ -255,65 +255,46 @@ mod tests {
         Value::Object(map)
     }
 
+    // `fingerprint` is stable across calls and ignores bind/event wiring values
+    // (tolerance lives in normalisation, never the hash), but distinguishes an
+    // extra item and a differing when-key presence; `skeleton_to_json` mirrors
+    // the tree shape (when_keys + nested items).
     #[test]
-    fn fingerprint_is_stable_across_calls() {
+    fn fingerprint_and_skeleton_matrix() {
         let skeleton = build_group_skeleton(&group(json!([
             { "icon-button": { "bind": "home", "event": "Navigate(Home)" } },
             { "icon-button": { "bind": "search", "event": "Navigate(Search)" } },
         ])));
         assert_eq!(fingerprint(&skeleton), fingerprint(&skeleton));
-    }
 
-    #[test]
-    fn fingerprint_ignores_wiring_values() {
-        // Same skeleton (two icon-buttons) with different bind / event
-        // wiring must collapse to one fingerprint — tolerance lives in
-        // normalisation, never in the hash.
-        let a = build_group_skeleton(&group(json!([
-            { "icon-button": { "bind": "home", "event": "Navigate(Home)" } },
-            { "icon-button": { "bind": "search", "event": "Navigate(Search)" } },
-        ])));
-        let b = build_group_skeleton(&group(json!([
+        let rewired = build_group_skeleton(&group(json!([
             { "icon-button": { "bind": "profile", "event": "Navigate(Profile)" } },
             { "icon-button": { "bind": "inbox", "event": "Navigate(Inbox)" } },
         ])));
-        assert_eq!(fingerprint(&a), fingerprint(&b));
-    }
+        assert_eq!(fingerprint(&skeleton), fingerprint(&rewired));
 
-    #[test]
-    fn fingerprint_distinguishes_structural_divergence() {
-        // An extra item is genuine structural divergence: distinct
-        // skeleton, distinct fingerprint.
-        let two = build_group_skeleton(&group(json!([
-            { "icon-button": {} },
-            { "icon-button": {} },
-        ])));
+        let two =
+            build_group_skeleton(&group(json!([ { "icon-button": {} }, { "icon-button": {} } ])));
         let three = build_group_skeleton(&group(json!([
             { "icon-button": {} },
             { "icon-button": {} },
             { "icon-button": {} },
         ])));
         assert_ne!(fingerprint(&two), fingerprint(&three));
-    }
 
-    #[test]
-    fn fingerprint_distinguishes_when_key_presence() {
         let bare = build_group_skeleton(&json!({ "items": [ { "text": {} } ] }));
         let conditional =
             build_group_skeleton(&json!({ "active-when": "$x", "items": [ { "text": {} } ] }));
         assert_ne!(fingerprint(&bare), fingerprint(&conditional));
-    }
 
-    #[test]
-    fn skeleton_json_mirrors_tree_shape() {
-        let skeleton = build_group_skeleton(&json!({
+        let nested = build_group_skeleton(&json!({
             "active-when": "$route",
             "items": [
                 { "icon-button": {} },
                 { "group": { "items": [ { "text": {} } ] } },
             ],
         }));
-        let projected = skeleton_to_json(&skeleton);
+        let projected = skeleton_to_json(&nested);
         assert_eq!(projected["group"]["when_keys"], json!(["active-when"]));
         assert_eq!(projected["group"]["items"][0], json!({ "item": "icon-button" }));
         assert_eq!(

@@ -26,70 +26,35 @@ fn minimal_png() -> Vec<u8> {
     ]
 }
 
+// Negative `shell_resident_app_icon` branches. The positive ios/android
+// branches are covered end-to-end by `tests/engine/verify.rs`:
+// `bootstrap_app_icon_shell_resident_escape_hatch` (ios appiconset + png),
+// `bootstrap_app_icon_android_shell_resident_anydpi` (adaptive xml), and
+// `bootstrap_app_icon_android_shell_resident_mipmap_png` (density-bucket png).
+// This matrix pins the falses: an ios appiconset whose referenced PNG is
+// absent, an ios Contents.json with no images, an android tree with no
+// launcher, and `core` (never shell-resident).
 #[test]
-fn ios_skeleton_without_png_false() {
-    let tmp = tempdir().unwrap();
-    let contents = r#"{
+fn shell_resident_app_icon_matrix() {
+    let png_ref = r#"{
   "images": [{ "filename": "AppIcon.png", "idiom": "universal", "platform": "ios", "size": "1024x1024" }],
   "info": { "author": "xcode", "version": 1 }
 }"#;
-    scaffold_ios_appiconset(tmp.path(), contents, None);
 
-    assert!(!shell_resident_app_icon(tmp.path(), "ios"));
-}
+    let skeleton = tempdir().unwrap();
+    scaffold_ios_appiconset(skeleton.path(), png_ref, None);
+    assert!(!shell_resident_app_icon(skeleton.path(), "ios"));
 
-#[test]
-fn ios_referenced_png_true() {
-    let tmp = tempdir().unwrap();
-    let contents = r#"{
-  "images": [{ "filename": "AppIcon.png", "idiom": "universal", "platform": "ios", "size": "1024x1024" }],
-  "info": { "author": "xcode", "version": 1 }
-}"#;
-    scaffold_ios_appiconset(tmp.path(), contents, Some(&minimal_png()));
+    let no_images = tempdir().unwrap();
+    scaffold_ios_appiconset(no_images.path(), r#"{"info":{"version":1}}"#, Some(&minimal_png()));
+    assert!(!shell_resident_app_icon(no_images.path(), "ios"));
 
-    assert!(shell_resident_app_icon(tmp.path(), "ios"));
-}
+    let android = tempdir().unwrap();
+    let values = android.path().join("Android/app/src/main/res/values");
+    std::fs::create_dir_all(&values).expect("mkdir values");
+    std::fs::write(values.join("strings.xml"), "<resources/>").expect("write strings");
+    assert!(!shell_resident_app_icon(android.path(), "android"));
 
-#[test]
-fn ios_contents_without_images_false() {
-    let tmp = tempdir().unwrap();
-    scaffold_ios_appiconset(tmp.path(), r#"{"info":{"version":1}}"#, Some(&minimal_png()));
-
-    assert!(!shell_resident_app_icon(tmp.path(), "ios"));
-}
-
-#[test]
-fn android_adaptive_xml_true() {
-    let tmp = tempdir().unwrap();
-    let dir = tmp.path().join("Android/app/src/main/res/mipmap-anydpi-v26");
-    std::fs::create_dir_all(&dir).expect("mkdir mipmap-anydpi-v26");
-    std::fs::write(dir.join("ic_launcher.xml"), "<adaptive-icon/>").expect("write xml");
-
-    assert!(shell_resident_app_icon(tmp.path(), "android"));
-}
-
-#[test]
-fn android_legacy_mipmap_true() {
-    let tmp = tempdir().unwrap();
-    let dir = tmp.path().join("Android/app/src/main/res/mipmap-mdpi");
-    std::fs::create_dir_all(&dir).expect("mkdir mipmap-mdpi");
-    std::fs::write(dir.join("ic_launcher.png"), minimal_png()).expect("write png");
-
-    assert!(shell_resident_app_icon(tmp.path(), "android"));
-}
-
-#[test]
-fn android_no_launcher_false() {
-    let tmp = tempdir().unwrap();
-    let dir = tmp.path().join("Android/app/src/main/res/values");
-    std::fs::create_dir_all(&dir).expect("mkdir values");
-    std::fs::write(dir.join("strings.xml"), "<resources/>").expect("write strings");
-
-    assert!(!shell_resident_app_icon(tmp.path(), "android"));
-}
-
-#[test]
-fn core_platform_false() {
-    let tmp = tempdir().unwrap();
-    assert!(!shell_resident_app_icon(tmp.path(), "core"));
+    let core = tempdir().unwrap();
+    assert!(!shell_resident_app_icon(core.path(), "core"));
 }

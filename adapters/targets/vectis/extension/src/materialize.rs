@@ -235,34 +235,18 @@ fn build_summary(
 mod tests {
     use super::*;
 
+    // `resolve_platform_filter` defaults to both platforms, dedupes repeats,
+    // and rejects an unknown platform id. The exit-code mapping from the
+    // summary `errors` array is asserted end-to-end by the CLI runs
+    // `materialize_assets_clean_run_exits_zero` (exit 0) and
+    // `materialize_app_icon_ios_rejects_small_raster` (exit 1).
     #[test]
-    fn exit_code_follows_errors_array() {
-        let clean = build_summary(Path::new("assets.yaml"), false, &["ios".into()], &[], &[], &[]);
-        assert_eq!(materialize_exit_code(&clean), 0);
-
-        let failed = build_summary(
-            Path::new("assets.yaml"),
-            false,
-            &["ios".into()],
-            &[],
-            &[],
-            &[json!({ "path": "/assets/foo", "message": "decode failed" })],
+    fn platform_filter_matrix() {
+        assert_eq!(resolve_platform_filter(None).expect("default"), vec!["ios", "android"]);
+        assert_eq!(
+            resolve_platform_filter(Some(&["ios".into(), "ios".into()])).expect("dedupe"),
+            vec!["ios"]
         );
-        assert_eq!(materialize_exit_code(&failed), 1);
-    }
-
-    #[test]
-    fn platform_filter_defaults_and_dedupes() {
-        let both = resolve_platform_filter(None).expect("default");
-        assert_eq!(both, vec!["ios", "android"]);
-
-        let ios_only =
-            resolve_platform_filter(Some(&["ios".into(), "ios".into()])).expect("dedupe");
-        assert_eq!(ios_only, vec!["ios"]);
-    }
-
-    #[test]
-    fn platform_filter_rejects_unknown() {
         let err = resolve_platform_filter(Some(&["web".into()])).unwrap_err();
         assert!(matches!(err, VectisError::InvalidProject { .. }));
     }

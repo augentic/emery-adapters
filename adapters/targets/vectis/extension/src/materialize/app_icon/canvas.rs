@@ -150,62 +150,42 @@ fn blend_channel(foreground: u8, alpha: f32) -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-
     use image::{ImageFormat, Rgba, RgbaImage};
     use tempfile::tempdir;
 
     use super::*;
 
-    const SQUARE_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <rect width="1024" height="1024" fill="#336699"/>
-</svg>"##;
-
+    // `decode_to_launcher_canvas` accepts a 1024² opaque raster without
+    // upscaling and rejects a sub-1024 raster (naming the dimension) and a
+    // non-opaque raster (naming `opaque`). SVG decode to the 1024 canvas is
+    // covered end-to-end by
+    // `tests/engine/materialize_app_icon.rs::materialize_app_icon_ios_exports_exist`.
     #[test]
-    fn svg_decodes_to_1024_canvas() {
+    fn decode_to_launcher_canvas_matrix() {
         let tmp = tempdir().expect("tempdir");
-        let path = tmp.path().join("app-icon.svg");
-        fs::write(&path, SQUARE_SVG).expect("write svg");
 
-        let canvas = decode_to_launcher_canvas(&path, "assets/app-icon.svg", "app-icon")
-            .expect("decode svg");
-        assert_eq!(canvas.dimensions(), (1024, 1024));
-        assert!(canvas.pixels().all(|px| px[3] == 255));
-    }
-
-    #[test]
-    fn raster_1024_decodes_without_upscale() {
-        let tmp = tempdir().expect("tempdir");
-        let path = tmp.path().join("app-icon.png");
-        let img = RgbaImage::from_pixel(1024, 1024, Rgba([4, 5, 6, 255]));
-        img.save_with_format(&path, ImageFormat::Png).expect("write png");
-
+        let ok = tmp.path().join("app-icon.png");
+        RgbaImage::from_pixel(1024, 1024, Rgba([4, 5, 6, 255]))
+            .save_with_format(&ok, ImageFormat::Png)
+            .expect("write png");
         let canvas =
-            decode_to_launcher_canvas(&path, "assets/app-icon.png", "app-icon").expect("decode");
+            decode_to_launcher_canvas(&ok, "assets/app-icon.png", "app-icon").expect("decode");
         assert_eq!(canvas.dimensions(), (1024, 1024));
         assert_eq!(canvas.get_pixel(0, 0).0, [4, 5, 6, 255]);
-    }
 
-    #[test]
-    fn raster_below_1024_rejects() {
-        let tmp = tempdir().expect("tempdir");
-        let path = tmp.path().join("small.png");
-        let img = RgbaImage::from_pixel(512, 512, Rgba([1, 2, 3, 255]));
-        img.save_with_format(&path, ImageFormat::Png).expect("write png");
-
-        let err = decode_to_launcher_canvas(&path, "assets/small.png", "app-icon").unwrap_err();
+        let small = tmp.path().join("small.png");
+        RgbaImage::from_pixel(512, 512, Rgba([1, 2, 3, 255]))
+            .save_with_format(&small, ImageFormat::Png)
+            .expect("write png");
+        let err = decode_to_launcher_canvas(&small, "assets/small.png", "app-icon").unwrap_err();
         assert!(err.contains("assets-app-icon-source-invalid"));
         assert!(err.contains("512"));
-    }
 
-    #[test]
-    fn raster_alpha_rejects() {
-        let tmp = tempdir().expect("tempdir");
-        let path = tmp.path().join("alpha.png");
-        let img = RgbaImage::from_pixel(1024, 1024, Rgba([1, 2, 3, 128]));
-        img.save_with_format(&path, ImageFormat::Png).expect("write png");
-
-        let err = decode_to_launcher_canvas(&path, "assets/alpha.png", "app-icon").unwrap_err();
+        let alpha = tmp.path().join("alpha.png");
+        RgbaImage::from_pixel(1024, 1024, Rgba([1, 2, 3, 128]))
+            .save_with_format(&alpha, ImageFormat::Png)
+            .expect("write png");
+        let err = decode_to_launcher_canvas(&alpha, "assets/alpha.png", "app-icon").unwrap_err();
         assert!(err.contains("assets-app-icon-source-invalid"));
         assert!(err.contains("opaque"));
     }

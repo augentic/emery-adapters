@@ -54,7 +54,12 @@ assets:
     assert!(png.is_file() && contents.is_file());
 
     let parsed: Value = serde_json::from_slice(&fs::read(&contents).unwrap()).unwrap();
-    assert!(parsed.get("images").and_then(Value::as_array).is_some_and(|a| !a.is_empty()));
+    let images = parsed["images"].as_array().expect("images array");
+    assert_eq!(images.len(), 1);
+    assert_eq!(images[0]["filename"], "AppIcon.png");
+    assert_eq!(images[0]["idiom"], "universal");
+    assert_eq!(images[0]["platform"], "ios");
+    assert_eq!(images[0]["size"], "1024x1024");
 
     let img = ImageReader::open(&png).unwrap().decode().unwrap();
     assert_eq!(img.width(), 1024);
@@ -171,4 +176,76 @@ assets:
     assert!(errors.iter().any(|entry| {
         entry["message"].as_str().unwrap_or("").contains("assets-app-icon-source-invalid")
     }));
+}
+
+// Re-homed from `src/materialize/app_icon.rs`: a pinned ios/android app-icon
+// export already on disk is skipped (no re-materialize), reported via
+// `skipped_pins`. The app-icon pin-skip branch is distinct from the
+// icon-vector one in `materialize.rs::materialize_skips_pinned_platform…`.
+#[test]
+fn materialize_app_icon_skips_pinned_ios_export() {
+    let tmp = tempdir().unwrap();
+    let design = tmp.path().join("design-system");
+    let appiconset = design.join("assets/exports/ios/app-icon/AppIcon.appiconset");
+    fs::create_dir_all(&appiconset).unwrap();
+    fs::write(
+        appiconset.join("Contents.json"),
+        r#"{"images":[{"filename":"AppIcon.png","idiom":"universal","platform":"ios","size":"1024x1024"}],"info":{"version":1,"author":"xcode"}}"#,
+    )
+    .unwrap();
+    fs::write(design.join("assets/app-icon.svg"), SQUARE_SVG).unwrap();
+
+    let yaml = r#"version: 1
+assets:
+  app-icon:
+    kind: vector
+    role: app-icon
+    alt: "App icon"
+    source: assets/app-icon.svg
+    sources:
+      ios: assets/exports/ios/app-icon/AppIcon.appiconset
+"#;
+    let assets_path = design.join("assets.yaml");
+    fs::write(&assets_path, yaml).unwrap();
+
+    let assert = vectis_materialize()
+        .args(["assets", "--platform", "ios"])
+        .arg(&assets_path)
+        .assert()
+        .success();
+    let value = parse_json(&assert.get_output().stdout);
+    assert!(value["materialized"].as_array().is_some_and(Vec::is_empty));
+    assert!(value["skipped_pins"].as_array().is_some_and(|arr| !arr.is_empty()));
+}
+
+#[test]
+fn materialize_app_icon_skips_pinned_android_export() {
+    let tmp = tempdir().unwrap();
+    let design = tmp.path().join("design-system");
+    let export_root = design.join("assets/exports/android/app-icon");
+    fs::create_dir_all(export_root.join("mipmap-anydpi-v26")).unwrap();
+    fs::write(export_root.join("mipmap-anydpi-v26/ic_launcher.xml"), "<adaptive-icon/>").unwrap();
+    fs::write(design.join("assets/app-icon.svg"), SQUARE_SVG).unwrap();
+
+    let yaml = r#"version: 1
+assets:
+  app-icon:
+    kind: vector
+    role: app-icon
+    alt: "App icon"
+    source: assets/app-icon.svg
+    sources:
+      android: assets/exports/android/app-icon
+"#;
+    let assets_path = design.join("assets.yaml");
+    fs::write(&assets_path, yaml).unwrap();
+
+    let assert = vectis_materialize()
+        .args(["assets", "--platform", "android"])
+        .arg(&assets_path)
+        .assert()
+        .success();
+    let value = parse_json(&assert.get_output().stdout);
+    assert!(value["materialized"].as_array().is_some_and(Vec::is_empty));
+    assert!(value["skipped_pins"].as_array().is_some_and(|arr| !arr.is_empty()));
 }
