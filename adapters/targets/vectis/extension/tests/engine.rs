@@ -24,3 +24,5 @@ mod materialize_illustrations;
 mod paths;
 #[path = "engine/tokens.rs"]
 mod tokens;
+#[path = "engine/verify.rs"]
+mod verify;

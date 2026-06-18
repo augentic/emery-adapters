@@ -13,9 +13,6 @@
 //!   non-zero when one is neither shell-resident (RFC-46 §6.3) nor
 //!   satisfiable from `design-system/assets.yaml` (§4.1).
 
-#[cfg(test)]
-mod tests;
-
 mod app_icon;
 mod catalog;
 
