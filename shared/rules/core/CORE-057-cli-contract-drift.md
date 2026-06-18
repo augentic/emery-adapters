@@ -23,10 +23,8 @@ rule_hints:
         - sh
       # Documented-ahead verbs, exempt until they ship:
       # - `catalog` — component-catalog inference (`specify catalog infer`, components.md)
-      # - `vectis`  — host-side template-updater workflow (`specify vectis update-versions`, known-drift.md)
       ignore:
         - catalog
-        - vectis
   - kind: cli-contract
     value: event-ids
     description: Dotted-kebab inline code spans and `"event"` JSON fields in fenced bodies, within the contract's own event-id families, must be journal event ids the binary declares.
@@ -68,7 +66,7 @@ This rule closes that seam. The running binary injects its own machine-readable 
 
 Named-test citations (`tests/….rs` claims against the binary's build-time test inventory) are the fourth selector of the same kind, scoped separately by [CORE-060](CORE-060-cli-test-citation-drift.md) — adapter references legitimately describe downstream generated-crate `tests/` layouts that are not CLI tests.
 
-Because the contract is rebuilt from the binary on every `make lint` run, bumping the CLI pin re-checks every citation in the same change — the rename sweep the CLI repo's AGENTS.md rule 5 prescribes is now machine-enforced on this side.
+Because the contract is rebuilt from the binary on every `make lint` run, bumping the CLI pin re-checks every citation in the same change — the rename sweep `engine/AGENTS.md` rule 5 prescribes is now machine-enforced on this side.
 
 ## Look For
 

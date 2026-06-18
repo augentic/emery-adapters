@@ -25,9 +25,9 @@ The Vectis target adapter contributes its `shape` / `build` / `merge` briefs to 
 └── schemas/                         # README pointing to canonical tool-owned schemas
 ```
 
-The adapter manifest, the three briefs (`shape`, `build`, `merge`), the WASI tool declaration, the Vectis codex, and the operator-facing `tokens.yaml` example all live under [`adapters/targets/vectis/`](..); runtime schemas ([`composition.schema.json`](https://schemas.specify.dev/vectis/composition.schema.json), [`tokens.schema.json`](https://schemas.specify.dev/vectis/tokens.schema.json), [`assets.schema.json`](https://schemas.specify.dev/vectis/assets.schema.json)) are tool-owned in the CLI repo and retrievable via `specify extension schema vectis <name>`.
+The adapter manifest, the three briefs (`shape`, `build`, `merge`), the WASI tool declaration, the Vectis codex, and the operator-facing `tokens.yaml` example all live under [`adapters/targets/vectis/`](..); runtime schemas ([`composition.schema.json`](https://schemas.specify.dev/vectis/composition.schema.json), [`tokens.schema.json`](https://schemas.specify.dev/vectis/tokens.schema.json), [`assets.schema.json`](https://schemas.specify.dev/vectis/assets.schema.json)) are tool-owned in **this repo** (`targets/vectis/extension/schemas/`) and retrievable via `specify extension schema vectis <name>`.
 
-The Vectis writer / reviewer / template-updater behavior (`core-writer`, `core-reviewer`, `test-writer`, `ios-writer`, `ios-reviewer`, `android-writer`, `android-reviewer`, `template-updater`) lives inline in [`../briefs/build.md`](../briefs/build.md) (writers and reviewers) and [`../briefs/merge.md`](../briefs/merge.md) (post-merge host cap-matrix re-verification). The `vectis:image-layout-inferer` behavior lives in the [`screenshots` source adapter](../../../sources/screenshots/adapter.yaml).
+The Vectis writer / reviewer behavior (`core-writer`, `core-reviewer`, `test-writer`, `ios-writer`, `ios-reviewer`, `android-writer`, `android-reviewer`) lives inline in [`../briefs/build.md`](../briefs/build.md) (writers and reviewers) and [`../briefs/merge.md`](../briefs/merge.md) (post-merge host cap-matrix re-verification). The `vectis:image-layout-inferer` behavior lives in the [`screenshots` source adapter](../../../sources/screenshots/adapter.yaml).
 
 ## Common Patterns
 

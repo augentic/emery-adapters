@@ -276,7 +276,7 @@ Field semantics:
 
 Callers that surface post-merge validator failures (the merge brief on a blocking finding) parse `findings[]` and include `{ rule-id, path, detail }` triples in the stop hint's `paths` field. The load-bearing finding is typically `findings[0].rule-id` plus a one-line restatement of `findings[0].detail`; the full envelope is captured at the log path referenced in the stop hint.
 
-When a caller re-surfaces an envelope finding as a `LintFinding` (see `schemas/diagnostics/diagnostic.schema.json` in the CLI repo), the mapping is: `findings[].rule-id` → `rule-id`, `findings[].path` → `location.path`, `target-adapter: contracts`. Schema-side contract metadata (schema pointer, `$id`, plus any single-mode Check 4 `change-kind` such as `removed-field` / `required-field-added` / `type-narrowed` / `enum-value-removed` / `additional-properties-tightened`) lives inside `evidence.kind: structured` with the contract data under `evidence.data`. The closed `LintFinding` severity enum (`critical` / `important` / `suggestion` / `optional`) is separate from any compatibility classification — classifiers remain contract-domain evidence fields, not severity.
+When a caller re-surfaces an envelope finding as a `LintFinding` (see `schemas/diagnostics/diagnostic.schema.json` embedded in the `specify` binary from [`augentic/specify`](https://github.com/augentic/specify)), the mapping is: `findings[].rule-id` → `rule-id`, `findings[].path` → `location.path`, `target-adapter: contracts`. Schema-side contract metadata (schema pointer, `$id`, plus any single-mode Check 4 `change-kind` such as `removed-field` / `required-field-added` / `type-narrowed` / `enum-value-removed` / `additional-properties-tightened`) lives inside `evidence.kind: structured` with the contract data under `evidence.data`. The closed `LintFinding` severity enum (`critical` / `important` / `suggestion` / `optional`) is separate from any compatibility classification — classifiers remain contract-domain evidence fields, not severity.
 
 ### Exit semantics
 
@@ -286,7 +286,7 @@ When a caller re-surfaces an envelope finding as a `LintFinding` (see `schemas/d
 | `1`       | One or more findings.                                                                                  | Record `failure`; halt the merge brief. The slice's deltas remain unmerged.                          |
 | `2`       | The tool could not run (resolver, permission, runtime, path missing, not a directory, internal error). | Record `failure`; journal the stderr line or JSON error message. The slice's deltas remain unmerged. |
 
-The mode is **deterministic**: the WASI tool is a thin shell over `specify_validate::validate_baseline_contracts` (in the `specify-cli` workspace). Repeated invocations against the same baseline produce identical findings.
+The mode is **deterministic**: the WASI tool is a thin shell over `validate_baseline` in the `specify-contract` extension crate ([`extension/src/validate.rs`](../../extension/src/validate.rs)). Repeated invocations against the same baseline produce identical findings.
 
 ### Why a WASI tool delegate?
 
@@ -329,7 +329,7 @@ Schema-side breakage is caught earlier, in `single`-mode Check 4 (cross-format c
 - Use `WARN` rather than `FAIL` (in `single` mode) when classification is ambiguous, e.g. when a schema is referenced by no bindings but might be shared vocabulary the spec brief just hasn't bound yet.
 - Do not attempt to fix issues — report them. Repair belongs to the author or importer sibling.
 - **`cross-project` mode is fatal.** Treat exit codes `1` (findings) and `2` (invocation error) as `failure` per the contracts adapter merge contract. The merge brief MUST halt; the slice's deltas remain unmerged until the operator resolves the finding.
-- Do not re-implement the tool's checks. The verifier sibling's `cross-project` mode is a delegate; the canonical algorithm lives in `crates/validate/src/contracts.rs` of the `specify-cli` workspace.
+- Do not re-implement the tool's checks. The verifier sibling's `cross-project` mode is a delegate; the canonical algorithm lives in [`targets/contracts/extension/src/validate.rs`](../../extension/src/validate.rs).
 
 ## Verification checklist
 
