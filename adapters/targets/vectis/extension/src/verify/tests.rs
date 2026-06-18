@@ -34,96 +34,6 @@ fn scaffold_android(root: &Path) {
     std::fs::write(dir.join("MainActivity.kt"), "class MainActivity").expect("write kt");
 }
 
-// ── detect mode ────────────────────────────────────────────────────
-
-#[test]
-fn detect_all_present_returns_empty_missing() {
-    let tmp = tempdir().unwrap();
-    write_project_yaml(tmp.path(), &["core", "ios", "android"]);
-    scaffold_core(tmp.path());
-    scaffold_ios(tmp.path());
-    scaffold_android(tmp.path());
-
-    let args = VerifyArgs {
-        mode: VerifyMode::Detect,
-        path: Some(tmp.path().to_path_buf()),
-    };
-    let result = run(&args).expect("detect should succeed");
-    let missing = result["missing"].as_array().expect("missing array");
-
-    assert!(missing.is_empty(), "expected empty missing set: {result}");
-}
-
-#[test]
-fn detect_missing_ios_returns_ios_in_missing() {
-    let tmp = tempdir().unwrap();
-    write_project_yaml(tmp.path(), &["core", "ios", "android"]);
-    scaffold_core(tmp.path());
-    scaffold_android(tmp.path());
-
-    let args = VerifyArgs {
-        mode: VerifyMode::Detect,
-        path: Some(tmp.path().to_path_buf()),
-    };
-    let result = run(&args).expect("detect should succeed");
-    let missing = result["missing"].as_array().expect("missing array");
-
-    assert_eq!(missing.len(), 1);
-    assert_eq!(missing[0], "ios");
-}
-
-#[test]
-fn detect_greenfield_returns_all_supported_missing() {
-    let tmp = tempdir().unwrap();
-    write_project_yaml(tmp.path(), &["core", "ios", "android"]);
-
-    let args = VerifyArgs {
-        mode: VerifyMode::Detect,
-        path: Some(tmp.path().to_path_buf()),
-    };
-    let result = run(&args).expect("detect should succeed");
-    let missing = result["missing"].as_array().expect("missing array");
-
-    assert_eq!(missing.len(), 3);
-    let names: Vec<&str> = missing.iter().filter_map(Value::as_str).collect();
-    assert!(names.contains(&"core"));
-    assert!(names.contains(&"ios"));
-    assert!(names.contains(&"android"));
-}
-
-#[test]
-fn detect_web_desktop_skipped_not_in_missing() {
-    let tmp = tempdir().unwrap();
-    write_project_yaml(tmp.path(), &["core", "web", "desktop"]);
-    scaffold_core(tmp.path());
-
-    let args = VerifyArgs {
-        mode: VerifyMode::Detect,
-        path: Some(tmp.path().to_path_buf()),
-    };
-    let result = run(&args).expect("detect should succeed");
-    let missing = result["missing"].as_array().expect("missing array");
-
-    assert!(missing.is_empty(), "web/desktop should not appear in missing: {result}");
-
-    let info = result["info"].as_array().expect("info array");
-    assert_eq!(info.len(), 2, "expected info findings for web and desktop: {result}");
-    assert!(info.iter().all(|f| f["id"] == "platform-not-yet-supported"));
-}
-
-#[test]
-fn detect_mode_exit_code_always_zero() {
-    let tmp = tempdir().unwrap();
-    write_project_yaml(tmp.path(), &["core", "ios"]);
-
-    let args = VerifyArgs {
-        mode: VerifyMode::Detect,
-        path: Some(tmp.path().to_path_buf()),
-    };
-    let result = run(&args).expect("detect should succeed");
-    assert_eq!(verify_exit_code(&result), 0);
-}
-
 // ── verify mode ────────────────────────────────────────────────────
 
 #[test]
@@ -188,6 +98,120 @@ fn verify_web_desktop_emit_info_not_error() {
     assert_eq!(verify_exit_code(&result), 0);
 }
 
+// ── bootstrap-app-icon mode ────────────────────────────────────────
+
+fn write_app_icon_assets(root: &Path, source_rel: Option<&str>) {
+    let design = root.join("design-system");
+    std::fs::create_dir_all(&design).expect("mkdir design-system");
+    let source_line = source_rel.map_or_else(String::new, |s| format!("    source: {s}\n"));
+    let content = format!(
+        "version: 1\napp-icon: brand-mark\nassets:\n  brand-mark:\n    kind: vector\n    role: app-icon\n{source_line}",
+    );
+    std::fs::write(design.join("assets.yaml"), content).expect("write assets.yaml");
+    if let Some(rel) = source_rel {
+        let path = design.join(rel);
+        std::fs::create_dir_all(path.parent().unwrap()).expect("mkdir source parent");
+        std::fs::write(&path, "<svg/>").expect("write source svg");
+    }
+}
+
+#[test]
+fn bootstrap_app_icon_greenfield_flags_ios_and_android() {
+    let tmp = tempdir().unwrap();
+    write_project_yaml(tmp.path(), &["core", "ios", "android"]);
+
+    let args = VerifyArgs {
+        mode: VerifyMode::BootstrapAppIcon,
+        path: Some(tmp.path().to_path_buf()),
+    };
+    let result = run(&args).expect("bootstrap-app-icon should succeed");
+    assert_eq!(result["mode"], "bootstrap-app-icon");
+    let findings = result["findings"].as_array().expect("findings array");
+
+    assert_eq!(findings.len(), 2, "expected ios + android findings: {result}");
+    assert!(findings.iter().all(|f| f["id"] == "plan-bootstrap-app-icon-missing"));
+    assert!(findings.iter().all(|f| f["severity"] == "error"));
+    assert_eq!(verify_exit_code(&result), 1);
+}
+
+#[test]
+fn bootstrap_app_icon_core_only_clean() {
+    let tmp = tempdir().unwrap();
+    write_project_yaml(tmp.path(), &["core"]);
+
+    let args = VerifyArgs {
+        mode: VerifyMode::BootstrapAppIcon,
+        path: Some(tmp.path().to_path_buf()),
+    };
+    let result = run(&args).expect("bootstrap-app-icon should succeed");
+    let findings = result["findings"].as_array().expect("findings array");
+
+    assert!(findings.is_empty(), "core-only must not trigger the gate: {result}");
+    assert_eq!(verify_exit_code(&result), 0);
+}
+
+#[test]
+fn bootstrap_app_icon_materializable_source_clean() {
+    let tmp = tempdir().unwrap();
+    write_project_yaml(tmp.path(), &["core", "ios", "android"]);
+    write_app_icon_assets(tmp.path(), Some("assets/brand-mark.svg"));
+
+    let args = VerifyArgs {
+        mode: VerifyMode::BootstrapAppIcon,
+        path: Some(tmp.path().to_path_buf()),
+    };
+    let result = run(&args).expect("bootstrap-app-icon should succeed");
+    let findings = result["findings"].as_array().expect("findings array");
+
+    assert!(findings.is_empty(), "path A source should satisfy the gate: {result}");
+    assert_eq!(verify_exit_code(&result), 0);
+}
+
+#[test]
+fn bootstrap_app_icon_missing_source_flags_platforms() {
+    let tmp = tempdir().unwrap();
+    write_project_yaml(tmp.path(), &["core", "ios"]);
+    // assets.yaml present but the `app-icon` entry carries no `source:`
+    // master and no platform pin → unsatisfiable.
+    write_app_icon_assets(tmp.path(), None);
+
+    let args = VerifyArgs {
+        mode: VerifyMode::BootstrapAppIcon,
+        path: Some(tmp.path().to_path_buf()),
+    };
+    let result = run(&args).expect("bootstrap-app-icon should succeed");
+    let findings = result["findings"].as_array().expect("findings array");
+
+    assert_eq!(findings.len(), 1, "ios should be flagged: {result}");
+    assert_eq!(findings[0]["id"], "plan-bootstrap-app-icon-missing");
+    assert_eq!(verify_exit_code(&result), 1);
+}
+
+#[test]
+fn bootstrap_app_icon_shell_resident_escape_hatch() {
+    let tmp = tempdir().unwrap();
+    write_project_yaml(tmp.path(), &["core", "ios"]);
+    // No assets.yaml, but the iOS shell already ships a launcher icon.
+    let appiconset = tmp.path().join("iOS/TestApp/Resources/Assets.xcassets/AppIcon.appiconset");
+    std::fs::create_dir_all(&appiconset).expect("mkdir appiconset");
+    std::fs::write(
+        appiconset.join("Contents.json"),
+        r#"{"images":[{"filename":"AppIcon.png","idiom":"universal"}]}"#,
+    )
+    .expect("write Contents.json");
+    std::fs::write(appiconset.join("AppIcon.png"), b"PNG").expect("write png");
+
+    let args = VerifyArgs {
+        mode: VerifyMode::BootstrapAppIcon,
+        path: Some(tmp.path().to_path_buf()),
+    };
+    let result = run(&args).expect("bootstrap-app-icon should succeed");
+    let findings = result["findings"].as_array().expect("findings array");
+
+    assert!(findings.is_empty(), "shell-resident icon should satisfy §6.3: {result}");
+    assert_eq!(verify_exit_code(&result), 0);
+}
+
 // ── error paths ────────────────────────────────────────────────────
 
 #[test]
@@ -195,7 +219,7 @@ fn missing_project_yaml_returns_error() {
     let tmp = tempdir().unwrap();
 
     let args = VerifyArgs {
-        mode: VerifyMode::Detect,
+        mode: VerifyMode::Verify,
         path: Some(tmp.path().to_path_buf()),
     };
     let err = run(&args).unwrap_err();
@@ -211,7 +235,7 @@ fn project_yaml_without_platforms_returns_error() {
         .expect("write project.yaml");
 
     let args = VerifyArgs {
-        mode: VerifyMode::Detect,
+        mode: VerifyMode::Verify,
         path: Some(tmp.path().to_path_buf()),
     };
     let err = run(&args).unwrap_err();
@@ -222,19 +246,19 @@ fn project_yaml_without_platforms_returns_error() {
 // ── render_json integration ────────────────────────────────────────
 
 #[test]
-fn render_json_detect_success_exits_zero() {
+fn render_json_verify_clean_exits_zero() {
     let tmp = tempdir().unwrap();
     write_project_yaml(tmp.path(), &["core"]);
     scaffold_core(tmp.path());
 
     let args = VerifyArgs {
-        mode: VerifyMode::Detect,
+        mode: VerifyMode::Verify,
         path: Some(tmp.path().to_path_buf()),
     };
     let (json, code) = super::render_json(run(&args));
     assert_eq!(code, 0);
     let value: Value = serde_json::from_str(&json).expect("valid JSON");
-    assert_eq!(value["mode"], "detect");
+    assert_eq!(value["mode"], "verify");
 }
 
 #[test]
@@ -258,7 +282,7 @@ fn render_json_error_exits_two() {
     let tmp = tempdir().unwrap();
 
     let args = VerifyArgs {
-        mode: VerifyMode::Detect,
+        mode: VerifyMode::Verify,
         path: Some(tmp.path().to_path_buf()),
     };
     let (json, code) = super::render_json(run(&args));
@@ -323,14 +347,9 @@ fn verify_catalog_missing_imageset_exits_one() {
     let result = run(&args).expect("verify should succeed");
     let findings = result["findings"].as_array().expect("findings array");
 
-    let catalog_errors: Vec<&Value> = findings
-        .iter()
-        .filter(|f| f["id"] == "shell-catalog-entry-missing")
-        .collect();
-    assert!(
-        !catalog_errors.is_empty(),
-        "expected shell catalog finding: {result}"
-    );
+    let catalog_errors: Vec<&Value> =
+        findings.iter().filter(|f| f["id"] == "shell-catalog-entry-missing").collect();
+    assert!(!catalog_errors.is_empty(), "expected shell catalog finding: {result}");
     assert_eq!(verify_exit_code(&result), 1);
 }
 
@@ -343,15 +362,13 @@ fn verify_catalog_present_imageset_exits_clean() {
     scaffold_android(tmp.path());
     write_design_system_inventory(tmp.path());
 
-    let imageset = tmp
-        .path()
-        .join("iOS/TodoApp/Resources/Assets.xcassets/empty-tasks-hero.imageset");
+    let imageset =
+        tmp.path().join("iOS/TodoApp/Resources/Assets.xcassets/empty-tasks-hero.imageset");
     std::fs::create_dir_all(&imageset).expect("mkdir imageset");
     std::fs::write(imageset.join("empty-tasks-hero@3x.png"), b"PNG").expect("write png");
 
-    let drawable = tmp
-        .path()
-        .join("Android/app/src/main/res/drawable-xxxhdpi/empty_tasks_hero.png");
+    let drawable =
+        tmp.path().join("Android/app/src/main/res/drawable-xxxhdpi/empty_tasks_hero.png");
     std::fs::create_dir_all(drawable.parent().unwrap()).expect("mkdir drawable");
     std::fs::write(&drawable, b"PNG").expect("write android png");
 
@@ -379,15 +396,16 @@ fn ios_dir_without_swift_files_is_not_present() {
     std::fs::write(ios_dir.join("README.md"), "placeholder").expect("write readme");
 
     let args = VerifyArgs {
-        mode: VerifyMode::Detect,
+        mode: VerifyMode::Verify,
         path: Some(tmp.path().to_path_buf()),
     };
-    let result = run(&args).expect("detect should succeed");
-    let missing = result["missing"].as_array().expect("missing array");
+    let result = run(&args).expect("verify should succeed");
+    let findings = result["findings"].as_array().expect("findings array");
 
     assert!(
-        missing.iter().any(|v| v.as_str() == Some("ios")),
-        "iOS dir with no .swift files should be missing: {result}"
+        findings.iter().any(|f| f["id"] == "platform-shell-missing"
+            && f["message"].as_str().is_some_and(|m| m.contains("ios"))),
+        "iOS dir with no .swift files should be flagged missing: {result}"
     );
 }
 
@@ -401,14 +419,15 @@ fn android_dir_without_kt_files_is_not_present() {
     std::fs::write(android_dir.join("build.gradle"), "").expect("write gradle");
 
     let args = VerifyArgs {
-        mode: VerifyMode::Detect,
+        mode: VerifyMode::Verify,
         path: Some(tmp.path().to_path_buf()),
     };
-    let result = run(&args).expect("detect should succeed");
-    let missing = result["missing"].as_array().expect("missing array");
+    let result = run(&args).expect("verify should succeed");
+    let findings = result["findings"].as_array().expect("findings array");
 
     assert!(
-        missing.iter().any(|v| v.as_str() == Some("android")),
-        "Android dir with no .kt files should be missing: {result}"
+        findings.iter().any(|f| f["id"] == "platform-shell-missing"
+            && f["message"].as_str().is_some_and(|m| m.contains("android"))),
+        "Android dir with no .kt files should be flagged missing: {result}"
     );
 }

@@ -6,22 +6,25 @@
 //!
 //! Two modes:
 //!
-//! - **detect** (plan-time): returns the set of declared-but-absent
-//!   platforms as a JSON array for bootstrap-slice insertion.
 //! - **verify** (build/lint): emits `diagnostic.schema.json`-shaped
 //!   findings and exits non-zero on any miss for a supported platform.
+//! - **bootstrap-app-icon** (build-time): gates the launcher `app-icon`
+//!   for every declared UI platform (`ios` / `android`), exiting
+//!   non-zero when one is neither shell-resident (RFC-46 §6.3) nor
+//!   satisfiable from `design-system/assets.yaml` (§4.1).
 
 #[cfg(test)]
 mod tests;
 
+mod app_icon;
 mod catalog;
 
 use std::path::{Path, PathBuf};
 
 use clap::{Args as ClapArgs, ValueEnum};
 use serde_json::Value;
-use specify_vectis_shell_detect::{SUPPORTED_SHELL_PLATFORMS, shell_present};
 
+use crate::shell::{SUPPORTED_SHELL_PLATFORMS, shell_present};
 use crate::validate::find_project_root;
 use crate::{VectisError, render_json as render_value};
 
@@ -39,10 +42,11 @@ pub struct VerifyArgs {
 /// Verification mode.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
 pub enum VerifyMode {
-    /// Plan-time: return the set of declared-but-absent platforms.
-    Detect,
     /// Build/lint-time: emit diagnostic findings, exit non-zero on miss.
     Verify,
+    /// Build-time: gate the launcher `app-icon` for declared UI
+    /// platforms (`ios` / `android`); RFC-46 §6.
+    BootstrapAppIcon,
 }
 
 /// Per-platform status entry in the verify report.
@@ -63,18 +67,20 @@ pub fn run(args: &VerifyArgs) -> Result<Value, VectisError> {
     let project_root = resolve_project_root(args.path.as_deref())?;
     let platforms = load_platforms(&project_root)?;
 
-    let statuses: Vec<PlatformStatus> =
-        platforms.iter().map(|p| check_platform(p, &project_root)).collect();
-
     match args.mode {
-        VerifyMode::Detect => Ok(render_detect(&statuses)),
-        VerifyMode::Verify => Ok(render_verify(&statuses, &project_root, &platforms)),
+        VerifyMode::Verify => {
+            let statuses: Vec<PlatformStatus> =
+                platforms.iter().map(|p| check_platform(p, &project_root)).collect();
+            Ok(render_verify(&statuses, &project_root, &platforms))
+        }
+        VerifyMode::BootstrapAppIcon => Ok(render_bootstrap_app_icon(&project_root, &platforms)),
     }
 }
 
 /// Render a `(success | error)` result as pretty-printed JSON with
-/// exit code. Detect mode always exits 0; verify mode exits 1 when
-/// any supported declared platform is missing.
+/// exit code. Both modes exit 1 when any `error`-severity finding is
+/// present (a missing supported shell, or an unsatisfiable launcher
+/// `app-icon`), and 0 otherwise.
 #[must_use]
 pub fn render_json(outcome: Result<Value, VectisError>) -> (String, u8) {
     match outcome {
@@ -95,14 +101,11 @@ pub fn render_json(outcome: Result<Value, VectisError>) -> (String, u8) {
 
 /// Compute the exit code for a verify payload.
 ///
-/// Detect mode always returns 0 (the consumer reads the `missing`
-/// array). Verify mode returns 1 when findings are present, 0
-/// otherwise.
+/// Returns 1 when any `error`-severity finding is present, 0 otherwise.
+/// Both `verify` and `bootstrap-app-icon` modes carry their result in
+/// the same `findings` array.
 #[must_use]
 fn verify_exit_code(value: &Value) -> u8 {
-    if value.get("mode").and_then(Value::as_str) == Some("detect") {
-        return 0;
-    }
     let has_findings = value.get("findings").and_then(Value::as_array).is_some_and(|arr| {
         arr.iter().any(|f| f.get("severity").and_then(Value::as_str) == Some("error"))
     });
@@ -167,46 +170,12 @@ fn is_supported(platform: &str) -> bool {
     SUPPORTED_SHELL_PLATFORMS.contains(&platform)
 }
 
-fn render_detect(statuses: &[PlatformStatus]) -> Value {
-    let missing: Vec<Value> = statuses
-        .iter()
-        .filter(|s| !s.present && is_supported(&s.platform))
-        .map(|s| Value::String(s.platform.clone()))
-        .collect();
-
-    let info_findings: Vec<Value> = statuses
-        .iter()
-        .filter(|s| !is_supported(&s.platform))
-        .map(|s| {
-            serde_json::json!({
-                "platform": s.platform,
-                "id": "platform-not-yet-supported",
-                "severity": "info",
-                "message": format!(
-                    "platform `{}` is accepted but has no on-disk interpretation yet",
-                    s.platform,
-                ),
-            })
-        })
-        .collect();
-
-    let entries: Vec<Value> = statuses
-        .iter()
-        .map(|s| {
-            serde_json::json!({
-                "platform": s.platform,
-                "declared": s.declared,
-                "present": s.present,
-            })
-        })
-        .collect();
-
+fn render_bootstrap_app_icon(project_root: &Path, platforms: &[String]) -> Value {
+    let findings = app_icon::bootstrap_app_icon_findings(project_root, platforms);
     serde_json::json!({
-        "mode": "detect",
-        "project-root": "",
-        "platforms": entries,
-        "missing": missing,
-        "info": info_findings,
+        "mode": "bootstrap-app-icon",
+        "project-root": project_root.display().to_string(),
+        "findings": findings,
     })
 }
 

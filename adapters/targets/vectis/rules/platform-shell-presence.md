@@ -26,4 +26,4 @@ Every platform declared in `project.yaml.platforms` and carried through `proposa
 
 ## Spec Guidance
 
-Platforms are an app-level fact carried to every slice. When a declared platform's shell tree is absent, plan-time reconciliation should have inserted a bootstrap slice to stand it up. If the shell is still missing at build time, the verify gate prevents the slice from reaching `built`.
+Platforms are an app-level fact carried to every slice from `project.yaml.platforms`. When a declared platform's shell tree is absent, the slice's own build stands it up (`scaffold <platform>` — the adapter's build-time `create` path); there is no separate plan-time bootstrap slice. If the shell is still missing when the slice reaches `built`, the verify gate prevents the transition.

@@ -16,7 +16,8 @@
 //! - `validate` — schema + cross-artifact validation for tokens, assets,
 //!   layout, composition, plus an `all` fan-out.
 //! - `verify` — declared-vs-present platform shell verification
-//!   (detect mode for plan-time, verify mode for build/lint).
+//!   (`verify` mode for build/lint; `bootstrap-app-icon` mode for the
+//!   build-time launcher-icon gate).
 //! - `infer` — deterministic component-identity clustering over the
 //!   composition baseline (name-free cluster report).
 //! - `materialize` — canonical-to-export asset conversion (`assets`
@@ -34,6 +35,7 @@ pub mod infer;
 pub mod materialize;
 pub mod scaffold;
 pub mod schema;
+mod shell;
 pub mod validate;
 pub mod verify;
 
@@ -62,7 +64,7 @@ pub fn render_json(payload: &Value) -> String {
     about = "Validate Vectis UI artifacts, verify platform shells, materialize design-system exports, infer shared components, render Crux project scaffolds, and retrieve tool-owned schemas.",
     long_about = "Vectis WASI command tool. Subcommands:\n  \
                   validate — validate Vectis UI artifacts (tokens, assets, layout, composition, all).\n  \
-                  verify  — verify declared platform shells are present on disk (detect, verify).\n  \
+                  verify  — verify declared platform shells are present on disk (verify, bootstrap-app-icon).\n  \
                   infer   — cluster structurally-identical groups in the composition baseline (name-free report).\n  \
                   materialize — convert canonical assets into per-platform exports (assets).\n  \
                   scaffold — render Crux project scaffolds (core, ios, android).\n  \

@@ -1362,19 +1362,11 @@ dependencies = [
  "serde-saphyr",
  "serde_json",
  "sha2",
- "specify-vectis-shell-detect",
  "tempfile",
  "thiserror",
  "tiny-skia",
  "toml",
  "usvg",
-]
-
-[[package]]
-name = "specify-vectis-shell-detect"
-version = "0.4.0"
-dependencies = [
- "tempfile",
 ]
 
 [[package]]

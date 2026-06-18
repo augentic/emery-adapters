@@ -4,7 +4,7 @@ use std::path::Path;
 
 use tempfile::tempdir;
 
-use crate::shell_resident_app_icon;
+use super::shell_resident_app_icon;
 
 fn scaffold_ios_appiconset(root: &Path, contents_json: &str, png_bytes: Option<&[u8]>) {
     let appiconset = root.join("iOS/TestApp/Resources/Assets.xcassets/AppIcon.appiconset");

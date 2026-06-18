@@ -7,14 +7,14 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
-use specify_vectis_shell_detect::shell_present;
 
 use crate::materialize::paths::{ANDROID_DENSITIES, kebab_to_snake};
+use crate::shell::shell_present;
 use crate::validate::ValidateMode;
 use crate::validate::engine::{
-    collect_asset_references, discover_artifact, parse_yaml_file, resolve_default_path_with_root,
+    collect_asset_references, discover_artifact, imageset_has_materialized_content,
+    parse_yaml_file, resolve_default_path_with_root,
 };
-use crate::validate::engine::imageset_has_materialized_content;
 
 /// Collect diagnostic findings for composition-referenced non-symbol assets
 /// that are absent from a present platform shell tree.
@@ -78,10 +78,7 @@ fn catalog_asset_applicable(entry: &Value) -> bool {
     if entry.get("role").and_then(Value::as_str) == Some("app-icon") {
         return false;
     }
-    matches!(
-        entry.get("kind").and_then(Value::as_str),
-        Some("vector" | "raster")
-    )
+    matches!(entry.get("kind").and_then(Value::as_str), Some("vector" | "raster"))
 }
 
 fn is_supported_shell_platform(platform: &str) -> bool {
@@ -105,7 +102,9 @@ fn catalog_expectation(platform: &str, asset_id: &str, entry: &Value) -> String 
     }
 }
 
-fn shell_catalog_entry_present(project_root: &Path, platform: &str, asset_id: &str, entry: &Value) -> bool {
+fn shell_catalog_entry_present(
+    project_root: &Path, platform: &str, asset_id: &str, entry: &Value,
+) -> bool {
     match platform {
         "ios" => ios_shell_has_imageset(project_root, asset_id),
         "android" => android_shell_has_asset(project_root, asset_id, entry),

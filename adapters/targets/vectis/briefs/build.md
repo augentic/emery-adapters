@@ -40,7 +40,7 @@ All phase sub-briefs assume these symbols are resolved by `/spec:build` before t
 
 Every slice carries the full app platform set from `project.yaml.platforms` (stamped verbatim into `proposal.md ## Platforms` by synthesis). Each slice signifies core + all declared shell work; build determines the **actual per-platform work**:
 
-- **create** — the shell tree is absent on disk → the bootstrap slice's build runs `specify extension run vectis -- scaffold <platform> <APP_NAME> [--caps <csv>]` to stand up the minimum shell. Only `core`, `ios`, and `android` have scaffold support today.
+- **create** — the shell tree is absent on disk → run `specify extension run vectis -- scaffold <platform> <APP_NAME> [--caps <csv>]` to stand up the minimum shell before generating into it. Standing up an absent shell is this adapter's own build-time responsibility — there is no separate plan-time bootstrap slice; `project.yaml.platforms` already declares the intent. Only `core`, `ios`, and `android` have scaffold support today.
 - **update** — the shell tree exists → diff core types against existing code and apply targeted edits (the normal feature-slice path).
 - **no-op** — the platform is in scope but the slice introduces no changes for that shell (skip the sub-brief).
 

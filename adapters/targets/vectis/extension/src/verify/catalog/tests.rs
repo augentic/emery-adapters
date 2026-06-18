@@ -75,7 +75,10 @@ fn missing_ios_imageset_emits_finding() {
     let findings = catalog_findings(tmp.path(), &["ios".to_string(), "android".to_string()]);
     let ios_errors: Vec<_> = findings
         .iter()
-        .filter(|f| f["id"] == "shell-catalog-entry-missing" && f["message"].as_str().unwrap().contains("ios"))
+        .filter(|f| {
+            f["id"] == "shell-catalog-entry-missing"
+                && f["message"].as_str().unwrap().contains("ios")
+        })
         .collect();
     assert_eq!(ios_errors.len(), 1);
     assert!(ios_errors[0]["message"].as_str().unwrap().contains("empty-tasks-hero"));
@@ -87,9 +90,8 @@ fn contents_json_only_imageset_is_missing() {
     scaffold_project(tmp.path());
     write_inventory(tmp.path());
 
-    let imageset = tmp
-        .path()
-        .join("iOS/TodoApp/Resources/Assets.xcassets/empty-tasks-hero.imageset");
+    let imageset =
+        tmp.path().join("iOS/TodoApp/Resources/Assets.xcassets/empty-tasks-hero.imageset");
     std::fs::create_dir_all(&imageset).expect("mkdir imageset");
     std::fs::write(imageset.join("Contents.json"), "{\"images\":[]}").expect("write json");
 
@@ -104,24 +106,19 @@ fn present_shell_catalog_entries_emit_no_findings() {
     scaffold_project(tmp.path());
     write_inventory(tmp.path());
 
-    let imageset = tmp
-        .path()
-        .join("iOS/TodoApp/Resources/Assets.xcassets/empty-tasks-hero.imageset");
+    let imageset =
+        tmp.path().join("iOS/TodoApp/Resources/Assets.xcassets/empty-tasks-hero.imageset");
     std::fs::create_dir_all(&imageset).expect("mkdir imageset");
     std::fs::write(imageset.join("empty-tasks-hero@3x.png"), b"PNG").expect("write png");
     std::fs::write(imageset.join("Contents.json"), "{\"images\":[]}").expect("write json");
 
-    let drawable = tmp
-        .path()
-        .join("Android/app/src/main/res/drawable-xxxhdpi/empty_tasks_hero.png");
+    let drawable =
+        tmp.path().join("Android/app/src/main/res/drawable-xxxhdpi/empty_tasks_hero.png");
     std::fs::create_dir_all(drawable.parent().unwrap()).expect("mkdir drawable");
     std::fs::write(&drawable, b"PNG").expect("write android png");
 
     let findings = catalog_findings(tmp.path(), &["ios".to_string(), "android".to_string()]);
-    let errors: Vec<_> = findings
-        .iter()
-        .filter(|f| f["severity"] == "error")
-        .collect();
+    let errors: Vec<_> = findings.iter().filter(|f| f["severity"] == "error").collect();
     assert!(errors.is_empty(), "expected clean catalog: {findings:?}");
 }
 

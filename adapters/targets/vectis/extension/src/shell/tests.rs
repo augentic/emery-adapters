@@ -4,7 +4,7 @@ use std::path::Path;
 
 use tempfile::tempdir;
 
-use super::{SUPPORTED_SHELL_PLATFORMS, missing_shell_platforms, shell_present};
+use super::{SUPPORTED_SHELL_PLATFORMS, shell_present};
 
 fn scaffold_core(root: &Path) {
     let dir = root.join("shared/src");
@@ -25,44 +25,42 @@ fn scaffold_android(root: &Path) {
 }
 
 #[test]
-fn all_present_empty_missing() {
+fn all_supported_present() {
     let tmp = tempdir().unwrap();
     scaffold_core(tmp.path());
     scaffold_ios(tmp.path());
     scaffold_android(tmp.path());
 
-    let missing = missing_shell_platforms(tmp.path(), &["core", "ios", "android"]);
-    assert!(missing.is_empty(), "expected empty missing set: {missing:?}");
+    assert!(shell_present(tmp.path(), "core"));
+    assert!(shell_present(tmp.path(), "ios"));
+    assert!(shell_present(tmp.path(), "android"));
 }
 
 #[test]
-fn missing_ios_only() {
+fn ios_absent_when_only_core_android() {
     let tmp = tempdir().unwrap();
     scaffold_core(tmp.path());
     scaffold_android(tmp.path());
 
-    let missing = missing_shell_platforms(tmp.path(), &["core", "ios", "android"]);
-    assert_eq!(missing, vec!["ios".to_string()]);
+    assert!(!shell_present(tmp.path(), "ios"));
+    assert!(shell_present(tmp.path(), "core"));
+    assert!(shell_present(tmp.path(), "android"));
 }
 
 #[test]
-fn greenfield_all_supported_missing() {
+fn greenfield_all_supported_absent() {
     let tmp = tempdir().unwrap();
 
-    let missing = missing_shell_platforms(tmp.path(), &["core", "ios", "android"]);
-    assert_eq!(missing.len(), 3);
-    assert!(missing.iter().any(|p| p == "core"));
-    assert!(missing.iter().any(|p| p == "ios"));
-    assert!(missing.iter().any(|p| p == "android"));
+    assert!(!shell_present(tmp.path(), "core"));
+    assert!(!shell_present(tmp.path(), "ios"));
+    assert!(!shell_present(tmp.path(), "android"));
 }
 
 #[test]
-fn web_desktop_not_in_missing() {
+fn web_desktop_treated_present() {
     let tmp = tempdir().unwrap();
     scaffold_core(tmp.path());
 
-    let missing = missing_shell_platforms(tmp.path(), &["core", "web", "desktop"]);
-    assert!(missing.is_empty(), "web/desktop should not appear in missing: {missing:?}");
     assert!(shell_present(tmp.path(), "web"));
     assert!(shell_present(tmp.path(), "desktop"));
 }
@@ -76,8 +74,6 @@ fn ios_without_swift_not_present() {
     std::fs::write(ios_dir.join("README.md"), "placeholder").expect("write readme");
 
     assert!(!shell_present(tmp.path(), "ios"));
-    let missing = missing_shell_platforms(tmp.path(), &["core", "ios"]);
-    assert!(missing.iter().any(|p| p == "ios"));
 }
 
 #[test]
@@ -89,8 +85,6 @@ fn android_without_kt_not_present() {
     std::fs::write(android_dir.join("build.gradle"), "").expect("write gradle");
 
     assert!(!shell_present(tmp.path(), "android"));
-    let missing = missing_shell_platforms(tmp.path(), &["core", "android"]);
-    assert!(missing.iter().any(|p| p == "android"));
 }
 
 #[test]

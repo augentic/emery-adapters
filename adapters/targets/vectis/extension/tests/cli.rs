@@ -167,34 +167,22 @@ fn scaffold_android(root: &std::path::Path) {
 }
 
 #[test]
-fn verify_detect_all_present_exits_zero() {
+fn verify_verify_all_present_exits_zero() {
     let tmp = tempdir().unwrap();
     write_project_yaml(tmp.path(), &["core", "ios", "android"]);
     scaffold_core(tmp.path());
     scaffold_ios(tmp.path());
     scaffold_android(tmp.path());
 
-    let assert = vectis_verify().args(["--mode", "detect"]).arg(tmp.path()).assert().success();
+    let assert = vectis_verify().args(["--mode", "verify"]).arg(tmp.path()).assert().success();
     let value = parse_json(&assert.get_output().stdout);
 
-    assert_eq!(value["mode"], "detect");
-    let missing = value["missing"].as_array().expect("missing array");
-    assert!(missing.is_empty(), "expected empty missing: {value}");
-}
-
-#[test]
-fn verify_detect_missing_shell_exits_zero_with_missing() {
-    let tmp = tempdir().unwrap();
-    write_project_yaml(tmp.path(), &["core", "ios"]);
-    scaffold_core(tmp.path());
-
-    let assert = vectis_verify().args(["--mode", "detect"]).arg(tmp.path()).assert().success();
-    let value = parse_json(&assert.get_output().stdout);
-
-    assert_eq!(value["mode"], "detect");
-    let missing = value["missing"].as_array().expect("missing array");
-    assert_eq!(missing.len(), 1);
-    assert_eq!(missing[0], "ios");
+    assert_eq!(value["mode"], "verify");
+    let findings = value["findings"].as_array().expect("findings array");
+    assert!(
+        findings.iter().all(|f| f["severity"] != "error"),
+        "expected no error findings: {value}"
+    );
 }
 
 #[test]
@@ -214,10 +202,40 @@ fn verify_verify_missing_shell_exits_one() {
 }
 
 #[test]
+fn verify_bootstrap_app_icon_greenfield_exits_one() {
+    let tmp = tempdir().unwrap();
+    write_project_yaml(tmp.path(), &["core", "ios", "android"]);
+
+    let assert =
+        vectis_verify().args(["--mode", "bootstrap-app-icon"]).arg(tmp.path()).assert().failure();
+    let output = assert.get_output();
+    let value = parse_json(&output.stdout);
+
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(value["mode"], "bootstrap-app-icon");
+    let findings = value["findings"].as_array().expect("findings array");
+    assert_eq!(findings.len(), 2, "expected ios + android findings: {value}");
+    assert!(findings.iter().all(|f| f["id"] == "plan-bootstrap-app-icon-missing"));
+}
+
+#[test]
+fn verify_bootstrap_app_icon_core_only_exits_zero() {
+    let tmp = tempdir().unwrap();
+    write_project_yaml(tmp.path(), &["core"]);
+
+    let assert =
+        vectis_verify().args(["--mode", "bootstrap-app-icon"]).arg(tmp.path()).assert().success();
+    let value = parse_json(&assert.get_output().stdout);
+
+    assert_eq!(value["mode"], "bootstrap-app-icon");
+    assert!(value["findings"].as_array().expect("findings array").is_empty());
+}
+
+#[test]
 fn verify_missing_project_yaml_exits_two() {
     let tmp = tempdir().unwrap();
 
-    let assert = vectis_verify().args(["--mode", "detect"]).arg(tmp.path()).assert().failure();
+    let assert = vectis_verify().args(["--mode", "verify"]).arg(tmp.path()).assert().failure();
     let output = assert.get_output();
     let value = parse_json(&output.stdout);
 
@@ -234,14 +252,14 @@ fn verify_uses_project_dir_env() {
 
     let assert = vectis_verify()
         .env("PROJECT_DIR", tmp.path())
-        .args(["--mode", "detect"])
+        .args(["--mode", "verify"])
         .assert()
         .success();
     let value = parse_json(&assert.get_output().stdout);
 
-    assert_eq!(value["mode"], "detect");
-    let missing = value["missing"].as_array().expect("missing array");
-    assert!(missing.is_empty());
+    assert_eq!(value["mode"], "verify");
+    let findings = value["findings"].as_array().expect("findings array");
+    assert!(findings.iter().all(|f| f["severity"] != "error"));
 }
 
 // ── schema subcommand ──────────────────────────────────────────────

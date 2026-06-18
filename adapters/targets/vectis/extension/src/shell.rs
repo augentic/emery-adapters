@@ -1,14 +1,14 @@
 //! Crux shell presence heuristics for Vectis-bound projects.
 //!
-//! Single source of truth for on-disk shell detection and shell-resident
-//! launcher icon probes (RFC-46 §6.3). The host CLI links this crate
-//! in-process; `wasi-tools/vectis` reuses it for `verify --mode detect`.
-
-#![warn(missing_docs)]
-
-mod launcher;
+//! On-disk shell detection and shell-resident launcher icon probes
+//! (RFC-46 §6.3) for the `verify` subcommand. `project.yaml.platforms`
+//! is the authority for platform *intent*; these heuristics report what
+//! is present on disk so build-time scaffolding and the bootstrap
+//! `app-icon` gate can decide what work remains.
 
 use std::path::Path;
+
+mod launcher;
 
 pub use launcher::shell_resident_app_icon;
 
@@ -34,21 +34,6 @@ pub fn shell_present(project_dir: &Path, platform: &str) -> bool {
         }
         _ => true,
     }
-}
-
-/// Returns declared supported platforms whose shell trees are absent.
-///
-/// Only [`SUPPORTED_SHELL_PLATFORMS`] are checked. `web`, `desktop`,
-/// and other unknown strings are omitted from the result.
-#[must_use]
-pub fn missing_shell_platforms(project_dir: &Path, declared: &[&str]) -> Vec<String> {
-    declared
-        .iter()
-        .copied()
-        .filter(|platform| SUPPORTED_SHELL_PLATFORMS.contains(platform))
-        .filter(|platform| !shell_present(project_dir, platform))
-        .map(str::to_owned)
-        .collect()
 }
 
 fn has_files_with_extension(dir: &Path, ext: &str) -> bool {

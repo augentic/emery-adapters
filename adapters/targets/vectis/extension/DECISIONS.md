@@ -274,31 +274,32 @@ _Codified in: `wasi-tools/vectis/src/materialize/render.rs`,
 
 ### §L — Bootstrap `app-icon` gate
 
-> **Bootstrap trigger (§6.1).** For a Vectis-bound project, UI shell bootstrap
-> is implied when `project.yaml.platforms` includes `ios` and/or `android` **and**
-> vectis shell-detect semantics report that platform in `missing[]` (same rules
-> as `vectis verify --mode detect` / `specify-vectis-shell-detect`). Detection
-> is filesystem-authoritative — host `propose --from` and `plan validate` call
-> the shared library in-process; they do not dispatch vectis WASM for this probe.
-> **`plan.yaml` slice names** (`app-foundation`, `bootstrap-*`) are **not** gate
-> inputs. `core`-only missing does not trigger; the gate fires only when `ios`
-> or `android` is among `missing[]`.
+> **Trigger.** `project.yaml.platforms` is the sole authority for platform
+> intent: the launcher `app-icon` gate fires for every declared UI platform
+> (`ios` and/or `android`). There is no filesystem shell scan, no `missing[]`
+> probe, and no `plan.yaml` slice-name inspection — whether a shell tree
+> happens to exist on disk is irrelevant to the trigger. A `core`-only
+> project never triggers the gate.
 >
-> **Validation rule (§6.2).** When §6.1 triggers, evaluate each missing UI
-> platform `π`: (1) **shell-resident escape hatch** — if
-> `shell_resident_app_icon(project_dir, π)` is true (§6.3), pass for `π`
-> without design-system inventory; (2) otherwise require `design-system/assets.yaml`
-> top-level `app-icon` pointing at a `role: app-icon` entry satisfiable for `π`
-> via path A (canonical `source:` materializable) or path B (operator-pinned
-> export tree at `exports/<π>/app-icon/`). Failure → `plan-bootstrap-app-icon-missing`
-> (plan validate) or `assets-app-icon-invalid` / `assets-app-icon-export-invalid`
-> (vectis validate assets).
+> **Validation rule (§6.2).** For each declared UI platform `π`:
+> (1) **shell-resident escape hatch** — if `shell_resident_app_icon(project_dir, π)`
+> is true (§6.3), pass for `π` without design-system inventory; (2) otherwise
+> require `design-system/assets.yaml` top-level `app-icon` pointing at a
+> `role: app-icon` entry satisfiable for `π` via path A (canonical `source:`
+> materializable) or path B (operator-pinned export tree at
+> `exports/<π>/app-icon/`). Failure → an error-severity
+> `plan-bootstrap-app-icon-missing` finding.
 >
-> When §6.1 does not trigger, `app-icon` inventory is not gated.
+> **Enforcement point — build-time only.** The gate runs at
+> `specify slice build --phase prepare` (after asset materialization), where
+> the host dispatches `vectis verify --mode bootstrap-app-icon` and re-raises
+> any error-severity finding as `plan-bootstrap-app-icon-missing`. It does
+> **not** run at `plan validate`: platform shell bootstrap is a build-time
+> adapter concern, never a plan-time check.
 
-_Codified in: `crates/workflow/src/platform/bootstrap.rs` (`BootstrapContext`);
-`crates/vectis-shell-detect` (`shell_resident_app_icon`); plan doctor
-(`plan-bootstrap-app-icon-missing`); `wasi-tools/vectis/src/validate/engine/assets/app_icon.rs`._
+_Codified in: `src/shell/launcher.rs` (`shell_resident_app_icon`, §6.3);
+`src/verify/app_icon.rs` (the gate behind `vectis verify --mode bootstrap-app-icon`);
+host `src/runtime/commands/slice/build.rs` (prepare-phase dispatch + re-raise)._
 
 ### Scaffold version-pin resolution
 

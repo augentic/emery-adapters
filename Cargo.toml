@@ -3,14 +3,12 @@ resolver = "3"
 members = [
     "adapters/targets/contracts/extension",
     "adapters/targets/vectis/extension",
-    "shared/vectis-shell-detect",
 ]
 
 # The Specify adapters repo (RFC-48 / RFC-49 T6). Each bundled adapter
 # co-locates its WASI extension crate under `adapters/**/extension/`; the
 # extension wasm builds here and is committed beside `adapter.yaml` as the
-# adapter's `adapter.wasm`. `shared/` holds the host-and-extension shared
-# crates forked from the platform repo (RFC-48 step-8 one-time fork).
+# adapter's `adapter.wasm`.
 
 [workspace.package]
 authors = ["Augentic"]
