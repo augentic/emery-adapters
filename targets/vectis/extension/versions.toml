@@ -14,8 +14,7 @@ crux_time     = "0.15.0"   # latest stable; same constraints
 crux_platform = "0.8.0"    # latest stable; same constraints
 
 # HARD PINS -- do not relax. Crux 0.17 specifies these exactly and will not
-# build with anything else. The `update-versions` command must lift the entire
-# Crux set in lock-step when these change.
+# build with anything else. Bump the entire Crux set in lock-step when these change.
 facet           = "=0.31"   # required by crux_core 0.17 and every cap crate
 facet_generate  = "=0.15"   # codegen feature; only 0.15 is compatible with facet 0.31
 serde           = "1.0"
@@ -32,8 +31,7 @@ serde_json      = "1.0"
 # `templates/core/codegen.rs`) fails with "unresolved module path
 # shared::ffi". No version of Crux bumps bindgen to 0.31 today; this pair must
 # stay at 0.29.4 / 0.9 until either a newer Crux release tracks 0.31 bindgen or
-# the codegen template is rewritten to call uniffi_bindgen 0.31 directly (the
-# latter is chunk-13 `template-updater` territory).
+# the codegen template is rewritten to call uniffi_bindgen 0.31 directly.
 #
 # IMPORTANT: cargo-swift's bundled uniffi-bindgen embeds a contract version
 # number into the generated Swift/Kotlin bindings. The Rust uniffi crate embeds
@@ -48,9 +46,7 @@ cargo_swift = "0.9"        # version range that ships uniffi_bindgen 0.29.x
 [android]
 # Bumped from the original Vectis pin block per chunk-3c verification (the older
 # pins -- agp 8.8.2 / kotlin 2.1.10 / compose_bom 2025.01.01 -- do not
-# produce a buildable APK against Xcode 16 / Java 21 toolchains). Chunk 11
-# (`update-versions`) will replace these with proven-coherent values pulled
-# from Google's Maven and Maven Central.
+# produce a buildable APK against Xcode 16 / Java 21 toolchains).
 compose_bom = "2026.01.01"
 koin        = "4.1.1"
 ktor        = "3.4.0"

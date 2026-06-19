@@ -3,8 +3,7 @@ version = 2
 yanked = "deny"
 # Crux 0.17's transitive deps include a couple of crates the upstream
 # maintainers have retired. Neither has a safe upgrade today and they
-# are removed via the `template-updater` skill when Crux bumps away
-# from them. Listed here explicitly (rather than as a blanket
+# are removed when Crux bumps away from them. Listed here explicitly (rather than as a blanket
 # `unmaintained = "warn"`) so new advisories still surface as errors.
 ignore = [
     "RUSTSEC-2024-0370", # proc-macro-error 1.x (via crux_macros -> crux_core)
