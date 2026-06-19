@@ -10,7 +10,7 @@ rule_hints:
     value: "AGENTS.md"
   - kind: cli-contract
     value: test-citations
-    description: "`tests/….rs` inline code spans and CLI-repo link targets under `tests/` must exist in the binary's build-time test inventory."
+    description: "`tests/….rs` inline code spans and `engine/` workspace link targets under `tests/` must exist in the binary's build-time test inventory."
     config:
       link-prefixes:
         - "https://github.com/augentic/specify/blob/main/engine/"
@@ -24,7 +24,7 @@ This repository routinely punts proof to the CLI: "the deterministic substrate i
 The `test-citations` selector of the `cli-contract` kind closes the gap. The pinned binary embeds an inventory of its own `tests/` tree at build time (published as the `tests` array of `specify contract dump`), and every citation in scope is checked against it:
 
 - An inline code span matching `tests/….rs` must be a file in the inventory.
-- A link target under one of the configured CLI-repo prefixes pointing into `tests/` must resolve — a file citation exactly, a directory citation by containing at least one inventoried file. `#L…` fragments are ignored.
+- A link target under one of the configured `engine/` link prefixes pointing into `tests/` must resolve — a file citation exactly, a directory citation by containing at least one inventoried file. `#L…` fragments are ignored.
 
 The scope is deliberately narrower than [CORE-057](CORE-057-cli-contract-drift.md): only `docs/**` and `AGENTS.md`, because adapter references and briefs legitimately describe `tests/` layouts of *generated downstream crates* (`tests/provider.rs` in an Omnia consumer project) that are not CLI tests and must not be checked against the CLI inventory.
 
