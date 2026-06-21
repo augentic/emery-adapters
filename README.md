@@ -40,15 +40,17 @@ The `fmt-check` arm shells out to nightly `rustfmt`, so a nightly toolchain
 plus the `cargo-make`, `cargo-nextest`, `cargo-deny`, and `cargo-vet` tools must
 be installed; the tasks are defined in `Makefile.toml`.
 
-Build the committed wasm32-wasip2 artifacts directly with:
+Refresh the committed `targets/<name>/adapter.wasm` wasm32-wasip2
+component with:
 
 ```bash
-cargo build --target wasm32-wasip2 --release -p specify-contract -p specify-vectis
+specify adapter build --path targets/<name> --refresh-extension
 ```
 
-The committed `targets/<name>/adapter.wasm` is the wasm32-wasip2
-release component for that adapter; refresh it via
-`specify adapter build --path targets/<name> --refresh-extension`.
+For fast local iteration on an extension crate alone, workspace builds
+still work (`cargo build --target wasm32-wasip2 --release -p specify-contract
+-p specify-vectis`), but only `specify adapter build` copies the release
+binary into the committed `adapter.wasm` beside `adapter.yaml`.
 
 ## Publishing
 
