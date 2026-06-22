@@ -221,7 +221,9 @@ Canonical spec: [`augentic/specify` `rfcs/rfc-46-asset-materialization.md`](http
 > Operator pins win silently — when `sources.<platform>` is set and the path
 > exists on disk, materialize skips that slot. Invocation: operator manual, or
 > automatic at `specify slice build --phase prepare` for in-scope missing
-> exports (§2.1 of RFC-46).
+> exports (§2.1 of RFC-46). The host dispatches **`vectis prepare build`**
+> (see §L); prepare resolves scope and invokes `materialize assets --only`
+> for missing in-scope ids only.
 >
 > **Report envelope (stable):** success payloads are flat JSON with
 > `command: "materialize assets"`, the resolved inventory `path`, `dry_run`,
@@ -245,7 +247,9 @@ _Codified in: `src/validate/engine/assets/` (export presence,
 `assets-materialization-missing`, `assets-app-icon-*`);
 `src/materialize/` (CLI surface, report envelope,
 `paths.rs` export conventions, `icons/` SVG→PDF/VD XML, `illustrations/` SVG→PNG,
-`raster_copy.rs` photo density copy; pin auto-write lands R46-S21)._
+`raster_copy.rs` photo density copy; pin auto-write lands R46-S21);
+`src/prepare/` (slice-build prepare orchestration: scope resolution,
+conditional `materialize assets --only`, bootstrap gate)._
 
 #### Illustration raster scale table (R46-S18)
 
@@ -288,16 +292,19 @@ _Codified in: `src/materialize/render.rs`,
 > `exports/<π>/app-icon/`). Failure → an error-severity
 > `plan-bootstrap-app-icon-missing` finding.
 >
-> **Enforcement point — build-time only.** The gate runs at
-> `specify slice build --phase prepare` (after asset materialization), where
-> the host dispatches `vectis verify --mode bootstrap-app-icon` and re-raises
-> any error-severity finding as `plan-bootstrap-app-icon-missing`. It does
-> **not** run at `plan validate`: platform shell bootstrap is a build-time
+> **Enforcement point — build-time only.** The gate runs inside
+> **`vectis prepare build`** (after conditional asset materialization),
+> which the host dispatches at `specify slice build --phase prepare`.
+> Prepare invokes `vectis verify --mode bootstrap-app-icon` and exits
+> non-zero when any error-severity finding is present. It does **not**
+> run at `plan validate`: platform shell bootstrap is a build-time
 > adapter concern, never a plan-time check.
 
 _Codified in: `src/shell/launcher.rs` (`shell_resident_app_icon`, §6.3);
 `src/verify/app_icon.rs` (the gate behind `vectis verify --mode bootstrap-app-icon`);
-host `src/runtime/commands/slice/build.rs` (prepare-phase dispatch + re-raise)._
+`src/prepare.rs` (orchestrates materialize + bootstrap gate for prepare);
+host `src/runtime/commands/slice/build.rs` (prepare-phase dispatch + re-raise
+until Phase 2 consolidation)._
 
 ### Scaffold version-pin resolution
 

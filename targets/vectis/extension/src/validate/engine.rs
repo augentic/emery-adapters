@@ -28,8 +28,11 @@ mod tokens;
 
 use std::path::Path;
 
-pub use assets::collect_asset_references;
-pub use assets::exports::imageset_has_materialized_content;
+pub use assets::exports::{
+    app_icon_export_exists, conventional_export_exists, imageset_has_materialized_content,
+    platform_pin_active,
+};
+pub use assets::{collect_asset_references, load_shell_platforms};
 pub use paths::{discover_artifact, find_project_root, resolve_default_path_with_root};
 use serde_json::Value;
 pub use shared::parse_yaml_file;

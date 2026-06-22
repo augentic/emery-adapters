@@ -102,7 +102,7 @@ pub fn render_json(outcome: Result<Value, VectisError>) -> (String, u8) {
 /// Both `verify` and `bootstrap-app-icon` modes carry their result in
 /// the same `findings` array.
 #[must_use]
-fn verify_exit_code(value: &Value) -> u8 {
+pub fn verify_exit_code(value: &Value) -> u8 {
     let has_findings = value.get("findings").and_then(Value::as_array).is_some_and(|arr| {
         arr.iter().any(|f| f.get("severity").and_then(Value::as_str) == Some("error"))
     });

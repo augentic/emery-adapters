@@ -9,13 +9,17 @@ use crate::materialize::paths::{
     ANDROID_DENSITIES, IOS_RASTER_SCALES, Platform, android_raster_artifact_rel, ios_imageset_dir,
     ios_raster_artifact_rel, ios_raster_filename, resolve_under_assets_dir,
 };
+use crate::materialize::{MaterializeFilter, matches_only};
 
 /// Copy per-density raster sources into conventional export paths for `role: photo`.
 pub fn materialize_photo_rasters(
     assets_dir: &Path, assets: &serde_json::Map<String, Value>, platforms: &[String],
-    dry_run: bool, materialized: &mut Vec<Value>, errors: &mut Vec<Value>,
+    filter: &MaterializeFilter<'_>, materialized: &mut Vec<Value>, errors: &mut Vec<Value>,
 ) {
     for (asset_id, entry) in assets {
+        if !matches_only(asset_id, filter.only) {
+            continue;
+        }
         if entry.get("role").and_then(Value::as_str) != Some("photo")
             || entry.get("kind").and_then(Value::as_str) != Some("raster")
         {
@@ -35,7 +39,13 @@ pub fn materialize_photo_rasters(
                 continue;
             };
 
-            match copy_platform_densities(asset_id, platform, assets_dir, density_map, dry_run) {
+            match copy_platform_densities(
+                asset_id,
+                platform,
+                assets_dir,
+                density_map,
+                filter.dry_run,
+            ) {
                 Ok(written) => {
                     for path in written {
                         materialized.push(materialized_entry(asset_id, platform, &path));

@@ -11,14 +11,18 @@ use serde_json::{Value, json};
 
 use crate::materialize::icons::{active_platform_pin, asset_error, materialized_entry};
 use crate::materialize::paths::{Platform, export_layout, resolve_under_assets_dir};
+use crate::materialize::{MaterializeFilter, matches_only};
 
 /// Materialize `role: app-icon` entries with a canonical `source:` master.
 pub fn materialize_app_icons(
     assets_dir: &Path, assets: &serde_json::Map<String, Value>, platforms: &[String],
-    dry_run: bool, materialized: &mut Vec<Value>, skipped_pins: &mut Vec<Value>,
+    filter: &MaterializeFilter<'_>, materialized: &mut Vec<Value>, skipped_pins: &mut Vec<Value>,
     errors: &mut Vec<Value>,
 ) {
     for (asset_id, entry) in assets {
+        if !matches_only(asset_id, filter.only) {
+            continue;
+        }
         if entry.get("role").and_then(Value::as_str) != Some("app-icon") {
             continue;
         }
@@ -55,10 +59,17 @@ pub fn materialize_app_icons(
             };
 
             let result = match platform {
-                Platform::Ios => materialize_ios(asset_id, assets_dir, &layout, &canvas, dry_run),
-                Platform::Android => {
-                    materialize_android(asset_id, entry, assets_dir, &layout, &canvas, dry_run)
+                Platform::Ios => {
+                    materialize_ios(asset_id, assets_dir, &layout, &canvas, filter.dry_run)
                 }
+                Platform::Android => materialize_android(
+                    asset_id,
+                    entry,
+                    assets_dir,
+                    &layout,
+                    &canvas,
+                    filter.dry_run,
+                ),
             };
             match result {
                 Ok(written) => materialized.extend(written),

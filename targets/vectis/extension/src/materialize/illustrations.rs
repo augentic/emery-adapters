@@ -12,14 +12,18 @@ use crate::materialize::paths::{
     Platform, export_layout, ios_imageset_dir, resolve_under_assets_dir,
 };
 use crate::materialize::svg::parse_icon_svg;
+use crate::materialize::{MaterializeFilter, matches_only};
 
 /// Materialize every in-scope `role: illustration` vector entry from `source:`.
 pub fn materialize_illustration_vectors(
     assets_dir: &Path, assets: &serde_json::Map<String, Value>, platforms: &[String],
-    dry_run: bool, materialized: &mut Vec<Value>, skipped_pins: &mut Vec<Value>,
+    filter: &MaterializeFilter<'_>, materialized: &mut Vec<Value>, skipped_pins: &mut Vec<Value>,
     errors: &mut Vec<Value>,
 ) {
     for (asset_id, entry) in assets {
+        if !matches_only(asset_id, filter.only) {
+            continue;
+        }
         if !is_illustration_vector_entry(entry) {
             continue;
         }
@@ -69,7 +73,7 @@ pub fn materialize_illustration_vectors(
                 platform,
                 assets_dir,
                 &layout,
-                dry_run,
+                filter.dry_run,
             ) {
                 Ok(written) => {
                     for path in written {

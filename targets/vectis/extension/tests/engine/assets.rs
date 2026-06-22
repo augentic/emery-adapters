@@ -873,6 +873,7 @@ screens:
         path: Some(assets_path.clone()),
         platform: None,
         dry_run: false,
+        only: None,
     }))
     .expect("materialize succeeds");
 
