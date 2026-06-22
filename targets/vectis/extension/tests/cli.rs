@@ -386,6 +386,45 @@ fn materialize_assets_clean_run_exits_zero() {
 }
 
 #[test]
+fn materialize_assets_resolves_relative_path_against_project_dir() {
+    let tmp = tempdir().unwrap();
+    let slice_assets = tmp.path().join(".specify/slices/active/assets.yaml");
+    std::fs::create_dir_all(slice_assets.parent().expect("parent")).expect("mkdir slice");
+    std::fs::write(&slice_assets, "version: 1\nassets: {}\n").expect("write assets.yaml");
+
+    let assert = vectis_materialize()
+        .env("PROJECT_DIR", tmp.path())
+        .args(["assets", ".specify/slices/active/assets.yaml"])
+        .assert()
+        .success();
+    let value = parse_json(&assert.get_output().stdout);
+
+    assert_eq!(value["command"], "materialize assets");
+    assert_eq!(value["path"], slice_assets.display().to_string());
+    assert_eq!(value["errors"].as_array().map(Vec::len), Some(0));
+}
+
+#[test]
+fn materialize_assets_relative_path_without_project_dir_is_cwd_relative() {
+    let tmp = tempdir().unwrap();
+    let design = tmp.path().join("design-system");
+    std::fs::create_dir_all(&design).expect("mkdir design-system");
+    let assets_path = design.join("assets.yaml");
+    std::fs::write(&assets_path, "version: 1\nassets: {}\n").expect("write assets.yaml");
+
+    let assert = vectis_materialize()
+        .env_remove("PROJECT_DIR")
+        .current_dir(&design)
+        .args(["assets", "assets.yaml"])
+        .assert()
+        .success();
+    let value = parse_json(&assert.get_output().stdout);
+
+    assert_eq!(value["path"], "assets.yaml");
+    assert_eq!(value["errors"].as_array().map(Vec::len), Some(0));
+}
+
+#[test]
 fn materialize_assets_dry_run_missing_file_exits_two() {
     let tmp = tempdir().unwrap();
     let missing = tmp.path().join("missing-assets.yaml");
