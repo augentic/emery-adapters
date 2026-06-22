@@ -46,6 +46,10 @@ pub struct AssetsArgs {
     /// Report planned writes without creating files or auto-writing pins.
     #[arg(long)]
     pub dry_run: bool,
+
+    /// Limit materialization to these asset ids (comma-separated).
+    #[arg(long, value_delimiter = ',')]
+    pub only: Option<Vec<String>>,
 }
 
 /// Dispatch a parsed [`MaterializeCommand`].
@@ -120,11 +124,15 @@ fn run_assets(args: &AssetsArgs) -> Result<Value, VectisError> {
 
     if let Some(assets) = instance.get("assets").and_then(Value::as_object) {
         let assets_dir = path.parent().unwrap_or_else(|| Path::new("."));
+        let filter = MaterializeFilter {
+            dry_run: args.dry_run,
+            only: args.only.as_deref(),
+        };
         materialize_icon_vectors(
             assets_dir,
             assets,
             &platforms,
-            args.dry_run,
+            &filter,
             &mut materialized,
             &mut skipped_pins,
             &mut errors,
@@ -133,7 +141,7 @@ fn run_assets(args: &AssetsArgs) -> Result<Value, VectisError> {
             assets_dir,
             assets,
             &platforms,
-            args.dry_run,
+            &filter,
             &mut materialized,
             &mut skipped_pins,
             &mut errors,
@@ -142,7 +150,7 @@ fn run_assets(args: &AssetsArgs) -> Result<Value, VectisError> {
             assets_dir,
             assets,
             &platforms,
-            args.dry_run,
+            &filter,
             &mut materialized,
             &mut errors,
         );
@@ -150,7 +158,7 @@ fn run_assets(args: &AssetsArgs) -> Result<Value, VectisError> {
             assets_dir,
             assets,
             &platforms,
-            args.dry_run,
+            &filter,
             &mut materialized,
             &mut skipped_pins,
             &mut errors,
@@ -224,6 +232,20 @@ fn resolve_platform_filter(platforms: Option<&[String]>) -> Result<Vec<String>, 
     }
 
     if out.is_empty() { Ok(vec!["ios".into(), "android".into()]) } else { Ok(out) }
+}
+
+/// Per-run filters shared by materialize funnels.
+#[derive(Debug, Clone, Copy)]
+pub struct MaterializeFilter<'a> {
+    /// When true, report planned writes without creating files or pins.
+    pub dry_run: bool,
+    /// When set, limit materialization to these asset ids.
+    pub only: Option<&'a [String]>,
+}
+
+/// When `only` is set, restrict materialization to the listed asset ids.
+pub(crate) fn matches_only(asset_id: &str, only: Option<&[String]>) -> bool {
+    only.is_none_or(|ids| ids.iter().any(|candidate| candidate == asset_id))
 }
 
 fn build_summary(

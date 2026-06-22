@@ -453,6 +453,115 @@ fn materialize_assets_missing_file_exits_two() {
     assert_eq!(value["exit-code"], 2);
 }
 
+// ── prepare subcommand ───────────────────────────────────────────────
+
+fn vectis_prepare() -> Command {
+    let mut cmd = vectis();
+    cmd.arg("prepare");
+    cmd
+}
+
+const TRIANGLE_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <path fill="#010203" d="M12 2L2 22h20z"/>
+</svg>"##;
+
+#[test]
+fn prepare_build_slice_local_materializes_missing_export() {
+    let tmp = tempdir().unwrap();
+    write_project_yaml(tmp.path(), &["core", "ios"]);
+
+    let design = tmp.path().join("design-system");
+    std::fs::create_dir_all(design.join("assets")).expect("mkdir design assets");
+    std::fs::write(design.join("assets/launcher.svg"), TRIANGLE_SVG).expect("write launcher svg");
+    std::fs::write(
+        design.join("assets.yaml"),
+        r"version: 1
+app-icon: launcher
+assets:
+  launcher:
+    role: app-icon
+    kind: vector
+    source: assets/launcher.svg
+",
+    )
+    .expect("write project assets");
+
+    let slice_dir = tmp.path().join(".specify/slices/active");
+    std::fs::create_dir_all(slice_dir.join("assets")).expect("mkdir assets");
+    std::fs::write(slice_dir.join("assets/glyph.svg"), TRIANGLE_SVG).expect("write svg");
+
+    let yaml = r#"version: 1
+assets:
+  glyph:
+    kind: vector
+    role: icon
+    alt: "Glyph"
+    source: assets/glyph.svg
+"#;
+    std::fs::write(slice_dir.join("assets.yaml"), yaml).expect("write slice assets");
+
+    let assert = vectis_prepare()
+        .env("PROJECT_DIR", tmp.path())
+        .args(["build", ".specify/slices/active"])
+        .assert()
+        .success();
+    let value = parse_json(&assert.get_output().stdout);
+
+    assert_eq!(value["command"], "prepare build");
+    assert_eq!(value["slice_dir"], ".specify/slices/active");
+    assert_eq!(value["platforms"], serde_json::json!(["ios"]));
+    assert!(
+        value["materialized"]["materialized"].as_array().is_some_and(|arr| !arr.is_empty()),
+        "expected materialized exports: {value}"
+    );
+    assert!(
+        slice_dir.join("assets/exports/ios/glyph.imageset/glyph.pdf").is_file(),
+        "ios export should exist after prepare build"
+    );
+}
+
+#[test]
+fn prepare_build_missing_app_icon_exits_one() {
+    let tmp = tempdir().unwrap();
+    write_project_yaml(tmp.path(), &["core", "ios"]);
+    std::fs::create_dir_all(tmp.path().join(".specify/slices/active")).expect("mkdir slice");
+
+    let assert = vectis_prepare()
+        .env("PROJECT_DIR", tmp.path())
+        .args(["build", ".specify/slices/active"])
+        .assert()
+        .failure();
+    let output = assert.get_output();
+    let value = parse_json(&output.stdout);
+
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(value["command"], "prepare build");
+    let findings = value["bootstrap_app_icon"]["findings"].as_array().expect("bootstrap findings");
+    assert!(!findings.is_empty());
+    assert!(findings.iter().all(|f| f["id"] == "plan-bootstrap-app-icon-missing"));
+}
+
+#[test]
+fn prepare_build_invalid_slice_assets_exits_two() {
+    let tmp = tempdir().unwrap();
+    write_project_yaml(tmp.path(), &["core", "ios"]);
+    let slice_dir = tmp.path().join(".specify/slices/active");
+    std::fs::create_dir_all(&slice_dir).expect("mkdir slice");
+    std::fs::write(slice_dir.join("assets.yaml"), ": : not valid yaml\n").expect("write assets");
+
+    let assert = vectis_prepare()
+        .env("PROJECT_DIR", tmp.path())
+        .args(["build", ".specify/slices/active"])
+        .assert()
+        .failure();
+    let output = assert.get_output();
+    let value = parse_json(&output.stdout);
+
+    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(value["error"], "invalid-project");
+    assert_eq!(value["exit-code"], 2);
+}
+
 #[test]
 fn infer_missing_composition_exits_two() {
     let tmp = tempdir().unwrap();

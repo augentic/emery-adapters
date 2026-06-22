@@ -22,6 +22,8 @@ mod materialize_app_icon;
 mod materialize_illustrations;
 #[path = "engine/paths.rs"]
 mod paths;
+#[path = "engine/prepare_scope.rs"]
+mod prepare_scope;
 #[path = "engine/tokens.rs"]
 mod tokens;
 #[path = "engine/verify.rs"]

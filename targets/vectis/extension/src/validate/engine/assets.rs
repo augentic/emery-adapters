@@ -6,6 +6,7 @@ mod platforms;
 
 use std::path::Path;
 
+pub use platforms::load_shell_platforms;
 use serde_json::{Value, json};
 
 use super::paths::{discover_artifact, find_project_root, resolve_default_path};
@@ -55,7 +56,7 @@ pub(super) fn validate(path: Option<&Path>) -> Result<Value, VectisError> {
         let assets_dir = target.parent().unwrap_or_else(|| Path::new("."));
         let project_root = find_project_root(&target)
             .unwrap_or_else(|| assets_dir.parent().unwrap_or(assets_dir).to_path_buf());
-        let shell_platforms = platforms::load_shell_platforms(&project_root);
+        let shell_platforms = load_shell_platforms(&project_root);
 
         if let Some(assets) = instance.get("assets").and_then(Value::as_object) {
             for (id, entry) in assets {

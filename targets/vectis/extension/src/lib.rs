@@ -11,7 +11,7 @@
 //! `output::emit` dispatcher; those couplings would re-attach the
 //! tool to the host CLI's release cadence.
 //!
-//! `vectis` exposes six subcommands:
+//! `vectis` exposes seven subcommands:
 //!
 //! - `validate` — schema + cross-artifact validation for tokens, assets,
 //!   layout, composition, plus an `all` fan-out.
@@ -22,6 +22,8 @@
 //!   composition baseline (name-free cluster report).
 //! - `materialize` — canonical-to-export asset conversion (`assets`
 //!   target; RFC-46 Phase 2).
+//! - `prepare` — slice-build prepare orchestration (`build` target;
+//!   RFC §2.1 scope + conditional materialize + bootstrap gate).
 //! - `scaffold` — render-only Crux project scaffolds (core / iOS /
 //!   Android shells).
 //! - `schema` — print a tool-owned embedded schema to stdout (the tool-owned schema and catalog decisions D1).
@@ -32,6 +34,7 @@
 mod error;
 pub mod infer;
 pub mod materialize;
+pub mod prepare;
 pub mod scaffold;
 pub mod schema;
 mod schema_source;
@@ -61,12 +64,13 @@ pub fn render_json(payload: &Value) -> String {
 #[command(
     name = "vectis",
     version,
-    about = "Validate Vectis UI artifacts, verify platform shells, materialize design-system exports, infer shared components, render Crux project scaffolds, and retrieve tool-owned schemas.",
+    about = "Validate Vectis UI artifacts, verify platform shells, materialize design-system exports, run slice-build prepare, infer shared components, render Crux project scaffolds, and retrieve tool-owned schemas.",
     long_about = "Vectis WASI command tool. Subcommands:\n  \
                   validate — validate Vectis UI artifacts (tokens, assets, layout, composition, all).\n  \
                   verify  — verify declared platform shells are present on disk (verify, bootstrap-app-icon).\n  \
                   infer   — cluster structurally-identical groups in the composition baseline (name-free report).\n  \
                   materialize — convert canonical assets into per-platform exports (assets).\n  \
+                  prepare — slice-build prepare orchestration (build).\n  \
                   scaffold — render Crux project scaffolds (core, ios, android).\n  \
                   schema  — print a tool-owned embedded schema to stdout."
 )]
@@ -88,6 +92,9 @@ pub enum VectisCommand {
     /// Convert canonical assets into per-platform exports.
     #[command(subcommand)]
     Materialize(materialize::MaterializeCommand),
+    /// Run slice-build prepare orchestration.
+    #[command(subcommand)]
+    Prepare(prepare::PrepareCommand),
     /// Render Vectis Crux scaffolds.
     #[command(subcommand)]
     Scaffold(scaffold::ScaffoldCommand),
@@ -107,6 +114,7 @@ pub fn run(args: &Args) -> (String, u8) {
         VectisCommand::Verify(v) => verify::render_json(verify::run(v)),
         VectisCommand::Infer(v) => infer::render_json(infer::run(v)),
         VectisCommand::Materialize(m) => materialize::render_json(materialize::run(m)),
+        VectisCommand::Prepare(p) => prepare::render_json(prepare::run(p)),
         VectisCommand::Scaffold(s) => scaffold::render_json(scaffold::run(s)),
         VectisCommand::Schema { name } => schema::run(name),
     }
