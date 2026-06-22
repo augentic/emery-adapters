@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
+use crate::VectisError;
 use crate::validate::engine::{
     app_icon_export_exists, collect_asset_references, conventional_export_exists,
     platform_pin_active,
@@ -49,6 +50,31 @@ pub fn resolve_effective_assets(slice_dir: &Path, project_dir: &Path) -> Option<
         });
     }
     None
+}
+
+/// Returns [`VectisError::InvalidProject`] when the effective inventory exists
+/// but is unreadable or lacks a parseable `assets:` map.
+///
+/// # Errors
+///
+/// Propagates [`VectisError::InvalidProject`] for I/O, YAML parse, or schema-shape
+/// failures on the resolved inventory path.
+pub fn validate_effective_inventory(effective: &EffectiveAssets) -> Result<(), VectisError> {
+    let raw = fs::read_to_string(&effective.path).map_err(|err| VectisError::InvalidProject {
+        message: format!("assets.yaml not readable at {}: {err}", effective.path.display()),
+    })?;
+    let doc: Value = serde_saphyr::from_str(&raw).map_err(|err| VectisError::InvalidProject {
+        message: format!("assets.yaml is not valid YAML at {}: {err}", effective.path.display()),
+    })?;
+    if doc.get("assets").and_then(Value::as_object).is_none() {
+        return Err(VectisError::InvalidProject {
+            message: format!(
+                "assets.yaml at {} has no parseable `assets:` map",
+                effective.path.display()
+            ),
+        });
+    }
+    Ok(())
 }
 
 /// Whether any in-scope asset lacks on-disk exports for a declared shell platform.
@@ -235,9 +261,15 @@ fn asset_needs_materialize(
                 && !app_icon_export_exists(assets_dir, platform)
         });
     }
+    let role = entry.get("role").and_then(Value::as_str);
     let Some(kind) = entry.get("kind").and_then(Value::as_str) else {
         return false;
     };
+    if role == Some("photo") && kind == "raster" {
+        return shell_platforms
+            .iter()
+            .any(|platform| photo_platform_needs_materialize(entry, id, assets_dir, platform));
+    }
     shell_platforms.iter().any(|platform| {
         if platform_pin_active(entry, platform, assets_dir) {
             return false;
@@ -247,4 +279,23 @@ fn asset_needs_materialize(
         }
         entry.get("source").and_then(Value::as_str).is_some()
     })
+}
+
+fn photo_platform_needs_materialize(
+    entry: &Value, id: &str, assets_dir: &Path, platform: &str,
+) -> bool {
+    let Some(density_map) =
+        entry.get("sources").and_then(|sources| sources.get(platform)).and_then(Value::as_object)
+    else {
+        return false;
+    };
+    if density_map.is_empty() {
+        return false;
+    }
+    if conventional_export_exists(assets_dir, id, "raster", platform, entry) {
+        return false;
+    }
+    density_map
+        .values()
+        .any(|value| value.as_str().is_some_and(|rel| assets_dir.join(rel).is_file()))
 }

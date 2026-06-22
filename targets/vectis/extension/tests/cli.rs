@@ -542,6 +542,27 @@ fn prepare_build_missing_app_icon_exits_one() {
 }
 
 #[test]
+fn prepare_build_invalid_slice_assets_exits_two() {
+    let tmp = tempdir().unwrap();
+    write_project_yaml(tmp.path(), &["core", "ios"]);
+    let slice_dir = tmp.path().join(".specify/slices/active");
+    std::fs::create_dir_all(&slice_dir).expect("mkdir slice");
+    std::fs::write(slice_dir.join("assets.yaml"), ": : not valid yaml\n").expect("write assets");
+
+    let assert = vectis_prepare()
+        .env("PROJECT_DIR", tmp.path())
+        .args(["build", ".specify/slices/active"])
+        .assert()
+        .failure();
+    let output = assert.get_output();
+    let value = parse_json(&output.stdout);
+
+    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(value["error"], "invalid-project");
+    assert_eq!(value["exit-code"], 2);
+}
+
+#[test]
 fn infer_missing_composition_exits_two() {
     let tmp = tempdir().unwrap();
     let missing = tmp.path().join("composition.yaml");

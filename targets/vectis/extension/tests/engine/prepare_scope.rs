@@ -8,9 +8,10 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use specify_vectis::VectisError;
 use specify_vectis::prepare::{
     EffectiveAssets, MaterializeScope, materialize_platform_csv, resolve_effective_assets,
-    resolve_materialize_scope, scope_needs_materialize,
+    resolve_materialize_scope, scope_needs_materialize, validate_effective_inventory,
 };
 use tempfile::TempDir;
 
@@ -253,4 +254,46 @@ fn needs_false_android_raster() {
     let eff = f.effective();
     let scope = resolve_materialize_scope(&f.slice, &f.project, &["android".into()], &eff);
     assert!(!scope_needs_materialize(&scope, &eff, &["android".into()]), "mipmap png satisfies");
+}
+
+#[test]
+fn needs_true_photo_density_sources_no_export() {
+    let f = Fixture::new();
+    f.slice_assets(
+        "assets:\n  hero:\n    kind: raster\n    role: photo\n    sources:\n      ios:\n        2x: assets/hero@2x.png\n",
+    );
+    f.slice_file("assets/hero@2x.png", "x");
+    f.slice_file("composition.yaml", "screens:\n  - image:\n      name: hero\n");
+
+    let eff = f.effective();
+    let scope = resolve_materialize_scope(&f.slice, &f.project, &["ios".into()], &eff);
+    assert!(scope.asset_ids.contains("hero"), "composition-referenced photo in scope");
+    assert!(
+        scope_needs_materialize(&scope, &eff, &["ios".into()]),
+        "photo with density sources but no export should trigger materialize"
+    );
+}
+
+#[test]
+fn needs_false_photo_export_satisfies() {
+    let f = Fixture::new();
+    f.slice_assets(
+        "assets:\n  hero:\n    kind: raster\n    role: photo\n    sources:\n      ios:\n        2x: assets/hero@2x.png\n",
+    );
+    f.slice_file("assets/hero@2x.png", "x");
+    f.slice_file("composition.yaml", "screens:\n  - image:\n      name: hero\n");
+    f.slice_file("assets/exports/ios/hero.imageset/hero@2x.png", "x");
+
+    let eff = f.effective();
+    let scope = resolve_materialize_scope(&f.slice, &f.project, &["ios".into()], &eff);
+    assert!(!scope_needs_materialize(&scope, &eff, &["ios".into()]), "imageset satisfies photo");
+}
+
+#[test]
+fn validate_rejects_invalid_effective_inventory() {
+    let f = Fixture::new();
+    f.slice_assets(": : not valid yaml\n");
+    let eff = f.effective();
+    let err = validate_effective_inventory(&eff).unwrap_err();
+    assert!(matches!(err, VectisError::InvalidProject { .. }));
 }

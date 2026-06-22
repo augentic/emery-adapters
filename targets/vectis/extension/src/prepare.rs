@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use clap::{Args as ClapArgs, Subcommand};
 pub use scope::{
     EffectiveAssets, MaterializeScope, materialize_platform_csv, resolve_effective_assets,
-    resolve_materialize_scope, scope_needs_materialize,
+    resolve_materialize_scope, scope_needs_materialize, validate_effective_inventory,
 };
 use serde_json::{Value, json};
 
@@ -85,6 +85,7 @@ fn run_build(args: &BuildArgs) -> Result<Value, VectisError> {
 
     let materialized = if let Some(effective) = resolve_effective_assets(&slice_dir, &project_root)
     {
+        validate_effective_inventory(&effective)?;
         let scope = resolve_materialize_scope(&slice_dir, &project_root, &platforms, &effective);
         if scope_needs_materialize(&scope, &effective, &platforms) {
             let only: Vec<String> = scope.asset_ids.into_iter().collect();
