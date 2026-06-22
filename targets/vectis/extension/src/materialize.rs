@@ -172,13 +172,20 @@ fn run_assets(args: &AssetsArgs) -> Result<Value, VectisError> {
 }
 
 fn resolve_assets_path(path: Option<&Path>) -> PathBuf {
-    let root = materialize_project_root();
     if let Some(p) = path {
         if p.is_absolute() {
             return p.to_path_buf();
         }
-        return root.join(p);
+        // Host prepare and WASI invocations set PROJECT_DIR; anchor explicit
+        // relative paths there. Native CLI without PROJECT_DIR stays cwd-relative
+        // (matching `validate assets` positional handling).
+        if let Some(project_dir) = std::env::var_os("PROJECT_DIR").filter(|value| !value.is_empty())
+        {
+            return PathBuf::from(project_dir).join(p);
+        }
+        return p.to_path_buf();
     }
+    let root = materialize_project_root();
     resolve_default_path_with_root(ValidateMode::Assets, &root)
 }
 
