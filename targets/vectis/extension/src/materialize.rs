@@ -172,10 +172,13 @@ fn run_assets(args: &AssetsArgs) -> Result<Value, VectisError> {
 }
 
 fn resolve_assets_path(path: Option<&Path>) -> PathBuf {
-    if let Some(p) = path {
-        return p.to_path_buf();
-    }
     let root = materialize_project_root();
+    if let Some(p) = path {
+        if p.is_absolute() {
+            return p.to_path_buf();
+        }
+        return root.join(p);
+    }
     resolve_default_path_with_root(ValidateMode::Assets, &root)
 }
 
