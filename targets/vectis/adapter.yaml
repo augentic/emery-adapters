@@ -12,6 +12,10 @@ platforms:
   required: true
   allowed: [core, ios, android, web, desktop]
   default: [core, ios, android]
+prepare:
+  argv: [prepare, build]
+catalog:
+  infer: true
 extension:
   name: vectis
   permissions:
