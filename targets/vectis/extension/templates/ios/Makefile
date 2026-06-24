@@ -34,7 +34,7 @@ sim-build:
 	@xcodebuild build \
 		-project __APP_NAME__.xcodeproj \
 		-scheme __APP_NAME__ \
-		-destination 'platform=iOS Simulator,name=iPhone 16' \
+		-destination 'generic/platform=iOS Simulator' \
 		-configuration Debug \
 		CODE_SIGNING_ALLOWED=NO \
 		2>&1 | xcbeautify
