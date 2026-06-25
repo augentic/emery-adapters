@@ -361,11 +361,10 @@ _Codified in: `src/verify.rs` (`run`, `check_platform`,
 > `generic/platform=iOS Simulator`.
 >
 > Prepare (`vectis prepare build`) auto-syncs both files when `ios`
-> is declared and `iOS/` exists, resolving the app name from
-> `iOS/project.yml` `name:` first, then from a sole PascalCase
-> Swift source folder under `iOS/`. Verify (`vectis verify --mode
-> verify`) emits `ios-scaffold-file-drift` error findings when
-> on-disk bytes diverge.
+> is declared and `iOS/` exists. `vectis sync ios-scaffold` repairs
+> the same files in-loop during verify without prepare side effects.
+> Verify (`vectis verify --mode verify`) emits `ios-scaffold-file-drift`
+> error findings when on-disk bytes diverge.
 
-_Codified in: `src/ios_scaffold.rs`; wired from `src/prepare.rs`
-and `src/verify.rs`._
+_Codified in: `src/ios_scaffold.rs`; wired from `src/prepare.rs`,
+`src/sync.rs`, and `src/verify.rs`._

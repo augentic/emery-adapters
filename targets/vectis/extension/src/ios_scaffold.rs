@@ -22,6 +22,17 @@ pub const DRIFT_FINDING_ID: &str = "ios-scaffold-file-drift";
 /// Required `sim-build` destination literal in the Makefile template.
 pub const REQUIRED_SIM_DESTINATION: &str = "generic/platform=iOS Simulator";
 
+/// JSON fragment for `scaffold_sync.ios` in prepare and sync command output.
+#[must_use]
+pub fn scaffold_sync_ios_json(report: &IosScaffoldSyncReport) -> Value {
+    json!({
+        "ios": {
+            "synced": &report.synced,
+            "unchanged": &report.unchanged,
+        }
+    })
+}
+
 /// Outcome of a prepare-time scaffold sync pass.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IosScaffoldSyncReport {
@@ -105,7 +116,7 @@ pub fn ios_scaffold_drift_findings(project_root: &Path) -> Vec<Value> {
                 return Some(drift_finding(
                     &relative_path,
                     &format!(
-                        "{relative_path} is not readable UTF-8 text; CLI-owned scaffold files must match the embedded template — run prepare sync or `vectis scaffold ios`"
+                        "{relative_path} is not readable UTF-8 text; CLI-owned scaffold files must match the embedded template — run `vectis sync ios-scaffold` or `specify slice build --phase prepare`"
                     ),
                 ));
             };
@@ -211,7 +222,7 @@ fn dir_contains_swift(dir: &Path) -> bool {
 
 fn drift_message(relative_path: &str, on_disk: &str) -> String {
     let mut message = format!(
-        "{relative_path} diverges from the embedded iOS scaffold template; agents must not edit this file — run prepare sync or `vectis scaffold ios`"
+        "{relative_path} diverges from the embedded iOS scaffold template; agents must not edit this file — run `vectis sync ios-scaffold` or `specify slice build --phase prepare`"
     );
     if relative_path.ends_with("Makefile") {
         if on_disk.contains("name=iPhone") || on_disk.contains("platform=iOS Simulator,name=") {
@@ -229,7 +240,7 @@ fn drift_message(relative_path: &str, on_disk: &str) -> String {
 
 fn missing_scaffold_message(relative_path: &str) -> String {
     format!(
-        "{relative_path} is missing; CLI-owned scaffold files must be present — run prepare sync or `vectis scaffold ios`"
+        "{relative_path} is missing; CLI-owned scaffold files must be present — run `vectis sync ios-scaffold` or `specify slice build --phase prepare`"
     )
 }
 

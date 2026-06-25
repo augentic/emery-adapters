@@ -578,6 +578,46 @@ fn prepare_build_invalid_slice_assets_exits_two() {
     assert_eq!(value["exit-code"], 2);
 }
 
+// ── sync subcommand ────────────────────────────────────────────────────
+
+fn vectis_sync() -> Command {
+    let mut cmd = vectis();
+    cmd.arg("sync");
+    cmd
+}
+
+#[test]
+fn sync_ios_scaffold_restores_drifted_makefile() {
+    let tmp = tempdir().unwrap();
+    write_project_yaml(tmp.path(), &["core", "ios"]);
+    let ios = tmp.path().join("iOS");
+    std::fs::create_dir_all(ios.join("TestApp")).expect("mkdir app");
+    std::fs::write(ios.join("project.yml"), "name: TestApp\n").expect("project yml");
+    std::fs::write(ios.join("TestApp/ContentView.swift"), "struct ContentView {}").expect("swift");
+    std::fs::write(
+        ios.join("Makefile"),
+        "sim-build:\n\t@xcodebuild -destination 'platform=iOS Simulator,name=iPhone 16'\n",
+    )
+    .expect("drifted makefile");
+
+    let assert =
+        vectis_sync().env("PROJECT_DIR", tmp.path()).args(["ios-scaffold"]).assert().success();
+    let value = parse_json(&assert.get_output().stdout);
+
+    assert_eq!(value["command"], "sync ios-scaffold");
+    assert!(
+        value["scaffold_sync"]["ios"]["synced"]
+            .as_array()
+            .expect("synced")
+            .iter()
+            .any(|entry| entry == "iOS/Makefile")
+    );
+
+    let restored = std::fs::read_to_string(ios.join("Makefile")).expect("read makefile");
+    assert!(restored.contains("generic/platform=iOS Simulator"));
+    assert!(!restored.contains("iPhone 16"));
+}
+
 #[test]
 fn infer_missing_composition_exits_two() {
     let tmp = tempdir().unwrap();

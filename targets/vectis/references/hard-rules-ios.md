@@ -6,9 +6,9 @@
 
 1. **Create mode must scaffold first.** Run `specify extension run vectis -- scaffold ios <APP_NAME> [--caps <csv>]` before writing any Swift under `iOS/`. Do not create Swift files before scaffold; scaffold must be the first write to `iOS/`.
 2. **Never hand-author scaffold files.** `iOS/Makefile`, `iOS/project.yml`, and the starter files emitted by scaffold (`<APP_NAME>App.swift`, starter `Core.swift`, `ContentView.swift`, starter `Views/`) must come from the scaffold renderer — not from worked examples or memory.
-3. **Never edit `iOS/Makefile` or `iOS/project.yml`.** These files are CLI-owned. `specify slice build --phase prepare` auto-syncs them from the embedded template; agents must not patch them during verify-repair or feature work.
+3. **Never edit `iOS/Makefile` or `iOS/project.yml`.** These files are CLI-owned. `specify slice build --phase prepare` auto-syncs them at build start; `specify extension run vectis -- sync ios-scaffold` repairs them in-loop during verify — agents must not patch them during verify-repair or feature work.
 4. **Never set a named simulator destination.** The `sim-build` target must keep `-destination 'generic/platform=iOS Simulator'`. Do not substitute `name=iPhone …` or any device-specific destination — it breaks on hosts with ambiguous simulator names.
-5. **Verify-repair scope is Swift and generated UI only.** When `make sim-build` fails, fix Swift under `iOS/<APP_NAME>/`, plus `Theme/`, `Components/`, and `Resources/`. Makefile and `project.yml` are out of scope — if destination drift is suspected, rely on prepare sync or escalate; do not edit the Makefile by hand.
+5. **Verify-repair scope is Swift and generated UI only.** When `make sim-build` fails, fix Swift under `iOS/<APP_NAME>/`, plus `Theme/`, `Components/`, and `Resources/`. Makefile and `project.yml` are out of scope — if destination drift is suspected, run `specify extension run vectis -- sync ios-scaffold` and retry `make sim-build` once; do not edit the Makefile by hand.
 
 ## Important notes
 

@@ -145,3 +145,49 @@ fn prepare_build_syncs_drifted_ios_makefile() {
     assert!(restored.contains(REQUIRED_SIM_DESTINATION));
     assert!(!restored.contains("iPhone 16"));
 }
+
+#[test]
+fn sync_ios_scaffold_command_restores_drifted_makefile() {
+    let _guard = env_lock();
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    fs::create_dir_all(project.join(".specify")).expect("specify dir");
+    fs::write(project.join(".specify/project.yaml"), "platforms:\n  - core\n  - ios\n")
+        .expect("project yaml");
+
+    let ios = project.join("iOS");
+    fs::create_dir_all(ios.join("Counter")).expect("app dir");
+    fs::write(ios.join("project.yml"), "name: Counter\n").expect("project yml");
+    fs::write(ios.join("Makefile"), "-destination 'platform=iOS Simulator,name=iPhone 16'\n")
+        .expect("makefile");
+    fs::write(ios.join("Counter/ContentView.swift"), "struct ContentView {}").expect("swift");
+
+    let previous = std::env::var_os("PROJECT_DIR");
+    #[expect(unsafe_code, reason = "edition-2024 set_var is unsafe; env_lock serializes access")]
+    // SAFETY: this test serializes PROJECT_DIR mutation with `env_lock`.
+    let () = unsafe { std::env::set_var("PROJECT_DIR", &project) };
+
+    let outcome = specify_vectis::sync::run(&specify_vectis::sync::SyncCommand::IosScaffold(
+        specify_vectis::sync::IosScaffoldArgs { path: None },
+    ))
+    .expect("sync ios-scaffold");
+
+    #[expect(
+        unsafe_code,
+        reason = "edition-2024 set_var/remove_var are unsafe; env_lock serializes access"
+    )]
+    // SAFETY: this test serializes PROJECT_DIR mutation with `env_lock`.
+    unsafe {
+        match previous {
+            Some(value) => std::env::set_var("PROJECT_DIR", value),
+            None => std::env::remove_var("PROJECT_DIR"),
+        }
+    }
+
+    let synced = outcome["scaffold_sync"]["ios"]["synced"].as_array().expect("synced array");
+    assert!(synced.iter().any(|v| v == "iOS/Makefile"));
+
+    let restored = fs::read_to_string(ios.join("Makefile")).expect("read makefile");
+    assert!(restored.contains(REQUIRED_SIM_DESTINATION));
+    assert!(!restored.contains("iPhone 16"));
+}

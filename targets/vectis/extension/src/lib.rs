@@ -11,7 +11,7 @@
 //! `output::emit` dispatcher; those couplings would re-attach the
 //! tool to the host CLI's release cadence.
 //!
-//! `vectis` exposes eight subcommands:
+//! `vectis` exposes nine subcommands:
 //!
 //! - `validate` — schema + cross-artifact validation for tokens, assets,
 //!   layout, composition, plus an `all` fan-out.
@@ -27,6 +27,8 @@
 //! - `scaffold` — render-only Crux project scaffolds (core / iOS /
 //!   Android shells).
 //! - `android` — Android shell bootstrap (`setup` vendored Gradle wrapper).
+//! - `sync` — lightweight scaffold repair (`ios-scaffold` for agent-immutable
+//!   iOS shell files without prepare side effects).
 //! - `schema` — print a tool-owned embedded schema to stdout (the tool-owned schema and catalog decisions D1).
 //!
 //! Each subcommand serialises its body directly; there is no shared
@@ -42,6 +44,7 @@ pub mod scaffold;
 pub mod schema;
 mod schema_source;
 mod shell;
+pub mod sync;
 pub mod validate;
 pub mod verify;
 
@@ -67,7 +70,7 @@ pub fn render_json(payload: &Value) -> String {
 #[command(
     name = "vectis",
     version,
-    about = "Validate Vectis UI artifacts, verify platform shells, materialize design-system exports, run slice-build prepare, infer shared components, render Crux project scaffolds, and retrieve tool-owned schemas.",
+    about = "Validate Vectis UI artifacts, verify platform shells, materialize design-system exports, run slice-build prepare, sync scaffold files, infer shared components, render Crux project scaffolds, and retrieve tool-owned schemas.",
     long_about = "Vectis WASI command tool. Subcommands:\n  \
                   validate — validate Vectis UI artifacts (tokens, assets, layout, composition, all).\n  \
                   verify  — verify declared platform shells are present on disk (verify, bootstrap-app-icon).\n  \
@@ -76,6 +79,7 @@ pub fn render_json(payload: &Value) -> String {
                   prepare — slice-build prepare orchestration (build).\n  \
                   scaffold — render Crux project scaffolds (core, ios, android).\n  \
                   android — Android shell bootstrap (setup).\n  \
+                  sync — lightweight scaffold repair (ios-scaffold).\n  \
                   schema  — print a tool-owned embedded schema to stdout."
 )]
 pub struct Args {
@@ -105,6 +109,9 @@ pub enum VectisCommand {
     /// Android shell bootstrap helpers.
     #[command(subcommand)]
     Android(android::AndroidCommand),
+    /// Repair agent-immutable scaffold files without prepare side effects.
+    #[command(subcommand)]
+    Sync(sync::SyncCommand),
     /// Print a tool-owned embedded schema to stdout.
     Schema {
         /// Schema name (tokens, assets, composition).
@@ -124,6 +131,7 @@ pub fn run(args: &Args) -> (String, u8) {
         VectisCommand::Prepare(p) => prepare::render_json(prepare::run(p)),
         VectisCommand::Scaffold(s) => scaffold::render_json(scaffold::run(s)),
         VectisCommand::Android(a) => android::render_json(android::run(a)),
+        VectisCommand::Sync(s) => sync::render_json(sync::run(s)),
         VectisCommand::Schema { name } => schema::run(name),
     }
 }
