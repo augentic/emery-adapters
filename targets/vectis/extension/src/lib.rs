@@ -11,7 +11,7 @@
 //! `output::emit` dispatcher; those couplings would re-attach the
 //! tool to the host CLI's release cadence.
 //!
-//! `vectis` exposes seven subcommands:
+//! `vectis` exposes eight subcommands:
 //!
 //! - `validate` — schema + cross-artifact validation for tokens, assets,
 //!   layout, composition, plus an `all` fan-out.
@@ -26,11 +26,13 @@
 //!   RFC §2.1 scope + conditional materialize + bootstrap gate).
 //! - `scaffold` — render-only Crux project scaffolds (core / iOS /
 //!   Android shells).
+//! - `android` — Android shell bootstrap (`setup` vendored Gradle wrapper).
 //! - `schema` — print a tool-owned embedded schema to stdout (the tool-owned schema and catalog decisions D1).
 //!
 //! Each subcommand serialises its body directly; there is no shared
 //! envelope wrapper.
 
+pub mod android;
 mod error;
 pub mod infer;
 pub mod materialize;
@@ -72,6 +74,7 @@ pub fn render_json(payload: &Value) -> String {
                   materialize — convert canonical assets into per-platform exports (assets).\n  \
                   prepare — slice-build prepare orchestration (build).\n  \
                   scaffold — render Crux project scaffolds (core, ios, android).\n  \
+                  android — Android shell bootstrap (setup).\n  \
                   schema  — print a tool-owned embedded schema to stdout."
 )]
 pub struct Args {
@@ -98,6 +101,9 @@ pub enum VectisCommand {
     /// Render Vectis Crux scaffolds.
     #[command(subcommand)]
     Scaffold(scaffold::ScaffoldCommand),
+    /// Android shell bootstrap helpers.
+    #[command(subcommand)]
+    Android(android::AndroidCommand),
     /// Print a tool-owned embedded schema to stdout.
     Schema {
         /// Schema name (tokens, assets, composition).
@@ -116,6 +122,7 @@ pub fn run(args: &Args) -> (String, u8) {
         VectisCommand::Materialize(m) => materialize::render_json(materialize::run(m)),
         VectisCommand::Prepare(p) => prepare::render_json(prepare::run(p)),
         VectisCommand::Scaffold(s) => scaffold::render_json(scaffold::run(s)),
+        VectisCommand::Android(a) => android::render_json(android::run(a)),
         VectisCommand::Schema { name } => schema::run(name),
     }
 }

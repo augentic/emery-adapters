@@ -17,6 +17,7 @@ use crate::materialize::{
 use crate::validate::engine::load_shell_platforms;
 use crate::validate::find_project_root;
 use crate::verify::{VerifyArgs, VerifyMode, run as run_verify, verify_exit_code};
+use crate::android::{run_for_shell_dir, setup_exit_code};
 use crate::{VectisError, render_json as render_value};
 
 /// Nested targets under `vectis prepare`.
@@ -75,6 +76,11 @@ fn prepare_exit_code(value: &Value) -> u8 {
     {
         return 1;
     }
+    if let Some(setup) = value.get("android_setup")
+        && setup_exit_code(setup) != 0
+    {
+        return 1;
+    }
     0
 }
 
@@ -108,6 +114,14 @@ fn run_build(args: &BuildArgs) -> Result<Value, VectisError> {
         path: Some(project_root.clone()),
     })?;
 
+    let android_setup = if platforms.iter().any(|p| p == "android")
+        && project_root.join("Android").is_dir()
+    {
+        Some(run_for_shell_dir(&project_root.join("Android")))
+    } else {
+        None
+    };
+
     Ok(json!({
         "command": "prepare build",
         "slice_dir": slice_dir.strip_prefix(&project_root)
@@ -115,6 +129,7 @@ fn run_build(args: &BuildArgs) -> Result<Value, VectisError> {
         "platforms": platforms,
         "materialized": materialized,
         "bootstrap_app_icon": bootstrap,
+        "android_setup": android_setup,
     }))
 }
 

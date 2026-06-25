@@ -48,9 +48,7 @@ fn scaffold_ios(root: &Path) {
 }
 
 fn scaffold_android(root: &Path) {
-    let dir = root.join("Android/app/src/main/kotlin/com/test");
-    std::fs::create_dir_all(&dir).expect("mkdir Android");
-    std::fs::write(dir.join("MainActivity.kt"), "class MainActivity").expect("write kt");
+    crate::engine_support::scaffold_android_verify_ready(root);
 }
 
 fn write_app_icon_assets(root: &Path, source_rel: Option<&str>) {

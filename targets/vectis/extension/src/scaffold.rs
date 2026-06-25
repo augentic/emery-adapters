@@ -171,7 +171,14 @@ pub fn run(command: &ScaffoldCommand) -> Result<serde_json::Value, ScaffoldError
     let versions = Versions::resolve(command.common().version_file.as_deref())?;
     let plan = plan_command(command, &versions)?;
     write_plan(&project_dir, &plan)?;
-    Ok(plan.to_json(&project_dir))
+    let mut payload = plan.to_json(&project_dir);
+    if matches!(command, ScaffoldCommand::Android(_)) {
+        let setup = crate::android::run_for_shell_dir(&project_dir.join("Android"));
+        if let serde_json::Value::Object(ref mut map) = payload {
+            map.insert("android-setup".to_string(), setup);
+        }
+    }
+    Ok(payload)
 }
 
 /// Plan a scaffold command without touching the filesystem.
