@@ -77,7 +77,7 @@ bindings:
 1. Load [`build/composition.md`](build/composition.md) — regenerate `composition.yaml` from `spec.md` + `design.md` and run the deterministic validator gate.
 2. Load [`build/core/write.md`](build/core/write.md) — generate / update the Crux shared core.
 3. Load [`build/test.md`](build/test.md) — generate / update Crux tests, then run the core verify-repair loop (max 3 iterations).
-4. (When `ios` is in scope) Load [`build/ios/write.md`](build/ios/write.md) — generate / update the SwiftUI shell, then its verify loop.
+4. (When `ios` is in scope) Load [`build/ios/write.md`](build/ios/write.md) — generate / update the SwiftUI shell. After the writer sub-agent returns, run `specify extension run vectis -- sync ios-scaffold` once to repair CLI-owned scaffold files the writer may have touched, then spawn its verify loop.
 5. (When `android` is in scope) Load [`build/android/write.md`](build/android/write.md) — generate / update the Compose shell, then its verify loop.
 6. Load [`build/core/review.md`](build/core/review.md) and, when in-scope, [`build/ios/review.md`](build/ios/review.md) and [`build/android/review.md`](build/android/review.md). Reviewers run in parallel.
 7. Run § Consolidate review findings.

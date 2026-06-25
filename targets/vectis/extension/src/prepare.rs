@@ -12,7 +12,7 @@ pub use scope::{
 use serde_json::{Value, json};
 
 use crate::android::{run_for_shell_dir, setup_exit_code};
-use crate::ios_scaffold::{IosScaffoldSyncReport, sync_ios_scaffold_files};
+use crate::ios_scaffold::{scaffold_sync_ios_json, sync_ios_scaffold_files};
 use crate::materialize::{
     AssetsArgs, MaterializeCommand, materialize_exit_code, run as run_materialize,
 };
@@ -122,7 +122,7 @@ fn run_build(args: &BuildArgs) -> Result<Value, VectisError> {
     let scaffold_sync = (platforms.iter().any(|p| p == "ios") && project_root.join("iOS").is_dir())
         .then(|| sync_ios_scaffold_files(&project_root))
         .transpose()?
-        .map(|report| render_scaffold_sync(&report));
+        .map(|report| scaffold_sync_ios_json(&report));
 
     Ok(json!({
         "command": "prepare build",
@@ -170,14 +170,5 @@ fn skipped_materialize_summary(path: &Path, platforms: &[String]) -> Value {
         "skipped_pins": [],
         "errors": [],
         "skipped": true,
-    })
-}
-
-fn render_scaffold_sync(report: &IosScaffoldSyncReport) -> Value {
-    json!({
-        "ios": {
-            "synced": &report.synced,
-            "unchanged": &report.unchanged,
-        }
     })
 }

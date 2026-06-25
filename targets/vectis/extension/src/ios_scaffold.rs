@@ -22,6 +22,17 @@ pub const DRIFT_FINDING_ID: &str = "ios-scaffold-file-drift";
 /// Required `sim-build` destination literal in the Makefile template.
 pub const REQUIRED_SIM_DESTINATION: &str = "generic/platform=iOS Simulator";
 
+/// JSON fragment for `scaffold_sync.ios` in prepare and sync command output.
+#[must_use]
+pub fn scaffold_sync_ios_json(report: &IosScaffoldSyncReport) -> Value {
+    json!({
+        "ios": {
+            "synced": &report.synced,
+            "unchanged": &report.unchanged,
+        }
+    })
+}
+
 /// Outcome of a prepare-time scaffold sync pass.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IosScaffoldSyncReport {
@@ -53,9 +64,9 @@ pub fn sync_ios_scaffold_files(project_root: &Path) -> Result<IosScaffoldSyncRep
 
     for file in expected {
         let target = project_root.join(&file.relative_path);
-        if target.is_file()
-            && fs::read_to_string(&target).map_err(|err| map_io(&err))? == file.contents
-        {
+        let matches_template = target.is_file()
+            && on_disk_bytes(&target).is_ok_and(|on_disk| on_disk == file.contents.as_bytes());
+        if matches_template {
             unchanged.push(file.relative_path);
             continue;
         }
@@ -71,7 +82,9 @@ pub fn sync_ios_scaffold_files(project_root: &Path) -> Result<IosScaffoldSyncRep
 
 /// Compare agent-immutable iOS scaffold files against the embedded templates.
 ///
-/// Returns diagnostic-shaped findings (`severity: error`) for each drifted file.
+/// Returns diagnostic-shaped findings (`severity: error`) for drifted scaffold
+/// files. When app-name resolution or template rendering fails, returns a single
+/// finding scoped to `path: "iOS"`.
 #[must_use]
 pub fn ios_scaffold_drift_findings(project_root: &Path) -> Vec<Value> {
     let ios_root = project_root.join("iOS");
@@ -101,18 +114,20 @@ pub fn ios_scaffold_drift_findings(project_root: &Path) -> Vec<Value> {
                     &missing_scaffold_message(&relative_path),
                 ));
             }
-            let Ok(on_disk) = fs::read_to_string(&target) else {
-                return Some(drift_finding(
+            match on_disk_bytes(&target) {
+                Ok(on_disk) if on_disk == file.contents.as_bytes() => None,
+                Ok(on_disk) => {
+                    let on_disk_text = String::from_utf8_lossy(&on_disk);
+                    Some(drift_finding(
+                        &relative_path,
+                        &drift_message(&relative_path, &on_disk_text),
+                    ))
+                }
+                Err(err) => Some(drift_finding(
                     &relative_path,
-                    &format!(
-                        "{relative_path} is not readable UTF-8 text; CLI-owned scaffold files must match the embedded template — run prepare sync or `vectis scaffold ios`"
-                    ),
-                ));
-            };
-            if on_disk == file.contents {
-                return None;
+                    &unreadable_scaffold_message(&relative_path, &err),
+                )),
             }
-            Some(drift_finding(&relative_path, &drift_message(&relative_path, &on_disk)))
         })
         .collect()
 }
@@ -130,8 +145,9 @@ pub fn resolve_ios_app_name(project_root: &Path) -> Result<String, VectisError> 
         });
     }
 
-    if let Some(name) = read_project_yml_name(&ios_root.join("project.yml"))? {
-        validate_app_name(&name)?;
+    if let Some(name) = read_project_yml_name(&ios_root.join("project.yml"))?
+        && validate_app_name(&name).is_ok()
+    {
         return Ok(name);
     }
 
@@ -211,7 +227,7 @@ fn dir_contains_swift(dir: &Path) -> bool {
 
 fn drift_message(relative_path: &str, on_disk: &str) -> String {
     let mut message = format!(
-        "{relative_path} diverges from the embedded iOS scaffold template; agents must not edit this file — run prepare sync or `vectis scaffold ios`"
+        "{relative_path} diverges from the embedded iOS scaffold template; agents must not edit this file — run `vectis sync ios-scaffold` or `specify slice build --phase prepare`"
     );
     if relative_path.ends_with("Makefile") {
         if on_disk.contains("name=iPhone") || on_disk.contains("platform=iOS Simulator,name=") {
@@ -229,8 +245,18 @@ fn drift_message(relative_path: &str, on_disk: &str) -> String {
 
 fn missing_scaffold_message(relative_path: &str) -> String {
     format!(
-        "{relative_path} is missing; CLI-owned scaffold files must be present — run prepare sync or `vectis scaffold ios`"
+        "{relative_path} is missing; CLI-owned scaffold files must be present — run `vectis sync ios-scaffold` or `specify slice build --phase prepare`"
     )
+}
+
+fn unreadable_scaffold_message(relative_path: &str, err: &std::io::Error) -> String {
+    format!(
+        "{relative_path} could not be read ({err}); CLI-owned scaffold files must match the embedded template — run `vectis sync ios-scaffold` or `specify slice build --phase prepare`"
+    )
+}
+
+fn on_disk_bytes(path: &Path) -> Result<Vec<u8>, std::io::Error> {
+    fs::read(path)
 }
 
 fn drift_finding(path: &str, message: &str) -> Value {

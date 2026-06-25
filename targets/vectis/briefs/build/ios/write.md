@@ -35,7 +35,7 @@ Spawn the writer sub-agent with `mode: create|update` and `skip_verification: tr
 Full set at [`hard-rules-ios.md`](../../../references/hard-rules-ios.md). Highlights:
 
 - Create mode must run `vectis scaffold ios` before any Swift files exist under `iOS/`.
-- Never edit `iOS/Makefile` or `iOS/project.yml` — prepare auto-syncs them from the embedded template.
+- Never edit `iOS/Makefile` or `iOS/project.yml` — prepare and `vectis sync ios-scaffold` auto-sync them from the embedded template.
 - Never substitute a named simulator destination (`name=iPhone …`); `sim-build` uses `generic/platform=iOS Simulator` only.
 
 ## Verify (max 3 iterations)
@@ -43,12 +43,13 @@ Full set at [`hard-rules-ios.md`](../../../references/hard-rules-ios.md). Highli
 Spawn this loop in its own sub-agent with `IOS_SHELL_DIR` and `APP_NAME`. The sub-agent returns `status`, `iterations_used`, and any unresolved errors. The verify sub-agent is the **sole source of truth** for iOS shell checkboxes in `tasks.md` — never mark an iOS task complete or report success unless `make build` and `make sim-build` have actually run and passed in the verify loop.
 
 ```bash
-swiftformat "${IOS_SHELL_DIR}/${APP_NAME}/"        # 1. Format.
-cd "$IOS_SHELL_DIR" && make build                  # 2. Build (typegen + package + xcodegen).
-cd "$IOS_SHELL_DIR" && make sim-build              # 3. Simulator build.
+specify extension run vectis -- sync ios-scaffold              # 0. CLI repair — every iteration.
+swiftformat "${IOS_SHELL_DIR}/${APP_NAME}/"                    # 1. Format.
+cd "$IOS_SHELL_DIR" && make build                              # 2. Build (typegen + package + xcodegen).
+cd "$IOS_SHELL_DIR" && make sim-build                          # 3. Simulator build.
 ```
 
-If a step fails, fix the issue and re-run from step 1. Repeat until all three checks pass or 3 iterations are exhausted. **Verify-repair scope:** fixes are limited to Swift under `iOS/<APP_NAME>/`, plus `Theme/`, `Components/`, and `Resources/`. `iOS/Makefile` and `iOS/project.yml` are out of scope — if `sim-build` fails with destination errors, rely on prepare sync (`specify slice build --phase prepare`) or escalate; never patch the Makefile by hand. If the same error recurs across iterations with no change in output, stop early. If still failing after 3 iterations: **stop**, report the remaining failures with full error output, and escalate.
+If a step fails, fix the issue and re-run from step 0. Repeat until all three checks pass or 3 iterations are exhausted. **Verify-repair scope:** fixes are limited to Swift under `iOS/<APP_NAME>/`, plus `Theme/`, `Components/`, and `Resources/`. `iOS/Makefile` and `iOS/project.yml` are out of scope — if `sim-build` fails with a destination / simulator-not-found error, run `specify extension run vectis -- sync ios-scaffold`, retry `make sim-build` once, and only then proceed to Swift repair; never patch the Makefile by hand. If the same error recurs across iterations with no change in output, stop early. If still failing after 3 iterations: **stop**, report the remaining failures with full error output, and escalate.
 
 If the iOS app panics with `UniFFI contract version mismatch`, the installed `cargo-swift` version is incompatible with the active Vectis version pins — surface this to the operator (it is typically a template / pin drift fix; see [../../build.md](../../build.md) § Template / version-pin drift handling).
 
