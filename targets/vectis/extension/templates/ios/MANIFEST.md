@@ -7,6 +7,17 @@ Source filenames are flat under `templates/ios/`. Nested target paths (especiall
 
 Total: 7 files (matches the file manifest contract for iOS assembly).
 
+## Agent-immutable scaffold files
+
+These paths are CLI-owned — agents must never author or edit them. `specify slice build --phase prepare` re-renders them from the embedded templates; `vectis verify --mode verify` blocks drift.
+
+| Path | Policy |
+| ---- | ------ |
+| `iOS/Makefile` | Fully immutable for agents. `sim-build` must use `-destination 'generic/platform=iOS Simulator'` — never a named device (`name=iPhone …`). |
+| `iOS/project.yml` | Fully immutable for agents. XcodeGen picks up nested theme / component / asset directories automatically. |
+
+Swift sources under `iOS/<APP_NAME>/` (except the scaffold-only starter layout in create mode) and generated `Theme/`, `Components/`, `Resources/` remain agent-writable per the iOS build brief.
+
 ## Placeholder reference
 
 Always present in the iOS templates:

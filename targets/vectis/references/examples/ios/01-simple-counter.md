@@ -87,8 +87,10 @@ targets:
 
 ## `iOS/Makefile`
 
+Scaffold files (`Makefile`, `project.yml`) are authoritative from `specify extension run vectis -- scaffold ios <APP_NAME>` — do not hand-copy from this example. The block below matches the embedded template for reference only; Swift sections below demonstrate shell patterns.
+
 ```makefile
-.PHONY: all build clean typegen package xcode
+.PHONY: all build clean typegen package xcode sim-build
 
 SHARED_DIR := ../shared
 
@@ -120,7 +122,7 @@ sim-build:
 	@xcodebuild build \
 		-project Counter.xcodeproj \
 		-scheme Counter \
-		-destination 'platform=iOS Simulator,name=iPhone 16' \
+		-destination 'generic/platform=iOS Simulator' \
 		-configuration Debug \
 		CODE_SIGNING_ALLOWED=NO \
 		2>&1 | xcbeautify

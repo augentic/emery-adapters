@@ -432,3 +432,27 @@ fn verify_catalog_present_imageset_exits_clean() {
     );
     assert_eq!(code, 0);
 }
+
+#[test]
+fn verify_ios_makefile_drift_exits_one() {
+    let tmp = tempdir().unwrap();
+    write_project_yaml(tmp.path(), &["core", "ios"]);
+    scaffold_core(tmp.path());
+    scaffold_ios(tmp.path());
+
+    let ios = tmp.path().join("iOS");
+    std::fs::write(ios.join("project.yml"), "name: TestApp\n").expect("write project.yml");
+    std::fs::write(
+        ios.join("Makefile"),
+        "sim-build:\n\t@xcodebuild -destination 'platform=iOS Simulator,name=iPhone 16'\n",
+    )
+    .expect("write makefile");
+
+    let (result, code) = verify(&args(VerifyMode::Verify, tmp.path()));
+    let findings = result["findings"].as_array().expect("findings array");
+    assert!(
+        findings.iter().any(|f| f["id"] == "ios-scaffold-file-drift"),
+        "expected scaffold drift finding: {result}"
+    );
+    assert_eq!(code, 1);
+}

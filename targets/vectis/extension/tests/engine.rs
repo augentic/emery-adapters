@@ -12,6 +12,8 @@ mod assets;
 mod composition;
 #[path = "engine/infer.rs"]
 mod infer;
+#[path = "engine/ios_scaffold.rs"]
+mod ios_scaffold;
 #[path = "engine/layout.rs"]
 mod layout;
 #[path = "engine/materialize.rs"]
