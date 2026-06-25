@@ -17,9 +17,8 @@ const GRADLEW_BYTES: &[u8] = include_bytes!("../../assets/android/gradle-wrapper
 const GRADLEW_BAT_BYTES: &[u8] = include_bytes!("../../assets/android/gradle-wrapper/gradlew.bat");
 const WRAPPER_JAR_BYTES: &[u8] =
     include_bytes!("../../assets/android/gradle-wrapper/gradle/wrapper/gradle-wrapper.jar");
-const WRAPPER_PROPERTIES: &str = include_str!(
-    "../../assets/android/gradle-wrapper/gradle/wrapper/gradle-wrapper.properties"
-);
+const WRAPPER_PROPERTIES: &str =
+    include_str!("../../assets/android/gradle-wrapper/gradle/wrapper/gradle-wrapper.properties");
 
 /// Arguments for `vectis android setup`.
 #[derive(ClapArgs, Debug, Clone, PartialEq, Eq)]
@@ -174,15 +173,13 @@ fn install_wrapper(android_dir: &Path) -> Result<Vec<String>, String> {
 }
 
 fn write_bytes(path: &Path, bytes: &[u8]) -> Result<(), String> {
-    let mut file =
-        std::fs::File::create(path).map_err(|err| format!("failed to write {}: {err}", path.display()))?;
-    file.write_all(bytes)
-        .map_err(|err| format!("failed to write {}: {err}", path.display()))
+    let mut file = std::fs::File::create(path)
+        .map_err(|err| format!("failed to write {}: {err}", path.display()))?;
+    file.write_all(bytes).map_err(|err| format!("failed to write {}: {err}", path.display()))
 }
 
 fn relative_path(base: &Path, path: &Path) -> String {
-    path.strip_prefix(base)
-        .map_or_else(|_| path.display().to_string(), |p| p.display().to_string())
+    path.strip_prefix(base).map_or_else(|_| path.display().to_string(), |p| p.display().to_string())
 }
 
 #[cfg(unix)]

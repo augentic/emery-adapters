@@ -11,13 +11,13 @@ pub use scope::{
 };
 use serde_json::{Value, json};
 
+use crate::android::{run_for_shell_dir, setup_exit_code};
 use crate::materialize::{
     AssetsArgs, MaterializeCommand, materialize_exit_code, run as run_materialize,
 };
 use crate::validate::engine::load_shell_platforms;
 use crate::validate::find_project_root;
 use crate::verify::{VerifyArgs, VerifyMode, run as run_verify, verify_exit_code};
-use crate::android::{run_for_shell_dir, setup_exit_code};
 use crate::{VectisError, render_json as render_value};
 
 /// Nested targets under `vectis prepare`.
@@ -114,13 +114,9 @@ fn run_build(args: &BuildArgs) -> Result<Value, VectisError> {
         path: Some(project_root.clone()),
     })?;
 
-    let android_setup = if platforms.iter().any(|p| p == "android")
-        && project_root.join("Android").is_dir()
-    {
-        Some(run_for_shell_dir(&project_root.join("Android")))
-    } else {
-        None
-    };
+    let android_setup = (platforms.iter().any(|p| p == "android")
+        && project_root.join("Android").is_dir())
+    .then(|| run_for_shell_dir(&project_root.join("Android")));
 
     Ok(json!({
         "command": "prepare build",

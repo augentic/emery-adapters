@@ -85,11 +85,8 @@ pub fn scaffold_android_shell(project: &std::path::Path) {
 pub fn scaffold_android_verify_ready(project: &std::path::Path) {
     scaffold_android_shell(project);
     let _unused = specify_vectis::android::run_for_shell_dir(&project.join("Android"));
-    std::fs::write(
-        project.join("Android/local.properties"),
-        "sdk.dir=/tmp/android-sdk\n",
-    )
-    .expect("local.properties");
+    std::fs::write(project.join("Android/local.properties"), "sdk.dir=/tmp/android-sdk\n")
+        .expect("local.properties");
     std::fs::write(
         project.join("Android/gradle.properties"),
         "android.useAndroidX=true\norg.gradle.java.home=/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home\n",

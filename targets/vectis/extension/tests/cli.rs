@@ -195,11 +195,8 @@ fn scaffold_android(root: &std::path::Path) {
     std::fs::create_dir_all(&dir).expect("mkdir Android");
     std::fs::write(dir.join("MainActivity.kt"), "class MainActivity").expect("write kt");
     let _unused = specify_vectis::android::run_for_shell_dir(&root.join("Android"));
-    std::fs::write(
-        root.join("Android/local.properties"),
-        "sdk.dir=/tmp/android-sdk\n",
-    )
-    .expect("local.properties");
+    std::fs::write(root.join("Android/local.properties"), "sdk.dir=/tmp/android-sdk\n")
+        .expect("local.properties");
     std::fs::write(
         root.join("Android/gradle.properties"),
         "android.useAndroidX=true\norg.gradle.java.home=/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home\n",

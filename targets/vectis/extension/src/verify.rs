@@ -210,10 +210,8 @@ fn render_verify(statuses: &[PlatformStatus], project_root: &Path, platforms: &[
     findings.extend(catalog::catalog_findings(project_root, platforms));
 
     let android_declared = platforms.iter().any(|p| p == "android");
-    let android_present = statuses
-        .iter()
-        .find(|s| s.platform == "android")
-        .is_some_and(|s| s.present);
+    let android_present =
+        statuses.iter().find(|s| s.platform == "android").is_some_and(|s| s.present);
     findings.extend(android_toolchain::android_toolchain_findings(
         project_root,
         android_declared,

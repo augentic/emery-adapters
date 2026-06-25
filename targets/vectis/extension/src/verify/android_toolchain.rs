@@ -12,7 +12,9 @@ const APK_REL: &str = "app/build/outputs/apk/debug/app-debug.apk";
 /// Emit Android toolchain findings when `android` is declared and the shell
 /// tree is present.
 #[must_use]
-pub fn android_toolchain_findings(project_root: &Path, android_declared: bool, android_present: bool) -> Vec<Value> {
+pub fn android_toolchain_findings(
+    project_root: &Path, android_declared: bool, android_present: bool,
+) -> Vec<Value> {
     if !android_declared || !android_present {
         return Vec::new();
     }
@@ -102,18 +104,14 @@ fn warning_finding(id: &str, message: impl Into<String>) -> Value {
 }
 
 fn file_contains(path: &Path, needle: &str) -> bool {
-    std::fs::read_to_string(path)
-        .ok()
-        .is_some_and(|content| content.contains(needle))
+    std::fs::read_to_string(path).ok().is_some_and(|content| content.contains(needle))
 }
 
 #[cfg(unix)]
 fn is_executable(path: &Path) -> bool {
     use std::os::unix::fs::PermissionsExt;
 
-    std::fs::metadata(path)
-        .ok()
-        .is_some_and(|meta| meta.permissions().mode() & 0o111 != 0)
+    std::fs::metadata(path).ok().is_some_and(|meta| meta.permissions().mode() & 0o111 != 0)
 }
 
 #[cfg(not(unix))]

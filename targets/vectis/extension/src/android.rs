@@ -4,7 +4,6 @@ mod setup;
 
 use clap::Subcommand;
 use serde_json::Value;
-
 pub use setup::{AndroidSetupArgs, run as run_setup, run_for_shell_dir, setup_exit_code};
 
 /// Nested targets under `vectis android`.
