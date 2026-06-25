@@ -26,6 +26,33 @@ fn resolve_app_name_from_project_yml() {
 }
 
 #[test]
+fn resolve_app_name_falls_back_when_project_yml_name_invalid() {
+    let dir = tempdir().unwrap();
+    let ios = dir.path().join("iOS");
+    fs::create_dir_all(ios.join("TodoApp")).expect("app dir");
+    fs::write(ios.join("project.yml"), "name: not-valid\n").expect("project yml");
+    fs::write(ios.join("TodoApp/ContentView.swift"), "struct ContentView {}").expect("swift");
+
+    assert_eq!(resolve_ios_app_name(dir.path()).expect("app name"), "TodoApp");
+}
+
+#[test]
+fn sync_restores_non_utf8_makefile() {
+    let dir = tempdir().unwrap();
+    let ios = dir.path().join("iOS");
+    fs::create_dir_all(ios.join("TodoApp")).expect("app dir");
+    fs::write(ios.join("project.yml"), "name: TodoApp\n").expect("project yml");
+    fs::write(ios.join("Makefile"), [0xFF, 0xFE, 0x00]).expect("binary makefile");
+    fs::write(ios.join("TodoApp/ContentView.swift"), "struct ContentView {}").expect("swift");
+
+    let report = sync_ios_scaffold_files(dir.path()).expect("sync");
+    assert!(report.synced.iter().any(|p| p == "iOS/Makefile"));
+
+    let restored = fs::read_to_string(ios.join("Makefile")).expect("read makefile");
+    assert!(restored.contains(REQUIRED_SIM_DESTINATION));
+}
+
+#[test]
 fn sync_restores_drifted_makefile_destination() {
     let dir = tempdir().unwrap();
     let ios = dir.path().join("iOS");
