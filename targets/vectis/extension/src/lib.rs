@@ -35,6 +35,7 @@
 pub mod android;
 mod error;
 pub mod infer;
+pub mod ios_scaffold;
 pub mod materialize;
 pub mod prepare;
 pub mod scaffold;

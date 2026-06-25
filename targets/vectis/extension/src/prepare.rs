@@ -12,6 +12,7 @@ pub use scope::{
 use serde_json::{Value, json};
 
 use crate::android::{run_for_shell_dir, setup_exit_code};
+use crate::ios_scaffold::{IosScaffoldSyncReport, sync_ios_scaffold_files};
 use crate::materialize::{
     AssetsArgs, MaterializeCommand, materialize_exit_code, run as run_materialize,
 };
@@ -118,6 +119,11 @@ fn run_build(args: &BuildArgs) -> Result<Value, VectisError> {
         && project_root.join("Android").is_dir())
     .then(|| run_for_shell_dir(&project_root.join("Android")));
 
+    let scaffold_sync = (platforms.iter().any(|p| p == "ios") && project_root.join("iOS").is_dir())
+        .then(|| sync_ios_scaffold_files(&project_root))
+        .transpose()?
+        .map(|report| render_scaffold_sync(&report));
+
     Ok(json!({
         "command": "prepare build",
         "slice_dir": slice_dir.strip_prefix(&project_root)
@@ -126,6 +132,7 @@ fn run_build(args: &BuildArgs) -> Result<Value, VectisError> {
         "materialized": materialized,
         "bootstrap_app_icon": bootstrap,
         "android_setup": android_setup,
+        "scaffold_sync": scaffold_sync,
     }))
 }
 
@@ -163,5 +170,14 @@ fn skipped_materialize_summary(path: &Path, platforms: &[String]) -> Value {
         "skipped_pins": [],
         "errors": [],
         "skipped": true,
+    })
+}
+
+fn render_scaffold_sync(report: &IosScaffoldSyncReport) -> Value {
+    json!({
+        "ios": {
+            "synced": &report.synced,
+            "unchanged": &report.unchanged,
+        }
     })
 }

@@ -29,6 +29,7 @@ The Vectis core / test / iOS / Android writer and reviewer orchestration lives i
 ### Hard rules
 
 - [`hard-rules-core.md`](hard-rules-core.md) — Crux core hard rules.
+- [`hard-rules-ios.md`](hard-rules-ios.md) — iOS shell hard rules (scaffold immutability, Makefile ownership).
 - [`hard-rules-android.md`](hard-rules-android.md) — Android shell hard rules.
 
 ### Crux core depth

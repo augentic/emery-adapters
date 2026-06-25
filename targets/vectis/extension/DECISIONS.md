@@ -352,3 +352,20 @@ and the path-construction call sites under `engine/assets.rs`,
 
 _Codified in: `src/verify.rs` (`run`, `check_platform`,
 `render_detect`, `render_verify`, `verify_exit_code`)._
+
+### §L — iOS scaffold file immutability
+
+> `iOS/Makefile` and `iOS/project.yml` are agent-immutable. They
+> render exclusively from the embedded iOS assembly templates; the
+> `sim-build` destination is always
+> `generic/platform=iOS Simulator`.
+>
+> Prepare (`vectis prepare build`) auto-syncs both files when `ios`
+> is declared and `iOS/` exists, resolving the app name from
+> `iOS/project.yml` `name:` first, then from a sole PascalCase
+> Swift source folder under `iOS/`. Verify (`vectis verify --mode
+> verify`) emits `ios-scaffold-file-drift` error findings when
+> on-disk bytes diverge.
+
+_Codified in: `src/ios_scaffold.rs`; wired from `src/prepare.rs`
+and `src/verify.rs`._

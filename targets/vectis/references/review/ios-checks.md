@@ -245,3 +245,20 @@ Per the render-by-`kind` contract ([`ios/design-system-integration.md`](../ios/d
 When `composition.yaml` or `assets.yaml` is absent, skip this check — there is no cross-artifact signal.
 
 **Fix**: Regenerate the affected screen via `vectis:ios-writer` after `vectis materialize assets` has populated `design-system/assets/exports/ios/` (or after operator pins are in place). If the glyph is genuinely platform-native, change the `assets.yaml` entry to `kind: symbol` with `symbols.ios` / `symbols.android` and update composition to reference the symbol id — do not leave a `vector` / `raster` entry while the shell still substitutes SF Symbols.
+
+## IOS-021: iOS Scaffold File Drift Or Named Simulator Destination
+
+**Severity**: important
+
+**Codex**: `rule_id: VECTIS-007`
+
+Per the iOS scaffold immutability contract ([`hard-rules-ios.md`](../hard-rules-ios.md), [`extension/templates/ios/MANIFEST.md`](../../extension/templates/ios/MANIFEST.md)), `iOS/Makefile` and `iOS/project.yml` are CLI-owned. Agents must not edit them. The `sim-build` target must use `-destination 'generic/platform=iOS Simulator'` — never a named device (`name=iPhone …`).
+
+**Detection**:
+
+1. Read `iOS/Makefile` and `iOS/project.yml` when the iOS shell is in scope.
+2. Flag any Makefile `sim-build` destination that names a simulator device instead of `generic/platform=iOS Simulator`.
+3. Flag evidence that Makefile or `project.yml` was hand-authored or patched during agent work (for example, content that matches a worked example but diverges from the embedded template, or operator reports of agent Makefile edits).
+4. When `vectis verify --mode verify` reports `ios-scaffold-file-drift`, treat it as a confirmed defect and cite `rule_id: VECTIS-007`.
+
+**Fix**: Do not patch scaffold files by hand. Run `specify slice build --phase prepare` to auto-sync from the embedded template, or re-scaffold on a clean tree. Limit verify-repair to Swift under `iOS/<APP_NAME>/`, plus `Theme/`, `Components/`, and `Resources/`.

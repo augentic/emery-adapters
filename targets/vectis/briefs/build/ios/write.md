@@ -8,7 +8,7 @@ The SwiftUI patterns, Crux iOS shell anatomy, token templates, and design-system
 
 Inspect `${IOS_SHELL_DIR}` for any `.swift` files:
 
-- No Swift files → **create mode**: scaffold with `specify extension run vectis -- scaffold ios <APP_NAME> [--caps <csv>]`, then enter update mode.
+- No Swift files → **create mode**: scaffold with `specify extension run vectis -- scaffold ios <APP_NAME> [--caps <csv>]`, then enter update mode. Do not create Swift files before scaffold — scaffold must be the first write to `iOS/`.
 - Swift files present → **update mode**: diff core types against existing Swift code and apply targeted edits.
 
 Spawn the writer sub-agent with `mode: create|update` and `skip_verification: true`; the dedicated verify sub-agent (§ Verify) runs afterward.
@@ -30,6 +30,14 @@ Spawn the writer sub-agent with `mode: create|update` and `skip_verification: tr
 5. **Enforce shell boundaries.** Keep all business logic in the Rust core; the shell only renders views and performs platform I/O. Remove any legacy `import VectisDesign` — there is no shared Swift Package; the writer emits shell-local theme + asset code exclusively.
 6. **SwiftUI hazards to avoid.** Never place `TextField` or a small `Button` inside a `ScrollView` within a `NavigationStack` — the `UIScrollView` touch-delay mechanism suppresses taps. Always include `#Preview` blocks for new screens to keep Xcode previews working.
 
+## Hard rules
+
+Full set at [`hard-rules-ios.md`](../../../references/hard-rules-ios.md). Highlights:
+
+- Create mode must run `vectis scaffold ios` before any Swift files exist under `iOS/`.
+- Never edit `iOS/Makefile` or `iOS/project.yml` — prepare auto-syncs them from the embedded template.
+- Never substitute a named simulator destination (`name=iPhone …`); `sim-build` uses `generic/platform=iOS Simulator` only.
+
 ## Verify (max 3 iterations)
 
 Spawn this loop in its own sub-agent with `IOS_SHELL_DIR` and `APP_NAME`. The sub-agent returns `status`, `iterations_used`, and any unresolved errors. The verify sub-agent is the **sole source of truth** for iOS shell checkboxes in `tasks.md` — never mark an iOS task complete or report success unless `make build` and `make sim-build` have actually run and passed in the verify loop.
@@ -40,7 +48,7 @@ cd "$IOS_SHELL_DIR" && make build                  # 2. Build (typegen + package
 cd "$IOS_SHELL_DIR" && make sim-build              # 3. Simulator build.
 ```
 
-If a step fails, fix the issue and re-run from step 1. Repeat until all three checks pass or 3 iterations are exhausted. If the same error recurs across iterations with no change in output, stop early. If still failing after 3 iterations: **stop**, report the remaining failures with full error output, and escalate.
+If a step fails, fix the issue and re-run from step 1. Repeat until all three checks pass or 3 iterations are exhausted. **Verify-repair scope:** fixes are limited to Swift under `iOS/<APP_NAME>/`, plus `Theme/`, `Components/`, and `Resources/`. `iOS/Makefile` and `iOS/project.yml` are out of scope — if `sim-build` fails with destination errors, rely on prepare sync (`specify slice build --phase prepare`) or escalate; never patch the Makefile by hand. If the same error recurs across iterations with no change in output, stop early. If still failing after 3 iterations: **stop**, report the remaining failures with full error output, and escalate.
 
 If the iOS app panics with `UniFFI contract version mismatch`, the installed `cargo-swift` version is incompatible with the active Vectis version pins — surface this to the operator (it is typically a template / pin drift fix; see [../../build.md](../../build.md) § Template / version-pin drift handling).
 

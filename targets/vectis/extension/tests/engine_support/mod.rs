@@ -99,3 +99,15 @@ pub fn scaffold_android_verify_ready(project: &std::path::Path) {
     std::fs::create_dir_all(&apk_parent).expect("apk dir");
     std::fs::write(apk_parent.join("app-debug.apk"), b"PK").expect("apk");
 }
+
+/// iOS shell with immutable scaffold files synced so `verify --mode verify`
+/// exits clean when `ios` is declared.
+pub fn scaffold_ios_verify_ready(project: &std::path::Path, app_name: &str) {
+    let ios = project.join("iOS");
+    let app_dir = ios.join(app_name);
+    std::fs::create_dir_all(&app_dir).expect("mkdir iOS app dir");
+    std::fs::write(app_dir.join("ContentView.swift"), "struct ContentView {}")
+        .expect("write swift");
+    std::fs::write(ios.join("project.yml"), format!("name: {app_name}\n")).expect("project.yml");
+    specify_vectis::ios_scaffold::sync_ios_scaffold_files(project).expect("sync ios scaffold");
+}

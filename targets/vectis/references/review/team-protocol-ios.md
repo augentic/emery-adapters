@@ -55,8 +55,11 @@ The Integration specialist cross-checks wired UI input artifacts (`composition.y
 | Check | Codex | Library |
 | --- | --- | --- |
 | Render-by-`kind` drift | `VECTIS-006` | [`ios-checks.md`](ios-checks.md) **IOS-020** |
+| Scaffold file drift / named simulator | `VECTIS-007` | [`ios-checks.md`](ios-checks.md) **IOS-021** |
 
 Apply [`VECTIS-006`](../../rules/VECTIS-006-asset-render-by-kind.md): forbid `Image(systemName:)` for composition-referenced ids whose `assets.yaml` entry is `vector` or `raster`. Cite `rule_id: VECTIS-006` on every finding. Skip when `composition.yaml` or `assets.yaml` is absent.
+
+Apply [`VECTIS-007`](../../rules/VECTIS-007-ios-scaffold-immutability.md): forbid agent edits to `iOS/Makefile` and `iOS/project.yml` and any named simulator destination in `sim-build`. Cite `rule_id: VECTIS-007` on every finding. When `vectis verify --mode verify` already reported `ios-scaffold-file-drift`, treat it as confirmed.
 
 ## Antagonist responsibilities
 

@@ -22,6 +22,7 @@ use std::path::{Path, PathBuf};
 use clap::{Args as ClapArgs, ValueEnum};
 use serde_json::Value;
 
+use crate::ios_scaffold::ios_scaffold_drift_findings;
 use crate::shell::{SUPPORTED_SHELL_PLATFORMS, shell_present};
 use crate::validate::find_project_root;
 use crate::{VectisError, render_json as render_value};
@@ -217,6 +218,10 @@ fn render_verify(statuses: &[PlatformStatus], project_root: &Path, platforms: &[
         android_declared,
         android_present,
     ));
+
+    if platforms.iter().any(|p| p == "ios") && shell_present(project_root, "ios") {
+        findings.extend(ios_scaffold_drift_findings(project_root));
+    }
 
     serde_json::json!({
         "mode": "verify",
