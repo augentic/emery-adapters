@@ -245,7 +245,10 @@ pub fn parse_caps(raw: Option<&str>) -> Result<Vec<Capability>, ScaffoldError> {
 #[must_use]
 pub fn render_json(outcome: Result<serde_json::Value, ScaffoldError>) -> (String, u8) {
     match outcome {
-        Ok(value) => (render_value(&value), 0),
+        Ok(value) => {
+            let code = scaffold_exit_code(&value);
+            (render_value(&value), code)
+        }
         Err(err) => {
             let exit_code = err.exit_code();
             let serde_json::Value::Object(mut payload) = err.to_json() else {
@@ -255,6 +258,12 @@ pub fn render_json(outcome: Result<serde_json::Value, ScaffoldError>) -> (String
             (render_value(&serde_json::Value::Object(payload)), exit_code)
         }
     }
+}
+
+fn scaffold_exit_code(value: &serde_json::Value) -> u8 {
+    value
+        .get("android-setup")
+        .map_or(0, crate::android::setup_exit_code)
 }
 
 fn project_dir_from_env() -> Result<PathBuf, ScaffoldError> {

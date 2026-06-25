@@ -59,6 +59,18 @@ fn android_setup_errors_when_android_dir_missing() {
     assert_eq!(err.exit_code(), 2);
 }
 
+#[test]
+fn android_setup_rejects_partial_wrapper() {
+    let tmp = tempdir().expect("tempdir");
+    setup_android_shell(tmp.path());
+    std::fs::write(tmp.path().join("Android/gradlew"), b"#!/bin/sh\n").expect("gradlew");
+
+    let payload = run_for_shell_dir(&tmp.path().join("Android"));
+    assert_eq!(setup_exit_code(&payload), 1);
+    let findings = payload["findings"].as_array().expect("findings");
+    assert_eq!(findings[0]["id"], "android-setup-wrapper-failed");
+}
+
 fn toolchain_finding_ids(value: &Value) -> Vec<&str> {
     value["findings"]
         .as_array()

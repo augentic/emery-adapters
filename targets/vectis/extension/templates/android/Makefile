@@ -11,7 +11,7 @@ setup: setup-extension setup-host
 	@chmod +x gradlew 2>/dev/null || true
 
 setup-extension:
-	@specify extension run vectis -- android setup .
+	@specify extension run vectis -- android setup ..
 
 setup-host:
 	@test -n "$$ANDROID_HOME" || (echo "ANDROID_HOME is unset" >&2; exit 1)
@@ -35,7 +35,7 @@ setup-ndk:
 	@if ! grep -q '__ANDROID_NDK_VERSION__' shared/build.gradle.kts 2>/dev/null; then :; \
 	else \
 	  test -n "$$ANDROID_HOME" || (echo "ANDROID_HOME is unset" >&2; exit 1); \
-	  NDK=$$(ls -1 "$$ANDROID_HOME/ndk" 2>/dev/null | sort -V | tail -1); \
+	  NDK=$$(ANDROID_HOME="$$ANDROID_HOME" python3 -c 'import os; root=os.path.join(os.environ["ANDROID_HOME"], "ndk"); print(sorted(os.listdir(root), key=lambda s: [int(x) for x in s.split(".")])[-1])'); \
 	  test -n "$$NDK" || (echo "No NDK under $$ANDROID_HOME/ndk" >&2; exit 1); \
 	  if [ "$$(uname)" = Darwin ]; then \
 	    sed -i '' "s/__ANDROID_NDK_VERSION__/$$NDK/g" shared/build.gradle.kts; \

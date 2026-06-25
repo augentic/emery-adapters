@@ -1,7 +1,7 @@
 //! Android toolchain + compile-artifact probes for `verify --mode verify`.
 //!
-//! Compile itself runs via `make verify` in the Android shell; this module
-//! checks that the host-side setup and debug APK are present on disk.
+//! Compilation is driven by `make verify` in the Android shell; this module
+//! checks that host-side setup artifacts and the debug APK are present on disk.
 
 use std::path::Path;
 
@@ -30,7 +30,7 @@ pub fn android_toolchain_findings(
         ));
     } else if !is_executable(&gradlew) {
         findings.push(error_finding(
-            "android-gradlew-missing",
+            "android-gradlew-not-executable",
             "`gradlew` exists but is not executable; run `chmod +x Android/gradlew`",
         ));
     }
@@ -40,6 +40,14 @@ pub fn android_toolchain_findings(
         findings.push(error_finding(
             "android-wrapper-jar-missing",
             "Android shell is missing `gradle/wrapper/gradle-wrapper.jar`",
+        ));
+    }
+
+    let wrapper_properties = android_dir.join("gradle/wrapper/gradle-wrapper.properties");
+    if !wrapper_properties.is_file() {
+        findings.push(error_finding(
+            "android-wrapper-properties-missing",
+            "Android shell is missing `gradle/wrapper/gradle-wrapper.properties`",
         ));
     }
 
@@ -58,7 +66,7 @@ pub fn android_toolchain_findings(
 
     let gradle_properties = android_dir.join("gradle.properties");
     if gradle_properties.is_file() && !file_contains(&gradle_properties, "org.gradle.java.home") {
-        findings.push(warning_finding(
+        findings.push(info_finding(
             "android-java-home-unpinned",
             "`gradle.properties` has no `org.gradle.java.home`; pin Java 21 via `make setup-host`",
         ));
@@ -66,7 +74,7 @@ pub fn android_toolchain_findings(
 
     let shared_build = android_dir.join("shared/build.gradle.kts");
     if shared_build.is_file() && file_contains(&shared_build, "__ANDROID_NDK_VERSION__") {
-        findings.push(warning_finding(
+        findings.push(info_finding(
             "android-ndk-unsubstituted",
             "`shared/build.gradle.kts` still contains `__ANDROID_NDK_VERSION__`; run `make setup-host`",
         ));
@@ -94,10 +102,10 @@ fn error_finding(id: &str, message: impl Into<String>) -> Value {
     })
 }
 
-fn warning_finding(id: &str, message: impl Into<String>) -> Value {
+fn info_finding(id: &str, message: impl Into<String>) -> Value {
     json!({
         "id": id,
-        "severity": "suggestion",
+        "severity": "info",
         "source": "deterministic",
         "message": message.into(),
     })

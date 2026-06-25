@@ -135,15 +135,13 @@ fn android_shell_dir(project_root: &Path) -> Result<PathBuf, VectisError> {
 }
 
 fn install_wrapper(android_dir: &Path) -> Result<Vec<String>, String> {
-    let gradlew = android_dir.join("gradlew");
-    let wrapper_jar = android_dir.join("gradle/wrapper/gradle-wrapper.jar");
-    if gradlew.is_file() && wrapper_jar.is_file() {
+    if wrapper_complete(android_dir) {
         return Ok(Vec::new());
     }
-    if gradlew.is_file() || wrapper_jar.is_file() {
+    if wrapper_partial(android_dir) {
         return Err(
-            "partial Gradle wrapper detected; remove `gradlew` and `gradle/wrapper/` then re-run \
-             `vectis android setup`"
+            "partial Gradle wrapper detected; remove `gradlew`, `gradlew.bat`, and \
+             `gradle/wrapper/` then re-run `vectis android setup`"
                 .into(),
         );
     }
@@ -152,6 +150,7 @@ fn install_wrapper(android_dir: &Path) -> Result<Vec<String>, String> {
     std::fs::create_dir_all(android_dir.join("gradle/wrapper"))
         .map_err(|err| format!("failed to create gradle/wrapper: {err}"))?;
 
+    let gradlew = android_dir.join("gradlew");
     write_bytes(&gradlew, GRADLEW_BYTES)?;
     installed.push(relative_path(android_dir, &gradlew));
 
@@ -159,6 +158,7 @@ fn install_wrapper(android_dir: &Path) -> Result<Vec<String>, String> {
     write_bytes(&gradlew_bat, GRADLEW_BAT_BYTES)?;
     installed.push(relative_path(android_dir, &gradlew_bat));
 
+    let wrapper_jar = android_dir.join("gradle/wrapper/gradle-wrapper.jar");
     write_bytes(&wrapper_jar, WRAPPER_JAR_BYTES)?;
     installed.push(relative_path(android_dir, &wrapper_jar));
 
@@ -170,6 +170,24 @@ fn install_wrapper(android_dir: &Path) -> Result<Vec<String>, String> {
     set_executable(&gradlew);
 
     Ok(installed)
+}
+
+fn wrapper_paths(android_dir: &Path) -> [PathBuf; 4] {
+    [
+        android_dir.join("gradlew"),
+        android_dir.join("gradlew.bat"),
+        android_dir.join("gradle/wrapper/gradle-wrapper.jar"),
+        android_dir.join("gradle/wrapper/gradle-wrapper.properties"),
+    ]
+}
+
+fn wrapper_complete(android_dir: &Path) -> bool {
+    wrapper_paths(android_dir).iter().all(|path| path.is_file())
+}
+
+fn wrapper_partial(android_dir: &Path) -> bool {
+    let present = wrapper_paths(android_dir).iter().filter(|path| path.is_file()).count();
+    present > 0 && !wrapper_complete(android_dir)
 }
 
 fn write_bytes(path: &Path, bytes: &[u8]) -> Result<(), String> {
