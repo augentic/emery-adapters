@@ -139,11 +139,9 @@ fn install_wrapper(android_dir: &Path) -> Result<Vec<String>, String> {
         return Ok(Vec::new());
     }
     if wrapper_partial(android_dir) {
-        return Err(
-            "partial Gradle wrapper detected; remove `gradlew`, `gradlew.bat`, and \
+        return Err("partial Gradle wrapper detected; remove `gradlew`, `gradlew.bat`, and \
              `gradle/wrapper/` then re-run `vectis android setup`"
-                .into(),
-        );
+            .into());
     }
 
     let mut installed = Vec::new();

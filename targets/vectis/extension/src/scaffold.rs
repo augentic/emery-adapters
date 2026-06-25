@@ -261,9 +261,7 @@ pub fn render_json(outcome: Result<serde_json::Value, ScaffoldError>) -> (String
 }
 
 fn scaffold_exit_code(value: &serde_json::Value) -> u8 {
-    value
-        .get("android-setup")
-        .map_or(0, crate::android::setup_exit_code)
+    value.get("android-setup").map_or(0, crate::android::setup_exit_code)
 }
 
 fn project_dir_from_env() -> Result<PathBuf, ScaffoldError> {
