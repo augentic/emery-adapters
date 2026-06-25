@@ -188,6 +188,8 @@ fn scaffold_ios(root: &std::path::Path) {
     let dir = root.join("iOS/TestApp");
     std::fs::create_dir_all(&dir).expect("mkdir iOS/TestApp");
     std::fs::write(dir.join("ContentView.swift"), "struct ContentView {}").expect("write swift");
+    std::fs::write(root.join("iOS/project.yml"), "name: TestApp\n").expect("project yml");
+    specify_vectis::ios_scaffold::sync_ios_scaffold_files(root).expect("sync ios scaffold");
 }
 
 fn scaffold_android(root: &std::path::Path) {

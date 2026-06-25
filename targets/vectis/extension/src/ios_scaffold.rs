@@ -94,11 +94,25 @@ pub fn ios_scaffold_drift_findings(project_root: &Path) -> Vec<Value> {
         .into_iter()
         .filter_map(|file| {
             let target = project_root.join(&file.relative_path);
-            let on_disk = target.is_file().then(|| fs::read_to_string(&target).ok())??;
+            let relative_path = file.relative_path;
+            if !target.is_file() {
+                return Some(drift_finding(
+                    &relative_path,
+                    &missing_scaffold_message(&relative_path),
+                ));
+            }
+            let Ok(on_disk) = fs::read_to_string(&target) else {
+                return Some(drift_finding(
+                    &relative_path,
+                    &format!(
+                        "{relative_path} is not readable UTF-8 text; CLI-owned scaffold files must match the embedded template — run prepare sync or `vectis scaffold ios`"
+                    ),
+                ));
+            };
             if on_disk == file.contents {
                 return None;
             }
-            Some(drift_finding(&file.relative_path, &drift_message(&file.relative_path, &on_disk)))
+            Some(drift_finding(&relative_path, &drift_message(&relative_path, &on_disk)))
         })
         .collect()
 }
@@ -206,13 +220,17 @@ fn drift_message(relative_path: &str, on_disk: &str) -> String {
                 " (forbidden named simulator destination; required: '{REQUIRED_SIM_DESTINATION}')"
             );
         } else if !on_disk.contains(REQUIRED_SIM_DESTINATION) {
-            let _ = write!(
-                message,
-                " (sim-build must use '-destination \\'{REQUIRED_SIM_DESTINATION}\\'')"
-            );
+            let _ =
+                write!(message, " (sim-build must use -destination '{REQUIRED_SIM_DESTINATION}')");
         }
     }
     message
+}
+
+fn missing_scaffold_message(relative_path: &str) -> String {
+    format!(
+        "{relative_path} is missing; CLI-owned scaffold files must be present — run prepare sync or `vectis scaffold ios`"
+    )
 }
 
 fn drift_finding(path: &str, message: &str) -> Value {

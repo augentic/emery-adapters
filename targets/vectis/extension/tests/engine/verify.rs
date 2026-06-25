@@ -42,9 +42,7 @@ fn scaffold_core(root: &Path) {
 }
 
 fn scaffold_ios(root: &Path) {
-    let dir = root.join("iOS/TestApp");
-    std::fs::create_dir_all(&dir).expect("mkdir iOS/TestApp");
-    std::fs::write(dir.join("ContentView.swift"), "struct ContentView {}").expect("write swift");
+    crate::engine_support::scaffold_ios_verify_ready(root, "TestApp");
 }
 
 fn scaffold_android(root: &Path) {
@@ -85,9 +83,9 @@ fn write_design_system_inventory(root: &Path) {
 }
 
 fn scaffold_ios_with_xcassets(root: &Path) {
+    crate::engine_support::scaffold_ios_verify_ready(root, "TodoApp");
     let app = root.join("iOS/TodoApp");
     std::fs::create_dir_all(app.join("Resources/Assets.xcassets")).expect("mkdir xcassets");
-    std::fs::write(app.join("ContentView.swift"), "struct ContentView {}").expect("write swift");
 }
 
 // ── verify mode ────────────────────────────────────────────────────
@@ -441,7 +439,6 @@ fn verify_ios_makefile_drift_exits_one() {
     scaffold_ios(tmp.path());
 
     let ios = tmp.path().join("iOS");
-    std::fs::write(ios.join("project.yml"), "name: TestApp\n").expect("write project.yml");
     std::fs::write(
         ios.join("Makefile"),
         "sim-build:\n\t@xcodebuild -destination 'platform=iOS Simulator,name=iPhone 16'\n",
@@ -453,6 +450,28 @@ fn verify_ios_makefile_drift_exits_one() {
     assert!(
         findings.iter().any(|f| f["id"] == "ios-scaffold-file-drift"),
         "expected scaffold drift finding: {result}"
+    );
+    assert_eq!(code, 1);
+}
+
+#[test]
+fn verify_ios_missing_makefile_exits_one() {
+    let tmp = tempdir().unwrap();
+    write_project_yaml(tmp.path(), &["core", "ios"]);
+    scaffold_core(tmp.path());
+
+    let ios = tmp.path().join("iOS");
+    std::fs::create_dir_all(ios.join("TestApp")).expect("app dir");
+    std::fs::write(ios.join("project.yml"), "name: TestApp\n").expect("project yml");
+    std::fs::write(ios.join("TestApp/ContentView.swift"), "struct ContentView {}").expect("swift");
+
+    let (result, code) = verify(&args(VerifyMode::Verify, tmp.path()));
+    let findings = result["findings"].as_array().expect("findings array");
+    assert!(
+        findings
+            .iter()
+            .any(|f| f["id"] == "ios-scaffold-file-drift" && f["path"] == "iOS/Makefile"),
+        "expected missing Makefile finding: {result}"
     );
     assert_eq!(code, 1);
 }

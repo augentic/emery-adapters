@@ -64,6 +64,20 @@ fn sync_is_noop_when_makefile_matches_template() {
 }
 
 #[test]
+fn drift_findings_flag_missing_makefile() {
+    let dir = tempdir().unwrap();
+    let ios = dir.path().join("iOS");
+    fs::create_dir_all(ios.join("Counter")).expect("app dir");
+    fs::write(ios.join("project.yml"), "name: Counter\n").expect("project yml");
+
+    let findings = ios_scaffold_drift_findings(dir.path());
+    assert!(
+        findings.iter().any(|f| f["path"] == "iOS/Makefile"),
+        "expected missing Makefile finding: {findings:?}"
+    );
+}
+
+#[test]
 fn drift_findings_flag_named_simulator() {
     let dir = tempdir().unwrap();
     let ios = dir.path().join("iOS");
