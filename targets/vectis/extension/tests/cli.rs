@@ -194,6 +194,20 @@ fn scaffold_android(root: &std::path::Path) {
     let dir = root.join("Android/app/src/main/kotlin/com/test");
     std::fs::create_dir_all(&dir).expect("mkdir Android");
     std::fs::write(dir.join("MainActivity.kt"), "class MainActivity").expect("write kt");
+    let _unused = specify_vectis::android::run_for_shell_dir(&root.join("Android"));
+    std::fs::write(root.join("Android/local.properties"), "sdk.dir=/tmp/android-sdk\n")
+        .expect("local.properties");
+    std::fs::write(
+        root.join("Android/gradle.properties"),
+        "android.useAndroidX=true\norg.gradle.java.home=/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home\n",
+    )
+    .expect("gradle.properties");
+    let shared_build = root.join("Android/shared/build.gradle.kts");
+    std::fs::create_dir_all(shared_build.parent().expect("parent")).expect("shared dir");
+    std::fs::write(&shared_build, "ndkVersion = \"26.1.10909125\"\n").expect("shared build");
+    let apk_parent = root.join("Android/app/build/outputs/apk/debug");
+    std::fs::create_dir_all(&apk_parent).expect("apk dir");
+    std::fs::write(apk_parent.join("app-debug.apk"), b"PK").expect("apk");
 }
 
 #[test]

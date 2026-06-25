@@ -11,6 +11,7 @@ pub use scope::{
 };
 use serde_json::{Value, json};
 
+use crate::android::{run_for_shell_dir, setup_exit_code};
 use crate::materialize::{
     AssetsArgs, MaterializeCommand, materialize_exit_code, run as run_materialize,
 };
@@ -75,6 +76,11 @@ fn prepare_exit_code(value: &Value) -> u8 {
     {
         return 1;
     }
+    if let Some(setup) = value.get("android_setup")
+        && setup_exit_code(setup) != 0
+    {
+        return 1;
+    }
     0
 }
 
@@ -108,6 +114,10 @@ fn run_build(args: &BuildArgs) -> Result<Value, VectisError> {
         path: Some(project_root.clone()),
     })?;
 
+    let android_setup = (platforms.iter().any(|p| p == "android")
+        && project_root.join("Android").is_dir())
+    .then(|| run_for_shell_dir(&project_root.join("Android")));
+
     Ok(json!({
         "command": "prepare build",
         "slice_dir": slice_dir.strip_prefix(&project_root)
@@ -115,6 +125,7 @@ fn run_build(args: &BuildArgs) -> Result<Value, VectisError> {
         "platforms": platforms,
         "materialized": materialized,
         "bootstrap_app_icon": bootstrap,
+        "android_setup": android_setup,
     }))
 }
 

@@ -41,43 +41,25 @@ Full set at [`hard-rules-android.md`](../../../references/hard-rules-android.md)
 
 ## Verify (max 3 iterations)
 
-Spawn this loop in its own sub-agent with `ANDROID_SHELL_DIR`. The sub-agent returns `status`, `iterations_used`, and any unresolved errors. The verify sub-agent is the **sole source of truth** for Android shell checkboxes in `tasks.md` — never mark an Android task complete or report success unless `make build`, `gradlew :shared:cargoBuild`, and `gradlew :app:assembleDebug` have actually run and passed in the verify loop.
+Spawn this loop in its own sub-agent with `ANDROID_SHELL_DIR`. The sub-agent returns `status`, `iterations_used`, and any unresolved errors. The verify sub-agent is the **sole source of truth** for Android shell checkboxes in `tasks.md` — never mark an Android task complete or report success unless `make verify` has actually run and passed in the verify loop (`make verify` runs `setup`, typegen, `:shared:cargoBuild`, and `:app:assembleDebug`).
 
 ### Pre-flight (fail fast on misconfiguration)
 
 Run these before entering the loop. If any check fails, report the missing prerequisite and mark Android verification as **pending** rather than entering the build loop.
 
 ```bash
-test -f "${ANDROID_SHELL_DIR}/local.properties"
-grep -q "sdk.dir" "${ANDROID_SHELL_DIR}/local.properties"
-grep -q "org.gradle.java.home" "${ANDROID_SHELL_DIR}/gradle.properties"  # Must point to Java 21.
 rustup target list --installed | grep android
 ```
 
-### Gradle wrapper bootstrap
-
-Before any `./gradlew` invocation, verify `gradlew` exists and is executable and `gradle/wrapper/gradle-wrapper.jar` is present. If the wrapper is missing, bootstrap from a minimal init project:
-
-```bash
-tmp_dir=$(mktemp -d)
-cd "$tmp_dir" && gradle wrapper && cd -
-cp "$tmp_dir/gradlew" "$tmp_dir/gradlew.bat" "$ANDROID_SHELL_DIR/"
-cp -r "$tmp_dir/gradle" "$ANDROID_SHELL_DIR/"
-chmod +x "$ANDROID_SHELL_DIR/gradlew"
-rm -rf "$tmp_dir"
-```
-
-If `gradle` itself is not installed, report the prerequisite (`brew install gradle`) and mark Android verification as pending.
+`local.properties`, `org.gradle.java.home`, NDK substitution, and the vendored Gradle wrapper are handled by `make verify` via `make setup` (`vectis android setup` + `make setup-host`). Do not bootstrap the wrapper manually with `gradle wrapper`.
 
 ### Build loop
 
 ```bash
-cd "$ANDROID_SHELL_DIR" && make build                       # 1. Type generation + cross-compile.
-cd "$ANDROID_SHELL_DIR" && ./gradlew :shared:cargoBuild     # 2. Rust library build.
-cd "$ANDROID_SHELL_DIR" && ./gradlew :app:assembleDebug     # 3. APK build.
+cd "${ANDROID_SHELL_DIR}" && make verify
 ```
 
-If a step fails, fix the issue and re-run. Repeat until all three checks pass or 3 iterations are exhausted. Stop early on identical-output regressions. If still failing after 3 iterations: **stop** and escalate. Java 25+ environments hit `IllegalArgumentException`; the fix is pinning `org.gradle.java.home` to Java 21 in `gradle.properties`.
+If a step fails, fix the issue and re-run. Repeat until `make verify` passes or 3 iterations are exhausted. Stop early on identical-output regressions. If still failing after 3 iterations: **stop** and escalate. Java 25+ environments hit `IllegalArgumentException`; the fix is pinning `org.gradle.java.home` to Java 21 in `gradle.properties` via `make setup-host`.
 
 ## Worked examples
 

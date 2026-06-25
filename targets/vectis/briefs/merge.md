@@ -63,12 +63,8 @@ cd "$PROJECT_DIR/iOS" && make build
 cd "$PROJECT_DIR/iOS" && make sim-build
 
 # Android, when ${PROJECT_DIR}/Android exists
-test -f "$PROJECT_DIR/Android/local.properties"
-grep -q "org.gradle.java.home" "$PROJECT_DIR/Android/gradle.properties"
 rustup target list --installed | grep android
-cd "$PROJECT_DIR/Android" && make build
-cd "$PROJECT_DIR/Android" && ./gradlew :shared:cargoBuild
-cd "$PROJECT_DIR/Android" && ./gradlew :app:assembleDebug
+cd "$PROJECT_DIR/Android" && make verify
 ```
 
 Record every host step in a structured list with these fields:

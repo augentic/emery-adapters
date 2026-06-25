@@ -171,7 +171,14 @@ pub fn run(command: &ScaffoldCommand) -> Result<serde_json::Value, ScaffoldError
     let versions = Versions::resolve(command.common().version_file.as_deref())?;
     let plan = plan_command(command, &versions)?;
     write_plan(&project_dir, &plan)?;
-    Ok(plan.to_json(&project_dir))
+    let mut payload = plan.to_json(&project_dir);
+    if matches!(command, ScaffoldCommand::Android(_)) {
+        let setup = crate::android::run_for_shell_dir(&project_dir.join("Android"));
+        if let serde_json::Value::Object(ref mut map) = payload {
+            map.insert("android-setup".to_string(), setup);
+        }
+    }
+    Ok(payload)
 }
 
 /// Plan a scaffold command without touching the filesystem.
@@ -238,7 +245,10 @@ pub fn parse_caps(raw: Option<&str>) -> Result<Vec<Capability>, ScaffoldError> {
 #[must_use]
 pub fn render_json(outcome: Result<serde_json::Value, ScaffoldError>) -> (String, u8) {
     match outcome {
-        Ok(value) => (render_value(&value), 0),
+        Ok(value) => {
+            let code = scaffold_exit_code(&value);
+            (render_value(&value), code)
+        }
         Err(err) => {
             let exit_code = err.exit_code();
             let serde_json::Value::Object(mut payload) = err.to_json() else {
@@ -248,6 +258,10 @@ pub fn render_json(outcome: Result<serde_json::Value, ScaffoldError>) -> (String
             (render_value(&serde_json::Value::Object(payload)), exit_code)
         }
     }
+}
+
+fn scaffold_exit_code(value: &serde_json::Value) -> u8 {
+    value.get("android-setup").map_or(0, crate::android::setup_exit_code)
 }
 
 fn project_dir_from_env() -> Result<PathBuf, ScaffoldError> {

@@ -7,7 +7,7 @@ Source filenames are flat under `templates/android/`. Nested target paths (espec
 
 Total: 19 files (matches the Android assembly file manifest).
 
-The Gradle wrapper files (`gradlew`, `gradlew.bat`, `gradle/wrapper/gradle-wrapper.jar`, `gradle/wrapper/gradle-wrapper.properties`) are intentionally **not** templates. They are produced by the host verify pipeline invoking `gradle wrapper --gradle-version <pin>` after the Gradle config files exist. The same applies to `local.properties` (per-developer; carries `sdk.dir` from `$ANDROID_HOME`).
+The Gradle wrapper files (`gradlew`, `gradlew.bat`, `gradle/wrapper/gradle-wrapper.jar`, `gradle/wrapper/gradle-wrapper.properties`) are **not** emitted as scaffold templates. They are vendored inside the `vectis` extension (`extension/assets/android/gradle-wrapper/`) and copied into `Android/` by `vectis android setup` (also run automatically after `vectis scaffold android` and during `vectis prepare build` when `android` is in scope). `local.properties` (`sdk.dir` from `$ANDROID_HOME`), `org.gradle.java.home`, and NDK substitution remain host-derived via `make setup-host` in the Android Makefile.
 
 ## Placeholder reference
 
@@ -145,11 +145,8 @@ landed during verification:
 - The `gradle.properties` template **omits** `org.gradle.java.home`. The
   reference doc pins it to `/Library/Java/JavaVirtualMachines/jdk-21.jdk/...`
   (a per-machine path) and warns Java 25+ breaks Gradle's Kotlin compiler.
-  The chunk-3c templates rely on the developer's `JAVA_HOME` pointing at
-  Java 21. Chunk 8 should consider auto-detecting Java 21 via
-  `/usr/libexec/java_home -v 21` (macOS) or equivalent, and writing the line
-  into `gradle.properties` at scaffold time so the project remains
-  hermetic.
+  The Android Makefile `setup-host` target appends `org.gradle.java.home`
+  after scaffold using `/usr/libexec/java_home -v 21` (macOS) or `$JAVA_HOME`.
 - The "Initial Version Pins" block in `the initial Vectis task plan` is stale for
   Android. The verification staging substituted the working values from the
   reference doc (`agp = "8.13.2"`, `kotlin = "2.3.0"`,
