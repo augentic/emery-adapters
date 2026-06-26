@@ -15,3 +15,6 @@ xcodebuild build \
 	-configuration Debug \
 	CODE_SIGNING_ALLOWED=NO \
 	2>&1 | xcbeautify
+
+mkdir -p .vectis
+date -u +%Y-%m-%dT%H:%M:%SZ > .vectis/verify.ok

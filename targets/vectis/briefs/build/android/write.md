@@ -11,7 +11,7 @@ Inspect `${ANDROID_SHELL_DIR}/app/src/main/java/<package>/Core.kt`:
 - Missing → **create mode**: scaffold with `specify extension run vectis -- scaffold android <APP_NAME> [--caps <csv>] [--android-package <package>]`, then enter pre-flight (see § Verify below), then update mode.
 - Present → **update mode**: diff core types against existing Kotlin code and apply targeted edits.
 
-Spawn the writer sub-agent with `mode: create|update` and `skip_verification: true`; the dedicated verify sub-agent (§ Verify) runs afterward.
+Spawn the writer sub-agent with `mode: create|update` and `skip_verification: true`; the orchestrator runs the verify loop (§ Verify) after the writer returns.
 
 ## Writer steps
 
@@ -41,25 +41,25 @@ Full set at [`hard-rules-android.md`](../../../references/hard-rules-android.md)
 
 ## Verify (max 3 iterations)
 
-Spawn this loop in its own sub-agent with `ANDROID_SHELL_DIR`. The sub-agent returns `status`, `iterations_used`, and any unresolved errors. The verify sub-agent is the **sole source of truth** for Android shell checkboxes in `tasks.md` — never mark an Android task complete or report success unless `make verify` has actually run and passed in the verify loop (`make verify` runs `setup`, typegen, `:shared:cargoBuild`, and `:app:assembleDebug`).
+The `/spec:build` **orchestrator** runs the verify loop — not a sub-agent with shell access. The orchestrator is the **sole source of truth** for Android shell checkboxes in `tasks.md`; never mark an Android task complete or report success unless `make verify` has actually run and passed in the same iteration (`make verify` runs `setup`, typegen, `:shared:cargoBuild`, and `:app:assembleDebug`).
 
 ### Pre-flight (fail fast on misconfiguration)
 
-Run these before entering the loop. If any check fails, report the missing prerequisite and mark Android verification as **pending** rather than entering the build loop.
-
-```bash
-rustup target list --installed | grep android
-```
+Before entering the loop, confirm host prerequisites via `specify slice build --phase prepare` (adapter `host_prereq` native script) or `specify extension run vectis -- verify --mode host-prereq` for an env-only advisory probe. If host prerequisites are missing (`ANDROID_HOME`, Rust Android targets, Java 21), report **deferred** and stop — do not scaffold into a broken host.
 
 `local.properties`, `org.gradle.java.home`, NDK substitution, and the vendored Gradle wrapper are handled by `make verify` via `make setup` (`vectis android setup` + `make setup-host`). Do not bootstrap the wrapper manually with `gradle wrapper`.
 
 ### Build loop
 
+After the writer sub-agent returns, the orchestrator runs:
+
 ```bash
 cd "${ANDROID_SHELL_DIR}" && make verify
 ```
 
-If a step fails, fix the issue and re-run. Repeat until `make verify` passes or 3 iterations are exhausted. Stop early on identical-output regressions. If still failing after 3 iterations: **stop** and escalate. Java 25+ environments hit `IllegalArgumentException`; the fix is pinning `org.gradle.java.home` to Java 21 in `gradle.properties` via `make setup-host`.
+On failure the orchestrator captures stderr and spawns a **repair-only** sub-agent (`task: android-verify-repair`) with Kotlin/Gradle edit scope only — **no shell**. The sub-agent returns edited Kotlin files or a patch plan; the orchestrator applies edits and re-runs `make verify`.
+
+If still failing after 3 iterations: **stop**, report the remaining failures with full error output, and escalate. Java 25+ environments hit `IllegalArgumentException`; the fix is pinning `org.gradle.java.home` to Java 21 in `gradle.properties` via `make setup-host`.
 
 ## Worked examples
 

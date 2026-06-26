@@ -190,6 +190,9 @@ fn scaffold_ios(root: &std::path::Path) {
     std::fs::write(dir.join("ContentView.swift"), "struct ContentView {}").expect("write swift");
     std::fs::write(root.join("iOS/project.yml"), "name: TestApp\n").expect("project yml");
     specify_vectis::ios_scaffold::sync_ios_scaffold_files(root).expect("sync ios scaffold");
+    let stamp_dir = root.join("iOS/.vectis");
+    std::fs::create_dir_all(&stamp_dir).expect("mkdir .vectis");
+    std::fs::write(stamp_dir.join("verify.ok"), "test-stamp\n").expect("ios verify stamp");
 }
 
 fn scaffold_android(root: &std::path::Path) {
@@ -210,6 +213,22 @@ fn scaffold_android(root: &std::path::Path) {
     let apk_parent = root.join("Android/app/build/outputs/apk/debug");
     std::fs::create_dir_all(&apk_parent).expect("apk dir");
     std::fs::write(apk_parent.join("app-debug.apk"), b"PK").expect("apk");
+    let stamp_dir = root.join("Android/.vectis");
+    std::fs::create_dir_all(&stamp_dir).expect("mkdir .vectis");
+    std::fs::write(stamp_dir.join("verify.ok"), "test-stamp\n").expect("android verify stamp");
+}
+
+#[test]
+fn verify_host_prereq_core_only_exits_zero() {
+    let tmp = tempdir().unwrap();
+    write_project_yaml(tmp.path(), &["core"]);
+
+    let assert = vectis_verify().args(["--mode", "host-prereq"]).arg(tmp.path()).assert().success();
+    let value = parse_json(&assert.get_output().stdout);
+
+    assert_eq!(value["mode"], "host-prereq");
+    let findings = value["findings"].as_array().expect("findings array");
+    assert!(findings.is_empty(), "core-only must not require host tools: {value}");
 }
 
 #[test]

@@ -67,6 +67,8 @@ android-lib:
 apk: typegen
 	@echo "Building debug APK..."
 	@./gradlew :app:assembleDebug
+	@mkdir -p .vectis
+	@date -u +%Y-%m-%dT%H:%M:%SZ > .vectis/verify.ok
 
 install: apk
 	@./gradlew :app:installDebug

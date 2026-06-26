@@ -12,10 +12,16 @@
 //!   for every declared UI platform (`ios` / `android`), exiting
 //!   non-zero when one is neither shell-resident (RFC-46 §6.3) nor
 //!   satisfiable from `design-system/assets.yaml` (§4.1).
+//! - **host-prereq** (advisory): probes host env visible to the WASI guest
+//!   (`ANDROID_HOME`). Rust Android targets and `xcodebuild` depth checks run
+//!   only in native builds of this crate; prepare-time gating is the adapter's
+//!   native `host_prereq` script (`scripts/build-host-prereq.sh`).
 
 mod android_toolchain;
 mod app_icon;
 mod catalog;
+mod compile_stamp;
+mod host_prereq;
 
 use std::path::{Path, PathBuf};
 
@@ -46,6 +52,8 @@ pub enum VerifyMode {
     /// Build-time: gate the launcher `app-icon` for declared UI
     /// platforms (`ios` / `android`); RFC-46 §6.
     BootstrapAppIcon,
+    /// Prepare-time: probe host toolchain prerequisites for declared platforms.
+    HostPrereq,
 }
 
 /// Per-platform status entry in the verify report.
@@ -73,6 +81,7 @@ pub fn run(args: &VerifyArgs) -> Result<Value, VectisError> {
             Ok(render_verify(&statuses, &project_root, &platforms))
         }
         VerifyMode::BootstrapAppIcon => Ok(render_bootstrap_app_icon(&project_root, &platforms)),
+        VerifyMode::HostPrereq => Ok(render_host_prereq(&project_root, &platforms)),
     }
 }
 
@@ -178,6 +187,16 @@ fn render_bootstrap_app_icon(project_root: &Path, platforms: &[String]) -> Value
     })
 }
 
+fn render_host_prereq(project_root: &Path, platforms: &[String]) -> Value {
+    let findings = host_prereq::host_prereq_findings(platforms);
+    serde_json::json!({
+        "mode": "host-prereq",
+        "project-root": project_root.display().to_string(),
+        "platforms": platforms,
+        "findings": findings,
+    })
+}
+
 fn render_verify(statuses: &[PlatformStatus], project_root: &Path, platforms: &[String]) -> Value {
     let mut findings: Vec<Value> = Vec::new();
 
@@ -222,6 +241,14 @@ fn render_verify(statuses: &[PlatformStatus], project_root: &Path, platforms: &[
     if platforms.iter().any(|p| p == "ios") && shell_present(project_root, "ios") {
         findings.extend(ios_scaffold_drift_findings(project_root));
     }
+
+    let ios_present = statuses.iter().find(|s| s.platform == "ios").is_some_and(|s| s.present);
+    findings.extend(compile_stamp::compile_stamp_findings(
+        project_root,
+        platforms,
+        ios_present,
+        android_present,
+    ));
 
     serde_json::json!({
         "mode": "verify",

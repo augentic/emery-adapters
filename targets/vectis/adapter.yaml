@@ -14,6 +14,10 @@ platforms:
   default: [core, ios, android]
 prepare:
   argv: [prepare, build]
+host_prereq:
+  script: scripts/build-host-prereq.sh
+finalize_verify:
+  script: scripts/build-finalize-verify.sh
 catalog:
   infer: true
 extension:

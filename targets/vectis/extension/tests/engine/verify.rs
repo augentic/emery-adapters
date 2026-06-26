@@ -178,6 +178,40 @@ fn android_dir_without_kt_files_is_not_present() {
     );
 }
 
+// ── host-prereq mode ───────────────────────────────────────────────
+
+#[test]
+fn host_prereq_core_only_clean() {
+    let tmp = tempdir().unwrap();
+    write_project_yaml(tmp.path(), &["core"]);
+
+    let (result, code) = verify(&args(VerifyMode::HostPrereq, tmp.path()));
+    assert_eq!(result["mode"], "host-prereq");
+    let findings = result["findings"].as_array().expect("findings array");
+    assert!(findings.is_empty(), "core-only must not require host tools: {result}");
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn verify_compile_stamp_missing_when_ios_shell_without_stamp() {
+    let tmp = tempdir().unwrap();
+    write_project_yaml(tmp.path(), &["core", "ios"]);
+    scaffold_core(tmp.path());
+    let ios = tmp.path().join("iOS/TestApp");
+    std::fs::create_dir_all(&ios).expect("ios dir");
+    std::fs::write(ios.join("ContentView.swift"), "struct ContentView {}").expect("swift");
+    std::fs::write(tmp.path().join("iOS/project.yml"), "name: TestApp\n").expect("project yml");
+    specify_vectis::ios_scaffold::sync_ios_scaffold_files(tmp.path()).expect("sync");
+
+    let (result, code) = verify(&args(VerifyMode::Verify, tmp.path()));
+    assert_eq!(code, 1);
+    let findings = result["findings"].as_array().expect("findings");
+    assert!(
+        findings.iter().any(|f| f["id"] == "ios-verify-stamp-missing"),
+        "expected ios verify stamp finding: {result}"
+    );
+}
+
 // ── bootstrap-app-icon mode ────────────────────────────────────────
 
 #[test]
