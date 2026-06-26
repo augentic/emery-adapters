@@ -240,10 +240,7 @@ fn drift_message(relative_path: &str, on_disk: &str) -> String {
         } else if relative_path.ends_with("sim-build.sh")
             && !on_disk.contains(REQUIRED_SIM_DESTINATION)
         {
-            let _ = write!(
-                message,
-                " (sim-build.sh must set DEST='{REQUIRED_SIM_DESTINATION}')"
-            );
+            let _ = write!(message, " (sim-build.sh must set DEST='{REQUIRED_SIM_DESTINATION}')");
         } else if relative_path.ends_with("Makefile") && on_disk.contains("-destination") {
             let _ = write!(
                 message,
