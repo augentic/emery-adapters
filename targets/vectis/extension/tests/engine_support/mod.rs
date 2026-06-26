@@ -98,6 +98,9 @@ pub fn scaffold_android_verify_ready(project: &std::path::Path) {
     let apk_parent = project.join("Android/app/build/outputs/apk/debug");
     std::fs::create_dir_all(&apk_parent).expect("apk dir");
     std::fs::write(apk_parent.join("app-debug.apk"), b"PK").expect("apk");
+    let stamp_dir = project.join("Android/.vectis");
+    std::fs::create_dir_all(&stamp_dir).expect("mkdir .vectis");
+    std::fs::write(stamp_dir.join("verify.ok"), "test-stamp\n").expect("android verify stamp");
 }
 
 /// iOS shell with immutable scaffold files synced so `verify --mode verify`
@@ -110,4 +113,7 @@ pub fn scaffold_ios_verify_ready(project: &std::path::Path, app_name: &str) {
         .expect("write swift");
     std::fs::write(ios.join("project.yml"), format!("name: {app_name}\n")).expect("project.yml");
     specify_vectis::ios_scaffold::sync_ios_scaffold_files(project).expect("sync ios scaffold");
+    let stamp_dir = ios.join(".vectis");
+    std::fs::create_dir_all(&stamp_dir).expect("mkdir .vectis");
+    std::fs::write(stamp_dir.join("verify.ok"), "test-stamp\n").expect("ios verify stamp");
 }

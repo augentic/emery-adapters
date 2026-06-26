@@ -129,6 +129,9 @@ fn verify_android_toolchain_clean_after_setup_and_apk() {
     let apk_parent = tmp.path().join("Android/app/build/outputs/apk/debug");
     std::fs::create_dir_all(&apk_parent).expect("apk dir");
     std::fs::write(apk_parent.join("app-debug.apk"), b"PK").expect("apk");
+    let stamp_dir = tmp.path().join("Android/.vectis");
+    std::fs::create_dir_all(&stamp_dir).expect("mkdir .vectis");
+    std::fs::write(stamp_dir.join("verify.ok"), "test-stamp\n").expect("android verify stamp");
 
     let (rendered, code) = render_json(run_verify(&VerifyArgs {
         mode: VerifyMode::Verify,

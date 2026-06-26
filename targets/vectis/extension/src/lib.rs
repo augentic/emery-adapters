@@ -73,7 +73,7 @@ pub fn render_json(payload: &Value) -> String {
     about = "Validate Vectis UI artifacts, verify platform shells, materialize design-system exports, run slice-build prepare, sync scaffold files, infer shared components, render Crux project scaffolds, and retrieve tool-owned schemas.",
     long_about = "Vectis WASI command tool. Subcommands:\n  \
                   validate — validate Vectis UI artifacts (tokens, assets, layout, composition, all).\n  \
-                  verify  — verify declared platform shells are present on disk (verify, bootstrap-app-icon).\n  \
+                  verify  — verify declared platform shells are present on disk (verify, bootstrap-app-icon, host-prereq).\n  \
                   infer   — cluster structurally-identical groups in the composition baseline (name-free report).\n  \
                   materialize — convert canonical assets into per-platform exports (assets).\n  \
                   prepare — slice-build prepare orchestration (build).\n  \
