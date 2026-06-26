@@ -67,7 +67,7 @@ fn ios_host_prereq() -> Vec<Value> {
 }
 
 #[cfg(any(target_arch = "wasm32", not(target_os = "macos")))]
-fn ios_host_prereq() -> Vec<Value> {
+const fn ios_host_prereq() -> Vec<Value> {
     Vec::new()
 }
 
