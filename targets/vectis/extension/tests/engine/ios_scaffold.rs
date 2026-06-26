@@ -142,7 +142,7 @@ fn drift_findings_flag_named_simulator() {
         .expect("makefile");
 
     let findings = ios_scaffold_drift_findings(dir.path());
-    assert!(findings.len() >= 2);
+    assert_eq!(findings.len(), 3);
     assert!(findings.iter().all(|f| f["id"] == DRIFT_FINDING_ID));
     assert!(
         findings.iter().any(|f| {
@@ -150,6 +150,14 @@ fn drift_findings_flag_named_simulator() {
                 && f["message"].as_str().unwrap().contains("forbidden named simulator")
         }),
         "expected named simulator hint in Makefile finding: {findings:?}"
+    );
+    assert!(
+        findings.iter().any(|f| f["path"] == "iOS/.vectis/sim-build.sh"),
+        "expected missing sim-build.sh finding: {findings:?}"
+    );
+    assert!(
+        findings.iter().any(|f| f["path"] == "iOS/project.yml"),
+        "expected drifted project.yml finding: {findings:?}"
     );
 }
 
