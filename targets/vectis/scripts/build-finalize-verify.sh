@@ -10,7 +10,12 @@ PROJECT_DIR="$SPECIFY_PROJECT_DIR"
 SLICE_DIR="$SPECIFY_SLICE_DIR"
 PROJECT_YAML="${PROJECT_DIR}/.specify/project.yaml"
 
-mapfile -t platforms < <(grep -E '^\s*-\s+(core|ios|android|web|desktop)\s*$' "$PROJECT_YAML" | sed -E 's/^[[:space:]]*-[[:space:]]*//')
+cd "$PROJECT_DIR"
+
+platforms=()
+while IFS= read -r platform; do
+  [[ -n "$platform" ]] && platforms+=("$platform")
+done < <(grep -E '^\s*-\s+(core|ios|android|web|desktop)\s*$' "$PROJECT_YAML" | sed -E 's/^[[:space:]]*-[[:space:]]*//')
 
 platform_enabled() {
   local want="$1"

@@ -223,11 +223,7 @@ fn verify_host_prereq_core_only_exits_zero() {
     let tmp = tempdir().unwrap();
     write_project_yaml(tmp.path(), &["core"]);
 
-    let assert = vectis_verify()
-        .args(["--mode", "host-prereq"])
-        .arg(tmp.path())
-        .assert()
-        .success();
+    let assert = vectis_verify().args(["--mode", "host-prereq"]).arg(tmp.path()).assert().success();
     let value = parse_json(&assert.get_output().stdout);
 
     assert_eq!(value["mode"], "host-prereq");

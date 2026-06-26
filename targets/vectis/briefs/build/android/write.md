@@ -45,7 +45,7 @@ The `/spec:build` **orchestrator** runs the verify loop — not a sub-agent with
 
 ### Pre-flight (fail fast on misconfiguration)
 
-Before entering the loop, the orchestrator runs `specify extension run vectis -- verify --mode host-prereq` (also enforced at `slice build --phase prepare`). If host prerequisites are missing (`ANDROID_HOME`, Rust Android targets, Java 21), report **deferred** and stop — do not scaffold into a broken host.
+Before entering the loop, confirm host prerequisites via `specify slice build --phase prepare` (adapter `host_prereq` native script) or `specify extension run vectis -- verify --mode host-prereq` for an env-only advisory probe. If host prerequisites are missing (`ANDROID_HOME`, Rust Android targets, Java 21), report **deferred** and stop — do not scaffold into a broken host.
 
 `local.properties`, `org.gradle.java.home`, NDK substitution, and the vendored Gradle wrapper are handled by `make verify` via `make setup` (`vectis android setup` + `make setup-host`). Do not bootstrap the wrapper manually with `gradle wrapper`.
 

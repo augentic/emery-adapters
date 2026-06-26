@@ -11,7 +11,10 @@ if [[ ! -f "$PROJECT_YAML" ]]; then
   exit 1
 fi
 
-mapfile -t platforms < <(grep -E '^\s*-\s+(core|ios|android|web|desktop)\s*$' "$PROJECT_YAML" | sed -E 's/^[[:space:]]*-[[:space:]]*//')
+platforms=()
+while IFS= read -r platform; do
+  [[ -n "$platform" ]] && platforms+=("$platform")
+done < <(grep -E '^\s*-\s+(core|ios|android|web|desktop)\s*$' "$PROJECT_YAML" | sed -E 's/^[[:space:]]*-[[:space:]]*//')
 
 missing=()
 

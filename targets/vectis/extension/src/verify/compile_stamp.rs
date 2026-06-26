@@ -17,7 +17,8 @@ pub fn compile_stamp_findings(
 ) -> Vec<Value> {
     let mut findings = Vec::new();
 
-    if platforms.iter().any(|p| p == "ios") && ios_present
+    if platforms.iter().any(|p| p == "ios")
+        && ios_present
         && !project_root.join(IOS_VERIFY_STAMP).is_file()
     {
         findings.push(error_finding(
@@ -28,14 +29,13 @@ pub fn compile_stamp_findings(
         ));
     }
 
-    if platforms.iter().any(|p| p == "android") && android_present
+    if platforms.iter().any(|p| p == "android")
+        && android_present
         && !project_root.join(ANDROID_VERIFY_STAMP).is_file()
     {
         findings.push(error_finding(
             "android-verify-stamp-missing",
-            format!(
-                "`{ANDROID_VERIFY_STAMP}` not found; run `make verify` in the Android shell"
-            ),
+            format!("`{ANDROID_VERIFY_STAMP}` not found; run `make verify` in the Android shell"),
         ));
     }
 

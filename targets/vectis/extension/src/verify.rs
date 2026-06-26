@@ -12,8 +12,10 @@
 //!   for every declared UI platform (`ios` / `android`), exiting
 //!   non-zero when one is neither shell-resident (RFC-46 §6.3) nor
 //!   satisfiable from `design-system/assets.yaml` (§4.1).
-//! - **host-prereq** (prepare-time): probes host toolchain env (Android
-//!   SDK home, Rust Android targets, `xcodebuild`) before codegen.
+//! - **host-prereq** (advisory): probes host env visible to the WASI guest
+//!   (`ANDROID_HOME`). Rust Android targets and `xcodebuild` depth checks run
+//!   only in native builds of this crate; prepare-time gating is the adapter's
+//!   native `host_prereq` script (`scripts/build-host-prereq.sh`).
 
 mod android_toolchain;
 mod app_icon;

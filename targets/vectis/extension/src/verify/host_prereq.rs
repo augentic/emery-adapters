@@ -1,9 +1,13 @@
 //! Host toolchain prerequisite probes for `verify --mode host-prereq`.
 //!
-//! Runs inside the WASI guest; uses environment variables and filesystem
-//! probes only (no process spawn).
+//! Operators may invoke this mode directly via `specify extension run vectis`.
+//! Authoritative prepare-time gating is the adapter's native
+//! `host_prereq` script (`scripts/build-host-prereq.sh`), which the Specify
+//! CLI runs on the host. The WASI guest only probes environment variables
+//! visible in-process; filesystem depth checks (rustup targets, `xcodebuild`)
+//! run only on native (non-WASM) builds of this crate.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use serde_json::{Value, json};
 
@@ -40,7 +44,7 @@ fn android_host_prereq() -> Vec<Value> {
         ));
     }
 
-    if !android_rust_targets_installed() {
+    if host_depth_probe_available() && !android_rust_targets_installed() {
         findings.push(error_finding(
             "android-rust-target-missing",
             "Rust Android targets not installed; run `rustup target add aarch64-linux-android armv7-linux-androideabi`",
@@ -51,6 +55,10 @@ fn android_host_prereq() -> Vec<Value> {
 }
 
 fn ios_host_prereq() -> Vec<Value> {
+    if !host_depth_probe_available() {
+        return Vec::new();
+    }
+
     #[cfg(target_os = "macos")]
     {
         if xcodebuild_available() {
@@ -68,6 +76,18 @@ fn ios_host_prereq() -> Vec<Value> {
     }
 }
 
+/// Depth probes need native host filesystem access; the shipped WASM guest
+/// cannot read `~/.rustup` or macOS Xcode paths reliably.
+#[cfg(target_arch = "wasm32")]
+const fn host_depth_probe_available() -> bool {
+    false
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+const fn host_depth_probe_available() -> bool {
+    true
+}
+
 #[cfg(target_os = "macos")]
 fn xcodebuild_available() -> bool {
     if let Ok(developer_dir) = std::env::var("DEVELOPER_DIR") {
@@ -77,12 +97,9 @@ fn xcodebuild_available() -> bool {
         }
     }
 
-    [
-        "/usr/bin/xcodebuild",
-        "/Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild",
-    ]
-    .iter()
-    .any(|path| Path::new(path).is_file())
+    ["/usr/bin/xcodebuild", "/Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild"]
+        .iter()
+        .any(|path| std::path::Path::new(path).is_file())
 }
 
 fn android_rust_targets_installed() -> bool {
@@ -96,9 +113,7 @@ fn android_rust_targets_installed() -> bool {
 
     toolchains.flatten().any(|entry| {
         let lib = entry.path().join("lib/rustlib");
-        ANDROID_RUST_TARGETS
-            .iter()
-            .all(|target| lib.join(target).is_dir())
+        ANDROID_RUST_TARGETS.iter().all(|target| lib.join(target).is_dir())
     })
 }
 
@@ -107,11 +122,7 @@ fn rustup_home() -> Option<PathBuf> {
         .ok()
         .filter(|v| !v.is_empty())
         .map(PathBuf::from)
-        .or_else(|| {
-            std::env::var("HOME")
-                .ok()
-                .map(|home| PathBuf::from(home).join(".rustup"))
-        })
+        .or_else(|| std::env::var("HOME").ok().map(|home| PathBuf::from(home).join(".rustup")))
         .filter(|path| path.is_dir())
 }
 
