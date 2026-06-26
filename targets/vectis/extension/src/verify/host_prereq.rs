@@ -54,26 +54,21 @@ fn android_host_prereq() -> Vec<Value> {
     findings
 }
 
+#[cfg(all(not(target_arch = "wasm32"), target_os = "macos"))]
 fn ios_host_prereq() -> Vec<Value> {
-    if !host_depth_probe_available() {
-        return Vec::new();
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        if xcodebuild_available() {
-            Vec::new()
-        } else {
-            vec![error_finding(
-                "ios-xcodebuild-missing",
-                "xcodebuild not found; install Xcode command-line tools when ios is in project platforms",
-            )]
-        }
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
+    if xcodebuild_available() {
         Vec::new()
+    } else {
+        vec![error_finding(
+            "ios-xcodebuild-missing",
+            "xcodebuild not found; install Xcode command-line tools when ios is in project platforms",
+        )]
     }
+}
+
+#[cfg(any(target_arch = "wasm32", not(target_os = "macos")))]
+fn ios_host_prereq() -> Vec<Value> {
+    Vec::new()
 }
 
 /// Depth probes need native host filesystem access; the shipped WASM guest
