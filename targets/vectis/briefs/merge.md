@@ -59,6 +59,7 @@ cd "$PROJECT_DIR" && cargo clippy --all-targets
 cd "$PROJECT_DIR" && cargo test
 
 # iOS, when ${PROJECT_DIR}/iOS exists
+cd "$PROJECT_DIR" && specify extension run vectis -- sync ios-scaffold
 cd "$PROJECT_DIR/iOS" && make build
 cd "$PROJECT_DIR/iOS" && make sim-build
 

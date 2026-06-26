@@ -87,7 +87,7 @@ targets:
 
 ## `iOS/Makefile`
 
-Scaffold files (`Makefile`, `project.yml`) are authoritative from `specify extension run vectis -- scaffold ios <APP_NAME>` — do not hand-copy from this example. The block below matches the embedded template for reference only; Swift sections below demonstrate shell patterns.
+Scaffold files (`Makefile`, `project.yml`, `iOS/.vectis/sim-build.sh`) are authoritative from `specify extension run vectis -- scaffold ios <APP_NAME>` — do not hand-copy from this example. The blocks below match the embedded template for reference only; Swift sections demonstrate shell patterns.
 
 ```makefile
 .PHONY: all build clean typegen package xcode sim-build
@@ -119,17 +119,13 @@ xcode:
 	@xcodegen
 
 sim-build:
-	@xcodebuild build \
-		-project Counter.xcodeproj \
-		-scheme Counter \
-		-destination 'generic/platform=iOS Simulator' \
-		-configuration Debug \
-		CODE_SIGNING_ALLOWED=NO \
-		2>&1 | xcbeautify
+	@bash "$(dir $(lastword $(MAKEFILE_LIST)))/.vectis/sim-build.sh"
 
 clean:
 	@rm -rf generated/ *.xcodeproj
 ```
+
+`iOS/.vectis/sim-build.sh` holds the fixed `generic/platform=iOS Simulator` destination; see the embedded template under `extension/templates/ios/.vectis/sim-build.sh`.
 
 ## `iOS/Counter/CounterApp.swift`
 
