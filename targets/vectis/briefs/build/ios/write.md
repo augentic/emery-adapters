@@ -11,7 +11,7 @@ Inspect `${IOS_SHELL_DIR}` for any `.swift` files:
 - No Swift files → **create mode**: scaffold with `specify extension run vectis -- scaffold ios <APP_NAME> [--caps <csv>]`, then enter update mode. Do not create Swift files before scaffold — scaffold must be the first write to `iOS/`.
 - Swift files present → **update mode**: diff core types against existing Swift code and apply targeted edits.
 
-Spawn the writer sub-agent with `mode: create|update` and `skip_verification: true`; the dedicated verify sub-agent (§ Verify) runs afterward.
+Spawn the writer sub-agent with `mode: create|update` and `skip_verification: true`; the orchestrator runs the verify loop (§ Verify) after the writer returns.
 
 ## Writer steps
 
@@ -35,21 +35,32 @@ Spawn the writer sub-agent with `mode: create|update` and `skip_verification: tr
 Full set at [`hard-rules-ios.md`](../../../references/hard-rules-ios.md). Highlights:
 
 - Create mode must run `vectis scaffold ios` before any Swift files exist under `iOS/`.
-- Never edit `iOS/Makefile` or `iOS/project.yml` — prepare and `vectis sync ios-scaffold` auto-sync them from the embedded template.
-- Never substitute a named simulator destination (`name=iPhone …`); `sim-build` uses `generic/platform=iOS Simulator` only.
+- Never edit `iOS/Makefile`, `iOS/project.yml`, or `iOS/.vectis/sim-build.sh` — prepare and `vectis sync ios-scaffold` auto-sync them from the embedded template.
+- Never substitute a named simulator destination (`name=iPhone …`); `sim-build` uses `generic/platform=iOS Simulator` via the CLI-owned script only.
 
 ## Verify (max 3 iterations)
 
-Spawn this loop in its own sub-agent with `IOS_SHELL_DIR` and `APP_NAME`. The sub-agent returns `status`, `iterations_used`, and any unresolved errors. The verify sub-agent is the **sole source of truth** for iOS shell checkboxes in `tasks.md` — never mark an iOS task complete or report success unless `make build` and `make sim-build` have actually run and passed in the verify loop.
+The `/spec:build` **orchestrator** runs the verify loop — not a sub-agent with shell access. The orchestrator is the **sole source of truth** for iOS shell checkboxes in `tasks.md`; never mark an iOS task complete or report success unless all four commands below have actually run and passed in the same iteration.
+
+After the writer sub-agent returns, the orchestrator runs `specify extension run vectis -- sync ios-scaffold` once, then executes this loop (max 3 iterations):
 
 ```bash
 specify extension run vectis -- sync ios-scaffold              # 0. CLI repair — every iteration.
 swiftformat "${IOS_SHELL_DIR}/${APP_NAME}/"                    # 1. Format.
 cd "$IOS_SHELL_DIR" && make build                              # 2. Build (typegen + package + xcodegen).
-cd "$IOS_SHELL_DIR" && make sim-build                          # 3. Simulator build.
+cd "$IOS_SHELL_DIR" && make sim-build                          # 3. Simulator build (delegates to .vectis/sim-build.sh).
 ```
 
-If a step fails, fix the issue and re-run from step 0. Repeat until all three checks pass or 3 iterations are exhausted. **Verify-repair scope:** fixes are limited to Swift under `iOS/<APP_NAME>/`, plus `Theme/`, `Components/`, and `Resources/`. `iOS/Makefile` and `iOS/project.yml` are out of scope — if `sim-build` fails with a destination / simulator-not-found error, run `specify extension run vectis -- sync ios-scaffold`, retry `make sim-build` once, and only then proceed to Swift repair; never patch the Makefile by hand. If the same error recurs across iterations with no change in output, stop early. If still failing after 3 iterations: **stop**, report the remaining failures with full error output, and escalate.
+On failure the orchestrator captures stderr and spawns a **repair-only** sub-agent (`task: ios-verify-repair`) with:
+
+- `forbidden_paths: [iOS/Makefile, iOS/project.yml, iOS/.vectis/sim-build.sh]`
+- `allowed_paths: iOS/<APP_NAME>/**/*.swift, Theme/, Components/, Resources/`
+- `error_output:` the captured stderr from the failing step
+- **No shell** — the sub-agent returns edited Swift files or a patch plan only; the orchestrator applies edits and re-runs the loop from step 0.
+
+**Destination / simulator-not-found errors:** the orchestrator runs `sync ios-scaffold` again and retries the same four commands. Never edit Makefile, `project.yml`, or `sim-build.sh`. Never run `xcodebuild` with a named device destination. If generic destination still fails after sync + retry, escalate — do not substitute `name=iPhone …`.
+
+If still failing after 3 iterations: **stop**, report the remaining failures with full error output, and escalate.
 
 If the iOS app panics with `UniFFI contract version mismatch`, the installed `cargo-swift` version is incompatible with the active Vectis version pins — surface this to the operator (it is typically a template / pin drift fix; see [../../build.md](../../build.md) § Template / version-pin drift handling).
 

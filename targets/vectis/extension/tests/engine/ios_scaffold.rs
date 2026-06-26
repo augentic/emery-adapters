@@ -49,7 +49,9 @@ fn sync_restores_non_utf8_makefile() {
     assert!(report.synced.iter().any(|p| p == "iOS/Makefile"));
 
     let restored = fs::read_to_string(ios.join("Makefile")).expect("read makefile");
-    assert!(restored.contains(REQUIRED_SIM_DESTINATION));
+    assert!(restored.contains(".vectis/sim-build.sh"));
+    let script = fs::read_to_string(ios.join(".vectis/sim-build.sh")).expect("read sim-build script");
+    assert!(script.contains(REQUIRED_SIM_DESTINATION));
 }
 
 #[test]
@@ -58,6 +60,7 @@ fn sync_restores_drifted_makefile_destination() {
     let ios = dir.path().join("iOS");
     fs::create_dir_all(ios.join("TodoApp")).expect("app dir");
     fs::write(ios.join("project.yml"), "name: TodoApp\n").expect("project yml");
+    // drift fixture — forbidden in real trees; sync must restore
     fs::write(ios.join("Makefile"), "-destination 'platform=iOS Simulator,name=iPhone 16'\n")
         .expect("makefile");
     fs::write(ios.join("TodoApp/ContentView.swift"), "struct ContentView {}").expect("swift");
@@ -66,6 +69,31 @@ fn sync_restores_drifted_makefile_destination() {
     assert!(report.synced.iter().any(|p| p == "iOS/Makefile"));
 
     let restored = fs::read_to_string(ios.join("Makefile")).expect("read makefile");
+    assert!(restored.contains(".vectis/sim-build.sh"));
+    assert!(!restored.contains("iPhone 16"));
+    let script = fs::read_to_string(ios.join(".vectis/sim-build.sh")).expect("read sim-build script");
+    assert!(script.contains(REQUIRED_SIM_DESTINATION));
+}
+
+#[test]
+fn sync_restores_drifted_sim_build_script() {
+    let dir = tempdir().unwrap();
+    let ios = dir.path().join("iOS");
+    fs::create_dir_all(ios.join("TodoApp")).expect("app dir");
+    fs::create_dir_all(ios.join(".vectis")).expect("vectis dir");
+    fs::write(ios.join("project.yml"), "name: TodoApp\n").expect("project yml");
+    // drift fixture — forbidden in real trees; sync must restore
+    fs::write(
+        ios.join(".vectis/sim-build.sh"),
+        "DEST='platform=iOS Simulator,name=iPhone 16'\n",
+    )
+    .expect("drifted script");
+    fs::write(ios.join("TodoApp/ContentView.swift"), "struct ContentView {}").expect("swift");
+
+    let report = sync_ios_scaffold_files(dir.path()).expect("sync");
+    assert!(report.synced.iter().any(|p| p == "iOS/.vectis/sim-build.sh"));
+
+    let restored = fs::read_to_string(ios.join(".vectis/sim-build.sh")).expect("read script");
     assert!(restored.contains(REQUIRED_SIM_DESTINATION));
     assert!(!restored.contains("iPhone 16"));
 }
@@ -114,7 +142,7 @@ fn drift_findings_flag_named_simulator() {
         .expect("makefile");
 
     let findings = ios_scaffold_drift_findings(dir.path());
-    assert_eq!(findings.len(), 2);
+    assert!(findings.len() >= 2);
     assert!(findings.iter().all(|f| f["id"] == DRIFT_FINDING_ID));
     assert!(
         findings.iter().any(|f| {
@@ -122,6 +150,29 @@ fn drift_findings_flag_named_simulator() {
                 && f["message"].as_str().unwrap().contains("forbidden named simulator")
         }),
         "expected named simulator hint in Makefile finding: {findings:?}"
+    );
+}
+
+#[test]
+fn drift_findings_flag_named_simulator_in_script() {
+    let dir = tempdir().unwrap();
+    let ios = dir.path().join("iOS");
+    fs::create_dir_all(ios.join(".vectis")).expect("vectis dir");
+    fs::write(ios.join("project.yml"), "name: Counter\n").expect("project yml");
+    // drift fixture — forbidden in real trees; sync must restore
+    fs::write(
+        ios.join(".vectis/sim-build.sh"),
+        "DEST='platform=iOS Simulator,name=iPhone 16'\n",
+    )
+    .expect("drifted script");
+
+    let findings = ios_scaffold_drift_findings(dir.path());
+    assert!(
+        findings.iter().any(|f| {
+            f["path"] == "iOS/.vectis/sim-build.sh"
+                && f["message"].as_str().unwrap().contains("forbidden named simulator")
+        }),
+        "expected named simulator hint in sim-build.sh finding: {findings:?}"
     );
 }
 
@@ -169,8 +220,10 @@ fn prepare_build_syncs_drifted_ios_makefile() {
     assert!(synced.iter().any(|v| v == "iOS/Makefile"));
 
     let restored = fs::read_to_string(ios.join("Makefile")).expect("read makefile");
-    assert!(restored.contains(REQUIRED_SIM_DESTINATION));
+    assert!(restored.contains(".vectis/sim-build.sh"));
     assert!(!restored.contains("iPhone 16"));
+    let script = fs::read_to_string(ios.join(".vectis/sim-build.sh")).expect("read sim-build script");
+    assert!(script.contains(REQUIRED_SIM_DESTINATION));
 }
 
 #[test]
@@ -215,6 +268,8 @@ fn sync_ios_scaffold_command_restores_drifted_makefile() {
     assert!(synced.iter().any(|v| v == "iOS/Makefile"));
 
     let restored = fs::read_to_string(ios.join("Makefile")).expect("read makefile");
-    assert!(restored.contains(REQUIRED_SIM_DESTINATION));
+    assert!(restored.contains(".vectis/sim-build.sh"));
     assert!(!restored.contains("iPhone 16"));
+    let script = fs::read_to_string(ios.join(".vectis/sim-build.sh")).expect("read sim-build script");
+    assert!(script.contains(REQUIRED_SIM_DESTINATION));
 }

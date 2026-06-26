@@ -10,7 +10,7 @@ use serde::Deserialize;
 
 const SCHEMA_VERSION: i64 = 1;
 const INCLUDE_STR_PREFIX: &str = "../../../templates";
-const EXPECTED_COUNTS: &[(&str, usize)] = &[("core", 13), ("ios", 8), ("android", 23)];
+const EXPECTED_COUNTS: &[(&str, usize)] = &[("core", 13), ("ios", 9), ("android", 23)];
 const ASSEMBLY_ORDER: &[&str] = &["core", "ios", "android"];
 const MANIFEST_IGNORED: &str = "MANIFEST.md";
 

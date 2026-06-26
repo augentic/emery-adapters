@@ -102,6 +102,12 @@ pub mod ios {
             include_when: IncludeWhen::Always,
         },
         TemplateEntry {
+            target: "iOS/.vectis/sim-build.sh",
+            contents: include_str!("../../../templates/ios/.vectis/sim-build.sh"),
+            path_mode: PathMode::AppName,
+            include_when: IncludeWhen::Always,
+        },
+        TemplateEntry {
             target: "iOS/__APP_NAME__/__APP_NAME__App.swift",
             contents: include_str!("../../../templates/ios/App.swift"),
             path_mode: PathMode::AppName,

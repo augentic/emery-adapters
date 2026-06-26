@@ -18,7 +18,7 @@ use super::*;
 const CORE_RENDER_ONLY_SHA256: &str =
     "bebbee1712d022f2c18d75edd8089c856fa4871f99cf495698fe38d4bf2d6c36";
 const IOS_RENDER_ONLY_SHA256: &str =
-    "7afaa3b003788ed702dff8e9a7d0072aea3bb40c8d363ab86cba72bf39978eb7";
+    "9a122359ca6a95d3938e5cb87eb46142b04cd63f63ec9af1ae4d75bf27ef15e9";
 const ANDROID_RENDER_ONLY_SHA256: &str =
     "dcc38a13e7d85b981d2975b631ba3b50514b8dab33fed59e259d8dc7ca94d8b7";
 

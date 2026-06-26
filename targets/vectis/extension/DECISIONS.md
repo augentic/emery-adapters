@@ -355,16 +355,17 @@ _Codified in: `src/verify.rs` (`run`, `check_platform`,
 
 ### §L — iOS scaffold file immutability
 
-> `iOS/Makefile` and `iOS/project.yml` are agent-immutable. They
-> render exclusively from the embedded iOS assembly templates; the
-> `sim-build` destination is always
-> `generic/platform=iOS Simulator`.
+> `iOS/Makefile`, `iOS/project.yml`, and `iOS/.vectis/sim-build.sh` are
+> agent-immutable. They render exclusively from the embedded iOS assembly
+> templates. The simulator destination lives only in `sim-build.sh` as
+> `generic/platform=iOS Simulator`; the Makefile delegates `sim-build` to
+> that script.
 >
-> Prepare (`vectis prepare build`) auto-syncs both files when `ios`
-> is declared and `iOS/` exists. `vectis sync ios-scaffold` repairs
-> the same files in-loop during verify without prepare side effects.
-> Verify (`vectis verify --mode verify`) emits `ios-scaffold-file-drift`
-> error findings when on-disk bytes diverge.
+> Prepare (`vectis prepare build`) auto-syncs all three paths when `ios`
+> is declared and `iOS/` exists. `vectis sync ios-scaffold` repairs the
+> same files in-loop during verify without prepare side effects. Verify
+> (`vectis verify --mode verify`) emits `ios-scaffold-file-drift` error
+> findings when on-disk bytes diverge.
 
 _Codified in: `src/ios_scaffold.rs`; wired from `src/prepare.rs`,
 `src/sync.rs`, and `src/verify.rs`._

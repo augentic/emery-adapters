@@ -1,8 +1,9 @@
 //! iOS agent-immutable scaffold file sync and drift detection.
 //!
-//! `iOS/Makefile` and `iOS/project.yml` are rendered exclusively from the
-//! embedded scaffold templates. Prepare overwrites drift before agent work;
-//! verify emits blocking findings when on-disk bytes diverge.
+//! `iOS/Makefile`, `iOS/project.yml`, and `iOS/.vectis/sim-build.sh` are
+//! rendered exclusively from the embedded scaffold templates. Prepare
+//! overwrites drift before agent work; verify emits blocking findings when
+//! on-disk bytes diverge.
 
 use std::fmt::Write;
 use std::fs;
@@ -14,12 +15,13 @@ use crate::VectisError;
 use crate::scaffold::{Versions, default_android_package, plan_ios, validate_app_name};
 
 /// Relative paths under the project root that agents must never edit.
-pub const IMMUTABLE_RELATIVE_PATHS: [&str; 2] = ["iOS/Makefile", "iOS/project.yml"];
+pub const IMMUTABLE_RELATIVE_PATHS: [&str; 3] =
+    ["iOS/Makefile", "iOS/project.yml", "iOS/.vectis/sim-build.sh"];
 
 /// Diagnostic id for scaffold drift findings.
 pub const DRIFT_FINDING_ID: &str = "ios-scaffold-file-drift";
 
-/// Required `sim-build` destination literal in the Makefile template.
+/// Required `sim-build` destination literal in the CLI-owned sim-build script.
 pub const REQUIRED_SIM_DESTINATION: &str = "generic/platform=iOS Simulator";
 
 /// JSON fragment for `scaffold_sync.ios` in prepare and sync command output.
@@ -229,15 +231,24 @@ fn drift_message(relative_path: &str, on_disk: &str) -> String {
     let mut message = format!(
         "{relative_path} diverges from the embedded iOS scaffold template; agents must not edit this file — run `vectis sync ios-scaffold` or `specify slice build --phase prepare`"
     );
-    if relative_path.ends_with("Makefile") {
+    if relative_path.ends_with("Makefile") || relative_path.ends_with("sim-build.sh") {
         if on_disk.contains("name=iPhone") || on_disk.contains("platform=iOS Simulator,name=") {
             let _ = write!(
                 message,
                 " (forbidden named simulator destination; required: '{REQUIRED_SIM_DESTINATION}')"
             );
-        } else if !on_disk.contains(REQUIRED_SIM_DESTINATION) {
-            let _ =
-                write!(message, " (sim-build must use -destination '{REQUIRED_SIM_DESTINATION}')");
+        } else if relative_path.ends_with("sim-build.sh")
+            && !on_disk.contains(REQUIRED_SIM_DESTINATION)
+        {
+            let _ = write!(
+                message,
+                " (sim-build.sh must set DEST='{REQUIRED_SIM_DESTINATION}')"
+            );
+        } else if relative_path.ends_with("Makefile") && on_disk.contains("-destination") {
+            let _ = write!(
+                message,
+                " (Makefile must delegate sim-build to iOS/.vectis/sim-build.sh — do not inline xcodebuild -destination)"
+            );
         }
     }
     message

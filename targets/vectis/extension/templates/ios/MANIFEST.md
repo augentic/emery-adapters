@@ -5,7 +5,7 @@ registry is [`../manifest.yaml`](../manifest.yaml) (`assemblies.ios`); `build.rs
 
 Source filenames are flat under `templates/ios/`. Nested target paths (especially the `iOS/__APP_NAME__/...` segment) are declared in `manifest.yaml`. The `__APP_NAME__` segment in target paths is substituted by the engine when writing each file, the same as inside file contents (e.g. `__APP_NAME__App.swift` becomes `CounterApp.swift`).
 
-Total: 7 files (matches the file manifest contract for iOS assembly).
+Total: 9 files (matches the file manifest contract for iOS assembly).
 
 ## Agent-immutable scaffold files
 
@@ -13,8 +13,9 @@ These paths are CLI-owned — agents must never author or edit them. `specify sl
 
 | Path | Policy |
 | ---- | ------ |
-| `iOS/Makefile` | Fully immutable for agents. `sim-build` must use `-destination 'generic/platform=iOS Simulator'` — never a named device (`name=iPhone …`). |
+| `iOS/Makefile` | Fully immutable for agents. `sim-build` delegates to `iOS/.vectis/sim-build.sh` — never inline `xcodebuild -destination`. |
 | `iOS/project.yml` | Fully immutable for agents. XcodeGen picks up nested theme / component / asset directories automatically. |
+| `iOS/.vectis/sim-build.sh` | Fully immutable for agents. Must set `DEST='generic/platform=iOS Simulator'` — never a named device (`name=iPhone …`). |
 
 Swift sources under `iOS/<APP_NAME>/` (except the scaffold-only starter layout in create mode) and generated `Theme/`, `Components/`, `Resources/` remain agent-writable per the iOS build brief.
 
@@ -87,4 +88,4 @@ If hot-reload returns, it can be added as a cap-style toggle
 
 ## Self-check
 
-Orphan detection and file-count parity (7 files) run in `build.rs` when the crate builds. After adding or renaming a template file, update [`../manifest.yaml`](../manifest.yaml) in the same change.
+Orphan detection and file-count parity (9 files) run in `build.rs` when the crate builds. After adding or renaming a template file, update [`../manifest.yaml`](../manifest.yaml) in the same change.

@@ -441,6 +441,7 @@ fn verify_ios_makefile_drift_exits_one() {
     let ios = tmp.path().join("iOS");
     std::fs::write(
         ios.join("Makefile"),
+        // drift fixture — forbidden in real trees; sync must restore
         "sim-build:\n\t@xcodebuild -destination 'platform=iOS Simulator,name=iPhone 16'\n",
     )
     .expect("write makefile");

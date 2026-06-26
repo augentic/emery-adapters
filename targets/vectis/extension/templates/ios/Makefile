@@ -29,15 +29,9 @@ xcode:
 	@echo "Generating Xcode project..."
 	@xcodegen
 
-# Build the iOS app for the simulator
+# Build the iOS app for the simulator (destination lives in .vectis/sim-build.sh)
 sim-build:
-	@xcodebuild build \
-		-project __APP_NAME__.xcodeproj \
-		-scheme __APP_NAME__ \
-		-destination 'generic/platform=iOS Simulator' \
-		-configuration Debug \
-		CODE_SIGNING_ALLOWED=NO \
-		2>&1 | xcbeautify
+	@bash "$(dir $(lastword $(MAKEFILE_LIST)))/.vectis/sim-build.sh"
 
 clean:
 	@rm -rf generated/ *.xcodeproj
