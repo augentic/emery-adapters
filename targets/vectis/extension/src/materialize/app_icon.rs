@@ -6,18 +6,17 @@ mod ios;
 
 use std::path::Path;
 
-pub use canvas::{LAUNCHER_CANVAS_SIZE, decode_to_launcher_canvas};
+pub use canvas::{LAUNCHER_CANVAS_SIZE, LauncherCanvas, decode_to_launcher_canvas};
 use serde_json::{Value, json};
 
 use crate::materialize::icons::{active_platform_pin, asset_error, materialized_entry};
 use crate::materialize::paths::{Platform, export_layout, resolve_under_assets_dir};
-use crate::materialize::{MaterializeFilter, matches_only};
+use crate::materialize::{MaterializeFilter, MaterializeSink, matches_only};
 
 /// Materialize `role: app-icon` entries with a canonical `source:` master.
 pub fn materialize_app_icons(
     assets_dir: &Path, assets: &serde_json::Map<String, Value>, platforms: &[String],
-    filter: &MaterializeFilter<'_>, materialized: &mut Vec<Value>, skipped_pins: &mut Vec<Value>,
-    errors: &mut Vec<Value>,
+    filter: &MaterializeFilter<'_>, sink: &mut MaterializeSink<'_>,
 ) {
     for (asset_id, entry) in assets {
         if !matches_only(asset_id, filter.only) {
@@ -31,13 +30,15 @@ pub fn materialize_app_icons(
         };
         let source_path = assets_dir.join(source_rel);
 
-        let canvas = match decode_to_launcher_canvas(&source_path, source_rel, asset_id) {
+        let launcher = match decode_to_launcher_canvas(&source_path, source_rel, asset_id) {
             Ok(canvas) => canvas,
             Err(message) => {
-                errors.push(asset_error(asset_id, &message));
+                sink.errors.push(asset_error(asset_id, &message));
                 continue;
             }
         };
+
+        record_app_icon_normalization(sink.normalized, asset_id, &launcher);
 
         let kind = entry.get("kind").and_then(Value::as_str).unwrap_or("vector");
 
@@ -46,7 +47,7 @@ pub fn materialize_app_icons(
                 continue;
             };
             if let Some(pin) = active_platform_pin(entry, platform_name, assets_dir) {
-                skipped_pins.push(json!({
+                sink.skipped_pins.push(json!({
                     "asset_id": asset_id,
                     "platform": platform_name,
                     "pin": pin,
@@ -60,20 +61,20 @@ pub fn materialize_app_icons(
 
             let result = match platform {
                 Platform::Ios => {
-                    materialize_ios(asset_id, assets_dir, &layout, &canvas, filter.dry_run)
+                    materialize_ios(asset_id, assets_dir, &layout, &launcher.image, filter.dry_run)
                 }
                 Platform::Android => materialize_android(
                     asset_id,
                     entry,
                     assets_dir,
                     &layout,
-                    &canvas,
+                    &launcher.image,
                     filter.dry_run,
                 ),
             };
             match result {
-                Ok(written) => materialized.extend(written),
-                Err(message) => errors.push(asset_error(asset_id, &message)),
+                Ok(written) => sink.materialized.extend(written),
+                Err(message) => sink.errors.push(asset_error(asset_id, &message)),
             }
         }
     }
@@ -124,6 +125,19 @@ fn materialize_android(
         .iter()
         .map(|path| materialized_entry(asset_id, Platform::Android, path))
         .collect())
+}
+
+fn record_app_icon_normalization(
+    normalized: &mut Vec<Value>, asset_id: &str, launcher: &LauncherCanvas,
+) {
+    let mut transforms = Vec::new();
+    if let Some(report) = &launcher.normalization {
+        transforms.extend(report.transforms.iter().copied());
+    }
+    if launcher.has_transparency {
+        transforms.push("composited-transparent-background");
+    }
+    crate::materialize::push_normalization_entry(normalized, asset_id, &transforms);
 }
 
 // The public `materialize_app_icons` funnel is exercised end-to-end through the

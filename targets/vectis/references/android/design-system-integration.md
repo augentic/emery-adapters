@@ -313,6 +313,8 @@ operators may also run `specify extension run vectis -- materialize assets` manu
 after editing canonical masters. Committed `exports/` trees are version-controlled
 — CI and shell builds consume them without re-running materialize on every job.
 
+Figma-exported **`kind: vector` masters** (icons, decorative chrome, illustrations, and app-icon SVG) may include no-op clip wrappers and group opacity; `vectis materialize assets` normalizes these automatically. **App-icon masters** may include transparent backgrounds (PNG alpha or SVG without a full-bleed background); materialize accepts them and composites at export — white for iOS `AppIcon.png`, launcher `tint` token background for Android adaptive icons. Unsupported after normalization: real clips, gradients, patterns, masks, filters, text, embedded images.
+
 Build hand-off is **materialize-then-copy**: the Android writer **copies**
 files from each entry's resolved `sources.android` export path(s) into the app
 module's `res/` tree at generation time. The canonical `source:` file is

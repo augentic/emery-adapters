@@ -63,6 +63,49 @@ assets:
     assert_eq!((img_xxxhdpi.width(), img_xxxhdpi.height()), (96, 96));
 }
 
+const FIGMA_CLIP_ILLUSTRATION: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" width="240" height="160">
+  <defs>
+    <clipPath id="clip"><path d="M0 0h240v160H0z"/></clipPath>
+  </defs>
+  <g clip-path="url(#clip)">
+    <rect width="240" height="160" fill="#AABBCC"/>
+  </g>
+</svg>"##;
+
+#[test]
+fn materialize_figma_style_illustration_exports_exist() {
+    let tmp = tempdir().unwrap();
+    let design = tmp.path().join("design-system");
+    fs::create_dir_all(design.join("assets")).unwrap();
+    fs::write(design.join("assets/onboarding-hero.svg"), FIGMA_CLIP_ILLUSTRATION).unwrap();
+
+    let yaml = r#"version: 1
+assets:
+  onboarding-hero:
+    kind: vector
+    role: illustration
+    alt: "Hero"
+    source: assets/onboarding-hero.svg
+"#;
+    let assets_path = design.join("assets.yaml");
+    fs::write(&assets_path, yaml).unwrap();
+
+    let assert = vectis_materialize().args(["assets"]).arg(&assets_path).assert().success();
+    let value = parse_json(&assert.get_output().stdout);
+    assert_eq!(value["errors"].as_array().map(Vec::len), Some(0));
+
+    let ios_2x = design.join("assets/exports/ios/onboarding-hero.imageset/onboarding-hero@2x.png");
+    let ios_3x = design.join("assets/exports/ios/onboarding-hero.imageset/onboarding-hero@3x.png");
+    let android_mdpi = design.join("assets/exports/android/drawable-mdpi/onboarding_hero.png");
+    let android_xxxhdpi =
+        design.join("assets/exports/android/drawable-xxxhdpi/onboarding_hero.png");
+    assert!(ios_2x.is_file() && ios_3x.is_file());
+    assert!(android_mdpi.is_file() && android_xxxhdpi.is_file());
+
+    let normalized = value["normalized"].as_array().expect("normalized");
+    assert!(normalized.iter().any(|entry| entry["asset_id"] == "onboarding-hero"));
+}
+
 // Re-homed from `src/materialize/raster_copy.rs`: copy-only `role: photo`
 // per-density masters for both the ios imageset (`@2x`) and the android
 // drawable-density (`mdpi`) branches, asserting byte-identical copies. Running

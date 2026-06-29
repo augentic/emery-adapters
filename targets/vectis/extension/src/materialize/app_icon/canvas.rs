@@ -2,19 +2,30 @@
 
 use std::path::Path;
 
-use image::{DynamicImage, ImageReader, RgbaImage};
-use usvg::Tree;
+use image::{ImageReader, RgbaImage};
 
 use crate::materialize::render::render_tree_to_png;
+use crate::materialize::rgba::image_has_transparency;
+use crate::materialize::svg::{NormalizeReport, parse_vector_svg};
 
 /// Fixed launcher canvas edge length (iOS path A and Android path A share this).
 pub const LAUNCHER_CANVAS_SIZE: u32 = 1024;
 
+/// Decoded launcher canvas plus optional SVG normalization metadata.
+#[derive(Debug)]
+pub struct LauncherCanvas {
+    /// 1024×1024 RGBA pixels (alpha retained for Android adaptive composition).
+    pub image: RgbaImage,
+    /// SVG normalization applied during vector decode, when any.
+    pub normalization: Option<NormalizeReport>,
+    /// Whether any decoded pixel carries α < 255.
+    pub has_transparency: bool,
+}
+
 /// Decode an app-icon `source:` master into a normalized 1024×1024 RGBA canvas.
 ///
-/// Raster masters must be square with width and height ≥1024 (no upscale), and
-/// must not carry alpha for iOS auto-convert. Larger square masters are
-/// downscaled to 1024×1024.
+/// Raster masters must be square with width and height ≥1024 (no upscale).
+/// Masters may carry alpha; platform writers composite at export time.
 ///
 /// # Errors
 ///
@@ -22,7 +33,7 @@ pub const LAUNCHER_CANVAS_SIZE: u32 = 1024;
 /// or violates path-A constraints.
 pub fn decode_to_launcher_canvas(
     source_path: &Path, source_rel: &str, asset_id: &str,
-) -> Result<RgbaImage, String> {
+) -> Result<LauncherCanvas, String> {
     let ext = source_path.extension().and_then(|value| value.to_str()).map(str::to_ascii_lowercase);
 
     match ext.as_deref() {
@@ -38,17 +49,17 @@ pub fn decode_to_launcher_canvas(
 
 fn decode_svg_canvas(
     source_path: &Path, source_rel: &str, asset_id: &str,
-) -> Result<RgbaImage, String> {
+) -> Result<LauncherCanvas, String> {
     let bytes = std::fs::read(source_path).map_err(|err| {
         format!(
             "assets-app-icon-source-invalid: app-icon `{asset_id}` `source:` `{source_rel}` not readable: {err}"
         )
     })?;
-    let tree = Tree::from_data(&bytes, &usvg::Options::default()).map_err(|err| {
+    let parsed = parse_vector_svg(&bytes, asset_id).map_err(|err| {
         format!("assets-app-icon-source-invalid: app-icon `{asset_id}` SVG decode failed: {err}")
     })?;
-    let png =
-        render_tree_to_png(&tree, LAUNCHER_CANVAS_SIZE, LAUNCHER_CANVAS_SIZE).map_err(|err| {
+    let png = render_tree_to_png(&parsed.tree, LAUNCHER_CANVAS_SIZE, LAUNCHER_CANVAS_SIZE)
+        .map_err(|err| {
             format!(
                 "assets-app-icon-source-invalid: app-icon `{asset_id}` SVG rasterize failed: {err}"
             )
@@ -56,12 +67,17 @@ fn decode_svg_canvas(
     let image = image::load_from_memory(&png).map_err(|err| {
         format!("assets-app-icon-source-invalid: app-icon `{asset_id}` SVG rasterize failed: {err}")
     })?;
-    Ok(flatten_to_opaque(image.to_rgba8()))
+    let rgba = image.to_rgba8();
+    Ok(LauncherCanvas {
+        has_transparency: image_has_transparency(&rgba),
+        normalization: parsed.normalization,
+        image: rgba,
+    })
 }
 
 fn decode_raster_canvas(
     source_path: &Path, source_rel: &str, asset_id: &str,
-) -> Result<RgbaImage, String> {
+) -> Result<LauncherCanvas, String> {
     let image = ImageReader::open(source_path)
         .map_err(|err| {
             format!(
@@ -92,11 +108,6 @@ fn decode_raster_canvas(
             "assets-app-icon-source-invalid: raster app-icon `{asset_id}` master must be at least 1024×1024 (got {width}×{height})"
         ));
     }
-    if raster_has_alpha(&image) {
-        return Err(format!(
-            "assets-app-icon-source-invalid: raster app-icon `{asset_id}` master must be opaque for iOS auto-convert (image has alpha)"
-        ));
-    }
 
     let rgba = if width > LAUNCHER_CANVAS_SIZE {
         image
@@ -109,43 +120,11 @@ fn decode_raster_canvas(
     } else {
         image.to_rgba8()
     };
-    Ok(flatten_to_opaque(rgba))
-}
-
-fn raster_has_alpha(image: &DynamicImage) -> bool {
-    match image {
-        DynamicImage::ImageLuma8(_) | DynamicImage::ImageRgb8(_) => false,
-        DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_) => {
-            image.to_rgba8().pixels().any(|pixel| pixel[3] < 255)
-        }
-        _ => image.to_rgba8().pixels().any(|pixel| pixel[3] < 255),
-    }
-}
-
-/// Composite any residual transparency onto an opaque white background.
-fn flatten_to_opaque(mut canvas: RgbaImage) -> RgbaImage {
-    for pixel in canvas.pixels_mut() {
-        if pixel[3] < 255 {
-            let alpha = f32::from(pixel[3]) / 255.0;
-            pixel[0] = blend_channel(pixel[0], alpha);
-            pixel[1] = blend_channel(pixel[1], alpha);
-            pixel[2] = blend_channel(pixel[2], alpha);
-            pixel[3] = 255;
-        }
-    }
-    canvas
-}
-
-fn blend_channel(foreground: u8, alpha: f32) -> u8 {
-    let blended = 255.0_f32.mul_add(1.0 - alpha, f32::from(foreground) * alpha);
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "blended channel is clamped to 0..=255 before narrowing"
-    )]
-    {
-        blended.round().clamp(0.0, 255.0) as u8
-    }
+    Ok(LauncherCanvas {
+        has_transparency: image_has_transparency(&rgba),
+        normalization: None,
+        image: rgba,
+    })
 }
 
 #[cfg(test)]
@@ -156,9 +135,9 @@ mod tests {
     use super::*;
 
     // `decode_to_launcher_canvas` accepts a 1024² opaque raster without
-    // upscaling and rejects a sub-1024 raster (naming the dimension) and a
-    // non-opaque raster (naming `opaque`). SVG decode to the 1024 canvas is
-    // covered end-to-end by
+    // upscaling and rejects a sub-1024 raster (naming the dimension). Transparent
+    // raster masters decode successfully with alpha preserved. SVG decode to the
+    // 1024 canvas is covered end-to-end by
     // `tests/engine/materialize_app_icon.rs::materialize_app_icon_ios_exports_exist`.
     #[test]
     fn decode_to_launcher_canvas_matrix() {
@@ -170,8 +149,9 @@ mod tests {
             .expect("write png");
         let canvas =
             decode_to_launcher_canvas(&ok, "assets/app-icon.png", "app-icon").expect("decode");
-        assert_eq!(canvas.dimensions(), (1024, 1024));
-        assert_eq!(canvas.get_pixel(0, 0).0, [4, 5, 6, 255]);
+        assert_eq!(canvas.image.dimensions(), (1024, 1024));
+        assert_eq!(canvas.image.get_pixel(0, 0).0, [4, 5, 6, 255]);
+        assert!(!canvas.has_transparency);
 
         let small = tmp.path().join("small.png");
         RgbaImage::from_pixel(512, 512, Rgba([1, 2, 3, 255]))
@@ -185,8 +165,9 @@ mod tests {
         RgbaImage::from_pixel(1024, 1024, Rgba([1, 2, 3, 128]))
             .save_with_format(&alpha, ImageFormat::Png)
             .expect("write png");
-        let err = decode_to_launcher_canvas(&alpha, "assets/alpha.png", "app-icon").unwrap_err();
-        assert!(err.contains("assets-app-icon-source-invalid"));
-        assert!(err.contains("opaque"));
+        let canvas =
+            decode_to_launcher_canvas(&alpha, "assets/alpha.png", "app-icon").expect("decode");
+        assert!(canvas.has_transparency);
+        assert_eq!(canvas.image.get_pixel(0, 0)[3], 128);
     }
 }

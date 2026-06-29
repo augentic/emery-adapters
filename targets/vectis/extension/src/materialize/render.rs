@@ -55,7 +55,7 @@ fn pixel_dim(logical: f32, factor: f32) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::materialize::svg::parse_icon_svg;
+    use crate::materialize::svg::parse_vector_svg;
 
     const TRIANGLE: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
   <path fill="#010203" d="M12 2L2 22h20z"/>
@@ -66,7 +66,7 @@ mod tests {
     // is byte-identical across repeated renders of the same tree.
     #[test]
     fn render_tree_matrix() {
-        let parsed = parse_icon_svg(TRIANGLE.as_bytes(), "tri").expect("parse");
+        let parsed = parse_vector_svg(TRIANGLE.as_bytes(), "tri").expect("parse");
         let (w, h) = scaled_dimensions(&parsed.tree, 2.0);
         assert_eq!((w, h), (48, 48));
         let png = render_tree_to_png(&parsed.tree, w, h).expect("render");

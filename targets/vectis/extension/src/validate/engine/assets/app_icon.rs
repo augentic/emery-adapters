@@ -43,7 +43,7 @@ pub(super) fn check_raster_source_master(
     let Ok(bytes) = std::fs::read(&path) else {
         return;
     };
-    let Some((width, height, has_alpha)) = png_ihdr(&bytes) else {
+    let Some((width, height, _has_alpha)) = png_ihdr(&bytes) else {
         errors.push(json!({
             "path": format!("/assets/{id}/source"),
             "message": format!(
@@ -64,14 +64,6 @@ pub(super) fn check_raster_source_master(
             "path": format!("/assets/{id}/source"),
             "message": format!(
                 "assets-app-icon-source-invalid: raster app-icon `{id}` master must be at least 1024×1024 (got {width}×{height})"
-            ),
-        }));
-    }
-    if has_alpha {
-        errors.push(json!({
-            "path": format!("/assets/{id}/source"),
-            "message": format!(
-                "assets-app-icon-source-invalid: raster app-icon `{id}` master must be opaque for iOS auto-convert (PNG has alpha)"
             ),
         }));
     }

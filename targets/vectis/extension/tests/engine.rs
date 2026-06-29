@@ -28,6 +28,8 @@ mod materialize_illustrations;
 mod paths;
 #[path = "engine/prepare_scope.rs"]
 mod prepare_scope;
+#[path = "engine/svg_normalize.rs"]
+mod svg_normalize;
 #[path = "engine/tokens.rs"]
 mod tokens;
 #[path = "engine/verify.rs"]
