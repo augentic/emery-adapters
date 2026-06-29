@@ -12,7 +12,7 @@ PROJECT_YAML="${PROJECT_DIR}/.specify/project.yaml"
 
 cd "$PROJECT_DIR"
 
-platforms=$(grep -E '^\s*-\s+(core|ios|android|web|desktop)\s*$' "$PROJECT_YAML" | sed -E 's/^[[:space:]]*-[[:space:]]*//')
+platforms=$(grep -E '^[[:space:]]*-[[:space:]]+(core|ios|android|web|desktop)[[:space:]]*$' "$PROJECT_YAML" | sed -E 's/^[[:space:]]*-[[:space:]]*//')
 
 platform_enabled() {
   want="$1"

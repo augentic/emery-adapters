@@ -2,14 +2,27 @@
 # CI guardrails for Vectis native hook scripts (POSIX `sh` contract).
 set -eu
 
-ROOT=$(CDPATH= cd -- "$(dirname "$0")/../../.." && pwd)
+ROOT=$(CDPATH= cd "$(dirname "$0")/../../.." && pwd)
 ADAPTER_ROOT="${ROOT}/targets/vectis"
 HOST_PREREQ="${ADAPTER_ROOT}/scripts/build-host-prereq.sh"
 FINALIZE_VERIFY="${ADAPTER_ROOT}/scripts/build-finalize-verify.sh"
+PLATFORMS_GREP='^[[:space:]]*-[[:space:]]+(core|ios|android|web|desktop)[[:space:]]*$'
 
 fail() {
   echo "test-hook-scripts: $*" >&2
   exit 1
+}
+
+make_temp_dir() {
+  if tmpdir=$(mktemp -d 2>/dev/null); then
+    printf '%s' "$tmpdir"
+    return 0
+  fi
+  if tmpdir=$(mktemp -d -t specify-hook 2>/dev/null); then
+    printf '%s' "$tmpdir"
+    return 0
+  fi
+  fail "mktemp failed"
 }
 
 echo "syntax-check host_prereq"
@@ -25,17 +38,27 @@ for script in "$HOST_PREREQ" "$FINALIZE_VERIFY"; do
   fi
 done
 
-tmpdir=$(mktemp -d)
+tmpdir=$(make_temp_dir)
 trap 'rm -rf "$tmpdir"' EXIT INT HUP TERM
 
 mkdir -p "${tmpdir}/.specify/slices/demo"
 cat > "${tmpdir}/.specify/project.yaml" <<'EOF'
 platforms:
   - core
+  - ios
 EOF
 
+echo "platform list parsing"
+platforms=$(grep -E "$PLATFORMS_GREP" "${tmpdir}/.specify/project.yaml" | sed -E 's/^[[:space:]]*-[[:space:]]*//')
+echo "$platforms" | grep -qx core || fail "expected core in parsed platforms"
+echo "$platforms" | grep -qx ios || fail "expected ios in parsed platforms"
+
 echo "core-only host_prereq"
-SPECIFY_PROJECT_DIR="$tmpdir" sh -- "$HOST_PREREQ"
+cat > "${tmpdir}/.specify/project.yaml" <<'EOF'
+platforms:
+  - core
+EOF
+SPECIFY_PROJECT_DIR="$tmpdir" sh "$HOST_PREREQ"
 
 mock_bin="${tmpdir}/bin"
 mkdir -p "$mock_bin"
@@ -52,7 +75,7 @@ echo "core-only finalize_verify"
 PATH="${mock_bin}:${PATH}" \
   SPECIFY_PROJECT_DIR="$tmpdir" \
   SPECIFY_SLICE_DIR="${tmpdir}/.specify/slices/demo" \
-  sh -- "$FINALIZE_VERIFY"
+  sh "$FINALIZE_VERIFY"
 
 resolve_from_design() {
   slice_dir="$1"
