@@ -1,7 +1,7 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # Host verify backstop for `specify slice build --phase finalize`.
-# Invoked by the Specify CLI when `adapter.yaml` declares `finalize_verify`.
-set -euo pipefail
+# Invoked by the Specify CLI via `sh` when `adapter.yaml` declares `finalize_verify`.
+set -eu
 
 : "${SPECIFY_PROJECT_DIR:?SPECIFY_PROJECT_DIR must be set}"
 : "${SPECIFY_SLICE_DIR:?SPECIFY_SLICE_DIR must be set}"
@@ -12,45 +12,37 @@ PROJECT_YAML="${PROJECT_DIR}/.specify/project.yaml"
 
 cd "$PROJECT_DIR"
 
-platforms=()
-while IFS= read -r platform; do
-  [[ -n "$platform" ]] && platforms+=("$platform")
-done < <(grep -E '^\s*-\s+(core|ios|android|web|desktop)\s*$' "$PROJECT_YAML" | sed -E 's/^[[:space:]]*-[[:space:]]*//')
+platforms=$(grep -E '^\s*-\s+(core|ios|android|web|desktop)\s*$' "$PROJECT_YAML" | sed -E 's/^[[:space:]]*-[[:space:]]*//')
 
 platform_enabled() {
-  local want="$1"
-  local p
-  for p in "${platforms[@]}"; do
-    [[ "$p" == "$want" ]] && return 0
-  done
-  return 1
+  want="$1"
+  echo "$platforms" | grep -qx "$want"
 }
 
 resolve_ios_app_name() {
-  if [[ -f "${SLICE_DIR}/design.md" ]]; then
-    local from_design
-    from_design="$(grep -E '^- `App` struct: `' "${SLICE_DIR}/design.md" | head -n1 | sed -E 's/^- `App` struct: `([^`]+)`.*/\1/' || true)"
-    if [[ -n "$from_design" ]]; then
+  if [ -f "${SLICE_DIR}/design.md" ]; then
+    from_design=$(grep -E '^- `App` struct: `' "${SLICE_DIR}/design.md" 2>/dev/null \
+      | head -n1 \
+      | sed -E 's/^- `App` struct: `([^`]+)`.*/\1/' || true)
+    if [ -n "$from_design" ]; then
       echo "$from_design"
       return 0
     fi
   fi
 
-  local project_yml="${PROJECT_DIR}/iOS/project.yml"
-  if [[ -f "$project_yml" ]]; then
-    local from_yml
-    from_yml="$(grep -E '^[[:space:]]*name:' "$project_yml" | head -n1 | sed -E 's/^[[:space:]]*name:[[:space:]]*"?([^"#]+)"?.*/\1/' | tr -d "' " || true)"
-    if [[ -n "$from_yml" ]]; then
+  project_yml="${PROJECT_DIR}/iOS/project.yml"
+  if [ -f "$project_yml" ]; then
+    from_yml=$(grep -E '^[[:space:]]*name:' "$project_yml" | head -n1 | sed -E 's/^[[:space:]]*name:[[:space:]]*"?([^"#]+)"?.*/\1/' | tr -d "' ")
+    if [ -n "$from_yml" ]; then
       echo "$from_yml"
       return 0
     fi
   fi
 
-  local entry name
   for entry in "${PROJECT_DIR}/iOS"/*; do
-    [[ -d "$entry" ]] || continue
-    name="$(basename "$entry")"
-    [[ "$name" == .* || "$name" == generated ]] && continue
+    [ -d "$entry" ] || continue
+    name=$(basename "$entry")
+    case "$name" in .*|generated) continue ;; esac
     if find "$entry" -name '*.swift' -print -quit | grep -q .; then
       echo "$name"
       return 0
@@ -61,14 +53,14 @@ resolve_ios_app_name() {
   return 1
 }
 
-if platform_enabled ios && [[ -d "${PROJECT_DIR}/iOS" ]]; then
+if platform_enabled ios && [ -d "${PROJECT_DIR}/iOS" ]; then
   specify extension run vectis -- sync ios-scaffold
-  app_name="$(resolve_ios_app_name)"
+  app_name=$(resolve_ios_app_name)
   swiftformat "iOS/${app_name}/"
   (cd "${PROJECT_DIR}/iOS" && make build && make sim-build)
 fi
 
-if platform_enabled android && [[ -d "${PROJECT_DIR}/Android" ]]; then
+if platform_enabled android && [ -d "${PROJECT_DIR}/Android" ]; then
   (cd "${PROJECT_DIR}/Android" && make verify)
 fi
 
