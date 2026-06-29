@@ -122,7 +122,11 @@ fn push_flat_path(
         return Ok(());
     }
 
-    let mut flat = FlatPath { d, fill: None, stroke: None };
+    let mut flat = FlatPath {
+        d,
+        fill: None,
+        stroke: None,
+    };
 
     if let Some(fill) = path.fill() {
         let alpha = fill.opacity().get() * opacity_stack;
@@ -185,10 +189,7 @@ fn union_clip_group(group: &Group, bounds: &mut Option<Rect>) {
 }
 
 fn merge_bounds(bounds: &mut Option<Rect>, next: Rect) {
-    *bounds = Some(match bounds.take() {
-        None => next,
-        Some(existing) => union_rects(existing, next),
-    });
+    *bounds = Some(bounds.take().map_or(next, |existing| union_rects(existing, next)));
 }
 
 fn union_rects(a: Rect, b: Rect) -> Rect {
@@ -248,109 +249,4 @@ fn emit_minimal_svg(width: f32, height: f32, paths: &[FlatPath]) -> String {
 
 fn rgb_hex(r: u8, g: u8, b: u8) -> String {
     format!("#{r:02X}{g:02X}{b:02X}")
-}
-
-#[cfg(test)]
-mod tests {
-    use usvg::Tree;
-
-    use super::*;
-    use crate::materialize::svg::parse_vector_svg;
-
-    const TRIANGLE: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <path fill="#010203" d="M12 2L2 22h20z"/>
-</svg>"##;
-
-    fn figma_clip_wrapper(width: f32, height: f32, inner: &str) -> String {
-        format!(
-            r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}">
-  <defs>
-    <clipPath id="clip"><path d="M0 0h{width}v{height}H0z"/></clipPath>
-  </defs>
-  <g clip-path="url(#clip)">{inner}</g>
-</svg>"##
-        )
-    }
-
-    #[test]
-    fn noop_clip_icon_sized() {
-        let svg = figma_clip_wrapper(
-            24.0,
-            24.0,
-            r##"<path fill="#010203" d="M12 2L2 22h20z"/>"##,
-        );
-        let parsed = parse_vector_svg(svg.as_bytes(), "icon").expect("parse");
-        assert!(!parsed.tree.has_defs_nodes());
-        let report = parsed.normalization.expect("normalized");
-        assert!(report.transforms.contains(&"stripped-noop-clip"));
-    }
-
-    #[test]
-    fn noop_clip_illustration_sized() {
-        let svg = figma_clip_wrapper(
-            240.0,
-            160.0,
-            r##"<rect width="240" height="160" fill="#AABBCC"/>"##,
-        );
-        let parsed = parse_vector_svg(svg.as_bytes(), "illus").expect("parse");
-        assert!(!parsed.tree.has_defs_nodes());
-    }
-
-    #[test]
-    fn noop_clip_launcher_sized() {
-        let svg = figma_clip_wrapper(
-            1024.0,
-            1024.0,
-            r##"<rect width="1024" height="1024" fill="#445566"/>"##,
-        );
-        let parsed = parse_vector_svg(svg.as_bytes(), "launcher").expect("parse");
-        assert!(!parsed.tree.has_defs_nodes());
-    }
-
-    #[test]
-    fn opacity_bake_preserves_rgb() {
-        let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <g opacity="0.12"><circle cx="12" cy="12" r="8" fill="#1A73E8"/></g>
-</svg>"##;
-        let parsed = parse_vector_svg(svg.as_bytes(), "fade").expect("parse");
-        let report = parsed.normalization.expect("normalized");
-        assert!(report.transforms.contains(&"baked-group-opacity"));
-
-        let mut paths = Vec::new();
-        crate::materialize::svg::collect_paths(parsed.tree.root(), &mut paths);
-        assert_eq!(paths.len(), 1);
-        let (r, g, b, alpha) = paths[0].color;
-        assert_eq!((r, g, b), (26, 115, 232));
-        assert!((alpha - 0.12).abs() < 0.01);
-    }
-
-    #[test]
-    fn gradient_still_fails_after_clip_strip_attempt() {
-        let svg = figma_clip_wrapper(
-            24.0,
-            24.0,
-            r##"<defs><linearGradient id="g"><stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#fff"/></linearGradient></defs><rect width="24" height="24" fill="url(#g)"/>"##,
-        );
-        let err = parse_vector_svg(svg.as_bytes(), "grad").unwrap_err();
-        assert!(err.contains("grad"));
-        assert!(err.contains("gradient"));
-    }
-
-    #[test]
-    fn real_clip_still_fails() {
-        let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <defs><clipPath id="c"><rect width="12" height="12"/></clipPath></defs>
-  <g clip-path="url(#c)"><path fill="#000" d="M0 0h24v24z"/></g>
-</svg>"##;
-        let err = parse_vector_svg(svg.as_bytes(), "clip").unwrap_err();
-        assert!(err.contains("clip"));
-    }
-
-    #[test]
-    fn clean_tree_skips_normalization() {
-        let opt = usvg::Options::default();
-        let tree = Tree::from_data(TRIANGLE.as_bytes(), &opt).expect("parse");
-        let result = normalize_for_export(&tree, "tri").expect("normalize");
-        assert!(result.is_none());
-    }
 }

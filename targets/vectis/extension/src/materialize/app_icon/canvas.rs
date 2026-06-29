@@ -58,14 +58,12 @@ fn decode_svg_canvas(
     let parsed = parse_vector_svg(&bytes, asset_id).map_err(|err| {
         format!("assets-app-icon-source-invalid: app-icon `{asset_id}` SVG decode failed: {err}")
     })?;
-    let png =
-        render_tree_to_png(&parsed.tree, LAUNCHER_CANVAS_SIZE, LAUNCHER_CANVAS_SIZE).map_err(
-            |err| {
-                format!(
-                    "assets-app-icon-source-invalid: app-icon `{asset_id}` SVG rasterize failed: {err}"
-                )
-            },
-        )?;
+    let png = render_tree_to_png(&parsed.tree, LAUNCHER_CANVAS_SIZE, LAUNCHER_CANVAS_SIZE)
+        .map_err(|err| {
+            format!(
+                "assets-app-icon-source-invalid: app-icon `{asset_id}` SVG rasterize failed: {err}"
+            )
+        })?;
     let image = image::load_from_memory(&png).map_err(|err| {
         format!("assets-app-icon-source-invalid: app-icon `{asset_id}` SVG rasterize failed: {err}")
     })?;

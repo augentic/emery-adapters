@@ -182,7 +182,9 @@ assets:
     let exported = image::open(&png).unwrap().to_rgba8();
     assert!(exported.pixels().all(|pixel| pixel[3] == 255));
 
-    assert!(design.join("assets/exports/android/app-icon/mipmap-xxxhdpi/ic_launcher.png").is_file());
+    assert!(
+        design.join("assets/exports/android/app-icon/mipmap-xxxhdpi/ic_launcher.png").is_file()
+    );
 
     let normalized = value["normalized"].as_array().expect("normalized");
     let entry = normalized.iter().find(|e| e["asset_id"] == "app-icon").expect("entry");

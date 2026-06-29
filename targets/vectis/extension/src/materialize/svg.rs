@@ -43,13 +43,6 @@ pub fn parse_vector_svg(svg_bytes: &[u8], asset_id: &str) -> Result<ParsedSvg, S
     Ok(ParsedSvg { tree, normalization })
 }
 
-/// Deprecated alias for [`parse_vector_svg`].
-#[deprecated(note = "use parse_vector_svg")]
-#[allow(dead_code)]
-pub fn parse_icon_svg(svg_bytes: &[u8], asset_id: &str) -> Result<ParsedSvg, String> {
-    parse_vector_svg(svg_bytes, asset_id)
-}
-
 fn validate_profile(tree: &Tree, asset_id: &str) -> Result<(), String> {
     if tree.has_text_nodes() {
         return Err(format!("asset `{asset_id}`: text nodes are not supported"));

@@ -34,8 +34,7 @@ pub fn flatten_to_opaque_white(foreground: RgbaImage) -> (RgbaImage, bool) {
 }
 
 fn blend_channel(foreground: u8, alpha: f32, background: u8) -> u8 {
-    let blended =
-        f32::from(background).mul_add(1.0 - alpha, f32::from(foreground) * alpha);
+    let blended = f32::from(background).mul_add(1.0 - alpha, f32::from(foreground) * alpha);
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,

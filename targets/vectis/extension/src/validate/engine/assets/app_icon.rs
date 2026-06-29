@@ -59,7 +59,7 @@ pub(super) fn check_raster_source_master(
                 "assets-app-icon-source-invalid: raster app-icon `{id}` master must be square (got {width}×{height})"
             ),
         }));
-    } else     if width < 1024 {
+    } else if width < 1024 {
         errors.push(json!({
             "path": format!("/assets/{id}/source"),
             "message": format!(

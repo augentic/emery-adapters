@@ -66,24 +66,5 @@ pub fn write_appiconset(canvas: &RgbaImage, appiconset_dir: &Path) -> Result<(),
 // `AppIcon.png` + `Contents.json` layout — single universal 1024×1024 ios
 // image entry — is asserted end-to-end through the CLI by
 // `tests/engine/materialize_app_icon.rs::materialize_app_icon_ios_exports_exist`.
-
-#[cfg(test)]
-mod tests {
-    use image::{Rgba, RgbaImage};
-    use tempfile::tempdir;
-
-    use super::*;
-
-    #[test]
-    fn write_appiconset_flattens_transparent_canvas() {
-        let tmp = tempdir().expect("tempdir");
-        let dir = tmp.path().join("AppIcon.appiconset");
-        let mut canvas = RgbaImage::from_pixel(1024, 1024, Rgba([0, 0, 0, 0]));
-        canvas.put_pixel(512, 512, Rgba([10, 20, 30, 128]));
-
-        write_appiconset(&canvas, &dir).expect("write");
-
-        let png = image::open(dir.join(APPICON_PNG_NAME)).expect("open").to_rgba8();
-        assert!(png.pixels().all(|pixel| pixel[3] == 255));
-    }
-}
+// Transparent-canvas flattening is covered by
+// `tests/engine/materialize_app_icon.rs::materialize_app_icon_transparent_*`.

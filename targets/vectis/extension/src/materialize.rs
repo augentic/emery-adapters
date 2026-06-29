@@ -21,6 +21,7 @@ use icons::materialize_icon_vectors;
 use illustrations::materialize_illustration_vectors;
 use raster_copy::materialize_photo_rasters;
 use serde_json::{Value, json};
+pub use svg::{collect_paths, parse_vector_svg};
 use yaml_pins::{apply_auto_pins, atomic_yaml_write, collect_auto_pins, serialise_yaml};
 
 use crate::validate::engine::resolve_default_path_with_root;
@@ -131,44 +132,23 @@ fn run_assets(args: &AssetsArgs) -> Result<Value, VectisError> {
             dry_run: args.dry_run,
             only: args.only.as_deref(),
         };
-        materialize_icon_vectors(
-            assets_dir,
-            assets,
-            &platforms,
-            &filter,
-            &mut materialized,
-            &mut skipped_pins,
-            &mut errors,
-            &mut normalized,
-        );
-        materialize_illustration_vectors(
-            assets_dir,
-            assets,
-            &platforms,
-            &filter,
-            &mut materialized,
-            &mut skipped_pins,
-            &mut errors,
-            &mut normalized,
-        );
+        let mut sink = MaterializeSink {
+            materialized: &mut materialized,
+            skipped_pins: &mut skipped_pins,
+            errors: &mut errors,
+            normalized: &mut normalized,
+        };
+        materialize_icon_vectors(assets_dir, assets, &platforms, &filter, &mut sink);
+        materialize_illustration_vectors(assets_dir, assets, &platforms, &filter, &mut sink);
         materialize_photo_rasters(
             assets_dir,
             assets,
             &platforms,
             &filter,
-            &mut materialized,
-            &mut errors,
+            sink.materialized,
+            sink.errors,
         );
-        materialize_app_icons(
-            assets_dir,
-            assets,
-            &platforms,
-            &filter,
-            &mut materialized,
-            &mut skipped_pins,
-            &mut errors,
-            &mut normalized,
-        );
+        materialize_app_icons(assets_dir, assets, &platforms, &filter, &mut sink);
     }
 
     if !args.dry_run
@@ -257,6 +237,19 @@ pub struct MaterializeFilter<'a> {
     pub only: Option<&'a [String]>,
 }
 
+/// Mutable materialize run outputs accumulated across funnels.
+#[derive(Debug)]
+pub struct MaterializeSink<'a> {
+    /// Written export paths per asset and platform.
+    pub materialized: &'a mut Vec<Value>,
+    /// Platform pins skipped because an operator export already exists.
+    pub skipped_pins: &'a mut Vec<Value>,
+    /// Per-asset conversion failures.
+    pub errors: &'a mut Vec<Value>,
+    /// SVG normalization transforms applied during the run.
+    pub normalized: &'a mut Vec<Value>,
+}
+
 /// When `only` is set, restrict materialization to the listed asset ids.
 pub(crate) fn matches_only(asset_id: &str, only: Option<&[String]>) -> bool {
     only.is_none_or(|ids| ids.iter().any(|candidate| candidate == asset_id))
@@ -285,7 +278,7 @@ fn build_summary(
 
 /// Append one `normalized[]` envelope entry when transforms were applied.
 pub(crate) fn push_normalization_entry(
-    normalized: &mut Vec<Value>, asset_id: &str, transforms: Vec<&str>,
+    normalized: &mut Vec<Value>, asset_id: &str, transforms: &[&str],
 ) {
     if transforms.is_empty() {
         return;
