@@ -48,6 +48,46 @@ assets:
     assert!(android_xml.is_file() && android_xml.metadata().unwrap().len() > 0);
 }
 
+const FIGMA_CLIP_ICON: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <defs>
+    <clipPath id="clip"><path d="M0 0h24v24H0z"/></clipPath>
+  </defs>
+  <g clip-path="url(#clip)">
+    <path fill="#010203" d="M12 2L2 22h20z"/>
+  </g>
+</svg>"##;
+
+#[test]
+fn materialize_figma_style_icon_exports_exist() {
+    let tmp = tempdir().unwrap();
+    let design = tmp.path().join("design-system");
+    fs::create_dir_all(design.join("assets")).unwrap();
+    fs::write(design.join("assets/add.svg"), FIGMA_CLIP_ICON).unwrap();
+
+    let yaml = r#"version: 1
+assets:
+  add:
+    kind: vector
+    role: icon
+    alt: "Add"
+    source: assets/add.svg
+"#;
+    let assets_path = design.join("assets.yaml");
+    fs::write(&assets_path, yaml).unwrap();
+
+    let assert = vectis_materialize().args(["assets"]).arg(&assets_path).assert().success();
+    let value = parse_json(&assert.get_output().stdout);
+    assert_eq!(value["errors"].as_array().map(Vec::len), Some(0));
+
+    let ios_pdf = design.join("assets/exports/ios/add.imageset/add.pdf");
+    let android_xml = design.join("assets/exports/android/drawable/add.xml");
+    assert!(ios_pdf.is_file() && ios_pdf.metadata().unwrap().len() > 0);
+    assert!(android_xml.is_file() && android_xml.metadata().unwrap().len() > 0);
+
+    let normalized = value["normalized"].as_array().expect("normalized");
+    assert!(normalized.iter().any(|entry| entry["asset_id"] == "add"));
+}
+
 #[test]
 fn materialize_icon_dry_run_skips_writes() {
     let tmp = tempdir().unwrap();

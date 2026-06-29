@@ -112,6 +112,84 @@ assets:
     assert!(background.contains("ic_launcher_background"));
 }
 
+const TRANSPARENT_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <circle cx="512" cy="512" r="400" fill="#445566"/>
+</svg>"##;
+
+#[test]
+fn materialize_app_icon_transparent_raster_exports_exist() {
+    let tmp = tempdir().unwrap();
+    let design = tmp.path().join("design-system");
+    fs::create_dir_all(design.join("assets")).unwrap();
+
+    let png_path = design.join("assets/app-icon.png");
+    let mut img = image::RgbaImage::from_pixel(1024, 1024, image::Rgba([0, 0, 0, 0]));
+    img.put_pixel(512, 512, image::Rgba([40, 50, 60, 200]));
+    img.save(&png_path).unwrap();
+
+    let yaml = r#"version: 1
+app-icon: app-icon
+assets:
+  app-icon:
+    kind: raster
+    role: app-icon
+    alt: "App icon"
+    source: assets/app-icon.png
+"#;
+    let assets_path = design.join("assets.yaml");
+    fs::write(&assets_path, yaml).unwrap();
+
+    let assert = vectis_materialize().args(["assets"]).arg(&assets_path).assert().success();
+    let value = parse_json(&assert.get_output().stdout);
+    assert_eq!(value["errors"].as_array().map(Vec::len), Some(0));
+
+    let png = design.join("assets/exports/ios/app-icon/AppIcon.appiconset/AppIcon.png");
+    assert!(png.is_file());
+    let exported = image::open(&png).unwrap().to_rgba8();
+    assert!(exported.pixels().all(|pixel| pixel[3] == 255));
+
+    let normalized = value["normalized"].as_array().expect("normalized");
+    let entry = normalized.iter().find(|e| e["asset_id"] == "app-icon").expect("entry");
+    let transforms = entry["transforms"].as_array().expect("transforms");
+    assert!(transforms.iter().any(|t| t == "composited-transparent-background"));
+}
+
+#[test]
+fn materialize_app_icon_transparent_svg_exports_exist() {
+    let tmp = tempdir().unwrap();
+    let design = tmp.path().join("design-system");
+    fs::create_dir_all(design.join("assets")).unwrap();
+    fs::write(design.join("assets/app-icon.svg"), TRANSPARENT_SVG).unwrap();
+
+    let yaml = r#"version: 1
+app-icon: app-icon
+assets:
+  app-icon:
+    kind: vector
+    role: app-icon
+    alt: "App icon"
+    source: assets/app-icon.svg
+"#;
+    let assets_path = design.join("assets.yaml");
+    fs::write(&assets_path, yaml).unwrap();
+
+    let assert = vectis_materialize().args(["assets"]).arg(&assets_path).assert().success();
+    let value = parse_json(&assert.get_output().stdout);
+    assert_eq!(value["errors"].as_array().map(Vec::len), Some(0));
+
+    let png = design.join("assets/exports/ios/app-icon/AppIcon.appiconset/AppIcon.png");
+    assert!(png.is_file());
+    let exported = image::open(&png).unwrap().to_rgba8();
+    assert!(exported.pixels().all(|pixel| pixel[3] == 255));
+
+    assert!(design.join("assets/exports/android/app-icon/mipmap-xxxhdpi/ic_launcher.png").is_file());
+
+    let normalized = value["normalized"].as_array().expect("normalized");
+    let entry = normalized.iter().find(|e| e["asset_id"] == "app-icon").expect("entry");
+    let transforms = entry["transforms"].as_array().expect("transforms");
+    assert!(transforms.iter().any(|t| t == "composited-transparent-background"));
+}
+
 #[test]
 fn materialize_app_icon_ios_rejects_small_raster() {
     let tmp = tempdir().unwrap();

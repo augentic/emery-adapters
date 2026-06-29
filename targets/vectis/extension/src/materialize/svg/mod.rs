@@ -1,7 +1,10 @@
-//! SVG load and lightweight profile checks for icon materialization (RFC-46 §2).
+//! SVG load and lightweight profile checks for vector materialization (RFC-46 §2).
+
+mod normalize;
 
 use std::fmt::Write;
 
+pub use normalize::{NormalizeReport, normalize_for_export};
 use usvg::tiny_skia_path::{Path, PathSegment};
 use usvg::{Node, Paint, Tree};
 
@@ -9,25 +12,42 @@ use usvg::{Node, Paint, Tree};
 #[derive(Debug)]
 pub struct ParsedSvg {
     pub tree: Tree,
+    pub normalization: Option<NormalizeReport>,
 }
 
-/// Load and validate an SVG master for icon vector export.
+/// Load and validate an SVG master for vector export (icons, illustrations, app-icon SVG).
 ///
 /// # Errors
 ///
 /// Returns a human-readable message naming the asset when the SVG uses
 /// unsupported features (gradients, text, filters, embedded images, …).
-pub fn parse_icon_svg(svg_bytes: &[u8], asset_id: &str) -> Result<ParsedSvg, String> {
+pub fn parse_vector_svg(svg_bytes: &[u8], asset_id: &str) -> Result<ParsedSvg, String> {
     let opt = usvg::Options::default();
     let tree = Tree::from_data(svg_bytes, &opt)
         .map_err(|err| format!("asset `{asset_id}`: SVG parse failed: {err}"))?;
+
+    let (tree, normalization) = match normalize_for_export(&tree, asset_id)? {
+        None => (tree, None),
+        Some((bytes, report)) => {
+            let tree = Tree::from_data(&bytes, &opt)
+                .map_err(|err| format!("asset `{asset_id}`: SVG re-parse failed: {err}"))?;
+            (tree, Some(report))
+        }
+    };
 
     validate_profile(&tree, asset_id)?;
     if !tree_has_drawable_paths(tree.root()) {
         return Err(format!("asset `{asset_id}`: SVG contains no drawable paths"));
     }
 
-    Ok(ParsedSvg { tree })
+    Ok(ParsedSvg { tree, normalization })
+}
+
+/// Deprecated alias for [`parse_vector_svg`].
+#[deprecated(note = "use parse_vector_svg")]
+#[allow(dead_code)]
+pub fn parse_icon_svg(svg_bytes: &[u8], asset_id: &str) -> Result<ParsedSvg, String> {
+    parse_vector_svg(svg_bytes, asset_id)
 }
 
 fn validate_profile(tree: &Tree, asset_id: &str) -> Result<(), String> {
@@ -159,7 +179,7 @@ fn append_coord(out: &mut String, verb: char, x: f32, y: f32) {
     let _ = write!(out, "{verb}{} {} ", trim_num(x), trim_num(y));
 }
 
-fn trim_num(value: f32) -> String {
+pub(super) fn trim_num(value: f32) -> String {
     let rounded = format!("{value:.4}");
     rounded.trim_end_matches('0').trim_end_matches('.').to_string()
 }
@@ -215,14 +235,14 @@ mod tests {
   <path fill="#010203" d="M12 2L2 22h20z"/>
 </svg>"##;
 
-    // `parse_icon_svg` parses a clean icon (positive size) and `path_data_string`
+    // `parse_vector_svg` parses a clean icon (positive size) and `path_data_string`
     // emits space-separated coords; an unsupported `<filter>` def is rejected
     // with an error naming the asset and `filters`. The happy-path parse of this
     // triangle is also covered end-to-end by
     // `tests/engine/materialize.rs::materialize_icon_vector_exports_exist`.
     #[test]
     fn svg_parse_matrix() {
-        let parsed = parse_icon_svg(TRIANGLE.as_bytes(), "tri").expect("parse");
+        let parsed = parse_vector_svg(TRIANGLE.as_bytes(), "tri").expect("parse");
         assert!(parsed.tree.size().width() > 0.0);
         let mut paths = Vec::new();
         collect_paths(parsed.tree.root(), &mut paths);
@@ -232,7 +252,7 @@ mod tests {
   <filter id="blur"><feGaussianBlur stdDeviation="2"/></filter>
   <rect width="24" height="24" filter="url(#blur)"/>
 </svg>"#;
-        let err = parse_icon_svg(filtered.as_bytes(), "bad").unwrap_err();
+        let err = parse_vector_svg(filtered.as_bytes(), "bad").unwrap_err();
         assert!(err.contains("bad"));
         assert!(err.contains("filters"));
     }

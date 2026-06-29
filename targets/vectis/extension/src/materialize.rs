@@ -9,6 +9,7 @@ pub mod illustrations;
 pub mod paths;
 mod raster_copy;
 mod render;
+mod rgba;
 mod svg;
 mod yaml_pins;
 
@@ -103,6 +104,7 @@ fn run_assets(args: &AssetsArgs) -> Result<Value, VectisError> {
     let mut materialized = Vec::new();
     let mut skipped_pins = Vec::new();
     let mut errors = Vec::new();
+    let mut normalized = Vec::new();
 
     let mut instance = match serde_saphyr::from_str::<Value>(&source) {
         Ok(value) => value,
@@ -118,6 +120,7 @@ fn run_assets(args: &AssetsArgs) -> Result<Value, VectisError> {
                 &materialized,
                 &skipped_pins,
                 &errors,
+                &normalized,
             ));
         }
     };
@@ -136,6 +139,7 @@ fn run_assets(args: &AssetsArgs) -> Result<Value, VectisError> {
             &mut materialized,
             &mut skipped_pins,
             &mut errors,
+            &mut normalized,
         );
         materialize_illustration_vectors(
             assets_dir,
@@ -145,6 +149,7 @@ fn run_assets(args: &AssetsArgs) -> Result<Value, VectisError> {
             &mut materialized,
             &mut skipped_pins,
             &mut errors,
+            &mut normalized,
         );
         materialize_photo_rasters(
             assets_dir,
@@ -162,6 +167,7 @@ fn run_assets(args: &AssetsArgs) -> Result<Value, VectisError> {
             &mut materialized,
             &mut skipped_pins,
             &mut errors,
+            &mut normalized,
         );
     }
 
@@ -176,7 +182,15 @@ fn run_assets(args: &AssetsArgs) -> Result<Value, VectisError> {
         }
     }
 
-    Ok(build_summary(&path, args.dry_run, &platforms, &materialized, &skipped_pins, &errors))
+    Ok(build_summary(
+        &path,
+        args.dry_run,
+        &platforms,
+        &materialized,
+        &skipped_pins,
+        &errors,
+        &normalized,
+    ))
 }
 
 fn resolve_assets_path(path: Option<&Path>) -> PathBuf {
@@ -250,9 +264,9 @@ pub(crate) fn matches_only(asset_id: &str, only: Option<&[String]>) -> bool {
 
 fn build_summary(
     path: &Path, dry_run: bool, platforms: &[String], materialized: &[Value],
-    skipped_pins: &[Value], errors: &[Value],
+    skipped_pins: &[Value], errors: &[Value], normalized: &[Value],
 ) -> Value {
-    json!({
+    let mut summary = json!({
         "command": "materialize assets",
         "path": path.display().to_string(),
         "dry_run": dry_run,
@@ -260,7 +274,26 @@ fn build_summary(
         "materialized": materialized,
         "skipped_pins": skipped_pins,
         "errors": errors,
-    })
+    });
+    if !normalized.is_empty()
+        && let Value::Object(ref mut map) = summary
+    {
+        map.insert("normalized".to_string(), Value::Array(normalized.to_vec()));
+    }
+    summary
+}
+
+/// Append one `normalized[]` envelope entry when transforms were applied.
+pub(crate) fn push_normalization_entry(
+    normalized: &mut Vec<Value>, asset_id: &str, transforms: Vec<&str>,
+) {
+    if transforms.is_empty() {
+        return;
+    }
+    normalized.push(json!({
+        "asset_id": asset_id,
+        "transforms": transforms,
+    }));
 }
 
 #[cfg(test)]

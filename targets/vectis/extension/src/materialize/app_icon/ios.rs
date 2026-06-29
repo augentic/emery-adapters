@@ -6,6 +6,8 @@ use std::path::Path;
 use image::RgbaImage;
 use serde_json::json;
 
+use crate::materialize::rgba::flatten_to_opaque_white;
+
 pub const APPICON_PNG_NAME: &str = "AppIcon.png";
 
 /// Write a single-size iOS 11+ `AppIcon.appiconset` from a 1024×1024 canvas.
@@ -27,9 +29,11 @@ pub fn write_appiconset(canvas: &RgbaImage, appiconset_dir: &Path) -> Result<(),
         format!("AppIcon.appiconset write failed at {}: {err}", appiconset_dir.display())
     })?;
 
+    let (opaque, _) = flatten_to_opaque_white(canvas.clone());
+
     let png_path = appiconset_dir.join(APPICON_PNG_NAME);
     let mut png_bytes = Vec::new();
-    canvas
+    opaque
         .write_to(&mut Cursor::new(&mut png_bytes), image::ImageFormat::Png)
         .map_err(|err| format!("AppIcon.png encode failed: {err}"))?;
     std::fs::write(&png_path, png_bytes)
@@ -62,3 +66,24 @@ pub fn write_appiconset(canvas: &RgbaImage, appiconset_dir: &Path) -> Result<(),
 // `AppIcon.png` + `Contents.json` layout — single universal 1024×1024 ios
 // image entry — is asserted end-to-end through the CLI by
 // `tests/engine/materialize_app_icon.rs::materialize_app_icon_ios_exports_exist`.
+
+#[cfg(test)]
+mod tests {
+    use image::{Rgba, RgbaImage};
+    use tempfile::tempdir;
+
+    use super::*;
+
+    #[test]
+    fn write_appiconset_flattens_transparent_canvas() {
+        let tmp = tempdir().expect("tempdir");
+        let dir = tmp.path().join("AppIcon.appiconset");
+        let mut canvas = RgbaImage::from_pixel(1024, 1024, Rgba([0, 0, 0, 0]));
+        canvas.put_pixel(512, 512, Rgba([10, 20, 30, 128]));
+
+        write_appiconset(&canvas, &dir).expect("write");
+
+        let png = image::open(dir.join(APPICON_PNG_NAME)).expect("open").to_rgba8();
+        assert!(png.pixels().all(|pixel| pixel[3] == 255));
+    }
+}

@@ -12,14 +12,14 @@ use usvg::Tree;
 use crate::materialize::paths::{
     Platform, export_layout, ios_imageset_dir, resolve_under_assets_dir,
 };
-use crate::materialize::svg::parse_icon_svg;
+use crate::materialize::svg::parse_vector_svg;
 use crate::materialize::{MaterializeFilter, matches_only};
 
 /// Materialize every in-scope `role: icon` / `role: decorative` vector entry.
 pub fn materialize_icon_vectors(
     assets_dir: &Path, assets: &serde_json::Map<String, Value>, platforms: &[String],
     filter: &MaterializeFilter<'_>, materialized: &mut Vec<Value>, skipped_pins: &mut Vec<Value>,
-    errors: &mut Vec<Value>,
+    errors: &mut Vec<Value>, normalized: &mut Vec<Value>,
 ) {
     for (asset_id, entry) in assets {
         if !matches_only(asset_id, filter.only) {
@@ -43,13 +43,21 @@ pub fn materialize_icon_vectors(
             }
         };
 
-        let parsed = match parse_icon_svg(&svg_bytes, asset_id) {
+        let parsed = match parse_vector_svg(&svg_bytes, asset_id) {
             Ok(parsed) => parsed,
             Err(message) => {
                 errors.push(asset_error(asset_id, &message));
                 continue;
             }
         };
+
+        if let Some(report) = &parsed.normalization {
+            crate::materialize::push_normalization_entry(
+                normalized,
+                asset_id,
+                report.transforms.clone(),
+            );
+        }
 
         for platform_name in platforms {
             if let Some(pin) = active_platform_pin(entry, platform_name, assets_dir) {
