@@ -29,6 +29,7 @@ fn build_content_stream(paths: &[DrawablePath], page_height: f32) -> String {
     let mut stream = String::new();
     for path in paths {
         let (r, g, b, opacity) = path.color;
+        stream.push_str("q\n");
         let _ = writeln!(
             stream,
             "{} {} {} rg",
@@ -36,11 +37,9 @@ fn build_content_stream(paths: &[DrawablePath], page_height: f32) -> String {
             f32::from(g) / 255.0,
             f32::from(b) / 255.0
         );
-        if opacity < 1.0 {
-            let _ = writeln!(stream, "{opacity} ca");
-        }
+        let _ = writeln!(stream, "{opacity} ca");
         append_pdf_path(&mut stream, &path.geometry, page_height);
-        stream.push_str("f\n");
+        stream.push_str("f\nQ\n");
     }
     stream
 }

@@ -230,14 +230,14 @@ fn emit_minimal_svg(width: f32, height: f32, paths: &[FlatPath]) -> String {
                 let _ = write!(svg, r#"fill-opacity="{}" "#, trim_num(alpha));
             }
             let _ = write!(svg, r#"d="{}"/>"#, path.d);
-        }
-
-        if let Some((r, g, b, alpha)) = path.stroke
+        } else if let Some((r, g, b, alpha)) = path.stroke
             && alpha > 0.0
         {
-            let _ = write!(svg, r#"<path fill="none" stroke="{}" "#, rgb_hex(r, g, b));
+            // Chrome exporters (`collect_paths`, Android VD) are fill-only; mirror
+            // `path_fill_rgba` stroke fallback as a solid fill path.
+            let _ = write!(svg, r#"<path fill="{}" "#, rgb_hex(r, g, b));
             if alpha < 1.0 {
-                let _ = write!(svg, r#"stroke-opacity="{}" "#, trim_num(alpha));
+                let _ = write!(svg, r#"fill-opacity="{}" "#, trim_num(alpha));
             }
             let _ = write!(svg, r#"d="{}"/>"#, path.d);
         }
