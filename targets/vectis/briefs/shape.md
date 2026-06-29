@@ -21,7 +21,7 @@ A Vectis slice produces a buildable cross-platform application:
 - `## Source` is **Manual** for Vectis (the per-source provenance lives in `Sources:` lines on each requirement; `proposal.md` describes intent at a higher level).
 - `## Domains` lists business features in kebab-case (`todo-app`, `weather-forecast`) — never implementation layers (`todo-core`, `todo-ios`). For Vectis, each domain is a business feature; each domain maps one-to-one to `specs/<domain>/spec.md`.
 - `## Platforms` is the build router. Read `project.yaml.platforms` directly and stamp the full set verbatim — do not cherry-pick or trim per slice. Valid tokens: `core` (always required and always present in the set), `ios`, `android`, `web`, `desktop`. `web` and `desktop` are accepted tokens but have no build sub-briefs, scaffold support, or on-disk shell interpretation yet — do not invent shell sections for them. Tokens, assets, and layout are **not** platforms — they are build inputs to the shells. Per-shell scope (`vectis:ios-*` vs `vectis:android-*` work) is driven entirely by this list. Every slice carries the same platform set; build determines per-platform work (create / update / no-op).
-- Modified domains list existing baseline spec folders that change behaviourally. The synthesis kernel assigns requirement IDs and emits `## ADDED` / `## MODIFIED` delta sections on persist — the agent does not number REQs or author delta headers.
+- Modified domains list existing baseline spec folders that change behaviourally. The synthesis kernel assigns requirement IDs and emits `## ADDED Requirements` / `## MODIFIED Requirements` delta sections on persist — the agent does not number REQs or author delta headers.
 
 ### `spec.md` — behavioural requirements
 
