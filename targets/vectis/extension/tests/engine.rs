@@ -10,6 +10,8 @@ mod android_setup;
 mod assets;
 #[path = "engine/composition.rs"]
 mod composition;
+#[path = "engine/core_scaffold.rs"]
+mod core_scaffold;
 #[path = "engine/infer.rs"]
 mod infer;
 #[path = "engine/ios_scaffold.rs"]

@@ -16,7 +16,7 @@ use super::templates::registry::{android, core, ios};
 use super::*;
 
 const CORE_RENDER_ONLY_SHA256: &str =
-    "bebbee1712d022f2c18d75edd8089c856fa4871f99cf495698fe38d4bf2d6c36";
+    "577630f252591645294f94c64bb600fdb81a1bd3ac6d0ea424508f6bdf5089ec";
 const IOS_RENDER_ONLY_SHA256: &str =
     "2706ec459150de6b97c99eea7f639546b6a21e9b5ca2e470876e7e8817cf3d8e";
 const ANDROID_RENDER_ONLY_SHA256: &str =
