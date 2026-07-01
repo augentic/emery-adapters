@@ -21,6 +21,7 @@ import json
 import os
 import subprocess
 import sys
+from typing import Dict, List, Optional
 
 device_filter = os.environ.get("SIM_DEVICE")
 os_filter = os.environ.get("SIM_OS")
@@ -30,24 +31,22 @@ def normalize_os(version: str) -> str:
     return version.replace(".", "-").lower()
 
 
-def list_devices(state: str | None = None) -> list[dict]:
+def list_devices(state: Optional[str] = None) -> List[Dict]:
     cmd = ["xcrun", "simctl", "list", "devices"]
     if state == "booted":
-        cmd.append("booted")
+        cmd.extend(["booted", "-j"])
     else:
         cmd.extend(["available", "-j"])
     raw = subprocess.check_output(cmd, text=True)
+    data = json.loads(raw)
+    devices: List[Dict] = []
     if state == "booted":
-        data = json.loads(raw)
-        devices: list[dict] = []
         for runtime_devices in data.get("devices", {}).values():
             for device in runtime_devices:
                 if device.get("isAvailable", True):
                     devices.append(device)
         return devices
 
-    data = json.loads(raw)
-    devices: list[dict] = []
     for runtime_id, runtime_devices in data.get("devices", {}).items():
         runtime_version = runtime_id.rsplit(".", 1)[-1]
         for device in runtime_devices:
