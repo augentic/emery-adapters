@@ -4,6 +4,8 @@
 
 mod engine_support;
 
+#[path = "engine/android_scaffold.rs"]
+mod android_scaffold;
 #[path = "engine/android_setup.rs"]
 mod android_setup;
 #[path = "engine/assets.rs"]

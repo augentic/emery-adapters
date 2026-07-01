@@ -20,7 +20,7 @@ const CORE_RENDER_ONLY_SHA256: &str =
 const IOS_RENDER_ONLY_SHA256: &str =
     "1b8c427c3d571799b2463cbcb8ad47d2052b3d7baa939ba8d6c75c7bc0754d67";
 const ANDROID_RENDER_ONLY_SHA256: &str =
-    "872bb9385288d9305786d4662b5b0edf849557ce30a35798aa8b64101d1f76db";
+    "ffc4565387aaf81555ad6b42f66bf9fab5359d1c066675d7ca00a589faec0762";
 
 fn versions() -> Versions {
     Versions::embedded().expect("embedded versions parse")

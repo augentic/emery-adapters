@@ -19,7 +19,7 @@ import __ANDROID_PACKAGE__.HomeView
 @Composable
 fun HomeScreen(
     viewModel: HomeView,
-    @Suppress("UNUSED_PARAMETER") onEvent: (Event) -> Unit
+    _onEvent: (Event) -> Unit
 ) {
     Column(
         modifier = Modifier
