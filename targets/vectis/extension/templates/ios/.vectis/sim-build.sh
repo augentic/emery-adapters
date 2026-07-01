@@ -5,6 +5,7 @@ set -euo pipefail
 DEST='generic/platform=iOS Simulator'
 APP_NAME='__APP_NAME__'
 IOS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+DERIVED_DATA="${IOS_DIR}/DerivedData"
 
 cd "$IOS_DIR"
 
@@ -13,6 +14,7 @@ xcodebuild build \
 	-scheme "${APP_NAME}" \
 	-destination "$DEST" \
 	-configuration Debug \
+	-derivedDataPath "${DERIVED_DATA}" \
 	CODE_SIGNING_ALLOWED=NO \
 	2>&1 | xcbeautify
 

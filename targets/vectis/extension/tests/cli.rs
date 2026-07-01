@@ -656,6 +656,8 @@ fn sync_ios_scaffold_restores_drifted_makefile() {
 
     let restored = std::fs::read_to_string(ios.join("Makefile")).expect("read makefile");
     assert!(restored.contains(".vectis/sim-build.sh"));
+    assert!(restored.contains(".vectis/sim-dev.sh"));
+    assert!(restored.contains("sim-run"));
     assert!(!restored.contains("iPhone 16"));
     let script = std::fs::read_to_string(ios.join(".vectis/sim-build.sh")).expect("read script");
     assert!(script.contains("generic/platform=iOS Simulator"));

@@ -135,9 +135,63 @@ fn sync_restores_non_utf8_makefile() {
 
     let restored = fs::read_to_string(ios.join("Makefile")).expect("read makefile");
     assert!(restored.contains(".vectis/sim-build.sh"));
+    assert!(restored.contains(".vectis/sim-dev.sh"));
+    assert!(restored.contains("sim-run"));
     let script =
         fs::read_to_string(ios.join(".vectis/sim-build.sh")).expect("read sim-build script");
     assert!(script.contains(REQUIRED_SIM_DESTINATION));
+    assert!(script.contains("-derivedDataPath"));
+}
+
+#[test]
+fn ios_scaffold_plan_includes_sim_dev_script() {
+    let plan = plan(None);
+    let sim_dev = plan
+        .files
+        .iter()
+        .find(|file| file.relative_path == "iOS/.vectis/sim-dev.sh")
+        .unwrap_or_else(|| panic!("iOS/.vectis/sim-dev.sh missing from ios plan"));
+    assert!(sim_dev.contents.contains("simctl install"));
+    assert!(sim_dev.contents.contains("simctl launch"));
+    assert!(sim_dev.contents.contains("DerivedData"));
+}
+
+#[test]
+fn sync_restores_drifted_sim_dev_script() {
+    let dir = tempdir().unwrap();
+    let ios = dir.path().join("iOS");
+    fs::create_dir_all(ios.join("TodoApp")).expect("app dir");
+    fs::create_dir_all(ios.join(".vectis")).expect("vectis dir");
+    fs::write(ios.join("project.yml"), "name: TodoApp\n").expect("project yml");
+    fs::write(ios.join(".vectis/sim-dev.sh"), "#!/bin/bash\necho broken\n")
+        .expect("drifted script");
+    fs::write(ios.join("TodoApp/ContentView.swift"), "struct ContentView {}").expect("swift");
+
+    let report = sync_ios_scaffold_files(dir.path()).expect("sync");
+    assert!(report.synced.iter().any(|p| p == "iOS/.vectis/sim-dev.sh"));
+
+    let restored = fs::read_to_string(ios.join(".vectis/sim-dev.sh")).expect("read script");
+    assert!(restored.contains("simctl install"));
+    assert!(restored.contains("simctl launch"));
+}
+
+#[test]
+fn sync_restores_makefile_sim_run_targets() {
+    let dir = tempdir().unwrap();
+    let ios = dir.path().join("iOS");
+    fs::create_dir_all(ios.join("TodoApp")).expect("app dir");
+    fs::write(ios.join("project.yml"), "name: TodoApp\n").expect("project yml");
+    fs::write(ios.join("Makefile"), "sim-build:\n\t@echo noop\n").expect("drifted makefile");
+    fs::write(ios.join("TodoApp/ContentView.swift"), "struct ContentView {}").expect("swift");
+
+    let report = sync_ios_scaffold_files(dir.path()).expect("sync");
+    assert!(report.synced.iter().any(|p| p == "iOS/Makefile"));
+
+    let restored = fs::read_to_string(ios.join("Makefile")).expect("read makefile");
+    assert!(restored.contains("sim-run"));
+    assert!(restored.contains("run: sim-run"));
+    assert!(restored.contains(".vectis/sim-dev.sh"));
+    assert!(restored.contains("DerivedData/"));
 }
 
 #[test]
@@ -160,6 +214,7 @@ fn sync_restores_drifted_makefile_destination() {
     let script =
         fs::read_to_string(ios.join(".vectis/sim-build.sh")).expect("read sim-build script");
     assert!(script.contains(REQUIRED_SIM_DESTINATION));
+    assert!(script.contains("-derivedDataPath"));
 }
 
 #[test]
@@ -226,7 +281,7 @@ fn drift_findings_flag_named_simulator() {
         .expect("makefile");
 
     let findings = ios_scaffold_drift_findings(dir.path());
-    assert_eq!(findings.len(), 3);
+    assert_eq!(findings.len(), 4);
     assert!(findings.iter().all(|f| f["id"] == DRIFT_FINDING_ID));
     assert!(
         findings.iter().any(|f| {
@@ -238,6 +293,10 @@ fn drift_findings_flag_named_simulator() {
     assert!(
         findings.iter().any(|f| f["path"] == "iOS/.vectis/sim-build.sh"),
         "expected missing sim-build.sh finding: {findings:?}"
+    );
+    assert!(
+        findings.iter().any(|f| f["path"] == "iOS/.vectis/sim-dev.sh"),
+        "expected missing sim-dev.sh finding: {findings:?}"
     );
     assert!(
         findings.iter().any(|f| f["path"] == "iOS/project.yml"),
