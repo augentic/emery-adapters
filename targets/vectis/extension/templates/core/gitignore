@@ -13,6 +13,7 @@
 *.xcodeproj/
 *.xcworkspace/
 DerivedData/
+iOS/DerivedData/
 build/
 iOS/generated/
 iOS/*.xcodeproj

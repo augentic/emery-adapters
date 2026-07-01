@@ -5,10 +5,30 @@
 ## Scaffold immutability (create and update mode)
 
 1. **Create mode must scaffold first.** Run `specify extension run vectis -- scaffold ios <APP_NAME> [--caps <csv>]` before writing any Swift under `iOS/`. Do not create Swift files before scaffold; scaffold must be the first write to `iOS/`.
-2. **Never hand-author scaffold files.** `iOS/Makefile`, `iOS/project.yml`, `iOS/.vectis/sim-build.sh`, and the starter files emitted by scaffold (`<APP_NAME>App.swift`, starter `Core.swift`, `ContentView.swift`, starter `Views/`) must come from the scaffold renderer — not from worked examples or memory.
-3. **Never edit CLI-owned scaffold files.** `iOS/Makefile`, `iOS/project.yml`, and `iOS/.vectis/sim-build.sh` are CLI-owned. `specify slice build --phase prepare` auto-syncs them at build start; `specify extension run vectis -- sync ios-scaffold` repairs them in-loop during verify — agents must not patch them during verify-repair or feature work.
-4. **Never set a named simulator destination.** The destination lives only in `iOS/.vectis/sim-build.sh` as `generic/platform=iOS Simulator`. Do not substitute `name=iPhone …`, inline `-destination` in the Makefile, or run `xcodebuild` with a device-specific destination.
+2. **Never hand-author scaffold files.** `iOS/Makefile`, `iOS/project.yml`, `iOS/.vectis/sim-build.sh`, `iOS/.vectis/sim-dev.sh`, and the starter files emitted by scaffold (`<APP_NAME>App.swift`, starter `Core.swift`, `ContentView.swift`, starter `Views/`) must come from the scaffold renderer — not from worked examples or memory.
+3. **Never edit CLI-owned scaffold files.** `iOS/Makefile`, `iOS/project.yml`, `iOS/.vectis/sim-build.sh`, and `iOS/.vectis/sim-dev.sh` are CLI-owned. `specify slice build --phase prepare` auto-syncs them at build start; `specify extension run vectis -- sync ios-scaffold` repairs them in-loop during verify — agents must not patch them during verify-repair or feature work.
+4. **Never set a named simulator destination in verify scripts.** The destination lives only in `iOS/.vectis/sim-build.sh` as `generic/platform=iOS Simulator`. Do not substitute `name=iPhone …`, inline `-destination` in the Makefile, or run `xcodebuild` with a device-specific destination.
 5. **Orchestrator runs verify; repair sub-agents are Swift-only.** The `/spec:build` orchestrator executes sync, `swiftformat`, `make build`, and `make sim-build`. `ios-verify-repair` sub-agents must not run `make`, `xcodebuild`, or edit scaffold paths — they return Swift edits only.
+
+## Running iOS locally
+
+Operators may desk-check the app outside the orchestrator verify loop:
+
+```bash
+cd iOS && make build && make sim-run
+# or with an explicit simulator:
+SIM_UDID=$(xcrun simctl list devices booted -j | ...) make sim-run
+# disambiguate by OS version:
+SIM_DEVICE="iPhone 17" SIM_OS="18.0" make sim-run
+```
+
+`make run` is an alias for `make sim-run` (Android parity). Built artifact:
+
+```text
+iOS/DerivedData/Build/Products/Debug-iphonesimulator/<AppName>.app
+```
+
+Environment variables (`SIM_UDID`, `SIM_DEVICE`, `SIM_OS`) are read by `iOS/.vectis/sim-dev.sh` only — not by the verify path.
 
 ## Important notes
 

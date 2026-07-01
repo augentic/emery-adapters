@@ -87,10 +87,10 @@ targets:
 
 ## `iOS/Makefile`
 
-Scaffold files (`Makefile`, `project.yml`, `iOS/.vectis/sim-build.sh`) are authoritative from `specify extension run vectis -- scaffold ios <APP_NAME>` — do not hand-copy from this example. The blocks below match the embedded template for reference only; Swift sections demonstrate shell patterns.
+Scaffold files (`Makefile`, `project.yml`, `iOS/.vectis/sim-build.sh`, `iOS/.vectis/sim-dev.sh`) are authoritative from `specify extension run vectis -- scaffold ios <APP_NAME>` — do not hand-copy from this example. The blocks below match the embedded template for reference only; Swift sections demonstrate shell patterns.
 
 ```makefile
-.PHONY: all build clean typegen package xcode sim-build
+.PHONY: all build clean typegen package xcode sim-build sim-install sim-launch sim-run run sim-app-path
 
 SHARED_DIR := ../shared
 
@@ -121,11 +121,33 @@ xcode:
 sim-build:
 	@bash "$(dir $(lastword $(MAKEFILE_LIST)))/.vectis/sim-build.sh"
 
+sim-install:
+	@bash "$(dir $(lastword $(MAKEFILE_LIST)))/.vectis/sim-dev.sh" install
+
+sim-launch:
+	@bash "$(dir $(lastword $(MAKEFILE_LIST)))/.vectis/sim-dev.sh" launch
+
+sim-run:
+	@bash "$(dir $(lastword $(MAKEFILE_LIST)))/.vectis/sim-dev.sh" run
+
+run: sim-run
+
+sim-app-path:
+	@bash "$(dir $(lastword $(MAKEFILE_LIST)))/.vectis/sim-dev.sh" app-path
+
 clean:
-	@rm -rf generated/ *.xcodeproj
+	@rm -rf generated/ DerivedData/ *.xcodeproj
 ```
 
-`iOS/.vectis/sim-build.sh` holds the fixed `generic/platform=iOS Simulator` destination; see the embedded template under `extension/templates/ios/.vectis/sim-build.sh`.
+`iOS/.vectis/sim-build.sh` holds the fixed `generic/platform=iOS Simulator` destination and writes build output to `iOS/DerivedData/`. `iOS/.vectis/sim-dev.sh` handles local install/launch via `simctl`. See the embedded templates under `extension/templates/ios/.vectis/`.
+
+## Local run
+
+```bash
+cd iOS && make build && make sim-run
+```
+
+Built artifact: `iOS/DerivedData/Build/Products/Debug-iphonesimulator/Counter.app`. Override simulator with `SIM_UDID`, or `SIM_DEVICE` + `SIM_OS`.
 
 ## `iOS/Counter/CounterApp.swift`
 

@@ -5,7 +5,7 @@ registry is [`../manifest.yaml`](../manifest.yaml) (`assemblies.ios`); `build.rs
 
 Source paths are declared under `templates/ios/` (mostly flat filenames; nested sources such as `.vectis/sim-build.sh` use subdirectories). Nested target paths (especially the `iOS/__APP_NAME__/...` segment) are declared in `manifest.yaml`. The `__APP_NAME__` segment in target paths is substituted by the engine when writing each file, the same as inside file contents (e.g. `__APP_NAME__App.swift` becomes `CounterApp.swift`).
 
-Total: 9 files (matches the file manifest contract for iOS assembly).
+Total: 10 files (matches the file manifest contract for iOS assembly).
 
 ## Agent-immutable scaffold files
 
@@ -13,9 +13,33 @@ These paths are CLI-owned — agents must never author or edit them. `specify sl
 
 | Path | Policy |
 | ---- | ------ |
-| `iOS/Makefile` | Fully immutable for agents. `sim-build` delegates to `iOS/.vectis/sim-build.sh` — never inline `xcodebuild -destination`. |
+| `iOS/Makefile` | Fully immutable for agents. `sim-build` delegates to `iOS/.vectis/sim-build.sh` — never inline `xcodebuild -destination`. Local-dev targets (`sim-install`, `sim-launch`, `sim-run`, `run`, `sim-app-path`) delegate to `iOS/.vectis/sim-dev.sh`. |
 | `iOS/project.yml` | Fully immutable for agents. Sets `SWIFT_TREAT_WARNINGS_AS_ERRORS: YES` under `settings.base` — Swift warnings fail the build. Never add `OTHER_LDFLAGS: ["-w"]` or other linker warning suppression. XcodeGen picks up nested theme / component / asset directories automatically. |
-| `iOS/.vectis/sim-build.sh` | Fully immutable for agents. Must set `DEST='generic/platform=iOS Simulator'` — never a named device (`name=iPhone …`). |
+| `iOS/.vectis/sim-build.sh` | Fully immutable for agents. Must set `DEST='generic/platform=iOS Simulator'` — never a named device (`name=iPhone …`). Writes `-derivedDataPath` to `iOS/DerivedData/` so verify and local-dev share a predictable `.app` path. |
+| `iOS/.vectis/sim-dev.sh` | Fully immutable for agents. Local-dev install/launch only — not part of the orchestrator verify loop. Resolves simulator via `SIM_UDID`, or `SIM_DEVICE` + `SIM_OS`, or booted/first-available iPhone fallback. |
+
+### Verify vs local-dev
+
+- **Verify path** (orchestrator): `make build` → `make sim-build` → `.vectis/verify.ok`. Uses generic simulator destination only.
+- **Local-dev path** (operators): `make run` / `make sim-run` → `sim-dev.sh run` (builds via `sim-build.sh` if needed, then `simctl install` + `simctl launch`).
+
+### Stable build output
+
+After `make sim-build`, the simulator `.app` is at:
+
+```text
+iOS/DerivedData/Build/Products/Debug-iphonesimulator/<AppName>.app
+```
+
+**Tradeoff:** in-repo `DerivedData` gives predictable paths and per-project cache isolation; first build may be cold vs a warm global Xcode cache. Global DerivedData is not used.
+
+### Simulator selection (local-dev)
+
+| Variable | Purpose |
+| -------- | ------- |
+| `SIM_UDID` | Use this simulator directly (highest priority) |
+| `SIM_DEVICE` + `SIM_OS` | Match device name and runtime version (e.g. `SIM_DEVICE="iPhone 17"` `SIM_OS="18.0"`) |
+| *(default)* | Booted simulator if any; else first available device whose name contains `iPhone` |
 
 Swift sources under `iOS/<APP_NAME>/` (except the scaffold-only starter layout in create mode) and generated `Theme/`, `Components/`, `Resources/` remain agent-writable per the iOS build brief.
 
@@ -25,8 +49,8 @@ Always present in the iOS templates:
 
 | Placeholder           | Example value | Files                                                                 |
 | --------------------- | ------------- | --------------------------------------------------------------------- |
-| `__APP_NAME__`        | `Counter`     | `project.yml`, `Makefile`, `App.swift`, `Core.swift`, `ContentView.swift`, `HomeScreen.swift` (and the file/folder paths in MANIFEST) |
-| `__APP_NAME_LOWER__`  | `counter`     | `project.yml` (bundle id prefix and per-config bundle ids)            |
+| `__APP_NAME__`        | `Counter`     | `project.yml`, `Makefile`, `App.swift`, `Core.swift`, `ContentView.swift`, `HomeScreen.swift`, `.vectis/*.sh` (and the file/folder paths in MANIFEST) |
+| `__APP_NAME_LOWER__`  | `counter`     | `project.yml` (bundle id prefix and per-config bundle ids), `.vectis/sim-dev.sh` |
 
 `__APP_NAME_LOWER__` is the lowercase form of the app name (no other
 transformations -- `TodoApp` → `todoapp`). The engine in chunk 7 derives it
@@ -88,4 +112,4 @@ If hot-reload returns, it can be added as a cap-style toggle
 
 ## Self-check
 
-Orphan detection and file-count parity (9 files) run in `build.rs` when the crate builds. After adding or renaming a template file, update [`../manifest.yaml`](../manifest.yaml) in the same change.
+Orphan detection and file-count parity (10 files) run in `build.rs` when the crate builds. After adding or renaming a template file, update [`../manifest.yaml`](../manifest.yaml) in the same change.
