@@ -14,7 +14,7 @@ These paths are CLI-owned — agents must never author or edit them. `specify sl
 | Path | Policy |
 | ---- | ------ |
 | `iOS/Makefile` | Fully immutable for agents. `sim-build` delegates to `iOS/.vectis/sim-build.sh` — never inline `xcodebuild -destination`. |
-| `iOS/project.yml` | Fully immutable for agents. XcodeGen picks up nested theme / component / asset directories automatically. |
+| `iOS/project.yml` | Fully immutable for agents. Sets `SWIFT_TREAT_WARNINGS_AS_ERRORS: YES` under `settings.base` — Swift warnings fail the build. Never add `OTHER_LDFLAGS: ["-w"]` or other linker warning suppression. XcodeGen picks up nested theme / component / asset directories automatically. |
 | `iOS/.vectis/sim-build.sh` | Fully immutable for agents. Must set `DEST='generic/platform=iOS Simulator'` — never a named device (`name=iPhone …`). |
 
 Swift sources under `iOS/<APP_NAME>/` (except the scaffold-only starter layout in create mode) and generated `Theme/`, `Components/`, `Resources/` remain agent-writable per the iOS build brief.

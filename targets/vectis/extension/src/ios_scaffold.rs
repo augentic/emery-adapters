@@ -24,6 +24,9 @@ pub const DRIFT_FINDING_ID: &str = "ios-scaffold-file-drift";
 /// Required `sim-build` destination literal in the CLI-owned sim-build script.
 pub const REQUIRED_SIM_DESTINATION: &str = "generic/platform=iOS Simulator";
 
+/// Required Xcode build setting in CLI-owned `project.yml` (`settings.base`).
+pub const REQUIRED_SWIFT_TREAT_WARNINGS_AS_ERRORS: &str = "SWIFT_TREAT_WARNINGS_AS_ERRORS: YES";
+
 /// JSON fragment for `scaffold_sync.ios` in prepare and sync command output.
 #[must_use]
 pub fn scaffold_sync_ios_json(report: &IosScaffoldSyncReport) -> Value {
@@ -245,6 +248,18 @@ fn drift_message(relative_path: &str, on_disk: &str) -> String {
             let _ = write!(
                 message,
                 " (Makefile must delegate sim-build to iOS/.vectis/sim-build.sh — do not inline xcodebuild -destination)"
+            );
+        }
+    } else if relative_path.ends_with("project.yml") {
+        if on_disk.contains("OTHER_LDFLAGS") && on_disk.contains("-w") {
+            let _ = write!(
+                message,
+                " (forbidden linker warning suppression via OTHER_LDFLAGS -w; remove OTHER_LDFLAGS and set {REQUIRED_SWIFT_TREAT_WARNINGS_AS_ERRORS} under settings.base)"
+            );
+        } else if !on_disk.contains(REQUIRED_SWIFT_TREAT_WARNINGS_AS_ERRORS) {
+            let _ = write!(
+                message,
+                " (project.yml must set {REQUIRED_SWIFT_TREAT_WARNINGS_AS_ERRORS} under settings.base)"
             );
         }
     }
