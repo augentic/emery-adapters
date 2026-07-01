@@ -59,8 +59,11 @@ The Integration specialist cross-checks wired UI input artifacts (`composition.y
 | Check | Codex | Library |
 | --- | --- | --- |
 | Render-by-`kind` drift | `VECTIS-006` | [`android-checks.md`](android-checks.md) **AND-028** |
+| Inline lint suppressions | `VECTIS-009` | [`android-checks.md`](android-checks.md) **AND-029** |
 
 Apply [`VECTIS-006`](../../rules/VECTIS-006-asset-render-by-kind.md): forbid `Icons.Default.*` (and equivalent Material Icons substitutes) for composition-referenced ids whose `assets.yaml` entry is `vector` or `raster`. Cite `rule_id: VECTIS-006` on every finding. Skip when `composition.yaml` or `assets.yaml` is absent.
+
+Apply [`VECTIS-009`](../../rules/VECTIS-009-lint-suppression-forbidden.md): forbid `@Suppress` and `@file:Suppress` in agent-authored Kotlin under `Android/app/src` and `Android/shared/src` (excluding `generated/`). Cite `rule_id: VECTIS-009` on every finding. When `vectis verify --mode verify` already reported `lint-suppression-forbidden`, treat it as confirmed.
 
 ## Antagonist responsibilities
 

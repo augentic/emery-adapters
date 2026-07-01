@@ -370,3 +370,19 @@ Per the render-by-`kind` contract ([`android/design-system-integration.md`](../a
 When `composition.yaml` or `assets.yaml` is absent, skip this check — there is no cross-artifact signal.
 
 **Fix**: Regenerate the affected screen via `vectis:android-writer` after `vectis materialize assets` has populated `design-system/assets/exports/android/` (or after operator pins are in place). If the glyph is genuinely platform-native, change the `assets.yaml` entry to `kind: symbol` with `symbols.ios` / `symbols.android` and update composition to reference the symbol id — do not leave a `vector` / `raster` entry while the shell still substitutes Material Icons.
+
+## AND-029: No inline lint suppressions
+
+**Severity**: important
+
+**Codex**: `rule_id: VECTIS-009`
+
+Per the Android write brief repair discipline and hard-rules-android, agent-authored Kotlin under `Android/app/src/**/*.kt` and `Android/shared/src/**/*.kt` (excluding `generated/`) must not carry `@Suppress(...)` or `@file:Suppress(...)`.
+
+**Detection**:
+
+1. Search agent-authored Kotlin sources for `@Suppress(` and `@file:Suppress`.
+2. Skip `generated/` subtrees and CLI-owned Gradle files.
+3. When `vectis verify --mode verify` reports `lint-suppression-forbidden`, treat it as a confirmed defect and cite `rule_id: VECTIS-009`.
+
+**Fix**: Remove the suppression and apply a structural fix (`_` prefixes, minimal handlers, narrow types) so Gradle `allWarningsAsErrors` passes without `@Suppress`.

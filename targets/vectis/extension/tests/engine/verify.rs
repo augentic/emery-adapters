@@ -573,3 +573,39 @@ fn verify_android_missing_makefile_exits_one() {
     );
     assert_eq!(code, 1);
 }
+
+#[test]
+fn verify_rust_allow_suppression_exits_one() {
+    let tmp = tempdir().unwrap();
+    write_project_yaml(tmp.path(), &["core"]);
+    let app = tmp.path().join("shared/src/app.rs");
+    std::fs::create_dir_all(app.parent().expect("parent")).expect("mkdir");
+    std::fs::write(&app, "#[allow(dead_code)]\npub struct App;\n").expect("write app.rs");
+
+    let (result, code) = verify(&args(VerifyMode::Verify, tmp.path()));
+    let findings = result["findings"].as_array().expect("findings array");
+    assert!(
+        findings.iter().any(|f| f["id"] == "lint-suppression-forbidden"),
+        "expected suppression finding: {result}"
+    );
+    assert_eq!(code, 1);
+}
+
+#[test]
+fn verify_kotlin_suppress_exits_one() {
+    let tmp = tempdir().unwrap();
+    write_project_yaml(tmp.path(), &["core", "android"]);
+    scaffold_core(tmp.path());
+    scaffold_android(tmp.path());
+    let main = tmp.path().join("Android/app/src/main/kotlin/com/test/MainActivity.kt");
+    let original = std::fs::read_to_string(&main).expect("read main");
+    std::fs::write(&main, format!("@Suppress(\"UNUSED\")\n{original}")).expect("inject suppress");
+
+    let (result, code) = verify(&args(VerifyMode::Verify, tmp.path()));
+    let findings = result["findings"].as_array().expect("findings array");
+    assert!(
+        findings.iter().any(|f| f["id"] == "lint-suppression-forbidden"),
+        "expected suppression finding: {result}"
+    );
+    assert_eq!(code, 1);
+}

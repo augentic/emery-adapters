@@ -32,6 +32,8 @@ mod materialize_illustrations;
 mod paths;
 #[path = "engine/prepare_scope.rs"]
 mod prepare_scope;
+#[path = "engine/suppression_scan.rs"]
+mod suppression_scan;
 #[path = "engine/svg_normalize.rs"]
 mod svg_normalize;
 #[path = "engine/tokens.rs"]
