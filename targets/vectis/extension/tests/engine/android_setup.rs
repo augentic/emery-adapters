@@ -110,28 +110,10 @@ fn verify_android_toolchain_clean_after_setup_and_apk() {
 
     let tmp = tempdir().expect("tempdir");
     write_project_yaml(tmp.path(), &["core", "android"]);
-    crate::engine_support::scaffold_android_shell(tmp.path());
     let core_dir = tmp.path().join("shared/src");
     std::fs::create_dir_all(&core_dir).expect("mkdir shared/src");
     std::fs::write(core_dir.join("app.rs"), "pub struct App;").expect("write app.rs");
-
-    let _unused = run_for_shell_dir(&tmp.path().join("Android"));
-    std::fs::write(tmp.path().join("Android/local.properties"), "sdk.dir=/tmp/android-sdk\n")
-        .expect("local.properties");
-    std::fs::write(
-        tmp.path().join("Android/gradle.properties"),
-        "android.useAndroidX=true\norg.gradle.java.home=/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home\n",
-    )
-    .expect("gradle.properties");
-    let shared_build = tmp.path().join("Android/shared/build.gradle.kts");
-    std::fs::create_dir_all(shared_build.parent().expect("parent")).expect("shared dir");
-    std::fs::write(&shared_build, "ndkVersion = \"26.1.10909125\"\n").expect("shared build");
-    let apk_parent = tmp.path().join("Android/app/build/outputs/apk/debug");
-    std::fs::create_dir_all(&apk_parent).expect("apk dir");
-    std::fs::write(apk_parent.join("app-debug.apk"), b"PK").expect("apk");
-    let stamp_dir = tmp.path().join("Android/.vectis");
-    std::fs::create_dir_all(&stamp_dir).expect("mkdir .vectis");
-    std::fs::write(stamp_dir.join("verify.ok"), "test-stamp\n").expect("android verify stamp");
+    crate::engine_support::scaffold_android_verify_ready(tmp.path());
 
     let (rendered, code) = render_json(run_verify(&VerifyArgs {
         mode: VerifyMode::Verify,

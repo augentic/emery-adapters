@@ -28,6 +28,7 @@ use std::path::{Path, PathBuf};
 use clap::{Args as ClapArgs, ValueEnum};
 use serde_json::Value;
 
+use crate::android_scaffold::android_scaffold_drift_findings;
 use crate::ios_scaffold::ios_scaffold_drift_findings;
 use crate::shell::{SUPPORTED_SHELL_PLATFORMS, shell_present};
 use crate::validate::find_project_root;
@@ -240,6 +241,10 @@ fn render_verify(statuses: &[PlatformStatus], project_root: &Path, platforms: &[
 
     if platforms.iter().any(|p| p == "ios") && shell_present(project_root, "ios") {
         findings.extend(ios_scaffold_drift_findings(project_root));
+    }
+
+    if platforms.iter().any(|p| p == "android") && shell_present(project_root, "android") {
+        findings.extend(android_scaffold_drift_findings(project_root));
     }
 
     let ios_present = statuses.iter().find(|s| s.platform == "ios").is_some_and(|s| s.present);

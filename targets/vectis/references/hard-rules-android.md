@@ -2,6 +2,11 @@
 
 **When to read this**: open this file at the start of every Android shell run, and again before final verification (step U8). It captures the Update Mode preservation contract plus the normative facts about the platform — UniFFI bridging, generated-type packages, Java 21 pinning, network security config, defensive error handling, and the crash-recovery pattern — that are easy to violate by hand-editing the rendered scaffold.
 
+## Scaffold immutability (create and update mode)
+
+1. **Never edit CLI-owned scaffold files.** `Android/Makefile`, `Android/settings.gradle.kts`, `Android/build.gradle.kts`, `Android/app/build.gradle.kts`, and `Android/shared/build.gradle.kts` are CLI-owned. `specify extension run vectis -- sync android-scaffold` repairs them in-loop during verify — agents must not patch them during verify-repair or feature work.
+2. **Host NDK substitution is Makefile-owned, not agent-authored.** `make setup-host` may replace `__ANDROID_NDK_VERSION__` in `Android/shared/build.gradle.kts`; sync preserves an already-substituted NDK pin when comparing bytes.
+
 ## Preservation Rules (Update Mode)
 
 1. **Never regenerate a file from scratch.** Make targeted edits.
