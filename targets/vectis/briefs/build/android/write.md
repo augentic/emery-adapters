@@ -54,13 +54,16 @@ Before entering the loop, confirm host prerequisites via `specify slice build --
 
 ### Build loop
 
-After the writer sub-agent returns, the orchestrator runs:
+After the writer sub-agent returns, the orchestrator runs `specify extension run vectis -- sync android-scaffold` once, then executes this loop (max 3 iterations):
 
 ```bash
-cd "${ANDROID_SHELL_DIR}" && make verify
+specify extension run vectis -- sync android-scaffold   # 0. CLI repair — every iteration.
+cd "${ANDROID_SHELL_DIR}" && make verify                # 1. Setup, typegen, cargoBuild, assembleDebug.
 ```
 
-On failure the orchestrator captures stderr and spawns a **repair-only** sub-agent (`task: android-verify-repair`) with Kotlin/Gradle edit scope only — **no shell**. The sub-agent returns edited Kotlin files or a patch plan; the orchestrator applies edits and re-runs `make verify`. **Structural fix only for warnings** — refactor (underscore-prefixed unused parameters, real handler wiring) until `make verify` passes; never silence a warning with `@Suppress`.
+On failure the orchestrator captures stderr and spawns a **repair-only** sub-agent (`task: android-verify-repair`) with Kotlin-only edit scope — **no shell**. The sub-agent returns edited Kotlin files or a patch plan; the orchestrator applies edits and re-runs the loop from step 0. **Structural fix only for warnings** — refactor (underscore-prefixed unused parameters, real handler wiring) until `make verify` passes; never silence a warning with `@Suppress`.
+
+**Gradle / Makefile drift errors:** the orchestrator runs `sync android-scaffold` again and retries the same two commands. Never edit `Android/Makefile`, `Android/settings.gradle.kts`, `Android/build.gradle.kts`, `Android/app/build.gradle.kts`, or `Android/shared/build.gradle.kts`. If strict-flag drift persists after sync + retry, escalate — do not patch CLI-owned scaffold files by hand.
 
 If still failing after 3 iterations: **stop**, report the remaining failures with full error output, and escalate. Java 25+ environments hit `IllegalArgumentException`; the fix is pinning `org.gradle.java.home` to Java 21 in `gradle.properties` via `make setup-host`.
 

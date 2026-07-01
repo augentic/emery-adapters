@@ -44,6 +44,6 @@ fun HomeScreen(
 fun HomeScreenPreview() {
     HomeScreen(
         viewModel = HomeView(message = "Hello from __APP_NAME__"),
-        onEvent = { }
+        _onEvent = { }
     )
 }
