@@ -196,10 +196,30 @@ fn scaffold_ios(root: &std::path::Path) {
 }
 
 fn scaffold_android(root: &std::path::Path) {
-    let dir = root.join("Android/app/src/main/kotlin/com/test");
-    std::fs::create_dir_all(&dir).expect("mkdir Android");
-    std::fs::write(dir.join("MainActivity.kt"), "class MainActivity").expect("write kt");
-    let _unused = specify_vectis::android::run_for_shell_dir(&root.join("Android"));
+    let android = root.join("Android");
+    let package = "com.vectis.testapp";
+    let app_name = "TestApp";
+    let package_path = package.replace('.', "/");
+    let kotlin_test = android.join("app/src/main/kotlin/com/test");
+    std::fs::create_dir_all(&kotlin_test).expect("mkdir Android");
+    std::fs::write(kotlin_test.join("MainActivity.kt"), "class MainActivity").expect("write kt");
+    std::fs::create_dir_all(android.join(format!("app/src/main/java/{package_path}")))
+        .expect("kotlin dir");
+    std::fs::write(
+        android.join("settings.gradle.kts"),
+        format!("rootProject.name = \"{app_name}\"\n"),
+    )
+    .expect("settings.gradle");
+    std::fs::write(android.join("app/build.gradle.kts"), format!("namespace = \"{package}\"\n"))
+        .expect("app build.gradle");
+    std::fs::write(
+        android.join(format!("app/src/main/java/{package_path}/{app_name}Application.kt")),
+        format!("package {package}\nclass {app_name}Application\n"),
+    )
+    .expect("application kt");
+    specify_vectis::android_scaffold::sync_android_scaffold_files(root)
+        .expect("sync android scaffold");
+    let _unused = specify_vectis::android::run_for_shell_dir(&android);
     std::fs::write(root.join("Android/local.properties"), "sdk.dir=/tmp/android-sdk\n")
         .expect("local.properties");
     std::fs::write(
@@ -208,8 +228,9 @@ fn scaffold_android(root: &std::path::Path) {
     )
     .expect("gradle.properties");
     let shared_build = root.join("Android/shared/build.gradle.kts");
-    std::fs::create_dir_all(shared_build.parent().expect("parent")).expect("shared dir");
-    std::fs::write(&shared_build, "ndkVersion = \"26.1.10909125\"\n").expect("shared build");
+    let mut contents = std::fs::read_to_string(&shared_build).expect("read shared build");
+    contents = contents.replace("__ANDROID_NDK_VERSION__", "26.1.10909125");
+    std::fs::write(&shared_build, contents).expect("shared build");
     let apk_parent = root.join("Android/app/build/outputs/apk/debug");
     std::fs::create_dir_all(&apk_parent).expect("apk dir");
     std::fs::write(apk_parent.join("app-debug.apk"), b"PK").expect("apk");
@@ -638,6 +659,44 @@ fn sync_ios_scaffold_restores_drifted_makefile() {
     assert!(!restored.contains("iPhone 16"));
     let script = std::fs::read_to_string(ios.join(".vectis/sim-build.sh")).expect("read script");
     assert!(script.contains("generic/platform=iOS Simulator"));
+}
+
+#[test]
+fn sync_android_scaffold_restores_drifted_makefile() {
+    let tmp = tempdir().unwrap();
+    write_project_yaml(tmp.path(), &["core", "android"]);
+    let android = tmp.path().join("Android");
+    let package_path = "com/vectis/testapp";
+    std::fs::create_dir_all(android.join(format!("app/src/main/java/{package_path}")))
+        .expect("mkdir app");
+    std::fs::write(android.join("settings.gradle.kts"), "rootProject.name = \"TestApp\"\n")
+        .expect("settings.gradle");
+    std::fs::write(android.join("app/build.gradle.kts"), "namespace = \"com.vectis.testapp\"\n")
+        .expect("app build.gradle");
+    std::fs::write(
+        android.join(format!("app/src/main/java/{package_path}/TestAppApplication.kt")),
+        "package com.vectis.testapp\n",
+    )
+    .expect("application kt");
+    std::fs::write(android.join("Makefile"), "verify:\n\t@echo drifted\n")
+        .expect("drifted makefile");
+
+    let assert =
+        vectis_sync().env("PROJECT_DIR", tmp.path()).args(["android-scaffold"]).assert().success();
+    let value = parse_json(&assert.get_output().stdout);
+
+    assert_eq!(value["command"], "sync android-scaffold");
+    assert!(
+        value["scaffold_sync"]["android"]["synced"]
+            .as_array()
+            .expect("synced")
+            .iter()
+            .any(|entry| entry == "Android/Makefile")
+    );
+
+    let restored = std::fs::read_to_string(android.join("Makefile")).expect("read makefile");
+    assert!(restored.contains("RUSTFLAGS=\"-D warnings\""));
+    assert!(!restored.contains("drifted"));
 }
 
 #[test]

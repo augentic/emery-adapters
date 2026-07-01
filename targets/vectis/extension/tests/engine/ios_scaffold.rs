@@ -4,15 +4,100 @@ use std::fs;
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use specify_vectis::ios_scaffold::{
-    DRIFT_FINDING_ID, REQUIRED_SIM_DESTINATION, ios_scaffold_drift_findings, resolve_ios_app_name,
-    sync_ios_scaffold_files,
+    DRIFT_FINDING_ID, REQUIRED_SIM_DESTINATION, REQUIRED_SWIFT_TREAT_WARNINGS_AS_ERRORS,
+    ios_scaffold_drift_findings, resolve_ios_app_name, sync_ios_scaffold_files,
 };
 use specify_vectis::prepare::{PrepareCommand, run};
+use specify_vectis::scaffold::{ScaffoldPlan, Versions, parse_caps, plan_ios};
 use tempfile::tempdir;
+
+fn versions() -> Versions {
+    Versions::embedded().expect("embedded versions parse")
+}
+
+fn plan(caps: Option<&str>) -> ScaffoldPlan {
+    let caps = parse_caps(caps).expect("parse caps");
+    plan_ios("Counter", "com.vectis.counter", &caps, &versions()).expect("plan ios")
+}
+
+fn project_yml_contents(plan: &ScaffoldPlan) -> &str {
+    plan.files
+        .iter()
+        .find(|file| file.relative_path == "iOS/project.yml")
+        .unwrap_or_else(|| panic!("iOS/project.yml missing from ios plan"))
+        .contents
+        .as_str()
+}
+
+fn assert_project_yml_strict_flags(plan: &ScaffoldPlan) {
+    let contents = project_yml_contents(plan);
+    assert!(
+        contents.contains(REQUIRED_SWIFT_TREAT_WARNINGS_AS_ERRORS),
+        "project.yml must set SWIFT_TREAT_WARNINGS_AS_ERRORS under settings.base:\n{contents}"
+    );
+    assert!(
+        !contents.contains("OTHER_LDFLAGS"),
+        "project.yml must not suppress linker warnings via OTHER_LDFLAGS:\n{contents}"
+    );
+    assert!(!contents.contains("-w"), "project.yml must not contain -w linker flag:\n{contents}");
+}
 
 fn env_lock() -> MutexGuard<'static, ()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     LOCK.get_or_init(|| Mutex::new(())).lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+#[test]
+fn ios_scaffold_project_yml_treats_warnings_as_errors_render_only() {
+    assert_project_yml_strict_flags(&plan(None));
+}
+
+#[test]
+fn ios_scaffold_project_yml_treats_warnings_as_errors_http() {
+    assert_project_yml_strict_flags(&plan(Some("http")));
+}
+
+#[test]
+fn sync_restores_drifted_project_yml_linker_suppression() {
+    let dir = tempdir().unwrap();
+    let ios = dir.path().join("iOS");
+    fs::create_dir_all(ios.join("Counter")).expect("app dir");
+    fs::write(ios.join("project.yml"), "name: Counter\n").expect("project yml");
+    fs::write(
+        ios.join("project.yml"),
+        "name: Counter\nsettings:\n  configs:\n    Debug:\n      OTHER_LDFLAGS: [\"-w\"]\n",
+    )
+    .expect("drifted project yml");
+    fs::write(ios.join("Counter/ContentView.swift"), "struct ContentView {}").expect("swift");
+
+    let report = sync_ios_scaffold_files(dir.path()).expect("sync");
+    assert!(report.synced.iter().any(|p| p == "iOS/project.yml"));
+
+    let restored = fs::read_to_string(ios.join("project.yml")).expect("read project yml");
+    assert!(restored.contains(REQUIRED_SWIFT_TREAT_WARNINGS_AS_ERRORS));
+    assert!(!restored.contains("OTHER_LDFLAGS"));
+    assert!(!restored.contains("-w"));
+}
+
+#[test]
+fn drift_findings_flag_linker_warning_suppression_in_project_yml() {
+    let dir = tempdir().unwrap();
+    let ios = dir.path().join("iOS");
+    fs::create_dir_all(ios.join("Counter")).expect("app dir");
+    fs::write(
+        ios.join("project.yml"),
+        "name: Counter\nsettings:\n  configs:\n    Debug:\n      OTHER_LDFLAGS: [\"-w\"]\n",
+    )
+    .expect("drifted project yml");
+
+    let findings = ios_scaffold_drift_findings(dir.path());
+    assert!(
+        findings.iter().any(|f| {
+            f["path"] == "iOS/project.yml"
+                && f["message"].as_str().unwrap().contains("forbidden linker warning suppression")
+        }),
+        "expected linker suppression hint in project.yml finding: {findings:?}"
+    );
 }
 
 #[test]

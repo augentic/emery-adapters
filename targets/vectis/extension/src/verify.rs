@@ -22,12 +22,15 @@ mod app_icon;
 mod catalog;
 mod compile_stamp;
 mod host_prereq;
+mod suppression_scan;
 
 use std::path::{Path, PathBuf};
 
 use clap::{Args as ClapArgs, ValueEnum};
 use serde_json::Value;
+pub use suppression_scan::{FINDING_ID, suppression_scan_findings};
 
+use crate::android_scaffold::android_scaffold_drift_findings;
 use crate::ios_scaffold::ios_scaffold_drift_findings;
 use crate::shell::{SUPPORTED_SHELL_PLATFORMS, shell_present};
 use crate::validate::find_project_root;
@@ -242,6 +245,10 @@ fn render_verify(statuses: &[PlatformStatus], project_root: &Path, platforms: &[
         findings.extend(ios_scaffold_drift_findings(project_root));
     }
 
+    if platforms.iter().any(|p| p == "android") && shell_present(project_root, "android") {
+        findings.extend(android_scaffold_drift_findings(project_root));
+    }
+
     let ios_present = statuses.iter().find(|s| s.platform == "ios").is_some_and(|s| s.present);
     findings.extend(compile_stamp::compile_stamp_findings(
         project_root,
@@ -249,6 +256,8 @@ fn render_verify(statuses: &[PlatformStatus], project_root: &Path, platforms: &[
         ios_present,
         android_present,
     ));
+
+    findings.extend(suppression_scan_findings(project_root, platforms));
 
     serde_json::json!({
         "mode": "verify",

@@ -33,12 +33,11 @@ targets:
       base:
         SWIFT_VERSION: "6.0"
         SWIFT_STRICT_CONCURRENCY: complete
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
         ENABLE_USER_SCRIPT_SANDBOXING: "NO"
         CODE_SIGNING_ALLOWED: "NO"
       configs:
         Debug:
           PRODUCT_BUNDLE_IDENTIFIER: com.vectis.__APP_NAME_LOWER__.debug
-          OTHER_LDFLAGS: ["-w"]
         Release:
           PRODUCT_BUNDLE_IDENTIFIER: com.vectis.__APP_NAME_LOWER__
-          OTHER_LDFLAGS: ["-w"]

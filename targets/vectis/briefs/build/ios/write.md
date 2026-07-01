@@ -13,6 +13,8 @@ Inspect `${IOS_SHELL_DIR}` for any `.swift` files:
 
 Spawn the writer sub-agent with `mode: create|update` and `skip_verification: true`; the orchestrator runs the verify loop (§ Verify) after the writer returns.
 
+Repair sub-agent (`task: ios-verify-repair`, invoked by the verify loop below) applies the minimum **structural** change to fix reported Swift / Xcode errors — never add or preserve `swiftlint:disable`, `swift-format-ignore`, or other lint/format suppression comments; refactor so `SWIFT_TREAT_WARNINGS_AS_ERRORS` passes cleanly.
+
 ## Writer steps
 
 1. **Read the input contract.** `app.rs`, `lib.rs`, `Cargo.toml`, the regenerated `composition.yaml`, sibling `tokens.yaml` / `assets.yaml` when present, and the `## iOS Shell Requirements` section of `spec.md` plus the `## iOS Shell Details` section of `design.md`.
@@ -37,6 +39,7 @@ Full set at [`hard-rules-ios.md`](../../../references/hard-rules-ios.md). Highli
 - Create mode must run `vectis scaffold ios` before any Swift files exist under `iOS/`.
 - Never edit `iOS/Makefile`, `iOS/project.yml`, or `iOS/.vectis/sim-build.sh` — prepare and `vectis sync ios-scaffold` auto-sync them from the embedded template.
 - Never substitute a named simulator destination (`name=iPhone …`); `sim-build` uses `generic/platform=iOS Simulator` via the CLI-owned script only.
+- Zero-warning policy: fix structure, never suppress — no `swiftlint:disable`, `swift-format-ignore`, or similar in shell Swift (`iOS/<APP_NAME>/**/*.swift` excluding `generated/`).
 
 ## Verify (max 3 iterations)
 
@@ -57,6 +60,8 @@ On failure the orchestrator captures stderr and spawns a **repair-only** sub-age
 - `allowed_paths: iOS/<APP_NAME>/**/*.swift, Theme/, Components/, Resources/`
 - `error_output:` the captured stderr from the failing step
 - **No shell** — the sub-agent returns edited Swift files or a patch plan only; the orchestrator applies edits and re-runs the loop from step 0.
+
+**Structural fix only for warnings** — refactor (underscore-prefixed unused parameters, real handler wiring, visibility adjustments) until `make build` / `make sim-build` pass; never silence a warning with `swiftlint:disable`, `swift-format-ignore`, or similar comments.
 
 **Destination / simulator-not-found errors:** the orchestrator runs `sync ios-scaffold` again and retries the same four commands. Never edit Makefile, `project.yml`, or `sim-build.sh`. Never run `xcodebuild` with a named device destination. If generic destination still fails after sync + retry, escalate — do not substitute `name=iPhone …`.
 

@@ -176,3 +176,18 @@ Every `if let Some(x) = ...` should have an `else` branch (or the absence should
 **Detection**: Search for `if let Some` and `if let Ok` without a corresponding `else`. Check whether the missing branch could indicate a logic gap (e.g., an item not found in the list -- should this be an error?).
 
 **Acceptable**: `if let Some(item) = model.items.find(...)` where the item not being found is a harmless no-op (e.g., stale event for a deleted item).
+
+## GEN-013: No inline lint suppressions
+
+**Severity**: important
+
+**Codex**: `rule_id: VECTIS-009`
+
+Per hard-rules-core rule 10 and the core write brief repair discipline, agent-authored Rust under `shared/src/**/*.rs` must not carry `#[allow(...)]` or `#[expect(...)]`. Crate-level `[workspace.lints.clippy]` allows in scaffold-owned `Cargo.toml` are out of scope.
+
+**Detection**:
+
+1. Search `shared/src/**/*.rs` for `#[allow(` and `#[expect(`.
+2. When `vectis verify --mode verify` reports `lint-suppression-forbidden`, treat it as a confirmed defect and cite `rule_id: VECTIS-009`.
+
+**Fix**: Remove the suppression and apply a structural fix (per-cap anchors, distinct match arms, helper extraction, const fns) so `cargo clippy --all-targets -- -D warnings` passes without inline attributes.

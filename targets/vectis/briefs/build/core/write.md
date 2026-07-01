@@ -11,7 +11,7 @@ Inspect `${PROJECT_DIR}/shared/src/app.rs`:
 - Missing → **create mode**: render the scaffold with `specify extension run vectis -- scaffold core <APP_NAME> [--caps <csv>]`, then enter update mode for feature-specific code.
 - Present → **update mode**: diff the artifact-derived target against the existing implementation and apply targeted edits.
 
-Repair sub-agent (invoked by the verify-repair loop in [../test.md](../test.md)) uses `mode: repair` plus the failing error output to apply the minimum change to fix the reported errors.
+Repair sub-agent (invoked by the verify-repair loop in [../test.md](../test.md)) uses `mode: repair` plus the failing error output to apply the minimum **structural** change to fix the reported errors — never add or preserve `#[allow]` / `#[expect]`; refactor so `RUSTFLAGS="-D warnings"` and `clippy -- -D warnings` pass cleanly.
 
 ## Critical path
 
@@ -31,6 +31,7 @@ Full set at [`hard-rules-core.md`](../../../references/hard-rules-core.md). High
 - Stay inside `app.rs` for domain + state-machine code; helpers live in adapter modules.
 - Generated-type conventions (`#[repr(C)]`, `#[derive(Facet)]`, kebab-case → PascalCase via uniffi rules) per [`crux/generated-type-conventions.md`](../../../references/crux/generated-type-conventions.md).
 - The `Effect` enum carries `#[effect(facet_typegen)]`; never reintroduce the retired `Capabilities` struct.
+- Zero-warning policy: fix structure, never suppress — no inline `#[allow]` / `#[expect]` in `shared/src/**/*.rs` (see rule 10 in [`hard-rules-core.md`](../../../references/hard-rules-core.md)).
 
 ## Worked examples
 

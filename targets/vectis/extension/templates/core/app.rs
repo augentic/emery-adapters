@@ -85,26 +85,52 @@ pub enum Effect {
     CAP:platform>>>
 }
 
-// Capability type aliases. The render-only baseline does not exercise
-// these directly (writer skills wire them into the update arms during
-// Update Mode); allow `dead_code` so the scaffolded project still
-// compiles cleanly under `-D warnings`.
+// Capability type aliases. Render-only anchor stubs keep each alias live
+// without inline lint suppressions; writer skills replace the stubs with
+// real capability wiring during Update Mode.
 <<<CAP:http
-#[allow(dead_code)]
 type Http = crux_http::Http<Effect, Event>;
+
+#[must_use]
+const fn http_capability_anchor() -> usize {
+    std::mem::size_of::<Http>()
+}
 CAP:http>>>
 <<<CAP:kv
-#[allow(dead_code)]
 type KeyValue = crux_kv::KeyValue<Effect, Event>;
+
+#[must_use]
+const fn kv_capability_anchor() -> usize {
+    std::mem::size_of::<KeyValue>()
+}
 CAP:kv>>>
 <<<CAP:time
-#[allow(dead_code)]
 type Time = crux_time::Time<Effect, Event>;
+
+#[must_use]
+const fn time_capability_anchor() -> usize {
+    std::mem::size_of::<Time>()
+}
 CAP:time>>>
 <<<CAP:platform
-#[allow(dead_code)]
 type Platform = crux_platform::Platform<Effect, Event>;
+
+#[must_use]
+const fn platform_capability_anchor() -> usize {
+    std::mem::size_of::<Platform>()
+}
 CAP:platform>>>
+
+// Caps without dedicated update arms (time, platform) are touched from
+// Navigate so their aliases stay live under `-D warnings`.
+const fn touch_orphan_capability_types() {
+    <<<CAP:time
+    let _ = time_capability_anchor();
+    CAP:time>>>
+    <<<CAP:platform
+    let _ = platform_capability_anchor();
+    CAP:platform>>>
+}
 
 #[derive(Default)]
 pub struct __APP_STRUCT__;
@@ -116,23 +142,27 @@ impl App for __APP_STRUCT__ {
     type Effect = Effect;
 
     // Render-only baseline: every capability event resolves to a bare
-    // `render()` call. With more than one cap selected, the per-cap arms
-    // share a body, which would otherwise trip `clippy::match_same_arms`
-    // under `-D warnings`. Writer skills replace these arms with real
-    // logic during Update Mode, at which point the allow becomes a no-op
-    // and can be dropped.
-    #[allow(clippy::match_same_arms)]
+    // `render()` call. Per-cap anchor stubs give each arm a distinct
+    // body so the scaffold stays clippy-clean under `-D warnings`.
+    // Writer skills replace these arms with real logic during Update Mode.
     fn update(&self, event: Event, model: &mut Model) -> Command<Effect, Event> {
         match event {
             Event::Navigate(Route::Home) => {
                 model.page = Page::Home;
+                touch_orphan_capability_types();
                 render()
             }
             <<<CAP:http
-            Event::FetchData | Event::Fetched(_) => render(),
+            Event::FetchData | Event::Fetched(_) => {
+                let _ = http_capability_anchor();
+                render()
+            }
             CAP:http>>>
             <<<CAP:kv
-            Event::LoadData | Event::Loaded(_) => render(),
+            Event::LoadData | Event::Loaded(_) => {
+                let _ = kv_capability_anchor();
+                render()
+            }
             CAP:kv>>>
         }
     }

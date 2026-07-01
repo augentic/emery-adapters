@@ -77,6 +77,41 @@ PATH="${mock_bin}:${PATH}" \
   SPECIFY_SLICE_DIR="${tmpdir}/.specify/slices/demo" \
   sh "$FINALIZE_VERIFY"
 
+android_sync_marker="${tmpdir}/android-scaffold-synced"
+cat > "${mock_bin}/specify" <<EOF
+#!/bin/sh
+if [ "\$1" = "extension" ] && [ "\$2" = "run" ] && [ "\$5" = "sync" ] && [ "\$6" = "android-scaffold" ]; then
+  touch "${android_sync_marker}"
+  exit 0
+fi
+if [ "\$1" = "extension" ] && [ "\$2" = "run" ]; then
+  exit 0
+fi
+exit 1
+EOF
+chmod +x "${mock_bin}/specify"
+
+cat > "${mock_bin}/make" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+chmod +x "${mock_bin}/make"
+
+android_project="${tmpdir}/android-finalize"
+mkdir -p "${android_project}/.specify/slices/demo" "${android_project}/Android"
+cat > "${android_project}/.specify/project.yaml" <<'EOF'
+platforms:
+  - core
+  - android
+EOF
+
+echo "android finalize_verify syncs scaffold before make verify"
+PATH="${mock_bin}:${PATH}" \
+  SPECIFY_PROJECT_DIR="$android_project" \
+  SPECIFY_SLICE_DIR="${android_project}/.specify/slices/demo" \
+  sh "$FINALIZE_VERIFY"
+[ -f "$android_sync_marker" ] || fail "expected android-scaffold sync during finalize_verify"
+
 resolve_from_design() {
   slice_dir="$1"
   grep -E '^- `App` struct: `' "${slice_dir}/design.md" 2>/dev/null \

@@ -27,14 +27,15 @@
 //! - `scaffold` — render-only Crux project scaffolds (core / iOS /
 //!   Android shells).
 //! - `android` — Android shell bootstrap (`setup` vendored Gradle wrapper).
-//! - `sync` — lightweight scaffold repair (`ios-scaffold` for agent-immutable
-//!   iOS shell files without prepare side effects).
+//! - `sync` — lightweight scaffold repair (`ios-scaffold` / `android-scaffold`
+//!   for agent-immutable shell files without prepare side effects).
 //! - `schema` — print a tool-owned embedded schema to stdout (the tool-owned schema and catalog decisions D1).
 //!
 //! Each subcommand serialises its body directly; there is no shared
 //! envelope wrapper.
 
 pub mod android;
+pub mod android_scaffold;
 mod error;
 pub mod infer;
 pub mod ios_scaffold;
@@ -79,7 +80,7 @@ pub fn render_json(payload: &Value) -> String {
                   prepare — slice-build prepare orchestration (build).\n  \
                   scaffold — render Crux project scaffolds (core, ios, android).\n  \
                   android — Android shell bootstrap (setup).\n  \
-                  sync — lightweight scaffold repair (ios-scaffold).\n  \
+                  sync — lightweight scaffold repair (ios-scaffold, android-scaffold).\n  \
                   schema  — print a tool-owned embedded schema to stdout."
 )]
 pub struct Args {

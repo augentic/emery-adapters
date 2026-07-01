@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use clap::{Args as ClapArgs, Subcommand};
 use serde_json::{Value, json};
 
+use crate::android_scaffold::{scaffold_sync_android_json, sync_android_scaffold_files};
 use crate::ios_scaffold::{scaffold_sync_ios_json, sync_ios_scaffold_files};
 use crate::validate::find_project_root;
 use crate::{VectisError, render_json as render_value};
@@ -14,11 +15,20 @@ use crate::{VectisError, render_json as render_value};
 pub enum SyncCommand {
     /// Re-render agent-immutable `iOS/Makefile` and `iOS/project.yml` from templates.
     IosScaffold(IosScaffoldArgs),
+    /// Re-render agent-immutable Android assembly Gradle files and Makefile from templates.
+    AndroidScaffold(AndroidScaffoldArgs),
 }
 
 /// Arguments for `vectis sync ios-scaffold`.
 #[derive(ClapArgs, Debug, Clone, PartialEq, Eq)]
 pub struct IosScaffoldArgs {
+    /// Project directory. Falls back to `PROJECT_DIR` env, then CWD walk-up.
+    pub path: Option<PathBuf>,
+}
+
+/// Arguments for `vectis sync android-scaffold`.
+#[derive(ClapArgs, Debug, Clone, PartialEq, Eq)]
+pub struct AndroidScaffoldArgs {
     /// Project directory. Falls back to `PROJECT_DIR` env, then CWD walk-up.
     pub path: Option<PathBuf>,
 }
@@ -32,6 +42,7 @@ pub struct IosScaffoldArgs {
 pub fn run(command: &SyncCommand) -> Result<Value, VectisError> {
     match command {
         SyncCommand::IosScaffold(args) => run_ios_scaffold(args),
+        SyncCommand::AndroidScaffold(args) => run_android_scaffold(args),
     }
 }
 
@@ -58,6 +69,16 @@ fn run_ios_scaffold(args: &IosScaffoldArgs) -> Result<Value, VectisError> {
         "command": "sync ios-scaffold",
         "project-root": project_root.display().to_string(),
         "scaffold_sync": scaffold_sync_ios_json(&report),
+    }))
+}
+
+fn run_android_scaffold(args: &AndroidScaffoldArgs) -> Result<Value, VectisError> {
+    let project_root = resolve_project_root(args.path.as_deref())?;
+    let report = sync_android_scaffold_files(&project_root)?;
+    Ok(json!({
+        "command": "sync android-scaffold",
+        "project-root": project_root.display().to_string(),
+        "scaffold_sync": scaffold_sync_android_json(&report),
     }))
 }
 

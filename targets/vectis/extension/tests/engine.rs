@@ -4,12 +4,16 @@
 
 mod engine_support;
 
+#[path = "engine/android_scaffold.rs"]
+mod android_scaffold;
 #[path = "engine/android_setup.rs"]
 mod android_setup;
 #[path = "engine/assets.rs"]
 mod assets;
 #[path = "engine/composition.rs"]
 mod composition;
+#[path = "engine/core_scaffold.rs"]
+mod core_scaffold;
 #[path = "engine/infer.rs"]
 mod infer;
 #[path = "engine/ios_scaffold.rs"]
@@ -28,6 +32,8 @@ mod materialize_illustrations;
 mod paths;
 #[path = "engine/prepare_scope.rs"]
 mod prepare_scope;
+#[path = "engine/suppression_scan.rs"]
+mod suppression_scan;
 #[path = "engine/svg_normalize.rs"]
 mod svg_normalize;
 #[path = "engine/tokens.rs"]

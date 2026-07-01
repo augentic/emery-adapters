@@ -55,20 +55,17 @@ open class Core : androidx.lifecycle.ViewModel() {
 CAP:http>>>
 <<<CAP:kv
             is Effect.KeyValue -> {
-                @Suppress("UNUSED_VARIABLE")
-                val keyValueOp = effect.value
+                // Stub: writer replaces with coreFfi.resolve plumbing in Update Mode.
             }
 CAP:kv>>>
 <<<CAP:time
             is Effect.Time -> {
-                @Suppress("UNUSED_VARIABLE")
-                val timeRequest = effect.value
+                // Stub: writer replaces with coreFfi.resolve plumbing in Update Mode.
             }
 CAP:time>>>
 <<<CAP:platform
             is Effect.Platform -> {
-                @Suppress("UNUSED_VARIABLE")
-                val platformRequest = effect.value
+                // Stub: writer replaces with coreFfi.resolve plumbing in Update Mode.
             }
 CAP:platform>>>
         }
@@ -80,9 +77,7 @@ CAP:platform>>>
         handleEffects(effects)
     }
 
-    private suspend fun performHttpRequest(request: HttpRequest): HttpResult {
-        @Suppress("UNUSED_VARIABLE")
-        val req = request
+    private suspend fun performHttpRequest(_request: HttpRequest): HttpResult {
         return HttpResult.Err(
             HttpError.Io("HTTP not implemented in deterministic baseline; writer skill enables in Update Mode")
         )

@@ -19,7 +19,7 @@ import __ANDROID_PACKAGE__.HomeView
 @Composable
 fun HomeScreen(
     viewModel: HomeView,
-    @Suppress("UNUSED_PARAMETER") onEvent: (Event) -> Unit
+    _onEvent: (Event) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -44,6 +44,6 @@ fun HomeScreen(
 fun HomeScreenPreview() {
     HomeScreen(
         viewModel = HomeView(message = "Hello from __APP_NAME__"),
-        onEvent = { }
+        _onEvent = { }
     )
 }

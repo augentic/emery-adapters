@@ -80,10 +80,32 @@ pub fn scaffold_android_shell(project: &std::path::Path) {
     std::fs::write(dir.join("MainActivity.kt"), "class MainActivity").expect("write kt");
 }
 
-/// Android shell with toolchain + debug APK stubs so `verify --mode verify`
-/// exits clean when `android` is declared.
+fn write_android_scaffold_identity(project: &std::path::Path, app_name: &str, package: &str) {
+    let android = project.join("Android");
+    let package_path = package.replace('.', "/");
+    std::fs::create_dir_all(android.join(format!("app/src/main/java/{package_path}")))
+        .expect("kotlin dir");
+    std::fs::write(
+        android.join("settings.gradle.kts"),
+        format!("rootProject.name = \"{app_name}\"\n"),
+    )
+    .expect("settings.gradle");
+    std::fs::write(android.join("app/build.gradle.kts"), format!("namespace = \"{package}\"\n"))
+        .expect("app build.gradle");
+    std::fs::write(
+        android.join(format!("app/src/main/java/{package_path}/{app_name}Application.kt")),
+        format!("package {package}\nclass {app_name}Application\n"),
+    )
+    .expect("application kt");
+}
+
+/// Android shell with immutable scaffold files synced and toolchain stubs so
+/// `verify --mode verify` exits clean when `android` is declared.
 pub fn scaffold_android_verify_ready(project: &std::path::Path) {
     scaffold_android_shell(project);
+    write_android_scaffold_identity(project, "TestApp", "com.vectis.testapp");
+    specify_vectis::android_scaffold::sync_android_scaffold_files(project)
+        .expect("sync android scaffold");
     let _unused = specify_vectis::android::run_for_shell_dir(&project.join("Android"));
     std::fs::write(project.join("Android/local.properties"), "sdk.dir=/tmp/android-sdk\n")
         .expect("local.properties");
@@ -93,8 +115,9 @@ pub fn scaffold_android_verify_ready(project: &std::path::Path) {
     )
     .expect("gradle.properties");
     let shared_build = project.join("Android/shared/build.gradle.kts");
-    std::fs::create_dir_all(shared_build.parent().expect("parent")).expect("shared dir");
-    std::fs::write(&shared_build, "ndkVersion = \"26.1.10909125\"\n").expect("shared build");
+    let mut contents = std::fs::read_to_string(&shared_build).expect("read shared build");
+    contents = contents.replace("__ANDROID_NDK_VERSION__", "26.1.10909125");
+    std::fs::write(&shared_build, contents).expect("shared build");
     let apk_parent = project.join("Android/app/build/outputs/apk/debug");
     std::fs::create_dir_all(&apk_parent).expect("apk dir");
     std::fs::write(apk_parent.join("app-debug.apk"), b"PK").expect("apk");

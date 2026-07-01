@@ -262,3 +262,19 @@ Per the iOS scaffold immutability contract ([`hard-rules-ios.md`](../hard-rules-
 4. When `vectis verify --mode verify` reports `ios-scaffold-file-drift`, treat it as a confirmed defect and cite `rule_id: VECTIS-007`.
 
 **Fix**: Do not patch scaffold files by hand. Run `specify extension run vectis -- sync ios-scaffold` to restore `iOS/Makefile`, `iOS/project.yml`, and `iOS/.vectis/sim-build.sh` from the embedded template. Limit verify-repair to Swift under `iOS/<APP_NAME>/`, plus `Theme/`, `Components/`, and `Resources/`.
+
+## IOS-022: No inline lint suppressions
+
+**Severity**: important
+
+**Codex**: `rule_id: VECTIS-009`
+
+Per the iOS write brief repair discipline and hard-rules-ios, agent-authored Swift under `iOS/**/*.swift` (excluding `generated/`) must not carry `swiftlint:disable` or `swift-format-ignore` comments.
+
+**Detection**:
+
+1. Search agent-authored Swift sources for `swiftlint:disable` and `swift-format-ignore`.
+2. Skip `generated/` subtrees and CLI-owned scaffold files (`iOS/Makefile`, `iOS/project.yml`, `iOS/.vectis/sim-build.sh`).
+3. When `vectis verify --mode verify` reports `lint-suppression-forbidden`, treat it as a confirmed defect and cite `rule_id: VECTIS-009`.
+
+**Fix**: Remove the disable comment and apply a structural fix so `SWIFT_TREAT_WARNINGS_AS_ERRORS` and SwiftLint pass without suppression comments.

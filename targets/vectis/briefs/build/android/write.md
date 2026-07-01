@@ -13,6 +13,8 @@ Inspect `${ANDROID_SHELL_DIR}/app/src/main/java/<package>/Core.kt`:
 
 Spawn the writer sub-agent with `mode: create|update` and `skip_verification: true`; the orchestrator runs the verify loop (§ Verify) after the writer returns.
 
+Repair sub-agent (`task: android-verify-repair`, invoked by the verify loop below) applies the minimum **structural** change to fix reported Kotlin / Gradle errors — never add or preserve `@Suppress` / `@file:Suppress`; refactor so `allWarningsAsErrors` and `JavaCompile -Werror` pass cleanly.
+
 ## Writer steps
 
 1. **Read inputs.** `app.rs`, the regenerated `composition.yaml`, sibling `tokens.yaml` / `assets.yaml` when present, the `## Android Shell Requirements` section of `spec.md`, and the `## Android Shell Details` section of `design.md`. Extract App name, ViewModel / Effect / Event / Route variants, and the capability set.
@@ -38,6 +40,7 @@ Full set at [`hard-rules-android.md`](../../../references/hard-rules-android.md)
 - Java 21 only — Java 25+ environments hit `IllegalArgumentException` in AGP; pin `org.gradle.java.home` in `gradle.properties`.
 - Always include `@Preview` blocks for new composables.
 - Coroutine cancellation MUST rethrow `CancellationException`.
+- Zero-warning policy: fix structure, never suppress — no `@Suppress` / `@file:Suppress` in shell Kotlin (`Android/app/src/**`, `Android/shared/src/**` excluding `generated/`).
 
 ## Verify (max 3 iterations)
 
@@ -51,13 +54,16 @@ Before entering the loop, confirm host prerequisites via `specify slice build --
 
 ### Build loop
 
-After the writer sub-agent returns, the orchestrator runs:
+After the writer sub-agent returns, the orchestrator runs `specify extension run vectis -- sync android-scaffold` once, then executes this loop (max 3 iterations):
 
 ```bash
-cd "${ANDROID_SHELL_DIR}" && make verify
+specify extension run vectis -- sync android-scaffold   # 0. CLI repair — every iteration.
+cd "${ANDROID_SHELL_DIR}" && make verify                # 1. Setup, typegen, cargoBuild, assembleDebug.
 ```
 
-On failure the orchestrator captures stderr and spawns a **repair-only** sub-agent (`task: android-verify-repair`) with Kotlin/Gradle edit scope only — **no shell**. The sub-agent returns edited Kotlin files or a patch plan; the orchestrator applies edits and re-runs `make verify`.
+On failure the orchestrator captures stderr and spawns a **repair-only** sub-agent (`task: android-verify-repair`) with Kotlin-only edit scope — **no shell**. The sub-agent returns edited Kotlin files or a patch plan; the orchestrator applies edits and re-runs the loop from step 0. **Structural fix only for warnings** — refactor (underscore-prefixed unused parameters, real handler wiring) until `make verify` passes; never silence a warning with `@Suppress`.
+
+**Gradle / Makefile drift errors:** the orchestrator runs `sync android-scaffold` again and retries the same two commands. Never edit `Android/Makefile`, `Android/settings.gradle.kts`, `Android/build.gradle.kts`, `Android/app/build.gradle.kts`, or `Android/shared/build.gradle.kts`. If strict-flag drift persists after sync + retry, escalate — do not patch CLI-owned scaffold files by hand.
 
 If still failing after 3 iterations: **stop**, report the remaining failures with full error output, and escalate. Java 25+ environments hit `IllegalArgumentException`; the fix is pinning `org.gradle.java.home` to Java 21 in `gradle.properties` via `make setup-host`.
 

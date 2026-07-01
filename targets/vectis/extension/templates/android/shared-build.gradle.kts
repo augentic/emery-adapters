@@ -1,3 +1,4 @@
+import org.gradle.api.tasks.compile.JavaCompile
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import com.android.build.gradle.tasks.MergeSourceSetFolders
 import com.nishtahir.CargoBuildTask
@@ -39,6 +40,7 @@ android {
     kotlin {
         compilerOptions {
             jvmTarget = JvmTarget.JVM_11
+            allWarningsAsErrors = true
         }
     }
 
@@ -105,4 +107,8 @@ afterEvaluate {
 tasks.matching { it.name.matches(Regex("merge.*JniLibFolders")) }.configureEach {
     inputs.dir(File(layout.buildDirectory.asFile.get(), "rustJniLibs/android"))
     dependsOn("cargoBuild")
+}
+
+tasks.withType<JavaCompile>().configureEach {
+    options.compilerArgs.add("-Werror")
 }

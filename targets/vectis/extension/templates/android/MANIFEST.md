@@ -96,14 +96,18 @@ Notes for chunk 8:
   exactly. The `http` block additionally adds `viewModelScope` / coroutine
   imports and the `resolveAndHandleEffects` helper -- they are not generic
   enough to live outside the marker.
-- **`kv`, `time`, `platform` baseline arms are TODO stubs.** They bind
-  `effect.value` to a suppressed-warning local and do nothing else (no
-  `coreFfi.resolve(...)` call, no async plumbing). The deterministic baseline
-  never emits these effects (the render-only update path only fires
-  `render()`), so this is safe. The writer skills replace the stubs with real
-  handlers in Update Mode. If chunk 6 wires `Event` variants that emit
-  non-HTTP effects on init, those stubs will need to grow `coreFfi.resolve`
-  plumbing similar to the HTTP arm.
+- **`kv`, `time`, `platform` baseline arms are TODO stubs.** Empty `when`
+  arms with a comment only — no `@Suppress`, no dummy bindings. The
+  deterministic baseline never emits these effects (the render-only update
+  path only fires `render()`), so this is safe. The writer skills replace
+  the stubs with real handlers in Update Mode. If chunk 6 wires `Event`
+  variants that emit non-HTTP effects on init, those stubs will need to grow
+  `coreFfi.resolve` plumbing similar to the HTTP arm.
+- **Zero-warning policy.** `app-build.gradle.kts` and
+  `shared-build.gradle.kts` set `allWarningsAsErrors = true` on the Kotlin
+  compiler and `-Werror` on `JavaCompile`. Shell Kotlin must not use
+  `@Suppress` or `@file:Suppress` — fix structure (underscore-prefixed
+  unused parameters, empty stub arms, real handler wiring) instead.
 - **The `sse` cap intentionally has no entry in `Core.kt` today.** Same
   reasoning as chunk 3b: `app.rs` doesn't declare an `Effect::Sse(...)`
   variant in the render-only baseline, so the Kotlin `Effect` enum has no

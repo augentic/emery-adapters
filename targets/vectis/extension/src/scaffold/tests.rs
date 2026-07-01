@@ -16,11 +16,11 @@ use super::templates::registry::{android, core, ios};
 use super::*;
 
 const CORE_RENDER_ONLY_SHA256: &str =
-    "bebbee1712d022f2c18d75edd8089c856fa4871f99cf495698fe38d4bf2d6c36";
+    "0fb3572fffb5e249f1128450afcf6812a55856f2017808db22425a88587866d3";
 const IOS_RENDER_ONLY_SHA256: &str =
-    "2706ec459150de6b97c99eea7f639546b6a21e9b5ca2e470876e7e8817cf3d8e";
+    "c7338104ec61e7e56d4c750937d5e09023bae29f149454bfc168122180163f12";
 const ANDROID_RENDER_ONLY_SHA256: &str =
-    "062502a6942d296e35dd3631ebd7119bba8b85399b9d0ce800c4f80e17bb0d18";
+    "6d6888bc19e0951063b1e90f9129b9bdd70fe3b2c2fb479cba209bc8df1e0c0b";
 
 fn versions() -> Versions {
     Versions::embedded().expect("embedded versions parse")
