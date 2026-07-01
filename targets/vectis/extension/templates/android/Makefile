@@ -48,7 +48,7 @@ verify: setup typegen android-lib apk
 
 typegen: lib
 	@echo "Generating Kotlin types..."
-	@cd $(WORKSPACE) && RUST_LOG=info cargo run \
+	@cd $(WORKSPACE) && RUSTFLAGS="-D warnings" RUST_LOG=info cargo run \
 		--package shared \
 		--bin codegen \
 		--features codegen,facet_typegen \
@@ -58,7 +58,7 @@ typegen: lib
 
 lib:
 	@echo "Building Rust shared library..."
-	@cd $(WORKSPACE) && cargo build --features uniffi
+	@cd $(WORKSPACE) && RUSTFLAGS="-D warnings" cargo build --features uniffi
 
 android-lib:
 	@echo "Cross-compiling Rust for Android..."

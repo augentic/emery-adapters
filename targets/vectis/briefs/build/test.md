@@ -28,16 +28,16 @@ Spawn in its own sub-agent with `PROJECT_DIR`, the spec path, and (in update mod
 Capture the baseline before the writers (update mode only):
 
 ```bash
-cd "$PROJECT_DIR" && cargo test 2>&1 | tee "/tmp/${SLICE_ID}-${DOMAIN_NAME}-baseline.txt"
+cd "$PROJECT_DIR" && RUSTFLAGS="-D warnings" cargo test 2>&1 | tee "/tmp/${SLICE_ID}-${DOMAIN_NAME}-baseline.txt"
 ```
 
 Each iteration runs all four checks; if any fail, apply the targeted fix and start a new iteration.
 
 ```bash
-cd "$PROJECT_DIR" && cargo fmt --check         # 1. Formatting (auto-fix with `cargo fmt`).
-cd "$PROJECT_DIR" && cargo check               # 2. Compilation.
-cd "$PROJECT_DIR" && cargo clippy --all-targets # 3. Lint.
-cd "$PROJECT_DIR" && cargo test                # 4. Tests.
+cd "$PROJECT_DIR" && cargo fmt --check                                      # 1. Formatting (auto-fix with `cargo fmt`).
+cd "$PROJECT_DIR" && RUSTFLAGS="-D warnings" cargo check                    # 2. Compilation.
+cd "$PROJECT_DIR" && cargo clippy --all-targets -- -D warnings            # 3. Lint.
+cd "$PROJECT_DIR" && RUSTFLAGS="-D warnings" cargo test                     # 4. Tests.
 ```
 
 ### Failure classification → repair sub-agent routing

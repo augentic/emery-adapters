@@ -2,7 +2,7 @@
 
 use std::process::Command;
 
-use specify_vectis::scaffold::{parse_caps, plan_core, write_plan, Versions};
+use specify_vectis::scaffold::{Versions, parse_caps, plan_core, write_plan};
 use tempfile::tempdir;
 
 fn versions() -> Versions {
@@ -21,14 +21,8 @@ fn plan_app_rs(caps: Option<&str>) -> String {
 }
 
 fn assert_no_inline_suppressions(app_rs: &str) {
-    assert!(
-        !app_rs.contains("#[allow"),
-        "app.rs must not contain #[allow]: {app_rs}"
-    );
-    assert!(
-        !app_rs.contains("#[expect"),
-        "app.rs must not contain #[expect]: {app_rs}"
-    );
+    assert!(!app_rs.contains("#[allow"), "app.rs must not contain #[allow]: {app_rs}");
+    assert!(!app_rs.contains("#[expect"), "app.rs must not contain #[expect]: {app_rs}");
 }
 
 fn write_core_scaffold(root: &std::path::Path, caps: Option<&str>) {

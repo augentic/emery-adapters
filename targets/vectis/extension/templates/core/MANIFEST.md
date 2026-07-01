@@ -77,7 +77,7 @@ Notes for chunk 5/6:
 
 ## Zero-warning contract
 
-The render-only core scaffold must compile under `cargo clippy --all-targets -- -D warnings` without inline Rust lint suppressions (`#[allow]`, `#[expect]`) in `app.rs`. Capability type aliases stay live via per-cap anchor stubs; caps without update arms (`time`, `platform`) are touched from `Navigate`. Crate-level `[workspace.lints.clippy]` allows in `workspace-cargo.toml` (e.g. `cargo_common_metadata`) are intentional and distinct from inline suppressions. Writer skills must fix structure rather than add suppressions when extending the core.
+The render-only core scaffold must compile under `cargo clippy --all-targets -- -D warnings` without inline Rust lint suppressions (`#[allow]`, `#[expect]`) in `app.rs`. Capability type aliases stay live via per-cap anchor stubs; caps without update arms (`time`, `platform`) are touched from `Navigate`. Crate-level `[workspace.lints.clippy]` allows in `workspace-cargo.toml` (e.g. `cargo_common_metadata`) are intentional and distinct from inline suppressions; `allow_attributes` and `allow_attributes_without_reason` are set to `warn` so inline suppressions fail under `-D warnings`. Writer skills must fix structure rather than add suppressions when extending the core.
 
 ## Self-check
 

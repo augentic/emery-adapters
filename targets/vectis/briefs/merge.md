@@ -54,9 +54,9 @@ After `specify slice merge` exits zero (the slice's deltas have been promoted in
 ```bash
 # core, when ${PROJECT_DIR}/shared exists
 cd "$PROJECT_DIR" && cargo fmt --check
-cd "$PROJECT_DIR" && cargo check
-cd "$PROJECT_DIR" && cargo clippy --all-targets
-cd "$PROJECT_DIR" && cargo test
+cd "$PROJECT_DIR" && RUSTFLAGS="-D warnings" cargo check
+cd "$PROJECT_DIR" && cargo clippy --all-targets -- -D warnings
+cd "$PROJECT_DIR" && RUSTFLAGS="-D warnings" cargo test
 
 # iOS, when ${PROJECT_DIR}/iOS exists
 cd "$PROJECT_DIR" && specify extension run vectis -- sync ios-scaffold

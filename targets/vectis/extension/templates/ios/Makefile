@@ -9,7 +9,7 @@ build: typegen package xcode
 # Phase 1: generate SharedTypes (domain types as a Swift package)
 typegen:
 	@echo "Generating SharedTypes..."
-	@RUST_LOG=info cargo run --manifest-path $(SHARED_DIR)/Cargo.toml \
+	@RUST_LOG=info RUSTFLAGS="-D warnings" cargo run --manifest-path $(SHARED_DIR)/Cargo.toml \
 		--bin codegen --features codegen,facet_typegen -- \
 		--language swift --output-dir generated
 
@@ -17,7 +17,7 @@ typegen:
 package:
 	@echo "Building Shared Swift package..."
 	@cd $(SHARED_DIR) && \
-		cargo swift package --name Shared --platforms ios \
+		RUSTFLAGS="-D warnings" cargo swift package --name Shared --platforms ios \
 			--lib-type static --features uniffi && \
 		rm -rf ../iOS/generated/Shared && \
 		mkdir -p ../iOS/generated/Shared && \
