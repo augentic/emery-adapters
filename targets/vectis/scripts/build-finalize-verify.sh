@@ -61,6 +61,7 @@ if platform_enabled ios && [ -d "${PROJECT_DIR}/iOS" ]; then
 fi
 
 if platform_enabled android && [ -d "${PROJECT_DIR}/Android" ]; then
+  specify extension run vectis -- sync android-scaffold
   (cd "${PROJECT_DIR}/Android" && make verify)
 fi
 
