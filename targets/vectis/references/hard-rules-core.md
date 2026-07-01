@@ -13,4 +13,4 @@ In update mode, minimize collateral changes. Follow these rules:
 7. **Preserve `clippy.toml` and `rust-toolchain.toml`** unless a newly added capability introduces duplicate transitive crates or requires new build targets.
 8. **Preserve `Cargo.lock`** -- do not delete or manually edit it. Let `cargo` update it when dependencies change.
 9. **Preserve doc comments and code comments** on unchanged items.
-10. **Preserve `#[allow(...)]` attributes** on unchanged functions (e.g., `#[allow(clippy::too_many_lines)]` on `update()`).
+10. **Never add or preserve inline lint suppressions.** Do not introduce `#[allow(...)]` or `#[expect(...)]` in `shared/src/**/*.rs`, and remove any stale suppressions encountered during repair. Fix the underlying structure (extract helpers, split match arms, use const anchors, narrow types) so `cargo clippy --all-targets -- -D warnings` passes without inline suppressions. Crate-level `[workspace.lints.clippy]` allows in `Cargo.toml` are scaffold-owned and out of scope for writers.

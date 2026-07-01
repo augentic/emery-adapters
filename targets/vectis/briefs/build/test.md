@@ -51,9 +51,11 @@ cd "$PROJECT_DIR" && RUSTFLAGS="-D warnings" cargo test                     # 4.
 | Type mismatch between handler output and assertion | Per spec | Classify per spec, spawn the appropriate repair sub-agent. |
 | API surface mismatch: wrong method on `Command`, incorrect `expect_*` chain, stale builder, wrong `resolve()` argument shape | Test issue | Spawn `test-writer` repair sub-agent (the Crux 0.17 API surface is non-trivial; the sub-agent reads the relevant Crux docs / template before fixing). |
 | Unresolved import or missing crate in `Cargo.toml` | Workspace issue | Edit `Cargo.toml` directly (no sub-agent needed). |
+| Compiler warning, clippy lint, or `allow_attributes` / `allow_attributes_without_reason` promotion under `-D warnings` | Code issue | Spawn `core-writer` repair sub-agent — fix code structure; never add or preserve `#[allow]` / `#[expect]`. |
 
 ### Repair discipline
 
+- **Structural fix only for warnings.** Compiler and clippy warnings are code issues — refactor (extract helpers, split match arms, narrow types) until the four-command loop passes under `-D warnings`. Never silence a warning with `#[allow]` or `#[expect]`.
 - **Minimum change only.** Fix the reported error and nothing else.
 - **Scope the diff.** Before committing a repair, verify the change is limited to files and functions identified in the error output.
 - **One failure class per sub-agent.** When multiple failures are present, group them by classification (code vs test) and spawn one repair sub-agent per class.
