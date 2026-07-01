@@ -125,6 +125,69 @@ fn kotlin_file_suppress_is_forbidden() {
 }
 
 #[test]
+fn rust_crate_level_allow_is_forbidden() {
+    let tmp = tempdir().unwrap();
+    write_project(tmp.path(), &["core"]);
+    write_file(&tmp.path().join("shared/src/lib.rs"), "#![allow(dead_code)]\npub mod app;\n");
+
+    let findings = suppression_scan_findings(tmp.path(), &["core".into()]);
+    assert_eq!(findings.len(), 1);
+    assert!(findings[0]["message"].as_str().unwrap().contains("#![allow("));
+}
+
+#[test]
+fn rust_string_literal_mention_is_not_forbidden() {
+    let tmp = tempdir().unwrap();
+    write_project(tmp.path(), &["core"]);
+    write_file(
+        &tmp.path().join("shared/src/app.rs"),
+        "const HELP: &str = \"never use #[allow(dead_code)] in shared/src\";\n",
+    );
+
+    let findings = suppression_scan_findings(tmp.path(), &["core".into()]);
+    assert!(findings.is_empty(), "string literals must not trip the scan: {findings:?}");
+}
+
+#[test]
+fn rust_block_comment_mention_is_not_forbidden() {
+    let tmp = tempdir().unwrap();
+    write_project(tmp.path(), &["core"]);
+    write_file(
+        &tmp.path().join("shared/src/app.rs"),
+        "/* #[allow(dead_code)] is forbidden in agent-authored code */\npub struct App;\n",
+    );
+
+    let findings = suppression_scan_findings(tmp.path(), &["core".into()]);
+    assert!(findings.is_empty(), "block comments must not trip the scan: {findings:?}");
+}
+
+#[test]
+fn kotlin_string_literal_mention_is_not_forbidden() {
+    let tmp = tempdir().unwrap();
+    write_project(tmp.path(), &["android"]);
+    write_file(
+        &tmp.path().join("Android/app/src/main/java/com/test/Main.kt"),
+        "const val HELP = \"@Suppress(\\\"UNUSED\\\") is forbidden\"\n",
+    );
+
+    let findings = suppression_scan_findings(tmp.path(), &["android".into()]);
+    assert!(findings.is_empty(), "string literals must not trip the scan: {findings:?}");
+}
+
+#[test]
+fn swift_string_literal_mention_is_not_forbidden() {
+    let tmp = tempdir().unwrap();
+    write_project(tmp.path(), &["ios"]);
+    write_file(
+        &tmp.path().join("iOS/TestApp/ContentView.swift"),
+        "let help = \"swiftlint:disable is forbidden in shell Swift\"\n",
+    );
+
+    let findings = suppression_scan_findings(tmp.path(), &["ios".into()]);
+    assert!(findings.is_empty(), "string literals must not trip the scan: {findings:?}");
+}
+
+#[test]
 fn generated_subtree_is_skipped() {
     let tmp = tempdir().unwrap();
     write_project(tmp.path(), &["ios", "android"]);

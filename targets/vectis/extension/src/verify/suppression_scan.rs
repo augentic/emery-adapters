@@ -118,22 +118,63 @@ fn scan_file(path: &Path, extension: &str, on_hit: &mut dyn FnMut(&Path, usize, 
     let Ok(source) = fs::read_to_string(path) else {
         return;
     };
-    let patterns = patterns_for_extension(extension);
-    let skip_comment_lines = extension == "rs";
     for (line_no, line) in source.lines().enumerate() {
-        if skip_comment_lines {
-            let trimmed = line.trim_start();
-            if trimmed.starts_with("//") || trimmed.starts_with('*') {
-                continue;
-            }
+        let trimmed = line.trim_start();
+        if should_skip_comment_line(extension, trimmed) {
+            continue;
         }
-        for pattern in patterns {
-            if let Some(matched) = line.find(pattern).map(|start| &line[start..]) {
-                let token = matched.split_whitespace().next().unwrap_or(pattern);
-                on_hit(path, line_no + 1, token);
-            }
+        for token in suppression_tokens_on_line(extension, line, trimmed) {
+            on_hit(path, line_no + 1, token);
         }
     }
+}
+
+fn should_skip_comment_line(extension: &str, trimmed: &str) -> bool {
+    match extension {
+        "rs" | "kt" => {
+            trimmed.starts_with("//") || trimmed.starts_with('*') || trimmed.starts_with("/*")
+        }
+        _ => false,
+    }
+}
+
+fn suppression_tokens_on_line(extension: &str, line: &str, trimmed: &str) -> Vec<&'static str> {
+    match extension {
+        "rs" => rust_suppression_token(trimmed).into_iter().collect(),
+        _ => patterns_for_extension(extension)
+            .iter()
+            .copied()
+            .filter_map(|pattern| line_matches_suppression(extension, line, trimmed, pattern))
+            .collect(),
+    }
+}
+
+fn line_matches_suppression(
+    extension: &str, line: &str, trimmed: &str, pattern: &'static str,
+) -> Option<&'static str> {
+    match extension {
+        "rs" => rust_suppression_token(trimmed),
+        "kt" => trimmed.starts_with(pattern).then_some(pattern),
+        "swift" => swift_suppression_in_comment(line, pattern),
+        _ => None,
+    }
+}
+
+fn rust_suppression_token(trimmed: &str) -> Option<&'static str> {
+    let rest = trimmed.strip_prefix('#')?;
+    let attr = rest.strip_prefix('!').unwrap_or(rest);
+    if attr.starts_with("[allow(") {
+        Some(if rest.starts_with('!') { "#![allow(" } else { "#[allow(" })
+    } else if attr.starts_with("[expect(") {
+        Some(if rest.starts_with('!') { "#![expect(" } else { "#[expect(" })
+    } else {
+        None
+    }
+}
+
+fn swift_suppression_in_comment(line: &str, pattern: &'static str) -> Option<&'static str> {
+    let pos = line.find(pattern)?;
+    (line[..pos].contains("//") || line.trim_start().starts_with("//")).then_some(pattern)
 }
 
 fn patterns_for_extension(extension: &str) -> &'static [&'static str] {
