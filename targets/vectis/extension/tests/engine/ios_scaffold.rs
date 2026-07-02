@@ -4,8 +4,9 @@ use std::fs;
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use specify_vectis::ios_scaffold::{
-    DRIFT_FINDING_ID, REQUIRED_SIM_DESTINATION, REQUIRED_SWIFT_TREAT_WARNINGS_AS_ERRORS,
-    ios_scaffold_drift_findings, resolve_ios_app_name, sync_ios_scaffold_files,
+    DRIFT_FINDING_ID, REQUIRED_CARGO_SWIFT_XCFRAMEWORK_NAME, REQUIRED_SIM_DESTINATION,
+    REQUIRED_SWIFT_TREAT_WARNINGS_AS_ERRORS, ios_scaffold_drift_findings, resolve_ios_app_name,
+    sync_ios_scaffold_files,
 };
 use specify_vectis::prepare::{PrepareCommand, run};
 use specify_vectis::scaffold::{ScaffoldPlan, Versions, parse_caps, plan_ios};
@@ -42,6 +43,23 @@ fn assert_project_yml_strict_flags(plan: &ScaffoldPlan) {
     assert!(!contents.contains("-w"), "project.yml must not contain -w linker flag:\n{contents}");
 }
 
+fn makefile_contents(plan: &ScaffoldPlan) -> &str {
+    plan.files
+        .iter()
+        .find(|file| file.relative_path == "iOS/Makefile")
+        .unwrap_or_else(|| panic!("iOS/Makefile missing from ios plan"))
+        .contents
+        .as_str()
+}
+
+fn assert_makefile_xcframework_name(plan: &ScaffoldPlan) {
+    let contents = makefile_contents(plan);
+    assert!(
+        contents.contains(REQUIRED_CARGO_SWIFT_XCFRAMEWORK_NAME),
+        "iOS/Makefile package target must pass {REQUIRED_CARGO_SWIFT_XCFRAMEWORK_NAME}:\n{contents}"
+    );
+}
+
 fn env_lock() -> MutexGuard<'static, ()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     LOCK.get_or_init(|| Mutex::new(())).lock().unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -50,6 +68,16 @@ fn env_lock() -> MutexGuard<'static, ()> {
 #[test]
 fn ios_scaffold_project_yml_treats_warnings_as_errors_render_only() {
     assert_project_yml_strict_flags(&plan(None));
+}
+
+#[test]
+fn ios_scaffold_makefile_sets_xcframework_name_render_only() {
+    assert_makefile_xcframework_name(&plan(None));
+}
+
+#[test]
+fn ios_scaffold_makefile_sets_xcframework_name_http() {
+    assert_makefile_xcframework_name(&plan(Some("http")));
 }
 
 #[test]
@@ -137,6 +165,7 @@ fn sync_restores_non_utf8_makefile() {
     assert!(restored.contains(".vectis/sim-build.sh"));
     assert!(restored.contains(".vectis/sim-dev.sh"));
     assert!(restored.contains("sim-run"));
+    assert!(restored.contains(REQUIRED_CARGO_SWIFT_XCFRAMEWORK_NAME));
     let script =
         fs::read_to_string(ios.join(".vectis/sim-build.sh")).expect("read sim-build script");
     assert!(script.contains(REQUIRED_SIM_DESTINATION));
@@ -192,6 +221,32 @@ fn sync_restores_makefile_sim_run_targets() {
     assert!(restored.contains("run: sim-run"));
     assert!(restored.contains(".vectis/sim-dev.sh"));
     assert!(restored.contains("DerivedData/"));
+    assert!(restored.contains(REQUIRED_CARGO_SWIFT_XCFRAMEWORK_NAME));
+}
+
+#[test]
+fn drift_findings_flag_missing_xcframework_name_in_makefile() {
+    let dir = tempdir().unwrap();
+    let ios = dir.path().join("iOS");
+    fs::create_dir_all(ios.join("Counter")).expect("app dir");
+    fs::write(ios.join("project.yml"), "name: Counter\n").expect("project yml");
+    fs::write(
+        ios.join("Makefile"),
+        "package:\n\tcargo swift package --name Shared --platforms ios --lib-type static --features uniffi\n",
+    )
+    .expect("drifted makefile");
+
+    let findings = ios_scaffold_drift_findings(dir.path());
+    assert!(
+        findings.iter().any(|f| {
+            f["path"] == "iOS/Makefile"
+                && f["message"]
+                    .as_str()
+                    .unwrap()
+                    .contains("Makefile cargo swift package must pass --xcframework-name sharedFFI")
+        }),
+        "expected xcframework-name hint in Makefile finding: {findings:?}"
+    );
 }
 
 #[test]

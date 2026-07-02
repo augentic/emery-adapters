@@ -28,6 +28,9 @@ pub const REQUIRED_SIM_DESTINATION: &str = "generic/platform=iOS Simulator";
 /// Required Xcode build setting in CLI-owned `project.yml` (`settings.base`).
 pub const REQUIRED_SWIFT_TREAT_WARNINGS_AS_ERRORS: &str = "SWIFT_TREAT_WARNINGS_AS_ERRORS: YES";
 
+/// Required `cargo swift package` flag in CLI-owned `iOS/Makefile` (`package` target).
+pub const REQUIRED_CARGO_SWIFT_XCFRAMEWORK_NAME: &str = "--xcframework-name sharedFFI";
+
 /// JSON fragment for `scaffold_sync.ios` in prepare and sync command output.
 #[must_use]
 pub fn scaffold_sync_ios_json(report: &IosScaffoldSyncReport) -> Value {
@@ -249,6 +252,13 @@ fn drift_message(relative_path: &str, on_disk: &str) -> String {
             let _ = write!(
                 message,
                 " (Makefile must delegate sim-build to iOS/.vectis/sim-build.sh — do not inline xcodebuild -destination)"
+            );
+        } else if relative_path.ends_with("Makefile")
+            && !on_disk.contains(REQUIRED_CARGO_SWIFT_XCFRAMEWORK_NAME)
+        {
+            let _ = write!(
+                message,
+                " (Makefile cargo swift package must pass {REQUIRED_CARGO_SWIFT_XCFRAMEWORK_NAME})"
             );
         }
     } else if relative_path.ends_with("project.yml") {

@@ -1338,14 +1338,14 @@ checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
 
 [[package]]
 name = "specify-adapters-rust-quality"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "tempfile",
 ]
 
 [[package]]
 name = "specify-contract"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "assert_cmd",
  "clap",
@@ -1358,7 +1358,7 @@ dependencies = [
 
 [[package]]
 name = "specify-vectis"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "assert_cmd",
  "clap",
