@@ -108,7 +108,8 @@ package:
 	@echo "Building Shared Swift package..."
 	@cd $(SHARED_DIR) && \
 		cargo swift package --name Shared --platforms ios \
-			--lib-type static --features uniffi && \
+			--lib-type static --features uniffi \
+			--xcframework-name sharedFFI && \
 		rm -rf ../iOS/generated/Shared && \
 		mkdir -p ../iOS/generated/Shared && \
 		cp -r Shared/* ../iOS/generated/Shared/ && \

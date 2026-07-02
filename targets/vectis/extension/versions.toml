@@ -42,6 +42,10 @@ serde_json      = "1.0"
 # see `prerequisites::cargo_swift_overrides`.
 uniffi      = "=0.29.4"
 cargo_swift = "0.9"        # version range that ships uniffi_bindgen 0.29.x
+#
+# cargo-swift 0.9 defaults --xcframework-name to RustFramework, but UniFFI
+# bindings import sharedFFI (crate name `shared`). The iOS Makefile package
+# target must pass --xcframework-name sharedFFI explicitly.
 
 [android]
 # Bumped from the original Vectis pin block per chunk-3c verification (the older

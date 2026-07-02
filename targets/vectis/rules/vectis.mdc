@@ -59,6 +59,7 @@ Token changes in `tokens.yaml` are picked up by each shell writer, which emits s
 
 - Does the core exist with `shared/src/app.rs`?
 - Run the explicit iOS host checks from the shell directory: `make typegen`, `make package`, and `make xcode`.
+- If `make build` fails on `shared.swift` with `cannot find type 'RustBuffer'` or `ffi_shared_uniffi_contract_version`, run `sync ios-scaffold`, `make clean`, and rebuild — the iOS Makefile is missing `--xcframework-name sharedFFI` (cargo-swift 0.9 scaffold drift).
 - If those pass but the iOS app panics with "UniFFI contract version mismatch", the installed cargo-swift version is incompatible with the active Vectis version pins. Reinstall a compatible cargo-swift release and rerun the host checks.
 
 ### Android Shell Build Fails

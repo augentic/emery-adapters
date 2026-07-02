@@ -13,7 +13,7 @@ These paths are CLI-owned — agents must never author or edit them. `specify sl
 
 | Path | Policy |
 | ---- | ------ |
-| `iOS/Makefile` | Fully immutable for agents. `sim-build` delegates to `iOS/.vectis/sim-build.sh` — never inline `xcodebuild -destination`. Local-dev targets (`sim-install`, `sim-launch`, `sim-run`, `run`, `sim-app-path`) delegate to `iOS/.vectis/sim-dev.sh`. |
+| `iOS/Makefile` | Fully immutable for agents. `package` target: `cargo swift package` must pass `--xcframework-name sharedFFI`. `sim-build` delegates to `iOS/.vectis/sim-build.sh` — never inline `xcodebuild -destination`. Local-dev targets (`sim-install`, `sim-launch`, `sim-run`, `run`, `sim-app-path`) delegate to `iOS/.vectis/sim-dev.sh`. |
 | `iOS/project.yml` | Fully immutable for agents. Sets `SWIFT_TREAT_WARNINGS_AS_ERRORS: YES` under `settings.base` — Swift warnings fail the build. Never add `OTHER_LDFLAGS: ["-w"]` or other linker warning suppression. XcodeGen picks up nested theme / component / asset directories automatically. |
 | `iOS/.vectis/sim-build.sh` | Fully immutable for agents. Must set `DEST='generic/platform=iOS Simulator'` — never a named device (`name=iPhone …`). Writes `-derivedDataPath` to `iOS/DerivedData/` so verify and local-dev share a predictable `.app` path. |
 | `iOS/.vectis/sim-dev.sh` | Fully immutable for agents. Local-dev install/launch only — not part of the orchestrator verify loop. Resolves simulator via `SIM_UDID`, or `SIM_DEVICE` + `SIM_OS`, or booted/first-available iPhone fallback. |

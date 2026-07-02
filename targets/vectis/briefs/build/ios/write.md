@@ -69,7 +69,7 @@ Operators may use `make run` / `make sim-run` for local desk checks; the orchest
 
 If still failing after 3 iterations: **stop**, report the remaining failures with full error output, and escalate.
 
-If the iOS app panics with `UniFFI contract version mismatch`, the installed `cargo-swift` version is incompatible with the active Vectis version pins — surface this to the operator (it is typically a template / pin drift fix; see [../../build.md](../../build.md) § Template / version-pin drift handling).
+If `make build` fails on `shared.swift` with `cannot find type 'RustBuffer'` or `ffi_shared_uniffi_contract_version`, the operator likely has cargo-swift 0.9 without a synced iOS scaffold — run `sync ios-scaffold`, `make clean`, and rebuild. This is a compile-time scaffold drift symptom, distinct from a runtime `UniFFI contract version mismatch` (which indicates an incompatible cargo-swift pin; see [../../build.md](../../build.md) § Template / version-pin drift handling).
 
 ## Worked examples
 
