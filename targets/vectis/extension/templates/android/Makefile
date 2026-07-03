@@ -11,7 +11,7 @@ setup: setup-extension setup-host
 	@chmod +x gradlew 2>/dev/null || true
 
 setup-extension:
-	@specify extension run vectis -- android setup ..
+	@specify extension run vectis -- android setup
 
 setup-host:
 	@test -n "$$ANDROID_HOME" || (echo "ANDROID_HOME is unset" >&2; exit 1)

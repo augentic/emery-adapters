@@ -72,6 +72,10 @@ fn assert_makefile_strict_rustflags(plan: &ScaffoldPlan) {
         contents.contains(REQUIRED_MAKEFILE_RUSTFLAGS),
         "Android/Makefile must prefix cargo with {REQUIRED_MAKEFILE_RUSTFLAGS}:\n{contents}"
     );
+    assert!(
+        !contents.contains("android setup .."),
+        "Android/Makefile setup-extension must invoke `android setup` without a `..` path (PROJECT_DIR is used instead):\n{contents}"
+    );
 }
 
 fn write_minimal_android_tree(root: &std::path::Path, app_name: &str, package: &str) {

@@ -1,6 +1,7 @@
 //! Integration tests for `vectis android setup`.
 
 use std::path::Path;
+use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use serde_json::Value;
 use specify_vectis::android::{
@@ -32,6 +33,45 @@ fn android_setup_installs_vendored_wrapper() {
     assert_eq!(setup_exit_code(&again), 0);
     let actions = again["actions"].as_array().expect("actions");
     assert!(actions.iter().any(|a| a["status"] == "skipped"));
+}
+
+fn env_lock() -> MutexGuard<'static, ()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(())).lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+#[test]
+fn android_setup_uses_project_dir_from_android_cwd() {
+    let _guard = env_lock();
+    let tmp = tempdir().expect("tempdir");
+    write_project_yaml(tmp.path(), &["core", "android"]);
+    setup_android_shell(tmp.path());
+
+    let previous_dir = std::env::current_dir().expect("cwd");
+    std::env::set_current_dir(tmp.path().join("Android")).expect("chdir Android");
+
+    let previous_project_dir = std::env::var_os("PROJECT_DIR");
+    #[expect(unsafe_code, reason = "edition-2024 set_var is unsafe; env_lock serializes access")]
+    // SAFETY: this test serializes PROJECT_DIR mutation with `env_lock`.
+    let () = unsafe { std::env::set_var("PROJECT_DIR", tmp.path()) };
+
+    let payload = run(&AndroidCommand::Setup(AndroidSetupArgs { path: None })).expect("setup");
+
+    #[expect(
+        unsafe_code,
+        reason = "edition-2024 set_var/remove_var are unsafe; env_lock serializes access"
+    )]
+    // SAFETY: this test serializes PROJECT_DIR mutation with `env_lock`.
+    unsafe {
+        match previous_project_dir {
+            Some(value) => std::env::set_var("PROJECT_DIR", value),
+            None => std::env::remove_var("PROJECT_DIR"),
+        }
+    }
+    std::env::set_current_dir(previous_dir).expect("restore cwd");
+
+    assert_eq!(setup_exit_code(&payload), 0);
+    assert!(tmp.path().join("Android/gradlew").is_file());
 }
 
 #[test]
