@@ -1,7 +1,6 @@
 //! Integration tests for iOS scaffold sync and drift detection.
 
 use std::fs;
-use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use specify_vectis::ios_scaffold::{
     DRIFT_FINDING_ID, REQUIRED_CARGO_SWIFT_XCFRAMEWORK_NAME, REQUIRED_SIM_DESTINATION,
@@ -11,6 +10,8 @@ use specify_vectis::ios_scaffold::{
 use specify_vectis::prepare::{PrepareCommand, run};
 use specify_vectis::scaffold::{ScaffoldPlan, Versions, parse_caps, plan_ios};
 use tempfile::tempdir;
+
+use crate::engine_support::{ProjectDirGuard, env_lock};
 
 fn versions() -> Versions {
     Versions::embedded().expect("embedded versions parse")
@@ -58,11 +59,6 @@ fn assert_makefile_xcframework_name(plan: &ScaffoldPlan) {
         contents.contains(REQUIRED_CARGO_SWIFT_XCFRAMEWORK_NAME),
         "iOS/Makefile package target must pass {REQUIRED_CARGO_SWIFT_XCFRAMEWORK_NAME}:\n{contents}"
     );
-}
-
-fn env_lock() -> MutexGuard<'static, ()> {
-    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    LOCK.get_or_init(|| Mutex::new(())).lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 #[test]
@@ -397,27 +393,12 @@ fn prepare_build_syncs_drifted_ios_makefile() {
         .expect("makefile");
     fs::write(ios.join("Counter/ContentView.swift"), "struct ContentView {}").expect("swift");
 
-    let previous = std::env::var_os("PROJECT_DIR");
-    #[expect(unsafe_code, reason = "edition-2024 set_var is unsafe; env_lock serializes access")]
-    // SAFETY: this test serializes PROJECT_DIR mutation with `env_lock`.
-    let () = unsafe { std::env::set_var("PROJECT_DIR", &project) };
+    let _project_dir = ProjectDirGuard::set(&project);
 
     let outcome = run(&PrepareCommand::Build(specify_vectis::prepare::BuildArgs {
         slice_dir: slice.strip_prefix(&project).unwrap().to_path_buf(),
     }))
     .expect("prepare build");
-
-    #[expect(
-        unsafe_code,
-        reason = "edition-2024 set_var/remove_var are unsafe; env_lock serializes access"
-    )]
-    // SAFETY: this test serializes PROJECT_DIR mutation with `env_lock`.
-    unsafe {
-        match previous {
-            Some(value) => std::env::set_var("PROJECT_DIR", value),
-            None => std::env::remove_var("PROJECT_DIR"),
-        }
-    }
 
     let synced = outcome["scaffold_sync"]["ios"]["synced"].as_array().expect("synced array");
     assert!(synced.iter().any(|v| v == "iOS/Makefile"));
@@ -446,27 +427,12 @@ fn sync_ios_scaffold_command_restores_drifted_makefile() {
         .expect("makefile");
     fs::write(ios.join("Counter/ContentView.swift"), "struct ContentView {}").expect("swift");
 
-    let previous = std::env::var_os("PROJECT_DIR");
-    #[expect(unsafe_code, reason = "edition-2024 set_var is unsafe; env_lock serializes access")]
-    // SAFETY: this test serializes PROJECT_DIR mutation with `env_lock`.
-    let () = unsafe { std::env::set_var("PROJECT_DIR", &project) };
+    let _project_dir = ProjectDirGuard::set(&project);
 
     let outcome = specify_vectis::sync::run(&specify_vectis::sync::SyncCommand::IosScaffold(
         specify_vectis::sync::IosScaffoldArgs { path: None },
     ))
     .expect("sync ios-scaffold");
-
-    #[expect(
-        unsafe_code,
-        reason = "edition-2024 set_var/remove_var are unsafe; env_lock serializes access"
-    )]
-    // SAFETY: this test serializes PROJECT_DIR mutation with `env_lock`.
-    unsafe {
-        match previous {
-            Some(value) => std::env::set_var("PROJECT_DIR", value),
-            None => std::env::remove_var("PROJECT_DIR"),
-        }
-    }
 
     let synced = outcome["scaffold_sync"]["ios"]["synced"].as_array().expect("synced array");
     assert!(synced.iter().any(|v| v == "iOS/Makefile"));

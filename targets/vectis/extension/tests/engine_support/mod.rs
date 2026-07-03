@@ -5,11 +5,75 @@
 
 #![allow(dead_code, reason = "shared test helpers; not every integration binary uses every helper")]
 
+use std::ffi::OsString;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use serde_json::Value;
 use tempfile::{NamedTempFile, TempDir};
+
+static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+/// Serialize mutation of process-global `PROJECT_DIR` and CWD across the
+/// `tests/engine` integration binary.
+pub fn env_lock() -> MutexGuard<'static, ()> {
+    ENV_LOCK.get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Restore `PROJECT_DIR` on drop. Use only while [`env_lock`] is held.
+pub struct ProjectDirGuard {
+    previous: Option<OsString>,
+}
+
+impl ProjectDirGuard {
+    /// Set `PROJECT_DIR` to `path`, remembering the prior value for restore.
+    pub fn set(path: &Path) -> Self {
+        let previous = std::env::var_os("PROJECT_DIR");
+        #[expect(unsafe_code, reason = "edition-2024 set_var is unsafe; env_lock serializes access")]
+        // SAFETY: callers hold `env_lock` for the guard's lifetime.
+        let () = unsafe { std::env::set_var("PROJECT_DIR", path) };
+        Self { previous }
+    }
+}
+
+impl Drop for ProjectDirGuard {
+    fn drop(&mut self) {
+        #[expect(
+            unsafe_code,
+            reason = "edition-2024 set_var/remove_var are unsafe; env_lock serializes access"
+        )]
+        // SAFETY: drop runs before `env_lock` is released.
+        unsafe {
+            match &self.previous {
+                Some(value) => std::env::set_var("PROJECT_DIR", value),
+                None => std::env::remove_var("PROJECT_DIR"),
+            }
+        }
+    }
+}
+
+/// Restore the process CWD on drop. Use only while [`env_lock`] is held.
+pub struct CwdGuard {
+    previous: PathBuf,
+}
+
+impl CwdGuard {
+    /// Change the process CWD to `path`, remembering the prior directory.
+    pub fn set(path: PathBuf) -> Self {
+        let previous = std::env::current_dir().expect("cwd");
+        std::env::set_current_dir(&path).expect("set_current_dir");
+        Self { previous }
+    }
+}
+
+impl Drop for CwdGuard {
+    fn drop(&mut self) {
+        std::env::set_current_dir(&self.previous).expect("restore cwd");
+    }
+}
 
 pub fn errors_array(envelope: &Value) -> &[Value] {
     envelope.get("errors").and_then(Value::as_array).expect("errors array").as_slice()
@@ -48,7 +112,7 @@ pub fn write_assets_project(yaml: &str, raster_files: &[&str]) -> (TempDir, Path
 
 /// Drop a `.specify/specs/composition.yaml` under `<project>/` so the
 /// asset-validator's sibling-discovery walk picks it up.
-pub fn write_specs_composition(project: &std::path::Path, yaml: &str) {
+pub fn write_specs_composition(project: &Path, yaml: &str) {
     let dir = project.join(".specify").join("specs");
     std::fs::create_dir_all(&dir).expect("mkdir .specify/specs");
     std::fs::write(dir.join("composition.yaml"), yaml).expect("write composition.yaml");
@@ -62,7 +126,7 @@ pub fn write_specify_project() -> TempDir {
 }
 
 /// Materialise `.specify/project.yaml` under an existing project root.
-pub fn write_project_yaml(project: &std::path::Path, platforms: &[&str]) {
+pub fn write_project_yaml(project: &Path, platforms: &[&str]) {
     let dot_specify = project.join(".specify");
     std::fs::create_dir_all(&dot_specify).expect("mkdir .specify");
     let yaml_platforms: Vec<String> = platforms.iter().map(|p| format!("  - {p}")).collect();
@@ -74,13 +138,13 @@ pub fn write_project_yaml(project: &std::path::Path, platforms: &[&str]) {
 }
 
 /// Minimal Android shell tree (`.kt` present) for verify / scaffold tests.
-pub fn scaffold_android_shell(project: &std::path::Path) {
+pub fn scaffold_android_shell(project: &Path) {
     let dir = project.join("Android/app/src/main/kotlin/com/test");
     std::fs::create_dir_all(&dir).expect("mkdir Android");
     std::fs::write(dir.join("MainActivity.kt"), "class MainActivity").expect("write kt");
 }
 
-fn write_android_scaffold_identity(project: &std::path::Path, app_name: &str, package: &str) {
+fn write_android_scaffold_identity(project: &Path, app_name: &str, package: &str) {
     let android = project.join("Android");
     let package_path = package.replace('.', "/");
     std::fs::create_dir_all(android.join(format!("app/src/main/java/{package_path}")))
@@ -101,7 +165,7 @@ fn write_android_scaffold_identity(project: &std::path::Path, app_name: &str, pa
 
 /// Android shell with immutable scaffold files synced and toolchain stubs so
 /// `verify --mode verify` exits clean when `android` is declared.
-pub fn scaffold_android_verify_ready(project: &std::path::Path) {
+pub fn scaffold_android_verify_ready(project: &Path) {
     scaffold_android_shell(project);
     write_android_scaffold_identity(project, "TestApp", "com.vectis.testapp");
     specify_vectis::android_scaffold::sync_android_scaffold_files(project)
@@ -128,7 +192,7 @@ pub fn scaffold_android_verify_ready(project: &std::path::Path) {
 
 /// iOS shell with immutable scaffold files synced so `verify --mode verify`
 /// exits clean when `ios` is declared.
-pub fn scaffold_ios_verify_ready(project: &std::path::Path, app_name: &str) {
+pub fn scaffold_ios_verify_ready(project: &Path, app_name: &str) {
     let ios = project.join("iOS");
     let app_dir = ios.join(app_name);
     std::fs::create_dir_all(&app_dir).expect("mkdir iOS app dir");
