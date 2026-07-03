@@ -42,23 +42,59 @@ fn assert_no_suppress(plan: &ScaffoldPlan) {
 }
 
 fn assert_gradle_strict_flags(plan: &ScaffoldPlan) {
-    for path in ["Android/app/build.gradle.kts", "Android/shared/build.gradle.kts"] {
-        let contents = plan
-            .files
-            .iter()
-            .find(|file| file.relative_path == path)
-            .unwrap_or_else(|| panic!("{path} missing from android plan"))
-            .contents
-            .as_str();
-        assert!(
-            contents.contains(REQUIRED_GRADLE_ALL_WARNINGS_AS_ERRORS),
-            "{path} must set allWarningsAsErrors = true:\n{contents}"
-        );
-        assert!(
-            contents.contains(REQUIRED_JAVA_COMPILE_WERROR),
-            "{path} must add JavaCompile -Werror:\n{contents}"
-        );
-    }
+    let app = plan
+        .files
+        .iter()
+        .find(|file| file.relative_path == "Android/app/build.gradle.kts")
+        .unwrap_or_else(|| panic!("Android/app/build.gradle.kts missing from android plan"))
+        .contents
+        .as_str();
+    assert!(
+        app.contains(REQUIRED_GRADLE_ALL_WARNINGS_AS_ERRORS),
+        "Android/app/build.gradle.kts must set allWarningsAsErrors = true:\n{app}"
+    );
+    assert!(
+        app.contains(REQUIRED_JAVA_COMPILE_WERROR),
+        "Android/app/build.gradle.kts must add JavaCompile -Werror:\n{app}"
+    );
+
+    let shared = plan
+        .files
+        .iter()
+        .find(|file| file.relative_path == "Android/shared/build.gradle.kts")
+        .unwrap_or_else(|| panic!("Android/shared/build.gradle.kts missing from android plan"))
+        .contents
+        .as_str();
+    assert!(
+        !shared.contains(REQUIRED_GRADLE_ALL_WARNINGS_AS_ERRORS),
+        "Android/shared/build.gradle.kts must not set allWarningsAsErrors (generated UniFFI only):\n{shared}"
+    );
+    assert!(
+        !shared.contains(REQUIRED_JAVA_COMPILE_WERROR),
+        "Android/shared/build.gradle.kts must not add JavaCompile -Werror (generated UniFFI only):\n{shared}"
+    );
+}
+
+fn assert_shared_cargo_extension_profile(plan: &ScaffoldPlan) {
+    let contents = plan
+        .files
+        .iter()
+        .find(|file| file.relative_path == "Android/shared/build.gradle.kts")
+        .unwrap_or_else(|| panic!("Android/shared/build.gradle.kts missing from android plan"))
+        .contents
+        .as_str();
+    assert!(
+        contents.contains("profile = \"debug\""),
+        "Android/shared/build.gradle.kts must set profile = \"debug\" in CargoExtension:\n{contents}"
+    );
+    let cargo_block =
+        contents.split("extensions.configure<CargoExtension>").nth(1).unwrap_or_else(|| {
+            panic!("CargoExtension block missing from shared build.gradle.kts:\n{contents}")
+        });
+    assert!(
+        !cargo_block.contains("adapter = \"debug\""),
+        "CargoExtension block must not use invalid adapter = \"debug\" property:\n{cargo_block}"
+    );
 }
 
 fn assert_makefile_strict_rustflags(plan: &ScaffoldPlan) {
@@ -108,11 +144,13 @@ fn android_scaffold_kt_has_no_suppress_http_kv_time_platform() {
 #[test]
 fn android_scaffold_gradle_treats_warnings_as_errors_render_only() {
     assert_gradle_strict_flags(&plan(None));
+    assert_shared_cargo_extension_profile(&plan(None));
 }
 
 #[test]
 fn android_scaffold_gradle_treats_warnings_as_errors_http() {
     assert_gradle_strict_flags(&plan(Some("http")));
+    assert_shared_cargo_extension_profile(&plan(Some("http")));
 }
 
 #[test]

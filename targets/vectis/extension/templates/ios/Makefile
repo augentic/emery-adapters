@@ -12,6 +12,7 @@ typegen:
 	@RUST_LOG=info RUSTFLAGS="-D warnings" cargo run --manifest-path $(SHARED_DIR)/Cargo.toml \
 		--bin codegen --features codegen,facet_typegen -- \
 		--language swift --output-dir generated
+	@bash "$(dir $(lastword $(MAKEFILE_LIST)))/.vectis/relax-generated-spm-packages.sh" generated/SharedTypes/Package.swift
 
 # Phase 2: build Shared (UniFFI bindings as a Swift package via cargo-swift)
 package:
@@ -24,6 +25,7 @@ package:
 		mkdir -p ../iOS/generated/Shared && \
 		cp -r Shared/* ../iOS/generated/Shared/ && \
 		rm -rf Shared
+	@bash "$(dir $(lastword $(MAKEFILE_LIST)))/.vectis/relax-generated-spm-packages.sh" generated/Shared/Package.swift
 
 # Phase 3: generate Xcode project from project.yml
 xcode:

@@ -21,6 +21,13 @@ The brief runs against the build request the CLI prepared at `.specify/slices/<s
   - `assets.yaml` — asset inventory; the composition validator's `tokens` / `assets` modes run only when the respective file is present.
   - `components.yaml` — the agent-inferred component catalog (surfaced as `CATALOG_PATH`); written by `specify catalog infer` at Step 0.5 and read back during composition regeneration; absent → no component factoring.
 
+## Consumer posture
+
+- Agents executing this brief in a consumer project are **consumers**, not adapter maintainers.
+- On scaffold / verify / finalize / toolchain failure: **stop** with `deferred` or a failure report — see [Consumer tooling boundary](../references/spec-runtime/guardrails.md#consumer-tooling-boundary).
+- **Never** edit `specify-adapters`, `extension/templates/`, or `adapter.wasm` in-band — even when `adapters/` is a sibling symlink.
+- Tooling fixes happen in a **separate maintainer session** on specify-adapters; consumers then re-sync scaffolds (`specify extension run vectis -- sync android-scaffold` / `ios-scaffold`).
+
 ## Standard arguments
 
 All phase sub-briefs assume these symbols are resolved by `/spec:build` before the sub-agent fan-out:
@@ -117,7 +124,11 @@ Per [Standards layer](../references/spec-runtime/standards-layer-snippet.md), de
 
 ## § Template / version-pin drift handling
 
-The Vectis scaffold tool (`specify extension run vectis -- scaffold ...`) is render-only and ships with embedded version pins. Upstream bumps (Crux core, uniffi, AGP / Gradle, cargo-swift, Xcode) can break a freshly rendered scaffold even when the rest of the slice is correct. Detect this when a verify-repair loop fails repeatedly with cargo / Gradle / Xcode errors that look like API renames, missing imports, or toolchain mismatches rather than feature-level bugs. When detected, do **not** auto-fix in-band: record the failing combo (caps + shells), the failing host step, and the load-bearing error line, then mark the build outcome as `deferred` with a template / pin drift signal. The operator opens a separate **specify-adapters** slice to edit [`extension/versions.toml`](../extension/versions.toml) and, if needed, [`extension/templates/core/`](../extension/templates/core/).
+The Vectis scaffold tool (`specify extension run vectis -- scaffold ...`) is render-only and ships with embedded version pins. Upstream bumps (Crux core, uniffi, AGP / Gradle, cargo-swift, Xcode) can break a freshly rendered scaffold even when the rest of the slice is correct. Detect this when a verify-repair loop fails repeatedly with cargo / Gradle / Xcode errors that look like API renames, missing imports, or toolchain mismatches rather than feature-level bugs.
+
+**Agents:** detect → record the failing combo (caps + shells), the failing host step, and the load-bearing error line → mark the build outcome as `deferred` with a template / pin drift signal → **exit** (no upstream edits). See [Consumer tooling boundary](../references/spec-runtime/guardrails.md#consumer-tooling-boundary).
+
+**Operators (separate maintainer session):** edit [`extension/versions.toml`](../extension/versions.toml) and/or [`extension/templates/`](../extension/templates/core/), rebuild `adapter.wasm`, publish / bump the adapter version, then in the consumer project run `specify extension run vectis -- sync android-scaffold` (and `ios-scaffold` when needed).
 
 ## § Phase outcome contract
 

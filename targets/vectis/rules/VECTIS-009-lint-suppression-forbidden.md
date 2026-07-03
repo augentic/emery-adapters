@@ -32,7 +32,8 @@ Agent-authored trees must compile and lint cleanly without inline suppressions. 
 | --- | --- | --- |
 | `shared/src/**/*.rs` | `#[allow(...)]`, `#[expect(...)]` | Crate-level `[workspace.lints.clippy]` allows in scaffold-owned `Cargo.toml` |
 | `iOS/**/*.swift` (excl. `generated/`) | `swiftlint:disable`, `swift-format-ignore` | CLI-owned `iOS/project.yml` strict flags |
-| `Android/app/src/**/*.kt`, `Android/shared/src/**/*.kt` (excl. `generated/`) | `@Suppress(...)`, `@file:Suppress(...)` | Gradle `allWarningsAsErrors` in CLI-owned build scripts |
+| `Android/app/src/**/*.kt` (excl. `generated/`) | `@Suppress(...)`, `@file:Suppress(...)` | Gradle `allWarningsAsErrors` on `:app` in CLI-owned `app/build.gradle.kts` |
+| `Android/shared` generated UniFFI under `../generated/` | *(out of scope — bindgen output)* | `:shared` omits `allWarningsAsErrors` by design |
 
 `specify-ignore:` comments are not a build-verify escape hatch and are not scanned by this rule.
 

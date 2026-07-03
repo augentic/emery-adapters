@@ -5,7 +5,7 @@ registry is [`../manifest.yaml`](../manifest.yaml) (`assemblies.ios`); `build.rs
 
 Source paths are declared under `templates/ios/` (mostly flat filenames; nested sources such as `.vectis/sim-build.sh` use subdirectories). Nested target paths (especially the `iOS/__APP_NAME__/...` segment) are declared in `manifest.yaml`. The `__APP_NAME__` segment in target paths is substituted by the engine when writing each file, the same as inside file contents (e.g. `__APP_NAME__App.swift` becomes `CounterApp.swift`).
 
-Total: 10 files (matches the file manifest contract for iOS assembly).
+Total: 11 files (matches the file manifest contract for iOS assembly).
 
 ## Agent-immutable scaffold files
 
@@ -14,7 +14,8 @@ These paths are CLI-owned — agents must never author or edit them. `specify sl
 | Path | Policy |
 | ---- | ------ |
 | `iOS/Makefile` | Fully immutable for agents. `package` target: `cargo swift package` must pass `--xcframework-name sharedFFI`. `sim-build` delegates to `iOS/.vectis/sim-build.sh` — never inline `xcodebuild -destination`. Local-dev targets (`sim-install`, `sim-launch`, `sim-run`, `run`, `sim-app-path`) delegate to `iOS/.vectis/sim-dev.sh`. |
-| `iOS/project.yml` | Fully immutable for agents. Sets `SWIFT_TREAT_WARNINGS_AS_ERRORS: YES` under `settings.base` — Swift warnings fail the build. Never add `OTHER_LDFLAGS: ["-w"]` or other linker warning suppression. XcodeGen picks up nested theme / component / asset directories automatically. |
+| `iOS/project.yml` | Fully immutable for agents. Sets `SWIFT_TREAT_WARNINGS_AS_ERRORS: YES` on the app target only — shell Swift warnings fail the build. Generated `Shared` / `SharedTypes` SPM packages are patched by `iOS/.vectis/relax-generated-spm-packages.sh` after typegen/package. Never add `OTHER_LDFLAGS: ["-w"]` or other linker warning suppression. XcodeGen picks up nested theme / component / asset directories automatically. |
+| `iOS/.vectis/relax-generated-spm-packages.sh` | Fully immutable for agents. Relaxes compiler warnings on generated SPM `Package.swift` targets (UniFFI / facet output). |
 | `iOS/.vectis/sim-build.sh` | Fully immutable for agents. Must set `DEST='generic/platform=iOS Simulator'` — never a named device (`name=iPhone …`). Writes `-derivedDataPath` to `iOS/DerivedData/` so verify and local-dev share a predictable `.app` path. |
 | `iOS/.vectis/sim-dev.sh` | Fully immutable for agents. Local-dev install/launch only — not part of the orchestrator verify loop. Resolves simulator via `SIM_UDID`, or `SIM_DEVICE` + `SIM_OS`, or booted/first-available iPhone fallback. |
 
@@ -112,4 +113,4 @@ If hot-reload returns, it can be added as a cap-style toggle
 
 ## Self-check
 
-Orphan detection and file-count parity (10 files) run in `build.rs` when the crate builds. After adding or renaming a template file, update [`../manifest.yaml`](../manifest.yaml) in the same change.
+Orphan detection and file-count parity (11 files) run in `build.rs` when the crate builds. After adding or renaming a template file, update [`../manifest.yaml`](../manifest.yaml) in the same change.

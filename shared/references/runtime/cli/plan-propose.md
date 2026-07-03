@@ -10,8 +10,6 @@ specify plan propose --from <response.json> [--format json]
 - `--dry-run` emits the **request envelope** — a flat catalog of raw `(source, lead)` leads read 1:1 from `discovery.md`, plus the project topology (always at least one project, each carrying its normalized `target` adapter). It writes no plan state and emits no journal event; its only filesystem effect is recreating the plan scratch lane (`.specify/scratch/plan/`) empty, so `--from` can never consume a stale response envelope from a prior run.
 - `--from <response.json>` is the **only slice writer**. It schema-validates the raw response file (`proposal-schema`), re-reads `discovery.md`, rebuilds the lead catalog, validates the agent's `slices[]` grouping, enforces total lead coverage, validates explicit slice names, binds projects, atomically replaces `plan.yaml.slices[]`, then emits `plan.reconcile.completed`. It never trusts a prior dry-run snapshot.
 
-**Platform shell bootstrap is not a plan concern.** `project.yaml.platforms` is the sole authority for platform intent; `--from` performs no filesystem shell detection and inserts no bootstrap slices. Standing up an absent platform shell is the bound target adapter's build-time responsibility (for Vectis, the build brief's `scaffold` step). Every project — greenfield or incremental — drives the same plan rhythm regardless of which shells exist on disk.
-
 Passing neither mode fails with `plan-propose-mode-required`; passing both is rejected by the argument parser.
 
 The response file's canonical location is `.specify/scratch/plan/propose-response.json` — the gitignored plan scratch lane that `--dry-run` just reset. Never write the envelope to the project root.

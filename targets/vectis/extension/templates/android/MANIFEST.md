@@ -103,11 +103,13 @@ Notes for chunk 8:
   the stubs with real handlers in Update Mode. If chunk 6 wires `Event`
   variants that emit non-HTTP effects on init, those stubs will need to grow
   `coreFfi.resolve` plumbing similar to the HTTP arm.
-- **Zero-warning policy.** `app-build.gradle.kts` and
-  `shared-build.gradle.kts` set `allWarningsAsErrors = true` on the Kotlin
-  compiler and `-Werror` on `JavaCompile`. Shell Kotlin must not use
-  `@Suppress` or `@file:Suppress` — fix structure (underscore-prefixed
-  unused parameters, empty stub arms, real handler wiring) instead.
+- **Zero-warning policy.** `app-build.gradle.kts` sets `allWarningsAsErrors = true` on
+  the Kotlin compiler and `-Werror` on `JavaCompile` for agent-authored shell code.
+  `shared-build.gradle.kts` compiles generated UniFFI Kotlin only and intentionally
+  omits those flags (Crux / UniFFI pin output is outside agent control). Shell Kotlin
+  under `Android/app/src/**` must not use `@Suppress` or `@file:Suppress` — fix
+  structure (underscore-prefixed unused parameters, empty stub arms, real handler
+  wiring) instead.
 - **The `sse` cap intentionally has no entry in `Core.kt` today.** Same
   reasoning as chunk 3b: `app.rs` doesn't declare an `Effect::Sse(...)`
   variant in the render-only baseline, so the Kotlin `Effect` enum has no

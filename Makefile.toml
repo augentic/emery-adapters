@@ -15,10 +15,10 @@ skip_rust_env_info = true
 # CI Checks
 # -------------------------------------
 [tasks.check]
-dependencies = ["fmt-check", "lint", "test", "test-docs", "doc", "check-hook-scripts"]
+dependencies = ["fmt-check", "lint", "test", "test-docs", "doc", "check-hook-scripts", "check-guardrails-consumer-boundary"]
 
 [tasks.ci]
-dependencies = ["fmt-check", "lint", "test", "test-docs", "doc", "vet", "deny", "check-hook-scripts"]
+dependencies = ["fmt-check", "lint", "test", "test-docs", "doc", "vet", "deny", "check-hook-scripts", "check-guardrails-consumer-boundary"]
 
 # -------------------------------------
 # Individual Actions
@@ -28,6 +28,15 @@ dependencies = ["fmt-check", "lint", "test", "test-docs", "doc", "vet", "deny", 
 [tasks.check-hook-scripts]
 script = '''
 sh targets/vectis/scripts/test-hook-scripts.sh
+'''
+
+[tasks.check-guardrails-consumer-boundary]
+script = '''
+grep -q '^## Consumer tooling boundary$' shared/references/runtime/guardrails.md || {
+  echo "shared/references/runtime/guardrails.md is missing ## Consumer tooling boundary" >&2
+  echo "Sync from plugins/spec/references/guardrails.md in specify." >&2
+  exit 1
+}
 '''
 
 # Audit

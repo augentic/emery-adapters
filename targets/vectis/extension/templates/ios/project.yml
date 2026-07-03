@@ -33,6 +33,8 @@ targets:
       base:
         SWIFT_VERSION: "6.0"
         SWIFT_STRICT_CONCURRENCY: complete
+        # App shell Swift only — generated Shared / SharedTypes SPM packages are
+        # patched by iOS/.vectis/relax-generated-spm-packages.sh after typegen/package.
         SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
         ENABLE_USER_SCRIPT_SANDBOXING: "NO"
         CODE_SIGNING_ALLOWED: "NO"
