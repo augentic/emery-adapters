@@ -18,9 +18,9 @@ use super::*;
 const CORE_RENDER_ONLY_SHA256: &str =
     "be4d2c16b0736c7be8f137990e7039055c66c228957ddd1b13d54caa8433b7b0";
 const IOS_RENDER_ONLY_SHA256: &str =
-    "d40f871654e122f1d3a332d41a672f49c66c5fd40deb14303de3992d9f86d4e1";
+    "b18f5c2ffcb5b355c1ecf80868bdd225f3aa20b574aad116a820023c25e6dd1f";
 const ANDROID_RENDER_ONLY_SHA256: &str =
-    "c6419e53e4efa3542c7741c138becc681a19dca2384c4fc35b303ebc5d8e7dca";
+    "aabeb6981db93bfa6bf365bed6e5ada5cd55bdc22d0b2c5552c9e20db1b26ee0";
 
 fn versions() -> Versions {
     Versions::embedded().expect("embedded versions parse")

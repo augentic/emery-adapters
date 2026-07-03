@@ -87,10 +87,10 @@ fn assert_shared_cargo_extension_profile(plan: &ScaffoldPlan) {
         contents.contains("profile = \"debug\""),
         "Android/shared/build.gradle.kts must set profile = \"debug\" in CargoExtension:\n{contents}"
     );
-    let cargo_block = contents
-        .split("extensions.configure<CargoExtension>")
-        .nth(1)
-        .unwrap_or_else(|| panic!("CargoExtension block missing from shared build.gradle.kts:\n{contents}"));
+    let cargo_block =
+        contents.split("extensions.configure<CargoExtension>").nth(1).unwrap_or_else(|| {
+            panic!("CargoExtension block missing from shared build.gradle.kts:\n{contents}")
+        });
     assert!(
         !cargo_block.contains("adapter = \"debug\""),
         "CargoExtension block must not use invalid adapter = \"debug\" property:\n{cargo_block}"
