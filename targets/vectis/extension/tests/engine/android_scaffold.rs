@@ -1,7 +1,6 @@
 //! Android scaffold zero-suppression, strict Gradle flags, and sync/drift tests.
 
 use std::fs;
-use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use specify_vectis::android_scaffold::{
     DRIFT_FINDING_ID, REQUIRED_GRADLE_ALL_WARNINGS_AS_ERRORS, REQUIRED_JAVA_COMPILE_WERROR,
@@ -10,6 +9,8 @@ use specify_vectis::android_scaffold::{
 };
 use specify_vectis::scaffold::{ScaffoldPlan, Versions, parse_caps, plan_android};
 use tempfile::tempdir;
+
+use crate::engine_support::{ProjectDirGuard, env_lock};
 
 fn versions() -> Versions {
     Versions::embedded().expect("embedded versions parse")
@@ -72,6 +73,10 @@ fn assert_makefile_strict_rustflags(plan: &ScaffoldPlan) {
         contents.contains(REQUIRED_MAKEFILE_RUSTFLAGS),
         "Android/Makefile must prefix cargo with {REQUIRED_MAKEFILE_RUSTFLAGS}:\n{contents}"
     );
+    assert!(
+        !contents.contains("android setup .."),
+        "Android/Makefile setup-extension must invoke `android setup` without a `..` path (PROJECT_DIR is used instead):\n{contents}"
+    );
 }
 
 fn write_minimal_android_tree(root: &std::path::Path, app_name: &str, package: &str) {
@@ -88,11 +93,6 @@ fn write_minimal_android_tree(root: &std::path::Path, app_name: &str, package: &
         format!("package {package}\nclass {app_name}Application\n"),
     )
     .expect("application kt");
-}
-
-fn env_lock() -> MutexGuard<'static, ()> {
-    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    LOCK.get_or_init(|| Mutex::new(())).lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 #[test]
@@ -262,27 +262,12 @@ fn sync_android_scaffold_command_restores_drifted_makefile() {
     fs::write(project.join("Android/Makefile"), "verify:\n\t@echo drifted\n")
         .expect("drifted makefile");
 
-    let previous = std::env::var_os("PROJECT_DIR");
-    #[expect(unsafe_code, reason = "edition-2024 set_var is unsafe; env_lock serializes access")]
-    // SAFETY: this test serializes PROJECT_DIR mutation with `env_lock`.
-    let () = unsafe { std::env::set_var("PROJECT_DIR", &project) };
+    let _project_dir = ProjectDirGuard::set(&project);
 
     let outcome = specify_vectis::sync::run(&specify_vectis::sync::SyncCommand::AndroidScaffold(
         specify_vectis::sync::AndroidScaffoldArgs { path: None },
     ))
     .expect("sync android-scaffold");
-
-    #[expect(
-        unsafe_code,
-        reason = "edition-2024 set_var/remove_var are unsafe; env_lock serializes access"
-    )]
-    // SAFETY: this test serializes PROJECT_DIR mutation with `env_lock`.
-    unsafe {
-        match previous {
-            Some(value) => std::env::set_var("PROJECT_DIR", value),
-            None => std::env::remove_var("PROJECT_DIR"),
-        }
-    }
 
     let synced = outcome["scaffold_sync"]["android"]["synced"].as_array().expect("synced array");
     assert!(synced.iter().any(|v| v == "Android/Makefile"));

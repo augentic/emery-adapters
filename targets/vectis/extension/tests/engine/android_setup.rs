@@ -8,7 +8,7 @@ use specify_vectis::android::{
 };
 use tempfile::tempdir;
 
-use crate::engine_support::write_project_yaml;
+use crate::engine_support::{CwdGuard, ProjectDirGuard, env_lock, write_project_yaml};
 
 fn setup_android_shell(root: &Path) {
     let dir = root.join("Android/app/src/main/kotlin/com/test");
@@ -32,6 +32,22 @@ fn android_setup_installs_vendored_wrapper() {
     assert_eq!(setup_exit_code(&again), 0);
     let actions = again["actions"].as_array().expect("actions");
     assert!(actions.iter().any(|a| a["status"] == "skipped"));
+}
+
+#[test]
+fn android_setup_uses_project_dir_from_android_cwd() {
+    let _guard = env_lock();
+    let tmp = tempdir().expect("tempdir");
+    write_project_yaml(tmp.path(), &["core", "android"]);
+    setup_android_shell(tmp.path());
+
+    let _cwd = CwdGuard::set(&tmp.path().join("Android"));
+    let _project_dir = ProjectDirGuard::set(tmp.path());
+
+    let payload = run(&AndroidCommand::Setup(AndroidSetupArgs { path: None })).expect("setup");
+
+    assert_eq!(setup_exit_code(&payload), 0);
+    assert!(tmp.path().join("Android/gradlew").is_file());
 }
 
 #[test]
