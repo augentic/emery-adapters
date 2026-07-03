@@ -169,6 +169,19 @@ fn sync_restores_non_utf8_makefile() {
 }
 
 #[test]
+fn ios_scaffold_plan_includes_relax_ffi_package_warnings_script() {
+    let plan = plan(None);
+    let script = plan
+        .files
+        .iter()
+        .find(|file| file.relative_path == "iOS/.vectis/relax-generated-spm-packages.sh")
+        .unwrap_or_else(|| panic!("relax-generated-spm-packages.sh missing from ios plan"));
+    assert!(script.contents.contains("suppress-warnings"));
+    let makefile = makefile_contents(&plan);
+    assert!(makefile.contains("relax-generated-spm-packages.sh"));
+}
+
+#[test]
 fn ios_scaffold_plan_includes_sim_dev_script() {
     let plan = plan(None);
     let sim_dev = plan
@@ -332,7 +345,7 @@ fn drift_findings_flag_named_simulator() {
         .expect("makefile");
 
     let findings = ios_scaffold_drift_findings(dir.path());
-    assert_eq!(findings.len(), 4);
+    assert_eq!(findings.len(), 5);
     assert!(findings.iter().all(|f| f["id"] == DRIFT_FINDING_ID));
     assert!(
         findings.iter().any(|f| {

@@ -16,8 +16,13 @@ use crate::VectisError;
 use crate::scaffold::{Versions, default_android_package, plan_ios, validate_app_name};
 
 /// Relative paths under the project root that agents must never edit.
-pub const IMMUTABLE_RELATIVE_PATHS: [&str; 4] =
-    ["iOS/Makefile", "iOS/project.yml", "iOS/.vectis/sim-build.sh", "iOS/.vectis/sim-dev.sh"];
+pub const IMMUTABLE_RELATIVE_PATHS: [&str; 5] = [
+    "iOS/Makefile",
+    "iOS/project.yml",
+    "iOS/.vectis/sim-build.sh",
+    "iOS/.vectis/sim-dev.sh",
+    "iOS/.vectis/relax-generated-spm-packages.sh",
+];
 
 /// Diagnostic id for scaffold drift findings.
 pub const DRIFT_FINDING_ID: &str = "ios-scaffold-file-drift";

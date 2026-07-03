@@ -39,7 +39,7 @@ Full set at [`hard-rules-ios.md`](../../../references/hard-rules-ios.md). Highli
 - Create mode must run `vectis scaffold ios` before any Swift files exist under `iOS/`.
 - Never edit `iOS/Makefile`, `iOS/project.yml`, `iOS/.vectis/sim-build.sh`, or `iOS/.vectis/sim-dev.sh` — prepare and `vectis sync ios-scaffold` auto-sync them from the embedded template.
 - Never substitute a named simulator destination (`name=iPhone …`); `sim-build` uses `generic/platform=iOS Simulator` via the CLI-owned script only.
-- Zero-warning policy: fix structure, never suppress — no `swiftlint:disable`, `swift-format-ignore`, or similar in shell Swift (`iOS/<APP_NAME>/**/*.swift` excluding `generated/`).
+- Zero-warning policy: fix structure, never suppress — no `swiftlint:disable`, `swift-format-ignore`, or similar in shell Swift (`iOS/<APP_NAME>/**/*.swift` excluding `generated/`). Generated `Shared` / `SharedTypes` SPM packages relax warnings via `relax-generated-spm-packages.sh`.
 
 ## Verify (max 3 iterations)
 

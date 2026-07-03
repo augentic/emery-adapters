@@ -40,7 +40,7 @@ Full set at [`hard-rules-android.md`](../../../references/hard-rules-android.md)
 - Java 21 only — Java 25+ environments hit `IllegalArgumentException` in AGP; pin `org.gradle.java.home` in `gradle.properties`.
 - Always include `@Preview` blocks for new composables.
 - Coroutine cancellation MUST rethrow `CancellationException`.
-- Zero-warning policy: fix structure, never suppress — no `@Suppress` / `@file:Suppress` in shell Kotlin (`Android/app/src/**`, `Android/shared/src/**` excluding `generated/`).
+- Zero-warning policy: fix structure, never suppress — no `@Suppress` / `@file:Suppress` in shell Kotlin (`Android/app/src/**` only; `:shared` compiles generated UniFFI and omits `allWarningsAsErrors`).
 
 ## Verify (max 3 iterations)
 

@@ -302,14 +302,25 @@ fn drift_message(relative_path: &str, on_disk: &str) -> String {
             " (Makefile cargo invocations must prefix {REQUIRED_MAKEFILE_RUSTFLAGS})"
         );
     } else if relative_path.ends_with("build.gradle.kts") {
-        if !on_disk.contains(REQUIRED_GRADLE_ALL_WARNINGS_AS_ERRORS) {
+        if relative_path.contains("/app/") {
+            if !on_disk.contains(REQUIRED_GRADLE_ALL_WARNINGS_AS_ERRORS) {
+                let _ = write!(
+                    message,
+                    " (Gradle kotlin.compilerOptions must set {REQUIRED_GRADLE_ALL_WARNINGS_AS_ERRORS} on the app module)"
+                );
+            } else if !on_disk.contains(REQUIRED_JAVA_COMPILE_WERROR) {
+                let _ = write!(
+                    message,
+                    " (Gradle must add JavaCompile {REQUIRED_JAVA_COMPILE_WERROR} on the app module)"
+                );
+            }
+        } else if relative_path.contains("/shared/")
+            && on_disk.contains(REQUIRED_GRADLE_ALL_WARNINGS_AS_ERRORS)
+        {
             let _ = write!(
                 message,
-                " (Gradle kotlin.compilerOptions must set {REQUIRED_GRADLE_ALL_WARNINGS_AS_ERRORS})"
+                " (the shared module compiles generated UniFFI Kotlin only — it must not set {REQUIRED_GRADLE_ALL_WARNINGS_AS_ERRORS})"
             );
-        } else if !on_disk.contains(REQUIRED_JAVA_COMPILE_WERROR) {
-            let _ =
-                write!(message, " (Gradle must add JavaCompile {REQUIRED_JAVA_COMPILE_WERROR})");
         }
     }
     message

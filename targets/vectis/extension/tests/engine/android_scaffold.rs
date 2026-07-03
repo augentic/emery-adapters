@@ -42,23 +42,37 @@ fn assert_no_suppress(plan: &ScaffoldPlan) {
 }
 
 fn assert_gradle_strict_flags(plan: &ScaffoldPlan) {
-    for path in ["Android/app/build.gradle.kts", "Android/shared/build.gradle.kts"] {
-        let contents = plan
-            .files
-            .iter()
-            .find(|file| file.relative_path == path)
-            .unwrap_or_else(|| panic!("{path} missing from android plan"))
-            .contents
-            .as_str();
-        assert!(
-            contents.contains(REQUIRED_GRADLE_ALL_WARNINGS_AS_ERRORS),
-            "{path} must set allWarningsAsErrors = true:\n{contents}"
-        );
-        assert!(
-            contents.contains(REQUIRED_JAVA_COMPILE_WERROR),
-            "{path} must add JavaCompile -Werror:\n{contents}"
-        );
-    }
+    let app = plan
+        .files
+        .iter()
+        .find(|file| file.relative_path == "Android/app/build.gradle.kts")
+        .unwrap_or_else(|| panic!("Android/app/build.gradle.kts missing from android plan"))
+        .contents
+        .as_str();
+    assert!(
+        app.contains(REQUIRED_GRADLE_ALL_WARNINGS_AS_ERRORS),
+        "Android/app/build.gradle.kts must set allWarningsAsErrors = true:\n{app}"
+    );
+    assert!(
+        app.contains(REQUIRED_JAVA_COMPILE_WERROR),
+        "Android/app/build.gradle.kts must add JavaCompile -Werror:\n{app}"
+    );
+
+    let shared = plan
+        .files
+        .iter()
+        .find(|file| file.relative_path == "Android/shared/build.gradle.kts")
+        .unwrap_or_else(|| panic!("Android/shared/build.gradle.kts missing from android plan"))
+        .contents
+        .as_str();
+    assert!(
+        !shared.contains(REQUIRED_GRADLE_ALL_WARNINGS_AS_ERRORS),
+        "Android/shared/build.gradle.kts must not set allWarningsAsErrors (generated UniFFI only):\n{shared}"
+    );
+    assert!(
+        !shared.contains(REQUIRED_JAVA_COMPILE_WERROR),
+        "Android/shared/build.gradle.kts must not add JavaCompile -Werror (generated UniFFI only):\n{shared}"
+    );
 }
 
 fn assert_shared_cargo_extension_profile(plan: &ScaffoldPlan) {

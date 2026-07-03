@@ -42,6 +42,8 @@ assemblies:
         target: iOS/.vectis/sim-build.sh
       - source: .vectis/sim-dev.sh
         target: iOS/.vectis/sim-dev.sh
+      - source: .vectis/relax-generated-spm-packages.sh
+        target: iOS/.vectis/relax-generated-spm-packages.sh
       - source: App.swift
         target: iOS/__APP_NAME__/__APP_NAME__App.swift
       - source: Core.swift
