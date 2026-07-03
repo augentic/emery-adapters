@@ -4,6 +4,8 @@ This directory is the single **spec-runtime bundle**: a tree of relative symlink
 
 There are no generated copies and no sync step: a symlink can never drift from its target. Edit the canonical file under `plugins/spec/references/` and every adapter sees the change immediately.
 
+**Maintainer note (specify-adapters fork):** this repository carries a **forked copy** of the spec-runtime bundle as regular files under `shared/references/runtime/`, not live symlinks into `augentic/specify`. When `plugins/spec/references/` changes in specify, manually sync the matching files here (or run `make check-adapters-parity` from a sibling specify checkout).
+
 | Bundle path (symlink) | Canonical target |
 | --- | --- |
 | `guardrails.md` | `plugins/spec/references/guardrails.md` |

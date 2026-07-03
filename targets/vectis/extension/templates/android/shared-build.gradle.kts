@@ -72,7 +72,7 @@ extensions.configure<CargoExtension>("cargo") {
     module = "../.."
     extraCargoBuildArguments = listOf("--package", "shared")
     libname = "shared"
-    adapter = "debug"
+    profile = "debug"
     targets = listOf("arm", "arm64", "x86", "x86_64")
     features {
         defaultAnd(arrayOf("uniffi"))

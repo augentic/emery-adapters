@@ -61,6 +61,28 @@ fn assert_gradle_strict_flags(plan: &ScaffoldPlan) {
     }
 }
 
+fn assert_shared_cargo_extension_profile(plan: &ScaffoldPlan) {
+    let contents = plan
+        .files
+        .iter()
+        .find(|file| file.relative_path == "Android/shared/build.gradle.kts")
+        .unwrap_or_else(|| panic!("Android/shared/build.gradle.kts missing from android plan"))
+        .contents
+        .as_str();
+    assert!(
+        contents.contains("profile = \"debug\""),
+        "Android/shared/build.gradle.kts must set profile = \"debug\" in CargoExtension:\n{contents}"
+    );
+    let cargo_block = contents
+        .split("extensions.configure<CargoExtension>")
+        .nth(1)
+        .unwrap_or_else(|| panic!("CargoExtension block missing from shared build.gradle.kts:\n{contents}"));
+    assert!(
+        !cargo_block.contains("adapter = \"debug\""),
+        "CargoExtension block must not use invalid adapter = \"debug\" property:\n{cargo_block}"
+    );
+}
+
 fn assert_makefile_strict_rustflags(plan: &ScaffoldPlan) {
     let contents = plan
         .files
@@ -108,11 +130,13 @@ fn android_scaffold_kt_has_no_suppress_http_kv_time_platform() {
 #[test]
 fn android_scaffold_gradle_treats_warnings_as_errors_render_only() {
     assert_gradle_strict_flags(&plan(None));
+    assert_shared_cargo_extension_profile(&plan(None));
 }
 
 #[test]
 fn android_scaffold_gradle_treats_warnings_as_errors_http() {
     assert_gradle_strict_flags(&plan(Some("http")));
+    assert_shared_cargo_extension_profile(&plan(Some("http")));
 }
 
 #[test]
