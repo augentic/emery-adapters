@@ -18,7 +18,8 @@ static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 /// Serialize mutation of process-global `PROJECT_DIR` and CWD across the
 /// `tests/engine` integration binary.
 pub fn env_lock() -> MutexGuard<'static, ()> {
-    ENV_LOCK.get_or_init(|| Mutex::new(()))
+    ENV_LOCK
+        .get_or_init(|| Mutex::new(()))
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
@@ -32,7 +33,10 @@ impl ProjectDirGuard {
     /// Set `PROJECT_DIR` to `path`, remembering the prior value for restore.
     pub fn set(path: &Path) -> Self {
         let previous = std::env::var_os("PROJECT_DIR");
-        #[expect(unsafe_code, reason = "edition-2024 set_var is unsafe; env_lock serializes access")]
+        #[expect(
+            unsafe_code,
+            reason = "edition-2024 set_var is unsafe; env_lock serializes access"
+        )]
         // SAFETY: callers hold `env_lock` for the guard's lifetime.
         let () = unsafe { std::env::set_var("PROJECT_DIR", path) };
         Self { previous }
@@ -62,9 +66,9 @@ pub struct CwdGuard {
 
 impl CwdGuard {
     /// Change the process CWD to `path`, remembering the prior directory.
-    pub fn set(path: PathBuf) -> Self {
+    pub fn set(path: &Path) -> Self {
         let previous = std::env::current_dir().expect("cwd");
-        std::env::set_current_dir(&path).expect("set_current_dir");
+        std::env::set_current_dir(path).expect("set_current_dir");
         Self { previous }
     }
 }

@@ -41,7 +41,7 @@ fn android_setup_uses_project_dir_from_android_cwd() {
     write_project_yaml(tmp.path(), &["core", "android"]);
     setup_android_shell(tmp.path());
 
-    let _cwd = CwdGuard::set(tmp.path().join("Android"));
+    let _cwd = CwdGuard::set(&tmp.path().join("Android"));
     let _project_dir = ProjectDirGuard::set(tmp.path());
 
     let payload = run(&AndroidCommand::Setup(AndroidSetupArgs { path: None })).expect("setup");
