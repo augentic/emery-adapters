@@ -32,7 +32,7 @@ sh targets/vectis/scripts/test-hook-scripts.sh
 
 [tasks.check-guardrails-consumer-boundary]
 script = '''
-rg -q '^## Consumer tooling boundary$' shared/references/runtime/guardrails.md || {
+grep -q '^## Consumer tooling boundary$' shared/references/runtime/guardrails.md || {
   echo "shared/references/runtime/guardrails.md is missing ## Consumer tooling boundary" >&2
   echo "Sync from plugins/spec/references/guardrails.md in specify." >&2
   exit 1

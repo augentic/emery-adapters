@@ -6,9 +6,6 @@ set -eu
 patch_package() {
   local pkg="$1"
   [[ -f "$pkg" ]] || return 0
-  if grep -q 'suppress-warnings' "$pkg"; then
-    return 0
-  fi
   python3 - "$pkg" <<'PY'
 import re
 import sys
