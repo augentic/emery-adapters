@@ -125,12 +125,35 @@ pub struct Context<'a> {
 /// Maximum verify-repair iterations per the build brief's Phase 4.
 const MAX_REPAIR_ITERATIONS: usize = 2;
 
+/// One format sub-flow of the build brief's Phase 2.
+struct SubFlow {
+    /// Format name, used in prompts and answer-schema names.
+    format: &'static str,
+    /// Registry path of the format's sub-brief.
+    brief: &'static str,
+    /// The `contracts/` subdirectory this format owns, used to route
+    /// validator findings back to the owning sub-brief for repair.
+    dir: &'static str,
+}
+
 /// The three format sub-flows in the build brief's fixed Phase 2 order:
 /// the schema vocabulary stabilises before the bindings reference it.
-const SUB_FLOWS: [(&str, &str); 3] = [
-    ("json-schema", "briefs/build/json-schema.md"),
-    ("openapi", "briefs/build/openapi.md"),
-    ("asyncapi", "briefs/build/asyncapi.md"),
+const SUB_FLOWS: [SubFlow; 3] = [
+    SubFlow {
+        format: "json-schema",
+        brief: "briefs/build/json-schema.md",
+        dir: "schemas",
+    },
+    SubFlow {
+        format: "openapi",
+        brief: "briefs/build/openapi.md",
+        dir: "http",
+    },
+    SubFlow {
+        format: "asyncapi",
+        brief: "briefs/build/asyncapi.md",
+        dir: "messages",
+    },
 ];
 
 /// Adapter-internal answer schema for one format sub-flow leg. Internal
@@ -201,8 +224,9 @@ pub async fn build<P: Model>(
     // part of each sub-flow's own judgment: the brief tells it when to
     // skip, and a skipped leg answers `applicable: false` without writing.
     let mut summaries: Vec<String> = Vec::new();
-    for (format, brief_path) in SUB_FLOWS {
-        let system = format!("{build_brief}\n\n---\n\n{}", registry::body(brief_path));
+    for sub_flow in &SUB_FLOWS {
+        let format = sub_flow.format;
+        let system = format!("{build_brief}\n\n---\n\n{}", registry::body(sub_flow.brief));
         let user = format!(
             "Run the `{format}` sub-flow of the contracts build for slice `{slice}` \
              (adapter `{}`).\n\n\
@@ -221,15 +245,16 @@ pub async fn build<P: Model>(
     }
 
     // Phase 4 — verify-repair loop over the in-core validators (the
-    // Phase 5 tool gate, compiled in). One repair call per iteration
-    // carries every finding; the agent re-enters the owning sub-briefs
-    // through its MCP references.
+    // Phase 5 tool gate, compiled in). The brief re-enters the owning
+    // sub-brief per format; the session-less shape folds that into one
+    // repair call per iteration carrying every finding, with the owning
+    // sub-briefs inlined so repair does not depend on the MCP route.
     for _ in 0..MAX_REPAIR_ITERATIONS {
         let findings = validate_baseline(&slice_contracts);
         if findings.is_empty() {
             break;
         }
-        let system = build_brief.to_string();
+        let system = format!("{build_brief}{}", owning_sub_briefs(&findings, &slice_contracts));
         let user = format!(
             "The contract validators found blocking issues in slice `{slice}`'s delta \
              under `{slice_contracts_rel}/`. Re-enter the owning format sub-brief(s) \
@@ -263,7 +288,11 @@ pub async fn build<P: Model>(
 ///
 /// One judgment leg folds the delta and answers with the report; the
 /// post-merge validator gate then runs in core, with one bounded repair
-/// leg when it finds blocking issues.
+/// leg when it finds blocking issues. Merge deliberately gets one repair
+/// leg where build gets two: the delta was already
+/// validated at build time, so post-merge findings are collision-shaped
+/// (`id-unique` against the baseline) and either one pass clears them or
+/// the slice needs human review.
 ///
 /// # Errors
 ///
@@ -301,6 +330,25 @@ pub async fn merge<P: Model>(
     }
 
     Ok(enforce_validators(report, &findings))
+}
+
+/// Inline the sub-briefs owning the findings' files into a repair
+/// prompt, routed by the `contracts/` subdirectory each format owns.
+/// Findings that route nowhere pull in every sub-brief, so repair never
+/// runs without the specialist material the brief's Phase 4 re-enters.
+fn owning_sub_briefs(findings: &[ContractFinding], contracts_dir: &Path) -> String {
+    let unrouted = findings.iter().any(|finding| {
+        !SUB_FLOWS.iter().any(|sub_flow| finding.path.starts_with(contracts_dir.join(sub_flow.dir)))
+    });
+    let mut inlined = String::new();
+    for sub_flow in &SUB_FLOWS {
+        let owned_dir = contracts_dir.join(sub_flow.dir);
+        if unrouted || findings.iter().any(|finding| finding.path.starts_with(&owned_dir)) {
+            inlined.push_str("\n\n---\n\n");
+            inlined.push_str(registry::body(sub_flow.brief));
+        }
+    }
+    inlined
 }
 
 /// Resolve the operation's tree root beneath the shared mount.

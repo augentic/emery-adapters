@@ -126,6 +126,15 @@ async fn build_repair_loop_is_bounded() {
     let repair = &requests[3].messages[0].content;
     assert!(repair.contains(RULE_VERSION_IS_SEMVER), "repair prompt carries the finding");
     assert!(repair.contains("http/api.yaml"), "repair prompt names the file");
+    let repair_system = requests[3].system.as_deref().unwrap();
+    assert!(
+        repair_system.contains("# contracts.build — openapi sub-flow"),
+        "owning sub-brief is inlined for the finding under http/"
+    );
+    assert!(
+        !repair_system.contains("# contracts.build — asyncapi sub-flow"),
+        "unaffected sub-briefs stay out of the repair prompt"
+    );
 }
 
 #[tokio::test]
