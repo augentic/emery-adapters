@@ -71,6 +71,18 @@ exit $status
 command = "cargo"
 args = ["build", "-p", "specify-contracts-guest", "--target", "wasm32-wasip2"]
 
+# Refresh the committed guest components: release-build each adapter guest
+# and copy it to `targets/<name>/guest.wasm` beside the adapter manifest
+# (the Step-5 cutover replaces `adapter.wasm` with this artifact; until
+# then both ship). Run on guest changes, then commit the wasm diff.
+[tasks.refresh-guests]
+script = '''
+set -e
+cargo build -p specify-contracts-guest --target wasm32-wasip2 --release
+cp target/wasm32-wasip2/release/specify_contracts_guest.wasm targets/contracts/guest.wasm
+echo "refreshed targets/contracts/guest.wasm"
+'''
+
 # Audit
 [tasks.audit]
 command = "cargo"

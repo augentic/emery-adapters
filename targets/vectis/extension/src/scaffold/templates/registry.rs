@@ -115,9 +115,7 @@ pub mod ios {
         },
         TemplateEntry {
             target: "iOS/.vectis/relax-generated-spm-packages.sh",
-            contents: include_str!(
-                "../../../templates/ios/.vectis/relax-generated-spm-packages.sh"
-            ),
+            contents: include_str!("../../../templates/ios/.vectis/relax-generated-spm-packages.sh"),
             path_mode: PathMode::AppName,
             include_when: IncludeWhen::Always,
         },

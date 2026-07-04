@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "crates/guest-kit",
+    "crates/runtime-tests",
     "targets/contracts/core",
     "targets/contracts/extension",
     "targets/contracts/guest",

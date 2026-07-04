@@ -1,0 +1,32 @@
+[package]
+name = "specify-adapters-runtime-tests"
+description = "Dev-only composed-deployment tests hosting the adapter guest components on the Omnia runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+# Integration tests compile to the single `it` binary (one binary per
+# crate); the per-area files are pulled in via tests/it.rs `#[path]`
+# includes.
+autotests = false
+
+[[test]]
+name = "it"
+path = "tests/it.rs"
+
+# Host-only: the composed tests never compile for the guest wasm32 targets,
+# so their dependencies live under the same target gate omnia itself uses.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+anyhow.workspace = true
+omnia.workspace = true
+omnia-testkit.workspace = true
+omnia-wasi-http.workspace = true
+omnia-wasi-model.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true
