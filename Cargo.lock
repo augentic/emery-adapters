@@ -2438,6 +2438,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "omnia-cursor"
+version = "0.28.0"
+source = "git+https://github.com/augentic/backends.git?rev=573087bb8ae87bef1354e33c271d5a73d600fb63#573087bb8ae87bef1354e33c271d5a73d600fb63"
+dependencies = [
+ "anyhow",
+ "omnia",
+ "omnia-wasi-model",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "omnia-guest"
 version = "0.35.0"
 source = "git+https://github.com/augentic/omnia.git?rev=63c24f0367dd6f8ffaa319f74f5bd2f3fa6d222b#63c24f0367dd6f8ffaa319f74f5bd2f3fa6d222b"
@@ -4000,6 +4014,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 
 [[package]]
+name = "signal-hook-registry"
+version = "1.4.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c4db69cba1110affc0e9f7bcd48bbf87b3f4fc7c61fc9155afd4c469eb3d6c1b"
+dependencies = [
+ "errno",
+ "libc",
+]
+
+[[package]]
 name = "simd-adler32"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4118,6 +4142,28 @@ dependencies = [
  "serde_json",
  "specify-contracts-core",
  "specify-guest-kit",
+ "wasip3",
+ "wit-bindgen 0.58.0",
+]
+
+[[package]]
+name = "specify-eval-driver"
+version = "0.4.3"
+dependencies = [
+ "anyhow",
+ "cfg-if",
+ "omnia",
+ "omnia-cursor",
+ "omnia-wasi-http",
+ "omnia-wasi-model",
+ "tokio",
+]
+
+[[package]]
+name = "specify-eval-guest"
+version = "0.4.3"
+dependencies = [
+ "serde_json",
  "wasip3",
  "wit-bindgen 0.58.0",
 ]
@@ -4439,6 +4485,7 @@ dependencies = [
  "libc",
  "mio",
  "pin-project-lite",
+ "signal-hook-registry",
  "socket2",
  "tokio-macros",
  "windows-sys 0.61.2",

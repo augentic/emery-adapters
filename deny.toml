@@ -17,11 +17,19 @@ feature-depth = 1
 unmaintained = 'workspace'
 ignore = []
 
+# Mirrors the specify engine's allowlist: the omnia host graph the
+# eval driver pulls in (rustls / aws-lc-rs / opentelemetry) carries the
+# ISC / LLVM-exception / CDLA / CC0 entries beyond this repo's original
+# extension-only set.
 [licenses]
 allow = [
+  "Apache-2.0 WITH LLVM-exception",
   "Apache-2.0",
   "BSD-2-Clause",
   "BSD-3-Clause",
+  "CC0-1.0",
+  "CDLA-Permissive-2.0",
+  "ISC",
   "MIT",
   "MIT-0",
   "Unicode-3.0",

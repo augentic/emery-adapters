@@ -69,7 +69,18 @@ exit $status
 # wasm32-wasip2 target the omnia runtime loads.
 [tasks.build-guests]
 command = "cargo"
-args = ["build", "-p", "specify-contracts-guest", "--target", "wasm32-wasip2"]
+args = ["build", "-p", "specify-contracts-guest", "-p", "specify-eval-guest", "--target", "wasm32-wasip2"]
+
+# Live decomposition-proof evals (RFC-61 Step 2 Milestone E): every
+# contracts scenario through the eval driver against the real cursor
+# backend. Requires cursor-agent on PATH; see evals/contracts/README.md.
+[tasks.eval-contracts]
+script = '''
+set -e
+for scenario in describe design import source update; do
+  evals/contracts/run.sh "$scenario"
+done
+'''
 
 # Refresh the committed guest components: release-build each adapter guest
 # and copy it to `targets/<name>/guest.wasm` beside the adapter manifest
