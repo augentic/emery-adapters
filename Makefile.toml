@@ -15,10 +15,10 @@ skip_rust_env_info = true
 # CI Checks
 # -------------------------------------
 [tasks.check]
-dependencies = ["fmt-check", "lint", "test", "test-docs", "doc", "check-hook-scripts", "check-guardrails-consumer-boundary"]
+dependencies = ["fmt-check", "lint", "test", "test-docs", "doc", "check-hook-scripts", "check-guardrails-consumer-boundary", "check-pins"]
 
 [tasks.ci]
-dependencies = ["fmt-check", "lint", "test", "test-docs", "doc", "vet", "deny", "check-hook-scripts", "check-guardrails-consumer-boundary"]
+dependencies = ["fmt-check", "lint", "test", "test-docs", "doc", "vet", "deny", "check-hook-scripts", "check-guardrails-consumer-boundary", "check-pins"]
 
 # -------------------------------------
 # Individual Actions
@@ -38,6 +38,38 @@ grep -q '^## Consumer tooling boundary$' shared/references/runtime/guardrails.md
   exit 1
 }
 '''
+
+# Vendored-pin parity (RFC-61): the wit/ and schemas/answers/ trees are
+# byte-copies of the augentic/specify sources. When a sibling checkout is
+# present (developer machines, the migration branch), any drift fails;
+# CI without a sibling checkout skips with a notice.
+[tasks.check-pins]
+script = '''
+sibling="../specify"
+if [ ! -d "$sibling" ]; then
+  echo "check-pins: no sibling specify checkout; skipping vendored-pin parity"
+  exit 0
+fi
+status=0
+for pair in "wit/specify.wit:$sibling/wit/specify.wit" \
+            "schemas/answers/leads.schema.json:$sibling/schemas/answers/leads.schema.json" \
+            "schemas/answers/evidence.schema.json:$sibling/schemas/answers/evidence.schema.json" \
+            "schemas/answers/report.schema.json:$sibling/schemas/answers/report.schema.json"; do
+  local_file="${pair%%:*}"
+  upstream="${pair#*:}"
+  if ! cmp -s "$local_file" "$upstream"; then
+    echo "check-pins: $local_file diverges from $upstream; re-vendor from specify" >&2
+    status=1
+  fi
+done
+exit $status
+'''
+
+# Guest components (RFC-61): build every adapter guest crate for the
+# wasm32-wasip2 target the omnia runtime loads.
+[tasks.build-guests]
+command = "cargo"
+args = ["build", "-p", "specify-contracts-guest", "--target", "wasm32-wasip2"]
 
 # Audit
 [tasks.audit]

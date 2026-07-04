@@ -1,7 +1,10 @@
 [workspace]
 resolver = "3"
 members = [
+    "crates/guest-kit",
+    "targets/contracts/core",
     "targets/contracts/extension",
+    "targets/contracts/guest",
     "targets/vectis/extension",
     "tools/rust-quality",
 ]
@@ -9,7 +12,10 @@ members = [
 # The Specify adapters repo (RFC-48 / RFC-49 T6). Each bundled adapter
 # co-locates its WASI extension crate under `{sources,targets}/**/extension/`;
 # the extension wasm builds here and is committed beside `adapter.yaml` as the
-# adapter's `adapter.wasm`.
+# adapter's `adapter.wasm`. The RFC-61 migration adds per-adapter guest
+# components: a wasm-free `<name>-core` crate plus a wasm32-only
+# `<name>-guest` shim generating bindings from the vendored `wit/` pin, with
+# shared guest support under `crates/`.
 
 [workspace.package]
 authors = ["Augentic"]
@@ -22,6 +28,7 @@ version = "0.4.3"
 publish = false
 
 [workspace.dependencies]
+anyhow = "1"
 clap = { version = "4", features = ["derive", "env"] }
 jsonschema = { version = "0.46", default-features = false }
 semver = "1"
@@ -29,14 +36,47 @@ serde = { version = "1", features = ["derive"] }
 serde-saphyr = "0.0.26"
 serde_json = "1"
 sha2 = "0.11"
+specify-guest-kit = { path = "crates/guest-kit" }
+specify-contracts-core = { path = "targets/contracts/core" }
 thiserror = "2"
 toml = "1"
 assert_cmd = "2"
 tempfile = "3"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 resvg = { version = "0.47", default-features = false }
 usvg = { version = "0.47", default-features = false }
 tiny-skia = { version = "0.12", default-features = false }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+
+# Omnia guest SDK — the 0.35.0 crates are unpublished pre-publish pins,
+# supplied from the same git rev the specify engine pins (see
+# [patch.crates-io] below).
+omnia = "0.35.0"
+omnia-guest = "0.35.0"
+omnia-testkit = "0.35.0"
+omnia-wasi-http = "0.35.0"
+omnia-wasi-model = "0.35.0"
+wasip3 = { version = "0.7.0", features = ["http-compat"] }
+wit-bindgen = { version = "0.58.0", features = ["async-spawn"] }
+
+[patch.crates-io]
+# Same unpublished-pin rev as augentic/specify's engine workspace; drop
+# when omnia publishes to crates.io.
+omnia = { git = "https://github.com/augentic/omnia.git", rev = "63c24f0367dd6f8ffaa319f74f5bd2f3fa6d222b" }
+omnia-guest = { git = "https://github.com/augentic/omnia.git", rev = "63c24f0367dd6f8ffaa319f74f5bd2f3fa6d222b" }
+omnia-guest-macros = { git = "https://github.com/augentic/omnia.git", rev = "63c24f0367dd6f8ffaa319f74f5bd2f3fa6d222b" }
+omnia-host-macros = { git = "https://github.com/augentic/omnia.git", rev = "63c24f0367dd6f8ffaa319f74f5bd2f3fa6d222b" }
+omnia-testkit = { git = "https://github.com/augentic/omnia.git", rev = "63c24f0367dd6f8ffaa319f74f5bd2f3fa6d222b" }
+omnia-wasi-config = { git = "https://github.com/augentic/omnia.git", rev = "63c24f0367dd6f8ffaa319f74f5bd2f3fa6d222b" }
+omnia-wasi-http = { git = "https://github.com/augentic/omnia.git", rev = "63c24f0367dd6f8ffaa319f74f5bd2f3fa6d222b" }
+omnia-wasi-model = { git = "https://github.com/augentic/omnia.git", rev = "63c24f0367dd6f8ffaa319f74f5bd2f3fa6d222b" }
+
+# `wrpc-wasmtime` 0.1.0 is unpublished on crates.io; omnia's own
+# [patch.crates-io] supplies it, but patches do not propagate to
+# dependents, so this workspace carries the same patch pinned to the rev
+# omnia's Cargo.lock records.
+wrpc-transport = { git = "https://github.com/bytecodealliance/wrpc", rev = "b347c61db52dea9fe515a349ac9a91ba11cfe4f9" }
+wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc", rev = "b347c61db52dea9fe515a349ac9a91ba11cfe4f9" }
 
 [workspace.lints.rust]
 # https://dirname.github.io/rust-std-doc/rustc/lints/listing/allowed-by-default.html

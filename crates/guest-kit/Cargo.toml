@@ -1,0 +1,24 @@
+[package]
+name = "specify-guest-kit"
+description = "Shared guest support for Specify adapter components: the local Model capability trait and its mock provider"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+
+# The WASI-backed default body of `Model::create` compiles only for the
+# wasm32 guest target, mirroring omnia-guest's capability traits.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+omnia-wasi-model.workspace = true
+wasip3.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+
+[lints]
+workspace = true
