@@ -18,10 +18,9 @@ path = "src/main.rs"
 
 [dependencies]
 clap.workspace = true
-semver.workspace = true
 serde = { workspace = true, features = ["derive"] }
-serde-saphyr.workspace = true
 serde_json.workspace = true
+specify-contracts-core.workspace = true
 
 [dev-dependencies]
 assert_cmd.workspace = true

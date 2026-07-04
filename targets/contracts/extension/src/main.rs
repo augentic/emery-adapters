@@ -15,15 +15,16 @@
 //! `Render`, or the `output::emit` dispatcher; those couplings would
 //! re-attach this tool to the host CLI's release cadence.
 //!
-//! Wraps the in-crate [`validate::validate_baseline`] to surface
-//! the contract Validation checks (`SemVer` `info.version`,
+//! Wraps [`specify_contracts_core::validate::validate_baseline`] to
+//! surface the contract Validation checks (`SemVer` `info.version`,
 //! `info.x-specify-id` format, cross-project id uniqueness) as a
 //! standalone executable that the contracts adapter can shell out
 //! to from skill runtimes.
 //!
-//! The validator functions live in the sibling [`validate`] module;
-//! this binary is deliberately a thin argument-parsing +
-//! JSON-rendering shell over them.
+//! The validator functions live in the wasm-free
+//! `specify-contracts-core` crate (RFC-61 Step 2), shared with the
+//! contracts guest component; this binary is deliberately a thin
+//! argument-parsing + JSON-rendering shell over them.
 //!
 //! # Exit codes
 //!
@@ -60,10 +61,7 @@ use std::process::ExitCode;
 
 use clap::{Parser, ValueEnum};
 use serde::Serialize;
-
-mod validate;
-
-use validate::{ContractFinding, validate_baseline};
+use specify_contracts_core::validate::{ContractFinding, validate_baseline};
 
 const EXIT_OK: u8 = 0;
 const EXIT_FINDINGS: u8 = 1;

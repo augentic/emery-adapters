@@ -1,0 +1,33 @@
+[package]
+name = "specify-contracts-core"
+description = "Wasm-free core of the contracts target adapter: validators, embedded prose registry, and the judgment operation template"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+# Integration tests compile to the single `it` binary (one binary per
+# crate); the per-area files are pulled in via tests/it.rs `#[path]`
+# includes.
+autotests = false
+
+[[test]]
+name = "it"
+path = "tests/it.rs"
+
+[dependencies]
+semver.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde-saphyr.workspace = true
+serde_json.workspace = true
+specify-guest-kit.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+jsonschema.workspace = true
+tempfile.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

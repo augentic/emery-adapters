@@ -1,0 +1,15 @@
+[package]
+name = "specify-contracts-guest"
+description = "wasm32 shim of the contracts adapter guest: WIT bindings, target export glue, and the MCP reference shelf"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+specify-contracts-core.workspace = true
+
+[lints]
+workspace = true
