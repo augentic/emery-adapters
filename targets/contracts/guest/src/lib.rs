@@ -2,7 +2,7 @@
 //!
 //! Exports the `augentic:specify` `target-adapter` world — `guidance` /
 //! `build` / `merge` route into the wasm-free core's operation template with
-//! the WASI-backed [`Model`] provider — plus `wasi:http/incoming-handler`,
+//! the WASI-backed `Model` provider — plus `wasi:http/incoming-handler`,
 //! serving the core's embedded prose registry as an MCP reference shelf
 //! (`list_docs` / `read_doc` tools, `doc://` resources).
 //!
