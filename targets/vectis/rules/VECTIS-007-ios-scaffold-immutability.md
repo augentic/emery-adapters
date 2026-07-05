@@ -19,7 +19,7 @@ references:
   - label: iOS hard rules
     path: adapters/targets/vectis/references/hard-rules-ios.md
   - label: iOS template manifest
-    path: adapters/targets/vectis/extension/templates/ios/MANIFEST.md
+    path: adapters/targets/vectis/crates/core/templates/ios/MANIFEST.md
 ---
 
 ## Rule

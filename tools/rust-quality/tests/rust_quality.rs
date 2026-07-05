@@ -1,10 +1,11 @@
-//! Workspace-wide unit-test ratchet for the specify-adapters extensions.
+//! Workspace-wide unit-test ratchet for the specify-adapters crates.
 //!
 //! Run with `cargo test --test rust_quality` (or via `cargo make test`).
 //! Counts `#[test]` / `#[tokio::test]` declarations under each adapter's
-//! `extension/src/` tree and fails when the live count drifts from the
-//! committed budget in `rust_quality_budget.toml`. Mirrors the engine gate
-//! and enforces the integration-first posture in TESTING.md.
+//! `src/` trees (the guest shim and its sub-crates) and fails when the
+//! live count drifts from the committed budget in
+//! `rust_quality_budget.toml`. Mirrors the engine gate and enforces the
+//! integration-first posture in TESTING.md.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
@@ -15,9 +16,9 @@ use std::path::{Path, PathBuf};
 const BUDGET_FILE: &str = "rust_quality_budget.toml";
 
 /// Count `#[test]` / `#[tokio::test]` declarations in each adapter's
-/// `extension/src/` tree, keyed by adapter directory name. Integration
-/// tests under any `tests/` tree are excluded by construction — only
-/// `extension/src/` files are scoped.
+/// `src/` trees, keyed by adapter directory name. Integration tests
+/// under any `tests/` tree are excluded by construction — only `src/`
+/// files are scoped.
 fn count_src_unit_tests(root: &Path) -> BTreeMap<String, usize> {
     let mut counts = BTreeMap::new();
     count_walk(root, root, &mut counts);
@@ -63,9 +64,10 @@ fn count_src_file(root: &Path, path: &Path, counts: &mut BTreeMap<String, usize>
     }
 }
 
-/// Scope key for an adapter `extension/src/` Rust file, or `None` when the
-/// file is elsewhere. Matches `{targets,sources}/<name>/extension/src/**`
-/// and keys to `<name>`.
+/// Scope key for an adapter `src/` Rust file, or `None` when the file
+/// is elsewhere. Matches the guest shim (`{targets,sources}/<name>/src/**`)
+/// and every sub-crate (`{targets,sources}/<name>/crates/*/src/**`), keying
+/// both to `<name>`.
 fn adapter_scope(rel: &str) -> Option<String> {
     let mut parts = rel.split('/');
     let axis = parts.next()?;
@@ -73,10 +75,14 @@ fn adapter_scope(rel: &str) -> Option<String> {
         return None;
     }
     let name = parts.next()?;
-    if parts.next() == Some("extension") && parts.next() == Some("src") {
-        return Some(name.to_owned());
+    match parts.next()? {
+        "src" => Some(name.to_owned()),
+        "crates" => {
+            let _crate_dir = parts.next()?;
+            (parts.next() == Some("src")).then(|| name.to_owned())
+        }
+        _ => None,
     }
-    None
 }
 
 /// Workspace root: this crate lives at `<root>/tools/rust-quality`.
@@ -151,15 +157,18 @@ fn unit_test_budget_holds() {
 fn counts_src_unit_tests_by_scope() {
     let dir = tempfile::tempdir().expect("tempdir");
     let root = dir.path();
-    let src = root.join("targets/demo/extension/src/foo.rs");
-    fs::create_dir_all(src.parent().expect("parent")).expect("mkdir");
-    fs::write(&src, "#[test]\nfn a() {}\n#[tokio::test]\nasync fn b() {}\n").expect("write");
+    let shim = root.join("targets/demo/src/lib.rs");
+    fs::create_dir_all(shim.parent().expect("parent")).expect("mkdir");
+    fs::write(&shim, "#[test]\nfn a() {}\n").expect("write");
+    let core = root.join("targets/demo/crates/core/src/foo.rs");
+    fs::create_dir_all(core.parent().expect("parent")).expect("mkdir");
+    fs::write(&core, "#[test]\nfn b() {}\n#[tokio::test]\nasync fn c() {}\n").expect("write");
     // Integration tests under tests/ must never be counted.
-    let it = root.join("targets/demo/extension/tests/cli.rs");
+    let it = root.join("targets/demo/crates/core/tests/it.rs");
     fs::create_dir_all(it.parent().expect("parent")).expect("mkdir");
-    fs::write(&it, "#[test]\nfn c() {}\n").expect("write");
+    fs::write(&it, "#[test]\nfn d() {}\n").expect("write");
 
     let counts = count_src_unit_tests(root);
-    assert_eq!(counts.get("demo").copied(), Some(2));
+    assert_eq!(counts.get("demo").copied(), Some(3), "shim + core src tests share one scope");
     assert_eq!(counts.len(), 1, "integration tests under tests/ are excluded");
 }

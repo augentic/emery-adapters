@@ -1,6 +1,6 @@
 # Vectis reference material
 
-Reference documentation for the Vectis target adapter at [`adapters/targets/vectis/`](..). In Specify, Vectis is a **target adapter** — `shape`, `build`, `merge` — not a slash-command plugin.
+Reference documentation for the Vectis target adapter at [`adapters/targets/vectis/`](..). In Specify, Vectis is a **target adapter** — `guidance`, `build`, `merge` — not a slash-command plugin.
 
 The Vectis core / test / iOS / Android writer and reviewer orchestration lives in [`../briefs/build.md`](../briefs/build.md) and eight phase sub-briefs under [`../briefs/build/`](../briefs/build/). The depth (Crux idioms, SwiftUI patterns, Compose patterns, hard rules, review check libraries, token templates, design-system integration) and worked examples live in this folder.
 
@@ -8,7 +8,7 @@ The Vectis core / test / iOS / Android writer and reviewer orchestration lives i
 
 | Brief | Purpose |
 |-------|---------|
-| [`shape.md`](../briefs/shape.md) | Idiom guidance for core synthesis. |
+| [`guidance.md`](../briefs/guidance.md) | Idiom guidance for core synthesis. |
 | [`build.md`](../briefs/build.md) | Orchestrator: phase order, sub-agent contract, verify-serial / review-parallel rule, consolidation, template-drift signal, phase outcome. |
 | [`build/composition.md`](../briefs/build/composition.md) | Regenerate `composition.yaml` from `spec.md` + `design.md`; run the deterministic validator gate. |
 | [`build/core/write.md`](../briefs/build/core/write.md) | Generate / update the Crux shared core. |

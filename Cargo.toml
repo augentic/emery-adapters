@@ -9,7 +9,6 @@ members = [
     "sources/screenshots",
     "sources/typescript",
     "targets/*/crates/*",
-    "targets/*/extension",
     "targets/contracts",
     "targets/omnia",
     "targets/vectis",
@@ -23,9 +22,7 @@ members = [
 # contains the briefs/references it embeds. Shared guest support lives under
 # top-level `crates/`. Guest roots are explicit members (prose-only adapters
 # have no root package, so a bare `targets/*` glob cannot work); the crate
-# trees glob. The legacy WASI extension crate stays at `<adapter>/extension/`
-# — `specify adapter build` and CORE-061 pin that path — until RFC-61 Step 5
-# deletes it.
+# trees glob.
 
 [workspace.package]
 authors = ["Augentic"]
@@ -40,7 +37,6 @@ publish = false
 [workspace.dependencies]
 anyhow = "1"
 cfg-if = "1"
-clap = { version = "4", features = ["derive", "env"] }
 jsonschema = { version = "0.46", default-features = false }
 semver = "1"
 serde = { version = "1", features = ["derive"] }
@@ -53,7 +49,6 @@ specify-contracts-core = { path = "targets/contracts/crates/core" }
 specify-vectis-core = { path = "targets/vectis/crates/core" }
 thiserror = "2"
 toml = "1"
-assert_cmd = "2"
 tempfile = "3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 resvg = { version = "0.47", default-features = false }

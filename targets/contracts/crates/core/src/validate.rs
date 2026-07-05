@@ -2,10 +2,9 @@
 //! enforce `version-is-semver`, `id-format`, and `id-unique` against each
 //! top-level `OpenAPI` / `AsyncAPI` document.
 //!
-//! Owned by the wasm-free core so both consumers share one implementation:
-//! the legacy `specify-contract` extension binary (a thin shim scheduled
-//! for deletion at RFC-61 Step 5 Milestone A2) and the contracts guest's
-//! validate-before-visible gate after each judgment answer lands.
+//! Owned by the wasm-free core: the contracts guest runs these
+//! validators as its validate-before-visible gate after each judgment
+//! answer lands.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

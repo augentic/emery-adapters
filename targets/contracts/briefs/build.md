@@ -18,7 +18,7 @@ The brief runs against the build request the CLI prepared at `.specify/slices/<s
 
 - `inputs.artifacts.proposal` (`proposal.md`) — authorship mode (author vs import), source material, interface scope, producer/consumer roles.
 - `inputs.artifacts.specs[]` (`specs/<domain>/spec.md`) — behavioural requirements: endpoints / channels / payloads / errors (one file per `proposal.md ## Domains` entry). Provenance lines tell the brief whether the slice is author-driven (`Sources: [intent | <doc-key>]`) or import-driven (`Sources: [<code-or-contract-source>]`).
-- `inputs.artifacts.design` (`design.md`) — the format selection (OpenAPI 3.1 / AsyncAPI 3.0 / JSON Schema), file-layout intent, and any cross-contract dependency notes (see [`shape.md`](shape.md)).
+- `inputs.artifacts.design` (`design.md`) — the format selection (OpenAPI 3.1 / AsyncAPI 3.0 / JSON Schema), file-layout intent, and any cross-contract dependency notes (see [`guidance.md`](guidance.md)).
 - `inputs.artifacts.tasks` (`tasks.md`) — progress tracking.
 - `inputs.artifacts.additional[]` — the optional `contracts/` subtree declared by [`adapter.yaml`](../adapter.yaml): partial deltas written by a prior pass, present only when the slice already carries them.
 - The root `contracts/` baseline — read-only context for `$ref` reuse and extension authoring; outside the request manifest, not a slice delta.
@@ -102,7 +102,7 @@ Each `findings[]` item validates against `schemas/diagnostics/diagnostic.schema.
 
 ## See also
 
-- [`shape.md`](shape.md) — synthesis-time idiom guidance for the contracts target.
+- [`guidance.md`](guidance.md) — synthesis-time idiom guidance for the contracts target.
 - [`merge.md`](merge.md) — landing brief, including the post-merge `contract` WASI tool gate.
 - [`build/json-schema.md`](build/json-schema.md), [`build/openapi.md`](build/openapi.md), [`build/asyncapi.md`](build/asyncapi.md) — per-format sub-briefs.
 - [`references/artifact-structure.md`](../references/artifact-structure.md) — directory layout for root `contracts/`.

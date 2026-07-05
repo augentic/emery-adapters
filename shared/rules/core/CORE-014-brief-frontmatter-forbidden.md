@@ -5,7 +5,7 @@ severity: important
 trigger: An adapter brief under `adapters/**/briefs/` opens with a YAML frontmatter fence even though briefs are resolved by path only.
 rule_hints:
   - kind: path-pattern
-    value: "adapters/**/briefs/shape.md"
+    value: "adapters/**/briefs/guidance.md"
   - kind: path-pattern
     value: "adapters/**/briefs/build.md"
   - kind: path-pattern

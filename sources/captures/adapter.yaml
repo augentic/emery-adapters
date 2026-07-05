@@ -2,10 +2,6 @@
 name: captures
 version: "1.0.0"
 axis: source
-execution: agent
-briefs:
-  extract: briefs/extract.md
-  survey: briefs/survey.md
 description: >-
   Runtime capture source adapter. Walks a read-only capture tree under
   `$SOURCE_DIR` (the directory layout `/capture:wiretapper` writes —

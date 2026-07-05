@@ -6,7 +6,7 @@ use specify_omnia_core::registry;
 #[test]
 fn registry_embeds_briefs_references_and_rules() {
     for path in [
-        "briefs/shape.md",
+        "briefs/guidance.md",
         "briefs/build.md",
         "briefs/merge.md",
         "briefs/build/crate.md",

@@ -48,14 +48,11 @@ fn minimal_png() -> Vec<u8> {
     ]
 }
 
-// Negative `shell_resident_app_icon` branches. The positive ios/android
-// branches are covered end-to-end by the extension's `tests/engine/verify.rs`:
-// `bootstrap_app_icon_shell_resident_escape_hatch` (ios appiconset + png),
-// `bootstrap_app_icon_android_shell_resident_anydpi` (adaptive xml), and
-// `bootstrap_app_icon_android_shell_resident_mipmap_png` (density-bucket png).
-// This matrix pins the falses: an ios appiconset whose referenced PNG is
-// absent, an ios Contents.json with no images, an android tree with no
-// launcher, and `core` (never shell-resident).
+// Negative `shell_resident_app_icon` branches. This matrix pins the
+// falses: an ios appiconset whose referenced PNG is absent, an ios
+// Contents.json with no images, an android tree with no launcher, and
+// `core` (never shell-resident). The positive branches ride the probe
+// below and the guest build's bootstrap app-icon gate.
 #[test]
 fn shell_resident_app_icon_matrix() {
     let png_ref = r#"{
@@ -82,10 +79,8 @@ fn shell_resident_app_icon_matrix() {
 }
 
 // Positive ios probe through whitespace-tolerant Contents.json parsing:
-// `"filename" : "AppIcon.png"` (spaced colon) must still resolve the PNG.
-// Replaces the extension's two private-helper unit tests
-// (`parses_filename_from_contents_json` / `parse_json_string_value`) by
-// reaching the same parse kernel through the public probe.
+// `"filename" : "AppIcon.png"` (spaced colon) must still resolve the PNG,
+// reaching the parse kernel through the public probe.
 #[test]
 fn spaced_contents_json_resolves_icon() {
     let spaced = r#"{

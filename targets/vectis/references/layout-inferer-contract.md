@@ -146,5 +146,5 @@ Source-specific skills MAY add additional sections (e.g. the image inferer repor
 ## See also
 
 - [Component Catalog](./spec-runtime/components.md) — operator workflow and validation surfaces for `components.yaml`.
-- [`composition.schema.json`](https://schemas.specify.dev/vectis/composition.schema.json) — the schema both `layout.yaml` (unwired) and `composition.yaml` (wired) validate against. Retrieve with `specify extension schema vectis composition`.
+- [`composition.schema.json`](https://schemas.specify.dev/vectis/composition.schema.json) — the schema both `layout.yaml` (unwired) and `composition.yaml` (wired) validate against; tool-owned at `targets/vectis/crates/core/schemas/` and embedded in the adapter guest.
 - [`tokens.schema.json`](https://schemas.specify.dev/vectis/tokens.schema.json) and [`assets.schema.json`](https://schemas.specify.dev/vectis/assets.schema.json) — the sibling input schemas the cross-artifact reference checks consume.

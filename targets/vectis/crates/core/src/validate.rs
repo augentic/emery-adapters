@@ -2,14 +2,10 @@
 //! cross-artifact validation for tokens, assets, layout, and
 //! composition, plus an `all` fan-out.
 //!
-//! Absorbed from the legacy extension's `validate` subcommand (RFC-61
-//! Step 3): the engine and its rule set are unchanged; only the
-//! CLI argument surface stayed behind in `specify-vectis-extension`,
-//! which converts its clap types onto [`ValidateMode`] and calls
-//! [`run`]. The guest's `build` / `merge` operations call [`run`]
-//! directly as their deterministic postlude gate. Provenance for every
-//! rule lives in the repository-root `DECISIONS.md` (§"Vectis
-//! validation and materialization").
+//! The guest's `build` / `merge` operations call [`run`] directly as
+//! their deterministic postlude gate. Provenance for every rule lives
+//! in the repository-root `DECISIONS.md` (§"Vectis validation and
+//! materialization").
 
 use std::path::Path;
 
@@ -25,7 +21,7 @@ pub mod error {
     pub use crate::VectisError;
 }
 
-/// Vectis validation modes, mirroring the extension's CLI spelling.
+/// Vectis validation modes, one per UI artifact plus the `all` fan-out.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ValidateMode {
     /// Validate a `tokens.yaml` file.

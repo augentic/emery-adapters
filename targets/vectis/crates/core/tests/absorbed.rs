@@ -3,13 +3,8 @@
 //! These matrices lived as `#[cfg(test)]` src unit tests in the legacy
 //! extension crate; this crate carries no src tests (the workspace
 //! ratchet), so they run here against the same items through the
-//! public module tree. The end-to-end funnels — the CLI envelopes,
-//! exit codes, app-icon SVG decode, and the full acceptance fixture —
-//! stay covered by the extension's own integration suite
-//! (`targets/vectis/extension/tests/`), the primary oracle until
-//! RFC-61 Step 5 deletes it. The one kernel left behind is the
-//! extension-private `png_ihdr` reader, exercised end-to-end by the
-//! extension's app-icon validate / materialize runs.
+//! public module tree. The worked-example appendix pins re-homed from
+//! the extension's integration suite live in `appendices.rs`.
 
 use image::{ImageFormat, Rgba, RgbaImage};
 use serde_json::{Map, Value, json};
@@ -40,9 +35,7 @@ const TRIANGLE: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 
 
 // The platform filter defaults to both platforms, dedupes repeats, and
 // rejects an unknown platform id — observed through the public [`run`]
-// entry point (the summary's `platforms` echo and the typed error). The
-// exit-code mapping from the summary `errors` array is asserted
-// end-to-end by the extension's CLI runs.
+// entry point (the summary's `platforms` echo and the typed error).
 #[test]
 fn platform_filter_matrix() {
     let tmp = tempdir().expect("tempdir");
@@ -255,8 +248,7 @@ fn yaml_pins_matrix() {
 // `parse_vector_svg` parses a clean icon (positive size) and
 // `path_data_string` emits space-separated coords; an unsupported
 // `<filter>` def is rejected with an error naming the asset and
-// `filters`. The happy-path parse of this triangle is also covered
-// end-to-end by the extension's materialize integration tests.
+// `filters`.
 #[test]
 fn svg_parse_matrix() {
     let parsed = parse_vector_svg(TRIANGLE.as_bytes(), "tri").expect("parse");
@@ -352,8 +344,6 @@ fn write_android_export_creates_required_tree() {
 // `decode_to_launcher_canvas` accepts a 1024² opaque raster without
 // upscaling and rejects a sub-1024 raster (naming the dimension).
 // Transparent raster masters decode successfully with alpha preserved.
-// SVG decode to the 1024 canvas is covered end-to-end by the extension's
-// app-icon materialize integration tests.
 #[test]
 fn decode_to_launcher_canvas_matrix() {
     let tmp = tempdir().expect("tempdir");

@@ -72,7 +72,7 @@ When a reconciled `id` group the agent marked `disagreed` carries claims from mu
 
 - The kernel renders `Sources:` deterministically: sort by authority class (`intent` < `documentation` < `behaviour`), then alphabetically by source key within a class, highest-authority key first.
 - Order requirements in the response by source order on the highest-authority Evidence document (when tied, fall back to alphabetical order on the first contributing source key); the kernel assigns `REQ` ids and renders the spec blocks in that declaration order.
-- Re-running `/spec:refine` on identical `Evidence[]` and `shape` MUST produce byte-identical artifacts: the kernel is a deterministic, target-independent projection over a fixed response and emits no timestamps into the artifacts.
+- Re-running `/spec:refine` on identical `Evidence[]` and `guidance` MUST produce byte-identical artifacts: the kernel is a deterministic, target-independent projection over a fixed response and emits no timestamps into the artifacts.
 
 ## Plan-time reconciliation is a separate playbook
 

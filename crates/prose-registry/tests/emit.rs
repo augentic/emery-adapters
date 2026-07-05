@@ -26,18 +26,19 @@ fn generate(adapter_root: &Path, trees: &[&str]) -> Result<String, String> {
 fn emits_sorted_doc_table() {
     let adapter = TempDir::new().expect("adapter root");
     write(adapter.path(), "references/openapi/verifier.md", "# verifier");
-    write(adapter.path(), "briefs/shape.md", "# shape");
+    write(adapter.path(), "briefs/guidance.md", "# guidance");
     write(adapter.path(), "briefs/build.md", "# build");
     write(adapter.path(), "briefs/notes.txt", "not embedded");
 
     let generated = generate(adapter.path(), &["briefs", "references"]).expect("emit succeeds");
 
     let build = generated.find(r#"Doc { path: "briefs/build.md""#).expect("build brief embedded");
-    let shape = generated.find(r#"Doc { path: "briefs/shape.md""#).expect("shape brief embedded");
+    let guidance =
+        generated.find(r#"Doc { path: "briefs/guidance.md""#).expect("guidance brief embedded");
     let verifier = generated
         .find(r#"Doc { path: "references/openapi/verifier.md""#)
         .expect("nested reference embedded");
-    assert!(build < shape && shape < verifier, "table is sorted by adapter-relative path");
+    assert!(build < guidance && guidance < verifier, "table is sorted by adapter-relative path");
     assert!(!generated.contains("notes.txt"), "non-markdown files are skipped");
     assert!(generated.contains("include_str!"), "bodies ride as include_str! against disk");
     assert!(generated.contains("pub static DOCS"), "table binds the DOCS static");

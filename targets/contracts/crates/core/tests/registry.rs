@@ -6,7 +6,7 @@ use specify_contracts_core::registry;
 #[test]
 fn registry_embeds_briefs_and_references() {
     for path in [
-        "briefs/shape.md",
+        "briefs/guidance.md",
         "briefs/build.md",
         "briefs/merge.md",
         "briefs/build/json-schema.md",

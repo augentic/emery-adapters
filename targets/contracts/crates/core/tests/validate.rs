@@ -69,9 +69,7 @@ fn check(case: &Case) {
 
 // `validate_baseline` is a pure `(contracts tree → sorted findings)`
 // projection, so each rule's edge set collapses to a table — a new
-// case is a row, not a `fn`. The wire contract (exit codes, JSON
-// shape, golden bytes) is owned black-box by the extension's
-// `tests/cli.rs` and is deliberately not restated here.
+// case is a row, not a `fn`.
 
 #[test]
 fn version_rule_matrix() {

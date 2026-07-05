@@ -1,8 +1,8 @@
-# Vectis target — `shape`
+# Vectis target — `guidance`
 
 Core synthesis reads this brief alongside `Evidence[]` and the slice's `proposal.md` when it writes `spec.md` and `design.md` for a `target: vectis` slice. The brief is **input to synthesis**, not a runtime step: it does not consume Evidence on its own, does not write artifacts, and does not transition lifecycle state. It tells the synthesiser how Vectis idioms organise canonical artifact content so the resulting `spec.md` and `design.md` can be implemented directly by the `build` brief.
 
-`shape` only describes what synthesis should fold into the canonical artifacts. Implementation patterns, scaffold commands, verify-repair, and reviewers live in `build.md`. Operator-curated UI inputs (`tokens.yaml`, `assets.yaml`) are build-time inputs, not synthesis inputs — never describe their contents in `spec.md` / `design.md`.
+`guidance` only describes what synthesis should fold into the canonical artifacts. Implementation patterns, scaffold commands, verify-repair, and reviewers live in `build.md`. Operator-curated UI inputs (`tokens.yaml`, `assets.yaml`) are build-time inputs, not synthesis inputs — never describe their contents in `spec.md` / `design.md`.
 
 ## What a Vectis slice produces
 
@@ -46,7 +46,7 @@ Required sections in order:
 - **`## API Contracts`** — when `contracts/http/` exists, reference the OpenAPI specs there rather than restating endpoint shapes; otherwise describe endpoints (method, URL, request/response, errors). Include only when the HTTP adapter is used.
 - **`## iOS Shell Details`** (when `ios` in Platforms) — navigation style (single / stack / tabs), per-screen customisations that go beyond what `composition.yaml` will express, platform features (haptics, share sheet), HIG fallback policy when `tokens.yaml` is absent.
 - **`## Android Shell Details`** (when `android` in Platforms) — navigation patterns (single activity, bottom nav, drawer), Material 3 customisations per ViewModel variant, platform features (edge-to-edge, system bars), Koin DI requirements when multiple non-Render effects are used, adapter-client details (Ktor for HTTP / SSE, SharedPreferences for KV), Material 3 fallback policy when `tokens.yaml` is absent.
-- **`## Implementation Constraints`** — Swift 6 / iOS 17+ deployment target; Kotlin 2.x / Jetpack Compose / Material 3 / minSdk 34; Java 21 LTS (not Java 25+ — Gradle compatibility). When the slice supplies an explicit scaffold version file, reference its path and summarise the Crux / facet / uniffi pins it declares; otherwise note that the scaffold tool's embedded defaults come from the vectis extension's [`extension/versions.toml`](../extension/versions.toml) until the operator overrides via a slice-local version file.
+- **`## Implementation Constraints`** — Swift 6 / iOS 17+ deployment target; Kotlin 2.x / Jetpack Compose / Material 3 / minSdk 34; Java 21 LTS (not Java 25+ — Gradle compatibility). When the slice supplies an explicit scaffold version file, reference its path and summarise the Crux / facet / uniffi pins it declares; otherwise note that the scaffolder's embedded defaults come from the adapter's [`crates/core/versions.toml`](../crates/core/versions.toml) until the operator overrides via a slice-local version file.
 - **`## Dependencies`** — external packages or services this slice depends on.
 - **`## Risks / Open Questions`** — known risks, trade-offs, unresolved decisions.
 

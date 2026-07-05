@@ -2,17 +2,4 @@
 name: contracts
 version: "1.0.0"
 axis: target
-execution: agent
 description: API contract definition and validation
-briefs:
-  shape: briefs/shape.md
-  build: briefs/build.md
-  merge: briefs/merge.md
-extension:
-  name: contract
-  permissions:
-    read:
-      - $PROJECT_DIR/contracts
-inputs:
-  - path: contracts
-    required: false

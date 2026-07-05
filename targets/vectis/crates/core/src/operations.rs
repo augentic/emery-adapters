@@ -46,10 +46,10 @@ const SHELF_POINTER: &str = "Every brief, reference, and rule document this adap
      `briefs/build/ios/write.md`); fetch documents the briefs cite lazily from there.";
 
 /// Guidance on the expected build artifacts for this target — the
-/// embedded shape brief, returned deterministically (no judgment leg).
+/// embedded guidance brief, returned deterministically (no judgment leg).
 #[must_use]
 pub fn guidance() -> &'static str {
-    registry::body("briefs/shape.md")
+    registry::body("briefs/guidance.md")
 }
 
 /// Build a slice's Crux core, shell code, and regenerated
@@ -124,7 +124,8 @@ pub async fn build<P: Model>(
     // leg's judgment, recorded as a bindings file the workflow's
     // deterministic bind bookkeeping projects into the catalog.
     let infer_block = render_infer_report(&tree_root);
-    let system = assemble(&["briefs/build.md", "briefs/shape.md", "briefs/build/composition.md"]);
+    let system =
+        assemble(&["briefs/build.md", "briefs/guidance.md", "briefs/build/composition.md"]);
     let user = format!(
         "Run component inference (Step 0.5) and composition regeneration (Phase 1) of \
          the vectis build for slice `{slice}` (adapter `{}`).\n\n\

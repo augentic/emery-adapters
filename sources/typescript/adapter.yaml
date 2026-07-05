@@ -2,10 +2,6 @@
 name: typescript
 version: "1.0.0"
 axis: source
-execution: agent
-briefs:
-  extract: briefs/extract.md
-  survey: briefs/survey.md
 description: >-
   TypeScript / JavaScript legacy-code source adapter. Walks a read-only source
   tree under `$SOURCE_DIR`, surveys framework-rooted call sites (Express,

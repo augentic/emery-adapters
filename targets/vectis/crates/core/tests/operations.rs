@@ -41,8 +41,8 @@ fn schema_format(request: &Request) -> (&str, &str) {
 }
 
 #[test]
-fn guidance_returns_embedded_shape_brief() {
-    assert!(guidance().starts_with("# Vectis target — `shape`"));
+fn guidance_returns_embedded_brief() {
+    assert!(guidance().starts_with("# Vectis target — `guidance`"));
 }
 
 #[tokio::test]
@@ -73,14 +73,14 @@ async fn build_runs_prelude_then_phase_legs_then_report() {
     let requests = model.requests();
     assert_eq!(requests.len(), 6, "composition, core, two shells, review, then one report call");
 
-    // First leg: composition — the orchestrator brief plus the shape
+    // First leg: composition — the orchestrator brief plus the guidance
     // refresher and the composition sub-brief, the deterministic prepare
     // prelude's summary, the adapter's own MCP grant, and the workspace
     // lend.
     let first = &requests[0];
     let system = first.system.as_deref().unwrap();
     assert!(system.contains("# Vectis target — build brief"), "build brief in system");
-    assert!(system.contains("# Vectis target — `shape`"), "shape refresher in system");
+    assert!(system.contains("# Vectis target — `guidance`"), "guidance refresher in system");
     assert!(system.contains("# Vectis build — composition"), "composition sub-brief in system");
     let user = &first.messages[0].content;
     assert!(user.contains("PROPOSAL-BODY") && user.contains("DESIGN-BODY"), "typed inputs");

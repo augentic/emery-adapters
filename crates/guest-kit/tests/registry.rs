@@ -9,8 +9,8 @@ static DOCS: &[Doc] = &[
         body: "# build",
     },
     Doc {
-        path: "briefs/shape.md",
-        body: "# shape",
+        path: "briefs/guidance.md",
+        body: "# guidance",
     },
     Doc {
         path: "references/verifier.md",
@@ -20,7 +20,7 @@ static DOCS: &[Doc] = &[
 
 #[test]
 fn find_binary_searches_by_path() {
-    assert_eq!(find(DOCS, "briefs/shape.md").map(|doc| doc.body), Some("# shape"));
+    assert_eq!(find(DOCS, "briefs/guidance.md").map(|doc| doc.body), Some("# guidance"));
     assert_eq!(find(DOCS, "references/verifier.md").map(|doc| doc.body), Some("# verifier"));
     assert!(find(DOCS, "briefs/missing.md").is_none());
 }

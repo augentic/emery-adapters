@@ -1,6 +1,6 @@
 # Omnia reference material
 
-Reference documentation for the Omnia target adapter at [`adapters/targets/omnia/`](..). In Specify, Omnia is a **target adapter** — `shape`, `build`, `merge` — not a slash-command plugin.
+Reference documentation for the Omnia target adapter at [`adapters/targets/omnia/`](..). In Specify, Omnia is a **target adapter** — `guidance`, `build`, `merge` — not a slash-command plugin.
 
 The Omnia crate / test / guest / review orchestration lives in [`../briefs/build.md`](../briefs/build.md) and five phase sub-briefs under [`../briefs/build/`](../briefs/build/). The depth (templates, hard rules, mapping tables, mock-provider patterns, specialist prompts, rules) and worked examples live in this folder.
 
@@ -8,7 +8,7 @@ The Omnia crate / test / guest / review orchestration lives in [`../briefs/build
 
 | Brief | Purpose |
 |-------|---------|
-| [`shape.md`](../briefs/shape.md) | Idiom guidance (provider DI, WASM guardrails, error variants, validation placement) consumed by core synthesis. |
+| [`guidance.md`](../briefs/guidance.md) | Idiom guidance (provider DI, WASM guardrails, error variants, validation placement) consumed by core synthesis. |
 | [`build.md`](../briefs/build.md) | Orchestrator: bindings, mode detection, phase order, verify-repair loop, stop-hint contract. |
 | [`build/crate.md`](../briefs/build/crate.md) | Phase 2: generate or update the Rust crate. |
 | [`build/test.md`](../briefs/build/test.md) | Phase 3: generate or update the test suite. |

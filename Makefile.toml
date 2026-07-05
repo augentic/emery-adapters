@@ -18,20 +18,14 @@ skip_rust_env_info = true
 # CI Checks
 # -------------------------------------
 [tasks.check]
-dependencies = ["fmt-check", "lint", "test", "test-docs", "doc", "check-hook-scripts", "check-guardrails-consumer-boundary", "check-pins"]
+dependencies = ["fmt-check", "lint", "test", "test-docs", "doc", "check-guardrails-consumer-boundary", "check-pins"]
 
 [tasks.ci]
-dependencies = ["fmt-check", "lint", "test", "test-docs", "doc", "vet", "deny", "check-hook-scripts", "check-guardrails-consumer-boundary", "check-pins"]
+dependencies = ["fmt-check", "lint", "test", "test-docs", "doc", "vet", "deny", "check-guardrails-consumer-boundary", "check-pins"]
 
 # -------------------------------------
 # Individual Actions
 # -------------------------------------
-
-# Native hook scripts (POSIX `sh` contract — same runner as specify slice build)
-[tasks.check-hook-scripts]
-script = '''
-sh targets/vectis/scripts/test-hook-scripts.sh
-'''
 
 [tasks.check-guardrails-consumer-boundary]
 script = '''
@@ -101,11 +95,7 @@ evals/vectis/run.sh single-screen
 
 # Refresh the committed guest components: release-build every adapter guest
 # and copy each artifact to `{targets,sources}/<name>/guest.wasm` beside its
-# adapter manifest (the Step-5 cutover replaces `adapter.wasm` with this
-# artifact; until then both ship). The vectis artifact is named after its
-# lib target (`specify_vectis_adapter`) because the legacy extension keeps
-# the `specify_vectis` lib name until Step 5. Run on guest changes, then
-# commit the wasm diff.
+# adapter manifest. Run on guest changes, then commit the wasm diff.
 [tasks.refresh-guests]
 script = '''
 set -e
@@ -115,7 +105,7 @@ cargo build $flags --target wasm32-wasip2 --release
 for pair in \
   "specify_contracts.wasm:targets/contracts" \
   "specify_omnia.wasm:targets/omnia" \
-  "specify_vectis_adapter.wasm:targets/vectis" \
+  "specify_vectis.wasm:targets/vectis" \
   "specify_captures.wasm:sources/captures" \
   "specify_documentation.wasm:sources/documentation" \
   "specify_intent.wasm:sources/intent" \

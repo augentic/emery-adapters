@@ -42,8 +42,8 @@ fn schema_format(request: &Request) -> (&str, &str) {
 }
 
 #[test]
-fn guidance_returns_embedded_shape_brief() {
-    assert!(guidance().starts_with("# Omnia target — shape brief"));
+fn guidance_returns_embedded_brief() {
+    assert!(guidance().starts_with("# Omnia target — guidance brief"));
 }
 
 #[tokio::test]
@@ -73,7 +73,7 @@ async fn build_runs_phase_legs_then_report() {
     let first = &requests[0];
     let system = first.system.as_deref().unwrap();
     assert!(system.contains("# Omnia target — build brief"), "build brief in system");
-    assert!(system.contains("# Omnia target — shape brief"), "shape refresher in system");
+    assert!(system.contains("# Omnia target — guidance brief"), "guidance refresher in system");
     assert!(system.contains("# Omnia build — crate writer"), "crate sub-brief in system");
     assert!(system.contains("# Omnia build — test writer"), "test sub-brief in system");
     assert!(system.contains("# Omnia build — guest writer"), "guest sub-brief in system");

@@ -28,10 +28,10 @@ const SHELF_POINTER: &str = "Every brief, reference, and rule document this adap
      paths like `references/guardrails.md`); fetch documents the briefs cite lazily from there.";
 
 /// Guidance on the expected build artifacts for this target — the
-/// embedded shape brief, returned deterministically (no judgment leg).
+/// embedded guidance brief, returned deterministically (no judgment leg).
 #[must_use]
 pub fn guidance() -> &'static str {
-    registry::body("briefs/shape.md")
+    registry::body("briefs/guidance.md")
 }
 
 /// Build a slice's crate, tests, and guest scaffolding per the build
@@ -52,15 +52,15 @@ pub async fn build<P: Model>(
     let inputs_block = phase::render_inputs(inputs);
     let build_brief = registry::body("briefs/build.md");
 
-    // Phases 1–5 — generation: the shape refresher plus the crate / test
-    // / guest sub-briefs ride in the system channel because the brief's
-    // verify-repair loop crosses all three (a cargo failure re-enters the
-    // owning sub-brief), so one agent leg must hold them together. Mode
-    // detection (create vs update) is the brief's own § Mode detection,
-    // judged inside the leg against the lent workspace.
+    // Phases 1–5 — generation: the guidance refresher plus the crate /
+    // test / guest sub-briefs ride in the system channel because the
+    // brief's verify-repair loop crosses all three (a cargo failure
+    // re-enters the owning sub-brief), so one agent leg must hold them
+    // together. Mode detection (create vs update) is the brief's own
+    // § Mode detection, judged inside the leg against the lent workspace.
     let system = assemble(&[
         "briefs/build.md",
-        "briefs/shape.md",
+        "briefs/guidance.md",
         "briefs/build/crate.md",
         "briefs/build/test.md",
         "briefs/build/guest.md",

@@ -22,7 +22,7 @@ use crate::common::{self, Bundle};
 const TARGET_INTERFACE: &str = "augentic:specify/target@0.1.0";
 
 // guidance("target:vectis") through host-mediated dispatch in the composed
-// deployment returns the embedded shape brief — the core registry riding
+// deployment returns the embedded guidance brief — the core registry riding
 // inside the component, beside the other guests.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn guidance_through_dispatch() -> Result<()> {
@@ -46,8 +46,8 @@ async fn guidance_through_dispatch() -> Result<()> {
         anyhow::bail!("guidance payload is not a string: {payload:?}");
     };
     assert!(
-        brief.starts_with("# Vectis target — `shape`"),
-        "guidance returns the embedded shape brief: {}",
+        brief.starts_with("# Vectis target — `guidance`"),
+        "guidance returns the embedded guidance brief: {}",
         &brief[..brief.len().min(80)]
     );
     Ok(())

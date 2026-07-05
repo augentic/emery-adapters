@@ -50,8 +50,8 @@ fn seed_bad_contract(dir: &Path) {
 }
 
 #[test]
-fn guidance_returns_embedded_shape_brief() {
-    assert!(guidance().starts_with("# contracts.shape"));
+fn guidance_returns_embedded_brief() {
+    assert!(guidance().starts_with("# contracts.guidance"));
 }
 
 #[tokio::test]

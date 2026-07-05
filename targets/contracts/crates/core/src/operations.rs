@@ -53,10 +53,10 @@ const SUB_FLOWS: [SubFlow; 3] = [
 ];
 
 /// Guidance on the expected build artifacts for this target — the
-/// embedded shape brief, returned deterministically (no judgment leg).
+/// embedded guidance brief, returned deterministically (no judgment leg).
 #[must_use]
 pub fn guidance() -> &'static str {
-    registry::body("briefs/shape.md")
+    registry::body("briefs/guidance.md")
 }
 
 /// Build a slice's contract deltas under `.specify/slices/<slice>/contracts/`.

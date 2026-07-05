@@ -6,7 +6,7 @@
 2. **Inline phase sub-briefs.** Each build phase body lives in a phase sub-brief under [`build/`](build/).
 3. **Design-system inputs.** `tokens.yaml` and `assets.yaml` are operator-curated and consumed as read-only build inputs; the brief never invents or restates their contents. The component catalog (`.specify/design-system/components.yaml`) is the third design-system input, joining `tokens.yaml` and `assets.yaml`, but it is **agent-inferred and operator-reviewable**, not operator-curated: the workflow's deterministic bind bookkeeping writes it from the Step 0.5 bindings file (recording the names the build skill or operator parts supply), and the brief reads the confirmed entries back during composition regeneration to factor shared component code per in-scope shell tree. Operators review and may `reject` or rename entries. When absent, no component factoring occurs.
 
-The Vectis target stays three-capability (`shape` / `build` / `merge`) — there is **no** fourth `refine` slot. Composition regeneration is part of `build`.
+The Vectis target stays three-capability (`guidance` / `build` / `merge`) — there is **no** fourth `refine` slot. Composition regeneration is part of `build`.
 
 ## Inputs
 
@@ -25,7 +25,7 @@ The brief runs against the build request the CLI prepared at `.specify/slices/<s
 
 - Agents executing this brief in a consumer project are **consumers**, not adapter maintainers.
 - On scaffold / verify / finalize / toolchain failure: **stop** with `deferred` or a failure report — see [Consumer tooling boundary](../references/spec-runtime/guardrails.md#consumer-tooling-boundary).
-- **Never** edit `specify-adapters`, `crates/core/templates/`, or `adapter.wasm` in-band — even when `adapters/` is a sibling symlink.
+- **Never** edit `specify-adapters`, `crates/core/templates/`, or `guest.wasm` in-band — even when `adapters/` is a sibling symlink.
 - Tooling fixes happen in a **separate maintainer session** on specify-adapters; consumer scaffolds re-sync deterministically on the next build (the adapter re-renders the agent-immutable scaffold files from its embedded templates).
 
 ## Standard arguments
@@ -128,7 +128,7 @@ The adapter's scaffold renderer is render-only and ships with embedded version p
 
 **Agents:** detect → record the failing combo (caps + shells), the failing host step, and the load-bearing error line → mark the build outcome as `deferred` with a template / pin drift signal → **exit** (no upstream edits). See [Consumer tooling boundary](../references/spec-runtime/guardrails.md#consumer-tooling-boundary).
 
-**Operators (separate maintainer session):** edit [`crates/core/versions.toml`](../crates/core/versions.toml) and/or [`crates/core/templates/`](../crates/core/templates/core/), rebuild `adapter.wasm`, publish / bump the adapter version; the consumer project's scaffolds re-sync deterministically on the next build.
+**Operators (separate maintainer session):** edit [`crates/core/versions.toml`](../crates/core/versions.toml) and/or [`crates/core/templates/`](../crates/core/templates/core/), rebuild `guest.wasm`, publish / bump the adapter version; the consumer project's scaffolds re-sync deterministically on the next build.
 
 ## § Phase outcome contract
 

@@ -6,6 +6,8 @@
 
 #[path = "absorbed.rs"]
 mod absorbed;
+#[path = "appendices.rs"]
+mod appendices;
 #[path = "catalog.rs"]
 mod catalog;
 #[path = "operations.rs"]

@@ -1,6 +1,6 @@
 # Omnia build — crate writer
 
-Loaded by [../build.md](../build.md) phase 2. Reads `specs/<domain>/spec.md` + `design.md`, writes `$CRATE_PATH`. Sequenced after [shape.md](../shape.md) (idiom guidance already folded into spec + design by core synthesis).
+Loaded by [../build.md](../build.md) phase 2. Reads `specs/<domain>/spec.md` + `design.md`, writes `$CRATE_PATH`. Sequenced after [guidance.md](../guidance.md) (idiom guidance already folded into spec + design by core synthesis).
 
 ## Authority hierarchy
 
@@ -10,14 +10,14 @@ The full Hard Rules + Authority Hierarchy live in [`../../references/hard-rules.
 2. **Apply update categories in fixed order**: structural → subtractive → modifying → additive. Type renames propagate first, dead code is removed before any new code is added, additive code depends on the already-updated type system.
 3. **Idempotency is non-negotiable.** If a section of an existing crate already matches the artifacts, do nothing.
 4. **No `unwrap()` / `expect()` in production code.** Tests may unwrap.
-5. **Provider trait selection follows [`shape.md`](../shape.md) and [`capabilities.md`](../../references/capabilities.md).** Every external I/O point in `design.md` resolves to a provider trait; see [`capability-mapping.md`](../../references/capability-mapping.md) for the artifact-to-trait mapping rules.
+5. **Provider trait selection follows [`guidance.md`](../guidance.md) and [`capabilities.md`](../../references/capabilities.md).** Every external I/O point in `design.md` resolves to a provider trait; see [`capability-mapping.md`](../../references/capability-mapping.md) for the artifact-to-trait mapping rules.
 6. **WASM guardrails are absolute** — see [`guardrails.md`](../../references/guardrails.md) and [`wasm-constraints.md`](../../references/wasm-constraints.md). Forbidden crates and forbidden std APIs never appear in generated code.
 7. **Never write tests in this step.** Tests belong to the [test writer](test.md) pass.
 8. **Re-scan inventory after every structural change** before proceeding to subtractive / modifying / additive categories. See [`change-classification.md`](../../references/change-classification.md) for how to classify artifact-vs-code differences.
 
 ## Critical path
 
-1. Read [shape.md](../shape.md) refresher and the slice's `specs/<domain>/spec.md` + `design.md` + `tasks.md`.
+1. Read [guidance.md](../guidance.md) refresher and the slice's `specs/<domain>/spec.md` + `design.md` + `tasks.md`.
 2. **Build the three cross-cutting matrices** per [`cross-cutting-matrices.md`](../../references/cross-cutting-matrices.md): Side-Effect, Outbound-Message, Transaction-Boundary. Every cell must land in code.
 3. **Mode dispatch.** Inherited from the parent brief: create mode (no `Cargo.toml`) vs update mode.
 4. Apply the per-mode process below; in update mode walk the four categories in fixed order.
@@ -29,7 +29,7 @@ The full Hard Rules + Authority Hierarchy live in [`../../references/hard-rules.
 1. Author the workspace `Cargo.toml` and the crate `Cargo.toml` per [`cargo-toml.md`](../../references/cargo-toml.md). Workspace dependencies pin `omnia-sdk` plus the `omnia-wasi-*` adapters for the provider traits the design declares. No private registries — every `omnia-*` crate lives on crates.io.
 2. Generate `src/lib.rs` (or `src/main.rs` for non-library crates) with one module per handler. Module layout follows the convention: `handlers/<surface>.rs`, `types.rs`, `error.rs`, `provider.rs`.
 3. For each handler, emit:
-   - A request struct with the `Handler<P>` impl per [`shape.md`](../shape.md) §Idiom: provider-based DI and [`sdk-api.md`](../../references/sdk-api.md) (`Handler<P>`, `Context`, `Reply`, `IntoBody`, `Client`, `Error`; Input Type Decision Tree; Response Types). `type Input` is one of `Vec<u8>` (POST / message body), `String` (single path param), `(String, String)` (tuple path params), `Option<String>` (query string), or `()` (scheduled / cron). Never `type Input = MyRequest`.
+   - A request struct with the `Handler<P>` impl per [`guidance.md`](../guidance.md) §Idiom: provider-based DI and [`sdk-api.md`](../../references/sdk-api.md) (`Handler<P>`, `Context`, `Reply`, `IntoBody`, `Client`, `Error`; Input Type Decision Tree; Response Types). `type Input` is one of `Vec<u8>` (POST / message body), `String` (single path param), `(String, String)` (tuple path params), `Option<String>` (query string), or `()` (scheduled / cron). Never `type Input = MyRequest`.
    - A standalone `async fn handle(owner: &str, request: …, provider: &P) -> Result<Reply<…>>` that the `Handler::handle` impl delegates to.
    - Response types implementing `IntoBody` for HTTP handlers (`fn into_body(self) -> anyhow::Result<Vec<u8>>`). Messaging handlers use `type Output = ()` and do not need `IntoBody`.
 4. Emit a domain error enum via `thiserror`, plus `impl From<DomainError> for omnia_sdk::Error` mapping each variant to the right `BadRequest` / `NotFound` / `ServerError` / `BadGateway` constructor with stable `code` strings. See [`error-handling.md`](../../references/error-handling.md) for the macros, domain enums, context patterns, and troubleshooting.

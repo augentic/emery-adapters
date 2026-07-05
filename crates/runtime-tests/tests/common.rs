@@ -19,10 +19,7 @@ use omnia_wasi_model::{
     Answer, FutureResult, HasModel, Request, ToolHost, WasiModel, WasiModelCtx,
 };
 
-/// One deployed guest: its manifest id and built artifact name. The
-/// vectis lib target is named apart from the `specify-vectis` package
-/// because the legacy extension keeps the `specify_vectis` lib name
-/// until RFC-61 Step 5.
+/// One deployed guest: its manifest id and built artifact name.
 type Guest = (&'static str, &'static str);
 
 /// The single-guest contracts deployment.
@@ -33,7 +30,7 @@ const CONTRACTS: &[Guest] = &[("target:contracts", "specify_contracts.wasm")];
 const COMPOSED: &[Guest] = &[
     ("target:contracts", "specify_contracts.wasm"),
     ("target:omnia", "specify_omnia.wasm"),
-    ("target:vectis", "specify_vectis_adapter.wasm"),
+    ("target:vectis", "specify_vectis.wasm"),
     ("source:documentation", "specify_documentation.wasm"),
 ];
 

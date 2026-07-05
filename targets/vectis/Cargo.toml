@@ -8,13 +8,7 @@ repository.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
-# The lib target is named apart from the package because the legacy
-# extension crate (`specify-vectis-extension`, deleted at RFC-61 Step 5)
-# keeps the `specify_vectis` lib name its integration tests import;
-# two same-named lib targets would collide in `cargo doc --workspace`.
-# The built component is `specify_vectis_adapter.wasm`.
 [lib]
-name = "specify_vectis_adapter"
 crate-type = ["cdylib"]
 
 # Guest-only: the component body compiles solely for wasm32, so its

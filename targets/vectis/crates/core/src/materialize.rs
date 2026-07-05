@@ -1,12 +1,9 @@
 //! Canonical-to-export asset conversion — the materialize library.
 //!
 //! Phase 2 (RFC-46) converts designer-owned `source:` files into per-platform
-//! exports under `design-system/assets/exports/<platform>/`. Absorbed from
-//! the legacy extension's `materialize` subcommand (RFC-61 Step 3): the
-//! funnels are unchanged; only the clap argument surface stayed behind in
-//! `specify-vectis-extension`, which converts its parsed args onto
-//! [`AssetsArgs`] and calls [`run`]. The guest's build prelude calls [`run`]
-//! through [`crate::prepare::materialize_step`].
+//! exports under `design-system/assets/exports/<platform>/`. The guest's
+//! build prelude calls [`run`] (via [`AssetsArgs`]) through
+//! [`crate::prepare::materialize_step`].
 
 pub mod app_icon;
 pub mod icons;
@@ -34,7 +31,7 @@ use crate::VectisError;
 use crate::validate::engine::resolve_default_path_with_root;
 use crate::validate::{ValidateMode, find_project_root};
 
-/// Materialize targets, mirroring the extension's CLI nesting.
+/// Materialize targets, one per asset domain.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MaterializeCommand {
     /// Convert canonical asset masters into per-platform exports.

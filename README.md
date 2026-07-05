@@ -4,13 +4,12 @@ First-party Specify **adapters**, extracted from the platform repo as
 independently-versioned registry artifacts (RFC-48 / RFC-49 T6).
 
 Each adapter is a self-contained tree under `{targets,sources}/<name>/`:
-its `adapter.yaml` manifest, briefs, references, rules, and — for adapters
-that ship a WASI extension — a co-located `extension/` crate plus the
-committed `adapter.wasm` it builds to. The platform `specify` binary
-consumes an adapter as an opaque, content-addressed artifact resolved from
-the global adapter store; it never compiles the extension itself.
+its `adapter.yaml` manifest, briefs, references, and rules. The platform
+`specify` binary consumes an adapter as an opaque, content-addressed
+artifact resolved from the global adapter store; it never compiles the
+adapter itself.
 
-RFC-61 adds per-adapter **guest components**: the adapter root doubles as a
+Each adapter is a **guest component** (RFC-61): the adapter root doubles as a
 wasm32-only cdylib package (`specify-<name>`, the bindgen/export shim built
 from `src/`), with its wasm-free core logic in a `crates/core/` sub-crate
 (`specify-<name>-core`) and the committed `guest.wasm` beside `adapter.yaml`.
@@ -26,7 +25,6 @@ Every adapter — the three targets and the five sources — shares the same gue
     Cargo.toml        #   `specify-<name>` — the adapter guest component (wasm32 shim)
     src/              #   shim body: bindgen, export glue, MCP reference shelf
     crates/core/      #   `specify-<name>-core` — wasm-free logic, natively tested
-    extension/        #   legacy WASI extension, where present (contracts, vectis; deleted at RFC-61 Step 5)
     guest.wasm        #   committed guest component (refreshed via `cargo make refresh-guests`)
 shared/               # shared references/rules forked from the platform repo;
                       # adapter `spec-runtime` / `agent-teams` symlinks resolve here
@@ -34,17 +32,17 @@ crates/               # shared guest support: guest-kit, prose-registry,
                       # eval-driver + eval-guest, runtime-tests
 evals/                # live eval harnesses against the real cursor backend
                       # (contracts, vectis)
-Cargo.toml            # workspace: guest roots + `{sources,targets}/*/crates/*` + `targets/*/extension`
+Cargo.toml            # workspace: guest roots + `{sources,targets}/*/crates/*`
 ```
 
-The `adapter.yaml` `briefs:` paths and `execution: agent` declarations remain for the native engine path and become vestigial at the Step 5 cutover.
+The `adapter.yaml` manifests carry the post-cutover field set only (`name`, `version`, `axis`, `description`, plus `platforms` where declared): the guests embed their own briefs, so nothing reads manifests for operation dispatch.
 
-The Crux shell-detection heuristics the platform exposes as
-`specify-vectis-shell-detect` are forked inline into the vectis extension at
-`targets/vectis/extension/src/shell.rs` rather than as a separate
+The Crux shell-detection heuristics the platform once exposed as
+`specify-vectis-shell-detect` live inline in the vectis core at
+`targets/vectis/crates/core/src/shell.rs` rather than as a separate
 workspace crate.
 
-## Building the guests and extensions
+## Building the guests
 
 The local gate mirrors CI — run it from the repo root:
 
@@ -62,21 +60,6 @@ Build every adapter guest for wasm32-wasip2 (plus the eval guest) with `cargo ma
 ```bash
 cargo make refresh-guests
 ```
-
-Refresh the committed `targets/<name>/adapter.wasm` wasm32-wasip2
-component with:
-
-```bash
-specify adapter build --path targets/<name> --refresh-extension
-```
-
-For fast local iteration on an extension crate alone, workspace builds still work:
-
-```bash
-cargo build --target wasm32-wasip2 --release -p specify-contract -p specify-vectis-extension
-```
-
-Only `specify adapter build` copies the release binary into the committed `adapter.wasm` beside `adapter.yaml`.
 
 ## Publishing
 

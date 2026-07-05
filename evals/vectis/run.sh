@@ -52,7 +52,7 @@ link = ["augentic:specify/source@0.1.0", "augentic:specify/target@0.1.0"]
 
 [[guest]]
 id = "target:vectis"
-source.path = "$wasm/specify_vectis_adapter.wasm"
+source.path = "$wasm/specify_vectis.wasm"
 
 [[mount]]
 name = "."
