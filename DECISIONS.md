@@ -98,6 +98,10 @@ Each shrunk manifest validates against the sibling repo's relaxed `source.schema
 
 **Swap criteria.** Revisit if/when the upstream capability grows tools/grants support (likely alongside the post-RFC-60 verify work): the swap is worthwhile only if upstream carries MCP tool grants *and* a workspace-lend affordance usable from a wasm-free core. Until then the trait is a deliberate fork, not drift. The specify engine's `specify-guest-model` byte-mirror keeps the same posture; the engine repo records its own entry at its step boundary.
 
+## RFC-61 Step 5 review fixes — ui-surface coherence moves in-guest
+
+**Decision (2026-07).** The A4 ui-surface coherence check — the report's authored `ui-surface.screens` compared against the produced slice `composition.yaml`, warning ids `composition-unexpected-for-non-ui-slice` / `composition-empty-for-ui-slice` — now runs in the vectis guest's deterministic build report gate (`operations.rs::ui_surface_coherence`, appended after enforcement), with the engine semantics preserved verbatim: findings are non-blocking `suggestion` severity that ride the report but never fail it or trigger the bounded repair leg, and a report without `ui-surface` emits nothing. This closes the last finalize-era check that lived only in the engine's two-phase `slice build` path, so the build brief's attribution of the warnings to the deterministic in-guest report gate is true ahead of the engine's Milestone S4 deletion.
+
 ## Vectis validation and materialization
 
 Provenance and rationale for the deterministic validation engine, re-homed from `targets/vectis/extension/DECISIONS.md` (see the anchor mapping note above). Code citations point at `specify-vectis-core` (`targets/vectis/crates/core/`), where the engine lives as of Milestone A1; inline comments in `src/validate/engine/` state the rules without historical labels; this file carries the citation.

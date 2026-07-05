@@ -24,7 +24,7 @@ use std::path::Path;
 
 use serde_json::Value;
 use specify_guest_kit::seam::{
-    Changeset, Context, Error, Finding, Input, Report, Status, WorkingTree,
+    Changeset, Context, Error, Finding, Input, Report, Severity, Status, WorkingTree,
 };
 use specify_guest_kit::{Model, phase};
 
@@ -70,7 +70,9 @@ pub fn guidance() -> &'static str {
 ///    instructed in its prompt.
 /// 5. **Postlude (deterministic)** — the composition cross-checks re-run
 ///    in core plus the report-coherence walk, with one bounded repair
-///    leg; residual findings force `failure` regardless of the answer.
+///    leg; residual findings force `failure` regardless of the answer,
+///    and the A4 ui-surface coherence warnings ride the final report as
+///    non-blocking suggestions.
 ///
 /// # Errors
 ///
@@ -268,8 +270,16 @@ pub async fn build<P: Model>(
     // Deterministic postlude: the in-core validator cross-checks, the
     // shell verify gate, and the report-coherence walk, one bounded
     // repair leg, then enforcement.
-    gate_report(model, ctx, build_brief, report, &tree_root, &slice_composition, "build", true)
-        .await
+    let mut report =
+        gate_report(model, ctx, build_brief, report, &tree_root, &slice_composition, "build", true)
+            .await?;
+
+    // A4 self-consistency: the report's authored `ui-surface` signal
+    // against the produced slice composition. Suggestion findings only —
+    // they ride the report but never fail it or trigger the repair leg.
+    let coherence = ui_surface_coherence(&report, &slice_composition);
+    report.findings.extend(coherence);
+    Ok(report)
 }
 
 /// Merge a built slice's delta into the baseline per the merge brief.
@@ -659,6 +669,85 @@ fn sync_shell_scaffold(tree_root: &Path, name: &str) -> Option<String> {
         _ => Ok(()),
     };
     outcome.err().map(|err| format!("- deterministic `{name}` scaffold sync could not run: {err}"))
+}
+
+/// Compare the report's authored `ui-surface` signal against the
+/// produced slice `composition.yaml` and return the non-blocking A4
+/// coherence warnings.
+///
+/// A pure self-consistency check: both the UI-surface judgement and the
+/// composition output come from the agent, so the gate never re-derives
+/// screen identification — it only catches the agent contradicting
+/// itself. The warnings are `suggestion` severity (never blocking); they
+/// ride the report but never fail it.
+///
+/// - `ui-surface.screens: 0` but the composition declares a UI surface ⇒
+///   `composition-unexpected-for-non-ui-slice`.
+/// - `ui-surface.screens > 0` but the composition is empty or absent ⇒
+///   `composition-empty-for-ui-slice`.
+///
+/// A report without `ui-surface` emits nothing.
+fn ui_surface_coherence(report: &Report, composition: &Path) -> Vec<Finding> {
+    let Some(ui_surface) = report.ui_surface else {
+        return Vec::new();
+    };
+    let has_surface = composition_declares_surface(composition);
+    let mut warnings = Vec::new();
+    if ui_surface.screens == 0 && has_surface {
+        warnings.push(ui_surface_warning(
+            "composition-unexpected-for-non-ui-slice",
+            "the report claims `ui-surface.screens: 0` but produced a non-empty \
+             composition.yaml; the UI-surface judgement contradicts the composition output"
+                .to_string(),
+        ));
+    }
+    if ui_surface.screens > 0 && !has_surface {
+        warnings.push(ui_surface_warning(
+            "composition-empty-for-ui-slice",
+            format!(
+                "the report claims `ui-surface.screens: {}` but produced an absent or empty \
+                 composition.yaml; the UI-surface judgement contradicts the composition output",
+                ui_surface.screens
+            ),
+        ));
+    }
+    warnings
+}
+
+/// One non-blocking A4 coherence warning.
+fn ui_surface_warning(rule_id: &str, detail: String) -> Finding {
+    Finding {
+        rule_id: Some(rule_id.to_string()),
+        severity: Severity::Suggestion,
+        detail,
+    }
+}
+
+/// Whether the composition at `path` declares any UI surface (A4's
+/// "non-empty" definition).
+///
+/// Non-empty: a `screens:` map with ≥1 entry, or a `delta:` envelope
+/// with any `added` / `modified` / `removed` entry. Empty: an absent
+/// file, a `screens: {}` map, or an all-empty `delta:`. A malformed or
+/// unreadable file is treated as empty — the coherence check is
+/// advisory and never aborts.
+fn composition_declares_surface(path: &Path) -> bool {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return false;
+    };
+    let Ok(doc) = serde_saphyr::from_str::<Value>(&text) else {
+        return false;
+    };
+
+    if doc.get("screens").and_then(Value::as_object).is_some_and(|s| !s.is_empty()) {
+        return true;
+    }
+
+    doc.get("delta").and_then(Value::as_object).is_some_and(|delta| {
+        ["added", "modified", "removed"]
+            .iter()
+            .any(|key| delta.get(*key).and_then(Value::as_object).is_some_and(|m| !m.is_empty()))
+    })
 }
 
 /// The in-core validator findings for one composition artifact, one

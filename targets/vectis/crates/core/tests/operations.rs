@@ -8,7 +8,9 @@ use std::fs;
 use std::path::Path;
 
 use specify_guest_kit::answers::REPORT_ANSWER_SCHEMA;
-use specify_guest_kit::seam::{Changeset, Context, Edit, Input, Severity, Status, WorkingTree};
+use specify_guest_kit::seam::{
+    Changeset, Context, Edit, Input, Report, Severity, Status, WorkingTree,
+};
 use specify_guest_kit::{Format, MockModel, Request};
 use specify_vectis_core::operations::{build, guidance, merge};
 use tempfile::TempDir;
@@ -247,6 +249,92 @@ async fn declared_outputs_that_exist_pass_the_gate() {
 
     assert_eq!(report.status, Status::Success);
     assert_eq!(model.requests().len(), 6, "no repair leg when the declared outputs exist");
+}
+
+/// Run a full build against the scripted mock with an optional staged
+/// slice composition and the given report answer, asserting the six
+/// phase legs ran with no repair leg (coherence warnings never trigger
+/// one).
+async fn build_with_composition(composition: Option<&str>, report_answer: &'static str) -> Report {
+    let tmp = TempDir::new().unwrap();
+    if let Some(body) = composition {
+        let slice_dir = tmp.path().join(".specify/slices/demo");
+        fs::create_dir_all(&slice_dir).unwrap();
+        fs::write(slice_dir.join("composition.yaml"), body).unwrap();
+    }
+    let model = MockModel::answering([
+        PHASE_DONE,
+        PHASE_DONE,
+        SHELL_SKIPPED,
+        SHELL_SKIPPED,
+        PHASE_DONE,
+        report_answer,
+    ]);
+    let report = build(&model, &ctx(tmp.path(), None), "demo", &[], &tree()).await.unwrap();
+    assert_eq!(model.requests().len(), 6, "coherence warnings never trigger the repair leg");
+    report
+}
+
+/// The A4 ui-surface coherence walk in the deterministic report gate:
+/// the two mismatch warnings (non-UI claim against a `screens:` /
+/// `delta:` surface, UI claim against an empty or absent composition),
+/// the coherent silent pairs, the absent-signal back-compat path, and
+/// the all-empty `delta:` envelope. Warnings are `suggestion` severity
+/// and never fail the report.
+#[tokio::test]
+async fn ui_surface_coherence() {
+    const NON_UI: &str = r#"{"status":"success","findings":[],"ui-surface":{"screens":0}}"#;
+    const UI: &str = r#"{"status":"success","findings":[],"ui-surface":{"screens":2}}"#;
+    const SCREENS: &str = "version: 1\nscreens:\n  home:\n    name: Home\n";
+    const EMPTY_SCREENS: &str = "version: 1\nscreens: {}\n";
+
+    // screens == 0 against a non-empty `screens:` composition warns
+    // unexpected-for-non-ui; the warning never blocks or fails.
+    let report = build_with_composition(Some(SCREENS), NON_UI).await;
+    assert_eq!(report.status, Status::Success, "coherence warnings never fail the report");
+    assert_eq!(report.findings.len(), 1, "expected one warning, got {:?}", report.findings);
+    assert_eq!(
+        report.findings[0].rule_id.as_deref(),
+        Some("composition-unexpected-for-non-ui-slice")
+    );
+    assert_eq!(report.findings[0].severity, Severity::Suggestion);
+    assert!(!report.findings[0].severity.blocking(), "A4 warnings must never block");
+
+    // screens > 0 against an empty `screens: {}` composition warns
+    // empty-for-ui-slice.
+    let report = build_with_composition(Some(EMPTY_SCREENS), UI).await;
+    assert_eq!(report.status, Status::Success);
+    assert_eq!(report.findings.len(), 1, "expected one warning, got {:?}", report.findings);
+    assert_eq!(report.findings[0].rule_id.as_deref(), Some("composition-empty-for-ui-slice"));
+    assert_eq!(report.findings[0].severity, Severity::Suggestion);
+
+    // An absent composition with a UI-surface claim also flags
+    // empty-for-ui (an unreadable file is treated as empty).
+    let report = build_with_composition(None, UI).await;
+    assert_eq!(report.status, Status::Success);
+    assert_eq!(report.findings.len(), 1, "absent composition for a UI slice warns");
+    assert_eq!(report.findings[0].rule_id.as_deref(), Some("composition-empty-for-ui-slice"));
+
+    // Coherent pairs and a report without a `ui-surface` claim stay silent.
+    let report = build_with_composition(Some(SCREENS), UI).await;
+    assert!(report.findings.is_empty(), "ui slice + non-empty composition is coherent");
+    let report = build_with_composition(Some(EMPTY_SCREENS), NON_UI).await;
+    assert!(report.findings.is_empty(), "non-ui slice + empty composition is coherent");
+    let report = build_with_composition(Some(SCREENS), SUCCESS_REPORT).await;
+    assert!(report.findings.is_empty(), "absent ui-surface emits no warnings");
+
+    // A non-empty `delta:` envelope counts as a UI surface; an all-empty
+    // `delta:` does not.
+    let added = "version: 1\ndelta:\n  added:\n    home:\n      name: Home\n  modified: {}\n  removed: {}\n";
+    let report = build_with_composition(Some(added), NON_UI).await;
+    assert_eq!(report.findings.len(), 1, "non-empty delta is a UI surface");
+    assert_eq!(
+        report.findings[0].rule_id.as_deref(),
+        Some("composition-unexpected-for-non-ui-slice")
+    );
+    let empty_delta = "version: 1\ndelta:\n  added: {}\n  modified: {}\n  removed: {}\n";
+    let report = build_with_composition(Some(empty_delta), NON_UI).await;
+    assert!(report.findings.is_empty(), "an all-empty delta carries no UI surface");
 }
 
 #[tokio::test]
