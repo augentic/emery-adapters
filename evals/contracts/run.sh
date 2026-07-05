@@ -71,12 +71,16 @@ mkdir -p "$runs"
 log="$runs/run-$(date -u +%Y%m%dT%H%M%SZ).log"
 echo "eval $scenario: slice=$slice scratch=$scratch log=$log"
 
+# The runtime supplies argv[0] (the deployment name); ours start at the
+# adapter id. Capture the exit status directly — a pipe to tee would
+# report tee's instead.
 status=0
 HTTP_ADDR="$addr" \
 SPECIFY_CONTRACTS_MCP_URL="http://$addr/mcp/contracts" \
 cargo run -q -p specify-eval-driver -- \
-  run --config "$scratch/omnia.toml" -- eval target:contracts "$slice" .eval/inputs \
-  2>&1 | tee "$log" || status=$?
+  run --config "$scratch/omnia.toml" -- target:contracts "$slice" .eval/inputs \
+  > "$log" 2>&1 || status=$?
+cat "$log"
 
 echo "eval $scenario: exit=$status; delta under $scratch/.specify/slices/$slice/contracts"
 exit "$status"

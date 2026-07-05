@@ -26,7 +26,7 @@ omnia-wasi-http.workspace = true
 omnia-wasi-model.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["time"] }
 
 [lints]
 workspace = true

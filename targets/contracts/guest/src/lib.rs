@@ -6,11 +6,12 @@
 //! serving the core's embedded prose registry as an MCP reference shelf
 //! (`list_docs` / `read_doc` tools, `doc://` resources).
 //!
-//! The judgment legs run behind `wit_bindgen::block_on`: the seam exports
-//! are plain (sync) funcs, and `block_on` drives the async-lowered
-//! `omnia:model/completion.create` import via `waitable-set.wait`. The MCP
-//! grant URL is read from the environment (`SPECIFY_CONTRACTS_MCP_URL`),
-//! never hardcoded — absent, judgment legs run without a reference grant.
+//! The seam operations are `async func`s, so the exports async-lift and the
+//! judgment legs await the async `omnia:model/completion.create` import
+//! directly — a sync-lifted export may never block, so there is no sync
+//! bridge to hide behind. The MCP grant URL is read from the environment
+//! (`SPECIFY_CONTRACTS_MCP_URL`), never hardcoded — absent, judgment legs
+//! run without a reference grant.
 #![cfg(target_arch = "wasm32")]
 
 mod bindings {
@@ -31,6 +32,9 @@ mod bindings {
     wit_bindgen::generate!({
         world: "target-adapter",
         path: "../../../wit",
+        // The seam operations are `async func`s (judgment legs await the
+        // async `omnia:model` import mid-call), so the exports async-lift.
+        async: true,
     });
 
     export!(ContractsAdapter);
@@ -63,25 +67,24 @@ impl Model for WasiModel {}
 struct ContractsAdapter;
 
 impl Guest for ContractsAdapter {
-    fn guidance(_id: AdapterId) -> Result<String, Error> {
+    async fn guidance(_id: AdapterId) -> Result<String, Error> {
         Ok(operations::guidance().to_string())
     }
 
-    fn build(
+    async fn build(
         id: AdapterId, slice: String, inputs: Vec<Input>, tree: WorkingTree,
     ) -> Result<Report, Error> {
         let inputs: Vec<operations::Input> = inputs.into_iter().map(input_into_core).collect();
         let tree = tree_into_core(tree);
         let mcp_url = std::env::var(MCP_URL_ENV).ok();
-        wit_bindgen::block_on(async move {
-            let ctx = context(&id, mcp_url.as_deref());
-            operations::build(&WasiModel, &ctx, &slice, &inputs, &tree).await
-        })
-        .map(report_into_wit)
-        .map_err(error_into_wit)
+        let ctx = context(&id, mcp_url.as_deref());
+        operations::build(&WasiModel, &ctx, &slice, &inputs, &tree)
+            .await
+            .map(report_into_wit)
+            .map_err(error_into_wit)
     }
 
-    fn merge(
+    async fn merge(
         id: AdapterId, slice: String, delta: Changeset, tree: WorkingTree,
     ) -> Result<Report, Error> {
         let delta = operations::Changeset {
@@ -97,12 +100,11 @@ impl Guest for ContractsAdapter {
         };
         let tree = tree_into_core(tree);
         let mcp_url = std::env::var(MCP_URL_ENV).ok();
-        wit_bindgen::block_on(async move {
-            let ctx = context(&id, mcp_url.as_deref());
-            operations::merge(&WasiModel, &ctx, &slice, &delta, &tree).await
-        })
-        .map(report_into_wit)
-        .map_err(error_into_wit)
+        let ctx = context(&id, mcp_url.as_deref());
+        operations::merge(&WasiModel, &ctx, &slice, &delta, &tree)
+            .await
+            .map(report_into_wit)
+            .map_err(error_into_wit)
     }
 }
 

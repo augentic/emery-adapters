@@ -13,9 +13,7 @@ use std::sync::{Arc, OnceLock};
 use anyhow::{Context as _, Result};
 use omnia::futures::FutureExt as _;
 use omnia::wasmtime_wasi::ResourceTable;
-use omnia::{
-    Backend as _, Backends as _, DeploymentBuilder, HasHttp, MountRegistry, Runtime, StoreCtx,
-};
+use omnia::{Backend as _, Backends as _, DeploymentBuilder, HasHttp, Runtime, StoreCtx};
 use omnia_testkit::{TempManifest, temp_manifest};
 use omnia_wasi_http::{HttpDefault, WasiHttp, WasiHttpCtxView};
 use omnia_wasi_model::{
@@ -124,12 +122,13 @@ pub async fn runtime(mount: &Path) -> Result<Runtime<Bundle>> {
         .context("building deployment")?;
     deployment.host::<WasiHttp, Bundle>().context("linking http host")?;
     deployment.host::<WasiModel, Bundle>().context("linking model host")?;
+    let mounts = deployment.mounts();
     let registry = deployment.into_registry().context("assembling registry")?;
 
     Ok(Runtime::from_parts(
         Arc::new(registry),
         Vec::new(),
-        Arc::new(MountRegistry::default()),
+        mounts,
         Bundle::connect().await.context("connecting backends")?,
     ))
 }
@@ -181,6 +180,14 @@ struct NoModel;
 
 impl WasiModelCtx for NoModel {
     fn complete(&self, _request: Request, _tool_host: Arc<dyn ToolHost>) -> FutureResult<Answer> {
-        async { anyhow::bail!("model-free composed test: completion must not be called") }.boxed()
+        async {
+            // Yield through the reactor before failing so the guest's
+            // async-lifted export genuinely parks awaiting the import — the
+            // probe must prove the seam survives a pending host future, not
+            // just an immediately-ready one.
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            anyhow::bail!("model-free composed test: completion must not be called")
+        }
+        .boxed()
     }
 }

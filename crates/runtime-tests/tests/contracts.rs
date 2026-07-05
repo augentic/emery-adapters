@@ -49,6 +49,51 @@ async fn guidance_through_dispatch() -> Result<()> {
     Ok(())
 }
 
+// build through dispatch exercises the async-lifted judgment leg (the
+// `async func` export awaiting `omnia:model/completion.create`): the
+// stub backend pends and then fails every completion, so the leg must
+// come back as the WIT error variant — not a trap — proving a pending
+// host future survives host-mediated dispatch.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn build_bridge_survives_dispatch() -> Result<()> {
+    let mount = tempfile::tempdir()?;
+    let runtime = common::runtime(mount.path()).await?;
+
+    let results = runtime
+        .invoke(
+            "target:contracts".into(),
+            Some(TARGET_INTERFACE.to_string()),
+            "build".to_string(),
+            vec![
+                Val::String("target:contracts".to_string()),
+                Val::String("bridge-probe".to_string()),
+                Val::List(Vec::new()),
+                Val::Record(vec![
+                    ("base".to_string(), Val::String("eval".to_string())),
+                    ("subpath".to_string(), Val::Option(None)),
+                ]),
+            ],
+        )
+        .await
+        .context("dispatching build")?;
+
+    let [Val::Result(Err(Some(payload)))] = results.as_slice() else {
+        anyhow::bail!("build against the stub backend returned an unexpected shape: {results:?}");
+    };
+    let Val::Variant(case, Some(detail)) = payload.as_ref() else {
+        anyhow::bail!("build error payload is not a variant: {payload:?}");
+    };
+    let Val::String(detail) = detail.as_ref() else {
+        anyhow::bail!("build error detail is not a string: {payload:?}");
+    };
+    assert_eq!(case, "internal", "stub-backend failure maps to the internal error case");
+    assert!(
+        detail.contains("completion must not be called"),
+        "error carries the stub backend's message: {detail}"
+    );
+    Ok(())
+}
+
 // POST one JSON-RPC message to /mcp/contracts and parse the reply.
 async fn post(runtime: &Runtime<Bundle>, message: &Value) -> Result<Value> {
     let response = http::post_json(runtime, "/mcp/contracts", message.to_string()).await?;

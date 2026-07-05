@@ -29,6 +29,9 @@ mod bindings {
     wit_bindgen::generate!({
         world: "workflow",
         path: "../../wit",
+        // The seam operations are `async func`s (judgment legs await the
+        // async `omnia:model` import mid-call), so the imports async-lower.
+        async: true,
     });
 }
 
@@ -53,7 +56,7 @@ impl wasip3::exports::cli::run::Guest for CliGuest {
             base: "eval".to_string(),
             subpath: None,
         };
-        let report = match target::build(adapter_id, slice, &inputs, &tree) {
+        let report = match target::build(adapter_id.clone(), slice.clone(), inputs, tree).await {
             Ok(report) => report,
             Err(error) => {
                 eprintln!("build failed: {error:?}");
