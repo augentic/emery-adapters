@@ -42,7 +42,7 @@ Agent-authored trees must compile and lint cleanly without inline suppressions. 
 - `#[allow(dead_code)]` or `#[expect(clippy::…)]` added during verify-repair in `shared/src`.
 - `// swiftlint:disable` or `// swift-format-ignore` in Swift screen or core bridge files.
 - `@Suppress("UNUSED_PARAMETER")` or `@file:Suppress` in Kotlin composables or ViewModels.
-- When `vectis verify --mode verify` reports `lint-suppression-forbidden`, treat it as a confirmed defect and cite `rule_id: VECTIS-009`.
+- When the in-guest shell-verify gate findings riding the report-leg prompt include `lint-suppression-forbidden`, treat it as a confirmed defect and cite `rule_id: VECTIS-009`.
 
 ## Spec Guidance
 

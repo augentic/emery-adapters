@@ -9,7 +9,7 @@ rule_hints:
     description: Any proposal that carries a ## Platforms section should be checked against the on-disk shell trees.
   - kind: tool
     value: vectis
-    description: The vectis verify tool detects declared-but-absent shell trees.
+    description: The adapter's in-guest shell-verify gate detects declared-but-absent shell trees.
 ---
 
 ## Rule

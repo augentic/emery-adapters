@@ -1,4 +1,4 @@
-//! Inline lint-suppression scan for `vectis verify --mode verify`.
+//! Inline lint-suppression scan for the in-guest shell-verify gate.
 //!
 //! Rejects agent-authored compiler / linter suppressions in core Rust and
 //! platform shell sources. Crate-level workspace lints and `generated/`

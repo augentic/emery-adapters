@@ -188,6 +188,6 @@ Per hard-rules-core rule 10 and the core write brief repair discipline, agent-au
 **Detection**:
 
 1. Search `shared/src/**/*.rs` for `#[allow(` and `#[expect(`.
-2. When `vectis verify --mode verify` reports `lint-suppression-forbidden`, treat it as a confirmed defect and cite `rule_id: VECTIS-009`.
+2. When the in-guest shell-verify gate findings riding the report-leg prompt include `lint-suppression-forbidden`, treat it as a confirmed defect and cite `rule_id: VECTIS-009`.
 
 **Fix**: Remove the suppression and apply a structural fix (per-cap anchors, distinct match arms, helper extraction, const fns) so `cargo clippy --all-targets -- -D warnings` passes without inline attributes.

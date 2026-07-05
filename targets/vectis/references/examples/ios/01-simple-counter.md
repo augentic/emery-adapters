@@ -140,7 +140,7 @@ clean:
 	@rm -rf generated/ DerivedData/ *.xcodeproj
 ```
 
-`iOS/.vectis/sim-build.sh` holds the fixed `generic/platform=iOS Simulator` destination and writes build output to `iOS/DerivedData/`. `iOS/.vectis/sim-dev.sh` handles local install/launch via `simctl`. See the embedded templates under `extension/templates/ios/.vectis/`.
+`iOS/.vectis/sim-build.sh` holds the fixed `generic/platform=iOS Simulator` destination and writes build output to `iOS/DerivedData/`. `iOS/.vectis/sim-dev.sh` handles local install/launch via `simctl`. See the embedded templates under `crates/core/templates/ios/.vectis/`.
 
 ## Local run
 

@@ -383,6 +383,6 @@ Per the Android write brief repair discipline and hard-rules-android, agent-auth
 
 1. Search agent-authored Kotlin sources for `@Suppress(` and `@file:Suppress`.
 2. Skip `generated/` subtrees and CLI-owned Gradle files.
-3. When `vectis verify --mode verify` reports `lint-suppression-forbidden`, treat it as a confirmed defect and cite `rule_id: VECTIS-009`.
+3. When the in-guest shell-verify gate findings riding the report-leg prompt include `lint-suppression-forbidden`, treat it as a confirmed defect and cite `rule_id: VECTIS-009`.
 
 **Fix**: Remove the suppression and apply a structural fix (`_` prefixes, minimal handlers, narrow types) so Gradle `allWarningsAsErrors` passes without `@Suppress`.

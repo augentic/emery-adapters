@@ -252,14 +252,14 @@ When `composition.yaml` or `assets.yaml` is absent, skip this check — there is
 
 **Codex**: `rule_id: VECTIS-007`
 
-Per the iOS scaffold immutability contract ([`hard-rules-ios.md`](../hard-rules-ios.md), [`extension/templates/ios/MANIFEST.md`](../../extension/templates/ios/MANIFEST.md)), `iOS/Makefile`, `iOS/project.yml`, `iOS/.vectis/sim-build.sh`, and `iOS/.vectis/sim-dev.sh` are CLI-owned. Agents must not edit them. The simulator destination for verify must be `generic/platform=iOS Simulator` in `sim-build.sh` only — never a named device (`name=iPhone …`) and never inlined in the Makefile.
+Per the iOS scaffold immutability contract ([`hard-rules-ios.md`](../hard-rules-ios.md), [`crates/core/templates/ios/MANIFEST.md`](../../crates/core/templates/ios/MANIFEST.md)), `iOS/Makefile`, `iOS/project.yml`, `iOS/.vectis/sim-build.sh`, and `iOS/.vectis/sim-dev.sh` are adapter-owned. Agents must not edit them. The simulator destination for verify must be `generic/platform=iOS Simulator` in `sim-build.sh` only — never a named device (`name=iPhone …`) and never inlined in the Makefile.
 
 **Detection**:
 
 1. Read `iOS/Makefile` and `iOS/project.yml` when the iOS shell is in scope.
 2. Flag any Makefile `sim-build` destination that names a simulator device instead of `generic/platform=iOS Simulator`.
 3. Flag evidence that Makefile or `project.yml` was hand-authored or patched during agent work (for example, content that matches a worked example but diverges from the embedded template, or operator reports of agent Makefile edits).
-4. When `vectis verify --mode verify` reports `ios-scaffold-file-drift`, treat it as a confirmed defect and cite `rule_id: VECTIS-007`.
+4. When the in-guest shell-verify gate findings riding the report-leg prompt include `ios-scaffold-file-drift`, treat it as a confirmed defect and cite `rule_id: VECTIS-007`.
 
 **Fix**: Do not patch scaffold files by hand. The adapter restores `iOS/Makefile`, `iOS/project.yml`, `iOS/.vectis/sim-build.sh`, and `iOS/.vectis/sim-dev.sh` from the embedded template deterministically around each write leg. Limit verify-repair to Swift under `iOS/<APP_NAME>/`, plus `Theme/`, `Components/`, and `Resources/`.
 
@@ -275,6 +275,6 @@ Per the iOS write brief repair discipline and hard-rules-ios, agent-authored Swi
 
 1. Search agent-authored Swift sources for `swiftlint:disable` and `swift-format-ignore`.
 2. Skip `generated/` subtrees and CLI-owned scaffold files (`iOS/Makefile`, `iOS/project.yml`, `iOS/.vectis/sim-build.sh`, `iOS/.vectis/sim-dev.sh`).
-3. When `vectis verify --mode verify` reports `lint-suppression-forbidden`, treat it as a confirmed defect and cite `rule_id: VECTIS-009`.
+3. When the in-guest shell-verify gate findings riding the report-leg prompt include `lint-suppression-forbidden`, treat it as a confirmed defect and cite `rule_id: VECTIS-009`.
 
 **Fix**: Remove the disable comment and apply a structural fix so `SWIFT_TREAT_WARNINGS_AS_ERRORS` and SwiftLint pass without suppression comments.

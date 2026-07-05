@@ -221,8 +221,8 @@ The writer consumes the already-validated input set.
 Canonical masters live under `design-system/assets/` (`source:` on each entry).
 Per-platform binaries live under `design-system/assets/exports/ios/` and are
 recorded in `sources.ios` (operator-pinned or auto-written by
-the adapter's materialize step). Materialization runs automatically at
-`specify slice build --phase prepare` for in-scope assets with missing exports;
+the adapter's materialize step). Materialization runs automatically as an
+in-guest prelude of the build operation for in-scope assets with missing exports;
 operators re-materialize by re-running the slice build
 after editing canonical masters. Committed `exports/` trees are version-controlled
 — CI and shell builds consume them without re-running materialize on every job.

@@ -9,7 +9,7 @@ Total: 11 files (matches the file manifest contract for iOS assembly).
 
 ## Agent-immutable scaffold files
 
-These paths are CLI-owned — agents must never author or edit them. `specify slice build --phase prepare` re-renders them from the embedded templates; `vectis verify --mode verify` blocks drift.
+These paths are adapter-owned — agents must never author or edit them. The build guest re-renders them from the embedded templates on each build; the in-guest shell-verify gate blocks drift.
 
 | Path | Policy |
 | ---- | ------ |

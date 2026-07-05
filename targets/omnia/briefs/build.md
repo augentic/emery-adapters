@@ -45,7 +45,7 @@ Check whether `$CRATE_PATH/Cargo.toml` exists:
 5. Run the § verify-repair loop below — cross-phase, classifies failures back to the matching phase brief.
 6. Load and follow [`build/review.md`](build/review.md) — its remediation cycle may re-enter the verify-repair loop with tighter caps.
 7. When the slice has a `captures` source binding, load and follow [`build/replay.md`](build/replay.md) — optional runtime capture replay. Omission when unbound is not an error.
-8. Mark `tasks.md` checkboxes complete as each task lands, then write the build report (see `## Build report`). The brief never transitions the slice lifecycle — the CLI's `--phase finalize` validates the report and owns the `Refined → Built` transition.
+8. Mark `tasks.md` checkboxes complete as each task lands, then answer the build's report leg with the build report (see `## Build report`). The brief never transitions the slice lifecycle — the deterministic in-guest report gate checks the answer and the workflow guest owns the `Refined → Built` transition.
 
 ## § Verify-repair loop (max 3 iterations)
 
@@ -77,7 +77,7 @@ If `cargo test` fails, classify each failure:
 
 **Update-mode regression check.** Before iteration 1, record the baseline: `cd $CRATE_PATH && cargo test 2>&1 | tee /tmp/${SLICE_NAME}-${CRATE_NAME}-baseline.txt`. After each iteration, for each test that passed before and now fails: if the spec explicitly changes the asserted behaviour → expected behavioural change, re-enter test writer to align expectations; if the spec does not change the asserted behaviour → true regression, route the fix through the classification table.
 
-Repeat until all four checks pass or 3 iterations exhausted. If still failing after 3 iterations: **STOP**. Write a `status: failure` build report (see `## Build report`) mapping the remaining failures as blocking findings, surface the stop hint below with full error output, and do not transition the slice — finalize parks it for human review.
+Repeat until all four checks pass or 3 iterations exhausted. If still failing after 3 iterations: **STOP**. Write a `status: failure` build report (see `## Build report`) mapping the remaining failures as blocking findings, surface the stop hint below with full error output, and do not transition the slice — a failure report parks it for human review.
 
 ## § Stop hint contract
 
@@ -89,7 +89,7 @@ A build failure surfaces a stop hint as the body's final output — a single str
 - `log-path` — absolute path to the captured stdout/stderr.
 - `next-action` — typically `re-run /spec:build $SLICE after fix`.
 
-Render the hint as the final visible output of the run, alongside the `status: failure` build report (see `## Build report`). The brief never calls `specify slice transition` — finalize validates the report and owns the lifecycle, so the slice stays `refined` and the loop (or a re-invocation) re-enters cleanly.
+Render the hint as the final visible output of the run, alongside the `status: failure` build report (see `## Build report`). The brief never calls `specify slice transition` — the deterministic in-guest report gate checks the answer and the workflow guest owns the lifecycle, so the slice stays `refined` and the loop (or a re-invocation) re-enters cleanly.
 
 ## § Deterministic review
 
@@ -99,7 +99,7 @@ Per [Standards layer](../references/spec-runtime/standards-layer-snippet.md), de
 
 ## Build report
 
-When the algorithm resolves, write a schema-valid build report to `.specify/slices/<slice>/build/report.yaml` (the handoff envelope's `report` field). This is the brief's final deliverable. The brief never transitions the slice lifecycle — the CLI's `--phase finalize` validates the report and owns the `Refined → Built` transition.
+When the algorithm resolves, return a schema-valid build report as the answer to the build's report leg (the schema-gated report answer — no report file is written). This is the brief's final deliverable. The brief never transitions the slice lifecycle — the deterministic in-guest report gate checks the answer's coherence against the working tree and the workflow guest owns the `Refined → Built` transition.
 
 ```yaml
 version: 1
@@ -109,7 +109,7 @@ status: success         # or: failure
 findings: []            # structured diagnostics; default []
 ```
 
-**Success vs failure findings rule.** A `status: success` report carries an empty `findings[]` or only non-blocking findings (`suggestion` / `optional`); the CLI rejects a `success` report carrying any blocking (`critical` / `important`) finding. A `status: failure` report populates `findings[]` with the blocking violations the target can map from the verify-repair output and `REVIEW.md`, and leaves `findings: []` when no specifics are mappable.
+**Success vs failure findings rule.** A `status: success` report carries an empty `findings[]` or only non-blocking findings (`suggestion` / `optional`); the deterministic report gate downgrades a `success` report carrying any blocking (`critical` / `important`) finding to `failure`. A `status: failure` report populates `findings[]` with the blocking violations the target can map from the verify-repair output and `REVIEW.md`, and leaves `findings: []` when no specifics are mappable.
 
 - **Clean build** — the verify-repair loop passes (`cargo fmt --check`, `cargo check`, `cargo clippy -- -D warnings`, `cargo test`), the code-review remediation cycle leaves no unresolved `critical` / `important` findings in `REVIEW.md`, and replay passes when a `captures` binding is present → `status: success`, `findings: []`.
 - **Unresolved build** — the verify-repair budget is exhausted (3 iterations) or the review remediation cycle cannot clear its blocking findings → `status: failure` with blocking findings mapped where possible.

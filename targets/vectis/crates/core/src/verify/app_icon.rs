@@ -1,4 +1,4 @@
-//! Bootstrap `app-icon` gate for `vectis verify --mode bootstrap-app-icon`
+//! Bootstrap `app-icon` gate, run in-guest as part of the build prelude
 //! (RFC-46 §6).
 //!
 //! `project.yaml.platforms` is the authority for platform intent: every

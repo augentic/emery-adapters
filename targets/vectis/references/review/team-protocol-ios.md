@@ -60,9 +60,9 @@ The Integration specialist cross-checks wired UI input artifacts (`composition.y
 
 Apply [`VECTIS-006`](../../rules/VECTIS-006-asset-render-by-kind.md): forbid `Image(systemName:)` for composition-referenced ids whose `assets.yaml` entry is `vector` or `raster`. Cite `rule_id: VECTIS-006` on every finding. Skip when `composition.yaml` or `assets.yaml` is absent.
 
-Apply [`VECTIS-007`](../../rules/VECTIS-007-ios-scaffold-immutability.md): forbid agent edits to `iOS/Makefile` and `iOS/project.yml` and any named simulator destination in `sim-build`. Cite `rule_id: VECTIS-007` on every finding. When `vectis verify --mode verify` already reported `ios-scaffold-file-drift`, treat it as confirmed.
+Apply [`VECTIS-007`](../../rules/VECTIS-007-ios-scaffold-immutability.md): forbid agent edits to `iOS/Makefile` and `iOS/project.yml` and any named simulator destination in `sim-build`. Cite `rule_id: VECTIS-007` on every finding. When the in-guest shell-verify gate findings riding the report-leg prompt already include `ios-scaffold-file-drift`, treat it as confirmed.
 
-Apply [`VECTIS-009`](../../rules/VECTIS-009-lint-suppression-forbidden.md): forbid `swiftlint:disable` and `swift-format-ignore` in agent-authored Swift (excluding `generated/`). Cite `rule_id: VECTIS-009` on every finding. When `vectis verify --mode verify` already reported `lint-suppression-forbidden`, treat it as confirmed.
+Apply [`VECTIS-009`](../../rules/VECTIS-009-lint-suppression-forbidden.md): forbid `swiftlint:disable` and `swift-format-ignore` in agent-authored Swift (excluding `generated/`). Cite `rule_id: VECTIS-009` on every finding. When the in-guest shell-verify gate findings riding the report-leg prompt already include `lint-suppression-forbidden`, treat it as confirmed.
 
 ## Antagonist responsibilities
 

@@ -25,7 +25,7 @@ serde_json      = "1.0"
 #
 # Chunk 11 investigated the chunk-7 prescription to bump to `cargo_swift=0.11`
 # + `uniffi="=0.31.0"` and discovered the bump breaks the Kotlin codegen step
-# in `vectis verify`. crux_core 0.17.0's `cli` feature transitively pins
+# in the Android shell's `make verify`. crux_core 0.17.0's `cli` feature transitively pins
 # `uniffi_bindgen = "=0.29.4"`, so mixing a 0.31 runtime (shared crate) with a
 # 0.29 bindgen (invoked via `crux_core::cli::bindgen` inside
 # `templates/core/codegen.rs`) fails with "unresolved module path

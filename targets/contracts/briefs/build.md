@@ -57,7 +57,7 @@ If a verifier reports failures:
 
 1. Re-enter the same format sub-brief with the verifier output for targeted repair via the same intent that produced the artifact (author or import).
 2. Re-run that format's verifier.
-3. If still failing after 2 iterations, stop repairing and write the `status: failure` build report described under `## Build report`, mapping the remaining failures as blocking findings. Do not mark the task complete; the skill's finalize step parks the slice for human review.
+3. If still failing after 2 iterations, stop repairing and write the `status: failure` build report described under `## Build report`, mapping the remaining failures as blocking findings. Do not mark the task complete; a failure report parks the slice for human review.
 
 A clean verification pass with zero issues is the expected outcome.
 
@@ -76,7 +76,7 @@ When the slice's specs describe no API interactions and no Source Material lists
 
 ## Build report
 
-When the algorithm resolves, write a schema-valid build report to `.specify/slices/<slice>/build/report.yaml` (the handoff envelope's `report` field). This is the brief's final deliverable. The brief never transitions the slice lifecycle — the CLI's `--phase finalize` validates the report and owns the `Refined → Built` transition.
+When the algorithm resolves, return a schema-valid build report as the answer to the build's report leg (the schema-gated report answer — no report file is written). This is the brief's final deliverable. The brief never transitions the slice lifecycle — the deterministic in-guest report gate checks the answer's coherence against the working tree and the workflow guest owns the `Refined → Built` transition.
 
 ```yaml
 version: 1
@@ -86,13 +86,13 @@ status: success         # or: failure
 findings: []            # structured diagnostics; default []
 ```
 
-**Success vs failure findings rule.** A `status: success` report carries an empty `findings[]` or only non-blocking findings (`suggestion` / `optional`); the CLI rejects a `success` report carrying any blocking (`critical` / `important`) finding. A `status: failure` report populates `findings[]` with the blocking violations the target can map from the contract tool / verifier output, and leaves `findings: []` when no specifics are mappable.
+**Success vs failure findings rule.** A `status: success` report carries an empty `findings[]` or only non-blocking findings (`suggestion` / `optional`); the deterministic report gate downgrades a `success` report carrying any blocking (`critical` / `important`) finding to `failure`. A `status: failure` report populates `findings[]` with the blocking violations the target can map from the contract validator / verifier output, and leaves `findings: []` when no specifics are mappable.
 
-- **Clean build** — Phase 5 tool gate exit 0 and verifiers clean → `status: success`, `findings: []` (or only advisory `suggestion` / `optional` findings).
-- **Unresolved build** — the verify-repair budget is exhausted (Phase 4) or the tool gate cannot run (Phase 5 exit 2) → `status: failure` with blocking findings mapped where possible.
+- **Clean build** — Phase 5 validator gate clean and verifiers clean → `status: success`, `findings: []` (or only advisory `suggestion` / `optional` findings).
+- **Unresolved build** — the verify-repair budget is exhausted (Phase 4) or the validator gate leaves residual findings after its repair budget (Phase 5) → `status: failure` with blocking findings mapped where possible.
 - **No-op** — the slice describes no API surface → `status: success`, `findings: []`.
 
-Each `findings[]` item validates against `schemas/diagnostics/diagnostic.schema.json` (the structured-diagnostic shape distributed with the CLI; required fields include `id`, `title`, `severity`, `source`, `artifact`, `evidence`, `impact`, `remediation`, `fingerprint`). Map the contract tool's findings (see [`report-shape.md`](../references/report-shape.md)) into that shape, carrying contract-domain detail under `evidence.kind: structured` with `target-adapter: contracts`.
+Each `findings[]` item validates against `schemas/diagnostics/diagnostic.schema.json` (the structured-diagnostic shape distributed with the CLI; required fields include `id`, `title`, `severity`, `source`, `artifact`, `evidence`, `impact`, `remediation`, `fingerprint`). Map the contract validator's findings (see [`report-shape.md`](../references/report-shape.md)) into that shape, carrying contract-domain detail under `evidence.kind: structured` with `target-adapter: contracts`.
 
 ## Output hygiene
 

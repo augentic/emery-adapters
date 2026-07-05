@@ -91,13 +91,7 @@ jobs:
             fi
             ref="${REGISTRY}/${REGISTRY_NAMESPACE}/${name}:${version}"
             echo "::group::${name}@${version} -> ${ref}"
-            # Recompile the committed adapter.wasm for adapters that bundle
-            # an extension; prose-only adapters pack without one.
-            if [ -d "${dir}extension" ]; then
-              "${SPECIFY}" adapter build --path "${dir}" --refresh-extension
-            else
-              "${SPECIFY}" adapter build --path "${dir}"
-            fi
+            "${SPECIFY}" adapter build --path "${dir}"
             "${SPECIFY}" adapter publish --path "${dir}" --reference "${ref}"
             echo "::endgroup::"
           done
