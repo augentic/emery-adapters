@@ -5,11 +5,12 @@
 use std::fs;
 use std::path::Path;
 
-use specify_contracts_core::operations::{
-    Changeset, Context, Edit, Error, Input, WorkingTree, build, guidance, merge,
-};
-use specify_contracts_core::report::{REPORT_ANSWER_SCHEMA, Severity, Status};
+use specify_contracts_core::operations::{build, guidance, merge};
 use specify_contracts_core::validate::RULE_VERSION_IS_SEMVER;
+use specify_guest_kit::answers::REPORT_ANSWER_SCHEMA;
+use specify_guest_kit::seam::{
+    Changeset, Context, Edit, Error, Input, Severity, Status, WorkingTree,
+};
 use specify_guest_kit::{Error as ModelError, Format, MockModel, Request};
 use tempfile::TempDir;
 

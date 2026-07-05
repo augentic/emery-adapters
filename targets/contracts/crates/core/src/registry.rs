@@ -1,5 +1,6 @@
 //! Embedded prose registry: every brief and reference document the
-//! contracts adapter ships, compiled in by `build.rs`.
+//! contracts adapter ships, compiled in by `build.rs` through the shared
+//! `specify-prose-registry` codegen.
 //!
 //! Documents are keyed by adapter-relative path (`briefs/build.md`,
 //! `references/openapi/verifier.md`, …). The `references/spec-runtime`
@@ -8,14 +9,7 @@
 //! MCP shelf serves this registry as `doc://` resources, and the operation
 //! template reads brief bodies from it for prompt assembly.
 
-/// One embedded reference document.
-#[derive(Clone, Copy, Debug)]
-pub struct Doc {
-    /// Adapter-relative path, e.g. `briefs/build.md`.
-    pub path: &'static str,
-    /// Full markdown body.
-    pub body: &'static str,
-}
+pub use specify_guest_kit::registry::Doc;
 
 include!(concat!(env!("OUT_DIR"), "/registry_docs.rs"));
 
@@ -28,7 +22,7 @@ pub fn docs() -> &'static [Doc] {
 /// Look up one document by its adapter-relative path.
 #[must_use]
 pub fn doc(path: &str) -> Option<&'static Doc> {
-    DOCS.binary_search_by(|doc| doc.path.cmp(path)).ok().map(|idx| &DOCS[idx])
+    specify_guest_kit::registry::find(DOCS, path)
 }
 
 /// The body of a document the registry is guaranteed to embed.
@@ -41,5 +35,5 @@ pub fn doc(path: &str) -> Option<&'static Doc> {
 /// not limp on.
 #[must_use]
 pub fn body(path: &str) -> &'static str {
-    doc(path).unwrap_or_else(|| panic!("document `{path}` is not embedded in the registry")).body
+    specify_guest_kit::registry::body(DOCS, path)
 }

@@ -4124,7 +4124,6 @@ version = "0.4.3"
 dependencies = [
  "omnia-guest",
  "omnia-wasi-http",
- "serde_json",
  "specify-contracts-core",
  "specify-guest-kit",
  "wasip3",
@@ -4141,8 +4140,8 @@ dependencies = [
  "serde-saphyr",
  "serde_json",
  "specify-guest-kit",
+ "specify-prose-registry",
  "tempfile",
- "thiserror 2.0.18",
  "tokio",
 ]
 
@@ -4172,10 +4171,20 @@ dependencies = [
 name = "specify-guest-kit"
 version = "0.4.3"
 dependencies = [
+ "omnia-guest",
  "omnia-wasi-model",
+ "serde",
+ "serde_json",
  "thiserror 2.0.18",
  "tokio",
  "wasip3",
+]
+
+[[package]]
+name = "specify-prose-registry"
+version = "0.4.3"
+dependencies = [
+ "tempfile",
 ]
 
 [[package]]

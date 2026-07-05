@@ -22,7 +22,9 @@ serde = { workspace = true, features = ["derive"] }
 serde-saphyr.workspace = true
 serde_json.workspace = true
 specify-guest-kit.workspace = true
-thiserror.workspace = true
+
+[build-dependencies]
+specify-prose-registry.workspace = true
 
 [dev-dependencies]
 jsonschema.workspace = true

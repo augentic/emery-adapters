@@ -1,0 +1,155 @@
+//! The judgment-answer deserializers: schema pins, envelope shapes, and
+//! the report projection onto the compact seam types.
+
+use specify_guest_kit::answers::{
+    EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA, REPORT_ANSWER_SCHEMA, ReportAnswer,
+    parse_evidence, parse_leads,
+};
+use specify_guest_kit::seam::{Authority, Backing, ClaimKind, Severity, Status};
+
+// The three embedded pins are the vendored schemas/answers/ documents,
+// byte-identical to the files on disk.
+#[test]
+fn schema_pins_match_vendored_files() {
+    for (pin, file) in [
+        (LEADS_ANSWER_SCHEMA, "leads.schema.json"),
+        (EVIDENCE_ANSWER_SCHEMA, "evidence.schema.json"),
+        (REPORT_ANSWER_SCHEMA, "report.schema.json"),
+    ] {
+        let on_disk = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../schemas/answers")
+                .join(file),
+        )
+        .expect("vendored schema file");
+        assert_eq!(pin, on_disk, "pin matches {file}");
+    }
+}
+
+// A survey answer's `leads[]` envelope deserializes into seam leads; an
+// omitted `topics` key means unclassified, never an error.
+#[test]
+fn leads_answer_deserializes() {
+    let leads = parse_leads(
+        r#"{"leads":[
+            {"lead":"password-reset","synopsis":"Reset flow with expiry.","topics":["auth","email"]},
+            {"lead":"session-timeout","synopsis":"Sessions expire after 30 minutes."}
+        ]}"#,
+    )
+    .expect("leads envelope parses");
+
+    assert_eq!(leads.len(), 2);
+    assert_eq!(leads[0].lead, "password-reset");
+    assert_eq!(leads[0].topics, vec!["auth", "email"]);
+    assert_eq!(leads[1].synopsis, "Sessions expire after 30 minutes.");
+    assert!(leads[1].topics.is_empty(), "omitted topics defaults to empty");
+
+    assert!(parse_leads(r#"[{"lead":"bare"}]"#).is_err(), "a bare array is not the envelope");
+}
+
+// An extract answer deserializes into the Evidence shape: kebab-case
+// keys, the closed authority / kind enums, both backing variants, and
+// open per-kind body fields (`replay-digest`, `input`, …) tolerated.
+#[test]
+fn evidence_answer_deserializes() {
+    let evidence = parse_evidence(
+        r#"{
+            "authority": "behaviour",
+            "claims": [
+                {
+                    "kind": "example",
+                    "id": "password-reset.expiry",
+                    "path": "captures/reset.json#L3-L9",
+                    "synopsis": "Expired token is rejected.",
+                    "backing": {"path": "captures/reset.json"},
+                    "replay-digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+                    "input": {"token": "stale"},
+                    "output": {"status": 410}
+                },
+                {"kind": "type", "backing": {"payload": "struct ResetToken { expiry: Instant }"}}
+            ]
+        }"#,
+    )
+    .expect("evidence body parses");
+
+    assert_eq!(evidence.authority, Authority::Behaviour);
+    assert_eq!(evidence.claims.len(), 2);
+    let example = &evidence.claims[0];
+    assert_eq!(example.kind, ClaimKind::Example);
+    assert_eq!(example.id.as_deref(), Some("password-reset.expiry"));
+    assert_eq!(example.path.as_deref(), Some("captures/reset.json#L3-L9"));
+    assert_eq!(example.backing, Some(Backing::Path("captures/reset.json".to_string())));
+    let claim = &evidence.claims[1];
+    assert_eq!(claim.kind, ClaimKind::Type, "`type` deserializes despite being a keyword");
+    assert_eq!(
+        claim.backing,
+        Some(Backing::Payload("struct ResetToken { expiry: Instant }".to_string()))
+    );
+    assert!(claim.id.is_none() && claim.path.is_none() && claim.synopsis.is_none());
+}
+
+// The two modeled open body fields (`synopsis`, `backing`) are lenient:
+// the answer schema does not pin their shape, so a schema-valid answer
+// carrying them in an unexpected shape drops the field instead of
+// failing the whole extract.
+#[test]
+fn evidence_open_body_fields_are_lenient() {
+    let evidence = parse_evidence(
+        r#"{
+            "authority": "documentation",
+            "claims": [
+                {"kind": "section", "synopsis": {"headline": "structured"}, "backing": "bare string"},
+                {"kind": "decision", "synopsis": "kept", "backing": {"payload": "ADR-7"}}
+            ]
+        }"#,
+    )
+    .expect("unpinned body shapes never fail the answer");
+
+    let odd = &evidence.claims[0];
+    assert!(odd.synopsis.is_none(), "non-string synopsis is dropped");
+    assert!(odd.backing.is_none(), "non-variant backing is dropped");
+    let clean = &evidence.claims[1];
+    assert_eq!(clean.synopsis.as_deref(), Some("kept"), "modeled shapes still parse");
+    assert_eq!(clean.backing, Some(Backing::Payload("ADR-7".to_string())));
+}
+
+// The report answer carries the full diagnostic shape and projects onto
+// the compact seam report: rule-id and severity map through, prose folds
+// into detail, and omitted keys take their defaults.
+#[test]
+fn report_answer_projects_onto_seam() {
+    let answer = ReportAnswer::parse(
+        r#"{
+            "status": "failure",
+            "findings": [{
+                "rule-id": "UNI-014",
+                "title": "Duplicate id",
+                "severity": "critical",
+                "impact": "Baseline is ambiguous.",
+                "remediation": "Rename one contract."
+            }],
+            "outputs": [{"platform": "ios", "path": "ios/App.swift"}],
+            "ui-surface": {"screens": 2}
+        }"#,
+    )
+    .expect("report body parses");
+    let report = answer.into_report();
+
+    assert_eq!(report.status, Status::Failure);
+    let finding = &report.findings[0];
+    assert_eq!(finding.rule_id.as_deref(), Some("UNI-014"));
+    assert_eq!(finding.severity, Severity::Critical);
+    assert_eq!(
+        finding.detail,
+        "Duplicate id — Baseline is ambiguous.; remediation: Rename one contract."
+    );
+    assert_eq!(report.outputs[0].path, "ios/App.swift");
+    assert_eq!(report.ui_surface.map(|surface| surface.screens), Some(2));
+
+    let minimal = ReportAnswer::parse(r#"{"status":"success","findings":[]}"#)
+        .expect("minimal report parses")
+        .into_report();
+    assert_eq!(minimal.status, Status::Success);
+    assert!(minimal.findings.is_empty() && minimal.outputs.is_empty());
+    assert!(minimal.ui_surface.is_none());
+}

@@ -2,125 +2,26 @@
 //!
 //! Each judgment leg is bracketed by deterministic guest code. The core
 //! assembles a prompt from the embedded brief plus the typed inputs,
-//! issues a single-shot `create` through the [`Model`] capability with a
-//! schema-gated `format`, deserializes the answer into the WIT-shaped
-//! records, and then runs the validate-before-visible checks (the
-//! absorbed contract validators) after the answer lands. All state
-//! between calls lives in the workspace tree — the session-less shape:
-//! `build` decomposes into the three format sub-flows (json-schema,
-//! openapi, asyncapi) as independent `create` calls, then a bounded
-//! verify-repair loop, then one report call.
+//! issues a single-shot `create` through the shared
+//! [`specify_guest_kit::judgment`] helper with a schema-gated `format`,
+//! and then runs the validate-before-visible checks (the absorbed
+//! contract validators) after the answer lands. All state between calls
+//! lives in the workspace tree — the session-less shape: `build`
+//! decomposes into the three format sub-flows (json-schema, openapi,
+//! asyncapi) as independent `create` calls, then a bounded verify-repair
+//! loop, then one report call.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde::Deserialize;
-use specify_guest_kit::{Format, McpGrant, Message, Model, Request, Role, SchemaFormat};
+use specify_guest_kit::answers::{REPORT_ANSWER_SCHEMA, ReportAnswer};
+use specify_guest_kit::seam::{
+    Changeset, Context, Error, Finding, Input, Report, Severity, Status, WorkingTree,
+};
+use specify_guest_kit::{Model, judgment};
 
 use crate::registry;
-use crate::report::{Finding, REPORT_ANSWER_SCHEMA, Report, ReportAnswer, Status};
 use crate::validate::{ContractFinding, validate_baseline};
-
-/// The error returned by operations — mirrors the WIT `types.error` variant.
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
-pub enum Error {
-    /// The request itself is malformed.
-    #[error("invalid request: {0}")]
-    InvalidRequest(String),
-    /// A filesystem operation failed.
-    #[error("io: {0}")]
-    Io(String),
-    /// A judgment call or answer-handling step failed.
-    #[error("internal: {0}")]
-    Internal(String),
-}
-
-impl From<specify_guest_kit::Error> for Error {
-    fn from(err: specify_guest_kit::Error) -> Self {
-        match err {
-            specify_guest_kit::Error::InvalidRequest(detail) => Self::InvalidRequest(detail),
-            other => Self::Internal(other.to_string()),
-        }
-    }
-}
-
-/// One slice-artifact input — mirrors the WIT `target.input` variant.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Input {
-    /// The slice's `proposal.md`.
-    Proposal(String),
-    /// The slice's `design.md`.
-    Design(String),
-    /// The slice's `tasks.md`.
-    Tasks(String),
-    /// One behavioural spec (`specs/<domain>/spec.md`).
-    Spec(String),
-    /// Any additional artifact.
-    Other(String),
-}
-
-impl Input {
-    const fn label(&self) -> &'static str {
-        match self {
-            Self::Proposal(_) => "proposal",
-            Self::Design(_) => "design",
-            Self::Tasks(_) => "tasks",
-            Self::Spec(_) => "spec",
-            Self::Other(_) => "other",
-        }
-    }
-
-    const fn body(&self) -> &String {
-        match self {
-            Self::Proposal(body)
-            | Self::Design(body)
-            | Self::Tasks(body)
-            | Self::Spec(body)
-            | Self::Other(body) => body,
-        }
-    }
-}
-
-/// Names the tree an operation works on — mirrors the WIT `working-tree`
-/// record. The adapter opens its own `"."` preopen; `subpath` scopes the
-/// operation beneath the shared mount root.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct WorkingTree {
-    /// The snapshot the operation applies against.
-    pub base: String,
-    /// Optional path beneath the shared mount root.
-    pub subpath: Option<String>,
-}
-
-/// One path-scoped edit — mirrors the WIT `types.edit` record.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Edit {
-    /// The edited file's path, relative to the working tree root.
-    pub path: String,
-    /// The new content handle, or absent for a deletion.
-    pub content: Option<String>,
-}
-
-/// A build's portable delta — mirrors the WIT `types.changeset` record.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Changeset {
-    /// The revision the edits apply against.
-    pub base: String,
-    /// The per-path edits the build produced.
-    pub edits: Vec<Edit>,
-}
-
-/// Call-scoped environment the shim resolves and hands to every operation.
-#[derive(Clone, Copy, Debug)]
-pub struct Context<'a> {
-    /// The plan-bound adapter identity this call was routed by.
-    pub adapter_id: &'a str,
-    /// The guest's `"."` preopen root (the shared project mount).
-    pub project_root: &'a Path,
-    /// The adapter's own MCP reference-shelf endpoint, granted to the
-    /// spawned agent so it can fetch `doc://` references lazily. Read
-    /// from `wasi:config` by the shim, never hardcoded.
-    pub mcp_url: Option<&'a str>,
-}
 
 /// Maximum verify-repair iterations per the build brief's Phase 4.
 const MAX_REPAIR_ITERATIONS: usize = 2;
@@ -216,7 +117,7 @@ pub async fn build<P: Model>(
     model: &P, ctx: &Context<'_>, slice: &str, inputs: &[Input], tree: &WorkingTree,
 ) -> Result<Report, Error> {
     let slice_contracts_rel = format!(".specify/slices/{slice}/contracts");
-    let slice_contracts = tree_root(ctx, tree).join(&slice_contracts_rel);
+    let slice_contracts = ctx.tree_root(tree).join(&slice_contracts_rel);
     let inputs_block = render_inputs(inputs);
     let build_brief = registry::body("briefs/build.md");
 
@@ -302,7 +203,7 @@ pub async fn build<P: Model>(
 pub async fn merge<P: Model>(
     model: &P, ctx: &Context<'_>, slice: &str, delta: &Changeset, tree: &WorkingTree,
 ) -> Result<Report, Error> {
-    let baseline = tree_root(ctx, tree).join("contracts");
+    let baseline = ctx.tree_root(tree).join("contracts");
     let merge_brief = registry::body("briefs/merge.md");
     let delta_block = render_delta(delta);
 
@@ -351,48 +252,11 @@ fn owning_sub_briefs(findings: &[ContractFinding], contracts_dir: &Path) -> Stri
     inlined
 }
 
-/// Resolve the operation's tree root beneath the shared mount.
-fn tree_root(ctx: &Context<'_>, tree: &WorkingTree) -> PathBuf {
-    tree.subpath
-        .as_deref()
-        .map_or_else(|| ctx.project_root.to_path_buf(), |sub| ctx.project_root.join(sub))
-}
-
-/// The MCP grants offered on every judgment leg: the adapter's own
-/// reference shelf, when the shim resolved its endpoint.
-fn grants(ctx: &Context<'_>) -> Vec<McpGrant> {
-    ctx.mcp_url
-        .map(|url| McpGrant {
-            name: "contracts-references".to_string(),
-            tools: Vec::new(),
-            url: url.to_string(),
-        })
-        .into_iter()
-        .collect()
-}
-
-/// Issue one internal sub-flow leg and deserialize its answer.
+/// Issue one internal sub-flow leg through the shared judgment helper.
 async fn sub_flow_call<P: Model>(
     model: &P, ctx: &Context<'_>, system: String, user: String, name: &str,
 ) -> Result<SubFlowAnswer, Error> {
-    let reply = model
-        .create(Request {
-            model: None,
-            system: Some(system),
-            messages: vec![Message {
-                role: Role::User,
-                content: user,
-            }],
-            format: Format::Schema(SchemaFormat {
-                name: name.to_string(),
-                schema: SUB_FLOW_ANSWER_SCHEMA.to_string(),
-            }),
-            mcp: grants(ctx),
-            lend_workspace: true,
-        })
-        .await?;
-    serde_json::from_str(&reply.answer)
-        .map_err(|err| Error::Internal(format!("sub-flow answer did not deserialize: {err}")))
+    judgment(model, ctx, system, user, name, SUB_FLOW_ANSWER_SCHEMA).await
 }
 
 /// Issue one report leg gated by the derived answer schema and project
@@ -400,25 +264,20 @@ async fn sub_flow_call<P: Model>(
 async fn report_call<P: Model>(
     model: &P, ctx: &Context<'_>, system: String, user: String,
 ) -> Result<Report, Error> {
-    let reply = model
-        .create(Request {
-            model: None,
-            system: Some(system),
-            messages: vec![Message {
-                role: Role::User,
-                content: user,
-            }],
-            format: Format::Schema(SchemaFormat {
-                name: "report".to_string(),
-                schema: REPORT_ANSWER_SCHEMA.to_string(),
-            }),
-            mcp: grants(ctx),
-            lend_workspace: true,
-        })
-        .await?;
-    let answer = ReportAnswer::parse(&reply.answer)
-        .map_err(|err| Error::Internal(format!("report answer did not deserialize: {err}")))?;
-    Ok(answer.into_report())
+    judgment::<P, ReportAnswer>(model, ctx, system, user, "report", REPORT_ANSWER_SCHEMA)
+        .await
+        .map(ReportAnswer::into_report)
+}
+
+/// Map one deterministic validator finding into the seam shape.
+/// Contract rules gate the build, so validator findings are blocking
+/// (`important`).
+fn validator_finding(finding: &ContractFinding) -> Finding {
+    Finding {
+        rule_id: Some(finding.rule_id.to_string()),
+        severity: Severity::Important,
+        detail: format!("{}: {}", finding.path.display(), finding.detail),
+    }
 }
 
 /// Deterministic guard after the answer lands: residual validator
@@ -427,7 +286,7 @@ async fn report_call<P: Model>(
 fn enforce_validators(mut report: Report, residual: &[ContractFinding]) -> Report {
     if !residual.is_empty() {
         report.status = Status::Failure;
-        report.findings.extend(residual.iter().map(Finding::from_validator));
+        report.findings.extend(residual.iter().map(validator_finding));
     }
     if report.status == Status::Success
         && report.findings.iter().any(|finding| finding.severity.blocking())
