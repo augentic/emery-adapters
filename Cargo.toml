@@ -12,6 +12,7 @@ members = [
     "targets/*/extension",
     "targets/contracts",
     "targets/omnia",
+    "targets/vectis",
     "tools/rust-quality",
 ]
 
@@ -49,6 +50,7 @@ sha2 = "0.11"
 specify-guest-kit = { path = "crates/guest-kit" }
 specify-prose-registry = { path = "crates/prose-registry" }
 specify-contracts-core = { path = "targets/contracts/crates/core" }
+specify-vectis-core = { path = "targets/vectis/crates/core" }
 thiserror = "2"
 toml = "1"
 assert_cmd = "2"

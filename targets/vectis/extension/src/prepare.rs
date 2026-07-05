@@ -1,21 +1,23 @@
 //! `vectis prepare` subcommand — slice-build prepare orchestration (RFC §2.1 + §6).
-
-mod scope;
+//!
+//! Scope resolution and the conditional materialize step moved to
+//! `specify-vectis-core` (RFC-61 Step 3); this module keeps the WASI
+//! command surface plus the host-bootstrap legs that depend on the
+//! extension-resident scaffold / verify machinery: the app-icon
+//! bootstrap gate, the Android Gradle setup, and the iOS scaffold sync.
 
 use std::path::{Path, PathBuf};
 
 use clap::{Args as ClapArgs, Subcommand};
-pub use scope::{
+use serde_json::{Value, json};
+pub use specify_vectis_core::prepare::{
     EffectiveAssets, MaterializeScope, materialize_platform_csv, resolve_effective_assets,
     resolve_materialize_scope, scope_needs_materialize, validate_effective_inventory,
 };
-use serde_json::{Value, json};
 
 use crate::android::{run_for_shell_dir, setup_exit_code};
 use crate::ios_scaffold::{scaffold_sync_ios_json, sync_ios_scaffold_files};
-use crate::materialize::{
-    AssetsArgs, MaterializeCommand, materialize_exit_code, run as run_materialize,
-};
+use crate::materialize::materialize_exit_code;
 use crate::validate::engine::load_shell_platforms;
 use crate::validate::find_project_root;
 use crate::verify::{VerifyArgs, VerifyMode, run as run_verify, verify_exit_code};
@@ -90,25 +92,8 @@ fn run_build(args: &BuildArgs) -> Result<Value, VectisError> {
     let slice_dir = resolve_slice_dir(&project_root, &args.slice_dir)?;
     let platforms = load_shell_platforms(&project_root);
 
-    let materialized = if let Some(effective) = resolve_effective_assets(&slice_dir, &project_root)
-    {
-        validate_effective_inventory(&effective)?;
-        let scope = resolve_materialize_scope(&slice_dir, &project_root, &platforms, &effective);
-        if scope_needs_materialize(&scope, &effective, &platforms) {
-            let only: Vec<String> = scope.asset_ids.into_iter().collect();
-            let mat_args = AssetsArgs {
-                path: Some(effective.path),
-                platform: Some(platforms.clone()),
-                dry_run: false,
-                only: Some(only),
-            };
-            run_materialize(&MaterializeCommand::Assets(mat_args))?
-        } else {
-            skipped_materialize_summary(&effective.path, &platforms)
-        }
-    } else {
-        skipped_materialize_summary(&project_root.join("design-system/assets.yaml"), &platforms)
-    };
+    let materialized =
+        specify_vectis_core::prepare::materialize_step(&slice_dir, &project_root, &platforms)?;
 
     let bootstrap = run_verify(&VerifyArgs {
         mode: VerifyMode::BootstrapAppIcon,
@@ -158,17 +143,4 @@ fn resolve_slice_dir(project_root: &Path, slice_dir: &Path) -> Result<PathBuf, V
         });
     }
     Ok(resolved)
-}
-
-fn skipped_materialize_summary(path: &Path, platforms: &[String]) -> Value {
-    json!({
-        "command": "materialize assets",
-        "path": path.display().to_string(),
-        "dry_run": false,
-        "platforms": platforms,
-        "materialized": [],
-        "skipped_pins": [],
-        "errors": [],
-        "skipped": true,
-    })
 }

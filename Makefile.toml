@@ -73,6 +73,7 @@ args = [
     "build",
     "-p", "specify-contracts",
     "-p", "specify-omnia",
+    "-p", "specify-vectis",
     "-p", "specify-captures",
     "-p", "specify-documentation",
     "-p", "specify-intent",
@@ -91,6 +92,16 @@ set -e
 for scenario in describe design import source update; do
   evals/contracts/run.sh "$scenario"
 done
+'''
+
+# Live build-leg eval for the vectis adapter guest (RFC-61 Step 3
+# Milestone D): the single-screen scenario through the eval driver
+# against the real cursor backend. Requires cursor-agent on PATH; see
+# evals/vectis/README.md.
+[tasks.eval-vectis]
+script = '''
+set -e
+evals/vectis/run.sh single-screen
 '''
 
 # Refresh the committed guest components: release-build each adapter guest

@@ -61,7 +61,7 @@ specify adapter build --path targets/<name> --refresh-extension
 For fast local iteration on an extension crate alone, workspace builds still work:
 
 ```bash
-cargo build --target wasm32-wasip2 --release -p specify-contract -p specify-vectis
+cargo build --target wasm32-wasip2 --release -p specify-contract -p specify-vectis-extension
 ```
 
 Only `specify adapter build` copies the release binary into the committed `adapter.wasm` beside `adapter.yaml`.

@@ -36,7 +36,6 @@
 
 pub mod android;
 pub mod android_scaffold;
-mod error;
 pub mod infer;
 pub mod ios_scaffold;
 pub mod materialize;
@@ -50,8 +49,8 @@ pub mod validate;
 pub mod verify;
 
 use clap::{Parser, Subcommand};
-pub use error::{EXIT_FAILURE, VectisError};
 use serde_json::Value;
+pub use specify_vectis_core::{EXIT_FAILURE, VectisError};
 
 /// Render a payload as pretty-printed JSON without a trailing newline.
 ///

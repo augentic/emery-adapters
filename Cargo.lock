@@ -4321,8 +4321,18 @@ dependencies = [
 name = "specify-vectis"
 version = "0.4.3"
 dependencies = [
- "assert_cmd",
- "clap",
+ "omnia-guest",
+ "omnia-wasi-http",
+ "specify-guest-kit",
+ "specify-vectis-core",
+ "wasip3",
+ "wit-bindgen 0.58.0",
+]
+
+[[package]]
+name = "specify-vectis-core"
+version = "0.4.3"
+dependencies = [
  "image",
  "jsonschema",
  "resvg",
@@ -4330,11 +4340,30 @@ dependencies = [
  "serde-saphyr",
  "serde_json",
  "sha2 0.11.0",
+ "specify-guest-kit",
+ "specify-prose-registry",
  "tempfile",
  "thiserror 2.0.18",
  "tiny-skia",
- "toml",
+ "tokio",
  "usvg",
+]
+
+[[package]]
+name = "specify-vectis-extension"
+version = "0.4.3"
+dependencies = [
+ "assert_cmd",
+ "clap",
+ "image",
+ "jsonschema",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "sha2 0.11.0",
+ "specify-vectis-core",
+ "tempfile",
+ "toml",
 ]
 
 [[package]]

@@ -5,7 +5,8 @@
 //! `specify-*-guest` crates), the `wasi:http`-backed store bundle a host
 //! binary's `runtime!` macro would generate, and the deployment manifests
 //! the tests deploy — the single-guest contracts manifest and the
-//! multi-guest composed manifest (contracts + omnia + documentation).
+//! multi-guest composed manifest (contracts + omnia + vectis +
+//! documentation).
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -26,6 +27,11 @@ pub const CONTRACTS_WASM: &str = "specify_contracts.wasm";
 
 /// Built artifact name of the omnia target-adapter guest.
 pub const OMNIA_WASM: &str = "specify_omnia.wasm";
+
+/// Built artifact name of the vectis target-adapter guest (the lib target
+/// is named apart from the `specify-vectis` package because the legacy
+/// extension keeps the `specify_vectis` lib name until RFC-61 Step 5).
+pub const VECTIS_WASM: &str = "specify_vectis_adapter.wasm";
 
 /// Built artifact name of the documentation source-adapter guest.
 pub const DOCUMENTATION_WASM: &str = "specify_documentation.wasm";
@@ -71,6 +77,8 @@ fn build_guests() {
                 "specify-contracts",
                 "-p",
                 "specify-omnia",
+                "-p",
+                "specify-vectis",
                 "-p",
                 "specify-captures",
                 "-p",
@@ -131,9 +139,9 @@ pub fn contracts_manifest(mount: &Path) -> Result<TempManifest> {
     ))
 }
 
-/// The multi-guest deployment manifest: the contracts and omnia target
-/// guests plus the documentation source guest, each with its own MCP
-/// shelf route, sharing one writable `"."` mount — the shared project
+/// The multi-guest deployment manifest: the contracts, omnia, and vectis
+/// target guests plus the documentation source guest, each with its own
+/// MCP shelf route, sharing one writable `"."` mount — the shared project
 /// tree every guest opens through its own preopen.
 ///
 /// # Errors
@@ -142,6 +150,7 @@ pub fn contracts_manifest(mount: &Path) -> Result<TempManifest> {
 pub fn composed_manifest(mount: &Path) -> Result<TempManifest> {
     let contracts = guest_wasm(CONTRACTS_WASM);
     let omnia = guest_wasm(OMNIA_WASM);
+    let vectis = guest_wasm(VECTIS_WASM);
     let documentation = guest_wasm(DOCUMENTATION_WASM);
 
     temp_manifest(&format!(
@@ -151,6 +160,9 @@ pub fn composed_manifest(mount: &Path) -> Result<TempManifest> {
          [[guest]]\n\
          id = \"target:omnia\"\n\
          source.path = \"{omnia}\"\n\n\
+         [[guest]]\n\
+         id = \"target:vectis\"\n\
+         source.path = \"{vectis}\"\n\n\
          [[guest]]\n\
          id = \"source:documentation\"\n\
          source.path = \"{documentation}\"\n\n\
@@ -165,12 +177,16 @@ pub fn composed_manifest(mount: &Path) -> Result<TempManifest> {
          prefix = \"/mcp/omnia\"\n\
          guest = \"target:omnia\"\n\n\
          [[route.http]]\n\
+         prefix = \"/mcp/vectis\"\n\
+         guest = \"target:vectis\"\n\n\
+         [[route.http]]\n\
          prefix = \"/mcp/documentation\"\n\
          guest = \"source:documentation\"\n\n\
          [transport]\n\
          default = \"in-process\"\n",
         contracts = contracts.display(),
         omnia = omnia.display(),
+        vectis = vectis.display(),
         documentation = documentation.display(),
         mount = mount.display(),
     ))
@@ -187,7 +203,7 @@ pub async fn runtime(mount: &Path) -> Result<Runtime<Bundle>> {
     assemble(contracts_manifest(mount)?).await
 }
 
-/// Assemble the multi-guest deployment (contracts + omnia +
+/// Assemble the multi-guest deployment (contracts + omnia + vectis +
 /// documentation) into a runtime, with `"."` mounted at `mount`.
 ///
 /// # Errors

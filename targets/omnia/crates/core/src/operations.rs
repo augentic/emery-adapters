@@ -161,11 +161,12 @@ pub async fn build<P: Model>(
     // Final leg — the report answer, gated by the derived answer schema.
     let user = format!(
         "Write the build report for slice `{slice}` per the build brief's \
-         `## Build report`. A `success` report carries only non-blocking findings; \
-         an exhausted verify-repair budget or unresolved blocking review findings \
-         mean `status: failure`. Declare the slice's crate tree (and the guest \
-         scaffolding, when this build wrote it) as `platform: core` outputs with \
-         paths relative to the project root.\n\n\
+         `## Build report`. First mark the completed `tasks.md` checkboxes in the \
+         slice directory per the brief. A `success` report carries only non-blocking \
+         findings; an exhausted verify-repair budget or unresolved blocking review \
+         findings mean `status: failure`. Declare the slice's crate tree (and the \
+         guest scaffolding, when this build wrote it) as `platform: core` outputs \
+         with paths relative to the project root.\n\n\
          Phase outcomes:\n{}",
         [("generation", &generation), ("review", &review), ("replay", &replay)]
             .map(render_phase_outcome)

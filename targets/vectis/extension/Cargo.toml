@@ -1,5 +1,5 @@
 [package]
-name = "specify-vectis"
+name = "specify-vectis-extension"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,6 +9,11 @@ description = "WASI command tool for Vectis (validate + scaffold)"
 categories = ["development-tools", "command-line-utilities", "wasm"]
 keywords = ["specify", "vectis", "wasi"]
 
+# The lib target keeps the historical `specify_vectis` crate name so the
+# integration tests' imports stay stable; the package rename to
+# `specify-vectis-extension` (RFC-61 Step 3) freed the `specify-vectis`
+# package name for the adapter guest. The shipped artifact is the
+# `vectis` binary either way.
 [lib]
 name = "specify_vectis"
 path = "src/lib.rs"
@@ -22,17 +27,12 @@ workspace = true
 
 [dependencies]
 clap.workspace = true
-jsonschema.workspace = true
 serde.workspace = true
 serde-saphyr.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
-thiserror.workspace = true
+specify-vectis-core.workspace = true
 toml.workspace = true
-resvg.workspace = true
-usvg.workspace = true
-tiny-skia.workspace = true
-image.workspace = true
 
 [build-dependencies]
 jsonschema.workspace = true
@@ -42,4 +42,5 @@ serde_json.workspace = true
 
 [dev-dependencies]
 assert_cmd.workspace = true
+image.workspace = true
 tempfile.workspace = true

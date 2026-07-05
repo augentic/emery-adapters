@@ -14,4 +14,4 @@
 # Adapters absent from this table have an implicit budget of 0. See
 # docs/standards/testing.md.
 [adapter]
-vectis = 28
+vectis = 14
