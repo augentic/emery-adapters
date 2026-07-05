@@ -4107,6 +4107,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "specify-captures"
+version = "0.4.3"
+dependencies = [
+ "omnia-guest",
+ "omnia-wasi-http",
+ "specify-captures-core",
+ "specify-guest-kit",
+ "wasip3",
+ "wit-bindgen 0.58.0",
+]
+
+[[package]]
+name = "specify-captures-core"
+version = "0.4.3"
+dependencies = [
+ "specify-guest-kit",
+ "specify-prose-registry",
+ "tokio",
+]
+
+[[package]]
 name = "specify-contract"
 version = "0.4.3"
 dependencies = [
@@ -4146,6 +4167,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "specify-documentation"
+version = "0.4.3"
+dependencies = [
+ "omnia-guest",
+ "omnia-wasi-http",
+ "specify-documentation-core",
+ "specify-guest-kit",
+ "wasip3",
+ "wit-bindgen 0.58.0",
+]
+
+[[package]]
+name = "specify-documentation-core"
+version = "0.4.3"
+dependencies = [
+ "specify-guest-kit",
+ "specify-prose-registry",
+ "tokio",
+]
+
+[[package]]
 name = "specify-eval-driver"
 version = "0.4.3"
 dependencies = [
@@ -4181,10 +4223,73 @@ dependencies = [
 ]
 
 [[package]]
+name = "specify-intent"
+version = "0.4.3"
+dependencies = [
+ "omnia-guest",
+ "omnia-wasi-http",
+ "specify-guest-kit",
+ "specify-intent-core",
+ "wasip3",
+ "wit-bindgen 0.58.0",
+]
+
+[[package]]
+name = "specify-intent-core"
+version = "0.4.3"
+dependencies = [
+ "specify-guest-kit",
+ "specify-prose-registry",
+ "tokio",
+]
+
+[[package]]
 name = "specify-prose-registry"
 version = "0.4.3"
 dependencies = [
  "tempfile",
+]
+
+[[package]]
+name = "specify-screenshots"
+version = "0.4.3"
+dependencies = [
+ "omnia-guest",
+ "omnia-wasi-http",
+ "specify-guest-kit",
+ "specify-screenshots-core",
+ "wasip3",
+ "wit-bindgen 0.58.0",
+]
+
+[[package]]
+name = "specify-screenshots-core"
+version = "0.4.3"
+dependencies = [
+ "specify-guest-kit",
+ "specify-prose-registry",
+ "tokio",
+]
+
+[[package]]
+name = "specify-typescript"
+version = "0.4.3"
+dependencies = [
+ "omnia-guest",
+ "omnia-wasi-http",
+ "specify-guest-kit",
+ "specify-typescript-core",
+ "wasip3",
+ "wit-bindgen 0.58.0",
+]
+
+[[package]]
+name = "specify-typescript-core"
+version = "0.4.3"
+dependencies = [
+ "specify-guest-kit",
+ "specify-prose-registry",
+ "tokio",
 ]
 
 [[package]]

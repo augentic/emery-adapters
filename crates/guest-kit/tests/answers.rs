@@ -3,9 +3,9 @@
 
 use specify_guest_kit::answers::{
     EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA, REPORT_ANSWER_SCHEMA, ReportAnswer,
-    parse_evidence, parse_leads,
+    parse_evidence, parse_leads, validate_evidence, validate_leads,
 };
-use specify_guest_kit::seam::{Authority, Backing, ClaimKind, Severity, Status};
+use specify_guest_kit::seam::{Authority, Backing, ClaimKind, Error, Severity, Status};
 
 // The three embedded pins are the vendored schemas/answers/ documents,
 // byte-identical to the files on disk.
@@ -111,6 +111,59 @@ fn evidence_open_body_fields_are_lenient() {
     let clean = &evidence.claims[1];
     assert_eq!(clean.synopsis.as_deref(), Some("kept"), "modeled shapes still parse");
     assert_eq!(clean.backing, Some(Backing::Payload("ADR-7".to_string())));
+}
+
+// The deterministic survey tail re-checks the id grammar the leads schema
+// pins: kebab-case lead ids and content-bearing synopses pass; violations
+// come back as one findings-style internal error.
+#[test]
+fn leads_validation_tail() {
+    let clean = parse_leads(
+        r#"{"leads":[{"lead":"password-reset","synopsis":"Reset flow with expiry."}]}"#,
+    )
+    .expect("clean leads parse");
+    validate_leads(&clean).expect("clean leads pass the tail");
+
+    let malformed = parse_leads(
+        r#"{"leads":[
+            {"lead":"Bad_Id","synopsis":"Casing and underscore violate the pattern."},
+            {"lead":"blank-synopsis","synopsis":"   "}
+        ]}"#,
+    )
+    .expect("the tail, not the parser, rejects malformed ids");
+    let Err(Error::Internal(detail)) = validate_leads(&malformed) else {
+        panic!("malformed leads must fail the tail");
+    };
+    assert!(detail.contains("lead `Bad_Id`"), "finding names the malformed id: {detail}");
+    assert!(detail.contains("synopsis is empty"), "finding names the empty synopsis: {detail}");
+}
+
+// The deterministic extract tail mirrors the evidence schema's conditional
+// id requirement (requirement / criterion / example claims) and the
+// dotted-kebab id pattern.
+#[test]
+fn evidence_validation_tail() {
+    let clean = parse_evidence(
+        r#"{"authority":"documentation","claims":[
+            {"kind":"requirement","id":"password-reset.request"},
+            {"kind":"decision"}
+        ]}"#,
+    )
+    .expect("clean evidence parses");
+    validate_evidence(&clean).expect("clean evidence passes the tail");
+
+    let malformed = parse_evidence(
+        r#"{"authority":"documentation","claims":[
+            {"kind":"requirement"},
+            {"kind":"criterion","id":"Not.Valid"}
+        ]}"#,
+    )
+    .expect("the tail, not the parser, rejects malformed claims");
+    let Err(Error::Internal(detail)) = validate_evidence(&malformed) else {
+        panic!("malformed evidence must fail the tail");
+    };
+    assert!(detail.contains("claims require an id"), "finding names the missing id: {detail}");
+    assert!(detail.contains("`Not.Valid`"), "finding names the malformed id: {detail}");
 }
 
 // The report answer carries the full diagnostic shape and projects onto

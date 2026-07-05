@@ -75,12 +75,28 @@ fn empty_trees_fail() {
     assert!(err.contains("no markdown documents"), "error names the failure: {err}");
 }
 
+// A tree that does not exist is skipped, not an error: adapters share one
+// canonical tree list (`briefs` + `references`) and an adapter may carry
+// no references tree at all.
 #[test]
-fn missing_tree_fails() {
+fn missing_tree_is_skipped() {
+    let adapter = TempDir::new().expect("adapter root");
+    write(adapter.path(), "briefs/survey.md", "# survey");
+
+    let generated =
+        generate(adapter.path(), &["briefs", "references"]).expect("missing tree is tolerated");
+
+    assert!(generated.contains(r#"Doc { path: "briefs/survey.md""#), "present tree is embedded");
+}
+
+// When every tree is missing, the empty-registry error fires: an adapter
+// with no prose at all has nothing to embed and the build must fail.
+#[test]
+fn all_trees_missing_fails() {
     let adapter = TempDir::new().expect("adapter root");
 
-    let err = generate(adapter.path(), &["briefs"]).expect_err("unreadable tree is an error");
-    assert!(err.contains("read "), "error names the unreadable tree: {err}");
+    let err = generate(adapter.path(), &["briefs"]).expect_err("no documents is an error");
+    assert!(err.contains("no markdown documents"), "error names the failure: {err}");
 }
 
 #[test]

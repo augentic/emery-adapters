@@ -2,6 +2,12 @@
 resolver = "3"
 members = [
     "crates/*",
+    "sources/*/crates/*",
+    "sources/captures",
+    "sources/documentation",
+    "sources/intent",
+    "sources/screenshots",
+    "sources/typescript",
     "targets/*/crates/*",
     "targets/*/extension",
     "targets/contracts",

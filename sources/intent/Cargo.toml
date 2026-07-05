@@ -1,0 +1,25 @@
+[package]
+name = "specify-intent"
+description = "Intent source-adapter WASI guest component: wasm32 shim over specify-intent-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+# Guest-only: the component body compiles solely for wasm32, so its
+# dependencies live under the same target gate omnia's guests use.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+omnia-guest.workspace = true
+omnia-wasi-http.workspace = true
+specify-intent-core = { path = "crates/core" }
+specify-guest-kit.workspace = true
+wasip3.workspace = true
+wit-bindgen.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,118 @@
+//! The judgment operations: `survey` and `extract`.
+//!
+//! Each operation is one schema-gated judgment leg bracketed by
+//! deterministic guest code: the core assembles a prompt from the embedded
+//! brief (the system channel) plus the call-specific context (the user
+//! message), issues a single-shot `create` through the shared
+//! [`specify_guest_kit::judgment`] helper, and re-checks the id grammar
+//! the answer schema pins after the answer lands. The calls are
+//! session-less — all working state lives in the operator's workspace
+//! tree and the prompt itself, so the user message tells the spawned
+//! agent where its bound source material lives (the `plan.yaml` source
+//! binding) rather than assuming any prior conversation. The judgment
+//! detail — the framework survey grammar, the `excerpt` / `type` / `call`
+//! extraction depth — rides in the embedded briefs and references.
+
+use specify_guest_kit::answers::{
+    EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA, LeadsAnswer, validate_evidence, validate_leads,
+};
+use specify_guest_kit::seam::{Context, Error, Evidence, Lead};
+use specify_guest_kit::{Model, judgment};
+
+use crate::registry;
+
+/// How the spawned agent resolves its bound source material — the
+/// session-less state note both prompts carry.
+const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and there is no \
+                            session: every input you need lives in the workspace tree and this \
+                            prompt. Resolve the bound source material from the plan — read \
+                            `plan.yaml` at the workspace root and find the binding under \
+                            `sources.<key>` whose `adapter` is `typescript`; its `path` \
+                            (relative to the workspace root) is the read-only TypeScript / \
+                            JavaScript source tree the brief calls `$SOURCE_DIR`. Treat that \
+                            tree as read-only.";
+
+/// Survey the bound legacy source tree into leads — one schema-gated
+/// judgment leg over the embedded `briefs/survey.md`, followed by the
+/// deterministic id-grammar tail.
+///
+/// # Errors
+///
+/// Returns [`Error::InvalidRequest`] when the model rejects the request
+/// as malformed, and [`Error::Internal`] for other model failures, an
+/// answer that does not deserialize, or an answer that fails the
+/// deterministic validation tail.
+pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>, Error> {
+    let system = registry::body("briefs/survey.md").to_string();
+    let user = format!(
+        "Survey the TypeScript / JavaScript source bound to adapter `{id}` using the \
+         brief's framework grammar.\n\n\
+         {BINDING_NOTE}\n\n\
+         When `discovery.md` at the workspace root already carries leads for this source \
+         under `## Lead inventory`, treat this call as a re-survey: return the complete \
+         current lead set — the caller replaces prior leads by their `(source, lead)` \
+         pairs (the brief's stable re-survey handle).\n\n\
+         Answer with one JSON object matching the gated schema: a `leads` array carrying \
+         the same `lead` / `synopsis` / optional `topics` content as the brief's lead \
+         blocks. The caller persists the leads into `discovery.md`; do not write it \
+         yourself.",
+        id = ctx.adapter_id,
+    );
+    let answer: LeadsAnswer =
+        judgment(model, ctx, system, user, "leads", LEADS_ANSWER_SCHEMA).await?;
+    validate_leads(&answer.leads)?;
+    Ok(answer.leads)
+}
+
+/// Extract one lead's behavioural Evidence from the bound source tree.
+///
+/// One schema-gated judgment leg over the embedded `briefs/extract.md`
+/// (emitting `excerpt` / `type` / `call` claims), followed by the
+/// deterministic claim-id tail.
+///
+/// # Errors
+///
+/// Returns [`Error::InvalidRequest`] when the model rejects the request
+/// as malformed, and [`Error::Internal`] for other model failures, an
+/// answer that does not deserialize, or an answer that fails the
+/// deterministic validation tail.
+pub async fn extract<P: Model>(
+    model: &P, ctx: &Context<'_>, lead: &Lead,
+) -> Result<Evidence, Error> {
+    let system = registry::body("briefs/extract.md").to_string();
+    let user = format!(
+        "Extract Evidence from the TypeScript / JavaScript source bound to adapter \
+         `{id}` for this lead:\n\n{lead}\n\n\
+         {BINDING_NOTE}\n\n\
+         The brief's reference shelf is served over this call's MCP grant — load the \
+         reference bodies on demand when the lead's surface needs deeper analysis.\n\n\
+         Answer with one JSON object matching the gated schema: the Evidence body \
+         (`authority`, `claims`) the brief describes, without the envelope `lead` key — \
+         this call names the lead. The caller persists the document under \
+         `.specify/slices/<slice>/evidence/`; do not write it yourself.",
+        id = ctx.adapter_id,
+        lead = render_lead(lead),
+    );
+    let evidence: Evidence =
+        judgment(model, ctx, system, user, "evidence", EVIDENCE_ANSWER_SCHEMA).await?;
+    validate_evidence(&evidence)?;
+    Ok(evidence)
+}
+
+/// Render the extract call's lead as the brief's lead-block shape.
+fn render_lead(lead: &Lead) -> String {
+    let topics = if lead.topics.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "
+- topics: [{}]",
+            lead.topics.join(", ")
+        )
+    };
+    format!(
+        "- lead: {}
+- synopsis: {}{topics}",
+        lead.lead, lead.synopsis
+    )
+}

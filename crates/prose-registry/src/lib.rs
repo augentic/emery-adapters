@@ -19,16 +19,24 @@ use std::path::{Path, PathBuf};
 /// `<out_dir>/registry_docs.rs`, printing the `cargo:rerun-if-changed`
 /// directives for every directory and document walked.
 ///
+/// A tree that does not exist under `adapter_root` is skipped — adapters
+/// share one canonical tree list (`briefs` + `references`) and not every
+/// adapter carries every tree.
+///
 /// # Errors
 ///
-/// Returns a rendered message when a tree cannot be walked (including a
-/// dangling symlink), when no markdown documents are found, or when the
-/// generated file cannot be written — the caller (a `build.rs`) should
-/// fail the build with it.
+/// Returns a rendered message when an existing tree cannot be walked
+/// (including a dangling symlink), when no markdown documents are found
+/// across all trees, or when the generated file cannot be written — the
+/// caller (a `build.rs`) should fail the build with it.
 pub fn emit(adapter_root: &Path, trees: &[&str], out_dir: &Path) -> Result<(), String> {
     let mut docs: Vec<(String, PathBuf)> = Vec::new();
     for tree in trees {
-        walk(&adapter_root.join(tree), tree, &mut docs)?;
+        let root = adapter_root.join(tree);
+        if !root.exists() {
+            continue;
+        }
+        walk(&root, tree, &mut docs)?;
     }
     docs.sort_by(|a, b| a.0.cmp(&b.0));
     if docs.is_empty() {

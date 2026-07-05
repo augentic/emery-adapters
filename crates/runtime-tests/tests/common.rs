@@ -3,8 +3,9 @@
 //! Owns guest-artifact building/locating (this workspace's counterpart to
 //! the specify engine's `crates/runtime/tests/common.rs`, pointed at the
 //! `specify-*-guest` crates), the `wasi:http`-backed store bundle a host
-//! binary's `runtime!` macro would generate, and the contracts deployment
-//! manifest the tests deploy.
+//! binary's `runtime!` macro would generate, and the deployment manifests
+//! the tests deploy — the single-guest contracts manifest and the
+//! multi-guest composed manifest (contracts + documentation).
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -22,6 +23,9 @@ use omnia_wasi_model::{
 
 /// Built artifact name of the contracts target-adapter guest.
 pub const CONTRACTS_WASM: &str = "specify_contracts.wasm";
+
+/// Built artifact name of the documentation source-adapter guest.
+pub const DOCUMENTATION_WASM: &str = "specify_documentation.wasm";
 
 /// The adapters workspace root (`<root>/crates/runtime-tests` is this crate).
 pub fn workspace_root() -> PathBuf {
@@ -58,7 +62,23 @@ fn build_guests() {
     GUESTS.get_or_init(|| {
         let status = Command::new("cargo")
             .env("CARGO_TARGET_DIR", target_dir())
-            .args(["build", "-p", "specify-contracts", "--target", "wasm32-wasip2"])
+            .args([
+                "build",
+                "-p",
+                "specify-contracts",
+                "-p",
+                "specify-captures",
+                "-p",
+                "specify-documentation",
+                "-p",
+                "specify-intent",
+                "-p",
+                "specify-screenshots",
+                "-p",
+                "specify-typescript",
+                "--target",
+                "wasm32-wasip2",
+            ])
             .current_dir(workspace_root())
             .status()
             .expect("spawning guest build");
@@ -106,6 +126,43 @@ pub fn contracts_manifest(mount: &Path) -> Result<TempManifest> {
     ))
 }
 
+/// The multi-guest deployment manifest: the contracts target guest plus
+/// the documentation source guest, each with its own MCP shelf route,
+/// sharing one writable `"."` mount — the shared project tree every
+/// guest opens through its own preopen.
+///
+/// # Errors
+///
+/// Returns an error when the temp manifest cannot be written.
+pub fn composed_manifest(mount: &Path) -> Result<TempManifest> {
+    let contracts = guest_wasm(CONTRACTS_WASM);
+    let documentation = guest_wasm(DOCUMENTATION_WASM);
+
+    temp_manifest(&format!(
+        "[[guest]]\n\
+         id = \"target:contracts\"\n\
+         source.path = \"{contracts}\"\n\n\
+         [[guest]]\n\
+         id = \"source:documentation\"\n\
+         source.path = \"{documentation}\"\n\n\
+         [[mount]]\n\
+         name = \".\"\n\
+         path = \"{mount}\"\n\
+         writable = true\n\n\
+         [[route.http]]\n\
+         prefix = \"/mcp/contracts\"\n\
+         guest = \"target:contracts\"\n\n\
+         [[route.http]]\n\
+         prefix = \"/mcp/documentation\"\n\
+         guest = \"source:documentation\"\n\n\
+         [transport]\n\
+         default = \"in-process\"\n",
+        contracts = contracts.display(),
+        documentation = documentation.display(),
+        mount = mount.display(),
+    ))
+}
+
 /// Assemble the contracts deployment into a runtime the tests can dispatch
 /// into and serve HTTP through, with `"."` mounted at `mount`.
 ///
@@ -114,7 +171,22 @@ pub fn contracts_manifest(mount: &Path) -> Result<TempManifest> {
 /// Returns an error when the deployment cannot be built or the backends
 /// cannot connect.
 pub async fn runtime(mount: &Path) -> Result<Runtime<Bundle>> {
-    let manifest = contracts_manifest(mount)?;
+    assemble(contracts_manifest(mount)?).await
+}
+
+/// Assemble the multi-guest deployment (contracts + documentation) into a
+/// runtime, with `"."` mounted at `mount`.
+///
+/// # Errors
+///
+/// Returns an error when the deployment cannot be built or the backends
+/// cannot connect.
+pub async fn composed_runtime(mount: &Path) -> Result<Runtime<Bundle>> {
+    assemble(composed_manifest(mount)?).await
+}
+
+// Deploy a temp manifest onto the runtime with the test backend bundle.
+async fn assemble(manifest: TempManifest) -> Result<Runtime<Bundle>> {
     let mut deployment = DeploymentBuilder::new()
         .config(manifest.path().to_path_buf())
         .build::<StoreCtx<Bundle>>()
