@@ -13,5 +13,7 @@
 #
 # Adapters absent from this table have an implicit budget of 0. See
 # TESTING.md.
+#
+# RFC-61 Step 5 Milestone A1 moved the last 14 vectis extension unit tests
+# into `targets/vectis/crates/core/tests/`, so the table is empty.
 [adapter]
-vectis = 14

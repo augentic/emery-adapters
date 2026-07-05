@@ -20,15 +20,9 @@ Delta-spec merging, baseline coherence validation, lifecycle transition, and the
 
 ## Pre-merge — composition validation
 
-Before invoking `specify slice merge`, re-run the deterministic validator against the staged slice contents so an invalid `composition.yaml` blocks the merge:
-
-```bash
-specify extension run vectis -- validate composition
-```
+Before the delta folds, the adapter's deterministic composition validator runs in-guest against the staged slice contents so an invalid `composition.yaml` blocks the merge.
 
 The validator discovers `${SLICE_DIR}/composition.yaml` first (slice-local takes precedence) and auto-invokes `tokens` / `assets` modes against any sibling `tokens.yaml` / `assets.yaml`. Errors are blocking — surface the report verbatim and stop. Warnings forward into the operator-facing summary but do not block. When the slice is core-only (no `composition.yaml` in `${SLICE_DIR}`), the validator exits cleanly without performing the wired-mode checks.
-
-A WASI tool invocation failure (missing sidecar, bad arguments, unreadable preopen) is a tool failure, not a validation finding; report it separately and stop.
 
 ## Merge invocation — broader landing surface
 
@@ -39,13 +33,9 @@ The merge surface is broader than spec / design / task deltas. In addition to th
 
 Review every UI input delta alongside the spec / design / task changes in the `specify slice merge preview` output before confirming, so reviewers can see which downstream shell generations will be affected.
 
-After `specify slice merge` exits zero, re-run the deterministic validator against the merged baseline:
+After the delta folds, the adapter re-runs the deterministic validator in-guest against the merged baseline (the merge report gate), with one bounded repair leg.
 
-```bash
-specify extension run vectis -- validate composition
-```
-
-The validator discovers the now-merged baseline `composition.yaml` and auto-invokes `tokens` / `assets` modes against any sibling `tokens.yaml` / `assets.yaml`. Run this even when the current slice did not generate any platform code, because later shell work will consume the merged baseline input set. Validation findings trigger a stop hint with `failure-kind: post-merge-validator`; warnings flow into the operator-facing summary; clean runs are silent.
+The validator discovers the now-merged baseline `composition.yaml` and auto-invokes `tokens` / `assets` modes against any sibling `tokens.yaml` / `assets.yaml`. It runs even when the current slice did not generate any platform code, because later shell work will consume the merged baseline input set. Residual validation findings force `status: failure` and trigger a stop hint with `failure-kind: post-merge-validator`; warnings flow into the operator-facing summary; clean runs are silent.
 
 ## Post-merge — host cap-matrix re-verification
 
@@ -58,8 +48,7 @@ cd "$PROJECT_DIR" && RUSTFLAGS="-D warnings" cargo check
 cd "$PROJECT_DIR" && cargo clippy --all-targets -- -D warnings
 cd "$PROJECT_DIR" && RUSTFLAGS="-D warnings" cargo test
 
-# iOS, when ${PROJECT_DIR}/iOS exists
-cd "$PROJECT_DIR" && specify extension run vectis -- sync ios-scaffold
+# iOS, when ${PROJECT_DIR}/iOS exists (scaffold files are adapter-synced at build time)
 cd "$PROJECT_DIR/iOS" && make build
 cd "$PROJECT_DIR/iOS" && make sim-build
 

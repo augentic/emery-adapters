@@ -4346,6 +4346,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tiny-skia",
  "tokio",
+ "toml",
  "usvg",
 ]
 
@@ -4356,14 +4357,9 @@ dependencies = [
  "assert_cmd",
  "clap",
  "image",
- "jsonschema",
- "serde",
- "serde-saphyr",
  "serde_json",
- "sha2 0.11.0",
  "specify-vectis-core",
  "tempfile",
- "toml",
 ]
 
 [[package]]

@@ -86,7 +86,7 @@ Emission policy:
 - Otherwise the inferer MUST flatten the group and emit a `# candidate component: <slug>` comment adjacent to each occurrence so the operator can promote it explicitly in a later edit. Single-occurrence candidates always remain comments, never directives.
 - Slugs MUST match `^[a-z][a-z0-9]*(-[a-z0-9]+)*$` (kebab-case). The reserved region names — `header`, `body`, `footer`, `fab` — MUST NOT be used as slugs (the schema enforces this; inferers MUST avoid producing them in the first place).
 
-Structural identity (cross-instance rule, validated by `specify extension run vectis -- validate layout`):
+Structural identity (cross-instance rule, validated by the adapter's deterministic `layout` validator mode):
 
 - Two groups carrying the same `component:` slug MUST share the same skeleton: same ordered nested item kinds and the same nested-group shape across the document.
 - Instances MAY differ in `bind`, `event`, `error`, `asset`, token references, the *condition expressions* on `*-when` keys, and free text content. Skeleton divergence is an error; wiring divergence is the expected use of the directive.
@@ -98,45 +98,34 @@ When the inferer is uncertain whether observed similarity meets the structural-i
 
 ## Verification
 
-Every inferer MUST invoke the deterministic validators **before reporting success**, then translate any reported errors into terminal output the operator can act on. The validators live in the declared `vectis` (`validate`) WASI tool, run through `specify extension run`, read their input from disk, and are the only authoritative source of pass/fail.
+Every inferred artifact MUST pass the deterministic validators **before it is accepted**, and reported errors surface verbatim so the operator can act on them. The validators are library code embedded in the vectis adapter; the workflow runs them in-guest at the gate that consumes the artifact, and that gate is the only authoritative source of pass/fail — inferers do not invoke a host command.
 
-Because the validator reads a file path, "errors block writes" is enforced through a **stage-then-validate-then-rename** sequence rather than a literal pre-write check. Validating before any write would either error on a missing file (greenfield) or re-check the previous run's content (refine):
+"Errors block writes" is enforced through a **stage-then-validate-then-rename** posture rather than a literal pre-write check. Validating before any write would either error on a missing file (greenfield) or re-check the previous run's content (refine):
 
-1. Write the inferred output to a sibling staging path (`<output-path>.tmp`). Refine runs MUST stage even when an existing `<output-path>` already validates clean — the validator never sees the new content otherwise.
-2. Run the validator against the staging path explicitly:
+1. The inferer writes the inferred output to a sibling staging path (`<output-path>.tmp`). Refine runs MUST stage even when an existing `<output-path>` already validates clean — the validator never sees the new content otherwise.
+2. The workflow's deterministic gate validates the staging content (`layout` mode).
+3. On a clean or warnings-only result, the staging file is atomically renamed onto `<output-path>` (`rename(2)`).
+4. On errors, the staging file is deleted, the validator report surfaces verbatim, and the run fails. Any prior `<output-path>` is preserved untouched.
 
-    ```bash
-    specify extension run vectis -- validate layout <output-path>.tmp
-    ```
+This validates YAML syntax, the composition schema, the unwired-subset rules above, and the §G structural-identity rule for any `component:` directives present. The gate validates the staging path explicitly, so a failed run cannot validate stale or default-resolved content. Errors block the rename; warnings surface in the operator-facing summary but do not block.
 
-3. On a clean or warnings-only result, atomically rename the staging file onto `<output-path>` (`rename(2)` / `mv <output-path>.tmp <output-path>`).
-4. On errors, delete the staging file, surface the validator report verbatim, and exit non-zero. Any prior `<output-path>` is preserved untouched.
+Cross-artifact reference checks (when the sibling input artifacts exist) run as `composition` mode against the **same staging path** before the atomic rename — never against a default-resolved path or the prior `<output-path>` — so token / asset references in the new content are checked, not last run's. `composition` mode auto-invokes `tokens` and `assets` modes when sibling `tokens.yaml` / `assets.yaml` files exist (whether slice-local or project-level); their reports surface in the same envelope. Errors fold into the same rename-blocking gate as `layout` mode; warnings forward into the summary.
 
-This validates YAML syntax, the composition schema, the unwired-subset rules above, and the §G structural-identity rule for any `component:` directives present. Pass the staging path explicitly so a failed run cannot validate stale or default-resolved content; the optional default-path resolution (slice-local `layout.yaml` then `design-system/layout.yaml`) exists for ad-hoc operator invocations, not for the inferer's own gate. Errors block the rename; warnings surface in the terminal summary but do not block.
+The full per-mode validator surface the adapter embeds:
 
-Cross-artifact reference checks (when the sibling input artifacts exist):
-
-```bash
-specify extension run vectis -- validate composition <output-path>.tmp
-```
-
-Inferers SHOULD run `composition` mode against the **same staging path** before the atomic rename — never against a default-resolved path or the prior `<output-path>` — so token / asset references in the new content are checked, not last run's. `composition` mode auto-invokes `tokens` and `assets` modes when sibling `tokens.yaml` / `assets.yaml` files exist (whether slice-local or project-level); their reports surface in the same envelope. Errors fold into the same rename-blocking gate as `validate layout`; warnings forward into the terminal summary.
-
-The full per-mode surface every inferer can call:
-
-| Verb | Validates |
+| Mode | Validates |
 |---|---|
-| `specify extension run vectis -- validate layout [path]` | `layout.yaml` against the unwired subset (composition schema + structural identity + no define-owned wiring keys + no `delta`). |
-| `specify extension run vectis -- validate composition [path]` | Wired or unwired composition; auto-invokes `tokens` and `assets` when siblings exist. |
-| `specify extension run vectis -- validate tokens [path]` | `tokens.yaml` against the published [`tokens.schema.json`](https://schemas.specify.dev/vectis/tokens.schema.json). |
-| `specify extension run vectis -- validate assets [path]` | `assets.yaml` against the published [`assets.schema.json`](https://schemas.specify.dev/vectis/assets.schema.json), plus referenced-file existence under `design-system/assets/**`. |
-| `specify extension run vectis -- validate all` | Runs all four against the active slice and baseline. Convenience mode. |
+| `layout` | `layout.yaml` against the unwired subset (composition schema + structural identity + no define-owned wiring keys + no `delta`). |
+| `composition` | Wired or unwired composition; auto-invokes `tokens` and `assets` when siblings exist. |
+| `tokens` | `tokens.yaml` against the published [`tokens.schema.json`](https://schemas.specify.dev/vectis/tokens.schema.json). |
+| `assets` | `assets.yaml` against the published [`assets.schema.json`](https://schemas.specify.dev/vectis/assets.schema.json), plus referenced-file existence under `design-system/assets/**`. |
+| `all` | Runs all four against the active slice and baseline. Convenience mode. |
 
-Exit semantics for every mode:
+Outcome semantics for every mode:
 
-- **Errors** — exit non-zero. Inferers MUST treat this as a write block and surface the report verbatim.
-- **Warnings only** — exit zero with a printed warning report. Inferers MUST forward warnings into the terminal summary; the write proceeds.
-- **Clean** — exit zero silently.
+- **Errors** — the gate fails the run. The report surfaces verbatim and the staged write is blocked.
+- **Warnings only** — the gate passes with a printed warning report forwarded into the summary; the write proceeds.
+- **Clean** — the gate passes silently.
 
 Inferers MUST NOT roll their own schema or reference validation. Every check the contract requires has an authoritative CLI verb above; reimplementing them in skill prose causes drift.
 

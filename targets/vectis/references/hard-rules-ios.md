@@ -4,9 +4,9 @@
 
 ## Scaffold immutability (create and update mode)
 
-1. **Create mode must scaffold first.** Run `specify extension run vectis -- scaffold ios <APP_NAME> [--caps <csv>]` before writing any Swift under `iOS/`. Do not create Swift files before scaffold; scaffold must be the first write to `iOS/`.
+1. **Create mode must scaffold first.** The adapter renders the iOS scaffold deterministically from its embedded templates before the write leg. Do not create Swift files before the scaffold exists; the rendered scaffold must be the first write to `iOS/`.
 2. **Never hand-author scaffold files.** `iOS/Makefile`, `iOS/project.yml`, `iOS/.vectis/sim-build.sh`, `iOS/.vectis/sim-dev.sh`, and the starter files emitted by scaffold (`<APP_NAME>App.swift`, starter `Core.swift`, `ContentView.swift`, starter `Views/`) must come from the scaffold renderer — not from worked examples or memory.
-3. **Never edit CLI-owned scaffold files.** `iOS/Makefile`, `iOS/project.yml`, `iOS/.vectis/sim-build.sh`, and `iOS/.vectis/sim-dev.sh` are CLI-owned. `specify slice build --phase prepare` auto-syncs them at build start; `specify extension run vectis -- sync ios-scaffold` repairs them in-loop during verify — agents must not patch them during verify-repair or feature work.
+3. **Never edit adapter-owned scaffold files.** `iOS/Makefile`, `iOS/project.yml`, `iOS/.vectis/sim-build.sh`, and `iOS/.vectis/sim-dev.sh` are adapter-owned. The adapter re-renders them deterministically at build prepare and around each write leg — agents must not patch them during verify-repair or feature work.
 4. **Never set a named simulator destination in verify scripts.** The destination lives only in `iOS/.vectis/sim-build.sh` as `generic/platform=iOS Simulator`. Do not substitute `name=iPhone …`, inline `-destination` in the Makefile, or run `xcodebuild` with a device-specific destination.
 5. **Orchestrator runs verify; repair sub-agents are Swift-only.** The `/spec:build` orchestrator executes sync, `swiftformat`, `make build`, and `make sim-build`. `ios-verify-repair` sub-agents must not run `make`, `xcodebuild`, or edit scaffold paths — they return Swift edits only.
 

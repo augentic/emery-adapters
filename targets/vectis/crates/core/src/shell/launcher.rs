@@ -89,23 +89,3 @@ fn android_shell_resident_app_icon(project_dir: &Path) -> bool {
     }
     false
 }
-
-#[cfg(test)]
-mod tests {
-    use super::{parse_json_string_value_after_key, referenced_png_filenames};
-
-    #[test]
-    fn parses_filename_from_contents_json() {
-        let json = r#"{"images":[{"filename":"AppIcon.png","idiom":"universal"}]}"#;
-        assert_eq!(referenced_png_filenames(json), vec!["AppIcon.png".to_string()]);
-    }
-
-    #[test]
-    fn parse_json_string_value() {
-        let fragment = r#""filename" : "AppIcon.png""#;
-        assert_eq!(
-            parse_json_string_value_after_key(fragment, "filename"),
-            Some("AppIcon.png".to_string())
-        );
-    }
-}

@@ -1,26 +1,31 @@
-//! Tests for `vectis scaffold` planning, writing, and the dispatcher. The five
-//! plan-shape unit tests the document flagged for collapse are folded into
-//! three table-style tests (`golden_hashes_*`, `plan_substitutions_and_caps`,
-//! `write_plan_refuses_existing_roots`); the `.gitignore` merge and the `run`
-//! dispatcher (which mutates `PROJECT_DIR`) stay distinct because they reach
-//! `runtime::merge_gitignore` and the env-bound dispatch path. They remain
-//! in-crate so the collapse stays coverage-neutral over `runtime.rs`.
+//! Tests for scaffold planning, writing, and the dispatcher, moved from
+//! the extension's `scaffold` unit tests (RFC-61 Step 5 Milestone A1)
+//! and re-pointed at the core's public surface: the env-bound `run`
+//! became the explicit-path [`run_at`], and the gitignore idempotency
+//! re-merge goes through a second `write_plan` pass instead of the
+//! private `runtime::merge_gitignore`.
 
 use std::fs;
-use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use sha2::{Digest, Sha256};
+use specify_vectis_core::scaffold::{
+    CommonArgs, CoreArgs, ScaffoldCommand, ScaffoldError, ScaffoldPlan, Versions, parse_caps,
+    plan_android, plan_core, plan_ios, run_at, write_plan,
+};
 use tempfile::tempdir;
-
-use super::templates::registry::{android, core, ios};
-use super::*;
 
 const CORE_RENDER_ONLY_SHA256: &str =
     "be4d2c16b0736c7be8f137990e7039055c66c228957ddd1b13d54caa8433b7b0";
 const IOS_RENDER_ONLY_SHA256: &str =
     "69bba9c2e5726b1355daf97d72ce98f55150694b32b890190af75025778035dc";
 const ANDROID_RENDER_ONLY_SHA256: &str =
-    "aabeb6981db93bfa6bf365bed6e5ada5cd55bdc22d0b2c5552c9e20db1b26ee0";
+    "bd764b6f12aaa48fb70bfa447eef5d87234de96965e725cbe2aaa872f966333c";
+
+// Template-registry entry counts, pinned by the build.rs manifest gate
+// (`EXPECTED_COUNTS`).
+const CORE_ENTRIES: usize = 13;
+const IOS_ENTRIES: usize = 11;
+const ANDROID_ENTRIES: usize = 23;
 
 fn versions() -> Versions {
     Versions::embedded().expect("embedded versions parse")
@@ -41,11 +46,6 @@ fn digest_plan(plan: &ScaffoldPlan) -> String {
         let _ = write!(hex, "{byte:02x}");
         hex
     })
-}
-
-fn env_lock() -> MutexGuard<'static, ()> {
-    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    LOCK.get_or_init(|| Mutex::new(())).lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 #[test]
@@ -70,7 +70,7 @@ fn plan_substitutions_and_caps() {
     let versions = versions();
 
     let plan = plan_core("Counter", "com.example.counter", &[], &versions).unwrap();
-    assert_eq!(plan.files.len(), core::ENTRIES.len());
+    assert_eq!(plan.files.len(), CORE_ENTRIES);
     assert_eq!(plan.files[0].relative_path, "Cargo.toml");
     assert_eq!(plan.files[8].relative_path, "shared/src/bin/codegen.rs");
     let app = plan.files.iter().find(|file| file.relative_path == "shared/src/app.rs").unwrap();
@@ -83,7 +83,7 @@ fn plan_substitutions_and_caps() {
 
     let ios_caps = parse_caps(Some("http")).unwrap();
     let ios = plan_ios("Counter", "com.vectis.counter", &ios_caps, &versions).unwrap();
-    assert_eq!(ios.files.len(), ios::ENTRIES.len());
+    assert_eq!(ios.files.len(), IOS_ENTRIES);
     assert!(ios.files.iter().any(|file| file.relative_path == "iOS/Counter/CounterApp.swift"));
     assert!(ios.files.iter().any(|file| {
         file.relative_path
@@ -99,7 +99,7 @@ fn plan_substitutions_and_caps() {
     assert!(!core_swift.contents.contains("<<<CAP:"));
 
     let android_bare = plan_android("Counter", "com.vectis.counter", &[], &versions).unwrap();
-    assert_eq!(android_bare.files.len(), android::ENTRIES.len() - 1);
+    assert_eq!(android_bare.files.len(), ANDROID_ENTRIES - 1);
     assert!(
         !android_bare
             .files
@@ -129,7 +129,7 @@ fn plan_substitutions_and_caps() {
     let android_caps = parse_caps(Some("http")).unwrap();
     let android_http =
         plan_android("Counter", "com.vectis.counter", &android_caps, &versions).unwrap();
-    assert_eq!(android_http.files.len(), android::ENTRIES.len());
+    assert_eq!(android_http.files.len(), ANDROID_ENTRIES);
     assert!(
         android_http
             .files
@@ -206,49 +206,24 @@ fn write_plan_merges_existing_gitignore() {
     assert_eq!(merged.matches("/target").count(), 1, "duplicate lines are not re-appended");
     assert!(dir.path().join("shared/src/app.rs").exists(), "rest of the plan writes normally");
 
-    // Idempotent: a second merge pass appends nothing.
+    // Idempotent: a merge pass over an already-merged .gitignore appends
+    // nothing (fresh dir so the rest of the plan writes cleanly).
+    let again = tempdir().unwrap();
+    fs::write(again.path().join(".gitignore"), &merged).unwrap();
     let plan_again = plan_core("Counter", "com.vectis.counter", &[], &versions()).unwrap();
-    let gitignore_template = plan_again
-        .files
-        .iter()
-        .find(|file| file.relative_path == ".gitignore")
-        .expect("core plan carries .gitignore");
-    runtime::merge_gitignore(&dir.path().join(".gitignore"), &gitignore_template.contents)
-        .expect("re-merge succeeds");
-    let remerged = fs::read_to_string(dir.path().join(".gitignore")).unwrap();
+    write_plan(again.path(), &plan_again).expect("re-merge succeeds");
+    let remerged = fs::read_to_string(again.path().join(".gitignore")).unwrap();
     assert_eq!(merged, remerged, "second merge is a no-op");
 }
 
 #[test]
-fn run_writes_under_project_dir() {
-    let _guard = env_lock();
+fn run_at_writes_under_project_dir() {
     let dir = tempdir().unwrap();
-    let previous = std::env::var_os("PROJECT_DIR");
-    #[expect(unsafe_code, reason = "edition-2024 set_var is unsafe; env_lock serializes access")]
-    // SAFETY: this test serializes PROJECT_DIR mutation with `env_lock`.
-    let () = unsafe { std::env::set_var("PROJECT_DIR", dir.path()) };
-
     let command = ScaffoldCommand::Core(CoreArgs {
-        common: CommonArgs {
-            app_name: "Counter".into(),
-            caps: None,
-            version_file: None,
-        },
+        common: CommonArgs::for_app("Counter".into()),
         android_package: None,
     });
-    let value = run(&command).expect("run succeeds");
+    let value = run_at(dir.path(), &command).expect("run_at succeeds");
     assert_eq!(value["target"], "core");
     assert!(dir.path().join("shared/src/app.rs").is_file());
-
-    #[expect(
-        unsafe_code,
-        reason = "edition-2024 set_var/remove_var are unsafe; env_lock serializes access"
-    )]
-    // SAFETY: this test serializes PROJECT_DIR mutation with `env_lock`.
-    unsafe {
-        match previous {
-            Some(value) => std::env::set_var("PROJECT_DIR", value),
-            None => std::env::remove_var("PROJECT_DIR"),
-        }
-    }
 }

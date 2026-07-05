@@ -1,7 +1,7 @@
 //! Host toolchain prerequisite probes for `verify --mode host-prereq`.
 //!
-//! Operators may invoke this mode directly via `specify extension run vectis`.
-//! Authoritative prepare-time gating is the adapter's native
+//! Advisory only, and deliberately not absorbed into the wasm-clean
+//! core: authoritative prepare-time gating is the adapter's native
 //! `host_prereq` script (`scripts/build-host-prereq.sh`), which the Specify
 //! CLI runs on the host. The WASI guest only probes environment variables
 //! visible in-process; filesystem depth checks (rustup targets, `xcodebuild`)

@@ -215,7 +215,7 @@ Per the component directive contract and reviewer surface, any `group` shape tha
 **Detection**: When the wired `composition.yaml` is available (sibling at the change-local or baseline path — see SKILL.md "Gather context"):
 
 1. Walk the composition tree collecting every `group` node.
-2. Compute a structural skeleton for each group (the same `*-when` presence + nested-item-kind shape that `specify extension run vectis -- validate composition` uses for the §G structural-identity rule).
+2. Compute a structural skeleton for each group (the same `*-when` presence + nested-item-kind shape the adapter's deterministic composition validator uses for the §G structural-identity rule).
 3. Group instances by skeleton equality. For any skeleton that appears in ≥2 instances **without** a sibling `component:` directive on any of those instances, flag the recurrence as a candidate component.
 4. Cross-check the iOS shell: if the recurring composition group already corresponds to an extracted SwiftUI sub-view under `iOS/<App>/Components/`, downgrade severity to `optional` and note the existing extraction; otherwise emit at the canonical `suggestion` severity (the operator will promote both surfaces in lockstep).
 
@@ -244,7 +244,7 @@ Per the render-by-`kind` contract ([`ios/design-system-integration.md`](../ios/d
 
 When `composition.yaml` or `assets.yaml` is absent, skip this check — there is no cross-artifact signal.
 
-**Fix**: Regenerate the affected screen via `vectis:ios-writer` after `vectis materialize assets` has populated `design-system/assets/exports/ios/` (or after operator pins are in place). If the glyph is genuinely platform-native, change the `assets.yaml` entry to `kind: symbol` with `symbols.ios` / `symbols.android` and update composition to reference the symbol id — do not leave a `vector` / `raster` entry while the shell still substitutes SF Symbols.
+**Fix**: Regenerate the affected screen via `vectis:ios-writer` after the adapter's materialize step has populated `design-system/assets/exports/ios/` (or after operator pins are in place). If the glyph is genuinely platform-native, change the `assets.yaml` entry to `kind: symbol` with `symbols.ios` / `symbols.android` and update composition to reference the symbol id — do not leave a `vector` / `raster` entry while the shell still substitutes SF Symbols.
 
 ## IOS-021: iOS Scaffold File Drift Or Named Simulator Destination
 
@@ -261,7 +261,7 @@ Per the iOS scaffold immutability contract ([`hard-rules-ios.md`](../hard-rules-
 3. Flag evidence that Makefile or `project.yml` was hand-authored or patched during agent work (for example, content that matches a worked example but diverges from the embedded template, or operator reports of agent Makefile edits).
 4. When `vectis verify --mode verify` reports `ios-scaffold-file-drift`, treat it as a confirmed defect and cite `rule_id: VECTIS-007`.
 
-**Fix**: Do not patch scaffold files by hand. Run `specify extension run vectis -- sync ios-scaffold` to restore `iOS/Makefile`, `iOS/project.yml`, `iOS/.vectis/sim-build.sh`, and `iOS/.vectis/sim-dev.sh` from the embedded template. Limit verify-repair to Swift under `iOS/<APP_NAME>/`, plus `Theme/`, `Components/`, and `Resources/`.
+**Fix**: Do not patch scaffold files by hand. The adapter restores `iOS/Makefile`, `iOS/project.yml`, `iOS/.vectis/sim-build.sh`, and `iOS/.vectis/sim-dev.sh` from the embedded template deterministically around each write leg. Limit verify-repair to Swift under `iOS/<APP_NAME>/`, plus `Theme/`, `Components/`, and `Resources/`.
 
 ## IOS-022: No inline lint suppressions
 

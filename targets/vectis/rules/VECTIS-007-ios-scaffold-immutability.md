@@ -51,4 +51,4 @@ Prepare auto-syncs immutable scaffold files before agent work; the orchestrator 
 
 ## Spec Guidance
 
-When scaffold files drift, run `specify extension run vectis -- sync ios-scaffold` (in-loop repair) or `specify slice build --phase prepare` (build-start repair) — do not hand-edit the Makefile or script to pick a simulator and do not use `vectis scaffold ios` on an existing tree (it refuses overwrites). Worked examples demonstrate Swift patterns only; they are not authoritative for Makefile, `project.yml`, or `sim-build.sh` content.
+When scaffold files drift, let the adapter repair them: it re-renders the agent-immutable files deterministically around each shell write leg and at build prepare. Do not hand-edit the Makefile or script to pick a simulator, and never hand-scaffold over an existing tree. Worked examples demonstrate Swift patterns only; they are not authoritative for Makefile, `project.yml`, or `sim-build.sh` content.

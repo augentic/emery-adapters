@@ -19,7 +19,7 @@ This directory is the live-backend eval harness for the vectis adapter guest. Th
 | -------- | ----- | ----- |
 | `single-screen` | `daily-quote` | A tiny single-screen feature (one read-only quote screen with a refresh action) on a `core + ios` platform set — one composition leg, one Crux core leg, one iOS shell leg, review, report. The Android leg is skipped by the declared platform set; the seed's `assets.yaml` is symbol-only so the materialize prelude reports `skipped: true`. |
 
-The scenario is deliberately minimal: it proves the session-less leg decomposition and the deterministic prelude / validator-gate / postlude bracket against a live model, not the full fixture depth of `targets/vectis/tests/`. The spawned agent's host-command loops (cargo / xcodebuild, `specify extension run vectis -- …`) may degrade gracefully inside the sandboxed scratch tree; the report and the composition gate are the assertions that matter.
+The scenario is deliberately minimal: it proves the session-less leg decomposition and the deterministic prelude / validator-gate / postlude bracket against a live model, not the full fixture depth of `targets/vectis/tests/`. The spawned agent's host-command loops (cargo / xcodebuild / make) may degrade gracefully inside the sandboxed scratch tree; the report and the composition gate are the assertions that matter.
 
 ## Running
 

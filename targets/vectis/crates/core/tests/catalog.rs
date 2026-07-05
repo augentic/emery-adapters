@@ -1,10 +1,10 @@
-//! Unit tests for shell catalog completeness probes.
+//! Shell catalog completeness probes, moved from the extension's
+//! `verify/catalog` unit tests (RFC-61 Step 5 Milestone A1).
 
 use std::path::Path;
 
+use specify_vectis_core::verify::catalog_findings;
 use tempfile::tempdir;
-
-use super::*;
 
 fn write_yaml(path: &Path, content: &str) {
     if let Some(parent) = path.parent() {

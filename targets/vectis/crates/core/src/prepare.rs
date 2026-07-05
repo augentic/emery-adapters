@@ -1,22 +1,17 @@
-//! Slice-build prepare — RFC §2.1 scope resolution and the conditional
-//! materialize step.
+//! Slice-build prepare — RFC §2.1 scope resolution, the conditional
+//! materialize step, and the full prepare orchestration.
 //!
 //! Absorbed from the legacy extension's `prepare build` subcommand
-//! (RFC-61 Step 3). This module owns the deterministic half the guest
-//! runs as its build prelude (replacing the `adapter.yaml`
-//! `prepare.argv` hook): resolve the effective `assets.yaml`
-//! (slice-local → project cascade), derive the in-scope asset ids from
-//! the slice's `composition.yaml` or artifact prose, and run
-//! [`crate::materialize`] over exactly that scope when a declared shell
-//! platform lacks on-disk exports. The extension's `prepare build` CLI
-//! keeps its host-bootstrap legs (app-icon verify gate, Android Gradle
-//! setup, iOS scaffold sync) around a call into [`materialize_step`];
-//! those legs depend on the scaffold / verify machinery that stays
-//! extension-side until Step 5.
+//! (RFC-61 Steps 3 and 5). [`materialize_step`] is the scoped
+//! materialize half; [`run_build`] is the complete legacy prepare run —
+//! materialize, the app-icon bootstrap gate, the Android Gradle-wrapper
+//! setup, and the iOS scaffold sync — that the guest drives as its
+//! deterministic build prelude and the extension's `prepare build` CLI
+//! shim wraps until A2 deletes it.
 
 mod scope;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub use scope::{
     EffectiveAssets, MaterializeScope, materialize_platform_csv, resolve_effective_assets,
@@ -24,8 +19,12 @@ pub use scope::{
 };
 use serde_json::{Value, json};
 
-use crate::VectisError;
-use crate::materialize::{AssetsArgs, MaterializeCommand, run as run_materialize};
+use crate::materialize::{
+    AssetsArgs, MaterializeCommand, materialize_exit_code, run as run_materialize,
+};
+use crate::validate::engine::load_shell_platforms;
+use crate::verify::{VerifyMode, run as run_verify, verify_exit_code};
+use crate::{VectisError, android, ios_scaffold};
 
 /// Run the deterministic prepare materialize step for one slice build.
 ///
@@ -78,4 +77,82 @@ fn skipped_materialize_summary(path: &Path, platforms: &[String]) -> Value {
         "errors": [],
         "skipped": true,
     })
+}
+
+/// Run the full slice-build prepare for one slice.
+///
+/// The scoped materialize step, the app-icon bootstrap gate, the
+/// Android Gradle-wrapper setup, and the iOS scaffold sync — the same
+/// orchestration the legacy `adapter.yaml` `prepare.argv` hook ran.
+/// `slice_dir` may be absolute or relative to `project_root`.
+///
+/// # Errors
+///
+/// Returns [`VectisError::InvalidProject`] when the slice directory
+/// cannot be resolved, and propagates materialize / verify / sync
+/// failures.
+pub fn run_build(project_root: &Path, slice_dir: &Path) -> Result<Value, VectisError> {
+    let slice_dir = resolve_slice_dir(project_root, slice_dir)?;
+    let platforms = load_shell_platforms(project_root);
+
+    let materialized = materialize_step(&slice_dir, project_root, &platforms)?;
+
+    let bootstrap = run_verify(VerifyMode::BootstrapAppIcon, project_root)?;
+
+    let android_setup = (platforms.iter().any(|p| p == "android")
+        && project_root.join("Android").is_dir())
+    .then(|| android::run_for_shell_dir(&project_root.join("Android")));
+
+    let scaffold_sync = (platforms.iter().any(|p| p == "ios") && project_root.join("iOS").is_dir())
+        .then(|| ios_scaffold::sync_ios_scaffold_files(project_root))
+        .transpose()?
+        .map(|report| ios_scaffold::scaffold_sync_ios_json(&report));
+
+    Ok(json!({
+        "command": "prepare build",
+        "slice_dir": slice_dir.strip_prefix(project_root)
+            .map_or_else(|_| slice_dir.to_string_lossy().into_owned(), |p| p.to_string_lossy().into_owned()),
+        "platforms": platforms,
+        "materialized": materialized,
+        "bootstrap_app_icon": bootstrap,
+        "android_setup": android_setup,
+        "scaffold_sync": scaffold_sync,
+    }))
+}
+
+/// Compute the exit code for a [`run_build`] payload: `1` when the
+/// materialize step, the bootstrap gate, or the Android setup surfaced
+/// errors, `0` otherwise.
+#[must_use]
+pub fn exit_code(value: &Value) -> u8 {
+    if let Some(materialized) = value.get("materialized")
+        && materialize_exit_code(materialized) != 0
+    {
+        return 1;
+    }
+    if let Some(bootstrap) = value.get("bootstrap_app_icon")
+        && verify_exit_code(bootstrap) != 0
+    {
+        return 1;
+    }
+    if let Some(setup) = value.get("android_setup")
+        && android::setup_exit_code(setup) != 0
+    {
+        return 1;
+    }
+    0
+}
+
+fn resolve_slice_dir(project_root: &Path, slice_dir: &Path) -> Result<PathBuf, VectisError> {
+    let resolved = if slice_dir.is_absolute() {
+        slice_dir.to_path_buf()
+    } else {
+        project_root.join(slice_dir)
+    };
+    if !resolved.is_dir() {
+        return Err(VectisError::InvalidProject {
+            message: format!("slice directory not found at {}", resolved.display()),
+        });
+    }
+    Ok(resolved)
 }

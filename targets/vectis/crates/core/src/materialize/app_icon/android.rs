@@ -14,13 +14,11 @@ const SAFE_ZONE_RATIO: f32 = 66.0 / ADAPTIVE_CANVAS_DP;
 const LEGACY_LAUNCHER_DP: f32 = 48.0;
 const DEFAULT_BACKGROUND: &str = "#FFFFFF";
 
-// The launcher XML templates stay physically under the extension's
-// `templates/` tree (the tool-owned location) until RFC-61 Step 5
-// retires the extension crate and moves them.
-const IC_LAUNCHER_XML: &str =
-    include_str!("../../../../../extension/templates/android/ic_launcher.xml");
+// The launcher XML templates live under this crate's `templates/` tree
+// (relocated from the legacy extension crate at RFC-61 Step 5 A1).
+const IC_LAUNCHER_XML: &str = include_str!("../../../templates/android/ic_launcher.xml");
 const IC_LAUNCHER_ROUND_XML: &str =
-    include_str!("../../../../../extension/templates/android/ic_launcher_round.xml");
+    include_str!("../../../templates/android/ic_launcher_round.xml");
 
 /// Write the adaptive + legacy mipmap tree under an Android app-icon export root.
 ///

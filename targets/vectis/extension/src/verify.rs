@@ -1,40 +1,22 @@
-//! `vectis verify` subcommand — declared-vs-present platform shell verification.
+//! `vectis verify` subcommand surface.
 //!
-//! Authority is `project.yaml.platforms` (the typed platform set, not
-//! per-slice proposals). The engine inspects on-disk shell trees and
-//! reports which declared platforms are present.
-//!
-//! Two modes:
-//!
-//! - **verify** (build/lint): emits `diagnostic.schema.json`-shaped
-//!   findings and exits non-zero on any miss for a supported platform.
-//! - **bootstrap-app-icon** (build-time): gates the launcher `app-icon`
-//!   for every declared UI platform (`ios` / `android`), exiting
-//!   non-zero when one is neither shell-resident (RFC-46 §6.3) nor
-//!   satisfiable from `design-system/assets.yaml` (§4.1).
-//! - **host-prereq** (advisory): probes host env visible to the WASI guest
-//!   (`ANDROID_HOME`). Rust Android targets and `xcodebuild` depth checks run
-//!   only in native builds of this crate; prepare-time gating is the adapter's
-//!   native `host_prereq` script (`scripts/build-host-prereq.sh`).
-
-mod android_toolchain;
-mod app_icon;
-mod catalog;
-mod compile_stamp;
-mod host_prereq;
-mod suppression_scan;
+//! The deterministic `verify` and `bootstrap-app-icon` modes moved to
+//! `specify-vectis-core` (RFC-61 Step 5 Milestone A1); this module
+//! keeps the WASI command surface — argument parsing, project-root
+//! resolution, and the JSON envelope — plus the advisory `host-prereq`
+//! mode, which probes host environment variables and native toolchain
+//! paths and therefore stays out of the wasm-clean core.
 
 use std::path::{Path, PathBuf};
 
 use clap::{Args as ClapArgs, ValueEnum};
 use serde_json::Value;
-pub use suppression_scan::{FINDING_ID, suppression_scan_findings};
+pub use specify_vectis_core::verify::{
+    FINDING_ID, load_platforms, suppression_scan_findings, verify_exit_code,
+};
 
-use crate::android_scaffold::android_scaffold_drift_findings;
-use crate::ios_scaffold::ios_scaffold_drift_findings;
-use crate::shell::{SUPPORTED_SHELL_PLATFORMS, shell_present};
 use crate::validate::find_project_root;
-use crate::{VectisError, render_json as render_value};
+use crate::{VectisError, host_prereq, render_json as render_value};
 
 /// Arguments accepted by `vectis verify`.
 #[derive(ClapArgs, Debug, Clone, PartialEq, Eq)]
@@ -59,14 +41,6 @@ pub enum VerifyMode {
     HostPrereq,
 }
 
-/// Per-platform status entry in the verify report.
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct PlatformStatus {
-    platform: String,
-    declared: bool,
-    present: bool,
-}
-
 /// Run the verify engine.
 ///
 /// # Errors
@@ -75,23 +49,27 @@ struct PlatformStatus {
 /// missing or unparseable, or lacks a `platforms` field.
 pub fn run(args: &VerifyArgs) -> Result<Value, VectisError> {
     let project_root = resolve_project_root(args.path.as_deref())?;
-    let platforms = load_platforms(&project_root)?;
 
     match args.mode {
-        VerifyMode::Verify => {
-            let statuses: Vec<PlatformStatus> =
-                platforms.iter().map(|p| check_platform(p, &project_root)).collect();
-            Ok(render_verify(&statuses, &project_root, &platforms))
+        VerifyMode::Verify => specify_vectis_core::verify::run(
+            specify_vectis_core::verify::VerifyMode::Verify,
+            &project_root,
+        ),
+        VerifyMode::BootstrapAppIcon => specify_vectis_core::verify::run(
+            specify_vectis_core::verify::VerifyMode::BootstrapAppIcon,
+            &project_root,
+        ),
+        VerifyMode::HostPrereq => {
+            let platforms = load_platforms(&project_root)?;
+            Ok(render_host_prereq(&project_root, &platforms))
         }
-        VerifyMode::BootstrapAppIcon => Ok(render_bootstrap_app_icon(&project_root, &platforms)),
-        VerifyMode::HostPrereq => Ok(render_host_prereq(&project_root, &platforms)),
     }
 }
 
 /// Render a `(success | error)` result as pretty-printed JSON with exit code.
 ///
-/// Both modes exit 1 when any `error`-severity finding is present (a missing
-/// supported shell, or an unsatisfiable launcher `app-icon`), and 0 otherwise.
+/// Every mode exits 1 when any `error`-severity finding is present, and
+/// 0 otherwise.
 #[must_use]
 pub fn render_json(outcome: Result<Value, VectisError>) -> (String, u8) {
     match outcome {
@@ -110,21 +88,6 @@ pub fn render_json(outcome: Result<Value, VectisError>) -> (String, u8) {
     }
 }
 
-/// Compute the exit code for a verify payload.
-///
-/// Returns 1 when any `error`-severity finding is present, 0 otherwise.
-/// Both `verify` and `bootstrap-app-icon` modes carry their result in
-/// the same `findings` array.
-#[must_use]
-pub fn verify_exit_code(value: &Value) -> u8 {
-    let has_findings = value.get("findings").and_then(Value::as_array).is_some_and(|arr| {
-        arr.iter().any(|f| f.get("severity").and_then(Value::as_str) == Some("error"))
-    });
-    u8::from(has_findings)
-}
-
-// ── project.yaml loading ───────────────────────────────────────────
-
 fn resolve_project_root(path: Option<&Path>) -> Result<PathBuf, VectisError> {
     if let Some(p) = path {
         return Ok(p.to_path_buf());
@@ -138,130 +101,12 @@ fn resolve_project_root(path: Option<&Path>) -> Result<PathBuf, VectisError> {
     })
 }
 
-fn load_platforms(project_root: &Path) -> Result<Vec<String>, VectisError> {
-    // The host CLI owns the project config at `.specify/project.yaml`;
-    // there is no root-level `project.yaml` in a Specify project.
-    let config_path = project_root.join(".specify").join("project.yaml");
-    let source =
-        std::fs::read_to_string(&config_path).map_err(|err| VectisError::InvalidProject {
-            message: format!("project.yaml not readable at {}: {err}", config_path.display()),
-        })?;
-    let doc: Value =
-        serde_saphyr::from_str(&source).map_err(|err| VectisError::InvalidProject {
-            message: format!("project.yaml is not valid YAML: {err}"),
-        })?;
-    let platforms = doc.get("platforms").and_then(Value::as_array).ok_or_else(|| {
-        VectisError::InvalidProject {
-            message: "project.yaml does not declare a `platforms` array".into(),
-        }
-    })?;
-    platforms
-        .iter()
-        .map(|v| {
-            v.as_str().map(String::from).ok_or_else(|| VectisError::InvalidProject {
-                message: "project.yaml `platforms` array contains a non-string entry".into(),
-            })
-        })
-        .collect()
-}
-
-// ── per-platform shell detection ───────────────────────────────────
-
-fn check_platform(platform: &str, project_root: &Path) -> PlatformStatus {
-    PlatformStatus {
-        platform: platform.to_string(),
-        declared: true,
-        present: shell_present(project_root, platform),
-    }
-}
-
-// ── output rendering ───────────────────────────────────────────────
-
-fn is_supported(platform: &str) -> bool {
-    SUPPORTED_SHELL_PLATFORMS.contains(&platform)
-}
-
-fn render_bootstrap_app_icon(project_root: &Path, platforms: &[String]) -> Value {
-    let findings = app_icon::bootstrap_app_icon_findings(project_root, platforms);
-    serde_json::json!({
-        "mode": "bootstrap-app-icon",
-        "project-root": project_root.display().to_string(),
-        "findings": findings,
-    })
-}
-
 fn render_host_prereq(project_root: &Path, platforms: &[String]) -> Value {
     let findings = host_prereq::host_prereq_findings(platforms);
     serde_json::json!({
         "mode": "host-prereq",
         "project-root": project_root.display().to_string(),
         "platforms": platforms,
-        "findings": findings,
-    })
-}
-
-fn render_verify(statuses: &[PlatformStatus], project_root: &Path, platforms: &[String]) -> Value {
-    let mut findings: Vec<Value> = Vec::new();
-
-    for status in statuses {
-        if !is_supported(&status.platform) {
-            findings.push(serde_json::json!({
-                "id": "platform-not-yet-supported",
-                "severity": "info",
-                "source": "deterministic",
-                "message": format!(
-                    "platform `{}` is accepted but has no on-disk interpretation yet",
-                    status.platform,
-                ),
-            }));
-            continue;
-        }
-        if !status.present {
-            findings.push(serde_json::json!({
-                "id": "platform-shell-missing",
-                "severity": "error",
-                "source": "deterministic",
-                "message": format!(
-                    "declared platform `{}` has no shell tree under `{}`",
-                    status.platform,
-                    project_root.display(),
-                ),
-            }));
-        }
-    }
-
-    findings.extend(catalog::catalog_findings(project_root, platforms));
-
-    let android_declared = platforms.iter().any(|p| p == "android");
-    let android_present =
-        statuses.iter().find(|s| s.platform == "android").is_some_and(|s| s.present);
-    findings.extend(android_toolchain::android_toolchain_findings(
-        project_root,
-        android_declared,
-        android_present,
-    ));
-
-    if platforms.iter().any(|p| p == "ios") && shell_present(project_root, "ios") {
-        findings.extend(ios_scaffold_drift_findings(project_root));
-    }
-
-    if platforms.iter().any(|p| p == "android") && shell_present(project_root, "android") {
-        findings.extend(android_scaffold_drift_findings(project_root));
-    }
-
-    let ios_present = statuses.iter().find(|s| s.platform == "ios").is_some_and(|s| s.present);
-    findings.extend(compile_stamp::compile_stamp_findings(
-        project_root,
-        platforms,
-        ios_present,
-        android_present,
-    ));
-
-    findings.extend(suppression_scan_findings(project_root, platforms));
-
-    serde_json::json!({
-        "mode": "verify",
-        "project-root": project_root.display().to_string(),
         "findings": findings,
     })
 }

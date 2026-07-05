@@ -1,12 +1,15 @@
-//! `vectis sync` subcommand — lightweight scaffold repair without prepare side effects.
+//! `vectis sync` subcommand surface.
+//!
+//! The scaffold repair legs moved to `specify-vectis-core` (RFC-61
+//! Step 5 Milestone A1); this module keeps the WASI command surface —
+//! argument parsing, project-root resolution, and the JSON envelope —
+//! and delegates each run to the core.
 
 use std::path::{Path, PathBuf};
 
 use clap::{Args as ClapArgs, Subcommand};
-use serde_json::{Value, json};
+use serde_json::Value;
 
-use crate::android_scaffold::{scaffold_sync_android_json, sync_android_scaffold_files};
-use crate::ios_scaffold::{scaffold_sync_ios_json, sync_ios_scaffold_files};
 use crate::validate::find_project_root;
 use crate::{VectisError, render_json as render_value};
 
@@ -33,7 +36,7 @@ pub struct AndroidScaffoldArgs {
     pub path: Option<PathBuf>,
 }
 
-/// Dispatch a parsed [`SyncCommand`].
+/// Dispatch a parsed [`SyncCommand`] through the core.
 ///
 /// # Errors
 ///
@@ -41,8 +44,14 @@ pub struct AndroidScaffoldArgs {
 /// resolved or scaffold sync fails.
 pub fn run(command: &SyncCommand) -> Result<Value, VectisError> {
     match command {
-        SyncCommand::IosScaffold(args) => run_ios_scaffold(args),
-        SyncCommand::AndroidScaffold(args) => run_android_scaffold(args),
+        SyncCommand::IosScaffold(args) => {
+            let project_root = resolve_project_root(args.path.as_deref())?;
+            specify_vectis_core::sync::ios(&project_root)
+        }
+        SyncCommand::AndroidScaffold(args) => {
+            let project_root = resolve_project_root(args.path.as_deref())?;
+            specify_vectis_core::sync::android(&project_root)
+        }
     }
 }
 
@@ -60,26 +69,6 @@ pub fn render_json(outcome: Result<Value, VectisError>) -> (String, u8) {
             (render_value(&Value::Object(payload)), exit_code)
         }
     }
-}
-
-fn run_ios_scaffold(args: &IosScaffoldArgs) -> Result<Value, VectisError> {
-    let project_root = resolve_project_root(args.path.as_deref())?;
-    let report = sync_ios_scaffold_files(&project_root)?;
-    Ok(json!({
-        "command": "sync ios-scaffold",
-        "project-root": project_root.display().to_string(),
-        "scaffold_sync": scaffold_sync_ios_json(&report),
-    }))
-}
-
-fn run_android_scaffold(args: &AndroidScaffoldArgs) -> Result<Value, VectisError> {
-    let project_root = resolve_project_root(args.path.as_deref())?;
-    let report = sync_android_scaffold_files(&project_root)?;
-    Ok(json!({
-        "command": "sync android-scaffold",
-        "project-root": project_root.display().to_string(),
-        "scaffold_sync": scaffold_sync_android_json(&report),
-    }))
 }
 
 fn resolve_project_root(path: Option<&Path>) -> Result<PathBuf, VectisError> {

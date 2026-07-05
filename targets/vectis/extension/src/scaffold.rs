@@ -1,32 +1,18 @@
-//! Render-only implementation for the `vectis scaffold` subcommand.
+//! `vectis scaffold` subcommand surface.
 //!
-//! The module accepts only explicit CLI inputs and the `PROJECT_DIR`
-//! declared by the WASI host. It renders embedded templates, plans
-//! every target file, then refuses all overwrites before creating
-//! directories or writing bytes. Per-target planning, the on-disk
-//! write step, and `app_name` validation live in the private `runtime`
-//! submodule; this
-//! parent module owns the clap derive surface, the public DTOs, and
-//! the dispatch path.
+//! The render-only scaffolding engine moved to `specify-vectis-core`
+//! (RFC-61 Step 5 Milestone A1); this module keeps the WASI command
+//! surface — the clap derive types, `PROJECT_DIR` resolution, and the
+//! JSON envelope — and delegates planning and writes to the core.
 
-mod runtime;
-mod templates;
-#[cfg(test)]
-mod tests;
-mod versions;
-
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use clap::{Args as ClapArgs, Subcommand};
-pub use runtime::{plan_android, plan_core, plan_ios, validate_app_name, write_plan};
-pub use templates::Capability;
-pub use versions::Versions;
+pub use specify_vectis_core::scaffold::{
+    Capability, PlannedFile, ScaffoldError, ScaffoldPlan, Versions, default_android_package,
+    parse_caps, plan_android, plan_command, plan_core, plan_ios, validate_app_name, write_plan,
+};
 
-/// Compatibility alias for the unified crate-wide error type.
-///
-/// Scaffold-side callers (and their tests) historically referred to
-/// `ScaffoldError`; the type itself now lives at the crate root.
-pub use crate::VectisError as ScaffoldError;
 use crate::render_json as render_value;
 
 /// Scaffold targets exposed under `vectis scaffold`.
@@ -41,33 +27,26 @@ pub enum ScaffoldCommand {
 }
 
 impl ScaffoldCommand {
-    /// Return the stable CLI spelling for this scaffold target.
-    #[must_use]
-    pub const fn name(&self) -> &'static str {
+    /// Project the parsed CLI command onto the core's request shape.
+    fn to_core(&self) -> specify_vectis_core::scaffold::ScaffoldCommand {
         match self {
-            Self::Core(_) => "core",
-            Self::Ios(_) => "ios",
-            Self::Android(_) => "android",
-        }
-    }
-
-    /// Return the app name supplied to this scaffold target.
-    #[must_use]
-    pub fn app_name(&self) -> &str {
-        match self {
-            Self::Core(args) => &args.common.app_name,
-            Self::Ios(args) => &args.common.app_name,
-            Self::Android(args) => &args.common.app_name,
-        }
-    }
-
-    /// Return common arguments for this command.
-    #[must_use]
-    pub const fn common(&self) -> &CommonArgs {
-        match self {
-            Self::Core(args) => &args.common,
-            Self::Ios(args) => &args.common,
-            Self::Android(args) => &args.common,
+            Self::Core(args) => specify_vectis_core::scaffold::ScaffoldCommand::Core(
+                specify_vectis_core::scaffold::CoreArgs {
+                    common: args.common.to_core(),
+                    android_package: args.android_package.clone(),
+                },
+            ),
+            Self::Ios(args) => specify_vectis_core::scaffold::ScaffoldCommand::Ios(
+                specify_vectis_core::scaffold::IosArgs {
+                    common: args.common.to_core(),
+                },
+            ),
+            Self::Android(args) => specify_vectis_core::scaffold::ScaffoldCommand::Android(
+                specify_vectis_core::scaffold::AndroidArgs {
+                    common: args.common.to_core(),
+                    android_package: args.android_package.clone(),
+                },
+            ),
         }
     }
 }
@@ -119,134 +98,33 @@ pub struct CommonArgs {
     pub version_file: Option<PathBuf>,
 }
 
-/// A rendered file ready to write under `PROJECT_DIR`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PlannedFile {
-    /// Relative target path under `PROJECT_DIR`.
-    pub relative_path: String,
-    /// Rendered file bytes as UTF-8 text.
-    pub contents: String,
-}
-
-/// A complete scaffold plan for one target.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ScaffoldPlan {
-    /// Scaffold target name.
-    pub target: &'static str,
-    /// App name supplied by the caller.
-    pub app_name: String,
-    /// Android package used for placeholders.
-    pub android_package: String,
-    /// Selected capability tags in stable input order.
-    pub capabilities: Vec<String>,
-    /// Files to write in template declaration order.
-    pub files: Vec<PlannedFile>,
-}
-
-impl ScaffoldPlan {
-    fn file_paths(&self) -> Vec<String> {
-        self.files.iter().map(|file| file.relative_path.clone()).collect()
-    }
-
-    fn to_json(&self, project_dir: &Path) -> serde_json::Value {
-        serde_json::json!({
-            "target": self.target,
-            "app-name": self.app_name,
-            "project-dir": project_dir.display().to_string(),
-            "android-package": self.android_package,
-            "capabilities": self.capabilities,
-            "files": self.file_paths(),
-        })
+impl CommonArgs {
+    fn to_core(&self) -> specify_vectis_core::scaffold::CommonArgs {
+        specify_vectis_core::scaffold::CommonArgs {
+            app_name: self.app_name.clone(),
+            caps: self.caps.clone(),
+            version_file: self.version_file.clone(),
+        }
     }
 }
 
-/// Execute a parsed scaffold subcommand.
+/// Execute a scaffold command against the `PROJECT_DIR` project root.
 ///
 /// # Errors
 ///
-/// Returns [`ScaffoldError`] for invalid inputs, version-file issues, missing
-/// `PROJECT_DIR`, or write failures.
+/// Returns [`ScaffoldError`] for invalid inputs, version-file issues,
+/// or write failures.
 pub fn run(command: &ScaffoldCommand) -> Result<serde_json::Value, ScaffoldError> {
     let project_dir = project_dir_from_env()?;
-    let versions = Versions::resolve(command.common().version_file.as_deref())?;
-    let plan = plan_command(command, &versions)?;
-    write_plan(&project_dir, &plan)?;
-    let mut payload = plan.to_json(&project_dir);
-    if matches!(command, ScaffoldCommand::Android(_)) {
-        let setup = crate::android::run_for_shell_dir(&project_dir.join("Android"));
-        if let serde_json::Value::Object(ref mut map) = payload {
-            map.insert("android-setup".to_string(), setup);
-        }
-    }
-    Ok(payload)
+    specify_vectis_core::scaffold::run_at(&project_dir, &command.to_core())
 }
 
-/// Plan a scaffold command without touching the filesystem.
-///
-/// # Errors
-///
-/// Returns [`ScaffoldError`] when arguments are invalid.
-pub fn plan_command(
-    command: &ScaffoldCommand, versions: &Versions,
-) -> Result<ScaffoldPlan, ScaffoldError> {
-    match command {
-        ScaffoldCommand::Core(args) => {
-            let caps = parse_caps(args.common.caps.as_deref())?;
-            let android_package = args
-                .android_package
-                .clone()
-                .unwrap_or_else(|| default_android_package(&args.common.app_name));
-            plan_core(&args.common.app_name, &android_package, &caps, versions)
-        }
-        ScaffoldCommand::Ios(args) => {
-            let caps = parse_caps(args.common.caps.as_deref())?;
-            let android_package = default_android_package(&args.common.app_name);
-            plan_ios(&args.common.app_name, &android_package, &caps, versions)
-        }
-        ScaffoldCommand::Android(args) => {
-            let caps = parse_caps(args.common.caps.as_deref())?;
-            let android_package = args
-                .android_package
-                .clone()
-                .unwrap_or_else(|| default_android_package(&args.common.app_name));
-            plan_android(&args.common.app_name, &android_package, &caps, versions)
-        }
-    }
-}
-
-/// Compute the default Android package: `com.vectis.<lower app name>`.
-#[must_use]
-pub fn default_android_package(app_name: &str) -> String {
-    format!("com.vectis.{}", app_name.to_lowercase())
-}
-
-/// Parse the `--caps` flag into the canonical capability set.
-///
-/// # Errors
-///
-/// Returns [`ScaffoldError`] when an unknown capability tag is present.
-pub fn parse_caps(raw: Option<&str>) -> Result<Vec<Capability>, ScaffoldError> {
-    let mut out: Vec<Capability> = Vec::new();
-    let Some(raw) = raw else { return Ok(out) };
-    for tag in raw.split(',').map(str::trim).filter(|s| !s.is_empty()) {
-        let cap = Capability::from_tag(tag).ok_or_else(|| ScaffoldError::InvalidProject {
-            message: format!(
-                "unknown capability: {tag:?} (expected one of: http, kv, time, platform, sse)"
-            ),
-        })?;
-        if !out.contains(&cap) {
-            out.push(cap);
-        }
-    }
-    Ok(out)
-}
-
-/// Render a `(success | error)` result as pretty-printed JSON.
+/// Render a scaffold outcome as pretty-printed JSON and exit code.
 #[must_use]
 pub fn render_json(outcome: Result<serde_json::Value, ScaffoldError>) -> (String, u8) {
     match outcome {
         Ok(value) => {
-            let code = scaffold_exit_code(&value);
+            let code = specify_vectis_core::scaffold::exit_code(&value);
             (render_value(&value), code)
         }
         Err(err) => {
@@ -260,16 +138,10 @@ pub fn render_json(outcome: Result<serde_json::Value, ScaffoldError>) -> (String
     }
 }
 
-fn scaffold_exit_code(value: &serde_json::Value) -> u8 {
-    value.get("android-setup").map_or(0, crate::android::setup_exit_code)
-}
-
 fn project_dir_from_env() -> Result<PathBuf, ScaffoldError> {
     std::env::var_os("PROJECT_DIR").map(PathBuf::from).ok_or_else(|| {
         ScaffoldError::InvalidProject {
-            message:
-                "PROJECT_DIR is not set; run through `specify extension run` with a project scope"
-                    .into(),
+            message: "PROJECT_DIR is not set; run with a project scope".into(),
         }
     })
 }

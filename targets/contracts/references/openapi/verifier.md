@@ -11,9 +11,9 @@ The verifier accepts a `--mode {single, cross-project}` flag. The mode determine
 | Mode               | Caller                                         | Trigger                                           | Scope                                                             | Output                                                |
 | ------------------ | ---------------------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------- |
 | `single` (default) | contracts adapter build brief in `/spec:build` | Post-author or post-import                        | One slice's `contracts/http/` inside one project                  | Markdown report for the verify-repair loop            |
-| `cross-project`    | contracts adapter merge brief                  | Producer-side merge of an OpenAPI contract change | Walk the merged `contracts/` baseline; enforce contract identity/version validation | JSON envelope produced by `specify extension run contract` |
+| `cross-project`    | contracts adapter merge brief                  | Producer-side merge of an OpenAPI contract change | Walk the merged `contracts/` baseline; enforce contract identity/version validation | Deterministic findings from the adapter's in-guest contract validator |
 
-`single` mode feeds the brief's verify-repair loop. `cross-project` mode is a thin delegate over the declared `contract` WASI tool (the declared `contract` WASI tool) — the verifier shells out through `specify extension run contract` and surfaces its findings; it does not implement its own cross-baseline check. Both modes share the read-only contract.
+`single` mode feeds the brief's verify-repair loop. `cross-project` mode describes the adapter's deterministic in-guest contract validator — the merge gate runs it itself and surfaces its findings; the verifier does not implement its own cross-baseline check. Both modes share the read-only contract.
 
 `--mode` is an internal flag of the format-specific verifier. Cross-project consumer-impact analysis is deferred until a real consumer workflow exists; this verifier owns deterministic single-slice and merged-baseline checks.
 
@@ -35,10 +35,10 @@ $CHANGE_SPECS        = $SLICE_DIR/specs/
 Caller passes the merged baseline directory:
 
 ```text
-$BASELINE_CONTRACTS = $PROJECT_ROOT/contracts   # the merged baseline, post-`specify slice merge run`
+$BASELINE_CONTRACTS = $PROJECT_ROOT/contracts   # the merged baseline, post-`specify slice merge`
 ```
 
-The verifier shells out to `specify extension run contract -- "$BASELINE_CONTRACTS" --format json` (the declared `contract` WASI tool), which walks every top-level OpenAPI 3.1 / AsyncAPI 3.0 document under `$BASELINE_CONTRACTS` and enforces the contract identity/version validation rules. No producer / consumer arguments are accepted — the tool's scope is the baseline as a whole.
+The adapter's in-guest contract validator walks every top-level OpenAPI 3.1 / AsyncAPI 3.0 document under `$BASELINE_CONTRACTS` and enforces the contract identity/version validation rules. No producer / consumer arguments are accepted — the tool's scope is the baseline as a whole.
 
 ## Prerequisites
 
@@ -51,9 +51,8 @@ If `$CHANGE_CONTRACTS/http/` does not exist or contains no files, report all che
 
 ### `cross-project` mode
 
-- `specify` is on `$PATH` and supports `specify extension run`.
-- The current project resolves the contracts adapter sidecar that declares the `contract` tool.
-- `$BASELINE_CONTRACTS` (`$PROJECT_ROOT/contracts`) is the directory the tool will walk. The declared read permission points at `$PROJECT_DIR/contracts`; if that directory is absent, `specify extension run` exits `2`. Callers MUST NOT pre-stat the path.
+- The contracts adapter is bound as the slice's target (the validator is embedded in its guest).
+- `$BASELINE_CONTRACTS` (`$PROJECT_ROOT/contracts`) is the directory the validator walks. An absent directory validates clean (there are no top-level documents to walk); callers MUST NOT pre-stat the path.
 
 ## Single-mode checks
 
@@ -146,7 +145,7 @@ For every top-level OpenAPI document under `$CHANGE_CONTRACTS/http/` (root key `
 2. **`info.x-specify-id` (when present) MUST match `^[a-z][a-z0-9-]*$` and be ≤ 64 characters.** Format violations are `FAIL`.
 3. **Within the slice directory, `info.x-specify-id` values MUST be unique.** When two top-level OpenAPI documents in `$CHANGE_CONTRACTS/http/` declare the same id, both are `FAIL`.
 
-The cross-repo uniqueness check (the same id declared by a top-level contract somewhere else under root `contracts/`) is **not** part of single mode — it is the merge-phase gate's job, run by `specify extension run contract` against the merged baseline (the contracts adapter merge contract). The single-mode skill only flags duplicates inside the slice to keep the verifier deterministic and self-contained.
+The cross-repo uniqueness check (the same id declared by a top-level contract somewhere else under root `contracts/`) is **not** part of single mode — it is the merge-phase gate's job, run by the adapter's in-guest contract validator against the merged baseline (the contracts adapter merge contract). The single-mode skill only flags duplicates inside the slice to keep the verifier deterministic and self-contained.
 
 Report format (one entry per failure):
 
@@ -206,28 +205,21 @@ All checks passed (12 $ref pointers, 6 schemas, 4 operations verified).
 
 `cross-project` mode runs **after** a producer's contract change merges. The contracts adapter merge brief invokes it as the post-merge baseline gate (the contracts adapter merge contract); `/spec:execute` re-uses the same gate per project after a producer-side merge (the workspace execution contract).
 
-The mode is a thin delegate over `specify extension run contract` (the declared `contract` WASI tool). The verifier sibling does not implement an independent cross-project algorithm — it shells out to the declared WASI tool, exits with the tool's exit code, and lets the caller (the merge brief, or `/spec:execute`) consume the JSON envelope. The deterministic checks the tool enforces are the contract identity/version validation rules:
+The mode describes the adapter's deterministic in-guest contract validator. The verifier sibling does not implement an independent cross-project algorithm — the merge gate runs the embedded validator and consumes its findings directly. The deterministic checks the validator enforces are the contract identity/version validation rules:
 
 - `contract.version-is-semver` — every top-level OpenAPI 3.1 / AsyncAPI 3.0 document's `info.version` parses as SemVer (per [semver.org](https://semver.org), prerelease labels included).
 - `contract.id-format` — when `info.x-specify-id` is present, the value matches `^[a-z][a-z0-9-]*$` and is ≤ 64 characters.
 - `contract.id-unique` — every present `info.x-specify-id` is unique across all top-level contracts under `$BASELINE_CONTRACTS`.
 
-### Invocation
+### Outcomes
 
-```bash
-specify extension run contract -- "$PROJECT_ROOT/contracts" --format json > /tmp/contract-findings.json
-case $? in
-  0) ;;  # clean — no findings, baseline is well-formed
-  1) ;;  # findings present — caller MUST treat as `failure`
-  2) ;;  # tool/validator could not run — caller MUST treat as `failure` and journal diagnostics
-esac
-```
-
-`--format json` is the canonical shape callers parse; `--format text` is the human-readable variant the operator can re-run by hand. Both produce the same exit code.
+- **clean** — no findings; the baseline is well-formed.
+- **findings present** — the gate treats the merge as `failure`.
+- **validator could not run** — the gate treats the merge as `failure` and journals diagnostics.
 
 ### JSON envelope
 
-The declared tool writes a single JSON object to stdout in `--format json` when the validator runs:
+The validator findings project into a JSON envelope (the shape captured in logs and operator-facing reports):
 
 ```json
 {
@@ -250,25 +242,25 @@ Field semantics:
 - `findings[].path` — repo-relative when the parent of `<baseline-dir>` matches the path's prefix, otherwise absolute. Suitable for verbatim rendering in operator-facing reports.
 - `findings[].rule-id` — one of `contract.version-is-semver`, `contract.id-format`, `contract.id-unique`.
 - `findings[].detail` — single-line human-readable description.
-- `exit-code` — mirrors the process exit code (`0` clean / `1` findings / `2` invocation error).
+- `exit-code` — legacy outcome code retained for envelope stability (`0` clean / `1` findings / `2` validator error).
 
 Callers that surface post-merge validator failures (the merge brief on a blocking finding) parse `findings[]` and include `{ rule-id, path, detail }` triples in the stop hint's `paths` field. The load-bearing finding is typically `findings[0].rule-id` plus a one-line restatement of `findings[0].detail`; the full envelope is captured at the log path referenced in the stop hint.
 
 When a caller re-surfaces an envelope finding as a `LintFinding` (see `schemas/diagnostics/diagnostic.schema.json` embedded in the `specify` binary from [`augentic/specify`](https://github.com/augentic/specify)), the mapping is: `findings[].rule-id` → `rule-id`, `findings[].path` → `location.path`, `target-adapter: contracts`. The contract-domain payload (`findings[].rule-id`, `path`, `detail`, plus any compatibility classification such as `additive` / `breaking` / `ambiguous` / `unverifiable`) lives inside `evidence.kind: structured` with the contract data under `evidence.data`. The closed `LintFinding` severity enum (`critical` / `important` / `suggestion` / `optional`) is separate from any compatibility classification — classifiers remain contract-domain evidence fields, not severity.
 
-### Exit semantics
+### Outcome semantics
 
-| Exit code | Meaning                                                                                                | Caller action                                                                                        |
-| --------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| `0`       | Clean — no findings.                                                                                   | Proceed to the next merge-brief step (e.g. `specify slice merge run`).                               |
-| `1`       | One or more findings.                                                                                  | Record `failure`; halt the merge brief. The slice's deltas remain unmerged.                          |
-| `2`       | The tool could not run (resolver, permission, runtime, path missing, not a directory, internal error). | Record `failure`; journal the stderr line or JSON error message. The slice's deltas remain unmerged. |
+| Outcome | Meaning | Gate action |
+| --------- | --------- | --------- |
+| clean | No findings. | Proceed to the next merge step. |
+| findings | One or more findings. | Record `failure`; the merge parks. The slice's deltas remain unmerged. |
+| validator error | The validator could not run (unreadable tree, internal error). | Record `failure`; journal the diagnostic. The slice's deltas remain unmerged. |
 
-The mode is **deterministic**: the WASI tool is a thin shell over `validate_baseline` in the `specify-contract` extension crate ([`extension/src/validate.rs`](../../extension/src/validate.rs)). Repeated invocations against the same baseline produce identical findings.
+The mode is **deterministic**: the gate is `validate_baseline` in `specify-contracts-core` ([`crates/core/src/validate.rs`](../../crates/core/src/validate.rs)), embedded in the adapter guest. Repeated invocations against the same baseline produce identical findings.
 
-### Why a WASI tool delegate?
+### Why an in-guest gate?
 
-The contracts adapter owns merge gating through the declared `contract` WASI tool: a deterministic, adapter-owned gate the merge brief can run through `specify` without crossing the core boundary or re-introducing concern-specific behavior into core crates.
+The contracts adapter owns merge gating through its embedded validator: a deterministic, adapter-owned gate that runs inside the guest without crossing the core boundary or re-introducing concern-specific behavior into engine crates.
 
 The deterministic baseline check is the canonical post-merge gate.
 
@@ -291,13 +283,12 @@ The deterministic baseline check is the canonical post-merge gate.
 
 | Scenario                                                   | Behavior                                                                                                                                                    |
 | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `$BASELINE_CONTRACTS` is absent                            | `specify extension run` exits `2` because the declared read preopen is missing or because the validator reports the missing directory. Caller records `failure`. |
-| `$BASELINE_CONTRACTS` is empty (no top-level contracts)    | Tool exits `0` with `findings: []`. Treated as clean.                                                                                                       |
-| Top-level contract has non-SemVer `info.version`           | Finding `contract.version-is-semver`; exit `1`. Caller records `failure`.                                                                                   |
-| Top-level contract has malformed `info.x-specify-id`       | Finding `contract.id-format`; exit `1`.                                                                                                                     |
-| Two top-level contracts share the same `info.x-specify-id` | Finding `contract.id-unique` against each colliding path; exit `1`.                                                                                         |
+| `$BASELINE_CONTRACTS` is absent                            | The validator treats an absent directory as clean (no top-level documents to walk). |
+| `$BASELINE_CONTRACTS` is empty (no top-level contracts)    | The validator reports no findings. Treated as clean.                                                                                                       |
+| Top-level contract has non-SemVer `info.version`           | Finding `contract.version-is-semver`; the gate records `failure`.                                                                                   |
+| Top-level contract has malformed `info.x-specify-id`       | Finding `contract.id-format` (blocking finding).                                                                                                                     |
+| Two top-level contracts share the same `info.x-specify-id` | Finding `contract.id-unique` against each colliding path (blocking finding).                                                                                         |
 | YAML file under `$BASELINE_CONTRACTS` is malformed         | Skipped by the validator (the format-verifier owns YAML diagnostics in `single` mode); does not surface as a cross-project finding.                         |
-| `specify` is not on `$PATH`                                | The shell-out fails with `command not found`; caller records `failure` with the resolve diagnostic on `--context`.                                          |
 
 ## Guardrails
 
@@ -305,8 +296,8 @@ The deterministic baseline check is the canonical post-merge gate.
 - Report every issue with the file path and a description of the problem.
 - When uncertain whether a schema is shared vocabulary or a standalone payload, use `WARN` rather than `FAIL` (in `single` mode).
 - Do not attempt to fix issues — report them. Repair belongs to the author or importer sibling.
-- **`cross-project` mode is fatal.** Treat exit codes `1` (findings) and `2` (invocation error) as `failure` per the contracts adapter merge contract. The merge brief MUST halt; the slice's deltas remain unmerged until the operator resolves the finding.
-- Do not re-implement the tool's checks. The verifier sibling's `cross-project` mode is a delegate; the canonical algorithm lives in [`targets/contracts/extension/src/validate.rs`](../../extension/src/validate.rs).
+- **`cross-project` mode is fatal.** Treat findings and validator errors as `failure` per the contracts adapter merge contract. The merge brief MUST halt; the slice's deltas remain unmerged until the operator resolves the finding.
+- Do not re-implement the validator's checks. The verifier sibling's `cross-project` mode is descriptive; the canonical algorithm lives in [`targets/contracts/crates/core/src/validate.rs`](../../crates/core/src/validate.rs).
 
 ## Verification checklist
 
@@ -326,7 +317,7 @@ Before completing the run:
 
 Before completing the run:
 
-- [ ] `specify extension run contract -- "$PROJECT_ROOT/contracts" --format json` invoked exactly once.
+- [ ] The adapter's in-guest contract validator ran exactly once against `$PROJECT_ROOT/contracts`.
 - [ ] Stdout (the JSON envelope) captured for the caller (typically the merge brief's `--context`).
 - [ ] Exit code propagated verbatim to the caller (`0` clean / `1` findings / `2` tool or validator error).
 - [ ] No findings re-classified, suppressed, or downgraded — the tool's output is authoritative.
@@ -338,6 +329,6 @@ Before completing the run:
 - [`../../references/json-schema-conventions.md`](../../references/json-schema-conventions.md) — schema metadata rules.
 - [`../../references/artifact-structure.md`](../../references/artifact-structure.md) — directory layout for the slice-local delta and the baseline.
 - [`../../references/report-shape.md`](../../references/report-shape.md) — single-mode markdown report shape this verifier emits.
-- [`../../briefs/merge.md`](../../briefs/merge.md) — merge brief that owns the post-merge `specify extension run contract` invocation and the §Merge and adoption contract three-branch outcome wiring.
+- [`../../briefs/merge.md`](../../briefs/merge.md) — merge brief that owns the post-merge in-guest validator gate and the §Merge and adoption contract three-branch outcome wiring.
 - [`author.md`](./author.md) — sibling for spec-driven authoring.
 - [`importer.md`](./importer.md) — sibling for normalising external documents.

@@ -58,28 +58,15 @@ delta:
 
 A whole-document `screens:` composition against a non-empty baseline is blocked at merge time (`composition-baseline-overwrite-blocked`); routine per-screen add / modify / remove flows through `delta:` and never reaches that gate.
 
-Write via the stage → validate → rename sequence used by every Vectis producer:
+Write the regenerated `${SLICE_DIR}/composition.yaml` directly; the adapter's deterministic composition validator gates it in-guest immediately after this leg (with a bounded repair loop) and again in the report gate, so a broken composition never reaches the platform phases.
 
-```bash
-COMP="${SLICE_DIR}/composition.yaml"
-write_yaml "${COMP}.tmp"
-specify extension run vectis -- validate composition "${COMP}.tmp"
-mv "${COMP}.tmp" "${COMP}"
-```
-
-The validator auto-invokes `tokens` and `assets` modes against any sibling `tokens.yaml` / `assets.yaml`. Errors are blocking: surface the report verbatim, delete the staging file, and exit non-zero — any prior `${SLICE_DIR}/composition.yaml` is preserved untouched. Warnings forward into the operator-facing summary. Clean runs proceed silently. On a validation error, fix `spec.md` / `design.md` (or the operator-curated `tokens.yaml` / `assets.yaml`) and re-run `/spec:build`; regeneration is idempotent against unchanged inputs.
+The validator auto-invokes `tokens` and `assets` modes against any sibling `tokens.yaml` / `assets.yaml`. Errors are blocking — the gate feeds them back for repair; an exhausted repair budget parks the slice. Warnings forward into the operator-facing summary. Clean runs proceed silently. On a persistent validation error, fix `spec.md` / `design.md` (or the operator-curated `tokens.yaml` / `assets.yaml`) and re-run `/spec:build`; regeneration is idempotent against unchanged inputs.
 
 When the slice has no UI surface at all, this step writes no `composition.yaml`. Detect this from the slice's own `spec.md`: skip composition regeneration when `spec.md` describes **no** screen-bearing requirements (Step 1 identifies zero screens), regardless of which platforms `## Platforms` lists. `## Platforms` is an app-level constant stamped verbatim to every slice and never narrows per slice, so it cannot signal whether *this slice* contributes any UI — never key the skip off it.
 
 ## Validation gate (pre-shell)
 
-After regenerating, re-run the deterministic validator against the merged input set:
-
-```bash
-specify extension run vectis -- validate composition
-```
-
-That single call covers:
+After regenerating, the adapter re-runs the deterministic validator in-guest against the merged input set. That single gate covers:
 
 1. **Composition schema validity** — `composition.yaml` conforms to the Vectis composition schema (regions, group hierarchy, allowed wiring keys, slug grammar, reserved-slug prohibitions).
 2. **Wiring coverage** — every field in each per-page view struct (from `design.md`) appears as a `bind`; every shell-facing `Event` variant relevant to a screen has an `event` wiring; every `maps_to` resolves to a declared ViewModel variant; every overlay `trigger` matches an `event` name in the same screen; every `Navigate(X)` argument has a corresponding screen slug and `Route` variant.

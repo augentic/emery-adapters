@@ -1,7 +1,7 @@
 //! Crux shell presence heuristics for Vectis-bound projects.
 //!
 //! On-disk shell detection and shell-resident launcher icon probes
-//! (RFC-46 §6.3) for the `verify` subcommand. `project.yaml.platforms`
+//! (RFC-46 §6.3) for [`crate::verify`]. `project.yaml.platforms`
 //! is the authority for platform *intent*; these heuristics report what
 //! is present on disk so build-time scaffolding and the bootstrap
 //! `app-icon` gate can decide what work remains.
@@ -52,9 +52,3 @@ fn has_files_with_extension(dir: &Path, ext: &str) -> bool {
     }
     false
 }
-
-#[cfg(test)]
-mod launcher_tests;
-
-#[cfg(test)]
-mod tests;

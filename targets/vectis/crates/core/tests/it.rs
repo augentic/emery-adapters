@@ -6,7 +6,13 @@
 
 #[path = "absorbed.rs"]
 mod absorbed;
+#[path = "catalog.rs"]
+mod catalog;
 #[path = "operations.rs"]
 mod operations;
 #[path = "registry.rs"]
 mod registry;
+#[path = "scaffold.rs"]
+mod scaffold;
+#[path = "shell.rs"]
+mod shell;

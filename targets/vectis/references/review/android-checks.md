@@ -340,7 +340,7 @@ Per the component directive contract and reviewer surface, any `group` shape tha
 **Detection**: When the wired `composition.yaml` is available (sibling at the change-local or baseline path — see SKILL.md "Gather context"):
 
 1. Walk the composition tree collecting every `group` node.
-2. Compute a structural skeleton for each group (the same `*-when` presence + nested-item-kind shape that `specify extension run vectis -- validate composition` uses for the §G structural-identity rule).
+2. Compute a structural skeleton for each group (the same `*-when` presence + nested-item-kind shape the adapter's deterministic composition validator uses for the §G structural-identity rule).
 3. Group instances by skeleton equality. For any skeleton that appears in ≥2 instances **without** a sibling `component:` directive on any of those instances, flag the recurrence as a candidate component.
 4. Cross-check the Android shell: if the recurring composition group already corresponds to an extracted `@Composable` under `ui/components/`, downgrade severity to `optional` and note the existing extraction; otherwise emit at the canonical `suggestion` severity (the operator will promote both surfaces in lockstep).
 
@@ -369,7 +369,7 @@ Per the render-by-`kind` contract ([`android/design-system-integration.md`](../a
 
 When `composition.yaml` or `assets.yaml` is absent, skip this check — there is no cross-artifact signal.
 
-**Fix**: Regenerate the affected screen via `vectis:android-writer` after `vectis materialize assets` has populated `design-system/assets/exports/android/` (or after operator pins are in place). If the glyph is genuinely platform-native, change the `assets.yaml` entry to `kind: symbol` with `symbols.ios` / `symbols.android` and update composition to reference the symbol id — do not leave a `vector` / `raster` entry while the shell still substitutes Material Icons.
+**Fix**: Regenerate the affected screen via `vectis:android-writer` after the adapter's materialize step has populated `design-system/assets/exports/android/` (or after operator pins are in place). If the glyph is genuinely platform-native, change the `assets.yaml` entry to `kind: symbol` with `symbols.ios` / `symbols.android` and update composition to reference the symbol id — do not leave a `vector` / `raster` entry while the shell still substitutes Material Icons.
 
 ## AND-029: No inline lint suppressions
 

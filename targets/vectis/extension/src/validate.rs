@@ -4,8 +4,8 @@
 //! `specify-vectis-core` (RFC-61 Step 3); this module keeps the WASI
 //! command surface — argument parsing and the JSON envelope — and
 //! delegates every check to the core so there is a single source of
-//! truth. Provenance for every rule lives in the sidecar `DECISIONS.md`
-//! at the crate root.
+//! truth. Provenance for every rule lives in the repository-root
+//! `DECISIONS.md` (§"Vectis validation and materialization").
 
 use std::path::PathBuf;
 
@@ -48,10 +48,6 @@ pub mod error {
     pub use crate::VectisError;
 }
 
-/// The validation engine, re-exported from the core so the sibling
-/// subcommands (`verify`, `infer`, `sync`) keep their historical
-/// `crate::validate::engine::…` import paths.
-pub(crate) use specify_vectis_core::validate::engine;
 pub use specify_vectis_core::validate::{ValidateMode, find_project_root, validate_exit_code};
 
 pub use crate::VectisError;

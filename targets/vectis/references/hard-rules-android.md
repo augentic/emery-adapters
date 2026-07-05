@@ -4,7 +4,7 @@
 
 ## Scaffold immutability (create and update mode)
 
-1. **Never edit CLI-owned scaffold files.** `Android/Makefile`, `Android/settings.gradle.kts`, `Android/build.gradle.kts`, `Android/app/build.gradle.kts`, and `Android/shared/build.gradle.kts` are CLI-owned. `specify extension run vectis -- sync android-scaffold` repairs them in-loop during verify — agents must not patch them during verify-repair or feature work.
+1. **Never edit adapter-owned scaffold files.** `Android/Makefile`, `Android/settings.gradle.kts`, `Android/build.gradle.kts`, `Android/app/build.gradle.kts`, and `Android/shared/build.gradle.kts` are adapter-owned. The adapter re-renders them deterministically around each write leg — agents must not patch them during verify-repair or feature work.
 2. **Host NDK substitution is Makefile-owned, not agent-authored.** `make setup-host` may replace `__ANDROID_NDK_VERSION__` in `Android/shared/build.gradle.kts`; sync preserves an already-substituted NDK pin when comparing bytes.
 
 ## Preservation Rules (Update Mode)

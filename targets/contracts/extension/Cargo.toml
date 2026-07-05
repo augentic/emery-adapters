@@ -9,9 +9,9 @@ description = "Standalone validator for the contracts adapter — SemVer + info.
 categories = ["development-tools", "command-line-utilities"]
 keywords = ["specify", "contracts", "validate", "openapi", "asyncapi"]
 
-# Host binary used by the contracts adapter gate. The published surface is
-# the WASI component run through `specify extension run contract -- ...`; this
-# native binary stays available for parity tests and direct local debugging.
+# Legacy host binary — the contracts gate now runs the in-guest validator in
+# `specify-contracts-core`; this shim stays available for parity tests and
+# direct local debugging until RFC-61 Step 5 Milestone A2 deletes the crate.
 [[bin]]
 name = "specify-contract"
 path = "src/main.rs"

@@ -8,7 +8,7 @@ Compose patterns, Crux Android shell anatomy, Kotlin token templates, and design
 
 Inspect `${ANDROID_SHELL_DIR}/app/src/main/java/<package>/Core.kt`:
 
-- Missing → **create mode**: scaffold with `specify extension run vectis -- scaffold android <APP_NAME> [--caps <csv>] [--android-package <package>]`, then enter pre-flight (see § Verify below), then update mode.
+- Missing → **create mode**: the adapter scaffolds the Android shell deterministically from its embedded templates before this leg (see the scaffold prelude in the leg's prompt, which also installs the vendored Gradle wrapper); enter pre-flight (see § Verify below), then update mode.
 - Present → **update mode**: diff core types against existing Kotlin code and apply targeted edits.
 
 Spawn the writer sub-agent with `mode: create|update` and `skip_verification: true`; the orchestrator runs the verify loop (§ Verify) after the writer returns.
@@ -22,7 +22,7 @@ Repair sub-agent (`task: android-verify-repair`, invoked by the verify loop belo
 3. **Diff Rust core types vs Kotlin inventory** by category (Effect → ViewModel → view-fields → Event → Route) and emit a summary edit plan.
 4. **Apply changes.** Expand or strip CAP blocks in `Core.kt`, `AndroidManifest.xml`, and Gradle build files. Add or remove screen composables for each ViewModel variant under `Android/app/src/main/java/com/vectis/<app>/ui/screens/`. Update the root `when` over the `ViewModel` enum. Dispatch new `Event`s through `Core.update(...)`. Emit one named composable per `component: <slug>` directive in `composition.yaml` under `Android/app/src/main/java/com/vectis/<app>/ui/components/` (PascalCased — `tab-bar` → `TabBarComponent.kt`), with props inferred from variation across instances. When `CATALOG_PATH` exists, every `confirmed` catalog entry referenced by a `component:` directive in `composition.yaml` produces a shared composable file. Per-screen composables reference the shared component instead of inlining the layout. When the catalog is absent, component files are still emitted for any `component:` directives in `composition.yaml` (backward-compatible behaviour), but the catalog is the authoritative driver for which slugs to factor. **Retroactive factoring (B7).** When a component newly `confirmed` this build is referenced by baseline screens *outside the current slice's domains* (composition.md Step 6a attached the `component: <slug>` directive to those prior screens via `delta.modified`), generate the shared `<Slug>Component.kt` **and** refactor those prior screens' generated composables to consume it in place of the inlined layout — the writer runs in `update` mode against the live shell tree, so editing prior-slice composables is in scope. The refactor is behaviour-preserving because the skeletons are structurally identical by construction; the verify loop below catches any regression. Idempotent: a prior screen already consuming the shared composable needs no further edit. Patterns: [`android/shell-pattern.md`](../../../references/android/shell-pattern.md), [`android/view-patterns.md`](../../../references/android/view-patterns.md).
 5. **Refresh generated UI surfaces.** Regenerate shell-local theme code under `Android/app/src/main/java/com/vectis/<app>/ui/theme/` (Material 3 fallback when `tokens.yaml` is absent — full templates: [`android/token-templates.md`](../../../references/android/token-templates.md)), and drawable / mipmap resources under `Android/app/src/main/res/`. Design-system integration depth: [`android/design-system-integration.md`](../../../references/android/design-system-integration.md).
-   - **Materialize gate.** `specify slice build --phase prepare` runs `vectis materialize assets` for in-scope ids with missing `sources.android` pins; operators may also run `specify extension run vectis -- materialize assets` manually after editing canonical masters under `design-system/assets/`. Committed trees under `design-system/assets/exports/android/` are the copy source — never read canonical `source:` SVG/PNG at write time.
+   - **Materialize gate.** The adapter's deterministic build prelude materializes in-scope ids with missing `sources.android` pins; after editing canonical masters under `design-system/assets/`, operators re-materialize by re-running the slice build. Committed trees under `design-system/assets/exports/android/` are the copy source — never read canonical `source:` SVG/PNG at write time.
    - **Copy from `exports/android/`.** Resolve the effective `assets.yaml` (slice-local `.specify/slices/<name>/assets.yaml` when present, else `design-system/assets.yaml`). For each composition-referenced asset id:
      - `kind: symbol` — emit `Icons.Default.<glyph>` (or extended icon set) at the call site; **no** `res/` copy.
      - `role: app-icon` — copy the `assets/exports/android/app-icon/` tree (`mipmap-*/`, `mipmap-anydpi-v26/`, `drawable-*/ic_launcher_foreground.png`, `values/ic_launcher_background.xml`) into matching `res/` locations.
@@ -48,22 +48,21 @@ The `/spec:build` **orchestrator** runs the verify loop — not a sub-agent with
 
 ### Pre-flight (fail fast on misconfiguration)
 
-Before entering the loop, confirm host prerequisites via `specify slice build --phase prepare` (adapter `host_prereq` native script) or `specify extension run vectis -- verify --mode host-prereq` for an env-only advisory probe. If host prerequisites are missing (`ANDROID_HOME`, Rust Android targets, Java 21), report **deferred** and stop — do not scaffold into a broken host.
+Before entering the loop, probe host prerequisites yourself (`ANDROID_HOME` set, Rust Android targets installed via `rustup target list --installed`, Java 21 available). If host prerequisites are missing, report **deferred** and stop — do not build into a broken host.
 
-`local.properties`, `org.gradle.java.home`, NDK substitution, and the vendored Gradle wrapper are handled by `make verify` via `make setup` (`vectis android setup` + `make setup-host`). Do not bootstrap the wrapper manually with `gradle wrapper`.
+`local.properties`, `org.gradle.java.home`, and NDK substitution are handled by `make verify` via `make setup` (`make setup-host`); the vendored Gradle wrapper is installed deterministically by the adapter at scaffold and build-prepare time. Do not bootstrap the wrapper manually with `gradle wrapper`.
 
 ### Build loop
 
-After the writer sub-agent returns, the orchestrator runs `specify extension run vectis -- sync android-scaffold` once, then executes this loop (max 3 iterations):
+After the writer sub-agent returns (the adapter has already re-rendered the agent-immutable scaffold files deterministically), the orchestrator executes this loop (max 3 iterations):
 
 ```bash
-specify extension run vectis -- sync android-scaffold   # 0. CLI repair — every iteration.
 cd "${ANDROID_SHELL_DIR}" && make verify                # 1. Setup, typegen, cargoBuild, assembleDebug.
 ```
 
-On failure the orchestrator captures stderr and spawns a **repair-only** sub-agent (`task: android-verify-repair`) with Kotlin-only edit scope — **no shell**. The sub-agent returns edited Kotlin files or a patch plan; the orchestrator applies edits and re-runs the loop from step 0. **Structural fix only for warnings** — refactor (underscore-prefixed unused parameters, real handler wiring) until `make verify` passes; never silence a warning with `@Suppress`.
+On failure the orchestrator captures stderr and spawns a **repair-only** sub-agent (`task: android-verify-repair`) with Kotlin-only edit scope — **no shell**. The sub-agent returns edited Kotlin files or a patch plan; the orchestrator applies edits and re-runs the loop from step 1. **Structural fix only for warnings** — refactor (underscore-prefixed unused parameters, real handler wiring) until `make verify` passes; never silence a warning with `@Suppress`.
 
-**Gradle / Makefile drift errors:** the orchestrator runs `sync android-scaffold` again and retries the same two commands. Never edit `Android/Makefile`, `Android/settings.gradle.kts`, `Android/build.gradle.kts`, `Android/app/build.gradle.kts`, or `Android/shared/build.gradle.kts`. If strict-flag drift persists after sync + retry, escalate — do not patch CLI-owned scaffold files by hand.
+**Gradle / Makefile drift errors:** the scaffold files are adapter-synced — retry the same command. Never edit `Android/Makefile`, `Android/settings.gradle.kts`, `Android/build.gradle.kts`, `Android/app/build.gradle.kts`, or `Android/shared/build.gradle.kts`. If strict-flag drift persists after a retry, escalate — do not patch adapter-owned scaffold files by hand.
 
 If still failing after 3 iterations: **stop**, report the remaining failures with full error output, and escalate. Java 25+ environments hit `IllegalArgumentException`; the fix is pinning `org.gradle.java.home` to Java 21 in `gradle.properties` via `make setup-host`.
 

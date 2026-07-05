@@ -1,4 +1,4 @@
-.PHONY: all build clean lib typegen android-lib apk install launch run setup setup-extension setup-host setup-java-home setup-ndk verify
+.PHONY: all build clean lib typegen android-lib apk install launch run setup setup-host setup-java-home setup-ndk verify
 
 WORKSPACE := ..
 
@@ -7,11 +7,11 @@ all: build
 # Codegen only — full compile assurance is `make verify`.
 build: typegen
 
-setup: setup-extension setup-host
+# The vendored Gradle wrapper is installed deterministically by the
+# vectis adapter (scaffold + build prepare); setup only covers the
+# host-derived pieces the adapter cannot see.
+setup: setup-host
 	@chmod +x gradlew 2>/dev/null || true
-
-setup-extension:
-	@specify extension run vectis -- android setup
 
 setup-host:
 	@test -n "$$ANDROID_HOME" || (echo "ANDROID_HOME is unset" >&2; exit 1)

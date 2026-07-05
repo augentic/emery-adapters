@@ -1,5 +1,12 @@
 //! Library surface for the `vectis` WASI command tool.
 //!
+//! As of RFC-61 Step 5 Milestone A1 every subcommand is a thin CLI shim
+//! over `specify-vectis-core` (argument parsing, project-root
+//! resolution, JSON envelope); the only implementation still resident
+//! here is the advisory `verify --mode host-prereq` probe, which reads
+//! host environment and native toolchain paths. Milestone A2 deletes
+//! this crate.
+//!
 //! ## Carve-out from workspace standards
 //!
 //! This crate is a deliberate carve-out from the workspace's
@@ -36,6 +43,7 @@
 
 pub mod android;
 pub mod android_scaffold;
+mod host_prereq;
 pub mod infer;
 pub mod ios_scaffold;
 pub mod materialize;
@@ -43,7 +51,6 @@ pub mod prepare;
 pub mod scaffold;
 pub mod schema;
 mod schema_source;
-mod shell;
 pub mod sync;
 pub mod validate;
 pub mod verify;

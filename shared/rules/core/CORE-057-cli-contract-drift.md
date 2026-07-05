@@ -21,8 +21,9 @@ rule_hints:
       langs:
         - bash
         - sh
-      # Documented-ahead verbs, exempt until they ship:
-      # - `catalog` — component-catalog inference (`specify catalog infer`, components.md)
+      # Retired-verb exemption: component-catalog inference re-homed
+      # onto the in-guest vectis library (RFC-61 Step 5); the token
+      # stays ignored while sibling-repo prose still cites the old verb.
       ignore:
         - catalog
   - kind: cli-contract

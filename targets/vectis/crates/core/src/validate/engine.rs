@@ -16,8 +16,8 @@
 //! Errors / warnings entries carry a JSON Pointer-shaped `path` so the
 //! operator can locate the offending sub-document. The dispatcher
 //! exits non-zero only when a real sub-report carries errors. Provenance
-//! and the rationale behind every rule live in
-//! `crates/vectis/DECISIONS.md`.
+//! and the rationale behind every rule live in the repository-root
+//! `DECISIONS.md` (§"Vectis validation and materialization").
 
 mod all;
 mod assets;

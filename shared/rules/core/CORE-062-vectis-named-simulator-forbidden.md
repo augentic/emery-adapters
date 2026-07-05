@@ -13,7 +13,7 @@ rule_hints:
 
 ## Rule
 
-Vectis iOS verify and merge briefs must never tell agents to patch `iOS/Makefile`, `iOS/project.yml`, or `iOS/.vectis/sim-build.sh` with a named simulator (`name=iPhone …`, `platform=iOS Simulator,name=…`). The generic destination is CLI-owned in `iOS/.vectis/sim-build.sh`; the orchestrator runs `vectis sync ios-scaffold` when repair is needed.
+Vectis iOS verify and merge briefs must never tell agents to patch `iOS/Makefile`, `iOS/project.yml`, or `iOS/.vectis/sim-build.sh` with a named simulator (`name=iPhone …`, `platform=iOS Simulator,name=…`). The generic destination is adapter-owned in `iOS/.vectis/sim-build.sh`; the adapter re-renders the scaffold files deterministically around each write leg, so drift repairs itself.
 
 ## Look For
 
@@ -22,4 +22,4 @@ Vectis iOS verify and merge briefs must never tell agents to patch `iOS/Makefile
 
 ## Fix
 
-Remove named-destination instructions. Point agents at `specify extension run vectis -- sync ios-scaffold` and Swift-only repair per [`targets/vectis/briefs/build/ios/write.md`](../../../targets/vectis/briefs/build/ios/write.md).
+Remove named-destination instructions. The adapter re-syncs the scaffold files deterministically; point agents at Swift-only repair per [`targets/vectis/briefs/build/ios/write.md`](../../../targets/vectis/briefs/build/ios/write.md).

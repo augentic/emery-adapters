@@ -87,7 +87,12 @@ async fn build_runs_prelude_then_phase_legs_then_report() {
     assert!(user.contains("slice `demo`"), "slice named");
     assert!(user.contains("prepare prelude"), "prelude summary feeds the first leg");
     assert!(user.contains("\"skipped\":true"), "nothing to materialize in an empty workspace");
-    assert!(user.contains("specify catalog infer"), "agent-run catalog inference instructed");
+    assert!(
+        user.contains("component-identity cluster report"),
+        "in-guest infer report feeds the leg"
+    );
+    assert!(user.contains("component-bindings.yaml"), "bindings file instructed");
+    assert!(!user.contains("specify catalog infer"), "no dead CLI verb in the prompt");
     assert!(user.contains("vectis-references"), "user prompt points at the MCP shelf");
     let (name, schema) = schema_format(first);
     assert_eq!(name, "composition");
@@ -129,14 +134,16 @@ async fn build_runs_prelude_then_phase_legs_then_report() {
     assert_eq!(schema, REPORT_ANSWER_SCHEMA);
     let report_user = &requests[5].messages[0].content;
     assert!(report_user.contains("no shell work"), "phase outcomes feed the report leg");
-    assert!(report_user.contains("verify --mode verify"), "agent-run shell verify gate instructed");
+    assert!(report_user.contains("shell verify gate"), "in-guest verify gate feeds the report");
+    assert!(!report_user.contains("specify extension run"), "no dead CLI verb in the prompt");
 }
 
 #[tokio::test]
 async fn declared_core_only_platforms_skip_the_shell_legs() {
     let tmp = TempDir::new().unwrap();
     fs::create_dir_all(tmp.path().join(".specify")).unwrap();
-    fs::write(tmp.path().join(".specify/project.yaml"), "platforms:\n  - core\n").unwrap();
+    fs::write(tmp.path().join(".specify/project.yaml"), "name: demo-app\nplatforms:\n  - core\n")
+        .unwrap();
     let model = MockModel::answering([PHASE_DONE, PHASE_DONE, PHASE_DONE, SUCCESS_REPORT]);
 
     let report = build(&model, &ctx(tmp.path(), None), "demo", &[], &tree()).await.unwrap();
@@ -146,6 +153,15 @@ async fn declared_core_only_platforms_skip_the_shell_legs() {
     assert_eq!(requests.len(), 4, "composition, core, review, report — no shell legs");
     assert_eq!(schema_format(&requests[1]).0, "core");
     assert_eq!(schema_format(&requests[2]).0, "review");
+    let core_user = &requests[1].messages[0].content;
+    assert!(
+        core_user.contains("scaffolded `core` for app `DemoApp`"),
+        "deterministic scaffold prelude stood the core tree up"
+    );
+    assert!(
+        tmp.path().join("shared/src/app.rs").is_file(),
+        "core scaffold rendered from the embedded templates"
+    );
     let review_system = requests[2].system.as_deref().unwrap();
     assert!(!review_system.contains("iOS review"), "no iOS review brief for a core-only project");
 }

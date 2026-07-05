@@ -128,9 +128,9 @@ deltas. After merge, the same paths become root `contracts/` baseline files.
 - `files-exist`: every path in **Expected Artifacts** exists in the slice
   working tree after `/spec:build`, and (when merge is run) in the baseline
   `contracts/` tree after `/spec:merge`.
-- `contract-validator-clean`: the build's contract verifier (the `contract`
-  WASI tool, run as `specify extension run contract -- "$PROJECT_ROOT/contracts" --format json`)
-  exits `0` with no findings and no manual-review warnings on the produced
+- `contract-validator-clean`: the build's contract verifier (the adapter's
+  in-guest contract validator over `$PROJECT_ROOT/contracts`)
+  reports no findings and no manual-review warnings on the produced
   artifacts.
 
 ## Negative Expectations

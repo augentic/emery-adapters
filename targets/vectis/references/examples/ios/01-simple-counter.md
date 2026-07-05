@@ -87,7 +87,7 @@ targets:
 
 ## `iOS/Makefile`
 
-Scaffold files (`Makefile`, `project.yml`, `iOS/.vectis/sim-build.sh`, `iOS/.vectis/sim-dev.sh`) are authoritative from `specify extension run vectis -- scaffold ios <APP_NAME>` — do not hand-copy from this example. The blocks below match the embedded template for reference only; Swift sections demonstrate shell patterns.
+Scaffold files (`Makefile`, `project.yml`, `iOS/.vectis/sim-build.sh`, `iOS/.vectis/sim-dev.sh`) are authoritative from the adapter's deterministic iOS scaffold render — do not hand-copy from this example. The blocks below match the embedded template for reference only; Swift sections demonstrate shell patterns.
 
 ```makefile
 .PHONY: all build clean typegen package xcode sim-build sim-install sim-launch sim-run run sim-app-path

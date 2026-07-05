@@ -1,41 +1,33 @@
-//! `vectis android setup` — vendored Gradle wrapper installation.
+//! Android shell bootstrap — vendored Gradle wrapper installation,
+//! absorbed from the legacy extension's `android setup` subcommand
+//! (RFC-61 Step 5 Milestone A1).
 //!
 //! Host-specific files (`local.properties`, `org.gradle.java.home`, NDK pin)
-//! are written by the Android Makefile `setup-host` target; WASI only
-//! forwards `PROJECT_DIR` / `CAPABILITY_DIR` and cannot read `$ANDROID_HOME`.
+//! are written by the Android Makefile `setup-host` target; the guest only
+//! sees the mounted project tree and cannot read `$ANDROID_HOME`.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use clap::Args as ClapArgs;
 use serde_json::{Value, json};
 
-use crate::validate::find_project_root;
-use crate::{VectisError, render_json as render_value};
+use crate::VectisError;
 
-const GRADLEW_BYTES: &[u8] = include_bytes!("../../assets/android/gradle-wrapper/gradlew");
-const GRADLEW_BAT_BYTES: &[u8] = include_bytes!("../../assets/android/gradle-wrapper/gradlew.bat");
+const GRADLEW_BYTES: &[u8] = include_bytes!("../assets/android/gradle-wrapper/gradlew");
+const GRADLEW_BAT_BYTES: &[u8] = include_bytes!("../assets/android/gradle-wrapper/gradlew.bat");
 const WRAPPER_JAR_BYTES: &[u8] =
-    include_bytes!("../../assets/android/gradle-wrapper/gradle/wrapper/gradle-wrapper.jar");
+    include_bytes!("../assets/android/gradle-wrapper/gradle/wrapper/gradle-wrapper.jar");
 const WRAPPER_PROPERTIES: &str =
-    include_str!("../../assets/android/gradle-wrapper/gradle/wrapper/gradle-wrapper.properties");
+    include_str!("../assets/android/gradle-wrapper/gradle/wrapper/gradle-wrapper.properties");
 
-/// Arguments for `vectis android setup`.
-#[derive(ClapArgs, Debug, Clone, PartialEq, Eq)]
-pub struct AndroidSetupArgs {
-    /// Project directory. Falls back to `PROJECT_DIR` env, then CWD walk-up.
-    pub path: Option<PathBuf>,
-}
-
-/// Dispatch `vectis android setup`.
+/// Install the vendored Gradle wrapper for the project's `Android/` shell.
 ///
 /// # Errors
 ///
-/// Returns [`VectisError::InvalidProject`] when the project root or `Android/`
-/// shell directory cannot be resolved.
-pub fn run(args: &AndroidSetupArgs) -> Result<Value, VectisError> {
-    let project_root = resolve_project_root(args.path.as_deref())?;
-    let android_dir = android_shell_dir(&project_root)?;
+/// Returns [`VectisError::InvalidProject`] when the `Android/` shell
+/// directory does not exist under `project_root`.
+pub fn setup(project_root: &Path) -> Result<Value, VectisError> {
+    let android_dir = android_shell_dir(project_root)?;
     Ok(run_for_shell_dir(&android_dir))
 }
 
@@ -83,25 +75,6 @@ pub fn run_for_shell_dir(android_dir: &Path) -> Value {
     })
 }
 
-/// Render a setup outcome as pretty-printed JSON and exit code.
-#[must_use]
-pub fn render_json(outcome: Result<Value, VectisError>) -> (String, u8) {
-    match outcome {
-        Ok(value) => {
-            let code = setup_exit_code(&value);
-            (render_value(&value), code)
-        }
-        Err(err) => {
-            let exit_code = err.exit_code();
-            let Value::Object(mut payload) = err.to_json() else {
-                unreachable!("VectisError::to_json always returns an object")
-            };
-            payload.entry("exit-code".to_string()).or_insert(Value::from(exit_code));
-            (render_value(&Value::Object(payload)), exit_code)
-        }
-    }
-}
-
 /// Returns 1 when any error-severity finding is present.
 #[must_use]
 pub fn setup_exit_code(value: &Value) -> u8 {
@@ -109,19 +82,6 @@ pub fn setup_exit_code(value: &Value) -> u8 {
         arr.iter().any(|f| f.get("severity").and_then(Value::as_str) == Some("error"))
     });
     u8::from(has_error)
-}
-
-fn resolve_project_root(path: Option<&Path>) -> Result<PathBuf, VectisError> {
-    if let Some(p) = path {
-        return Ok(p.to_path_buf());
-    }
-    if let Some(project_dir) = std::env::var_os("PROJECT_DIR").filter(|v| !v.is_empty()) {
-        return Ok(PathBuf::from(project_dir));
-    }
-    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    find_project_root(&cwd).ok_or_else(|| VectisError::InvalidProject {
-        message: "cannot locate project root (no .specify/ directory found)".into(),
-    })
 }
 
 fn android_shell_dir(project_root: &Path) -> Result<PathBuf, VectisError> {
@@ -140,7 +100,7 @@ fn install_wrapper(android_dir: &Path) -> Result<Vec<String>, String> {
     }
     if wrapper_partial(android_dir) {
         return Err("partial Gradle wrapper detected; remove `gradlew`, `gradlew.bat`, and \
-             `gradle/wrapper/` then re-run `vectis android setup`"
+             `gradle/wrapper/` then re-run the Android shell setup"
             .into());
     }
 

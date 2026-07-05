@@ -65,7 +65,7 @@ Android/
     └── build.gradle.kts
 ```
 
-The `specify extension run vectis -- scaffold android <AppName>` render step produces the package
+The adapter's deterministic Android scaffold render step produces the package
 tree (`<AppName>Application.kt`, `MainActivity.kt`, `core/Core.kt`, the
 starter `ui/screens/HomeScreen.kt`), the `res/values/themes.xml` baseline,
 and the Gradle / manifest / version-catalog wiring. The Android writer
@@ -184,7 +184,7 @@ to the literal `0.38f`.
 
 The deterministic check that every token reference in `composition.yaml`
 resolves to a `tokens.yaml` entry lives in
-`specify extension run vectis -- validate composition` (via the Vectis validator): when sibling
+the adapter's deterministic composition validator: when sibling
 `tokens.yaml` exists, the validator auto-invokes `tokens` mode and reports
 unresolved references as errors before the Android writer is called. The
 writer does not need to re-validate references at generation time; it
@@ -251,7 +251,7 @@ others absent), shell writers MAY use the same Material 3 default for the
 **absent** categories. Shell writers MUST NOT silently substitute defaults
 for a token name that is referenced from `composition.yaml` but missing
 from `tokens.yaml` — that condition is an error reported by
-`specify extension run vectis -- validate composition` and halts shell generation for the
+the adapter's deterministic composition validator and halts shell generation for the
 affected screen. The writer surfaces the validator output verbatim and
 declines to emit code that papers over the missing token.
 
@@ -297,7 +297,7 @@ order follows the Vectis input policy:
 
 The deterministic check that every asset reference in `composition.yaml`
 resolves to an `assets.yaml` entry lives in
-`specify extension run vectis -- validate composition` (auto-invokes `assets` mode when
+the adapter's deterministic composition validator (auto-invokes `assets` mode when
 present). Missing files are errors; missing optional densities are
 warnings (per Phase 1.7). The writer consumes the already-validated input
 set.
@@ -307,13 +307,13 @@ set.
 Canonical masters live under `design-system/assets/` (`source:` on each entry).
 Per-platform binaries live under `design-system/assets/exports/android/` and are
 recorded in `sources.android` (operator-pinned or auto-written by
-`vectis materialize assets`). Materialization runs automatically at
+the adapter's materialize step). Materialization runs automatically at
 `specify slice build --phase prepare` for in-scope assets with missing exports;
-operators may also run `specify extension run vectis -- materialize assets` manually
+operators re-materialize by re-running the slice build
 after editing canonical masters. Committed `exports/` trees are version-controlled
 — CI and shell builds consume them without re-running materialize on every job.
 
-Figma-exported **`kind: vector` masters** (icons, decorative chrome, illustrations, and app-icon SVG) may include no-op clip wrappers and group opacity; `vectis materialize assets` normalizes these automatically. **App-icon masters** may include transparent backgrounds (PNG alpha or SVG without a full-bleed background); materialize accepts them and composites at export — white for iOS `AppIcon.png`, launcher `tint` token background for Android adaptive icons. Unsupported after normalization: real clips, gradients, patterns, masks, filters, text, embedded images.
+Figma-exported **`kind: vector` masters** (icons, decorative chrome, illustrations, and app-icon SVG) may include no-op clip wrappers and group opacity; the adapter's materialize step normalizes these automatically. **App-icon masters** may include transparent backgrounds (PNG alpha or SVG without a full-bleed background); materialize accepts them and composites at export — white for iOS `AppIcon.png`, launcher `tint` token background for Android adaptive icons. Unsupported after normalization: real clips, gradients, patterns, masks, filters, text, embedded images.
 
 Build hand-off is **materialize-then-copy**: the Android writer **copies**
 files from each entry's resolved `sources.android` export path(s) into the app
@@ -407,7 +407,7 @@ of the slug per the component directive contract:
   composable body.
 
 The structural-identity rule (§G) is enforced by
-`specify extension run vectis -- validate composition` before the Android writer runs, so
+the adapter's deterministic composition validator before the Android writer runs, so
 the writer can trust that every instance of the slug shares the same
 skeleton and only the wiring varies.
 

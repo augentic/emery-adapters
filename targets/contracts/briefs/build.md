@@ -61,20 +61,14 @@ If a verifier reports failures:
 
 A clean verification pass with zero issues is the expected outcome.
 
-### Phase 5 — Tool gate
+### Phase 5 — Validator gate
 
-Build's final step invokes the declared `contract` WASI tool to confirm the slice's contract files parse and pass the validation rules in single-mode against the slice's delta:
+Build's final step is the adapter's deterministic contract validator, run in-guest against the slice's `contracts/` delta (`$SLICE_DIR/contracts`) with a bounded repair loop:
 
-```bash
-specify extension run contract -- "$SLICE_DIR/contracts" --format json > /tmp/contract-build.json
-case $? in
-  0) ;;  # clean — slice deltas are well-formed; write the success build report
-  1) ;;  # findings — re-enter the failing format sub-brief per Phase 4
-  2) ;;  # tool/validator could not run — write the failure build report; do not mark the task complete
-esac
-```
+- **clean** — slice deltas are well-formed; write the success build report.
+- **findings** — the gate feeds them back for repair; re-enter the failing format sub-brief per Phase 4. Residual findings after the repair budget force a `status: failure` build report; do not mark the task complete.
 
-The tool's `--format json` output shape is documented under [`references/report-shape.md`](../references/report-shape.md).
+The validator's finding shape is documented under [`references/report-shape.md`](../references/report-shape.md).
 
 ### No-op behaviour
 

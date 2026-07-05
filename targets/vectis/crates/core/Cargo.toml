@@ -1,6 +1,6 @@
 [package]
 name = "specify-vectis-core"
-description = "Wasm-free core of the vectis target adapter: embedded prose registry, the absorbed validate / materialize / prepare libraries, and the guidance / build / merge judgment operations"
+description = "Wasm-free core of the vectis target adapter: embedded prose registry, the absorbed validate / materialize / prepare / verify / infer / scaffold libraries, and the guidance / build / merge judgment operations"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -27,9 +27,14 @@ sha2.workspace = true
 specify-guest-kit.workspace = true
 thiserror.workspace = true
 tiny-skia.workspace = true
+toml.workspace = true
 usvg.workspace = true
 
 [build-dependencies]
+jsonschema.workspace = true
+serde.workspace = true
+serde-saphyr.workspace = true
+serde_json.workspace = true
 specify-prose-registry.workspace = true
 
 [dev-dependencies]

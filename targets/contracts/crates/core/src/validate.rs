@@ -3,9 +3,9 @@
 //! top-level `OpenAPI` / `AsyncAPI` document.
 //!
 //! Owned by the wasm-free core so both consumers share one implementation:
-//! the `specify-contract` extension binary (the `specify extension run
-//! contract` surface, unchanged until RFC-61 Step 5) and the contracts
-//! guest's validate-before-visible gate after each judgment answer lands.
+//! the legacy `specify-contract` extension binary (a thin shim scheduled
+//! for deletion at RFC-61 Step 5 Milestone A2) and the contracts guest's
+//! validate-before-visible gate after each judgment answer lands.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

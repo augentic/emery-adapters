@@ -8,8 +8,8 @@
 //! which converts its clap types onto [`ValidateMode`] and calls
 //! [`run`]. The guest's `build` / `merge` operations call [`run`]
 //! directly as their deterministic postlude gate. Provenance for every
-//! rule lives in the extension's sidecar `DECISIONS.md` until Step 5
-//! retires it.
+//! rule lives in the repository-root `DECISIONS.md` (§"Vectis
+//! validation and materialization").
 
 use std::path::Path;
 
