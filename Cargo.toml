@@ -57,8 +57,7 @@ tiny-skia = { version = "0.12", default-features = false }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 
 # Omnia guest SDK — the 0.35.0 crates are unpublished pre-publish pins,
-# supplied from the same git rev the specify engine pins (see
-# [patch.crates-io] below).
+# supplied from the git rev in [patch.crates-io] below.
 omnia = "0.35.0"
 omnia-guest = "0.35.0"
 omnia-testkit = "0.35.0"
@@ -68,21 +67,23 @@ wasip3 = { version = "0.7.0", features = ["http-compat"] }
 wit-bindgen = { version = "0.58.0", features = ["async-spawn"] }
 
 # Spawned cursor-agent model backend (unpublished; supplied straight from
-# the augentic/backends repo). Pinned to the pushed main head; a follow-up
-# bump picks up the in-flight cursor output-parser fix once it lands.
-omnia-cursor = { git = "https://github.com/augentic/backends.git", rev = "573087bb8ae87bef1354e33c271d5a73d600fb63" }
+# the augentic/backends repo). Pinned to the pushed `specify-feedback`
+# head, which includes the cursor output-parser fix.
+omnia-cursor = { git = "https://github.com/augentic/backends.git", rev = "a847850658bd7e39b42d80cd21dc1f4d9454b805" }
 
 [patch.crates-io]
-# Same unpublished-pin rev as augentic/specify's engine workspace; drop
-# when omnia publishes to crates.io.
-omnia = { git = "https://github.com/augentic/omnia.git", rev = "63c24f0367dd6f8ffaa319f74f5bd2f3fa6d222b" }
-omnia-guest = { git = "https://github.com/augentic/omnia.git", rev = "63c24f0367dd6f8ffaa319f74f5bd2f3fa6d222b" }
-omnia-guest-macros = { git = "https://github.com/augentic/omnia.git", rev = "63c24f0367dd6f8ffaa319f74f5bd2f3fa6d222b" }
-omnia-host-macros = { git = "https://github.com/augentic/omnia.git", rev = "63c24f0367dd6f8ffaa319f74f5bd2f3fa6d222b" }
-omnia-testkit = { git = "https://github.com/augentic/omnia.git", rev = "63c24f0367dd6f8ffaa319f74f5bd2f3fa6d222b" }
-omnia-wasi-config = { git = "https://github.com/augentic/omnia.git", rev = "63c24f0367dd6f8ffaa319f74f5bd2f3fa6d222b" }
-omnia-wasi-http = { git = "https://github.com/augentic/omnia.git", rev = "63c24f0367dd6f8ffaa319f74f5bd2f3fa6d222b" }
-omnia-wasi-model = { git = "https://github.com/augentic/omnia.git", rev = "63c24f0367dd6f8ffaa319f74f5bd2f3fa6d222b" }
+# augentic/omnia `specify-feedback` head. The augentic/specify engine
+# workspace patches these crates by sibling path (`../../omnia/crates/*`),
+# which resolves to this same rev; the engine re-pins to a git rev at
+# finalize. Drop when omnia publishes to crates.io.
+omnia = { git = "https://github.com/augentic/omnia.git", rev = "703c4b1006410500d0b68b9a3b254e6a8e4c07f4" }
+omnia-guest = { git = "https://github.com/augentic/omnia.git", rev = "703c4b1006410500d0b68b9a3b254e6a8e4c07f4" }
+omnia-guest-macros = { git = "https://github.com/augentic/omnia.git", rev = "703c4b1006410500d0b68b9a3b254e6a8e4c07f4" }
+omnia-host-macros = { git = "https://github.com/augentic/omnia.git", rev = "703c4b1006410500d0b68b9a3b254e6a8e4c07f4" }
+omnia-testkit = { git = "https://github.com/augentic/omnia.git", rev = "703c4b1006410500d0b68b9a3b254e6a8e4c07f4" }
+omnia-wasi-config = { git = "https://github.com/augentic/omnia.git", rev = "703c4b1006410500d0b68b9a3b254e6a8e4c07f4" }
+omnia-wasi-http = { git = "https://github.com/augentic/omnia.git", rev = "703c4b1006410500d0b68b9a3b254e6a8e4c07f4" }
+omnia-wasi-model = { git = "https://github.com/augentic/omnia.git", rev = "703c4b1006410500d0b68b9a3b254e6a8e4c07f4" }
 
 # `wrpc-wasmtime` 0.1.0 is unpublished on crates.io; omnia's own
 # [patch.crates-io] supplies it, but patches do not propagate to

@@ -91,6 +91,12 @@ No check was left homeless. The vectis platform builds and the omnia cargo/wasm3
 
 Each shrunk manifest validates against the sibling repo's relaxed `source.schema.json` / `target.schema.json` (verified against the schemas at S2 head). The omnia and vectis `description` strings were reworded for the `shape` → `guidance` rename in the same pass.
 
+## RFC-61 Step 5 Milestone A3 — guest-model capability deferral
+
+**Decision (2026-07).** The guest-kit `Model` trait (`crates/guest-kit/src/model.rs`) stays, despite upstream omnia growing its own guest-side model capability (`omnia-guest::capabilities::Model`, present as of the rev this workspace pins). The upstream capability deliberately mirrors `omnia:model/completion` *minus `tools` and `grants`* — workspace lending borrows a `wasi:filesystem` descriptor resource that only exists on `wasm32`, so it always sends `tools: vec![]` and empty grants, and points guests needing more at the raw `omnia-wasi-model` binding. Every judgment `create` these adapters issue requires both: the MCP reference-shelf grant and the `"."` workspace lend. The guest-kit trait exists precisely to carry those two fields across the wasm-free core boundary (`Request::mcp` + `Request::lend_workspace`, with the `wasm32` default body resolving the lend against the guest's own preopen), so the upstream capability cannot replace it today.
+
+**Swap criteria.** Revisit if/when the upstream capability grows tools/grants support (likely alongside the post-RFC-60 verify work): the swap is worthwhile only if upstream carries MCP tool grants *and* a workspace-lend affordance usable from a wasm-free core. Until then the trait is a deliberate fork, not drift. The specify engine's `specify-guest-model` byte-mirror keeps the same posture; the engine repo records its own entry at its step boundary.
+
 ## Vectis validation and materialization
 
 Provenance and rationale for the deterministic validation engine, re-homed from `targets/vectis/extension/DECISIONS.md` (see the anchor mapping note above). Code citations point at `specify-vectis-core` (`targets/vectis/crates/core/`), where the engine lives as of Milestone A1; inline comments in `src/validate/engine/` state the rules without historical labels; this file carries the citation.
