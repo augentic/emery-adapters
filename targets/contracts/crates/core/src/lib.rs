@@ -15,7 +15,7 @@
 //!   schema-gated formats, validate-before-visible enforcement.
 //!
 //! No `cfg(target_arch)` appears anywhere in this crate; the wasm32-only
-//! shim (`specify-contracts-guest`) owns bindings and export glue.
+//! shim (`specify-contracts`, the adapter-root package) owns bindings and export glue.
 
 pub mod operations;
 pub mod registry;

@@ -8,7 +8,7 @@ This directory is the live-backend eval harness for the contracts adapter guest:
 | ----- | ----- |
 | Host binary | [`crates/eval-driver`](../../crates/eval-driver) — `omnia::runtime!({ mode: command, hosts: { WasiHttp: HttpDefault, WasiModel: Cursor } })` |
 | Driver guest | [`crates/eval-guest`](../../crates/eval-guest) — the deployment's `wasi:cli/run` exporter; reads the slice inputs from the mount, dispatches `target.build`, prints the report as one JSON line |
-| Adapter guest | [`targets/contracts/guest`](../../targets/contracts/guest) — the component under test |
+| Adapter guest | [`targets/contracts`](../../targets/contracts) — the component under test |
 | Scenario seeds | `scenarios/<name>/inputs/*.md` (typed slice inputs by file stem) and `scenarios/<name>/seed/**` (files copied into the scratch project root) |
 | Runner | `run.sh` (one scenario per invocation) — `cargo make eval-contracts` runs it for every scenario |
 | Results | `runs/` — per-run raw output; the committed run summary lives at `runs/SUMMARY.md` |

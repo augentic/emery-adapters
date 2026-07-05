@@ -4119,6 +4119,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "specify-contracts"
+version = "0.4.3"
+dependencies = [
+ "omnia-guest",
+ "omnia-wasi-http",
+ "serde_json",
+ "specify-contracts-core",
+ "specify-guest-kit",
+ "wasip3",
+ "wit-bindgen 0.58.0",
+]
+
+[[package]]
 name = "specify-contracts-core"
 version = "0.4.3"
 dependencies = [
@@ -4131,19 +4144,6 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
-]
-
-[[package]]
-name = "specify-contracts-guest"
-version = "0.4.3"
-dependencies = [
- "omnia-guest",
- "omnia-wasi-http",
- "serde_json",
- "specify-contracts-core",
- "specify-guest-kit",
- "wasip3",
- "wit-bindgen 0.58.0",
 ]
 
 [[package]]

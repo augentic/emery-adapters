@@ -1,5 +1,5 @@
 #!/bin/sh
-# Drive one contracts-guest eval scenario against the live cursor backend.
+# Drive one contracts-adapter eval scenario against the live cursor backend.
 #
 #   evals/contracts/run.sh <describe|design|import|source|update>
 #
@@ -29,7 +29,7 @@ command -v cursor-agent >/dev/null || {
 }
 
 cd "$root"
-cargo build -p specify-contracts-guest -p specify-eval-guest --target wasm32-wasip2
+cargo build -p specify-contracts -p specify-eval-guest --target wasm32-wasip2
 
 # Scratch project tree: scenario seed files plus the slice inputs the
 # eval guest reads from the shared mount.
@@ -51,7 +51,7 @@ link = ["augentic:specify/source@0.1.0", "augentic:specify/target@0.1.0"]
 
 [[guest]]
 id = "target:contracts"
-source.path = "$wasm/specify_contracts_guest.wasm"
+source.path = "$wasm/specify_contracts.wasm"
 
 [[mount]]
 name = "."

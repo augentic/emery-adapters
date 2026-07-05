@@ -1,5 +1,5 @@
 [package]
-name = "specify-contracts-guest"
+name = "specify-contracts"
 description = "Contracts target-adapter WASI guest component: wasm32 shim over specify-contracts-core"
 version.workspace = true
 edition.workspace = true

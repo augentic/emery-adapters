@@ -69,7 +69,7 @@ exit $status
 # wasm32-wasip2 target the omnia runtime loads.
 [tasks.build-guests]
 command = "cargo"
-args = ["build", "-p", "specify-contracts-guest", "-p", "specify-eval-guest", "--target", "wasm32-wasip2"]
+args = ["build", "-p", "specify-contracts", "-p", "specify-eval-guest", "--target", "wasm32-wasip2"]
 
 # Live decomposition-proof evals (RFC-61 Step 2 Milestone E): every
 # contracts scenario through the eval driver against the real cursor
@@ -89,8 +89,8 @@ done
 [tasks.refresh-guests]
 script = '''
 set -e
-cargo build -p specify-contracts-guest --target wasm32-wasip2 --release
-cp target/wasm32-wasip2/release/specify_contracts_guest.wasm targets/contracts/guest.wasm
+cargo build -p specify-contracts --target wasm32-wasip2 --release
+cp target/wasm32-wasip2/release/specify_contracts.wasm targets/contracts/guest.wasm
 echo "refreshed targets/contracts/guest.wasm"
 '''
 

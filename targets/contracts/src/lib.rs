@@ -31,7 +31,7 @@ mod bindings {
 
     wit_bindgen::generate!({
         world: "target-adapter",
-        path: "../../../wit",
+        path: "../../wit",
         // The seam operations are `async func`s (judgment legs await the
         // async `omnia:model` import mid-call), so the exports async-lift.
         async: true,

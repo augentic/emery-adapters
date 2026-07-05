@@ -21,7 +21,10 @@ fn main() {
 fn run() -> Result<(), String> {
     let manifest_dir =
         PathBuf::from(env::var("CARGO_MANIFEST_DIR").map_err(|err| err.to_string())?);
-    let adapter_root = manifest_dir.parent().ok_or("core crate sits under the adapter root")?;
+    let adapter_root = manifest_dir
+        .parent()
+        .and_then(Path::parent)
+        .ok_or("core crate sits at <adapter>/crates/core under the adapter root")?;
 
     let mut docs: Vec<(String, PathBuf)> = Vec::new();
     for tree in ["briefs", "references"] {

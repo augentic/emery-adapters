@@ -21,7 +21,7 @@ use omnia_wasi_model::{
 };
 
 /// Built artifact name of the contracts target-adapter guest.
-pub const CONTRACTS_WASM: &str = "specify_contracts_guest.wasm";
+pub const CONTRACTS_WASM: &str = "specify_contracts.wasm";
 
 /// The adapters workspace root (`<root>/crates/runtime-tests` is this crate).
 pub fn workspace_root() -> PathBuf {
@@ -58,7 +58,7 @@ fn build_guests() {
     GUESTS.get_or_init(|| {
         let status = Command::new("cargo")
             .env("CARGO_TARGET_DIR", target_dir())
-            .args(["build", "-p", "specify-contracts-guest", "--target", "wasm32-wasip2"])
+            .args(["build", "-p", "specify-contracts", "--target", "wasm32-wasip2"])
             .current_dir(workspace_root())
             .status()
             .expect("spawning guest build");

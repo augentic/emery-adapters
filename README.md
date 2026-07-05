@@ -10,16 +10,27 @@ committed `adapter.wasm` it builds to. The platform `specify` binary
 consumes an adapter as an opaque, content-addressed artifact resolved from
 the global adapter store; it never compiles the extension itself.
 
+RFC-61 adds per-adapter **guest components**: the adapter root doubles as a
+wasm32-only cdylib package (`specify-<name>`, the bindgen/export shim built
+from `src/`), with its wasm-free core logic in a `crates/core/` sub-crate
+(`specify-<name>-core`) and the committed `guest.wasm` beside `adapter.yaml`.
+
 ## Layout
 
 ```text
 targets/
-  contracts/          # API contract authoring + validation (bundles the `contract` extension)
+  contracts/          # API contract authoring + validation
+    Cargo.toml        #   `specify-contracts` — the adapter guest component (wasm32 shim)
+    src/              #   shim body: bindgen, export glue, MCP shelf
+    crates/core/      #   `specify-contracts-core` — wasm-free logic, natively tested
+    extension/        #   legacy `contract` WASI extension (deleted at RFC-61 Step 5)
+    guest.wasm        #   committed guest component
   vectis/             # Crux cross-platform target (bundles the `vectis` extension)
 sources/              # source adapters (intent, documentation, typescript, captures, screenshots)
 shared/               # shared references/rules forked from the platform repo;
                       # adapter `spec-runtime` / `agent-teams` symlinks resolve here
-Cargo.toml            # workspace: members = each `**/extension` crate
+crates/               # shared guest support (guest-kit, eval driver/guest, runtime-tests)
+Cargo.toml            # workspace: guest roots + `targets/*/crates/*` + `**/extension` crates
 ```
 
 The Crux shell-detection heuristics the platform exposes as

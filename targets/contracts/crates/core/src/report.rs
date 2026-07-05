@@ -16,7 +16,7 @@ use crate::validate::ContractFinding;
 /// The derived judgment-answer schema gating `build` / `merge` replies —
 /// the vendored `schemas/answers/report.schema.json` pin.
 pub const REPORT_ANSWER_SCHEMA: &str =
-    include_str!("../../../../schemas/answers/report.schema.json");
+    include_str!("../../../../../schemas/answers/report.schema.json");
 
 /// Closed review severity enum, ordered for sort stability.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
