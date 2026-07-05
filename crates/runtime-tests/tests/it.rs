@@ -8,5 +8,7 @@
 mod common;
 #[path = "contracts.rs"]
 mod contracts;
+#[path = "omnia.rs"]
+mod omnia;
 #[path = "sources.rs"]
 mod sources;

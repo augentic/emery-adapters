@@ -11,6 +11,7 @@ members = [
     "targets/*/crates/*",
     "targets/*/extension",
     "targets/contracts",
+    "targets/omnia",
     "tools/rust-quality",
 ]
 

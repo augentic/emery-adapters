@@ -4244,6 +4244,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "specify-omnia"
+version = "0.4.3"
+dependencies = [
+ "omnia-guest",
+ "omnia-wasi-http",
+ "specify-guest-kit",
+ "specify-omnia-core",
+ "wasip3",
+ "wit-bindgen 0.58.0",
+]
+
+[[package]]
+name = "specify-omnia-core"
+version = "0.4.3"
+dependencies = [
+ "jsonschema",
+ "serde",
+ "serde_json",
+ "specify-guest-kit",
+ "specify-prose-registry",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "specify-prose-registry"
 version = "0.4.3"
 dependencies = [

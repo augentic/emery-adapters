@@ -72,6 +72,7 @@ command = "cargo"
 args = [
     "build",
     "-p", "specify-contracts",
+    "-p", "specify-omnia",
     "-p", "specify-captures",
     "-p", "specify-documentation",
     "-p", "specify-intent",

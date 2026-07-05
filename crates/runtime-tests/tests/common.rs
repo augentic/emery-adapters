@@ -5,7 +5,7 @@
 //! `specify-*-guest` crates), the `wasi:http`-backed store bundle a host
 //! binary's `runtime!` macro would generate, and the deployment manifests
 //! the tests deploy — the single-guest contracts manifest and the
-//! multi-guest composed manifest (contracts + documentation).
+//! multi-guest composed manifest (contracts + omnia + documentation).
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -23,6 +23,9 @@ use omnia_wasi_model::{
 
 /// Built artifact name of the contracts target-adapter guest.
 pub const CONTRACTS_WASM: &str = "specify_contracts.wasm";
+
+/// Built artifact name of the omnia target-adapter guest.
+pub const OMNIA_WASM: &str = "specify_omnia.wasm";
 
 /// Built artifact name of the documentation source-adapter guest.
 pub const DOCUMENTATION_WASM: &str = "specify_documentation.wasm";
@@ -66,6 +69,8 @@ fn build_guests() {
                 "build",
                 "-p",
                 "specify-contracts",
+                "-p",
+                "specify-omnia",
                 "-p",
                 "specify-captures",
                 "-p",
@@ -126,22 +131,26 @@ pub fn contracts_manifest(mount: &Path) -> Result<TempManifest> {
     ))
 }
 
-/// The multi-guest deployment manifest: the contracts target guest plus
-/// the documentation source guest, each with its own MCP shelf route,
-/// sharing one writable `"."` mount — the shared project tree every
-/// guest opens through its own preopen.
+/// The multi-guest deployment manifest: the contracts and omnia target
+/// guests plus the documentation source guest, each with its own MCP
+/// shelf route, sharing one writable `"."` mount — the shared project
+/// tree every guest opens through its own preopen.
 ///
 /// # Errors
 ///
 /// Returns an error when the temp manifest cannot be written.
 pub fn composed_manifest(mount: &Path) -> Result<TempManifest> {
     let contracts = guest_wasm(CONTRACTS_WASM);
+    let omnia = guest_wasm(OMNIA_WASM);
     let documentation = guest_wasm(DOCUMENTATION_WASM);
 
     temp_manifest(&format!(
         "[[guest]]\n\
          id = \"target:contracts\"\n\
          source.path = \"{contracts}\"\n\n\
+         [[guest]]\n\
+         id = \"target:omnia\"\n\
+         source.path = \"{omnia}\"\n\n\
          [[guest]]\n\
          id = \"source:documentation\"\n\
          source.path = \"{documentation}\"\n\n\
@@ -153,11 +162,15 @@ pub fn composed_manifest(mount: &Path) -> Result<TempManifest> {
          prefix = \"/mcp/contracts\"\n\
          guest = \"target:contracts\"\n\n\
          [[route.http]]\n\
+         prefix = \"/mcp/omnia\"\n\
+         guest = \"target:omnia\"\n\n\
+         [[route.http]]\n\
          prefix = \"/mcp/documentation\"\n\
          guest = \"source:documentation\"\n\n\
          [transport]\n\
          default = \"in-process\"\n",
         contracts = contracts.display(),
+        omnia = omnia.display(),
         documentation = documentation.display(),
         mount = mount.display(),
     ))
@@ -174,8 +187,8 @@ pub async fn runtime(mount: &Path) -> Result<Runtime<Bundle>> {
     assemble(contracts_manifest(mount)?).await
 }
 
-/// Assemble the multi-guest deployment (contracts + documentation) into a
-/// runtime, with `"."` mounted at `mount`.
+/// Assemble the multi-guest deployment (contracts + omnia +
+/// documentation) into a runtime, with `"."` mounted at `mount`.
 ///
 /// # Errors
 ///
