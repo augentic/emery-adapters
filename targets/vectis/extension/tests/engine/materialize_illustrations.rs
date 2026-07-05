@@ -22,7 +22,7 @@ const TRIANGLE: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 
 </svg>"##;
 
 #[test]
-fn materialize_illustration_vector_exports_exist() {
+fn vector_exports_exist() {
     let tmp = tempdir().unwrap();
     let design = tmp.path().join("design-system");
     fs::create_dir_all(design.join("assets")).unwrap();
@@ -73,7 +73,7 @@ const FIGMA_CLIP_ILLUSTRATION: &str = r##"<svg xmlns="http://www.w3.org/2000/svg
 </svg>"##;
 
 #[test]
-fn materialize_figma_style_illustration_exports_exist() {
+fn figma_style_exports_exist() {
     let tmp = tempdir().unwrap();
     let design = tmp.path().join("design-system");
     fs::create_dir_all(design.join("assets")).unwrap();
@@ -111,7 +111,7 @@ assets:
 // drawable-density (`mdpi`) branches, asserting byte-identical copies. Running
 // without `--platform` materializes both platform slots.
 #[test]
-fn materialize_photo_copies_density_slots() {
+fn photo_copies_density_slots() {
     let tmp = tempdir().unwrap();
     let design = tmp.path().join("design-system");
     fs::create_dir_all(design.join("assets/android")).unwrap();

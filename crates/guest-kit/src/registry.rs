@@ -36,3 +36,46 @@ pub fn body(docs: &[Doc], path: &str) -> &'static str {
         .unwrap_or_else(|| panic!("document `{path}` is not embedded in the registry"))
         .body
 }
+
+/// Generate an adapter core's `registry` module body over the `DOCS`
+/// table its `build.rs` emitted (via `specify_prose_registry::emit_core`).
+///
+/// Invoke once inside the core's `registry` module:
+///
+/// ```ignore
+/// pub mod registry {
+///     specify_guest_kit::embed_registry!();
+/// }
+/// ```
+#[macro_export]
+macro_rules! embed_registry {
+    () => {
+        pub use $crate::registry::Doc;
+
+        include!(concat!(env!("OUT_DIR"), "/registry_docs.rs"));
+
+        /// Every embedded document, sorted by adapter-relative path.
+        #[must_use]
+        pub fn docs() -> &'static [Doc] {
+            DOCS
+        }
+
+        /// Look up one document by its adapter-relative path.
+        #[must_use]
+        pub fn doc(path: &str) -> Option<&'static Doc> {
+            $crate::registry::find(DOCS, path)
+        }
+
+        /// The body of a document the registry is guaranteed to embed.
+        ///
+        /// # Panics
+        ///
+        /// Panics when `path` is not embedded — a build-time invariant, so a
+        /// miss means the adapter tree and its core disagree and the crate
+        /// must not limp on.
+        #[must_use]
+        pub fn body(path: &str) -> &'static str {
+            $crate::registry::body(DOCS, path)
+        }
+    };
+}

@@ -1,13 +1,9 @@
 //! Shared helpers for the composed-deployment integration tests.
 //!
-//! Owns guest-artifact building/locating (this workspace's counterpart to
-//! the specify engine's `crates/runtime/tests/common.rs`, pointed at the
-//! `specify-*-guest` crates), the `wasi:http`-backed store bundle a host
-//! binary's `runtime!` macro would generate, and the deployment manifests
-//! the tests deploy — the single-guest contracts manifest, the
-//! multi-guest composed manifest (contracts + omnia + vectis +
-//! documentation), and the source-guest composed manifest (intent +
-//! typescript + screenshots + captures).
+//! Owns guest-artifact building/locating (this workspace's counterpart
+//! to the specify engine's `crates/runtime/tests/common.rs`), the
+//! `wasi:http`-backed store bundle a host binary's `runtime!` macro
+//! would generate, and the deployment manifests the tests deploy.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -23,49 +19,88 @@ use omnia_wasi_model::{
     Answer, FutureResult, HasModel, Request, ToolHost, WasiModel, WasiModelCtx,
 };
 
-/// Built artifact name of the contracts target-adapter guest.
-pub const CONTRACTS_WASM: &str = "specify_contracts.wasm";
+/// One deployed guest: its manifest id and built artifact name. The
+/// vectis lib target is named apart from the `specify-vectis` package
+/// because the legacy extension keeps the `specify_vectis` lib name
+/// until RFC-61 Step 5.
+type Guest = (&'static str, &'static str);
 
-/// Built artifact name of the omnia target-adapter guest.
-pub const OMNIA_WASM: &str = "specify_omnia.wasm";
+/// The single-guest contracts deployment.
+const CONTRACTS: &[Guest] = &[("target:contracts", "specify_contracts.wasm")];
 
-/// Built artifact name of the vectis target-adapter guest (the lib target
-/// is named apart from the `specify-vectis` package because the legacy
-/// extension keeps the `specify_vectis` lib name until RFC-61 Step 5).
-pub const VECTIS_WASM: &str = "specify_vectis_adapter.wasm";
+/// The multi-guest composed deployment: three target guests plus one
+/// source guest.
+const COMPOSED: &[Guest] = &[
+    ("target:contracts", "specify_contracts.wasm"),
+    ("target:omnia", "specify_omnia.wasm"),
+    ("target:vectis", "specify_vectis_adapter.wasm"),
+    ("source:documentation", "specify_documentation.wasm"),
+];
 
-/// Built artifact name of the documentation source-adapter guest.
-pub const DOCUMENTATION_WASM: &str = "specify_documentation.wasm";
+/// The remaining source guests, composed together.
+const SOURCES: &[Guest] = &[
+    ("source:intent", "specify_intent.wasm"),
+    ("source:typescript", "specify_typescript.wasm"),
+    ("source:screenshots", "specify_screenshots.wasm"),
+    ("source:captures", "specify_captures.wasm"),
+];
 
-/// Built artifact name of the intent source-adapter guest.
-pub const INTENT_WASM: &str = "specify_intent.wasm";
-
-/// Built artifact name of the typescript source-adapter guest.
-pub const TYPESCRIPT_WASM: &str = "specify_typescript.wasm";
-
-/// Built artifact name of the screenshots source-adapter guest.
-pub const SCREENSHOTS_WASM: &str = "specify_screenshots.wasm";
-
-/// Built artifact name of the captures source-adapter guest.
-pub const CAPTURES_WASM: &str = "specify_captures.wasm";
-
-/// The adapters workspace root (`<root>/crates/runtime-tests` is this crate).
-pub fn workspace_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(2)
-        .expect("runtime-tests manifest dir is <workspace>/crates/runtime-tests")
-        .to_path_buf()
+/// Assemble the contracts deployment into a runtime the tests can
+/// dispatch into and serve HTTP through, with `"."` mounted at `mount`.
+///
+/// # Errors
+///
+/// Returns an error when the deployment cannot be built or the backends
+/// cannot connect.
+pub async fn runtime(mount: &Path) -> Result<Runtime<Bundle>> {
+    assemble(manifest(CONTRACTS, mount)?).await
 }
 
-/// Locate a built wasm32-wasip2 guest component, building the guest crates
-/// on first use (a fast no-op when fresh).
+/// Assemble the multi-guest deployment (contracts + omnia + vectis +
+/// documentation) into a runtime, with `"."` mounted at `mount`.
 ///
-/// # Panics
+/// # Errors
 ///
-/// Panics when the artifact is still absent after the build, pointing the
-/// developer at `cargo make build-guests`.
-pub fn guest_wasm(file: &str) -> PathBuf {
+/// As [`runtime`].
+pub async fn composed_runtime(mount: &Path) -> Result<Runtime<Bundle>> {
+    assemble(manifest(COMPOSED, mount)?).await
+}
+
+/// Assemble the source-guest deployment (intent + typescript +
+/// screenshots + captures) into a runtime, with `"."` mounted at `mount`.
+///
+/// # Errors
+///
+/// As [`runtime`].
+pub async fn source_guests_runtime(mount: &Path) -> Result<Runtime<Bundle>> {
+    assemble(manifest(SOURCES, mount)?).await
+}
+
+/// A deployment manifest over `guests`: each guest's MCP shelf routed at
+/// `/mcp/<name>`, sharing one writable `"."` mount — the shared project
+/// tree every guest opens through its own preopen.
+fn manifest(guests: &[Guest], mount: &Path) -> Result<TempManifest> {
+    use std::fmt::Write as _;
+
+    let mut doc = String::new();
+    for (id, file) in guests {
+        let wasm = guest_wasm(file);
+        writeln!(doc, "[[guest]]\nid = \"{id}\"\nsource.path = \"{}\"\n", wasm.display())?;
+    }
+    writeln!(doc, "[[mount]]\nname = \".\"\npath = \"{}\"\nwritable = true\n", mount.display())?;
+    for (id, _) in guests {
+        let name = id.split_once(':').expect("guest id is `<axis>:<name>`").1;
+        writeln!(doc, "[[route.http]]\nprefix = \"/mcp/{name}\"\nguest = \"{id}\"\n")?;
+    }
+    doc.push_str("[transport]\ndefault = \"in-process\"\n");
+    temp_manifest(&doc)
+}
+
+/// Locate a built wasm32-wasip2 guest component, building the guest
+/// crates on first use (a fast no-op when fresh). Panics when the
+/// artifact is still absent after the build, pointing the developer at
+/// `cargo make build-guests`.
+fn guest_wasm(file: &str) -> PathBuf {
     build_guests();
 
     let path = target_dir().join("wasm32-wasip2").join("debug").join(file);
@@ -78,34 +113,32 @@ pub fn guest_wasm(file: &str) -> PathBuf {
 }
 
 // Build the guest crates once per test process; cargo's own build lock
-// serializes concurrent invocations across test binaries.
+// serializes concurrent invocations across test binaries. The package
+// list mirrors the Makefile's `GUEST_PACKAGES`.
 fn build_guests() {
     static GUESTS: OnceLock<()> = OnceLock::new();
     GUESTS.get_or_init(|| {
+        let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .nth(2)
+            .expect("runtime-tests manifest dir is <workspace>/crates/runtime-tests")
+            .to_path_buf();
+        let packages = [
+            "specify-contracts",
+            "specify-omnia",
+            "specify-vectis",
+            "specify-captures",
+            "specify-documentation",
+            "specify-intent",
+            "specify-screenshots",
+            "specify-typescript",
+        ];
         let status = Command::new("cargo")
             .env("CARGO_TARGET_DIR", target_dir())
-            .args([
-                "build",
-                "-p",
-                "specify-contracts",
-                "-p",
-                "specify-omnia",
-                "-p",
-                "specify-vectis",
-                "-p",
-                "specify-captures",
-                "-p",
-                "specify-documentation",
-                "-p",
-                "specify-intent",
-                "-p",
-                "specify-screenshots",
-                "-p",
-                "specify-typescript",
-                "--target",
-                "wasm32-wasip2",
-            ])
-            .current_dir(workspace_root())
+            .arg("build")
+            .args(packages.iter().flat_map(|package| ["-p", package]))
+            .args(["--target", "wasm32-wasip2"])
+            .current_dir(workspace_root)
             .status()
             .expect("spawning guest build");
         assert!(status.success(), "guest build failed with status {status}");
@@ -121,174 +154,6 @@ fn target_dir() -> PathBuf {
         .nth(3)
         .expect("test exe sits at <target>/<profile>/deps/<exe>")
         .to_path_buf()
-}
-
-/// The contracts deployment manifest: the guest registered under
-/// `target:contracts`, its MCP shelf routed at `/mcp/contracts`, and a
-/// writable `"."` mount — the shared project tree every guest opens
-/// through its own preopen.
-///
-/// # Errors
-///
-/// Returns an error when the temp manifest cannot be written.
-pub fn contracts_manifest(mount: &Path) -> Result<TempManifest> {
-    let contracts = guest_wasm(CONTRACTS_WASM);
-
-    temp_manifest(&format!(
-        "[[guest]]\n\
-         id = \"target:contracts\"\n\
-         source.path = \"{contracts}\"\n\n\
-         [[mount]]\n\
-         name = \".\"\n\
-         path = \"{mount}\"\n\
-         writable = true\n\n\
-         [[route.http]]\n\
-         prefix = \"/mcp/contracts\"\n\
-         guest = \"target:contracts\"\n\n\
-         [transport]\n\
-         default = \"in-process\"\n",
-        contracts = contracts.display(),
-        mount = mount.display(),
-    ))
-}
-
-/// The multi-guest deployment manifest: the contracts, omnia, and vectis
-/// target guests plus the documentation source guest, each with its own
-/// MCP shelf route, sharing one writable `"."` mount — the shared project
-/// tree every guest opens through its own preopen.
-///
-/// # Errors
-///
-/// Returns an error when the temp manifest cannot be written.
-pub fn composed_manifest(mount: &Path) -> Result<TempManifest> {
-    let contracts = guest_wasm(CONTRACTS_WASM);
-    let omnia = guest_wasm(OMNIA_WASM);
-    let vectis = guest_wasm(VECTIS_WASM);
-    let documentation = guest_wasm(DOCUMENTATION_WASM);
-
-    temp_manifest(&format!(
-        "[[guest]]\n\
-         id = \"target:contracts\"\n\
-         source.path = \"{contracts}\"\n\n\
-         [[guest]]\n\
-         id = \"target:omnia\"\n\
-         source.path = \"{omnia}\"\n\n\
-         [[guest]]\n\
-         id = \"target:vectis\"\n\
-         source.path = \"{vectis}\"\n\n\
-         [[guest]]\n\
-         id = \"source:documentation\"\n\
-         source.path = \"{documentation}\"\n\n\
-         [[mount]]\n\
-         name = \".\"\n\
-         path = \"{mount}\"\n\
-         writable = true\n\n\
-         [[route.http]]\n\
-         prefix = \"/mcp/contracts\"\n\
-         guest = \"target:contracts\"\n\n\
-         [[route.http]]\n\
-         prefix = \"/mcp/omnia\"\n\
-         guest = \"target:omnia\"\n\n\
-         [[route.http]]\n\
-         prefix = \"/mcp/vectis\"\n\
-         guest = \"target:vectis\"\n\n\
-         [[route.http]]\n\
-         prefix = \"/mcp/documentation\"\n\
-         guest = \"source:documentation\"\n\n\
-         [transport]\n\
-         default = \"in-process\"\n",
-        contracts = contracts.display(),
-        omnia = omnia.display(),
-        vectis = vectis.display(),
-        documentation = documentation.display(),
-        mount = mount.display(),
-    ))
-}
-
-/// The source-guest composed deployment manifest: the intent, typescript,
-/// screenshots, and captures source guests, each with its own MCP shelf
-/// route, sharing one writable `"."` mount — the shared project tree every
-/// guest opens through its own preopen.
-///
-/// # Errors
-///
-/// Returns an error when the temp manifest cannot be written.
-pub fn source_guests_manifest(mount: &Path) -> Result<TempManifest> {
-    let intent = guest_wasm(INTENT_WASM);
-    let typescript = guest_wasm(TYPESCRIPT_WASM);
-    let screenshots = guest_wasm(SCREENSHOTS_WASM);
-    let captures = guest_wasm(CAPTURES_WASM);
-
-    temp_manifest(&format!(
-        "[[guest]]\n\
-         id = \"source:intent\"\n\
-         source.path = \"{intent}\"\n\n\
-         [[guest]]\n\
-         id = \"source:typescript\"\n\
-         source.path = \"{typescript}\"\n\n\
-         [[guest]]\n\
-         id = \"source:screenshots\"\n\
-         source.path = \"{screenshots}\"\n\n\
-         [[guest]]\n\
-         id = \"source:captures\"\n\
-         source.path = \"{captures}\"\n\n\
-         [[mount]]\n\
-         name = \".\"\n\
-         path = \"{mount}\"\n\
-         writable = true\n\n\
-         [[route.http]]\n\
-         prefix = \"/mcp/intent\"\n\
-         guest = \"source:intent\"\n\n\
-         [[route.http]]\n\
-         prefix = \"/mcp/typescript\"\n\
-         guest = \"source:typescript\"\n\n\
-         [[route.http]]\n\
-         prefix = \"/mcp/screenshots\"\n\
-         guest = \"source:screenshots\"\n\n\
-         [[route.http]]\n\
-         prefix = \"/mcp/captures\"\n\
-         guest = \"source:captures\"\n\n\
-         [transport]\n\
-         default = \"in-process\"\n",
-        intent = intent.display(),
-        typescript = typescript.display(),
-        screenshots = screenshots.display(),
-        captures = captures.display(),
-        mount = mount.display(),
-    ))
-}
-
-/// Assemble the contracts deployment into a runtime the tests can dispatch
-/// into and serve HTTP through, with `"."` mounted at `mount`.
-///
-/// # Errors
-///
-/// Returns an error when the deployment cannot be built or the backends
-/// cannot connect.
-pub async fn runtime(mount: &Path) -> Result<Runtime<Bundle>> {
-    assemble(contracts_manifest(mount)?).await
-}
-
-/// Assemble the multi-guest deployment (contracts + omnia + vectis +
-/// documentation) into a runtime, with `"."` mounted at `mount`.
-///
-/// # Errors
-///
-/// Returns an error when the deployment cannot be built or the backends
-/// cannot connect.
-pub async fn composed_runtime(mount: &Path) -> Result<Runtime<Bundle>> {
-    assemble(composed_manifest(mount)?).await
-}
-
-/// Assemble the source-guest composed deployment (intent + typescript +
-/// screenshots + captures) into a runtime, with `"."` mounted at `mount`.
-///
-/// # Errors
-///
-/// Returns an error when the deployment cannot be built or the backends
-/// cannot connect.
-pub async fn source_guests_runtime(mount: &Path) -> Result<Runtime<Bundle>> {
-    assemble(source_guests_manifest(mount)?).await
 }
 
 // Deploy a temp manifest onto the runtime with the test backend bundle.
@@ -314,20 +179,11 @@ async fn assemble(manifest: TempManifest) -> Result<Runtime<Bundle>> {
 /// The backend bundle a host binary's `runtime!` macro would generate for
 /// `hosts: { WasiHttp: HttpDefault, WasiModel: … }` — with the model
 /// backend stubbed: these composed tests are model-free (judgment legs are
-/// covered natively in `specify-contracts-core` and live by the Milestone
-/// E proof), so any completion is a test bug.
+/// covered natively in the core crates), so any completion is a test bug.
+#[derive(Clone)]
 pub struct Bundle {
     http: HttpDefault,
     model: NoModel,
-}
-
-impl Clone for Bundle {
-    fn clone(&self) -> Self {
-        Self {
-            http: self.http.clone(),
-            model: NoModel,
-        }
-    }
 }
 
 impl omnia::Backends for Bundle {
@@ -353,7 +209,7 @@ impl HasModel for Bundle {
 
 /// A model backend that fails every completion: linked so the guest's
 /// `omnia:model/completion` import resolves, never legitimately reached.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct NoModel;
 
 impl WasiModelCtx for NoModel {

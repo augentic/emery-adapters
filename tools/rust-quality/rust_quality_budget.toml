@@ -12,6 +12,6 @@
 #     lock it in. The ratchet only moves down.
 #
 # Adapters absent from this table have an implicit budget of 0. See
-# docs/standards/testing.md.
+# TESTING.md.
 [adapter]
 vectis = 14

@@ -2,7 +2,7 @@
 //!
 //! One binary per crate: each area file is pulled in as a `#[path]`
 //! submodule so the harness links exactly once. See
-//! [docs/standards/testing.md](../../../docs/standards/testing.md).
+//! `TESTING.md` at the workspace root.
 
 #[path = "common.rs"]
 mod common;

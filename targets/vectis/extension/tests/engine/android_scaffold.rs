@@ -132,29 +132,29 @@ fn write_minimal_android_tree(root: &std::path::Path, app_name: &str, package: &
 }
 
 #[test]
-fn android_scaffold_kt_has_no_suppress_render_only() {
+fn kt_has_no_suppress_render_only() {
     assert_no_suppress(&plan(None));
 }
 
 #[test]
-fn android_scaffold_kt_has_no_suppress_http_kv_time_platform() {
+fn kt_has_no_suppress_http_kv_time_platform() {
     assert_no_suppress(&plan(Some("http,kv,time,platform")));
 }
 
 #[test]
-fn android_scaffold_gradle_treats_warnings_as_errors_render_only() {
+fn gradle_treats_warnings_as_errors_render_only() {
     assert_gradle_strict_flags(&plan(None));
     assert_shared_cargo_extension_profile(&plan(None));
 }
 
 #[test]
-fn android_scaffold_gradle_treats_warnings_as_errors_http() {
+fn gradle_treats_warnings_as_errors_http() {
     assert_gradle_strict_flags(&plan(Some("http")));
     assert_shared_cargo_extension_profile(&plan(Some("http")));
 }
 
 #[test]
-fn android_scaffold_makefile_uses_strict_rustflags_render_only() {
+fn makefile_uses_strict_rustflags_render_only() {
     assert_makefile_strict_rustflags(&plan(None));
 }
 
@@ -289,7 +289,7 @@ fn drift_findings_flag_missing_makefile() {
 }
 
 #[test]
-fn sync_android_scaffold_command_restores_drifted_makefile() {
+fn sync_command_restores_drifted_makefile() {
     let _guard = env_lock();
     let tmp = tempdir().unwrap();
     let project = tmp.path().join("project");

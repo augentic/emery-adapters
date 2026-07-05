@@ -22,7 +22,7 @@ const SQUARE_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 
 </svg>"##;
 
 #[test]
-fn materialize_app_icon_ios_exports_exist() {
+fn ios_exports_exist() {
     let tmp = tempdir().unwrap();
     let design = tmp.path().join("design-system");
     fs::create_dir_all(design.join("assets")).unwrap();
@@ -71,7 +71,7 @@ assets:
 }
 
 #[test]
-fn materialize_app_icon_android_exports_exist() {
+fn android_exports_exist() {
     let tmp = tempdir().unwrap();
     let design = tmp.path().join("design-system");
     fs::create_dir_all(design.join("assets")).unwrap();
@@ -117,7 +117,7 @@ const TRANSPARENT_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBo
 </svg>"##;
 
 #[test]
-fn materialize_app_icon_transparent_raster_exports_exist() {
+fn transparent_raster_exports_exist() {
     let tmp = tempdir().unwrap();
     let design = tmp.path().join("design-system");
     fs::create_dir_all(design.join("assets")).unwrap();
@@ -155,7 +155,7 @@ assets:
 }
 
 #[test]
-fn materialize_app_icon_transparent_svg_exports_exist() {
+fn transparent_svg_exports_exist() {
     let tmp = tempdir().unwrap();
     let design = tmp.path().join("design-system");
     fs::create_dir_all(design.join("assets")).unwrap();
@@ -193,7 +193,7 @@ assets:
 }
 
 #[test]
-fn materialize_app_icon_ios_rejects_small_raster() {
+fn ios_rejects_small_raster() {
     let tmp = tempdir().unwrap();
     let design = tmp.path().join("design-system");
     fs::create_dir_all(design.join("assets")).unwrap();
@@ -226,7 +226,7 @@ assets:
 }
 
 #[test]
-fn materialize_app_icon_android_rejects_small_raster() {
+fn android_rejects_small_raster() {
     let tmp = tempdir().unwrap();
     let design = tmp.path().join("design-system");
     fs::create_dir_all(design.join("assets")).unwrap();
@@ -263,7 +263,7 @@ assets:
 // `skipped_pins`. The app-icon pin-skip branch is distinct from the
 // icon-vector one in `materialize.rs::materialize_skips_pinned_platform…`.
 #[test]
-fn materialize_app_icon_skips_pinned_ios_export() {
+fn skips_pinned_ios_export() {
     let tmp = tempdir().unwrap();
     let design = tmp.path().join("design-system");
     let appiconset = design.join("assets/exports/ios/app-icon/AppIcon.appiconset");
@@ -299,7 +299,7 @@ assets:
 }
 
 #[test]
-fn materialize_app_icon_skips_pinned_android_export() {
+fn skips_pinned_android_export() {
     let tmp = tempdir().unwrap();
     let design = tmp.path().join("design-system");
     let export_root = design.join("assets/exports/android/app-icon");

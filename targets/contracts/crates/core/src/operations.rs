@@ -1,24 +1,19 @@
-//! The judgment operation template: `guidance`, `build`, and `merge`.
+//! The judgment operation template: `guidance`, `build`, and `merge`,
+//! over the shared [`phase`] scaffolding.
 //!
-//! Each judgment leg is bracketed by deterministic guest code. The core
-//! assembles a prompt from the embedded brief plus the typed inputs,
-//! issues a single-shot `create` through the shared
-//! [`specify_guest_kit::judgment`] helper with a schema-gated `format`,
-//! and then runs the validate-before-visible checks (the absorbed
-//! contract validators) after the answer lands. All state between calls
-//! lives in the workspace tree — the session-less shape: `build`
-//! decomposes into the three format sub-flows (json-schema, openapi,
-//! asyncapi) as independent `create` calls, then a bounded verify-repair
-//! loop, then one report call.
+//! `build` decomposes into the three format sub-flows (json-schema,
+//! openapi, asyncapi) as independent legs, then a bounded verify-repair
+//! loop over the absorbed contract validators, then one report leg. The
+//! validators run again after the report lands (validate-before-visible);
+//! residual blocking findings force `status: failure` regardless of the
+//! answer.
 
 use std::path::Path;
 
-use serde::Deserialize;
-use specify_guest_kit::answers::{REPORT_ANSWER_SCHEMA, ReportAnswer};
 use specify_guest_kit::seam::{
-    Changeset, Context, Error, Finding, Input, Report, Severity, Status, WorkingTree,
+    Changeset, Context, Error, Finding, Input, Report, Severity, WorkingTree,
 };
-use specify_guest_kit::{Model, judgment};
+use specify_guest_kit::{Model, phase};
 
 use crate::registry;
 use crate::validate::{ContractFinding, validate_baseline};
@@ -57,42 +52,6 @@ const SUB_FLOWS: [SubFlow; 3] = [
     },
 ];
 
-/// Adapter-internal answer schema for one format sub-flow leg. Internal
-/// legs are not part of the `augentic:specify` contract, so this schema
-/// lives here rather than deriving from a canonical schema.
-const SUB_FLOW_ANSWER_SCHEMA: &str = r#"{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "additionalProperties": false,
-  "properties": {
-    "applicable": {
-      "description": "Whether the slice has any surface this format owns. `false` means the sub-flow wrote nothing.",
-      "type": "boolean"
-    },
-    "summary": {
-      "description": "One-paragraph account of what was authored, imported, repaired, or why the sub-flow was skipped.",
-      "minLength": 1,
-      "type": "string"
-    },
-    "written": {
-      "default": [],
-      "description": "Workspace-relative paths of files this sub-flow created or modified.",
-      "items": { "type": "string" },
-      "type": "array"
-    }
-  },
-  "required": ["applicable", "summary"]
-}"#;
-
-/// One format sub-flow's schema-gated answer.
-#[derive(Debug, Deserialize)]
-struct SubFlowAnswer {
-    applicable: bool,
-    summary: String,
-    #[serde(default)]
-    written: Vec<String>,
-}
-
 /// Guidance on the expected build artifacts for this target — the
 /// embedded shape brief, returned deterministically (no judgment leg).
 #[must_use]
@@ -102,23 +61,19 @@ pub fn guidance() -> &'static str {
 
 /// Build a slice's contract deltas under `.specify/slices/<slice>/contracts/`.
 ///
-/// Session-less decomposition: one `create` per format sub-flow (fixed
-/// order), a bounded verify-repair loop over the in-core validators, and
-/// one report call gated by the derived answer schema. The validators run
-/// again after the report lands; residual blocking findings force
-/// `status: failure` regardless of the answer.
+/// One leg per format sub-flow (fixed order), a bounded verify-repair
+/// loop over the in-core validators, and one report leg whose answer the
+/// validators then re-gate.
 ///
 /// # Errors
 ///
-/// Returns [`Error::InvalidRequest`] when the model rejects a request as
-/// malformed, and [`Error::Internal`] for other model failures or an
-/// answer that does not deserialize.
+/// As [`specify_guest_kit::judgment`].
 pub async fn build<P: Model>(
     model: &P, ctx: &Context<'_>, slice: &str, inputs: &[Input], tree: &WorkingTree,
 ) -> Result<Report, Error> {
     let slice_contracts_rel = format!(".specify/slices/{slice}/contracts");
     let slice_contracts = ctx.tree_root(tree).join(&slice_contracts_rel);
-    let inputs_block = render_inputs(inputs);
+    let inputs_block = phase::render_inputs(inputs);
     let build_brief = registry::body("briefs/build.md");
 
     // Phase 2 — author or import, fixed format order. Classification is
@@ -138,11 +93,8 @@ pub async fn build<P: Model>(
              {inputs_block}",
             ctx.adapter_id,
         );
-        let answer = sub_flow_call(model, ctx, system, user, &format!("{format}-sub-flow")).await?;
-        summaries.push(format!(
-            "- {format}: applicable={}, wrote {:?} — {}",
-            answer.applicable, answer.written, answer.summary
-        ));
+        let answer = phase::phase(model, ctx, system, user, &format!("{format}-sub-flow")).await?;
+        summaries.push(phase::render_outcome(format, &answer));
     }
 
     // Phase 4 — verify-repair loop over the in-core validators (the
@@ -164,7 +116,7 @@ pub async fn build<P: Model>(
              Answer `applicable: true` with a summary of the repairs.",
             render_validator_findings(&findings),
         );
-        sub_flow_call(model, ctx, system, user, "repair").await?;
+        phase::phase(model, ctx, system, user, "repair").await?;
     }
 
     // Final leg — the report answer, gated by the derived answer schema.
@@ -178,7 +130,7 @@ pub async fn build<P: Model>(
          Sub-flow outcomes:\n{}",
         summaries.join("\n"),
     );
-    let report = report_call(model, ctx, system, user).await?;
+    let report = phase::report(model, ctx, system, user).await?;
 
     // Validate-before-visible: residual blocking findings override the
     // judgment regardless of what the answer claimed.
@@ -187,25 +139,22 @@ pub async fn build<P: Model>(
 
 /// Merge a built slice's delta into the baseline `contracts/` tree.
 ///
-/// One judgment leg folds the delta and answers with the report; the
-/// post-merge validator gate then runs in core, with one bounded repair
-/// leg when it finds blocking issues. Merge deliberately gets one repair
-/// leg where build gets two: the delta was already
-/// validated at build time, so post-merge findings are collision-shaped
-/// (`id-unique` against the baseline) and either one pass clears them or
-/// the slice needs human review.
+/// One judgment leg folds the delta and answers with the report, then
+/// the post-merge validator gate runs in core with one bounded repair
+/// leg. Merge deliberately gets one repair leg where build gets two: the
+/// delta was already validated at build time, so post-merge findings are
+/// collision-shaped (`id-unique` against the baseline) and either one
+/// pass clears them or the slice needs human review.
 ///
 /// # Errors
 ///
-/// Returns [`Error::InvalidRequest`] when the model rejects a request as
-/// malformed, and [`Error::Internal`] for other model failures or an
-/// answer that does not deserialize.
+/// As [`specify_guest_kit::judgment`].
 pub async fn merge<P: Model>(
     model: &P, ctx: &Context<'_>, slice: &str, delta: &Changeset, tree: &WorkingTree,
 ) -> Result<Report, Error> {
     let baseline = ctx.tree_root(tree).join("contracts");
     let merge_brief = registry::body("briefs/merge.md");
-    let delta_block = render_delta(delta);
+    let delta_block = phase::render_delta(delta);
 
     let user = format!(
         "Merge slice `{slice}`'s built contract delta into the baseline `contracts/` \
@@ -215,7 +164,7 @@ pub async fn merge<P: Model>(
          then answer with the report body.\n\n{delta_block}",
         ctx.adapter_id, delta.base,
     );
-    let mut report = report_call(model, ctx, merge_brief.to_string(), user).await?;
+    let mut report = phase::report(model, ctx, merge_brief.to_string(), user).await?;
 
     // Post-merge validator gate with one bounded repair leg.
     let mut findings = validate_baseline(&baseline);
@@ -226,7 +175,7 @@ pub async fn merge<P: Model>(
              corrected report body.\n\n{}",
             render_validator_findings(&findings),
         );
-        report = report_call(model, ctx, merge_brief.to_string(), user).await?;
+        report = phase::report(model, ctx, merge_brief.to_string(), user).await?;
         findings = validate_baseline(&baseline);
     }
 
@@ -252,23 +201,6 @@ fn owning_sub_briefs(findings: &[ContractFinding], contracts_dir: &Path) -> Stri
     inlined
 }
 
-/// Issue one internal sub-flow leg through the shared judgment helper.
-async fn sub_flow_call<P: Model>(
-    model: &P, ctx: &Context<'_>, system: String, user: String, name: &str,
-) -> Result<SubFlowAnswer, Error> {
-    judgment(model, ctx, system, user, name, SUB_FLOW_ANSWER_SCHEMA).await
-}
-
-/// Issue one report leg gated by the derived answer schema and project
-/// the answer onto the seam-facing report.
-async fn report_call<P: Model>(
-    model: &P, ctx: &Context<'_>, system: String, user: String,
-) -> Result<Report, Error> {
-    judgment::<P, ReportAnswer>(model, ctx, system, user, "report", REPORT_ANSWER_SCHEMA)
-        .await
-        .map(ReportAnswer::into_report)
-}
-
 /// Map one deterministic validator finding into the seam shape.
 /// Contract rules gate the build, so validator findings are blocking
 /// (`important`).
@@ -280,32 +212,9 @@ fn validator_finding(finding: &ContractFinding) -> Finding {
     }
 }
 
-/// Deterministic guard after the answer lands: residual validator
-/// findings force `failure` and are appended to the report; a `success`
-/// answer carrying blocking findings is downgraded the same way.
-fn enforce_validators(mut report: Report, residual: &[ContractFinding]) -> Report {
-    if !residual.is_empty() {
-        report.status = Status::Failure;
-        report.findings.extend(residual.iter().map(validator_finding));
-    }
-    if report.status == Status::Success
-        && report.findings.iter().any(|finding| finding.severity.blocking())
-    {
-        report.status = Status::Failure;
-    }
-    report
-}
-
-/// Render the typed inputs as labeled prompt sections.
-fn render_inputs(inputs: &[Input]) -> String {
-    if inputs.is_empty() {
-        return "(no slice artifacts were provided)".to_string();
-    }
-    inputs
-        .iter()
-        .map(|input| format!("### input: {}\n\n{}", input.label(), input.body()))
-        .collect::<Vec<_>>()
-        .join("\n\n")
+/// [`phase::enforce`] over the deterministic validator residue.
+fn enforce_validators(report: Report, residual: &[ContractFinding]) -> Report {
+    phase::enforce(report, residual.iter().map(validator_finding).collect())
 }
 
 /// Render validator findings for a repair prompt.
@@ -317,23 +226,4 @@ fn render_validator_findings(findings: &[ContractFinding]) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
-}
-
-/// Render a changeset's edits for the merge prompt.
-fn render_delta(delta: &Changeset) -> String {
-    if delta.edits.is_empty() {
-        return "### delta\n\n(empty changeset — the slice wrote no contract files)".to_string();
-    }
-    let edits = delta
-        .edits
-        .iter()
-        .map(|edit| {
-            edit.content.as_ref().map_or_else(
-                || format!("- {} (deleted)", edit.path),
-                |content| format!("- {} (content: {content})", edit.path),
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    format!("### delta (base {})\n\n{edits}", delta.base)
 }

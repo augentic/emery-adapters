@@ -228,6 +228,19 @@ pub struct Finding {
     pub detail: String,
 }
 
+impl Finding {
+    /// A blocking (`important`) finding citing no rule — the shape the
+    /// deterministic gates emit.
+    #[must_use]
+    pub fn blocking(detail: impl Into<String>) -> Self {
+        Self {
+            rule_id: None,
+            severity: Severity::Important,
+            detail: detail.into(),
+        }
+    }
+}
+
 /// Judgment returned by `build` and `merge` — the WIT `report` record.
 /// The resulting state lives in the working tree, not here.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -258,6 +271,19 @@ pub struct Lead {
     /// reconciliation.
     #[serde(default)]
     pub topics: Vec<String>,
+}
+
+impl Lead {
+    /// Render as the briefs' lead-block shape for an extract prompt.
+    #[must_use]
+    pub fn render(&self) -> String {
+        let topics = if self.topics.is_empty() {
+            String::new()
+        } else {
+            format!("\n- topics: [{}]", self.topics.join(", "))
+        };
+        format!("- lead: {}\n- synopsis: {}{topics}", self.lead, self.synopsis)
+    }
 }
 
 /// Document-level authority class for an Evidence document, per the

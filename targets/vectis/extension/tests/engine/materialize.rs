@@ -21,7 +21,7 @@ const TRIANGLE: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 
 </svg>"##;
 
 #[test]
-fn materialize_icon_vector_exports_exist() {
+fn icon_vector_exports_exist() {
     let tmp = tempdir().unwrap();
     let design = tmp.path().join("design-system");
     fs::create_dir_all(design.join("assets")).unwrap();
@@ -58,7 +58,7 @@ const FIGMA_CLIP_ICON: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBo
 </svg>"##;
 
 #[test]
-fn materialize_figma_style_icon_exports_exist() {
+fn figma_style_icon_exports_exist() {
     let tmp = tempdir().unwrap();
     let design = tmp.path().join("design-system");
     fs::create_dir_all(design.join("assets")).unwrap();
@@ -89,7 +89,7 @@ assets:
 }
 
 #[test]
-fn materialize_icon_dry_run_skips_writes() {
+fn icon_dry_run_skips_writes() {
     let tmp = tempdir().unwrap();
     let design = tmp.path().join("design-system");
     fs::create_dir_all(design.join("assets")).unwrap();
@@ -118,7 +118,7 @@ assets:
 }
 
 #[test]
-fn materialize_auto_writes_sources_pins() {
+fn auto_writes_sources_pins() {
     let tmp = tempdir().unwrap();
     let design = tmp.path().join("design-system");
     fs::create_dir_all(design.join("assets")).unwrap();
@@ -144,7 +144,7 @@ assets:
 }
 
 #[test]
-fn materialize_skips_pinned_platform_despite_source_edit() {
+fn skips_pinned_platform_despite_source_edit() {
     let tmp = tempdir().unwrap();
     let design = tmp.path().join("design-system");
     let imageset = design.join("assets/exports/ios/chevron-right.imageset");
@@ -187,7 +187,7 @@ assets:
 }
 
 #[test]
-fn materialize_second_run_is_noop() {
+fn second_run_is_noop() {
     let tmp = tempdir().unwrap();
     let design = tmp.path().join("design-system");
     fs::create_dir_all(design.join("assets")).unwrap();

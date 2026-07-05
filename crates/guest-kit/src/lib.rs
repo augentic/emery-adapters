@@ -16,14 +16,22 @@
 //!   deserializers projecting schema-gated answers onto the seam types.
 //! - [`judgment`] — the shared judgment-call helper: one schema-gated
 //!   `create` with the reference grant and workspace lend attached.
+//! - [`phase`] — the shared per-leg scaffolding for target operation
+//!   templates: the internal phase-answer shape, prompt renderers, and
+//!   the deterministic report-coherence checks.
 //! - [`registry`] — the embedded prose-registry vocabulary the
-//!   `specify-prose-registry` codegen plugs into.
+//!   `specify-prose-registry` codegen plugs into, plus the
+//!   [`embed_registry!`] module generator.
 //! - [`shelf`] — the MCP URL env convention plus (on `wasm32`) the
 //!   generic `McpServer` reference shelf over an embedded doc table.
+//! - [`source_adapter!`] / [`target_adapter!`] — the `wasm32` shim
+//!   macros every adapter-root crate invokes.
 
+pub mod adapter;
 pub mod answers;
 mod call;
 pub mod model;
+pub mod phase;
 pub mod registry;
 pub mod seam;
 pub mod shelf;

@@ -47,24 +47,24 @@ fn run_clippy_d_warnings(root: &std::path::Path) {
 }
 
 #[test]
-fn core_scaffold_app_rs_has_no_inline_suppressions_render_only() {
+fn app_rs_has_no_inline_suppressions_render_only() {
     assert_no_inline_suppressions(&plan_app_rs(None));
 }
 
 #[test]
-fn core_scaffold_app_rs_has_no_inline_suppressions_http_kv() {
+fn app_rs_has_no_inline_suppressions_http_kv() {
     assert_no_inline_suppressions(&plan_app_rs(Some("http,kv")));
 }
 
 #[test]
-fn core_scaffold_clippy_clean_render_only() {
+fn clippy_clean_render_only() {
     let dir = tempdir().expect("tempdir");
     write_core_scaffold(dir.path(), None);
     run_clippy_d_warnings(dir.path());
 }
 
 #[test]
-fn core_scaffold_clippy_clean_http_kv() {
+fn clippy_clean_http_kv() {
     let dir = tempdir().expect("tempdir");
     write_core_scaffold(dir.path(), Some("http,kv"));
     run_clippy_d_warnings(dir.path());

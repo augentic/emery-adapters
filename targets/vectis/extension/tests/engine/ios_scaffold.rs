@@ -62,22 +62,22 @@ fn assert_makefile_xcframework_name(plan: &ScaffoldPlan) {
 }
 
 #[test]
-fn ios_scaffold_project_yml_treats_warnings_as_errors_render_only() {
+fn project_yml_treats_warnings_as_errors_render_only() {
     assert_project_yml_strict_flags(&plan(None));
 }
 
 #[test]
-fn ios_scaffold_makefile_sets_xcframework_name_render_only() {
+fn makefile_sets_xcframework_name_render_only() {
     assert_makefile_xcframework_name(&plan(None));
 }
 
 #[test]
-fn ios_scaffold_makefile_sets_xcframework_name_http() {
+fn makefile_sets_xcframework_name_http() {
     assert_makefile_xcframework_name(&plan(Some("http")));
 }
 
 #[test]
-fn ios_scaffold_project_yml_treats_warnings_as_errors_http() {
+fn project_yml_treats_warnings_as_errors_http() {
     assert_project_yml_strict_flags(&plan(Some("http")));
 }
 
@@ -169,7 +169,7 @@ fn sync_restores_non_utf8_makefile() {
 }
 
 #[test]
-fn ios_scaffold_plan_includes_relax_ffi_package_warnings_script() {
+fn plan_includes_relax_ffi_package_warnings_script() {
     let plan = plan(None);
     let script = plan
         .files
@@ -182,7 +182,7 @@ fn ios_scaffold_plan_includes_relax_ffi_package_warnings_script() {
 }
 
 #[test]
-fn ios_scaffold_plan_includes_sim_dev_script() {
+fn plan_includes_sim_dev_script() {
     let plan = plan(None);
     let sim_dev = plan
         .files
@@ -389,7 +389,7 @@ fn drift_findings_flag_named_simulator_in_script() {
 }
 
 #[test]
-fn prepare_build_syncs_drifted_ios_makefile() {
+fn prepare_build_syncs_drifted_makefile() {
     let _guard = env_lock();
     let tmp = tempdir().unwrap();
     let project = tmp.path().join("project");
@@ -425,7 +425,7 @@ fn prepare_build_syncs_drifted_ios_makefile() {
 }
 
 #[test]
-fn sync_ios_scaffold_command_restores_drifted_makefile() {
+fn sync_command_restores_drifted_makefile() {
     let _guard = env_lock();
     let tmp = tempdir().unwrap();
     let project = tmp.path().join("project");

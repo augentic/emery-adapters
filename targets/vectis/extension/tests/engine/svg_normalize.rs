@@ -18,7 +18,7 @@ fn figma_clip_wrapper(width: f32, height: f32, inner: &str) -> String {
 }
 
 #[test]
-fn parse_vector_svg_noop_clip_icon_sized() {
+fn noop_clip_icon_sized() {
     let svg = figma_clip_wrapper(24.0, 24.0, r##"<path fill="#010203" d="M12 2L2 22h20z"/>"##);
     let parsed = parse_vector_svg(svg.as_bytes(), "icon").expect("parse");
     assert!(!parsed.tree.has_defs_nodes());
@@ -27,7 +27,7 @@ fn parse_vector_svg_noop_clip_icon_sized() {
 }
 
 #[test]
-fn parse_vector_svg_noop_clip_illustration_sized() {
+fn noop_clip_illustration_sized() {
     let svg =
         figma_clip_wrapper(240.0, 160.0, r##"<rect width="240" height="160" fill="#AABBCC"/>"##);
     let parsed = parse_vector_svg(svg.as_bytes(), "illus").expect("parse");
@@ -35,7 +35,7 @@ fn parse_vector_svg_noop_clip_illustration_sized() {
 }
 
 #[test]
-fn parse_vector_svg_noop_clip_launcher_sized() {
+fn noop_clip_launcher_sized() {
     let svg = figma_clip_wrapper(
         1024.0,
         1024.0,
@@ -46,7 +46,7 @@ fn parse_vector_svg_noop_clip_launcher_sized() {
 }
 
 #[test]
-fn parse_vector_svg_opacity_bake_preserves_rgb() {
+fn opacity_bake_preserves_rgb() {
     let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
   <g opacity="0.12"><circle cx="12" cy="12" r="8" fill="#1A73E8"/></g>
 </svg>"##;
@@ -63,7 +63,7 @@ fn parse_vector_svg_opacity_bake_preserves_rgb() {
 }
 
 #[test]
-fn parse_vector_svg_gradient_still_fails() {
+fn gradient_still_fails() {
     let svg = figma_clip_wrapper(
         24.0,
         24.0,
@@ -75,7 +75,7 @@ fn parse_vector_svg_gradient_still_fails() {
 }
 
 #[test]
-fn parse_vector_svg_real_clip_still_fails() {
+fn real_clip_still_fails() {
     let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
   <defs><clipPath id="c"><rect width="12" height="12"/></clipPath></defs>
   <g clip-path="url(#c)"><path fill="#000" d="M0 0h24v24z"/></g>
@@ -85,7 +85,7 @@ fn parse_vector_svg_real_clip_still_fails() {
 }
 
 #[test]
-fn parse_vector_svg_clean_tree_skips_normalization() {
+fn clean_tree_skips_normalization() {
     let parsed = parse_vector_svg(TRIANGLE.as_bytes(), "tri").expect("parse");
     assert!(parsed.normalization.is_none());
 }

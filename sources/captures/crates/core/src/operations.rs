@@ -1,18 +1,10 @@
-//! The judgment operations: `survey` and `extract`.
+//! The judgment operations: `survey` and `extract` — schema-gated legs
+//! through [`specify_guest_kit::judgment`] with deterministic id-grammar
+//! tails.
 //!
-//! Each operation is one schema-gated judgment leg bracketed by
-//! deterministic guest code: the core assembles a prompt from the embedded
-//! brief (the system channel) plus the call-specific context (the user
-//! message), issues a single-shot `create` through the shared
-//! [`specify_guest_kit::judgment`] helper, and re-checks the id grammar
-//! the answer schema pins after the answer lands. The calls are
-//! session-less — all working state lives in the operator's workspace
-//! tree and the prompt itself, so the user message tells the spawned
-//! agent where its bound source material lives (the `plan.yaml` source
-//! binding) rather than assuming any prior conversation. The judgment
-//! detail — the capture-tree layout, the `kind: example` claim shape with
-//! `replay-digest` anchors, the 64 KiB inline cap — rides in the embedded
-//! briefs and references.
+//! The judgment detail — the capture-tree layout, the
+//! `kind: example` claim shape with `replay-digest` anchors, the 64 KiB
+//! inline cap — rides in the embedded briefs and references.
 
 use specify_guest_kit::answers::{
     EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA, LeadsAnswer, validate_evidence, validate_leads,
@@ -40,10 +32,8 @@ const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and
 ///
 /// # Errors
 ///
-/// Returns [`Error::InvalidRequest`] when the model rejects the request
-/// as malformed, and [`Error::Internal`] for other model failures, an
-/// answer that does not deserialize, or an answer that fails the
-/// deterministic validation tail.
+/// As [`specify_guest_kit::judgment`]; a validation-tail failure is
+/// [`Error::Internal`].
 pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>, Error> {
     let system = registry::body("briefs/survey.md").to_string();
     let user = format!(
@@ -73,10 +63,8 @@ pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>,
 ///
 /// # Errors
 ///
-/// Returns [`Error::InvalidRequest`] when the model rejects the request
-/// as malformed, and [`Error::Internal`] for other model failures, an
-/// answer that does not deserialize, or an answer that fails the
-/// deterministic validation tail.
+/// As [`specify_guest_kit::judgment`]; a validation-tail failure is
+/// [`Error::Internal`].
 pub async fn extract<P: Model>(
     model: &P, ctx: &Context<'_>, lead: &Lead,
 ) -> Result<Evidence, Error> {
@@ -93,28 +81,10 @@ pub async fn extract<P: Model>(
          the envelope `lead` key — this call names the lead. The caller persists the \
          document under `.specify/slices/<slice>/evidence/`; do not write it yourself.",
         id = ctx.adapter_id,
-        lead = render_lead(lead),
+        lead = lead.render(),
     );
     let evidence: Evidence =
         judgment(model, ctx, system, user, "evidence", EVIDENCE_ANSWER_SCHEMA).await?;
     validate_evidence(&evidence)?;
     Ok(evidence)
-}
-
-/// Render the extract call's lead as the brief's lead-block shape.
-fn render_lead(lead: &Lead) -> String {
-    let topics = if lead.topics.is_empty() {
-        String::new()
-    } else {
-        format!(
-            "
-- topics: [{}]",
-            lead.topics.join(", ")
-        )
-    };
-    format!(
-        "- lead: {}
-- synopsis: {}{topics}",
-        lead.lead, lead.synopsis
-    )
 }

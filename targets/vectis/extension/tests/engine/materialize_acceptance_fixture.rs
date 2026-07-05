@@ -28,7 +28,7 @@ fn assert_layout_artifacts_exist(design_root: &Path, role: &str, kind: &str, ass
 }
 
 #[test]
-fn acceptance_fixture_export_layout_complete() {
+fn export_layout_complete() {
     let root = acceptance_fixture_root();
     assert!(root.join("assets.yaml").is_file(), "acceptance fixture missing at {}", root.display());
 
@@ -37,7 +37,7 @@ fn acceptance_fixture_export_layout_complete() {
 }
 
 #[test]
-fn acceptance_fixture_validates_cleanly() {
+fn validates_cleanly() {
     let root = acceptance_fixture_root();
     let assets_path = root.join("assets.yaml");
     let envelope = run(&ValidateArgs {

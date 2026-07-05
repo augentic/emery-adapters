@@ -15,6 +15,27 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// [`emit`] for an adapter core's `build.rs`: resolves the adapter root
+/// from `CARGO_MANIFEST_DIR` (the core sits at `<adapter>/crates/core`)
+/// and the output from `OUT_DIR`.
+///
+/// # Panics
+///
+/// Panics on any failure — the caller is a build script and must not
+/// limp on.
+pub fn emit_core(trees: &[&str]) {
+    let manifest_dir =
+        PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR"));
+    let adapter_root = manifest_dir
+        .parent()
+        .and_then(Path::parent)
+        .expect("core crate sits at <adapter>/crates/core under the adapter root");
+    let out_dir = PathBuf::from(std::env::var("OUT_DIR").expect("cargo sets OUT_DIR"));
+    if let Err(err) = emit(adapter_root, trees, &out_dir) {
+        panic!("prose registry codegen failed for {}: {err}", adapter_root.display());
+    }
+}
+
 /// Walk `trees` under `adapter_root` and write the sorted `DOCS` table to
 /// `<out_dir>/registry_docs.rs`, printing the `cargo:rerun-if-changed`
 /// directives for every directory and document walked.

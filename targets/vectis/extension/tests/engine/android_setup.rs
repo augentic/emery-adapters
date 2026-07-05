@@ -19,7 +19,7 @@ fn setup_android_shell(root: &Path) {
 }
 
 #[test]
-fn android_setup_installs_vendored_wrapper() {
+fn installs_vendored_wrapper() {
     let tmp = tempdir().expect("tempdir");
     setup_android_shell(tmp.path());
 
@@ -35,7 +35,7 @@ fn android_setup_installs_vendored_wrapper() {
 }
 
 #[test]
-fn android_setup_uses_project_dir_from_android_cwd() {
+fn uses_project_dir_from_android_cwd() {
     let _guard = env_lock();
     let tmp = tempdir().expect("tempdir");
     write_project_yaml(tmp.path(), &["core", "android"]);
@@ -51,7 +51,7 @@ fn android_setup_uses_project_dir_from_android_cwd() {
 }
 
 #[test]
-fn android_setup_command_resolves_project_root() {
+fn command_resolves_project_root() {
     let tmp = tempdir().expect("tempdir");
     write_project_yaml(tmp.path(), &["core", "android"]);
     setup_android_shell(tmp.path());
@@ -64,7 +64,7 @@ fn android_setup_command_resolves_project_root() {
 }
 
 #[test]
-fn android_setup_errors_when_android_dir_missing() {
+fn errors_when_android_dir_missing() {
     let tmp = tempdir().expect("tempdir");
     write_project_yaml(tmp.path(), &["android"]);
 
@@ -76,7 +76,7 @@ fn android_setup_errors_when_android_dir_missing() {
 }
 
 #[test]
-fn android_setup_rejects_partial_wrapper() {
+fn rejects_partial_wrapper() {
     let tmp = tempdir().expect("tempdir");
     setup_android_shell(tmp.path());
     std::fs::write(tmp.path().join("Android/gradlew"), b"#!/bin/sh\n").expect("gradlew");
@@ -102,7 +102,7 @@ fn parse_verify_output(rendered: &str, code: u8) -> (Value, u8) {
 }
 
 #[test]
-fn verify_android_toolchain_findings_when_shell_incomplete() {
+fn verify_toolchain_findings_when_shell_incomplete() {
     use specify_vectis::verify::{VerifyArgs, VerifyMode, render_json, run as run_verify};
 
     let tmp = tempdir().expect("tempdir");
@@ -121,7 +121,7 @@ fn verify_android_toolchain_findings_when_shell_incomplete() {
 }
 
 #[test]
-fn verify_android_toolchain_clean_after_setup_and_apk() {
+fn verify_toolchain_clean_after_setup_and_apk() {
     use specify_vectis::verify::{VerifyArgs, VerifyMode, render_json, run as run_verify};
 
     let tmp = tempdir().expect("tempdir");

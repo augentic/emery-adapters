@@ -65,6 +65,6 @@ pub fn write_appiconset(canvas: &RgbaImage, appiconset_dir: &Path) -> Result<(),
 // `write_appiconset` lives in a private module (CLI-only reachable). Its
 // `AppIcon.png` + `Contents.json` layout — single universal 1024×1024 ios
 // image entry — is asserted end-to-end through the CLI by
-// `tests/engine/materialize_app_icon.rs::materialize_app_icon_ios_exports_exist`.
-// Transparent-canvas flattening is covered by
-// `tests/engine/materialize_app_icon.rs::materialize_app_icon_transparent_*`.
+// `tests/engine/materialize_app_icon.rs::ios_exports_exist`. Transparent-canvas
+// flattening is covered by
+// `tests/engine/materialize_app_icon.rs::transparent_*`.

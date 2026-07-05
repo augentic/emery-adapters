@@ -1,45 +1,30 @@
-//! The judgment operation template: `guidance`, `build`, and `merge`.
+//! The judgment operation template: `guidance`, `build`, and `merge`,
+//! over the shared [`phase`] scaffolding.
 //!
-//! Each judgment leg is bracketed by deterministic guest code. The core
-//! assembles a prompt from the embedded briefs plus the typed inputs,
-//! issues a single-shot `create` through the shared
-//! [`specify_guest_kit::judgment`] helper with a schema-gated `format`,
-//! and — unlike omnia — brackets the legs with the absorbed vectis
-//! libraries: the [`crate::prepare`] materialize step runs as the
-//! deterministic *prelude* (replacing the legacy `adapter.yaml`
-//! `prepare.argv` hook), and the [`crate::validate`] composition /
-//! tokens / assets cross-checks run as the deterministic *postlude*,
-//! feeding a bounded repair loop the way the contracts adapter's
-//! validators do. All state between calls lives in the workspace tree —
-//! the session-less shape.
+//! Unlike omnia, vectis brackets the legs with the absorbed libraries:
+//! the [`crate::prepare`] materialize step runs as the deterministic
+//! *prelude* (replacing the legacy `adapter.yaml` `prepare.argv` hook),
+//! and the [`crate::validate`] composition / tokens / assets
+//! cross-checks run as the deterministic *postlude*, feeding a bounded
+//! repair loop the way the contracts adapter's validators do.
 //!
 //! `build` decomposes along the build brief's own phase order: one
 //! *composition* leg (Step 0.5 component inference plus Phase 1
-//! composition regeneration) gated in-core by the composition validator
-//! (the per-shell write briefs require that gate passed first), one
-//! *core* leg (Phases 2–3 — Crux core writer, test writer, and the
-//! cargo verify-repair loop only the spawned agent can run in the lent
-//! workspace), one *shell* leg per declared shell platform (Phases 4–5
-//! — iOS / Android writers with their orchestrator-run verify loops),
-//! one *review* leg (Phases 6–7 — the per-platform review teams and
-//! § Consolidate review findings), then one report leg (Phases 8–9 —
-//! the agent-run shell verify gate and the report body). Host-command
-//! verification (cargo, xcodebuild, Gradle, `specify extension run
-//! vectis -- …`, and the host-prereq / finalize-verify scripts) is
-//! process-spawning and stays agent-side in the prompts; the
-//! deterministic tail checks what the in-core validators and pure Rust
-//! over the mounted tree can: the composition cross-checks hold and
-//! declared `outputs` paths exist.
+//! composition regeneration) gated in-core by the composition validator,
+//! one *core* leg (Phases 2–3), one *shell* leg per declared shell
+//! platform (Phases 4–5), one *review* leg (Phases 6–7), then one report
+//! leg (Phases 8–9). Host-command verification (cargo, xcodebuild,
+//! Gradle, `specify extension run vectis -- …`) is process-spawning and
+//! stays agent-side in the prompts; the deterministic tail checks what
+//! the in-core validators and pure Rust over the mounted tree can.
 
 use std::path::Path;
 
-use serde::Deserialize;
 use serde_json::Value;
-use specify_guest_kit::answers::{REPORT_ANSWER_SCHEMA, ReportAnswer};
 use specify_guest_kit::seam::{
-    Changeset, Context, Error, Finding, Input, Report, Severity, Status, WorkingTree,
+    Changeset, Context, Error, Finding, Input, Report, Status, WorkingTree,
 };
-use specify_guest_kit::{Model, judgment};
+use specify_guest_kit::{Model, phase};
 
 use crate::{VectisError, prepare, registry, validate};
 
@@ -47,46 +32,9 @@ use crate::{VectisError, prepare, registry, validate};
 /// composition leg, mirroring the contracts build's Phase 4 budget.
 const MAX_VALIDATE_REPAIR_ITERATIONS: usize = 2;
 
-/// Adapter-internal answer schema for one phase leg. Internal legs are
-/// not part of the `augentic:specify` contract, so this schema lives
-/// here rather than deriving from a canonical schema.
-const PHASE_ANSWER_SCHEMA: &str = r#"{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "additionalProperties": false,
-  "properties": {
-    "applicable": {
-      "description": "Whether the phase had work to do. `false` means the phase wrote nothing (e.g. a shell write for a no-op platform, or composition regeneration for a slice with no UI surface).",
-      "type": "boolean"
-    },
-    "summary": {
-      "description": "One-paragraph account of what was generated, reviewed, repaired, or why the phase was skipped.",
-      "minLength": 1,
-      "type": "string"
-    },
-    "written": {
-      "default": [],
-      "description": "Workspace-relative paths of files this phase created or modified.",
-      "items": { "type": "string" },
-      "type": "array"
-    }
-  },
-  "required": ["applicable", "summary"]
-}"#;
-
-/// One phase leg's schema-gated answer.
-#[derive(Debug, Deserialize)]
-struct PhaseAnswer {
-    applicable: bool,
-    summary: String,
-    #[serde(default)]
-    written: Vec<String>,
-}
-
 /// The pointer at the adapter's own MCP reference shelf every judgment
-/// leg's user prompt carries: the shelf serves the full `briefs/` /
-/// `references/` / `rules/` trees, so prompts stay lean and the agent
-/// fetches specialist material lazily instead of getting it inlined.
+/// leg's user prompt carries, so prompts stay lean and the agent fetches
+/// specialist material lazily instead of getting it inlined.
 const SHELF_POINTER: &str = "Every brief, reference, and rule document this adapter ships is \
      served by the granted `vectis-references` MCP shelf (`list_docs` / `read_doc`, \
      adapter-relative paths like `references/hard-rules-core.md` or \
@@ -100,38 +48,28 @@ pub fn guidance() -> &'static str {
 }
 
 /// Build a slice's Crux core, shell code, and regenerated
-/// `composition.yaml` per the build brief's phase order.
-///
-/// Session-less decomposition along the brief's own structure, with the
-/// absorbed libraries bracketing the legs:
+/// `composition.yaml` per the build brief's phase order:
 ///
 /// 1. **Prelude (deterministic)** — [`prepare::materialize_step`]:
 ///    RFC §2.1 scope resolution plus the conditional scoped
-///    `materialize assets` run, replacing the legacy `prepare.argv`
-///    hook. Its summary feeds the composition leg's prompt.
-/// 2. **Composition leg** (Step 0.5 + Phase 1) — component inference
-///    and composition regeneration — then the in-core composition
-///    validator gate with a bounded repair loop (the shell write briefs
-///    require the gate passed before any platform phase).
-/// 3. **Core leg** (Phases 2–3), then one **shell leg** per declared
-///    shell platform (Phases 4–5; a slice with no work for a shell
-///    answers `applicable: false`), then the **review leg**
-///    (Phases 6–7).
-/// 4. One report leg (Phases 8–9) gated by the derived answer schema,
-///    with the agent-run shell verify gate instructed in its prompt.
-/// 5. **Postlude (deterministic)** — the composition / tokens / assets
-///    cross-checks re-run in core plus the report-coherence walk
-///    (declared outputs exist under the tree root), with one bounded
-///    repair leg; residual findings force `failure` regardless of the
-///    answer.
+///    `materialize assets` run. Its summary feeds the composition leg.
+/// 2. **Composition leg** (Step 0.5 + Phase 1), then the in-core
+///    composition validator gate with a bounded repair loop — an
+///    exhausted budget parks the slice instead of burning the
+///    downstream legs against a knowingly-broken composition.
+/// 3. **Core leg** (Phases 2–3), one **shell leg** per declared shell
+///    platform (Phases 4–5), then the **review leg** (Phases 6–7).
+/// 4. One report leg (Phases 8–9), with the agent-run shell verify gate
+///    instructed in its prompt.
+/// 5. **Postlude (deterministic)** — the composition cross-checks re-run
+///    in core plus the report-coherence walk, with one bounded repair
+///    leg; residual findings force `failure` regardless of the answer.
 ///
 /// # Errors
 ///
-/// Returns [`Error::InvalidRequest`] when the model rejects a request
-/// as malformed or the workspace's design-system inputs are unreadable
-/// where the prelude needs them, [`Error::Io`] for prelude filesystem
-/// failures, and [`Error::Internal`] for other model failures or an
-/// answer that does not deserialize.
+/// As [`specify_guest_kit::judgment`], plus [`Error::Io`] /
+/// [`Error::InvalidRequest`] when the deterministic prelude cannot read
+/// the workspace's design-system inputs.
 pub async fn build<P: Model>(
     model: &P, ctx: &Context<'_>, slice: &str, inputs: &[Input], tree: &WorkingTree,
 ) -> Result<Report, Error> {
@@ -139,18 +77,17 @@ pub async fn build<P: Model>(
     let slice_dir_rel = format!(".specify/slices/{slice}");
     let slice_dir = tree_root.join(&slice_dir_rel);
     let slice_composition = slice_dir.join("composition.yaml");
-    let inputs_block = render_inputs(inputs);
+    let inputs_block = phase::render_inputs(inputs);
     let build_brief = registry::body("briefs/build.md");
 
     // Deterministic prelude — prepare scope resolution + conditional
-    // materialize over the effective assets.yaml, in-guest. This is the
-    // absorbed `prepare build` materialize step; the host-bootstrap legs
-    // the legacy hook also ran (app-icon verify gate, Android Gradle
-    // setup, iOS scaffold sync) are process-adjacent and ride agent-side
-    // in the shell legs' prompts instead. The platform scope derives
-    // from the same declared-platform read as the shell legs, so a
-    // core-only project materializes nothing for shells it will not
-    // build.
+    // materialize over the effective assets.yaml, in-guest. The
+    // host-bootstrap legs the legacy hook also ran (app-icon verify gate,
+    // Android Gradle setup, iOS scaffold sync) are process-adjacent and
+    // ride agent-side in the shell legs' prompts instead. The platform
+    // scope derives from the same declared-platform read as the shell
+    // legs, so a core-only project materializes nothing for shells it
+    // will not build.
     let shell_platforms: Vec<String> =
         declared_shell_legs(&tree_root).iter().map(|leg| leg.name.to_string()).collect();
     let prelude = prepare::materialize_step(&slice_dir, &tree_root, &shell_platforms)
@@ -161,8 +98,7 @@ pub async fn build<P: Model>(
     // regeneration. Catalog inference is CLI-assisted judgment the brief
     // owns, so the leg runs `specify catalog infer` itself in the lent
     // workspace; regeneration reads the updated catalog back.
-    let system =
-        assemble_system(&["briefs/build.md", "briefs/shape.md", "briefs/build/composition.md"]);
+    let system = assemble(&["briefs/build.md", "briefs/shape.md", "briefs/build/composition.md"]);
     let user = format!(
         "Run component inference (Step 0.5) and composition regeneration (Phase 1) of \
          the vectis build for slice `{slice}` (adapter `{}`).\n\n\
@@ -174,23 +110,26 @@ pub async fn build<P: Model>(
          {prelude_block}\n\n{SHELF_POINTER}\n\n{inputs_block}",
         ctx.adapter_id,
     );
-    let composition = phase_call(model, ctx, system, user, "composition").await?;
+    let composition = phase::phase(model, ctx, system, user, "composition").await?;
 
     // The per-shell write briefs require the composition gate passed
     // before any platform phase: an exhausted repair budget parks the
-    // slice with a deterministic failure report instead of burning the
-    // downstream core / shell / review / report legs against a
-    // knowingly-broken composition.
+    // slice with a deterministic failure report.
     let residual = composition_gate(model, ctx, slice, &slice_dir_rel, &slice_composition).await?;
     if !residual.is_empty() {
-        return Ok(gate_failure_report(residual));
+        return Ok(Report {
+            status: Status::Failure,
+            findings: residual.into_iter().map(Finding::blocking).collect(),
+            outputs: Vec::new(),
+            ui_surface: None,
+        });
     }
 
     // Phases 2–3 — Crux core writer plus test writer: the core
     // verify-repair loop crosses both sub-briefs (a cargo failure
     // re-enters the writer), so one agent leg holds them together.
     let system =
-        assemble_system(&["briefs/build.md", "briefs/build/core/write.md", "briefs/build/test.md"]);
+        assemble(&["briefs/build.md", "briefs/build/core/write.md", "briefs/build/test.md"]);
     let user = format!(
         "Run the Crux core phases (2-3) of the vectis build for slice `{slice}`: \
          generate or update the shared core per the core write sub-brief, write the \
@@ -199,14 +138,14 @@ pub async fn build<P: Model>(
          adapter cannot spawn them. Detect create vs update mode from the tree. \
          {SHELF_POINTER}\n\n{inputs_block}",
     );
-    let core = phase_call(model, ctx, system, user, "core").await?;
+    let core = phase::phase(model, ctx, system, user, "core").await?;
 
     // Phases 4–5 — per-shell writes, conditional on the declared
     // platform set (`project.yaml.platforms`); a core-only platform set
     // skips the shell legs wholesale, per the brief's platform scope.
-    let mut shell_outcomes: Vec<(&'static str, PhaseAnswer)> = Vec::new();
+    let mut shell_outcomes: Vec<(&'static str, phase::PhaseAnswer)> = Vec::new();
     for shell in declared_shell_legs(&tree_root) {
-        let system = assemble_system(&["briefs/build.md", shell.write_brief]);
+        let system = assemble(&["briefs/build.md", shell.write_brief]);
         let user = format!(
             "Run the {name} shell phase of the vectis build for slice `{slice}`: \
              scaffold the shell first when its tree is absent (`specify extension run \
@@ -220,7 +159,7 @@ pub async fn build<P: Model>(
              it in your summary. {SHELF_POINTER}",
             name = shell.name,
         );
-        let answer = phase_call(model, ctx, system, user, shell.name).await?;
+        let answer = phase::phase(model, ctx, system, user, shell.name).await?;
         shell_outcomes.push((shell.name, answer));
     }
 
@@ -228,7 +167,7 @@ pub async fn build<P: Model>(
     // § Consolidate review findings, one leg.
     let mut review_briefs = vec!["briefs/build.md", "briefs/build/core/review.md"];
     review_briefs.extend(declared_shell_legs(&tree_root).iter().map(|shell| shell.review_brief));
-    let system = assemble_system(&review_briefs);
+    let system = assemble(&review_briefs);
     let user = format!(
         "Run the review phases (6-7) of the vectis build for slice `{slice}`: spawn \
          the core reviewer team and, for each in-scope shell, its platform reviewer \
@@ -236,7 +175,7 @@ pub async fn build<P: Model>(
          brief's `## § Consolidate review findings` and drive any remediation in the \
          lent workspace. {SHELF_POINTER}",
     );
-    let review = phase_call(model, ctx, system, user, "review").await?;
+    let review = phase::phase(model, ctx, system, user, "review").await?;
 
     // Final leg — the shell verify gate (Phase 8, agent-run) and the
     // report answer (Phase 9), gated by the derived answer schema.
@@ -256,9 +195,13 @@ pub async fn build<P: Model>(
          relative to the project root, and set `ui-surface.screens` from the slice's \
          own screen count.\n\n\
          Phase outcomes:\n{}",
-        outcomes.iter().map(render_phase_outcome).collect::<Vec<_>>().join("\n"),
+        outcomes
+            .iter()
+            .map(|(name, answer)| phase::render_outcome(name, answer))
+            .collect::<Vec<_>>()
+            .join("\n"),
     );
-    let report = report_call(model, ctx, build_brief.to_string(), user).await?;
+    let report = phase::report(model, ctx, build_brief.to_string(), user).await?;
 
     // Deterministic postlude: the in-core validator cross-checks plus
     // the report-coherence walk, one bounded repair leg, then
@@ -268,28 +211,22 @@ pub async fn build<P: Model>(
 
 /// Merge a built slice's delta into the baseline per the merge brief.
 ///
-/// One judgment leg folds the delta and runs the brief's host
-/// cap-matrix re-verification (agent-run in the lent workspace — the
-/// `host_prereq` / `finalize_verify` scripts and the cargo / make /
-/// gradlew matrix are process-spawning and stay agent-side) and answers
-/// with the report; the deterministic postlude then re-runs the
-/// composition validator against the merged baseline
-/// (`.specify/specs/composition.yaml`, with its sibling tokens / assets
-/// auto-invoke) plus the report-coherence walk, with one bounded repair
-/// leg — mirroring the contracts merge shape.
+/// One judgment leg folds the delta and runs the brief's host cap-matrix
+/// re-verification (agent-run in the lent workspace), then the
+/// deterministic postlude re-runs the composition validator against the
+/// merged baseline (`.specify/specs/composition.yaml`) plus the
+/// report-coherence walk, with one bounded repair leg.
 ///
 /// # Errors
 ///
-/// Returns [`Error::InvalidRequest`] when the model rejects a request
-/// as malformed, and [`Error::Internal`] for other model failures or an
-/// answer that does not deserialize.
+/// As [`specify_guest_kit::judgment`].
 pub async fn merge<P: Model>(
     model: &P, ctx: &Context<'_>, slice: &str, delta: &Changeset, tree: &WorkingTree,
 ) -> Result<Report, Error> {
     let tree_root = ctx.tree_root(tree);
     let baseline_composition = tree_root.join(".specify/specs/composition.yaml");
     let merge_brief = registry::body("briefs/merge.md");
-    let delta_block = render_delta(delta);
+    let delta_block = phase::render_delta(delta);
 
     let user = format!(
         "Merge slice `{slice}`'s built delta (adapter `{}`). The project workspace is \
@@ -304,7 +241,7 @@ pub async fn merge<P: Model>(
          {SHELF_POINTER}\n\n{delta_block}",
         ctx.adapter_id, delta.base,
     );
-    let report = report_call(model, ctx, merge_brief.to_string(), user).await?;
+    let report = phase::report(model, ctx, merge_brief.to_string(), user).await?;
 
     gate_report(model, ctx, merge_brief, report, &tree_root, &baseline_composition, "merge").await
 }
@@ -340,11 +277,11 @@ const SHELL_LEGS: [ShellLeg; 2] = [
 /// The shell write legs the project's declared platform set enables.
 ///
 /// Reads `project.yaml.platforms`: a declared set without `ios` /
-/// `android` is a backend-only build and skips the shell legs
-/// wholesale (the brief's platform scope); an absent or unreadable
-/// declaration falls back to the adapter's default shell set (both),
-/// with each leg still free to self-skip via `applicable: false`.
-/// `web` / `desktop` have no sub-brief and are silently skipped.
+/// `android` is a backend-only build and skips the shell legs wholesale;
+/// an absent or unreadable declaration falls back to the adapter's
+/// default shell set (both), with each leg still free to self-skip via
+/// `applicable: false`. `web` / `desktop` have no sub-brief and are
+/// silently skipped.
 fn declared_shell_legs(project_root: &Path) -> Vec<&'static ShellLeg> {
     let declared = declared_platforms(project_root);
     SHELL_LEGS
@@ -376,7 +313,7 @@ async fn composition_gate<P: Model>(
         if findings.is_empty() {
             break;
         }
-        let system = assemble_system(&["briefs/build.md", "briefs/build/composition.md"]);
+        let system = assemble(&["briefs/build.md", "briefs/build/composition.md"]);
         let user = format!(
             "The deterministic composition validator found blocking issues in slice \
              `{slice}`'s regenerated `{slice_dir_rel}/composition.yaml`. Repair the \
@@ -385,57 +322,20 @@ async fn composition_gate<P: Model>(
              Answer `applicable: true` with a summary of the repairs. {SHELF_POINTER}",
             findings.join("\n"),
         );
-        phase_call(model, ctx, system, user, "composition-repair").await?;
+        phase::phase(model, ctx, system, user, "composition-repair").await?;
         findings = validation_findings(composition);
     }
     Ok(findings)
 }
 
-/// The deterministic failure report an exhausted composition gate
-/// parks the slice with — no downstream legs run, per the shell write
-/// briefs' gate-passed-first requirement.
-fn gate_failure_report(residual: Vec<String>) -> Report {
-    Report {
-        status: Status::Failure,
-        findings: residual
-            .into_iter()
-            .map(|detail| Finding {
-                rule_id: None,
-                severity: Severity::Important,
-                detail,
-            })
-            .collect(),
-        outputs: Vec::new(),
-        ui_surface: None,
-    }
-}
-
-/// Assemble a system prompt from embedded brief bodies, separated the
-/// way the contracts template separates orchestrator and sub-brief.
-fn assemble_system(briefs: &[&str]) -> String {
-    briefs.iter().map(|brief| registry::body(brief)).collect::<Vec<_>>().join("\n\n---\n\n")
-}
-
-/// Issue one internal phase leg through the shared judgment helper.
-async fn phase_call<P: Model>(
-    model: &P, ctx: &Context<'_>, system: String, user: String, name: &str,
-) -> Result<PhaseAnswer, Error> {
-    judgment(model, ctx, system, user, name, PHASE_ANSWER_SCHEMA).await
-}
-
-/// Issue one report leg gated by the derived answer schema and project
-/// the answer onto the seam-facing report.
-async fn report_call<P: Model>(
-    model: &P, ctx: &Context<'_>, system: String, user: String,
-) -> Result<Report, Error> {
-    judgment::<P, ReportAnswer>(model, ctx, system, user, "report", REPORT_ANSWER_SCHEMA)
-        .await
-        .map(ReportAnswer::into_report)
+/// Assemble a system prompt from embedded brief bodies.
+fn assemble(briefs: &[&str]) -> String {
+    let bodies: Vec<&str> = briefs.iter().map(|brief| registry::body(brief)).collect();
+    phase::assemble_system(&bodies)
 }
 
 /// The deterministic gate after the report answer lands, with one
-/// bounded repair leg — the vectis counterpart of the contracts
-/// validator gate: the in-core composition cross-checks (schema,
+/// bounded repair leg: the in-core composition cross-checks (schema,
 /// structural identity, sibling tokens / assets auto-invoke, reference
 /// resolution) re-run against `composition`, and a `success` report's
 /// declared outputs must exist under the tree root. Residual findings
@@ -445,7 +345,7 @@ async fn gate_report<P: Model>(
     composition: &Path, operation: &str,
 ) -> Result<Report, Error> {
     let mut residual = validation_findings(composition);
-    let mut missing = missing_outputs(&report, tree_root);
+    let mut missing = phase::missing_outputs(&report, tree_root);
     if !residual.is_empty() || !missing.is_empty() {
         let user = format!(
             "The deterministic report gate rejected the {operation} report:\n\n{}\n\n\
@@ -453,11 +353,12 @@ async fn gate_report<P: Model>(
              corrected report body.",
             residual.iter().chain(missing.iter()).cloned().collect::<Vec<_>>().join("\n"),
         );
-        report = report_call(model, ctx, brief.to_string(), user).await?;
+        report = phase::report(model, ctx, brief.to_string(), user).await?;
         residual = validation_findings(composition);
-        missing = missing_outputs(&report, tree_root);
+        missing = phase::missing_outputs(&report, tree_root);
     }
-    Ok(enforce_gate(report, &residual, &missing))
+    let findings = residual.into_iter().chain(missing).map(Finding::blocking).collect();
+    Ok(phase::enforce(report, findings))
 }
 
 /// The in-core validator findings for one composition artifact, one
@@ -499,45 +400,6 @@ fn collect_envelope_errors(envelope: &Value, mode: &str, findings: &mut Vec<Stri
     }
 }
 
-/// The declared outputs a `success` report claims that the mounted tree
-/// does not contain, one findings-style line each. A `failure` report
-/// is already parked for human review per the briefs' stop contract, so
-/// its output claims are not re-litigated.
-fn missing_outputs(report: &Report, tree_root: &Path) -> Vec<String> {
-    if report.status == Status::Failure {
-        return Vec::new();
-    }
-    report
-        .outputs
-        .iter()
-        .filter(|output| !tree_root.join(&output.path).exists())
-        .map(|output| {
-            format!("- declared output `{}` does not exist in the working tree", output.path)
-        })
-        .collect()
-}
-
-/// Deterministic guard after the final answer lands: residual validator
-/// findings or output discrepancies force `failure` and are appended to
-/// the report; a `success` answer carrying blocking findings is
-/// downgraded the same way.
-fn enforce_gate(mut report: Report, residual: &[String], missing: &[String]) -> Report {
-    if !residual.is_empty() || !missing.is_empty() {
-        report.status = Status::Failure;
-        report.findings.extend(residual.iter().chain(missing.iter()).map(|detail| Finding {
-            rule_id: None,
-            severity: Severity::Important,
-            detail: detail.clone(),
-        }));
-    }
-    if report.status == Status::Success
-        && report.findings.iter().any(|finding| finding.severity.blocking())
-    {
-        report.status = Status::Failure;
-    }
-    report
-}
-
 /// Map an absorbed-library failure onto the seam error vocabulary: I/O
 /// failures map through, a broken project or design-system input is an
 /// invalid request (the workspace is part of the call's contract), and
@@ -559,43 +421,4 @@ fn render_prelude(summary: &Value) -> String {
          `materialize assets` step before this leg; do not re-run it. Summary:\n\n{}",
         serde_json::to_string(summary).unwrap_or_else(|_| "{}".to_string()),
     )
-}
-
-/// Render one phase leg's outcome for the report prompt.
-fn render_phase_outcome((name, answer): &(&str, &PhaseAnswer)) -> String {
-    format!(
-        "- {name}: applicable={}, wrote {:?} — {}",
-        answer.applicable, answer.written, answer.summary
-    )
-}
-
-/// Render the typed inputs as labeled prompt sections.
-fn render_inputs(inputs: &[Input]) -> String {
-    if inputs.is_empty() {
-        return "(no slice artifacts were provided)".to_string();
-    }
-    inputs
-        .iter()
-        .map(|input| format!("### input: {}\n\n{}", input.label(), input.body()))
-        .collect::<Vec<_>>()
-        .join("\n\n")
-}
-
-/// Render a changeset's edits for the merge prompt.
-fn render_delta(delta: &Changeset) -> String {
-    if delta.edits.is_empty() {
-        return "### delta\n\n(empty changeset — the slice wrote no files)".to_string();
-    }
-    let edits = delta
-        .edits
-        .iter()
-        .map(|edit| {
-            edit.content.as_ref().map_or_else(
-                || format!("- {} (deleted)", edit.path),
-                |content| format!("- {} (content: {content})", edit.path),
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    format!("### delta (base {})\n\n{edits}", delta.base)
 }

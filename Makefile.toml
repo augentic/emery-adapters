@@ -3,6 +3,9 @@
 
 [env]
 CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
+# Every adapter guest package, mirrored by the runtime tests'
+# `build_guests` (crates/runtime-tests/tests/common.rs).
+GUEST_PACKAGES = "specify-contracts specify-omnia specify-vectis specify-captures specify-documentation specify-intent specify-screenshots specify-typescript"
 
 [config]
 default_to_workspace = true
@@ -68,20 +71,12 @@ exit $status
 # Guest components (RFC-61): build every adapter guest crate for the
 # wasm32-wasip2 target the omnia runtime loads.
 [tasks.build-guests]
-command = "cargo"
-args = [
-    "build",
-    "-p", "specify-contracts",
-    "-p", "specify-omnia",
-    "-p", "specify-vectis",
-    "-p", "specify-captures",
-    "-p", "specify-documentation",
-    "-p", "specify-intent",
-    "-p", "specify-screenshots",
-    "-p", "specify-typescript",
-    "-p", "specify-eval-guest",
-    "--target", "wasm32-wasip2",
-]
+script = '''
+set -e
+flags=""
+for package in $GUEST_PACKAGES; do flags="$flags -p $package"; done
+cargo build $flags -p specify-eval-guest --target wasm32-wasip2
+'''
 
 # Live decomposition-proof evals (RFC-61 Step 2 Milestone E): every
 # contracts scenario through the eval driver against the real cursor
@@ -114,16 +109,9 @@ evals/vectis/run.sh single-screen
 [tasks.refresh-guests]
 script = '''
 set -e
-cargo build \
-  -p specify-contracts \
-  -p specify-omnia \
-  -p specify-vectis \
-  -p specify-captures \
-  -p specify-documentation \
-  -p specify-intent \
-  -p specify-screenshots \
-  -p specify-typescript \
-  --target wasm32-wasip2 --release
+flags=""
+for package in $GUEST_PACKAGES; do flags="$flags -p $package"; done
+cargo build $flags --target wasm32-wasip2 --release
 for pair in \
   "specify_contracts.wasm:targets/contracts" \
   "specify_omnia.wasm:targets/omnia" \

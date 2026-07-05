@@ -4,7 +4,7 @@
 //! Counts `#[test]` / `#[tokio::test]` declarations under each adapter's
 //! `extension/src/` tree and fails when the live count drifts from the
 //! committed budget in `rust_quality_budget.toml`. Mirrors the engine gate
-//! and enforces the integration-first posture in docs/standards/testing.md.
+//! and enforces the integration-first posture in TESTING.md.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
@@ -133,7 +133,7 @@ fn unit_test_budget_holds() {
         if current > allowed {
             writeln!(
                 failures,
-                "[{scope}] {current} src unit tests > budget {allowed}: do not add src unit tests — exercise the behavior through the public surface in tests/, or justify and raise the budget in review (docs/standards/testing.md)"
+                "[{scope}] {current} src unit tests > budget {allowed}: do not add src unit tests — exercise the behavior through the public surface in tests/, or justify and raise the budget in review (TESTING.md)"
             )
             .expect("write to String");
         } else if current < allowed {

@@ -91,7 +91,7 @@ fn scaffold_ios_with_xcassets(root: &Path) {
 // ── verify mode ────────────────────────────────────────────────────
 
 #[test]
-fn verify_all_present_exits_clean() {
+fn all_present_exits_clean() {
     let tmp = tempdir().unwrap();
     write_project_yaml(tmp.path(), &["core", "ios", "android"]);
     scaffold_core(tmp.path());
@@ -108,7 +108,7 @@ fn verify_all_present_exits_clean() {
 }
 
 #[test]
-fn verify_missing_shell_exits_one() {
+fn missing_shell_exits_one() {
     let tmp = tempdir().unwrap();
     write_project_yaml(tmp.path(), &["core", "ios"]);
     // Only the core shell is scaffolded; the declared `ios` directory is
@@ -193,7 +193,7 @@ fn host_prereq_core_only_clean() {
 }
 
 #[test]
-fn verify_compile_stamp_missing_when_ios_shell_without_stamp() {
+fn compile_stamp_missing_when_ios_shell_without_stamp() {
     let tmp = tempdir().unwrap();
     write_project_yaml(tmp.path(), &["core", "ios"]);
     scaffold_core(tmp.path());
@@ -351,7 +351,7 @@ fn render_json_missing_project_yaml_exits_two() {
 // ── catalog completeness (RFC-46 §7) ─────────────────────────────
 
 #[test]
-fn verify_catalog_without_composition_emits_no_findings() {
+fn catalog_without_composition_emits_no_findings() {
     let tmp = tempdir().unwrap();
     write_project_yaml(tmp.path(), &["core", "ios", "android"]);
     scaffold_core(tmp.path());
@@ -377,7 +377,7 @@ fn verify_catalog_without_composition_emits_no_findings() {
 }
 
 #[test]
-fn verify_catalog_skips_app_icon_dedups_and_ignores_unknown_refs() {
+fn catalog_skips_app_icon_dedups_and_ignores_unknown_refs() {
     let tmp = tempdir().unwrap();
     write_project_yaml(tmp.path(), &["core", "ios", "android"]);
     scaffold_core(tmp.path());
@@ -420,7 +420,7 @@ fn verify_catalog_skips_app_icon_dedups_and_ignores_unknown_refs() {
 }
 
 #[test]
-fn verify_catalog_missing_imageset_exits_one() {
+fn catalog_missing_imageset_exits_one() {
     let tmp = tempdir().unwrap();
     write_project_yaml(tmp.path(), &["core", "ios", "android"]);
     scaffold_core(tmp.path());
@@ -438,7 +438,7 @@ fn verify_catalog_missing_imageset_exits_one() {
 }
 
 #[test]
-fn verify_catalog_present_imageset_exits_clean() {
+fn catalog_present_imageset_exits_clean() {
     let tmp = tempdir().unwrap();
     write_project_yaml(tmp.path(), &["core", "ios", "android"]);
     scaffold_core(tmp.path());
@@ -466,7 +466,7 @@ fn verify_catalog_present_imageset_exits_clean() {
 }
 
 #[test]
-fn verify_ios_makefile_drift_exits_one() {
+fn ios_makefile_drift_exits_one() {
     let tmp = tempdir().unwrap();
     write_project_yaml(tmp.path(), &["core", "ios"]);
     scaffold_core(tmp.path());
@@ -490,7 +490,7 @@ fn verify_ios_makefile_drift_exits_one() {
 }
 
 #[test]
-fn verify_ios_missing_makefile_exits_one() {
+fn ios_missing_makefile_exits_one() {
     let tmp = tempdir().unwrap();
     write_project_yaml(tmp.path(), &["core", "ios"]);
     scaffold_core(tmp.path());
@@ -512,7 +512,7 @@ fn verify_ios_missing_makefile_exits_one() {
 }
 
 #[test]
-fn verify_android_scaffold_drift_exits_one() {
+fn android_scaffold_drift_exits_one() {
     let tmp = tempdir().unwrap();
     write_project_yaml(tmp.path(), &["core", "android"]);
     scaffold_core(tmp.path());
@@ -544,7 +544,7 @@ fn verify_android_scaffold_drift_exits_one() {
 }
 
 #[test]
-fn verify_android_missing_makefile_exits_one() {
+fn android_missing_makefile_exits_one() {
     let tmp = tempdir().unwrap();
     write_project_yaml(tmp.path(), &["core", "android"]);
     scaffold_core(tmp.path());
@@ -575,7 +575,7 @@ fn verify_android_missing_makefile_exits_one() {
 }
 
 #[test]
-fn verify_rust_allow_suppression_exits_one() {
+fn rust_allow_suppression_exits_one() {
     let tmp = tempdir().unwrap();
     write_project_yaml(tmp.path(), &["core"]);
     let app = tmp.path().join("shared/src/app.rs");
@@ -592,7 +592,7 @@ fn verify_rust_allow_suppression_exits_one() {
 }
 
 #[test]
-fn verify_kotlin_suppress_exits_one() {
+fn kotlin_suppress_exits_one() {
     let tmp = tempdir().unwrap();
     write_project_yaml(tmp.path(), &["core", "android"]);
     scaffold_core(tmp.path());
