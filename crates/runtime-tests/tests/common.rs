@@ -4,9 +4,10 @@
 //! the specify engine's `crates/runtime/tests/common.rs`, pointed at the
 //! `specify-*-guest` crates), the `wasi:http`-backed store bundle a host
 //! binary's `runtime!` macro would generate, and the deployment manifests
-//! the tests deploy — the single-guest contracts manifest and the
+//! the tests deploy — the single-guest contracts manifest, the
 //! multi-guest composed manifest (contracts + omnia + vectis +
-//! documentation).
+//! documentation), and the source-guest composed manifest (intent +
+//! typescript + screenshots + captures).
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -35,6 +36,18 @@ pub const VECTIS_WASM: &str = "specify_vectis_adapter.wasm";
 
 /// Built artifact name of the documentation source-adapter guest.
 pub const DOCUMENTATION_WASM: &str = "specify_documentation.wasm";
+
+/// Built artifact name of the intent source-adapter guest.
+pub const INTENT_WASM: &str = "specify_intent.wasm";
+
+/// Built artifact name of the typescript source-adapter guest.
+pub const TYPESCRIPT_WASM: &str = "specify_typescript.wasm";
+
+/// Built artifact name of the screenshots source-adapter guest.
+pub const SCREENSHOTS_WASM: &str = "specify_screenshots.wasm";
+
+/// Built artifact name of the captures source-adapter guest.
+pub const CAPTURES_WASM: &str = "specify_captures.wasm";
 
 /// The adapters workspace root (`<root>/crates/runtime-tests` is this crate).
 pub fn workspace_root() -> PathBuf {
@@ -192,6 +205,59 @@ pub fn composed_manifest(mount: &Path) -> Result<TempManifest> {
     ))
 }
 
+/// The source-guest composed deployment manifest: the intent, typescript,
+/// screenshots, and captures source guests, each with its own MCP shelf
+/// route, sharing one writable `"."` mount — the shared project tree every
+/// guest opens through its own preopen.
+///
+/// # Errors
+///
+/// Returns an error when the temp manifest cannot be written.
+pub fn source_guests_manifest(mount: &Path) -> Result<TempManifest> {
+    let intent = guest_wasm(INTENT_WASM);
+    let typescript = guest_wasm(TYPESCRIPT_WASM);
+    let screenshots = guest_wasm(SCREENSHOTS_WASM);
+    let captures = guest_wasm(CAPTURES_WASM);
+
+    temp_manifest(&format!(
+        "[[guest]]\n\
+         id = \"source:intent\"\n\
+         source.path = \"{intent}\"\n\n\
+         [[guest]]\n\
+         id = \"source:typescript\"\n\
+         source.path = \"{typescript}\"\n\n\
+         [[guest]]\n\
+         id = \"source:screenshots\"\n\
+         source.path = \"{screenshots}\"\n\n\
+         [[guest]]\n\
+         id = \"source:captures\"\n\
+         source.path = \"{captures}\"\n\n\
+         [[mount]]\n\
+         name = \".\"\n\
+         path = \"{mount}\"\n\
+         writable = true\n\n\
+         [[route.http]]\n\
+         prefix = \"/mcp/intent\"\n\
+         guest = \"source:intent\"\n\n\
+         [[route.http]]\n\
+         prefix = \"/mcp/typescript\"\n\
+         guest = \"source:typescript\"\n\n\
+         [[route.http]]\n\
+         prefix = \"/mcp/screenshots\"\n\
+         guest = \"source:screenshots\"\n\n\
+         [[route.http]]\n\
+         prefix = \"/mcp/captures\"\n\
+         guest = \"source:captures\"\n\n\
+         [transport]\n\
+         default = \"in-process\"\n",
+        intent = intent.display(),
+        typescript = typescript.display(),
+        screenshots = screenshots.display(),
+        captures = captures.display(),
+        mount = mount.display(),
+    ))
+}
+
 /// Assemble the contracts deployment into a runtime the tests can dispatch
 /// into and serve HTTP through, with `"."` mounted at `mount`.
 ///
@@ -212,6 +278,17 @@ pub async fn runtime(mount: &Path) -> Result<Runtime<Bundle>> {
 /// cannot connect.
 pub async fn composed_runtime(mount: &Path) -> Result<Runtime<Bundle>> {
     assemble(composed_manifest(mount)?).await
+}
+
+/// Assemble the source-guest composed deployment (intent + typescript +
+/// screenshots + captures) into a runtime, with `"."` mounted at `mount`.
+///
+/// # Errors
+///
+/// Returns an error when the deployment cannot be built or the backends
+/// cannot connect.
+pub async fn source_guests_runtime(mount: &Path) -> Result<Runtime<Bundle>> {
+    assemble(source_guests_manifest(mount)?).await
 }
 
 // Deploy a temp manifest onto the runtime with the test backend bundle.

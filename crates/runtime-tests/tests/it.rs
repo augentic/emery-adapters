@@ -12,5 +12,7 @@ mod contracts;
 mod omnia;
 #[path = "sources.rs"]
 mod sources;
+#[path = "sources_rest.rs"]
+mod sources_rest;
 #[path = "vectis.rs"]
 mod vectis;

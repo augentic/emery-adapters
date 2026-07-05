@@ -104,16 +104,40 @@ set -e
 evals/vectis/run.sh single-screen
 '''
 
-# Refresh the committed guest components: release-build each adapter guest
-# and copy it to `targets/<name>/guest.wasm` beside the adapter manifest
-# (the Step-5 cutover replaces `adapter.wasm` with this artifact; until
-# then both ship). Run on guest changes, then commit the wasm diff.
+# Refresh the committed guest components: release-build every adapter guest
+# and copy each artifact to `{targets,sources}/<name>/guest.wasm` beside its
+# adapter manifest (the Step-5 cutover replaces `adapter.wasm` with this
+# artifact; until then both ship). The vectis artifact is named after its
+# lib target (`specify_vectis_adapter`) because the legacy extension keeps
+# the `specify_vectis` lib name until Step 5. Run on guest changes, then
+# commit the wasm diff.
 [tasks.refresh-guests]
 script = '''
 set -e
-cargo build -p specify-contracts --target wasm32-wasip2 --release
-cp target/wasm32-wasip2/release/specify_contracts.wasm targets/contracts/guest.wasm
-echo "refreshed targets/contracts/guest.wasm"
+cargo build \
+  -p specify-contracts \
+  -p specify-omnia \
+  -p specify-vectis \
+  -p specify-captures \
+  -p specify-documentation \
+  -p specify-intent \
+  -p specify-screenshots \
+  -p specify-typescript \
+  --target wasm32-wasip2 --release
+for pair in \
+  "specify_contracts.wasm:targets/contracts" \
+  "specify_omnia.wasm:targets/omnia" \
+  "specify_vectis_adapter.wasm:targets/vectis" \
+  "specify_captures.wasm:sources/captures" \
+  "specify_documentation.wasm:sources/documentation" \
+  "specify_intent.wasm:sources/intent" \
+  "specify_screenshots.wasm:sources/screenshots" \
+  "specify_typescript.wasm:sources/typescript"; do
+  artifact="${pair%%:*}"
+  adapter="${pair#*:}"
+  cp "target/wasm32-wasip2/release/$artifact" "$adapter/guest.wasm"
+  echo "refreshed $adapter/guest.wasm"
+done
 '''
 
 # Audit

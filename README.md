@@ -17,28 +17,34 @@ from `src/`), with its wasm-free core logic in a `crates/core/` sub-crate
 
 ## Layout
 
+Every adapter — the three targets and the five sources — shares the same guest anatomy:
+
 ```text
-targets/
-  contracts/          # API contract authoring + validation
-    Cargo.toml        #   `specify-contracts` — the adapter guest component (wasm32 shim)
-    src/              #   shim body: bindgen, export glue, MCP shelf
-    crates/core/      #   `specify-contracts-core` — wasm-free logic, natively tested
-    extension/        #   legacy `contract` WASI extension (deleted at RFC-61 Step 5)
-    guest.wasm        #   committed guest component
-  vectis/             # Crux cross-platform target (bundles the `vectis` extension)
-sources/              # source adapters (intent, documentation, typescript, captures, screenshots)
+{targets,sources}/
+  <name>/             # e.g. targets/{contracts,omnia,vectis}, sources/{intent,documentation,typescript,screenshots,captures}
+    adapter.yaml      #   adapter manifest (+ briefs/, references/, rules/ prose trees)
+    Cargo.toml        #   `specify-<name>` — the adapter guest component (wasm32 shim)
+    src/              #   shim body: bindgen, export glue, MCP reference shelf
+    crates/core/      #   `specify-<name>-core` — wasm-free logic, natively tested
+    extension/        #   legacy WASI extension, where present (contracts, vectis; deleted at RFC-61 Step 5)
+    guest.wasm        #   committed guest component (refreshed via `cargo make refresh-guests`)
 shared/               # shared references/rules forked from the platform repo;
                       # adapter `spec-runtime` / `agent-teams` symlinks resolve here
-crates/               # shared guest support (guest-kit, eval driver/guest, runtime-tests)
-Cargo.toml            # workspace: guest roots + `targets/*/crates/*` + `**/extension` crates
+crates/               # shared guest support: guest-kit, prose-registry,
+                      # eval-driver + eval-guest, runtime-tests
+evals/                # live eval harnesses against the real cursor backend
+                      # (contracts, vectis)
+Cargo.toml            # workspace: guest roots + `{sources,targets}/*/crates/*` + `targets/*/extension`
 ```
+
+The `adapter.yaml` `briefs:` paths and `execution: agent` declarations remain for the native engine path and become vestigial at the Step 5 cutover.
 
 The Crux shell-detection heuristics the platform exposes as
 `specify-vectis-shell-detect` are forked inline into the vectis extension at
 `targets/vectis/extension/src/shell.rs` rather than as a separate
 workspace crate.
 
-## Building the extensions
+## Building the guests and extensions
 
 The local gate mirrors CI — run it from the repo root:
 
@@ -50,6 +56,12 @@ cargo make ci      # the full gate — adds cargo-vet + cargo-deny
 The `fmt-check` arm shells out to nightly `rustfmt`, so a nightly toolchain
 plus the `cargo-make`, `cargo-nextest`, `cargo-deny`, and `cargo-vet` tools must
 be installed; the tasks are defined in `Makefile.toml`.
+
+Build every adapter guest for wasm32-wasip2 (plus the eval guest) with `cargo make build-guests`; refresh the committed `{targets,sources}/<name>/guest.wasm` components with:
+
+```bash
+cargo make refresh-guests
+```
 
 Refresh the committed `targets/<name>/adapter.wasm` wasm32-wasip2
 component with:
