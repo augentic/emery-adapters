@@ -16,7 +16,7 @@ $SOURCE_DIR/
 - **`<handler>/`** — kebab-case directory name becomes the lead `id` at survey time.
 - **`<scenario>.json`** — one scenario per file; extract emits one `kind: example` claim per file.
 - **`samples/`** — shared bulk data referenced by captures via `@samples/` paths. Not a handler directory; survey skips it.
-- **`INSTRUCTIONS.md`** — optional operator hints for Omnia test generation. Read for surface-naming context if needed; do not turn prose into Evidence claims. Test-harness semantics live in [`adapters/targets/omnia/prose/references/replay-fixtures.md`](../../../targets/omnia/references/replay-fixtures.md).
+- **`INSTRUCTIONS.md`** — optional operator hints for Omnia test generation. Read for surface-naming context if needed; do not turn prose into Evidence claims. Test-harness semantics live in [`targets/omnia/prose/references/replay-fixtures.md`](../../../../targets/omnia/prose/references/replay-fixtures.md).
 
 ## TestDef-style scenario files
 
@@ -43,7 +43,7 @@ All fields other than **`input`** are optional. Captures may record scenarios wh
 
 ### Non-evidence fields (extract ignores for claims)
 
-- **`setup`** — optional MockProvider configuration for test replay. Not behavioural evidence; Omnia test generation consumes it per [`replay-fixtures.md`](../../../targets/omnia/references/replay-fixtures.md).
+- **`setup`** — optional MockProvider configuration for test replay. Not behavioural evidence; Omnia test generation consumes it per [`replay-fixtures.md`](../../../../targets/omnia/prose/references/replay-fixtures.md).
 
 ### `@samples/` file references
 
@@ -62,4 +62,4 @@ Values prefixed with `@samples/` resolve relative to `tests/data/replays/`. Exam
 - [`extraction-mapping.md`](extraction-mapping.md) — capture JSON → Evidence claim field mapping
 - [`../prompts/survey.md`](../prompts/survey.md) — handler-grain lead survey
 - [`../prompts/extract.md`](../prompts/extract.md) — `kind: example` claim emission
-- Test-harness docs are **per-target** — Omnia: [`replay-fixtures.md`](../../../targets/omnia/references/replay-fixtures.md); hook contract: [`../../../codex/references/replay/`](../../../codex/references/replay/)
+- Test-harness docs are **per-target** — Omnia: [`replay-fixtures.md`](../../../../targets/omnia/prose/references/replay-fixtures.md); hook contract: [`codex/references/replay/`](../../../../codex/references/replay/)

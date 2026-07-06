@@ -71,11 +71,11 @@ The Vectis core / test / iOS / Android writer and reviewer orchestration lives i
 
 ### Asset materialization (implemented)
 
-Canonical SVG → per-platform exports (the adapter's materialize step), render-by-`kind` shell writers, build-time `plan-bootstrap-app-icon-missing` gate (the adapter's bootstrap app-icon verify at build prepare; a shell-resident launcher icon satisfies it). Inference-only symbol fallback; see [`VECTIS-006`](../rules/VECTIS-006-asset-render-by-kind.md), [`ios/design-system-integration.md`](ios/design-system-integration.md), [`android/design-system-integration.md`](android/design-system-integration.md), and [`rfcs/roadmap.md`](../../../../rfcs/roadmap.md#recently-implemented) (**Recently implemented**).
+Canonical SVG → per-platform exports (the adapter's materialize step), render-by-`kind` shell writers, build-time `plan-bootstrap-app-icon-missing` gate (the adapter's bootstrap app-icon verify at build prepare; a shell-resident launcher icon satisfies it). Inference-only symbol fallback; see [`VECTIS-006`](../rules/VECTIS-006-asset-render-by-kind.md), [`ios/design-system-integration.md`](ios/design-system-integration.md), [`android/design-system-integration.md`](android/design-system-integration.md), and [`rfcs/roadmap.md`](https://github.com/augentic/specify/blob/main/rfcs/roadmap.md#recently-implemented) (**Recently implemented**).
 
 ### Layout inferer contract (legacy)
 
-- [`layout-inferer-contract.md`](layout-inferer-contract.md) — historic contract preserved for the [`adapters/sources/screenshots/`](../../../sources/screenshots/) adapter.
+- [`layout-inferer-contract.md`](layout-inferer-contract.md) — historic contract preserved for the [`adapters/sources/screenshots/`](../../../../sources/screenshots/) adapter.
 
 ### Worked examples
 

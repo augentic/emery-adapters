@@ -4,7 +4,7 @@ Loaded by [../build.md](../build.md) phase 7 when the slice's `plan.yaml.sources
 
 ## Shared contract
 
-Read [`../../../../codex/references/replay/hook-contract.md`](../../../../codex/references/replay/hook-contract.md) first — skip rules, generic preconditions, advisory posture, journal recording, merge summary, and the ban on hand-editing `metadata.yaml`. Payload shapes: [`../../../../codex/references/replay/journal-payload.md`](../../../../codex/references/replay/journal-payload.md).
+Read [`../../../../codex/references/replay/hook-contract.md`](../../../../../codex/references/replay/hook-contract.md) first — skip rules, generic preconditions, advisory posture, journal recording, merge summary, and the ban on hand-editing `metadata.yaml`. Payload shapes: [`../../../../codex/references/replay/journal-payload.md`](../../../../../codex/references/replay/journal-payload.md).
 
 ## Omnia preconditions
 
@@ -13,7 +13,7 @@ In addition to the shared contract:
 - Phases 2–6 complete: crate, tests, guest (create mode), verify-repair loop, and code review have run.
 - Replay data is present under `$CRATE_PATH/tests/data/replays/` — copied or symlinked during [test writer](test.md) when a `captures` binding exists.
 
-Capture wire format: [`captures/references/capture-format.md`](../../../../sources/captures/prose/references/capture-format.md). Claim shape and 64 KiB inline cap: [`captures/prompts/extract.md`](../../../../sources/captures/prose/prompts/extract.md).
+Capture wire format: [`captures/references/capture-format.md`](../../../../../sources/captures/prose/references/capture-format.md). Claim shape and 64 KiB inline cap: [`captures/prompts/extract.md`](../../../../../sources/captures/prose/prompts/extract.md).
 
 ## Omnia execution
 
@@ -29,11 +29,11 @@ Capture wire format: [`captures/references/capture-format.md`](../../../../sourc
 
 3. **Classify results** per the shared contract (advisory in v1).
 
-4. **Record the journal event** per [`journal-payload.md`](../../../../codex/references/replay/journal-payload.md) with `runner: omnia-target@1 (cargo nextest)` (adjust version suffix to match the resolved Omnia target adapter version when known).
+4. **Record the journal event** per [`journal-payload.md`](../../../../../codex/references/replay/journal-payload.md) with `runner: omnia-target@1 (cargo nextest)` (adjust version suffix to match the resolved Omnia target adapter version when known).
 
 ## References
 
-- [`../../../../codex/references/replay/README.md`](../../../../codex/references/replay/README.md) — shared hook index and target adoption table
+- [`../../../../codex/references/replay/README.md`](../../../../../codex/references/replay/README.md) — shared hook index and target adoption table
 - [`../../references/replay-crate-layout.md`](../../references/replay-crate-layout.md) — crate paths and fixture loading
 - [`../../references/replay-fixtures.md`](../../references/replay-fixtures.md) — `setup` block and MockProvider mapping
 - [`../../references/examples/replay/`](../../references/examples/replay/) — worked migration examples

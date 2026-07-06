@@ -10,7 +10,7 @@ rule_hints:
   - kind: presence
     value: file
     config:
-      path: docs/reference/review-team-protocol.md
+      path: codex/references/runtime/review-team-protocol.md
     description: Flag the canonical review-team-protocol document when no file fact carries its path. The required path is policy carried here, not in the engine.
 ---
 

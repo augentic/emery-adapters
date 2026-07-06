@@ -2,7 +2,7 @@
 
 Shared **engineering standards** catalog — target-agnostic rules under `codex/`. Codex is the on-disk rule format; these files are durable policy, not workflow state or slice artifacts. Read by every target adapter's build review prompt during `/spec:build` and (when implemented) by `specify lint` for deterministic CI enforcement. Findings cite a rule here as a stable `rule_id` (for example `UNI-014`) alongside a report-local occurrence id (for example `UNI-3`) in `REVIEW.md`.
 
-See [docs/explanation/standards-layer.md](../../../../docs/explanation/standards-layer.md) for how engineering standards relate to workflow, artifacts, and `docs/standards/` (authoring house style).
+See [docs/explanation/standards-layer.md](https://github.com/augentic/specify/blob/main/docs/explanation/standards-layer.md) for how engineering standards relate to workflow, artifacts, and `docs/standards/` (authoring house style).
 
 This directory owns the `UNI-*` namespace. Target-specific rules live in per-adapter overlays under `targets/<name>/prose/rules/` (omnia: `OMNIA-*` / `RUST-*` / `SEC-*`; contracts: `IFACE-*`; vectis: `VECTIS-*`). Source-adapter overlays under `sources/<name>/prose/rules/` share a single namespace, `SRC-*`: every source-adapter owner maps to `{"SRC"}` in `check::rules`'s namespace map by the `check::rules` namespace map, so any new source adapter that grows an overlay opts into `SRC-*` without coordinating a per-adapter namespace. `FRAME-*` is reserved for declarative framework rules and MUST NOT appear under `{sources,targets}/*/prose/rules/`. Namespace ownership is enforced by `specify lint framework`.
 
@@ -54,7 +54,7 @@ Rules are grouped by severity (highest first). `UNI-*` ids are stable citation k
 
 ## File shape
 
-Each rule is a small markdown file with YAML frontmatter followed by a required `## Rule` heading. The canonical schema lives in the [`augentic/specify`](https://github.com/augentic/specify) `engine/` workspace at `schemas/rules/rule.schema.json` and is embedded in the CLI binary; see [`docs/contributing/checks.md`](../../../../docs/contributing/checks.md) for how `specify lint framework` consumes it. The minimum form:
+Each rule is a small markdown file with YAML frontmatter followed by a required `## Rule` heading. The canonical schema lives in the [`augentic/specify`](https://github.com/augentic/specify) `engine/` workspace at `schemas/rules/rule.schema.json` and is embedded in the CLI binary; see [`docs/contributing/checks.md`](https://github.com/augentic/specify/blob/main/docs/contributing/checks.md) for how `specify lint framework` consumes it. The minimum form:
 
 ```markdown
 ---
@@ -81,7 +81,7 @@ Target review prompts read this directory directly and apply each rule with targ
 
 - **Omnia** — [`targets/omnia/prose/prompts/build/review.md`](../../../targets/omnia/prose/prompts/build/review.md) phase 3 ("Universal checks (lead)") applies every `UNI-*` rule in the inventory above, skipping rules already covered by the SEC / COR / QUA specialists per the table in [`review-categories.md`](../../../targets/omnia/prose/references/review-categories.md).
 - **Vectis** — [`targets/vectis/prose/references/review/universal-checks.md`](../../../targets/vectis/prose/references/review/universal-checks.md) lists the Crux/Rust heuristics for each `UNI-*` and the overlaps to skip.
-- **Contracts** — [`docs/reference/targets/contracts.md`](../../../../docs/reference/targets/contracts.md) cites its overlay alongside this shared set.
+- **Contracts** — [`docs/reference/targets/contracts.md`](https://github.com/augentic/specify/blob/main/docs/reference/targets/contracts.md) cites its overlay alongside this shared set.
 
 A review finding always carries:
 

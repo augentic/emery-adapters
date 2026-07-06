@@ -1,6 +1,6 @@
 # Replay test harness
 
-Omnia target test generation consumes runtime captures copied or symlinked into `$CRATE_PATH/tests/data/replays/`. The wire format authority lives at [`adapters/sources/captures/prose/references/capture-format.md`](../../../sources/captures/prose/references/capture-format.md) — this document covers **test-harness** semantics only.
+Omnia target test generation consumes runtime captures copied or symlinked into `$CRATE_PATH/tests/data/replays/`. The wire format authority lives at [`adapters/sources/captures/prose/references/capture-format.md`](../../../../sources/captures/prose/references/capture-format.md) — this document covers **test-harness** semantics only.
 
 ## Setup block
 

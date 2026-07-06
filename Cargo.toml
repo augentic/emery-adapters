@@ -9,15 +9,6 @@ members = [
     "targets/*/core",
 ]
 
-# The Specify adapters repo (RFC-48 / RFC-49 T6). Each RFC-61 adapter root
-# (`{sources,targets}/<name>/`) *is* its guest package — a wasm32-only
-# `<name>` cdylib shim at the adapter root over a wasm-free
-# `core/` crate (`<name>-core`) — so the package physically
-# contains the prose trees (`prose/prompts`, `prose/references`) it embeds.
-# Shared guest support lives under top-level `crates/`; shared codex under
-# `codex/`; the live eval harness is the flattened `evals/` package
-# (example targets only, omnia examples/-style — not mainline crates).
-
 [workspace.package]
 authors = ["Augentic"]
 edition = "2024"
@@ -48,10 +39,12 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 resvg = { version = "0.47", default-features = false }
 usvg = { version = "0.47", default-features = false }
 tiny-skia = { version = "0.12", default-features = false }
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+image = { version = "0.25", default-features = false, features = [
+    "png",
+    "jpeg",
+    "webp",
+] }
 
-# Omnia guest SDK — the 0.35.0 crates are unpublished pre-publish pins,
-# supplied from the git rev in [patch.crates-io] below.
 omnia = "0.35.0"
 omnia-guest = "0.35.0"
 omnia-testkit = "0.35.0"
@@ -60,16 +53,9 @@ omnia-wasi-model = "0.35.0"
 wasip3 = { version = "0.7.0", features = ["http-compat"] }
 wit-bindgen = { version = "0.58.0", features = ["async-spawn"] }
 
-# Spawned cursor-agent model backend (unpublished; supplied straight from
-# the augentic/backends repo). Pinned to the pushed `specify-feedback`
-# head, which includes the cursor output-parser fix.
 omnia-cursor = { git = "https://github.com/augentic/backends.git", rev = "a847850658bd7e39b42d80cd21dc1f4d9454b805" }
 
 [patch.crates-io]
-# augentic/omnia `specify-feedback` head. The augentic/specify engine
-# workspace patches these crates by sibling path (`../../omnia/crates/*`),
-# which resolves to this same rev; the engine re-pins to a git rev at
-# finalize. Drop when omnia publishes to crates.io.
 omnia = { git = "https://github.com/augentic/omnia.git", rev = "703c4b1006410500d0b68b9a3b254e6a8e4c07f4" }
 omnia-guest = { git = "https://github.com/augentic/omnia.git", rev = "703c4b1006410500d0b68b9a3b254e6a8e4c07f4" }
 omnia-guest-macros = { git = "https://github.com/augentic/omnia.git", rev = "703c4b1006410500d0b68b9a3b254e6a8e4c07f4" }
@@ -79,10 +65,6 @@ omnia-wasi-config = { git = "https://github.com/augentic/omnia.git", rev = "703c
 omnia-wasi-http = { git = "https://github.com/augentic/omnia.git", rev = "703c4b1006410500d0b68b9a3b254e6a8e4c07f4" }
 omnia-wasi-model = { git = "https://github.com/augentic/omnia.git", rev = "703c4b1006410500d0b68b9a3b254e6a8e4c07f4" }
 
-# `wrpc-wasmtime` 0.1.0 is unpublished on crates.io; omnia's own
-# [patch.crates-io] supplies it, but patches do not propagate to
-# dependents, so this workspace carries the same patch pinned to the rev
-# omnia's Cargo.lock records.
 wrpc-transport = { git = "https://github.com/bytecodealliance/wrpc", rev = "b347c61db52dea9fe515a349ac9a91ba11cfe4f9" }
 wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc", rev = "b347c61db52dea9fe515a349ac9a91ba11cfe4f9" }
 
@@ -162,16 +144,6 @@ unneeded_field_pattern = "warn"
 unseparated_literal_suffix = "warn"
 unused_result_ok = "warn"
 verbose_file_reads = "warn"
-
-# Recommended-but-skipped restriction lints with rationale:
-# - `tests_outside_test_module`: fires on every integration test in `tests/*.rs`
-#   (by construction, integration tests are top-level fns in their own crate
-#   and cannot be inside `#[cfg(test)] mod tests`).
-# - `str_to_string` / `string_to_string`: opinionated against `.to_string()` on
-#   `&str`; `string_to_string` was also removed from clippy in 1.95 in favour of
-#   `clippy::implicit_clone`.
-# - `field_scoped_visibility_modifiers`: the workspace deliberately uses
-#   `pub(crate)` / `pub(super)` on struct fields throughout.
 
 [profile.release]
 lto = true

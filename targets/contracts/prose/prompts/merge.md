@@ -2,7 +2,7 @@
 
 Merge prompt for slices that target the `contracts` adapter — the contracts adapter core inlines this document into the system prompt of the merge leg. The standard delta-spec merge, baseline coherence validation, lifecycle transition, and archive move are delegated to the `specify` CLI (`specify slice merge`). The contracts target adds **one target-specific gate** on top of that flow: a post-merge baseline check the adapter runs deterministically in-guest. Every other artefact under `specs/` and `contracts/` is promoted by the standard delta merge.
 
-Follow the [`/spec:merge` skill](../../../../plugins/spec/skills/merge/SKILL.md) for the driver-side flow — slice selection, prerequisite checks, the AskQuestion confirmation around the merge preview, baseline-drift handling, and result rendering. The post-merge tool gate below is the contracts-specific delta on top of that flow.
+Follow the [`/spec:merge` skill](https://github.com/augentic/specify/blob/main/plugins/spec/skills/merge/SKILL.md) for the driver-side flow — slice selection, prerequisite checks, the AskQuestion confirmation around the merge preview, baseline-drift handling, and result rendering. The post-merge tool gate below is the contracts-specific delta on top of that flow.
 
 ## Target-specific adoption gate
 
