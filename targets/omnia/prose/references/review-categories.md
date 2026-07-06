@@ -13,7 +13,7 @@ These prefixes are **report-local occurrence ids** — the `id` field on a struc
 
 Stable codex sources for this reviewer:
 
-- [`adapters/targets/omnia/rules/`](../rules/) — Omnia-specific rules: `OMNIA-001` Provider-Only Host Access, `OMNIA-002` WASM Guest Runtime Constraints, `RUST-001` Classified SDK Errors, No Panic Paths, and `SEC-001` Host-Managed Secrets and Identity.
+- [`adapters/targets/omnia/prose/rules/`](../rules/) — Omnia-specific rules: `OMNIA-001` Provider-Only Host Access, `OMNIA-002` WASM Guest Runtime Constraints, `RUST-001` Classified SDK Errors, No Panic Paths, and `SEC-001` Host-Managed Secrets and Identity.
 - [`adapters/shared/rules/universal/`](../../../shared/rules/universal/) — shared `UNI-001` through `UNI-021` rules. Read these codex files directly.
 
 Prefer the most specific matching rule. For example, direct `std::env` access for a secret maps to `SEC-001`; direct `std::env` access for ordinary configuration maps to `OMNIA-002` or `OMNIA-001` depending on whether the core violation is WASM runtime behavior or provider bypass.

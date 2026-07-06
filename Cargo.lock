@@ -3941,12 +3941,9 @@ dependencies = [
 name = "specify-captures"
 version = "0.4.3"
 dependencies = [
- "omnia-guest",
- "omnia-wasi-http",
  "specify-captures-core",
  "specify-guest-kit",
  "wasip3",
- "wit-bindgen 0.58.0",
 ]
 
 [[package]]
@@ -3962,12 +3959,9 @@ dependencies = [
 name = "specify-contracts"
 version = "0.4.3"
 dependencies = [
- "omnia-guest",
- "omnia-wasi-http",
  "specify-contracts-core",
  "specify-guest-kit",
  "wasip3",
- "wit-bindgen 0.58.0",
 ]
 
 [[package]]
@@ -3989,12 +3983,9 @@ dependencies = [
 name = "specify-documentation"
 version = "0.4.3"
 dependencies = [
- "omnia-guest",
- "omnia-wasi-http",
  "specify-documentation-core",
  "specify-guest-kit",
  "wasip3",
- "wit-bindgen 0.58.0",
 ]
 
 [[package]]
@@ -4033,24 +4024,23 @@ name = "specify-guest-kit"
 version = "0.4.3"
 dependencies = [
  "omnia-guest",
+ "omnia-wasi-http",
  "omnia-wasi-model",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
  "wasip3",
+ "wit-bindgen 0.58.0",
 ]
 
 [[package]]
 name = "specify-intent"
 version = "0.4.3"
 dependencies = [
- "omnia-guest",
- "omnia-wasi-http",
  "specify-guest-kit",
  "specify-intent-core",
  "wasip3",
- "wit-bindgen 0.58.0",
 ]
 
 [[package]]
@@ -4066,12 +4056,9 @@ dependencies = [
 name = "specify-omnia"
 version = "0.4.3"
 dependencies = [
- "omnia-guest",
- "omnia-wasi-http",
  "specify-guest-kit",
  "specify-omnia-core",
  "wasip3",
- "wit-bindgen 0.58.0",
 ]
 
 [[package]]
@@ -4098,12 +4085,9 @@ dependencies = [
 name = "specify-screenshots"
 version = "0.4.3"
 dependencies = [
- "omnia-guest",
- "omnia-wasi-http",
  "specify-guest-kit",
  "specify-screenshots-core",
  "wasip3",
- "wit-bindgen 0.58.0",
 ]
 
 [[package]]
@@ -4119,12 +4103,9 @@ dependencies = [
 name = "specify-typescript"
 version = "0.4.3"
 dependencies = [
- "omnia-guest",
- "omnia-wasi-http",
  "specify-guest-kit",
  "specify-typescript-core",
  "wasip3",
- "wit-bindgen 0.58.0",
 ]
 
 [[package]]
@@ -4140,12 +4121,9 @@ dependencies = [
 name = "specify-vectis"
 version = "0.4.3"
 dependencies = [
- "omnia-guest",
- "omnia-wasi-http",
  "specify-guest-kit",
  "specify-vectis-core",
  "wasip3",
- "wit-bindgen 0.58.0",
 ]
 
 [[package]]

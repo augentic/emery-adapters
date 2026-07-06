@@ -24,10 +24,11 @@
 //!   [`embed_registry!`] module generator.
 //! - [`shelf`] — the MCP URL env convention plus (on `wasm32`) the
 //!   generic `McpServer` reference shelf over an embedded doc table.
-//! - [`source_adapter!`] / [`target_adapter!`] — the `wasm32` shim
-//!   macros every adapter-root crate invokes.
+//! - `source` / `target` (`wasm32` only) — the `augentic:specify` world bindings,
+//!   generated once per axis with a `pub` `export!` macro (omnia's
+//!   `wasi-*` guest convention), plus the seam-type [`From`] mappings.
+//!   Each adapter-root crate hand-writes its own thin shim over these.
 
-pub mod adapter;
 pub mod answers;
 mod call;
 pub mod model;
@@ -36,10 +37,17 @@ pub mod registry;
 pub mod seam;
 pub mod shelf;
 
+#[cfg(target_arch = "wasm32")]
+pub mod source;
+#[cfg(target_arch = "wasm32")]
+pub mod target;
+
 #[cfg(not(target_arch = "wasm32"))]
 mod mock;
 
 pub use call::judgment;
 #[cfg(not(target_arch = "wasm32"))]
 pub use mock::MockModel;
+#[cfg(target_arch = "wasm32")]
+pub use model::WasiModel;
 pub use model::{Error, Format, McpGrant, Message, Model, Reply, Request, Role, SchemaFormat};

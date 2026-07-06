@@ -21,13 +21,15 @@ serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 thiserror.workspace = true
 
-# The WASI-backed default body of `Model::create` and the MCP reference
-# shelf compile only for the wasm32 guest target, mirroring omnia-guest's
-# capability traits.
+# The WASI-backed default body of `Model::create`, the MCP reference
+# shelf, and the `augentic:specify` world bindings compile only for the
+# wasm32 guest target, mirroring omnia-guest's capability traits.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 omnia-guest.workspace = true
+omnia-wasi-http.workspace = true
 omnia-wasi-model.workspace = true
 wasip3.workspace = true
+wit-bindgen.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true

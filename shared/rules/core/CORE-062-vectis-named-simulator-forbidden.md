@@ -5,7 +5,7 @@ severity: important
 trigger: A Vectis target brief instructs agents to set or pick a named iOS simulator destination instead of the CLI-owned generic destination.
 rule_hints:
   - kind: path-pattern
-    value: targets/vectis/briefs/**/*.md
+    value: targets/vectis/prose/briefs/**/*.md
   - kind: regex
     value: "platform=iOS Simulator,name=|-destination[^\\n]*name=iPhone"
     description: Vectis build briefs must not instruct agents to substitute named simulator destinations in scaffold files.
@@ -22,4 +22,4 @@ Vectis iOS verify and merge briefs must never tell agents to patch `iOS/Makefile
 
 ## Fix
 
-Remove named-destination instructions. The adapter re-syncs the scaffold files deterministically; point agents at Swift-only repair per [`targets/vectis/briefs/build/ios/write.md`](../../../targets/vectis/briefs/build/ios/write.md).
+Remove named-destination instructions. The adapter re-syncs the scaffold files deterministically; point agents at Swift-only repair per [`targets/vectis/prose/briefs/build/ios/write.md`](../../../targets/vectis/prose/briefs/build/ios/write.md).

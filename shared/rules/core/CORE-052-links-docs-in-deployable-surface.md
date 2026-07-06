@@ -8,10 +8,10 @@ rule_hints:
     value: "plugins/**/*.md"
     description: Marketplace skills and their reference bodies (a deployed surface).
   - kind: path-pattern
-    value: "adapters/**/briefs/*.md"
+    value: "adapters/**/prose/briefs/*.md"
     description: Adapter operation briefs that ship with the adapter.
   - kind: path-pattern
-    value: "adapters/**/references/*.md"
+    value: "adapters/**/prose/references/*.md"
     description: Adapter reference bodies that ship with the adapter.
   - kind: regex
     value: "\\]\\((docs/|[^)]*\\.\\./docs/)[^)]*\\)"

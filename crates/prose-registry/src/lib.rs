@@ -1,7 +1,9 @@
 //! Build-time codegen for adapter guests' embedded prose registries.
 //!
-//! An adapter core's `build.rs` calls [`emit`] with the adapter root and
-//! its prose trees (typically `briefs` and `references`). The walk follows
+//! An adapter core's `build.rs` calls [`emit_core`] with its prose trees
+//! (typically `briefs` and `references`). Trees live under `<adapter>/prose/`
+//! on disk; registry keys omit the `prose/` prefix (`briefs/build.md`, not
+//! `prose/briefs/build.md`). The walk follows
 //! directory symlinks (such as `references/spec-runtime` into
 //! `shared/references/runtime/` — symlinks do not survive embedding, so
 //! the resolved content is inlined under the symlink-name path) and writes
@@ -36,7 +38,10 @@ pub fn emit_core(trees: &[&str]) {
     }
 }
 
-/// Walk `trees` under `adapter_root` and write the sorted `DOCS` table to
+const PROSE_ROOT: &str = "prose";
+
+/// Walk `trees` under `<adapter_root>/prose/` and write the sorted `DOCS`
+/// table to
 /// `<out_dir>/registry_docs.rs`, printing the `cargo:rerun-if-changed`
 /// directives for every directory and document walked.
 ///
@@ -53,7 +58,7 @@ pub fn emit_core(trees: &[&str]) {
 pub fn emit(adapter_root: &Path, trees: &[&str], out_dir: &Path) -> Result<(), String> {
     let mut docs: Vec<(String, PathBuf)> = Vec::new();
     for tree in trees {
-        let root = adapter_root.join(tree);
+        let root = adapter_root.join(PROSE_ROOT).join(tree);
         if !root.exists() {
             continue;
         }

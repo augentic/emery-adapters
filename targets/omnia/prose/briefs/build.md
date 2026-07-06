@@ -120,7 +120,7 @@ Each `findings[]` item validates against `schemas/diagnostics/diagnostic.schema.
 
 - [`guidance.md`](guidance.md), [`merge.md`](merge.md) — sibling briefs.
 - [`build/crate.md`](build/crate.md), [`build/test.md`](build/test.md), [`build/guest.md`](build/guest.md), [`build/review.md`](build/review.md), [`build/replay.md`](build/replay.md) — phase sub-briefs.
-- [`../../../sources/captures/references/capture-format.md`](../../../sources/captures/references/capture-format.md) — runtime capture wire format (when `captures` is bound).
+- [`../../../sources/captures/prose/references/capture-format.md`](../../../sources/captures/prose/references/capture-format.md) — runtime capture wire format (when `captures` is bound).
 - [`hard-rules.md`](../references/hard-rules.md) — full authority hierarchy and hard-rules set.
 - [`guardrails.md`](../references/guardrails.md), [`wasm-constraints.md`](../references/wasm-constraints.md) — forbidden crates / APIs, statelessness, serde / DST idioms.
 - [`capabilities.md`](../references/capabilities.md), [`capability-mapping.md`](../references/capability-mapping.md) — provider traits and artifact-to-trait mapping.

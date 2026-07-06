@@ -5,7 +5,7 @@ severity: important
 trigger: Skills or target briefs invoke retired host helper commands whose capabilities now run in-guest inside the bound target adapter.
 rule_hints:
   - kind: path-pattern
-    value: "{plugins/**/skills/**/SKILL.md,adapters/targets/**/briefs/**/*.md}"
+    value: "{plugins/**/skills/**/SKILL.md,adapters/targets/**/prose/briefs/**/*.md}"
   - kind: regex
     value: "\\bspecify-contract-validate\\b|\\bspecify-vectis\\s+(validate|init|add-shell)\\b|\\bspecify\\s+vectis\\s+(validate|init|add-shell)\\b"
     description: One alternation over every unconditionally retired invocation form (hyphenated and spaced vectis variants plus the retired contract-validate helper).

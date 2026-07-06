@@ -7,7 +7,13 @@ use std::path::Path;
 use specify_prose_registry::emit;
 use tempfile::TempDir;
 
-fn write(root: &Path, rel: &str, body: &str) {
+fn write_prose(root: &Path, rel: &str, body: &str) {
+    let path = root.join("prose").join(rel);
+    fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
+    fs::write(path, body).expect("write");
+}
+
+fn write_file(root: &Path, rel: &str, body: &str) {
     let path = root.join(rel);
     fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
     fs::write(path, body).expect("write");
@@ -25,10 +31,10 @@ fn generate(adapter_root: &Path, trees: &[&str]) -> Result<String, String> {
 #[test]
 fn emits_sorted_doc_table() {
     let adapter = TempDir::new().expect("adapter root");
-    write(adapter.path(), "references/openapi/verifier.md", "# verifier");
-    write(adapter.path(), "briefs/guidance.md", "# guidance");
-    write(adapter.path(), "briefs/build.md", "# build");
-    write(adapter.path(), "briefs/notes.txt", "not embedded");
+    write_prose(adapter.path(), "references/openapi/verifier.md", "# verifier");
+    write_prose(adapter.path(), "briefs/guidance.md", "# guidance");
+    write_prose(adapter.path(), "briefs/build.md", "# build");
+    write_prose(adapter.path(), "briefs/notes.txt", "not embedded");
 
     let generated = generate(adapter.path(), &["briefs", "references"]).expect("emit succeeds");
 
@@ -50,12 +56,12 @@ fn emits_sorted_doc_table() {
 fn resolves_directory_symlinks_inline() {
     let adapter = TempDir::new().expect("adapter root");
     let shared = TempDir::new().expect("shared tree");
-    write(shared.path(), "runtime/protocol.md", "# protocol");
-    write(adapter.path(), "briefs/build.md", "# build");
-    fs::create_dir_all(adapter.path().join("references")).expect("mkdir references");
+    write_file(shared.path(), "runtime/protocol.md", "# protocol");
+    write_prose(adapter.path(), "briefs/build.md", "# build");
+    fs::create_dir_all(adapter.path().join("prose/references")).expect("mkdir references");
     std::os::unix::fs::symlink(
         shared.path().join("runtime"),
-        adapter.path().join("references/spec-runtime"),
+        adapter.path().join("prose/references/spec-runtime"),
     )
     .expect("symlink");
 
@@ -70,7 +76,7 @@ fn resolves_directory_symlinks_inline() {
 #[test]
 fn empty_trees_fail() {
     let adapter = TempDir::new().expect("adapter root");
-    fs::create_dir_all(adapter.path().join("briefs")).expect("mkdir");
+    fs::create_dir_all(adapter.path().join("prose/briefs")).expect("mkdir");
 
     let err = generate(adapter.path(), &["briefs"]).expect_err("no documents is an error");
     assert!(err.contains("no markdown documents"), "error names the failure: {err}");
@@ -82,7 +88,7 @@ fn empty_trees_fail() {
 #[test]
 fn missing_tree_is_skipped() {
     let adapter = TempDir::new().expect("adapter root");
-    write(adapter.path(), "briefs/survey.md", "# survey");
+    write_prose(adapter.path(), "briefs/survey.md", "# survey");
 
     let generated =
         generate(adapter.path(), &["briefs", "references"]).expect("missing tree is tolerated");
@@ -103,10 +109,10 @@ fn all_trees_missing_fails() {
 #[test]
 fn dangling_symlink_fails() {
     let adapter = TempDir::new().expect("adapter root");
-    fs::create_dir_all(adapter.path().join("briefs")).expect("mkdir");
+    fs::create_dir_all(adapter.path().join("prose/briefs")).expect("mkdir");
     std::os::unix::fs::symlink(
         adapter.path().join("nowhere"),
-        adapter.path().join("briefs/dangling"),
+        adapter.path().join("prose/briefs/dangling"),
     )
     .expect("symlink");
 

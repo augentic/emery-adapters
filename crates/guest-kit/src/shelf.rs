@@ -54,6 +54,17 @@ mod wasm {
         pub docs: &'static [Doc],
     }
 
+    impl Shelf {
+        /// Serve one `wasi:http/incoming-handler` request over this shelf's
+        /// MCP router — the shared leg every adapter shim wires through
+        /// its `HttpGuest`.
+        pub async fn serve(
+            self, request: wasip3::http::types::Request,
+        ) -> Result<wasip3::http::types::Response, wasip3::http::types::ErrorCode> {
+            omnia_wasi_http::serve(omnia_guest::mcp::router(self), request).await
+        }
+    }
+
     impl McpServer for Shelf {
         fn info(&self) -> Implementation {
             Implementation::new(self.server_name, self.version)

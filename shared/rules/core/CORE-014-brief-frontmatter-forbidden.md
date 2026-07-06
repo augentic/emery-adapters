@@ -2,22 +2,22 @@
 id: CORE-014
 title: Brief Frontmatter Forbidden
 severity: important
-trigger: An adapter brief under `adapters/**/briefs/` opens with a YAML frontmatter fence even though briefs are resolved by path only.
+trigger: An adapter brief under `adapters/**/prose/briefs/` opens with a YAML frontmatter fence even though briefs are resolved by path only.
 rule_hints:
   - kind: path-pattern
-    value: "adapters/**/briefs/guidance.md"
+    value: "adapters/**/prose/briefs/guidance.md"
   - kind: path-pattern
-    value: "adapters/**/briefs/build.md"
+    value: "adapters/**/prose/briefs/build.md"
   - kind: path-pattern
-    value: "adapters/**/briefs/merge.md"
+    value: "adapters/**/prose/briefs/merge.md"
   - kind: path-pattern
-    value: "adapters/**/briefs/survey.md"
+    value: "adapters/**/prose/briefs/survey.md"
   - kind: path-pattern
-    value: "adapters/**/briefs/extract.md"
+    value: "adapters/**/prose/briefs/extract.md"
   - kind: path-pattern
-    value: "adapters/**/briefs/build/**/*.md"
+    value: "adapters/**/prose/briefs/build/**/*.md"
   - kind: path-pattern
-    value: "adapters/**/briefs/extract/**/*.md"
+    value: "adapters/**/prose/briefs/extract/**/*.md"
   - kind: regex
     value: "^---"
     description: Flag line 1 when the brief opens with a frontmatter delimiter.
@@ -29,7 +29,7 @@ Adapter briefs are not skills. The loader resolves them from `adapter.yaml` path
 
 ## Look For
 
-- `---` on the first line of `adapters/sources/<name>/briefs/*.md` or `adapters/targets/<name>/briefs/*.md`.
+- `---` on the first line of `adapters/sources/<name>/prose/briefs/*.md` or `adapters/targets/<name>/prose/briefs/*.md`.
 
 ## Fix
 

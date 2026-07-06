@@ -4,15 +4,17 @@ First-party Specify **adapters**, extracted from the platform repo as
 independently-versioned registry artifacts (RFC-48 / RFC-49 T6).
 
 Each adapter is a self-contained tree under `{targets,sources}/<name>/`:
-its `adapter.yaml` manifest, briefs, references, and rules. The platform
+its `adapter.yaml` manifest and `prose/` trees (`briefs/`, `references/`,
+and `rules/` where declared). The platform
 `specify` binary consumes an adapter as an opaque, content-addressed
 artifact resolved from the global adapter store; it never compiles the
 adapter itself.
 
 Each adapter is a **guest component** (RFC-61): the adapter root doubles as a
-wasm32-only cdylib package (`specify-<name>`, the bindgen/export shim built
-from `src/`), with its wasm-free core logic in a `crates/core/` sub-crate
-(`specify-<name>-core`) and the committed `guest.wasm` beside `adapter.yaml`.
+wasm32-only cdylib package (`specify-<name>`, a hand-written export shim over
+`specify-guest-kit`'s shared WIT bindings), with its wasm-free core logic in a
+`crates/core/` sub-crate (`specify-<name>-core`) and the committed `guest.wasm`
+beside `adapter.yaml`.
 
 ## Layout
 
@@ -21,9 +23,13 @@ Every adapter — the three targets and the five sources — shares the same gue
 ```text
 {targets,sources}/
   <name>/             # e.g. targets/{contracts,omnia,vectis}, sources/{intent,documentation,typescript,screenshots,captures}
-    adapter.yaml      #   adapter manifest (+ briefs/, references/, rules/ prose trees)
+    adapter.yaml      #   adapter manifest
+    prose/            #   agent-facing markdown (embedded into guest.wasm)
+      briefs/         #   operation orchestration
+      references/     #   lazy MCP reference corpus
+      rules/          #   engineering standards (target adapters)
     Cargo.toml        #   `specify-<name>` — the adapter guest component (wasm32 shim)
-    src/              #   shim body: bindgen, export glue, MCP reference shelf
+    src/              #   hand-written shim: Guest impl, export glue, MCP shelf
     crates/core/      #   `specify-<name>-core` — wasm-free logic, natively tested
     guest.wasm        #   committed guest component (refreshed via `cargo make refresh-guests`)
 shared/               # shared references/rules forked from the platform repo;

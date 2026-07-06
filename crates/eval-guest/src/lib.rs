@@ -14,7 +14,7 @@
 //! `spec*`; anything else rides as `other`).
 #![cfg(target_arch = "wasm32")]
 
-mod bindings {
+mod generated {
     //! `wit_bindgen::generate!` output for the `workflow` world. The world
     //! only imports (`source` / `target`), so there is no `export!` shim
     //! here; the `wasi:cli/run` export is wired by wasip3 in the crate root.
@@ -32,10 +32,11 @@ mod bindings {
         // The seam operations are `async func`s (judgment legs await the
         // async `omnia:model` import mid-call), so the imports async-lower.
         async: true,
+        generate_all,
     });
 }
 
-use bindings::augentic::specify::target::{self, Input, Report, Status, WorkingTree};
+use generated::augentic::specify::target::{self, Input, Report, Status, WorkingTree};
 use serde_json::json;
 
 struct CliGuest;

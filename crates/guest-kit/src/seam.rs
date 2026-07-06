@@ -4,9 +4,9 @@
 //! the source axis (`lead`, `evidence`, `claim`) and the target axis
 //! (`input`, `working-tree`, `report`, `finding`) plus the shared
 //! `types.error` / `types.changeset` vocabulary — so all adapter cores
-//! speak one language. Each adapter's `wasm32` shim maps its own
-//! bindgen-generated types onto these records at the export boundary;
-//! the cores stay bindgen-free and natively testable.
+//! speak one language. The shared `crate::source` / `crate::target`
+//! bindings map these records onto the generated seam types at the
+//! export boundary; the cores stay bindgen-free and natively testable.
 //!
 //! Only the types an answer deserializes into carry serde derives; the
 //! rest are plain data the shims construct by hand.
@@ -54,7 +54,19 @@ pub struct Context<'a> {
     pub mcp_url: Option<&'a str>,
 }
 
-impl Context<'_> {
+impl<'a> Context<'a> {
+    /// The call-scoped guest context: every guest in the deployment
+    /// shares the same `[[mount]]` preopens, so the operation root is the
+    /// guest's own `"."`.
+    #[must_use]
+    pub fn guest(adapter_id: &'a str, mcp_url: Option<&'a str>) -> Self {
+        Self {
+            adapter_id,
+            project_root: Path::new("."),
+            mcp_url,
+        }
+    }
+
     /// The MCP grants offered on every judgment leg: the adapter's own
     /// reference shelf, when the shim resolved its endpoint. The grant is
     /// named `<name>-references` after the axis-stripped adapter id

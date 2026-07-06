@@ -108,6 +108,16 @@ pub enum Error {
     Backend(String),
 }
 
+/// The WASI-backed judgment provider every adapter shim hands its core:
+/// [`Model`]'s `wasm32` default method body delegates to the
+/// `omnia-wasi-model` bindings, so the unit struct carries no state.
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone, Copy, Debug)]
+pub struct WasiModel;
+
+#[cfg(target_arch = "wasm32")]
+impl Model for WasiModel {}
+
 /// Issue judgment completions against the `omnia:model` host.
 ///
 /// The method carries a WASI-backed default body on `wasm32` (delegating

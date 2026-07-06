@@ -26,7 +26,7 @@ $CRATE_DIR/
 └── Architecture.md      # Component design (if generated)
 ```
 
-When the slice has a `captures` source binding, copy or symlink the bound capture tree into `$CRATE_DIR/tests/data/replays/` preserving the handler/scenario layout from [`captures/references/capture-format.md`](../../../sources/captures/references/capture-format.md).
+When the slice has a `captures` source binding, copy or symlink the bound capture tree into `$CRATE_DIR/tests/data/replays/` preserving the handler/scenario layout from [`captures/references/capture-format.md`](../../../sources/captures/prose/references/capture-format.md).
 
 ## Key paths
 

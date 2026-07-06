@@ -46,8 +46,8 @@ The closed `applicability.artifacts` enum carries framework-side tokens alongsid
 | ----------- | ------------------------------------------------- |
 | `skill`     | `plugins/**/SKILL.md` (frontmatter + body)        |
 | `adapter`   | `adapters/**/adapter.yaml` manifests              |
-| `brief`     | `adapters/**/briefs/*.md`                         |
-| `reference` | `adapters/**/references/*.md`                     |
+| `brief`     | `adapters/**/prose/briefs/*.md`                         |
+| `reference` | `adapters/**/prose/references/*.md`                     |
 | `codex`     | `adapters/**/rules/*.md` (rule files themselves)  |
 | `doc`       | `docs/**/*.md`                                    |
 

@@ -170,4 +170,4 @@ fn set_executable(path: &Path) {
 }
 
 #[cfg(not(unix))]
-fn set_executable(_path: &Path) {}
+const fn set_executable(_path: &Path) {}

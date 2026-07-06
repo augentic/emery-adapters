@@ -20,7 +20,7 @@ The Android-specific team-spawn protocol lives in [`review/team-protocol-android
 ## Finding-ID conventions
 
 - Report-local occurrence IDs: `AND-1`, `KTL-1`, `INT-1`, `UNI-1`, `NEW-1`. These are **report-local** counters — the `id` field on a structured `LintFinding` (the `LintFinding` schema uses the equivalent `FIND-0001` shape; this review uses prefixed counters for human triage). They restart in each report and must not be confused with codex `rule-id`s.
-- Stable codex citations: `rule_id: VECTIS-201` (for example) appears alongside each mapped finding. Codex ids must match `^VECTIS-[0-9]{3}$`. Markdown `rule_id:` prose maps to the kebab-case `rule-id` field on the `LintFinding` wire shape (likewise `target-adapter`, `source-adapter`, `related-rule-ids`, `confidence`). Rules: [`adapters/targets/vectis/rules/`](../../../rules/).
+- Stable codex citations: `rule_id: VECTIS-201` (for example) appears alongside each mapped finding. Codex ids must match `^VECTIS-[0-9]{3}$`. Markdown `rule_id:` prose maps to the kebab-case `rule-id` field on the `LintFinding` wire shape (likewise `target-adapter`, `source-adapter`, `related-rule-ids`, `confidence`). Rules: [`adapters/targets/vectis/prose/rules/`](../../../rules/).
 
 Severity values in finding output use the closed `LintFinding` severity enum: `critical`, `important`, `suggestion`, `optional`.
 

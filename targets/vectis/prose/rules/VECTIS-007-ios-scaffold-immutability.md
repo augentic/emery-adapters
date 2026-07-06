@@ -17,7 +17,7 @@ rule_hints:
     description: Forbidden named simulator destination in Makefile or sim-build.sh (not sim-dev.sh).
 references:
   - label: iOS hard rules
-    path: adapters/targets/vectis/references/hard-rules-ios.md
+    path: adapters/targets/vectis/prose/references/hard-rules-ios.md
   - label: iOS template manifest
     path: adapters/targets/vectis/crates/core/templates/ios/MANIFEST.md
 ---

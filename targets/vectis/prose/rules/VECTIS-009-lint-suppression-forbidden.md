@@ -17,11 +17,11 @@ rule_hints:
     description: Kotlin suppressions under Android/app/src and Android/shared/src (excluding generated/).
 references:
   - label: Core hard rules
-    path: adapters/targets/vectis/references/hard-rules-core.md
+    path: adapters/targets/vectis/prose/references/hard-rules-core.md
   - label: iOS write brief
-    path: adapters/targets/vectis/briefs/build/ios/write.md
+    path: adapters/targets/vectis/prose/briefs/build/ios/write.md
   - label: Android write brief
-    path: adapters/targets/vectis/briefs/build/android/write.md
+    path: adapters/targets/vectis/prose/briefs/build/android/write.md
 ---
 
 ## Rule

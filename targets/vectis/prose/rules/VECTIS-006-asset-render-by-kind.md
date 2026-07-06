@@ -7,9 +7,9 @@ applicability:
   adapters: [vectis]
 references:
   - label: iOS render-by-kind contract
-    path: adapters/targets/vectis/references/ios/design-system-integration.md
+    path: adapters/targets/vectis/prose/references/ios/design-system-integration.md
   - label: Android render-by-kind contract
-    path: adapters/targets/vectis/references/android/design-system-integration.md
+    path: adapters/targets/vectis/prose/references/android/design-system-integration.md
 ---
 
 ## Rule
