@@ -24,10 +24,11 @@
 
 use std::fs;
 use std::net::TcpListener;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use adapter_tests as harness;
 use anyhow::{Context as _, Result, ensure};
 use tempfile::TempDir;
 
@@ -95,14 +96,14 @@ fn live(adapter: &str, scenario: &str, slice: &str) -> Result<()> {
     );
 
     let root = workspace_root();
-    let target = target_dir()?;
-    cargo(&["build", "-p", adapter, "--target", "wasm32-wasip2"], root, &target)?;
-    cargo(
+    let target = harness::target_dir()?;
+    harness::cargo(&["build", "-p", adapter, "--target", "wasm32-wasip2"], root, &target)?;
+    harness::cargo(
         &["build", "-p", "evals", "--example", "eval-guest", "--target", "wasm32-wasip2"],
         root,
         &target,
     )?;
-    cargo(&["build", "-p", "evals", "--example", "eval-driver"], root, &target)?;
+    harness::cargo(&["build", "-p", "evals", "--example", "eval-driver"], root, &target)?;
 
     // Persist the scratch tree so a run's delta stays inspectable.
     let scratch = seed(adapter, scenario)?.keep();
@@ -160,7 +161,7 @@ fn live(adapter: &str, scenario: &str, slice: &str) -> Result<()> {
 /// manifest writer are well-formed without guests or a model.
 fn wiring(adapter: &str) -> Result<()> {
     let scenarios = manifest_dir().join(adapter).join("scenarios");
-    let target = target_dir()?;
+    let target = harness::target_dir()?;
     let mut seen = 0;
     for entry in fs::read_dir(&scenarios)? {
         let entry = entry?;
@@ -190,7 +191,7 @@ fn seed(adapter: &str, scenario: &str) -> Result<TempDir> {
         tempfile::Builder::new().prefix(&format!("specify-eval-{scenario}.")).tempdir()?;
     let seed = scenario_dir.join("seed");
     if seed.is_dir() {
-        copy_tree(&seed, scratch.path())?;
+        harness::copy_tree(&seed, scratch.path())?;
     }
 
     let inputs = scratch.path().join(".eval").join("inputs");
@@ -212,44 +213,24 @@ fn seed(adapter: &str, scenario: &str) -> Result<TempDir> {
 /// serves the adapter's MCP reference route for the spawned cursor-agent.
 fn manifest(target: &Path, adapter: &str, scratch: &Path) -> String {
     let wasm = target.join("wasm32-wasip2").join("debug");
-    format!(
-        r#"[[guest]]
-id = "eval"
-source.path = "{eval}"
-link = ["specify:adapter/source@0.1.0", "specify:adapter/target@0.1.0"]
-
-[[guest]]
-id = "target:{adapter}"
-source.path = "{adapter_wasm}"
-
-[[mount]]
-name = "."
-path = "{scratch}"
-writable = true
-
-[[route.http]]
-prefix = "/mcp/{adapter}"
-guest = "target:{adapter}"
-
-[transport]
-default = "in-process"
-"#,
-        eval = wasm.join("examples").join("eval_guest.wasm").display(),
-        adapter_wasm = wasm.join(format!("{adapter}.wasm")).display(),
-        scratch = scratch.display(),
-    )
-}
-
-// Run one cargo invocation against the workspace, into `target`.
-fn cargo(args: &[&str], root: &Path, target: &Path) -> Result<()> {
-    let status = Command::new("cargo")
-        .env("CARGO_TARGET_DIR", target)
-        .args(args)
-        .current_dir(root)
-        .status()
-        .context("spawning cargo")?;
-    ensure!(status.success(), "cargo {} failed with {status}", args.join(" "));
-    Ok(())
+    let guests = [
+        harness::Guest {
+            id: "eval".to_owned(),
+            wasm: wasm.join("examples").join("eval_guest.wasm"),
+            link: vec![
+                "specify:adapter/source@0.1.0".to_owned(),
+                "specify:adapter/target@0.1.0".to_owned(),
+            ],
+            route: None,
+        },
+        harness::Guest {
+            id: format!("target:{adapter}"),
+            wasm: wasm.join(format!("{adapter}.wasm")),
+            link: Vec::new(),
+            route: Some(format!("/mcp/{adapter}")),
+        },
+    ];
+    harness::manifest(&guests, scratch)
 }
 
 // The HTTP trigger address: honour an operator-set HTTP_ADDR, else grab an
@@ -268,20 +249,6 @@ fn cursor_agent_on_path() -> bool {
     })
 }
 
-fn copy_tree(from: &Path, to: &Path) -> Result<()> {
-    fs::create_dir_all(to)?;
-    for entry in fs::read_dir(from)? {
-        let entry = entry?;
-        let dest = to.join(entry.file_name());
-        if entry.file_type()?.is_dir() {
-            copy_tree(&entry.path(), &dest)?;
-        } else {
-            fs::copy(entry.path(), &dest)?;
-        }
-    }
-    Ok(())
-}
-
 // This package's directory (`evals/`), the root of the scenario trees.
 fn manifest_dir() -> &'static Path {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -289,15 +256,4 @@ fn manifest_dir() -> &'static Path {
 
 fn workspace_root() -> &'static Path {
     manifest_dir().parent().expect("evals/ sits at <workspace>/evals")
-}
-
-// The cargo target dir this test binary was built into (testkit's
-// convention: the test exe sits at `<target>/<profile>/deps/<exe>`).
-fn target_dir() -> Result<PathBuf> {
-    let test_exe = std::env::current_exe().context("test executable has a path")?;
-    Ok(test_exe
-        .ancestors()
-        .nth(3)
-        .expect("test exe sits at <target>/<profile>/deps/<exe>")
-        .to_path_buf())
 }

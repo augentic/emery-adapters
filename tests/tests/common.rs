@@ -1,14 +1,15 @@
 //! Shared helpers for the composed-deployment integration tests.
 //!
 //! Owns guest-artifact building/locating (this workspace's counterpart
-//! to the specify engine's `crates/runtime/tests/common.rs`), the
+//! to the specify engine's `crates/runtime/tests/common.rs`) and the
 //! `wasi:http`-backed store bundle a host binary's `runtime!` macro
-//! would generate, and the deployment manifests the tests deploy.
+//! would generate; manifest rendering and the cargo runner come from the
+//! `adapter-tests` harness library (`src/lib.rs`).
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::{Arc, OnceLock};
 
+use adapter_tests as harness;
 use anyhow::{Context as _, Result};
 use omnia::futures::FutureExt as _;
 use omnia::wasmtime_wasi::ResourceTable;
@@ -77,20 +78,19 @@ pub async fn source_guests_runtime(mount: &Path) -> Result<Runtime<Bundle>> {
 /// `/mcp/<name>`, sharing one writable `"."` mount — the shared project
 /// tree every guest opens through its own preopen.
 fn manifest(guests: &[Guest], mount: &Path) -> Result<TempManifest> {
-    use std::fmt::Write as _;
-
-    let mut doc = String::new();
-    for (id, file) in guests {
-        let wasm = guest_wasm(file);
-        writeln!(doc, "[[guest]]\nid = \"{id}\"\nsource.path = \"{}\"\n", wasm.display())?;
-    }
-    writeln!(doc, "[[mount]]\nname = \".\"\npath = \"{}\"\nwritable = true\n", mount.display())?;
-    for (id, _) in guests {
-        let name = id.split_once(':').expect("guest id is `<axis>:<name>`").1;
-        writeln!(doc, "[[route.http]]\nprefix = \"/mcp/{name}\"\nguest = \"{id}\"\n")?;
-    }
-    doc.push_str("[transport]\ndefault = \"in-process\"\n");
-    temp_manifest(&doc)
+    let entries: Vec<harness::Guest> = guests
+        .iter()
+        .map(|(id, file)| {
+            let name = id.split_once(':').expect("guest id is `<axis>:<name>`").1;
+            harness::Guest {
+                id: (*id).to_owned(),
+                wasm: guest_wasm(file),
+                link: Vec::new(),
+                route: Some(format!("/mcp/{name}")),
+            }
+        })
+        .collect();
+    temp_manifest(&harness::manifest(&entries, mount))
 }
 
 /// Locate a built wasm32-wasip2 guest component, building the guest
@@ -116,10 +116,8 @@ fn build_guests() {
     static GUESTS: OnceLock<()> = OnceLock::new();
     GUESTS.get_or_init(|| {
         let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .ancestors()
-            .nth(2)
-            .expect("tests manifest dir is <workspace>/crates/tests")
-            .to_path_buf();
+            .parent()
+            .expect("tests manifest dir is <workspace>/tests");
         let packages = [
             "contracts",
             "omnia-adapter",
@@ -130,27 +128,16 @@ fn build_guests() {
             "screenshots",
             "typescript",
         ];
-        let status = Command::new("cargo")
-            .env("CARGO_TARGET_DIR", target_dir())
-            .arg("build")
-            .args(packages.iter().flat_map(|package| ["-p", package]))
-            .args(["--target", "wasm32-wasip2"])
-            .current_dir(workspace_root)
-            .status()
-            .expect("spawning guest build");
-        assert!(status.success(), "guest build failed with status {status}");
+        let mut args = vec!["build"];
+        args.extend(packages.iter().flat_map(|package| ["-p", package]));
+        args.extend(["--target", "wasm32-wasip2"]);
+        harness::cargo(&args, workspace_root, &target_dir()).expect("guest build");
     });
 }
 
-// The cargo target dir this test binary was built into (testkit's
-// convention: the test exe sits at `<target>/<profile>/deps/<exe>`).
+// The cargo target dir this test binary was built into.
 fn target_dir() -> PathBuf {
-    let test_exe = std::env::current_exe().expect("test executable has a path");
-    test_exe
-        .ancestors()
-        .nth(3)
-        .expect("test exe sits at <target>/<profile>/deps/<exe>")
-        .to_path_buf()
+    harness::target_dir().expect("test exe sits at <target>/<profile>/deps/<exe>")
 }
 
 // Deploy a temp manifest onto the runtime with the test backend bundle.

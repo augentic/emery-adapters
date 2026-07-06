@@ -28,12 +28,7 @@ const GUESTS: [(&str, &str, &str, &str); 4] = [
         "typescript-references",
         "# TypeScript / JavaScript source survey",
     ),
-    (
-        "source:screenshots",
-        "/mcp/screenshots",
-        "screenshots-references",
-        "# `screenshots.survey`",
-    ),
+    ("source:screenshots", "/mcp/screenshots", "screenshots-references", "# `screenshots.survey`"),
     ("source:captures", "/mcp/captures", "captures-references", "# Runtime capture survey"),
 ];
 

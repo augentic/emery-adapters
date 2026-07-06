@@ -1,12 +1,12 @@
 # Testing
 
-Integration-first test posture for the `specify-adapters` crates — the wasm-free adapter cores (`<name>-core`) and the shared guest-support crates under `crates/`. It mirrors the engine standard in [`augentic/specify` `engine/docs/standards/testing.md`](https://github.com/augentic/specify/blob/main/engine/docs/standards/testing.md): the unit layer is deliberately thin, integration owns every publicly reachable behavior, and `cargo llvm-cov` is the brake on deletion. The WIT contract, `core/tests/` integration suites, and the `crates/tests` composed-deployment tests are the guardrails — design tests against those public surfaces, not private kernels. Read this before adding a new test or deleting one.
+Integration-first test posture for the `specify-adapters` crates — the wasm-free adapter cores (`<name>-core`) and the shared guest-support crates under `crates/`. It mirrors the engine standard in [`augentic/specify` `engine/docs/standards/testing.md`](https://github.com/augentic/specify/blob/main/engine/docs/standards/testing.md): the unit layer is deliberately thin, integration owns every publicly reachable behavior, and `cargo llvm-cov` is the brake on deletion. The WIT contract, `core/tests/` integration suites, and the root `tests/` composed-deployment tests (the `adapter-tests` package) are the guardrails — design tests against those public surfaces, not private kernels. Read this before adding a new test or deleting one.
 
 ## Posture
 
 Use `cargo make test` rather than `cargo test`. It runs `cargo nextest run --all --all-features --no-tests=pass` under `RUSTFLAGS=-Dwarnings`, matching CI. `nextest` is mandatory: it runs each test in its own process, and that isolation is what lets the CWD/env-mutating suites pass.
 
-Each adapter core consolidates its integration suite into a single `it` binary: `core/tests/it.rs` pulls each area in as a `#[path = "<area>.rs"]` submodule (`mod operations;`, `mod scaffold;`, …) so the crate-under-test links exactly once. The guest shims (`{targets,sources}/<name>/src/`) are hand-written wasm32 export glue over `adapter`'s shared WIT bindings and carry no native tests; the composed-deployment seams are covered by `crates/tests`.
+Each adapter core consolidates its integration suite into a single `it` binary: `core/tests/it.rs` pulls each area in as a `#[path = "<area>.rs"]` submodule (`mod operations;`, `mod scaffold;`, …) so the crate-under-test links exactly once. The guest shims (`{targets,sources}/<name>/src/`) are hand-written wasm32 export glue over `adapter`'s shared WIT bindings and carry no native tests; the composed-deployment seams are covered by the root `tests/` package (`adapter-tests`), whose `src/lib.rs` doubles as the shared host harness the `evals/` live tests reuse.
 
 ## The two layers — minimize the unit layer
 

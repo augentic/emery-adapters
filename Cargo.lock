@@ -18,6 +18,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "adapter-tests"
+version = "0.4.3"
+dependencies = [
+ "anyhow",
+ "omnia",
+ "omnia-testkit",
+ "omnia-wasi-http",
+ "omnia-wasi-model",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "addr2line"
 version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1171,6 +1185,7 @@ dependencies = [
 name = "evals"
 version = "0.4.3"
 dependencies = [
+ "adapter-tests",
  "anyhow",
  "cfg-if",
  "omnia",
@@ -4212,20 +4227,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06794f8f6c5c898b3275aebefa6b8a1cb24cd2c6c79397ab15774837a0bc5755"
 dependencies = [
  "winapi-util",
-]
-
-[[package]]
-name = "tests"
-version = "0.4.3"
-dependencies = [
- "anyhow",
- "omnia",
- "omnia-testkit",
- "omnia-wasi-http",
- "omnia-wasi-model",
- "serde_json",
- "tempfile",
- "tokio",
 ]
 
 [[package]]
