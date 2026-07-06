@@ -42,7 +42,7 @@ Unit tests under `extension/src/**` (the 14-test ratchet budget) moved to `core/
 - **Bootstrap app-icon gate (§L)** — runs in the guest build's deterministic prelude after materialize; error findings park the build.
 - **Host builds** (cargo / swiftformat / make / xcodebuild / gradlew) — stay agent-run in the lent workspace, instructed by the write prompts and the merge prompt's host cap-matrix section; the adapter cannot spawn host commands.
 
-Consequence: the `layout-inferer-contract`, verifier references, and `components.md` describe gates and modes, not invocations; `CORE-050`'s remedy is now "describe the surviving surface", and `CORE-057` keeps `catalog` in its ignore list only while sibling-repo prose still cites the retired verb.
+Consequence: the `layout-inferer-contract`, verifier references, and `components.md` describe gates and modes, not invocations; prose must describe the surviving surface rather than retired CLI verbs such as `specify extension run` or `specify catalog infer`.
 
 ## RFC-61 Step 5 Milestone A1 — D2 verification audit
 
@@ -77,7 +77,7 @@ No check was left homeless. The vectis platform builds and the omnia cargo/wasm3
 
 ## RFC-61 Step 5 Milestone A2 — `shape` → `guidance` rename
 
-**Decision (2026-07).** Per RFC-61 §"The contract revision", the target read-at-synthesis leg is `guidance` everywhere; the adapter vocabulary's `shape` term is retired. `targets/{contracts,omnia,vectis}/briefs/shape.md` moved to `briefs/guidance.md` (git renames); the three cores' `guidance()` operations read `registry::body("briefs/guidance.md")`; brief H1s and self-references, the omnia/vectis build-leg brief assemblies, the registry/operations/runtime tests, and prose citing `shape` as the operation name (references READMEs, `vectis.mdc`, shared runtime references, CORE-014's brief path glob) all follow. Incidental uses of the word "shape" (`report-shape.md`, "wire shape", "data shape") are untouched. The `briefs.shape` manifest key needed no rename because the manifest shrink below deletes the `briefs:` map outright. This repo's forked `CORE-001` / `CORE-004` / `CORE-007` rule docs still describe the full-shape manifest grammar whose key spelling is `shape` — they die with the manifest machinery engine-side (Milestone S4) rather than being reworded here.
+**Decision (2026-07).** Per RFC-61 §"The contract revision", the target read-at-synthesis leg is `guidance` everywhere; the adapter vocabulary's `shape` term is retired. `targets/{contracts,omnia,vectis}/briefs/shape.md` moved to `briefs/guidance.md` (git renames); the three cores' `guidance()` operations read `registry::body("briefs/guidance.md")`; brief H1s and self-references, the omnia/vectis build-leg brief assemblies, the registry/operations/runtime tests, and prose citing `shape` as the operation name (references READMEs, `vectis.mdc`, shared runtime references, CORE-014's brief path glob) all follow. Incidental uses of the word "shape" (`report-shape.md`, "wire shape", "data shape") are untouched. The `briefs.shape` manifest key needed no rename because the manifest shrink below deletes the `briefs:` map outright. The forked manifest-policing CORE rules (`CORE-001` / `CORE-004` / `CORE-007` and peers) described the full-shape manifest grammar whose key spelling was `shape` — they were deleted with the RFC-61 lint shrinkage pass alongside the sibling specify repo rather than being reworded here.
 
 ## RFC-61 Step 5 Milestone A2 — manifest shrink
 
