@@ -26,7 +26,7 @@ The dividing line matters because it keeps specs portable across targets:
 
 - **Specs stay behavioral.** They must not encode Omnia trait bindings, WASM implementation details, or generator-specific instructions. See [spec format](https://specify.augentic.io/reference/artifact-format.html#spec-files-behavioral-what).
 - **`design.md` carries the technical "how"** — domain models, API and message shapes, business logic, integrations, configuration, and risks. See [design format](https://specify.augentic.io/reference/artifact-format.html#design-document-technical-how). Cite stable requirement IDs (e.g. `REQ-003`) rather than requirement titles.
-- **Generator-owned binding decisions stay in the target adapter's build brief**, never in the artifacts. Omnia trait composition and Crux effect types are decided by the target adapter's `build` brief that writes the code, guided by its `guidance` brief — not hardcoded into the behavioral contract.
+- **Generator-owned binding decisions stay in the target adapter's build prompts**, never in the artifacts. Omnia trait composition and Crux effect types are decided by the target adapter's build operation that writes the code, guided by its `guidance` prompt — not hardcoded into the behavioral contract.
 
 ## Deriving specs from source code
 
@@ -46,7 +46,7 @@ Never generate tasks that require human-only action: manual app testing, visual 
 
 `specify slice validate` checks only the checkbox and grouping *shape* of `tasks.md`; it does not inspect task intent. Agent-completability is therefore judged at write time and re-checked by `/spec:build` as a preflight.
 
-Tasks are implemented by the active target adapter's `build` brief, which carries the specialist orchestration inline; they do not route to standalone specialist skills.
+Tasks are implemented by the active target adapter's build operation, which carries the specialist orchestration inline; they do not route to standalone specialist skills.
 
 ## Decision Records
 

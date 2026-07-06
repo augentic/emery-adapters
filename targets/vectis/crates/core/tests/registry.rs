@@ -1,22 +1,22 @@
 //! The embedded prose registry: coverage across all three trees,
-//! nested build sub-briefs, ordering, and symlink resolution.
+//! nested build prompts, ordering, and symlink resolution.
 
 use specify_vectis_core::registry;
 
 #[test]
-fn registry_embeds_briefs_references_and_rules() {
+fn registry_embeds_prompts_references_and_rules() {
     for path in [
-        "briefs/guidance.md",
-        "briefs/build.md",
-        "briefs/merge.md",
-        "briefs/build/composition.md",
-        "briefs/build/test.md",
-        "briefs/build/core/write.md",
-        "briefs/build/core/review.md",
-        "briefs/build/ios/write.md",
-        "briefs/build/ios/review.md",
-        "briefs/build/android/write.md",
-        "briefs/build/android/review.md",
+        "prompts/guidance.md",
+        "prompts/build.md",
+        "prompts/merge.md",
+        "prompts/build/composition.md",
+        "prompts/build/test.md",
+        "prompts/build/core/write.md",
+        "prompts/build/core/review.md",
+        "prompts/build/ios/write.md",
+        "prompts/build/ios/review.md",
+        "prompts/build/android/write.md",
+        "prompts/build/android/review.md",
         "references/hard-rules-core.md",
         "references/hard-rules-ios.md",
         "references/hard-rules-android.md",
@@ -27,11 +27,11 @@ fn registry_embeds_briefs_references_and_rules() {
     ] {
         assert!(registry::doc(path).is_some(), "registry embeds `{path}`");
     }
-    assert!(registry::body("briefs/build.md").starts_with("# Vectis target — build brief"));
+    assert!(registry::body("prompts/build.md").starts_with("# Vectis target — build prompt"));
 }
 
 /// The vectis prose shelf is the largest in the repo: 68 markdown files
-/// (~600 KB) across `briefs/` (with its nested per-platform build
+/// (~600 KB) across `prompts/` (with its nested per-platform build
 /// sub-trees), `references/`, and `rules/` must all embed. The floor
 /// guards against a silently truncated walk without pinning the exact
 /// prose inventory.

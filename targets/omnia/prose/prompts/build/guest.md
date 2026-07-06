@@ -26,7 +26,7 @@ The full constraint list lives at [`guardrails.md`](../../references/guardrails.
 5. **Author the supply-chain files** per [`configuration.md`](../../references/configuration.md): `deny.toml`, `cargo-vet` config (`exemptions.lock`, `imports.lock`, `audits.toml`). After the workspace builds for the first time and produces `Cargo.lock`, run `cargo vet regenerate {imports,exemptions,unpublished}`.
 6. **Author the five GitHub workflows** — full templates in [`configuration.md`](../../references/configuration.md): `audit`, `ci`, `patch`, `publish`, `release`.
 7. **Apply the project layout** described in [`project-layout.md`](../../references/project-layout.md).
-8. **Verify with `cargo check`** — fix any missing route / provider impl / wasm32-incompatible usage and re-check until clean. The parent brief's verify-repair loop runs after this step.
+8. **Verify with `cargo check`** — fix any missing route / provider impl / wasm32-incompatible usage and re-check until clean. The build prompt's verify-repair loop runs after this step.
 
 ## When `WasiIdentity` is consumed
 

@@ -1,5 +1,5 @@
 //! The judgment operation template against the scripted [`MockModel`]:
-//! the deterministic prepare prelude, the brief-driven phase legs, the
+//! the deterministic prepare prelude, the prompt-driven phase legs, the
 //! in-core composition validator gate with its bounded repair, the
 //! declared-platform shell-leg filter, and the deterministic report
 //! gate.
@@ -43,7 +43,7 @@ fn schema_format(request: &Request) -> (&str, &str) {
 }
 
 #[test]
-fn guidance_returns_embedded_brief() {
+fn guidance_returns_embedded_prompt() {
     assert!(guidance().starts_with("# Vectis target — `guidance`"));
 }
 
@@ -75,15 +75,15 @@ async fn build_runs_prelude_then_phase_legs_then_report() {
     let requests = model.requests();
     assert_eq!(requests.len(), 6, "composition, core, two shells, review, then one report call");
 
-    // First leg: composition — the orchestrator brief plus the guidance
-    // refresher and the composition sub-brief, the deterministic prepare
+    // First leg: composition — the parent build prompt plus the guidance
+    // refresher and the composition prompt, the deterministic prepare
     // prelude's summary, the adapter's own MCP grant, and the workspace
     // lend.
     let first = &requests[0];
     let system = first.system.as_deref().unwrap();
-    assert!(system.contains("# Vectis target — build brief"), "build brief in system");
+    assert!(system.contains("# Vectis target — build prompt"), "build prompt in system");
     assert!(system.contains("# Vectis target — `guidance`"), "guidance refresher in system");
-    assert!(system.contains("# Vectis build — composition"), "composition sub-brief in system");
+    assert!(system.contains("# Vectis build — composition"), "composition prompt in system");
     let user = &first.messages[0].content;
     assert!(user.contains("PROPOSAL-BODY") && user.contains("DESIGN-BODY"), "typed inputs");
     assert!(user.contains("slice `demo`"), "slice named");
@@ -103,7 +103,7 @@ async fn build_runs_prelude_then_phase_legs_then_report() {
     assert!(first.lend_workspace);
     assert_eq!(first.mcp[0].url, "http://shelf/mcp");
 
-    // The brief's phase order: core (Phases 2-3), the two shell writes
+    // The prompt's phase order: core (Phases 2-3), the two shell writes
     // (Phases 4-5), review (Phases 6-7), then the report leg gated by
     // the derived answer schema.
     let core = &requests[1];
@@ -165,7 +165,7 @@ async fn declared_core_only_platforms_skip_the_shell_legs() {
         "core scaffold rendered from the embedded templates"
     );
     let review_system = requests[2].system.as_deref().unwrap();
-    assert!(!review_system.contains("iOS review"), "no iOS review brief for a core-only project");
+    assert!(!review_system.contains("iOS review"), "no iOS review prompt for a core-only project");
 }
 
 #[tokio::test]

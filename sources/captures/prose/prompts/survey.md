@@ -1,6 +1,6 @@
 # Runtime capture survey
 
-`/spec:plan` invokes this brief once per binding under `plan.yaml.sources.<key>` whose adapter is `captures`. Your job: walk the read-only capture tree at `$SOURCE_DIR`, identify one handler-grain lead per `tests/data/replays/<handler>/` directory the wiretapper captured, and return one lead block per handler. The CLI appends your blocks under `## Lead inventory` in `discovery.md`; you never write `discovery.md` directly.
+`/spec:plan` invokes this prompt once per binding under `plan.yaml.sources.<key>` whose adapter is `captures`. Your job: walk the read-only capture tree at `$SOURCE_DIR`, identify one handler-grain lead per `tests/data/replays/<handler>/` directory the wiretapper captured, and return one lead block per handler. The CLI appends your blocks under `## Lead inventory` in `discovery.md`; you never write `discovery.md` directly.
 
 ## Binding
 
@@ -30,7 +30,7 @@ Operators with a non-conforming layout adapt the directory or write a thin wrapp
 ## Inputs
 
 - **`$SOURCE_DIR`** — read-only preopen of the operator-bound capture root. Walk this tree; never write into it.
-- **Source key** — kebab-case identifier passed in via the runner (the `<key>` from `plan.yaml.sources.<key>`). The CLI stamps each lead's `source` from it; this brief does not emit it.
+- **Source key** — kebab-case identifier passed in via the runner (the `<key>` from `plan.yaml.sources.<key>`). The CLI stamps each lead's `source` from it; this prompt does not emit it.
 
 The bound directory is the only filesystem grant — `$PROJECT_DIR` is unreachable, host env is unreadable, the network is denied. Use `$SCRATCH_DIR` for unavoidable intermediate state.
 
@@ -59,7 +59,7 @@ Emit blocks sorted alphabetically by `lead` so re-survey produces byte-stable di
 ## Algorithm
 
 1. **Walk `tests/data/replays/`.** Survey immediate subdirectories. Skip `samples/` (shared payloads, not handlers) and any directory whose name begins with `.` or `_`.
-2. **Per handler, inventory scenarios.** List `<handler>/*.json`. Skip the optional per-handler `INSTRUCTIONS.md` — the brief is not authoritative for surface naming. Zero-scenario handler directories are skipped silently (the operator drops them upstream).
+2. **Per handler, inventory scenarios.** List `<handler>/*.json`. Skip the optional per-handler `INSTRUCTIONS.md` — it is not authoritative for surface naming. Zero-scenario handler directories are skipped silently (the operator drops them upstream).
 3. **Identify the surface.** Inspect one or two scenario files to derive the route / topic / job identifier and method (e.g. `POST /users`, queue `user.created`, cron `0 */5 * * *`). When scenarios disagree, prefer the most common surface and note the spread in `synopsis`.
 4. **Emit one lead block per handler.** Sort by `lead`. Each block carries the handler `lead` and a reconciliation-grade synopsis; the CLI stamps `source` from the survey binding.
 
@@ -116,7 +116,7 @@ Expected output (alphabetically by `lead`; the CLI stamps `source: runtime`):
 
 - **Inventing handlers from `INSTRUCTIONS.md`.** The prose is operator hint material; the directory listing is the lead source of truth. If a handler is named in `INSTRUCTIONS.md` but has no scenario JSON files, emit nothing for it.
 - **Per-scenario leads.** One block per `<handler>/` directory, never one per `<scenario>.json`. Scenario-level detail belongs in `extract`'s `kind: example` claims.
-- **Cross-source slug mismatches here.** When another source surfaces the same handler under a different slug, reconciliation is propose-time agent judgment and Gate 1 `--sources` edits; this brief sees one source's tree. See [From sources to slices](../references/spec-runtime/reconciliation.md#plan-time-leads-become-slices) for how leads reconcile into slices.
+- **Cross-source slug mismatches here.** When another source surfaces the same handler under a different slug, reconciliation is propose-time agent judgment and Gate 1 `--sources` edits; this prompt sees one source's tree. See [From sources to slices](../references/spec-runtime/reconciliation.md#plan-time-leads-become-slices) for how leads reconcile into slices.
 - **Writing `discovery.md` or `plan.yaml`.** Only lead blocks. The CLI owns every lifecycle file.
 
 ## Failure modes

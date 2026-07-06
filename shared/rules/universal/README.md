@@ -1,6 +1,6 @@
 # Shared engineering standards (UNI-\*)
 
-Shared **engineering standards** catalog — target-agnostic rules under `adapters/shared/`. Codex is the on-disk rule format; these files are durable policy, not workflow state or slice artifacts. Read by every target adapter's build review brief during `/spec:build` and (when implemented) by `specify lint` for deterministic CI enforcement. Findings cite a rule here as a stable `rule_id` (for example `UNI-014`) alongside a report-local occurrence id (for example `UNI-3`) in `REVIEW.md`.
+Shared **engineering standards** catalog — target-agnostic rules under `adapters/shared/`. Codex is the on-disk rule format; these files are durable policy, not workflow state or slice artifacts. Read by every target adapter's build review prompt during `/spec:build` and (when implemented) by `specify lint` for deterministic CI enforcement. Findings cite a rule here as a stable `rule_id` (for example `UNI-014`) alongside a report-local occurrence id (for example `UNI-3`) in `REVIEW.md`.
 
 See [docs/explanation/standards-layer.md](../../../../docs/explanation/standards-layer.md) for how engineering standards relate to workflow, artifacts, and `docs/standards/` (authoring house style).
 
@@ -12,7 +12,7 @@ Sibling shared hook directory: [`../../target-hooks/replay/`](../../target-hooks
 
 Rules are grouped by severity (highest first). `UNI-*` ids are stable citation keys — they are not renumbered when severity or grouping changes.
 
-**Enforcement mode (review-only vs deterministically exported).** Every `UNI-*` rule is applied as a **model-assisted review finding** by the target build review briefs during `/spec:build`; none gate deterministically by default. The single exception today is **UNI-014** ([`hardcoded-configuration.md`](hardcoded-configuration.md)), which additionally carries deterministic `rule_hints` (a `path-pattern` + `regex` pair) and is therefore the only id exported to `specify lint` as a deterministic check. Treat every other id as review-only until it grows its own `rule_hints` block.
+**Enforcement mode (review-only vs deterministically exported).** Every `UNI-*` rule is applied as a **model-assisted review finding** by the target build review prompts during `/spec:build`; none gate deterministically by default. The single exception today is **UNI-014** ([`hardcoded-configuration.md`](hardcoded-configuration.md)), which additionally carries deterministic `rule_hints` (a `path-pattern` + `regex` pair) and is therefore the only id exported to `specify lint` as a deterministic check. Treat every other id as review-only until it grows its own `rule_hints` block.
 
 ### Critical
 
@@ -77,9 +77,9 @@ Optional frontmatter fields (`applicability`, `lint_mode`, `rule_hints`, `refere
 
 ## How rules are consumed
 
-Target review briefs read this directory directly and apply each rule with target-specific heuristics:
+Target review prompts read this directory directly and apply each rule with target-specific heuristics:
 
-- **Omnia** — [`adapters/targets/omnia/prose/briefs/build/review.md`](../../../targets/omnia/prose/briefs/build/review.md) phase 3 ("Universal checks (lead)") applies every `UNI-*` rule in the inventory above, skipping rules already covered by the SEC / COR / QUA specialists per the table in [`review-categories.md`](../../../targets/omnia/prose/references/review-categories.md).
+- **Omnia** — [`targets/omnia/prose/prompts/build/review.md`](../../../targets/omnia/prose/prompts/build/review.md) phase 3 ("Universal checks (lead)") applies every `UNI-*` rule in the inventory above, skipping rules already covered by the SEC / COR / QUA specialists per the table in [`review-categories.md`](../../../targets/omnia/prose/references/review-categories.md).
 - **Vectis** — [`adapters/targets/vectis/prose/references/review/universal-checks.md`](../../../targets/vectis/prose/references/review/universal-checks.md) lists the Crux/Rust heuristics for each `UNI-*` and the overlaps to skip.
 - **Contracts** — [`docs/reference/targets/contracts.md`](../../../../docs/reference/targets/contracts.md) cites its overlay alongside this shared set.
 

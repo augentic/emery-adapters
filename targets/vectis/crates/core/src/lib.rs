@@ -2,7 +2,7 @@
 //! against a mock [`specify_guest_kit::Model`]; the wasm32 shim
 //! (`specify-vectis`) owns bindings and export glue.
 //!
-//! - [`operations`] — the build brief's phase legs, the in-core
+//! - [`operations`] — the build prompt's phase legs, the in-core
 //!   composition validator gate with its bounded repair, and the
 //!   deterministic report-coherence tail, over the shared
 //!   `specify_guest_kit::phase` template.
@@ -15,7 +15,7 @@
 //!   render-only Crux scaffolding, scaffold-file sync, and the Android
 //!   Gradle-wrapper bootstrap. The guest calls them directly as the
 //!   deterministic prelude and postlude around the judgment legs.
-//! - [`registry`] — the embedded prose (`briefs/` + `references/` +
+//! - [`registry`] — the embedded prose (`prompts/` + `references/` +
 //!   `rules/`).
 
 pub mod android;

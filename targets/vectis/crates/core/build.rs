@@ -2,7 +2,7 @@
 //! `src/registry.rs` includes (symlinks resolve at build time), and
 //! generates the scaffold template registry from `templates/manifest.yaml`.
 //!
-//! The `rules/` tree rides along because the build brief's review flow cites
+//! The `rules/` tree rides along because the build prompt's review flow cites
 //! the Vectis rule overlay by path, so the shelf must serve it.
 
 use std::collections::{BTreeSet, HashMap};
@@ -20,7 +20,7 @@ const ASSEMBLY_ORDER: &[&str] = &["core", "ios", "android"];
 const MANIFEST_IGNORED: &str = "MANIFEST.md";
 
 fn main() {
-    specify_prose_registry::emit_core(&["briefs", "references", "rules"]);
+    specify_prose_registry::emit_core(&["prompts", "references", "rules"]);
     if let Err(err) = generate_template_registry() {
         panic!("vectis template manifest codegen failed: {err}");
     }

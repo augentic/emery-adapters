@@ -1,7 +1,7 @@
 //! The shared judgment-call shape every adapter operation uses.
 //!
 //! One leg is one schema-gated `create`: assemble the request from the
-//! brief-derived `system` and the operation's `user` prompt, offer the
+//! embedded-prompt `system` and the operation's `user` prompt, offer the
 //! adapter's own MCP reference grant, lend the shared workspace, and
 //! deserialize the host-validated answer into the leg's typed shape.
 //! Flow control around the legs — sub-flow ordering, repair loops,

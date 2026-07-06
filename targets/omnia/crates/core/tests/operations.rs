@@ -42,8 +42,8 @@ fn schema_format(request: &Request) -> (&str, &str) {
 }
 
 #[test]
-fn guidance_returns_embedded_brief() {
-    assert!(guidance().starts_with("# Omnia target — guidance brief"));
+fn guidance_returns_embedded_prompt() {
+    assert!(guidance().starts_with("# Omnia target — guidance prompt"));
 }
 
 #[tokio::test]
@@ -67,16 +67,16 @@ async fn build_runs_phase_legs_then_report() {
     let requests = model.requests();
     assert_eq!(requests.len(), 4, "generation, review, replay, then one report call");
 
-    // First leg: generation — the orchestrator brief plus the shape
-    // refresher and all three writer sub-briefs (the verify-repair loop
+    // First leg: generation — the build prompt plus the guidance
+    // refresher and all three writer prompts (the verify-repair loop
     // crosses them), the adapter's own MCP grant, and the workspace lend.
     let first = &requests[0];
     let system = first.system.as_deref().unwrap();
-    assert!(system.contains("# Omnia target — build brief"), "build brief in system");
-    assert!(system.contains("# Omnia target — guidance brief"), "guidance refresher in system");
-    assert!(system.contains("# Omnia build — crate writer"), "crate sub-brief in system");
-    assert!(system.contains("# Omnia build — test writer"), "test sub-brief in system");
-    assert!(system.contains("# Omnia build — guest writer"), "guest sub-brief in system");
+    assert!(system.contains("# Omnia target — build prompt"), "build prompt in system");
+    assert!(system.contains("# Omnia target — guidance prompt"), "guidance refresher in system");
+    assert!(system.contains("# Omnia build — crate writer"), "crate writer prompt in system");
+    assert!(system.contains("# Omnia build — test writer"), "test writer prompt in system");
+    assert!(system.contains("# Omnia build — guest writer"), "guest writer prompt in system");
     let user = &first.messages[0].content;
     assert!(user.contains("PROPOSAL-BODY") && user.contains("DESIGN-BODY"), "typed inputs");
     assert!(user.contains("slice `demo`"), "slice named");
@@ -89,8 +89,8 @@ async fn build_runs_phase_legs_then_report() {
     assert!(first.lend_workspace);
     assert_eq!(first.mcp[0].url, "http://shelf/mcp");
 
-    // Fixed phase order: review carries the review sub-brief, replay the
-    // replay sub-brief, then the report leg gated by the derived answer
+    // Fixed leg order: review carries the review prompt, replay the
+    // replay prompt, then the report leg gated by the derived answer
     // schema.
     let review = &requests[1];
     assert_eq!(schema_format(review).0, "review");
@@ -157,7 +157,7 @@ async fn declared_outputs_that_exist_pass_the_gate() {
 #[tokio::test]
 async fn failure_report_is_terminal_without_repair() {
     let tmp = TempDir::new().unwrap();
-    // A failure report parks the slice per the brief's stop contract; the
+    // A failure report parks the slice per the prompt's stop contract; the
     // gate must not spend a repair leg re-litigating its output claims.
     let model = MockModel::answering([
         PHASE_DONE,
@@ -219,7 +219,7 @@ async fn merge_is_one_report_leg_with_pre_merge_gate_instructions() {
     assert_eq!(report.status, Status::Success);
     let requests = model.requests();
     assert_eq!(requests.len(), 1, "a coherent report needs no repair leg");
-    assert!(requests[0].system.as_deref().unwrap().contains("# Omnia target — merge brief"));
+    assert!(requests[0].system.as_deref().unwrap().contains("# Omnia target — merge prompt"));
     let user = &requests[0].messages[0].content;
     assert!(user.contains("pre-merge gate"), "agent-run cargo verification instructed");
     assert!(user.contains("crates/demo/old.rs (deleted)"), "delta rendered");

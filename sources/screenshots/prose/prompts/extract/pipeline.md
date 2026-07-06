@@ -23,7 +23,7 @@ Skip when no `platform` hint is present and no chrome is detected. Otherwise rem
 - Web: browser chrome, devtools panes, surrounding OS chrome.
 - Generic: emulator frames, screen recorder overlays, OS-level toasts that aren't part of the application.
 
-Cropped pixels are staged in `$SCRATCH_DIR` only; they never leave the brief and never appear in Evidence. Record what was cropped on the lead's first emitted `region: { region: header }` claim under `notes.cropped_chrome:`.
+Cropped pixels are staged in `$SCRATCH_DIR` only; they never leave the prompt and never appear in Evidence. Record what was cropped on the lead's first emitted `region: { region: header }` claim under `notes.cropped_chrome:`.
 
 ## 3. Infer regions
 
@@ -89,12 +89,12 @@ Walk every container claim produced in stage 4 and compare every `container: gro
 
 - Same ordered nested item kinds.
 - Same nested-group shape.
-- Same set of `*-when` keys *present* on nested groups (presence — not condition value — is part of the skeleton). `*-when` keys themselves are not emitted by this brief (define-owned); presence here means future-instance check.
+- Same set of `*-when` keys *present* on nested groups (presence — not condition value — is part of the skeleton). `*-when` keys themselves are not emitted by this prompt (define-owned); presence here means future-instance check.
 - `platforms.*` overrides participate only against other `platforms.<same>` overrides; the **base** skeleton MUST still match across all instances.
 
 Apply the conservative emission policy:
 
-- Promote a container claim to `component: <slug>` only when **either** the operator confirms a candidate (a previous accepted Evidence carries the slug already) **or** the brief observes ≥2 structurally identical groups across screens of the *same run* (within `<lead>` plus any prior leads extracted for the same plan — synthesis aggregates across leads).
+- Promote a container claim to `component: <slug>` only when **either** the operator confirms a candidate (a previous accepted Evidence carries the slug already) **or** the prompt observes ≥2 structurally identical groups across screens of the *same run* (within `<lead>` plus any prior leads extracted for the same plan — synthesis aggregates across leads).
 - Otherwise leave `component:` unset on the claim and add `notes.candidate_component: <slug>` so the operator can promote it explicitly later.
 - Slugs MUST match `^[a-z][a-z0-9]*(-[a-z0-9]+)*$` (kebab-case). Reserved region names (`header`, `body`, `footer`, `fab`) MUST NOT be used as slugs.
 - Derive slugs from visible content (`task-row`, `setting-row`, `chip-tag`) — never from layout shape (`row-1`, `card-2`).
@@ -103,7 +103,7 @@ When in doubt, leave `component:` unset and emit the note. Promoting a note to a
 
 ### Feed candidate skeletons forward into inference (candidate cache)
 
-Whenever you emit a `notes.candidate_component: <slug>` hint, also write a candidate-cache sidecar so build-time component inference (the vectis adapter's in-guest clustering) has cross-slice memory before the composition baseline accumulates the screens. Write one YAML file per hinted group at `${PROJECT_DIR}/.specify/.cache/component-candidates/<slice>/<screen>/<group-path>.yaml`, keyed **strictly by provenance** — the slice slug, the screen slug, and the dotted group path within the screen. Never key the file by the derived slug (two distinct skeletons sharing a name would silently clobber each other) and never by a fingerprint: this is a vision brief, so it cannot compute the inference tool's canonical structural hash, and it must not try — provenance keys are collision-free by construction and the tool recomputes the canonical fingerprint at read time from the skeleton you store.
+Whenever you emit a `notes.candidate_component: <slug>` hint, also write a candidate-cache sidecar so build-time component inference (the vectis adapter's in-guest clustering) has cross-slice memory before the composition baseline accumulates the screens. Write one YAML file per hinted group at `${PROJECT_DIR}/.specify/.cache/component-candidates/<slice>/<screen>/<group-path>.yaml`, keyed **strictly by provenance** — the slice slug, the screen slug, and the dotted group path within the screen. Never key the file by the derived slug (two distinct skeletons sharing a name would silently clobber each other) and never by a fingerprint: this is a vision prompt, so it cannot compute the inference tool's canonical structural hash, and it must not try — provenance keys are collision-free by construction and the tool recomputes the canonical fingerprint at read time from the skeleton you store.
 
 The sidecar body carries the **normalized `group` skeleton** as a composition-`group`-shaped fragment — the exact shape the inference tool's normalizer consumes — plus the derived slug stored as an inner `candidate_component:` label hint (a suggestion the build skill may adopt or override at naming time; it is never an identity) and the enclosing `region:`. Because stage 4 emits Evidence `container: group` claims (and child `container` / `leaf` claims) rather than composition nodes, perform the Evidence→composition shape translation at write time: assemble the group's `items:` array in claim order, mapping each child leaf to its `{ <kind>: { … } }` item and each nested container `group` to a nested `group:`, so the cached fragment is already in composition shape. Wiring values (`bind`, `event`, `*-when` conditions, asset / token references, free text) are illustrative and stripped before fingerprinting, so copy them through verbatim or omit them — they never affect identity.
 
@@ -144,5 +144,5 @@ Each `notes.todo` and `notes.candidate_component` surfaces in the slice's synthe
 Re-runs are additive and conservative; the CLI replaces Evidence by `(<source>, <lead>)` tuple, but within a run:
 
 - A re-run against the same source images MAY refine previously emitted body fields when the same images still support the refinement.
-- Operator overrides committed at synthesis time (post-reconciliation edits in `spec.md` / `design.md`) are NOT visible to `extract`; the brief only sees the source images. Use stable `id`s so the reconciliation layer can detect and preserve operator edits.
+- Operator overrides committed at synthesis time (post-reconciliation edits in `spec.md` / `design.md`) are NOT visible to `extract`; the prompt only sees the source images. Use stable `id`s so the reconciliation layer can detect and preserve operator edits.
 - When the new screenshots no longer contain a previously inferred element, simply do not emit its claim. The synthesis layer detects the drop via the missing `id` and tags affected requirements with `[unknown]` / `[divergence]` — there is no `# stale-source:` annotation at the Evidence layer.

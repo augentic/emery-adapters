@@ -20,7 +20,7 @@ use crate::common::{self, Bundle};
 const TARGET_INTERFACE: &str = "augentic:specify/target@0.1.0";
 
 // guidance("target:omnia") through host-mediated dispatch in the composed
-// deployment returns the embedded guidance brief — the core registry riding
+// deployment returns the embedded guidance prompt — the core registry riding
 // inside the component, beside the contracts and documentation guests.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn guidance_through_dispatch() -> Result<()> {
@@ -40,13 +40,13 @@ async fn guidance_through_dispatch() -> Result<()> {
     let [Val::Result(Ok(Some(payload)))] = results.as_slice() else {
         anyhow::bail!("guidance returned an unexpected shape: {results:?}");
     };
-    let Val::String(brief) = payload.as_ref() else {
+    let Val::String(prompt) = payload.as_ref() else {
         anyhow::bail!("guidance payload is not a string: {payload:?}");
     };
     assert!(
-        brief.starts_with("# Omnia target — guidance brief"),
-        "guidance returns the embedded guidance brief: {}",
-        &brief[..brief.len().min(80)]
+        prompt.starts_with("# Omnia target — guidance prompt"),
+        "guidance returns the embedded guidance prompt: {}",
+        &prompt[..prompt.len().min(80)]
     );
     Ok(())
 }

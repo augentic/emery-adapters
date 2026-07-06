@@ -1,6 +1,6 @@
 # Replay hook contract
 
-Target-agnostic rules for the optional build-time `replay` hook (the capture-backed replay workflow). Each implementing target adds a runner sub-brief that links here and supplies target-specific paths and commands.
+Target-agnostic rules for the optional build-time `replay` hook (the capture-backed replay workflow). Each implementing target adds a runner prompt that links here and supplies target-specific paths and commands.
 
 ## When to run
 
@@ -14,7 +14,7 @@ Before invoking the target-specific runner:
 2. **Evidence or captures available** — the slice's Evidence includes `kind: example` claims from the `captures` extract pass, or the bound capture tree remains readable at the plan-level source path.
 3. **Replay tests exist** — the target's test-generation phase has produced tests that exercise the captured scenarios (each implementing target documents where those tests live).
 
-Capture wire format: [`captures/references/capture-format.md`](../../../sources/captures/prose/references/capture-format.md). Claim shape and 64 KiB inline cap: [`captures/briefs/extract.md`](../../../sources/captures/prose/briefs/extract.md).
+Capture wire format: [`captures/references/capture-format.md`](../../../sources/captures/prose/references/capture-format.md). Claim shape and 64 KiB inline cap: [`captures/prompts/extract.md`](../../../sources/captures/prose/prompts/extract.md).
 
 ## Advisory posture
 
@@ -32,7 +32,7 @@ This matches the current synthesis posture on `[conflict]` and `[divergence]` ta
 
 Emit `slice.replay.completed` (`EventKind::SliceReplayCompleted` in the `engine/` workspace (`specify_workflow::journal`)) via `specify journal emit slice.replay.completed --payload <json>`. Payload shape: [`journal-payload.md`](journal-payload.md).
 
-The implementing target's runner sub-brief supplies the `runner` string (e.g. `omnia-target@1 (cargo nextest)`).
+The implementing target's runner prompt supplies the `runner` string (e.g. `omnia-target@1 (cargo nextest)`).
 
 ### Do not hand-edit `metadata.yaml`
 
@@ -59,4 +59,4 @@ Capture the block before archival if present — `specify slice merge` moves the
 
 - [`README.md`](README.md) — target adoption table
 - [`journal-payload.md`](journal-payload.md) — closed payload shapes
-- [`../../../targets/omnia/briefs/build/replay.md`](../../../targets/omnia/briefs/build/replay.md) — Omnia runner (reference implementation)
+- [`../../../targets/omnia/prose/prompts/build/replay.md`](../../../targets/omnia/prose/prompts/build/replay.md) — Omnia runner (reference implementation)

@@ -1,15 +1,15 @@
-//! The embedded prose registry: captures' own briefs and the two
-//! references the extract brief requires ride inside.
+//! The embedded prose registry: captures' own prompts and the two
+//! references the extract prompt requires ride inside.
 
 use specify_captures_core::registry;
 
 #[test]
-fn registry_embeds_the_briefs() {
-    assert!(registry::body("briefs/survey.md").starts_with("# Runtime capture survey"));
-    assert!(registry::body("briefs/extract.md").starts_with("# Runtime capture extract"));
+fn registry_embeds_the_prompts() {
+    assert!(registry::body("prompts/survey.md").starts_with("# Runtime capture survey"));
+    assert!(registry::body("prompts/extract.md").starts_with("# Runtime capture extract"));
 }
 
-/// The extract brief instructs the agent to load both references; the
+/// The extract prompt instructs the agent to load both references; the
 /// shelf must serve them.
 #[test]
 fn registry_embeds_the_capture_references() {

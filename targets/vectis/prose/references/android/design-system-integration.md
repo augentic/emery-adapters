@@ -280,7 +280,7 @@ exports are validation errors (`assets-materialization-missing`) — never a
 writer shortcut. Platform glyph use requires an explicit `kind: symbol` entry
 (optionally `inferred: true` when promoted from screenshot inference; see
 [Layout Inferer Contract](../layout-inferer-contract.md) and
-`adapters/sources/screenshots/prose/briefs/extract.md`).
+`adapters/sources/screenshots/prose/prompts/extract.md`).
 
 ### Reading `assets.yaml`
 

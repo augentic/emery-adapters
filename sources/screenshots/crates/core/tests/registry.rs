@@ -1,15 +1,15 @@
-//! The embedded prose registry: screenshots' own briefs — including the
-//! nested pipeline sub-brief — and its worked example ride inside.
+//! The embedded prose registry: screenshots' own prompts — including the
+//! nested pipeline sub-prompt — and its worked example ride inside.
 
 use specify_screenshots_core::registry;
 
 #[test]
-fn registry_embeds_the_briefs() {
-    assert!(registry::body("briefs/survey.md").starts_with("# `screenshots.survey`"));
-    assert!(registry::body("briefs/extract.md").starts_with("# `screenshots.extract`"));
+fn registry_embeds_the_prompts() {
+    assert!(registry::body("prompts/survey.md").starts_with("# `screenshots.survey`"));
+    assert!(registry::body("prompts/extract.md").starts_with("# `screenshots.extract`"));
     assert!(
-        registry::doc("briefs/extract/pipeline.md").is_some(),
-        "the nested spatial pipeline sub-brief is embedded"
+        registry::doc("prompts/extract/pipeline.md").is_some(),
+        "the nested spatial pipeline sub-prompt is embedded"
     );
 }
 

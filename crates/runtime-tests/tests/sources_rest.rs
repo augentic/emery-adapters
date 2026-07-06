@@ -19,7 +19,7 @@ use crate::common::{self, Bundle};
 const SOURCE_INTERFACE: &str = "augentic:specify/source@0.1.0";
 
 /// The four source guests this deployment composes: guest id, MCP route,
-/// shelf server identity, and the survey brief's opening heading.
+/// shelf server identity, and the survey prompt's opening heading.
 const GUESTS: [(&str, &str, &str, &str); 4] = [
     ("source:intent", "/mcp/intent", "specify-intent-references", "# intent.survey"),
     (
@@ -91,7 +91,7 @@ async fn post(runtime: &Runtime<Bundle>, route: &str, message: &Value) -> Result
 
 // Each guest in the composed deployment serves its own embedded prose
 // registry on its own route: every shelf identifies itself with its own
-// server name and serves its own survey brief.
+// server name and serves its own survey prompt.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn per_guest_shelves() -> Result<()> {
     let mount = tempfile::tempdir()?;
@@ -112,19 +112,19 @@ async fn per_guest_shelves() -> Result<()> {
             "{guest}: shelf identifies its own server"
         );
 
-        let brief = post(
+        let prompt = post(
             &runtime,
             route,
             &json!({
                 "jsonrpc": "2.0", "id": 2, "method": "tools/call",
-                "params": { "name": "read_doc", "arguments": { "path": "briefs/survey.md" } }
+                "params": { "name": "read_doc", "arguments": { "path": "prompts/survey.md" } }
             }),
         )
         .await?;
-        let text = brief["result"]["content"][0]["text"].as_str().unwrap_or_default();
+        let text = prompt["result"]["content"][0]["text"].as_str().unwrap_or_default();
         assert!(
             text.starts_with(heading),
-            "{guest}: read_doc returns its own survey brief body: {brief}"
+            "{guest}: read_doc returns its own survey prompt body: {prompt}"
         );
     }
     Ok(())

@@ -2,9 +2,13 @@
 
 Standing architectural decisions for the Specify adapters repository. Read before changing the adapter guest / core split, the vectis validation or materialization engines, embedded asset homes, or the verification posture of a target's prompts.
 
-Each entry records the decision, why it was taken, and the consequences a change must reckon with — not how the feature works today. Current behavior lives in module-level rustdoc and the per-target briefs; entries here point at those rather than restating them.
+Each entry records the decision, why it was taken, and the consequences a change must reckon with — not how the feature works today. Current behavior lives in module-level rustdoc and the per-target prompts; entries here point at those rather than restating them.
 
 **Anchor mapping note.** The sections under [§"Vectis validation and materialization"](#vectis-validation-and-materialization) (§A–§L and the appendices) were re-homed verbatim from `targets/vectis/extension/DECISIONS.md` at RFC-61 Step 5 Milestone A1, keeping every heading — and therefore every anchor — unchanged. External citations of the form `targets/vectis/extension/DECISIONS.md#k--materialization-and-render-by-kind` resolve here with the same fragment; Milestone A2 deleted the sidecar pointer stub with the extension crate, so this file is the only home.
+
+## Prose tree rename — `briefs/` → `prompts/`
+
+**Decision (2026-07).** Every adapter's `prose/briefs/` tree is renamed to `prose/prompts/` (git renames across all eight adapters), and the word "brief" leaves the adapter vocabulary. The old name described the pre-WASM contract — an agent-read orchestration document with operator-facing flexibility. Post-cutover, these files are **embedded prompt fragments**: `build.rs` emits them into the guest via `specify_prose_registry`, the core's operation code assembles them into judgment-leg system prompts (`registry::body("prompts/…")`), and sequencing lives in Rust, not prose. The rename makes the on-disk name match the role. Consequences: registry keys, shelf-pointer prose, tests, and cross-references all use `prompts/…`; the parent/phase brief hierarchy and its lint rules (CORE-004/007/013/014) die engine-side in the same pass; "operator brief" (the intent source's input document) is a distinct surviving term and is untouched.
 
 ## RFC-61 Step 5 Milestone A1 — vectis self-containment
 
@@ -31,28 +35,28 @@ Unit tests under `extension/src/**` (the 14-test ratchet budget) moved to `crate
 
 - **Composition / tokens / assets validation** — deterministic in-guest gates: the build's post-composition gate with a bounded repair loop, the report-leg gate, the merge's pre-fold staged-slice gate, and the post-merge baseline gate (`operations.rs`). Prose describes "the adapter's deterministic composition validator", never a command.
 - **Catalog infer** — the guest runs the deterministic name-free cluster report in-guest and injects it into the composition leg's prompt; the agent writes `{ fingerprint → slug }` decisions to `${SLICE_DIR}/build/component-bindings.yaml`; the workflow's deterministic bind bookkeeping (engine-side) is the only catalog writer.
-- **Scaffold** — the guest scaffolds absent declared trees deterministically before the write legs (app name from existing shells or `project.yaml` `name:`); a scaffold the guest cannot run falls to the leg's writer per the write sub-brief.
+- **Scaffold** — the guest scaffolds absent declared trees deterministically before the write legs (app name from existing shells or `project.yaml` `name:`); a scaffold the guest cannot run falls to the leg's writer per the write prompt.
 - **Sync** — the guest re-renders the agent-immutable scaffold files deterministically before and after each shell write leg.
 - **Android setup** — the vendored Gradle-wrapper install runs inside the deterministic Android sync leg; the scaffolded `Android/Makefile` drops its `setup-extension` target (`specify extension run vectis -- android setup`) and `make setup` covers only host-derived pieces (`local.properties`, Java home, NDK substitution).
 - **Shell verify** — the deterministic shell verify gate runs in-guest at the report leg (findings ride in the prompt) and re-runs in the deterministic report gate.
 - **Bootstrap app-icon gate (§L)** — runs in the guest build's deterministic prelude after materialize; error findings park the build.
-- **Host builds** (cargo / swiftformat / make / xcodebuild / gradlew) — stay agent-run in the lent workspace, instructed by the write sub-briefs and the merge brief's host cap-matrix section; the adapter cannot spawn host commands.
+- **Host builds** (cargo / swiftformat / make / xcodebuild / gradlew) — stay agent-run in the lent workspace, instructed by the write prompts and the merge prompt's host cap-matrix section; the adapter cannot spawn host commands.
 
 Consequence: the `layout-inferer-contract`, verifier references, and `components.md` describe gates and modes, not invocations; `CORE-050`'s remedy is now "describe the surviving surface", and `CORE-057` keeps `catalog` in its ignore list only while sibling-repo prose still cites the retired verb.
 
 ## RFC-61 Step 5 Milestone A1 — D2 verification audit
 
-**Decision (2026-07).** Per engine decision D2 (deterministic-only guest merge) and parity-audit gap 4, each first-party target's prompts and deterministic legs were audited to confirm they carry the verification the native pre-merge gate and post-merge hooks used to run. Result, per target (home: **deterministic** = guest Rust before/after the model call; **prompt** = agent-run in the lent workspace, instructed by the compiled-in prompt + brief; **added-now** = wired during this audit):
+**Decision (2026-07).** Per engine decision D2 (deterministic-only guest merge) and parity-audit gap 4, each first-party target's prompts and deterministic legs were audited to confirm they carry the verification the native pre-merge gate and post-merge hooks used to run. Result, per target (home: **deterministic** = guest Rust before/after the model call; **prompt** = agent-run in the lent workspace, instructed by the compiled-in prompts; **added-now** = wired during this audit):
 
 | Target | Check | Home |
 | --- | --- | --- |
-| omnia | `cargo fmt --check` / `cargo check` / `cargo clippy -D warnings` / `cargo test` | prompt — build brief §Verify-repair loop; re-run by the merge brief §Omnia pre-merge gate |
-| omnia | `cargo build --target wasm32-wasip2 --release` | prompt — merge brief §Omnia pre-merge gate step 4 |
-| omnia | capability / provider-trait conformance | prompt — build crate sub-brief (capability-mapping) + review leg rules (OMNIA-001/002) |
+| omnia | `cargo fmt --check` / `cargo check` / `cargo clippy -D warnings` / `cargo test` | prompt — build prompt §Verify-repair loop; re-run by the merge prompt §Omnia pre-merge gate |
+| omnia | `cargo build --target wasm32-wasip2 --release` | prompt — merge prompt §Omnia pre-merge gate step 4 |
+| omnia | capability / provider-trait conformance | prompt — crate write prompt (capability-mapping) + review leg rules (OMNIA-001/002) |
 | vectis | composition / tokens / assets validation (build) | deterministic — post-composition gate with bounded repair + report gate |
 | vectis | staged slice composition validation (pre-merge) | **added-now** (deterministic) — `operations::merge` validates `.specify/slices/<slice>/composition.yaml` before the fold and parks on findings |
 | vectis | merged baseline composition validation (post-merge) | deterministic — merge report gate with one bounded repair leg |
-| vectis | platform builds (cargo / make build / make sim-build / make verify) | prompt — write sub-brief verify loops at build; merge brief §host cap-matrix re-verification at merge |
+| vectis | platform builds (cargo / make build / make sim-build / make verify) | prompt — write prompt verify loops at build; merge prompt §host cap-matrix re-verification at merge |
 | vectis | shell verify (tree presence, APK, scaffold drift) | deterministic — in-guest verify at the report leg + report gate |
 | vectis | bootstrap app-icon gate (§L) | **added-now** (deterministic) — guest build prelude after materialize |
 | vectis | vendored Gradle-wrapper install | **added-now** (deterministic) — Android scaffold-sync leg (replaces the Makefile's `setup-extension`) |
@@ -65,7 +69,7 @@ No check was left homeless. The vectis platform builds and the omnia cargo/wasm3
 
 **Decision (2026-07).** The legacy WASI extension stack is deleted: `targets/vectis/extension/` (65 files, ~8.9k lines — the clap shim, its `tests/cli.rs` + `tests/engine/**` integration suites, and the extension-local `host_prereq.rs`), `targets/contracts/extension/` (3 files, ~500 lines), the two committed `adapter.wasm` artifacts (`targets/{vectis,contracts}/adapter.wasm`), and the `targets/vectis/scripts/` native hook scripts (3 files, ~270 lines). The workspace drops the `"targets/*/extension"` members glob and the now-orphaned `clap` / `assert_cmd` `[workspace.dependencies]`. Standing consequences:
 
-- **Hook scripts and `check-hook-scripts` die together.** `build-finalize-verify.sh` shelled out to `specify extension run vectis` (a verb that dies at cutover) and `build-host-prereq.sh` existed only for the manifest's `host_prereq:` field, which the manifest shrink below removes — with no adapter.yaml consumer and no runnable body, the scripts and the `check-hook-scripts` task (dropped from the `check` / `ci` dependency lists in `Makefile.toml`) have no surviving purpose. Host-toolchain preflight is operator-owned post-cutover; the merge brief's host cap-matrix section instructs the agent-run platform builds that surface missing toolchains.
+- **Hook scripts and `check-hook-scripts` die together.** `build-finalize-verify.sh` shelled out to `specify extension run vectis` (a verb that dies at cutover) and `build-host-prereq.sh` existed only for the manifest's `host_prereq:` field, which the manifest shrink below removes — with no adapter.yaml consumer and no runnable body, the scripts and the `check-hook-scripts` task (dropped from the `check` / `ci` dependency lists in `Makefile.toml`) have no surviving purpose. Host-toolchain preflight is operator-owned post-cutover; the merge prompt's host cap-matrix section instructs the agent-run platform builds that surface missing toolchains.
 - **The extension integration suites are deleted, not ported.** A1 designated the core `tests/` tree the primary oracle; the extension suites covered the CLI wire contract (arg parsing, exit codes, stdout JSON), which has no post-cutover surface. The exception: the three DECISIONS-cited appendix fixture pins (Appendix C / D / E) re-home to `crates/core/tests/appendices.rs` against the core engine API, so the "codified in" pointers under §"Vectis validation and materialization" stay true.
 - **The rust-quality ratchet re-scopes.** `tools/rust-quality` counted `{targets,sources}/<name>/extension/src/**`; with no extension trees left that gate would be vacuously green forever, so it now counts every adapter `src/` tree (the guest shim and its `crates/*/src/` sub-crates), same budget semantics, all budgets at the implicit 0.
 - **Lib-name reclaim.** With `specify-vectis-extension` gone, the `specify_vectis` lib name is free; the vectis guest package drops its `[lib] name = "specify_vectis_adapter"` override and defaults to `specify_vectis`, so the built artifact is `specify_vectis.wasm` like every other guest. The committed artifact name is unchanged (`targets/vectis/guest.wasm`); `refresh-guests`, the runtime tests' deployment manifests, and the vectis eval runner track the new artifact name. The committed `guest.wasm` bytes are deliberately not refreshed here — Milestone A3 owns artifact refresh.
@@ -100,7 +104,7 @@ Each shrunk manifest validates against the sibling repo's relaxed `source.schema
 
 ## RFC-61 Step 5 review fixes — ui-surface coherence moves in-guest
 
-**Decision (2026-07).** The A4 ui-surface coherence check — the report's authored `ui-surface.screens` compared against the produced slice `composition.yaml`, warning ids `composition-unexpected-for-non-ui-slice` / `composition-empty-for-ui-slice` — now runs in the vectis guest's deterministic build report gate (`operations.rs::ui_surface_coherence`, appended after enforcement), with the engine semantics preserved verbatim: findings are non-blocking `suggestion` severity that ride the report but never fail it or trigger the bounded repair leg, and a report without `ui-surface` emits nothing. This closes the last finalize-era check that lived only in the engine's two-phase `slice build` path, so the build brief's attribution of the warnings to the deterministic in-guest report gate is true ahead of the engine's Milestone S4 deletion.
+**Decision (2026-07).** The A4 ui-surface coherence check — the report's authored `ui-surface.screens` compared against the produced slice `composition.yaml`, warning ids `composition-unexpected-for-non-ui-slice` / `composition-empty-for-ui-slice` — now runs in the vectis guest's deterministic build report gate (`operations.rs::ui_surface_coherence`, appended after enforcement), with the engine semantics preserved verbatim: findings are non-blocking `suggestion` severity that ride the report but never fail it or trigger the bounded repair leg, and a report without `ui-surface` emits nothing. This closes the last finalize-era check that lived only in the engine's two-phase `slice build` path, so the build prompt's attribution of the warnings to the deterministic in-guest report gate is true ahead of the engine's Milestone S4 deletion.
 
 ## Vectis validation and materialization
 

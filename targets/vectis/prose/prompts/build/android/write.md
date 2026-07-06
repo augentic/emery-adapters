@@ -1,6 +1,6 @@
 # Vectis build — Android shell (write + verify)
 
-Loaded by [../../build.md](../../build.md) when `android` is in the platform set (carried from `project.yaml.platforms` via `proposal.md ## Platforms`). The composition validation gate ([../composition.md](../composition.md)) MUST have passed first.
+Inlined by the adapter core into the Android shell leg's system prompt (alongside [../../build.md](../../build.md)) when `android` is in the platform set (carried from `project.yaml.platforms` via `proposal.md ## Platforms`). The composition validation gate ([../composition.md](../composition.md)) MUST have passed first.
 
 Compose patterns, Crux Android shell anatomy, Kotlin token templates, and design-system integration depth live in [`../../../references/android/`](../../../references/android/).
 
@@ -44,7 +44,7 @@ Full set at [`hard-rules-android.md`](../../../references/hard-rules-android.md)
 
 ## Verify (max 3 iterations)
 
-The `/spec:build` **orchestrator** runs the verify loop — not a sub-agent with shell access. The orchestrator is the **sole source of truth** for Android shell checkboxes in `tasks.md`; never mark an Android task complete or report success unless `make verify` has actually run and passed in the same iteration (`make verify` runs `setup`, typegen, `:shared:cargoBuild`, and `:app:assembleDebug`).
+The shell leg's **orchestrating agent** runs the verify loop — not a sub-agent with shell access. The orchestrator is the **sole source of truth** for Android shell checkboxes in `tasks.md`; never mark an Android task complete or report success unless `make verify` has actually run and passed in the same iteration (`make verify` runs `setup`, typegen, `:shared:cargoBuild`, and `:app:assembleDebug`).
 
 ### Pre-flight (fail fast on misconfiguration)
 

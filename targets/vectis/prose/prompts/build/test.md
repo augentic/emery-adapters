@@ -1,6 +1,6 @@
 # Vectis build — tests + core verify-repair
 
-Loaded by [../build.md](../build.md) Step 5 (write tests) and Step 6 (verify-repair the shared core). Both phases run in their own sub-agents with clean context windows.
+Inlined by the adapter core into the core leg's system prompt (alongside [../build.md](../build.md) and [core/write.md](core/write.md)); carries Step 5 (write tests) and Step 6 (verify-repair the shared core). Both phases run in their own sub-agents with clean context windows.
 
 Carries the cross-cutting Rust verify-repair loop. The spec-to-test mapping rules live in [`test-spec-mapping.md`](../../references/test-spec-mapping.md) and the operational runbook lives in [`test-runbook.md`](../../references/test-runbook.md).
 
@@ -69,4 +69,4 @@ After tests pass, compare results against the baseline from before the writers r
 
 ### Loop control
 
-Repeat until all four checks pass or 3 iterations are exhausted. If still failing after 3 iterations: **stop**. Do not mark the task complete. Report the remaining failures with full error output and escalate for guidance (the parent brief reads this as a `build` failure outcome).
+Repeat until all four checks pass or 3 iterations are exhausted. If still failing after 3 iterations: **stop**. Do not mark the task complete. Report the remaining failures with full error output and escalate for guidance (the parent build prompt reads this as a `build` failure outcome).

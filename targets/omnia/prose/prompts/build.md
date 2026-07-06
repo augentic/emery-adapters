@@ -1,10 +1,10 @@
-# Omnia target — build brief
+# Omnia target — build prompt
 
-> `/spec:build` loads this brief when it walks an `in-progress` plan entry whose slice has `target: omnia`. The brief dispatches to five phase sub-briefs under [`build/`](build/). Read this orchestrator linearly; load each phase sub-brief at the marked step, follow it end-to-end, and return here for the next step. Synthesis idioms (provider DI, WASM guardrails, error variants, validation placement) live in [`guidance.md`](guidance.md) and must already be reflected in the slice's `specs/<domain>/spec.md` + `design.md` before this brief runs.
+> The omnia adapter core inlines this document into the system prompt of every build leg — generation, standards review, capture replay, and the report — alongside the leg's own prompt under [`build/`](build/). Leg sequencing lives in the adapter core (`crates/core/src/operations.rs`), not here: each leg's user prompt names the sections of this document to follow. Synthesis idioms (provider DI, WASM guardrails, error variants, validation placement) live in [`guidance.md`](guidance.md) and must already be reflected in the slice's `specs/<domain>/spec.md` + `design.md` before the build runs.
 
 ## Inputs and bindings
 
-The brief runs against the build request the CLI prepared at `.specify/slices/<slice>/build/request.yaml`; consume its `inputs` manifest rather than relying on convention. Every artifact path resolves against `inputs.root` (the slice tree).
+The build runs against the build request the CLI prepared at `.specify/slices/<slice>/build/request.yaml`; consume its `inputs` manifest rather than relying on convention. Every artifact path resolves against `inputs.root` (the slice tree).
 
 - `inputs.artifacts.proposal` (`proposal.md`) — domain inventory and slice scope.
 - `inputs.artifacts.specs[]` (`specs/<domain>/spec.md`) — behavioural requirements, one file per `proposal.md ## Domains` entry.
@@ -12,7 +12,7 @@ The brief runs against the build request the CLI prepared at `.specify/slices/<s
 - `inputs.artifacts.tasks` (`tasks.md`) — implementation sequencing and progress tracking.
 - `inputs.artifacts.additional[]` — empty for omnia: [`adapter.yaml`](../adapter.yaml) declares no extra slice-tree inputs. Omnia reads the project working tree's `Cargo.toml` directly for workspace context; that is not a slice-tree input.
 
-The brief binds these working names from the request and the resolved crate:
+These working names, bound from the request and the resolved crate, are used throughout:
 
 ```text
 $SLICE_NAME    = active in-progress plan entry's slice name (from `specify plan next`)
@@ -27,7 +27,7 @@ $GUEST_PATH    = workspace root (single `src/lib.rs` exports HTTP / Messaging / 
 $REVIEW_OUTPUT = $CRATE_PATH/REVIEW.md
 ```
 
-`/spec:build` resolves `$SLICE_NAME` from `specify plan next`. The brief uses that name throughout.
+`$SLICE_NAME` arrives in each leg's user prompt, taken from the build request.
 
 ## Mode detection
 
@@ -36,16 +36,9 @@ Check whether `$CRATE_PATH/Cargo.toml` exists:
 - **Missing** → **create mode**: generate the crate, tests, and (if `src/lib.rs` is absent at the guest root) guest scaffolding.
 - **Present** → **update mode**: incremental change against the existing crate; guest wiring updates are folded into the crate-writer step (skip the guest phase).
 
-## Phase order
+## Leg map
 
-1. Read [`guidance.md`](guidance.md) refresher and the slice's `specs/<domain>/spec.md` + `design.md` + `tasks.md`.
-2. Load and follow [`build/crate.md`](build/crate.md) — generates or updates the crate.
-3. Load and follow [`build/test.md`](build/test.md) — generates or updates the tests.
-4. (Create mode only) Load and follow [`build/guest.md`](build/guest.md) — scaffolds the WASM guest wrapper.
-5. Run the § verify-repair loop below — cross-phase, classifies failures back to the matching phase brief.
-6. Load and follow [`build/review.md`](build/review.md) — its remediation cycle may re-enter the verify-repair loop with tighter caps.
-7. When the slice has a `captures` source binding, load and follow [`build/replay.md`](build/replay.md) — optional runtime capture replay. Omission when unbound is not an error.
-8. Mark `tasks.md` checkboxes complete as each task lands, then answer the build's report leg with the build report (see `## Build report`). The brief never transitions the slice lifecycle — the deterministic in-guest report gate checks the answer and the workflow guest owns the `Refined → Built` transition.
+The adapter core drives four legs in a fixed order — generation (crate writer, test writer, guest writer in create mode, then the § verify-repair loop), standards review ([`build/review.md`](build/review.md)), capture replay ([`build/replay.md`](build/replay.md), self-skipping when no `captures` source is bound), then the report leg (see `## Build report`). Within the generation leg, write the crate before the tests, mark `tasks.md` checkboxes complete as each task lands, and never transition the slice lifecycle — the deterministic in-guest report gate checks the report answer and the workflow guest owns the `Refined → Built` transition.
 
 ## § Verify-repair loop (max 3 iterations)
 
@@ -73,7 +66,7 @@ If `cargo test` fails, classify each failure:
 | MockProvider missing a trait impl the handler now requires | Test issue | Update MockProvider |
 | Unresolved import or missing crate in `Cargo.toml` | Workspace issue | Fix `Cargo.toml` paths or workspace member list directly |
 
-**Repair discipline.** Minimum change only — fix the reported error and nothing else. Scope the diff to files and functions named in the error output. Group failures by classification and re-enter each phase brief once with all same-class errors. Full repair recipes: [`repair-patterns.md`](../references/repair-patterns.md).
+**Repair discipline.** Minimum change only — fix the reported error and nothing else. Scope the diff to files and functions named in the error output. Group failures by classification and re-enter each writer prompt once with all same-class errors. Full repair recipes: [`repair-patterns.md`](../references/repair-patterns.md).
 
 **Update-mode regression check.** Before iteration 1, record the baseline: `cd $CRATE_PATH && cargo test 2>&1 | tee /tmp/${SLICE_NAME}-${CRATE_NAME}-baseline.txt`. After each iteration, for each test that passed before and now fails: if the spec explicitly changes the asserted behaviour → expected behavioural change, re-enter test writer to align expectations; if the spec does not change the asserted behaviour → true regression, route the fix through the classification table.
 
@@ -89,17 +82,17 @@ A build failure surfaces a stop hint as the body's final output — a single str
 - `log-path` — absolute path to the captured stdout/stderr.
 - `next-action` — typically `re-run /spec:build $SLICE after fix`.
 
-Render the hint as the final visible output of the run, alongside the `status: failure` build report (see `## Build report`). The brief never calls `specify slice transition` — the deterministic in-guest report gate checks the answer and the workflow guest owns the lifecycle, so the slice stays `refined` and the loop (or a re-invocation) re-enters cleanly.
+Render the hint as the final visible output of the run, alongside the `status: failure` build report (see `## Build report`). Never call `specify slice transition` — the deterministic in-guest report gate checks the answer and the workflow guest owns the lifecycle, so the slice stays `refined` and the loop (or a re-invocation) re-enters cleanly.
 
 ## § Deterministic review
 
 Phase 6 writes `$REVIEW_OUTPUT` (`REVIEW.md`) — that is the model-assisted surface: specialist + antagonist judgment per [`team-protocol-crate.md`](../references/team-protocol-crate.md) and [`build/review.md`](build/review.md). `specify lint project --format json` is the **deterministic complement**. It resolves applicable rules via `specify rules export`, evaluates declarative `rule_hints`, and emits findings in the same `LintFinding` shape (`rule-id`, `fingerprint`, severity, `evidence`) operators already see in that export. The two surfaces are layered, not alternatives — model-assisted judgment sits on top of the deterministic scan.
 
-Per [Standards layer](../references/spec-runtime/standards-layer-snippet.md), deterministic findings may block CI but never transition plan entries, slices, or changes. CI wiring is consumer-project policy, not adapter policy; this brief acknowledges the surface and links out for the contract.
+Per [Standards layer](../references/spec-runtime/standards-layer-snippet.md), deterministic findings may block CI but never transition plan entries, slices, or changes. CI wiring is consumer-project policy, not adapter policy; this prompt acknowledges the surface and links out for the contract.
 
 ## Build report
 
-When the algorithm resolves, return a schema-valid build report as the answer to the build's report leg (the schema-gated report answer — no report file is written). This is the brief's final deliverable. The brief never transitions the slice lifecycle — the deterministic in-guest report gate checks the answer's coherence against the working tree and the workflow guest owns the `Refined → Built` transition.
+When the algorithm resolves, return a schema-valid build report as the answer to the build's report leg (the schema-gated report answer — no report file is written). This is the build's final deliverable. Never transition the slice lifecycle — the deterministic in-guest report gate checks the answer's coherence against the working tree and the workflow guest owns the `Refined → Built` transition.
 
 ```yaml
 version: 1
@@ -118,8 +111,8 @@ Each `findings[]` item validates against `schemas/diagnostics/diagnostic.schema.
 
 ## References
 
-- [`guidance.md`](guidance.md), [`merge.md`](merge.md) — sibling briefs.
-- [`build/crate.md`](build/crate.md), [`build/test.md`](build/test.md), [`build/guest.md`](build/guest.md), [`build/review.md`](build/review.md), [`build/replay.md`](build/replay.md) — phase sub-briefs.
+- [`guidance.md`](guidance.md), [`merge.md`](merge.md) — sibling prompts.
+- [`build/crate.md`](build/crate.md), [`build/test.md`](build/test.md), [`build/guest.md`](build/guest.md), [`build/review.md`](build/review.md), [`build/replay.md`](build/replay.md) — per-leg prompts.
 - [`../../../sources/captures/prose/references/capture-format.md`](../../../sources/captures/prose/references/capture-format.md) — runtime capture wire format (when `captures` is bound).
 - [`hard-rules.md`](../references/hard-rules.md) — full authority hierarchy and hard-rules set.
 - [`guardrails.md`](../references/guardrails.md), [`wasm-constraints.md`](../references/wasm-constraints.md) — forbidden crates / APIs, statelessness, serde / DST idioms.

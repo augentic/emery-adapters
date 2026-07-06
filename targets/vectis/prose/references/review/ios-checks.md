@@ -269,7 +269,7 @@ Per the iOS scaffold immutability contract ([`hard-rules-ios.md`](../hard-rules-
 
 **Codex**: `rule_id: VECTIS-009`
 
-Per the iOS write brief repair discipline and hard-rules-ios, agent-authored Swift under `iOS/**/*.swift` (excluding `generated/`) must not carry `swiftlint:disable` or `swift-format-ignore` comments.
+Per the iOS write prompt repair discipline and hard-rules-ios, agent-authored Swift under `iOS/**/*.swift` (excluding `generated/`) must not carry `swiftlint:disable` or `swift-format-ignore` comments.
 
 **Detection**:
 

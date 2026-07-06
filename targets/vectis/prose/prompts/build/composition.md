@@ -1,6 +1,6 @@
 # Vectis build — composition
 
-Loaded by [../build.md](../build.md) Step 1 before any per-platform phase. Regenerates `${SLICE_DIR}/composition.yaml` from the canonical `spec.md` + `design.md` and runs the validator gate. `composition.yaml` is a build output (not a Specify artifact); the merge brief lands it into the baseline alongside the code.
+Inlined by the adapter core into the composition leg's system prompt (alongside [../build.md](../build.md)), before any per-platform phase. Regenerates `${SLICE_DIR}/composition.yaml` from the canonical `spec.md` + `design.md`; the adapter runs the deterministic validator gate after the leg. `composition.yaml` is a build output (not a Specify artifact); the merge prompt lands it into the baseline alongside the code.
 
 ## Inputs
 

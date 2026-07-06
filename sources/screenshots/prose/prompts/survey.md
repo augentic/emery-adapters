@@ -1,16 +1,16 @@
 # `screenshots.survey`
 
-Walk `$SOURCE_DIR` (a read-only preopen of an operator-bound directory of screen images), identify one lead per screen via vision inference, and return one lead block per screen for the CLI to append under `## Lead inventory` in `discovery.md`. The CLI persists the result; this brief returns the lead-block payload only.
+Walk `$SOURCE_DIR` (a read-only preopen of an operator-bound directory of screen images), identify one lead per screen via vision inference, and return one lead block per screen for the CLI to append under `## Lead inventory` in `discovery.md`. The CLI persists the result; this prompt returns the lead-block payload only.
 
 ## Inputs
 
 - `$SOURCE_DIR` — read-only directory holding the bound screen-image set. Never write here.
-- `<source>` — the plan-level binding key under `plan.yaml.sources.<key>`; the CLI passes it in for context and stamps each lead's `source` itself, so this brief does not emit it.
+- `<source>` — the plan-level binding key under `plan.yaml.sources.<key>`; the CLI passes it in for context and stamps each lead's `source` itself, so this prompt does not emit it.
 - `$SCRATCH_DIR` — per-slice write-only scratch space; use only for unavoidable intermediate state (e.g. cropped staging files when chrome cropping is required to disambiguate a screen).
 
 ## Vision prerequisite
 
-The brief assumes the agent runtime can inspect attached images. The check is **positive**: at least one of the input image paths MUST be successfully read through the runtime's native attachment / file-read mechanism. The brief MUST NOT consult a host-provided "vision adapter" flag (those are announced inconsistently across runtimes), and it MUST NOT fall back to filename-based or metadata-only inference.
+The prompt assumes the agent runtime can inspect attached images. The check is **positive**: at least one of the input image paths MUST be successfully read through the runtime's native attachment / file-read mechanism. The prompt MUST NOT consult a host-provided "vision adapter" flag (those are announced inconsistently across runtimes), and it MUST NOT fall back to filename-based or metadata-only inference.
 
 When the check fails, exit `1` with a single-line message naming the supported runtimes:
 
@@ -23,7 +23,7 @@ and re-run.
 
 ## Accepted formats
 
-PNG and JPEG only. HEIC, TIFF, PDF, SVG, WebP, and GIF MUST be converted before invocation; the brief MUST NOT invent a conversion step or call out to a hosted service.
+PNG and JPEG only. HEIC, TIFF, PDF, SVG, WebP, and GIF MUST be converted before invocation; the prompt MUST NOT invent a conversion step or call out to a hosted service.
 
 ## What is a lead
 
@@ -45,7 +45,7 @@ Skip images that contain no application content (orphan splash screens, full-scr
 
 ## Output
 
-Return one block per lead, in alphabetical `lead` order. The CLI appends them under the existing `## Lead inventory` heading in `discovery.md`; this brief never writes the heading itself.
+Return one block per lead, in alphabetical `lead` order. The CLI appends them under the existing `## Lead inventory` heading in `discovery.md`; this prompt never writes the heading itself.
 
 ```markdown
 ### task-list
@@ -55,7 +55,7 @@ Return one block per lead, in alphabetical `lead` order. The CLI appends them un
 - topics: [tasks, list-view]
 ```
 
-Field order is fixed (`lead`, `synopsis`, then optional `topics`). Do not emit `source`; the CLI stamps it from the survey binding. Cross-source merging is `/spec:plan`'s `propose` sub-step, not this brief's job — see [From sources to slices](../references/spec-runtime/reconciliation.md#plan-time-leads-become-slices) for how leads reconcile into slices.
+Field order is fixed (`lead`, `synopsis`, then optional `topics`). Do not emit `source`; the CLI stamps it from the survey binding. Cross-source merging is `/spec:plan`'s `propose` sub-step, not this prompt's job — see [From sources to slices](../references/spec-runtime/reconciliation.md#plan-time-leads-become-slices) for how leads reconcile into slices.
 
 ## Worked example
 
@@ -93,7 +93,7 @@ A full input / output fixture for this example lives at [`evals/fixtures/sources
 ## Guardrails
 
 - `$SOURCE_DIR` is read-only. Reads outside it surface as `source-survey-path-denied`; never attempt to widen the preopen.
-- Never crop or extract production assets out of screenshots. Cropping platform chrome (status bars, navigation bars, browser chrome, emulator frames) into `$SCRATCH_DIR` is permitted only as a triage aid; cropped pixels never leave the brief.
+- Never crop or extract production assets out of screenshots. Cropping platform chrome (status bars, navigation bars, browser chrome, emulator frames) into `$SCRATCH_DIR` is permitted only as a triage aid; cropped pixels never leave the prompt.
 - Do not write or rewrite the `## Lead inventory` heading — the CLI owns the section frame.
 - Do not emit Evidence here. Per-screen spatial extraction is `screenshots.extract`'s job, run once per lead at slice time.
 - Do not invent a lead the screens do not depict. Empty inventories (`$SOURCE_DIR` parseable but no application screens) are valid output.

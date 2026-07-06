@@ -42,7 +42,7 @@ iOS/DerivedData/Build/Products/Debug-iphonesimulator/<AppName>.app
 | `SIM_DEVICE` + `SIM_OS` | Match device name and runtime version (e.g. `SIM_DEVICE="iPhone 17"` `SIM_OS="18.0"`) |
 | *(default)* | Booted simulator if any; else first available device whose name contains `iPhone` |
 
-Swift sources under `iOS/<APP_NAME>/` (except the scaffold-only starter layout in create mode) and generated `Theme/`, `Components/`, `Resources/` remain agent-writable per the iOS build brief.
+Swift sources under `iOS/<APP_NAME>/` (except the scaffold-only starter layout in create mode) and generated `Theme/`, `Components/`, `Resources/` remain agent-writable per the iOS build prompt.
 
 ## Placeholder reference
 

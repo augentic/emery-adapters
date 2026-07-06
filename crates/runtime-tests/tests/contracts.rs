@@ -19,7 +19,7 @@ use crate::common::{self, Bundle};
 const TARGET_INTERFACE: &str = "augentic:specify/target@0.1.0";
 
 // guidance("target:contracts") through host-mediated dispatch returns the
-// embedded guidance brief — the core registry riding inside the component.
+// embedded guidance prompt — the core registry riding inside the component.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn guidance_through_dispatch() -> Result<()> {
     let mount = tempfile::tempdir()?;
@@ -38,13 +38,13 @@ async fn guidance_through_dispatch() -> Result<()> {
     let [Val::Result(Ok(Some(payload)))] = results.as_slice() else {
         anyhow::bail!("guidance returned an unexpected shape: {results:?}");
     };
-    let Val::String(brief) = payload.as_ref() else {
+    let Val::String(prompt) = payload.as_ref() else {
         anyhow::bail!("guidance payload is not a string: {payload:?}");
     };
     assert!(
-        brief.starts_with("# contracts.guidance"),
-        "guidance returns the embedded guidance brief: {}",
-        &brief[..brief.len().min(80)]
+        prompt.starts_with("# contracts.guidance"),
+        "guidance returns the embedded guidance prompt: {}",
+        &prompt[..prompt.len().min(80)]
     );
     Ok(())
 }
@@ -102,8 +102,8 @@ async fn post(runtime: &Runtime<Bundle>, message: &Value) -> Result<Value> {
 }
 
 // The route serves the embedded prose registry as an MCP shelf: initialize
-// identifies the server, resources/list carries the briefs as doc://
-// resources, read_doc returns a brief body, and the resolved
+// identifies the server, resources/list carries the prompts as doc://
+// resources, read_doc returns a prompt body, and the resolved
 // `references/spec-runtime` symlink content is served under its
 // symlink-name path.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -129,22 +129,22 @@ async fn shelf() -> Result<()> {
         .iter()
         .filter_map(|resource| resource["uri"].as_str())
         .collect();
-    assert!(uris.contains(&"doc://briefs/build.md"), "shelf lists the build brief: {uris:?}");
+    assert!(uris.contains(&"doc://prompts/build.md"), "shelf lists the build prompt: {uris:?}");
     assert!(
         uris.contains(&"doc://references/spec-runtime/phase-outcome-contract.md"),
         "shelf lists the resolved spec-runtime symlink content: {uris:?}"
     );
 
-    let brief = post(
+    let prompt = post(
         &runtime,
         &json!({
             "jsonrpc": "2.0", "id": 3, "method": "tools/call",
-            "params": { "name": "read_doc", "arguments": { "path": "briefs/build.md" } }
+            "params": { "name": "read_doc", "arguments": { "path": "prompts/build.md" } }
         }),
     )
     .await?;
-    let text = brief["result"]["content"][0]["text"].as_str().unwrap_or_default();
-    assert!(text.starts_with("# contracts.build"), "read_doc returns the brief body: {brief}");
+    let text = prompt["result"]["content"][0]["text"].as_str().unwrap_or_default();
+    assert!(text.starts_with("# contracts.build"), "read_doc returns the prompt body: {prompt}");
 
     let runtime_doc = post(
         &runtime,

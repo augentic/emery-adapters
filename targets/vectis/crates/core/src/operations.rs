@@ -8,7 +8,7 @@
 //! cross-checks run as the deterministic *postlude*, feeding a bounded
 //! repair loop the way the contracts adapter's validators do.
 //!
-//! `build` decomposes along the build brief's own phase order: one
+//! `build` decomposes along the build prompt's own phase order: one
 //! *composition* leg (Step 0.5 component inference plus Phase 1
 //! composition regeneration) gated in-core by the composition validator,
 //! one *core* leg (Phases 2–3), one *shell* leg per declared shell
@@ -40,20 +40,20 @@ const MAX_VALIDATE_REPAIR_ITERATIONS: usize = 2;
 /// The pointer at the adapter's own MCP reference shelf every judgment
 /// leg's user prompt carries, so prompts stay lean and the agent fetches
 /// specialist material lazily instead of getting it inlined.
-const SHELF_POINTER: &str = "Every brief, reference, and rule document this adapter ships is \
+const SHELF_POINTER: &str = "Every prompt, reference, and rule document this adapter ships is \
      served by the granted `vectis-references` MCP shelf (`list_docs` / `read_doc`, \
      adapter-relative paths like `references/hard-rules-core.md` or \
-     `briefs/build/ios/write.md`); fetch documents the briefs cite lazily from there.";
+     `prompts/build/ios/write.md`); fetch documents the prompts cite lazily from there.";
 
 /// Guidance on the expected build artifacts for this target — the
-/// embedded guidance brief, returned deterministically (no judgment leg).
+/// embedded guidance prompt, returned deterministically (no judgment leg).
 #[must_use]
 pub fn guidance() -> &'static str {
-    registry::body("briefs/guidance.md")
+    registry::body("prompts/guidance.md")
 }
 
 /// Build a slice's Crux core, shell code, and regenerated
-/// `composition.yaml` per the build brief's phase order:
+/// `composition.yaml` per the build prompt's phase order:
 ///
 /// 1. **Prelude (deterministic)** — [`prepare::materialize_step`]:
 ///    RFC §2.1 scope resolution plus the conditional scoped
@@ -81,7 +81,7 @@ pub fn guidance() -> &'static str {
 /// the workspace's design-system inputs.
 #[expect(
     clippy::too_many_lines,
-    reason = "One linear leg-by-leg walk of the brief's phase order; splitting hides the order."
+    reason = "One linear leg-by-leg walk of the prompt's phase order; splitting hides the order."
 )]
 pub async fn build<P: Model>(
     model: &P, ctx: &Context<'_>, slice: &str, inputs: &[Input], tree: &WorkingTree,
@@ -91,7 +91,7 @@ pub async fn build<P: Model>(
     let slice_dir = tree_root.join(&slice_dir_rel);
     let slice_composition = slice_dir.join("composition.yaml");
     let inputs_block = phase::render_inputs(inputs);
-    let build_brief = registry::body("briefs/build.md");
+    let build_prompt = registry::body("prompts/build.md");
 
     // Deterministic prelude — prepare scope resolution + conditional
     // materialize over the effective assets.yaml, in-guest. The
@@ -127,19 +127,19 @@ pub async fn build<P: Model>(
     // deterministic bind bookkeeping projects into the catalog.
     let infer_block = render_infer_report(&tree_root);
     let system =
-        assemble(&["briefs/build.md", "briefs/guidance.md", "briefs/build/composition.md"]);
+        assemble(&["prompts/build.md", "prompts/guidance.md", "prompts/build/composition.md"]);
     let user = format!(
         "Run component inference (Step 0.5) and composition regeneration (Phase 1) of \
          the vectis build for slice `{slice}` (adapter `{}`).\n\n\
          The project workspace is lent to you. The adapter already ran the \
          deterministic component-identity clustering in-guest — the name-free cluster \
          report is below; do not attempt to re-run it. Decide what each unbound \
-         cluster is and what to call it per the build brief's Step 0.5, write your \
+         cluster is and what to call it per the build prompt's Step 0.5, write your \
          `{{ fingerprint -> slug }}` decisions to \
          `{slice_dir_rel}/build/component-bindings.yaml` (echo populated `bound-slug` \
          names verbatim — operator parts carry naming authority), then regenerate \
          `{slice_dir_rel}/composition.yaml` from the slice artifacts per the \
-         composition sub-brief, treating your fresh bindings plus the existing catalog \
+         composition prompt, treating your fresh bindings plus the existing catalog \
          as the effective component set. For a slice with no UI surface, write no \
          composition and answer with `applicable: false`.\n\n\
          {infer_block}\n\n\
@@ -148,7 +148,7 @@ pub async fn build<P: Model>(
     );
     let composition = phase::phase(model, ctx, system, user, "composition").await?;
 
-    // The per-shell write briefs require the composition gate passed
+    // The per-shell write prompts require the composition gate passed
     // before any platform phase: an exhausted repair budget parks the
     // slice with a deterministic failure report.
     let residual = composition_gate(model, ctx, slice, &slice_dir_rel, &slice_composition).await?;
@@ -165,18 +165,18 @@ pub async fn build<P: Model>(
     // shell trees from the embedded templates before the write legs
     // (create mode). The summary rides into the leg prompts; a scaffold
     // the adapter could not run deterministically falls to the leg's
-    // writer per the write sub-brief.
+    // writer per the write prompt.
     let scaffold_block = scaffold_missing_trees(&tree_root);
 
     // Phases 2–3 — Crux core writer plus test writer: the core
-    // verify-repair loop crosses both sub-briefs (a cargo failure
+    // verify-repair loop crosses both prompts (a cargo failure
     // re-enters the writer), so one agent leg holds them together.
     let system =
-        assemble(&["briefs/build.md", "briefs/build/core/write.md", "briefs/build/test.md"]);
+        assemble(&["prompts/build.md", "prompts/build/core/write.md", "prompts/build/test.md"]);
     let user = format!(
         "Run the Crux core phases (2-3) of the vectis build for slice `{slice}`: \
-         generate or update the shared core per the core write sub-brief, write the \
-         Crux tests, then run the test sub-brief's core verify-repair loop yourself — \
+         generate or update the shared core per the core write prompt, write the \
+         Crux tests, then run the test prompt's core verify-repair loop yourself — \
          the cargo check / clippy / test commands run in the lent workspace; this \
          adapter cannot spawn them. Detect create vs update mode from the tree.\n\n\
          {scaffold_block}\n\n{SHELF_POINTER}\n\n{inputs_block}",
@@ -185,7 +185,7 @@ pub async fn build<P: Model>(
 
     // Phases 4–5 — per-shell writes, conditional on the declared
     // platform set (`project.yaml.platforms`); a core-only platform set
-    // skips the shell legs wholesale, per the brief's platform scope.
+    // skips the shell legs wholesale, per the prompt's platform scope.
     // The adapter re-renders the agent-immutable scaffold files
     // deterministically before each write leg (repairing prior drift
     // ahead of the leg's verify loop) and again after it (the legacy
@@ -196,19 +196,19 @@ pub async fn build<P: Model>(
         if let Some(note) = sync_shell_scaffold(&tree_root, shell.name) {
             sync_notes.push(note);
         }
-        let system = assemble(&["briefs/build.md", shell.write_brief]);
+        let system = assemble(&["prompts/build.md", shell.write_prompt]);
         let user = format!(
             "Run the {name} shell phase of the vectis build for slice `{slice}`: \
-             generate or update the shell per the write sub-brief (the adapter already \
+             generate or update the shell per the write prompt (the adapter already \
              scaffolded any absent declared tree deterministically — see below; do not \
-             hand-write scaffold boilerplate), then run the sub-brief's \
+             hand-write scaffold boilerplate), then run the write prompt's \
              orchestrator-owned verify loop yourself in the lent workspace — this \
              adapter cannot spawn host commands. The agent-immutable scaffold files \
              (Makefiles, `project.yml`, assembly Gradle files, `.vectis/` scripts) are \
              re-rendered deterministically by the adapter before and after this leg; \
              never edit them. When the slice introduces no work for this shell, write \
              nothing and answer with `applicable: false`; when a host prerequisite is \
-             missing, stop per the brief's deferred contract and report it in your \
+             missing, stop per the prompt's deferred contract and report it in your \
              summary.\n\n{scaffold_block}\n\n{SHELF_POINTER}",
             name = shell.name,
         );
@@ -219,16 +219,16 @@ pub async fn build<P: Model>(
         }
     }
 
-    // Phases 6–7 — the review teams (parallel per the brief) and
+    // Phases 6–7 — the review teams (parallel per the prompt) and
     // § Consolidate review findings, one leg.
-    let mut review_briefs = vec!["briefs/build.md", "briefs/build/core/review.md"];
-    review_briefs.extend(declared_shell_legs(&tree_root).iter().map(|shell| shell.review_brief));
-    let system = assemble(&review_briefs);
+    let mut review_prompts = vec!["prompts/build.md", "prompts/build/core/review.md"];
+    review_prompts.extend(declared_shell_legs(&tree_root).iter().map(|shell| shell.review_prompt));
+    let system = assemble(&review_prompts);
     let user = format!(
         "Run the review phases (6-7) of the vectis build for slice `{slice}`: spawn \
          the core reviewer team and, for each in-scope shell, its platform reviewer \
-         team per the review sub-briefs (reviewers run in parallel), then run the build \
-         brief's `## § Consolidate review findings` and drive any remediation in the \
+         team per the review prompts (reviewers run in parallel), then run the build \
+         prompt's `## § Consolidate review findings` and drive any remediation in the \
          lent workspace. {SHELF_POINTER}",
     );
     let review = phase::phase(model, ctx, system, user, "review").await?;
@@ -246,12 +246,12 @@ pub async fn build<P: Model>(
     outcomes.extend(shell_outcomes.iter().map(|(name, answer)| (*name, answer)));
     outcomes.push(("review", &review));
     let user = format!(
-        "Write the build report for slice `{slice}` per the build brief's `## Build \
+        "Write the build report for slice `{slice}` per the build prompt's `## Build \
          report`. The adapter already ran the deterministic shell verify gate in-guest \
          — its findings are below and re-run after your answer; a missing or empty \
          tree for a supported declared platform forces `status: failure`, so repair \
          the tree first when the gate reports errors. Then mark the completed \
-         `tasks.md` checkboxes in the slice directory per the brief before answering. \
+         `tasks.md` checkboxes in the slice directory per the prompt before answering. \
          A `success` report carries only non-blocking findings; an exhausted \
          verify-repair budget, a failed composition gate, or unresolved blocking \
          review findings mean `status: failure`. Declare `outputs[]` per supported \
@@ -265,14 +265,22 @@ pub async fn build<P: Model>(
             .collect::<Vec<_>>()
             .join("\n"),
     );
-    let report = phase::report(model, ctx, build_brief.to_string(), user).await?;
+    let report = phase::report(model, ctx, build_prompt.to_string(), user).await?;
 
     // Deterministic postlude: the in-core validator cross-checks, the
     // shell verify gate, and the report-coherence walk, one bounded
     // repair leg, then enforcement.
-    let mut report =
-        gate_report(model, ctx, build_brief, report, &tree_root, &slice_composition, "build", true)
-            .await?;
+    let mut report = gate_report(
+        model,
+        ctx,
+        build_prompt,
+        report,
+        &tree_root,
+        &slice_composition,
+        "build",
+        true,
+    )
+    .await?;
 
     // A4 self-consistency: the report's authored `ui-surface` signal
     // against the produced slice composition. Suggestion findings only —
@@ -282,11 +290,11 @@ pub async fn build<P: Model>(
     Ok(report)
 }
 
-/// Merge a built slice's delta into the baseline per the merge brief.
+/// Merge a built slice's delta into the baseline per the merge prompt.
 ///
 /// A deterministic pre-merge gate validates the staged slice
 /// composition (blocking findings park the merge before the delta
-/// folds). One judgment leg then folds the delta and runs the brief's
+/// folds). One judgment leg then folds the delta and runs the prompt's
 /// host cap-matrix re-verification (agent-run in the lent workspace),
 /// and the deterministic postlude re-runs the composition validator
 /// against the merged baseline (`.specify/specs/composition.yaml`) plus
@@ -300,11 +308,11 @@ pub async fn merge<P: Model>(
 ) -> Result<Report, Error> {
     let tree_root = ctx.tree_root(tree);
     let baseline_composition = tree_root.join(".specify/specs/composition.yaml");
-    let merge_brief = registry::body("briefs/merge.md");
+    let merge_prompt = registry::body("prompts/merge.md");
     let delta_block = phase::render_delta(delta);
 
     // Deterministic pre-merge gate: an invalid staged slice composition
-    // blocks the merge before the delta folds, per the merge brief.
+    // blocks the merge before the delta folds, per the merge prompt.
     let staged = tree_root.join(format!(".specify/slices/{slice}/composition.yaml"));
     let staged_findings = validation_findings(&staged);
     if !staged_findings.is_empty() {
@@ -322,16 +330,16 @@ pub async fn merge<P: Model>(
          baseline is ours, the delta is theirs). Fold the changes in place — including \
          the slice's `composition.yaml` into the baseline and any operator-curated \
          `tokens.yaml` / `assets.yaml` updates into `design-system/` — then run the \
-         merge brief's `## Post-merge — host cap-matrix re-verification` yourself: the \
+         merge prompt's `## Post-merge — host cap-matrix re-verification` yourself: the \
          cargo / make / gradlew commands run in the lent workspace; this adapter \
          cannot spawn them. The composition validator re-runs deterministically \
          in-guest after your answer. Any gate failure means `status: failure`. Answer \
          with the report body. {SHELF_POINTER}\n\n{delta_block}",
         ctx.adapter_id, delta.base,
     );
-    let report = phase::report(model, ctx, merge_brief.to_string(), user).await?;
+    let report = phase::report(model, ctx, merge_prompt.to_string(), user).await?;
 
-    gate_report(model, ctx, merge_brief, report, &tree_root, &baseline_composition, "merge", false)
+    gate_report(model, ctx, merge_prompt, report, &tree_root, &baseline_composition, "merge", false)
         .await
 }
 
@@ -340,26 +348,26 @@ struct ShellLeg {
     /// Platform token (`ios` / `android`), used in prompts and answer
     /// schema names.
     name: &'static str,
-    /// Registry path of the platform's write sub-brief.
-    write_brief: &'static str,
-    /// Registry path of the platform's review sub-brief.
-    review_brief: &'static str,
+    /// Registry path of the platform's write prompt.
+    write_prompt: &'static str,
+    /// Registry path of the platform's review prompt.
+    review_prompt: &'static str,
 }
 
-/// The shell platforms with build sub-briefs, in the brief's dependency
-/// order (core first is implicit; iOS and Android generation legs are
-/// independent but run serially here — their verify halves share the
-/// same cargo workspace lock anyway, per the brief).
+/// The shell platforms with build prompts, in the build prompt's
+/// dependency order (core first is implicit; iOS and Android generation
+/// legs are independent but run serially here — their verify halves
+/// share the same cargo workspace lock anyway, per the prompt).
 const SHELL_LEGS: [ShellLeg; 2] = [
     ShellLeg {
         name: "ios",
-        write_brief: "briefs/build/ios/write.md",
-        review_brief: "briefs/build/ios/review.md",
+        write_prompt: "prompts/build/ios/write.md",
+        review_prompt: "prompts/build/ios/review.md",
     },
     ShellLeg {
         name: "android",
-        write_brief: "briefs/build/android/write.md",
-        review_brief: "briefs/build/android/review.md",
+        write_prompt: "prompts/build/android/write.md",
+        review_prompt: "prompts/build/android/review.md",
     },
 ];
 
@@ -369,7 +377,7 @@ const SHELL_LEGS: [ShellLeg; 2] = [
 /// `android` is a backend-only build and skips the shell legs wholesale;
 /// an absent or unreadable declaration falls back to the adapter's
 /// default shell set (both), with each leg still free to self-skip via
-/// `applicable: false`. `web` / `desktop` have no sub-brief and are
+/// `applicable: false`. `web` / `desktop` have no prompt and are
 /// silently skipped.
 fn declared_shell_legs(project_root: &Path) -> Vec<&'static ShellLeg> {
     let declared = declared_platforms(project_root);
@@ -389,7 +397,7 @@ fn declared_platforms(project_root: &Path) -> Option<Vec<String>> {
 }
 
 /// The in-core composition validator gate, with its bounded repair loop
-/// — the per-shell write briefs require this gate passed before any
+/// — the per-shell write prompts require this gate passed before any
 /// platform phase, so it runs right after the composition leg rather
 /// than with the postlude. Returns the residual findings after the
 /// repair budget: non-empty means the gate did not clear and the build
@@ -402,12 +410,12 @@ async fn composition_gate<P: Model>(
         if findings.is_empty() {
             break;
         }
-        let system = assemble(&["briefs/build.md", "briefs/build/composition.md"]);
+        let system = assemble(&["prompts/build.md", "prompts/build/composition.md"]);
         let user = format!(
             "The deterministic composition validator found blocking issues in slice \
              `{slice}`'s regenerated `{slice_dir_rel}/composition.yaml`. Repair the \
              composition (or the operator-curated manifests it references) in place per \
-             the composition sub-brief's validator gate.\n\n{}\n\n\
+             the composition prompt's validator gate.\n\n{}\n\n\
              Answer `applicable: true` with a summary of the repairs. {SHELF_POINTER}",
             findings.join("\n"),
         );
@@ -417,9 +425,9 @@ async fn composition_gate<P: Model>(
     Ok(findings)
 }
 
-/// Assemble a system prompt from embedded brief bodies.
-fn assemble(briefs: &[&str]) -> String {
-    let bodies: Vec<&str> = briefs.iter().map(|brief| registry::body(brief)).collect();
+/// Assemble a system prompt from embedded prompt bodies.
+fn assemble(prompts: &[&str]) -> String {
+    let bodies: Vec<&str> = prompts.iter().map(|prompt| registry::body(prompt)).collect();
     phase::assemble_system(&bodies)
 }
 
@@ -432,7 +440,7 @@ fn assemble(briefs: &[&str]) -> String {
 /// Residual findings then force `failure` regardless of the answer.
 #[expect(clippy::too_many_arguments, reason = "One internal gate call site per operation.")]
 async fn gate_report<P: Model>(
-    model: &P, ctx: &Context<'_>, brief: &str, mut report: Report, tree_root: &Path,
+    model: &P, ctx: &Context<'_>, prompt: &str, mut report: Report, tree_root: &Path,
     composition: &Path, operation: &str, shell_verify: bool,
 ) -> Result<Report, Error> {
     let gather = |report: &Report| {
@@ -451,7 +459,7 @@ async fn gate_report<P: Model>(
              corrected report body.",
             residual.join("\n"),
         );
-        report = phase::report(model, ctx, brief.to_string(), user).await?;
+        report = phase::report(model, ctx, prompt.to_string(), user).await?;
         residual = gather(&report);
     }
     let findings = residual.into_iter().map(Finding::blocking).collect();
@@ -597,7 +605,7 @@ fn scaffold_missing_trees(tree_root: &Path) -> String {
                     )),
                     Err(err) => notes.push(format!(
                         "- could not scaffold `{target}` ({err}); stand the tree up per the \
-                         write sub-brief"
+                         write prompt"
                     )),
                 }
             }
@@ -605,7 +613,7 @@ fn scaffold_missing_trees(tree_root: &Path) -> String {
         None => notes.push(
             "- absent trees could not be scaffolded (no app name resolves from the \
              existing shells or `project.yaml` `name:`); stand them up per the write \
-             sub-briefs"
+             prompts"
                 .to_string(),
         ),
     }

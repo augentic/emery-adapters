@@ -1,6 +1,6 @@
 # `documentation.extract`
 
-For one `Lead`, walk `$SOURCE_DIR` (read-only) and return a single `Evidence` document of structured claims. The CLI persists the result at `.specify/slices/<slice>/evidence/<source>.yaml`; this brief returns the YAML body only. Core synthesis later reconciles this Evidence with every other bound source's into the slice's `spec.md` — see [From sources to slices](../references/spec-runtime/reconciliation.md#slice-time-evidence-becomes-a-spec).
+For one `Lead`, walk `$SOURCE_DIR` (read-only) and return a single `Evidence` document of structured claims. The CLI persists the result at `.specify/slices/<slice>/evidence/<source>.yaml`; this prompt returns the YAML body only. Core synthesis later reconciles this Evidence with every other bound source's into the slice's `spec.md` — see [From sources to slices](../references/spec-runtime/reconciliation.md#slice-time-evidence-becomes-a-spec).
 
 ## Inputs
 

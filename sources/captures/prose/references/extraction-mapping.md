@@ -1,10 +1,10 @@
 # Capture → Evidence extraction mapping
 
-Maps runtime capture JSON fields to `kind: example` claim fields emitted by the `captures` extract brief. The brief at [`../briefs/extract.md`](../briefs/extract.md) keeps the binding, inputs, and claim grain; this reference owns the procedural detail — wire format, field mapping, caps, determinism, worked example, anti-patterns, failure modes.
+Maps runtime capture JSON fields to `kind: example` claim fields emitted by the `captures` extract prompt. The prompt at [`../prompts/extract.md`](../prompts/extract.md) keeps the binding, inputs, and claim grain; this reference owns the procedural detail — wire format, field mapping, caps, determinism, worked example, anti-patterns, failure modes.
 
 ## Output: Evidence YAML
 
-Return one Evidence document matching `schemas/evidence.schema.json`. The CLI atomically writes it to `evidence/<source>.yaml`; the brief produces the body. Top-level field order is fixed (`authority`, `lead`, `claims`):
+Return one Evidence document matching `schemas/evidence.schema.json`. The CLI atomically writes it to `evidence/<source>.yaml`; the prompt produces the body. Top-level field order is fixed (`authority`, `lead`, `claims`):
 
 ```yaml
 authority: behaviour
@@ -80,7 +80,7 @@ Same skip-root and traversal rules as `survey`: relative paths only under `$SOUR
 
 ## Worked example
 
-Bound lead `user-registration` against the capture tree from the `survey` brief's worked example, source key `runtime`. Three scenarios; each fits inline under the 64 KiB cap.
+Bound lead `user-registration` against the capture tree from the `survey` prompt's worked example, source key `runtime`. Three scenarios; each fits inline under the 64 KiB cap.
 
 Resulting Evidence YAML:
 
@@ -136,7 +136,7 @@ Three scenarios, three claims, three digests. Synthesis reconciles these with si
 - **Inlining over-budget bodies.** Respect the 64 KiB inline cap. Over-budget claims fall back to `replay-digest` + `path`; downstream replay reads the bytes from disk.
 - **Representative-scenario shortcuts.** Every captured scenario contributes one claim. Collapsing 47 scenarios into 3 "representative" examples loses the divergence signal that makes runtime authority useful.
 - **Speculative claims.** Do not infer behaviour the captures do not exhibit. If no capture demonstrates duplicate-email handling, emit no claim for it — synthesis tags unknowns; you do not.
-- **`INSTRUCTIONS.md` as evidence.** The per-handler `INSTRUCTIONS.md` is operator hint material for Omnia test generation ([`build/test.md`](../../../targets/omnia/briefs/build/test.md)); not behavioural evidence. Read it for surface-naming context if needed; do not turn its prose into claims.
+- **`INSTRUCTIONS.md` as evidence.** The per-handler `INSTRUCTIONS.md` is operator hint material for Omnia test generation ([`build/test.md`](../../../../targets/omnia/prose/prompts/build/test.md)); not behavioural evidence. Read it for surface-naming context if needed; do not turn its prose into claims.
 - **Whole-file dumps in `statement`.** The `path:` + `replay-digest:` pair is the citation; `statement:` is a single-line summary. The body fields (`input` / `output`) carry observed structure; raw JSON paste in `statement:` is wrong.
 - **Cross-source synthesis.** Do not reconcile this lead's claims with another source's Evidence — that is core synthesis's job in `/spec:refine`. Emit Evidence purely from `$SOURCE_DIR`.
 
@@ -152,6 +152,6 @@ Three scenarios, three claims, three digests. Synthesis reconciles these with si
 ## See also
 
 - [`capture-format.md`](capture-format.md) — on-disk wire format
-- [`../briefs/extract.md`](../briefs/extract.md) — binding, inputs, claim grain
+- [`../prompts/extract.md`](../prompts/extract.md) — binding, inputs, claim grain
 - [workflow §`extract` output](https://github.com/augentic/specify/blob/main/engine/docs/standards/workflow.md#extract-output)
 - [workflow §Runtime source adapter (D1)](https://github.com/augentic/specify/blob/main/engine/docs/standards/workflow.md#runtime-source-adapter-d1)

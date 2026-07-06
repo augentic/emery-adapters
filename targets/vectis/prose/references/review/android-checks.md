@@ -377,7 +377,7 @@ When `composition.yaml` or `assets.yaml` is absent, skip this check — there is
 
 **Codex**: `rule_id: VECTIS-009`
 
-Per the Android write brief repair discipline and hard-rules-android, agent-authored Kotlin under `Android/app/src/**/*.kt` and `Android/shared/src/**/*.kt` (excluding `generated/`) must not carry `@Suppress(...)` or `@file:Suppress(...)`.
+Per the Android write prompt repair discipline and hard-rules-android, agent-authored Kotlin under `Android/app/src/**/*.kt` and `Android/shared/src/**/*.kt` (excluding `generated/`) must not carry `@Suppress(...)` or `@file:Suppress(...)`.
 
 **Detection**:
 

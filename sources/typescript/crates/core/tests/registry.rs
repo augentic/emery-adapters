@@ -1,19 +1,20 @@
-//! The embedded prose registry: typescript's own briefs and its deep
+//! The embedded prose registry: typescript's own prompts and its deep
 //! reference shelf ride inside.
 
 use specify_typescript_core::registry;
 
 #[test]
-fn registry_embeds_the_briefs() {
+fn registry_embeds_the_prompts() {
     assert!(
-        registry::body("briefs/survey.md").starts_with("# TypeScript / JavaScript source survey")
+        registry::body("prompts/survey.md").starts_with("# TypeScript / JavaScript source survey")
     );
     assert!(
-        registry::body("briefs/extract.md").starts_with("# TypeScript / JavaScript source extract")
+        registry::body("prompts/extract.md")
+            .starts_with("# TypeScript / JavaScript source extract")
     );
 }
 
-/// The extraction reference shelf the extract brief loads on demand is
+/// The extraction reference shelf the extract prompt loads on demand is
 /// embedded alongside the resolved `spec-runtime` symlink content.
 #[test]
 fn registry_embeds_the_reference_shelf() {

@@ -4,7 +4,7 @@ First-party Specify **adapters**, extracted from the platform repo as
 independently-versioned registry artifacts (RFC-48 / RFC-49 T6).
 
 Each adapter is a self-contained tree under `{targets,sources}/<name>/`:
-its `adapter.yaml` manifest and `prose/` trees (`briefs/`, `references/`,
+its `adapter.yaml` manifest and `prose/` trees (`prompts/`, `references/`,
 and `rules/` where declared). The platform
 `specify` binary consumes an adapter as an opaque, content-addressed
 artifact resolved from the global adapter store; it never compiles the
@@ -25,7 +25,7 @@ Every adapter — the three targets and the five sources — shares the same gue
   <name>/             # e.g. targets/{contracts,omnia,vectis}, sources/{intent,documentation,typescript,screenshots,captures}
     adapter.yaml      #   adapter manifest
     prose/            #   agent-facing markdown (embedded into guest.wasm)
-      briefs/         #   operation orchestration
+      prompts/        #   operation system-prompt fragments
       references/     #   lazy MCP reference corpus
       rules/          #   engineering standards (target adapters)
     Cargo.toml        #   `specify-<name>` — the adapter guest component (wasm32 shim)
@@ -41,7 +41,7 @@ evals/                # live eval harnesses against the real cursor backend
 Cargo.toml            # workspace: guest roots + `{sources,targets}/*/crates/*`
 ```
 
-The `adapter.yaml` manifests carry the post-cutover field set only (`name`, `version`, `axis`, `description`, plus `platforms` where declared): the guests embed their own briefs, so nothing reads manifests for operation dispatch.
+The `adapter.yaml` manifests carry the post-cutover field set only (`name`, `version`, `axis`, `description`, plus `platforms` where declared): the guests embed their own prompts, so nothing reads manifests for operation dispatch.
 
 The Crux shell-detection heuristics the platform once exposed as
 `specify-vectis-shell-detect` live inline in the vectis core at

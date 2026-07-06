@@ -82,7 +82,7 @@ pub async fn report<P: Model>(
         .map(ReportAnswer::into_report)
 }
 
-/// Assemble a system prompt from brief bodies, orchestrator first.
+/// Assemble a system prompt from embedded prompt bodies, shared preamble first.
 #[must_use]
 pub fn assemble_system(bodies: &[&str]) -> String {
     bodies.join("\n\n---\n\n")
@@ -133,7 +133,7 @@ pub fn render_outcome(name: &str, answer: &PhaseAnswer) -> String {
 /// The declared outputs a `success` report claims that the mounted tree
 /// does not contain, one findings-style line each.
 ///
-/// A `failure` report is already parked for human review per the briefs'
+/// A `failure` report is already parked for human review per the prompts'
 /// stop contract, so its output claims are not re-litigated.
 #[must_use]
 pub fn missing_outputs(report: &Report, tree_root: &Path) -> Vec<String> {

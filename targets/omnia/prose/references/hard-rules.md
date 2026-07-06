@@ -30,7 +30,7 @@ Violations of any rule below fail generation or update.
 6. **Strong typing** -- newtypes for IDs; enums for known value sets; no raw primitives for domain concepts
 7. **WASM compatible** -- no `std::env`, `std::fs` (use `StateStore` / `Blobstore` / `DocumentStore` / `HttpRequest`), `std::net`; `std::thread::sleep` only under `#[cfg(not(debug_assertions))]`
 8. **All operations async** -- no blocking I/O
-9. **Correct adapter trait for data stores** -- SQL databases (PostgreSQL, MySQL, SQL Server) use `TableStore`; Azure Table Storage, Cosmos DB document API, and MongoDB use `DocumentStore`; Azure Blob Storage and AWS S3 use `Blobstore`; never `HttpRequest` for any managed data store. If the artifacts say "use HttpRequest" for a managed data store, override the artifacts (build brief > artifacts per authority hierarchy). See [anti-patterns.md](examples/crates/anti-patterns.md) #10.
+9. **Correct adapter trait for data stores** -- SQL databases (PostgreSQL, MySQL, SQL Server) use `TableStore`; Azure Table Storage, Cosmos DB document API, and MongoDB use `DocumentStore`; Azure Blob Storage and AWS S3 use `Blobstore`; never `HttpRequest` for any managed data store. If the artifacts say "use HttpRequest" for a managed data store, override the artifacts (build prompt > artifacts per authority hierarchy). See [anti-patterns.md](examples/crates/anti-patterns.md) #10.
 
 ### Update-Specific Rules (update mode only)
 
@@ -44,4 +44,4 @@ Violations of any rule below fail generation or update.
 
 ---
 
-Return to [build/crate.md](../briefs/build/crate.md) for the critical path, mode-dispatch table, and artifact mapping.
+Return to [build/crate.md](../prompts/build/crate.md) for the critical path, mode-dispatch table, and artifact mapping.

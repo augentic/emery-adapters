@@ -27,7 +27,7 @@ const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and
                             is absent for intent bindings — no source tree is bound).";
 
 /// Survey the inline intent binding into its single lead — one
-/// schema-gated judgment leg over the embedded `briefs/survey.md`,
+/// schema-gated judgment leg over the embedded `prompts/survey.md`,
 /// followed by the deterministic id-grammar tail.
 ///
 /// # Errors
@@ -35,18 +35,18 @@ const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and
 /// As [`specify_guest_kit::judgment`]; a validation-tail failure is
 /// [`Error::Internal`].
 pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>, Error> {
-    let system = registry::body("briefs/survey.md").to_string();
+    let system = registry::body("prompts/survey.md").to_string();
     let user = format!(
         "Survey the intent source bound to adapter `{id}`.\n\n\
          {BINDING_NOTE}\n\n\
-         The lead id is the slice name the plan derived for this binding (the brief's \
+         The lead id is the slice name the plan derived for this binding (the prompt's \
          `slice-name` input): resolve it from the `plan.yaml` entry under `slices[]` \
          that binds this source. Re-running this survey replaces the prior lead by its \
-         `(source, lead)` pair, exactly as the brief describes — emit the single \
+         `(source, lead)` pair, exactly as the prompt describes — emit the single \
          current lead.\n\n\
          Answer with one JSON object matching the gated schema: a `leads` array carrying \
          exactly one lead whose `synopsis` is the operator's intent string, verbatim, per \
-         the brief. The caller persists the lead into `discovery.md`; do not write it \
+         the prompt. The caller persists the lead into `discovery.md`; do not write it \
          yourself.",
         id = ctx.adapter_id,
     );
@@ -59,7 +59,7 @@ pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>,
 /// Extract the lead's Evidence: the single `kind: intent` claim echoing
 /// the operator's intent string.
 ///
-/// One schema-gated judgment leg over the embedded `briefs/extract.md`,
+/// One schema-gated judgment leg over the embedded `prompts/extract.md`,
 /// followed by the deterministic claim-id tail.
 ///
 /// # Errors
@@ -69,7 +69,7 @@ pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>,
 pub async fn extract<P: Model>(
     model: &P, ctx: &Context<'_>, lead: &Lead,
 ) -> Result<Evidence, Error> {
-    let system = registry::body("briefs/extract.md").to_string();
+    let system = registry::body("prompts/extract.md").to_string();
     let user = format!(
         "Extract Evidence from the intent source bound to adapter `{id}` for this \
          lead:\n\n{lead}\n\n\
@@ -77,7 +77,7 @@ pub async fn extract<P: Model>(
          Answer with one JSON object matching the gated schema: the Evidence body \
          (`authority: \"intent\"`, one `kind: \"intent\"` claim whose `id` equals the \
          lead id and whose `statement` carries the operator's intent string verbatim, \
-         per the brief), without the envelope `lead` key — this call names the lead. \
+         per the prompt), without the envelope `lead` key — this call names the lead. \
          The caller persists the document under `.specify/slices/<slice>/evidence/`; do \
          not write it yourself.",
         id = ctx.adapter_id,

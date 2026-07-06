@@ -1,10 +1,10 @@
 # TypeScript / JavaScript source extract
 
-`/spec:refine` invokes this brief once per `slices[].sources[]` binding whose adapter is `typescript`. Your job: for a single `(source, lead)` pair, locate the matching TypeScript module(s) under `$SOURCE_DIR`, read the surrounding code, and emit one Evidence YAML document the CLI persists to `.specify/slices/<slice>/evidence/<source>.yaml`.
+`/spec:refine` invokes this prompt once per `slices[].sources[]` binding whose adapter is `typescript`. Your job: for a single `(source, lead)` pair, locate the matching TypeScript module(s) under `$SOURCE_DIR`, read the surrounding code, and emit one Evidence YAML document the CLI persists to `.specify/slices/<slice>/evidence/<source>.yaml`.
 
 ## Inputs
 
-- **`$SOURCE_DIR`** — read-only preopen of the operator-bound source root (same path the survey brief walked). Walk it; resolve `tsconfig.json` `paths` mappings relative to it.
+- **`$SOURCE_DIR`** — read-only preopen of the operator-bound source root (same path the survey prompt walked). Walk it; resolve `tsconfig.json` `paths` mappings relative to it.
 - **`<lead>`** — the kebab-case id of the `## Lead inventory` block the slice is bound to. Look it up in `discovery.md` (the runner provides it via the binding); the block tells you which surface(s) to extract.
 - **`<source>`** — the kebab-case source key the binding resolves through.
 
@@ -55,7 +55,7 @@ This adapter emits three kinds from the closed enum (`evidence.schema.json#/$def
 
 - **`excerpt`** — a behavioural code span. Use this for handler bodies, validation logic, error paths, and other behaviour the requirement / criterion synthesis will reconcile on. One claim per span; spans should be focused (typically 5–80 lines of source) and accompanied by a short `excerpt:` field carrying enough context for the reader to understand the behaviour. **Do not dump raw file contents.** The `path:` anchor is the source of truth; the `excerpt:` field is short context, not a verbatim file paste.
 - **`type`** — a declared interface, type alias, class declaration, or DTO. Use this when synthesis will need the shape of an input / output (e.g. `CreateUserDto`, `RegistrationResult`). The body field is `signature:` — the declaration's source spelling (one line preferred; multi-line acceptable for short class headers).
-- **`call`** — an observed cross-module call that contributes to the lead's behaviour. Use this when synthesis must know that a handler delegates to another module (the call is the wire). The body field is `callee:` — `<module>:<symbol>` matching the `handler` resolution rules from the survey brief (named export, `<ClassName>.<method>`, framework-suffixed inline arrow, etc.).
+- **`call`** — an observed cross-module call that contributes to the lead's behaviour. Use this when synthesis must know that a handler delegates to another module (the call is the wire). The body field is `callee:` — `<module>:<symbol>` matching the `handler` resolution rules from the survey prompt (named export, `<ClassName>.<method>`, framework-suffixed inline arrow, etc.).
 
 `id` is optional on `excerpt` / `type` / `call` (per `evidence.schema.json` — required only on `requirement` and `criterion`). You MAY carry it for deterministic cross-source reconciliation when the claim corresponds to a stable concept; otherwise omit it.
 
@@ -68,11 +68,11 @@ Rules for the body fields:
 - **No raw file dumps.** Anchors point at the source; the YAML must not paraphrase or restate large spans. Keep `excerpt:` to a paragraph or so of focused context (the validation rule, the error response, the side effect) — never tens of lines of `"\n"`-separated source.
 - **One claim per concept.** Two overlapping excerpts of the same handler are noise; pick the smallest range that captures the behaviour.
 - **Stable spans across reruns.** Choose anchors at named-function or block boundaries when possible so re-extraction produces byte-stable Evidence even when surrounding lines shift slightly.
-- **Symbols, not phrasing.** `call.callee` is `<file>:<symbol>` matching the survey brief's handler resolution; not free-form prose. `type.signature` is the declaration's source spelling.
+- **Symbols, not phrasing.** `call.callee` is `<file>:<symbol>` matching the survey prompt's handler resolution; not free-form prose. `type.signature` is the declaration's source spelling.
 
 ## Worked example
 
-Bound lead `user-registration` against a small Express service at `$SOURCE_DIR` (the source tree from the survey brief's worked example, source key `legacy-monolith`).
+Bound lead `user-registration` against a small Express service at `$SOURCE_DIR` (the source tree from the survey prompt's worked example, source key `legacy-monolith`).
 
 Source files in scope (per the lead's surface in the staged JSON):
 
@@ -101,7 +101,7 @@ Three claims, three anchors, no raw source bodies. Synthesis reconciles these in
 
 ## Path rules
 
-Same skip-root and traversal rules as the survey brief: relative paths only, no `..`, no leading `/`, never under `node_modules`, `vendor`, `target`, `.venv`, `dist`, `build`, no `*.d.ts` files. A symlink inside `$SOURCE_DIR` pointing outside is denied at canonicalization; the host runner returns `source-extract-path-denied` and the slice stays `refining` per workflow §Extraction reliability.
+Same skip-root and traversal rules as the survey prompt: relative paths only, no `..`, no leading `/`, never under `node_modules`, `vendor`, `target`, `.venv`, `dist`, `build`, no `*.d.ts` files. A symlink inside `$SOURCE_DIR` pointing outside is denied at canonicalization; the host runner returns `source-extract-path-denied` and the slice stays `refining` per workflow §Extraction reliability.
 
 ## Anti-patterns
 
@@ -116,7 +116,7 @@ Same skip-root and traversal rules as the survey brief: relative paths only, no 
 
 | Condition                                                | Action                                                                                                                          |
 | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Lead id not present in `discovery.md`               | The runner refuses to invoke the brief; not a brief-level failure mode.                                                         |
+| Lead id not present in `discovery.md`               | The runner refuses to invoke the prompt; not a prompt-level failure mode.                                                       |
 | Lead maps to no file under `$SOURCE_DIR`            | Return `claims: []`. Core synthesis surfaces `[unknown]` on every affected requirement.                                         |
 | Read denied outside `$SOURCE_DIR` / `$CAPABILITY_DIR`    | Host runner returns `source-extract-path-denied`; slice stays `refining` and no Evidence is written.                            |
 | Production source uses an out-of-scope framework only    | Emit any in-scope `excerpt` / `type` / `call` claims; the gap surfaces as `[unknown]` requirements at synthesis.                |

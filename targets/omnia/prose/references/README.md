@@ -2,20 +2,20 @@
 
 Reference documentation for the Omnia target adapter at [`adapters/targets/omnia/`](..). In Specify, Omnia is a **target adapter** — `guidance`, `build`, `merge` — not a slash-command plugin.
 
-The Omnia crate / test / guest / review orchestration lives in [`../briefs/build.md`](../briefs/build.md) and five phase sub-briefs under [`../briefs/build/`](../briefs/build/). The depth (templates, hard rules, mapping tables, mock-provider patterns, specialist prompts, rules) and worked examples live in this folder.
+The Omnia crate / test / guest / review instructions live in [`../prompts/build.md`](../prompts/build.md) and the per-leg prompts under [`../prompts/build/`](../prompts/build/); the adapter core (`../crates/core/src/operations.rs`) owns leg sequencing. The depth (templates, hard rules, mapping tables, mock-provider patterns, specialist prompts, rules) and worked examples live in this folder.
 
-## Briefs
+## Prompts
 
-| Brief | Purpose |
-|-------|---------|
-| [`guidance.md`](../briefs/guidance.md) | Idiom guidance (provider DI, WASM guardrails, error variants, validation placement) consumed by core synthesis. |
-| [`build.md`](../briefs/build.md) | Orchestrator: bindings, mode detection, phase order, verify-repair loop, stop-hint contract. |
-| [`build/crate.md`](../briefs/build/crate.md) | Phase 2: generate or update the Rust crate. |
-| [`build/test.md`](../briefs/build/test.md) | Phase 3: generate or update the test suite. |
-| [`build/guest.md`](../briefs/build/guest.md) | Phase 4 (create mode only): scaffold the WASM guest wrapper. |
-| [`build/review.md`](../briefs/build/review.md) | Phase 6: agent-team code review and remediation cycle. |
-| [`build/replay.md`](../briefs/build/replay.md) | Phase 7 (optional): runtime capture replay when a `captures` source is bound. Delegates hook contract to [`../../../shared/target-hooks/replay/`](../../../shared/target-hooks/replay/). |
-| [`merge.md`](../briefs/merge.md) | Pre-merge gate (cargo + clippy + test + wasm32 build) run by `/spec:merge`. |
+| Prompt | Purpose |
+|--------|---------|
+| [`guidance.md`](../prompts/guidance.md) | Idiom guidance (provider DI, WASM guardrails, error variants, validation placement) consumed by core synthesis. |
+| [`build.md`](../prompts/build.md) | Shared build preamble: bindings, mode detection, verify-repair loop, stop-hint contract, report shape. |
+| [`build/crate.md`](../prompts/build/crate.md) | Generation leg: generate or update the Rust crate. |
+| [`build/test.md`](../prompts/build/test.md) | Generation leg: generate or update the test suite. |
+| [`build/guest.md`](../prompts/build/guest.md) | Generation leg (create mode only): scaffold the WASM guest wrapper. |
+| [`build/review.md`](../prompts/build/review.md) | Review leg: agent-team code review and remediation cycle. |
+| [`build/replay.md`](../prompts/build/replay.md) | Replay leg (self-skipping): runtime capture replay when a `captures` source is bound. Delegates hook contract to [`../../../shared/target-hooks/replay/`](../../../shared/target-hooks/replay/). |
+| [`merge.md`](../prompts/merge.md) | Merge leg: delta fold plus the pre-merge gate (cargo + clippy + test + wasm32 build). |
 
 ## References
 

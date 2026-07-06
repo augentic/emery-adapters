@@ -32,7 +32,7 @@ fn schema_format(request: &Request) -> (&str, &str) {
     }
 }
 
-// One leg: the embedded survey brief is the system channel, the user
+// One leg: the embedded survey prompt is the system channel, the user
 // message carries the call context (adapter id, plan.yaml binding
 // resolution, the re-survey note, the JSON envelope instruction), and the
 // request rides the leads schema pin, the adapter's own MCP grant, and
@@ -53,11 +53,11 @@ async fn survey_assembles_prompt_and_parses() {
     assert_eq!(requests.len(), 1, "survey is a single judgment leg");
     let request = &requests[0];
     let system = request.system.as_deref().unwrap();
-    assert!(system.starts_with("# `documentation.survey`"), "survey brief is the system prompt");
+    assert!(system.starts_with("# `documentation.survey`"), "survey prompt is the system channel");
     let user = &request.messages[0].content;
     assert!(user.contains("source:documentation"), "user message names the adapter id");
     assert!(user.contains("plan.yaml") && user.contains("sources.<key>"), "binding resolution");
-    assert!(user.contains("$SOURCE_DIR"), "binding is mapped onto the brief's vocabulary");
+    assert!(user.contains("$SOURCE_DIR"), "binding is mapped onto the prompt's vocabulary");
     assert!(user.contains("re-survey"), "re-survey framing is carried");
     let (name, schema) = schema_format(request);
     assert_eq!(name, "leads");
@@ -105,7 +105,7 @@ async fn survey_tail_rejects_empty_synopsis() {
     assert!(matches!(err, Error::Internal(detail) if detail.contains("synopsis is empty")));
 }
 
-// One leg: the embedded extract brief is the system channel, the user
+// One leg: the embedded extract prompt is the system channel, the user
 // message carries the lead block plus the binding resolution, and the
 // answer deserializes into the Evidence shape through the evidence
 // schema pin.
@@ -130,7 +130,10 @@ async fn extract_assembles_prompt_and_parses() {
     assert_eq!(requests.len(), 1, "extract is a single judgment leg");
     let request = &requests[0];
     let system = request.system.as_deref().unwrap();
-    assert!(system.starts_with("# `documentation.extract`"), "extract brief is the system prompt");
+    assert!(
+        system.starts_with("# `documentation.extract`"),
+        "extract prompt is the system channel"
+    );
     let user = &request.messages[0].content;
     assert!(user.contains("- lead: password-reset"), "user message carries the lead id");
     assert!(user.contains("Reset flow with expiring links."), "and its synopsis");

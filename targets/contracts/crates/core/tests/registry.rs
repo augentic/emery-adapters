@@ -4,20 +4,20 @@
 use specify_contracts_core::registry;
 
 #[test]
-fn registry_embeds_briefs_and_references() {
+fn registry_embeds_prompts_and_references() {
     for path in [
-        "briefs/guidance.md",
-        "briefs/build.md",
-        "briefs/merge.md",
-        "briefs/build/json-schema.md",
-        "briefs/build/openapi.md",
-        "briefs/build/asyncapi.md",
+        "prompts/guidance.md",
+        "prompts/build.md",
+        "prompts/merge.md",
+        "prompts/build/json-schema.md",
+        "prompts/build/openapi.md",
+        "prompts/build/asyncapi.md",
         "references/report-shape.md",
         "references/openapi/verifier.md",
     ] {
         assert!(registry::doc(path).is_some(), "registry embeds `{path}`");
     }
-    assert!(registry::body("briefs/build.md").starts_with("# contracts.build"));
+    assert!(registry::body("prompts/build.md").starts_with("# contracts.build"));
 }
 
 /// The `references/spec-runtime` symlink into `shared/references/runtime/`

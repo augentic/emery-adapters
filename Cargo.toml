@@ -19,7 +19,7 @@ members = [
 # (`{sources,targets}/<name>/`) *is* its guest package — a wasm32-only
 # `specify-<name>` cdylib shim at the adapter root over a wasm-free
 # `crates/core/` crate (`specify-<name>-core`) — so the package physically
-# contains the prose trees (`prose/briefs`, `prose/references`) it embeds. Shared guest support lives under
+# contains the prose trees (`prose/prompts`, `prose/references`) it embeds. Shared guest support lives under
 # top-level `crates/`. Guest roots are explicit members (prose-only adapters
 # have no root package, so a bare `targets/*` glob cannot work); the crate
 # trees glob.

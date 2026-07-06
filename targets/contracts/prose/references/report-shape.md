@@ -6,10 +6,10 @@ The verifier runs in two modes:
 
 | Surface                            | Output format                                  | Caller                                         | Trigger                                        |
 | ---------------------------------- | ---------------------------------------------- | ---------------------------------------------- | ---------------------------------------------- |
-| Format verifier `single` (default) | Markdown                                       | contracts adapter build brief in `/spec:build` | Post-author or post-import; verify-repair loop |
-| Format verifier `cross-project`    | JSON envelope from the adapter's in-guest contract validator | contracts adapter merge brief                  | Post-merge baseline validation gate            |
+| Format verifier `single` (default) | Markdown                                       | contracts adapter build prompt in `/spec:build` | Post-author or post-import; verify-repair loop |
+| Format verifier `cross-project`    | JSON envelope from the adapter's in-guest contract validator | contracts adapter merge prompt                  | Post-merge baseline validation gate            |
 
-`single` mode is human-readable; the contracts adapter build brief drives a verify-repair loop until the report is clean. Format-verifier `cross-project` mode describes the adapter's in-guest contract validator and preserves its baseline-validation JSON envelope.
+`single` mode is human-readable; the contracts adapter build prompt drives a verify-repair loop until the report is clean. Format-verifier `cross-project` mode describes the adapter's in-guest contract validator and preserves its baseline-validation JSON envelope.
 
 Both modes share the **read-only** contract — the verifier MUST NOT generate, modify, or delete any files in either mode.
 
@@ -19,7 +19,7 @@ The severity vocabulary is shared across formats and modes:
 
 | Severity                   | Markdown glyph | Meaning                                                                                                                                                                                                        |
 | -------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `FAIL` (`error` in YAML)   | `✗`            | A hard failure. The artefact does not conform; the verify-repair loop must repair before the brief proceeds.                                                                                                   |
+| `FAIL` (`error` in YAML)   | `✗`            | A hard failure. The artefact does not conform; the verify-repair loop must repair before the build proceeds.                                                                                                   |
 | `WARN` (`warning` in YAML) | `⚠`            | A finding that requires human review. Common in cross-format compatibility checks where the conservative output is "the wire shape changed in a backwards-incompatible direction; the operator should triage." |
 | `INFO` (`info` in YAML)    | `ℹ`            | A neutral observation. Common when the consumer's view matches the producer's update or when the consumer has no prior view.                                                                                   |
 
@@ -79,4 +79,4 @@ WARN: contracts/schemas/payment.yaml — "$schema" is Draft 7; expected Draft 20
 
 ### Single-mode exit semantics
 
-`single` mode preserves classical exit semantics: zero on a clean report, non-zero on read errors. A clean report with `WARN`-only findings still exits zero — `WARN` is informational for human review, not a blocker. Only `FAIL` findings block the verify-repair loop, but exit code 0 is preserved across the loop iterations because the brief drives repair, not the verifier.
+`single` mode preserves classical exit semantics: zero on a clean report, non-zero on read errors. A clean report with `WARN`-only findings still exits zero — `WARN` is informational for human review, not a blocker. Only `FAIL` findings block the verify-repair loop, but exit code 0 is preserved across the loop iterations because the build drives repair, not the verifier.

@@ -53,4 +53,4 @@ When adding tests from new captures, follow the same pattern already used in the
 
 - [`replay-fixtures.md`](replay-fixtures.md) — `setup` block, `INSTRUCTIONS.md`, MockProvider mapping
 - [`examples/replay/`](examples/replay/) — worked handler, test, and replay examples
-- [`../briefs/build/test.md`](../briefs/build/test.md) — test writer phase
+- [`../prompts/build/test.md`](../prompts/build/test.md) — test writer prompt

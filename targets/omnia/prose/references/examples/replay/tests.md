@@ -17,7 +17,7 @@ crates/r9k-adapter/
             └── ...
 ```
 
-The `tests/provider.rs` file is shared between `static.rs` and `replay.rs`. See the Omnia target build test-writer phase ([`build/test.md`](../../../briefs/build/test.md)) for the `static.rs` MockProvider patterns this replay file extends.
+The `tests/provider.rs` file is shared between `static.rs` and `replay.rs`. See the Omnia target build test-writer prompt ([`build/test.md`](../../../prompts/build/test.md)) for the `static.rs` MockProvider patterns this replay file extends.
 
 ## tests/provider.rs
 

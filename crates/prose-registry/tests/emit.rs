@@ -32,15 +32,15 @@ fn generate(adapter_root: &Path, trees: &[&str]) -> Result<String, String> {
 fn emits_sorted_doc_table() {
     let adapter = TempDir::new().expect("adapter root");
     write(adapter.path(), "references/openapi/verifier.md", "# verifier");
-    write(adapter.path(), "briefs/guidance.md", "# guidance");
-    write(adapter.path(), "briefs/build.md", "# build");
-    write(adapter.path(), "briefs/notes.txt", "not embedded");
+    write(adapter.path(), "prompts/guidance.md", "# guidance");
+    write(adapter.path(), "prompts/build.md", "# build");
+    write(adapter.path(), "prompts/notes.txt", "not embedded");
 
-    let generated = generate(adapter.path(), &["briefs", "references"]).expect("emit succeeds");
+    let generated = generate(adapter.path(), &["prompts", "references"]).expect("emit succeeds");
 
-    let build = generated.find(r#"Doc { path: "briefs/build.md""#).expect("build brief embedded");
+    let build = generated.find(r#"Doc { path: "prompts/build.md""#).expect("build prompt embedded");
     let guidance =
-        generated.find(r#"Doc { path: "briefs/guidance.md""#).expect("guidance brief embedded");
+        generated.find(r#"Doc { path: "prompts/guidance.md""#).expect("guidance prompt embedded");
     let verifier = generated
         .find(r#"Doc { path: "references/openapi/verifier.md""#)
         .expect("nested reference embedded");
@@ -57,7 +57,7 @@ fn resolves_directory_symlinks_inline() {
     let adapter = TempDir::new().expect("adapter root");
     let shared = TempDir::new().expect("shared tree");
     write_file(shared.path(), "runtime/protocol.md", "# protocol");
-    write(adapter.path(), "briefs/build.md", "# build");
+    write(adapter.path(), "prompts/build.md", "# build");
     fs::create_dir_all(adapter.path().join("prose/references")).expect("mkdir references");
     std::os::unix::fs::symlink(
         shared.path().join("runtime"),
@@ -65,7 +65,7 @@ fn resolves_directory_symlinks_inline() {
     )
     .expect("symlink");
 
-    let generated = generate(adapter.path(), &["briefs", "references"]).expect("emit succeeds");
+    let generated = generate(adapter.path(), &["prompts", "references"]).expect("emit succeeds");
 
     assert!(
         generated.contains(r#"Doc { path: "references/spec-runtime/protocol.md""#),
@@ -76,24 +76,24 @@ fn resolves_directory_symlinks_inline() {
 #[test]
 fn empty_trees_fail() {
     let adapter = TempDir::new().expect("adapter root");
-    fs::create_dir_all(adapter.path().join("prose/briefs")).expect("mkdir");
+    fs::create_dir_all(adapter.path().join("prose/prompts")).expect("mkdir");
 
-    let err = generate(adapter.path(), &["briefs"]).expect_err("no documents is an error");
+    let err = generate(adapter.path(), &["prompts"]).expect_err("no documents is an error");
     assert!(err.contains("no markdown documents"), "error names the failure: {err}");
 }
 
 // A tree that does not exist is skipped, not an error: adapters share one
-// canonical tree list (`briefs` + `references`) and an adapter may carry
+// canonical tree list (`prompts` + `references`) and an adapter may carry
 // no references tree at all.
 #[test]
 fn missing_tree_is_skipped() {
     let adapter = TempDir::new().expect("adapter root");
-    write(adapter.path(), "briefs/survey.md", "# survey");
+    write(adapter.path(), "prompts/survey.md", "# survey");
 
     let generated =
-        generate(adapter.path(), &["briefs", "references"]).expect("missing tree is tolerated");
+        generate(adapter.path(), &["prompts", "references"]).expect("missing tree is tolerated");
 
-    assert!(generated.contains(r#"Doc { path: "briefs/survey.md""#), "present tree is embedded");
+    assert!(generated.contains(r#"Doc { path: "prompts/survey.md""#), "present tree is embedded");
 }
 
 // When every tree is missing, the empty-registry error fires: an adapter
@@ -102,20 +102,20 @@ fn missing_tree_is_skipped() {
 fn all_trees_missing_fails() {
     let adapter = TempDir::new().expect("adapter root");
 
-    let err = generate(adapter.path(), &["briefs"]).expect_err("no documents is an error");
+    let err = generate(adapter.path(), &["prompts"]).expect_err("no documents is an error");
     assert!(err.contains("no markdown documents"), "error names the failure: {err}");
 }
 
 #[test]
 fn dangling_symlink_fails() {
     let adapter = TempDir::new().expect("adapter root");
-    fs::create_dir_all(adapter.path().join("prose/briefs")).expect("mkdir");
+    fs::create_dir_all(adapter.path().join("prose/prompts")).expect("mkdir");
     std::os::unix::fs::symlink(
         adapter.path().join("nowhere"),
-        adapter.path().join("prose/briefs/dangling"),
+        adapter.path().join("prose/prompts/dangling"),
     )
     .expect("symlink");
 
-    let err = generate(adapter.path(), &["briefs"]).expect_err("dangling symlink is an error");
+    let err = generate(adapter.path(), &["prompts"]).expect_err("dangling symlink is an error");
     assert!(err.contains("dangling symlink"), "error points at the symlink: {err}");
 }

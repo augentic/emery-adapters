@@ -15,8 +15,8 @@ fn ctx() -> Context<'static> {
     }
 }
 
-// The survey prompt embeds the typescript brief as the system channel and
-// frames the call around the brief's framework grammar and the read-only
+// The survey call embeds the typescript prompt as the system channel and
+// frames the call around the prompt's framework grammar and the read-only
 // TS / JS source-tree binding.
 #[tokio::test]
 async fn survey_frames_the_framework_grammar() {
@@ -30,7 +30,7 @@ async fn survey_frames_the_framework_grammar() {
     let request = &model.requests()[0];
     assert!(request.system.as_deref().unwrap().starts_with("# TypeScript / JavaScript source"));
     let user = &request.messages[0].content;
-    assert!(user.contains("framework grammar"), "survey framing names the brief's grammar");
+    assert!(user.contains("framework grammar"), "survey framing names the prompt's grammar");
     assert!(
         user.contains("TypeScript / JavaScript source tree"),
         "the binding note names the TS / JS tree"
@@ -38,7 +38,7 @@ async fn survey_frames_the_framework_grammar() {
     assert!(user.contains("read-only"), "the binding note marks the tree read-only");
 }
 
-// The extract prompt points the agent at the reference shelf over the MCP
+// The extract call points the agent at the reference shelf over the MCP
 // grant, and the code-shaped claim kinds parse through the shared shape.
 #[tokio::test]
 async fn extract_points_at_the_reference_shelf() {
@@ -65,5 +65,5 @@ async fn extract_points_at_the_reference_shelf() {
     assert!(request.system.as_deref().unwrap().starts_with("# TypeScript / JavaScript source"));
     let user = &request.messages[0].content;
     assert!(user.contains("reference shelf"), "the prompt points at the MCP-served references");
-    assert!(user.contains("- lead: task-service"), "the lead renders as the brief's block shape");
+    assert!(user.contains("- lead: task-service"), "the lead renders as the prompt's block shape");
 }

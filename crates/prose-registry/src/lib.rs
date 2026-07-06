@@ -1,9 +1,9 @@
 //! Build-time codegen for adapter guests' embedded prose registries.
 //!
 //! An adapter core's `build.rs` calls [`emit_core`] with its prose trees
-//! (typically `briefs` and `references`). Trees live under `<adapter>/prose/`
-//! on disk; registry keys omit the `prose/` prefix (`briefs/build.md`, not
-//! `prose/briefs/build.md`). The walk follows
+//! (typically `prompts` and `references`). Trees live under `<adapter>/prose/`
+//! on disk; registry keys omit the `prose/` prefix (`prompts/build.md`, not
+//! `prose/prompts/build.md`). The walk follows
 //! directory symlinks (such as `references/spec-runtime` into
 //! `shared/references/runtime/` — symlinks do not survive embedding, so
 //! the resolved content is inlined under the symlink-name path) and writes
@@ -46,7 +46,7 @@ const PROSE_ROOT: &str = "prose";
 /// directives for every directory and document walked.
 ///
 /// A tree that does not exist under `adapter_root` is skipped — adapters
-/// share one canonical tree list (`briefs` + `references`) and not every
+/// share one canonical tree list (`prompts` + `references`) and not every
 /// adapter carries every tree.
 ///
 /// # Errors
@@ -90,7 +90,7 @@ pub fn emit(adapter_root: &Path, trees: &[&str], out_dir: &Path) -> Result<(), S
 
 // Collect every `.md` file under `dir` as `(adapter-relative path, resolved
 // absolute path)`, descending through directory symlinks. `rel` is the
-// symlink-name path (briefs reference `references/spec-runtime/...`), while
+// symlink-name path (prompts reference `references/spec-runtime/...`), while
 // the resolved path feeds `include_str!`.
 fn walk(dir: &Path, rel: &str, docs: &mut Vec<(String, PathBuf)>) -> Result<(), String> {
     println!("cargo:rerun-if-changed={}", dir.display());

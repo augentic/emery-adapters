@@ -1,11 +1,11 @@
-//! The embedded prose registry: brief coverage and symlink resolution.
+//! The embedded prose registry: prompt coverage and symlink resolution.
 
 use specify_documentation_core::registry;
 
 #[test]
-fn registry_embeds_the_briefs() {
-    assert!(registry::body("briefs/survey.md").starts_with("# `documentation.survey`"));
-    assert!(registry::body("briefs/extract.md").starts_with("# `documentation.extract`"));
+fn registry_embeds_the_prompts() {
+    assert!(registry::body("prompts/survey.md").starts_with("# `documentation.survey`"));
+    assert!(registry::body("prompts/extract.md").starts_with("# `documentation.extract`"));
 }
 
 /// The `references/spec-runtime` symlink into `shared/references/runtime/`

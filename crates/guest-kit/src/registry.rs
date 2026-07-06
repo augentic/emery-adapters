@@ -4,13 +4,13 @@
 //! sorted `DOCS` table of [`Doc`] entries into `$OUT_DIR/registry_docs.rs`;
 //! the core `include!`s that table next to a `pub use` of this [`Doc`]
 //! type and wraps the lookup helpers below. Documents are keyed by
-//! adapter-relative path (`briefs/build.md`,
+//! adapter-relative path (`prompts/build.md`,
 //! `references/openapi/verifier.md`, …).
 
 /// One embedded reference document.
 #[derive(Clone, Copy, Debug)]
 pub struct Doc {
-    /// Adapter-relative path, e.g. `briefs/build.md`.
+    /// Adapter-relative path, e.g. `prompts/build.md`.
     pub path: &'static str,
     /// Full markdown body.
     pub body: &'static str,

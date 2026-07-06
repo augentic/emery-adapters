@@ -6,7 +6,7 @@ This sub-flow is JSON-Schema-only. Protocol bindings under `contracts/http/` bel
 
 ## Critical path
 
-1. **Read the briefs and specs.** Open [../build.md](../build.md) and the slice's `specs/<domain>/spec.md` files to identify which payload types the slice requires; read `contracts/schemas/` (the schema baseline) to know what shared vocabulary already exists.
+1. **Read the build prompt and specs.** Open [../build.md](../build.md) and the slice's `specs/<domain>/spec.md` files to identify which payload types the slice requires; read `contracts/schemas/` (the schema baseline) to know what shared vocabulary already exists.
 2. **Identify the intent.** Map the trigger to one of three sibling references using the [intent dispatch](#intent-dispatch) table — author, importer, or verifier. Load only the relevant sibling.
 3. **Dispatch to the sibling.** Open and follow [`../../references/json-schema/author.md`](../../references/json-schema/author.md), [`../../references/json-schema/importer.md`](../../references/json-schema/importer.md), or [`../../references/json-schema/verifier.md`](../../references/json-schema/verifier.md). Each sibling owns its complete algorithm, decision rules, and output format.
 4. **Write outputs to `contracts/schemas/`.** Author and importer paths produce or normalise JSON Schema YAML files under `$SLICE_DIR/contracts/schemas/` — one named type per file, kebab-case filenames, URN `$id` derived from the file path.
@@ -39,7 +39,7 @@ Conventions enforced for every schema file in either location:
 
 | Intent | Trigger | Sibling |
 |---|---|---|
-| Author or extend reusable schemas from a spec | build brief during `/spec:build`; operator extending the baseline for new payload types | [`../../references/json-schema/author.md`](../../references/json-schema/author.md) |
+| Author or extend reusable schemas from a spec | build prompt during `/spec:build`; operator extending the baseline for new payload types | [`../../references/json-schema/author.md`](../../references/json-schema/author.md) |
 | Import or normalise external schema files | operator drops schema files into a slice's `contracts/schemas/` directory | [`../../references/json-schema/importer.md`](../../references/json-schema/importer.md) |
 | Verify `$ref` consistency, metadata, cross-format consumer compatibility, or merge-time baseline validation | build verification; post-merge contract baseline gate | [`../../references/json-schema/verifier.md`](../../references/json-schema/verifier.md) |
 

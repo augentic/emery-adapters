@@ -1,6 +1,6 @@
 # Runtime capture extract
 
-`/spec:refine` invokes this brief once per `slices[].sources[]` binding whose adapter is `captures`. Your job: for a single `(source, lead)` pair, locate the matching `tests/data/replays/<handler>/` directory under `$SOURCE_DIR`, read every scenario capture, and emit one Evidence YAML document the CLI persists to `.specify/slices/<slice>/evidence/<source>.yaml`.
+`/spec:refine` invokes this prompt once per `slices[].sources[]` binding whose adapter is `captures`. Your job: for a single `(source, lead)` pair, locate the matching `tests/data/replays/<handler>/` directory under `$SOURCE_DIR`, read every scenario capture, and emit one Evidence YAML document the CLI persists to `.specify/slices/<slice>/evidence/<source>.yaml`.
 
 ## Binding
 
@@ -17,7 +17,7 @@ The bound `path:` becomes `$SOURCE_DIR`. The capture layout is the one `/capture
 
 ## Reference shelf
 
-Load both references — they own everything the brief does not spell out.
+Load both references — they own everything the prompt does not spell out.
 
 - [`../references/capture-format.md`](../references/capture-format.md) — on-disk wire format and behavioural vs non-evidence fields.
 - [`../references/extraction-mapping.md`](../references/extraction-mapping.md) — Evidence YAML shape, claim-field detail, capture JSON → claim field mapping, 64 KiB inline cap, determinism rules, worked example, path rules, anti-patterns, and failure modes.

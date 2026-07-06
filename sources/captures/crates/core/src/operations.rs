@@ -4,7 +4,7 @@
 //!
 //! The judgment detail — the capture-tree layout, the
 //! `kind: example` claim shape with `replay-digest` anchors, the 64 KiB
-//! inline cap — rides in the embedded briefs and references.
+//! inline cap — rides in the embedded prompts and references.
 
 use specify_guest_kit::answers::{
     EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA, LeadsAnswer, validate_evidence, validate_leads,
@@ -22,12 +22,12 @@ const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and
                             `plan.yaml` at the workspace root and find the binding under \
                             `sources.<key>` whose `adapter` is `captures`; its `path` \
                             (relative to the workspace root) is the read-only runtime capture \
-                            tree the brief calls `$SOURCE_DIR` (the \
+                            tree the prompt calls `$SOURCE_DIR` (the \
                             `tests/data/replays/<handler>/` layout `/capture:wiretapper` \
                             writes).";
 
 /// Survey the bound capture tree into leads (one per captured handler) —
-/// one schema-gated judgment leg over the embedded `briefs/survey.md`,
+/// one schema-gated judgment leg over the embedded `prompts/survey.md`,
 /// followed by the deterministic id-grammar tail.
 ///
 /// # Errors
@@ -35,16 +35,16 @@ const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and
 /// As [`specify_guest_kit::judgment`]; a validation-tail failure is
 /// [`Error::Internal`].
 pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>, Error> {
-    let system = registry::body("briefs/survey.md").to_string();
+    let system = registry::body("prompts/survey.md").to_string();
     let user = format!(
         "Survey the runtime-capture source bound to adapter `{id}`.\n\n\
          {BINDING_NOTE}\n\n\
          When `discovery.md` at the workspace root already carries leads for this source \
          under `## Lead inventory`, treat this call as a re-survey: return the complete \
          current lead set — the caller replaces prior leads by their `(source, lead)` \
-         pairs (the brief sorts blocks by `lead` for byte-stable re-survey diffs).\n\n\
+         pairs (the prompt sorts blocks by `lead` for byte-stable re-survey diffs).\n\n\
          Answer with one JSON object matching the gated schema: a `leads` array carrying \
-         the same `lead` / `synopsis` / optional `topics` content as the brief's lead \
+         the same `lead` / `synopsis` / optional `topics` content as the prompt's lead \
          blocks. The caller persists the leads into `discovery.md`; do not write it \
          yourself.",
         id = ctx.adapter_id,
@@ -57,7 +57,7 @@ pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>,
 
 /// Extract one lead's behavioural Evidence from the bound capture tree.
 ///
-/// One schema-gated judgment leg over the embedded `briefs/extract.md`
+/// One schema-gated judgment leg over the embedded `prompts/extract.md`
 /// (emitting `kind: example` claims with `replay-digest` anchors),
 /// followed by the deterministic claim-id tail.
 ///
@@ -68,16 +68,16 @@ pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>,
 pub async fn extract<P: Model>(
     model: &P, ctx: &Context<'_>, lead: &Lead,
 ) -> Result<Evidence, Error> {
-    let system = registry::body("briefs/extract.md").to_string();
+    let system = registry::body("prompts/extract.md").to_string();
     let user = format!(
         "Extract Evidence from the runtime-capture source bound to adapter `{id}` for \
          this lead (one captured handler):\n\n{lead}\n\n\
          {BINDING_NOTE}\n\n\
-         The brief's references (`capture-format.md`, `extraction-mapping.md`) are \
-         served over this call's MCP grant — load both, as the brief requires.\n\n\
+         The prompt's references (`capture-format.md`, `extraction-mapping.md`) are \
+         served over this call's MCP grant — load both, as the prompt requires.\n\n\
          Answer with one JSON object matching the gated schema: the Evidence body \
          (`authority: \"behaviour\"`, `kind: \"example\"` claims carrying the \
-         `replay-digest` / `input` / `output` body fields the brief describes), without \
+         `replay-digest` / `input` / `output` body fields the prompt describes), without \
          the envelope `lead` key — this call names the lead. The caller persists the \
          document under `.specify/slices/<slice>/evidence/`; do not write it yourself.",
         id = ctx.adapter_id,

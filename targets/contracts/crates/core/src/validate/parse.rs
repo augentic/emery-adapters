@@ -15,7 +15,7 @@ pub struct TopLevelDoc {
 
 /// Walk `contracts_dir` for `*.yaml` files, parse each, and keep only
 /// those whose root carries `openapi:` or `asyncapi:`. YAML parse errors
-/// are swallowed silently — the contracts-brief verifier owns that
+/// are swallowed silently — the format verifier references own that
 /// diagnostic; this module is identity / version only.
 pub fn collect_top_level_docs(contracts_dir: &Path) -> Vec<TopLevelDoc> {
     let mut paths = Vec::new();

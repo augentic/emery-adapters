@@ -1,6 +1,6 @@
 # Vectis Guest Evals — RFC-61 Step 3 Build-Leg Proof
 
-This directory is the live-backend eval harness for the vectis adapter guest. The scenario drives the guest's `build` operation end-to-end: the deterministic in-guest prepare prelude (scope resolution + conditional `materialize assets`), the brief-driven judgment legs as single-shot `create` calls against the real cursor backend (composition, Crux core, per-shell writes, review), the in-core composition validator gate with its bounded repair, then the schema-gated report and the deterministic postlude — with all state in the scratch working tree and references fetched over the guest's own MCP route.
+This directory is the live-backend eval harness for the vectis adapter guest. The scenario drives the guest's `build` operation end-to-end: the deterministic in-guest prepare prelude (scope resolution + conditional `materialize assets`), the prompt-driven judgment legs as single-shot `create` calls against the real cursor backend (composition, Crux core, per-shell writes, review), the in-core composition validator gate with its bounded repair, then the schema-gated report and the deterministic postlude — with all state in the scratch working tree and references fetched over the guest's own MCP route.
 
 ## Anatomy
 

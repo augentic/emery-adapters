@@ -46,4 +46,4 @@ The block is additive; it must not reshape other `metadata.yaml` fields. `/spec:
 ## See also
 
 - [`hook-contract.md`](hook-contract.md) — when to emit, advisory posture, merge rules
-- [`../../../targets/omnia/briefs/build/replay.md`](../../../targets/omnia/briefs/build/replay.md) — Omnia runner that produces these payloads
+- [`../../../targets/omnia/prose/prompts/build/replay.md`](../../../targets/omnia/prose/prompts/build/replay.md) — Omnia runner that produces these payloads

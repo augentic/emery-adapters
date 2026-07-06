@@ -1,21 +1,21 @@
-# Omnia target — guidance brief
+# Omnia target — guidance prompt
 
-> This brief produces **prose guidance only**. Core synthesis (the `/spec:refine` pipeline) consumes the guidance below when authoring `proposal.md`, `specs/<domain>/spec.md`, and `design.md` for a slice whose `Slice.target == omnia`. The brief does **not** read sources or write artifacts — it carries idioms the synthesiser folds into the canonical artifacts. The same guidance applies whether the slice's evidence is pure intent, documentation, code, or any combination; per eval scenario #5h, both fixtures pick up identical `guidance`.
+> This document is **prose guidance only**, returned verbatim by the adapter's `guidance` operation. Core synthesis (the `/spec:refine` pipeline) consumes the guidance below when authoring `proposal.md`, `specs/<domain>/spec.md`, and `design.md` for a slice whose `Slice.target == omnia`. It does **not** read sources or write artifacts — it carries idioms the synthesiser folds into the canonical artifacts. The same guidance applies whether the slice's evidence is pure intent, documentation, code, or any combination; per eval scenario #5h, both fixtures pick up identical `guidance`.
 
 ## Omnia domains
 
 For Omnia targets, each `## Domains` entry in `proposal.md` maps to one spec file at `specs/<domain>/spec.md`. The domain slug normally equals the crate name for a single generated crate; for broader work (multi-crate service or migration), the domain is the service surface slug.
 
-The workflow owns the `## Domains` section and the `specs/<domain>/spec.md` layout. This brief defines what a domain *means* for Omnia but does not rename or relocate the core sections.
+The workflow owns the `## Domains` section and the `specs/<domain>/spec.md` layout. This guidance defines what a domain *means* for Omnia but does not rename or relocate the core sections.
 
-## How synthesis consumes this brief
+## How synthesis consumes this guidance
 
 When the synthesising agent assembles a slice for an Omnia target it MUST:
 
-1. Read this brief first, ahead of any source-supplied `Evidence`.
+1. Read this guidance first, ahead of any source-supplied `Evidence`.
 2. Lift the deep references listed at the bottom into the synthesis context (they are normative, not optional).
 3. Author `proposal.md`, `specs/<domain>/spec.md`, `design.md`, and `tasks.md` so the artifacts match the §Required artifact shapes below, regardless of which sources contributed evidence.
-4. Carry tag-and-proceed posture on uncertainty: `[unknown]`, `[conflict]`, `[divergence]` are review signals (see [`../references/guardrails.md`](../references/guardrails.md) for the per-trait coverage matrix the spec lists each handler against). The brief never asks synthesis to halt.
+4. Carry tag-and-proceed posture on uncertainty: `[unknown]`, `[conflict]`, `[divergence]` are review signals (see [`../references/guardrails.md`](../references/guardrails.md) for the per-trait coverage matrix the spec lists each handler against). This guidance never asks synthesis to halt.
 
 ## Idiom: provider-based dependency injection
 
@@ -94,7 +94,7 @@ Sequence:
 3. Author / update guest wiring (routes, topic arms, WebSocket exports, provider impls).
 4. Run code review.
 
-The build brief carries the detailed orchestration; tasks.md should follow that ordering so `/spec:build` walks the slice the same way every time.
+The build prompt carries the detailed writer instructions; tasks.md should follow that ordering so the build walks the slice the same way every time.
 
 ## References
 

@@ -21,10 +21,10 @@ const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and
                             `plan.yaml` at the workspace root and find the binding under \
                             `sources.<key>` whose `adapter` is `documentation`; its `path` \
                             (relative to the workspace root) is the read-only documentation \
-                            tree the brief calls `$SOURCE_DIR`.";
+                            tree the prompt calls `$SOURCE_DIR`.";
 
 /// Survey the bound documentation tree into leads — one schema-gated
-/// judgment leg over the embedded `briefs/survey.md`, followed by the
+/// judgment leg over the embedded `prompts/survey.md`, followed by the
 /// deterministic id-grammar tail.
 ///
 /// # Errors
@@ -32,16 +32,16 @@ const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and
 /// As [`specify_guest_kit::judgment`]; a validation-tail failure is
 /// [`Error::Internal`].
 pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>, Error> {
-    let system = registry::body("briefs/survey.md").to_string();
+    let system = registry::body("prompts/survey.md").to_string();
     let user = format!(
         "Survey the documentation source bound to adapter `{id}`.\n\n\
          {BINDING_NOTE}\n\n\
          When `discovery.md` at the workspace root already carries leads for this source \
          under `## Lead inventory`, treat this call as a re-survey: return the complete \
          current lead set — the caller replaces prior leads by their `(source, lead)` \
-         pairs, exactly as the brief describes.\n\n\
+         pairs, exactly as the prompt describes.\n\n\
          Answer with one JSON object matching the gated schema: a `leads` array carrying \
-         the same `lead` / `synopsis` / optional `topics` content as the brief's lead \
+         the same `lead` / `synopsis` / optional `topics` content as the prompt's lead \
          blocks. The caller persists the leads into `discovery.md`; do not write it \
          yourself.",
         id = ctx.adapter_id,
@@ -53,7 +53,7 @@ pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>,
 }
 
 /// Extract one lead's Evidence from the bound documentation tree — one
-/// schema-gated judgment leg over the embedded `briefs/extract.md`,
+/// schema-gated judgment leg over the embedded `prompts/extract.md`,
 /// followed by the deterministic claim-id tail.
 ///
 /// # Errors
@@ -63,13 +63,13 @@ pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>,
 pub async fn extract<P: Model>(
     model: &P, ctx: &Context<'_>, lead: &Lead,
 ) -> Result<Evidence, Error> {
-    let system = registry::body("briefs/extract.md").to_string();
+    let system = registry::body("prompts/extract.md").to_string();
     let user = format!(
         "Extract Evidence from the documentation source bound to adapter `{id}` for this \
          lead:\n\n{lead}\n\n\
          {BINDING_NOTE}\n\n\
          Answer with one JSON object matching the gated schema: the Evidence body \
-         (`authority`, `claims`) the brief describes, without the envelope `lead` key — \
+         (`authority`, `claims`) the prompt describes, without the envelope `lead` key — \
          this call names the lead. The caller persists the document under \
          `.specify/slices/<slice>/evidence/`; do not write it yourself.",
         id = ctx.adapter_id,

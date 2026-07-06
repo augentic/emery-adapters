@@ -15,7 +15,7 @@ The baseline is the source of truth for the platform's current contract surface.
 
 ## The three authorship patterns
 
-Every author run falls into one of three patterns. The classification depends on the baseline state and the brief's plan structure, not on the algorithm — the same delta-computation steps run in all three.
+Every author run falls into one of three patterns. The classification depends on the baseline state and the change's plan structure, not on the algorithm — the same delta-computation steps run in all three.
 
 | Pattern | Baseline state | Most spec interactions are… |
 |---|---|---|
@@ -23,7 +23,7 @@ Every author run falls into one of three patterns. The classification depends on
 | **Spec-first** | Empty. Single-repo, no external consumers. | New. The delta is the full contract set, derived from the slice's specs. |
 | **Contract-given** | Imported. The baseline came from an external system via the matching `contracts.build` format importer. | Covered. The delta is non-empty only for extensions the slice introduces. |
 
-The author algorithms produce the same artefact regardless of pattern. The pattern label is for the alignment report and the brief's transcript, not for branching logic.
+The author algorithms produce the same artefact regardless of pattern. The pattern label is for the alignment report and the build transcript, not for branching logic.
 
 ## Computing the minimal delta
 
@@ -44,7 +44,7 @@ The spec describes interactions absent from the baseline, or asserts new claims 
 
 - **Wholly new elements.** New endpoints, channels, or types — write a new file under the appropriate subdirectory of `$SLICE_DIR/contracts/`.
 - **Extensions to baseline elements.** New status codes on a baseline operation, new optional fields on a baseline schema. The delta file must contain **both the existing baseline content and the new additions** because merge is opaque file replacement (see §Opaque file replacement below).
-- **Backwards-incompatible changes.** Newly-required fields, removed fields, narrowed types. Surface as warnings in the alignment report; the slice is permitted but the brief must flag it for human review.
+- **Backwards-incompatible changes.** Newly-required fields, removed fields, narrowed types. Surface as warnings in the alignment report; the slice is permitted but the build must flag it for human review.
 
 ### 3. Normalisation
 

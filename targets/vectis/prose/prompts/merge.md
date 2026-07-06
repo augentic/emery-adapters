@@ -1,11 +1,11 @@
 # Vectis target — `merge`
 
-`/spec:merge` reads this brief when the slice it is merging declares `target: vectis`. The core merge work — deterministic spec-delta promotion, baseline coherence validation, lifecycle transition, and archive move — runs through `specify slice merge` per the shared `/spec:merge` skill. This brief adds the Vectis-specific adoption gates that run before the CLI invocation (preview confirmation), alongside it (the broader landing surface), and after it (host cap-matrix re-verification).
+The adapter core inlines this document into the system prompt of the merge leg when the slice being merged declares `target: vectis`. Deterministic spec-delta promotion, baseline coherence validation, lifecycle transition, and the archive move stay with `specify slice merge` in the workflow; this prompt adds the Vectis-specific adoption gates around the delta fold: the deterministic pre-merge composition gate the adapter runs in-guest before the leg, the broader landing surface the fold covers, and the post-merge host cap-matrix re-verification the merge leg runs itself (the adapter re-runs the composition validator deterministically after the answer).
 
-Two things make the Vectis `merge` brief different from the bare slice merge:
+Two things make the Vectis `merge` prompt different from the bare slice merge:
 
-1. **`composition.yaml` is a build output that lands at merge time.** It is not a Specify artifact under `.specify/specs/`; the `build` brief regenerates it from `spec.md` + `design.md`, and `merge` promotes it into the baseline alongside the implementation code. The pre- and post-merge composition validators are the gate.
-2. **The cap matrix is re-verified against the merged baseline.** A green slice build is necessary but not sufficient — the merge brief re-runs `cargo` / `make build` / `gradlew` against the merged tree because cross-slice regressions (UniFFI bridging drift, Java 21 / Gradle wrapper changes, cargo-swift drift, cap-marker expansion) only surface after deltas land.
+1. **`composition.yaml` is a build output that lands at merge time.** It is not a Specify artifact under `.specify/specs/`; the `build` prompt regenerates it from `spec.md` + `design.md`, and `merge` promotes it into the baseline alongside the implementation code. The pre- and post-merge composition validators are the gate.
+2. **The cap matrix is re-verified against the merged baseline.** A green slice build is necessary but not sufficient — the merge leg re-runs `cargo` / `make build` / `gradlew` against the merged tree because cross-slice regressions (UniFFI bridging drift, Java 21 / Gradle wrapper changes, cargo-swift drift, cap-marker expansion) only surface after deltas land.
 
 ## Prerequisites
 
@@ -69,7 +69,7 @@ When the slice modified neither the core nor a shell (e.g. a docs-only or UI-inp
 
 ### Why post-merge, not pre-merge
 
-The post-merge gate intentionally validates the merged baseline, not the staged delta. Shell verification (UniFFI bridging, Java 21 / Gradle wrapper, cargo-swift, cap-marker expansion) is only meaningful once the spec-level deltas are promoted and the writers have a stable baseline to build against. The `build` brief already verified the slice in isolation; this gate catches cross-slice regressions.
+The post-merge gate intentionally validates the merged baseline, not the staged delta. Shell verification (UniFFI bridging, Java 21 / Gradle wrapper, cargo-swift, cap-marker expansion) is only meaningful once the spec-level deltas are promoted and the writers have a stable baseline to build against. The build already verified the slice in isolation; this gate catches cross-slice regressions.
 
 ## Stop hint contract
 
@@ -83,6 +83,6 @@ When the pre-merge gate, the CLI delta merge, or the post-merge hook fails, emit
 - `paths` — for `baseline-conflict`: the conflicting baseline files reported by `specify slice merge`. For `pre-merge-gate` / `post-merge-validator`: the captured validator report, structured host step list, or stderr log path.
 - `next-action` — `resolve and re-run /spec:merge $SLICE` for conflicts; `re-run /spec:build $SLICE` for gate failures classified as build regressions; `queue repair slice` for `post-merge-validator` drift (composition validation or cap-matrix failure after a successful `specify slice merge`).
 
-Lifecycle invariants: `pre-merge-gate` and `baseline-conflict` leave the slice at `built` and the plan entry at `in-progress`. `post-merge-validator` runs after `specify slice merge` succeeded, so the slice is already `merged` and the plan entry is already `done` — the hint is observability, not a park. The brief MUST NOT attempt to roll back the merge on a post-merge failure.
+Lifecycle invariants: `pre-merge-gate` and `baseline-conflict` leave the slice at `built` and the plan entry at `in-progress`. `post-merge-validator` runs after `specify slice merge` succeeded, so the slice is already `merged` and the plan entry is already `done` — the hint is observability, not a park. The merge leg MUST NOT attempt to roll back the merge on a post-merge failure.
 
 For cap-matrix failures that look like version-pin drift (AGP / Gradle / uniffi mismatch surfaced after pins changed in this slice), record the failure in the stop hint and surface it — **agents exit** without editing specify-adapters (see [Consumer tooling boundary](../references/spec-runtime/guardrails.md#consumer-tooling-boundary)). The operator decides whether the next step is a pin fix in specify-adapters ([build.md](build.md) § Template / version-pin drift handling), a pin rollback, or a follow-up slice.

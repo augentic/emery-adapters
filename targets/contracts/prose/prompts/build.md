@@ -1,6 +1,8 @@
 # contracts.build
 
-Orchestrates `/spec:build` for slices targeting the `contracts` adapter. Authors and validates machine-readable contract artifacts under the slice-local `contracts/` directory. Dispatches to three per-format sub-briefs (`build/json-schema.md`, `build/openapi.md`, `build/asyncapi.md`); each carries an internal author / import / verify intent table that fans out to references under `adapters/targets/contracts/prose/references/<format>/`.
+> The contracts adapter core inlines this document into the system prompt of every build leg — the three format sub-flows, the bounded verify-repair loop, and the report — alongside the leg's own format sub-prompt under [`build/`](build/). Leg sequencing lives in the adapter core (`crates/core/src/operations.rs`), not here: each leg's user prompt names the phases of this document to follow.
+
+Build authors and validates machine-readable contract artifacts under the slice-local `contracts/` directory across three per-format sub-prompts (`build/json-schema.md`, `build/openapi.md`, `build/asyncapi.md`); each carries an internal author / import / verify intent table that fans out to references under [`../references/<format>/`](../references/).
 
 ## Scope
 
@@ -14,10 +16,10 @@ Build MUST NOT edit the root `contracts/` baseline directly. Baseline updates ha
 
 ## Inputs
 
-The brief runs against the build request the CLI prepared at `.specify/slices/<slice>/build/request.yaml`; consume its `inputs` manifest rather than relying on convention. Every artifact path resolves against `inputs.root` (the slice tree).
+The build runs against the build request the CLI prepared at `.specify/slices/<slice>/build/request.yaml`; the adapter core renders its `inputs` manifest into each leg's user prompt as `### input:` sections. Every artifact path resolves against `inputs.root` (the slice tree).
 
 - `inputs.artifacts.proposal` (`proposal.md`) — authorship mode (author vs import), source material, interface scope, producer/consumer roles.
-- `inputs.artifacts.specs[]` (`specs/<domain>/spec.md`) — behavioural requirements: endpoints / channels / payloads / errors (one file per `proposal.md ## Domains` entry). Provenance lines tell the brief whether the slice is author-driven (`Sources: [intent | <doc-key>]`) or import-driven (`Sources: [<code-or-contract-source>]`).
+- `inputs.artifacts.specs[]` (`specs/<domain>/spec.md`) — behavioural requirements: endpoints / channels / payloads / errors (one file per `proposal.md ## Domains` entry). Provenance lines tell the build whether the slice is author-driven (`Sources: [intent | <doc-key>]`) or import-driven (`Sources: [<code-or-contract-source>]`).
 - `inputs.artifacts.design` (`design.md`) — the format selection (OpenAPI 3.1 / AsyncAPI 3.0 / JSON Schema), file-layout intent, and any cross-contract dependency notes (see [`guidance.md`](guidance.md)).
 - `inputs.artifacts.tasks` (`tasks.md`) — progress tracking.
 - `inputs.artifacts.additional[]` — the optional `contracts/` subtree declared by [`adapter.yaml`](../adapter.yaml): partial deltas written by a prior pass, present only when the slice already carries them.
@@ -33,7 +35,7 @@ Identify the authorship mode from `proposal.md`: author-from-specs, import-exist
 
 ### Phase 2 — Author or import (fixed format order)
 
-When a slice touches more than one contract format, run the format sub-briefs in this fixed order — the schema vocabulary is shared and must stabilise before the bindings reference it:
+The adapter core runs the format sub-flows in this fixed order — the schema vocabulary is shared and must stabilise before the bindings reference it. Each leg's system prompt appends the owning format sub-prompt:
 
 1. **[build/json-schema.md](build/json-schema.md)** — author or import the minimal JSON Schema delta for reusable payload vocabulary. Owns `$id` assignment, one-type-per-file decomposition, and schema-file naming. Skip when the slice has no shared payload schemas.
 2. **[build/openapi.md](build/openapi.md)** — author or import the minimal OpenAPI delta for HTTP / resource interactions. Reuse change-local or baseline `contracts/schemas/` files; do not author competing schemas under different filenames or `$id`s. Skip when the slice has no HTTP interactions.
@@ -45,7 +47,7 @@ Import paths must produce an import report covering lossless changes, lossy chan
 
 ### Phase 3 — Verify
 
-Verification runs the verifier intent of each format sub-brief that owns artifacts in the slice. Run only the formats that produced artifacts; skip the rest. The verifier siblings live under [`references/<format>/verifier.md`](../references/).
+Verification runs the verifier intent of each format sub-prompt that owns artifacts in the slice. Run only the formats that produced artifacts; skip the rest. The verifier siblings live under [`references/<format>/verifier.md`](../references/).
 
 For mixed-format slices, the final verifier pass must check cross-format `$ref` consistency and report duplicate schema identities before build can complete. The format verifiers enforce the identity & version rules inline (SemVer `info.version`; kebab-case + ≤64-char `info.x-specify-id` when present; in-slice uniqueness on declared ids). The **cross-repo** uniqueness check is **not** part of build-time verification; it is the merge gate's job (see [`merge.md`](merge.md)).
 
@@ -55,7 +57,7 @@ Run each format's verifier in `mode: single` against the slice directory. The ve
 
 If a verifier reports failures:
 
-1. Re-enter the same format sub-brief with the verifier output for targeted repair via the same intent that produced the artifact (author or import).
+1. Re-enter the same format sub-prompt with the verifier output for targeted repair via the same intent that produced the artifact (author or import).
 2. Re-run that format's verifier.
 3. If still failing after 2 iterations, stop repairing and write the `status: failure` build report described under `## Build report`, mapping the remaining failures as blocking findings. Do not mark the task complete; a failure report parks the slice for human review.
 
@@ -66,17 +68,17 @@ A clean verification pass with zero issues is the expected outcome.
 Build's final step is the adapter's deterministic contract validator, run in-guest against the slice's `contracts/` delta (`$SLICE_DIR/contracts`) with a bounded repair loop:
 
 - **clean** — slice deltas are well-formed; write the success build report.
-- **findings** — the gate feeds them back for repair; re-enter the failing format sub-brief per Phase 4. Residual findings after the repair budget force a `status: failure` build report; do not mark the task complete.
+- **findings** — the gate feeds them back for repair; re-enter the failing format sub-prompt per Phase 4. Residual findings after the repair budget force a `status: failure` build report; do not mark the task complete.
 
 The validator's finding shape is documented under [`references/report-shape.md`](../references/report-shape.md).
 
 ### No-op behaviour
 
-When the slice's specs describe no API interactions and no Source Material lists importable contract artifacts, every format pass produces an empty delta and the verifiers have nothing to check. The brief completes as a no-op and still writes a `status: success` build report (see `## Build report`). This is normal for slices that touch only planning metadata or contract documentation without affecting an API surface.
+When the slice's specs describe no API interactions and no Source Material lists importable contract artifacts, every format pass produces an empty delta and the verifiers have nothing to check. The build completes as a no-op and still returns a `status: success` build report (see `## Build report`). This is normal for slices that touch only planning metadata or contract documentation without affecting an API surface.
 
 ## Build report
 
-When the algorithm resolves, return a schema-valid build report as the answer to the build's report leg (the schema-gated report answer — no report file is written). This is the brief's final deliverable. The brief never transitions the slice lifecycle — the deterministic in-guest report gate checks the answer's coherence against the working tree and the workflow guest owns the `Refined → Built` transition.
+When the algorithm resolves, return a schema-valid build report as the answer to the build's report leg (the schema-gated report answer — no report file is written). This is the build's final deliverable. The build legs never transition the slice lifecycle — the deterministic in-guest report gate checks the answer's coherence against the working tree and the workflow guest owns the `Refined → Built` transition.
 
 ```yaml
 version: 1
@@ -103,8 +105,8 @@ Each `findings[]` item validates against `schemas/diagnostics/diagnostic.schema.
 ## See also
 
 - [`guidance.md`](guidance.md) — synthesis-time idiom guidance for the contracts target.
-- [`merge.md`](merge.md) — landing brief, including the post-merge `contract` WASI tool gate.
-- [`build/json-schema.md`](build/json-schema.md), [`build/openapi.md`](build/openapi.md), [`build/asyncapi.md`](build/asyncapi.md) — per-format sub-briefs.
+- [`merge.md`](merge.md) — merge prompt, including the post-merge `contract` WASI tool gate.
+- [`build/json-schema.md`](build/json-schema.md), [`build/openapi.md`](build/openapi.md), [`build/asyncapi.md`](build/asyncapi.md) — per-format sub-prompts.
 - [`references/artifact-structure.md`](../references/artifact-structure.md) — directory layout for root `contracts/`.
 - [`references/baseline-vs-delta.md`](../references/baseline-vs-delta.md) — cross-format minimal-delta rules and merge semantics.
 - [`references/import-upgrade-policy.md`](../references/import-upgrade-policy.md) — shared framework for the importer siblings.

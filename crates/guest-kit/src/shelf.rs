@@ -39,7 +39,7 @@ mod wasm {
 
     use crate::registry::{self, Doc};
 
-    /// An embedded prose registry served over MCP: every brief and
+    /// An embedded prose registry served over MCP: every prompt and
     /// reference document the adapter compiled in, addressable by its
     /// adapter-relative path.
     #[derive(Clone, Copy, Debug)]
@@ -85,7 +85,7 @@ mod wasm {
                         "properties": {
                             "path": {
                                 "type": "string",
-                                "description": "Adapter-relative document path, e.g. `briefs/build.md`."
+                                "description": "Adapter-relative document path, e.g. `prompts/build.md`."
                             }
                         },
                         "required": ["path"]

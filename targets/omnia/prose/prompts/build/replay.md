@@ -13,7 +13,7 @@ In addition to the shared contract:
 - Phases 2–6 complete: crate, tests, guest (create mode), verify-repair loop, and code review have run.
 - Replay data is present under `$CRATE_PATH/tests/data/replays/` — copied or symlinked during [test writer](test.md) when a `captures` binding exists.
 
-Capture wire format: [`captures/references/capture-format.md`](../../../../sources/captures/prose/references/capture-format.md). Claim shape and 64 KiB inline cap: [`captures/briefs/extract.md`](../../../../sources/captures/prose/briefs/extract.md).
+Capture wire format: [`captures/references/capture-format.md`](../../../../sources/captures/prose/references/capture-format.md). Claim shape and 64 KiB inline cap: [`captures/prompts/extract.md`](../../../../sources/captures/prose/prompts/extract.md).
 
 ## Omnia execution
 

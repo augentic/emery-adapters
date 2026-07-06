@@ -60,6 +60,6 @@ Values prefixed with `@samples/` resolve relative to `tests/data/replays/`. Exam
 ## See also
 
 - [`extraction-mapping.md`](extraction-mapping.md) — capture JSON → Evidence claim field mapping
-- [`../briefs/survey.md`](../briefs/survey.md) — handler-grain lead survey
-- [`../briefs/extract.md`](../briefs/extract.md) — `kind: example` claim emission
+- [`../prompts/survey.md`](../prompts/survey.md) — handler-grain lead survey
+- [`../prompts/extract.md`](../prompts/extract.md) — `kind: example` claim emission
 - Test-harness docs are **per-target** — Omnia: [`replay-fixtures.md`](../../../targets/omnia/references/replay-fixtures.md); hook contract: [`../../../shared/target-hooks/replay/`](../../../shared/target-hooks/replay/)

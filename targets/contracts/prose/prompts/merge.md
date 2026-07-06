@@ -1,6 +1,6 @@
 # contracts.merge
 
-Landing brief for slices that target the `contracts` adapter. The standard delta-spec merge, baseline coherence validation, lifecycle transition, and archive move are delegated to the `specify` CLI (`specify slice merge`). The contracts target adds **one target-specific gate** on top of that flow: a post-merge baseline check the adapter runs deterministically in-guest. Every other artefact under `specs/` and `contracts/` is promoted by the standard delta merge.
+Merge prompt for slices that target the `contracts` adapter — the contracts adapter core inlines this document into the system prompt of the merge leg. The standard delta-spec merge, baseline coherence validation, lifecycle transition, and archive move are delegated to the `specify` CLI (`specify slice merge`). The contracts target adds **one target-specific gate** on top of that flow: a post-merge baseline check the adapter runs deterministically in-guest. Every other artefact under `specs/` and `contracts/` is promoted by the standard delta merge.
 
 Follow the [`/spec:merge` skill](../../../../plugins/spec/skills/merge/SKILL.md) for the driver-side flow — slice selection, prerequisite checks, the AskQuestion confirmation around the merge preview, baseline-drift handling, and result rendering. The post-merge tool gate below is the contracts-specific delta on top of that flow.
 
@@ -41,7 +41,7 @@ When the slice's contributions need to flow into downstream consumer projects (p
 1. `specify workspace push` — push the workspace clones' branches that already received the merged contract deltas.
 2. Operator PR merge — review and merge those PRs through the forge UI, `gh pr merge`, or the team's normal merge queue.
 
-Pin updates that the operator can publish proceed after the validator gate clears. Pin updates that surface drift the brief cannot auto-resolve (e.g. a consumer's workspace clone has uncommitted local edits, a consumer project is offline, or `workspace push` reports `no-branch` because the clone is not on the prepared `specify/<change-name>` branch) require operator reconciliation — emit a stop hint with `failure-kind: lifecycle-refused`.
+Pin updates that the operator can publish proceed after the validator gate clears. Pin updates that surface drift the merge cannot auto-resolve (e.g. a consumer's workspace clone has uncommitted local edits, a consumer project is offline, or `workspace push` reports `no-branch` because the clone is not on the prepared `specify/<change-name>` branch) require operator reconciliation — emit a stop hint with `failure-kind: lifecycle-refused`.
 
 ## Stop hint contract
 
@@ -55,4 +55,4 @@ When the pre-merge gate, the CLI delta merge, or the post-merge hook fails, emit
 - `paths` — for `baseline-conflict`: the conflicting baseline files reported by `specify slice merge`. For `pre-merge-gate` / `post-merge-validator`: the captured `$LOG_PATH` or the validator findings carried in the merge report.
 - `next-action` — `resolve and re-run /spec:merge $SLICE` for conflicts; `queue repair slice` for `post-merge-validator` drift (validator findings or tool invocation failure after a successful `specify slice merge`).
 
-Lifecycle invariants: `pre-merge-gate` and `baseline-conflict` leave the slice at `built` and the plan entry at `in-progress`. `post-merge-validator` runs after `specify slice merge` succeeded, so the slice is already `merged` and the plan entry is already `done` — the hint is observability, not a park. The brief MUST NOT attempt to roll back the merge on a post-merge validator failure.
+Lifecycle invariants: `pre-merge-gate` and `baseline-conflict` leave the slice at `built` and the plan entry at `in-progress`. `post-merge-validator` runs after `specify slice merge` succeeded, so the slice is already `merged` and the plan entry is already `done` — the hint is observability, not a park. The merge leg MUST NOT attempt to roll back the merge on a post-merge validator failure.

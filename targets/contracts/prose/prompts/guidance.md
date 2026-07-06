@@ -4,7 +4,7 @@ Idiom guidance core synthesis (`/spec:refine`) folds into the generated `specs/<
 
 ## Contract domains
 
-Each `proposal.md ## Domains` bullet names one contract surface — an HTTP API domain, an event family, or a schema vocabulary scope — and maps one-to-one to `specs/<domain>/spec.md`. For a single HTTP API the domain is typically the API domain slug (e.g. `billing-api`); for a mixed-format slice the domain is the overarching contract surface (e.g. `order-lifecycle` when it spans both HTTP endpoints and event channels). Target briefs may describe what a domain means for the contracts target, but they do not rename `## Domains` or move spec files out of the canonical `specs/` layout.
+Each `proposal.md ## Domains` bullet names one contract surface — an HTTP API domain, an event family, or a schema vocabulary scope — and maps one-to-one to `specs/<domain>/spec.md`. For a single HTTP API the domain is typically the API domain slug (e.g. `billing-api`); for a mixed-format slice the domain is the overarching contract surface (e.g. `order-lifecycle` when it spans both HTTP endpoints and event channels). Target prompts may describe what a domain means for the contracts target, but they do not rename `## Domains` or move spec files out of the canonical `specs/` layout.
 
 ## What core synthesises for a contracts slice
 
@@ -23,7 +23,7 @@ The contracts target dispatches at `build` time to one of three contract sub-typ
 | Evented / pub-sub / streaming / WebSocket | AsyncAPI 3.0 | Files land under `contracts/messages/<event-domain>-events.yaml`. |
 | Reusable payload schemas referenced by HTTP or evented surfaces | JSON Schema (Draft 2020-12) | Files land under `contracts/schemas/<type>.yaml`; one named type per file; URN `$id`. |
 
-A slice MAY produce more than one format (e.g. a JSON Schema for payload shapes plus an OpenAPI document that `$ref`s into it). When the slice's surface mixes formats, `design.md` should list every format and the shared-schema reuse expectations. The three sub-types are **not** separate target adapters — they are intent-dispatched inside the single `build` brief.
+A slice MAY produce more than one format (e.g. a JSON Schema for payload shapes plus an OpenAPI document that `$ref`s into it). When the slice's surface mixes formats, `design.md` should list every format and the shared-schema reuse expectations. The three sub-types are **not** separate target adapters — they are format sub-flows inside the single `build` operation.
 
 ## Validation rules synthesis must surface
 
@@ -37,7 +37,7 @@ The merge gate runs the adapter's deterministic contract validator in-guest agai
 
 The contracts target supports both contract-first authoring (specs drive a new contract) and contract-given import (operator supplies an external OpenAPI / AsyncAPI / JSON Schema file and the build step normalises it). The `Sources:` provenance on each requirement in `specs/<domain>/spec.md` tells `/spec:build` which path applies — a `documentation` or `intent` source typically signals authoring; a code-source binding (`typescript`, future contract source adapters) typically signals import or reverse-engineering from observed behaviour.
 
-When a slice is import-driven, `design.md` should name the supplied file path and the format detected. The `build` brief's format sub-flows handle version detection and upgrades (Swagger 2.0 → OpenAPI 3.1, AsyncAPI 2.x → AsyncAPI 3.0, JSON Schema draft-04/06/07/2019-09 → 2020-12) per `references/import-upgrade-policy.md`.
+When a slice is import-driven, `design.md` should name the supplied file path and the format detected. The `build` operation's format sub-flows handle version detection and upgrades (Swagger 2.0 → OpenAPI 3.1, AsyncAPI 2.x → AsyncAPI 3.0, JSON Schema draft-04/06/07/2019-09 → 2020-12) per `references/import-upgrade-policy.md`.
 
 ## What synthesis MUST NOT do
 

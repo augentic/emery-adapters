@@ -1,6 +1,6 @@
 # JSON Schema Sub-Flow
 
-Index of the JSON Schema format sub-flow run by the contracts build brief. Read exactly one file per invocation — the brief selects the intent.
+Index of the JSON Schema format sub-flow run by the contracts build prompt. Read exactly one file per invocation — the format sub-prompt selects the intent.
 
 | File | Read when |
 | --- | --- |

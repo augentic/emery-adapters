@@ -1,6 +1,6 @@
 # Vectis build — core review
 
-Loaded by [../../build.md](../../build.md) Step 11 after the core verify-repair loop succeeds. Scope: the Rust `shared` crate. Drives an agent team — three specialists plus an antagonist — through a bounded review-fix loop (max 3 iterations).
+Inlined by the adapter core into the review leg's system prompt (alongside [../../build.md](../../build.md) and the in-scope shell review prompts) after the core verify-repair loop succeeds. Scope: the Rust `shared` crate. Drives an agent team — three specialists plus an antagonist — through a bounded review-fix loop (max 3 iterations).
 
 The shared agent-team protocol lives in [`../../../references/agent-teams.md`](../../../references/agent-teams.md); the core-specific team-spawn protocol lives in [`review/team-protocol-core.md`](../../../references/review/team-protocol-core.md).
 
@@ -19,7 +19,7 @@ The shared agent-team protocol lives in [`../../../references/agent-teams.md`](.
 
 ## Standalone vs orchestrated
 
-The core reviewer has no orchestrated mode — when design-level findings accumulate it always returns them for consolidation by the parent build brief / operator. Per-platform shell reviewers ([`../ios/review.md`](../ios/review.md), [`../android/review.md`](../android/review.md)) honour the `orchestrated: true` flag.
+The core reviewer has no orchestrated mode — when design-level findings accumulate it always returns them for consolidation by the parent build prompt / operator. Per-platform shell reviewers ([`../ios/review.md`](../ios/review.md), [`../android/review.md`](../android/review.md)) honour the `orchestrated: true` flag.
 
 ## Finding-ID conventions
 

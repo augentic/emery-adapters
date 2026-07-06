@@ -1,11 +1,11 @@
 # `documentation.survey`
 
-Walk `$SOURCE_DIR` (a read-only preopen of the operator-bound docs path) and emit one `Lead` per top-level concept the docs describe. The CLI persists the result; this brief returns the lead-block payload only.
+Walk `$SOURCE_DIR` (a read-only preopen of the operator-bound docs path) and emit one `Lead` per top-level concept the docs describe. The CLI persists the result; this prompt returns the lead-block payload only.
 
 ## Inputs
 
 - `$SOURCE_DIR` — read-only directory holding the bound documentation set. Never write here.
-- `<source>` — the plan-level binding key under `plan.yaml.sources.<key>`; the CLI passes it in for context and stamps each lead's `source` itself, so this brief does not emit it.
+- `<source>` — the plan-level binding key under `plan.yaml.sources.<key>`; the CLI passes it in for context and stamps each lead's `source` itself, so this prompt does not emit it.
 - `$SCRATCH_DIR` — per-slice write-only scratch space; use only if intermediate state is unavoidable.
 
 ## What is a top-level concept
@@ -25,7 +25,7 @@ Skip files that contain no behavioural content (e.g. tables of contents, license
 
 ## Output
 
-Return one block per lead, in alphabetical `lead` order. The CLI appends them under the existing `## Lead inventory` heading in `discovery.md`; this brief never writes the heading itself.
+Return one block per lead, in alphabetical `lead` order. The CLI appends them under the existing `## Lead inventory` heading in `discovery.md`; this prompt never writes the heading itself.
 
 ```markdown
 ### password-reset
@@ -35,7 +35,7 @@ Return one block per lead, in alphabetical `lead` order. The CLI appends them un
 - topics: [identity, password]
 ```
 
-Field order is fixed (`lead`, `synopsis`, then optional `topics`). Do not emit `source`; the CLI stamps it from the survey binding. Cross-source merging is `/spec:plan`'s `propose` sub-step, not this brief's job — see [From sources to slices](../references/spec-runtime/reconciliation.md#plan-time-leads-become-slices) for how leads reconcile into slices.
+Field order is fixed (`lead`, `synopsis`, then optional `topics`). Do not emit `source`; the CLI stamps it from the survey binding. Cross-source merging is `/spec:plan`'s `propose` sub-step, not this prompt's job — see [From sources to slices](../references/spec-runtime/reconciliation.md#plan-time-leads-become-slices) for how leads reconcile into slices.
 
 ## Worked example
 

@@ -18,45 +18,45 @@ use specify_guest_kit::{Model, phase};
 use crate::registry;
 use crate::validate::{ContractFinding, validate_baseline};
 
-/// Maximum verify-repair iterations per the build brief's Phase 4.
+/// Maximum verify-repair iterations per the build prompt's Phase 4.
 const MAX_REPAIR_ITERATIONS: usize = 2;
 
-/// One format sub-flow of the build brief's Phase 2.
+/// One format sub-flow of the build prompt's Phase 2.
 struct SubFlow {
     /// Format name, used in prompts and answer-schema names.
     format: &'static str,
-    /// Registry path of the format's sub-brief.
-    brief: &'static str,
+    /// Registry path of the format's sub-prompt.
+    prompt: &'static str,
     /// The `contracts/` subdirectory this format owns, used to route
-    /// validator findings back to the owning sub-brief for repair.
+    /// validator findings back to the owning sub-prompt for repair.
     dir: &'static str,
 }
 
-/// The three format sub-flows in the build brief's fixed Phase 2 order:
+/// The three format sub-flows in the build prompt's fixed Phase 2 order:
 /// the schema vocabulary stabilises before the bindings reference it.
 const SUB_FLOWS: [SubFlow; 3] = [
     SubFlow {
         format: "json-schema",
-        brief: "briefs/build/json-schema.md",
+        prompt: "prompts/build/json-schema.md",
         dir: "schemas",
     },
     SubFlow {
         format: "openapi",
-        brief: "briefs/build/openapi.md",
+        prompt: "prompts/build/openapi.md",
         dir: "http",
     },
     SubFlow {
         format: "asyncapi",
-        brief: "briefs/build/asyncapi.md",
+        prompt: "prompts/build/asyncapi.md",
         dir: "messages",
     },
 ];
 
 /// Guidance on the expected build artifacts for this target — the
-/// embedded guidance brief, returned deterministically (no judgment leg).
+/// embedded guidance prompt, returned deterministically (no judgment leg).
 #[must_use]
 pub fn guidance() -> &'static str {
-    registry::body("briefs/guidance.md")
+    registry::body("prompts/guidance.md")
 }
 
 /// Build a slice's contract deltas under `.specify/slices/<slice>/contracts/`.
@@ -74,15 +74,15 @@ pub async fn build<P: Model>(
     let slice_contracts_rel = format!(".specify/slices/{slice}/contracts");
     let slice_contracts = ctx.tree_root(tree).join(&slice_contracts_rel);
     let inputs_block = phase::render_inputs(inputs);
-    let build_brief = registry::body("briefs/build.md");
+    let build_prompt = registry::body("prompts/build.md");
 
     // Phase 2 — author or import, fixed format order. Classification is
-    // part of each sub-flow's own judgment: the brief tells it when to
+    // part of each sub-flow's own judgment: the prompt tells it when to
     // skip, and a skipped leg answers `applicable: false` without writing.
     let mut summaries: Vec<String> = Vec::new();
     for sub_flow in &SUB_FLOWS {
         let format = sub_flow.format;
-        let system = format!("{build_brief}\n\n---\n\n{}", registry::body(sub_flow.brief));
+        let system = format!("{build_prompt}\n\n---\n\n{}", registry::body(sub_flow.prompt));
         let user = format!(
             "Run the `{format}` sub-flow of the contracts build for slice `{slice}` \
              (adapter `{}`).\n\n\
@@ -98,20 +98,20 @@ pub async fn build<P: Model>(
     }
 
     // Phase 4 — verify-repair loop over the in-core validators (the
-    // Phase 5 tool gate, compiled in). The brief re-enters the owning
-    // sub-brief per format; the session-less shape folds that into one
+    // Phase 5 tool gate, compiled in). The prompt re-enters the owning
+    // sub-prompt per format; the session-less shape folds that into one
     // repair call per iteration carrying every finding, with the owning
-    // sub-briefs inlined so repair does not depend on the MCP route.
+    // sub-prompts inlined so repair does not depend on the MCP route.
     for _ in 0..MAX_REPAIR_ITERATIONS {
         let findings = validate_baseline(&slice_contracts);
         if findings.is_empty() {
             break;
         }
-        let system = format!("{build_brief}{}", owning_sub_briefs(&findings, &slice_contracts));
+        let system = format!("{build_prompt}{}", owning_sub_prompts(&findings, &slice_contracts));
         let user = format!(
             "The contract validators found blocking issues in slice `{slice}`'s delta \
-             under `{slice_contracts_rel}/`. Re-enter the owning format sub-brief(s) \
-             per the build brief's Phase 4 and repair the files in place.\n\n\
+             under `{slice_contracts_rel}/`. Re-enter the owning format sub-prompt(s) \
+             per the build prompt's Phase 4 and repair the files in place.\n\n\
              {}\n\n\
              Answer `applicable: true` with a summary of the repairs.",
             render_validator_findings(&findings),
@@ -120,10 +120,10 @@ pub async fn build<P: Model>(
     }
 
     // Final leg — the report answer, gated by the derived answer schema.
-    let system = build_brief.to_string();
+    let system = build_prompt.to_string();
     let user = format!(
         "Write the build report for slice `{slice}`. Verify the delta under \
-         `{slice_contracts_rel}/` per the build brief's Phase 3, then answer with \
+         `{slice_contracts_rel}/` per the build prompt's Phase 3, then answer with \
          the report body (`status`, `findings`, `outputs`, `ui-surface`). A \
          `success` report carries only non-blocking findings. Contract artifacts \
          declare no per-platform outputs, so `outputs` is normally empty.\n\n\
@@ -153,18 +153,18 @@ pub async fn merge<P: Model>(
     model: &P, ctx: &Context<'_>, slice: &str, delta: &Changeset, tree: &WorkingTree,
 ) -> Result<Report, Error> {
     let baseline = ctx.tree_root(tree).join("contracts");
-    let merge_brief = registry::body("briefs/merge.md");
+    let merge_prompt = registry::body("prompts/merge.md");
     let delta_block = phase::render_delta(delta);
 
     let user = format!(
         "Merge slice `{slice}`'s built contract delta into the baseline `contracts/` \
          tree (adapter `{}`). The project workspace is lent to you; the delta below \
          applies against base `{}` (a 3-way merge: the baseline is ours, the delta is \
-         theirs). Fold the changes in place, resolving conflicts per the merge brief, \
+         theirs). Fold the changes in place, resolving conflicts per the merge prompt, \
          then answer with the report body.\n\n{delta_block}",
         ctx.adapter_id, delta.base,
     );
-    let mut report = phase::report(model, ctx, merge_brief.to_string(), user).await?;
+    let mut report = phase::report(model, ctx, merge_prompt.to_string(), user).await?;
 
     // Post-merge validator gate with one bounded repair leg.
     let mut findings = validate_baseline(&baseline);
@@ -175,18 +175,19 @@ pub async fn merge<P: Model>(
              corrected report body.\n\n{}",
             render_validator_findings(&findings),
         );
-        report = phase::report(model, ctx, merge_brief.to_string(), user).await?;
+        report = phase::report(model, ctx, merge_prompt.to_string(), user).await?;
         findings = validate_baseline(&baseline);
     }
 
     Ok(enforce_validators(report, &findings))
 }
 
-/// Inline the sub-briefs owning the findings' files into a repair
+/// Inline the sub-prompts owning the findings' files into a repair
 /// prompt, routed by the `contracts/` subdirectory each format owns.
-/// Findings that route nowhere pull in every sub-brief, so repair never
-/// runs without the specialist material the brief's Phase 4 re-enters.
-fn owning_sub_briefs(findings: &[ContractFinding], contracts_dir: &Path) -> String {
+/// Findings that route nowhere pull in every sub-prompt, so repair never
+/// runs without the specialist material the build prompt's Phase 4
+/// re-enters.
+fn owning_sub_prompts(findings: &[ContractFinding], contracts_dir: &Path) -> String {
     let unrouted = findings.iter().any(|finding| {
         !SUB_FLOWS.iter().any(|sub_flow| finding.path.starts_with(contracts_dir.join(sub_flow.dir)))
     });
@@ -195,7 +196,7 @@ fn owning_sub_briefs(findings: &[ContractFinding], contracts_dir: &Path) -> Stri
         let owned_dir = contracts_dir.join(sub_flow.dir);
         if unrouted || findings.iter().any(|finding| finding.path.starts_with(&owned_dir)) {
             inlined.push_str("\n\n---\n\n");
-            inlined.push_str(registry::body(sub_flow.brief));
+            inlined.push_str(registry::body(sub_flow.prompt));
         }
     }
     inlined

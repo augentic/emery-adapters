@@ -183,7 +183,7 @@ Every `if let Some(x) = ...` should have an `else` branch (or the absence should
 
 **Codex**: `rule_id: VECTIS-009`
 
-Per hard-rules-core rule 10 and the core write brief repair discipline, agent-authored Rust under `shared/src/**/*.rs` must not carry `#[allow(...)]` or `#[expect(...)]`. Crate-level `[workspace.lints.clippy]` allows in scaffold-owned `Cargo.toml` are out of scope.
+Per hard-rules-core rule 10 and the core write prompt repair discipline, agent-authored Rust under `shared/src/**/*.rs` must not carry `#[allow(...)]` or `#[expect(...)]`. Crate-level `[workspace.lints.clippy]` allows in scaffold-owned `Cargo.toml` are out of scope.
 
 **Detection**:
 

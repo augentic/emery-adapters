@@ -64,7 +64,7 @@ async fn post(runtime: &Runtime<Bundle>, route: &str, message: &Value) -> Result
 
 // Each guest in the composed deployment serves its own embedded prose
 // registry on its own route: the documentation shelf identifies itself
-// and serves the survey brief, while the contracts shelf next door keeps
+// and serves the survey prompt, while the contracts shelf next door keeps
 // serving the contracts registry.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn per_guest_shelves() -> Result<()> {
@@ -82,19 +82,19 @@ async fn per_guest_shelves() -> Result<()> {
     .await?;
     assert_eq!(init["result"]["serverInfo"]["name"], "specify-documentation-references");
 
-    let brief = post(
+    let prompt = post(
         &runtime,
         "/mcp/documentation",
         &json!({
             "jsonrpc": "2.0", "id": 2, "method": "tools/call",
-            "params": { "name": "read_doc", "arguments": { "path": "briefs/survey.md" } }
+            "params": { "name": "read_doc", "arguments": { "path": "prompts/survey.md" } }
         }),
     )
     .await?;
-    let text = brief["result"]["content"][0]["text"].as_str().unwrap_or_default();
+    let text = prompt["result"]["content"][0]["text"].as_str().unwrap_or_default();
     assert!(
         text.starts_with("# `documentation.survey`"),
-        "read_doc returns the survey brief body: {brief}"
+        "read_doc returns the survey prompt body: {prompt}"
     );
 
     let contracts_init = post(

@@ -18,13 +18,13 @@ rule_hints:
 
 ## Rule
 
-Reference corpora are context-budget surfaces: briefs steer agents into `references/` trees with instructions like "read the matching capability example", and the agent must be able to pick that file from an index instead of opening the whole directory. Every subdirectory of an adapter's `references/` tree that has grown to two or more files owes a `README.md` index — a short file listing each member with a one-line description of when to read it.
+Reference corpora are context-budget surfaces: prompts steer agents into `references/` trees with instructions like "read the matching capability example", and the agent must be able to pick that file from an index instead of opening the whole directory. Every subdirectory of an adapter's `references/` tree that has grown to two or more files owes a `README.md` index — a short file listing each member with a one-line description of when to read it.
 
 The deterministic hint walks the directory prefixes of the indexed file facts, keeps those matching the configured corpus roots (direct children of each adapter's `references/` directory, plus the shared corpus root), counts the files beneath each (recursively, so a corpus organized into nested subfolders still owes its top-level index), and flags any at-threshold directory whose `README.md` is absent.
 
 ## Look For
 
-- A new `references/<topic>/` subdirectory that accumulated sibling files without an index — the usual smell is a brief that says "see `references/<topic>/`" with no guidance on which file inside it answers what.
+- A new `references/<topic>/` subdirectory that accumulated sibling files without an index — the usual smell is a prompt that says "see `references/<topic>/`" with no guidance on which file inside it answers what.
 - An existing corpus whose `README.md` was deleted or renamed during a restructure while the member files survived.
 
 ## Fix

@@ -19,10 +19,10 @@ The full Hard Rules + Authority Hierarchy live in [`../../references/hard-rules.
 
 1. Read [guidance.md](../guidance.md) refresher and the slice's `specs/<domain>/spec.md` + `design.md` + `tasks.md`.
 2. **Build the three cross-cutting matrices** per [`cross-cutting-matrices.md`](../../references/cross-cutting-matrices.md): Side-Effect, Outbound-Message, Transaction-Boundary. Every cell must land in code.
-3. **Mode dispatch.** Inherited from the parent brief: create mode (no `Cargo.toml`) vs update mode.
+3. **Mode dispatch.** Inherited from the build prompt: create mode (no `Cargo.toml`) vs update mode.
 4. Apply the per-mode process below; in update mode walk the four categories in fixed order.
 5. Run the inventory re-scan after every structural change.
-6. Return control to the parent brief, which runs the verify-repair loop.
+6. Continue with the build prompt's verify-repair loop.
 
 ## Create mode
 
@@ -61,4 +61,4 @@ The full checklist lives at [`checklists.md`](../../references/checklists.md). H
 - Every `Config::get` key in `design.md` has a matching read in the handler (or in `Provider::new`).
 - Every `omnia_sdk::Error` mapping in `design.md` has a matching arm in `impl From<DomainError>`.
 - No forbidden crate or forbidden std API per [`guardrails.md`](../../references/guardrails.md).
-- `cargo fmt`, `cargo check`, `cargo clippy -- -D warnings` all pass before returning control to the parent brief's verify-repair loop.
+- `cargo fmt`, `cargo check`, `cargo clippy -- -D warnings` all pass before entering the build prompt's verify-repair loop.

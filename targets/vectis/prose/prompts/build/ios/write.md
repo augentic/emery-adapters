@@ -1,6 +1,6 @@
 # Vectis build — iOS shell (write + verify)
 
-Loaded by [../../build.md](../../build.md) when `ios` is in the platform set (carried from `project.yaml.platforms` via `proposal.md ## Platforms`). The composition validation gate ([../composition.md](../composition.md)) MUST have passed first.
+Inlined by the adapter core into the iOS shell leg's system prompt (alongside [../../build.md](../../build.md)) when `ios` is in the platform set (carried from `project.yaml.platforms` via `proposal.md ## Platforms`). The composition validation gate ([../composition.md](../composition.md)) MUST have passed first.
 
 The SwiftUI patterns, Crux iOS shell anatomy, token templates, and design-system integration depth live in [`../../../references/ios/`](../../../references/ios/).
 
@@ -43,7 +43,7 @@ Full set at [`hard-rules-ios.md`](../../../references/hard-rules-ios.md). Highli
 
 ## Verify (max 3 iterations)
 
-The `/spec:build` **orchestrator** runs the verify loop — not a sub-agent with shell access. The orchestrator is the **sole source of truth** for iOS shell checkboxes in `tasks.md`; never mark an iOS task complete or report success unless all three commands below have actually run and passed in the same iteration.
+The shell leg's **orchestrating agent** runs the verify loop — not a sub-agent with shell access. The orchestrator is the **sole source of truth** for iOS shell checkboxes in `tasks.md`; never mark an iOS task complete or report success unless all three commands below have actually run and passed in the same iteration.
 
 After the writer sub-agent returns (the adapter has already re-rendered the agent-immutable scaffold files deterministically), the orchestrator executes this loop (max 3 iterations):
 

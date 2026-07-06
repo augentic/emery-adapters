@@ -1,6 +1,6 @@
 # `screenshots.extract`
 
-For one `Lead`, run the vision-assisted spatial pipeline against the image(s) bound to that screen under `$SOURCE_DIR` and return a single `Evidence` document carrying `region` / `container` / `leaf` claims. The CLI persists the result at `.specify/slices/<slice>/evidence/<source>.yaml`; this brief returns the YAML body only.
+For one `Lead`, run the vision-assisted spatial pipeline against the image(s) bound to that screen under `$SOURCE_DIR` and return a single `Evidence` document carrying `region` / `container` / `leaf` claims. The CLI persists the result at `.specify/slices/<slice>/evidence/<source>.yaml`; this prompt returns the YAML body only.
 
 The pipeline body lives in [`extract/pipeline.md`](extract/pipeline.md) and runs the spatial-inference pipeline — triage → chrome cropping → regions → containers → leaves → conservative component detection. The pipeline emits flat claims, not a hierarchical `layout.yaml`. Downstream synthesis (core) folds the claims back into the canonical artifacts (see [From sources to slices](../references/spec-runtime/reconciliation.md#slice-time-evidence-becomes-a-spec)); `adapters/targets/vectis/build` regenerates `composition.yaml` from the synthesised `spec.md` / `design.md`.
 
@@ -27,7 +27,7 @@ If no image resolves, return Evidence with `claims: []` rather than fabricating 
 
 ## Pipeline
 
-Run the seven-stage pipeline defined in [`extract/pipeline.md`](extract/pipeline.md): triage → crop platform chrome → infer regions → infer containers → infer leaves → detect candidate components conservatively → emit gaps. Each stage records uncertainty in `notes:` on the affected claim. The pipeline brief also carries the determinism and idempotence rules.
+Run the seven-stage pipeline defined in [`extract/pipeline.md`](extract/pipeline.md): triage → crop platform chrome → infer regions → infer containers → infer leaves → detect candidate components conservatively → emit gaps. Each stage records uncertainty in `notes:` on the affected claim. The pipeline prompt also carries the determinism and idempotence rules.
 
 ## Token references
 

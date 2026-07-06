@@ -103,7 +103,7 @@ Record what cleanup the operator actually performed, per the scenario's
 
 - **Result:** `pass | fail`
 - **Fault domain (on failure):** one of `cli-substrate`,
-  `skill-orchestration`, `adapter-brief`, `specialist-generation`, or
+  `skill-orchestration`, `adapter-prompt`, `specialist-generation`, or
   `unknown`.
 - **Notes:** free-form prose for context the structured fields above can't
   capture. Keep this short.

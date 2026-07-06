@@ -1,6 +1,6 @@
 # AsyncAPI — Verifier
 
-> **When to read this.** Read this when verifying an AsyncAPI artefact — invoked by the contracts adapter build brief in `single` mode after the author or importer sibling produces output, by the contracts adapter merge brief in `cross-project` mode against the merged baseline (the contracts adapter merge contract), or directly by an operator running validation against an existing artefact. Skip this file when authoring (use [`author.md`](./author.md)) or normalising an external document (use [`importer.md`](./importer.md)).
+> **When to read this.** Read this when verifying an AsyncAPI artefact — invoked by the contracts adapter build prompt in `single` mode after the author or importer sibling produces output, by the contracts adapter merge prompt in `cross-project` mode against the merged baseline (the contracts adapter merge contract), or directly by an operator running validation against an existing artefact. Skip this file when authoring (use [`author.md`](./author.md)) or normalising an external document (use [`importer.md`](./importer.md)).
 
 The verifier is **read-only**. It MUST NOT generate, modify, or delete any files. Its sole output is a list of issues rendered as a validation report.
 
@@ -10,10 +10,10 @@ The verifier accepts a `--mode {single, cross-project}` flag. The mode determine
 
 | Mode               | Caller                                         | Trigger                                            | Scope                                                             | Output                                                |
 | ------------------ | ---------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------- |
-| `single` (default) | contracts adapter build brief in `/spec:build` | Post-author or post-import                         | One slice's `contracts/messages/` inside one project              | Markdown report for the verify-repair loop            |
-| `cross-project`    | contracts adapter merge brief                  | Producer-side merge of an AsyncAPI contract change | Walk the merged `contracts/` baseline; enforce contract identity/version validation | Deterministic findings from the adapter's in-guest contract validator |
+| `single` (default) | contracts adapter build prompt in `/spec:build` | Post-author or post-import                         | One slice's `contracts/messages/` inside one project              | Markdown report for the verify-repair loop            |
+| `cross-project`    | contracts adapter merge prompt                  | Producer-side merge of an AsyncAPI contract change | Walk the merged `contracts/` baseline; enforce contract identity/version validation | Deterministic findings from the adapter's in-guest contract validator |
 
-`single` mode feeds the brief's verify-repair loop. `cross-project` mode describes the adapter's deterministic in-guest contract validator — the merge gate runs it itself and surfaces its findings; the verifier does not implement its own cross-baseline check. Both modes share the read-only contract.
+`single` mode feeds the build's verify-repair loop. `cross-project` mode describes the adapter's deterministic in-guest contract validator — the merge gate runs it itself and surfaces its findings; the verifier does not implement its own cross-baseline check. Both modes share the read-only contract.
 
 `--mode` is an internal flag of the format-specific verifier. Cross-project consumer-impact analysis is deferred until a real consumer workflow exists; this verifier owns deterministic single-slice and merged-baseline checks.
 
@@ -149,7 +149,7 @@ FAIL: contracts/messages/order-events.yaml — channel "orderPlaced" has no oper
 
 Use `FAIL` when the schema is unambiguously a top-level message payload in a spec scenario, or when a channel has no operations at all. Use `WARN` when classification is ambiguous — the verify-repair loop surfaces the warning for human review.
 
-When the slice has **no specs**, skip Check 3 — there are no scenarios to cross-reference. Record this in the report so the brief knows the check was deliberately bypassed.
+When the slice has **no specs**, skip Check 3 — there are no scenarios to cross-reference. Record this in the report so the build knows the check was deliberately bypassed.
 
 ### Check 4 — Identity & version (contract identity/version validation)
 
@@ -218,7 +218,7 @@ All checks passed (9 $ref pointers, 6 schemas, 4 channels, 5 operations verified
 
 ## Cross-project mode
 
-`cross-project` mode runs **after** a producer's contract change merges. The contracts adapter merge brief invokes it as the post-merge baseline gate (the contracts adapter merge contract); `/spec:execute` re-uses the same gate per project after a producer-side merge (the workspace execution contract).
+`cross-project` mode runs **after** a producer's contract change merges. The contracts adapter merge prompt invokes it as the post-merge baseline gate (the contracts adapter merge contract); `/spec:execute` re-uses the same gate per project after a producer-side merge (the workspace execution contract).
 
 The mode describes the adapter's deterministic in-guest contract validator. The verifier sibling does not implement an independent cross-project algorithm — the merge gate runs the embedded validator and consumes its findings directly. The deterministic checks the validator enforces are the contract identity/version validation rules:
 
@@ -259,7 +259,7 @@ Field semantics:
 - `findings[].detail` — single-line human-readable description.
 - `exit-code` — legacy outcome code retained for envelope stability (`0` clean / `1` findings / `2` validator error).
 
-Callers that surface post-merge validator failures (the merge brief on a blocking finding) parse `findings[]` and include `{ rule-id, path, detail }` triples in the stop hint's `paths` field. The load-bearing finding is typically `findings[0].rule-id` plus a one-line restatement of `findings[0].detail`; the full envelope is captured at the log path referenced in the stop hint.
+Callers that surface post-merge validator failures (the merge prompt on a blocking finding) parse `findings[]` and include `{ rule-id, path, detail }` triples in the stop hint's `paths` field. The load-bearing finding is typically `findings[0].rule-id` plus a one-line restatement of `findings[0].detail`; the full envelope is captured at the log path referenced in the stop hint.
 
 When a caller re-surfaces an envelope finding as a `LintFinding` (see `schemas/diagnostics/diagnostic.schema.json` embedded in the `specify` binary from [`augentic/specify`](https://github.com/augentic/specify)), the mapping is: `findings[].rule-id` → `rule-id`, `findings[].path` → `location.path`, `target-adapter: contracts`. The contract-domain payload (`findings[].rule-id`, `path`, `detail`, plus any compatibility classification such as `additive` / `breaking` / `ambiguous` / `unverifiable`, channel id, message id) lives inside `evidence.kind: structured` with the contract data under `evidence.data`. The closed `LintFinding` severity enum (`critical` / `important` / `suggestion` / `optional`) is separate from any compatibility classification — classifiers remain contract-domain evidence fields, not severity.
 
@@ -312,7 +312,7 @@ The deterministic baseline check is the canonical post-merge gate.
 - Report every issue with the file path and a description of the problem.
 - When uncertain whether a schema is shared vocabulary or a standalone payload, use `WARN` rather than `FAIL` (in `single` mode).
 - Do not attempt to fix issues — report them. Repair belongs to the author or importer sibling.
-- **`cross-project` mode is fatal.** Treat findings and validator errors as `failure` per the contracts adapter merge contract. The merge brief MUST halt; the slice's deltas remain unmerged until the operator resolves the finding.
+- **`cross-project` mode is fatal.** Treat findings and validator errors as `failure` per the contracts adapter merge contract. The merge leg MUST halt; the slice's deltas remain unmerged until the operator resolves the finding.
 - Do not re-implement the validator's checks. The verifier sibling's `cross-project` mode is descriptive; the canonical algorithm lives in [`targets/contracts/crates/core/src/validate.rs`](../../crates/core/src/validate.rs).
 
 ## Verification checklist
@@ -336,7 +336,7 @@ Before completing the run:
 Before completing the run:
 
 - [ ] The adapter's in-guest contract validator ran exactly once against `$PROJECT_ROOT/contracts`.
-- [ ] Stdout (the JSON envelope) captured for the caller (typically the merge brief's `--context`).
+- [ ] Stdout (the JSON envelope) captured for the caller (typically the merge prompt's `--context`).
 - [ ] Exit code propagated verbatim to the caller (`0` clean / `1` findings / `2` tool or validator error).
 - [ ] No findings re-classified, suppressed, or downgraded — the tool's output is authoritative.
 - [ ] No files created or modified.
@@ -347,6 +347,6 @@ Before completing the run:
 - [`../../references/json-schema-conventions.md`](../../references/json-schema-conventions.md) — schema metadata rules.
 - [`../../references/artifact-structure.md`](../../references/artifact-structure.md) — directory layout for the slice-local delta and the baseline.
 - [`../../references/report-shape.md`](../../references/report-shape.md) — single-mode markdown report shape this verifier emits.
-- [`../../briefs/merge.md`](../../briefs/merge.md) — merge brief that owns the post-merge in-guest validator gate and the §Merge and adoption contract three-branch outcome wiring.
+- [`../../prompts/merge.md`](../../prompts/merge.md) — merge prompt that owns the post-merge in-guest validator gate and the §Merge and adoption contract three-branch outcome wiring.
 - [`author.md`](./author.md) — sibling for spec-driven authoring.
 - [`importer.md`](./importer.md) — sibling for normalising external documents.

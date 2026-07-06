@@ -1,13 +1,13 @@
 # TypeScript / JavaScript source survey
 
-`/spec:plan` invokes this brief once per binding under `plan.yaml.sources.<key>` whose adapter is `typescript`. Your job: walk the read-only source tree at `$SOURCE_DIR`, identify slice-sized units of work using the framework grammar below, and return one lead block per unit. The CLI appends your blocks under `## Lead inventory` in `discovery.md`; you never write `discovery.md` directly.
+`/spec:plan` invokes this prompt once per binding under `plan.yaml.sources.<key>` whose adapter is `typescript`. Your job: walk the read-only source tree at `$SOURCE_DIR`, identify slice-sized units of work using the framework grammar below, and return one lead block per unit. The CLI appends your blocks under `## Lead inventory` in `discovery.md`; you never write `discovery.md` directly.
 
-JavaScript sources (`.js`, `.mjs`, `.cjs`, `.jsx`) fold into this brief: the framework idioms are the same. Detect the file extension purely to widen the import-graph walk; the brief content does not branch on it.
+JavaScript sources (`.js`, `.mjs`, `.cjs`, `.jsx`) fold into this prompt: the framework idioms are the same. Detect the file extension purely to widen the import-graph walk; the prompt content does not branch on it.
 
 ## Inputs
 
 - **`$SOURCE_DIR`** — read-only preopen of the operator-bound source root (the `path:` from `plan.yaml.sources.<key>`). Walk this tree; resolve `tsconfig.json` `paths` mappings relative to it.
-- **Source key** — kebab-case identifier passed in via the runner (the `<key>` from `plan.yaml.sources.<key>`). The CLI stamps each lead's `source` from it; this brief does not emit it.
+- **Source key** — kebab-case identifier passed in via the runner (the `<key>` from `plan.yaml.sources.<key>`). The CLI stamps each lead's `source` from it; this prompt does not emit it.
 
 The bound directory is the only filesystem grant; `$PROJECT_DIR` is unreachable. Treat the tree as read-only — no writes back into `$SOURCE_DIR`.
 
@@ -113,7 +113,7 @@ When a larger source decomposes into multiple leads, emit one block per surface 
 - **Hallucinated framework signatures.** If `package.json` does not depend on `bullmq`, do not emit BullMQ surfaces. Framework absence is dispositive.
 - **Test files.** Skip `*.test.*`, `*.spec.*`, and anything under `tests/` or `__tests__/`. Tests validate production surfaces, they are not production surfaces.
 - **Type-only `.d.ts` files in `touches`.** They contribute zero production LOC and inflate lead sizing.
-- **Cross-source coalescing.** This brief only sees one source's tree. Cross-source merges happen later in `/spec:plan`'s `propose` sub-step — see [From sources to slices](../references/spec-runtime/reconciliation.md#plan-time-leads-become-slices) for how leads reconcile into slices.
+- **Cross-source coalescing.** This prompt only sees one source's tree. Cross-source merges happen later in `/spec:plan`'s `propose` sub-step — see [From sources to slices](../references/spec-runtime/reconciliation.md#plan-time-leads-become-slices) for how leads reconcile into slices.
 - **Writing `discovery.md` or `plan.yaml`.** Only lead blocks. The CLI owns every lifecycle file.
 
 ## Failure modes

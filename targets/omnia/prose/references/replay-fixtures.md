@@ -73,7 +73,7 @@ The handler returns `Vec<VehicleInfo>` directly (no side-effect publishing).
 Compare the response body against `output.success` by JSON equality.
 ```
 
-`INSTRUCTIONS.md` is **not** behavioural Evidence — the `captures` extract brief may read it for surface-naming context only.
+`INSTRUCTIONS.md` is **not** behavioural Evidence — the `captures` extract prompt may read it for surface-naming context only.
 
 ## TestDef → MockProvider mapping
 
@@ -89,4 +89,4 @@ When generating tests from scenario captures:
 
 - [`replay-crate-layout.md`](replay-crate-layout.md) — generated-crate paths and fixture loading
 - [`mock-provider.md`](mock-provider.md) — Static + Replay MockProvider variants
-- [`../briefs/build/test.md`](../briefs/build/test.md) — test writer phase
+- [`../prompts/build/test.md`](../prompts/build/test.md) — test writer prompt

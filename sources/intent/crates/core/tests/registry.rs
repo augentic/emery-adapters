@@ -1,13 +1,13 @@
-//! The embedded prose registry: intent's own briefs ride inside, and the
+//! The embedded prose registry: intent's own prompts ride inside, and the
 //! adapter's bare `references/` tree (only the `spec-runtime` symlink)
 //! still resolves.
 
 use specify_intent_core::registry;
 
 #[test]
-fn registry_embeds_the_briefs() {
-    assert!(registry::body("briefs/survey.md").starts_with("# intent.survey"));
-    assert!(registry::body("briefs/extract.md").starts_with("# intent.extract"));
+fn registry_embeds_the_prompts() {
+    assert!(registry::body("prompts/survey.md").starts_with("# intent.survey"));
+    assert!(registry::body("prompts/extract.md").starts_with("# intent.extract"));
 }
 
 /// Intent ships no references of its own — its `references/` tree holds

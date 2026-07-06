@@ -2,23 +2,23 @@
 
 Reference documentation for the Vectis target adapter at [`adapters/targets/vectis/`](..). In Specify, Vectis is a **target adapter** — `guidance`, `build`, `merge` — not a slash-command plugin.
 
-The Vectis core / test / iOS / Android writer and reviewer orchestration lives in [`../briefs/build.md`](../briefs/build.md) and eight phase sub-briefs under [`../briefs/build/`](../briefs/build/). The depth (Crux idioms, SwiftUI patterns, Compose patterns, hard rules, review check libraries, token templates, design-system integration) and worked examples live in this folder.
+The Vectis core / test / iOS / Android writer and reviewer orchestration lives in [`../prompts/build.md`](../prompts/build.md) and eight phase prompts under [`../prompts/build/`](../prompts/build/). The depth (Crux idioms, SwiftUI patterns, Compose patterns, hard rules, review check libraries, token templates, design-system integration) and worked examples live in this folder.
 
-## Briefs
+## Prompts
 
-| Brief | Purpose |
-|-------|---------|
-| [`guidance.md`](../briefs/guidance.md) | Idiom guidance for core synthesis. |
-| [`build.md`](../briefs/build.md) | Orchestrator: phase order, sub-agent contract, verify-serial / review-parallel rule, consolidation, template-drift signal, phase outcome. |
-| [`build/composition.md`](../briefs/build/composition.md) | Regenerate `composition.yaml` from `spec.md` + `design.md`; run the deterministic validator gate. |
-| [`build/core/write.md`](../briefs/build/core/write.md) | Generate / update the Crux shared core. |
-| [`build/core/review.md`](../briefs/build/core/review.md) | Agent-team review of the Rust `shared` crate. |
-| [`build/test.md`](../briefs/build/test.md) | Generate / update Crux tests; run the core verify-repair loop. |
-| [`build/ios/write.md`](../briefs/build/ios/write.md) | Generate / update the SwiftUI iOS shell + verify. |
-| [`build/ios/review.md`](../briefs/build/ios/review.md) | Agent-team review of the iOS shell. |
-| [`build/android/write.md`](../briefs/build/android/write.md) | Generate / update the Compose Android shell + verify. |
-| [`build/android/review.md`](../briefs/build/android/review.md) | Agent-team review of the Android shell. |
-| [`merge.md`](../briefs/merge.md) | Pre-merge gate run by `/spec:merge`. |
+| Prompt | Purpose |
+|--------|---------|
+| [`guidance.md`](../prompts/guidance.md) | Idiom guidance for core synthesis. |
+| [`build.md`](../prompts/build.md) | Parent build prompt: phase vocabulary, sub-agent contract, verify-serial / review-parallel rule, consolidation, template-drift signal, phase outcome. |
+| [`build/composition.md`](../prompts/build/composition.md) | Regenerate `composition.yaml` from `spec.md` + `design.md`; gated by the deterministic validator. |
+| [`build/core/write.md`](../prompts/build/core/write.md) | Generate / update the Crux shared core. |
+| [`build/core/review.md`](../prompts/build/core/review.md) | Agent-team review of the Rust `shared` crate. |
+| [`build/test.md`](../prompts/build/test.md) | Generate / update Crux tests; run the core verify-repair loop. |
+| [`build/ios/write.md`](../prompts/build/ios/write.md) | Generate / update the SwiftUI iOS shell + verify. |
+| [`build/ios/review.md`](../prompts/build/ios/review.md) | Agent-team review of the iOS shell. |
+| [`build/android/write.md`](../prompts/build/android/write.md) | Generate / update the Compose Android shell + verify. |
+| [`build/android/review.md`](../prompts/build/android/review.md) | Agent-team review of the Android shell. |
+| [`merge.md`](../prompts/merge.md) | Merge-leg gates around the delta fold. |
 
 ## References
 

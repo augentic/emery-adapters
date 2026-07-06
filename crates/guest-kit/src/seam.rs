@@ -286,7 +286,7 @@ pub struct Lead {
 }
 
 impl Lead {
-    /// Render as the briefs' lead-block shape for an extract prompt.
+    /// Render as the survey prompts' lead-block shape for an extract prompt.
     #[must_use]
     pub fn render(&self) -> String {
         let topics = if self.topics.is_empty() {

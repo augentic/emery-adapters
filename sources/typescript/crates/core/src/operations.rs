@@ -4,7 +4,7 @@
 //!
 //! The judgment detail — the framework survey grammar, the
 //! `excerpt` / `type` / `call` extraction depth — rides in the embedded
-//! briefs and references.
+//! prompts and references.
 
 use specify_guest_kit::answers::{
     EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA, LeadsAnswer, validate_evidence, validate_leads,
@@ -22,11 +22,11 @@ const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and
                             `plan.yaml` at the workspace root and find the binding under \
                             `sources.<key>` whose `adapter` is `typescript`; its `path` \
                             (relative to the workspace root) is the read-only TypeScript / \
-                            JavaScript source tree the brief calls `$SOURCE_DIR`. Treat that \
+                            JavaScript source tree the prompt calls `$SOURCE_DIR`. Treat that \
                             tree as read-only.";
 
 /// Survey the bound legacy source tree into leads — one schema-gated
-/// judgment leg over the embedded `briefs/survey.md`, followed by the
+/// judgment leg over the embedded `prompts/survey.md`, followed by the
 /// deterministic id-grammar tail.
 ///
 /// # Errors
@@ -34,17 +34,17 @@ const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and
 /// As [`specify_guest_kit::judgment`]; a validation-tail failure is
 /// [`Error::Internal`].
 pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>, Error> {
-    let system = registry::body("briefs/survey.md").to_string();
+    let system = registry::body("prompts/survey.md").to_string();
     let user = format!(
         "Survey the TypeScript / JavaScript source bound to adapter `{id}` using the \
-         brief's framework grammar.\n\n\
+         prompt's framework grammar.\n\n\
          {BINDING_NOTE}\n\n\
          When `discovery.md` at the workspace root already carries leads for this source \
          under `## Lead inventory`, treat this call as a re-survey: return the complete \
          current lead set — the caller replaces prior leads by their `(source, lead)` \
-         pairs (the brief's stable re-survey handle).\n\n\
+         pairs (the prompt's stable re-survey handle).\n\n\
          Answer with one JSON object matching the gated schema: a `leads` array carrying \
-         the same `lead` / `synopsis` / optional `topics` content as the brief's lead \
+         the same `lead` / `synopsis` / optional `topics` content as the prompt's lead \
          blocks. The caller persists the leads into `discovery.md`; do not write it \
          yourself.",
         id = ctx.adapter_id,
@@ -57,7 +57,7 @@ pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>,
 
 /// Extract one lead's behavioural Evidence from the bound source tree.
 ///
-/// One schema-gated judgment leg over the embedded `briefs/extract.md`
+/// One schema-gated judgment leg over the embedded `prompts/extract.md`
 /// (emitting `excerpt` / `type` / `call` claims), followed by the
 /// deterministic claim-id tail.
 ///
@@ -68,15 +68,15 @@ pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>,
 pub async fn extract<P: Model>(
     model: &P, ctx: &Context<'_>, lead: &Lead,
 ) -> Result<Evidence, Error> {
-    let system = registry::body("briefs/extract.md").to_string();
+    let system = registry::body("prompts/extract.md").to_string();
     let user = format!(
         "Extract Evidence from the TypeScript / JavaScript source bound to adapter \
          `{id}` for this lead:\n\n{lead}\n\n\
          {BINDING_NOTE}\n\n\
-         The brief's reference shelf is served over this call's MCP grant — load the \
+         The prompt's reference shelf is served over this call's MCP grant — load the \
          reference bodies on demand when the lead's surface needs deeper analysis.\n\n\
          Answer with one JSON object matching the gated schema: the Evidence body \
-         (`authority`, `claims`) the brief describes, without the envelope `lead` key — \
+         (`authority`, `claims`) the prompt describes, without the envelope `lead` key — \
          this call names the lead. The caller persists the document under \
          `.specify/slices/<slice>/evidence/`; do not write it yourself.",
         id = ctx.adapter_id,

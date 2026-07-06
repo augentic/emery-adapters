@@ -48,4 +48,4 @@ Output — block appended under `## Lead inventory` in `discovery.md`:
 
 - Re-running `intent.survey` against the same source replaces the lead by its `(source, lead)` pair. Editing the intent string and re-running yields the same lead with an updated synopsis.
 - The single lead becomes the slice driving the plan; see [From sources to slices](../references/spec-runtime/reconciliation.md#plan-time-leads-become-slices) for how leads reconcile into slices.
-- `discovery.md`'s `## Summary` and `## Source inventory` sections are owned by `/spec:plan`, not this brief; this brief only writes inside `## Lead inventory`.
+- `discovery.md`'s `## Summary` and `## Source inventory` sections are owned by `/spec:plan`, not this prompt; this prompt only writes inside `## Lead inventory`.

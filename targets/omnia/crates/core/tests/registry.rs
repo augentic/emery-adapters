@@ -4,16 +4,16 @@
 use specify_omnia_core::registry;
 
 #[test]
-fn registry_embeds_briefs_references_and_rules() {
+fn registry_embeds_prompts_references_and_rules() {
     for path in [
-        "briefs/guidance.md",
-        "briefs/build.md",
-        "briefs/merge.md",
-        "briefs/build/crate.md",
-        "briefs/build/test.md",
-        "briefs/build/guest.md",
-        "briefs/build/review.md",
-        "briefs/build/replay.md",
+        "prompts/guidance.md",
+        "prompts/build.md",
+        "prompts/merge.md",
+        "prompts/build/crate.md",
+        "prompts/build/test.md",
+        "prompts/build/guest.md",
+        "prompts/build/review.md",
+        "prompts/build/replay.md",
         "references/guardrails.md",
         "references/wasm-constraints.md",
         "references/team-protocol-crate.md",
@@ -26,11 +26,11 @@ fn registry_embeds_briefs_references_and_rules() {
     ] {
         assert!(registry::doc(path).is_some(), "registry embeds `{path}`");
     }
-    assert!(registry::body("briefs/build.md").starts_with("# Omnia target — build brief"));
+    assert!(registry::body("prompts/build.md").starts_with("# Omnia target — build prompt"));
 }
 
 /// The reference shelf is the point of this adapter: ~65 markdown files
-/// (~700 KB) across `references/` plus the briefs and rules must all
+/// (~700 KB) across `references/` plus the prompts and rules must all
 /// embed. The floor guards against a silently truncated walk without
 /// pinning the exact prose inventory.
 #[test]

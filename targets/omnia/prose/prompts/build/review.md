@@ -35,10 +35,10 @@ Auto-fix applies only to findings the antagonist confirmed or upgraded, and only
 After auto-fix completes:
 
 1. Parse `$REVIEW_OUTPUT`. Process by severity.
-2. **`critical` / `important`** — auto-fixable + not disputed: apply the fix directly. Non-auto-fixable: classify as test issue vs code issue and re-enter the matching phase brief (back to [crate writer](crate.md) or [test writer](test.md)). After all `critical` / `important` fixes, return to the parent brief's verify-repair loop with max 2 iterations (tighter than the standard 3, since these are targeted repairs).
+2. **`critical` / `important`** — auto-fixable + not disputed: apply the fix directly. Non-auto-fixable: classify as test issue vs code issue and re-enter the matching writer prompt (back to [crate writer](crate.md) or [test writer](test.md)). After all `critical` / `important` fixes, return to the build prompt's verify-repair loop with max 2 iterations (tighter than the standard 3, since these are targeted repairs).
 3. **`suggestion`** — auto-fix when available; otherwise document as accepted technical debt in `REVIEW.md`.
 4. **`optional`** — document only.
-5. Re-run this brief (without `fix`) to verify fix quality. If new `critical` / `important` findings appear, repeat the remediation cycle once.
+5. Re-run this review (without `fix`) to verify fix quality. If new `critical` / `important` findings appear, repeat the remediation cycle once.
 
 ## See also
 

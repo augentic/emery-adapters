@@ -1,6 +1,6 @@
 # Vectis target — `guidance`
 
-Core synthesis reads this brief alongside `Evidence[]` and the slice's `proposal.md` when it writes `spec.md` and `design.md` for a `target: vectis` slice. The brief is **input to synthesis**, not a runtime step: it does not consume Evidence on its own, does not write artifacts, and does not transition lifecycle state. It tells the synthesiser how Vectis idioms organise canonical artifact content so the resulting `spec.md` and `design.md` can be implemented directly by the `build` brief.
+Core synthesis reads this prompt alongside `Evidence[]` and the slice's `proposal.md` when it writes `spec.md` and `design.md` for a `target: vectis` slice. The prompt is **input to synthesis**, not a runtime step: it does not consume Evidence on its own, does not write artifacts, and does not transition lifecycle state. It tells the synthesiser how Vectis idioms organise canonical artifact content so the resulting `spec.md` and `design.md` can be implemented directly by the `build` prompt.
 
 `guidance` only describes what synthesis should fold into the canonical artifacts. Implementation patterns, scaffold commands, verify-repair, and reviewers live in `build.md`. Operator-curated UI inputs (`tokens.yaml`, `assets.yaml`) are build-time inputs, not synthesis inputs — never describe their contents in `spec.md` / `design.md`.
 
@@ -20,7 +20,7 @@ A Vectis slice produces a buildable cross-platform application:
 
 - `## Source` is **Manual** for Vectis (the per-source provenance lives in `Sources:` lines on each requirement; `proposal.md` describes intent at a higher level).
 - `## Domains` lists business features in kebab-case (`todo-app`, `weather-forecast`) — never implementation layers (`todo-core`, `todo-ios`). For Vectis, each domain is a business feature; each domain maps one-to-one to `specs/<domain>/spec.md`.
-- `## Platforms` is the build router. Read `project.yaml.platforms` directly and stamp the full set verbatim — do not cherry-pick or trim per slice. Valid tokens: `core` (always required and always present in the set), `ios`, `android`, `web`, `desktop`. `web` and `desktop` are accepted tokens but have no build sub-briefs, scaffold support, or on-disk shell interpretation yet — do not invent shell sections for them. Tokens, assets, and layout are **not** platforms — they are build inputs to the shells. Per-shell scope (`vectis:ios-*` vs `vectis:android-*` work) is driven entirely by this list. Every slice carries the same platform set; build determines per-platform work (create / update / no-op).
+- `## Platforms` is the build router. Read `project.yaml.platforms` directly and stamp the full set verbatim — do not cherry-pick or trim per slice. Valid tokens: `core` (always required and always present in the set), `ios`, `android`, `web`, `desktop`. `web` and `desktop` are accepted tokens but have no build prompts, scaffold support, or on-disk shell interpretation yet — do not invent shell sections for them. Tokens, assets, and layout are **not** platforms — they are build inputs to the shells. Per-shell scope (`vectis:ios-*` vs `vectis:android-*` work) is driven entirely by this list. Every slice carries the same platform set; build determines per-platform work (create / update / no-op).
 - Modified domains list existing baseline spec folders that change behaviourally. The synthesis kernel assigns requirement IDs and emits `## ADDED Requirements` / `## MODIFIED Requirements` delta sections on persist — the agent does not number REQs or author delta headers.
 
 ### `spec.md` — behavioural requirements
@@ -73,7 +73,7 @@ Naming conventions to keep `design.md` and the eventual `composition.yaml` align
 - Tasks are organised by **build phase**, not by feature. All features in the slice share one task list, ordered: core first, shells second.
 - Each task references the domain's spec at `specs/<domain>/spec.md`. The spec contains both core requirements and the platform-specific requirements sections.
 - Tokens / assets / layout work is **input context** for the shells (the shell writers read `tokens.yaml` / `assets.yaml` / regenerated `composition.yaml` directly) — never a separate task tier.
-- Tasks must be **agent-completable** with code or local tooling. No manual mobile-app testing, no real-world API calls, no production credentials, no visual inspection, no physical-device-only checks, no app-store-review tasks. Express verification through fixture-backed tests, mocked effects, and local build commands available to the `build` brief.
+- Tasks must be **agent-completable** with code or local tooling. No manual mobile-app testing, no real-world API calls, no production credentials, no visual inspection, no physical-device-only checks, no app-store-review tasks. Express verification through fixture-backed tests, mocked effects, and local build commands available to the `build` prompt.
 
 ## Operator-curated build inputs (never synthesised)
 
@@ -82,7 +82,7 @@ The synthesiser must **never** invent or restate the contents of these files in 
 - **`tokens.yaml`** — concrete token values (colours, typography, spacing, radii, elevation). Source of truth for the design system; validated by the declared Vectis tool. Reference token names from `design.md` as policy notes (`the iOS shell falls back to system colors when this token is absent`); never enumerate the catalogue.
 - **`assets.yaml`** — asset manifest (raster, vector, SF Symbols, Material icons) with per-platform source mappings. Reference assets by id with usage notes (`the empty-tasks hero is rendered at 2:1 aspect ratio`); never enumerate the manifest.
 
-The synthesiser also never writes `composition.yaml`. The build brief regenerates it from the canonical artifacts above on every run.
+The synthesiser also never writes `composition.yaml`. The build prompt regenerates it from the canonical artifacts above on every run.
 
 ## Capability gating cues for the synthesiser
 
@@ -95,7 +95,7 @@ When folding Evidence into `design.md`'s `## Adapters` table, the following cues
 - Platform detection (iOS vs Android vs Web) — `Platform` adapter (`crux_platform`).
 - Rendering (always) — `Render` adapter.
 
-State the capability set explicitly in `design.md`; the `build` brief feeds this directly into the core writer's capability wiring and into the per-shell `Effect` switch generation.
+State the capability set explicitly in `design.md`; the `build` prompt feeds this directly into the core writer's capability wiring and into the per-shell `Effect` switch generation.
 
 ## Source-adapter contract (what the synthesiser may encounter)
 

@@ -18,10 +18,10 @@ rule_hints:
 references:
   - label: Core hard rules
     path: adapters/targets/vectis/prose/references/hard-rules-core.md
-  - label: iOS write brief
-    path: adapters/targets/vectis/prose/briefs/build/ios/write.md
-  - label: Android write brief
-    path: adapters/targets/vectis/prose/briefs/build/android/write.md
+  - label: iOS write prompt
+    path: adapters/targets/vectis/prose/prompts/build/ios/write.md
+  - label: Android write prompt
+    path: adapters/targets/vectis/prose/prompts/build/android/write.md
 ---
 
 ## Rule
@@ -46,4 +46,4 @@ Agent-authored trees must compile and lint cleanly without inline suppressions. 
 
 ## Spec Guidance
 
-Remove the suppression and apply the structural fix documented in hard-rules and the platform write briefs. For Rust, prefer per-cap anchors, distinct match arms, and helper extraction. For Swift and Kotlin, use `_` prefixes, narrow types, or minimal handlers — never disable the linter.
+Remove the suppression and apply the structural fix documented in hard-rules and the platform write prompts. For Rust, prefer per-cap anchors, distinct match arms, and helper extraction. For Swift and Kotlin, use `_` prefixes, narrow types, or minimal handlers — never disable the linter.

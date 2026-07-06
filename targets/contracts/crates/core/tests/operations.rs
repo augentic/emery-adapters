@@ -50,7 +50,7 @@ fn seed_bad_contract(dir: &Path) {
 }
 
 #[test]
-fn guidance_returns_embedded_brief() {
+fn guidance_returns_embedded_prompt() {
     assert!(guidance().starts_with("# contracts.guidance"));
 }
 
@@ -75,12 +75,12 @@ async fn build_runs_sub_flows_then_report() {
     let requests = model.requests();
     assert_eq!(requests.len(), 4, "three sub-flows plus one report call");
 
-    // First leg: the json-schema sub-flow, brief-assembled prompt, the
-    // adapter's own MCP grant, and the workspace lend.
+    // First leg: the json-schema sub-flow, the assembled system prompt,
+    // the adapter's own MCP grant, and the workspace lend.
     let first = &requests[0];
     let system = first.system.as_deref().unwrap();
-    assert!(system.contains("# contracts.build"), "build brief in system");
-    assert!(system.contains("json-schema sub-flow"), "sub-brief in system");
+    assert!(system.contains("# contracts.build"), "build prompt in system");
+    assert!(system.contains("json-schema sub-flow"), "sub-prompt in system");
     let user = &first.messages[0].content;
     assert!(user.contains("PROPOSAL-BODY") && user.contains("DESIGN-BODY"), "typed inputs");
     assert!(user.contains(".specify/slices/demo/contracts"), "slice delta dir named");
@@ -130,11 +130,11 @@ async fn build_repair_loop_is_bounded() {
     let repair_system = requests[3].system.as_deref().unwrap();
     assert!(
         repair_system.contains("# contracts.build — openapi sub-flow"),
-        "owning sub-brief is inlined for the finding under http/"
+        "owning sub-prompt is inlined for the finding under http/"
     );
     assert!(
         !repair_system.contains("# contracts.build — asyncapi sub-flow"),
-        "unaffected sub-briefs stay out of the repair prompt"
+        "unaffected sub-prompts stay out of the repair prompt"
     );
 }
 

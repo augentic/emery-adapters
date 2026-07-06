@@ -6,7 +6,7 @@ This sub-flow is OpenAPI-only. Shared payload schemas under `contracts/schemas/`
 
 ## Critical path
 
-1. **Read the briefs and specs.** Open [../build.md](../build.md) and the slice's `specs/<domain>/spec.md` files to identify what HTTP interactions the slice requires; read `contracts/http/` (the HTTP baseline) to know what already exists.
+1. **Read the build prompt and specs.** Open [../build.md](../build.md) and the slice's `specs/<domain>/spec.md` files to identify what HTTP interactions the slice requires; read `contracts/http/` (the HTTP baseline) to know what already exists.
 2. **Identify the intent.** Map the trigger to one of three sibling references using the [intent dispatch](#intent-dispatch) table — author, importer, or verifier. Stop reading sub-flow prose once the sibling is selected; load only the relevant sibling.
 3. **Dispatch to the sibling.** Open and follow [`../../references/openapi/author.md`](../../references/openapi/author.md), [`../../references/openapi/importer.md`](../../references/openapi/importer.md), or [`../../references/openapi/verifier.md`](../../references/openapi/verifier.md). Each sibling owns its complete algorithm, decision rules, and output format.
 4. **Write outputs to `contracts/http/`.** Author and importer paths produce or normalise OpenAPI 3.1 YAML files under `$SLICE_DIR/contracts/http/`. Decomposed payload schemas land under `$SLICE_DIR/contracts/schemas/` (json-schema-sub-flow territory) — never inline them.
@@ -46,11 +46,11 @@ Pick the sibling that matches the trigger. Each sibling is a self-contained algo
 
 | Intent | Trigger | Sibling |
 |---|---|---|
-| Author or extend the OpenAPI document from a spec | build brief during `/spec:build`; operator extending the baseline for new HTTP interactions | [`../../references/openapi/author.md`](../../references/openapi/author.md) |
+| Author or extend the OpenAPI document from a spec | build prompt during `/spec:build`; operator extending the baseline for new HTTP interactions | [`../../references/openapi/author.md`](../../references/openapi/author.md) |
 | Import or normalise an external OpenAPI document | operator drops an OpenAPI file into a slice's `contracts/http/` directory | [`../../references/openapi/importer.md`](../../references/openapi/importer.md) |
 | Verify internal consistency or run merge-time baseline validation | build verification; post-merge contract baseline gate; operator invoking validation against an existing OpenAPI artefact | [`../../references/openapi/verifier.md`](../../references/openapi/verifier.md) |
 
-The three intents share a common artefact contract (paths, file naming, `$ref` discipline) but have distinct algorithms — never conflate them. An import must be followed by a verifier run before the brief considers the artefact ready for merge; an author run normally ends with a verifier run too.
+The three intents share a common artefact contract (paths, file naming, `$ref` discipline) but have distinct algorithms — never conflate them. An import must be followed by a verifier run before the build considers the artefact ready for merge; an author run normally ends with a verifier run too.
 
 ## Hard rules
 
