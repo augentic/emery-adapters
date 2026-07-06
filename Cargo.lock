@@ -22,6 +22,7 @@ name = "adapter-tests"
 version = "0.4.3"
 dependencies = [
  "anyhow",
+ "harness",
  "omnia",
  "omnia-testkit",
  "omnia-wasi-http",
@@ -1185,9 +1186,9 @@ dependencies = [
 name = "evals"
 version = "0.4.3"
 dependencies = [
- "adapter-tests",
  "anyhow",
  "cfg-if",
+ "harness",
  "omnia",
  "omnia-cursor",
  "omnia-wasi-http",
@@ -1529,6 +1530,13 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+]
+
+[[package]]
+name = "harness"
+version = "0.4.3"
+dependencies = [
+ "anyhow",
 ]
 
 [[package]]

@@ -32,11 +32,10 @@ wasip3.workspace = true
 wit-bindgen.workspace = true
 
 # The live test's own (host-only) support; kept out of the wasm32 example
-# builds by the same target gate. `adapter-tests` is the shared host
-# harness (manifest rendering, cargo runner, target-dir discovery) from
-# the root `tests/` package.
+# builds by the same target gate. `harness` is the shared host harness
+# (manifest rendering, cargo runner, target-dir discovery).
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-adapter-tests.workspace = true
+harness.workspace = true
 tempfile.workspace = true
 
 [[example]]

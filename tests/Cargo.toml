@@ -1,6 +1,6 @@
 [package]
 name = "adapter-tests"
-description = "Composed-deployment tests hosting the adapter guest components on the Omnia runtime, plus the shared host-side harness library the live evals reuse"
+description = "Composed-deployment tests hosting the adapter guest components on the Omnia runtime"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -16,15 +16,11 @@ autotests = false
 name = "it"
 path = "tests/it.rs"
 
-# Host-only: the harness library never compiles for the guest wasm32
-# targets, so its dependencies live under the same target gate omnia
-# itself uses.
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-anyhow.workspace = true
-
 # Host-only: the composed tests never compile for the guest wasm32 targets,
 # so their dependencies live under the same target gate omnia itself uses.
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+anyhow.workspace = true
+harness.workspace = true
 omnia.workspace = true
 omnia-testkit.workspace = true
 omnia-wasi-http.workspace = true

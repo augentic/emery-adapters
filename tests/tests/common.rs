@@ -4,12 +4,11 @@
 //! to the specify engine's `crates/runtime/tests/common.rs`) and the
 //! `wasi:http`-backed store bundle a host binary's `runtime!` macro
 //! would generate; manifest rendering and the cargo runner come from the
-//! `adapter-tests` harness library (`src/lib.rs`).
+//! shared `harness` crate (`crates/harness`).
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
-use adapter_tests as harness;
 use anyhow::{Context as _, Result};
 use omnia::futures::FutureExt as _;
 use omnia::wasmtime_wasi::ResourceTable;

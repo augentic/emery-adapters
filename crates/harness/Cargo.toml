@@ -1,0 +1,17 @@
+[package]
+name = "harness"
+description = "Shared host-side test harness for the hosted-deployment suites: cargo-target-dir discovery, a subprocess cargo runner, deployment-manifest rendering, and tree copying"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+# Host-only: the harness never compiles for the guest wasm32 targets, so
+# its dependencies live under the same target gate omnia itself uses.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+anyhow.workspace = true
+
+[lints]
+workspace = true

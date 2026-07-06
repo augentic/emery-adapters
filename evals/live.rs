@@ -28,7 +28,6 @@ use std::path::Path;
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use adapter_tests as harness;
 use anyhow::{Context as _, Result, ensure};
 use tempfile::TempDir;
 

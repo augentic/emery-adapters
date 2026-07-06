@@ -1,8 +1,8 @@
 //! Shared host-side harness for the hosted-deployment test surfaces: the
-//! composed-deployment tests in this package's `tests/` tree and the live
+//! composed-deployment tests in the root `tests/` package and the live
 //! eval harness in `evals/`.
 //!
-//! Owns the pieces both harnesses need — cargo-target-dir discovery, a
+//! Owns the pieces both suites need — cargo-target-dir discovery, a
 //! subprocess `cargo` runner, deployment-manifest rendering over [`Guest`]
 //! entries, and tree copying. The omnia runtime assembly itself stays with
 //! each consumer: the composed tests deploy in-process via `omnia-testkit`,
