@@ -6,7 +6,6 @@ members = [
     "sources/*/core",
     "targets/*",
     "targets/*/core",
-    "tools/rust-quality",
 ]
 
 # The Specify adapters repo (RFC-48 / RFC-49 T6). Each RFC-61 adapter root

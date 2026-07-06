@@ -3931,13 +3931,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "specify-adapters-rust-quality"
-version = "0.4.3"
-dependencies = [
- "tempfile",
-]
-
-[[package]]
 name = "specify-captures"
 version = "0.4.3"
 dependencies = [

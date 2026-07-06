@@ -96,6 +96,10 @@ No check was left homeless. The vectis platform builds and the omnia cargo/wasm3
 
 Each shrunk manifest validates against the sibling repo's relaxed `source.schema.json` / `target.schema.json` (verified against the schemas at S2 head). The omnia and vectis `description` strings were reworded for the `shape` → `guidance` rename in the same pass.
 
+## `tools/rust-quality` ratchet removal
+
+**Decision (2026-07).** The `tools/rust-quality` workspace member and its per-adapter src unit-test budget gate are deleted. The gate was re-scoped at Milestone A2 to count adapter `src/` trees after the extension crates went away; every adapter had already reached implicit budget 0, and the prescribed WIT interface plus `core/tests/` and `crates/runtime-tests` integration suites are the meaningful guardrails — a separate ratchet crate added maintenance surface without catching contract drift the existing layers do not already cover. The integration-first posture in `TESTING.md` stays; only the mechanical CI counter retires.
+
 ## RFC-61 Step 5 Milestone A3 — guest-model capability deferral
 
 **Decision (2026-07).** The guest-kit `Model` trait (`crates/guest-kit/src/model.rs`) stays, despite upstream omnia growing its own guest-side model capability (`omnia-guest::capabilities::Model`, present as of the rev this workspace pins). The upstream capability deliberately mirrors `omnia:model/completion` *minus `tools` and `grants`* — workspace lending borrows a `wasi:filesystem` descriptor resource that only exists on `wasm32`, so it always sends `tools: vec![]` and empty grants, and points guests needing more at the raw `omnia-wasi-model` binding. Every judgment `create` these adapters issue requires both: the MCP reference-shelf grant and the `"."` workspace lend. The guest-kit trait exists precisely to carry those two fields across the wasm-free core boundary (`Request::mcp` + `Request::lend_workspace`, with the `wasm32` default body resolving the lend against the guest's own preopen), so the upstream capability cannot replace it today.

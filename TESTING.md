@@ -1,6 +1,6 @@
 # Testing
 
-Integration-first test posture for the `specify-adapters` crates — the wasm-free adapter cores (`specify-<name>-core`) and the shared guest-support crates under `crates/`. It mirrors the engine standard in [`augentic/specify` `engine/docs/standards/testing.md`](https://github.com/augentic/specify/blob/main/engine/docs/standards/testing.md): the unit layer is deliberately thin, integration owns every publicly reachable behavior, and `cargo llvm-cov` is the brake on deletion. A ratchet gate ([`tools/rust-quality`](tools/rust-quality)) holds each adapter's `src` unit-test count down — the lever is designing tests against the public surface, not widening it. Read this before adding a new test or deleting one.
+Integration-first test posture for the `specify-adapters` crates — the wasm-free adapter cores (`specify-<name>-core`) and the shared guest-support crates under `crates/`. It mirrors the engine standard in [`augentic/specify` `engine/docs/standards/testing.md`](https://github.com/augentic/specify/blob/main/engine/docs/standards/testing.md): the unit layer is deliberately thin, integration owns every publicly reachable behavior, and `cargo llvm-cov` is the brake on deletion. The WIT contract, `core/tests/` integration suites, and `crates/runtime-tests` composed-deployment tests are the guardrails — design tests against those public surfaces, not private kernels. Read this before adding a new test or deleting one.
 
 ## Posture
 
@@ -23,17 +23,6 @@ Every behavior gets a home in exactly one layer. Decide the layer **before** wri
 - **Collapse (stay unit)** — a dense pure `(input → output/code)` matrix (e.g. `app_icon/canvas` render math, `svg`, `materialize/paths`) becomes one table-driven `#[test]` with a block per case. Coverage-neutral by construction.
 - **Re-home** — behavior reachable through the library lands in the crate's `tests/` tree.
 - **Keep** — a genuinely unreachable defensive branch / error variant no caller can trigger, with a one-line comment saying why an agent cannot get the same signal from integration.
-
-## The src unit-test ratchet
-
-A strict ratchet enforces this posture in CI. [`tools/rust-quality`](tools/rust-quality) is a `publish = false` workspace member whose `unit_test_budget_holds` test counts `#[test]` / `#[tokio::test]` declarations under each adapter's `src/` trees (the guest shim and its `crates/*/src/` sub-crates) and holds them to the committed budget in [`tools/rust-quality/rust_quality_budget.toml`](tools/rust-quality/rust_quality_budget.toml). It mirrors the engine gate and runs under `cargo make test`.
-
-- Adding a `src` unit test fails CI unless you raise that adapter's budget — a reviewable edit that must be justified.
-- Removing one fails until you ratchet the budget down to the new count.
-
-The lever is to design positive/negative tests against the **existing** public surface (the library API in the crate's `tests/` tree), then re-home already-`pub` kernels, then collapse the private affordability residue in place. Widening production API to test a private kernel is a last resort, not the lever; the target is *near-zero* `src` unit tests, not literal zero. The gate counts tests; `cargo llvm-cov` still guards behavior — both stay. Every adapter currently sits at the implicit budget of 0.
-
-**Phase 2 (deferred):** once the residue is small, the numeric budget is replaced by a per-test marker — every surviving `src` `#[cfg(test)]` carries a `// rust-quality:allow(unit-test) reason: …` line, the gate flags any unmarked `src` `#[test]`, and `rust_quality_budget.toml` retires. Not built yet; until then the budget file is the contract.
 
 ## Coverage is the brake on deletion
 
