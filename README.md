@@ -33,10 +33,11 @@ shared/
   prose/              # cross-adapter prose, same grammar as adapter prose/
     references/       #   spec-runtime bundle, replay hook docs, …
     rules/            #   UNI-* and CORE-* engineering rules
-crates/               # shared guest support: adapter, prose,
-                      # eval-driver + eval-guest, runtime-tests
-evals/                # live eval harnesses against the real cursor backend
-                      # (contracts, vectis)
+crates/               # shared guest support: adapter, prose, runtime-tests
+evals/                # live eval harness against the real cursor backend,
+                      # flattened like omnia's examples/: runtime.rs (the
+                      # eval-driver host) + guest.rs (the eval-guest cdylib)
+                      # over the per-adapter scenario trees (contracts, vectis)
 Cargo.toml            # workspace: guest roots + `{sources,targets}/*` + `{sources,targets}/*/core`
 ```
 

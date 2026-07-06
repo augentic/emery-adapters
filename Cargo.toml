@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "crates/*",
+    "evals",
     "sources/*",
     "sources/*/core",
     "targets/*",
@@ -14,7 +15,8 @@ members = [
 # `core/` crate (`<name>-core`) — so the package physically
 # contains the prose trees (`prose/prompts`, `prose/references`) it embeds.
 # Shared guest support lives under top-level `crates/`; shared codex under
-# `codex/`.
+# `codex/`; the live eval harness is the flattened `evals/` package
+# (example targets only, omnia examples/-style — not mainline crates).
 
 [workspace.package]
 authors = ["Augentic"]

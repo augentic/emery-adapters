@@ -2,7 +2,7 @@
 
 `specify.wit` is a **vendored copy** of the adapter contract published by [augentic/specify](https://github.com/augentic/specify) at `wit/specify.wit`.
 
-[`adapter`](../crates/adapter/) generates the `source-adapter` and `target-adapter` world bindings once (`crates/adapter/src/{source,target}.rs`); each adapter-root crate hand-writes a thin shim that implements the generated `Guest` trait and wires it in with `export!(Adapter with_types_in adapter::{source,target})`. The eval guest (`crates/eval-guest`) generates the import-only `workflow` world locally.
+[`adapter`](../crates/adapter/) generates the `source-adapter` and `target-adapter` world bindings once (`crates/adapter/src/{source,target}.rs`); each adapter-root crate hand-writes a thin shim that implements the generated `Guest` trait and wires it in with `export!(Adapter with_types_in adapter::{source,target})`. The eval guest (`evals/guest.rs`) generates the import-only `workflow` world locally.
 
 This copy is a temporary pin: once the `specify:adapter` package is published via `wkg` (operator-handled, per RFC-61's cross-repo landing order), guest crates consume the published package and this directory is deleted. Until then, keep it byte-identical to the upstream file — `cargo make check-pins` compares against a sibling `../specify` checkout when one is present, and any contract change lands in the specify repo first.
 

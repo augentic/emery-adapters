@@ -1,4 +1,4 @@
-//! Omnia `runtime!` host binary for adapter-guest evals (RFC-61 Step 2,
+//! Omnia `runtime!` host for adapter-guest evals (RFC-61 Step 2,
 //! Milestone E).
 //!
 //! Binds the live cursor backend behind `wasi-model`: command mode drives
@@ -8,7 +8,7 @@
 //! cargo-make task, or by hand:
 //!
 //! ```text
-//! cargo run -p eval-driver -- run --config <manifest> -- eval <slice> <inputs-dir>
+//! cargo run -p evals --example eval-driver -- run --config <manifest> -- eval <slice> <inputs-dir>
 //! ```
 //!
 //! Requires `cursor-agent` on `PATH`, authenticated via `CURSOR_API_KEY` or a

@@ -6,8 +6,8 @@ This directory is the live-backend eval harness for the vectis adapter guest. Th
 
 | Piece | Where |
 | ----- | ----- |
-| Host binary | [`crates/eval-driver`](../../crates/eval-driver) — `omnia::runtime!({ mode: command, hosts: { WasiHttp: HttpDefault, WasiModel: Cursor } })` |
-| Driver guest | [`crates/eval-guest`](../../crates/eval-guest) — the deployment's `wasi:cli/run` exporter; reads the slice inputs from the mount, dispatches `target.build` by adapter id, prints the report as one JSON line |
+| Host binary | [`evals/runtime.rs`](../runtime.rs) (the `eval-driver` example of the flattened `evals` package) — `omnia::runtime!({ mode: command, hosts: { WasiHttp: HttpDefault, WasiModel: Cursor } })` |
+| Driver guest | [`evals/guest.rs`](../guest.rs) (the `eval-guest` cdylib example) — the deployment's `wasi:cli/run` exporter; reads the slice inputs from the mount, dispatches `target.build` by adapter id, prints the report as one JSON line |
 | Adapter guest | [`targets/vectis`](../../targets/vectis) — the component under test (`vectis.wasm`) |
 | Scenario seeds | `scenarios/<name>/inputs/*.md` (typed slice inputs by file stem) and `scenarios/<name>/seed/**` (files copied into the scratch project root: `.specify/project.yaml` platform set, operator-curated `design-system/` manifests) |
 | Runner | `run.sh` (one scenario per invocation) — `cargo make eval-vectis` runs it |

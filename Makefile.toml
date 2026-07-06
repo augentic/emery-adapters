@@ -74,13 +74,15 @@ exit $status
 '''
 
 # Guest components (RFC-61): build every adapter guest crate for the
-# wasm32-wasip2 target the omnia runtime loads.
+# wasm32-wasip2 target the omnia runtime loads, plus the eval driver
+# guest (an example target of the flattened evals/ package).
 [tasks.build-guests]
 script = '''
 set -e
 flags=""
 for package in $GUEST_PACKAGES; do flags="$flags -p $package"; done
-cargo build $flags -p eval-guest --target wasm32-wasip2
+cargo build $flags --target wasm32-wasip2
+cargo build -p evals --example eval-guest --target wasm32-wasip2
 '''
 
 # Live decomposition-proof evals (RFC-61 Step 2 Milestone E): every

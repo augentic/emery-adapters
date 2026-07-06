@@ -28,7 +28,7 @@ mod generated {
 
     wit_bindgen::generate!({
         world: "workflow",
-        path: "../../wit",
+        path: "../wit",
         // Asyncness follows the WIT declarations: the judgment operations
         // are `async func`s (judgment legs await the async `omnia:model`
         // import mid-call) and async-lower; `describe` is a plain `func`

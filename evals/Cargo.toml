@@ -1,0 +1,44 @@
+[package]
+name = "evals"
+description = "Live adapter-guest eval harness: the cursor-backed runtime host and driver guest over the per-adapter scenario trees"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+# Flattened like omnia's examples/ package: no lib, just the two example
+# targets below. Deliberately outside crates/ — the harness is an eval
+# affordance (RFC-62's dev loop), not mainline guest support.
+[dependencies]
+cfg-if.workspace = true
+
+# Host-only: the runtime never compiles for the guest wasm32 targets, so
+# its dependencies live under the same target gate omnia itself uses.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+anyhow.workspace = true
+omnia.workspace = true
+omnia-cursor.workspace = true
+omnia-wasi-http.workspace = true
+omnia-wasi-model.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+# Guest-only: the component body compiles solely for wasm32, so its
+# dependencies live under the same target gate omnia's guests use.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+serde_json.workspace = true
+wasip3.workspace = true
+wit-bindgen.workspace = true
+
+[[example]]
+name = "eval-driver"
+path = "runtime.rs"
+
+[[example]]
+name = "eval-guest"
+path = "guest.rs"
+crate-type = ["cdylib"]
+
+[lints]
+workspace = true

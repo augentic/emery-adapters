@@ -1182,7 +1182,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "eval-driver"
+name = "evals"
 version = "0.4.3"
 dependencies = [
  "anyhow",
@@ -1191,14 +1191,8 @@ dependencies = [
  "omnia-cursor",
  "omnia-wasi-http",
  "omnia-wasi-model",
- "tokio",
-]
-
-[[package]]
-name = "eval-guest"
-version = "0.4.3"
-dependencies = [
  "serde_json",
+ "tokio",
  "wasip3",
  "wit-bindgen 0.58.0",
 ]
