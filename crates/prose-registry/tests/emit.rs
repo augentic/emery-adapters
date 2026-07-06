@@ -7,7 +7,7 @@ use std::path::Path;
 use specify_prose_registry::emit;
 use tempfile::TempDir;
 
-fn write_prose(root: &Path, rel: &str, body: &str) {
+fn write(root: &Path, rel: &str, body: &str) {
     let path = root.join("prose").join(rel);
     fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
     fs::write(path, body).expect("write");
@@ -31,10 +31,10 @@ fn generate(adapter_root: &Path, trees: &[&str]) -> Result<String, String> {
 #[test]
 fn emits_sorted_doc_table() {
     let adapter = TempDir::new().expect("adapter root");
-    write_prose(adapter.path(), "references/openapi/verifier.md", "# verifier");
-    write_prose(adapter.path(), "briefs/guidance.md", "# guidance");
-    write_prose(adapter.path(), "briefs/build.md", "# build");
-    write_prose(adapter.path(), "briefs/notes.txt", "not embedded");
+    write(adapter.path(), "references/openapi/verifier.md", "# verifier");
+    write(adapter.path(), "briefs/guidance.md", "# guidance");
+    write(adapter.path(), "briefs/build.md", "# build");
+    write(adapter.path(), "briefs/notes.txt", "not embedded");
 
     let generated = generate(adapter.path(), &["briefs", "references"]).expect("emit succeeds");
 
@@ -57,7 +57,7 @@ fn resolves_directory_symlinks_inline() {
     let adapter = TempDir::new().expect("adapter root");
     let shared = TempDir::new().expect("shared tree");
     write_file(shared.path(), "runtime/protocol.md", "# protocol");
-    write_prose(adapter.path(), "briefs/build.md", "# build");
+    write(adapter.path(), "briefs/build.md", "# build");
     fs::create_dir_all(adapter.path().join("prose/references")).expect("mkdir references");
     std::os::unix::fs::symlink(
         shared.path().join("runtime"),
@@ -88,7 +88,7 @@ fn empty_trees_fail() {
 #[test]
 fn missing_tree_is_skipped() {
     let adapter = TempDir::new().expect("adapter root");
-    write_prose(adapter.path(), "briefs/survey.md", "# survey");
+    write(adapter.path(), "briefs/survey.md", "# survey");
 
     let generated =
         generate(adapter.path(), &["briefs", "references"]).expect("missing tree is tolerated");
