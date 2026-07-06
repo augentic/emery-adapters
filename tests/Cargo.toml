@@ -1,5 +1,5 @@
 [package]
-name = "adapters-runtime-tests"
+name = "tests"
 description = "Dev-only composed-deployment tests hosting the adapter guest components on the Omnia runtime"
 version.workspace = true
 edition.workspace = true

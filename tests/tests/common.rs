@@ -117,8 +117,8 @@ fn build_guests() {
     GUESTS.get_or_init(|| {
         let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .ancestors()
-            .nth(2)
-            .expect("runtime-tests manifest dir is <workspace>/crates/runtime-tests")
+            .nth(1)
+            .expect("tests manifest dir is <workspace>/tests")
             .to_path_buf();
         let packages = [
             "contracts",

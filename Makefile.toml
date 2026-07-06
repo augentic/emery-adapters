@@ -4,7 +4,7 @@
 [env]
 CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
 # Every adapter guest package, mirrored by the runtime tests'
-# `build_guests` (crates/runtime-tests/tests/common.rs).
+# `build_guests` (tests/tests/common.rs).
 GUEST_PACKAGES = "contracts omnia-adapter vectis captures documentation intent screenshots typescript"
 
 [config]
