@@ -37,7 +37,7 @@ mod generated {
     });
 }
 
-use generated::augentic::specify::target::{self, Input, Report, Status, WorkingTree};
+use generated::specify::adapter::target::{self, Input, Report, Status, WorkingTree};
 use serde_json::json;
 
 struct CliGuest;

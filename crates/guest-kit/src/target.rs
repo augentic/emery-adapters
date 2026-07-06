@@ -34,7 +34,7 @@ mod generated {
     });
 }
 
-pub use generated::exports::augentic::specify::target::*;
+pub use generated::exports::specify::adapter::target::*;
 pub use generated::*;
 
 impl From<crate::seam::BuildInput> for BuildInput {

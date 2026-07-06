@@ -34,7 +34,7 @@ mod generated {
     });
 }
 
-pub use generated::exports::augentic::specify::source::*;
+pub use generated::exports::specify::adapter::source::*;
 pub use generated::*;
 
 impl From<crate::seam::SourceManifest> for Manifest {
