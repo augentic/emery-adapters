@@ -1,6 +1,6 @@
 //! The wasm-free seam vocabulary shared by every adapter core.
 //!
-//! These types mirror the `augentic:specify` WIT records and variants —
+//! These types mirror the `specify:adapter` WIT records and variants —
 //! the source axis (`lead`, `evidence`, `claim`) and the target axis
 //! (`input`, `working-tree`, `report`, `finding`) plus the shared
 //! `types.error` / `types.changeset` vocabulary — so all adapter cores

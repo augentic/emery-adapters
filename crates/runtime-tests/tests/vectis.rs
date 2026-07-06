@@ -19,7 +19,7 @@ use serde_json::{Value, json};
 use crate::common::{self, Bundle};
 
 /// The versioned interface name the target-adapter world exports.
-const TARGET_INTERFACE: &str = "augentic:specify/target@0.1.0";
+const TARGET_INTERFACE: &str = "specify:adapter/target@0.1.0";
 
 // describe("target:vectis") through host-mediated dispatch returns the
 // compiled-in RFC-64 manifest record: no compatibility floor, the three

@@ -17,7 +17,7 @@ use serde_json::{Value, json};
 use crate::common::{self, Bundle};
 
 /// The versioned interface name the target-adapter world exports.
-const TARGET_INTERFACE: &str = "augentic:specify/target@0.1.0";
+const TARGET_INTERFACE: &str = "specify:adapter/target@0.1.0";
 
 // guidance("target:omnia") through host-mediated dispatch in the composed
 // deployment returns the embedded guidance prompt — the core registry riding

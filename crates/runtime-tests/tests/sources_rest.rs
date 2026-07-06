@@ -16,7 +16,7 @@ use serde_json::{Value, json};
 use crate::common::{self, Bundle};
 
 /// The versioned interface name the source-adapter world exports.
-const SOURCE_INTERFACE: &str = "augentic:specify/source@0.1.0";
+const SOURCE_INTERFACE: &str = "specify:adapter/source@0.1.0";
 
 /// The four source guests this deployment composes: guest id, MCP route,
 /// shelf server identity, and the survey prompt's opening heading.

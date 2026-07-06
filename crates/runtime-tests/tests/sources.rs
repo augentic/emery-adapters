@@ -15,7 +15,7 @@ use serde_json::{Value, json};
 use crate::common::{self, Bundle};
 
 /// The versioned interface name the source-adapter world exports.
-const SOURCE_INTERFACE: &str = "augentic:specify/source@0.1.0";
+const SOURCE_INTERFACE: &str = "specify:adapter/source@0.1.0";
 
 // describe("source:documentation") through host-mediated dispatch returns
 // the compiled-in RFC-64 manifest record — on the source axis just the

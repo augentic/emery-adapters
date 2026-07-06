@@ -18,7 +18,7 @@ use crate::seam::{Changeset, Context, Error, Finding, Input, Report, Status};
 
 /// Answer schema for one internal phase leg.
 ///
-/// Internal legs are not part of the `augentic:specify` contract, so
+/// Internal legs are not part of the `specify:adapter` contract, so
 /// this schema is adapter-internal rather than derived from a canonical
 /// schema.
 pub const PHASE_ANSWER_SCHEMA: &str = r#"{

@@ -1,5 +1,17 @@
-# Vendored `augentic:specify` WIT pin
+# Vendored `specify:adapter` WIT pin
 
-`specify.wit` is a **vendored copy** of the adapter contract published by [augentic/specify](https://github.com/augentic/specify) at `wit/specify.wit`. [`specify-guest-kit`](../crates/guest-kit/) generates the `source-adapter` and `target-adapter` world bindings once (`crates/guest-kit/src/{source,target}.rs`); each adapter-root crate hand-writes a thin shim that implements the generated `Guest` trait and wires it in with `export!(Adapter with_types_in specify_guest_kit::{source,target})`. The eval guest (`crates/eval-guest`) generates the import-only `workflow` world locally.
+`specify.wit` is a **vendored copy** of the adapter contract published by [augentic/specify](https://github.com/augentic/specify) at `wit/specify.wit`.
 
-This copy is a temporary pin: once the `augentic:specify` package is published via `wkg` (operator-handled, per RFC-61's cross-repo landing order), guest crates consume the published package and this directory is deleted. Until then, keep it byte-identical to the upstream file — `cargo make check-pins` compares against a sibling `../specify` checkout when one is present, and any contract change lands in the specify repo first.
+[`specify-guest-kit`](../crates/guest-kit/) generates the `source-adapter` and `target-adapter` world bindings once (`crates/guest-kit/src/{source,target}.rs`); each adapter-root crate hand-writes a thin shim that implements the generated `Guest` trait and wires it in with `export!(Adapter with_types_in specify_guest_kit::{source,target})`. The eval guest (`crates/eval-guest`) generates the import-only `workflow` world locally.
+
+This copy is a temporary pin: once the `specify:adapter` package is published via `wkg` (operator-handled, per RFC-61's cross-repo landing order), guest crates consume the published package and this directory is deleted. Until then, keep it byte-identical to the upstream file — `cargo make check-pins` compares against a sibling `../specify` checkout when one is present, and any contract change lands in the specify repo first.
+
+## Prerequisites
+
+Install [wkg](https://github.com/bytecodealliance/wasm-pkg-tools).
+
+## Usage
+
+```bash
+wkg get specify:adapter@0.1.0-draft --config .wkg-config.toml --output ./wit/specify.wit
+```

@@ -22,7 +22,7 @@ serde_json.workspace = true
 thiserror.workspace = true
 
 # The WASI-backed default body of `Model::create`, the MCP reference
-# shelf, and the `augentic:specify` world bindings compile only for the
+# shelf, and the `specify:adapter` world bindings compile only for the
 # wasm32 guest target, mirroring omnia-guest's capability traits.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 omnia-guest.workspace = true

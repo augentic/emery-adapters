@@ -48,7 +48,7 @@ cat > "$scratch/omnia.toml" <<MANIFEST
 [[guest]]
 id = "eval"
 source.path = "$wasm/specify_eval_guest.wasm"
-link = ["augentic:specify/source@0.1.0", "augentic:specify/target@0.1.0"]
+link = ["specify:adapter/source@0.1.0", "specify:adapter/target@0.1.0"]
 
 [[guest]]
 id = "target:vectis"

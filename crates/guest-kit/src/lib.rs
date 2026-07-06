@@ -11,7 +11,7 @@
 //!   bind [`MockModel`]. When the upstream capability lands, the swap is a
 //!   one-line import change.
 //! - [`seam`] — the wasm-free DTO vocabulary mirroring the
-//!   `augentic:specify` WIT records, shared by every adapter core.
+//!   `specify:adapter` WIT records, shared by every adapter core.
 //! - [`answers`] — the vendored judgment-answer schema pins and the
 //!   deserializers projecting schema-gated answers onto the seam types.
 //! - [`judgment`] — the shared judgment-call helper: one schema-gated
@@ -24,7 +24,7 @@
 //!   [`embed_registry!`] module generator.
 //! - [`shelf`] — the MCP URL env convention plus (on `wasm32`) the
 //!   generic `McpServer` reference shelf over an embedded doc table.
-//! - `source` / `target` (`wasm32` only) — the `augentic:specify` world bindings,
+//! - `source` / `target` (`wasm32` only) — the `specify:adapter` world bindings,
 //!   generated once per axis with a `pub` `export!` macro (omnia's
 //!   `wasi-*` guest convention), plus the seam-type [`From`] mappings.
 //!   Each adapter-root crate hand-writes its own thin shim over these.

@@ -1,7 +1,7 @@
 //! Eval-driver guest component for the RFC-61 Step 2 decomposition proof.
 //!
 //! The eval deployment's only `wasi:cli/run` exporter. Imports the
-//! `augentic:specify` `workflow` world; Omnia's host-mediated link dispatch
+//! `specify:adapter` `workflow` world; Omnia's host-mediated link dispatch
 //! routes the `target.build` call to the adapter guest registered under the
 //! `adapter-id` first argument. `run` reads the slice's input artifacts from
 //! the shared `"."` mount, drives one `build`, and prints the report as one
