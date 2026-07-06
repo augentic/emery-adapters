@@ -10,7 +10,7 @@ This directory is the live-backend eval harness for the vectis adapter guest. Th
 | Driver guest | [`evals/guest.rs`](../guest.rs) (the `eval-guest` cdylib example) — the deployment's `wasi:cli/run` exporter; reads the slice inputs from the mount, dispatches `target.build` by adapter id, prints the report as one JSON line |
 | Adapter guest | [`targets/vectis`](../../targets/vectis) — the component under test (`vectis.wasm`) |
 | Scenario seeds | `scenarios/<name>/inputs/*.md` (typed slice inputs by file stem) and `scenarios/<name>/seed/**` (files copied into the scratch project root: `.specify/project.yaml` platform set, operator-curated `design-system/` manifests) |
-| Runner | `run.sh` (one scenario per invocation) — `cargo make eval-vectis` runs it |
+| Runner | [`evals/live.rs`](../live.rs) (the `live` `[[test]]` target) — one `#[ignore]`d test per scenario under `vectis::`, plus the non-ignored `vectis::wiring` smoke CI runs model-free; `cargo make eval-vectis` runs the scenario |
 | Results | `runs/` — per-run raw output |
 
 ## Scenarios
@@ -30,15 +30,15 @@ Requires [`cursor-agent`](https://cursor.com/docs/cli) on `PATH`, authenticated 
 cargo make eval-vectis
 
 # directly
-evals/vectis/run.sh single-screen
+cargo test -p evals --test live -- --ignored --nocapture vectis::single_screen
 ```
 
-The runner builds the guests, seeds a scratch tree under a temp dir, writes the deployment manifest, and drives one command-mode run. The report JSON line and full log land under `runs/<scenario>/`; exit status carries the report's `status`.
+Each test builds the guests, seeds a scratch tree under a temp dir, writes the deployment manifest, and spawns the prebuilt `eval-driver` example for one command-mode run. The report JSON line and full log land under `runs/<scenario>/`; the test fails on a failing report `status`.
 
 ## Smoke-checking without a model
 
 ```bash
-DRY_RUN=1 evals/vectis/run.sh single-screen
+cargo test -p evals --test live vectis::wiring
 ```
 
-`DRY_RUN=1` exercises everything up to the model seam — the wasm32 guest builds, the scratch tree seeding, and the deployment-manifest generation — then exits before spawning the driver, so no `cursor-agent` is needed.
+The non-ignored `vectis::wiring` test exercises everything below the model seam that needs no build — the scratch tree seeding and the deployment-manifest generation for every scenario — so ordinary CI runs it without `cursor-agent` or the wasm32 guests.

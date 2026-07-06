@@ -31,6 +31,11 @@ serde_json.workspace = true
 wasip3.workspace = true
 wit-bindgen.workspace = true
 
+# The live test's own (host-only) support; kept out of the wasm32 example
+# builds by the same target gate.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+tempfile.workspace = true
+
 [[example]]
 name = "eval-driver"
 path = "runtime.rs"
@@ -39,6 +44,12 @@ path = "runtime.rs"
 name = "eval-guest"
 path = "guest.rs"
 crate-type = ["cdylib"]
+
+# The scenario runner: non-ignored `wiring` smokes for CI plus the
+# `#[ignore]`d live evals (`cargo make eval-contracts` / `eval-vectis`).
+[[test]]
+name = "live"
+path = "live.rs"
 
 [lints]
 workspace = true

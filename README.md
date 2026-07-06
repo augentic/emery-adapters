@@ -33,8 +33,8 @@ shared/
   prose/              # cross-adapter prose, same grammar as adapter prose/
     references/       #   spec-runtime bundle, replay hook docs, …
     rules/            #   UNI-* and CORE-* engineering rules
-crates/               # shared guest support: adapter, prose
-tests/                # composed-deployment tests hosting the built adapter
+crates/               # shared guest support (adapter, prose) + the composed-
+                      # deployment tests (tests/) hosting the built adapter
                       # guest components on the Omnia runtime
 evals/                # live eval harness against the real cursor backend,
                       # flattened like omnia's examples/: runtime.rs (the

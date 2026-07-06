@@ -108,7 +108,7 @@ Each shrunk manifest validates against the sibling repo's relaxed `source.schema
 
 ## `tools/rust-quality` ratchet removal
 
-**Decision (2026-07).** The `tools/rust-quality` workspace member and its per-adapter src unit-test budget gate are deleted. The gate was re-scoped at Milestone A2 to count adapter `src/` trees after the extension crates went away; every adapter had already reached implicit budget 0, and the prescribed WIT interface plus `core/tests/` and the root `tests/` package's integration suites are the meaningful guardrails — a separate ratchet crate added maintenance surface without catching contract drift the existing layers do not already cover. The integration-first posture in `TESTING.md` stays; only the mechanical CI counter retires.
+**Decision (2026-07).** The `tools/rust-quality` workspace member and its per-adapter src unit-test budget gate are deleted. The gate was re-scoped at Milestone A2 to count adapter `src/` trees after the extension crates went away; every adapter had already reached implicit budget 0, and the prescribed WIT interface plus `core/tests/` and the `crates/tests` integration suites are the meaningful guardrails — a separate ratchet crate added maintenance surface without catching contract drift the existing layers do not already cover. The integration-first posture in `TESTING.md` stays; only the mechanical CI counter retires.
 
 ## RFC-61 Step 5 Milestone A3 — guest-model capability deferral
 

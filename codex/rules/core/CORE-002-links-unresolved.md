@@ -5,7 +5,7 @@ severity: important
 trigger: A markdown file contains an `[label](target)` link whose relative target does not exist on disk after joining against the file's parent directory.
 rule_hints:
   - kind: path-pattern
-    value: "adapters/**/*.md"
+    value: "{codex,sources,targets}/**/*.md"
     description: Adapter manifests, prompts, references, and rules.
   - kind: path-pattern
     value: "plugins/**/*.md"

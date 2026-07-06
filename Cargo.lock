@@ -1178,6 +1178,7 @@ dependencies = [
  "omnia-wasi-http",
  "omnia-wasi-model",
  "serde_json",
+ "tempfile",
  "tokio",
  "wasip3",
  "wit-bindgen 0.58.0",

@@ -1,8 +1,8 @@
 # Framework convergence rules (`CORE-*`)
 
-First-party rules that enforce framework-repository invariants through the shared deterministic-hint interpreter. The pack root activates the second shared resolution root (`adapters/codex/rules/<pack>/`) with pack name `core`; resolved rules carry `origin: core`. `CORE-*` rules participate in `specify lint framework` runs by default and are excluded from consumer-side `specify rules export` / `specify lint` unless the operator passes `--include-core`.
+First-party rules that enforce framework-repository invariants through the shared deterministic-hint interpreter. The pack root activates the second shared resolution root (`codex/rules/<pack>/`) with pack name `core`; resolved rules carry `origin: core`. `CORE-*` rules participate in `specify lint framework` runs by default and are excluded from consumer-side `specify rules export` / `specify lint` unless the operator passes `--include-core`.
 
-This directory is the peer of [`adapters/codex/rules/universal/`](../universal/README.md): same file shape, same JSON Schema, different namespace ownership. `CORE-*` is the only namespace allowed under `adapters/codex/rules/core/`; the `rules` WASI tool (CORE-009) rejects any non-`CORE-*` rule placed here and any `CORE-*` rule placed elsewhere.
+This directory is the peer of [`codex/rules/universal/`](../universal/README.md): same file shape, same JSON Schema, different namespace ownership. `CORE-*` is the only namespace allowed under `codex/rules/core/`; the `rules` WASI tool (CORE-009) rejects any non-`CORE-*` rule placed here and any `CORE-*` rule placed elsewhere.
 
 See [docs/explanation/standards-layer.md](../../../../docs/explanation/standards-layer.md) for how engineering standards relate to workflow, artifacts, and `docs/standards/` (authoring house style).
 
@@ -46,8 +46,8 @@ The closed `applicability.artifacts` enum carries framework-side tokens alongsid
 | ----------- | ------------------------------------------------- |
 | `skill`     | `plugins/**/SKILL.md` (frontmatter + body)        |
 | `adapter`   | adapter manifests — vacant post-RFC-64 (`adapter.yaml` is retired) |
-| `reference` | `adapters/**/prose/references/*.md`                     |
-| `codex`     | `adapters/**/rules/*.md` (rule files themselves)  |
+| `reference` | `{sources,targets}/**/prose/references/*.md`            |
+| `codex`     | `codex/rules/**/*.md` and adapter `prose/rules/*.md` (rule files themselves)  |
 | `doc`       | `docs/**/*.md`                                    |
 
 Framework tokens compose with the existing consumer-side tokens (`code`, `tests`, `contracts`, `specs`, `design`, `tasks`); a single rule can list both sides.
@@ -57,7 +57,7 @@ Framework tokens compose with the existing consumer-side tokens (`code`, `tests`
 **Authoring checklist (avoid the `applicability.artifacts` footgun):**
 
 - [ ] **Do not** rely on `applicability.artifacts` to scope a framework rule — on the framework profile it silently drops the rule from the resolved set before any hint runs.
-- [ ] **Do** add a `kind: path-pattern` hint whose `value` glob matches the target files (e.g. `plugins/**/SKILL.md`, `adapters/**/prose/references/*.md`).
+- [ ] **Do** add a `kind: path-pattern` hint whose `value` glob matches the target files (e.g. `plugins/**/SKILL.md`, `{sources,targets}/**/prose/references/*.md`).
 - [ ] Run `make lint` and confirm the new rule actually fires on a known-bad fixture; a rule that resolves but matches nothing is the usual symptom of the quirk.
 - [ ] Cross-check against [`CORE-011-agent-teams-missing-canonical.md`](CORE-011-agent-teams-missing-canonical.md), which scopes with `path-pattern` rather than `applicability.artifacts`.
 

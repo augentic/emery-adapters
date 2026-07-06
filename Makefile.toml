@@ -4,7 +4,7 @@
 [env]
 CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
 # Every adapter guest package, mirrored by the runtime tests'
-# `build_guests` (tests/tests/common.rs).
+# `build_guests` (crates/tests/tests/common.rs).
 GUEST_PACKAGES = "contracts omnia-adapter vectis captures documentation intent screenshots typescript"
 
 [config]
@@ -86,24 +86,21 @@ cargo build -p evals --example eval-guest --target wasm32-wasip2
 '''
 
 # Live decomposition-proof evals (RFC-61 Step 2 Milestone E): every
-# contracts scenario through the eval driver against the real cursor
-# backend. Requires cursor-agent on PATH; see evals/contracts/README.md.
+# contracts scenario through the `#[ignore]`d tests in evals/live.rs
+# against the real cursor backend. Requires cursor-agent on PATH; see
+# evals/contracts/README.md.
 [tasks.eval-contracts]
 script = '''
-set -e
-for scenario in describe design import source update; do
-  evals/contracts/run.sh "$scenario"
-done
+cargo test -p evals --test live -- --ignored --nocapture contracts::
 '''
 
 # Live build-leg eval for the vectis adapter guest (RFC-61 Step 3
-# Milestone D): the single-screen scenario through the eval driver
-# against the real cursor backend. Requires cursor-agent on PATH; see
-# evals/vectis/README.md.
+# Milestone D): the single-screen scenario through the `#[ignore]`d
+# tests in evals/live.rs against the real cursor backend. Requires
+# cursor-agent on PATH; see evals/vectis/README.md.
 [tasks.eval-vectis]
 script = '''
-set -e
-evals/vectis/run.sh single-screen
+cargo test -p evals --test live -- --ignored --nocapture vectis::
 '''
 
 # Release-build every adapter guest component where cargo puts it
