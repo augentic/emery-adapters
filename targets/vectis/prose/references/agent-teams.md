@@ -1,1 +1,1 @@
-../../../../shared/references/runtime/review-team-protocol.md
+../../../../shared/prose/references/runtime/review-team-protocol.md

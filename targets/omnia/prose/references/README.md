@@ -2,7 +2,7 @@
 
 Reference documentation for the Omnia target adapter at [`adapters/targets/omnia/`](..). In Specify, Omnia is a **target adapter** — `guidance`, `build`, `merge` — not a slash-command plugin.
 
-The Omnia crate / test / guest / review instructions live in [`../prompts/build.md`](../prompts/build.md) and the per-leg prompts under [`../prompts/build/`](../prompts/build/); the adapter core (`../crates/core/src/operations.rs`) owns leg sequencing. The depth (templates, hard rules, mapping tables, mock-provider patterns, specialist prompts, rules) and worked examples live in this folder.
+The Omnia crate / test / guest / review instructions live in [`../prompts/build.md`](../prompts/build.md) and the per-leg prompts under [`../prompts/build/`](../prompts/build/); the adapter core (`../core/src/operations.rs`) owns leg sequencing. The depth (templates, hard rules, mapping tables, mock-provider patterns, specialist prompts, rules) and worked examples live in this folder.
 
 ## Prompts
 
@@ -14,7 +14,7 @@ The Omnia crate / test / guest / review instructions live in [`../prompts/build.
 | [`build/test.md`](../prompts/build/test.md) | Generation leg: generate or update the test suite. |
 | [`build/guest.md`](../prompts/build/guest.md) | Generation leg (create mode only): scaffold the WASM guest wrapper. |
 | [`build/review.md`](../prompts/build/review.md) | Review leg: agent-team code review and remediation cycle. |
-| [`build/replay.md`](../prompts/build/replay.md) | Replay leg (self-skipping): runtime capture replay when a `captures` source is bound. Delegates hook contract to [`../../../shared/target-hooks/replay/`](../../../shared/target-hooks/replay/). |
+| [`build/replay.md`](../prompts/build/replay.md) | Replay leg (self-skipping): runtime capture replay when a `captures` source is bound. Delegates hook contract to [`../../../shared/prose/references/replay/`](../../../shared/prose/references/replay/). |
 | [`merge.md`](../prompts/merge.md) | Merge leg: delta fold plus the pre-merge gate (cargo + clippy + test + wasm32 build). |
 
 ## References
@@ -68,7 +68,7 @@ The Omnia crate / test / guest / review instructions live in [`../prompts/build.
 - [`review-output-template.md`](review-output-template.md) — `REVIEW.md` template and finding-ID conventions.
 - [`agent-teams.md`](agent-teams.md) — shared multi-agent review pattern (specialists + antagonist + lead synthesis).
 - [`../rules/`](../rules/) — Omnia-specific rules (`OMNIA-001`, `OMNIA-002`, `RUST-001`, `SEC-001`).
-- [`../../../shared/rules/universal/`](../../../shared/rules/universal/) — shared `UNI-*` rules.
+- [`../../../shared/prose/rules/universal/`](../../../shared/prose/rules/universal/) — shared `UNI-*` rules.
 
 ### Worked examples
 

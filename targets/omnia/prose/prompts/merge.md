@@ -1,6 +1,6 @@
 # Omnia target — merge prompt
 
-> The omnia adapter core inlines this document into the system prompt of the merge leg (`crates/core/src/operations.rs`). The leg receives the slice's built delta and a lent workspace: fold the delta in place (a 3-way merge — the baseline is ours, the delta is theirs), run the § Omnia pre-merge gate, and answer with the merge report. The engine owns baseline coherence, the lifecycle transition to `merged`, and the archive move; this prompt only enforces the Omnia-specific *pre-merge* gate: the generated crate compiles, its tests pass, and the WASM target builds.
+> The omnia adapter core inlines this document into the system prompt of the merge leg (`core/src/operations.rs`). The leg receives the slice's built delta and a lent workspace: fold the delta in place (a 3-way merge — the baseline is ours, the delta is theirs), run the § Omnia pre-merge gate, and answer with the merge report. The engine owns baseline coherence, the lifecycle transition to `merged`, and the archive move; this prompt only enforces the Omnia-specific *pre-merge* gate: the generated crate compiles, its tests pass, and the WASM target builds.
 
 ## Inputs and bindings
 

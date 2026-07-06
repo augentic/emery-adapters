@@ -6,7 +6,7 @@ Integration-first test posture for the `specify-adapters` crates — the wasm-fr
 
 Use `cargo make test` rather than `cargo test`. It runs `cargo nextest run --all --all-features --no-tests=pass` under `RUSTFLAGS=-Dwarnings`, matching CI. `nextest` is mandatory: it runs each test in its own process, and that isolation is what lets the CWD/env-mutating suites pass.
 
-Each adapter core consolidates its integration suite into a single `it` binary: `crates/core/tests/it.rs` pulls each area in as a `#[path = "<area>.rs"]` submodule (`mod operations;`, `mod scaffold;`, …) so the crate-under-test links exactly once. The guest shims (`{targets,sources}/<name>/src/`) are hand-written wasm32 export glue over `specify-guest-kit`'s shared WIT bindings and carry no native tests; the composed-deployment seams are covered by `crates/runtime-tests`.
+Each adapter core consolidates its integration suite into a single `it` binary: `core/tests/it.rs` pulls each area in as a `#[path = "<area>.rs"]` submodule (`mod operations;`, `mod scaffold;`, …) so the crate-under-test links exactly once. The guest shims (`{targets,sources}/<name>/src/`) are hand-written wasm32 export glue over `specify-guest-kit`'s shared WIT bindings and carry no native tests; the composed-deployment seams are covered by `crates/runtime-tests`.
 
 ## The two layers — minimize the unit layer
 
@@ -15,7 +15,7 @@ Every behavior gets a home in exactly one layer. Decide the layer **before** wri
 | Layer | Location | Required when | Forbidden when |
 | ----- | -------- | ------------- | -------------- |
 | **Kernel unit** | `#[cfg(test)] mod tests` / sibling `tests.rs` next to the code | The branch is genuinely unreachable through the public API (a defensive guard, an error variant no caller triggers), **or** the behavior is a dense pure parse/projection / render-math edge matrix whose case-per-cell integration port would inflate the suite | The behavior is reachable through the crate's public surface and an integration test already covers it — or could, without a matrix explosion |
-| **Crate integration** | `crates/core/tests/` (via the consolidated `it` binary) | The behavior is reachable through the library API: engine invariants, filesystem-shape corners, render output, judgment-leg prompts against a mock `Model` | The same observable behavior is already asserted elsewhere and needs no coverage backfill |
+| **Crate integration** | `core/tests/` (via the consolidated `it` binary) | The behavior is reachable through the library API: engine invariants, filesystem-shape corners, render output, judgment-leg prompts against a mock `Model` | The same observable behavior is already asserted elsewhere and needs no coverage backfill |
 
 ## Triage rubric (applied to every `#[cfg(test)]` / `tests.rs`)
 

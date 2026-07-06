@@ -16,18 +16,18 @@ Each entry records the decision, why it was taken, and the consequences a change
 
 | Extension module | Core module | Notes |
 | --- | --- | --- |
-| `infer` | `crates/core/src/infer.rs` | The catalog-infer **report** phase (deterministic, name-free clustering); the engine's bind bookkeeping stays engine-side. The guest build runs the report in-guest and injects it into the composition leg's prompt. |
-| `verify` | `crates/core/src/verify.rs` (+ `verify/app_icon.rs`) | `verify` and `bootstrap-app-icon` modes move; `host-prereq` mode stayed extension-local (`extension/src/host_prereq.rs`) — it probes the host environment and is not wasm-clean — and died with the extension at A2. |
-| `scaffold` | `crates/core/src/scaffold.rs` (+ `scaffold/`) | Render-only scaffolding with embedded version pins; `run_at` takes an explicit project dir (no env reads in core). |
-| `sync` | `crates/core/src/sync.rs` | Lightweight scaffold repair without prepare side effects. |
-| `android` | `crates/core/src/android.rs` | Vendored Gradle-wrapper install; the `#[cfg(unix)]` chmod leg was a no-op under WASI and did not move. |
-| `schema` / `schema_source` | `crates/core/src/schema_source.rs` | Published-schema source of truth; the JSON files live under `crates/core/schemas/`. |
-| `shell` | `crates/core/src/shell.rs` (+ `shell/launcher.rs`) | Shell presence and shell-resident app-icon detection. |
-| `prepare` (orchestration) | `crates/core/src/prepare.rs` (`run_build`, `exit_code`) | The full prepare orchestration (materialize + bootstrap gate + android setup + iOS sync) joins the previously absorbed `materialize_step`. |
+| `infer` | `core/src/infer.rs` | The catalog-infer **report** phase (deterministic, name-free clustering); the engine's bind bookkeeping stays engine-side. The guest build runs the report in-guest and injects it into the composition leg's prompt. |
+| `verify` | `core/src/verify.rs` (+ `verify/app_icon.rs`) | `verify` and `bootstrap-app-icon` modes move; `host-prereq` mode stayed extension-local (`extension/src/host_prereq.rs`) — it probes the host environment and is not wasm-clean — and died with the extension at A2. |
+| `scaffold` | `core/src/scaffold.rs` (+ `scaffold/`) | Render-only scaffolding with embedded version pins; `run_at` takes an explicit project dir (no env reads in core). |
+| `sync` | `core/src/sync.rs` | Lightweight scaffold repair without prepare side effects. |
+| `android` | `core/src/android.rs` | Vendored Gradle-wrapper install; the `#[cfg(unix)]` chmod leg was a no-op under WASI and did not move. |
+| `schema` / `schema_source` | `core/src/schema_source.rs` | Published-schema source of truth; the JSON files live under `core/schemas/`. |
+| `shell` | `core/src/shell.rs` (+ `shell/launcher.rs`) | Shell presence and shell-resident app-icon detection. |
+| `prepare` (orchestration) | `core/src/prepare.rs` (`run_build`, `exit_code`) | The full prepare orchestration (materialize + bootstrap gate + android setup + iOS sync) joins the previously absorbed `materialize_step`. |
 
-Unit tests under `extension/src/**` (the 14-test ratchet budget) moved to `crates/core/tests/` as integration tests over the core's public surface; the `vectis` line in `tools/rust-quality/rust_quality_budget.toml` is removed (implicit budget 0). The extension's integration tests kept passing against the shim re-exports as a secondary oracle until A2 deleted them (see the A2 entry below for what was re-homed).
+Unit tests under `extension/src/**` (the 14-test ratchet budget) moved to `core/tests/` as integration tests over the core's public surface; the `vectis` line in `tools/rust-quality/rust_quality_budget.toml` is removed (implicit budget 0). The extension's integration tests kept passing against the shim re-exports as a secondary oracle until A2 deleted them (see the A2 entry below for what was re-homed).
 
-**Asset relocation.** `extension/schemas/` → `crates/core/schemas/`; `extension/templates/` → `crates/core/templates/`; `extension/assets/` → `crates/core/assets/`; `extension/versions.toml` → `crates/core/versions.toml`. The template-registry generation from `extension/build.rs` merged into `crates/core/build.rs` (which already embedded the prose registry); all `include_str!` / `include_bytes!` depths updated on both sides. Nothing asset-shaped remains extension-owned, so A2's deletion is a pure crate removal.
+**Asset relocation.** `extension/schemas/` → `core/schemas/`; `extension/templates/` → `core/templates/`; `extension/assets/` → `core/assets/`; `extension/versions.toml` → `core/versions.toml`. The template-registry generation from `extension/build.rs` merged into `core/build.rs` (which already embedded the prose registry); all `include_str!` / `include_bytes!` depths updated on both sides. Nothing asset-shaped remains extension-owned, so A2's deletion is a pure crate removal.
 
 ## RFC-61 Step 5 Milestone A1 — prompt and prose cutover
 
@@ -70,10 +70,10 @@ No check was left homeless. The vectis platform builds and the omnia cargo/wasm3
 **Decision (2026-07).** The legacy WASI extension stack is deleted: `targets/vectis/extension/` (65 files, ~8.9k lines — the clap shim, its `tests/cli.rs` + `tests/engine/**` integration suites, and the extension-local `host_prereq.rs`), `targets/contracts/extension/` (3 files, ~500 lines), the two committed `adapter.wasm` artifacts (`targets/{vectis,contracts}/adapter.wasm`), and the `targets/vectis/scripts/` native hook scripts (3 files, ~270 lines). The workspace drops the `"targets/*/extension"` members glob and the now-orphaned `clap` / `assert_cmd` `[workspace.dependencies]`. Standing consequences:
 
 - **Hook scripts and `check-hook-scripts` die together.** `build-finalize-verify.sh` shelled out to `specify extension run vectis` (a verb that dies at cutover) and `build-host-prereq.sh` existed only for the manifest's `host_prereq:` field, which the manifest shrink below removes — with no adapter.yaml consumer and no runnable body, the scripts and the `check-hook-scripts` task (dropped from the `check` / `ci` dependency lists in `Makefile.toml`) have no surviving purpose. Host-toolchain preflight is operator-owned post-cutover; the merge prompt's host cap-matrix section instructs the agent-run platform builds that surface missing toolchains.
-- **The extension integration suites are deleted, not ported.** A1 designated the core `tests/` tree the primary oracle; the extension suites covered the CLI wire contract (arg parsing, exit codes, stdout JSON), which has no post-cutover surface. The exception: the three DECISIONS-cited appendix fixture pins (Appendix C / D / E) re-home to `crates/core/tests/appendices.rs` against the core engine API, so the "codified in" pointers under §"Vectis validation and materialization" stay true.
+- **The extension integration suites are deleted, not ported.** A1 designated the core `tests/` tree the primary oracle; the extension suites covered the CLI wire contract (arg parsing, exit codes, stdout JSON), which has no post-cutover surface. The exception: the three DECISIONS-cited appendix fixture pins (Appendix C / D / E) re-home to `core/tests/appendices.rs` against the core engine API, so the "codified in" pointers under §"Vectis validation and materialization" stay true.
 - **The rust-quality ratchet re-scopes.** `tools/rust-quality` counted `{targets,sources}/<name>/extension/src/**`; with no extension trees left that gate would be vacuously green forever, so it now counts every adapter `src/` tree (the guest shim and its `crates/*/src/` sub-crates), same budget semantics, all budgets at the implicit 0.
 - **Lib-name reclaim.** With `specify-vectis-extension` gone, the `specify_vectis` lib name is free; the vectis guest package drops its `[lib] name = "specify_vectis_adapter"` override and defaults to `specify_vectis`, so the built artifact is `specify_vectis.wasm` like every other guest. The committed artifact name is unchanged (`targets/vectis/guest.wasm`); `refresh-guests`, the runtime tests' deployment manifests, and the vectis eval runner track the new artifact name. The committed `guest.wasm` bytes are deliberately not refreshed here — Milestone A3 owns artifact refresh.
-- **CORE-061 dies with the extension machinery** (post-review addendum). `shared/rules/core/CORE-061-adapter-extension-crate-missing.md` checked that every adapter declaring `adapter.yaml.extension` shipped a co-located `extension/` crate and a committed `adapter.wasm` — all three of which this milestone deletes (the extension crates above, the `adapter.wasm` artifacts, and the manifest `extension:` field in the manifest-shrink entry below). The rule is vacuous with nothing left to trigger on, so the rule file is deleted; no index or citation referenced it.
+- **CORE-061 dies with the extension machinery** (post-review addendum). `shared/prose/rules/core/CORE-061-adapter-extension-crate-missing.md` checked that every adapter declaring `adapter.yaml.extension` shipped a co-located `extension/` crate and a committed `adapter.wasm` — all three of which this milestone deletes (the extension crates above, the `adapter.wasm` artifacts, and the manifest `extension:` field in the manifest-shrink entry below). The rule is vacuous with nothing left to trigger on, so the rule file is deleted; no index or citation referenced it.
 
 ## RFC-61 Step 5 Milestone A2 — `shape` → `guidance` rename
 
@@ -108,7 +108,7 @@ Each shrunk manifest validates against the sibling repo's relaxed `source.schema
 
 ## Vectis validation and materialization
 
-Provenance and rationale for the deterministic validation engine, re-homed from `targets/vectis/extension/DECISIONS.md` (see the anchor mapping note above). Code citations point at `specify-vectis-core` (`targets/vectis/crates/core/`), where the engine lives as of Milestone A1; inline comments in `src/validate/engine/` state the rules without historical labels; this file carries the citation.
+Provenance and rationale for the deterministic validation engine, re-homed from `targets/vectis/extension/DECISIONS.md` (see the anchor mapping note above). Code citations point at `specify-vectis-core` (`targets/vectis/core/`), where the engine lives as of Milestone A1; inline comments in `src/validate/engine/` state the rules without historical labels; this file carries the citation.
 
 ### Vectis UI artifact surface
 
@@ -166,19 +166,19 @@ _Codified in: `src/validate/engine/shared.rs::ASSETS_SCHEMA_SOURCE`, `assets_val
 
 > Pinned verbatim as the happy-path schema fixture; any future drift surfaces in the layout-mode test suite first.
 
-_Codified in: `crates/core/tests/appendices.rs::APPENDIX_C_LAYOUT_YAML`._
+_Codified in: `core/tests/appendices.rs::APPENDIX_C_LAYOUT_YAML`._
 
 ### Appendix D — example `tokens.yaml`
 
 > Pinned verbatim as the happy-path tokens schema fixture; any future drift surfaces in the tokens-mode test suite first.
 
-_Codified in: `crates/core/tests/appendices.rs::APPENDIX_D_TOKENS_YAML`._
+_Codified in: `core/tests/appendices.rs::APPENDIX_D_TOKENS_YAML`._
 
 ### Appendix E — example `assets.yaml`
 
 > Pinned verbatim as the happy-path assets schema fixture; any future drift surfaces in the assets-mode test suite first.
 
-_Codified in: `crates/core/tests/appendices.rs::APPENDIX_E_ASSETS_YAML`._
+_Codified in: `core/tests/appendices.rs::APPENDIX_E_ASSETS_YAML`._
 
 ### Appendix F — patched `composition.schema.json`
 

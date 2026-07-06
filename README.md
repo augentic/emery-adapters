@@ -13,7 +13,7 @@ adapter itself.
 Each adapter is a **guest component** (RFC-61): the adapter root doubles as a
 wasm32-only cdylib package (`specify-<name>`, a hand-written export shim over
 `specify-guest-kit`'s shared WIT bindings), with its wasm-free core logic in a
-`crates/core/` sub-crate (`specify-<name>-core`) and the committed `guest.wasm`
+`core/` sub-crate (`specify-<name>-core`) and the committed `guest.wasm`
 beside `adapter.yaml`.
 
 ## Layout
@@ -21,6 +21,7 @@ beside `adapter.yaml`.
 Every adapter — the three targets and the five sources — shares the same guest anatomy:
 
 ```text
+wit/                  # the contract — specify.wit, the axis worlds
 {targets,sources}/
   <name>/             # e.g. targets/{contracts,omnia,vectis}, sources/{intent,documentation,typescript,screenshots,captures}
     adapter.yaml      #   adapter manifest
@@ -30,22 +31,24 @@ Every adapter — the three targets and the five sources — shares the same gue
       rules/          #   engineering standards (target adapters)
     Cargo.toml        #   `specify-<name>` — the adapter guest component (wasm32 shim)
     src/              #   hand-written shim: Guest impl, export glue, MCP shelf
-    crates/core/      #   `specify-<name>-core` — wasm-free logic, natively tested
+    core/             #   `specify-<name>-core` — wasm-free logic, natively tested
     guest.wasm        #   committed guest component (refreshed via `cargo make refresh-guests`)
-shared/               # shared references/rules forked from the platform repo;
-                      # adapter `spec-runtime` / `agent-teams` symlinks resolve here
+shared/
+  prose/              # cross-adapter prose, same grammar as adapter prose/
+    references/       #   spec-runtime bundle, replay hook docs, …
+    rules/            #   UNI-* and CORE-* engineering rules
 crates/               # shared guest support: guest-kit, prose-registry,
                       # eval-driver + eval-guest, runtime-tests
 evals/                # live eval harnesses against the real cursor backend
                       # (contracts, vectis)
-Cargo.toml            # workspace: guest roots + `{sources,targets}/*/crates/*`
+Cargo.toml            # workspace: guest roots + `{sources,targets}/*` + `{sources,targets}/*/core`
 ```
 
 The `adapter.yaml` manifests carry the post-cutover field set only (`name`, `version`, `axis`, `description`, plus `platforms` where declared): the guests embed their own prompts, so nothing reads manifests for operation dispatch.
 
 The Crux shell-detection heuristics the platform once exposed as
 `specify-vectis-shell-detect` live inline in the vectis core at
-`targets/vectis/crates/core/src/shell.rs` rather than as a separate
+`targets/vectis/core/src/shell.rs` rather than as a separate
 workspace crate.
 
 ## Building the guests

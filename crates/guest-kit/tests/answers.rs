@@ -7,7 +7,7 @@ use specify_guest_kit::answers::{
 };
 use specify_guest_kit::seam::{Authority, Backing, ClaimKind, Error, Severity, Status};
 
-// The three embedded pins are the vendored schemas/answers/ documents,
+// The three embedded pins are the vendored crates/guest-kit/schemas/answers/ documents,
 // byte-identical to the files on disk.
 #[test]
 fn schema_pins_match_vendored_files() {
@@ -17,9 +17,7 @@ fn schema_pins_match_vendored_files() {
         (REPORT_ANSWER_SCHEMA, "report.schema.json"),
     ] {
         let on_disk = std::fs::read_to_string(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../schemas/answers")
-                .join(file),
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("schemas/answers").join(file),
         )
         .expect("vendored schema file");
         assert_eq!(pin, on_disk, "pin matches {file}");

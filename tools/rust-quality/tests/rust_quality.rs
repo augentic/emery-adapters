@@ -2,7 +2,7 @@
 //!
 //! Run with `cargo test --test rust_quality` (or via `cargo make test`).
 //! Counts `#[test]` / `#[tokio::test]` declarations under each adapter's
-//! `src/` trees (the guest shim and its sub-crates) and fails when the
+//! `src/` trees (the guest shim and its core crate) and fails when the
 //! live count drifts from the committed budget in
 //! `rust_quality_budget.toml`. Mirrors the engine gate and enforces the
 //! integration-first posture in TESTING.md.
@@ -66,7 +66,7 @@ fn count_src_file(root: &Path, path: &Path, counts: &mut BTreeMap<String, usize>
 
 /// Scope key for an adapter `src/` Rust file, or `None` when the file
 /// is elsewhere. Matches the guest shim (`{targets,sources}/<name>/src/**`)
-/// and every sub-crate (`{targets,sources}/<name>/crates/*/src/**`), keying
+/// and the core crate (`{targets,sources}/<name>/core/src/**`), keying
 /// both to `<name>`.
 fn adapter_scope(rel: &str) -> Option<String> {
     let mut parts = rel.split('/');
@@ -77,10 +77,7 @@ fn adapter_scope(rel: &str) -> Option<String> {
     let name = parts.next()?;
     match parts.next()? {
         "src" => Some(name.to_owned()),
-        "crates" => {
-            let _crate_dir = parts.next()?;
-            (parts.next() == Some("src")).then(|| name.to_owned())
-        }
+        "core" => (parts.next() == Some("src")).then(|| name.to_owned()),
         _ => None,
     }
 }
@@ -160,11 +157,11 @@ fn counts_src_unit_tests_by_scope() {
     let shim = root.join("targets/demo/src/lib.rs");
     fs::create_dir_all(shim.parent().expect("parent")).expect("mkdir");
     fs::write(&shim, "#[test]\nfn a() {}\n").expect("write");
-    let core = root.join("targets/demo/crates/core/src/foo.rs");
+    let core = root.join("targets/demo/core/src/foo.rs");
     fs::create_dir_all(core.parent().expect("parent")).expect("mkdir");
     fs::write(&core, "#[test]\nfn b() {}\n#[tokio::test]\nasync fn c() {}\n").expect("write");
     // Integration tests under tests/ must never be counted.
-    let it = root.join("targets/demo/crates/core/tests/it.rs");
+    let it = root.join("targets/demo/core/tests/it.rs");
     fs::create_dir_all(it.parent().expect("parent")).expect("mkdir");
     fs::write(&it, "#[test]\nfn d() {}\n").expect("write");
 

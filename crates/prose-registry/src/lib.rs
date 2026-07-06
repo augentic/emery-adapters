@@ -5,7 +5,7 @@
 //! on disk; registry keys omit the `prose/` prefix (`prompts/build.md`, not
 //! `prose/prompts/build.md`). The walk follows
 //! directory symlinks (such as `references/spec-runtime` into
-//! `shared/references/runtime/` — symlinks do not survive embedding, so
+//! `shared/prose/references/runtime/` — symlinks do not survive embedding, so
 //! the resolved content is inlined under the symlink-name path) and writes
 //! `<out_dir>/registry_docs.rs`: one `Doc` entry per markdown file, keyed
 //! by its adapter-relative path, with the body pulled in by `include_str!`
@@ -18,7 +18,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// [`emit`] for an adapter core's `build.rs`: resolves the adapter root
-/// from `CARGO_MANIFEST_DIR` (the core sits at `<adapter>/crates/core`)
+/// from `CARGO_MANIFEST_DIR` (the core sits at `<adapter>/core`)
 /// and the output from `OUT_DIR`.
 ///
 /// # Panics
@@ -28,10 +28,8 @@ use std::path::{Path, PathBuf};
 pub fn emit_core(trees: &[&str]) {
     let manifest_dir =
         PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR"));
-    let adapter_root = manifest_dir
-        .parent()
-        .and_then(Path::parent)
-        .expect("core crate sits at <adapter>/crates/core under the adapter root");
+    let adapter_root =
+        manifest_dir.parent().expect("core crate sits at <adapter>/core under the adapter root");
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").expect("cargo sets OUT_DIR"));
     if let Err(err) = emit(adapter_root, trees, &out_dir) {
         panic!("prose registry codegen failed for {}: {err}", adapter_root.display());

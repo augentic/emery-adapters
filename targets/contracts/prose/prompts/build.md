@@ -1,6 +1,6 @@
 # contracts.build
 
-> The contracts adapter core inlines this document into the system prompt of every build leg — the three format sub-flows, the bounded verify-repair loop, and the report — alongside the leg's own format sub-prompt under [`build/`](build/). Leg sequencing lives in the adapter core (`crates/core/src/operations.rs`), not here: each leg's user prompt names the phases of this document to follow.
+> The contracts adapter core inlines this document into the system prompt of every build leg — the three format sub-flows, the bounded verify-repair loop, and the report — alongside the leg's own format sub-prompt under [`build/`](build/). Leg sequencing lives in the adapter core (`core/src/operations.rs`), not here: each leg's user prompt names the phases of this document to follow.
 
 Build authors and validates machine-readable contract artifacts under the slice-local `contracts/` directory across three per-format sub-prompts (`build/json-schema.md`, `build/openapi.md`, `build/asyncapi.md`); each carries an internal author / import / verify intent table that fans out to references under [`../references/<format>/`](../references/).
 
