@@ -9,10 +9,19 @@
 use specify_guest_kit::answers::{
     EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA, LeadsAnswer, validate_evidence, validate_leads,
 };
-use specify_guest_kit::seam::{Context, Error, Evidence, Lead};
+use specify_guest_kit::seam::{Context, Error, Evidence, Lead, SourceManifest};
 use specify_guest_kit::{Model, judgment};
 
 use crate::registry;
+
+/// The adapter's deterministic self-description (RFC-64).
+///
+/// Resolve-time metadata answered from compiled-in constants: no
+/// compatibility floor is declared, matching the retired manifest.
+#[must_use]
+pub const fn describe() -> SourceManifest {
+    SourceManifest { specify_floor: None }
+}
 
 /// How the spawned agent resolves its bound source material — the
 /// session-less state note both prompts carry. Intent bindings are

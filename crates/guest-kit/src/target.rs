@@ -24,9 +24,11 @@ mod generated {
     wit_bindgen::generate!({
         world: "target-adapter",
         path: "../../wit",
-        // The seam operations are `async func`s (judgment legs await the
-        // async `omnia:model` import mid-call), so the exports async-lift.
-        async: true,
+        // Asyncness follows the WIT declarations: the judgment operations
+        // are `async func`s (they await the async `omnia:model` import
+        // mid-call) and async-lift; `describe` is a plain `func` (RFC-64:
+        // deterministic, effect-free) and sync-lifts — forcing it async
+        // would fail component validation at load.
         generate_all,
         pub_export_macro: true,
     });
@@ -34,6 +36,35 @@ mod generated {
 
 pub use generated::exports::augentic::specify::target::*;
 pub use generated::*;
+
+impl From<crate::seam::BuildInput> for BuildInput {
+    fn from(input: crate::seam::BuildInput) -> Self {
+        Self {
+            path: input.path,
+            required: input.required,
+        }
+    }
+}
+
+impl From<crate::seam::PlatformsCapability> for PlatformsCapability {
+    fn from(capability: crate::seam::PlatformsCapability) -> Self {
+        Self {
+            required: capability.required,
+            allowed: capability.allowed.into_iter().map(Into::into).collect(),
+            default: capability.default.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+impl From<crate::seam::TargetManifest> for Manifest {
+    fn from(manifest: crate::seam::TargetManifest) -> Self {
+        Self {
+            specify_floor: manifest.specify_floor,
+            inputs: manifest.inputs.into_iter().map(Into::into).collect(),
+            platforms: manifest.platforms.map(Into::into),
+        }
+    }
+}
 
 impl From<Input> for crate::seam::Input {
     fn from(input: Input) -> Self {

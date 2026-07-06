@@ -10,7 +10,7 @@ use specify_guest_kit::seam::{
     Changeset, Context, Edit, Error, Input, Severity, Status, WorkingTree,
 };
 use specify_guest_kit::{Error as ModelError, Format, MockModel, Request};
-use specify_omnia_core::operations::{build, guidance, merge};
+use specify_omnia_core::operations::{build, describe, guidance, merge};
 use tempfile::TempDir;
 
 const PHASE_DONE: &str = r#"{"applicable":true,"summary":"phase complete"}"#;
@@ -283,4 +283,14 @@ async fn merge_missing_output_repairs_then_enforces() {
     assert_eq!(report.status, Status::Failure);
     assert!(report.findings[0].detail.contains("crates/demo"));
     assert_eq!(model.requests().len(), 2, "one merge leg plus one bounded repair leg");
+}
+
+// The RFC-64 self-description is answerable without a model or a
+// filesystem: no floor, no declared build inputs, no platform capability.
+#[test]
+fn describe_declares_nothing() {
+    let manifest = describe();
+    assert_eq!(manifest.specify_floor, None);
+    assert!(manifest.inputs.is_empty());
+    assert_eq!(manifest.platforms, None);
 }

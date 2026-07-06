@@ -1,20 +1,18 @@
 # specify-adapters
 
 First-party Specify **adapters**, extracted from the platform repo as
-independently-versioned registry artifacts (RFC-48 / RFC-49 T6).
+independently-versioned registry artifacts (RFC-48 / RFC-49 T6, amended by
+RFC-64).
 
-Each adapter is a self-contained tree under `{targets,sources}/<name>/`:
-its `adapter.yaml` manifest and `prose/` trees (`prompts/`, `references/`,
-and `rules/` where declared). The platform
-`specify` binary consumes an adapter as an opaque, content-addressed
-artifact resolved from the global adapter store; it never compiles the
-adapter itself.
-
-Each adapter is a **guest component** (RFC-61): the adapter root doubles as a
-wasm32-only cdylib package (`specify-<name>`, a hand-written export shim over
-`specify-guest-kit`'s shared WIT bindings), with its wasm-free core logic in a
-`core/` sub-crate (`specify-<name>-core`) and the committed `guest.wasm`
-beside `adapter.yaml`.
+Each adapter is a **guest component** (RFC-61 / RFC-64): the adapter root
+doubles as a wasm32-only cdylib package (`specify-<name>`, a hand-written
+export shim over `specify-guest-kit`'s shared WIT bindings), with its
+wasm-free core logic in a `core/` sub-crate (`specify-<name>-core`) and its
+`prose/` trees (`prompts/`, `references/`, and `rules/` where declared)
+embedded at build time. The deployable artifact is exactly the built
+component — there is no `adapter.yaml` manifest and no committed wasm: the
+platform `specify` binary pulls the published component from the registry
+and reads its resolve-time facts through the WIT `describe` operation.
 
 ## Layout
 
@@ -24,15 +22,13 @@ Every adapter — the three targets and the five sources — shares the same gue
 wit/                  # the contract — specify.wit, the axis worlds
 {targets,sources}/
   <name>/             # e.g. targets/{contracts,omnia,vectis}, sources/{intent,documentation,typescript,screenshots,captures}
-    adapter.yaml      #   adapter manifest
-    prose/            #   agent-facing markdown (embedded into guest.wasm)
+    prose/            #   agent-facing markdown (embedded into the component)
       prompts/        #   operation system-prompt fragments
       references/     #   lazy MCP reference corpus
       rules/          #   engineering standards (target adapters)
-    Cargo.toml        #   `specify-<name>` — the adapter guest component (wasm32 shim)
+    Cargo.toml        #   `specify-<name>` — the adapter guest component (wasm32 shim); its `version` is the adapter identity semver
     src/              #   hand-written shim: Guest impl, export glue, MCP shelf
     core/             #   `specify-<name>-core` — wasm-free logic, natively tested
-    guest.wasm        #   committed guest component (refreshed via `cargo make refresh-guests`)
 shared/
   prose/              # cross-adapter prose, same grammar as adapter prose/
     references/       #   spec-runtime bundle, replay hook docs, …
@@ -44,7 +40,12 @@ evals/                # live eval harnesses against the real cursor backend
 Cargo.toml            # workspace: guest roots + `{sources,targets}/*` + `{sources,targets}/*/core`
 ```
 
-The `adapter.yaml` manifests carry the post-cutover field set only (`name`, `version`, `axis`, `description`, plus `platforms` where declared): the guests embed their own prompts, so nothing reads manifests for operation dispatch.
+The facts the retired `adapter.yaml` carried live wasm-native (RFC-64):
+identity in the guest crate's `Cargo.toml` `version` and the wasm-pkg
+reference it publishes under (`augentic:<name>@<semver>`); axis in the
+exported world (`source` xor `target`); the compatibility floor and — for
+targets — the declared build `inputs[]` and platforms capability in the
+`describe` operation's compiled-in manifest record.
 
 The Crux shell-detection heuristics the platform once exposed as
 `specify-vectis-shell-detect` live inline in the vectis core at
@@ -64,17 +65,25 @@ The `fmt-check` arm shells out to nightly `rustfmt`, so a nightly toolchain
 plus the `cargo-make`, `cargo-nextest`, `cargo-deny`, and `cargo-vet` tools must
 be installed; the tasks are defined in `Makefile.toml`.
 
-Build every adapter guest for wasm32-wasip2 (plus the eval guest) with `cargo make build-guests`; refresh the committed `{targets,sources}/<name>/guest.wasm` components with:
+Build every adapter guest for wasm32-wasip2 (plus the eval guest) with
+`cargo make build-guests`; release-build the deployable components into
+`target/wasm32-wasip2/release/specify_<name>.wasm` with:
 
 ```bash
-cargo make refresh-guests
+cargo make build-guests-release
 ```
 
 ## Publishing
 
-`specify adapter publish --path targets/<name> --reference <registry>/<ns>/<name>:<version>`
-packs the tree into a byte-deterministic single-layer OCI artifact, pushes
-it, pulls it back, and verifies the content digest. CI (`.github/workflows/release.yaml`)
-runs this for every adapter on a `v*` tag. Registry credentials come from
-`SPECIFY_REGISTRY_TOKEN` (bearer) or `SPECIFY_REGISTRY_USERNAME` /
-`SPECIFY_REGISTRY_PASSWORD` (basic).
+Publishing an adapter is: release-build the guest package, push the emitted
+component to the registry as a standard wasm-pkg package (RFC-64) —
+
+```bash
+cargo make build-guests-release
+wkg publish target/wasm32-wasip2/release/specify_<name>.wasm --package augentic:<name>@<semver>
+```
+
+where `<semver>` is the guest crate's `Cargo.toml` `version`. CI
+(`.github/workflows/release.yaml`) runs this for every adapter on a `v*`
+tag. Registry credentials come from `SPECIFY_REGISTRY_USERNAME` /
+`SPECIFY_REGISTRY_PASSWORD`, written into the `wkg` config's registry auth.

@@ -10,7 +10,7 @@ The build runs against the build request the CLI prepared at `.specify/slices/<s
 - `inputs.artifacts.specs[]` (`specs/<domain>/spec.md`) — behavioural requirements, one file per `proposal.md ## Domains` entry.
 - `inputs.artifacts.design` (`design.md`) — domain model, provider DI, error variants, and WASM idioms (see [`guidance.md`](guidance.md)).
 - `inputs.artifacts.tasks` (`tasks.md`) — implementation sequencing and progress tracking.
-- `inputs.artifacts.additional[]` — empty for omnia: [`adapter.yaml`](../adapter.yaml) declares no extra slice-tree inputs. Omnia reads the project working tree's `Cargo.toml` directly for workspace context; that is not a slice-tree input.
+- `inputs.artifacts.additional[]` — empty for omnia: the adapter's `describe` manifest declares no extra slice-tree inputs. Omnia reads the project working tree's `Cargo.toml` directly for workspace context; that is not a slice-tree input.
 
 These working names, bound from the request and the resolved crate, are used throughout:
 

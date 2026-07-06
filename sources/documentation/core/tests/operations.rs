@@ -4,7 +4,7 @@
 
 use std::path::Path;
 
-use specify_documentation_core::operations::{extract, survey};
+use specify_documentation_core::operations::{describe, extract, survey};
 use specify_guest_kit::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA};
 use specify_guest_kit::seam::{Authority, ClaimKind, Context, Error, Lead};
 use specify_guest_kit::{Error as ModelError, Format, MockModel, Request};
@@ -181,4 +181,11 @@ async fn model_invalid_request_maps_through() {
     let err = survey(&model, &ctx(None)).await.unwrap_err();
 
     assert!(matches!(err, Error::InvalidRequest(_)));
+}
+
+// The RFC-64 self-description is answerable without a model or a
+// filesystem: no compatibility floor is declared.
+#[test]
+fn describe_declares_no_floor() {
+    assert_eq!(describe().specify_floor, None);
 }

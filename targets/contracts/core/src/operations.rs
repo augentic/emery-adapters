@@ -11,7 +11,8 @@
 use std::path::Path;
 
 use specify_guest_kit::seam::{
-    Changeset, Context, Error, Finding, Input, Report, Severity, WorkingTree,
+    BuildInput, Changeset, Context, Error, Finding, Input, Report, Severity, TargetManifest,
+    WorkingTree,
 };
 use specify_guest_kit::{Model, phase};
 
@@ -51,6 +52,24 @@ const SUB_FLOWS: [SubFlow; 3] = [
         dir: "messages",
     },
 ];
+
+/// The adapter's deterministic self-description (RFC-64).
+///
+/// Resolve-time metadata answered from compiled-in constants: no
+/// compatibility floor; one optional build input — the slice tree's
+/// `contracts/` subtree, carrying partial deltas written by a prior
+/// pass.
+#[must_use]
+pub fn describe() -> TargetManifest {
+    TargetManifest {
+        specify_floor: None,
+        inputs: vec![BuildInput {
+            path: "contracts".to_string(),
+            required: false,
+        }],
+        platforms: None,
+    }
+}
 
 /// Guidance on the expected build artifacts for this target — the
 /// embedded guidance prompt, returned deterministically (no judgment leg).

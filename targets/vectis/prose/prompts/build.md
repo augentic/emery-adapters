@@ -16,7 +16,7 @@ The build runs against the build request the CLI prepared at `.specify/slices/<s
 - `inputs.artifacts.specs[]` (`specs/<domain>/spec.md`) — behavioural requirements per domain: screen titles, scenarios, platform-specific behaviour, validation rules.
 - `inputs.artifacts.design` (`design.md`) — domain model: ViewModel / `Event` / `Route` variants, per-page view structs, capability matrix.
 - `inputs.artifacts.tasks` (`tasks.md`) — phase-completion tracking.
-- `inputs.artifacts.additional[]` — the three design-system inputs declared by [`adapter.yaml`](../adapter.yaml), **all optional** (`required: false`), each with an explicit absent-fallback:
+- `inputs.artifacts.additional[]` — the three design-system inputs the adapter's `describe` manifest declares, **all optional** (`required: false`), each with an explicit absent-fallback:
   - `tokens.yaml` — design tokens; absent → HIG (iOS) / Material 3 (Android) theme fallback in the shell writers.
   - `assets.yaml` — asset inventory; the composition validator's `tokens` / `assets` modes run only when the respective file is present.
   - `components.yaml` — the agent-inferred component catalog (surfaced as `CATALOG_PATH`); written by the workflow's deterministic bind bookkeeping from the Step 0.5 bindings file and read back during composition regeneration; absent → no component factoring.
@@ -25,7 +25,7 @@ The build runs against the build request the CLI prepared at `.specify/slices/<s
 
 - Agents executing this prompt in a consumer project are **consumers**, not adapter maintainers.
 - On scaffold / verify / finalize / toolchain failure: **stop** with `deferred` or a failure report — see [Consumer tooling boundary](../references/spec-runtime/guardrails.md#consumer-tooling-boundary).
-- **Never** edit `specify-adapters`, `core/templates/`, or `guest.wasm` in-band — even when `adapters/` is a sibling symlink.
+- **Never** edit `specify-adapters`, `core/templates/`, or the built guest component in-band — even when `adapters/` is a sibling symlink.
 - Tooling fixes happen in a **separate maintainer session** on specify-adapters; consumer scaffolds re-sync deterministically on the next build (the adapter re-renders the agent-immutable scaffold files from its embedded templates).
 
 ## Standard arguments
@@ -118,7 +118,7 @@ The adapter's scaffold renderer is render-only and ships with embedded version p
 
 **Agents:** detect → record the failing combo (caps + shells), the failing host step, and the load-bearing error line → mark the build outcome as `deferred` with a template / pin drift signal → **exit** (no upstream edits). See [Consumer tooling boundary](../references/spec-runtime/guardrails.md#consumer-tooling-boundary).
 
-**Operators (separate maintainer session):** edit [`core/versions.toml`](../core/versions.toml) and/or [`core/templates/`](../core/templates/core/), rebuild `guest.wasm`, publish / bump the adapter version; the consumer project's scaffolds re-sync deterministically on the next build.
+**Operators (separate maintainer session):** edit [`core/versions.toml`](../core/versions.toml) and/or [`core/templates/`](../core/templates/core/), rebuild the guest component, publish / bump the adapter version; the consumer project's scaffolds re-sync deterministically on the next build.
 
 ## § Phase outcome contract
 

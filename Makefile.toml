@@ -48,8 +48,19 @@ if [ ! -d "$sibling" ]; then
   exit 0
 fi
 status=0
-for pair in "wit/specify.wit:$sibling/wit/specify.wit" \
-            "crates/guest-kit/schemas/answers/leads.schema.json:$sibling/schemas/answers/leads.schema.json" \
+# RFC-64 migration window: the `describe` op landed in this repo's WIT
+# first. Until the sibling re-vendors (its R64 engine milestone), a
+# sibling WIT that predates `describe` is skipped rather than failed;
+# once the sibling carries `describe`, byte parity is enforced again.
+if grep -q 'describe: func' "$sibling/wit/specify.wit"; then
+  if ! cmp -s "wit/specify.wit" "$sibling/wit/specify.wit"; then
+    echo "check-pins: wit/specify.wit diverges from $sibling/wit/specify.wit; re-vendor from specify" >&2
+    status=1
+  fi
+else
+  echo "check-pins: sibling wit predates RFC-64 describe; skipping wit parity until specify re-vendors"
+fi
+for pair in "crates/guest-kit/schemas/answers/leads.schema.json:$sibling/schemas/answers/leads.schema.json" \
             "crates/guest-kit/schemas/answers/evidence.schema.json:$sibling/schemas/answers/evidence.schema.json" \
             "crates/guest-kit/schemas/answers/report.schema.json:$sibling/schemas/answers/report.schema.json"; do
   local_file="${pair%%:*}"
@@ -93,29 +104,15 @@ set -e
 evals/vectis/run.sh single-screen
 '''
 
-# Refresh the committed guest components: release-build every adapter guest
-# and copy each artifact to `{targets,sources}/<name>/guest.wasm` beside its
-# adapter manifest. Run on guest changes, then commit the wasm diff.
-[tasks.refresh-guests]
+# Release-build every adapter guest component where cargo puts it
+# (`target/wasm32-wasip2/release/specify_<name>.wasm`) — the deployable
+# artifacts the publish workflow pushes (RFC-64: no committed copies).
+[tasks.build-guests-release]
 script = '''
 set -e
 flags=""
 for package in $GUEST_PACKAGES; do flags="$flags -p $package"; done
 cargo build $flags --target wasm32-wasip2 --release
-for pair in \
-  "specify_contracts.wasm:targets/contracts" \
-  "specify_omnia.wasm:targets/omnia" \
-  "specify_vectis.wasm:targets/vectis" \
-  "specify_captures.wasm:sources/captures" \
-  "specify_documentation.wasm:sources/documentation" \
-  "specify_intent.wasm:sources/intent" \
-  "specify_screenshots.wasm:sources/screenshots" \
-  "specify_typescript.wasm:sources/typescript"; do
-  artifact="${pair%%:*}"
-  adapter="${pair#*:}"
-  cp "target/wasm32-wasip2/release/$artifact" "$adapter/guest.wasm"
-  echo "refreshed $adapter/guest.wasm"
-done
 '''
 
 # Audit

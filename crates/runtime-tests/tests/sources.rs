@@ -17,6 +17,34 @@ use crate::common::{self, Bundle};
 /// The versioned interface name the source-adapter world exports.
 const SOURCE_INTERFACE: &str = "augentic:specify/source@0.1.0";
 
+// describe("source:documentation") through host-mediated dispatch returns
+// the compiled-in RFC-64 manifest record — on the source axis just the
+// compatibility floor, absent here matching the retired adapter.yaml.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn describe_through_dispatch() -> Result<()> {
+    let mount = tempfile::tempdir()?;
+    let runtime = common::composed_runtime(mount.path()).await?;
+
+    let results = runtime
+        .invoke(
+            "source:documentation".into(),
+            Some(SOURCE_INTERFACE.to_string()),
+            "describe".to_string(),
+            vec![Val::String("source:documentation".to_string())],
+        )
+        .await
+        .context("dispatching describe")?;
+
+    let [Val::Record(fields)] = results.as_slice() else {
+        anyhow::bail!("describe returned an unexpected shape: {results:?}");
+    };
+    assert!(
+        fields.iter().any(|(key, value)| key == "specify-floor" && *value == Val::Option(None)),
+        "documentation declares no compatibility floor: {fields:?}"
+    );
+    Ok(())
+}
+
 // survey through dispatch exercises the source guest's async-lifted
 // judgment leg (the `async func` export awaiting
 // `omnia:model/completion.create`): the stub backend pends and then fails

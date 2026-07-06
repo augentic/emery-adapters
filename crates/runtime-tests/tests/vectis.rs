@@ -21,6 +21,75 @@ use crate::common::{self, Bundle};
 /// The versioned interface name the target-adapter world exports.
 const TARGET_INTERFACE: &str = "augentic:specify/target@0.1.0";
 
+// describe("target:vectis") through host-mediated dispatch returns the
+// compiled-in RFC-64 manifest record: no compatibility floor, the three
+// optional design-system build inputs, and the required platforms
+// capability — the resolve-time facts the retired adapter.yaml carried.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn describe_through_dispatch() -> Result<()> {
+    let mount = tempfile::tempdir()?;
+    let runtime = common::composed_runtime(mount.path()).await?;
+
+    let results = runtime
+        .invoke(
+            "target:vectis".into(),
+            Some(TARGET_INTERFACE.to_string()),
+            "describe".to_string(),
+            vec![Val::String("target:vectis".to_string())],
+        )
+        .await
+        .context("dispatching describe")?;
+
+    let [Val::Record(fields)] = results.as_slice() else {
+        anyhow::bail!("describe returned an unexpected shape: {results:?}");
+    };
+    let field = |name: &str| {
+        fields
+            .iter()
+            .find(|(key, _)| key == name)
+            .map(|(_, value)| value)
+            .with_context(|| format!("manifest record carries `{name}`: {fields:?}"))
+    };
+
+    let Val::Option(None) = field("specify-floor")? else {
+        anyhow::bail!("vectis declares no compatibility floor: {fields:?}");
+    };
+
+    let Val::List(inputs) = field("inputs")? else {
+        anyhow::bail!("manifest `inputs` is a list: {fields:?}");
+    };
+    let paths: Vec<&str> = inputs
+        .iter()
+        .filter_map(|input| {
+            let Val::Record(entries) = input else { return None };
+            entries.iter().find_map(|(key, value)| {
+                if let ("path", Val::String(path)) = (key.as_str(), value) {
+                    Some(path.as_str())
+                } else {
+                    None
+                }
+            })
+        })
+        .collect();
+    assert_eq!(
+        paths,
+        ["tokens.yaml", "assets.yaml", "components.yaml"],
+        "vectis declares the three optional design-system inputs"
+    );
+
+    let Val::Option(Some(platforms)) = field("platforms")? else {
+        anyhow::bail!("vectis declares a platforms capability: {fields:?}");
+    };
+    let Val::Record(capability) = platforms.as_ref() else {
+        anyhow::bail!("platforms capability is a record: {platforms:?}");
+    };
+    assert!(
+        capability.iter().any(|(key, value)| key == "required" && *value == Val::Bool(true)),
+        "vectis requires a declared platform set: {capability:?}"
+    );
+    Ok(())
+}
+
 // guidance("target:vectis") through host-mediated dispatch in the composed
 // deployment returns the embedded guidance prompt — the core registry riding
 // inside the component, beside the other guests.

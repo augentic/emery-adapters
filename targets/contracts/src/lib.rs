@@ -3,13 +3,19 @@
 //! shim contract.
 #![cfg(target_arch = "wasm32")]
 
-use specify_guest_kit::target::{AdapterId, Changeset, Error, Guest, Input, Report, WorkingTree};
+use specify_guest_kit::target::{
+    AdapterId, Changeset, Error, Guest, Input, Manifest, Report, WorkingTree,
+};
 use specify_guest_kit::{WasiModel, seam, shelf};
 
 struct Adapter;
 specify_guest_kit::target::export!(Adapter with_types_in specify_guest_kit::target);
 
 impl Guest for Adapter {
+    fn describe(_id: AdapterId) -> Manifest {
+        specify_contracts_core::operations::describe().into()
+    }
+
     async fn guidance(_id: AdapterId) -> Result<String, Error> {
         Ok(specify_contracts_core::operations::guidance().to_string())
     }

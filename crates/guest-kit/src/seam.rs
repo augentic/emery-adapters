@@ -267,6 +267,52 @@ pub struct Report {
     pub ui_surface: Option<UiSurface>,
 }
 
+/// A source adapter's deterministic self-description — mirrors the WIT
+/// `source.manifest` record (RFC-64). Metadata the host reads at resolve
+/// time, answerable from compiled-in constants.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SourceManifest {
+    /// Optional host-CLI compatibility floor (exact minimum `specify`
+    /// version). Absent means no floor.
+    pub specify_floor: Option<String>,
+}
+
+/// One adapter-declared build input — mirrors the WIT
+/// `target.build-input` record.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BuildInput {
+    /// Slice-tree-relative path of the input.
+    pub path: String,
+    /// Whether the build must abort when the path is absent.
+    pub required: bool,
+}
+
+/// Declarative platforms capability — mirrors the WIT
+/// `target.platforms-capability` record.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PlatformsCapability {
+    /// Whether projects must declare a platform set.
+    pub required: bool,
+    /// The set of platforms this target accepts.
+    pub allowed: Vec<Platform>,
+    /// The set assumed when the operator accepts the default.
+    pub default: Vec<Platform>,
+}
+
+/// A target adapter's deterministic self-description — mirrors the WIT
+/// `target.manifest` record (RFC-64). Metadata the host reads at resolve
+/// time, answerable from compiled-in constants.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TargetManifest {
+    /// Optional host-CLI compatibility floor (exact minimum `specify`
+    /// version). Absent means no floor.
+    pub specify_floor: Option<String>,
+    /// Adapter-declared build inputs; empty when the target declares none.
+    pub inputs: Vec<BuildInput>,
+    /// Declarative platforms capability; absent when platform-agnostic.
+    pub platforms: Option<PlatformsCapability>,
+}
+
 /// One lead surfaced by a survey — mirrors the WIT `source.lead` record.
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]

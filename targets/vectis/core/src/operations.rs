@@ -24,7 +24,8 @@ use std::path::Path;
 
 use serde_json::Value;
 use specify_guest_kit::seam::{
-    Changeset, Context, Error, Finding, Input, Report, Severity, Status, WorkingTree,
+    BuildInput, Changeset, Context, Error, Finding, Input, Platform, PlatformsCapability, Report,
+    Severity, Status, TargetManifest, WorkingTree,
 };
 use specify_guest_kit::{Model, phase};
 
@@ -44,6 +45,36 @@ const SHELF_POINTER: &str = "Every prompt, reference, and rule document this ada
      served by the granted `vectis-references` MCP shelf (`list_docs` / `read_doc`, \
      adapter-relative paths like `references/hard-rules-core.md` or \
      `prompts/build/ios/write.md`); fetch documents the prompts cite lazily from there.";
+
+/// The adapter's deterministic self-description (RFC-64).
+///
+/// Resolve-time metadata answered from compiled-in constants: no
+/// compatibility floor; three optional design-system build inputs
+/// (`tokens.yaml`, `assets.yaml`, `components.yaml`); a required
+/// platform declaration (`specify init --platforms`) over the full
+/// closed platform set, defaulting to core + the two supported shells.
+#[must_use]
+pub fn describe() -> TargetManifest {
+    let optional = |path: &str| BuildInput {
+        path: path.to_string(),
+        required: false,
+    };
+    TargetManifest {
+        specify_floor: None,
+        inputs: vec![optional("tokens.yaml"), optional("assets.yaml"), optional("components.yaml")],
+        platforms: Some(PlatformsCapability {
+            required: true,
+            allowed: vec![
+                Platform::Core,
+                Platform::Ios,
+                Platform::Android,
+                Platform::Web,
+                Platform::Desktop,
+            ],
+            default: vec![Platform::Core, Platform::Ios, Platform::Android],
+        }),
+    }
+}
 
 /// Guidance on the expected build artifacts for this target — the
 /// embedded guidance prompt, returned deterministically (no judgment leg).

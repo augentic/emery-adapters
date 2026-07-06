@@ -2,13 +2,17 @@
 //! See `specify_guest_kit::source` for the shim contract.
 #![cfg(target_arch = "wasm32")]
 
-use specify_guest_kit::source::{AdapterId, Error, Evidence, Guest, Lead};
+use specify_guest_kit::source::{AdapterId, Error, Evidence, Guest, Lead, Manifest};
 use specify_guest_kit::{WasiModel, seam, shelf};
 
 struct Adapter;
 specify_guest_kit::source::export!(Adapter with_types_in specify_guest_kit::source);
 
 impl Guest for Adapter {
+    fn describe(_id: AdapterId) -> Manifest {
+        specify_intent_core::operations::describe().into()
+    }
+
     async fn survey(id: AdapterId) -> Result<Vec<Lead>, Error> {
         let url = shelf::mcp_url("intent");
         let ctx = seam::Context::guest(&id, url.as_deref());

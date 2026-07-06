@@ -4,7 +4,7 @@ use std::path::Path;
 
 use specify_guest_kit::MockModel;
 use specify_guest_kit::seam::{Authority, ClaimKind, Context, Lead};
-use specify_intent_core::operations::{extract, survey};
+use specify_intent_core::operations::{describe, extract, survey};
 
 fn ctx() -> Context<'static> {
     Context {
@@ -55,4 +55,11 @@ async fn extract_parses_the_intent_claim() {
     assert_eq!(evidence.claims[0].id.as_deref(), Some("password-reset"));
     let request = &model.requests()[0];
     assert!(request.system.as_deref().unwrap().starts_with("# intent.extract"));
+}
+
+// The RFC-64 self-description is answerable without a model or a
+// filesystem: no compatibility floor is declared.
+#[test]
+fn describe_declares_no_floor() {
+    assert_eq!(describe().specify_floor, None);
 }

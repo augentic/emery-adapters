@@ -9,10 +9,10 @@ use std::path::Path;
 
 use specify_guest_kit::answers::REPORT_ANSWER_SCHEMA;
 use specify_guest_kit::seam::{
-    Changeset, Context, Edit, Input, Report, Severity, Status, WorkingTree,
+    Changeset, Context, Edit, Input, Platform, Report, Severity, Status, WorkingTree,
 };
 use specify_guest_kit::{Format, MockModel, Request};
-use specify_vectis_core::operations::{build, guidance, merge};
+use specify_vectis_core::operations::{build, describe, guidance, merge};
 use tempfile::TempDir;
 
 const PHASE_DONE: &str = r#"{"applicable":true,"summary":"phase complete"}"#;
@@ -405,4 +405,23 @@ async fn merge_success_with_blocking_finding_downgrades() {
 
     assert_eq!(report.status, Status::Failure);
     assert_eq!(report.findings[0].rule_id.as_deref(), Some("VECTIS-006"));
+}
+
+// The RFC-64 self-description is answerable without a model or a
+// filesystem: no floor, the three optional design-system inputs, and a
+// required platform declaration defaulting to core + the two shells.
+#[test]
+fn describe_declares_inputs_and_platforms() {
+    let manifest = describe();
+    assert_eq!(manifest.specify_floor, None);
+    let declared: Vec<(&str, bool)> =
+        manifest.inputs.iter().map(|input| (input.path.as_str(), input.required)).collect();
+    assert_eq!(
+        declared,
+        [("tokens.yaml", false), ("assets.yaml", false), ("components.yaml", false)]
+    );
+    let platforms = manifest.platforms.expect("vectis declares a platforms capability");
+    assert!(platforms.required);
+    assert_eq!(platforms.allowed.len(), 5);
+    assert_eq!(platforms.default, [Platform::Core, Platform::Ios, Platform::Android]);
 }

@@ -1,9 +1,12 @@
 name: Release adapters
 
-# Publish each adapter as an immutable, content-addressed registry
-# artifact (RFC-48 D4/D6). Tagging `v<x.y.z>` cuts a release; each adapter
-# carries its own RFC-47 semver in its `adapter.yaml.version`, which is
-# the published `(name, version)` identity.
+# Publish each adapter as a standard wasm-pkg package (RFC-64: one
+# component, no manifest). Tagging `v<x.y.z>` cuts a release; each
+# adapter's identity semver lives in its guest crate's `Cargo.toml`
+# `version` — the single identity declaration — and the release-built
+# component `target/wasm32-wasip2/release/specify_<name>.wasm` is pushed
+# as `augentic:<name>@<semver>`. No tree pack, no adapter.yaml, no
+# committed wasm.
 on:
   push:
     tags:
@@ -15,16 +18,15 @@ permissions:
   packages: write
 
 env:
-  # Canonical first-party registry host. Must match the namespace mapping
-  # `specify -> <host>` that `specify init` writes into a consumer's
-  # `.specify/wasm-pkg.toml`, so a published `specify:<name>@<ver>`
-  # resolves back here. Override via repository variable for a mirror.
+  # Canonical first-party registry host. Must match the `augentic`
+  # namespace mapping the engine resolves `augentic:<name>@<ver>`
+  # references against. Override via repository variable for a mirror.
   REGISTRY: ${{ vars.SPECIFY_REGISTRY || 'augentic.io' }}
-  REGISTRY_NAMESPACE: specify
+  REGISTRY_NAMESPACE: augentic
 
 jobs:
   publish:
-    name: Publish adapter artifacts
+    name: Publish adapter components
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -50,48 +52,53 @@ jobs:
         with:
           tool: cargo-make,cargo-nextest
 
+      - name: Install wkg
+        run: cargo install wkg --locked
+
       # Guard against publishing immutable artifacts from a broken tree:
       # fmt-check + clippy + nextest + doctests + doc (the lighter pre-commit
       # subset; vet/deny stay on the per-push CI gate).
       - name: Pre-publish workspace check
         run: cargo make check
 
-      # RFC-49 T5 cross-repo seam: the platform owns the `specify` binary
-      # that packs/publishes/verifies the artifact.
-      - name: Checkout platform binary source
-        uses: actions/checkout@v4
-        with:
-          repository: augentic/specify
-          ref: main
-          path: .platform
+      - name: Release-build every adapter component
+        run: cargo make build-guests-release
 
-      - name: Build specify
-        working-directory: .platform/engine
-        run: cargo build --release -p specify --locked
-
-      - name: Build, publish, and verify each adapter
-        shell: bash
+      # `wkg publish` resolves the `augentic` namespace through this
+      # config; credentials come from the registry secrets.
+      - name: Write wkg config
         env:
-          SPECIFY: ${{ github.workspace }}/.platform/engine/target/release/specify
-          # `specify adapter publish` reads registry credentials from the
-          # environment (bearer SPECIFY_REGISTRY_TOKEN, else basic
-          # SPECIFY_REGISTRY_USERNAME/_PASSWORD).
           SPECIFY_REGISTRY_USERNAME: ${{ secrets.SPECIFY_REGISTRY_USERNAME }}
           SPECIFY_REGISTRY_PASSWORD: ${{ secrets.SPECIFY_REGISTRY_PASSWORD }}
-          SPECIFY_REGISTRY_TOKEN: ${{ secrets.SPECIFY_REGISTRY_TOKEN }}
         run: |
           set -euo pipefail
-          shopt -s nullglob
+          mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/wasm-pkg"
+          cat > "${XDG_CONFIG_HOME:-$HOME/.config}/wasm-pkg/config.toml" <<EOF
+          [namespace_registries]
+          ${REGISTRY_NAMESPACE} = "${REGISTRY}"
+
+          [registry."${REGISTRY}".oci]
+          auth = { username = "${SPECIFY_REGISTRY_USERNAME}", password = "${SPECIFY_REGISTRY_PASSWORD}" }
+          EOF
+
+      - name: Publish each adapter component
+        shell: bash
+        run: |
+          set -euo pipefail
+          metadata="$(cargo metadata --no-deps --format-version 1)"
           for dir in targets/*/ sources/*/; do
-            [ -f "${dir}adapter.yaml" ] || continue
             name="$(basename "${dir}")"
-            version="$(sed -n 's/^version:[[:space:]]*"\{0,1\}\([^"[:space:]]*\)"\{0,1\}.*/\1/p' "${dir}adapter.yaml" | head -1)"
-            if [ -z "${version}" ]; then
-              echo "::error::no version in ${dir}adapter.yaml"; exit 1
+            version="$(jq -r --arg n "specify-${name}" \
+              '.packages[] | select(.name == $n) | .version' <<< "${metadata}")"
+            if [ -z "${version}" ] || [ "${version}" = "null" ]; then
+              echo "::error::no specify-${name} package version in cargo metadata"; exit 1
             fi
-            ref="${REGISTRY}/${REGISTRY_NAMESPACE}/${name}:${version}"
-            echo "::group::${name}@${version} -> ${ref}"
-            "${SPECIFY}" adapter build --path "${dir}"
-            "${SPECIFY}" adapter publish --path "${dir}" --reference "${ref}"
+            artifact="target/wasm32-wasip2/release/specify_${name}.wasm"
+            if [ ! -s "${artifact}" ]; then
+              echo "::error::missing release component ${artifact}"; exit 1
+            fi
+            package="${REGISTRY_NAMESPACE}:${name}@${version}"
+            echo "::group::${package}"
+            wkg publish "${artifact}" --package "${package}"
             echo "::endgroup::"
           done

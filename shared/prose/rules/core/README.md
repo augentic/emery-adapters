@@ -45,7 +45,7 @@ The closed `applicability.artifacts` enum carries framework-side tokens alongsid
 | Token       | Targets                                           |
 | ----------- | ------------------------------------------------- |
 | `skill`     | `plugins/**/SKILL.md` (frontmatter + body)        |
-| `adapter`   | `adapters/**/adapter.yaml` manifests              |
+| `adapter`   | adapter manifests — vacant post-RFC-64 (`adapter.yaml` is retired) |
 | `reference` | `adapters/**/prose/references/*.md`                     |
 | `codex`     | `adapters/**/rules/*.md` (rule files themselves)  |
 | `doc`       | `docs/**/*.md`                                    |
@@ -57,7 +57,7 @@ Framework tokens compose with the existing consumer-side tokens (`code`, `tests`
 **Authoring checklist (avoid the `applicability.artifacts` footgun):**
 
 - [ ] **Do not** rely on `applicability.artifacts` to scope a framework rule — on the framework profile it silently drops the rule from the resolved set before any hint runs.
-- [ ] **Do** add a `kind: path-pattern` hint whose `value` glob matches the target files (e.g. `plugins/**/SKILL.md`, `adapters/**/adapter.yaml`).
+- [ ] **Do** add a `kind: path-pattern` hint whose `value` glob matches the target files (e.g. `plugins/**/SKILL.md`, `adapters/**/prose/references/*.md`).
 - [ ] Run `make lint` and confirm the new rule actually fires on a known-bad fixture; a rule that resolves but matches nothing is the usual symptom of the quirk.
 - [ ] Cross-check against [`CORE-011-agent-teams-missing-canonical.md`](CORE-011-agent-teams-missing-canonical.md), which scopes with `path-pattern` rather than `applicability.artifacts`.
 

@@ -4,7 +4,7 @@ use std::path::Path;
 
 use specify_guest_kit::MockModel;
 use specify_guest_kit::seam::{Authority, ClaimKind, Context, Lead};
-use specify_screenshots_core::operations::extract;
+use specify_screenshots_core::operations::{describe, extract};
 
 // The extract answer's spatial claim kinds — `region` / `container` /
 // `leaf` — parse through the shared Evidence shape.
@@ -40,4 +40,11 @@ async fn extract_parses_the_spatial_kinds() {
         request.messages[0].content.contains("screen images"),
         "the binding note names the image-set material"
     );
+}
+
+// The RFC-64 self-description is answerable without a model or a
+// filesystem: no compatibility floor is declared.
+#[test]
+fn describe_declares_no_floor() {
+    assert_eq!(describe().specify_floor, None);
 }

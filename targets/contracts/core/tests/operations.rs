@@ -5,7 +5,7 @@
 use std::fs;
 use std::path::Path;
 
-use specify_contracts_core::operations::{build, guidance, merge};
+use specify_contracts_core::operations::{build, describe, guidance, merge};
 use specify_contracts_core::validate::RULE_VERSION_IS_SEMVER;
 use specify_guest_kit::answers::REPORT_ANSWER_SCHEMA;
 use specify_guest_kit::seam::{
@@ -236,4 +236,17 @@ async fn merge_post_gate_repairs_then_enforces() {
     let requests = model.requests();
     assert_eq!(requests.len(), 2, "one merge leg plus one bounded repair leg");
     assert!(requests[1].messages[0].content.contains("post-merge"));
+}
+
+// The RFC-64 self-description is answerable without a model or a
+// filesystem: no floor, one optional `contracts` build input, no
+// platform capability.
+#[test]
+fn describe_declares_the_contracts_input() {
+    let manifest = describe();
+    assert_eq!(manifest.specify_floor, None);
+    let declared: Vec<(&str, bool)> =
+        manifest.inputs.iter().map(|input| (input.path.as_str(), input.required)).collect();
+    assert_eq!(declared, [("contracts", false)]);
+    assert_eq!(manifest.platforms, None);
 }

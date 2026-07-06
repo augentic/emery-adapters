@@ -3932,7 +3932,7 @@ dependencies = [
 
 [[package]]
 name = "specify-captures"
-version = "0.4.3"
+version = "1.0.0"
 dependencies = [
  "specify-captures-core",
  "specify-guest-kit",
@@ -3950,7 +3950,7 @@ dependencies = [
 
 [[package]]
 name = "specify-contracts"
-version = "0.4.3"
+version = "1.0.0"
 dependencies = [
  "specify-contracts-core",
  "specify-guest-kit",
@@ -3974,7 +3974,7 @@ dependencies = [
 
 [[package]]
 name = "specify-documentation"
-version = "0.4.3"
+version = "1.0.0"
 dependencies = [
  "specify-documentation-core",
  "specify-guest-kit",
@@ -4029,7 +4029,7 @@ dependencies = [
 
 [[package]]
 name = "specify-intent"
-version = "0.4.3"
+version = "1.0.0"
 dependencies = [
  "specify-guest-kit",
  "specify-intent-core",
@@ -4047,7 +4047,7 @@ dependencies = [
 
 [[package]]
 name = "specify-omnia"
-version = "0.4.3"
+version = "1.0.0"
 dependencies = [
  "specify-guest-kit",
  "specify-omnia-core",
@@ -4076,7 +4076,7 @@ dependencies = [
 
 [[package]]
 name = "specify-screenshots"
-version = "0.4.3"
+version = "1.0.0"
 dependencies = [
  "specify-guest-kit",
  "specify-screenshots-core",
@@ -4094,7 +4094,7 @@ dependencies = [
 
 [[package]]
 name = "specify-typescript"
-version = "0.4.3"
+version = "1.0.0"
 dependencies = [
  "specify-guest-kit",
  "specify-typescript-core",
@@ -4112,7 +4112,7 @@ dependencies = [
 
 [[package]]
 name = "specify-vectis"
-version = "0.4.3"
+version = "1.0.4"
 dependencies = [
  "specify-guest-kit",
  "specify-vectis-core",

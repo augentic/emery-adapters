@@ -24,9 +24,11 @@ mod generated {
     wit_bindgen::generate!({
         world: "source-adapter",
         path: "../../wit",
-        // The seam operations are `async func`s (judgment legs await the
-        // async `omnia:model` import mid-call), so the exports async-lift.
-        async: true,
+        // Asyncness follows the WIT declarations: the judgment operations
+        // are `async func`s (they await the async `omnia:model` import
+        // mid-call) and async-lift; `describe` is a plain `func` (RFC-64:
+        // deterministic, effect-free) and sync-lifts — forcing it async
+        // would fail component validation at load.
         generate_all,
         pub_export_macro: true,
     });
@@ -34,6 +36,14 @@ mod generated {
 
 pub use generated::exports::augentic::specify::source::*;
 pub use generated::*;
+
+impl From<crate::seam::SourceManifest> for Manifest {
+    fn from(manifest: crate::seam::SourceManifest) -> Self {
+        Self {
+            specify_floor: manifest.specify_floor,
+        }
+    }
+}
 
 impl From<crate::seam::Lead> for Lead {
     fn from(lead: crate::seam::Lead) -> Self {

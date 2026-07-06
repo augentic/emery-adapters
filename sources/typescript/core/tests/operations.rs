@@ -5,7 +5,7 @@ use std::path::Path;
 
 use specify_guest_kit::MockModel;
 use specify_guest_kit::seam::{Authority, ClaimKind, Context, Lead};
-use specify_typescript_core::operations::{extract, survey};
+use specify_typescript_core::operations::{describe, extract, survey};
 
 fn ctx() -> Context<'static> {
     Context {
@@ -66,4 +66,11 @@ async fn extract_points_at_the_reference_shelf() {
     let user = &request.messages[0].content;
     assert!(user.contains("reference shelf"), "the prompt points at the MCP-served references");
     assert!(user.contains("- lead: task-service"), "the lead renders as the prompt's block shape");
+}
+
+// The RFC-64 self-description is answerable without a model or a
+// filesystem: no compatibility floor is declared.
+#[test]
+fn describe_declares_no_floor() {
+    assert_eq!(describe().specify_floor, None);
 }

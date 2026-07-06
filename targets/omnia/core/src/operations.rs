@@ -14,7 +14,9 @@
 
 use std::path::Path;
 
-use specify_guest_kit::seam::{Changeset, Context, Error, Finding, Input, Report, WorkingTree};
+use specify_guest_kit::seam::{
+    Changeset, Context, Error, Finding, Input, Report, TargetManifest, WorkingTree,
+};
 use specify_guest_kit::{Model, phase};
 
 use crate::registry;
@@ -25,6 +27,21 @@ use crate::registry;
 const SHELF_POINTER: &str = "Every prompt, reference, and rule document this adapter ships is \
      served by the granted `omnia-references` MCP shelf (`list_docs` / `read_doc`, adapter-relative \
      paths like `references/guardrails.md`); fetch documents the prompts cite lazily from there.";
+
+/// The adapter's deterministic self-description (RFC-64).
+///
+/// Resolve-time metadata answered from compiled-in constants: no
+/// compatibility floor, no declared build inputs (omnia reads the
+/// working tree's `Cargo.toml` directly — not a slice-tree input), no
+/// platform capability.
+#[must_use]
+pub const fn describe() -> TargetManifest {
+    TargetManifest {
+        specify_floor: None,
+        inputs: Vec::new(),
+        platforms: None,
+    }
+}
 
 /// Guidance on the expected build artifacts for this target — the
 /// embedded guidance prompt, returned deterministically (no judgment leg).

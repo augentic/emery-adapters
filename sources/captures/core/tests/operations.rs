@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use specify_captures_core::operations::extract;
+use specify_captures_core::operations::{describe, extract};
 use specify_guest_kit::MockModel;
 use specify_guest_kit::seam::{Authority, ClaimKind, Context, Error, Lead};
 
@@ -64,4 +64,11 @@ async fn extract_tail_rejects_idless_example_claims() {
     let err = extract(&model, &ctx(), &lead()).await.unwrap_err();
 
     assert!(matches!(err, Error::Internal(detail) if detail.contains("require an id")));
+}
+
+// The RFC-64 self-description is answerable without a model or a
+// filesystem: no compatibility floor is declared.
+#[test]
+fn describe_declares_no_floor() {
+    assert_eq!(describe().specify_floor, None);
 }
