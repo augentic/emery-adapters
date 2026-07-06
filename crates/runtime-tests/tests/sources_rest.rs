@@ -5,7 +5,7 @@
 //! reference shelf on its own HTTP route.
 //!
 //! Model-free by design, like the other composed tests: the judgment legs
-//! are covered natively in each `specify-<name>-core` against `MockModel`.
+//! are covered natively in each `<name>-core` against `MockModel`.
 
 use anyhow::{Context as _, Result};
 use omnia::wasmtime::component::Val;
@@ -21,20 +21,20 @@ const SOURCE_INTERFACE: &str = "specify:adapter/source@0.1.0";
 /// The four source guests this deployment composes: guest id, MCP route,
 /// shelf server identity, and the survey prompt's opening heading.
 const GUESTS: [(&str, &str, &str, &str); 4] = [
-    ("source:intent", "/mcp/intent", "specify-intent-references", "# intent.survey"),
+    ("source:intent", "/mcp/intent", "intent-references", "# intent.survey"),
     (
         "source:typescript",
         "/mcp/typescript",
-        "specify-typescript-references",
+        "typescript-references",
         "# TypeScript / JavaScript source survey",
     ),
     (
         "source:screenshots",
         "/mcp/screenshots",
-        "specify-screenshots-references",
+        "screenshots-references",
         "# `screenshots.survey`",
     ),
-    ("source:captures", "/mcp/captures", "specify-captures-references", "# Runtime capture survey"),
+    ("source:captures", "/mcp/captures", "captures-references", "# Runtime capture survey"),
 ];
 
 // survey through dispatch exercises each source guest's async-lifted

@@ -3,6 +3,35 @@
 version = 4
 
 [[package]]
+name = "adapter"
+version = "0.4.3"
+dependencies = [
+ "omnia-guest",
+ "omnia-wasi-http",
+ "omnia-wasi-model",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "wasip3",
+ "wit-bindgen 0.58.0",
+]
+
+[[package]]
+name = "adapters-runtime-tests"
+version = "0.4.3"
+dependencies = [
+ "anyhow",
+ "omnia",
+ "omnia-testkit",
+ "omnia-wasi-http",
+ "omnia-wasi-model",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "addr2line"
 version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -496,6 +525,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "captures"
+version = "1.0.0"
+dependencies = [
+ "adapter",
+ "captures-core",
+ "wasip3",
+]
+
+[[package]]
+name = "captures-core"
+version = "0.4.3"
+dependencies = [
+ "adapter",
+ "prose",
+ "tokio",
+]
+
+[[package]]
 name = "cc"
 version = "1.2.65"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -655,6 +702,30 @@ name = "const-oid"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6ef517f0926dd24a1582492c791b6a4818a4d94e789a334894aa15b0d12f55c"
+
+[[package]]
+name = "contracts"
+version = "1.0.0"
+dependencies = [
+ "adapter",
+ "contracts-core",
+ "wasip3",
+]
+
+[[package]]
+name = "contracts-core"
+version = "0.4.3"
+dependencies = [
+ "adapter",
+ "jsonschema",
+ "prose",
+ "semver",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
 
 [[package]]
 name = "core-foundation"
@@ -1017,6 +1088,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "documentation"
+version = "1.0.0"
+dependencies = [
+ "adapter",
+ "documentation-core",
+ "wasip3",
+]
+
+[[package]]
+name = "documentation-core"
+version = "0.4.3"
+dependencies = [
+ "adapter",
+ "prose",
+ "tokio",
+]
+
+[[package]]
 name = "dunce"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1090,6 +1179,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1a05365e3b1c6d1650318537c7460c6923f1abdd272ad6842baa2b509957a06"
 dependencies = [
  "num-traits",
+]
+
+[[package]]
+name = "eval-driver"
+version = "0.4.3"
+dependencies = [
+ "anyhow",
+ "cfg-if",
+ "omnia",
+ "omnia-cursor",
+ "omnia-wasi-http",
+ "omnia-wasi-model",
+ "tokio",
+]
+
+[[package]]
+name = "eval-guest"
+version = "0.4.3"
+dependencies = [
+ "serde_json",
+ "wasip3",
+ "wit-bindgen 0.58.0",
 ]
 
 [[package]]
@@ -1787,6 +1898,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "intent"
+version = "1.0.0"
+dependencies = [
+ "adapter",
+ "intent-core",
+ "wasip3",
+]
+
+[[package]]
+name = "intent-core"
+version = "0.4.3"
+dependencies = [
+ "adapter",
+ "prose",
+ "tokio",
+]
+
+[[package]]
 name = "io-extras"
 version = "0.18.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2361,6 +2490,28 @@ dependencies = [
  "wasmtime-wasi-http",
  "wrpc-transport",
  "wrpc-wasmtime",
+]
+
+[[package]]
+name = "omnia-adapter"
+version = "1.0.0"
+dependencies = [
+ "adapter",
+ "omnia-core",
+ "wasip3",
+]
+
+[[package]]
+name = "omnia-core"
+version = "0.4.3"
+dependencies = [
+ "adapter",
+ "jsonschema",
+ "prose",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
 ]
 
 [[package]]
@@ -2974,6 +3125,13 @@ dependencies = [
  "rand_xorshift",
  "regex-syntax",
  "unarray",
+]
+
+[[package]]
+name = "prose"
+version = "0.4.3"
+dependencies = [
+ "tempfile",
 ]
 
 [[package]]
@@ -3644,6 +3802,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
+name = "screenshots"
+version = "1.0.0"
+dependencies = [
+ "adapter",
+ "screenshots-core",
+ "wasip3",
+]
+
+[[package]]
+name = "screenshots-core"
+version = "0.4.3"
+dependencies = [
+ "adapter",
+ "prose",
+ "tokio",
+]
+
+[[package]]
 name = "sea-query"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3914,230 +4090,6 @@ checksum = "52d1cfed4120b4d927bf7c0f86d2087a4a7d6027c906d9f9d525a80573b9be51"
 dependencies = [
  "libc",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "specify-adapters-runtime-tests"
-version = "0.4.3"
-dependencies = [
- "anyhow",
- "omnia",
- "omnia-testkit",
- "omnia-wasi-http",
- "omnia-wasi-model",
- "serde_json",
- "tempfile",
- "tokio",
-]
-
-[[package]]
-name = "specify-captures"
-version = "1.0.0"
-dependencies = [
- "specify-captures-core",
- "specify-guest-kit",
- "wasip3",
-]
-
-[[package]]
-name = "specify-captures-core"
-version = "0.4.3"
-dependencies = [
- "specify-guest-kit",
- "specify-prose-registry",
- "tokio",
-]
-
-[[package]]
-name = "specify-contracts"
-version = "1.0.0"
-dependencies = [
- "specify-contracts-core",
- "specify-guest-kit",
- "wasip3",
-]
-
-[[package]]
-name = "specify-contracts-core"
-version = "0.4.3"
-dependencies = [
- "jsonschema",
- "semver",
- "serde",
- "serde-saphyr",
- "serde_json",
- "specify-guest-kit",
- "specify-prose-registry",
- "tempfile",
- "tokio",
-]
-
-[[package]]
-name = "specify-documentation"
-version = "1.0.0"
-dependencies = [
- "specify-documentation-core",
- "specify-guest-kit",
- "wasip3",
-]
-
-[[package]]
-name = "specify-documentation-core"
-version = "0.4.3"
-dependencies = [
- "specify-guest-kit",
- "specify-prose-registry",
- "tokio",
-]
-
-[[package]]
-name = "specify-eval-driver"
-version = "0.4.3"
-dependencies = [
- "anyhow",
- "cfg-if",
- "omnia",
- "omnia-cursor",
- "omnia-wasi-http",
- "omnia-wasi-model",
- "tokio",
-]
-
-[[package]]
-name = "specify-eval-guest"
-version = "0.4.3"
-dependencies = [
- "serde_json",
- "wasip3",
- "wit-bindgen 0.58.0",
-]
-
-[[package]]
-name = "specify-guest-kit"
-version = "0.4.3"
-dependencies = [
- "omnia-guest",
- "omnia-wasi-http",
- "omnia-wasi-model",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "tokio",
- "wasip3",
- "wit-bindgen 0.58.0",
-]
-
-[[package]]
-name = "specify-intent"
-version = "1.0.0"
-dependencies = [
- "specify-guest-kit",
- "specify-intent-core",
- "wasip3",
-]
-
-[[package]]
-name = "specify-intent-core"
-version = "0.4.3"
-dependencies = [
- "specify-guest-kit",
- "specify-prose-registry",
- "tokio",
-]
-
-[[package]]
-name = "specify-omnia"
-version = "1.0.0"
-dependencies = [
- "specify-guest-kit",
- "specify-omnia-core",
- "wasip3",
-]
-
-[[package]]
-name = "specify-omnia-core"
-version = "0.4.3"
-dependencies = [
- "jsonschema",
- "serde",
- "serde_json",
- "specify-guest-kit",
- "specify-prose-registry",
- "tempfile",
- "tokio",
-]
-
-[[package]]
-name = "specify-prose-registry"
-version = "0.4.3"
-dependencies = [
- "tempfile",
-]
-
-[[package]]
-name = "specify-screenshots"
-version = "1.0.0"
-dependencies = [
- "specify-guest-kit",
- "specify-screenshots-core",
- "wasip3",
-]
-
-[[package]]
-name = "specify-screenshots-core"
-version = "0.4.3"
-dependencies = [
- "specify-guest-kit",
- "specify-prose-registry",
- "tokio",
-]
-
-[[package]]
-name = "specify-typescript"
-version = "1.0.0"
-dependencies = [
- "specify-guest-kit",
- "specify-typescript-core",
- "wasip3",
-]
-
-[[package]]
-name = "specify-typescript-core"
-version = "0.4.3"
-dependencies = [
- "specify-guest-kit",
- "specify-prose-registry",
- "tokio",
-]
-
-[[package]]
-name = "specify-vectis"
-version = "1.0.4"
-dependencies = [
- "specify-guest-kit",
- "specify-vectis-core",
- "wasip3",
-]
-
-[[package]]
-name = "specify-vectis-core"
-version = "0.4.3"
-dependencies = [
- "image",
- "jsonschema",
- "resvg",
- "serde",
- "serde-saphyr",
- "serde_json",
- "sha2 0.11.0",
- "specify-guest-kit",
- "specify-prose-registry",
- "tempfile",
- "thiserror 2.0.18",
- "tiny-skia",
- "tokio",
- "toml",
- "usvg",
 ]
 
 [[package]]
@@ -4728,6 +4680,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
+name = "typescript"
+version = "1.0.0"
+dependencies = [
+ "adapter",
+ "typescript-core",
+ "wasip3",
+]
+
+[[package]]
+name = "typescript-core"
+version = "0.4.3"
+dependencies = [
+ "adapter",
+ "prose",
+ "tokio",
+]
+
+[[package]]
 name = "unarray"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4854,6 +4824,36 @@ name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
+
+[[package]]
+name = "vectis"
+version = "1.0.4"
+dependencies = [
+ "adapter",
+ "vectis-core",
+ "wasip3",
+]
+
+[[package]]
+name = "vectis-core"
+version = "0.4.3"
+dependencies = [
+ "adapter",
+ "image",
+ "jsonschema",
+ "prose",
+ "resvg",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "sha2 0.11.0",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tiny-skia",
+ "tokio",
+ "toml",
+ "usvg",
+]
 
 [[package]]
 name = "version_check"

@@ -1,8 +1,8 @@
 //! The seam vocabulary's own behavior: severity blocking classes, input
 //! prompt labels, and the model-to-seam error mapping.
 
-use specify_guest_kit::Error as ModelError;
-use specify_guest_kit::seam::{Error, Input, Severity};
+use adapter::Error as ModelError;
+use adapter::seam::{Error, Input, Severity};
 
 #[test]
 fn blocking_severities_gate_success() {

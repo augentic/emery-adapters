@@ -1,23 +1,23 @@
 //! The contracts adapter guest: `wasm32` shim over
-//! `specify-contracts-core`. See `specify_guest_kit::target` for the
+//! `contracts-core`. See `adapter::target` for the
 //! shim contract.
 #![cfg(target_arch = "wasm32")]
 
-use specify_guest_kit::target::{
+use adapter::target::{
     AdapterId, Changeset, Error, Guest, Input, Manifest, Report, WorkingTree,
 };
-use specify_guest_kit::{WasiModel, seam, shelf};
+use adapter::{WasiModel, seam, shelf};
 
 struct Adapter;
-specify_guest_kit::target::export!(Adapter with_types_in specify_guest_kit::target);
+adapter::target::export!(Adapter with_types_in adapter::target);
 
 impl Guest for Adapter {
     fn describe(_id: AdapterId) -> Manifest {
-        specify_contracts_core::operations::describe().into()
+        contracts_core::operations::describe().into()
     }
 
     async fn guidance(_id: AdapterId) -> Result<String, Error> {
-        Ok(specify_contracts_core::operations::guidance().to_string())
+        Ok(contracts_core::operations::guidance().to_string())
     }
 
     async fn build(
@@ -27,7 +27,7 @@ impl Guest for Adapter {
         let tree = seam::WorkingTree::from(tree);
         let url = shelf::mcp_url("contracts");
         let ctx = seam::Context::guest(&id, url.as_deref());
-        specify_contracts_core::operations::build(&WasiModel, &ctx, &slice, &inputs, &tree)
+        contracts_core::operations::build(&WasiModel, &ctx, &slice, &inputs, &tree)
             .await
             .map(Into::into)
             .map_err(Into::into)
@@ -40,7 +40,7 @@ impl Guest for Adapter {
         let tree = seam::WorkingTree::from(tree);
         let url = shelf::mcp_url("contracts");
         let ctx = seam::Context::guest(&id, url.as_deref());
-        specify_contracts_core::operations::merge(&WasiModel, &ctx, &slice, &delta, &tree)
+        contracts_core::operations::merge(&WasiModel, &ctx, &slice, &delta, &tree)
             .await
             .map(Into::into)
             .map_err(Into::into)
@@ -55,9 +55,9 @@ impl wasip3::exports::http::handler::Guest for HttpGuest {
         request: wasip3::http::types::Request,
     ) -> Result<wasip3::http::types::Response, wasip3::http::types::ErrorCode> {
         shelf::Shelf {
-            server_name: "specify-contracts-references",
+            server_name: "contracts-references",
             version: env!("CARGO_PKG_VERSION"),
-            docs: specify_contracts_core::registry::docs(),
+            docs: contracts_core::registry::docs(),
         }
         .serve(request)
         .await

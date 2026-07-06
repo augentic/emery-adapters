@@ -23,11 +23,11 @@
 use std::path::Path;
 
 use serde_json::Value;
-use specify_guest_kit::seam::{
+use adapter::seam::{
     BuildInput, Changeset, Context, Error, Finding, Input, Platform, PlatformsCapability, Report,
     Severity, Status, TargetManifest, WorkingTree,
 };
-use specify_guest_kit::{Model, phase};
+use adapter::{Model, phase};
 
 use crate::{
     VectisError, android, android_scaffold, infer, ios_scaffold, prepare, registry, scaffold,
@@ -107,7 +107,7 @@ pub fn guidance() -> &'static str {
 ///
 /// # Errors
 ///
-/// As [`specify_guest_kit::judgment`], plus [`Error::Io`] /
+/// As [`adapter::judgment`], plus [`Error::Io`] /
 /// [`Error::InvalidRequest`] when the deterministic prelude cannot read
 /// the workspace's design-system inputs.
 #[expect(
@@ -333,7 +333,7 @@ pub async fn build<P: Model>(
 ///
 /// # Errors
 ///
-/// As [`specify_guest_kit::judgment`].
+/// As [`adapter::judgment`].
 pub async fn merge<P: Model>(
     model: &P, ctx: &Context<'_>, slice: &str, delta: &Changeset, tree: &WorkingTree,
 ) -> Result<Report, Error> {

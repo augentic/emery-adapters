@@ -1,5 +1,5 @@
 [package]
-name = "specify-eval-guest"
+name = "eval-guest"
 description = "Eval-driver WASI guest: drives one target-adapter build through host-mediated dispatch"
 version.workspace = true
 edition.workspace = true

@@ -10,11 +10,11 @@
 
 use std::path::Path;
 
-use specify_guest_kit::seam::{
+use adapter::seam::{
     BuildInput, Changeset, Context, Error, Finding, Input, Report, Severity, TargetManifest,
     WorkingTree,
 };
-use specify_guest_kit::{Model, phase};
+use adapter::{Model, phase};
 
 use crate::registry;
 use crate::validate::{ContractFinding, validate_baseline};
@@ -86,7 +86,7 @@ pub fn guidance() -> &'static str {
 ///
 /// # Errors
 ///
-/// As [`specify_guest_kit::judgment`].
+/// As [`adapter::judgment`].
 pub async fn build<P: Model>(
     model: &P, ctx: &Context<'_>, slice: &str, inputs: &[Input], tree: &WorkingTree,
 ) -> Result<Report, Error> {
@@ -167,7 +167,7 @@ pub async fn build<P: Model>(
 ///
 /// # Errors
 ///
-/// As [`specify_guest_kit::judgment`].
+/// As [`adapter::judgment`].
 pub async fn merge<P: Model>(
     model: &P, ctx: &Context<'_>, slice: &str, delta: &Changeset, tree: &WorkingTree,
 ) -> Result<Report, Error> {

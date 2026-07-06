@@ -8,7 +8,7 @@
 //! cargo-make task, or by hand:
 //!
 //! ```text
-//! cargo run -p specify-eval-driver -- run --config <manifest> -- eval <slice> <inputs-dir>
+//! cargo run -p eval-driver -- run --config <manifest> -- eval <slice> <inputs-dir>
 //! ```
 //!
 //! Requires `cursor-agent` on `PATH`, authenticated via `CURSOR_API_KEY` or a

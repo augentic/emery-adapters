@@ -1,8 +1,8 @@
 //! Wasm-free core of the omnia target adapter: [`operations`] (the
 //! build operation's phase legs and the deterministic report-coherence
-//! gate over the shared `specify_guest_kit::phase` template) and
+//! gate over the shared `adapter::phase` template) and
 //! [`registry`] (the embedded prose), natively testable against a mock
-//! [`specify_guest_kit::Model`]. The wasm32 shim (`specify-omnia`) owns
+//! [`adapter::Model`]. The wasm32 shim (`omnia`) owns
 //! bindings and export glue.
 //!
 //! Omnia's verification is cargo / clippy / wasm32 runs a wasm guest

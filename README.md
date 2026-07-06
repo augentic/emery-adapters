@@ -5,9 +5,9 @@ independently-versioned registry artifacts (RFC-48 / RFC-49 T6, amended by
 RFC-64).
 
 Each adapter is a **guest component** (RFC-61 / RFC-64): the adapter root
-doubles as a wasm32-only cdylib package (`specify-<name>`, a hand-written
-export shim over `specify-guest-kit`'s shared WIT bindings), with its
-wasm-free core logic in a `core/` sub-crate (`specify-<name>-core`) and its
+doubles as a wasm32-only cdylib package (`<name>`, a hand-written
+export shim over `adapter`'s shared WIT bindings), with its
+wasm-free core logic in a `core/` sub-crate (`<name>-core`) and its
 `prose/` trees (`prompts/`, `references/`, and `rules/` where declared)
 embedded at build time. The deployable artifact is exactly the built
 component — there is no `adapter.yaml` manifest and no committed wasm: the
@@ -26,14 +26,14 @@ wit/                  # the contract — specify.wit, the axis worlds
       prompts/        #   operation system-prompt fragments
       references/     #   lazy MCP reference corpus
       rules/          #   engineering standards (target adapters)
-    Cargo.toml        #   `specify-<name>` — the adapter guest component (wasm32 shim); its `version` is the adapter identity semver
+    Cargo.toml        #   `<name>` — the adapter guest component (wasm32 shim); its `version` is the adapter identity semver
     src/              #   hand-written shim: Guest impl, export glue, MCP shelf
-    core/             #   `specify-<name>-core` — wasm-free logic, natively tested
+    core/             #   `<name>-core` — wasm-free logic, natively tested
 shared/
   prose/              # cross-adapter prose, same grammar as adapter prose/
     references/       #   spec-runtime bundle, replay hook docs, …
     rules/            #   UNI-* and CORE-* engineering rules
-crates/               # shared guest support: guest-kit, prose-registry,
+crates/               # shared guest support: adapter, prose,
                       # eval-driver + eval-guest, runtime-tests
 evals/                # live eval harnesses against the real cursor backend
                       # (contracts, vectis)
@@ -48,7 +48,7 @@ targets — the declared build `inputs[]` and platforms capability in the
 `describe` operation's compiled-in manifest record.
 
 The Crux shell-detection heuristics the platform once exposed as
-`specify-vectis-shell-detect` live inline in the vectis core at
+`vectis-shell-detect` live inline in the vectis core at
 `targets/vectis/core/src/shell.rs` rather than as a separate
 workspace crate.
 
@@ -67,7 +67,7 @@ be installed; the tasks are defined in `Makefile.toml`.
 
 Build every adapter guest for wasm32-wasip2 (plus the eval guest) with
 `cargo make build-guests`; release-build the deployable components into
-`target/wasm32-wasip2/release/specify_<name>.wasm` with:
+`target/wasm32-wasip2/release/<name>.wasm` with:
 
 ```bash
 cargo make build-guests-release
@@ -80,7 +80,7 @@ component to the registry as a standard wasm-pkg package (RFC-64) —
 
 ```bash
 cargo make build-guests-release
-wkg publish target/wasm32-wasip2/release/specify_<name>.wasm --package augentic:<name>@<semver>
+wkg publish target/wasm32-wasip2/release/<name>.wasm --package augentic:<name>@<semver>
 ```
 
 where `<semver>` is the guest crate's `Cargo.toml` `version`. CI

@@ -1,5 +1,5 @@
 [package]
-name = "specify-captures-core"
+name = "captures-core"
 description = "Wasm-free core of the captures source adapter: embedded prose registry and the survey / extract judgment operations"
 version.workspace = true
 edition.workspace = true
@@ -17,10 +17,10 @@ name = "it"
 path = "tests/it.rs"
 
 [dependencies]
-specify-guest-kit.workspace = true
+adapter.workspace = true
 
 [build-dependencies]
-specify-prose-registry.workspace = true
+prose.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true

@@ -3,9 +3,9 @@
 
 use std::path::Path;
 
-use specify_guest_kit::MockModel;
-use specify_guest_kit::seam::{Authority, ClaimKind, Context, Lead};
-use specify_typescript_core::operations::{describe, extract, survey};
+use adapter::MockModel;
+use adapter::seam::{Authority, ClaimKind, Context, Lead};
+use typescript_core::operations::{describe, extract, survey};
 
 fn ctx() -> Context<'static> {
     Context {

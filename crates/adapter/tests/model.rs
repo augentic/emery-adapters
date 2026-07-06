@@ -1,6 +1,6 @@
 //! Integration tests for the `Model` capability's native mock provider.
 
-use specify_guest_kit::{Error, Format, McpGrant, Message, MockModel, Model, Reply, Request, Role};
+use adapter::{Error, Format, McpGrant, Message, MockModel, Model, Reply, Request, Role};
 
 fn request(task: &str) -> Request {
     Request {

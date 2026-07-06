@@ -1,6 +1,6 @@
 # Vendored judgment answer schemas
 
-These documents are **vendored copies** of the generated answer schemas published by [augentic/specify](https://github.com/augentic/specify) under `crates/guest-kit/schemas/answers/`. Each is the `format: schema(...)` payload an adapter guest sends with a judgment `omnia:model/completion.create` call, derived there from the canonical embedded schemas (never hand-written — regeneration lives in the specify repo's `specify-schema` crate):
+These documents are **vendored copies** of the generated answer schemas published by [augentic/specify](https://github.com/augentic/specify) under `crates/adapter/schemas/answers/`. Each is the `format: schema(...)` payload an adapter guest sends with a judgment `omnia:model/completion.create` call, derived there from the canonical embedded schemas (never hand-written — regeneration lives in the specify repo's `specify-schema` crate):
 
 | Schema                 | Answer for                                                                                 |
 | ---------------------- | ------------------------------------------------------------------------------------------ |

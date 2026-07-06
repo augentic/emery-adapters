@@ -1,5 +1,5 @@
 [package]
-name = "specify-guest-kit"
+name = "adapter"
 description = "Shared guest support for Specify adapter components: the local Model capability trait and its mock provider"
 version.workspace = true
 edition.workspace = true

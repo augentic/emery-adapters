@@ -4,10 +4,10 @@
 
 use std::path::Path;
 
-use specify_documentation_core::operations::{describe, extract, survey};
-use specify_guest_kit::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA};
-use specify_guest_kit::seam::{Authority, ClaimKind, Context, Error, Lead};
-use specify_guest_kit::{Error as ModelError, Format, MockModel, Request};
+use documentation_core::operations::{describe, extract, survey};
+use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA};
+use adapter::seam::{Authority, ClaimKind, Context, Error, Lead};
+use adapter::{Error as ModelError, Format, MockModel, Request};
 
 fn ctx(mcp_url: Option<&str>) -> Context<'_> {
     Context {

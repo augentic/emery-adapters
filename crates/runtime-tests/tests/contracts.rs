@@ -4,7 +4,7 @@
 //! `references/spec-runtime` symlink content.
 //!
 //! Model-free by design: the judgment legs (`build` / `merge`) are covered
-//! natively in `specify-contracts-core` against `MockModel`, and live
+//! natively in `contracts-core` against `MockModel`, and live
 //! against the cursor backend by the Milestone E proof harness.
 
 use anyhow::{Context as _, Result};
@@ -119,7 +119,7 @@ async fn shelf() -> Result<()> {
         }),
     )
     .await?;
-    assert_eq!(init["result"]["serverInfo"]["name"], "specify-contracts-references");
+    assert_eq!(init["result"]["serverInfo"]["name"], "contracts-references");
 
     let resources =
         post(&runtime, &json!({ "jsonrpc": "2.0", "id": 2, "method": "resources/list" })).await?;

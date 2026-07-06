@@ -1,10 +1,10 @@
-//! The prose-registry codegen: tree walking, ordering, symlink
+//! The prose codegen: tree walking, ordering, symlink
 //! resolution, and failure modes.
 
 use std::fs;
 use std::path::Path;
 
-use specify_prose_registry::emit;
+use prose::emit;
 use tempfile::TempDir;
 
 fn write(root: &Path, rel: &str, body: &str) {

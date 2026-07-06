@@ -1,23 +1,23 @@
 //! The screenshots adapter guest: `wasm32` shim over
-//! `specify-screenshots-core`. See `specify_guest_kit::source` for
+//! `screenshots-core`. See `adapter::source` for
 //! the shim contract.
 #![cfg(target_arch = "wasm32")]
 
-use specify_guest_kit::source::{AdapterId, Error, Evidence, Guest, Lead, Manifest};
-use specify_guest_kit::{WasiModel, seam, shelf};
+use adapter::source::{AdapterId, Error, Evidence, Guest, Lead, Manifest};
+use adapter::{WasiModel, seam, shelf};
 
 struct Adapter;
-specify_guest_kit::source::export!(Adapter with_types_in specify_guest_kit::source);
+adapter::source::export!(Adapter with_types_in adapter::source);
 
 impl Guest for Adapter {
     fn describe(_id: AdapterId) -> Manifest {
-        specify_screenshots_core::operations::describe().into()
+        screenshots_core::operations::describe().into()
     }
 
     async fn survey(id: AdapterId) -> Result<Vec<Lead>, Error> {
         let url = shelf::mcp_url("screenshots");
         let ctx = seam::Context::guest(&id, url.as_deref());
-        specify_screenshots_core::operations::survey(&WasiModel, &ctx)
+        screenshots_core::operations::survey(&WasiModel, &ctx)
             .await
             .map(|leads| leads.into_iter().map(Into::into).collect())
             .map_err(Into::into)
@@ -27,7 +27,7 @@ impl Guest for Adapter {
         let lead = seam::Lead::from(lead);
         let url = shelf::mcp_url("screenshots");
         let ctx = seam::Context::guest(&id, url.as_deref());
-        specify_screenshots_core::operations::extract(&WasiModel, &ctx, &lead)
+        screenshots_core::operations::extract(&WasiModel, &ctx, &lead)
             .await
             .map(Into::into)
             .map_err(Into::into)
@@ -42,9 +42,9 @@ impl wasip3::exports::http::handler::Guest for HttpGuest {
         request: wasip3::http::types::Request,
     ) -> Result<wasip3::http::types::Response, wasip3::http::types::ErrorCode> {
         shelf::Shelf {
-            server_name: "specify-screenshots-references",
+            server_name: "screenshots-references",
             version: env!("CARGO_PKG_VERSION"),
-            docs: specify_screenshots_core::registry::docs(),
+            docs: screenshots_core::registry::docs(),
         }
         .serve(request)
         .await

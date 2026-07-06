@@ -8,7 +8,7 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
-use specify_vectis_core::validate::{ValidateMode, run};
+use vectis_core::validate::{ValidateMode, run};
 use tempfile::{NamedTempFile, TempDir};
 
 fn errors_array(envelope: &Value) -> &[Value] {

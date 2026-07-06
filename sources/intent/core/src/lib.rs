@@ -1,7 +1,7 @@
 //! Wasm-free core of the intent source adapter: [`operations`] (the
 //! survey / extract judgment legs) and [`registry`] (the embedded
 //! prose), natively testable against a mock
-//! [`specify_guest_kit::Model`]. The wasm32 shim (`specify-intent`)
+//! [`adapter::Model`]. The wasm32 shim (`intent`)
 //! owns bindings and export glue.
 
 pub mod operations;

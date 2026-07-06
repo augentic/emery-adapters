@@ -1,7 +1,7 @@
 //! The embedded prose registry: coverage across all three trees,
 //! nested build prompts, ordering, and symlink resolution.
 
-use specify_vectis_core::registry;
+use vectis_core::registry;
 
 #[test]
 fn registry_embeds_prompts_references_and_rules() {
@@ -51,7 +51,7 @@ fn non_markdown_rules_are_not_embedded() {
 }
 
 /// The `references/spec-runtime` and `references/agent-teams.md`
-/// symlinks into `shared/prose/references/runtime/` are resolved at build
+/// symlinks into `codex/references/runtime/` are resolved at build
 /// time: documents appear under their symlink-name paths with the
 /// shared content inlined.
 #[test]

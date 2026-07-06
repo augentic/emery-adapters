@@ -29,7 +29,7 @@ esac
 }
 
 cd "$root"
-cargo build -p specify-vectis -p specify-eval-guest --target wasm32-wasip2
+cargo build -p vectis -p eval-guest --target wasm32-wasip2
 
 # Scratch project tree: scenario seed files (project.yaml platform set,
 # operator-curated design-system manifests) plus the slice inputs the
@@ -47,12 +47,12 @@ wasm="$root/target/wasm32-wasip2/debug"
 cat > "$scratch/omnia.toml" <<MANIFEST
 [[guest]]
 id = "eval"
-source.path = "$wasm/specify_eval_guest.wasm"
+source.path = "$wasm/eval_guest.wasm"
 link = ["specify:adapter/source@0.1.0", "specify:adapter/target@0.1.0"]
 
 [[guest]]
 id = "target:vectis"
-source.path = "$wasm/specify_vectis.wasm"
+source.path = "$wasm/vectis.wasm"
 
 [[mount]]
 name = "."
@@ -84,7 +84,7 @@ echo "eval $scenario: slice=$slice scratch=$scratch log=$log"
 status=0
 HTTP_ADDR="$addr" \
 SPECIFY_VECTIS_MCP_URL="http://$addr/mcp/vectis" \
-cargo run -q -p specify-eval-driver -- \
+cargo run -q -p eval-driver -- \
   run --config "$scratch/omnia.toml" -- target:vectis "$slice" .eval/inputs \
   > "$log" 2>&1 || status=$?
 cat "$log"

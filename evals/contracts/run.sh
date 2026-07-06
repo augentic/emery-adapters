@@ -29,7 +29,7 @@ command -v cursor-agent >/dev/null || {
 }
 
 cd "$root"
-cargo build -p specify-contracts -p specify-eval-guest --target wasm32-wasip2
+cargo build -p contracts -p eval-guest --target wasm32-wasip2
 
 # Scratch project tree: scenario seed files plus the slice inputs the
 # eval guest reads from the shared mount.
@@ -46,12 +46,12 @@ wasm="$root/target/wasm32-wasip2/debug"
 cat > "$scratch/omnia.toml" <<MANIFEST
 [[guest]]
 id = "eval"
-source.path = "$wasm/specify_eval_guest.wasm"
+source.path = "$wasm/eval_guest.wasm"
 link = ["specify:adapter/source@0.1.0", "specify:adapter/target@0.1.0"]
 
 [[guest]]
 id = "target:contracts"
-source.path = "$wasm/specify_contracts.wasm"
+source.path = "$wasm/contracts.wasm"
 
 [[mount]]
 name = "."
@@ -77,7 +77,7 @@ echo "eval $scenario: slice=$slice scratch=$scratch log=$log"
 status=0
 HTTP_ADDR="$addr" \
 SPECIFY_CONTRACTS_MCP_URL="http://$addr/mcp/contracts" \
-cargo run -q -p specify-eval-driver -- \
+cargo run -q -p eval-driver -- \
   run --config "$scratch/omnia.toml" -- target:contracts "$slice" .eval/inputs \
   > "$log" 2>&1 || status=$?
 cat "$log"

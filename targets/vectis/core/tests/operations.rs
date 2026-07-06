@@ -7,12 +7,12 @@
 use std::fs;
 use std::path::Path;
 
-use specify_guest_kit::answers::REPORT_ANSWER_SCHEMA;
-use specify_guest_kit::seam::{
+use adapter::answers::REPORT_ANSWER_SCHEMA;
+use adapter::seam::{
     Changeset, Context, Edit, Input, Platform, Report, Severity, Status, WorkingTree,
 };
-use specify_guest_kit::{Format, MockModel, Request};
-use specify_vectis_core::operations::{build, describe, guidance, merge};
+use adapter::{Format, MockModel, Request};
+use vectis_core::operations::{build, describe, guidance, merge};
 use tempfile::TempDir;
 
 const PHASE_DONE: &str = r#"{"applicable":true,"summary":"phase complete"}"#;

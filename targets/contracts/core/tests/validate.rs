@@ -3,7 +3,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use specify_contracts_core::validate::{
+use contracts_core::validate::{
     ContractFinding, RULE_ID_FORMAT, RULE_ID_UNIQUE, RULE_VERSION_IS_SEMVER, validate_baseline,
 };
 use tempfile::TempDir;

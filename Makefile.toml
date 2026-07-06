@@ -5,7 +5,7 @@
 CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
 # Every adapter guest package, mirrored by the runtime tests'
 # `build_guests` (crates/runtime-tests/tests/common.rs).
-GUEST_PACKAGES = "specify-contracts specify-omnia specify-vectis specify-captures specify-documentation specify-intent specify-screenshots specify-typescript"
+GUEST_PACKAGES = "contracts omnia-adapter vectis captures documentation intent screenshots typescript"
 
 [config]
 default_to_workspace = true
@@ -29,14 +29,14 @@ dependencies = ["fmt-check", "lint", "test", "test-docs", "doc", "vet", "deny", 
 
 [tasks.check-guardrails-consumer-boundary]
 script = '''
-grep -q '^## Consumer tooling boundary$' shared/prose/references/runtime/guardrails.md || {
-  echo "shared/prose/references/runtime/guardrails.md is missing ## Consumer tooling boundary" >&2
+grep -q '^## Consumer tooling boundary$' codex/references/runtime/guardrails.md || {
+  echo "codex/references/runtime/guardrails.md is missing ## Consumer tooling boundary" >&2
   echo "Sync from plugins/spec/references/guardrails.md in specify." >&2
   exit 1
 }
 '''
 
-# Vendored-pin parity (RFC-61): the wit/ and crates/guest-kit/schemas/answers/ trees are
+# Vendored-pin parity (RFC-61): the wit/ and crates/adapter/schemas/answers/ trees are
 # byte-copies of the augentic/specify sources. When a sibling checkout is
 # present (developer machines, the migration branch), any drift fails;
 # CI without a sibling checkout skips with a notice.
@@ -60,9 +60,9 @@ if grep -q 'describe: func' "$sibling/wit/specify.wit"; then
 else
   echo "check-pins: sibling wit predates RFC-64 describe; skipping wit parity until specify re-vendors"
 fi
-for pair in "crates/guest-kit/schemas/answers/leads.schema.json:$sibling/schemas/answers/leads.schema.json" \
-            "crates/guest-kit/schemas/answers/evidence.schema.json:$sibling/schemas/answers/evidence.schema.json" \
-            "crates/guest-kit/schemas/answers/report.schema.json:$sibling/schemas/answers/report.schema.json"; do
+for pair in "crates/adapter/schemas/answers/leads.schema.json:$sibling/schemas/answers/leads.schema.json" \
+            "crates/adapter/schemas/answers/evidence.schema.json:$sibling/schemas/answers/evidence.schema.json" \
+            "crates/adapter/schemas/answers/report.schema.json:$sibling/schemas/answers/report.schema.json"; do
   local_file="${pair%%:*}"
   upstream="${pair#*:}"
   if ! cmp -s "$local_file" "$upstream"; then
@@ -80,7 +80,7 @@ script = '''
 set -e
 flags=""
 for package in $GUEST_PACKAGES; do flags="$flags -p $package"; done
-cargo build $flags -p specify-eval-guest --target wasm32-wasip2
+cargo build $flags -p eval-guest --target wasm32-wasip2
 '''
 
 # Live decomposition-proof evals (RFC-61 Step 2 Milestone E): every
@@ -105,7 +105,7 @@ evals/vectis/run.sh single-screen
 '''
 
 # Release-build every adapter guest component where cargo puts it
-# (`target/wasm32-wasip2/release/specify_<name>.wasm`) — the deployable
+# (`target/wasm32-wasip2/release/<name>.wasm`) — the deployable
 # artifacts the publish workflow pushes (RFC-64: no committed copies).
 [tasks.build-guests-release]
 script = '''

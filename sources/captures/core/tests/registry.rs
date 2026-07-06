@@ -1,7 +1,7 @@
 //! The embedded prose registry: captures' own prompts and the two
 //! references the extract prompt requires ride inside.
 
-use specify_captures_core::registry;
+use captures_core::registry;
 
 #[test]
 fn registry_embeds_the_prompts() {

@@ -4,7 +4,7 @@
 //! the source guest's own MCP reference shelf on its own HTTP route.
 //!
 //! Model-free by design, like the contracts tests: the judgment legs are
-//! covered natively in each `specify-<name>-core` against `MockModel`.
+//! covered natively in each `<name>-core` against `MockModel`.
 
 use anyhow::{Context as _, Result};
 use omnia::wasmtime::component::Val;
@@ -108,7 +108,7 @@ async fn per_guest_shelves() -> Result<()> {
         }),
     )
     .await?;
-    assert_eq!(init["result"]["serverInfo"]["name"], "specify-documentation-references");
+    assert_eq!(init["result"]["serverInfo"]["name"], "documentation-references");
 
     let prompt = post(
         &runtime,
@@ -135,7 +135,7 @@ async fn per_guest_shelves() -> Result<()> {
     )
     .await?;
     assert_eq!(
-        contracts_init["result"]["serverInfo"]["name"], "specify-contracts-references",
+        contracts_init["result"]["serverInfo"]["name"], "contracts-references",
         "the contracts shelf keeps its own identity beside the source guest"
     );
 

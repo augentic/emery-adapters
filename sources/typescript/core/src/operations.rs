@@ -1,16 +1,16 @@
 //! The judgment operations: `survey` and `extract` — schema-gated legs
-//! through [`specify_guest_kit::judgment`] with deterministic id-grammar
+//! through [`adapter::judgment`] with deterministic id-grammar
 //! tails.
 //!
 //! The judgment detail — the framework survey grammar, the
 //! `excerpt` / `type` / `call` extraction depth — rides in the embedded
 //! prompts and references.
 
-use specify_guest_kit::answers::{
+use adapter::answers::{
     EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA, LeadsAnswer, validate_evidence, validate_leads,
 };
-use specify_guest_kit::seam::{Context, Error, Evidence, Lead, SourceManifest};
-use specify_guest_kit::{Model, judgment};
+use adapter::seam::{Context, Error, Evidence, Lead, SourceManifest};
+use adapter::{Model, judgment};
 
 use crate::registry;
 
@@ -40,7 +40,7 @@ const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and
 ///
 /// # Errors
 ///
-/// As [`specify_guest_kit::judgment`]; a validation-tail failure is
+/// As [`adapter::judgment`]; a validation-tail failure is
 /// [`Error::Internal`].
 pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>, Error> {
     let system = registry::body("prompts/survey.md").to_string();
@@ -72,7 +72,7 @@ pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>,
 ///
 /// # Errors
 ///
-/// As [`specify_guest_kit::judgment`]; a validation-tail failure is
+/// As [`adapter::judgment`]; a validation-tail failure is
 /// [`Error::Internal`].
 pub async fn extract<P: Model>(
     model: &P, ctx: &Context<'_>, lead: &Lead,

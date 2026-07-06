@@ -1,5 +1,5 @@
 [package]
-name = "specify-contracts-core"
+name = "contracts-core"
 description = "Wasm-free core of the contracts target adapter: validators, embedded prose registry, and the judgment operation template"
 version.workspace = true
 edition.workspace = true
@@ -21,10 +21,10 @@ semver.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde-saphyr.workspace = true
 serde_json.workspace = true
-specify-guest-kit.workspace = true
+adapter.workspace = true
 
 [build-dependencies]
-specify-prose-registry.workspace = true
+prose.workspace = true
 
 [dev-dependencies]
 jsonschema.workspace = true

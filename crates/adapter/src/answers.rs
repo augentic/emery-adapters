@@ -3,7 +3,7 @@
 //! Every judgment leg is gated by `format: schema(...)`, so the host
 //! validates the reply against the derived answer schema before the guest
 //! sees it. This module carries the three vendored schema pins
-//! (`crates/guest-kit/schemas/answers/{leads,evidence,report}.schema.json`) as embedded
+//! (`crates/adapter/schemas/answers/{leads,evidence,report}.schema.json`) as embedded
 //! strings and the matching parse functions: a survey answer's `leads[]`
 //! envelope, an extract answer's Evidence body, and a build / merge
 //! answer's full diagnostic shape projected onto the compact seam-facing
@@ -19,15 +19,15 @@ use crate::seam::{
 };
 
 /// The derived judgment-answer schema gating `survey` replies — the
-/// vendored `crates/guest-kit/schemas/answers/leads.schema.json` pin.
+/// vendored `crates/adapter/schemas/answers/leads.schema.json` pin.
 pub const LEADS_ANSWER_SCHEMA: &str = include_str!("../schemas/answers/leads.schema.json");
 
 /// The derived judgment-answer schema gating `extract` replies — the
-/// vendored `crates/guest-kit/schemas/answers/evidence.schema.json` pin.
+/// vendored `crates/adapter/schemas/answers/evidence.schema.json` pin.
 pub const EVIDENCE_ANSWER_SCHEMA: &str = include_str!("../schemas/answers/evidence.schema.json");
 
 /// The derived judgment-answer schema gating `build` / `merge` replies —
-/// the vendored `crates/guest-kit/schemas/answers/report.schema.json` pin.
+/// the vendored `crates/adapter/schemas/answers/report.schema.json` pin.
 pub const REPORT_ANSWER_SCHEMA: &str = include_str!("../schemas/answers/report.schema.json");
 
 /// The schema-gated `survey` answer envelope: leads ride under a `leads`

@@ -4,7 +4,7 @@ name: Release adapters
 # component, no manifest). Tagging `v<x.y.z>` cuts a release; each
 # adapter's identity semver lives in its guest crate's `Cargo.toml`
 # `version` — the single identity declaration — and the release-built
-# component `target/wasm32-wasip2/release/specify_<name>.wasm` is pushed
+# component `target/wasm32-wasip2/release/<name>.wasm` is pushed
 # as `augentic:<name>@<semver>`. No tree pack, no adapter.yaml, no
 # committed wasm.
 on:
@@ -88,12 +88,13 @@ jobs:
           metadata="$(cargo metadata --no-deps --format-version 1)"
           for dir in targets/*/ sources/*/; do
             name="$(basename "${dir}")"
-            version="$(jq -r --arg n "specify-${name}" \
+            pkg="$(sed -n 's/^name = "\(.*\)"/\1/p' "${dir}Cargo.toml" | head -1)"
+            version="$(jq -r --arg n "${pkg}" \
               '.packages[] | select(.name == $n) | .version' <<< "${metadata}")"
             if [ -z "${version}" ] || [ "${version}" = "null" ]; then
-              echo "::error::no specify-${name} package version in cargo metadata"; exit 1
+              echo "::error::no ${pkg} package version in cargo metadata"; exit 1
             fi
-            artifact="target/wasm32-wasip2/release/specify_${name}.wasm"
+            artifact="target/wasm32-wasip2/release/${name}.wasm"
             if [ ! -s "${artifact}" ]; then
               echo "::error::missing release component ${artifact}"; exit 1
             fi

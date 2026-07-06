@@ -1,11 +1,11 @@
 //! Wasm-free core of the vectis target adapter, natively testable
-//! against a mock [`specify_guest_kit::Model`]; the wasm32 shim
-//! (`specify-vectis`) owns bindings and export glue.
+//! against a mock [`adapter::Model`]; the wasm32 shim
+//! (`vectis`) owns bindings and export glue.
 //!
 //! - [`operations`] — the build prompt's phase legs, the in-core
 //!   composition validator gate with its bounded repair, and the
 //!   deterministic report-coherence tail, over the shared
-//!   `specify_guest_kit::phase` template.
+//!   `adapter::phase` template.
 //! - [`validate`] / [`materialize`] / [`prepare`] / [`infer`] /
 //!   [`verify`] / [`scaffold`] / [`sync`] / [`android`] — the
 //!   deterministic libraries: schema + cross-artifact validation,

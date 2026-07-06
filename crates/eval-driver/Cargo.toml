@@ -1,5 +1,5 @@
 [package]
-name = "specify-eval-driver"
+name = "eval-driver"
 description = "Omnia runtime! host binary driving adapter-guest evals against the live cursor backend"
 version.workspace = true
 edition.workspace = true

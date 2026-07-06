@@ -1,5 +1,5 @@
 [package]
-name = "specify-omnia-core"
+name = "omnia-core"
 description = "Wasm-free core of the omnia target adapter: embedded prose registry and the guidance / build / merge judgment operations"
 version.workspace = true
 edition.workspace = true
@@ -18,10 +18,10 @@ path = "tests/it.rs"
 
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
-specify-guest-kit.workspace = true
+adapter.workspace = true
 
 [build-dependencies]
-specify-prose-registry.workspace = true
+prose.workspace = true
 
 [dev-dependencies]
 jsonschema.workspace = true

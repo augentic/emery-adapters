@@ -16,7 +16,7 @@ The Vectis target adapter contributes its `guidance` / `build` / `merge` prompts
 ```text
 /targets/vectis/
 ├── prompts/                         # guidance, build (with phase prompts), merge
-├── core/                            # specify-vectis-core: engines, templates, versions.toml, schemas
+├── core/                            # vectis-core: engines, templates, versions.toml, schemas
 │   └── schemas/                     # composition, tokens, assets JSON Schemas
 ├── references/                      # Crux idiom prose, design-system docs, layout-inferer contract
 └── rules/

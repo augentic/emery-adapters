@@ -1,6 +1,6 @@
 //! The embedded prose registry: prompt coverage and symlink resolution.
 
-use specify_documentation_core::registry;
+use documentation_core::registry;
 
 #[test]
 fn registry_embeds_the_prompts() {
@@ -8,7 +8,7 @@ fn registry_embeds_the_prompts() {
     assert!(registry::body("prompts/extract.md").starts_with("# `documentation.extract`"));
 }
 
-/// The `references/spec-runtime` symlink into `shared/prose/references/runtime/`
+/// The `references/spec-runtime` symlink into `codex/references/runtime/`
 /// is resolved at build time: documents appear under their symlink-name
 /// paths with the shared content inlined.
 #[test]

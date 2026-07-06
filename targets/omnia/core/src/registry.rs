@@ -6,4 +6,4 @@
 //! resources; the operation template reads prompt bodies from it for
 //! system-prompt assembly.
 
-specify_guest_kit::embed_registry!();
+adapter::embed_registry!();

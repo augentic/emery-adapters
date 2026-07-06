@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use specify_vectis_core::shell::{
+use vectis_core::shell::{
     SUPPORTED_SHELL_PLATFORMS, shell_present, shell_resident_app_icon,
 };
 use tempfile::tempdir;

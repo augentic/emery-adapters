@@ -5,5 +5,5 @@
 //! cites the Omnia rule overlay by path, so the shelf must serve it.
 
 fn main() {
-    specify_prose_registry::emit_core(&["prompts", "references", "rules"]);
+    prose::emit_core(&["prompts", "references", "rules"]);
 }

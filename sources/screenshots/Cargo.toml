@@ -1,6 +1,6 @@
 [package]
-name = "specify-screenshots"
-description = "Screenshots source-adapter WASI guest component: wasm32 shim over specify-screenshots-core"
+name = "screenshots"
+description = "Screenshots source-adapter WASI guest component: wasm32 shim over screenshots-core"
 # The adapter identity version (RFC-64): the semver the component
 # publishes under as `augentic:<name>@<version>` — declared once, here.
 version = "1.0.0"
@@ -16,8 +16,8 @@ crate-type = ["cdylib"]
 # Guest-only: the component body compiles solely for wasm32, so its
 # dependencies live under the same target gate omnia's guests use.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-specify-screenshots-core = { path = "core" }
-specify-guest-kit.workspace = true
+screenshots-core = { path = "core" }
+adapter.workspace = true
 wasip3.workspace = true
 
 [lints]

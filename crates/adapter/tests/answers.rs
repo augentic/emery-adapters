@@ -1,13 +1,13 @@
 //! The judgment-answer deserializers: schema pins, envelope shapes, and
 //! the report projection onto the compact seam types.
 
-use specify_guest_kit::answers::{
+use adapter::answers::{
     EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA, REPORT_ANSWER_SCHEMA, ReportAnswer,
     parse_evidence, parse_leads, validate_evidence, validate_leads,
 };
-use specify_guest_kit::seam::{Authority, Backing, ClaimKind, Error, Severity, Status};
+use adapter::seam::{Authority, Backing, ClaimKind, Error, Severity, Status};
 
-// The three embedded pins are the vendored crates/guest-kit/schemas/answers/ documents,
+// The three embedded pins are the vendored crates/adapter/schemas/answers/ documents,
 // byte-identical to the files on disk.
 #[test]
 fn schema_pins_match_vendored_files() {

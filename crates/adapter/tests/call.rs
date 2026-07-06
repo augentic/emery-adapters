@@ -4,8 +4,8 @@
 use std::path::Path;
 
 use serde::Deserialize;
-use specify_guest_kit::seam::{Context, Error, WorkingTree};
-use specify_guest_kit::{Error as ModelError, Format, MockModel, judgment};
+use adapter::seam::{Context, Error, WorkingTree};
+use adapter::{Error as ModelError, Format, MockModel, judgment};
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 struct Answer {
@@ -82,7 +82,7 @@ async fn judgment_without_mcp_url_offers_no_grant() {
 async fn judgment_maps_errors() {
     let model = MockModel::scripted([
         Err(ModelError::InvalidRequest("messages must not be empty".to_string())),
-        Ok(specify_guest_kit::Reply {
+        Ok(adapter::Reply {
             answer: "this is not json".to_string(),
         }),
     ]);

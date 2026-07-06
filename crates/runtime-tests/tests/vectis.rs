@@ -8,7 +8,7 @@
 //! Model-free by design, like the contracts and omnia tests: the
 //! judgment legs (`build` / `merge`) and the absorbed validate /
 //! materialize / prepare libraries are covered natively in
-//! `specify-vectis-core` against `MockModel`.
+//! `vectis-core` against `MockModel`.
 
 use anyhow::{Context as _, Result};
 use omnia::wasmtime::component::Val;
@@ -145,7 +145,7 @@ async fn shelf() -> Result<()> {
         }),
     )
     .await?;
-    assert_eq!(init["result"]["serverInfo"]["name"], "specify-vectis-references");
+    assert_eq!(init["result"]["serverInfo"]["name"], "vectis-references");
 
     let reference = post(
         &runtime,

@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use specify_vectis_core::verify::catalog_findings;
+use vectis_core::verify::catalog_findings;
 use tempfile::tempdir;
 
 fn write_yaml(path: &Path, content: &str) {

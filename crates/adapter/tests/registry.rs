@@ -1,8 +1,8 @@
-//! The prose-registry lookup helpers over a sorted doc table.
+//! The prose lookup helpers over a sorted doc table.
 
-use specify_guest_kit::registry::{Doc, body, find};
+use adapter::registry::{Doc, body, find};
 
-/// A sorted table, as the `specify-prose-registry` codegen emits.
+/// A sorted table, as the `prose` codegen emits.
 static DOCS: &[Doc] = &[
     Doc {
         path: "prompts/build.md",

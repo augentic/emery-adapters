@@ -1,7 +1,7 @@
 //! The embedded prose registry: screenshots' own prompts — including the
 //! nested pipeline sub-prompt — and its worked example ride inside.
 
-use specify_screenshots_core::registry;
+use screenshots_core::registry;
 
 #[test]
 fn registry_embeds_the_prompts() {

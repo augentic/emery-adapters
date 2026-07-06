@@ -1,10 +1,10 @@
-//! Consolidated integration binary for `specify-captures-core`.
+//! Consolidated integration binary for `captures-core`.
 //!
 //! One binary per crate: each former `tests/<area>.rs` is pulled in here as a
 //! `#[path]` submodule so the crate-under-test links exactly once. See
 //! `TESTING.md` at the workspace root.
 //!
-//! Full operation coverage lives in `specify-documentation-core`'s tests —
+//! Full operation coverage lives in `documentation-core`'s tests —
 //! the five source cores share one template — so this binary asserts only
 //! what is captures-specific.
 

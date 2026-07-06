@@ -5,8 +5,8 @@
 //! in a library crate with `pub_export_macro`, flat re-exports, and a
 //! per-crate [`export!`] invocation in each consumer. A shim implements
 //! [`Guest`] for its own type and wires it in with
-//! `specify_guest_kit::target::export!(Adapter with_types_in
-//! specify_guest_kit::target)`.
+//! `adapter::target::export!(Adapter with_types_in
+//! adapter::target)`.
 //!
 //! The [`From`] impls below map the generated seam records onto the
 //! wasm-free [`crate::seam`] vocabulary at the export boundary, so the

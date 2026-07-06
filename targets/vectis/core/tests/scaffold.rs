@@ -8,7 +8,7 @@
 use std::fs;
 
 use sha2::{Digest, Sha256};
-use specify_vectis_core::scaffold::{
+use vectis_core::scaffold::{
     CommonArgs, CoreArgs, ScaffoldCommand, ScaffoldError, ScaffoldPlan, Versions, parse_caps,
     plan_android, plan_core, plan_ios, run_at, write_plan,
 };

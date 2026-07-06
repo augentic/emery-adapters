@@ -256,7 +256,7 @@ When a caller re-surfaces an envelope finding as a `LintFinding` (see `schemas/d
 | findings | One or more findings. | Record `failure`; the merge parks. The slice's deltas remain unmerged. |
 | validator error | The validator could not run (unreadable tree, internal error). | Record `failure`; journal the diagnostic. The slice's deltas remain unmerged. |
 
-The mode is **deterministic**: the gate is `validate_baseline` in `specify-contracts-core` ([`core/src/validate.rs`](../../core/src/validate.rs)), embedded in the adapter guest. Repeated invocations against the same baseline produce identical findings.
+The mode is **deterministic**: the gate is `validate_baseline` in `contracts-core` ([`core/src/validate.rs`](../../core/src/validate.rs)), embedded in the adapter guest. Repeated invocations against the same baseline produce identical findings.
 
 ### Why an in-guest gate?
 

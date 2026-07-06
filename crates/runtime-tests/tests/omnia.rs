@@ -5,7 +5,7 @@
 //! `references/spec-runtime` symlink content.
 //!
 //! Model-free by design, like the contracts tests: the judgment legs
-//! (`build` / `merge`) are covered natively in `specify-omnia-core`
+//! (`build` / `merge`) are covered natively in `omnia-core`
 //! against `MockModel`.
 
 use anyhow::{Context as _, Result};
@@ -75,7 +75,7 @@ async fn shelf() -> Result<()> {
         }),
     )
     .await?;
-    assert_eq!(init["result"]["serverInfo"]["name"], "specify-omnia-references");
+    assert_eq!(init["result"]["serverInfo"]["name"], "omnia-references");
 
     let reference = post(
         &runtime,

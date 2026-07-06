@@ -19,8 +19,8 @@
 //! - [`phase`] — the shared per-leg scaffolding for target operation
 //!   templates: the internal phase-answer shape, prompt renderers, and
 //!   the deterministic report-coherence checks.
-//! - [`registry`] — the embedded prose-registry vocabulary the
-//!   `specify-prose-registry` codegen plugs into, plus the
+//! - [`registry`] — the embedded prose vocabulary the
+//!   `prose` codegen plugs into, plus the
 //!   [`embed_registry!`] module generator.
 //! - [`shelf`] — the MCP URL env convention plus (on `wasm32`) the
 //!   generic `McpServer` reference shelf over an embedded doc table.

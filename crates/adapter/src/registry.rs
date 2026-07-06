@@ -1,6 +1,6 @@
-//! The embedded prose-registry vocabulary and lookup helpers.
+//! The embedded prose vocabulary and lookup helpers.
 //!
-//! Each adapter core's `build.rs` (via `specify-prose-registry`) emits a
+//! Each adapter core's `build.rs` (via `prose`) emits a
 //! sorted `DOCS` table of [`Doc`] entries into `$OUT_DIR/registry_docs.rs`;
 //! the core `include!`s that table next to a `pub use` of this [`Doc`]
 //! type and wraps the lookup helpers below. Documents are keyed by
@@ -38,13 +38,13 @@ pub fn body(docs: &[Doc], path: &str) -> &'static str {
 }
 
 /// Generate an adapter core's `registry` module body over the `DOCS`
-/// table its `build.rs` emitted (via `specify_prose_registry::emit_core`).
+/// table its `build.rs` emitted (via `prose::emit_core`).
 ///
 /// Invoke once inside the core's `registry` module:
 ///
 /// ```ignore
 /// pub mod registry {
-///     specify_guest_kit::embed_registry!();
+///     adapter::embed_registry!();
 /// }
 /// ```
 #[macro_export]

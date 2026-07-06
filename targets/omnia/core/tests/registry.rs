@@ -1,7 +1,7 @@
 //! The embedded prose registry: coverage across all three trees,
 //! ordering, and symlink resolution.
 
-use specify_omnia_core::registry;
+use omnia_core::registry;
 
 #[test]
 fn registry_embeds_prompts_references_and_rules() {
@@ -48,7 +48,7 @@ fn non_markdown_rules_are_not_embedded() {
     assert!(registry::doc("rules/omnia.mdc").is_none());
 }
 
-/// The `references/spec-runtime` symlink into `shared/prose/references/runtime/`
+/// The `references/spec-runtime` symlink into `codex/references/runtime/`
 /// is resolved at build time: documents appear under their symlink-name
 /// paths with the shared content inlined.
 #[test]

@@ -1,7 +1,7 @@
 //! The embedded prose registry: coverage, ordering, and symlink
 //! resolution.
 
-use specify_contracts_core::registry;
+use contracts_core::registry;
 
 #[test]
 fn registry_embeds_prompts_and_references() {
@@ -20,7 +20,7 @@ fn registry_embeds_prompts_and_references() {
     assert!(registry::body("prompts/build.md").starts_with("# contracts.build"));
 }
 
-/// The `references/spec-runtime` symlink into `shared/prose/references/runtime/`
+/// The `references/spec-runtime` symlink into `codex/references/runtime/`
 /// is resolved at build time: documents appear under their symlink-name
 /// paths with the shared content inlined.
 #[test]

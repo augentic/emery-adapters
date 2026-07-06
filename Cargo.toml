@@ -10,11 +10,11 @@ members = [
 
 # The Specify adapters repo (RFC-48 / RFC-49 T6). Each RFC-61 adapter root
 # (`{sources,targets}/<name>/`) *is* its guest package — a wasm32-only
-# `specify-<name>` cdylib shim at the adapter root over a wasm-free
-# `core/` crate (`specify-<name>-core`) — so the package physically
+# `<name>` cdylib shim at the adapter root over a wasm-free
+# `core/` crate (`<name>-core`) — so the package physically
 # contains the prose trees (`prose/prompts`, `prose/references`) it embeds.
-# Shared guest support lives under top-level `crates/`; shared prose under
-# `shared/prose/`.
+# Shared guest support lives under top-level `crates/`; shared codex under
+# `codex/`.
 
 [workspace.package]
 authors = ["Augentic"]
@@ -35,10 +35,10 @@ serde = { version = "1", features = ["derive"] }
 serde-saphyr = "0.0.26"
 serde_json = "1"
 sha2 = "0.11"
-specify-guest-kit = { path = "crates/guest-kit" }
-specify-prose-registry = { path = "crates/prose-registry" }
-specify-contracts-core = { path = "targets/contracts/core" }
-specify-vectis-core = { path = "targets/vectis/core" }
+adapter = { path = "crates/adapter" }
+prose = { path = "crates/prose" }
+contracts-core = { path = "targets/contracts/core" }
+vectis-core = { path = "targets/vectis/core" }
 thiserror = "2"
 toml = "1"
 tempfile = "3"

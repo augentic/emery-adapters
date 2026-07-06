@@ -2,9 +2,9 @@
 
 use std::path::Path;
 
-use specify_guest_kit::MockModel;
-use specify_guest_kit::seam::{Authority, ClaimKind, Context, Lead};
-use specify_screenshots_core::operations::{describe, extract};
+use adapter::MockModel;
+use adapter::seam::{Authority, ClaimKind, Context, Lead};
+use screenshots_core::operations::{describe, extract};
 
 // The extract answer's spatial claim kinds — `region` / `container` /
 // `leaf` — parse through the shared Evidence shape.

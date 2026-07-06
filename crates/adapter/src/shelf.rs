@@ -45,7 +45,7 @@ mod wasm {
     #[derive(Clone, Copy, Debug)]
     pub struct Shelf {
         /// Server identity reported in the `initialize` handshake, e.g.
-        /// `specify-contracts-references`.
+        /// `contracts-references`.
         pub server_name: &'static str,
         /// Server version reported alongside the name — the shim's own
         /// `CARGO_PKG_VERSION`.

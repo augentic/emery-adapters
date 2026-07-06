@@ -3,5 +3,5 @@
 //! symlinks resolve at build time.
 
 fn main() {
-    specify_prose_registry::emit_core(&["prompts", "references"]);
+    prose::emit_core(&["prompts", "references"]);
 }

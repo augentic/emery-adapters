@@ -23,23 +23,23 @@ use omnia_wasi_model::{
 type Guest = (&'static str, &'static str);
 
 /// The single-guest contracts deployment.
-const CONTRACTS: &[Guest] = &[("target:contracts", "specify_contracts.wasm")];
+const CONTRACTS: &[Guest] = &[("target:contracts", "contracts.wasm")];
 
 /// The multi-guest composed deployment: three target guests plus one
 /// source guest.
 const COMPOSED: &[Guest] = &[
-    ("target:contracts", "specify_contracts.wasm"),
-    ("target:omnia", "specify_omnia.wasm"),
-    ("target:vectis", "specify_vectis.wasm"),
-    ("source:documentation", "specify_documentation.wasm"),
+    ("target:contracts", "contracts.wasm"),
+    ("target:omnia", "omnia.wasm"),
+    ("target:vectis", "vectis.wasm"),
+    ("source:documentation", "documentation.wasm"),
 ];
 
 /// The remaining source guests, composed together.
 const SOURCES: &[Guest] = &[
-    ("source:intent", "specify_intent.wasm"),
-    ("source:typescript", "specify_typescript.wasm"),
-    ("source:screenshots", "specify_screenshots.wasm"),
-    ("source:captures", "specify_captures.wasm"),
+    ("source:intent", "intent.wasm"),
+    ("source:typescript", "typescript.wasm"),
+    ("source:screenshots", "screenshots.wasm"),
+    ("source:captures", "captures.wasm"),
 ];
 
 /// Assemble the contracts deployment into a runtime the tests can
@@ -121,14 +121,14 @@ fn build_guests() {
             .expect("runtime-tests manifest dir is <workspace>/crates/runtime-tests")
             .to_path_buf();
         let packages = [
-            "specify-contracts",
-            "specify-omnia",
-            "specify-vectis",
-            "specify-captures",
-            "specify-documentation",
-            "specify-intent",
-            "specify-screenshots",
-            "specify-typescript",
+            "contracts",
+            "omnia-adapter",
+            "vectis",
+            "captures",
+            "documentation",
+            "intent",
+            "screenshots",
+            "typescript",
         ];
         let status = Command::new("cargo")
             .env("CARGO_TARGET_DIR", target_dir())
