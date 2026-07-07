@@ -8,8 +8,8 @@
 //!   Wasm-free adapter cores take `P: Model` bounds and issue judgment
 //!   calls through the trait; on `wasm32` the default method body
 //!   delegates to the `omnia-wasi-model` bindings, and off `wasm32` tests
-//!   bind [`MockModel`]. When the upstream capability lands, the swap is a
-//!   one-line import change.
+//!   bind the `testkit` crate's scripted `MockModel`. When the upstream
+//!   capability lands, the swap is a one-line import change.
 //! - [`seam`] — the wasm-free DTO vocabulary mirroring the
 //!   `specify:adapter` WIT records, shared by every adapter core.
 //! - [`answers`] — the vendored judgment-answer schema pins and the
@@ -42,12 +42,7 @@ pub mod source;
 #[cfg(target_arch = "wasm32")]
 pub mod target;
 
-#[cfg(not(target_arch = "wasm32"))]
-mod mock;
-
 pub use call::judgment;
-#[cfg(not(target_arch = "wasm32"))]
-pub use mock::MockModel;
 #[cfg(target_arch = "wasm32")]
 pub use model::WasiModel;
 pub use model::{Error, Format, McpGrant, Message, Model, Reply, Request, Role, SchemaFormat};

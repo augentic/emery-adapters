@@ -27,6 +27,7 @@ prose.workspace = true
 jsonschema.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
+testkit.workspace = true
 tokio.workspace = true
 
 [lints]

@@ -1,6 +1,6 @@
 [package]
-name = "contracts-core"
-description = "Wasm-free core of the contracts target adapter: validators, embedded prose registry, and the judgment operation template"
+name = "testkit"
+description = "Test doubles for the adapter-core suites: the scripted MockModel judgment provider"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -16,20 +16,13 @@ autotests = false
 name = "it"
 path = "tests/it.rs"
 
-[dependencies]
-semver.workspace = true
-serde = { workspace = true, features = ["derive"] }
-serde-saphyr.workspace = true
-serde_json.workspace = true
+# Dev-dependency-only: the testkit never compiles for the guest wasm32
+# targets, so its dependencies live under the same target gate the
+# harness uses.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 adapter.workspace = true
 
-[build-dependencies]
-prose.workspace = true
-
 [dev-dependencies]
-jsonschema.workspace = true
-tempfile.workspace = true
-testkit.workspace = true
 tokio.workspace = true
 
 [lints]

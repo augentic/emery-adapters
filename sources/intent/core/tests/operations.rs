@@ -2,9 +2,9 @@
 
 use std::path::Path;
 
-use adapter::MockModel;
 use adapter::seam::{Authority, ClaimKind, Context, Lead};
 use intent_core::operations::{describe, extract, survey};
+use testkit::MockModel;
 
 fn ctx() -> Context<'static> {
     Context {

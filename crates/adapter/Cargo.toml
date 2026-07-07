@@ -1,6 +1,6 @@
 [package]
 name = "adapter"
-description = "Shared guest support for Specify adapter components: the local Model capability trait and its mock provider"
+description = "Shared guest support for Specify adapter components: the local Model capability trait and the shared judgment scaffolding"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -36,8 +36,11 @@ omnia-wasi-model.workspace = true
 wasip3.workspace = true
 wit-bindgen.workspace = true
 
+# The dev-dependency cycle back through `testkit` is deliberate and
+# cargo-legal: dev-deps are only built for tests, never for the guest.
 [dev-dependencies]
 tempfile.workspace = true
+testkit.workspace = true
 tokio.workspace = true
 
 [lints]

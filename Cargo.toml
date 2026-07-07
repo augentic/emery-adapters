@@ -24,6 +24,7 @@ sha2 = "0.11"
 adapter = { path = "crates/adapter" }
 harness = { path = "crates/harness" }
 prose = { path = "crates/prose" }
+testkit = { path = "crates/testkit" }
 contracts-core = { path = "targets/contracts/core" }
 vectis-core = { path = "targets/vectis/core" }
 thiserror = "2"

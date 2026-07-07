@@ -1,6 +1,7 @@
-//! Integration tests for the `Model` capability's native mock provider.
+//! The scripted [`MockModel`] provider: FIFO replies and request recording.
 
-use adapter::{Error, Format, McpGrant, Message, MockModel, Model, Reply, Request, Role};
+use adapter::{Error, Format, McpGrant, Message, Model, Reply, Request, Role};
+use testkit::MockModel;
 
 fn request(task: &str) -> Request {
     Request {

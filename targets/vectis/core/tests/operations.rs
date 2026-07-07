@@ -11,8 +11,9 @@ use adapter::answers::REPORT_ANSWER_SCHEMA;
 use adapter::seam::{
     Changeset, Context, Edit, Input, Platform, Report, Severity, Status, WorkingTree,
 };
-use adapter::{Format, MockModel, Request};
+use adapter::{Format, Request};
 use tempfile::TempDir;
+use testkit::MockModel;
 use vectis_core::operations::{build, describe, guidance, merge};
 
 const PHASE_DONE: &str = r#"{"applicable":true,"summary":"phase complete"}"#;

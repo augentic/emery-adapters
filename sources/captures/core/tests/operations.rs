@@ -3,9 +3,9 @@
 
 use std::path::Path;
 
-use adapter::MockModel;
 use adapter::seam::{Authority, ClaimKind, Context, Error, Lead};
 use captures_core::operations::{describe, extract};
+use testkit::MockModel;
 
 fn ctx() -> Context<'static> {
     Context {

@@ -7,8 +7,6 @@
 mod answers;
 #[path = "call.rs"]
 mod call;
-#[path = "model.rs"]
-mod model;
 #[cfg(feature = "prose-overlay")]
 #[path = "overlay.rs"]
 mod overlay;

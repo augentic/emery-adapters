@@ -7,9 +7,10 @@ use std::path::Path;
 
 use adapter::answers::REPORT_ANSWER_SCHEMA;
 use adapter::seam::{Changeset, Context, Edit, Error, Input, Severity, Status, WorkingTree};
-use adapter::{Error as ModelError, Format, MockModel, Request};
+use adapter::{Error as ModelError, Format, Request};
 use omnia_core::operations::{build, describe, guidance, merge};
 use tempfile::TempDir;
+use testkit::MockModel;
 
 const PHASE_DONE: &str = r#"{"applicable":true,"summary":"phase complete"}"#;
 const REPLAY_SKIPPED: &str = r#"{"applicable":false,"summary":"no captures binding"}"#;

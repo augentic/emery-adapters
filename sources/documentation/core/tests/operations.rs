@@ -6,8 +6,9 @@ use std::path::Path;
 
 use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA};
 use adapter::seam::{Authority, ClaimKind, Context, Error, Lead};
-use adapter::{Error as ModelError, Format, MockModel, Request};
+use adapter::{Error as ModelError, Format, Request};
 use documentation_core::operations::{describe, extract, survey};
+use testkit::MockModel;
 
 fn ctx(mcp_url: Option<&str>) -> Context<'_> {
     Context {

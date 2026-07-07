@@ -1,9 +1,15 @@
-//! Native mock provider for the [`Model`] capability.
+//! Test doubles for the adapter-core suites.
+//!
+//! Consumed only through `[dev-dependencies]`, so nothing here can reach
+//! a shipped guest component's dependency graph — the structural
+//! guarantee that keeps test support out of mainline adapter code.
+
+#![cfg(not(target_arch = "wasm32"))]
 
 use std::collections::VecDeque;
 use std::sync::Mutex;
 
-use crate::model::{Error, Model, Reply, Request};
+use adapter::{Error, Model, Reply, Request};
 
 /// Scripted [`Model`] provider for native tests: replies are served in
 /// FIFO order and every request is recorded for assertion.
