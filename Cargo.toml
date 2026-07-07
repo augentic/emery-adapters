@@ -1,14 +1,6 @@
 [workspace]
 resolver = "3"
-members = [
-    "crates/*",
-    "evals",
-    "sources/*",
-    "sources/*/core",
-    "targets/*",
-    "targets/*/core",
-    "tests",
-]
+members = ["crates/*", "sources/*", "targets/*", "evals", "tests"]
 
 [workspace.package]
 authors = ["Augentic"]

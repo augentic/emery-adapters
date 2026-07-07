@@ -19,7 +19,7 @@ and reads its resolve-time facts through the WIT `describe` operation.
 Every adapter — the three targets and the five sources — shares the same guest anatomy:
 
 ```text
-wit/                  # the contract — specify.wit, the axis worlds
+wit/                  # the contract — wit/specify.wit, the axis worlds
 {targets,sources}/
   <name>/             # e.g. targets/{contracts,omnia,vectis}, sources/{intent,documentation,typescript,screenshots,captures}
     prose/            #   agent-facing markdown (embedded into the component)
