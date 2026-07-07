@@ -22,12 +22,12 @@
 
 use std::path::Path;
 
-use serde_json::Value;
 use adapter::seam::{
     BuildInput, Changeset, Context, Error, Finding, Input, Platform, PlatformsCapability, Report,
     Severity, Status, TargetManifest, WorkingTree,
 };
 use adapter::{Model, phase};
+use serde_json::Value;
 
 use crate::{
     VectisError, android, android_scaffold, infer, ios_scaffold, prepare, registry, scaffold,

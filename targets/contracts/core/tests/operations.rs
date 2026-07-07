@@ -5,13 +5,11 @@
 use std::fs;
 use std::path::Path;
 
+use adapter::answers::REPORT_ANSWER_SCHEMA;
+use adapter::seam::{Changeset, Context, Edit, Error, Input, Severity, Status, WorkingTree};
+use adapter::{Error as ModelError, Format, MockModel, Request};
 use contracts_core::operations::{build, describe, guidance, merge};
 use contracts_core::validate::RULE_VERSION_IS_SEMVER;
-use adapter::answers::REPORT_ANSWER_SCHEMA;
-use adapter::seam::{
-    Changeset, Context, Edit, Error, Input, Severity, Status, WorkingTree,
-};
-use adapter::{Error as ModelError, Format, MockModel, Request};
 use tempfile::TempDir;
 
 const NOT_APPLICABLE: &str = r#"{"applicable":false,"summary":"no surface this format owns"}"#;

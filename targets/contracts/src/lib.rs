@@ -3,9 +3,7 @@
 //! shim contract.
 #![cfg(target_arch = "wasm32")]
 
-use adapter::target::{
-    AdapterId, Changeset, Error, Guest, Input, Manifest, Report, WorkingTree,
-};
+use adapter::target::{AdapterId, Changeset, Error, Guest, Input, Manifest, Report, WorkingTree};
 use adapter::{WasiModel, seam, shelf};
 
 struct Adapter;

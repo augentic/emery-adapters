@@ -23,7 +23,7 @@ mod generated {
 
     wit_bindgen::generate!({
         world: "source-adapter",
-        path: "../../wit",
+        path: "../../wit/deps/specify",
         // Asyncness follows the WIT declarations: the judgment operations
         // are `async func`s (they await the async `omnia:model` import
         // mid-call) and async-lift; `describe` is a plain `func` (RFC-64:

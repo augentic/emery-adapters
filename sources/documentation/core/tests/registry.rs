@@ -1,4 +1,5 @@
-//! The embedded prose registry: prompt coverage and symlink resolution.
+//! The embedded prose registry: prompt and rule coverage plus symlink
+//! resolution.
 
 use documentation_core::registry;
 
@@ -6,6 +7,15 @@ use documentation_core::registry;
 fn registry_embeds_the_prompts() {
     assert!(registry::body("prompts/survey.md").starts_with("# `documentation.survey`"));
     assert!(registry::body("prompts/extract.md").starts_with("# `documentation.extract`"));
+}
+
+/// The `rules/` overlay pack travels inside the component (RFC-66
+/// §"Codex ownership becomes real").
+#[test]
+fn registry_embeds_the_rule_overlay() {
+    let doc = registry::doc("rules/documentation-verbatim-preservation.md")
+        .expect("SRC-001 rule overlay is embedded");
+    assert!(doc.body.contains("id: SRC-001"), "rule frontmatter carries its id");
 }
 
 /// The `references/spec-runtime` symlink into `codex/references/runtime/`

@@ -2,7 +2,7 @@
 name = "documentation"
 description = "Documentation source-adapter WASI guest component: wasm32 shim over documentation-core"
 # The adapter identity version (RFC-64): the semver the component
-# publishes under as `augentic:<name>@<version>` — declared once, here.
+# publishes under as `specify:<name>@<version>` — declared once, here.
 version = "1.0.0"
 edition.workspace = true
 license.workspace = true

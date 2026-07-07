@@ -6,9 +6,7 @@ use std::fs;
 use std::path::Path;
 
 use adapter::answers::REPORT_ANSWER_SCHEMA;
-use adapter::seam::{
-    Changeset, Context, Edit, Error, Input, Severity, Status, WorkingTree,
-};
+use adapter::seam::{Changeset, Context, Edit, Error, Input, Severity, Status, WorkingTree};
 use adapter::{Error as ModelError, Format, MockModel, Request};
 use omnia_core::operations::{build, describe, guidance, merge};
 use tempfile::TempDir;

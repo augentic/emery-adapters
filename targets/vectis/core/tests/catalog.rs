@@ -3,8 +3,8 @@
 
 use std::path::Path;
 
-use vectis_core::verify::catalog_findings;
 use tempfile::tempdir;
+use vectis_core::verify::catalog_findings;
 
 fn write_yaml(path: &Path, content: &str) {
     if let Some(parent) = path.parent() {

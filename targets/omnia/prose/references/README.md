@@ -68,7 +68,7 @@ The Omnia crate / test / guest / review instructions live in [`../prompts/build.
 - [`review-output-template.md`](review-output-template.md) — `REVIEW.md` template and finding-ID conventions.
 - [`agent-teams.md`](agent-teams.md) — shared multi-agent review pattern (specialists + antagonist + lead synthesis).
 - [`../rules/`](../rules/) — Omnia-specific rules (`OMNIA-001`, `OMNIA-002`, `RUST-001`, `SEC-001`).
-- [`../../../codex/rules/universal/`](../../../../codex/rules/universal/) — shared `UNI-*` rules.
+- `specify rules export` — resolves the shared `UNI-*` rules from the binary-materialized codex cache.
 
 ### Worked examples
 

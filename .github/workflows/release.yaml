@@ -5,8 +5,15 @@ name: Release adapters
 # adapter's identity semver lives in its guest crate's `Cargo.toml`
 # `version` — the single identity declaration — and the release-built
 # component `target/wasm32-wasip2/release/<name>.wasm` is pushed
-# as `augentic:<name>@<semver>`. No tree pack, no adapter.yaml, no
+# as `specify:<name>@<semver>`. No tree pack, no adapter.yaml, no
 # committed wasm.
+#
+# Publishing is idempotent (RFC-66): each identity is probed before
+# pushing and skipped when already present, so a tag carrying a mixed
+# bag of bumped and untouched adapters publishes only what moved, and
+# re-running this workflow against an already-published tag pushes
+# nothing and succeeds. Auth is GITHUB_TOKEN alone — no registry
+# username/password secrets.
 on:
   push:
     tags:
@@ -18,11 +25,13 @@ permissions:
   packages: write
 
 env:
-  # Canonical first-party registry host. Must match the `augentic`
-  # namespace mapping the engine resolves `augentic:<name>@<ver>`
-  # references against. Override via repository variable for a mirror.
+  # Canonical first-party registry host. Must match the `specify`
+  # namespace mapping the engine resolves `specify:<name>@<ver>`
+  # references against (RFC-65: namespaces follow product, not org —
+  # augentic.io stays the HOST). Override via repository variable for
+  # a mirror.
   REGISTRY: ${{ vars.SPECIFY_REGISTRY || 'augentic.io' }}
-  REGISTRY_NAMESPACE: augentic
+  REGISTRY_NAMESPACE: specify
 
 jobs:
   publish:
@@ -53,7 +62,10 @@ jobs:
           tool: cargo-make,cargo-nextest
 
       - name: Install wkg
-        run: cargo install wkg --locked
+        # Pinned: the idempotency probe fingerprints in
+        # scripts/wkg-publish-idempotent.sh are validated against this
+        # wkg version's error text — revalidate them when bumping.
+        run: cargo install wkg@0.15.0 --locked
 
       # Guard against publishing immutable artifacts from a broken tree:
       # fmt-check + clippy + nextest + doctests + doc (the lighter pre-commit
@@ -64,12 +76,10 @@ jobs:
       - name: Release-build every adapter component
         run: cargo make build-guests-release
 
-      # `wkg publish` resolves the `augentic` namespace through this
-      # config; credentials come from the registry secrets.
+      # `wkg publish` resolves the `specify` namespace through this
+      # config; auth is GITHUB_TOKEN (RFC-66 — the registry
+      # username/password secrets are retired).
       - name: Write wkg config
-        env:
-          SPECIFY_REGISTRY_USERNAME: ${{ secrets.SPECIFY_REGISTRY_USERNAME }}
-          SPECIFY_REGISTRY_PASSWORD: ${{ secrets.SPECIFY_REGISTRY_PASSWORD }}
         run: |
           set -euo pipefail
           mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/wasm-pkg"
@@ -78,28 +88,10 @@ jobs:
           ${REGISTRY_NAMESPACE} = "${REGISTRY}"
 
           [registry."${REGISTRY}".oci]
-          auth = { username = "${SPECIFY_REGISTRY_USERNAME}", password = "${SPECIFY_REGISTRY_PASSWORD}" }
+          auth = { username = "${{ github.actor }}", password = "${{ secrets.GITHUB_TOKEN }}" }
           EOF
 
+      # The publish loop lives in the cargo-make task so local emergency
+      # publishing is the same code path with a developer's own token.
       - name: Publish each adapter component
-        shell: bash
-        run: |
-          set -euo pipefail
-          metadata="$(cargo metadata --no-deps --format-version 1)"
-          for dir in targets/*/ sources/*/; do
-            name="$(basename "${dir}")"
-            pkg="$(sed -n 's/^name = "\(.*\)"/\1/p' "${dir}Cargo.toml" | head -1)"
-            version="$(jq -r --arg n "${pkg}" \
-              '.packages[] | select(.name == $n) | .version' <<< "${metadata}")"
-            if [ -z "${version}" ] || [ "${version}" = "null" ]; then
-              echo "::error::no ${pkg} package version in cargo metadata"; exit 1
-            fi
-            artifact="target/wasm32-wasip2/release/${name}.wasm"
-            if [ ! -s "${artifact}" ]; then
-              echo "::error::missing release component ${artifact}"; exit 1
-            fi
-            package="${REGISTRY_NAMESPACE}:${name}@${version}"
-            echo "::group::${package}"
-            wkg publish "${artifact}" --package "${package}"
-            echo "::endgroup::"
-          done
+        run: cargo make publish-adapters

@@ -45,7 +45,7 @@ Cargo.toml            # workspace: guest roots + `{sources,targets}/*` + `{sourc
 
 The facts the retired `adapter.yaml` carried live wasm-native (RFC-64):
 identity in the guest crate's `Cargo.toml` `version` and the wasm-pkg
-reference it publishes under (`augentic:<name>@<semver>`); axis in the
+reference it publishes under (`specify:<name>@<semver>`); axis in the
 exported world (`source` xor `target`); the compatibility floor and — for
 targets — the declared build `inputs[]` and platforms capability in the
 `describe` operation's compiled-in manifest record.
@@ -78,15 +78,17 @@ cargo make build-guests-release
 
 ## Publishing
 
-Publishing an adapter is: release-build the guest package, push the emitted
-component to the registry as a standard wasm-pkg package (RFC-64) —
+Publishing an adapter is: release-build the guest packages, push the emitted
+components to the registry as standard wasm-pkg packages (RFC-64) —
 
 ```bash
 cargo make build-guests-release
-wkg publish target/wasm32-wasip2/release/<name>.wasm --package augentic:<name>@<semver>
+cargo make publish-adapters
 ```
 
-where `<semver>` is the guest crate's `Cargo.toml` `version`. CI
-(`.github/workflows/release.yaml`) runs this for every adapter on a `v*`
-tag. Registry credentials come from `SPECIFY_REGISTRY_USERNAME` /
-`SPECIFY_REGISTRY_PASSWORD`, written into the `wkg` config's registry auth.
+where each identity's `<semver>` is the guest crate's `Cargo.toml` `version`.
+Publishing is idempotent (RFC-66): each identity is probed first and skipped
+when already present, so only bumped adapters are pushed. CI
+(`.github/workflows/release.yaml`) runs the same task for every adapter on a
+`v*` tag, authenticated by `GITHUB_TOKEN`; local emergency publishing uses
+the developer's own token in their `wkg` config.

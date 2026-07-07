@@ -6,6 +6,13 @@ CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
 # Every adapter guest package, mirrored by the runtime tests'
 # `build_guests` (tests/tests/common.rs).
 GUEST_PACKAGES = "contracts omnia-adapter vectis captures documentation intent screenshots typescript"
+# The single `specify:adapter` WIT pin (RFC-66): the version `wit-vendor`
+# fetches and `check-pins` verifies. Declared here and nowhere else —
+# every task and doc reads this variable.
+WIT_PIN = "0.1.0"
+# Where the vendored WIT lives (conventional wasm-tools deps layout; the
+# `wit_bindgen::generate!` invocations resolve this directory).
+WIT_VENDORED = "wit/deps/specify/specify.wit"
 
 [config]
 default_to_workspace = true
@@ -36,29 +43,38 @@ grep -q '^## Consumer tooling boundary$' codex/references/runtime/guardrails.md 
 }
 '''
 
-# Vendored-pin parity (RFC-61): the wit/ and crates/adapter/schemas/answers/ trees are
-# byte-copies of the augentic/specify sources. When a sibling checkout is
-# present (developer machines, the migration branch), any drift fails;
-# CI without a sibling checkout skips with a notice.
+# Vendored-pin parity. Two arms:
+#
+# WIT arm (RFC-66): the vendored $WIT_VENDORED must byte-match the pinned
+# published `specify:adapter@$WIT_PIN` package. Pre-first-publish posture:
+# nothing is published yet (the first real publish rides the next engine
+# tag), so an unfetchable pin — unpublished version, missing wkg, or an
+# unreachable registry — skips with a notice naming the pin; CI must pass
+# on a runner with no registry access until the first publish. Once the
+# pin is fetchable, byte parity is enforced strictly.
+#
+# Schema arms (RFC-61, unchanged): the crates/adapter/schemas/answers/
+# files are byte-copies of the augentic/specify sources, compared against
+# a sibling checkout when one is present; CI without a sibling skips with
+# a notice. The schema ownership story is not RFC-66's.
 [tasks.check-pins]
 script = '''
-sibling="../specify"
-if [ ! -d "$sibling" ]; then
-  echo "check-pins: no sibling specify checkout; skipping vendored-pin parity"
-  exit 0
-fi
 status=0
-# RFC-64 migration window: the `describe` op landed in this repo's WIT
-# first. Until the sibling re-vendors (its R64 engine milestone), a
-# sibling WIT that predates `describe` is skipped rather than failed;
-# once the sibling carries `describe`, byte parity is enforced again.
-if grep -q 'describe: func' "$sibling/wit/specify.wit"; then
-  if ! cmp -s "wit/specify.wit" "$sibling/wit/specify.wit"; then
-    echo "check-pins: wit/specify.wit diverges from $sibling/wit/specify.wit; re-vendor from specify" >&2
+wit_tmp="$(mktemp -t specify-adapter-wit.XXXXXX)"
+trap 'rm -f "$wit_tmp"' EXIT
+if command -v wkg >/dev/null 2>&1 \
+   && wkg get "specify:adapter@$WIT_PIN" --config wit/.wkg-config.toml --format wit --output "$wit_tmp" --overwrite >/dev/null 2>&1; then
+  if ! cmp -s "$WIT_VENDORED" "$wit_tmp"; then
+    echo "check-pins: $WIT_VENDORED diverges from published specify:adapter@$WIT_PIN; run \`cargo make wit-vendor\`" >&2
     status=1
   fi
 else
-  echo "check-pins: sibling wit predates RFC-64 describe; skipping wit parity until specify re-vendors"
+  echo "check-pins: specify:adapter@$WIT_PIN not fetchable (unpublished or registry unreachable); skipping wit pin parity"
+fi
+sibling="../specify"
+if [ ! -d "$sibling" ]; then
+  echo "check-pins: no sibling specify checkout; skipping answer-schema pin parity"
+  exit $status
 fi
 for pair in "crates/adapter/schemas/answers/leads.schema.json:$sibling/schemas/answers/leads.schema.json" \
             "crates/adapter/schemas/answers/evidence.schema.json:$sibling/schemas/answers/evidence.schema.json" \
@@ -71,6 +87,45 @@ for pair in "crates/adapter/schemas/answers/leads.schema.json:$sibling/schemas/a
   fi
 done
 exit $status
+'''
+
+# Refresh the vendored WIT from the published `specify:adapter@$WIT_PIN`
+# package (RFC-66). Fetches to a temp file and moves on success, so a
+# failed fetch — unpublished pin, unreachable registry — never corrupts
+# the vendored copy. The `specify:` namespace resolves through
+# wit/.wkg-config.toml to augentic.io's well-known wasm-pkg file.
+[tasks.wit-vendor]
+script = '''
+set -eu
+if ! command -v wkg >/dev/null 2>&1; then
+  echo "wit-vendor: wkg not found; install with \`cargo install wkg --locked\`" >&2
+  exit 1
+fi
+wit_tmp="$(mktemp -t specify-adapter-wit.XXXXXX)"
+trap 'rm -f "$wit_tmp"' EXIT
+if ! wkg get "specify:adapter@$WIT_PIN" --config wit/.wkg-config.toml --format wit --output "$wit_tmp" --overwrite; then
+  echo "wit-vendor: fetching specify:adapter@$WIT_PIN failed (not yet published, or registry unreachable); $WIT_VENDORED left unchanged" >&2
+  exit 1
+fi
+mv "$wit_tmp" "$WIT_VENDORED"
+trap - EXIT
+echo "wit-vendor: refreshed $WIT_VENDORED from specify:adapter@$WIT_PIN"
+'''
+
+# Dev-loop override (RFC-66): copy the sibling engine checkout's WIT into
+# the vendored location while iterating on a contract change before the
+# new `specify:adapter` version is published. The published pin is the
+# release posture — run `cargo make wit-vendor` once the version lands.
+[tasks.wit-vendor-sibling]
+script = '''
+set -eu
+sibling="../specify/wit/specify.wit"
+if [ ! -f "$sibling" ]; then
+  echo "wit-vendor-sibling: no sibling engine WIT at $sibling" >&2
+  exit 1
+fi
+cp "$sibling" "$WIT_VENDORED"
+echo "wit-vendor-sibling: copied $sibling into $WIT_VENDORED (dev override; run \`cargo make wit-vendor\` for the published pin)"
 '''
 
 # Guest components (RFC-61): build every adapter guest crate for the
@@ -146,6 +201,46 @@ set -e
 flags=""
 for package in $GUEST_PACKAGES; do flags="$flags -p $package"; done
 cargo build $flags --target wasm32-wasip2 --release
+'''
+
+# Publish every adapter component as `$REGISTRY_NAMESPACE:<name>@<ver>`
+# (RFC-64 identity, RFC-66 idempotency). Walks targets/*/ sources/*/,
+# reads each guest crate's identity semver from cargo metadata, and
+# pushes the release-built `target/wasm32-wasip2/release/<name>.wasm`
+# through scripts/wkg-publish-idempotent.sh: the helper probes the
+# registry first and skips identities already present, so a tag carrying
+# a mixed bag of bumped and untouched adapters succeeds — a version is
+# published at most once, ever, and a probe that cannot distinguish
+# absent from unreachable aborts rather than risk re-pushing an
+# immutable identity. Requires `cargo make build-guests-release` first
+# (components are built up front; the helper's build leg is unused) and
+# a wkg config routing the namespace (CI writes one from GITHUB_TOKEN;
+# local emergency publishing runs this same task with the developer's
+# own token in their wkg config). Namespace defaults to `specify`
+# (RFC-65: namespaces follow product, not org); override via
+# REGISTRY_NAMESPACE.
+[tasks.publish-adapters]
+script_runner = "bash"
+script = '''
+set -euo pipefail
+namespace="${REGISTRY_NAMESPACE:-specify}"
+metadata="$(cargo metadata --no-deps --format-version 1)"
+for dir in targets/*/ sources/*/; do
+  name="$(basename "${dir}")"
+  pkg="$(sed -n 's/^name = "\(.*\)"/\1/p' "${dir}Cargo.toml" | head -1)"
+  version="$(jq -r --arg n "${pkg}" \
+    '.packages[] | select(.name == $n) | .version' <<< "${metadata}")"
+  if [ -z "${version}" ] || [ "${version}" = "null" ]; then
+    echo "publish-adapters: no ${pkg} package version in cargo metadata" >&2
+    exit 1
+  fi
+  artifact="target/wasm32-wasip2/release/${name}.wasm"
+  if [ ! -s "${artifact}" ]; then
+    echo "publish-adapters: missing release component ${artifact}; run \`cargo make build-guests-release\` first" >&2
+    exit 1
+  fi
+  scripts/wkg-publish-idempotent.sh "${namespace}:${name}@${version}" "${artifact}"
+done
 '''
 
 # Audit

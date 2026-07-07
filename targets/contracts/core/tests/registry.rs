@@ -1,10 +1,10 @@
-//! The embedded prose registry: coverage, ordering, and symlink
-//! resolution.
+//! The embedded prose registry: coverage across all three trees,
+//! ordering, and symlink resolution.
 
 use contracts_core::registry;
 
 #[test]
-fn registry_embeds_prompts_and_references() {
+fn registry_embeds_prompts_references_and_rules() {
     for path in [
         "prompts/guidance.md",
         "prompts/build.md",
@@ -14,6 +14,11 @@ fn registry_embeds_prompts_and_references() {
         "prompts/build/asyncapi.md",
         "references/report-shape.md",
         "references/openapi/verifier.md",
+        "rules/asyncapi-consumer-compatibility.md",
+        "rules/consumer-impact-classification.md",
+        "rules/json-schema-evolution-safety.md",
+        "rules/openapi-consumer-compatibility.md",
+        "rules/semver-contract-versioning.md",
     ] {
         assert!(registry::doc(path).is_some(), "registry embeds `{path}`");
     }

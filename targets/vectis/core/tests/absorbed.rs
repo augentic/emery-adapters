@@ -8,6 +8,7 @@
 
 use image::{ImageFormat, Rgba, RgbaImage};
 use serde_json::{Map, Value, json};
+use tempfile::tempdir;
 use vectis_core::VectisError;
 use vectis_core::materialize::app_icon::android::{
     resolve_launcher_background, write_android_export,
@@ -27,7 +28,6 @@ use vectis_core::validate::engine::composition::{
 use vectis_core::validate::engine::{
     conventional_export_exists, imageset_has_materialized_content,
 };
-use tempfile::tempdir;
 
 const TRIANGLE: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
   <path fill="#010203" d="M12 2L2 22h20z"/>

@@ -3,9 +3,9 @@
 
 use std::path::Path;
 
-use serde::Deserialize;
 use adapter::seam::{Context, Error, WorkingTree};
 use adapter::{Error as ModelError, Format, MockModel, judgment};
+use serde::Deserialize;
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 struct Answer {

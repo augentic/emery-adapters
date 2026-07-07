@@ -368,7 +368,7 @@ fn adapter_dir(adapter: &str) -> Result<PathBuf> {
 // call in `<adapter>/core/build.rs` (pinned by `overlay::seeding`).
 fn embedded_trees(adapter: &str) -> &'static [&'static str] {
     match adapter {
-        "vectis" => &["prompts", "references", "rules"],
+        "contracts" | "vectis" => &["prompts", "references", "rules"],
         _ => &["prompts", "references"],
     }
 }

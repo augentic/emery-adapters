@@ -8,11 +8,11 @@
 use std::fs;
 
 use sha2::{Digest, Sha256};
+use tempfile::tempdir;
 use vectis_core::scaffold::{
     CommonArgs, CoreArgs, ScaffoldCommand, ScaffoldError, ScaffoldPlan, Versions, parse_caps,
     plan_android, plan_core, plan_ios, run_at, write_plan,
 };
-use tempfile::tempdir;
 
 const CORE_RENDER_ONLY_SHA256: &str =
     "f83be964272287a86228aefa3219e6f248f977b42880ecf3eeccc353f4a84b1e";
