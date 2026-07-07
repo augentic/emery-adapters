@@ -1,6 +1,6 @@
 [workspace]
-resolver = "3"
 members = ["crates/*", "sources/*", "targets/*", "evals", "tests"]
+resolver = "3"
 
 [workspace.package]
 authors = ["Augentic"]
@@ -15,10 +15,10 @@ publish = false
 [workspace.dependencies]
 anyhow = "1"
 cfg-if = "1"
-jsonschema = { version = "0.46", default-features = false }
+jsonschema = { version = "0.46.10", default-features = false }
 semver = "1"
 serde = { version = "1", features = ["derive"] }
-serde-saphyr = "0.0.26"
+serde-saphyr = "0.0.29"
 serde_json = "1"
 sha2 = "0.11"
 adapter = { path = "crates/adapter" }
@@ -38,29 +38,28 @@ image = { version = "0.25", default-features = false, features = [
     "jpeg",
     "webp",
 ] }
+wasip3 = { version = "0.7.0", features = ["http-compat"] }
+wit-bindgen = { version = "0.58.0", features = ["async-spawn"] }
 
 omnia = "0.35.0"
 omnia-guest = "0.35.0"
 omnia-testkit = "0.35.0"
 omnia-wasi-http = "0.35.0"
 omnia-wasi-model = "0.35.0"
-wasip3 = { version = "0.7.0", features = ["http-compat"] }
-wit-bindgen = { version = "0.58.0", features = ["async-spawn"] }
-
-omnia-cursor = { git = "https://github.com/augentic/backends.git", rev = "a847850658bd7e39b42d80cd21dc1f4d9454b805" }
+omnia-cursor = { git = "https://github.com/augentic/backends.git" }
 
 [patch.crates-io]
-omnia = { git = "https://github.com/augentic/omnia.git", rev = "703c4b1006410500d0b68b9a3b254e6a8e4c07f4" }
-omnia-guest = { git = "https://github.com/augentic/omnia.git", rev = "703c4b1006410500d0b68b9a3b254e6a8e4c07f4" }
-omnia-guest-macros = { git = "https://github.com/augentic/omnia.git", rev = "703c4b1006410500d0b68b9a3b254e6a8e4c07f4" }
-omnia-host-macros = { git = "https://github.com/augentic/omnia.git", rev = "703c4b1006410500d0b68b9a3b254e6a8e4c07f4" }
-omnia-testkit = { git = "https://github.com/augentic/omnia.git", rev = "703c4b1006410500d0b68b9a3b254e6a8e4c07f4" }
-omnia-wasi-config = { git = "https://github.com/augentic/omnia.git", rev = "703c4b1006410500d0b68b9a3b254e6a8e4c07f4" }
-omnia-wasi-http = { git = "https://github.com/augentic/omnia.git", rev = "703c4b1006410500d0b68b9a3b254e6a8e4c07f4" }
-omnia-wasi-model = { git = "https://github.com/augentic/omnia.git", rev = "703c4b1006410500d0b68b9a3b254e6a8e4c07f4" }
+omnia = { git = "https://github.com/augentic/omnia.git" }
+omnia-guest = { git = "https://github.com/augentic/omnia.git" }
+omnia-guest-macros = { git = "https://github.com/augentic/omnia.git" }
+omnia-host-macros = { git = "https://github.com/augentic/omnia.git" }
+omnia-testkit = { git = "https://github.com/augentic/omnia.git" }
+omnia-wasi-config = { git = "https://github.com/augentic/omnia.git" }
+omnia-wasi-http = { git = "https://github.com/augentic/omnia.git" }
+omnia-wasi-model = { git = "https://github.com/augentic/omnia.git" }
 
-wrpc-transport = { git = "https://github.com/bytecodealliance/wrpc", rev = "b347c61db52dea9fe515a349ac9a91ba11cfe4f9" }
-wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc", rev = "b347c61db52dea9fe515a349ac9a91ba11cfe4f9" }
+wrpc-transport = { git = "https://github.com/bytecodealliance/wrpc" }
+wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }
 
 [workspace.lints.rust]
 # https://dirname.github.io/rust-std-doc/rustc/lints/listing/allowed-by-default.html
