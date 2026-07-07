@@ -9,8 +9,8 @@ fn registry_embeds_the_prompts() {
     assert!(registry::body("prompts/extract.md").starts_with("# `documentation.extract`"));
 }
 
-/// The `rules/` overlay pack travels inside the component (RFC-66
-/// §"Codex ownership becomes real").
+/// The `rules/` overlay pack travels inside the component (DECISIONS.md
+/// §"Codex ownership flip: shared packs live in the engine").
 #[test]
 fn registry_embeds_the_rule_overlay() {
     let doc = registry::doc("rules/documentation-verbatim-preservation.md")

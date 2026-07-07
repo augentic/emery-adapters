@@ -1,4 +1,4 @@
-# wkg client config for vendoring the `specify:adapter` WIT (RFC-66).
+# wkg client config for vendoring the `specify:adapter` WIT.
 # The `specify:` namespace routes to augentic.io, whose static
 # `/.well-known/wasm-pkg/registry.json` points the wasm-pkg client at
 # the backing OCI registry; pulls are anonymous. Used by the

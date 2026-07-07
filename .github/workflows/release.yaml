@@ -8,7 +8,8 @@ name: Release adapters
 # as `specify:<name>@<semver>`. No tree pack, no adapter.yaml, no
 # committed wasm.
 #
-# Publishing is idempotent (RFC-66): each identity is probed before
+# Publishing is idempotent (DECISIONS.md §"Idempotent adapter publishing
+# on GITHUB_TOKEN"): each identity is probed before
 # pushing and skipped when already present, so a tag carrying a mixed
 # bag of bumped and untouched adapters publishes only what moved, and
 # re-running this workflow against an already-published tag pushes
@@ -77,8 +78,8 @@ jobs:
         run: cargo make build-guests-release
 
       # `wkg publish` resolves the `specify` namespace through this
-      # config; auth is GITHUB_TOKEN (RFC-66 — the registry
-      # username/password secrets are retired).
+      # config; auth is GITHUB_TOKEN (the registry username/password
+      # secrets are retired).
       - name: Write wkg config
         run: |
           set -euo pipefail

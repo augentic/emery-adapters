@@ -87,7 +87,7 @@ cargo make publish-adapters
 ```
 
 where each identity's `<semver>` is the guest crate's `Cargo.toml` `version`.
-Publishing is idempotent (RFC-66): each identity is probed first and skipped
+Publishing is idempotent: each identity is probed first and skipped
 when already present, so only bumped adapters are pushed. CI
 (`.github/workflows/release.yaml`) runs the same task for every adapter on a
 `v*` tag, authenticated by `GITHUB_TOKEN`; local emergency publishing uses

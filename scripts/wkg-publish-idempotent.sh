@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Idempotent wasm-pkg publish leg (RFC-66): probe, then (optionally
+# Idempotent wasm-pkg publish leg: probe, then (optionally
 # build, then) publish.
 #
 # Usage: wkg-publish-idempotent.sh <package-ref> <artifact-path> [build-command...]
@@ -10,8 +10,8 @@
 # release-built up front by `cargo make build-guests-release`, so the
 # publish loop omits the build command. Registry identities are
 # immutable, and skip-if-present is the immutability enforcement
-# (RFC-66 §"Risks and invariants"): it is what prevents a re-tag from
-# mutating an already-published version.
+# (DECISIONS.md §"Idempotent adapter publishing on GITHUB_TOKEN"): it is
+# what prevents a re-tag from mutating an already-published version.
 #
 # The load-bearing invariant is the absent-vs-unreachable distinction:
 # the probe treats only a definitive not-found as permission to publish.

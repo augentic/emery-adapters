@@ -3,8 +3,8 @@
 //! symlinks resolve at build time.
 //!
 //! The `rules/` tree rides along so the component carries its own rule
-//! overlay pack, pinned to the adapter version (RFC-66 §"Codex
-//! ownership becomes real").
+//! overlay pack, pinned to the adapter version (DECISIONS.md §"Codex
+//! ownership flip: shared packs live in the engine").
 
 fn main() {
     prose::emit_core(&["prompts", "references", "rules"]);
