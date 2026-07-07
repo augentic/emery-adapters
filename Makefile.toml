@@ -159,16 +159,14 @@ cargo test -p evals --test live -- --ignored --nocapture vectis::
 script_runner = "bash"
 script = '''
 set -euo pipefail
-
 version=$(sed -n '/^\[workspace\.package\]/,/^\[/p' Cargo.toml \
   | awk -F'"' '/^version = / {print $2; exit}')
 
-for dir in targets/*/ sources/*/; do
+for dir in {targets,sources}/*/; do
   name="$(basename "${dir}")"
-
   wkg publish "target/wasm32-wasip2/release/${name}.wasm" \
     --package "specify:${name}@${version}" \
-    --config "${PWD}/.wkg-config.toml"
+    --config .wkg-config.toml
 done
 '''
 

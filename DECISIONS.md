@@ -60,7 +60,7 @@ The hands-off loop is the `eval-watch` cargo-make task: cargo-watch over one ada
 
 The publish loop lives in the `publish` cargo-make task; the release workflow is a thin caller. Publish auth is `GITHUB_TOKEN` alone.
 
-_Codified in: `scripts/wkg-publish-idempotent.sh`; `Makefile.toml` (`publish`); `.github/workflows/release.yaml`._
+_Codified in: `Makefile.toml` (`publish`); `.github/workflows/release.yaml`._
 
 ## Codex ownership
 

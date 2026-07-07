@@ -49,8 +49,6 @@ jobs:
           tool: cargo-make,cargo-nextest
 
       - name: Install wkg
-        # Pinned: probe fingerprints in scripts/wkg-publish-idempotent.sh
-        # were validated against this wkg version — revalidate when bumping.
         run: cargo install wkg@0.15.0 --locked
 
       - name: Pre-publish workspace check
