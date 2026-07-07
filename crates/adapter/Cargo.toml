@@ -16,6 +16,11 @@ autotests = false
 name = "it"
 path = "tests/it.rs"
 
+[features]
+# Dev-only prose overlay: body lookups consult `.eval/prose/<path>` before
+# the embedded table. Never enabled by the release guest builds.
+prose-overlay = []
+
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
@@ -32,6 +37,7 @@ wasip3.workspace = true
 wit-bindgen.workspace = true
 
 [dev-dependencies]
+tempfile.workspace = true
 tokio.workspace = true
 
 [lints]

@@ -102,18 +102,29 @@ pub fn cargo(args: &[&str], root: &Path, target: &Path) -> Result<()> {
 
 /// Recursively copy the tree at `from` into `to`, creating `to`.
 ///
+/// Symlinks resolve like the build-time prose embed: a linked directory
+/// is copied as a real directory under its link-name path and a linked
+/// file's resolved content is copied, so the destination tree carries no
+/// links.
+///
 /// # Errors
 ///
-/// Returns an error when any directory or file cannot be read or written.
+/// Returns an error when any directory or file cannot be read or
+/// written, including a dangling symlink.
 pub fn copy_tree(from: &Path, to: &Path) -> Result<()> {
     fs::create_dir_all(to)?;
     for entry in fs::read_dir(from)? {
         let entry = entry?;
+        let path = entry.path();
         let dest = to.join(entry.file_name());
-        if entry.file_type()?.is_dir() {
-            copy_tree(&entry.path(), &dest)?;
+        // `metadata` follows symlinks; a dangling link errors here rather
+        // than being silently dropped from the copy.
+        let metadata = fs::metadata(&path)
+            .with_context(|| format!("resolve {} (dangling symlink?)", path.display()))?;
+        if metadata.is_dir() {
+            copy_tree(&path, &dest)?;
         } else {
-            fs::copy(entry.path(), &dest)?;
+            fs::copy(&path, &dest)?;
         }
     }
     Ok(())

@@ -33,14 +33,20 @@ wit-bindgen.workspace = true
 
 # The live test's own (host-only) support; kept out of the wasm32 example
 # builds by the same target gate. `harness` is the shared host harness
-# (manifest rendering, cargo runner, target-dir discovery).
+# (manifest rendering, cargo runner, target-dir discovery); `prose` is the
+# build-time embed walk the overlay seeding test replays for parity.
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 harness.workspace = true
+prose.workspace = true
+sha2.workspace = true
 tempfile.workspace = true
 
+# `test = true` runs the driver's unit tests (the model-override decision)
+# under ordinary `cargo test`; examples default to `test = false`.
 [[example]]
 name = "eval-driver"
 path = "runtime.rs"
+test = true
 
 [[example]]
 name = "eval-guest"

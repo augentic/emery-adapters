@@ -6,8 +6,8 @@ This directory is the live-backend eval harness for the contracts adapter guest:
 
 | Piece | Where |
 | ----- | ----- |
-| Host binary | [`evals/runtime.rs`](../runtime.rs) (the `eval-driver` example of the flattened `evals` package) — `omnia::runtime!({ mode: command, hosts: { WasiHttp: HttpDefault, WasiModel: Cursor } })` |
-| Driver guest | [`evals/guest.rs`](../guest.rs) (the `eval-guest` cdylib example) — the deployment's `wasi:cli/run` exporter; reads the slice inputs from the mount, dispatches `target.build`, prints the report as one JSON line |
+| Host binary | [`evals/runtime.rs`](../runtime.rs) (the `eval-driver` example of the flattened `evals` package) — `omnia::runtime!({ mode: command, hosts: { WasiHttp: HttpDefault, WasiModel: EvalModel } })` — the cursor backend behind the `SPECIFY_EVAL_MODEL` decorator |
+| Driver guest | [`evals/guest.rs`](../guest.rs) (the `eval-guest` cdylib example) — the deployment's `wasi:cli/run` exporter; drives one seam operation per invocation (`survey` / `extract` / `guidance` / `build` / `merge`, selected by the first argument — these scenarios drive `build`), reads its inputs from the mount, prints the typed answer as one JSON line |
 | Adapter guest | [`targets/contracts`](../../targets/contracts) — the component under test |
 | Scenario seeds | `scenarios/<name>/inputs/*.md` (typed slice inputs by file stem) and `scenarios/<name>/seed/**` (files copied into the scratch project root) |
 | Runner | [`evals/live.rs`](../live.rs) (the `live` `[[test]]` target) — one `#[ignore]`d test per scenario under `contracts::`, plus the non-ignored `contracts::wiring` smoke CI runs model-free; `cargo make eval-contracts` runs every scenario |
@@ -17,7 +17,7 @@ The scenarios mirror the operator-driven documents under [`targets/contracts/tes
 
 ## Running
 
-Requires [`cursor-agent`](https://cursor.com/docs/cli) on `PATH`, authenticated via `CURSOR_API_KEY` or a prior `cursor-agent login`.
+Requires [`cursor-agent`](https://cursor.com/docs/cli) on `PATH`, authenticated via `CURSOR_API_KEY` or a prior `cursor-agent login`. Set `SPECIFY_EVAL_MODEL=<model-id>` to override the model driver-side for a run (fills `Request.model` only when the guest left it unset; the id never enters a guest).
 
 ```bash
 # every scenario

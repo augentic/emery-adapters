@@ -6,6 +6,17 @@ Each entry records the decision, why it was taken, and the consequences a change
 
 **Anchor mapping note.** The sections under [§"Vectis validation and materialization"](#vectis-validation-and-materialization) (§A–§L and the appendices) were re-homed verbatim from `targets/vectis/extension/DECISIONS.md` at RFC-61 Step 5 Milestone A1, keeping every heading — and therefore every anchor — unchanged. External citations of the form `targets/vectis/extension/DECISIONS.md#k--materialization-and-render-by-kind` resolve here with the same fragment; Milestone A2 deleted the sidecar pointer stub with the extension crate, so this file is the only home.
 
+## RFC-62 — the prose overlay dev loop
+
+**Decision (2026-07).** The adapter author's prose iteration loop pays no compilation ([RFC-62](https://github.com/augentic/specify/blob/main/rfcs/rfc-62-adapter-dev-loop.md)): the `adapter` crate gains a dev-only `prose-overlay` cargo feature, off by default and compiled out of `build-guests-release` and every published component — the overlay exists to iterate, never to certify, and graded evidence (committed run summaries, the eval sweep) comes from embedded builds only. Behavior lives in module rustdoc rather than here: the read path in `crates/adapter/src/registry.rs`, the runner in `evals/live.rs`, the driver in `evals/runtime.rs`. The standing consequences:
+
+- **The overlay overrides bodies, never the doc set.** Registry and shelf lookups consult `.eval/prose/<key>` (under the guest's `"."` preopen) before the embedded table, but only for paths the table declares; a path absent from both keeps the registry's panic contract, and an overlay file that exists but cannot be read panics rather than silently serving the embedded body.
+- **The cargo-skip is stamp-guarded.** In overlay mode the runner skips all three cargo legs when the artifacts exist *and* a SHA-256 stamp matches the adapter wasm from the last overlay-flagged build — presence alone cannot prove the feature is compiled in, because unflagged builds share the artifact path. A Rust edit under the overlay remains the RFC's stale-artifact trap; the escape hatch is re-running without it.
+- **The eval guest drives one operation per invocation.** Its argv leads with an operation selector over the judgment-bearing seam operations (`survey`, `extract`, `guidance`, `build`, `merge`), so a source adapter's prompts are exercisable at all and a target author studies one prompt without paying a whole multi-leg build.
+- **Model ids stay out of guests.** `SPECIFY_EVAL_MODEL` is read by the eval driver alone and applied as a decorator that fills `Request.model` only when the guest left it `None`; the cursor backend keeps its no-environment-configuration posture and the id never enters a guest or the WIT contract.
+
+The hands-off loop is the `eval-watch` cargo-make task: a cargo-watch over one adapter's prose trees re-invoking a single required scenario filter with the overlay active — one model leg per save.
+
 ## RFC-64 Milestone R64-A — one component, no manifest
 
 **Decision (2026-07).** The deployable adapter artifact is exactly one wasm component ([RFC-64](rfcs/rfc-64-adapter-artifact.md)): `adapter.yaml` and the committed `guest.wasm` blobs are retired, and every fact the manifest carried moves into the component or the registry reference. Consequences, piece by piece:

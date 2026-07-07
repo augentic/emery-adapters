@@ -102,9 +102,9 @@ mod wasm {
                 }
                 "read_doc" => {
                     let path = arguments.get("path").and_then(Value::as_str).unwrap_or_default();
-                    registry::find(self.docs, path).map_or_else(
+                    registry::resolve(self.docs, path).map_or_else(
                         || Err(McpError::resource_not_found(path)),
-                        |doc| Ok(CallToolResult::text(doc.body)),
+                        |body| Ok(CallToolResult::text(body)),
                     )
                 }
                 other => Err(McpError::unknown_tool(other)),
@@ -127,9 +127,9 @@ mod wasm {
 
         fn read_resource(&self, uri: &str) -> Result<ResourceContents, McpError> {
             let path = uri.strip_prefix("doc://").unwrap_or(uri);
-            registry::find(self.docs, path).map_or_else(
+            registry::resolve(self.docs, path).map_or_else(
                 || Err(McpError::resource_not_found(uri)),
-                |doc| Ok(ResourceContents::text(uri, "text/markdown", doc.body)),
+                |body| Ok(ResourceContents::text(uri, "text/markdown", body)),
             )
         }
     }

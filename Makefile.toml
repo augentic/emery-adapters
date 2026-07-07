@@ -103,6 +103,40 @@ script = '''
 cargo test -p evals --test live -- --ignored --nocapture vectis::
 '''
 
+# Prose-overlay watch loop (RFC-62): re-run one live scenario on every
+# save under an adapter's prose trees. With SPECIFY_EVAL_OVERLAY=1 the
+# save-to-report loop is the overlay loop — after the one-time build a
+# re-run spawns no cargo, only the model leg repeats. Parametrized by
+# EVAL_ADAPTER (default contracts) and EVAL_FILTER (required: a
+# single-scenario live-test filter, e.g. contracts::design — one model
+# leg per save is the loop's whole point). Watches
+# targets/<adapter>/prose — the adapters the evals exercise today are
+# all targets; a sources/ adapter would need the prefix taught here. A
+# script task over cargo-watch (installed on demand) rather than
+# cargo-make's native `watch` attribute: the watched path is
+# env-parametrized, which the shell expresses directly. Requires
+# cursor-agent on PATH.
+[tasks.eval-watch]
+script = '''
+adapter="${EVAL_ADAPTER:-contracts}"
+if [ -z "${EVAL_FILTER:-}" ]; then
+  echo "eval-watch: EVAL_FILTER is required — name one scenario, e.g." >&2
+  echo "  EVAL_FILTER=contracts::design cargo make eval-watch" >&2
+  echo "(a bare \`${adapter}::\` prefix fans out to every live scenario of the adapter)" >&2
+  exit 1
+fi
+prose="targets/${adapter}/prose"
+if [ ! -d "$prose" ]; then
+  echo "eval-watch: no prose tree at $prose (sources/ adapters need a different prefix)" >&2
+  exit 1
+fi
+# EVAL_FILTER is re-evaluated by the `sh -c` cargo-watch spawns: a value
+# with spaces becomes multiple filters; metacharacters execute.
+# Operator-supplied env, so informational only.
+cargo watch -w "$prose" -s "SPECIFY_EVAL_OVERLAY=1 cargo test -p evals --test live -- --ignored --nocapture $EVAL_FILTER"
+'''
+install_crate = "cargo-watch"
+
 # Release-build every adapter guest component where cargo puts it
 # (`target/wasm32-wasip2/release/<name>.wasm`) — the deployable
 # artifacts the publish workflow pushes (RFC-64: no committed copies).

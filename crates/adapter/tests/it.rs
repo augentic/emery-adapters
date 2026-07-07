@@ -9,6 +9,9 @@ mod answers;
 mod call;
 #[path = "model.rs"]
 mod model;
+#[cfg(feature = "prose-overlay")]
+#[path = "overlay.rs"]
+mod overlay;
 #[path = "registry.rs"]
 mod registry;
 #[path = "seam.rs"]
