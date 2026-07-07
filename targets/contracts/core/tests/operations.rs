@@ -236,9 +236,7 @@ async fn merge_post_gate_repairs_then_enforces() {
     assert!(requests[1].messages[0].content.contains("post-merge"));
 }
 
-// The RFC-64 self-description is answerable without a model or a
-// filesystem: no floor, one optional `contracts` build input, no
-// platform capability.
+// No model call.
 #[test]
 fn describe_declares_the_contracts_input() {
     let manifest = describe();

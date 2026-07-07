@@ -53,7 +53,7 @@ const SUB_FLOWS: [SubFlow; 3] = [
     },
 ];
 
-/// The adapter's deterministic self-description (RFC-64).
+/// Deterministic self-description for the `describe` operation.
 ///
 /// Resolve-time metadata answered from compiled-in constants: no
 /// compatibility floor; one optional build input — the slice tree's

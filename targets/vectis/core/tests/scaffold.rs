@@ -1,9 +1,4 @@
-//! Tests for scaffold planning, writing, and the dispatcher, moved from
-//! the extension's `scaffold` unit tests (RFC-61 Step 5 Milestone A1)
-//! and re-pointed at the core's public surface: the env-bound `run`
-//! became the explicit-path [`run_at`], and the gitignore idempotency
-//! re-merge goes through a second `write_plan` pass instead of the
-//! private `runtime::merge_gitignore`.
+//! Tests for scaffold planning, writing, and the dispatcher.
 
 use std::fs;
 

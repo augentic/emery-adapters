@@ -1,4 +1,4 @@
-//! SVG load and lightweight profile checks for vector materialization (RFC-46 §2).
+//! SVG load and lightweight profile checks for vector materialization.
 
 mod normalize;
 

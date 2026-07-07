@@ -6,7 +6,7 @@
 //! for the lend with the plain [`Request::lend_workspace`] flag, and the
 //! `wasm32` default body resolves it against the guest's own `"."` preopen
 //! at the call site — a host call from the adapter's own instance, exactly
-//! where RFC-61 says the descriptor belongs.
+//! where the descriptor belongs.
 
 use std::future::Future;
 

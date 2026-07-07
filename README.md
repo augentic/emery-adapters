@@ -1,18 +1,16 @@
 # specify-adapters
 
-First-party Specify **adapters**, extracted from the platform repo as
-independently-versioned registry artifacts (RFC-48 / RFC-49 T6, amended by
-RFC-64).
+First-party Specify **adapters** — independently versioned wasm-pkg registry
+artifacts consumed by the platform `specify` binary.
 
-Each adapter is a **guest component** (RFC-61 / RFC-64): the adapter root
-doubles as a wasm32-only cdylib package (`<name>`, a hand-written
-export shim over `adapter`'s shared WIT bindings), with its
-wasm-free core logic in a `core/` sub-crate (`<name>-core`) and its
+Each adapter is a **guest component**: the adapter root is a wasm32-only cdylib
+package (`<name>`, a hand-written export shim over `adapter`'s shared WIT
+bindings), with wasm-free core logic in a `core/` sub-crate (`<name>-core`) and
 `prose/` trees (`prompts/`, `references/`, and `rules/` where declared)
-embedded at build time. The deployable artifact is exactly the built
-component — there is no `adapter.yaml` manifest and no committed wasm: the
-platform `specify` binary pulls the published component from the registry
-and reads its resolve-time facts through the WIT `describe` operation.
+embedded at build time. The deployable artifact is the built component — no
+manifest file, no committed wasm. The platform resolves the published component
+from the registry and reads resolve-time facts through the WIT `describe`
+operation.
 
 ## Layout
 
@@ -43,17 +41,13 @@ evals/                # live eval harness against the real cursor backend,
 Cargo.toml            # workspace: guest roots + `{sources,targets}/*` + `{sources,targets}/*/core`
 ```
 
-The facts the retired `adapter.yaml` carried live wasm-native (RFC-64):
-identity in the guest crate's `Cargo.toml` `version` and the wasm-pkg
-reference it publishes under (`specify:<name>@<semver>`); axis in the
-exported world (`source` xor `target`); the compatibility floor and — for
-targets — the declared build `inputs[]` and platforms capability in the
-`describe` operation's compiled-in manifest record.
+Identity lives in the guest crate's `Cargo.toml` `version` and the wasm-pkg
+reference it publishes under (`specify:<name>@<semver>`). Axis is the exported
+world (`source` xor `target`). The compatibility floor and — for targets — the
+declared build `inputs[]` and platforms capability are compiled into the
+`describe` operation's manifest record.
 
-The Crux shell-detection heuristics the platform once exposed as
-`vectis-shell-detect` live inline in the vectis core at
-`targets/vectis/core/src/shell.rs` rather than as a separate
-workspace crate.
+Crux shell-detection heuristics live in `targets/vectis/core/src/shell.rs`.
 
 ## Building the guests
 
@@ -68,27 +62,33 @@ The `fmt-check` arm shells out to nightly `rustfmt`, so a nightly toolchain
 plus the `cargo-make`, `cargo-nextest`, `cargo-deny`, and `cargo-vet` tools must
 be installed; the tasks are defined in `Makefile.toml`.
 
-Build every adapter guest for wasm32-wasip2 (plus the eval guest) with
-`cargo make build-guests`; release-build the deployable components into
-`target/wasm32-wasip2/release/<name>.wasm` with:
+Debug-build the eval guest only:
 
 ```bash
-cargo make build-guests-release
+cargo make debug
 ```
+
+Release-build every workspace member for wasm32-wasip2 (adapter components land
+at `target/wasm32-wasip2/release/<name>.wasm`):
+
+```bash
+cargo make release
+```
+
+The composed-deployment tests build guests from source on first use when artifacts
+are absent under `target/wasm32-wasip2/debug/`.
 
 ## Publishing
 
-Publishing an adapter is: release-build the guest packages, push the emitted
-components to the registry as standard wasm-pkg packages (RFC-64) —
+Release-build, then push components to the registry as wasm-pkg packages:
 
 ```bash
-cargo make build-guests-release
-cargo make publish-adapters
+cargo make release
+cargo make publish
 ```
 
-where each identity's `<semver>` is the guest crate's `Cargo.toml` `version`.
-Publishing is idempotent: each identity is probed first and skipped
-when already present, so only bumped adapters are pushed. CI
-(`.github/workflows/release.yaml`) runs the same task for every adapter on a
-`v*` tag, authenticated by `GITHUB_TOKEN`; local emergency publishing uses
-the developer's own token in their `wkg` config.
+Each identity's `<semver>` is the guest crate's `Cargo.toml` `version`.
+Publishing is idempotent: each identity is probed first and skipped when already
+present. CI (`.github/workflows/release.yaml`) runs the same tasks on a `v*`
+tag, authenticated by `GITHUB_TOKEN`; local emergency publishing uses the
+developer's own token in their `wkg` config.

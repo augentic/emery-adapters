@@ -8,7 +8,7 @@ Use `cargo make test` rather than `cargo test`. It runs `cargo nextest run --all
 
 Each adapter core consolidates its integration suite into a single `it` binary: `core/tests/it.rs` pulls each area in as a `#[path = "<area>.rs"]` submodule (`mod operations;`, `mod scaffold;`, …) so the crate-under-test links exactly once. The guest shims (`{targets,sources}/<name>/src/`) are hand-written wasm32 export glue over `adapter`'s shared WIT bindings and carry no native tests; the composed-deployment seams are covered by the root `tests/` package (`adapter-tests`). Both it and the `evals/` live tests share the host-side harness crate at `crates/harness` (manifest rendering, the cargo runner, target-dir discovery, tree copying).
 
-Prompt prose splits across the layers the same way: the native core tests answer "did my prompt edit land in the assembled text" through a mock `Model`, and the `#[ignore]`d live evals in `evals/live.rs` — with the RFC-62 prose overlay (`SPECIFY_EVAL_OVERLAY=1`, the `eval-watch` task) for iteration — are the only layer that judges the prose's effect on model output. Never duplicate a prompt-assembly assertion into a live eval.
+Prompt prose splits across the layers the same way: the native core tests answer "did my prompt edit land in the assembled text" through a mock `Model`, and the `#[ignore]`d live evals in `evals/live.rs` — with the prose overlay (`SPECIFY_EVAL_OVERLAY=1`, the `eval-watch` task) for iteration — are the only layer that judges the prose's effect on model output. Never duplicate a prompt-assembly assertion into a live eval.
 
 ## The two layers — minimize the unit layer
 

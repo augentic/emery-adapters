@@ -1,41 +1,4 @@
-//! Deterministic component-identity detection (the catalog infer
-//! *report* phase), absorbed from the legacy extension's `infer`
-//! subcommand (RFC-61 Step 5 Milestone A1).
-//!
-//! The engine clusters structurally-identical `group` subtrees across the
-//! composition baseline and emits a **name-free** cluster report as JSON.
-//! It performs *identity* and *clustering* only — it invents **no**
-//! component names (that is the build skill's job — the identity /
-//! label / bookkeeping split). Each cluster carries only the
-//! deterministic facts a namer needs: the structural fingerprint, the
-//! occurrence count, the screen provenance list, the representative
-//! normalised skeleton, and the raw semantic evidence (region, item
-//! kinds, `event` targets) passed through verbatim.
-//!
-//! Detection scope is the `group`: the
-//! walk descends through every screen region — including `states`,
-//! `overlays`, and `platforms` — but only a `group` is a detection unit.
-//!
-//! `--composition` supplies the baseline groups. `--candidate-cache`
-//! folds screenshot stage-6 candidate skeletons into the
-//! same clustering pass: each cache entry stores a normalised `group`
-//! fragment keyed by provenance (`<slice>/<screen>/<group-path>.yaml`),
-//! and the fingerprint is recomputed **at read time** through the one
-//! `build_group_skeleton` normaliser — no agent-written fingerprint is
-//! ever trusted. A cached skeleton and a baseline group with the same
-//! fingerprint cluster as one candidate, giving inference cross-slice
-//! memory before the baseline accumulates.
-//!
-//! `--parts` folds the operator-authored parts input into
-//! the same read-time-fingerprint pass: each part's `group` fragment is
-//! normalised and registered as a **pinned binding** `{ fingerprint →
-//! slug }`. A pinned fingerprint carries two authorities — **naming**
-//! (the cluster's `bound-slug` echoes the operator slug, so the build
-//! skill leaves it untouched) and **promotion** (a matched pin clusters
-//! as soon as it hits ≥1 baseline/cache group, bypassing
-//! `--min-occurrences`). A pin matching zero groups is surfaced under
-//! `unmatched-parts`. The tool still invents no name of its own — it
-//! only echoes the operator's.
+//! Deterministic component-identity detection (the catalog infer report phase).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};

@@ -1,4 +1,4 @@
-//! `role: app-icon` structural validation (RFC-46 §4.2 / §4.3).
+//! `role: app-icon` structural validation.
 
 use std::path::Path;
 

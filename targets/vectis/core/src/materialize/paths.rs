@@ -1,4 +1,4 @@
-//! Conventional export paths for `vectis materialize assets` (RFC-46 §2, Resolved §7).
+//! Conventional export paths for `vectis materialize assets`.
 //!
 //! Paths are relative to the directory containing `assets.yaml` (typically
 //! `design-system/`) and use the `assets/exports/<platform>/…` prefix.

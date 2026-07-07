@@ -1,9 +1,4 @@
 //! Canonical-to-export asset conversion — the materialize library.
-//!
-//! Phase 2 (RFC-46) converts designer-owned `source:` files into per-platform
-//! exports under `design-system/assets/exports/<platform>/`. The guest's
-//! build prelude calls [`run`] (via [`AssetsArgs`]) through
-//! [`crate::prepare::materialize_step`].
 
 pub mod app_icon;
 pub mod icons;

@@ -53,7 +53,7 @@ mod generated {
         // Asyncness follows the WIT declarations: the judgment operations
         // are `async func`s (judgment legs await the async `omnia:model`
         // import mid-call) and async-lower; `describe` is a plain `func`
-        // (RFC-64) and sync-lowers.
+        // and sync-lowers.
         generate_all,
     });
 }

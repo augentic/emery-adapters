@@ -1,13 +1,4 @@
-//! Bootstrap `app-icon` gate, run in-guest as part of the build prelude
-//! (RFC-46 §6).
-//!
-//! `project.yaml.platforms` is the authority for platform intent: every
-//! declared UI platform (`ios` / `android`) must carry a satisfiable
-//! launcher `app-icon` by build time. A shell that already ships a
-//! resident launcher icon (§6.3 escape hatch) satisfies the gate;
-//! otherwise `design-system/assets.yaml` must carry a materializable
-//! `source:` master (path A) or an operator-pinned export tree via
-//! `sources.<platform>` (path B), per §4.1.
+//! Bootstrap `app-icon` gate, run in-guest as part of the build prelude.
 
 use std::path::Path;
 

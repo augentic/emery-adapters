@@ -1,14 +1,4 @@
-//! Render-only Crux project scaffolding, absorbed from the legacy
-//! extension's `scaffold` subcommand (RFC-61 Step 5 Milestone A1).
-//!
-//! The module accepts only explicit inputs plus an explicit project
-//! directory. It renders embedded templates, plans every target file,
-//! then refuses all overwrites before creating directories or writing
-//! bytes. Per-target planning, the on-disk write step, and `app_name`
-//! validation live in the private `runtime` submodule; this parent
-//! module owns the public DTOs and the dispatch path. The extension's
-//! CLI shim converts its clap types onto [`ScaffoldCommand`] and calls
-//! [`run_at`] with the host-provided `PROJECT_DIR`.
+//! Render-only Crux project scaffolding.
 
 mod runtime;
 mod templates;

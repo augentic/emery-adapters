@@ -3,7 +3,6 @@
 
 [env]
 CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
-GUEST_PACKAGES = "contracts omnia-adapter vectis captures documentation intent screenshots typescript"
 
 [config]
 default_to_workspace = true
@@ -16,28 +15,10 @@ skip_rust_env_info = true
 # CI Checks
 # -------------------------------------
 [tasks.check]
-dependencies = [
-  "fmt-check",
-  "lint",
-  "test",
-  "test-docs",
-  "doc",
-  "check-guardrails-consumer-boundary",
-  "check-pins",
-]
+dependencies = ["fmt-check", "lint", "test", "test-docs", "doc"]
 
 [tasks.ci]
-dependencies = [
-  "fmt-check",
-  "lint",
-  "test",
-  "test-docs",
-  "doc",
-  "vet",
-  "deny",
-  "check-guardrails-consumer-boundary",
-  "check-pins",
-]
+dependencies = ["fmt-check", "lint", "test", "test-docs", "doc", "vet", "deny"]
 
 # -------------------------------------
 # Individual Actions
@@ -69,6 +50,9 @@ install_crate = "cargo-udeps"
 # Fmt
 [tasks.fmt]
 script = "cargo +nightly fmt --all"
+
+[tasks.fmt-check]
+script = "cargo +nightly fmt --all -- --check"
 
 # Lint
 [tasks.lint]
@@ -148,17 +132,15 @@ script = '''
 cargo build --workspace --target wasm32-wasip2 --release
 '''
 
-# Live decomposition-proof evals (RFC-61 Step 2 Milestone E): every
-# contracts scenario through the `#[ignore]`d tests in evals/live.rs
-# against the real cursor backend. Requires cursor-agent on PATH; see
-# evals/contracts/README.md.
+# Live contracts evals: every scenario through the `#[ignore]`d tests in
+# evals/live.rs against the real cursor backend. Requires cursor-agent
+# on PATH; see evals/contracts/README.md.
 [tasks.eval-contracts]
 script = '''
 cargo test -p evals --test live -- --ignored --nocapture contracts::
 '''
 
-# Live build-leg eval for the vectis adapter guest (RFC-61 Step 3
-# Milestone D): the single-screen scenario through the `#[ignore]`d
+# Live vectis eval: the single-screen scenario through the `#[ignore]`d
 # tests in evals/live.rs against the real cursor backend. Requires
 # cursor-agent on PATH; see evals/vectis/README.md.
 [tasks.eval-vectis]
@@ -166,171 +148,60 @@ script = '''
 cargo test -p evals --test live -- --ignored --nocapture vectis::
 '''
 
-# Prose-overlay watch loop: re-run one live scenario on every
-# save under an adapter's prose trees. With SPECIFY_EVAL_OVERLAY=1 the
-# save-to-report loop is the overlay loop — after the one-time build a
-# re-run spawns no cargo, only the model leg repeats. Parametrized by
-# EVAL_ADAPTER (default contracts) and EVAL_FILTER (required: a
-# single-scenario live-test filter, e.g. contracts::design — one model
-# leg per save is the loop's whole point). Watches
-# targets/<adapter>/prose — the adapters the evals exercise today are
-# all targets; a sources/ adapter would need the prefix taught here. A
-# script task over cargo-watch (installed on demand) rather than
-# cargo-make's native `watch` attribute: the watched path is
-# env-parametrized, which the shell expresses directly. Requires
-# cursor-agent on PATH.
-[tasks.eval-watch]
-script = '''
-adapter="${EVAL_ADAPTER:-contracts}"
-if [ -z "${EVAL_FILTER:-}" ]; then
-  echo "eval-watch: EVAL_FILTER is required — name one scenario, e.g." >&2
-  echo "  EVAL_FILTER=contracts::design cargo make eval-watch" >&2
-  echo "(a bare \`${adapter}::\` prefix fans out to every live scenario of the adapter)" >&2
-  exit 1
-fi
-prose="targets/${adapter}/prose"
-if [ ! -d "$prose" ]; then
-  echo "eval-watch: no prose tree at $prose (sources/ adapters need a different prefix)" >&2
-  exit 1
-fi
-# EVAL_FILTER is re-evaluated by the `sh -c` cargo-watch spawns: a value
-# with spaces becomes multiple filters; metacharacters execute.
-# Operator-supplied env, so informational only.
-cargo watch -w "$prose" -s "SPECIFY_EVAL_OVERLAY=1 cargo test -p evals --test live -- --ignored --nocapture $EVAL_FILTER"
-'''
-install_crate = "cargo-watch"
-
-# Publish every adapter component as `$REGISTRY_NAMESPACE:<name>@<ver>`
-# (RFC-64 identity, RFC-66 idempotency). Walks targets/*/ sources/*/,
-# reads each guest crate's identity semver from cargo metadata, and
-# pushes the release-built `target/wasm32-wasip2/release/<name>.wasm`
-# through scripts/wkg-publish-idempotent.sh: the helper probes the
-# registry first and skips identities already present, so a tag carrying
-# a mixed bag of bumped and untouched adapters succeeds — a version is
-# published at most once, ever, and a probe that cannot distinguish
-# absent from unreachable aborts rather than risk re-pushing an
-# immutable identity. Requires `cargo make build-guests-release` first
-# (components are built up front; the helper's build leg is unused) and
-# a wkg config routing the namespace (CI writes one from GITHUB_TOKEN;
-# local emergency publishing runs this same task with the developer's
-# own token in their wkg config). Namespace defaults to `specify`
-# (RFC-65: namespaces follow product, not org); override via
-# REGISTRY_NAMESPACE.
+# Publish every adapter component as `specify:<name>@<ver>`. For example:
+# 
+# ```bash
+# wkg publish "target/wasm32-wasip2/release/captures.wasm" \
+#   --package "specify:captures@0.1.0" \
+#   --config "${PWD}/.wkg-config.toml"
+# ```
 [tasks.publish]
 script_runner = "bash"
 script = '''
 set -euo pipefail
-namespace="${REGISTRY_NAMESPACE:-specify}"
-metadata="$(cargo metadata --no-deps --format-version 1)"
+
+version=$(sed -n '/^\[workspace\.package\]/,/^\[/p' Cargo.toml \
+  | awk -F'"' '/^version = / {print $2; exit}')
+
 for dir in targets/*/ sources/*/; do
   name="$(basename "${dir}")"
-  pkg="$(sed -n 's/^name = "\(.*\)"/\1/p' "${dir}Cargo.toml" | head -1)"
-  version="$(jq -r --arg n "${pkg}" \
-    '.packages[] | select(.name == $n) | .version' <<< "${metadata}")"
-  if [ -z "${version}" ] || [ "${version}" = "null" ]; then
-    echo "publish-adapters: no ${pkg} package version in cargo metadata" >&2
-    exit 1
-  fi
-  artifact="target/wasm32-wasip2/release/${name}.wasm"
-  if [ ! -s "${artifact}" ]; then
-    echo "publish-adapters: missing release component ${artifact}; run \`cargo make build-guests-release\` first" >&2
-    exit 1
-  fi
-  scripts/wkg-publish-idempotent.sh "${namespace}:${name}@${version}" "${artifact}"
+
+  wkg publish "target/wasm32-wasip2/release/${name}.wasm" \
+    --package "specify:${name}@${version}" \
+    --config "${PWD}/.wkg-config.toml"
 done
 '''
 
-# [tasks.check-guardrails-consumer-boundary]
+# # Prose-overlay watch loop: re-run one live scenario on every
+# # save under an adapter's prose trees. With SPECIFY_EVAL_OVERLAY=1 the
+# # save-to-report loop is the overlay loop — after the one-time build a
+# # re-run spawns no cargo, only the model leg repeats. Parametrized by
+# # EVAL_ADAPTER (default contracts) and EVAL_FILTER (required: a
+# # single-scenario live-test filter, e.g. contracts::design — one model
+# # leg per save is the loop's whole point). Watches
+# # targets/<adapter>/prose — the adapters the evals exercise today are
+# # all targets; a sources/ adapter would need the prefix taught here. A
+# # script task over cargo-watch (installed on demand) rather than
+# # cargo-make's native `watch` attribute: the watched path is
+# # env-parametrized, which the shell expresses directly. Requires
+# # cursor-agent on PATH.
+# [tasks.eval-watch]
 # script = '''
-# grep -q '^## Consumer tooling boundary$' codex/references/runtime/guardrails.md || {
-#   echo "codex/references/runtime/guardrails.md is missing ## Consumer tooling boundary" >&2
-#   echo "Sync from plugins/spec/references/guardrails.md in specify." >&2
-#   exit 1
-# }
-# '''
-
-# # Refresh the vendored WIT from the published `specify:adapter@$WIT_PIN`
-# # package. Fetches to a temp file and moves on success, so a
-# # failed fetch — unpublished pin, unreachable registry — never corrupts
-# # the vendored copy. The `specify:` namespace resolves through
-# # wit/.wkg-config.toml to augentic.io's well-known wasm-pkg file.
-# [tasks.wit-vendor]
-# script = '''
-# set -eu
-# if ! command -v wkg >/dev/null 2>&1; then
-#   echo "wit-vendor: wkg not found; install with \`cargo install wkg --locked\`" >&2
-#   exit 1
-# fi
-# wit_tmp="$(mktemp -t specify-adapter-wit.XXXXXX)"
-# trap 'rm -f "$wit_tmp"' EXIT
-# if ! wkg get "specify:adapter@$WIT_PIN" --config wit/.wkg-config.toml --format wit --output "$wit_tmp" --overwrite; then
-#   echo "wit-vendor: fetching specify:adapter@$WIT_PIN failed (not yet published, or registry unreachable); wit/specify.wit left unchanged" >&2
+# adapter="${EVAL_ADAPTER:-contracts}"
+# if [ -z "${EVAL_FILTER:-}" ]; then
+#   echo "eval-watch: EVAL_FILTER is required — name one scenario, e.g." >&2
+#   echo "  EVAL_FILTER=contracts::design cargo make eval-watch" >&2
+#   echo "(a bare \`${adapter}::\` prefix fans out to every live scenario of the adapter)" >&2
 #   exit 1
 # fi
-# mv "$wit_tmp" "wit/specify.wit"
-# trap - EXIT
-# echo "wit-vendor: refreshed wit/specify.wit from specify:adapter@$WIT_PIN"
-# '''
-
-# # Dev-loop override (RFC-66): copy the sibling engine checkout's WIT into
-# # the vendored location while iterating on a contract change before the
-# # new `specify:adapter` version is published. The published pin is the
-# # release posture — run `cargo make wit-vendor` once the version lands.
-# [tasks.wit-vendor-sibling]
-# script = '''
-# set -eu
-# sibling="../specify/wit/wit/specify.wit"
-# if [ ! -f "$sibling" ]; then
-#   echo "wit-vendor-sibling: no sibling engine WIT at $sibling" >&2
+# prose="targets/${adapter}/prose"
+# if [ ! -d "$prose" ]; then
+#   echo "eval-watch: no prose tree at $prose (sources/ adapters need a different prefix)" >&2
 #   exit 1
 # fi
-# cp "$sibling" "wit/specify.wit"
-# echo "wit-vendor-sibling: copied $sibling into wit/specify.wit (dev override; run \`cargo make wit-vendor\` for the published pin)"
+# # EVAL_FILTER is re-evaluated by the `sh -c` cargo-watch spawns: a value
+# # with spaces becomes multiple filters; metacharacters execute.
+# # Operator-supplied env, so informational only.
+# cargo watch -w "$prose" -s "SPECIFY_EVAL_OVERLAY=1 cargo test -p evals --test live -- --ignored --nocapture $EVAL_FILTER"
 # '''
-
-# # Vendored-pin parity. Two arms:
-# #
-# # WIT arm (DECISIONS.md §"WIT ownership flip: vendored published pin"):
-# # the vendored wit/specify.wit must byte-match the pinned
-# # published `specify:adapter@$WIT_PIN` package. Pre-first-publish posture:
-# # nothing is published yet (the first real publish rides the next engine
-# # tag), so an unfetchable pin — unpublished version, missing wkg, or an
-# # unreachable registry — skips with a notice naming the pin; CI must pass
-# # on a runner with no registry access until the first publish. Once the
-# # pin is fetchable, byte parity is enforced strictly.
-# #
-# # Schema arms (RFC-61, unchanged): the crates/adapter/schemas/answers/
-# # files are byte-copies of the augentic/specify sources, compared against
-# # a sibling checkout when one is present; CI without a sibling skips with
-# # a notice. Schema ownership is a separate story from the WIT flip.
-# [tasks.check-pins]
-# script = '''
-# status=0
-# wit_tmp="$(mktemp -t specify-adapter-wit.XXXXXX)"
-# trap 'rm -f "$wit_tmp"' EXIT
-# if command -v wkg >/dev/null 2>&1 \
-#    && wkg get "specify:adapter@$WIT_PIN" --config wit/.wkg-config.toml --format wit --output "$wit_tmp" --overwrite >/dev/null 2>&1; then
-#   if ! cmp -s "wit/specify.wit" "$wit_tmp"; then
-#     echo "check-pins: wit/specify.wit diverges from published specify:adapter@$WIT_PIN; run \`cargo make wit-vendor\`" >&2
-#     status=1
-#   fi
-# else
-#   echo "check-pins: specify:adapter@$WIT_PIN not fetchable (unpublished or registry unreachable); skipping wit pin parity"
-# fi
-# sibling="../specify"
-# if [ ! -d "$sibling" ]; then
-#   echo "check-pins: no sibling specify checkout; skipping answer-schema pin parity"
-#   exit $status
-# fi
-# for pair in "crates/adapter/schemas/answers/leads.schema.json:$sibling/schemas/answers/leads.schema.json" \
-#             "crates/adapter/schemas/answers/evidence.schema.json:$sibling/schemas/answers/evidence.schema.json" \
-#             "crates/adapter/schemas/answers/report.schema.json:$sibling/schemas/answers/report.schema.json"; do
-#   local_file="${pair%%:*}"
-#   upstream="${pair#*:}"
-#   if ! cmp -s "$local_file" "$upstream"; then
-#     echo "check-pins: $local_file diverges from $upstream; re-vendor from specify" >&2
-#     status=1
-#   fi
-# done
-# exit $status
-# '''
+# install_crate = "cargo-watch"

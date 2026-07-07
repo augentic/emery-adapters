@@ -268,7 +268,7 @@ pub struct Report {
 }
 
 /// A source adapter's deterministic self-description — mirrors the WIT
-/// `source.manifest` record (RFC-64). Metadata the host reads at resolve
+/// `source.manifest` record. Metadata the host reads at resolve
 /// time, answerable from compiled-in constants.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SourceManifest {
@@ -300,7 +300,7 @@ pub struct PlatformsCapability {
 }
 
 /// A target adapter's deterministic self-description — mirrors the WIT
-/// `target.manifest` record (RFC-64). Metadata the host reads at resolve
+/// `target.manifest` record. Metadata the host reads at resolve
 /// time, answerable from compiled-in constants.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TargetManifest {

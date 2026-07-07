@@ -1,4 +1,4 @@
-//! Shared 1024×1024 launcher canvas decode for `role: app-icon` (RFC-46 §4.1).
+//! Shared 1024×1024 launcher canvas decode for `role: app-icon`.
 
 use std::path::Path;
 

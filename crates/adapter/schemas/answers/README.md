@@ -8,4 +8,4 @@ These documents are **vendored copies** of the generated answer schemas publishe
 | `evidence.schema.json` | source `extract` — Evidence minus the envelope `lead`                                      |
 | `report.schema.json`   | target `build` / `merge` — report minus `version` / `slice` / `target`, diagnostic inlined |
 
-This copy is a temporary pin: once the `specify:adapter` package distribution carries the answer schemas (the WIT itself already flipped to a published-pin consume — see [`wit/README.md`](../../../../wit/README.md)), this directory is deleted. Until then, keep it byte-identical to upstream — `cargo make check-pins` compares against a sibling `../specify` checkout when one is present. Never edit these files here; change the canonical schema in the specify repo and re-vendor.
+This copy is a temporary pin: once the `specify:adapter` package distribution carries the answer schemas (see [`wit/README.md`](../../../../wit/README.md)), this directory is deleted. Until then, keep it byte-identical to upstream in the specify repo. Never edit these files here; change the canonical schema in specify and re-vendor.

@@ -57,8 +57,7 @@ async fn extract_parses_the_intent_claim() {
     assert!(request.system.as_deref().unwrap().starts_with("# intent.extract"));
 }
 
-// The RFC-64 self-description is answerable without a model or a
-// filesystem: no compatibility floor is declared.
+// No model call.
 #[test]
 fn describe_declares_no_floor() {
     assert_eq!(describe().specify_floor, None);

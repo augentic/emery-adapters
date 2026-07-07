@@ -68,8 +68,7 @@ async fn extract_points_at_the_reference_shelf() {
     assert!(user.contains("- lead: task-service"), "the lead renders as the prompt's block shape");
 }
 
-// The RFC-64 self-description is answerable without a model or a
-// filesystem: no compatibility floor is declared.
+// No model call.
 #[test]
 fn describe_declares_no_floor() {
     assert_eq!(describe().specify_floor, None);

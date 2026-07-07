@@ -18,8 +18,8 @@ use crate::common::{self, Bundle};
 const SOURCE_INTERFACE: &str = "specify:adapter/source@0.1.0";
 
 // describe("source:documentation") through host-mediated dispatch returns
-// the compiled-in RFC-64 manifest record — on the source axis just the
-// compatibility floor, absent here matching the retired adapter.yaml.
+// the compiled-in manifest record — on the source axis just the
+// compatibility floor, absent here.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn describe_through_dispatch() -> Result<()> {
     let mount = tempfile::tempdir()?;

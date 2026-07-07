@@ -1,20 +1,13 @@
 name: Release adapters
 
-# Publish each adapter as a standard wasm-pkg package (RFC-64: one
-# component, no manifest). Tagging `v<x.y.z>` cuts a release; each
-# adapter's identity semver lives in its guest crate's `Cargo.toml`
-# `version` — the single identity declaration — and the release-built
-# component `target/wasm32-wasip2/release/<name>.wasm` is pushed
-# as `specify:<name>@<semver>`. No tree pack, no adapter.yaml, no
-# committed wasm.
+# Publish each adapter as a standard wasm-pkg package. Tagging `v<x.y.z>`
+# cuts a release; each adapter's identity semver lives in its guest crate's
+# `Cargo.toml` `version`, and the release-built component
+# `target/wasm32-wasip2/release/<name>.wasm` is pushed as
+# `specify:<name>@<semver>`.
 #
-# Publishing is idempotent (DECISIONS.md §"Idempotent adapter publishing
-# on GITHUB_TOKEN"): each identity is probed before
-# pushing and skipped when already present, so a tag carrying a mixed
-# bag of bumped and untouched adapters publishes only what moved, and
-# re-running this workflow against an already-published tag pushes
-# nothing and succeeds. Auth is GITHUB_TOKEN alone — no registry
-# username/password secrets.
+# Publishing is idempotent: each identity is probed before pushing and
+# skipped when already present. Auth is GITHUB_TOKEN alone.
 on:
   push:
     tags:
@@ -26,11 +19,6 @@ permissions:
   packages: write
 
 env:
-  # Canonical first-party registry host. Must match the `specify`
-  # namespace mapping the engine resolves `specify:<name>@<ver>`
-  # references against (RFC-65: namespaces follow product, not org —
-  # augentic.io stays the HOST). Override via repository variable for
-  # a mirror.
   REGISTRY: ${{ vars.SPECIFY_REGISTRY || 'augentic.io' }}
   REGISTRY_NAMESPACE: specify
 
@@ -43,8 +31,6 @@ jobs:
       - name: Checkout adapters
         uses: actions/checkout@v4
 
-      # The stable toolchain is pinned by rust-toolchain.toml; nightly
-      # rustfmt backs the `fmt-check` arm of the pre-publish gate below.
       - name: Install nightly rustfmt
         uses: dtolnay/rust-toolchain@nightly
         with:
@@ -63,36 +49,15 @@ jobs:
           tool: cargo-make,cargo-nextest
 
       - name: Install wkg
-        # Pinned: the idempotency probe fingerprints in
-        # scripts/wkg-publish-idempotent.sh are validated against this
-        # wkg version's error text — revalidate them when bumping.
+        # Pinned: probe fingerprints in scripts/wkg-publish-idempotent.sh
+        # were validated against this wkg version — revalidate when bumping.
         run: cargo install wkg@0.15.0 --locked
 
-      # Guard against publishing immutable artifacts from a broken tree:
-      # fmt-check + clippy + nextest + doctests + doc (the lighter pre-commit
-      # subset; vet/deny stay on the per-push CI gate).
       - name: Pre-publish workspace check
         run: cargo make check
 
-      - name: Release-build every adapter component
-        run: cargo make build-guests-release
+      - name: Release-build adapter components
+        run: cargo make release
 
-      # `wkg publish` resolves the `specify` namespace through this
-      # config; auth is GITHUB_TOKEN (the registry username/password
-      # secrets are retired).
-      - name: Write wkg config
-        run: |
-          set -euo pipefail
-          mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/wasm-pkg"
-          cat > "${XDG_CONFIG_HOME:-$HOME/.config}/wasm-pkg/config.toml" <<EOF
-          [namespace_registries]
-          ${REGISTRY_NAMESPACE} = "${REGISTRY}"
-
-          [registry."${REGISTRY}".oci]
-          auth = { username = "${{ github.actor }}", password = "${{ secrets.GITHUB_TOKEN }}" }
-          EOF
-
-      # The publish loop lives in the cargo-make task so local emergency
-      # publishing is the same code path with a developer's own token.
       - name: Publish each adapter component
-        run: cargo make publish-adapters
+        run: cargo make publish

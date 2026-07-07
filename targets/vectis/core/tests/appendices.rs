@@ -1,8 +1,4 @@
-//! Appendix C / D / E worked-example pins from the repository-root
-//! `DECISIONS.md` (§"Vectis validation and materialization"), re-homed
-//! from the deleted extension test tree at RFC-61 Step 5 Milestone A2.
-//! Each appendix fixture is pinned verbatim against the core validation
-//! engine so any schema or rule drift surfaces here first.
+//! Appendix C / D / E worked-example pins against the validation engine.
 
 use std::io::Write as _;
 use std::path::{Path, PathBuf};

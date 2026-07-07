@@ -4,7 +4,7 @@
 //! crates stay thin:
 //!
 //! - [`model`] — the **local `Model` capability trait**, the stand-in for
-//!   the `Model` capability RFC-61 adds to `omnia-guest::capabilities`.
+//!   the `Model` capability in `omnia-guest::capabilities`.
 //!   Wasm-free adapter cores take `P: Model` bounds and issue judgment
 //!   calls through the trait; on `wasm32` the default method body
 //!   delegates to the `omnia-wasi-model` bindings, and off `wasm32` tests

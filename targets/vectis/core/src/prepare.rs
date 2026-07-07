@@ -1,13 +1,4 @@
-//! Slice-build prepare — RFC §2.1 scope resolution, the conditional
-//! materialize step, and the full prepare orchestration.
-//!
-//! Absorbed from the legacy extension's `prepare build` subcommand
-//! (RFC-61 Steps 3 and 5). [`materialize_step`] is the scoped
-//! materialize half; [`run_build`] is the complete legacy prepare run —
-//! materialize, the app-icon bootstrap gate, the Android Gradle-wrapper
-//! setup, and the iOS scaffold sync — that the guest drives as its
-//! deterministic build prelude and the extension's `prepare build` CLI
-//! shim wraps until A2 deletes it.
+//! Slice-build prepare — scope resolution, materialize step, and prepare orchestration.
 
 mod scope;
 

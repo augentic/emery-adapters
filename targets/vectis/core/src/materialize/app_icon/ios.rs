@@ -1,4 +1,4 @@
-//! iOS `AppIcon.appiconset` export for auto-converted app icons (RFC-46 §4.2).
+//! iOS `AppIcon.appiconset` export for auto-converted app icons.
 
 use std::io::Cursor;
 use std::path::Path;

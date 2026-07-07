@@ -22,9 +22,9 @@ use crate::common::{self, Bundle};
 const TARGET_INTERFACE: &str = "specify:adapter/target@0.1.0";
 
 // describe("target:vectis") through host-mediated dispatch returns the
-// compiled-in RFC-64 manifest record: no compatibility floor, the three
+// compiled-in manifest record: no compatibility floor, the three
 // optional design-system build inputs, and the required platforms
-// capability — the resolve-time facts the retired adapter.yaml carried.
+// capability.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn describe_through_dispatch() -> Result<()> {
     let mount = tempfile::tempdir()?;

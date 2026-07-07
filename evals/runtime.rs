@@ -1,5 +1,4 @@
-//! Omnia `runtime!` host for adapter-guest evals (RFC-61 Step 2,
-//! Milestone E).
+//! Omnia `runtime!` host for adapter-guest evals.
 //!
 //! Binds the live cursor backend behind `wasi-model`: command mode drives
 //! the eval guest's `wasi:cli/run` export once and exits with its status,

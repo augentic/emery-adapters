@@ -283,8 +283,7 @@ async fn merge_missing_output_repairs_then_enforces() {
     assert_eq!(model.requests().len(), 2, "one merge leg plus one bounded repair leg");
 }
 
-// The RFC-64 self-description is answerable without a model or a
-// filesystem: no floor, no declared build inputs, no platform capability.
+// No model call.
 #[test]
 fn describe_declares_nothing() {
     let manifest = describe();

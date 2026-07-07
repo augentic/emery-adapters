@@ -1,10 +1,4 @@
-//! Android shell bootstrap — vendored Gradle wrapper installation,
-//! absorbed from the legacy extension's `android setup` subcommand
-//! (RFC-61 Step 5 Milestone A1).
-//!
-//! Host-specific files (`local.properties`, `org.gradle.java.home`, NDK pin)
-//! are written by the Android Makefile `setup-host` target; the guest only
-//! sees the mounted project tree and cannot read `$ANDROID_HOME`.
+//! Android shell bootstrap — vendored Gradle wrapper installation.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};

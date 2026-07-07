@@ -1,5 +1,4 @@
-//! Shell catalog completeness probes, moved from the extension's
-//! `verify/catalog` unit tests (RFC-61 Step 5 Milestone A1).
+//! Shell catalog completeness probes.
 
 use std::path::Path;
 

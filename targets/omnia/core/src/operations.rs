@@ -28,7 +28,7 @@ const SHELF_POINTER: &str = "Every prompt, reference, and rule document this ada
      served by the granted `omnia-references` MCP shelf (`list_docs` / `read_doc`, adapter-relative \
      paths like `references/guardrails.md`); fetch documents the prompts cite lazily from there.";
 
-/// The adapter's deterministic self-description (RFC-64).
+/// Deterministic self-description for the `describe` operation.
 ///
 /// Resolve-time metadata answered from compiled-in constants: no
 /// compatibility floor, no declared build inputs (omnia reads the

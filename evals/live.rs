@@ -20,8 +20,8 @@
 //! without building guests or spawning anything, so CI catches
 //! scenario-tree drift without a model or a cursor-agent install.
 //!
-//! `SPECIFY_EVAL_OVERLAY=1` switches a live run into prose-overlay mode
-//! (RFC-62): the adapter guest builds with the `adapter/prose-overlay`
+//! `SPECIFY_EVAL_OVERLAY=1` switches a live run into prose-overlay mode:
+//! the adapter guest builds with the `adapter/prose-overlay`
 //! feature, the adapter's prose trees seed `<scratch>/.eval/prose/`, and
 //! once the three artifacts exist on disk the cargo legs are skipped
 //! entirely — a prose-only edit re-invokes the driver with no build.
@@ -96,9 +96,7 @@ mod vectis {
 mod overlay {
     use anyhow::Result;
 
-    // The model-free seeding parity check: every key the build-time embed
-    // would emit must have a seeded overlay file, including keys reached
-    // through the prose-tree symlinks (RFC-62 criterion 2).
+    // Every embed key must have a seeded overlay file, including symlinked paths.
     #[test]
     fn seeding() -> Result<()> {
         for adapter in ["contracts", "vectis"] {
@@ -107,10 +105,7 @@ mod overlay {
         Ok(())
     }
 
-    // The skip predicate over the real target dir: run once after the
-    // one-time overlay build to prove a re-invocation spawns no cargo
-    // (RFC-62 criterion 6) — and that the skip is sound: the stamp must
-    // match the current adapter wasm, not merely exist.
+    // After an overlay build, a re-invocation must not spawn cargo when the stamp matches.
     #[test]
     #[ignore = "needs the three prebuilt artifacts; run after an overlay-mode build"]
     fn artifacts_present() -> Result<()> {
@@ -262,7 +257,7 @@ fn overlay_active() -> bool {
 /// runs) share the same artifact path, so presence alone cannot prove
 /// the feature is compiled in — the stamp is what guards against
 /// spawning a guest that would silently serve embedded bodies. A Rust
-/// edit under the overlay is still the RFC's stale-artifact trap:
+/// edit under the overlay is still the stale-artifact trap:
 /// re-run without it.
 fn build(adapter: &str, root: &Path, target: &Path, overlay: bool) -> Result<()> {
     // `-p {adapter}` assumes the eval name is the cargo package name;

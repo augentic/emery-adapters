@@ -1,8 +1,7 @@
 [package]
 name = "captures"
 description = "Captures source-adapter WASI guest component: wasm32 shim over captures-core"
-# The adapter identity version (RFC-64): the semver the component
-# publishes under as `specify:<name>@<version>` — declared once, here.
+
 version = "1.0.0"
 edition.workspace = true
 license.workspace = true

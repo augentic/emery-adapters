@@ -10,7 +10,7 @@ publish.workspace = true
 
 # Flattened like omnia's examples/ package: no lib, just the two example
 # targets below. Deliberately outside crates/ — the harness is an eval
-# affordance (RFC-62's dev loop), not mainline guest support.
+# affordance for the dev loop, not mainline guest support.
 [dependencies]
 cfg-if.workspace = true
 

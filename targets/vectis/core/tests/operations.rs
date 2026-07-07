@@ -407,9 +407,7 @@ async fn merge_success_with_blocking_finding_downgrades() {
     assert_eq!(report.findings[0].rule_id.as_deref(), Some("VECTIS-006"));
 }
 
-// The RFC-64 self-description is answerable without a model or a
-// filesystem: no floor, the three optional design-system inputs, and a
-// required platform declaration defaulting to core + the two shells.
+// No model call.
 #[test]
 fn describe_declares_inputs_and_platforms() {
     let manifest = describe();

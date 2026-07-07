@@ -1,9 +1,9 @@
-//! Shell-resident launcher icon probes (RFC-46 §6.3).
+//! Shell-resident launcher icon probes.
 
 use std::path::Path;
 
 /// Returns whether the on-disk shell for `platform` already carries a
-/// satisfiable launcher icon (RFC-46 §6.3 escape hatch).
+/// satisfiable launcher icon (shell-resident escape hatch).
 ///
 /// Only `ios` and `android` are probed; other platform strings return
 /// `false`.

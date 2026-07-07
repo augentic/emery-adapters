@@ -13,7 +13,7 @@ use adapter::{Model, judgment};
 
 use crate::registry;
 
-/// The adapter's deterministic self-description (RFC-64).
+/// Deterministic self-description for the `describe` operation.
 ///
 /// Resolve-time metadata answered from compiled-in constants: no
 /// compatibility floor is declared, matching the retired manifest.

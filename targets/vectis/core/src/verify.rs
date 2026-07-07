@@ -1,24 +1,4 @@
-//! Declared-vs-present platform shell verification, absorbed from the
-//! legacy extension's `verify` subcommand (RFC-61 Step 5 Milestone A1).
-//!
-//! Authority is `project.yaml.platforms` (the typed platform set, not
-//! per-slice proposals). The engine inspects on-disk shell trees and
-//! reports which declared platforms are present.
-//!
-//! Two deterministic modes:
-//!
-//! - **verify** (build/lint): emits `diagnostic.schema.json`-shaped
-//!   findings; any `error`-severity finding means a miss for a
-//!   supported platform, catalog drift, a stale compile stamp, or a
-//!   forbidden lint suppression.
-//! - **bootstrap-app-icon** (build-time): gates the launcher `app-icon`
-//!   for every declared UI platform (`ios` / `android`), erroring when
-//!   one is neither shell-resident (RFC-46 §6.3) nor satisfiable from
-//!   `design-system/assets.yaml` (§4.1).
-//!
-//! The advisory `host-prereq` mode stays in the extension crate: it
-//! probes host environment variables and native toolchain paths, which
-//! a deterministic wasm-clean library must not do.
+//! Declared-vs-present platform shell verification.
 
 mod android_toolchain;
 mod app_icon;
@@ -43,7 +23,7 @@ pub enum VerifyMode {
     /// Build/lint-time: emit diagnostic findings for declared platforms.
     Verify,
     /// Build-time: gate the launcher `app-icon` for declared UI
-    /// platforms (`ios` / `android`); RFC-46 §6.
+    /// platforms (`ios` / `android`).
     BootstrapAppIcon,
 }
 

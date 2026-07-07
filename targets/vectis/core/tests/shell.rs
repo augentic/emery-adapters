@@ -1,5 +1,4 @@
-//! Crux shell presence heuristics and launcher icon probes, moved from
-//! the extension's `shell` unit tests (RFC-61 Step 5 Milestone A1).
+//! Crux shell presence heuristics and launcher icon probes.
 
 use std::path::Path;
 

@@ -66,8 +66,7 @@ async fn extract_tail_rejects_idless_example_claims() {
     assert!(matches!(err, Error::Internal(detail) if detail.contains("require an id")));
 }
 
-// The RFC-64 self-description is answerable without a model or a
-// filesystem: no compatibility floor is declared.
+// No model call.
 #[test]
 fn describe_declares_no_floor() {
     assert_eq!(describe().specify_floor, None);

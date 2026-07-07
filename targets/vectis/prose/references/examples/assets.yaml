@@ -27,7 +27,7 @@ assets:
   #   alt: "Settings"
   #   source: assets/settings.svg
 
-  # Example app launcher icon (RFC-46) — uncomment and supply a master or pinned exports.
+  # Example app launcher icon — uncomment and supply a master or pinned exports.
   # app-icon:
   #   kind: vector
   #   role: app-icon

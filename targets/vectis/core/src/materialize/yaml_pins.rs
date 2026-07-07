@@ -1,4 +1,4 @@
-//! Auto-write absent `sources.<platform>` pins after materialize (RFC-46 Resolved §7).
+//! Auto-write absent `sources.<platform>` pins after materialize.
 
 use std::collections::HashSet;
 use std::path::Path;

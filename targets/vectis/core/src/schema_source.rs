@@ -1,11 +1,4 @@
-//! Embedded schema sources shared between [`crate::validate`]
-//! (lazy-compiled validators) and the `schema` retrieval surface (raw
-//! schema lookup by name).
-//!
-//! The `.json` sources live under this crate's `schemas/` — the
-//! tool-owned location the Vectis codex
-//! ([`rules/vectis.mdc`](../../../rules/vectis.mdc)) pins — relocated
-//! from the legacy extension crate at RFC-61 Step 5 (Milestone A1).
+//! Embedded schema sources shared between validate and the schema retrieval surface.
 
 /// Canonical tool-owned `tokens.schema.json` (the tool-owned schema and catalog decisions D1).
 pub const TOKENS_SCHEMA_SOURCE: &str = include_str!("../schemas/tokens.schema.json");

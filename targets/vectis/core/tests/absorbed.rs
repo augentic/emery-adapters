@@ -1,10 +1,4 @@
-//! Re-homed kernel tests for the absorbed libraries (RFC-61 Step 3).
-//!
-//! These matrices lived as `#[cfg(test)]` src unit tests in the legacy
-//! extension crate; this crate carries no src tests (the workspace
-//! ratchet), so they run here against the same items through the
-//! public module tree. The worked-example appendix pins re-homed from
-//! the extension's integration suite live in `appendices.rs`.
+//! Re-homed kernel tests for the absorbed libraries.
 
 use image::{ImageFormat, Rgba, RgbaImage};
 use serde_json::{Map, Value, json};

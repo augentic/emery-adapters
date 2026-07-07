@@ -46,7 +46,7 @@ const SHELF_POINTER: &str = "Every prompt, reference, and rule document this ada
      adapter-relative paths like `references/hard-rules-core.md` or \
      `prompts/build/ios/write.md`); fetch documents the prompts cite lazily from there.";
 
-/// The adapter's deterministic self-description (RFC-64).
+/// Deterministic self-description for the `describe` operation.
 ///
 /// Resolve-time metadata answered from compiled-in constants: no
 /// compatibility floor; three optional design-system build inputs

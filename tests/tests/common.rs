@@ -92,25 +92,20 @@ fn manifest(guests: &[Guest], mount: &Path) -> Result<TempManifest> {
     temp_manifest(&harness::manifest(&entries, mount))
 }
 
-/// Locate a built wasm32-wasip2 guest component, building the guest
-/// crates on first use (a fast no-op when fresh). Panics when the
-/// artifact is still absent after the build, pointing the developer at
-/// `cargo make build-guests`.
+/// Locate a built wasm32-wasip2 guest component, building on first use.
 fn guest_wasm(file: &str) -> PathBuf {
     build_guests();
 
     let path = target_dir().join("wasm32-wasip2").join("debug").join(file);
     assert!(
         path.exists(),
-        "guest `{file}` not found at {path}; run `cargo make build-guests`",
+        "guest `{file}` not found at {path}; run `cargo build --workspace --target wasm32-wasip2`",
         path = path.display()
     );
     path
 }
 
-// Build the guest crates once per test process; cargo's own build lock
-// serializes concurrent invocations across test binaries. The package
-// list mirrors the Makefile's `GUEST_PACKAGES`.
+// Build guest crates once per test process.
 fn build_guests() {
     static GUESTS: OnceLock<()> = OnceLock::new();
     GUESTS.get_or_init(|| {

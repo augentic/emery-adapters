@@ -1,8 +1,4 @@
 //! Lightweight scaffold repair without prepare side effects.
-//!
-//! Absorbed from the legacy extension's `sync` subcommand (RFC-61
-//! Step 5 Milestone A1). Re-renders the agent-immutable shell files
-//! from the embedded templates when the shell tree exists.
 
 use std::path::Path;
 

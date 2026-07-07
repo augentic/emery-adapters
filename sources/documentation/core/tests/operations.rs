@@ -183,8 +183,7 @@ async fn model_invalid_request_maps_through() {
     assert!(matches!(err, Error::InvalidRequest(_)));
 }
 
-// The RFC-64 self-description is answerable without a model or a
-// filesystem: no compatibility floor is declared.
+// No model call.
 #[test]
 fn describe_declares_no_floor() {
     assert_eq!(describe().specify_floor, None);

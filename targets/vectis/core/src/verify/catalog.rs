@@ -1,4 +1,4 @@
-//! Shell asset-catalog completeness for verify mode `verify` (RFC-46 §7).
+//! Shell asset-catalog completeness for verify mode `verify`.
 //!
 //! Cross-checks composition-referenced `vector` / `raster` inventory against
 //! on-disk shell resources (`Assets.xcassets` imagesets, Android `res/drawable*`).

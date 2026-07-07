@@ -1,10 +1,4 @@
 //! Crux shell presence heuristics for Vectis-bound projects.
-//!
-//! On-disk shell detection and shell-resident launcher icon probes
-//! (RFC-46 §6.3) for [`crate::verify`]. `project.yaml.platforms`
-//! is the authority for platform *intent*; these heuristics report what
-//! is present on disk so build-time scaffolding and the bootstrap
-//! `app-icon` gate can decide what work remains.
 
 use std::path::Path;
 
