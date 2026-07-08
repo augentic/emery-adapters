@@ -35,7 +35,7 @@ const GUESTS: [(&str, &str, &str, &str); 4] = [
 // the stub backend pends then fails, so each leg must come back as the WIT
 // error variant — not a trap — for all four guests in one deployment.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn survey_bridges_survive_dispatch() -> Result<()> {
+async fn survey_bridges() -> Result<()> {
     let mount = tempfile::tempdir()?;
     let runtime = common::source_guests_runtime(mount.path()).await?;
 

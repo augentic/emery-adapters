@@ -21,7 +21,7 @@ use serde_json::{Value, json};
 const TARGET_INTERFACE: &str = "specify:adapter/target@0.1.0";
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn describe_through_dispatch() -> Result<()> {
+async fn describe() -> Result<()> {
     let mount = tempfile::tempdir()?;
     let runtime = common::composed_runtime(mount.path()).await?;
 
@@ -86,7 +86,7 @@ async fn describe_through_dispatch() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn guidance_through_dispatch() -> Result<()> {
+async fn guidance() -> Result<()> {
     let mount = tempfile::tempdir()?;
     let runtime = common::composed_runtime(mount.path()).await?;
 

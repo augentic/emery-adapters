@@ -18,7 +18,7 @@ use serde_json::{Value, json};
 const TARGET_INTERFACE: &str = "specify:adapter/target@0.1.0";
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn guidance_through_dispatch() -> Result<()> {
+async fn guidance() -> Result<()> {
     let mount = tempfile::tempdir()?;
     let runtime = common::runtime(mount.path()).await?;
 
@@ -51,7 +51,7 @@ async fn guidance_through_dispatch() -> Result<()> {
 // error variant — not a trap — proving a pending host future survives
 // host-mediated dispatch.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn build_bridge_survives_dispatch() -> Result<()> {
+async fn build_bridge() -> Result<()> {
     let mount = tempfile::tempdir()?;
     let runtime = common::runtime(mount.path()).await?;
 

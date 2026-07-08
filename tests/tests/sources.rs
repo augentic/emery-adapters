@@ -17,7 +17,7 @@ use serde_json::{Value, json};
 const SOURCE_INTERFACE: &str = "specify:adapter/source@0.1.0";
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn describe_through_dispatch() -> Result<()> {
+async fn describe() -> Result<()> {
     let mount = tempfile::tempdir()?;
     let runtime = common::composed_runtime(mount.path()).await?;
 
@@ -46,7 +46,7 @@ async fn describe_through_dispatch() -> Result<()> {
 // error variant — not a trap — proving the source axis survives
 // host-mediated dispatch in a multi-guest deployment.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn survey_bridge_survives_dispatch() -> Result<()> {
+async fn survey_bridge() -> Result<()> {
     let mount = tempfile::tempdir()?;
     let runtime = common::composed_runtime(mount.path()).await?;
 
