@@ -1,18 +1,12 @@
 //! The judgment operation template: `guidance`, `build`, and `merge`,
 //! over the shared [`phase`] scaffolding.
 //!
-//! Unlike omnia, vectis brackets the legs with the absorbed libraries:
-//! the [`crate::prepare`] materialize step runs as the deterministic
-//! *prelude*, and the [`crate::validate`] composition / tokens / assets
-//! cross-checks run as the deterministic *postlude*, feeding a bounded
-//! repair loop.
-//!
-//! `build` decomposes along the build prompt's phase order: one
-//! *composition* leg (Step 0.5 component inference plus Phase 1
-//! composition regeneration) gated in-guest by the composition validator,
-//! one *core* leg (Phases 2–3), one *shell* leg per declared shell
-//! platform (Phases 4–5), one *review* leg (Phases 6–7), then one report
-//! leg (Phases 8–9). Host-command verification (cargo, xcodebuild,
+//! Judgment legs are bracketed deterministically: the
+//! [`crate::prepare`] materialize step runs as the *prelude*, and the
+//! [`crate::validate`] composition / tokens / assets cross-checks run
+//! as the *postlude*, feeding a bounded repair loop. `build` decomposes
+//! along the build prompt's phase order (composition → core → per-shell
+//! → review → report); host-command verification (cargo, xcodebuild,
 //! Gradle) is process-spawning and stays agent-side in the prompts.
 
 use std::path::Path;
@@ -111,10 +105,9 @@ pub async fn build<P: Model>(
     let inputs_block = phase::render_inputs(inputs);
     let build_prompt = registry::body("prompts/build.md");
 
-    // Deterministic prelude — prepare scope resolution + conditional
-    // materialize. The platform scope derives from the same
-    // declared-platform read as the shell legs, so a core-only project
-    // materializes nothing for shells it will not build.
+    // The materialize scope derives from the same declared-platform
+    // read as the shell legs, so a core-only project materializes
+    // nothing for shells it will not build.
     let shell_platforms: Vec<String> =
         declared_shell_legs(&tree_root).iter().map(|leg| leg.name.to_string()).collect();
     let prelude = prepare::materialize_step(&slice_dir, &tree_root, &shell_platforms)
@@ -133,11 +126,10 @@ pub async fn build<P: Model>(
         });
     }
 
-    // Step 0.5 + Phase 1 — component inference and composition
-    // regeneration. Component *identity* is deterministic and runs
-    // in-guest here (the name-free cluster report); *naming* is the
-    // leg's judgment, recorded as a bindings file the workflow's
-    // deterministic bind bookkeeping projects into the catalog.
+    // Component *identity* is deterministic and runs in-guest (the
+    // name-free cluster report); *naming* is the leg's judgment,
+    // recorded as a bindings file the workflow's deterministic bind
+    // bookkeeping projects into the catalog.
     let infer_block = render_infer_report(&tree_root);
     let system =
         assemble(&["prompts/build.md", "prompts/guidance.md", "prompts/build/composition.md"]);
@@ -174,16 +166,11 @@ pub async fn build<P: Model>(
         });
     }
 
-    // Deterministic scaffold prelude — stand up the missing core /
-    // shell trees from the embedded templates before the write legs
-    // (create mode). The summary rides into the leg prompts; a scaffold
-    // the adapter could not run deterministically falls to the leg's
-    // writer per the write prompt.
     let scaffold_block = scaffold_missing_trees(&tree_root);
 
-    // Phases 2–3 — Crux core writer plus test writer: the core
-    // verify-repair loop crosses both prompts (a cargo failure
-    // re-enters the writer), so one agent leg holds them together.
+    // The core verify-repair loop crosses the write and test prompts
+    // (a cargo failure re-enters the writer), so one agent leg holds
+    // them together.
     let system =
         assemble(&["prompts/build.md", "prompts/build/core/write.md", "prompts/build/test.md"]);
     let user = format!(
@@ -196,13 +183,9 @@ pub async fn build<P: Model>(
     );
     let core = phase::phase(model, ctx, system, user, "core").await?;
 
-    // Phases 4–5 — per-shell writes, conditional on the declared
-    // platform set (`project.yaml.platforms`); a core-only platform set
-    // skips the shell legs wholesale, per the prompt's platform scope.
-    // The adapter re-renders the agent-immutable scaffold files
+    // The agent-immutable scaffold files are re-rendered
     // deterministically before each write leg (repairing prior drift
-    // ahead of the leg's verify loop) and again after it (the legacy
-    // `sync` step).
+    // ahead of the leg's verify loop) and again after it.
     let mut shell_outcomes: Vec<(&'static str, phase::PhaseAnswer)> = Vec::new();
     let mut sync_notes: Vec<String> = Vec::new();
     for shell in declared_shell_legs(&tree_root) {
@@ -232,8 +215,6 @@ pub async fn build<P: Model>(
         }
     }
 
-    // Phases 6–7 — the review teams (parallel per the prompt) and
-    // § Consolidate review findings, one leg.
     let mut review_prompts = vec!["prompts/build.md", "prompts/build/core/review.md"];
     review_prompts.extend(declared_shell_legs(&tree_root).iter().map(|shell| shell.review_prompt));
     let system = assemble(&review_prompts);
@@ -246,9 +227,8 @@ pub async fn build<P: Model>(
     );
     let review = phase::phase(model, ctx, system, user, "review").await?;
 
-    // Final leg — the deterministic shell verify gate (Phase 8, run
-    // in-guest) feeds the report answer (Phase 9), gated by the derived
-    // answer schema.
+    // The deterministic shell verify gate runs in-guest and feeds the
+    // report leg, gated by the derived answer schema.
     let verify_block = render_verify_gate(&tree_root);
     let sync_block = if sync_notes.is_empty() {
         String::new()
@@ -280,9 +260,6 @@ pub async fn build<P: Model>(
     );
     let report = phase::report(model, ctx, build_prompt.to_string(), user).await?;
 
-    // Deterministic postlude: the in-guest validator cross-checks, the
-    // shell verify gate, and the report-coherence walk, one bounded
-    // repair leg, then enforcement.
     let mut report = gate_report(
         model,
         ctx,
@@ -295,9 +272,8 @@ pub async fn build<P: Model>(
     )
     .await?;
 
-    // A4 self-consistency: the report's authored `ui-surface` signal
-    // against the produced slice composition. Suggestion findings only —
-    // they ride the report but never fail it or trigger the repair leg.
+    // Suggestion findings only — they ride the report but never fail
+    // it or trigger the repair leg.
     let coherence = ui_surface_coherence(&report, &slice_composition);
     report.findings.extend(coherence);
     Ok(report)
@@ -666,8 +642,8 @@ fn resolve_scaffold_app_name(tree_root: &Path) -> Option<String> {
 }
 
 /// Re-render one shell's agent-immutable scaffold files around its
-/// write leg (the legacy `sync` step; for Android also the idempotent
-/// vendored Gradle-wrapper install the legacy Makefile `setup` ran).
+/// write leg (for Android also the idempotent vendored Gradle-wrapper
+/// install).
 /// Returns a note for the report leg when the sync could not run; a
 /// clean sync is silent (drift would resurface through the
 /// deterministic verify gate anyway).
@@ -810,7 +786,7 @@ fn collect_envelope_errors(envelope: &Value, mode: &str, findings: &mut Vec<Stri
     }
 }
 
-/// Map an absorbed-library failure onto the seam error vocabulary: I/O
+/// Map a [`VectisError`] onto the seam error vocabulary: I/O
 /// failures map through, a broken project or design-system input is an
 /// invalid request (the workspace is part of the call's contract), and
 /// internal invariants stay internal.

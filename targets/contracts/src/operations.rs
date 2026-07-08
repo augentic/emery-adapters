@@ -90,8 +90,8 @@ pub async fn build<P: Model>(
     let inputs_block = phase::render_inputs(inputs);
     let build_prompt = registry::body("prompts/build.md");
 
-    // Phase 2 — author or import, fixed format order. Each sub-flow
-    // judges its own applicability and self-skips.
+    // Author or import, fixed format order. Each sub-flow judges its
+    // own applicability and self-skips.
     let mut summaries: Vec<String> = Vec::new();
     for sub_flow in &SUB_FLOWS {
         let format = sub_flow.format;
@@ -110,7 +110,7 @@ pub async fn build<P: Model>(
         summaries.push(phase::render_outcome(format, &answer));
     }
 
-    // Phase 4 — verify-repair over the compiled-in validators. The
+    // Verify-repair over the compiled-in validators. The
     // session-less shape folds each iteration into one repair call
     // carrying every finding, with the owning sub-prompts inlined so
     // repair does not depend on the MCP route.

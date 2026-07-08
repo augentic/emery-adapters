@@ -1,4 +1,4 @@
-//! Matrix coverage for the absorbed baseline-contract validators.
+//! Matrix coverage for the baseline-contract validators.
 
 use std::fs;
 use std::path::PathBuf;

@@ -98,7 +98,7 @@ pub fn run(args: &InferArgs) -> Result<Value, VectisError> {
         collect_cached_groups(cache_dir, &mut occurrences);
     }
 
-    // Step 0: register a pinned binding per operator part.
+    // Register a pinned binding per operator part.
     let pins =
         args.parts.as_ref().map_or_else(Vec::new, |parts_path| collect_part_pins(parts_path));
 

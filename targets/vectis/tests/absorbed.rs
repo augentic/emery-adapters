@@ -1,4 +1,4 @@
-//! Re-homed kernel tests for the absorbed libraries.
+//! Kernel tests for the materialize and validate libraries.
 
 use image::{ImageFormat, Rgba, RgbaImage};
 use serde_json::{Map, Value, json};
