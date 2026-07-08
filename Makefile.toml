@@ -132,6 +132,30 @@ script = '''
 cargo build --workspace --target wasm32-wasip2 --release
 '''
 
+# Fast dev-loop builds of the adapter components: same `--release`
+# artifact path the engine's bare-name resolution probes
+# (`target/wasm32-wasip2/release/<name>.wasm`), but with LTO off and a
+# low opt level so the edit-resolve loop pays seconds, not a full
+# release build. Optional package arg scopes the build
+# (`cargo make dev contracts`); default is the whole workspace.
+# Accepted trade: switching between `dev` and `release` flavors changes
+# the profile fingerprint and forces a rebuild — publishing is rare.
+[tasks.dev]
+script_runner = "bash"
+script = '''
+set -euo pipefail
+if [ -n "${1:-}" ]; then
+  scope=(-p "$1")
+else
+  scope=(--workspace)
+fi
+CARGO_PROFILE_RELEASE_LTO=false \
+CARGO_PROFILE_RELEASE_OPT_LEVEL=1 \
+CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 \
+CARGO_PROFILE_RELEASE_STRIP=false \
+cargo build "${scope[@]}" --target wasm32-wasip2 --release
+'''
+
 # Live contracts evals: every scenario through the `#[ignore]`d tests in
 # evals/live.rs against the real cursor backend. Requires cursor-agent
 # on PATH; see evals/contracts/README.md.
@@ -171,7 +195,7 @@ done
 '''
 
 # # overlay watch loop: re-run one live scenario on every
-# # save under an adapter's prose trees. With SPECIFY_EVAL_OVERLAY=1 the
+# # save under an adapter's prose trees. With SPECIFY_PROSE_OVERLAY=1 the
 # # save-to-report loop is the overlay loop — after the one-time build a
 # # re-run spawns no cargo, only the model leg repeats. Parametrized by
 # # EVAL_ADAPTER (default contracts) and EVAL_FILTER (required: a
@@ -200,6 +224,6 @@ done
 # # EVAL_FILTER is re-evaluated by the `sh -c` cargo-watch spawns: a value
 # # with spaces becomes multiple filters; metacharacters execute.
 # # Operator-supplied env, so informational only.
-# cargo watch -w "$prose" -s "SPECIFY_EVAL_OVERLAY=1 cargo test -p evals --test live -- --ignored --nocapture $EVAL_FILTER"
+# cargo watch -w "$prose" -s "SPECIFY_PROSE_OVERLAY=1 cargo test -p evals --test live -- --ignored --nocapture $EVAL_FILTER"
 # '''
 # install_crate = "cargo-watch"

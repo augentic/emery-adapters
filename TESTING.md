@@ -10,7 +10,9 @@ Use `make test` rather than `cargo test`. It runs `cargo nextest run --all --all
 
 Each adapter's native integration suite is the standard auto-discovered layout: every `tests/<area>.rs` is its own integration test binary (the adapter crates are `cdylib` + `rlib` so the suites can link the wasm-free modules natively). The guest shims (`{targets,sources}/<name>/src/guest.rs`, wasm32-only) are hand-written export glue over `adapter`'s shared WIT bindings and carry no native tests; the composed-deployment seams are covered by the `composed` test target of the `evals` package (`evals/composed.rs`), which carries its own runtime-assembly helpers and deploys in-process via `omnia-testkit`. Both it and the live evals (`evals/live.rs`) share the package's lib (`evals/harness.rs` — manifest rendering, the cargo runner, target-dir discovery, tree copying).
 
-Prompt prose splits across the layers the same way: the native adapter tests answer "did my prompt edit land in the assembled text" through a mock `Model`, and the `#[ignore]`d live evals in `evals/live.rs` — with the prose overlay (`SPECIFY_EVAL_OVERLAY=1`, the `eval-watch` task) for iteration — are the only layer that judges the prose's effect on model output. Never duplicate a prompt-assembly assertion into a live eval.
+Prompt prose splits across the layers the same way: the native adapter tests answer "did my prompt edit land in the assembled text" through a mock `Model`, and the `#[ignore]`d live evals in `evals/live.rs` — with the prose overlay (`SPECIFY_PROSE_OVERLAY=1`, the `eval-watch` task) for iteration — are the only layer that judges the prose's effect on model output. Never duplicate a prompt-assembly assertion into a live eval.
+
+For code (not prose) iteration against a consumer project, `cargo make dev [adapter]` builds the components with fast profile settings into the same `target/wasm32-wasip2/release/` path the engine's bare-name resolution probes — seconds instead of a full `cargo make release`.
 
 ## The two layers — minimize the unit layer
 

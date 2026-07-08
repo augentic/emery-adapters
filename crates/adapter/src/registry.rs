@@ -25,17 +25,25 @@ pub fn find<'d>(docs: &'d [Doc], path: &str) -> Option<&'d Doc> {
 /// The body of a document the embedded table declares, or `None` when
 /// `path` is not in `docs`.
 ///
-/// Under the `overlay` feature an on-disk overlay body wins, but
-/// the doc *set* is always the embedded table's — the overlay overrides
-/// bodies, never entries.
+/// When the deployment grants `SPECIFY_PROSE_OVERLAY=1` an on-disk
+/// overlay body wins, but the doc *set* is always the embedded table's
+/// — the overlay overrides bodies, never entries. Without the grant the
+/// probe is inert and the embedded body is served.
 #[must_use]
 pub fn resolve(docs: &[Doc], path: &str) -> Option<&'static str> {
     let doc = find(docs, path)?;
-    #[cfg(feature = "overlay")]
-    if let Some(body) = overlay(path) {
+    if overlay_enabled()
+        && let Some(body) = overlay(path)
+    {
         return Some(body);
     }
     Some(doc.body)
+}
+
+/// Whether the deployment granted the prose overlay
+/// (`SPECIFY_PROSE_OVERLAY=1` in the guest environment).
+fn overlay_enabled() -> bool {
+    std::env::var("SPECIFY_PROSE_OVERLAY").is_ok_and(|value| value == "1")
 }
 
 /// The overlay body for `path` from `.eval/prose/<path>`, or `None` when
@@ -43,15 +51,23 @@ pub fn resolve(docs: &[Doc], path: &str) -> Option<&'static str> {
 /// `&'static str` contract — acceptable for this dev-only affordance in
 /// a per-call-instantiated guest.
 ///
+/// The first overlay-served body prints an attestation marker to stderr,
+/// so a run that used overlaid prose can never pass as an embedded run.
+///
 /// # Panics
 ///
 /// Panics when the overlay file exists but cannot be read — the overlay
 /// must never silently fall back to a body the author is not editing.
-#[cfg(feature = "overlay")]
 fn overlay(path: &str) -> Option<&'static str> {
+    static ATTEST: std::sync::Once = std::sync::Once::new();
     let file = std::path::Path::new(".eval/prose").join(path);
     match std::fs::read_to_string(&file) {
-        Ok(body) => Some(body.leak()),
+        Ok(body) => {
+            ATTEST.call_once(|| {
+                eprintln!("prose overlay active: .eval/prose/ overrides embedded bodies");
+            });
+            Some(body.leak())
+        }
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
         Err(err) => panic!("prose overlay `{}` is unreadable: {err}", file.display()),
     }

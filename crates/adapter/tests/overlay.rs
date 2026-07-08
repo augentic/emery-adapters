@@ -1,8 +1,6 @@
-//! The dev-only prose overlay (`--features overlay`): overlay
-//! bodies win, misses fall back to the embedded table, and the doc set
-//! never changes.
-
-#![cfg(feature = "overlay")]
+//! The dev-only prose overlay (`SPECIFY_PROSE_OVERLAY=1`): overlay
+//! bodies win, misses fall back to the embedded table, the doc set
+//! never changes, and without the env grant the probe is inert.
 
 use std::fs;
 
@@ -22,10 +20,18 @@ static DOCS: &[Doc] = &[
 ];
 
 // Rebase the process cwd into a fresh tempdir seeded with `.eval/prose/`
-// overlay files — the overlay resolves against the cwd. Mutating the cwd
-// is safe here because `cargo make test` runs under nextest with
-// process-per-test isolation. The returned guard keeps the tree alive.
+// overlay files and grant the overlay env var — the overlay resolves
+// against the cwd. Mutating the cwd and env is safe here because
+// `cargo make test` runs under nextest with process-per-test isolation.
+// The returned guard keeps the tree alive.
 fn enter_overlay(files: &[(&str, &str)]) -> TempDir {
+    let dir = seed_tree(files);
+    grant_overlay();
+    dir
+}
+
+// Seed the tree without the env grant: the probe must stay inert.
+fn seed_tree(files: &[(&str, &str)]) -> TempDir {
     let dir = tempfile::tempdir().expect("create tempdir");
     for (path, contents) in files {
         let file = dir.path().join(".eval/prose").join(path);
@@ -43,7 +49,18 @@ fn enter_overlay_with_dir_at(path: &str) -> TempDir {
     let dir = tempfile::tempdir().expect("create tempdir");
     fs::create_dir_all(dir.path().join(".eval/prose").join(path)).expect("create overlay dir");
     std::env::set_current_dir(dir.path()).expect("enter tempdir");
+    grant_overlay();
     dir
+}
+
+#[expect(
+    unsafe_code,
+    reason = "edition-2024 `set_var` is unsafe; nextest runs each test in its own \
+              process, so no other thread touches the environment concurrently"
+)]
+fn grant_overlay() {
+    // SAFETY: process-per-test isolation (see the lint expectation above).
+    unsafe { std::env::set_var("SPECIFY_PROSE_OVERLAY", "1") };
 }
 
 #[test]
@@ -58,6 +75,15 @@ fn absent_serves_embedded() {
     let _dir = enter_overlay(&[("prompts/build.md", "# overlaid build")]);
     assert_eq!(body(DOCS, "references/verifier.md"), "# embedded verifier");
     assert_eq!(resolve(DOCS, "references/verifier.md"), Some("# embedded verifier"));
+}
+
+// Without the env grant a seeded overlay tree is ignored: the probe is
+// inert by default, so a published component serves embedded bodies.
+#[test]
+fn ungranted_serves_embedded() {
+    let _dir = seed_tree(&[("prompts/build.md", "# overlaid build")]);
+    assert_eq!(body(DOCS, "prompts/build.md"), "# embedded build");
+    assert_eq!(resolve(DOCS, "prompts/build.md"), Some("# embedded build"));
 }
 
 // An empty overlay file is served as-is by design: `read_to_string`

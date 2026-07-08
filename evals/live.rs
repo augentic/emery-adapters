@@ -20,11 +20,12 @@
 //! without building guests or spawning anything, so CI catches
 //! scenario-tree drift without a model or a cursor-agent install.
 //!
-//! `SPECIFY_EVAL_OVERLAY=1` switches a live run into overlay mode:
-//! the adapter guest builds with the `adapter/overlay`
-//! feature, the adapter's prose trees seed `<scratch>/.eval/prose/`, and
-//! once the three artifacts exist on disk the cargo legs are skipped
-//! entirely — a prose-only edit re-invokes the driver with no build.
+//! `SPECIFY_PROSE_OVERLAY=1` switches a live run into overlay mode:
+//! the adapter's prose trees seed `<scratch>/.eval/prose/`, the env var
+//! is forwarded to the guest (whose registry probes the overlay at
+//! runtime), and once the three artifacts exist on disk the cargo legs
+//! are skipped entirely — a prose-only edit re-invokes the driver with
+//! no build.
 
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -35,7 +36,6 @@ use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context as _, Result, bail, ensure};
-use sha2::{Digest as _, Sha256};
 use tempfile::TempDir;
 
 mod contracts {
@@ -103,24 +103,6 @@ mod overlay {
         }
         Ok(())
     }
-
-    // After an overlay build, a re-invocation must not spawn cargo when the stamp matches.
-    #[test]
-    #[ignore = "needs the three prebuilt artifacts; run after an overlay-mode build"]
-    fn artifacts_present() -> Result<()> {
-        let target = evals::target_dir()?;
-        for adapter in ["contracts", "vectis"] {
-            for path in super::artifacts(&target, adapter) {
-                anyhow::ensure!(path.is_file(), "missing artifact {}", path.display());
-            }
-            anyhow::ensure!(
-                super::overlay_fresh(&target, adapter)?,
-                "overlay stamp for {adapter} is missing or stale — an unflagged build \
-                 overwrote the flagged wasm; re-run the overlay build"
-            );
-        }
-        Ok(())
-    }
 }
 
 /// Drive one live eval of `operation` (the eval guest's operation
@@ -161,13 +143,18 @@ fn live(adapter: &str, scenario: &str, operation: &str, slice: &str) -> Result<(
     // adapter, so the axis-qualified id stays `target:` — the guest passes
     // it through verbatim.
     let driver = driver(&target);
-    let output = Command::new(&driver)
-        .current_dir(root)
-        .env("HTTP_ADDR", &addr)
-        .env(
-            format!("SPECIFY_{}_MCP_URL", adapter.to_uppercase()),
-            format!("http://{addr}/mcp/{adapter}"),
-        )
+    let mut command = Command::new(&driver);
+    command.current_dir(root).env("HTTP_ADDR", &addr).env(
+        format!("SPECIFY_{}_MCP_URL", adapter.to_uppercase()),
+        format!("http://{addr}/mcp/{adapter}"),
+    );
+    if overlay {
+        // Forwarded to the guest through the same host-env channel the
+        // MCP URL uses; the registry probes `.eval/prose/` only under
+        // this grant.
+        command.env("SPECIFY_PROSE_OVERLAY", "1");
+    }
+    let output = command
         .args(["run", "--config"])
         .arg(&manifest_path)
         .args(["--", operation, &format!("target:{adapter}"), slice, ".eval/inputs"])
@@ -246,58 +233,25 @@ fn seed(adapter: &str, scenario: &str) -> Result<TempDir> {
 }
 
 fn overlay_active() -> bool {
-    std::env::var("SPECIFY_EVAL_OVERLAY").is_ok_and(|value| value == "1")
+    std::env::var("SPECIFY_PROSE_OVERLAY").is_ok_and(|value| value == "1")
 }
 
 /// Build the three run artifacts — or, in overlay mode, skip cargo when
-/// all three exist and the adapter wasm matches the last overlay-flagged
-/// build's stamp. Unflagged builds share the same artifact path, so
-/// presence alone cannot prove the feature is compiled in; the stamp
-/// guards against a guest that would silently serve embedded bodies.
+/// all three exist. Overlay selection is a runtime env grant, so there
+/// is only one flavor of each binary and presence alone is proof enough.
 fn build(adapter: &str, root: &Path, target: &Path, overlay: bool) -> Result<()> {
-    if overlay && overlay_fresh(target, adapter)? {
-        println!("eval {adapter}: overlay active, stamped artifacts present; cargo builds skipped");
+    if overlay && artifacts(target, adapter).iter().all(|path| path.is_file()) {
+        println!("eval {adapter}: overlay active, artifacts present; cargo builds skipped");
         return Ok(());
     }
-    let mut guest = vec!["build", "-p", adapter, "--target", "wasm32-wasip2"];
-    if overlay {
-        // Enables the `adapter` dependency's feature on the guest build;
-        // the eval guest reads no prose, so only this leg carries it.
-        guest.extend(["--features", "adapter/overlay"]);
-    }
-    evals::cargo(&guest, root, target)?;
-    if overlay {
-        fs::write(stamp_path(target, adapter), digest(&adapter_wasm(target, adapter))?)?;
-    }
+    evals::cargo(&["build", "-p", adapter, "--target", "wasm32-wasip2"], root, target)?;
     evals::cargo(
         &["build", "-p", "evals", "--example", "eval-guest", "--target", "wasm32-wasip2"],
         root,
         target,
     )?;
     evals::cargo(&["build", "-p", "evals", "--example", "eval-driver"], root, target)?;
-    if overlay {
-        println!("eval {adapter}: cargo builds ran (overlay)");
-    }
     Ok(())
-}
-
-fn overlay_fresh(target: &Path, adapter: &str) -> Result<bool> {
-    if !artifacts(target, adapter).iter().all(|path| path.is_file()) {
-        return Ok(false);
-    }
-    let Ok(stamp) = fs::read(stamp_path(target, adapter)) else {
-        return Ok(false);
-    };
-    Ok(stamp == digest(&adapter_wasm(target, adapter))?)
-}
-
-// Raw SHA-256 of the last overlay-flagged build of `<adapter>.wasm`.
-fn stamp_path(target: &Path, adapter: &str) -> PathBuf {
-    target.join("wasm32-wasip2").join("debug").join(format!(".{adapter}.overlay-stamp"))
-}
-
-fn digest(path: &Path) -> Result<Vec<u8>> {
-    Ok(Sha256::digest(fs::read(path)?).to_vec())
 }
 
 fn artifacts(target: &Path, adapter: &str) -> [PathBuf; 3] {

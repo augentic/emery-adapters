@@ -6,10 +6,11 @@ Each entry records the decision, why it was taken, and the consequences a change
 
 ## Prose overlay dev loop
 
-**Decision (2026-07).** The adapter author's prose iteration loop pays no compilation: the `adapter` crate has a dev-only `overlay` cargo feature, off by default and compiled out of `cargo make release` and every published component. The overlay exists to iterate, never to certify; graded evidence comes from embedded builds only. Behavior lives in module rustdoc: `crates/adapter/src/registry.rs`, `evals/live.rs`, `evals/runtime.rs`.
+**Decision (2026-07, amended 2026-07).** The adapter author's prose iteration loop pays no compilation: the overlay probe is compiled into every build of the `adapter` crate and is **inert unless the deployment grants `SPECIFY_PROSE_OVERLAY=1`** in the guest environment. There is no cargo feature and therefore only one flavor of each guest binary. `specify`'s deployment generator never sets the variable; only the eval harness does. The overlay exists to iterate, never to certify; graded evidence comes from ungranted runs, and activation is attested by the guest itself — the registry prints a stderr marker on the first overlay-served body, which is strictly stronger than the retired build-side SHA-256 stamp (the guest attests at run time; a stamp could only hash the build). Behavior lives in module rustdoc: `crates/adapter/src/registry.rs`, `evals/live.rs`, `evals/runtime.rs`.
 
 - **The overlay overrides bodies, never the doc set.** Registry lookups consult `.eval/prose/<key>` before the embedded table, but only for paths the table declares.
-- **The cargo-skip is stamp-guarded.** In overlay mode the runner skips cargo legs when artifacts exist and a SHA-256 stamp matches the adapter wasm from the last overlay-flagged build.
+- **Runtime selection makes the cargo-skip trivial.** In overlay mode the runner skips cargo legs on plain artifact presence — with one binary flavor there is no stamp to guard.
+- **Accepted consequence.** An operator who sets the variable and seeds `.eval/prose/` can override prompts in a pinned component on their own machine — visible, opt-in, and audit-loud via the stderr marker.
 - **The eval guest drives one operation per invocation.** Its argv leads with an operation selector over the judgment-bearing seam operations.
 - **Model ids stay out of guests.** `SPECIFY_EVAL_MODEL` is read by the eval driver alone.
 

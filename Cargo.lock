@@ -1185,7 +1185,6 @@ dependencies = [
  "omnia-wasi-model",
  "prose",
  "serde_json",
- "sha2 0.11.0",
  "tempfile",
  "tokio",
  "wasip3",

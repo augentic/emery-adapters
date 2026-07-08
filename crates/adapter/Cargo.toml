@@ -8,11 +8,6 @@ repository.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
-[features]
-# Dev-only prose overlay: body lookups consult `.eval/prose/<path>` before
-# the embedded table. Never enabled by the release guest builds.
-overlay = []
-
 [dependencies]
 omnia-guest.workspace = true
 serde = { workspace = true, features = ["derive"] }
