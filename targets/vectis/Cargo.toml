@@ -1,7 +1,6 @@
 [package]
 name = "vectis"
 description = "Vectis target-adapter"
-
 version.workspace = true
 edition.workspace = true
 license.workspace = true

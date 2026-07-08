@@ -1,7 +1,6 @@
 [package]
 name = "intent"
 description = "Intent source-adapter"
-
 version.workspace = true
 edition.workspace = true
 license.workspace = true
