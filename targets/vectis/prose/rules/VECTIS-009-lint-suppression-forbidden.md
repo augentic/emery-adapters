@@ -5,16 +5,6 @@ severity: important
 trigger: Agent-authored core Rust or platform shell sources carry inline compiler or linter suppressions instead of structural fixes.
 applicability:
   adapters: [vectis]
-rule_hints:
-  - kind: regex
-    value: '#\[(allow|expect)\('
-    description: Inline Rust lint suppressions under shared/src.
-  - kind: regex
-    value: swiftlint:disable|swift-format-ignore
-    description: Swift lint/format disable comments under iOS agent-authored sources (excluding generated/).
-  - kind: regex
-    value: '@Suppress\(|@file:Suppress'
-    description: Kotlin suppressions under Android/app/src and Android/shared/src (excluding generated/).
 references:
   - label: Core hard rules
     path: adapters/targets/vectis/prose/references/hard-rules-core.md

@@ -3,13 +3,6 @@ id: UNI-014
 title: Hardcoded Configuration Values
 severity: important
 trigger: Operational parameters are embedded as literals instead of named constants or configuration.
-rule_hints:
-  - kind: path-pattern
-    value: '**/*.rs'
-    description: Restrict the URL-literal scan to Rust source files.
-  - kind: regex
-    value: '\bhttps?://\S+'
-    description: Literal HTTP(S) URL embedded in Rust source.
 ---
 
 ## Rule

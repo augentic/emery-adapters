@@ -30,4 +30,4 @@ This directory is the single **spec-runtime bundle**: the canonical copy of the 
 
 ## Review-team protocol
 
-The review-team protocol is a separate surface and is **not** part of the spec-runtime bundle above. It is exposed here as `review-team-protocol.md`, and each target adapter exposes it as `references/agent-teams.md -> ../../../../codex/references/runtime/review-team-protocol.md`. Overlays MUST be symlinks (regular-file copies are forbidden). The document is forked from `docs/reference/review-team-protocol.md` in the specify repo, where `CORE-011` guards the canonical document's presence.
+The review-team protocol is a separate surface and is **not** part of the spec-runtime bundle above. It is exposed here as `review-team-protocol.md`, and each target adapter exposes it as `references/agent-teams.md -> ../../../../codex/references/runtime/review-team-protocol.md`. Overlays MUST be symlinks (regular-file copies are forbidden). The document is forked from `docs/reference/review-team-protocol.md` in the specify repo, where a framework-quality cargo test (`tests/framework_quality/prose.rs`) guards the canonical document's presence.

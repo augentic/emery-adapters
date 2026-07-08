@@ -5,13 +5,6 @@ severity: important
 trigger: A Vectis target prompt instructs agents to set or pick a named iOS simulator destination instead of the CLI-owned generic destination.
 applicability:
   adapters: [vectis]
-rule_hints:
-  - kind: path-pattern
-    value: targets/vectis/prose/prompts/**/*.md
-    description: Scope deterministic checks to Vectis build and merge prompt prose.
-  - kind: regex
-    value: "platform=iOS Simulator,name=|-destination[^\\n]*name=iPhone"
-    description: Vectis build prompts must not instruct agents to substitute named simulator destinations in scaffold files.
 references:
   - label: iOS hard rules
     path: adapters/targets/vectis/prose/references/hard-rules-ios.md

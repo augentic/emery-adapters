@@ -5,16 +5,6 @@ severity: important
 trigger: An agent-authored or drifted iOS shell edits CLI-owned scaffold files or substitutes a named simulator destination in the iOS Makefile or sim-build script.
 applicability:
   adapters: [vectis]
-rule_hints:
-  - kind: path-pattern
-    value: iOS/Makefile
-    description: Flag named simulator destinations or inlined xcodebuild -destination in the CLI-owned Makefile.
-  - kind: path-pattern
-    value: iOS/.vectis/sim-build.sh
-    description: Flag named simulator destinations in the CLI-owned sim-build script.
-  - kind: regex
-    value: name=iPhone|platform=iOS Simulator,name=
-    description: Forbidden named simulator destination in Makefile or sim-build.sh (not sim-dev.sh).
 references:
   - label: iOS hard rules
     path: adapters/targets/vectis/prose/references/hard-rules-ios.md

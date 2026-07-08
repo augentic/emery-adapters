@@ -1,10 +1,10 @@
 # Shared engineering standards (UNI-\*)
 
-Shared **engineering standards** catalog — target-agnostic rules under `codex/`. Codex is the on-disk rule format; these files are durable policy, not workflow state or slice artifacts. Read by every target adapter's build review prompt during `/spec:build` and (when implemented) by `specify lint` for deterministic CI enforcement. Findings cite a rule here as a stable `rule_id` (for example `UNI-014`) alongside a report-local occurrence id (for example `UNI-3`) in `REVIEW.md`.
+Shared **engineering standards** catalog — target-agnostic rules under `codex/`. Codex is the on-disk rule format; these files are durable policy, not workflow state or slice artifacts. Read by every target adapter's build review prompt during `/spec:build` and exported to consumer projects by `specify rules export`. Findings cite a rule here as a stable `rule_id` (for example `UNI-014`) alongside a report-local occurrence id (for example `UNI-3`) in `REVIEW.md`.
 
 See [docs/explanation/standards-layer.md](https://github.com/augentic/specify/blob/main/docs/explanation/standards-layer.md) for how engineering standards relate to workflow, artifacts, and `docs/standards/` (authoring house style).
 
-This directory owns the `UNI-*` namespace. Target-specific rules live in per-adapter overlays under `targets/<name>/prose/rules/` (omnia: `OMNIA-*` / `RUST-*` / `SEC-*`; contracts: `IFACE-*`; vectis: `VECTIS-*`). Source-adapter overlays under `sources/<name>/prose/rules/` share a single namespace, `SRC-*`: every source-adapter owner maps to `{"SRC"}` in `check::rules`'s namespace map by the `check::rules` namespace map, so any new source adapter that grows an overlay opts into `SRC-*` without coordinating a per-adapter namespace. `FRAME-*` is reserved for declarative framework rules and MUST NOT appear under `{sources,targets}/*/prose/rules/`. Namespace ownership is enforced by `specify lint framework`.
+This directory owns the `UNI-*` namespace. Target-specific rules live in per-adapter overlays under `targets/<name>/prose/rules/` (omnia: `OMNIA-*` / `RUST-*` / `SEC-*`; contracts: `IFACE-*`; vectis: `VECTIS-*`). Source-adapter overlays under `sources/<name>/prose/rules/` share a single namespace, `SRC-*`, so any new source adapter that grows an overlay opts into `SRC-*` without coordinating a per-adapter namespace. Namespace ownership is enforced by this repo's rule-shape cargo test (`crates/prose/tests/rule_shape.rs`).
 
 Sibling shared hook directory: [`codex/references/replay/`](../../references/replay/) — shared build-time replay hook contract for targets that opt in.
 
@@ -12,7 +12,7 @@ Sibling shared hook directory: [`codex/references/replay/`](../../references/rep
 
 Rules are grouped by severity (highest first). `UNI-*` ids are stable citation keys — they are not renumbered when severity or grouping changes.
 
-**Enforcement mode (review-only vs deterministically exported).** Every `UNI-*` rule is applied as a **model-assisted review finding** by the target build review prompts during `/spec:build`; none gate deterministically by default. The single exception today is **UNI-014** ([`hardcoded-configuration.md`](hardcoded-configuration.md)), which additionally carries deterministic `rule_hints` (a `path-pattern` + `regex` pair) and is therefore the only id exported to `specify lint` as a deterministic check. Treat every other id as review-only until it grows its own `rule_hints` block.
+**Enforcement mode.** Every `UNI-*` rule is applied as a **model-assisted review finding** by the target build review prompts during `/spec:build`; none gate deterministically. Rules are agent-readable prose — there is no deterministic hint machinery.
 
 ### Critical
 
@@ -54,7 +54,7 @@ Rules are grouped by severity (highest first). `UNI-*` ids are stable citation k
 
 ## File shape
 
-Each rule is a small markdown file with YAML frontmatter followed by a required `## Rule` heading. The canonical schema lives in [`augentic/specify`](https://github.com/augentic/specify) at `schemas/rules/rule.schema.json` and is embedded in the CLI binary; see [`docs/contributing/checks.md`](https://github.com/augentic/specify/blob/main/docs/contributing/checks.md) for how `specify lint framework` consumes it. The minimum form:
+Each rule is a small markdown file with YAML frontmatter followed by a required `## Rule` heading. The canonical schema lives in [`augentic/specify`](https://github.com/augentic/specify) at `schemas/rules/rule.schema.json` and is embedded in the CLI binary, which validates every rule at `specify rules export`; this repo's rule-shape cargo test enforces the same shape at CI time. The minimum form:
 
 ```markdown
 ---
@@ -73,7 +73,7 @@ What the rule actually requires, in prose.
 - Concrete code patterns or smells that hint the rule is being violated.
 ```
 
-Optional frontmatter fields (`applicability`, `lint_mode`, `rule_hints`, `references`, `deprecated`) are documented in the schema. `id` must be globally unique across every codex tree the checker discovers.
+Optional frontmatter fields (`applicability`, `references`, `deprecated`) are documented in the schema. `id` must be globally unique across every codex tree the checker discovers.
 
 ## How rules are consumed
 
@@ -94,7 +94,7 @@ Adapter overlays are preferred over the shared rule when both match — e.g. a h
 
 1. Pick the next free `UNI-NNN`. Do not reuse retired ids; mark old rules with a `deprecated:` block in the frontmatter and keep the file so historical citations still resolve.
 2. Create the file with the frontmatter and `## Rule` heading shown above.
-3. Wire the new id into any target review references that should apply it (Omnia [`review-categories.md`](../../../targets/omnia/prose/references/review-categories.md), Vectis [`universal-checks.md`](../../../targets/vectis/prose/references/review/universal-checks.md), etc.) — `make lint` does **not** verify that every consumer cites every rule, so coverage is a manual concern.
-4. Run `specify lint framework --framework-root .` from this repository checkout (or `make lint-adapters` when the sibling `augentic/specify` checkout is present). The relevant predicate is `framework::check::rules` in `specify-standards`, which enforces frontmatter validity, the `## Rule` body heading, namespace ownership, and id uniqueness across the shared tree and every per-adapter overlay.
+3. Wire the new id into any target review references that should apply it (Omnia [`review-categories.md`](../../../targets/omnia/prose/references/review-categories.md), Vectis [`universal-checks.md`](../../../targets/vectis/prose/references/review/universal-checks.md), etc.) — no check verifies that every consumer cites every rule, so coverage is a manual concern.
+4. Run `cargo make ci` (or `cargo test -p prose --test rule_shape` for the fast path) from this repository checkout. The rule-shape test enforces frontmatter validity, the `## Rule` body heading, namespace ownership, and id uniqueness across the shared tree and every per-adapter overlay.
 
 `README.md` files (case-insensitive) under any codex directory are skipped by the discovery walk and are reserved for index pages like this one — they are never validated as rules.
