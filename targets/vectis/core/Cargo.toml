@@ -1,6 +1,6 @@
 [package]
 name = "vectis-core"
-description = "Wasm-free core of the vectis target adapter: embedded prose registry, the absorbed validate / materialize / prepare / verify / infer / scaffold libraries, and the guidance / build / merge judgment operations"
+description = "Vectis target-adapter core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

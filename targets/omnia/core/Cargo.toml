@@ -1,6 +1,6 @@
 [package]
 name = "omnia-core"
-description = "Wasm-free core of the omnia target adapter: embedded prose registry and the guidance / build / merge judgment operations"
+description = "Omnia target-adapter core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

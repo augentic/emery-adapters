@@ -1,25 +1,26 @@
 //! Re-homed kernel tests for the absorbed libraries.
 
+use vectis_core as core;
 use image::{ImageFormat, Rgba, RgbaImage};
 use serde_json::{Map, Value, json};
 use tempfile::tempdir;
-use vectis_core::VectisError;
-use vectis_core::materialize::app_icon::android::{
+use core::VectisError;
+use core::materialize::app_icon::android::{
     resolve_launcher_background, write_android_export,
 };
-use vectis_core::materialize::app_icon::decode_to_launcher_canvas;
-use vectis_core::materialize::paths::{
+use core::materialize::app_icon::decode_to_launcher_canvas;
+use core::materialize::paths::{
     ANDROID_DENSITIES, Platform, android_density_factor, export_layout, ios_raster_filename,
     ios_scale_factor, kebab_to_snake,
 };
-use vectis_core::materialize::render::{render_tree_to_png, scaled_dimensions};
-use vectis_core::materialize::svg::{collect_paths, parse_vector_svg, path_data_string};
-use vectis_core::materialize::yaml_pins::{AutoPin, apply_auto_pins, collect_auto_pins};
-use vectis_core::materialize::{AssetsArgs, MaterializeCommand, run as materialize_run};
-use vectis_core::validate::engine::composition::{
+use core::materialize::render::{render_tree_to_png, scaled_dimensions};
+use core::materialize::svg::{collect_paths, parse_vector_svg, path_data_string};
+use core::materialize::yaml_pins::{AutoPin, apply_auto_pins, collect_auto_pins};
+use core::materialize::{AssetsArgs, MaterializeCommand, run as materialize_run};
+use core::validate::engine::composition::{
     build_group_skeleton, fingerprint, skeleton_to_json,
 };
-use vectis_core::validate::engine::{
+use core::validate::engine::{
     conventional_export_exists, imageset_has_materialized_content,
 };
 

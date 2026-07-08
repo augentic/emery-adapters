@@ -1,6 +1,6 @@
 [package]
 name = "documentation-core"
-description = "Wasm-free core of the documentation source adapter: embedded prose registry and the survey / extract judgment operations"
+description = "Documentation source-adapter core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

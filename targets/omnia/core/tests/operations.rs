@@ -2,13 +2,14 @@
 //! prompt assembly, schema-gated formats, the phase-leg decomposition,
 //! and the deterministic report-coherence gate with its bounded repair.
 
+use omnia_core as core;
 use std::fs;
 use std::path::Path;
 
 use adapter::answers::REPORT_ANSWER_SCHEMA;
 use adapter::seam::{Changeset, Context, Edit, Error, Input, Severity, Status, WorkingTree};
 use adapter::{Error as ModelError, Format, Request};
-use omnia_core::operations::{build, describe, guidance, merge};
+use core::operations::{build, describe, guidance, merge};
 use tempfile::TempDir;
 use testkit::MockModel;
 
@@ -56,7 +57,7 @@ async fn build_runs_phase_legs_then_report() {
     ];
 
     let report =
-        build(&model, &ctx(tmp.path(), Some("http://shelf/mcp")), "demo", &inputs, &tree())
+        build(&model, &ctx(tmp.path(), Some("http://references/mcp")), "demo", &inputs, &tree())
             .await
             .unwrap();
 
@@ -80,13 +81,13 @@ async fn build_runs_phase_legs_then_report() {
     assert!(user.contains("PROPOSAL-BODY") && user.contains("DESIGN-BODY"), "typed inputs");
     assert!(user.contains("slice `demo`"), "slice named");
     assert!(user.contains("Verify-repair loop"), "agent-run cargo verification instructed");
-    assert!(user.contains("omnia-references"), "user prompt points at the MCP shelf");
+    assert!(user.contains("omnia-references"), "user prompt points at the MCP references");
     let (name, schema) = schema_format(first);
     assert_eq!(name, "generation");
     let compiled = serde_json::from_str::<serde_json::Value>(schema).unwrap();
     assert!(jsonschema::validator_for(&compiled).is_ok(), "internal schema compiles");
     assert!(first.lend_workspace);
-    assert_eq!(first.mcp[0].url, "http://shelf/mcp");
+    assert_eq!(first.mcp[0].url, "http://references/mcp");
 
     // Fixed leg order: review carries the review prompt, replay the
     // replay prompt, then the report leg gated by the derived answer

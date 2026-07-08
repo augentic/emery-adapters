@@ -1,10 +1,11 @@
 //! Captures-specific operation behavior: `kind: example` claims with the
 //! open `replay-digest` / `input` / `output` body fields.
 
+use captures_core as core;
 use std::path::Path;
 
 use adapter::seam::{Authority, ClaimKind, Context, Error, Lead};
-use captures_core::operations::{describe, extract};
+use core::operations::{describe, extract};
 use testkit::MockModel;
 
 fn ctx() -> Context<'static> {

@@ -1,7 +1,7 @@
 //! Composed multi-guest deployment tests: the contracts target guest and
 //! the documentation source guest side by side, proving the source axis
 //! rides the same seams — `survey` through host-mediated dispatch, and
-//! the source guest's own MCP reference shelf on its own HTTP route.
+//! the source guest's own MCP references on its own HTTP route.
 //!
 //! Model-free by design, like the contracts tests: the judgment legs are
 //! covered natively in each `<name>-core` against `MockModel`.
@@ -91,8 +91,8 @@ async fn post(runtime: &Runtime<Bundle>, route: &str, message: &Value) -> Result
 }
 
 // Each guest in the composed deployment serves its own embedded prose
-// registry on its own route: the documentation shelf identifies itself
-// and serves the survey prompt, while the contracts shelf next door keeps
+// registry on its own route: the documentation references server identifies itself
+// and serves the survey prompt, while the contracts references next door keeps
 // serving the contracts registry.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn per_guest_shelves() -> Result<()> {
@@ -136,7 +136,7 @@ async fn per_guest_shelves() -> Result<()> {
     .await?;
     assert_eq!(
         contracts_init["result"]["serverInfo"]["name"], "contracts-references",
-        "the contracts shelf keeps its own identity beside the source guest"
+        "the contracts references keeps its own identity beside the source guest"
     );
 
     Ok(())

@@ -1,6 +1,6 @@
 //! Composed-deployment tests for the contracts adapter guest: the
 //! `guidance` seam through host-mediated dispatch, and the MCP reference
-//! shelf over `wasi:http` — including the build-time-resolved
+//! references over `wasi:http` — including the build-time-resolved
 //! `references/spec-runtime` symlink content.
 //!
 //! Model-free by design: the judgment legs (`build` / `merge`) are covered
@@ -101,13 +101,13 @@ async fn post(runtime: &Runtime<Bundle>, message: &Value) -> Result<Value> {
     serde_json::from_slice(response.body()).context("MCP reply is JSON")
 }
 
-// The route serves the embedded prose registry as an MCP shelf: initialize
+// The route serves the embedded prose registry as an MCP references: initialize
 // identifies the server, resources/list carries the prompts as doc://
 // resources, read_doc returns a prompt body, and the resolved
 // `references/spec-runtime` symlink content is served under its
 // symlink-name path.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn shelf() -> Result<()> {
+async fn references() -> Result<()> {
     let mount = tempfile::tempdir()?;
     let runtime = common::runtime(mount.path()).await?;
 
@@ -129,10 +129,10 @@ async fn shelf() -> Result<()> {
         .iter()
         .filter_map(|resource| resource["uri"].as_str())
         .collect();
-    assert!(uris.contains(&"doc://prompts/build.md"), "shelf lists the build prompt: {uris:?}");
+    assert!(uris.contains(&"doc://prompts/build.md"), "references lists the build prompt: {uris:?}");
     assert!(
         uris.contains(&"doc://references/spec-runtime/phase-outcome-contract.md"),
-        "shelf lists the resolved spec-runtime symlink content: {uris:?}"
+        "references lists the resolved spec-runtime symlink content: {uris:?}"
     );
 
     let prompt = post(

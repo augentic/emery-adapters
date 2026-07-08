@@ -82,7 +82,7 @@ pub async fn extract<P: Model>(
         "Extract Evidence from the TypeScript / JavaScript source bound to adapter \
          `{id}` for this lead:\n\n{lead}\n\n\
          {BINDING_NOTE}\n\n\
-         The prompt's reference shelf is served over this call's MCP grant — load the \
+         The prompt's references is served over this call's MCP grant — load the \
          reference bodies on demand when the lead's surface needs deeper analysis.\n\n\
          Answer with one JSON object matching the gated schema: the Evidence body \
          (`authority`, `claims`) the prompt describes, without the envelope `lead` key — \

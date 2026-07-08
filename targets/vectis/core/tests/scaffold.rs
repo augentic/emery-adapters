@@ -1,10 +1,11 @@
 //! Tests for scaffold planning, writing, and the dispatcher.
 
+use vectis_core as core;
 use std::fs;
 
 use sha2::{Digest, Sha256};
 use tempfile::tempdir;
-use vectis_core::scaffold::{
+use core::scaffold::{
     CommonArgs, CoreArgs, ScaffoldCommand, ScaffoldError, ScaffoldPlan, Versions, parse_caps,
     plan_android, plan_core, plan_ios, run_at, write_plan,
 };

@@ -1,22 +1,22 @@
-//! The intent adapter guest: `wasm32` shim over `intent-core`.
+//! The intent adapter guest: `wasm32` shim over `core`.
 //! See `adapter::source` for the shim contract.
 #![cfg(target_arch = "wasm32")]
 
 use adapter::source::{AdapterId, Error, Evidence, Guest, Lead, Manifest};
-use adapter::{WasiModel, seam, shelf};
+use adapter::{WasiModel, seam, references};
 
 struct Adapter;
 adapter::source::export!(Adapter with_types_in adapter::source);
 
 impl Guest for Adapter {
     fn describe(_id: AdapterId) -> Manifest {
-        intent_core::operations::describe().into()
+        core::operations::describe().into()
     }
 
     async fn survey(id: AdapterId) -> Result<Vec<Lead>, Error> {
-        let url = shelf::mcp_url("intent");
+        let url = references::mcp_url("intent");
         let ctx = seam::Context::guest(&id, url.as_deref());
-        intent_core::operations::survey(&WasiModel, &ctx)
+        core::operations::survey(&WasiModel, &ctx)
             .await
             .map(|leads| leads.into_iter().map(Into::into).collect())
             .map_err(Into::into)
@@ -24,9 +24,9 @@ impl Guest for Adapter {
 
     async fn extract(id: AdapterId, lead: Lead) -> Result<Evidence, Error> {
         let lead = seam::Lead::from(lead);
-        let url = shelf::mcp_url("intent");
+        let url = references::mcp_url("intent");
         let ctx = seam::Context::guest(&id, url.as_deref());
-        intent_core::operations::extract(&WasiModel, &ctx, &lead)
+        core::operations::extract(&WasiModel, &ctx, &lead)
             .await
             .map(Into::into)
             .map_err(Into::into)
@@ -40,10 +40,10 @@ impl wasip3::exports::http::handler::Guest for HttpGuest {
     async fn handle(
         request: wasip3::http::types::Request,
     ) -> Result<wasip3::http::types::Response, wasip3::http::types::ErrorCode> {
-        shelf::Shelf {
+        references::References {
             server_name: "intent-references",
             version: env!("CARGO_PKG_VERSION"),
-            docs: intent_core::registry::docs(),
+            docs: core::registry::docs(),
         }
         .serve(request)
         .await

@@ -1,7 +1,8 @@
 //! The embedded prose registry: prompt and rule coverage plus symlink
 //! resolution.
 
-use documentation_core::registry;
+use documentation_core as core;
+use core::registry;
 
 #[test]
 fn registry_embeds_the_prompts() {

@@ -1,9 +1,10 @@
 //! Screenshots-specific operation behavior: the spatial claim kinds.
 
+use screenshots_core as core;
 use std::path::Path;
 
 use adapter::seam::{Authority, ClaimKind, Context, Lead};
-use screenshots_core::operations::{describe, extract};
+use core::operations::{describe, extract};
 use testkit::MockModel;
 
 // The extract answer's spatial claim kinds — `region` / `container` /

@@ -1,9 +1,10 @@
 //! Matrix coverage for the absorbed baseline-contract validators.
 
+use contracts_core as core;
 use std::fs;
 use std::path::PathBuf;
 
-use contracts_core::validate::{
+use core::validate::{
     ContractFinding, RULE_ID_FORMAT, RULE_ID_UNIQUE, RULE_VERSION_IS_SEMVER, validate_baseline,
 };
 use tempfile::TempDir;

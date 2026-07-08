@@ -1,11 +1,12 @@
 //! Typescript-specific operation behavior: the source-tree binding note,
-//! the framework-grammar survey framing, and the reference-shelf pointer.
+//! the framework-grammar survey framing, and the references pointer.
 
+use typescript_core as core;
 use std::path::Path;
 
 use adapter::seam::{Authority, ClaimKind, Context, Lead};
 use testkit::MockModel;
-use typescript_core::operations::{describe, extract, survey};
+use core::operations::{describe, extract, survey};
 
 fn ctx() -> Context<'static> {
     Context {
@@ -38,10 +39,10 @@ async fn survey_frames_the_framework_grammar() {
     assert!(user.contains("read-only"), "the binding note marks the tree read-only");
 }
 
-// The extract call points the agent at the reference shelf over the MCP
+// The extract call points the agent at the references over the MCP
 // grant, and the code-shaped claim kinds parse through the shared shape.
 #[tokio::test]
-async fn extract_points_at_the_reference_shelf() {
+async fn extract_points_at_the_references() {
     let model = MockModel::answering([r#"{
             "authority": "behaviour",
             "claims": [
@@ -64,7 +65,7 @@ async fn extract_points_at_the_reference_shelf() {
     let request = &model.requests()[0];
     assert!(request.system.as_deref().unwrap().starts_with("# TypeScript / JavaScript source"));
     let user = &request.messages[0].content;
-    assert!(user.contains("reference shelf"), "the prompt points at the MCP-served references");
+    assert!(user.contains("references"), "the prompt points at the MCP-served references");
     assert!(user.contains("- lead: task-service"), "the lead renders as the prompt's block shape");
 }
 

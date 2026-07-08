@@ -10,7 +10,7 @@
 
 `$PROJECT_DIR` is unreachable; do not attempt to read project lifecycle state. Writes back into `$SOURCE_DIR` are denied. Use `$SCRATCH_DIR` for any internal staging.
 
-## Reference shelf
+## References
 
 Load on demand when the lead's surface needs deeper analysis. The bodies carry TypeScript-specific extraction depth.
 

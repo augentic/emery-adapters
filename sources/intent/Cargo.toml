@@ -1,7 +1,7 @@
 [package]
 name = "intent"
-description = "Intent source-adapter WASI guest component: wasm32 shim over intent-core"
-version = "1.0.0"
+description = "Intent source-adapter"
+version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -11,12 +11,10 @@ publish.workspace = true
 [lib]
 crate-type = ["cdylib"]
 
-# Guest-only: the component body compiles solely for wasm32, so its
-# dependencies live under the same target gate omnia's guests use.
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-intent-core = { path = "core" }
-adapter.workspace = true
-wasip3.workspace = true
-
 [lints]
 workspace = true
+
+[dependencies]
+adapter.workspace = true
+core = { path = "core", package = "intent-core" }
+wasip3.workspace = true

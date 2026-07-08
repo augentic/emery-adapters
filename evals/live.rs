@@ -260,13 +260,6 @@ fn overlay_active() -> bool {
 /// edit under the overlay is still the stale-artifact trap:
 /// re-run without it.
 fn build(adapter: &str, root: &Path, target: &Path, overlay: bool) -> Result<()> {
-    // `-p {adapter}` assumes the eval name is the cargo package name;
-    // `omnia` breaks this (package `omnia-adapter`, lib `omnia`) — map
-    // the package name here before adding omnia evals.
-    ensure!(
-        adapter != "omnia",
-        "eval `omnia` builds as package `omnia-adapter`; teach `build` the mapping first"
-    );
     if overlay && overlay_fresh(target, adapter)? {
         println!("eval {adapter}: overlay active, stamped artifacts present; cargo builds skipped");
         return Ok(());
@@ -347,8 +340,7 @@ fn seed_overlay(adapter: &str, scratch: &Path) -> Result<()> {
 }
 
 // The adapter's on-disk directory: eval adapter names match the directory
-// name under `targets/` or `sources/` (not necessarily the package name —
-// `targets/omnia` builds `omnia-adapter`).
+// name under `targets/` or `sources/`.
 fn adapter_dir(adapter: &str) -> Result<PathBuf> {
     for axis in ["targets", "sources"] {
         let dir = workspace_root().join(axis).join(adapter);

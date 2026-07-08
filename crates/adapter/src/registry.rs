@@ -27,11 +27,11 @@ pub fn find<'d>(docs: &'d [Doc], path: &str) -> Option<&'d Doc> {
 /// `path` is not in `docs`.
 ///
 /// The single body-resolution seam shared by [`body`] and the MCP
-/// shelf's read path: under the `prose-overlay` feature an on-disk
+/// references server's read path: under the `prose-overlay` feature an on-disk
 /// overlay body wins, but the doc *set* is always the embedded table's —
 /// the overlay overrides bodies, never entries. Public as the
 /// `Option`-returning sibling of the panicking [`body`], for callers
-/// that treat a miss as recoverable (the MCP shelf).
+/// that treat a miss as recoverable (the MCP references).
 #[must_use]
 pub fn resolve(docs: &[Doc], path: &str) -> Option<&'static str> {
     let doc = find(docs, path)?;

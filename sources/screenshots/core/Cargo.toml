@@ -1,6 +1,6 @@
 [package]
 name = "screenshots-core"
-description = "Wasm-free core of the screenshots source adapter: embedded prose registry and the survey / extract judgment operations"
+description = "Screenshots source-adapter core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

@@ -25,7 +25,7 @@ wit/                  # the contract — wit/specify.wit, the axis worlds
       references/     #   lazy MCP reference corpus
       rules/          #   engineering standards (target adapters)
     Cargo.toml        #   `<name>` — the adapter guest component (wasm32 shim); its `version` is the adapter identity semver
-    src/              #   hand-written shim: Guest impl, export glue, MCP shelf
+    src/              #   hand-written shim: Guest impl, export glue, MCP references
     core/             #   `<name>-core` — wasm-free logic, natively tested
 shared/
   prose/              # cross-adapter prose, same grammar as adapter prose/

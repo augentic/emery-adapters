@@ -30,7 +30,7 @@ async fn judgment_assembles_request_and_deserializes() {
 
     let answer: Answer = judgment(
         &model,
-        &ctx(Some("http://shelf/mcp"), Path::new(".")),
+        &ctx(Some("http://references/mcp"), Path::new(".")),
         "SYSTEM".to_string(),
         "USER".to_string(),
         "probe",
@@ -55,7 +55,7 @@ async fn judgment_assembles_request_and_deserializes() {
     assert!(request.lend_workspace, "every judgment leg lends the workspace");
     assert_eq!(request.mcp.len(), 1);
     assert_eq!(request.mcp[0].name, "contracts-references", "grant named after the adapter");
-    assert_eq!(request.mcp[0].url, "http://shelf/mcp");
+    assert_eq!(request.mcp[0].url, "http://references/mcp");
 }
 
 // Without a resolved MCP URL the leg runs grant-free rather than failing.

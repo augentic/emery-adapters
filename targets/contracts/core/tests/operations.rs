@@ -2,14 +2,15 @@
 //! prompt assembly, schema-gated formats, answer projection, the
 //! bounded verify-repair loop, and validate-before-visible enforcement.
 
+use contracts_core as core;
 use std::fs;
 use std::path::Path;
 
 use adapter::answers::REPORT_ANSWER_SCHEMA;
 use adapter::seam::{Changeset, Context, Edit, Error, Input, Severity, Status, WorkingTree};
 use adapter::{Error as ModelError, Format, Request};
-use contracts_core::operations::{build, describe, guidance, merge};
-use contracts_core::validate::RULE_VERSION_IS_SEMVER;
+use core::operations::{build, describe, guidance, merge};
+use core::validate::RULE_VERSION_IS_SEMVER;
 use tempfile::TempDir;
 use testkit::MockModel;
 
@@ -64,7 +65,7 @@ async fn build_runs_sub_flows_then_report() {
     ];
 
     let report =
-        build(&model, &ctx(tmp.path(), Some("http://shelf/mcp")), "demo", &inputs, &tree())
+        build(&model, &ctx(tmp.path(), Some("http://references/mcp")), "demo", &inputs, &tree())
             .await
             .unwrap();
 
@@ -88,7 +89,7 @@ async fn build_runs_sub_flows_then_report() {
     let compiled = serde_json::from_str::<serde_json::Value>(schema).unwrap();
     assert!(jsonschema::validator_for(&compiled).is_ok(), "internal schema compiles");
     assert!(first.lend_workspace);
-    assert_eq!(first.mcp[0].url, "http://shelf/mcp");
+    assert_eq!(first.mcp[0].url, "http://references/mcp");
 
     // Fixed sub-flow order, then the report leg gated by the derived
     // answer schema.

@@ -1,9 +1,10 @@
 //! Intent-specific operation behavior: the degenerate inline binding.
 
+use intent_core as core;
 use std::path::Path;
 
 use adapter::seam::{Authority, ClaimKind, Context, Lead};
-use intent_core::operations::{describe, extract, survey};
+use core::operations::{describe, extract, survey};
 use testkit::MockModel;
 
 fn ctx() -> Context<'static> {

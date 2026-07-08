@@ -38,11 +38,11 @@ use crate::{
 /// composition leg, mirroring the contracts build's Phase 4 budget.
 const MAX_VALIDATE_REPAIR_ITERATIONS: usize = 2;
 
-/// The pointer at the adapter's own MCP reference shelf every judgment
+/// The pointer at the adapter's own MCP references every judgment
 /// leg's user prompt carries, so prompts stay lean and the agent fetches
 /// specialist material lazily instead of getting it inlined.
-const SHELF_POINTER: &str = "Every prompt, reference, and rule document this adapter ships is \
-     served by the granted `vectis-references` MCP shelf (`list_docs` / `read_doc`, \
+const REFERENCES_POINTER: &str = "Every prompt, reference, and rule document this adapter ships is \
+     served by the granted `vectis-references` MCP references (`list_docs` / `read_doc`, \
      adapter-relative paths like `references/hard-rules-core.md` or \
      `prompts/build/ios/write.md`); fetch documents the prompts cite lazily from there.";
 
@@ -174,7 +174,7 @@ pub async fn build<P: Model>(
          as the effective component set. For a slice with no UI surface, write no \
          composition and answer with `applicable: false`.\n\n\
          {infer_block}\n\n\
-         {prelude_block}\n\n{SHELF_POINTER}\n\n{inputs_block}",
+         {prelude_block}\n\n{REFERENCES_POINTER}\n\n{inputs_block}",
         ctx.adapter_id,
     );
     let composition = phase::phase(model, ctx, system, user, "composition").await?;
@@ -210,7 +210,7 @@ pub async fn build<P: Model>(
          Crux tests, then run the test prompt's core verify-repair loop yourself — \
          the cargo check / clippy / test commands run in the lent workspace; this \
          adapter cannot spawn them. Detect create vs update mode from the tree.\n\n\
-         {scaffold_block}\n\n{SHELF_POINTER}\n\n{inputs_block}",
+         {scaffold_block}\n\n{REFERENCES_POINTER}\n\n{inputs_block}",
     );
     let core = phase::phase(model, ctx, system, user, "core").await?;
 
@@ -240,7 +240,7 @@ pub async fn build<P: Model>(
              never edit them. When the slice introduces no work for this shell, write \
              nothing and answer with `applicable: false`; when a host prerequisite is \
              missing, stop per the prompt's deferred contract and report it in your \
-             summary.\n\n{scaffold_block}\n\n{SHELF_POINTER}",
+             summary.\n\n{scaffold_block}\n\n{REFERENCES_POINTER}",
             name = shell.name,
         );
         let answer = phase::phase(model, ctx, system, user, shell.name).await?;
@@ -260,7 +260,7 @@ pub async fn build<P: Model>(
          the core reviewer team and, for each in-scope shell, its platform reviewer \
          team per the review prompts (reviewers run in parallel), then run the build \
          prompt's `## § Consolidate review findings` and drive any remediation in the \
-         lent workspace. {SHELF_POINTER}",
+         lent workspace. {REFERENCES_POINTER}",
     );
     let review = phase::phase(model, ctx, system, user, "review").await?;
 
@@ -365,7 +365,7 @@ pub async fn merge<P: Model>(
          cargo / make / gradlew commands run in the lent workspace; this adapter \
          cannot spawn them. The composition validator re-runs deterministically \
          in-guest after your answer. Any gate failure means `status: failure`. Answer \
-         with the report body. {SHELF_POINTER}\n\n{delta_block}",
+         with the report body. {REFERENCES_POINTER}\n\n{delta_block}",
         ctx.adapter_id, delta.base,
     );
     let report = phase::report(model, ctx, merge_prompt.to_string(), user).await?;
@@ -447,7 +447,7 @@ async fn composition_gate<P: Model>(
              `{slice}`'s regenerated `{slice_dir_rel}/composition.yaml`. Repair the \
              composition (or the operator-curated manifests it references) in place per \
              the composition prompt's validator gate.\n\n{}\n\n\
-             Answer `applicable: true` with a summary of the repairs. {SHELF_POINTER}",
+             Answer `applicable: true` with a summary of the repairs. {REFERENCES_POINTER}",
             findings.join("\n"),
         );
         phase::phase(model, ctx, system, user, "composition-repair").await?;

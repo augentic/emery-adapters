@@ -1,7 +1,8 @@
 //! The embedded prose registry: coverage across all three trees,
 //! ordering, and symlink resolution.
 
-use contracts_core::registry;
+use contracts_core as core;
+use core::registry;
 
 #[test]
 fn registry_embeds_prompts_references_and_rules() {

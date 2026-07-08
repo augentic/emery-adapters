@@ -2,7 +2,7 @@
 
 Inlined by the adapter core into the core leg's system prompt (alongside [../../build.md](../../build.md) and [../test.md](../test.md)). Generates or updates the Crux shared Rust core under `${PROJECT_DIR}/shared/`. Run inside its own sub-agent with a clean context window.
 
-The Crux 0.17 idioms and the artifact-to-code mapping live in the [`../../../references/crux/`](../../../references/crux/) reference shelf.
+The Crux 0.17 idioms and the artifact-to-code mapping live in the [`../../../references/crux/`](../../../references/crux/) references.
 
 ## Mode detection
 

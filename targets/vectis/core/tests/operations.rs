@@ -4,6 +4,7 @@
 //! declared-platform shell-leg filter, and the deterministic report
 //! gate.
 
+use vectis_core as core;
 use std::fs;
 use std::path::Path;
 
@@ -14,7 +15,7 @@ use adapter::seam::{
 use adapter::{Format, Request};
 use tempfile::TempDir;
 use testkit::MockModel;
-use vectis_core::operations::{build, describe, guidance, merge};
+use core::operations::{build, describe, guidance, merge};
 
 const PHASE_DONE: &str = r#"{"applicable":true,"summary":"phase complete"}"#;
 const SHELL_SKIPPED: &str = r#"{"applicable":false,"summary":"no shell work in this slice"}"#;
@@ -66,7 +67,7 @@ async fn build_runs_prelude_then_phase_legs_then_report() {
     ];
 
     let report =
-        build(&model, &ctx(tmp.path(), Some("http://shelf/mcp")), "demo", &inputs, &tree())
+        build(&model, &ctx(tmp.path(), Some("http://references/mcp")), "demo", &inputs, &tree())
             .await
             .unwrap();
 
@@ -96,13 +97,13 @@ async fn build_runs_prelude_then_phase_legs_then_report() {
     );
     assert!(user.contains("component-bindings.yaml"), "bindings file instructed");
     assert!(!user.contains("specify catalog infer"), "no dead CLI verb in the prompt");
-    assert!(user.contains("vectis-references"), "user prompt points at the MCP shelf");
+    assert!(user.contains("vectis-references"), "user prompt points at the MCP references");
     let (name, schema) = schema_format(first);
     assert_eq!(name, "composition");
     let compiled = serde_json::from_str::<serde_json::Value>(schema).unwrap();
     assert!(jsonschema::validator_for(&compiled).is_ok(), "internal schema compiles");
     assert!(first.lend_workspace);
-    assert_eq!(first.mcp[0].url, "http://shelf/mcp");
+    assert_eq!(first.mcp[0].url, "http://references/mcp");
 
     // The prompt's phase order: core (Phases 2-3), the two shell writes
     // (Phases 4-5), review (Phases 6-7), then the report leg gated by

@@ -3,7 +3,7 @@
 //! generates the scaffold template registry from `templates/manifest.yaml`.
 //!
 //! The `rules/` tree rides along because the build prompt's review flow cites
-//! the Vectis rule overlay by path, so the shelf must serve it.
+//! the Vectis rule overlay by path, so the references server must serve it.
 
 use std::collections::{BTreeSet, HashMap};
 use std::fmt::Write as _;

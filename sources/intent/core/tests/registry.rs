@@ -2,7 +2,8 @@
 //! adapter's bare `references/` tree (only the `spec-runtime` symlink)
 //! still resolves.
 
-use intent_core::registry;
+use intent_core as core;
+use core::registry;
 
 #[test]
 fn registry_embeds_the_prompts() {

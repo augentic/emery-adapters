@@ -1,7 +1,8 @@
 //! The embedded prose registry: captures' own prompts and the two
 //! references the extract prompt requires ride inside.
 
-use captures_core::registry;
+use captures_core as core;
+use core::registry;
 
 #[test]
 fn registry_embeds_the_prompts() {
@@ -10,7 +11,7 @@ fn registry_embeds_the_prompts() {
 }
 
 /// The extract prompt instructs the agent to load both references; the
-/// shelf must serve them.
+/// references server must serve them.
 #[test]
 fn registry_embeds_the_capture_references() {
     assert!(registry::doc("references/capture-format.md").is_some());

@@ -2,12 +2,13 @@
 //! [`MockModel`]: prompt assembly, schema-gated formats, answer
 //! deserialization, and the deterministic validation tails.
 
+use documentation_core as core;
 use std::path::Path;
 
 use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA};
 use adapter::seam::{Authority, ClaimKind, Context, Error, Lead};
 use adapter::{Error as ModelError, Format, Request};
-use documentation_core::operations::{describe, extract, survey};
+use core::operations::{describe, extract, survey};
 use testkit::MockModel;
 
 fn ctx(mcp_url: Option<&str>) -> Context<'_> {
@@ -44,7 +45,7 @@ async fn survey_assembles_prompt_and_parses() {
         r#"{"leads":[{"lead":"password-reset","synopsis":"Reset flow.","topics":["identity"]}]}"#,
     ]);
 
-    let leads = survey(&model, &ctx(Some("http://shelf/mcp"))).await.unwrap();
+    let leads = survey(&model, &ctx(Some("http://references/mcp"))).await.unwrap();
 
     assert_eq!(leads.len(), 1);
     assert_eq!(leads[0].lead, "password-reset");
@@ -64,7 +65,7 @@ async fn survey_assembles_prompt_and_parses() {
     assert_eq!(name, "leads");
     assert_eq!(schema, LEADS_ANSWER_SCHEMA);
     assert!(request.lend_workspace);
-    assert_eq!(request.mcp[0].url, "http://shelf/mcp");
+    assert_eq!(request.mcp[0].url, "http://references/mcp");
     assert_eq!(request.mcp[0].name, "documentation-references");
 }
 
@@ -120,7 +121,7 @@ async fn extract_assembles_prompt_and_parses() {
             ]
         }"#]);
 
-    let evidence = extract(&model, &ctx(Some("http://shelf/mcp")), &lead()).await.unwrap();
+    let evidence = extract(&model, &ctx(Some("http://references/mcp")), &lead()).await.unwrap();
 
     assert_eq!(evidence.authority, Authority::Documentation);
     assert_eq!(evidence.claims.len(), 2);
@@ -144,7 +145,7 @@ async fn extract_assembles_prompt_and_parses() {
     assert_eq!(name, "evidence");
     assert_eq!(schema, EVIDENCE_ANSWER_SCHEMA);
     assert!(request.lend_workspace);
-    assert_eq!(request.mcp[0].url, "http://shelf/mcp");
+    assert_eq!(request.mcp[0].url, "http://references/mcp");
 }
 
 // The deterministic tail mirrors the evidence schema's conditional id

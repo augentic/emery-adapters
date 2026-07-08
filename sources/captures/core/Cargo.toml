@@ -1,6 +1,6 @@
 [package]
 name = "captures-core"
-description = "Wasm-free core of the captures source adapter: embedded prose registry and the survey / extract judgment operations"
+description = "Captures source-adapter core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

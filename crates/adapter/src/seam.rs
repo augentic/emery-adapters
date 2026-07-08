@@ -48,7 +48,7 @@ pub struct Context<'a> {
     pub adapter_id: &'a str,
     /// The guest's `"."` preopen root (the shared project mount).
     pub project_root: &'a Path,
-    /// The adapter's own MCP reference-shelf endpoint, granted to the
+    /// The adapter's own MCP references endpoint, granted to the
     /// spawned agent so it can fetch `doc://` references lazily. Read
     /// from the environment by the shim, never hardcoded.
     pub mcp_url: Option<&'a str>,
@@ -68,7 +68,7 @@ impl<'a> Context<'a> {
     }
 
     /// The MCP grants offered on every judgment leg: the adapter's own
-    /// reference shelf, when the shim resolved its endpoint. The grant is
+    /// references, when the shim resolved its endpoint. The grant is
     /// named `<name>-references` after the axis-stripped adapter id
     /// (`target:contracts` grants `contracts-references`).
     #[must_use]

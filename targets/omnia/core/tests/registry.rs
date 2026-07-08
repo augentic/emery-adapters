@@ -1,7 +1,8 @@
 //! The embedded prose registry: coverage across all three trees,
 //! ordering, and symlink resolution.
 
-use omnia_core::registry;
+use omnia_core as core;
+use core::registry;
 
 #[test]
 fn registry_embeds_prompts_references_and_rules() {
@@ -29,14 +30,14 @@ fn registry_embeds_prompts_references_and_rules() {
     assert!(registry::body("prompts/build.md").starts_with("# Omnia target — build prompt"));
 }
 
-/// The reference shelf is the point of this adapter: ~65 markdown files
+/// The references is the point of this adapter: ~65 markdown files
 /// (~700 KB) across `references/` plus the prompts and rules must all
 /// embed. The floor guards against a silently truncated walk without
 /// pinning the exact prose inventory.
 #[test]
-fn registry_embeds_the_full_reference_shelf() {
+fn registry_embeds_the_full_references() {
     let docs = registry::docs();
-    assert!(docs.len() >= 90, "expected the full prose shelf, got {} docs", docs.len());
+    assert!(docs.len() >= 90, "expected the full prose references, got {} docs", docs.len());
     let total: usize = docs.iter().map(|doc| doc.body.len()).sum();
     assert!(total >= 700 * 1024, "expected >= 700 KiB of embedded prose, got {total} bytes");
 }

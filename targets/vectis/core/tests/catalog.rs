@@ -1,9 +1,10 @@
 //! Shell catalog completeness probes.
 
+use vectis_core as core;
 use std::path::Path;
 
 use tempfile::tempdir;
-use vectis_core::verify::catalog_findings;
+use core::verify::catalog_findings;
 
 fn write_yaml(path: &Path, content: &str) {
     if let Some(parent) = path.parent() {

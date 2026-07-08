@@ -1,6 +1,6 @@
 [package]
 name = "typescript-core"
-description = "Wasm-free core of the TypeScript / JavaScript source adapter: embedded prose registry and the survey / extract judgment operations"
+description = "TypeScript source-adapter core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

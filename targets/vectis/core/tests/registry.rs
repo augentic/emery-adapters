@@ -1,7 +1,8 @@
 //! The embedded prose registry: coverage across all three trees,
 //! nested build prompts, ordering, and symlink resolution.
 
-use vectis_core::registry;
+use vectis_core as core;
+use core::registry;
 
 #[test]
 fn registry_embeds_prompts_references_and_rules() {
@@ -30,15 +31,15 @@ fn registry_embeds_prompts_references_and_rules() {
     assert!(registry::body("prompts/build.md").starts_with("# Vectis target — build prompt"));
 }
 
-/// The vectis prose shelf is the largest in the repo: 68 markdown files
+/// The vectis prose references is the largest in the repo: 68 markdown files
 /// (~600 KB) across `prompts/` (with its nested per-platform build
 /// sub-trees), `references/`, and `rules/` must all embed. The floor
 /// guards against a silently truncated walk without pinning the exact
 /// prose inventory.
 #[test]
-fn registry_embeds_the_full_reference_shelf() {
+fn registry_embeds_the_full_references() {
     let docs = registry::docs();
-    assert!(docs.len() >= 65, "expected the full prose shelf, got {} docs", docs.len());
+    assert!(docs.len() >= 65, "expected the full prose references, got {} docs", docs.len());
     let total: usize = docs.iter().map(|doc| doc.body.len()).sum();
     assert!(total >= 550 * 1024, "expected >= 550 KiB of embedded prose, got {total} bytes");
 }

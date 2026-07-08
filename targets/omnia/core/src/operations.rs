@@ -21,11 +21,11 @@ use adapter::{Model, phase};
 
 use crate::registry;
 
-/// The pointer at the adapter's own MCP reference shelf every judgment
+/// The pointer at the adapter's own MCP references every judgment
 /// leg's user prompt carries, so prompts stay lean and the agent fetches
 /// specialist material lazily instead of getting it inlined.
-const SHELF_POINTER: &str = "Every prompt, reference, and rule document this adapter ships is \
-     served by the granted `omnia-references` MCP shelf (`list_docs` / `read_doc`, adapter-relative \
+const REFERENCES_POINTER: &str = "Every prompt, reference, and rule document this adapter ships is \
+     served by the granted `omnia-references` MCP references (`list_docs` / `read_doc`, adapter-relative \
      paths like `references/guardrails.md`); fetch documents the prompts cite lazily from there.";
 
 /// Deterministic self-description for the `describe` operation.
@@ -87,7 +87,7 @@ pub async fn build<P: Model>(
          build prompt's `## Mode detection`, follow the crate-writer, test-writer, and \
          (create mode only) guest-writer prompts, then run the build prompt's \
          `## § Verify-repair loop` yourself — the cargo / clippy / test commands run \
-         in the lent workspace; this adapter cannot spawn them. {SHELF_POINTER}\n\n\
+         in the lent workspace; this adapter cannot spawn them. {REFERENCES_POINTER}\n\n\
          {inputs_block}",
         ctx.adapter_id,
     );
@@ -95,14 +95,14 @@ pub async fn build<P: Model>(
 
     // Review leg — standards review: its remediation cycle may re-enter
     // the crate / test writer prompts and the verify-repair loop with
-    // tighter caps; the specialist protocol and rule codex live on the shelf.
+    // tighter caps; the specialist protocol and rule codex live on the references server.
     let system = assemble(&["prompts/build.md", "prompts/build/review.md"]);
     let user = format!(
         "Run the standards-review leg of the omnia build for slice `{slice}`: \
          spawn the review team per the review prompt, synthesise `REVIEW.md`, and \
          drive the remediation cycle — re-running the verify-repair loop's cargo \
          commands in the lent workspace where the review prompt calls for it. \
-         {SHELF_POINTER}",
+         {REFERENCES_POINTER}",
     );
     let review = phase::phase(model, ctx, system, user, "review").await?;
 
@@ -115,7 +115,7 @@ pub async fn build<P: Model>(
         "Run the capture-replay leg of the omnia build for slice `{slice}`. \
          When the slice has no `captures` source binding in `plan.yaml`, write \
          nothing and answer with `applicable: false` — omission when unbound is not \
-         an error. {SHELF_POINTER}",
+         an error. {REFERENCES_POINTER}",
     );
     let replay = phase::phase(model, ctx, system, user, "replay").await?;
 
@@ -163,7 +163,7 @@ pub async fn merge<P: Model>(
          the merge prompt's `## § Omnia pre-merge gate` yourself — the cargo / clippy \
          / test / wasm32-wasip2 commands run in the lent workspace; this adapter \
          cannot spawn them. Any gate failure means `status: failure`. Answer with the \
-         report body. {SHELF_POINTER}\n\n{delta_block}",
+         report body. {REFERENCES_POINTER}\n\n{delta_block}",
         ctx.adapter_id, delta.base,
     );
     let report = phase::report(model, ctx, merge_prompt.to_string(), user).await?;

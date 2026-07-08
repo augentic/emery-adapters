@@ -1,9 +1,10 @@
 //! Crux shell presence heuristics and launcher icon probes.
 
+use vectis_core as core;
 use std::path::Path;
 
 use tempfile::tempdir;
-use vectis_core::shell::{SUPPORTED_SHELL_PLATFORMS, shell_present, shell_resident_app_icon};
+use core::shell::{SUPPORTED_SHELL_PLATFORMS, shell_present, shell_resident_app_icon};
 
 // Greenfield (empty) tree: every supported shell is absent. The `core`-absent
 // branch is unit-only — `verify` fixtures always scaffold core. The positive

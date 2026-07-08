@@ -1,6 +1,6 @@
 //! Composed-deployment tests for the omnia adapter guest: the `guidance`
 //! seam through host-mediated dispatch, and the ~700 KB embedded
-//! reference shelf served over `wasi:http` on the guest's own
+//! references served over `wasi:http` on the guest's own
 //! `/mcp/omnia` route — including the build-time-resolved
 //! `references/spec-runtime` symlink content.
 //!
@@ -58,12 +58,12 @@ async fn post(runtime: &Runtime<Bundle>, message: &Value) -> Result<Value> {
     serde_json::from_slice(response.body()).context("MCP reply is JSON")
 }
 
-// The route serves the embedded prose registry as an MCP shelf: initialize
+// The route serves the embedded prose registry as an MCP references: initialize
 // identifies the server, read_doc returns a reference body, and the
 // resolved `references/spec-runtime` symlink content is served under its
 // symlink-name path.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn shelf() -> Result<()> {
+async fn references() -> Result<()> {
     let mount = tempfile::tempdir()?;
     let runtime = common::composed_runtime(mount.path()).await?;
 

@@ -22,8 +22,8 @@
 //! - [`registry`] — the embedded prose vocabulary the
 //!   `prose` codegen plugs into, plus the
 //!   [`embed_registry!`] module generator.
-//! - [`shelf`] — the MCP URL env convention plus (on `wasm32`) the
-//!   generic `McpServer` reference shelf over an embedded doc table.
+//! - [`references`] — the MCP URL env convention plus (on `wasm32`) the
+//!   generic `McpServer` over an embedded doc table.
 //! - `source` / `target` (`wasm32` only) — the `specify:adapter` world bindings,
 //!   generated once per axis with a `pub` `export!` macro (omnia's
 //!   `wasi-*` guest convention), plus the seam-type [`From`] mappings.
@@ -35,7 +35,7 @@ pub mod model;
 pub mod phase;
 pub mod registry;
 pub mod seam;
-pub mod shelf;
+pub mod references;
 
 #[cfg(target_arch = "wasm32")]
 pub mod source;

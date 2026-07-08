@@ -1,6 +1,6 @@
 //! Composed-deployment tests for the vectis adapter guest: the `guidance`
 //! seam through host-mediated dispatch, and the ~600 KB embedded
-//! reference shelf served over `wasi:http` on the guest's own
+//! references served over `wasi:http` on the guest's own
 //! `/mcp/vectis` route — including the nested per-platform build
 //! per-platform prompts and the build-time-resolved `references/agent-teams.md`
 //! symlink content.
@@ -129,11 +129,11 @@ async fn post(runtime: &Runtime<Bundle>, message: &Value) -> Result<Value> {
     serde_json::from_slice(response.body()).context("MCP reply is JSON")
 }
 
-// The route serves the embedded prose registry as an MCP shelf: initialize
+// The route serves the embedded prose registry as an MCP references: initialize
 // identifies the server, read_doc returns a reference body, and a nested
 // per-platform build prompt is served under its full path.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn shelf() -> Result<()> {
+async fn references() -> Result<()> {
     let mount = tempfile::tempdir()?;
     let runtime = common::composed_runtime(mount.path()).await?;
 

@@ -2,7 +2,7 @@
 //! guests — intent, typescript, screenshots, and captures — side by side
 //! in one deployment, proving each rides the same seams as documentation:
 //! `survey` through host-mediated dispatch, and each guest's own MCP
-//! reference shelf on its own HTTP route.
+//! references on its own HTTP route.
 //!
 //! Model-free by design, like the other composed tests: the judgment legs
 //! are covered natively in each `<name>-core` against `MockModel`.
@@ -19,7 +19,7 @@ use crate::common::{self, Bundle};
 const SOURCE_INTERFACE: &str = "specify:adapter/source@0.1.0";
 
 /// The four source guests this deployment composes: guest id, MCP route,
-/// shelf server identity, and the survey prompt's opening heading.
+/// references server identity, and the survey prompt's opening heading.
 const GUESTS: [(&str, &str, &str, &str); 4] = [
     ("source:intent", "/mcp/intent", "intent-references", "# intent.survey"),
     (
@@ -85,7 +85,7 @@ async fn post(runtime: &Runtime<Bundle>, route: &str, message: &Value) -> Result
 }
 
 // Each guest in the composed deployment serves its own embedded prose
-// registry on its own route: every shelf identifies itself with its own
+// registry on its own route: every references server identifies itself with its own
 // server name and serves its own survey prompt.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn per_guest_shelves() -> Result<()> {
@@ -104,7 +104,7 @@ async fn per_guest_shelves() -> Result<()> {
         .await?;
         assert_eq!(
             init["result"]["serverInfo"]["name"], server,
-            "{guest}: shelf identifies its own server"
+            "{guest}: references server identifies its own server"
         );
 
         let prompt = post(

@@ -73,7 +73,7 @@ pub async fn source_guests_runtime(mount: &Path) -> Result<Runtime<Bundle>> {
     assemble(manifest(SOURCES, mount)?).await
 }
 
-/// A deployment manifest over `guests`: each guest's MCP shelf routed at
+/// A deployment manifest over `guests`: each guest's MCP references routed at
 /// `/mcp/<name>`, sharing one writable `"."` mount — the shared project
 /// tree every guest opens through its own preopen.
 fn manifest(guests: &[Guest], mount: &Path) -> Result<TempManifest> {
@@ -114,7 +114,7 @@ fn build_guests() {
             .expect("tests manifest dir is <workspace>/tests");
         let packages = [
             "contracts",
-            "omnia-adapter",
+            "omnia",
             "vectis",
             "captures",
             "documentation",

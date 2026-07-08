@@ -1,11 +1,12 @@
 //! Appendix C / D / E worked-example pins against the validation engine.
 
+use vectis_core as core;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 use tempfile::{NamedTempFile, TempDir};
-use vectis_core::validate::{ValidateMode, run};
+use core::validate::{ValidateMode, run};
 
 fn errors_array(envelope: &Value) -> &[Value] {
     envelope.get("errors").and_then(Value::as_array).expect("errors array").as_slice()

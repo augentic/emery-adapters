@@ -25,7 +25,7 @@ version = "0.4.3"
 dependencies = [
  "anyhow",
  "harness",
- "omnia",
+ "omnia 0.35.0",
  "omnia-testkit",
  "omnia-wasi-http",
  "omnia-wasi-model",
@@ -529,7 +529,7 @@ dependencies = [
 
 [[package]]
 name = "captures"
-version = "1.0.0"
+version = "0.4.3"
 dependencies = [
  "adapter",
  "captures-core",
@@ -709,7 +709,7 @@ checksum = "a6ef517f0926dd24a1582492c791b6a4818a4d94e789a334894aa15b0d12f55c"
 
 [[package]]
 name = "contracts"
-version = "1.0.0"
+version = "0.4.3"
 dependencies = [
  "adapter",
  "contracts-core",
@@ -1094,7 +1094,7 @@ dependencies = [
 
 [[package]]
 name = "documentation"
-version = "1.0.0"
+version = "0.4.3"
 dependencies = [
  "adapter",
  "documentation-core",
@@ -1194,7 +1194,7 @@ dependencies = [
  "anyhow",
  "cfg-if",
  "harness",
- "omnia",
+ "omnia 0.35.0",
  "omnia-cursor",
  "omnia-wasi-http",
  "omnia-wasi-model",
@@ -1910,7 +1910,7 @@ dependencies = [
 
 [[package]]
 name = "intent"
-version = "1.0.0"
+version = "0.4.3"
 dependencies = [
  "adapter",
  "intent-core",
@@ -2472,6 +2472,15 @@ dependencies = [
 
 [[package]]
 name = "omnia"
+version = "0.4.3"
+dependencies = [
+ "adapter",
+ "omnia-core",
+ "wasip3",
+]
+
+[[package]]
+name = "omnia"
 version = "0.35.0"
 source = "git+https://github.com/augentic/omnia.git#a4b41c31cfbea6917b88053cd86eac15728d57d4"
 dependencies = [
@@ -2505,15 +2514,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "omnia-adapter"
-version = "1.0.0"
-dependencies = [
- "adapter",
- "omnia-core",
- "wasip3",
-]
-
-[[package]]
 name = "omnia-core"
 version = "0.4.3"
 dependencies = [
@@ -2533,7 +2533,7 @@ version = "0.28.0"
 source = "git+https://github.com/augentic/backends.git#32582fd29ce986f314504bd8b352d870b4ec6c15"
 dependencies = [
  "anyhow",
- "omnia",
+ "omnia 0.35.0",
  "omnia-wasi-model",
  "serde",
  "serde_json",
@@ -2603,7 +2603,7 @@ dependencies = [
  "futures",
  "http",
  "http-body-util",
- "omnia",
+ "omnia 0.35.0",
  "tokio",
  "wasmtime",
  "wasmtime-wasi",
@@ -2618,7 +2618,7 @@ dependencies = [
  "anyhow",
  "bytes",
  "futures",
- "omnia",
+ "omnia 0.35.0",
  "parking_lot",
  "tracing",
  "wasmtime",
@@ -2632,7 +2632,7 @@ version = "0.35.0"
 source = "git+https://github.com/augentic/omnia.git#a4b41c31cfbea6917b88053cd86eac15728d57d4"
 dependencies = [
  "anyhow",
- "omnia",
+ "omnia 0.35.0",
  "tracing",
  "wasmtime",
  "wasmtime-wasi-config",
@@ -2648,7 +2648,7 @@ dependencies = [
  "chrono",
  "fromenv",
  "futures",
- "omnia",
+ "omnia 0.35.0",
  "parking_lot",
  "polodb_core",
  "regex",
@@ -2675,7 +2675,7 @@ dependencies = [
  "http-body",
  "http-body-util",
  "hyper",
- "omnia",
+ "omnia 0.35.0",
  "omnia-wasi-keyvalue",
  "percent-encoding",
  "reqwest 0.13.4",
@@ -2699,7 +2699,7 @@ dependencies = [
  "fromenv",
  "futures",
  "oauth2",
- "omnia",
+ "omnia 0.35.0",
  "serde",
  "tracing",
  "wasmtime",
@@ -2716,7 +2716,7 @@ dependencies = [
  "chrono",
  "futures",
  "moka",
- "omnia",
+ "omnia 0.35.0",
  "serde",
  "serde_json",
  "tracing",
@@ -2733,7 +2733,7 @@ dependencies = [
  "anyhow",
  "futures",
  "http",
- "omnia",
+ "omnia 0.35.0",
  "serde",
  "time",
  "tokio",
@@ -2754,7 +2754,7 @@ dependencies = [
  "cap-std",
  "futures",
  "jsonschema",
- "omnia",
+ "omnia 0.35.0",
  "serde",
  "serde_json",
  "tokio",
@@ -2775,7 +2775,7 @@ dependencies = [
  "futures",
  "hex",
  "num-traits",
- "omnia",
+ "omnia 0.35.0",
  "omnia-guest-macros",
  "opentelemetry",
  "opentelemetry-proto",
@@ -2799,7 +2799,7 @@ dependencies = [
  "chrono",
  "fromenv",
  "futures",
- "omnia",
+ "omnia 0.35.0",
  "parking_lot",
  "rusqlite",
  "sea-query",
@@ -2821,7 +2821,7 @@ dependencies = [
  "futures",
  "futures-channel",
  "futures-util",
- "omnia",
+ "omnia 0.35.0",
  "tokio",
  "tokio-stream",
  "tokio-tungstenite",
@@ -3816,7 +3816,7 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
 name = "screenshots"
-version = "1.0.0"
+version = "0.4.3"
 dependencies = [
  "adapter",
  "screenshots-core",
@@ -4703,7 +4703,7 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
 name = "typescript"
-version = "1.0.0"
+version = "0.4.3"
 dependencies = [
  "adapter",
  "typescript-core",
@@ -4850,7 +4850,7 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "vectis"
-version = "1.0.4"
+version = "0.4.3"
 dependencies = [
  "adapter",
  "vectis-core",

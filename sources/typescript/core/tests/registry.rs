@@ -1,7 +1,8 @@
 //! The embedded prose registry: typescript's own prompts and its deep
-//! reference shelf ride inside.
+//! references ride inside.
 
-use typescript_core::registry;
+use typescript_core as core;
+use core::registry;
 
 #[test]
 fn registry_embeds_the_prompts() {
@@ -14,10 +15,10 @@ fn registry_embeds_the_prompts() {
     );
 }
 
-/// The extraction reference shelf the extract prompt loads on demand is
+/// The extraction references the extract prompt loads on demand is
 /// embedded alongside the resolved `spec-runtime` symlink content.
 #[test]
-fn registry_embeds_the_reference_shelf() {
+fn registry_embeds_the_references() {
     for path in [
         "references/business-logic.md",
         "references/language-mapping.md",

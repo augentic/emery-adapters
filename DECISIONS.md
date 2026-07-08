@@ -42,7 +42,7 @@ The hands-off loop is the `eval-watch` cargo-make task: cargo-watch over one ada
 
 ## Guest-model capability deferral
 
-**Decision (2026-07).** The `adapter` crate's `Model` trait stays despite upstream omnia growing its own guest-side model capability. Every judgment `create` these adapters issue requires MCP reference-shelf grants and the `"."` workspace lend — fields the upstream capability does not carry today.
+**Decision (2026-07).** The `adapter` crate's `Model` trait stays despite upstream omnia growing its own guest-side model capability. Every judgment `create` these adapters issue requires MCP references grants and the `"."` workspace lend — fields the upstream capability does not carry today.
 
 **Swap criteria.** Revisit when upstream carries MCP tool grants and a workspace-lend affordance usable from a wasm-free core.
 
