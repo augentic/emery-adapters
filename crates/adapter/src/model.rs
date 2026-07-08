@@ -1,10 +1,19 @@
-//! The `Model` capability: judgment calls through `omnia:model/completion`.
+//! The `JudgmentModel` capability: judgment calls through
+//! `omnia:model/completion`.
 //!
 //! The request and reply types mirror the `omnia:model@0.1.0` records,
 //! except the `grants.workspace` descriptor lend: a core asks for the
 //! lend with the plain [`Request::lend_workspace`] flag, and the `wasm32`
 //! default body resolves it against the guest's own `"."` preopen at the
 //! call site.
+//!
+//! This is deliberately not `omnia_guest::Model`: the upstream capability
+//! carries neither the workspace lend nor MCP grants (guests needing
+//! tools or grants call the raw `omnia-wasi-model` binding directly —
+//! which is exactly what the `wasm32` default body here does). Judgment
+//! legs always lend the workspace and offer the adapter's reference
+//! grant, so they run through this trait; simple grant-free completions
+//! can use the upstream `omnia_guest::Model` instead.
 
 use std::future::Future;
 
@@ -111,14 +120,14 @@ pub enum Error {
 pub struct WasiModel;
 
 #[cfg(target_arch = "wasm32")]
-impl Model for WasiModel {}
+impl JudgmentModel for WasiModel {}
 
 /// Issue judgment completions against the `omnia:model` host.
 ///
 /// `create` has a WASI-backed default body on `wasm32` and a bare
 /// signature off it, so native tests supply their own provider — the same
 /// shape as omnia-guest's capability traits.
-pub trait Model: Send + Sync {
+pub trait JudgmentModel: Send + Sync {
     /// Single-shot completion — returns one validated reply.
     #[cfg(not(target_arch = "wasm32"))]
     fn create(&self, request: Request) -> impl Future<Output = Result<Reply, Error>> + Send;

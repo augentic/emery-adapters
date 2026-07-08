@@ -174,26 +174,26 @@ fn check_rules(root: &Path) -> Vec<String> {
                     ));
                 }
             }
-            if let Some(severity) = fields.get("severity") {
-                if !severity.is_empty() && !SEVERITIES.contains(&severity.as_str()) {
-                    findings
-                        .push(format!("{rel}: severity `{severity}` is not one of {SEVERITIES:?}"));
-                }
+            if let Some(severity) = fields.get("severity")
+                && !severity.is_empty()
+                && !SEVERITIES.contains(&severity.as_str())
+            {
+                findings.push(format!("{rel}: severity `{severity}` is not one of {SEVERITIES:?}"));
             }
-            if let Some(id) = fields.get("id") {
-                if !id.is_empty() {
-                    if !id_matches(id, tree.prefixes) {
-                        findings.push(format!(
-                            "{rel}: id `{id}` violates namespace ownership — this tree owns \
-                             {:?} (shape `PREFIX-NNN`)",
-                            tree.prefixes
-                        ));
-                    }
-                    if let Some(previous) = seen_ids.insert(id.clone(), rel.clone()) {
-                        findings.push(format!(
-                            "{rel}: duplicate rule id `{id}` (also declared by {previous})"
-                        ));
-                    }
+            if let Some(id) = fields.get("id")
+                && !id.is_empty()
+            {
+                if !id_matches(id, tree.prefixes) {
+                    findings.push(format!(
+                        "{rel}: id `{id}` violates namespace ownership — this tree owns \
+                         {:?} (shape `PREFIX-NNN`)",
+                        tree.prefixes
+                    ));
+                }
+                if let Some(previous) = seen_ids.insert(id.clone(), rel.clone()) {
+                    findings.push(format!(
+                        "{rel}: duplicate rule id `{id}` (also declared by {previous})"
+                    ));
                 }
             }
             if !body.lines().any(|line| line.trim_end() == "## Rule") {

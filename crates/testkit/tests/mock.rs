@@ -1,6 +1,6 @@
 //! The scripted [`MockModel`] provider: FIFO replies and request recording.
 
-use adapter::{Error, Format, McpGrant, Message, Model, Reply, Request, Role};
+use adapter::{Error, Format, JudgmentModel, McpGrant, Message, Reply, Request, Role};
 use testkit::MockModel;
 
 fn request(task: &str) -> Request {

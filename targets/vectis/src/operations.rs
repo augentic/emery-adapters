@@ -15,7 +15,7 @@ use adapter::seam::{
     BuildInput, Changeset, Context, Error, Finding, Input, Platform, PlatformsCapability, Report,
     Severity, Status, TargetManifest, WorkingTree,
 };
-use adapter::{Model, phase};
+use adapter::{JudgmentModel, phase};
 use serde_json::Value;
 
 use crate::{
@@ -95,7 +95,7 @@ pub fn guidance() -> &'static str {
     clippy::too_many_lines,
     reason = "One linear leg-by-leg walk of the prompt's phase order; splitting hides the order."
 )]
-pub async fn build<P: Model>(
+pub async fn build<P: JudgmentModel>(
     model: &P, ctx: &Context<'_>, slice: &str, inputs: &[Input], tree: &WorkingTree,
 ) -> Result<Report, Error> {
     let tree_root = ctx.tree_root(tree);
@@ -292,7 +292,7 @@ pub async fn build<P: Model>(
 /// # Errors
 ///
 /// As [`adapter::judgment`].
-pub async fn merge<P: Model>(
+pub async fn merge<P: JudgmentModel>(
     model: &P, ctx: &Context<'_>, slice: &str, delta: &Changeset, tree: &WorkingTree,
 ) -> Result<Report, Error> {
     let tree_root = ctx.tree_root(tree);
@@ -391,7 +391,7 @@ fn declared_platforms(project_root: &Path) -> Option<Vec<String>> {
 /// than with the postlude. Returns the residual findings after the
 /// repair budget: non-empty means the gate did not clear and the build
 /// must park the slice rather than run the platform phases.
-async fn composition_gate<P: Model>(
+async fn composition_gate<P: JudgmentModel>(
     model: &P, ctx: &Context<'_>, slice: &str, slice_dir_rel: &str, composition: &Path,
 ) -> Result<Vec<String>, Error> {
     let mut findings = validation_findings(composition);
@@ -428,7 +428,7 @@ fn assemble(prompts: &[&str]) -> String {
 /// `success` report's declared outputs must exist under the tree root.
 /// Residual findings then force `failure` regardless of the answer.
 #[expect(clippy::too_many_arguments, reason = "One internal gate call site per operation.")]
-async fn gate_report<P: Model>(
+async fn gate_report<P: JudgmentModel>(
     model: &P, ctx: &Context<'_>, prompt: &str, mut report: Report, tree_root: &Path,
     composition: &Path, operation: &str, shell_verify: bool,
 ) -> Result<Report, Error> {

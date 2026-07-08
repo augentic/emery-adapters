@@ -9,7 +9,7 @@
 
 use serde::de::DeserializeOwned;
 
-use crate::model::{Format, Message, Model, Request, Role, SchemaFormat};
+use crate::model::{Format, JudgmentModel, Message, Request, Role, SchemaFormat};
 use crate::seam::{Context, Error};
 
 /// Issue one schema-gated judgment leg and deserialize its answer.
@@ -24,7 +24,7 @@ use crate::seam::{Context, Error};
 /// Returns [`Error::InvalidRequest`] when the model rejects the request
 /// as malformed, and [`Error::Internal`] for other model failures or an
 /// answer that does not deserialize into `T`.
-pub async fn judgment<P: Model, T: DeserializeOwned>(
+pub async fn judgment<P: JudgmentModel, T: DeserializeOwned>(
     model: &P, ctx: &Context<'_>, system: String, user: String, schema_name: &str, schema: &str,
 ) -> Result<T, Error> {
     let reply = model

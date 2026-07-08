@@ -13,7 +13,7 @@ use serde::Deserialize;
 
 use crate::answers::{REPORT_ANSWER_SCHEMA, ReportAnswer};
 use crate::judgment;
-use crate::model::Model;
+use crate::model::JudgmentModel;
 use crate::seam::{Changeset, Context, Error, Finding, Input, Report, Status};
 
 /// Answer schema for one internal phase leg.
@@ -62,7 +62,7 @@ pub struct PhaseAnswer {
 /// # Errors
 ///
 /// As [`judgment`].
-pub async fn phase<P: Model>(
+pub async fn phase<P: JudgmentModel>(
     model: &P, ctx: &Context<'_>, system: String, user: String, name: &str,
 ) -> Result<PhaseAnswer, Error> {
     judgment(model, ctx, system, user, name, PHASE_ANSWER_SCHEMA).await
@@ -74,7 +74,7 @@ pub async fn phase<P: Model>(
 /// # Errors
 ///
 /// As [`judgment`].
-pub async fn report<P: Model>(
+pub async fn report<P: JudgmentModel>(
     model: &P, ctx: &Context<'_>, system: String, user: String,
 ) -> Result<Report, Error> {
     judgment::<P, ReportAnswer>(model, ctx, system, user, "report", REPORT_ANSWER_SCHEMA)

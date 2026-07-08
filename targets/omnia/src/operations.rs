@@ -12,7 +12,7 @@ use std::path::Path;
 use adapter::seam::{
     Changeset, Context, Error, Finding, Input, Report, TargetManifest, WorkingTree,
 };
-use adapter::{Model, phase};
+use adapter::{JudgmentModel, phase};
 
 use crate::registry;
 
@@ -49,7 +49,7 @@ pub fn guidance() -> &'static str {
 /// # Errors
 ///
 /// As [`adapter::judgment`].
-pub async fn build<P: Model>(
+pub async fn build<P: JudgmentModel>(
     model: &P, ctx: &Context<'_>, slice: &str, inputs: &[Input], tree: &WorkingTree,
 ) -> Result<Report, Error> {
     let tree_root = ctx.tree_root(tree);
@@ -131,7 +131,7 @@ pub async fn build<P: Model>(
 /// # Errors
 ///
 /// As [`adapter::judgment`].
-pub async fn merge<P: Model>(
+pub async fn merge<P: JudgmentModel>(
     model: &P, ctx: &Context<'_>, slice: &str, delta: &Changeset, tree: &WorkingTree,
 ) -> Result<Report, Error> {
     let tree_root = ctx.tree_root(tree);
@@ -161,7 +161,7 @@ fn assemble(prompts: &[&str]) -> String {
 /// Report-coherence gate with one bounded repair leg: when a `success`
 /// report declares outputs the tree does not contain, one repair leg
 /// gets the discrepancies; residual discrepancies force `failure`.
-async fn gate_report<P: Model>(
+async fn gate_report<P: JudgmentModel>(
     model: &P, ctx: &Context<'_>, prompt: &str, mut report: Report, tree_root: &Path,
     operation: &str,
 ) -> Result<Report, Error> {
