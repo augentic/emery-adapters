@@ -12,14 +12,8 @@ use crate::validate::error::VectisError;
 
 /// Validate `tokens.yaml` against the embedded tokens schema.
 ///
-/// Resolution order for the file path:
-/// 1. The explicit `[path]` positional, when supplied.
-/// 2. The first existing file in `artifacts.tokens.paths`
-///    (`change_local` then `project`, with `<name>` expanded against
-///    the alphabetically-first directory under `.specify/slices/`).
-/// 3. The last candidate template (`design-system/tokens.yaml`)
-///    when nothing exists, so the read error names the most
-///    operator-friendly path.
+/// Path resolution: the explicit `[path]` positional, else the
+/// `artifacts.tokens` cascade (see [`super::paths`]).
 ///
 /// # Errors
 ///

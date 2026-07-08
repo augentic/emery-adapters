@@ -1,10 +1,9 @@
 //! Shared helpers for the composed-deployment integration tests.
 //!
-//! Owns guest-artifact building/locating (this workspace's counterpart
-//! to the specify engine's `crates/runtime/tests/common.rs`) and the
-//! `wasi:http`-backed store bundle a host binary's `runtime!` macro
-//! would generate; manifest rendering and the cargo runner come from the
-//! shared `harness` crate (`crates/harness`).
+//! Owns guest-artifact building/locating and the `wasi:http`-backed
+//! store bundle a host binary's `runtime!` macro would generate;
+//! manifest rendering and the cargo runner come from the shared
+//! `harness` crate (`crates/harness`).
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
@@ -105,36 +104,25 @@ fn guest_wasm(file: &str) -> PathBuf {
     path
 }
 
-// Build guest crates once per test process.
 fn build_guests() {
     static GUESTS: OnceLock<()> = OnceLock::new();
     GUESTS.get_or_init(|| {
         let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .expect("tests manifest dir is <workspace>/tests");
-        let packages = [
-            "contracts",
-            "omnia",
-            "vectis",
-            "captures",
-            "documentation",
-            "intent",
-            "screenshots",
-            "typescript",
-        ];
-        let mut args = vec!["build"];
-        args.extend(packages.iter().flat_map(|package| ["-p", package]));
-        args.extend(["--target", "wasm32-wasip2"]);
+        // `--workspace` rather than a `-p` list: the bare spec `omnia` is
+        // ambiguous between the guest crate and the runtime dependency
+        // of the same name. Host-side members compile to empty crates on
+        // wasm32, so the whole-workspace build is equivalent.
+        let args = ["build", "--workspace", "--target", "wasm32-wasip2"];
         harness::cargo(&args, workspace_root, &target_dir()).expect("guest build");
     });
 }
 
-// The cargo target dir this test binary was built into.
 fn target_dir() -> PathBuf {
     harness::target_dir().expect("test exe sits at <target>/<profile>/deps/<exe>")
 }
 
-// Deploy a temp manifest onto the runtime with the test backend bundle.
 async fn assemble(manifest: TempManifest) -> Result<Runtime<Bundle>> {
     let mut deployment = DeploymentBuilder::new()
         .config(manifest.path().to_path_buf())
@@ -157,7 +145,7 @@ async fn assemble(manifest: TempManifest) -> Result<Runtime<Bundle>> {
 /// The backend bundle a host binary's `runtime!` macro would generate for
 /// `hosts: { WasiHttp: HttpDefault, WasiModel: … }` — with the model
 /// backend stubbed: these composed tests are model-free (judgment legs are
-/// covered natively in the core crates), so any completion is a test bug.
+/// covered natively in each adapter crate), so any completion is a test bug.
 #[derive(Clone)]
 pub struct Bundle {
     http: HttpDefault,

@@ -1,4 +1,4 @@
-//! Bootstrap `app-icon` gate, run in-guest as part of the build prelude.
+//! Bootstrap `app-icon` gate, run as part of the build prelude.
 
 use std::path::Path;
 

@@ -5,5 +5,5 @@
 //! cites the Omnia rule overlay by path, so the references server must serve it.
 
 fn main() {
-    prose::emit_core(&["prompts", "references", "rules"]);
+    prose::emit_adapter(&["prompts", "references", "rules"]);
 }

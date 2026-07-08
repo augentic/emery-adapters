@@ -1,6 +1,5 @@
-//! The judgment operations: `survey` and `extract` — schema-gated legs
-//! through [`adapter::judgment`] with deterministic id-grammar
-//! tails.
+//! The judgment operations: `survey` and `extract` — schema-gated
+//! legs through [`adapter::judgment`] with id-grammar tails.
 //!
 //! The intent source is degenerate by construction: the binding
 //! carries the operator's free-form intent string inline, so both legs
@@ -14,19 +13,15 @@ use adapter::{Model, judgment};
 
 use crate::registry;
 
-/// Deterministic self-description for the `describe` operation.
-///
-/// Resolve-time metadata answered from compiled-in constants: no
-/// compatibility floor is declared, matching the retired manifest.
+/// Resolve-time `describe` metadata: no compatibility floor.
 #[must_use]
 pub const fn describe() -> SourceManifest {
     SourceManifest { specify_floor: None }
 }
 
-/// How the spawned agent resolves its bound source material — the
-/// session-less state note both prompts carry. Intent bindings are
-/// inline: the operator's brief rides in the plan itself, and no source
-/// tree is preopened.
+/// Session-less state note both prompts carry. Intent bindings are
+/// inline: the operator's brief rides in the plan itself, and no
+/// source tree is preopened.
 const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and there is no \
                             session: every input you need lives in the workspace tree and this \
                             prompt. Resolve the bound source material from the plan — read \
@@ -36,8 +31,8 @@ const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and
                             is absent for intent bindings — no source tree is bound).";
 
 /// Survey the inline intent binding into its single lead — one
-/// schema-gated judgment leg over the embedded `prompts/survey.md`,
-/// followed by the deterministic id-grammar tail.
+/// schema-gated leg over `prompts/survey.md`, then the id-grammar
+/// tail.
 ///
 /// # Errors
 ///
@@ -65,11 +60,9 @@ pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>,
     Ok(answer.leads)
 }
 
-/// Extract the lead's Evidence: the single `kind: intent` claim echoing
-/// the operator's intent string.
-///
-/// One schema-gated judgment leg over the embedded `prompts/extract.md`,
-/// followed by the deterministic claim-id tail.
+/// Extract the lead's Evidence: the single `kind: intent` claim
+/// echoing the operator's intent string. One schema-gated leg over
+/// `prompts/extract.md`, then the claim-id tail.
 ///
 /// # Errors
 ///

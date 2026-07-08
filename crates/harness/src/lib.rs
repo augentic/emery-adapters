@@ -31,12 +31,8 @@ pub struct Guest {
 }
 
 /// Render a deployment manifest over `guests` with one writable `"."`
-/// mount at `mount`.
-///
-/// Emits one block per guest (with its `link` list when non-empty), the
-/// mount — the shared project tree every guest opens through its own
-/// preopen — an HTTP route per guest that declares one, and in-process
-/// transport.
+/// mount at `mount`, an HTTP route per guest that declares one, and
+/// in-process transport.
 #[must_use]
 pub fn manifest(guests: &[Guest], mount: &Path) -> String {
     use std::fmt::Write as _;

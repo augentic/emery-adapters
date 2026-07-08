@@ -20,7 +20,7 @@ const ASSEMBLY_ORDER: &[&str] = &["core", "ios", "android"];
 const MANIFEST_IGNORED: &str = "MANIFEST.md";
 
 fn main() {
-    prose::emit_core(&["prompts", "references", "rules"]);
+    prose::emit_adapter(&["prompts", "references", "rules"]);
     if let Err(err) = generate_template_registry() {
         panic!("vectis template manifest codegen failed: {err}");
     }

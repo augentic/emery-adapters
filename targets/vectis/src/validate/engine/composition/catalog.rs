@@ -1,5 +1,5 @@
-//! Component-catalog cross-reference (component catalog contract):
-//! catalog parsing plus the slug↔entry agreement checks.
+//! Component-catalog cross-reference: catalog parsing plus the
+//! slug↔entry agreement checks.
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -9,11 +9,10 @@ use serde_json::Value;
 use super::finding::Finding;
 use crate::validate::engine::shared::escape_pointer_token;
 
-/// Read and parse the component catalog with explicit error reporting.
-/// Unlike `parse_yaml_file` (which returns `None` silently because its
-/// callers have an auto-invoked sibling validator), the catalog has no
-/// prior validation step — a present-but-invalid file must surface as
-/// a composition-mode error rather than being silently skipped.
+/// Read and parse the component catalog with explicit error
+/// reporting: the catalog has no prior validation step, so a
+/// present-but-invalid file must surface as a composition-mode error
+/// rather than being silently skipped.
 pub(super) fn parse_catalog_file(path: &Path) -> Result<Value, String> {
     let source = std::fs::read_to_string(path)
         .map_err(|err| format!("component catalog at {} is not readable: {err}", path.display()))?;
@@ -22,15 +21,10 @@ pub(super) fn parse_catalog_file(path: &Path) -> Result<Value, String> {
     })
 }
 
-/// Cross-reference every `component: <slug>` in the composition
-/// against the agent-inferred, operator-reviewable component catalog.
+/// Cross-reference every `component: <slug>` against the catalog.
 ///
-/// - A slug absent from the catalog → error.
-/// - A slug with `status: rejected` → error.
-/// - A slug with `status: confirmed` → OK.
-/// - A confirmed catalog entry with zero `component:` references in
-///   the composition → warning (the entry exists but is unused in
-///   this artifact).
+/// Absent or `status: rejected` slugs → error; a confirmed entry with
+/// zero `component:` references → warning (unused in this artifact).
 pub(super) fn check_catalog_cross_references(
     instance: &Value, catalog: &Value, errors: &mut Vec<Finding>, warnings: &mut Vec<Finding>,
 ) {
@@ -77,8 +71,8 @@ pub(super) fn check_catalog_cross_references(
     }
 }
 
-/// Walk a composition document and collect every `component: <slug>`
-/// directive as a `(slug, json_pointer_path)` pair.
+/// Collect every `component: <slug>` directive as a
+/// `(slug, json_pointer_path)` pair.
 fn collect_component_slugs(node: &Value, json_path: &str, out: &mut Vec<(String, String)>) {
     match node {
         Value::Object(map) => {

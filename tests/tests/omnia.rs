@@ -5,7 +5,7 @@
 //! `references/spec-runtime` symlink content.
 //!
 //! Model-free by design, like the contracts tests: the judgment legs
-//! (`build` / `merge`) are covered natively in `omnia-core`
+//! (`build` / `merge`) are covered natively in the `omnia` crate
 //! against `MockModel`.
 
 use anyhow::{Context as _, Result};
@@ -19,9 +19,6 @@ use crate::common::{self, Bundle};
 /// The versioned interface name the target-adapter world exports.
 const TARGET_INTERFACE: &str = "specify:adapter/target@0.1.0";
 
-// guidance("target:omnia") through host-mediated dispatch in the composed
-// deployment returns the embedded guidance prompt — the core registry riding
-// inside the component, beside the contracts and documentation guests.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn guidance_through_dispatch() -> Result<()> {
     let mount = tempfile::tempdir()?;
@@ -51,17 +48,12 @@ async fn guidance_through_dispatch() -> Result<()> {
     Ok(())
 }
 
-// POST one JSON-RPC message to /mcp/omnia and parse the reply.
 async fn post(runtime: &Runtime<Bundle>, message: &Value) -> Result<Value> {
     let response = http::post_json(runtime, "/mcp/omnia", message.to_string()).await?;
     assert!(response.status().is_success(), "MCP POST replies 2xx: {}", response.status());
     serde_json::from_slice(response.body()).context("MCP reply is JSON")
 }
 
-// The route serves the embedded prose registry as an MCP references: initialize
-// identifies the server, read_doc returns a reference body, and the
-// resolved `references/spec-runtime` symlink content is served under its
-// symlink-name path.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn references() -> Result<()> {
     let mount = tempfile::tempdir()?;

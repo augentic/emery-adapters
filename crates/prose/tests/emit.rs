@@ -25,9 +25,6 @@ fn generate(adapter_root: &Path, trees: &[&str]) -> Result<String, String> {
     Ok(fs::read_to_string(out.path().join("registry_docs.rs")).expect("generated file"))
 }
 
-// The generated table carries one `Doc` per markdown file, keyed by its
-// adapter-relative path, sorted, with non-markdown files skipped and the
-// body pulled in by `include_str!` against the resolved absolute path.
 #[test]
 fn emits_sorted_doc_table() {
     let adapter = TempDir::new().expect("adapter root");
@@ -50,8 +47,6 @@ fn emits_sorted_doc_table() {
     assert!(generated.contains("pub static DOCS"), "table binds the DOCS static");
 }
 
-// A directory symlink is descended: its documents appear under their
-// symlink-name paths with the resolved target feeding `include_str!`.
 #[test]
 fn resolves_directory_symlinks_inline() {
     let adapter = TempDir::new().expect("adapter root");
@@ -82,9 +77,8 @@ fn empty_trees_fail() {
     assert!(err.contains("no markdown documents"), "error names the failure: {err}");
 }
 
-// A tree that does not exist is skipped, not an error: adapters share one
-// canonical tree list (`prompts` + `references`) and an adapter may carry
-// no references tree at all.
+// Adapters share one canonical tree list and an adapter may carry no
+// references tree at all.
 #[test]
 fn missing_tree_is_skipped() {
     let adapter = TempDir::new().expect("adapter root");
@@ -96,8 +90,6 @@ fn missing_tree_is_skipped() {
     assert!(generated.contains(r#"Doc { path: "prompts/survey.md""#), "present tree is embedded");
 }
 
-// When every tree is missing, the empty-registry error fires: an adapter
-// with no prose at all has nothing to embed and the build must fail.
 #[test]
 fn all_trees_missing_fails() {
     let adapter = TempDir::new().expect("adapter root");

@@ -74,8 +74,6 @@ async fn build_runs_sub_flows_then_report() {
     let requests = model.requests();
     assert_eq!(requests.len(), 4, "three sub-flows plus one report call");
 
-    // First leg: the json-schema sub-flow, the assembled system prompt,
-    // the adapter's own MCP grant, and the workspace lend.
     let first = &requests[0];
     let system = first.system.as_deref().unwrap();
     assert!(system.contains("# contracts.build"), "build prompt in system");
@@ -90,8 +88,6 @@ async fn build_runs_sub_flows_then_report() {
     assert!(first.lend_workspace);
     assert_eq!(first.mcp[0].url, "http://references/mcp");
 
-    // Fixed sub-flow order, then the report leg gated by the derived
-    // answer schema.
     assert_eq!(schema_format(&requests[1]).0, "openapi-sub-flow");
     assert_eq!(schema_format(&requests[2]).0, "asyncapi-sub-flow");
     let (name, schema) = schema_format(&requests[3]);
@@ -103,8 +99,6 @@ async fn build_runs_sub_flows_then_report() {
 async fn build_repair_loop_is_bounded() {
     let tmp = TempDir::new().unwrap();
     seed_bad_contract(&tmp.path().join(".specify/slices/demo/contracts"));
-    // The mock never fixes the file, so both repair iterations fire and
-    // the residual finding overrides the success answer.
     let model = MockModel::answering([
         NOT_APPLICABLE,
         NOT_APPLICABLE,
@@ -213,8 +207,7 @@ async fn success_with_blocking_finding_downgrades() {
 #[tokio::test]
 async fn merge_post_gate_repairs_then_enforces() {
     let tmp = TempDir::new().unwrap();
-    // Baseline under a working-tree subpath; the mock's repair leg never
-    // fixes the file, so enforcement appends the validator finding.
+    // Baseline under a working-tree subpath, mirroring a scoped mount.
     seed_bad_contract(&tmp.path().join("proj/contracts"));
     let model = MockModel::answering([SUCCESS_REPORT, SUCCESS_REPORT]);
     let delta = Changeset {
@@ -237,7 +230,6 @@ async fn merge_post_gate_repairs_then_enforces() {
     assert!(requests[1].messages[0].content.contains("post-merge"));
 }
 
-// No model call.
 #[test]
 fn describe_declares_the_contracts_input() {
     let manifest = describe();

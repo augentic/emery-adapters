@@ -1,8 +1,7 @@
-//! Deterministic validation engine behind [`crate::validate::run`].
+//! Validation engine behind [`crate::validate::run`].
 //!
-//! Public surface: [`run`] dispatches a [`ValidateMode`] plus optional
-//! artifact path to the per-mode handler. Each per-mode envelope
-//! carries a uniform shape:
+//! [`run`] dispatches a [`ValidateMode`] plus optional artifact path
+//! to the per-mode handler. Every per-mode envelope shares one shape:
 //!
 //! ```json
 //! {
@@ -13,10 +12,9 @@
 //! }
 //! ```
 //!
-//! Errors / warnings entries carry a JSON Pointer-shaped `path` so the
-//! operator can locate the offending sub-document. The dispatcher
-//! exits non-zero only when a real sub-report carries errors. Provenance
-//! and the rationale behind every rule live in the repository-root
+//! Error / warning entries carry a JSON Pointer-shaped `path` locating
+//! the offending sub-document. The dispatcher exits non-zero only when
+//! a real sub-report carries errors. Rule provenance: repository-root
 //! `DECISIONS.md` (§"Vectis validation and materialization").
 
 mod all;
@@ -45,15 +43,12 @@ use crate::validate::error::VectisError;
 ///
 /// # Errors
 ///
-/// Returns [`VectisError::InvalidProject`] when the resolved
-/// `tokens.yaml` / `assets.yaml` / `layout.yaml` / `composition.yaml`
-/// is unreadable in single-mode runs (missing file, permission
-/// denied; `validate all` instead surfaces the missing input as a
-/// synthetic `skipped: true` sub-report) and [`VectisError::Internal`]
-/// if an embedded schema fails to compile. YAML parse failures and
-/// schema validation failures are *not* errors at this layer; they are
-/// folded into the `errors` array of the per-mode envelope so the
-/// operator sees the full report alongside any other findings.
+/// Returns [`VectisError::InvalidProject`] when the resolved artifact
+/// is unreadable in single-mode runs (`validate all` instead surfaces
+/// a missing input as a `skipped: true` sub-report) and
+/// [`VectisError::Internal`] if an embedded schema fails to compile.
+/// YAML parse and schema violations are folded into the envelope's
+/// `errors` array instead of erroring at this layer.
 pub fn run(mode: ValidateMode, path: Option<&Path>) -> Result<Value, VectisError> {
     match mode {
         ValidateMode::Tokens => tokens::validate(path),
@@ -64,10 +59,8 @@ pub fn run(mode: ValidateMode, path: Option<&Path>) -> Result<Value, VectisError
     }
 }
 
-/// Re-enter [`run`] for the auto-invoke path. Runs the named sub-mode
-/// against the supplied path and returns its envelope. Used by
-/// composition mode to fold sibling tokens / assets envelopes, and by
-/// `validate all` to dispatch each sub-mode in turn.
+/// Re-enter [`run`] with an explicit path — used by composition
+/// mode's sibling auto-invoke and by `validate all`.
 pub(super) fn run_inner(mode: ValidateMode, path: &Path) -> Result<Value, VectisError> {
     run(mode, Some(path))
 }

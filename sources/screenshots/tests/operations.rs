@@ -1,14 +1,11 @@
 //! Screenshots-specific operation behavior: the spatial claim kinds.
 
-use screenshots_core as core;
 use std::path::Path;
 
 use adapter::seam::{Authority, ClaimKind, Context, Lead};
-use core::operations::{describe, extract};
+use screenshots::operations::{describe, extract};
 use testkit::MockModel;
 
-// The extract answer's spatial claim kinds — `region` / `container` /
-// `leaf` — parse through the shared Evidence shape.
 #[tokio::test]
 async fn extract_parses_the_spatial_kinds() {
     let model = MockModel::answering([r#"{
@@ -43,7 +40,6 @@ async fn extract_parses_the_spatial_kinds() {
     );
 }
 
-// No model call.
 #[test]
 fn describe_declares_no_floor() {
     assert_eq!(describe().specify_floor, None);

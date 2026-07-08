@@ -32,12 +32,9 @@ const GUESTS: [(&str, &str, &str, &str); 4] = [
     ("source:captures", "/mcp/captures", "captures-references", "# Runtime capture survey"),
 ];
 
-// survey through dispatch exercises each source guest's async-lifted
-// judgment leg (the `async func` export awaiting
-// `omnia:model/completion.create`): the stub backend pends and then fails
-// every completion, so each leg must come back as the WIT error variant —
-// not a trap — proving all four remaining source guests survive
-// host-mediated dispatch in one composed deployment.
+// Each async-lifted `survey` export awaits `omnia:model/completion.create`;
+// the stub backend pends then fails, so each leg must come back as the WIT
+// error variant — not a trap — for all four guests in one deployment.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn survey_bridges_survive_dispatch() -> Result<()> {
     let mount = tempfile::tempdir()?;
@@ -77,16 +74,12 @@ async fn survey_bridges_survive_dispatch() -> Result<()> {
     Ok(())
 }
 
-// POST one JSON-RPC message to a route and parse the reply.
 async fn post(runtime: &Runtime<Bundle>, route: &str, message: &Value) -> Result<Value> {
     let response = http::post_json(runtime, route, message.to_string()).await?;
     assert!(response.status().is_success(), "MCP POST replies 2xx: {}", response.status());
     serde_json::from_slice(response.body()).context("MCP reply is JSON")
 }
 
-// Each guest in the composed deployment serves its own embedded prose
-// registry on its own route: every references server identifies itself with its own
-// server name and serves its own survey prompt.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn per_guest_shelves() -> Result<()> {
     let mount = tempfile::tempdir()?;

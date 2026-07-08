@@ -2,9 +2,8 @@
 //! `src/registry.rs` includes; symlinks resolve at build time.
 //!
 //! The `rules/` tree rides along so the component carries its own rule
-//! overlay pack, pinned to the adapter version (DECISIONS.md §"Codex
-//! ownership flip: shared packs live in the engine").
+//! overlay pack, pinned to the adapter version.
 
 fn main() {
-    prose::emit_core(&["prompts", "references", "rules"]);
+    prose::emit_adapter(&["prompts", "references", "rules"]);
 }

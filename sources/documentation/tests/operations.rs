@@ -2,13 +2,12 @@
 //! [`MockModel`]: prompt assembly, schema-gated formats, answer
 //! deserialization, and the deterministic validation tails.
 
-use documentation_core as core;
 use std::path::Path;
 
 use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA};
 use adapter::seam::{Authority, ClaimKind, Context, Error, Lead};
 use adapter::{Error as ModelError, Format, Request};
-use core::operations::{describe, extract, survey};
+use documentation::operations::{describe, extract, survey};
 use testkit::MockModel;
 
 fn ctx(mcp_url: Option<&str>) -> Context<'_> {
@@ -34,11 +33,6 @@ fn schema_format(request: &Request) -> (&str, &str) {
     }
 }
 
-// One leg: the embedded survey prompt is the system channel, the user
-// message carries the call context (adapter id, plan.yaml binding
-// resolution, the re-survey note, the JSON envelope instruction), and the
-// request rides the leads schema pin, the adapter's own MCP grant, and
-// the workspace lend.
 #[tokio::test]
 async fn survey_assembles_prompt_and_parses() {
     let model = MockModel::answering([
@@ -69,7 +63,6 @@ async fn survey_assembles_prompt_and_parses() {
     assert_eq!(request.mcp[0].name, "documentation-references");
 }
 
-// Without a resolved MCP endpoint the leg still runs — just grant-free.
 #[tokio::test]
 async fn survey_without_mcp_url_offers_no_grant() {
     let model = MockModel::answering([r#"{"leads":[]}"#]);
@@ -79,9 +72,7 @@ async fn survey_without_mcp_url_offers_no_grant() {
     assert!(model.requests()[0].mcp.is_empty(), "no URL means no reference grant");
 }
 
-// The deterministic tail re-checks the kebab-case id grammar after the
-// answer lands: a malformed lead id fails as a findings-style internal
-// error even though it deserialized.
+// The tail re-checks id grammar after the answer deserializes.
 #[tokio::test]
 async fn survey_tail_rejects_malformed_lead_id() {
     let model =
@@ -97,7 +88,6 @@ async fn survey_tail_rejects_malformed_lead_id() {
     }
 }
 
-// A whitespace-only synopsis fails the tail the same way.
 #[tokio::test]
 async fn survey_tail_rejects_empty_synopsis() {
     let model = MockModel::answering([r#"{"leads":[{"lead":"account","synopsis":"  "}]}"#]);
@@ -107,10 +97,6 @@ async fn survey_tail_rejects_empty_synopsis() {
     assert!(matches!(err, Error::Internal(detail) if detail.contains("synopsis is empty")));
 }
 
-// One leg: the embedded extract prompt is the system channel, the user
-// message carries the lead block plus the binding resolution, and the
-// answer deserializes into the Evidence shape through the evidence
-// schema pin.
 #[tokio::test]
 async fn extract_assembles_prompt_and_parses() {
     let model = MockModel::answering([r#"{
@@ -148,9 +134,7 @@ async fn extract_assembles_prompt_and_parses() {
     assert_eq!(request.mcp[0].url, "http://references/mcp");
 }
 
-// The deterministic tail mirrors the evidence schema's conditional id
-// requirement: a requirement claim without an id fails even though the
-// answer deserialized.
+// The tail mirrors the evidence schema's conditional id requirement.
 #[tokio::test]
 async fn extract_tail_rejects_missing_claim_id() {
     let model = MockModel::answering([
@@ -162,7 +146,6 @@ async fn extract_tail_rejects_missing_claim_id() {
     assert!(matches!(err, Error::Internal(detail) if detail.contains("require an id")));
 }
 
-// A claim id outside the dotted-kebab pattern fails the tail.
 #[tokio::test]
 async fn extract_tail_rejects_malformed_claim_id() {
     let model = MockModel::answering([
@@ -174,7 +157,6 @@ async fn extract_tail_rejects_malformed_claim_id() {
     assert!(matches!(err, Error::Internal(detail) if detail.contains("`Not.Valid`")));
 }
 
-// Model failures map through the seam error vocabulary.
 #[tokio::test]
 async fn model_invalid_request_maps_through() {
     let model =
@@ -185,7 +167,6 @@ async fn model_invalid_request_maps_through() {
     assert!(matches!(err, Error::InvalidRequest(_)));
 }
 
-// No model call.
 #[test]
 fn describe_declares_no_floor() {
     assert_eq!(describe().specify_floor, None);

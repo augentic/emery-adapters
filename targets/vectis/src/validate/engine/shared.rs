@@ -13,17 +13,10 @@ use serde_json::Value;
 use crate::schema_source::{ASSETS_SCHEMA_SOURCE, COMPOSITION_SCHEMA_SOURCE, TOKENS_SCHEMA_SOURCE};
 use crate::validate::error::VectisError;
 
-/// Lazily compiled tokens validator. Compiling once per process avoids
-/// re-parsing the embedded schema on every invocation; `validate all`
-/// fans out across every mode in a single dispatch, so the cache pays
-/// off.
 static TOKENS_VALIDATOR: OnceLock<Result<Validator, String>> = OnceLock::new();
 
-/// Lazily compiled assets validator (companion to [`TOKENS_VALIDATOR`]).
 static ASSETS_VALIDATOR: OnceLock<Result<Validator, String>> = OnceLock::new();
 
-/// Lazily compiled composition validator. Shared between `layout` mode
-/// and `composition` mode: one schema, two runtime layers on top.
 static COMPOSITION_VALIDATOR: OnceLock<Result<Validator, String>> = OnceLock::new();
 
 /// Compile the embedded tokens schema once and re-use the validator.
@@ -57,11 +50,9 @@ pub fn composition_validator() -> Result<&'static Validator, VectisError> {
     lazy_validator(&COMPOSITION_VALIDATOR, COMPOSITION_SCHEMA_SOURCE, "composition.schema.json")
 }
 
-/// Generic helper for the embedded-schema lazy-compile pattern. The
-/// cell stores `Result<Validator, String>` so a build-time invariant
-/// breach (the embedded JSON is unparseable, or the schema itself is
-/// invalid) survives across `OnceLock` initialisation without
-/// re-running the failing branch on every call.
+/// Lazy-compile an embedded schema. The cell stores
+/// `Result<Validator, String>` so a compile failure survives
+/// `OnceLock` initialisation instead of re-running on every call.
 fn lazy_validator(
     cell: &'static OnceLock<Result<Validator, String>>, source: &'static str, name: &'static str,
 ) -> Result<&'static Validator, VectisError> {
@@ -81,22 +72,16 @@ fn lazy_validator(
 
 /// Read `path` and parse it as YAML into a [`serde_json::Value`].
 ///
-/// The `Option<Value>` return shape is intentional: composition mode
-/// only calls this after auto-invoking the sibling validator, so any
-/// read / parse failure has already surfaced in the folded sub-report.
-/// Returning `None` lets the call site stay flat with `if let Some(...)`
-/// instead of dragging a synthetic error type through.
+/// Returns `None` on any read / parse failure: callers auto-invoke
+/// the sibling validator first, so the failure has already surfaced
+/// in the folded sub-report.
 #[must_use]
 pub fn parse_yaml_file(path: &Path) -> Option<Value> {
     let source = std::fs::read_to_string(path).ok()?;
     serde_saphyr::from_str::<Value>(&source).ok()
 }
 
-/// Escape a JSON Pointer reference token: `~` becomes `~0` and `/`
-/// becomes `~1`. Asset ids are kebab-case so neither substitution
-/// fires for the common case, but composition keys (e.g. screen slugs)
-/// MAY contain slashes if a future schema relaxation permits, so the
-/// escape is safe rather than redundant.
+/// Escape a JSON Pointer reference token (`~` → `~0`, `/` → `~1`).
 pub(super) fn escape_pointer_token(token: &str) -> String {
     token.replace('~', "~0").replace('/', "~1")
 }

@@ -17,9 +17,6 @@ use crate::common::{self, Bundle};
 /// The versioned interface name the source-adapter world exports.
 const SOURCE_INTERFACE: &str = "specify:adapter/source@0.1.0";
 
-// describe("source:documentation") through host-mediated dispatch returns
-// the compiled-in manifest record — on the source axis just the
-// compatibility floor, absent here.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn describe_through_dispatch() -> Result<()> {
     let mount = tempfile::tempdir()?;
@@ -45,12 +42,10 @@ async fn describe_through_dispatch() -> Result<()> {
     Ok(())
 }
 
-// survey through dispatch exercises the source guest's async-lifted
-// judgment leg (the `async func` export awaiting
-// `omnia:model/completion.create`): the stub backend pends and then fails
-// every completion, so the leg must come back as the WIT error variant —
-// not a trap — proving the source axis survives host-mediated dispatch
-// in a multi-guest deployment.
+// The async-lifted `survey` export awaits `omnia:model/completion.create`;
+// the stub backend pends then fails, so the leg must come back as the WIT
+// error variant — not a trap — proving the source axis survives
+// host-mediated dispatch in a multi-guest deployment.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn survey_bridge_survives_dispatch() -> Result<()> {
     let mount = tempfile::tempdir()?;
@@ -83,17 +78,12 @@ async fn survey_bridge_survives_dispatch() -> Result<()> {
     Ok(())
 }
 
-// POST one JSON-RPC message to a route and parse the reply.
 async fn post(runtime: &Runtime<Bundle>, route: &str, message: &Value) -> Result<Value> {
     let response = http::post_json(runtime, route, message.to_string()).await?;
     assert!(response.status().is_success(), "MCP POST replies 2xx: {}", response.status());
     serde_json::from_slice(response.body()).context("MCP reply is JSON")
 }
 
-// Each guest in the composed deployment serves its own embedded prose
-// registry on its own route: the documentation references server identifies itself
-// and serves the survey prompt, while the contracts references next door keeps
-// serving the contracts registry.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn per_guest_shelves() -> Result<()> {
     let mount = tempfile::tempdir()?;

@@ -1,8 +1,7 @@
 //! Unified terminal-error type shared by every `vectis` subcommand.
 //!
-//! Every subcommand reports failures through this one type. The wire
-//! payload is `{"error": "...", "message": "..."}` plus an injected
-//! `"exit-code"`.
+//! The wire payload is `{"error": "...", "message": "..."}` plus an
+//! injected `"exit-code"`.
 
 use std::io;
 
@@ -11,18 +10,15 @@ use thiserror::Error;
 
 /// Process exit code for all terminal `vectis` failures.
 ///
-/// `vectis` standardises on the host CLI's typed-error slot: `0` for
-/// clean success, `1` for a successful run that surfaced findings, and
-/// `2` for invocation / I/O / runtime failures. Every subcommand
-/// reports failures with `2`, matching the host contract and the
-/// `validate` exit shape.
+/// Matches the host CLI contract: `0` clean success, `1` findings,
+/// `2` invocation / I/O / runtime failure.
 pub const EXIT_FAILURE: u8 = 2;
 
 /// Terminal failure modes for any `vectis` subcommand.
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum VectisError {
-    /// Filesystem I/O failure (scaffold writes and version-file reads).
+    /// Filesystem I/O failure.
     #[error("io error: {0}")]
     Io(#[from] io::Error),
 

@@ -4,8 +4,8 @@
 //! `references/spec-runtime` symlink content.
 //!
 //! Model-free by design: the judgment legs (`build` / `merge`) are covered
-//! natively in `contracts-core` against `MockModel`, and live
-//! against the cursor backend by the Milestone E proof harness.
+//! natively in the `contracts` crate against `MockModel`, and live
+//! against the cursor backend by the eval harness.
 
 use anyhow::{Context as _, Result};
 use omnia::wasmtime::component::Val;
@@ -18,8 +18,6 @@ use crate::common::{self, Bundle};
 /// The versioned interface name the target-adapter world exports.
 const TARGET_INTERFACE: &str = "specify:adapter/target@0.1.0";
 
-// guidance("target:contracts") through host-mediated dispatch returns the
-// embedded guidance prompt — the core registry riding inside the component.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn guidance_through_dispatch() -> Result<()> {
     let mount = tempfile::tempdir()?;
@@ -49,11 +47,10 @@ async fn guidance_through_dispatch() -> Result<()> {
     Ok(())
 }
 
-// build through dispatch exercises the async-lifted judgment leg (the
-// `async func` export awaiting `omnia:model/completion.create`): the
-// stub backend pends and then fails every completion, so the leg must
-// come back as the WIT error variant — not a trap — proving a pending
-// host future survives host-mediated dispatch.
+// The async-lifted `build` export awaits `omnia:model/completion.create`;
+// the stub backend pends then fails, so the leg must come back as the WIT
+// error variant — not a trap — proving a pending host future survives
+// host-mediated dispatch.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn build_bridge_survives_dispatch() -> Result<()> {
     let mount = tempfile::tempdir()?;
@@ -94,18 +91,12 @@ async fn build_bridge_survives_dispatch() -> Result<()> {
     Ok(())
 }
 
-// POST one JSON-RPC message to /mcp/contracts and parse the reply.
 async fn post(runtime: &Runtime<Bundle>, message: &Value) -> Result<Value> {
     let response = http::post_json(runtime, "/mcp/contracts", message.to_string()).await?;
     assert!(response.status().is_success(), "MCP POST replies 2xx: {}", response.status());
     serde_json::from_slice(response.body()).context("MCP reply is JSON")
 }
 
-// The route serves the embedded prose registry as an MCP references: initialize
-// identifies the server, resources/list carries the prompts as doc://
-// resources, read_doc returns a prompt body, and the resolved
-// `references/spec-runtime` symlink content is served under its
-// symlink-name path.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn references() -> Result<()> {
     let mount = tempfile::tempdir()?;
@@ -129,7 +120,10 @@ async fn references() -> Result<()> {
         .iter()
         .filter_map(|resource| resource["uri"].as_str())
         .collect();
-    assert!(uris.contains(&"doc://prompts/build.md"), "references lists the build prompt: {uris:?}");
+    assert!(
+        uris.contains(&"doc://prompts/build.md"),
+        "references lists the build prompt: {uris:?}"
+    );
     assert!(
         uris.contains(&"doc://references/spec-runtime/phase-outcome-contract.md"),
         "references lists the resolved spec-runtime symlink content: {uris:?}"

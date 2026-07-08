@@ -1,4 +1,4 @@
-//! Test doubles for the adapter-core suites.
+//! Test doubles for the adapter test suites.
 //!
 //! Consumed only through `[dev-dependencies]`, so nothing here can reach
 //! a shipped guest component's dependency graph — the structural

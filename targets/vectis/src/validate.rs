@@ -1,11 +1,9 @@
-//! Deterministic validation library for Vectis UI artifacts — schema +
-//! cross-artifact validation for tokens, assets, layout, and
-//! composition, plus an `all` fan-out.
+//! Schema + cross-artifact validation for Vectis UI artifacts
+//! (tokens, assets, layout, composition), plus an `all` fan-out.
 //!
-//! The guest's `build` / `merge` operations call [`run`] directly as
-//! their deterministic postlude gate. Provenance for every rule lives
-//! in the repository-root `DECISIONS.md` (§"Vectis validation and
-//! materialization").
+//! The guest's `build` / `merge` operations call [`run`] as their
+//! postlude gate. Rule provenance lives in the repository-root
+//! `DECISIONS.md` (§"Vectis validation and materialization").
 
 use std::path::Path;
 
@@ -15,8 +13,8 @@ pub mod engine;
 
 pub use engine::find_project_root;
 
-/// Re-export the crate-wide error type at the path the engine modules
-/// historically import (`crate::validate::error::VectisError`).
+/// Re-export of [`crate::VectisError`] at the path the engine modules
+/// import (`crate::validate::error::VectisError`).
 pub mod error {
     pub use crate::VectisError;
 }
@@ -64,16 +62,15 @@ pub fn run(mode: ValidateMode, path: Option<&Path>) -> Result<Value, crate::Vect
     engine::run(mode, path)
 }
 
-/// Compute the recursive validation exit code for a success payload:
-/// `1` when any real sub-report carries errors, `0` otherwise.
+/// Exit code for a success payload: `1` when any real sub-report
+/// carries errors, `0` otherwise.
 #[must_use]
 pub fn validate_exit_code(value: &Value) -> u8 {
     u8::from(envelope_has_errors(value))
 }
 
 /// Whether a validation envelope (or any folded sub-report) carries
-/// errors — the recursion `validate_exit_code` and the guest's
-/// deterministic postlude share.
+/// errors. Shared by `validate_exit_code` and the guest postlude.
 #[must_use]
 pub fn envelope_has_errors(node: &Value) -> bool {
     if node.get("errors").and_then(Value::as_array).is_some_and(|arr| !arr.is_empty()) {

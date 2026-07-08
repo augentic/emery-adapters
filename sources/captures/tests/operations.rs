@@ -1,11 +1,10 @@
 //! Captures-specific operation behavior: `kind: example` claims with the
 //! open `replay-digest` / `input` / `output` body fields.
 
-use captures_core as core;
 use std::path::Path;
 
 use adapter::seam::{Authority, ClaimKind, Context, Error, Lead};
-use core::operations::{describe, extract};
+use captures::operations::{describe, extract};
 use testkit::MockModel;
 
 fn ctx() -> Context<'static> {
@@ -24,9 +23,8 @@ fn lead() -> Lead {
     }
 }
 
-// The extract answer's `kind: example` claims carry open per-kind body
-// fields (`replay-digest`, `input`, `output`) the seam tolerates, under
-// the `behaviour` authority the adapter emits.
+// The open per-kind body fields (`replay-digest`, `input`, `output`)
+// must survive the seam's claim shape.
 #[tokio::test]
 async fn extract_parses_example_claims_with_replay_digests() {
     let model = MockModel::answering([r#"{
@@ -55,8 +53,7 @@ async fn extract_parses_example_claims_with_replay_digests() {
     );
 }
 
-// `example` claims are id-required by the evidence schema's conditional;
-// the deterministic tail enforces the same rule after the answer lands.
+// The tail mirrors the evidence schema's conditional id requirement.
 #[tokio::test]
 async fn extract_tail_rejects_idless_example_claims() {
     let model =
@@ -67,7 +64,6 @@ async fn extract_tail_rejects_idless_example_claims() {
     assert!(matches!(err, Error::Internal(detail) if detail.contains("require an id")));
 }
 
-// No model call.
 #[test]
 fn describe_declares_no_floor() {
     assert_eq!(describe().specify_floor, None);

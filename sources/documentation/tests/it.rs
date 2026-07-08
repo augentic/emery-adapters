@@ -1,4 +1,5 @@
-//! Consolidated integration binary for `documentation-core`.
+//! Consolidated integration binary for the `documentation` adapter's
+//! wasm-free modules.
 //!
 //! One binary per crate: each former `tests/<area>.rs` is pulled in here as a
 //! `#[path]` submodule so the crate-under-test links exactly once. See

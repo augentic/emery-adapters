@@ -532,18 +532,10 @@ name = "captures"
 version = "0.4.3"
 dependencies = [
  "adapter",
- "captures-core",
- "wasip3",
-]
-
-[[package]]
-name = "captures-core"
-version = "0.4.3"
-dependencies = [
- "adapter",
  "prose",
  "testkit",
  "tokio",
+ "wasip3",
 ]
 
 [[package]]
@@ -712,15 +704,6 @@ name = "contracts"
 version = "0.4.3"
 dependencies = [
  "adapter",
- "contracts-core",
- "wasip3",
-]
-
-[[package]]
-name = "contracts-core"
-version = "0.4.3"
-dependencies = [
- "adapter",
  "jsonschema",
  "prose",
  "semver",
@@ -730,6 +713,7 @@ dependencies = [
  "tempfile",
  "testkit",
  "tokio",
+ "wasip3",
 ]
 
 [[package]]
@@ -1097,18 +1081,10 @@ name = "documentation"
 version = "0.4.3"
 dependencies = [
  "adapter",
- "documentation-core",
- "wasip3",
-]
-
-[[package]]
-name = "documentation-core"
-version = "0.4.3"
-dependencies = [
- "adapter",
  "prose",
  "testkit",
  "tokio",
+ "wasip3",
 ]
 
 [[package]]
@@ -1913,18 +1889,10 @@ name = "intent"
 version = "0.4.3"
 dependencies = [
  "adapter",
- "intent-core",
- "wasip3",
-]
-
-[[package]]
-name = "intent-core"
-version = "0.4.3"
-dependencies = [
- "adapter",
  "prose",
  "testkit",
  "tokio",
+ "wasip3",
 ]
 
 [[package]]
@@ -2475,7 +2443,13 @@ name = "omnia"
 version = "0.4.3"
 dependencies = [
  "adapter",
- "omnia-core",
+ "jsonschema",
+ "prose",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "testkit",
+ "tokio",
  "wasip3",
 ]
 
@@ -2511,20 +2485,6 @@ dependencies = [
  "wasmtime-wasi-http",
  "wrpc-transport",
  "wrpc-wasmtime",
-]
-
-[[package]]
-name = "omnia-core"
-version = "0.4.3"
-dependencies = [
- "adapter",
- "jsonschema",
- "prose",
- "serde",
- "serde_json",
- "tempfile",
- "testkit",
- "tokio",
 ]
 
 [[package]]
@@ -3819,18 +3779,10 @@ name = "screenshots"
 version = "0.4.3"
 dependencies = [
  "adapter",
- "screenshots-core",
- "wasip3",
-]
-
-[[package]]
-name = "screenshots-core"
-version = "0.4.3"
-dependencies = [
- "adapter",
  "prose",
  "testkit",
  "tokio",
+ "wasip3",
 ]
 
 [[package]]
@@ -4706,18 +4658,10 @@ name = "typescript"
 version = "0.4.3"
 dependencies = [
  "adapter",
- "typescript-core",
- "wasip3",
-]
-
-[[package]]
-name = "typescript-core"
-version = "0.4.3"
-dependencies = [
- "adapter",
  "prose",
  "testkit",
  "tokio",
+ "wasip3",
 ]
 
 [[package]]
@@ -4853,15 +4797,6 @@ name = "vectis"
 version = "0.4.3"
 dependencies = [
  "adapter",
- "vectis-core",
- "wasip3",
-]
-
-[[package]]
-name = "vectis-core"
-version = "0.4.3"
-dependencies = [
- "adapter",
  "image",
  "jsonschema",
  "prose",
@@ -4877,6 +4812,7 @@ dependencies = [
  "tokio",
  "toml",
  "usvg",
+ "wasip3",
 ]
 
 [[package]]

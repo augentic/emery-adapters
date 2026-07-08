@@ -8,7 +8,7 @@
 //! Model-free by design, like the contracts and omnia tests: the
 //! judgment legs (`build` / `merge`) and the absorbed validate /
 //! materialize / prepare libraries are covered natively in
-//! `vectis-core` against `MockModel`.
+//! the `vectis` crate against `MockModel`.
 
 use anyhow::{Context as _, Result};
 use omnia::wasmtime::component::Val;
@@ -21,10 +21,6 @@ use crate::common::{self, Bundle};
 /// The versioned interface name the target-adapter world exports.
 const TARGET_INTERFACE: &str = "specify:adapter/target@0.1.0";
 
-// describe("target:vectis") through host-mediated dispatch returns the
-// compiled-in manifest record: no compatibility floor, the three
-// optional design-system build inputs, and the required platforms
-// capability.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn describe_through_dispatch() -> Result<()> {
     let mount = tempfile::tempdir()?;
@@ -90,9 +86,6 @@ async fn describe_through_dispatch() -> Result<()> {
     Ok(())
 }
 
-// guidance("target:vectis") through host-mediated dispatch in the composed
-// deployment returns the embedded guidance prompt — the core registry riding
-// inside the component, beside the other guests.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn guidance_through_dispatch() -> Result<()> {
     let mount = tempfile::tempdir()?;
@@ -122,16 +115,12 @@ async fn guidance_through_dispatch() -> Result<()> {
     Ok(())
 }
 
-// POST one JSON-RPC message to /mcp/vectis and parse the reply.
 async fn post(runtime: &Runtime<Bundle>, message: &Value) -> Result<Value> {
     let response = http::post_json(runtime, "/mcp/vectis", message.to_string()).await?;
     assert!(response.status().is_success(), "MCP POST replies 2xx: {}", response.status());
     serde_json::from_slice(response.body()).context("MCP reply is JSON")
 }
 
-// The route serves the embedded prose registry as an MCP references: initialize
-// identifies the server, read_doc returns a reference body, and a nested
-// per-platform build prompt is served under its full path.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn references() -> Result<()> {
     let mount = tempfile::tempdir()?;

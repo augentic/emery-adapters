@@ -1,10 +1,7 @@
-//! Per-target plan construction and the on-disk write step.
-//!
-//! Pure relocation from `scaffold.rs`: deterministic plan derivation
-//! per scaffold target (core / iOS / Android), all-or-nothing collision
-//! check, and the final `fs::write` pass under `PROJECT_DIR`. Public
-//! surface is unchanged; the parent re-exports `plan_core`, `plan_ios`,
-//! `plan_android`, `write_plan`, and `validate_app_name`.
+//! Per-target plan construction and the on-disk write step: plan
+//! derivation per scaffold target (core / iOS / Android), an
+//! all-or-nothing collision check, then the write pass under
+//! `PROJECT_DIR`.
 
 use std::fs;
 use std::path::Path;

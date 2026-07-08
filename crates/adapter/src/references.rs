@@ -1,12 +1,9 @@
 //! The MCP references server every adapter guest serves over `wasi:http`.
 //!
-//! The serving surface is identical across adapters — `list_docs` /
-//! `read_doc` tools plus `doc://` resources over an embedded prose
-//! registry — so one [`References`] implements `omnia_guest::mcp::McpServer`
-//! for all of them; a shim differs only in its server name and doc table.
-//! The `McpServer` implementation is `wasm32`-gated with the rest of the
-//! guest-only plumbing (the references server is exercised end to end by
-//! the composed runtime tests); the [`mcp_url`] env convention is wasm-free.
+//! The surface is identical across adapters — `list_docs` / `read_doc`
+//! tools plus `doc://` resources over an embedded prose registry — so one
+//! `References` implements `omnia_guest::mcp::McpServer` for all of
+//! them; a shim differs only in its server name and doc table.
 
 /// The adapter's own MCP references URL from the environment.
 ///
@@ -39,25 +36,22 @@ mod wasm {
 
     use crate::registry::{self, Doc};
 
-    /// An embedded prose registry served over MCP: every prompt and
-    /// reference document the adapter compiled in, addressable by its
+    /// An embedded prose registry served over MCP, addressable by
     /// adapter-relative path.
     #[derive(Clone, Copy, Debug)]
     pub struct References {
         /// Server identity reported in the `initialize` handshake, e.g.
         /// `contracts-references`.
         pub server_name: &'static str,
-        /// Server version reported alongside the name — the shim's own
-        /// `CARGO_PKG_VERSION`.
+        /// Server version — the shim's own `CARGO_PKG_VERSION`.
         pub version: &'static str,
-        /// The sorted embedded doc table the references server serves.
+        /// The sorted embedded doc table to serve.
         pub docs: &'static [Doc],
     }
 
     impl References {
         /// Serve one `wasi:http/incoming-handler` request over this
-        /// references server's MCP router — the shared leg every adapter
-        /// shim wires through its `HttpGuest`.
+        /// server's MCP router.
         pub async fn serve(
             self, request: wasip3::http::types::Request,
         ) -> Result<wasip3::http::types::Response, wasip3::http::types::ErrorCode> {

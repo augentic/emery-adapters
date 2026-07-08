@@ -2,5 +2,5 @@
 //! `src/registry.rs` includes; symlinks resolve at build time.
 
 fn main() {
-    prose::emit_core(&["prompts", "references"]);
+    prose::emit_adapter(&["prompts", "references"]);
 }

@@ -1,6 +1,6 @@
 # Omnia target — build prompt
 
-> The omnia adapter core inlines this document into the system prompt of every build leg — generation, standards review, capture replay, and the report — alongside the leg's own prompt under [`build/`](build/). Leg sequencing lives in the adapter core (`core/src/operations.rs`), not here: each leg's user prompt names the sections of this document to follow. Synthesis idioms (provider DI, WASM guardrails, error variants, validation placement) live in [`guidance.md`](guidance.md) and must already be reflected in the slice's `specs/<domain>/spec.md` + `design.md` before the build runs.
+> The omnia adapter core inlines this document into the system prompt of every build leg — generation, standards review, capture replay, and the report — alongside the leg's own prompt under [`build/`](build/). Leg sequencing lives in the adapter core (`src/operations.rs`), not here: each leg's user prompt names the sections of this document to follow. Synthesis idioms (provider DI, WASM guardrails, error variants, validation placement) live in [`guidance.md`](guidance.md) and must already be reflected in the slice's `specs/<domain>/spec.md` + `design.md` before the build runs.
 
 ## Inputs and bindings
 

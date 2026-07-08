@@ -1,8 +1,7 @@
 //! The embedded prose registry: coverage across all three trees,
 //! nested build prompts, ordering, and symlink resolution.
 
-use vectis_core as core;
-use core::registry;
+use vectis::registry;
 
 #[test]
 fn registry_embeds_prompts_references_and_rules() {

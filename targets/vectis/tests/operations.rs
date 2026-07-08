@@ -1,10 +1,9 @@
 //! The judgment operation template against the scripted [`MockModel`]:
 //! the deterministic prepare prelude, the prompt-driven phase legs, the
-//! in-core composition validator gate with its bounded repair, the
+//! in-guest composition validator gate with its bounded repair, the
 //! declared-platform shell-leg filter, and the deterministic report
 //! gate.
 
-use vectis_core as core;
 use std::fs;
 use std::path::Path;
 
@@ -15,7 +14,7 @@ use adapter::seam::{
 use adapter::{Format, Request};
 use tempfile::TempDir;
 use testkit::MockModel;
-use core::operations::{build, describe, guidance, merge};
+use vectis::operations::{build, describe, guidance, merge};
 
 const PHASE_DONE: &str = r#"{"applicable":true,"summary":"phase complete"}"#;
 const SHELL_SKIPPED: &str = r#"{"applicable":false,"summary":"no shell work in this slice"}"#;
@@ -77,10 +76,7 @@ async fn build_runs_prelude_then_phase_legs_then_report() {
     let requests = model.requests();
     assert_eq!(requests.len(), 6, "composition, core, two shells, review, then one report call");
 
-    // First leg: composition — the parent build prompt plus the guidance
-    // refresher and the composition prompt, the deterministic prepare
-    // prelude's summary, the adapter's own MCP grant, and the workspace
-    // lend.
+    // First leg: composition.
     let first = &requests[0];
     let system = first.system.as_deref().unwrap();
     assert!(system.contains("# Vectis target — build prompt"), "build prompt in system");
@@ -105,9 +101,8 @@ async fn build_runs_prelude_then_phase_legs_then_report() {
     assert!(first.lend_workspace);
     assert_eq!(first.mcp[0].url, "http://references/mcp");
 
-    // The prompt's phase order: core (Phases 2-3), the two shell writes
-    // (Phases 4-5), review (Phases 6-7), then the report leg gated by
-    // the derived answer schema.
+    // Phase order: core, the two shell writes, review, then the report
+    // leg gated by the derived answer schema.
     let core = &requests[1];
     assert_eq!(schema_format(core).0, "core");
     assert!(core.system.as_deref().unwrap().contains("# Vectis build — core (write)"));
@@ -173,11 +168,9 @@ async fn declared_core_only_platforms_skip_the_shell_legs() {
 #[tokio::test]
 async fn composition_validator_findings_feed_the_bounded_repair_loop() {
     let tmp = TempDir::new().unwrap();
-    // An unparseable composition triggers the in-core validator gate;
-    // the mock never fixes the file, so both bounded repair iterations
-    // fire, the exhausted gate parks the slice with a deterministic
-    // failure report, and no downstream core / shell / review / report
-    // leg is spent against the knowingly-broken composition.
+    // The mock never fixes the unparseable composition, so both bounded
+    // repair iterations fire and no downstream leg is spent against the
+    // knowingly-broken composition.
     let slice_dir = tmp.path().join(".specify/slices/demo");
     fs::create_dir_all(&slice_dir).unwrap();
     fs::write(slice_dir.join("composition.yaml"), "screens: [broken\n").unwrap();
@@ -204,9 +197,8 @@ async fn composition_validator_findings_feed_the_bounded_repair_loop() {
 #[tokio::test]
 async fn missing_output_triggers_bounded_repair_then_enforcement() {
     let tmp = TempDir::new().unwrap();
-    // The success report declares `shared/src/app.rs`, which never
-    // appears in the tree; the single bounded repair leg fires and the
-    // residual discrepancy overrides the repeated success answer.
+    // The declared output never appears in the tree; the residual
+    // discrepancy overrides the repeated success answer.
     let model = MockModel::answering([
         PHASE_DONE,
         PHASE_DONE,
@@ -277,12 +269,8 @@ async fn build_with_composition(composition: Option<&str>, report_answer: &'stat
     report
 }
 
-/// The A4 ui-surface coherence walk in the deterministic report gate:
-/// the two mismatch warnings (non-UI claim against a `screens:` /
-/// `delta:` surface, UI claim against an empty or absent composition),
-/// the coherent silent pairs, the absent-signal back-compat path, and
-/// the all-empty `delta:` envelope. Warnings are `suggestion` severity
-/// and never fail the report.
+/// The A4 ui-surface coherence walk in the deterministic report gate.
+/// Warnings are `suggestion` severity and never fail the report.
 #[tokio::test]
 async fn ui_surface_coherence() {
     const NON_UI: &str = r#"{"status":"success","findings":[],"ui-surface":{"screens":0}}"#;
@@ -291,7 +279,7 @@ async fn ui_surface_coherence() {
     const EMPTY_SCREENS: &str = "version: 1\nscreens: {}\n";
 
     // screens == 0 against a non-empty `screens:` composition warns
-    // unexpected-for-non-ui; the warning never blocks or fails.
+    // unexpected-for-non-ui.
     let report = build_with_composition(Some(SCREENS), NON_UI).await;
     assert_eq!(report.status, Status::Success, "coherence warnings never fail the report");
     assert_eq!(report.findings.len(), 1, "expected one warning, got {:?}", report.findings);
@@ -373,8 +361,7 @@ async fn merge_is_one_report_leg_with_postlude_gate() {
 async fn merge_gates_the_merged_baseline_composition() {
     let tmp = TempDir::new().unwrap();
     // A broken merged baseline composition is caught by the postlude's
-    // in-core validator; the bounded repair leg fires once and the
-    // residual findings force failure.
+    // in-guest validator; residual findings force failure.
     fs::create_dir_all(tmp.path().join(".specify/specs")).unwrap();
     fs::write(tmp.path().join(".specify/specs/composition.yaml"), "screens: [broken\n").unwrap();
     let model = MockModel::answering([SUCCESS_REPORT, SUCCESS_REPORT]);
@@ -409,7 +396,6 @@ async fn merge_success_with_blocking_finding_downgrades() {
     assert_eq!(report.findings[0].rule_id.as_deref(), Some("VECTIS-006"));
 }
 
-// No model call.
 #[test]
 fn describe_declares_inputs_and_platforms() {
     let manifest = describe();

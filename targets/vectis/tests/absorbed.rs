@@ -1,36 +1,26 @@
 //! Re-homed kernel tests for the absorbed libraries.
 
-use vectis_core as core;
 use image::{ImageFormat, Rgba, RgbaImage};
 use serde_json::{Map, Value, json};
 use tempfile::tempdir;
-use core::VectisError;
-use core::materialize::app_icon::android::{
-    resolve_launcher_background, write_android_export,
-};
-use core::materialize::app_icon::decode_to_launcher_canvas;
-use core::materialize::paths::{
+use vectis::VectisError;
+use vectis::materialize::app_icon::android::{resolve_launcher_background, write_android_export};
+use vectis::materialize::app_icon::decode_to_launcher_canvas;
+use vectis::materialize::paths::{
     ANDROID_DENSITIES, Platform, android_density_factor, export_layout, ios_raster_filename,
     ios_scale_factor, kebab_to_snake,
 };
-use core::materialize::render::{render_tree_to_png, scaled_dimensions};
-use core::materialize::svg::{collect_paths, parse_vector_svg, path_data_string};
-use core::materialize::yaml_pins::{AutoPin, apply_auto_pins, collect_auto_pins};
-use core::materialize::{AssetsArgs, MaterializeCommand, run as materialize_run};
-use core::validate::engine::composition::{
-    build_group_skeleton, fingerprint, skeleton_to_json,
-};
-use core::validate::engine::{
-    conventional_export_exists, imageset_has_materialized_content,
-};
+use vectis::materialize::render::{render_tree_to_png, scaled_dimensions};
+use vectis::materialize::svg::{collect_paths, parse_vector_svg, path_data_string};
+use vectis::materialize::yaml_pins::{AutoPin, apply_auto_pins, collect_auto_pins};
+use vectis::materialize::{AssetsArgs, MaterializeCommand, run as materialize_run};
+use vectis::validate::engine::composition::{build_group_skeleton, fingerprint, skeleton_to_json};
+use vectis::validate::engine::{conventional_export_exists, imageset_has_materialized_content};
 
 const TRIANGLE: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
   <path fill="#010203" d="M12 2L2 22h20z"/>
 </svg>"##;
 
-// The platform filter defaults to both platforms, dedupes repeats, and
-// rejects an unknown platform id — observed through the public [`run`]
-// entry point (the summary's `platforms` echo and the typed error).
 #[test]
 fn platform_filter_matrix() {
     let tmp = tempdir().expect("tempdir");
@@ -57,10 +47,7 @@ fn platform_filter_matrix() {
     assert!(matches!(err, VectisError::InvalidProject { .. }));
 }
 
-// `kebab_to_snake`, `ios_scale_factor`, `android_density_factor`, and
-// `ios_raster_filename` are the scalar path helpers; one matrix pins the
-// kebab→snake translation, every iOS/Android scale factor, and the
-// imageset filename suffix convention (`1x` omits `@`).
+// Pins the platform naming conventions (`1x` omits the `@` suffix).
 #[test]
 fn scale_and_filename_conventions() {
     assert_eq!(kebab_to_snake("onboarding-hero"), "onboarding_hero");
@@ -78,10 +65,6 @@ fn scale_and_filename_conventions() {
     assert_eq!(ios_raster_filename("hero", "2x"), "hero@2x.png");
 }
 
-// `export_layout` resolves each (role, kind, platform) to its conventional
-// pin + ordered artifact list. The deterministic full-list cases collapse
-// into one table; `decorative/vector` aliases `icon/vector`, and the
-// 13-artifact android app-icon tree is asserted by shape.
 #[test]
 fn export_layout_matrix() {
     struct Case {
@@ -193,10 +176,8 @@ fn unsupported_roles_return_none() {
     assert!(export_layout("icon", "raster", Platform::Android, "badge").is_none());
 }
 
-// `collect_auto_pins` keeps one pin per (asset, platform) — the artifact
-// entry wins over the sidecar Contents.json — and `apply_auto_pins` fills
-// only absent platform slots, leaving an existing `ios` pin untouched while
-// adding the missing `android` one.
+// The artifact entry wins over the sidecar Contents.json; auto-pins fill
+// only absent platform slots.
 #[test]
 fn yaml_pins_matrix() {
     let assets = Map::from_iter([(
@@ -240,10 +221,6 @@ fn yaml_pins_matrix() {
     assert_eq!(sources["android"], "assets/exports/android/drawable/settings.xml");
 }
 
-// `parse_vector_svg` parses a clean icon (positive size) and
-// `path_data_string` emits space-separated coords; an unsupported
-// `<filter>` def is rejected with an error naming the asset and
-// `filters`.
 #[test]
 fn svg_parse_matrix() {
     let parsed = parse_vector_svg(TRIANGLE.as_bytes(), "tri").expect("parse");
@@ -261,9 +238,6 @@ fn svg_parse_matrix() {
     assert!(err.contains("filters"));
 }
 
-// `scaled_dimensions` scales the 24×24 viewBox by the requested factor and
-// `render_tree_to_png` emits a PNG (magic header, non-trivial length) that
-// is byte-identical across repeated renders of the same tree.
 #[test]
 fn render_tree_matrix() {
     let parsed = parse_vector_svg(TRIANGLE.as_bytes(), "tri").expect("parse");
@@ -279,8 +253,6 @@ fn render_tree_matrix() {
     assert_eq!(first, second);
 }
 
-// `resolve_launcher_background` resolves a tint token to its light hex via
-// tokens.yaml and falls back to the default `#FFFFFF` when no tint is set.
 #[test]
 fn resolve_launcher_background_matrix() {
     let tmp = tempdir().expect("tempdir");
@@ -336,9 +308,6 @@ fn write_android_export_creates_required_tree() {
     assert!(round.contains("adaptive-icon"));
 }
 
-// `decode_to_launcher_canvas` accepts a 1024² opaque raster without
-// upscaling and rejects a sub-1024 raster (naming the dimension).
-// Transparent raster masters decode successfully with alpha preserved.
 #[test]
 fn decode_to_launcher_canvas_matrix() {
     let tmp = tempdir().expect("tempdir");
@@ -369,10 +338,7 @@ fn decode_to_launcher_canvas_matrix() {
     assert_eq!(canvas.image.get_pixel(0, 0)[3], 128);
 }
 
-// `conventional_export_exists` accepts an android vector drawable xml and an
-// android raster density png, and for an ios raster imageset requires a
-// materialized file beyond Contents.json (which `imageset_has_materialized_content`
-// alone reports false for).
+// An ios raster imageset needs a materialized file beyond Contents.json.
 #[test]
 fn conventional_export_matrix() {
     let tmp = tempdir().expect("tempdir");
@@ -405,10 +371,7 @@ fn group(items: Value) -> Value {
     Value::Object(map)
 }
 
-// `fingerprint` is stable across calls and ignores bind/event wiring values
-// (tolerance lives in normalisation, never the hash), but distinguishes an
-// extra item and a differing when-key presence; `skeleton_to_json` mirrors
-// the tree shape (when_keys + nested items).
+// Bind/event wiring tolerance lives in normalisation, never the hash.
 #[test]
 fn fingerprint_and_skeleton_matrix() {
     let skeleton = build_group_skeleton(&group(json!([

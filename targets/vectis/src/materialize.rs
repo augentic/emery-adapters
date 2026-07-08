@@ -5,8 +5,8 @@ pub mod icons;
 pub mod illustrations;
 pub mod paths;
 mod raster_copy;
-// `render`, `svg`, and `yaml_pins` are public so the crate's integration
-// suite can pin their kernels directly (the re-homed src unit tests).
+// `render`, `svg`, and `yaml_pins` are public so the integration suite
+// can pin their kernels directly.
 pub mod render;
 mod rgba;
 pub mod svg;

@@ -8,9 +8,8 @@
 //! `adapter::target::export!(Adapter with_types_in
 //! adapter::target)`.
 //!
-//! The [`From`] impls below map the generated seam records onto the
-//! wasm-free [`crate::seam`] vocabulary at the export boundary, so the
-//! shims stay thin delegations to their core crates.
+//! The [`From`] impls map the generated records onto the [`crate::seam`]
+//! vocabulary at the export boundary.
 
 mod generated {
     #![allow(

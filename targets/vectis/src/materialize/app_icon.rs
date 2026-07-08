@@ -1,7 +1,7 @@
 //! App-icon materialization — shared launcher canvas and per-platform exports.
 
-// `android` is public so the crate's integration suite can pin the
-// adaptive/legacy export tree directly (the re-homed src unit tests).
+// `android` is public so the integration suite can pin the
+// adaptive/legacy export tree directly.
 pub mod android;
 mod canvas;
 mod ios;
@@ -141,12 +141,3 @@ fn record_app_icon_normalization(
     }
     crate::materialize::push_normalization_entry(normalized, asset_id, &transforms);
 }
-
-// The public `materialize_app_icons` funnel is exercised end-to-end through the
-// CLI by `tests/engine/materialize_app_icon.rs`: ios + android SVG exports
-// (`materialize_app_icon_{ios,android}_exports_exist`), the small-raster
-// rejection (`materialize_app_icon_{ios,android}_rejects_small_raster`), and the
-// pinned-export skip (`materialize_app_icon_skips_pinned_{ios,android}_export`).
-// Tint-token background resolution is unit-covered by
-// `app_icon::android`'s `resolve_launcher_background_matrix`, and the
-// actool-friendly `Contents.json` layout by `app_icon::ios`'s appiconset test.

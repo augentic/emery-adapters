@@ -1,4 +1,4 @@
-//! Android toolchain + compile-artifact probes for the in-guest shell-verify gate.
+//! Android toolchain + compile-artifact probes for the shell-verify gate.
 //!
 //! Compilation is driven by `make verify` in the Android shell; this module
 //! checks that host-side setup artifacts and the debug APK are present on disk.

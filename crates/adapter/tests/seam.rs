@@ -27,8 +27,6 @@ fn inputs_carry_prompt_labels_and_bodies() {
     }
 }
 
-// The model error taxonomy folds onto the seam's WIT-shaped variant:
-// invalid requests map through, everything else is internal.
 #[test]
 fn model_errors_map_onto_seam_errors() {
     assert_eq!(

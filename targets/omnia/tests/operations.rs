@@ -2,14 +2,13 @@
 //! prompt assembly, schema-gated formats, the phase-leg decomposition,
 //! and the deterministic report-coherence gate with its bounded repair.
 
-use omnia_core as core;
 use std::fs;
 use std::path::Path;
 
 use adapter::answers::REPORT_ANSWER_SCHEMA;
 use adapter::seam::{Changeset, Context, Edit, Error, Input, Severity, Status, WorkingTree};
 use adapter::{Error as ModelError, Format, Request};
-use core::operations::{build, describe, guidance, merge};
+use omnia::operations::{build, describe, guidance, merge};
 use tempfile::TempDir;
 use testkit::MockModel;
 
@@ -67,9 +66,6 @@ async fn build_runs_phase_legs_then_report() {
     let requests = model.requests();
     assert_eq!(requests.len(), 4, "generation, review, replay, then one report call");
 
-    // First leg: generation — the build prompt plus the guidance
-    // refresher and all three writer prompts (the verify-repair loop
-    // crosses them), the adapter's own MCP grant, and the workspace lend.
     let first = &requests[0];
     let system = first.system.as_deref().unwrap();
     assert!(system.contains("# Omnia target — build prompt"), "build prompt in system");
@@ -89,9 +85,6 @@ async fn build_runs_phase_legs_then_report() {
     assert!(first.lend_workspace);
     assert_eq!(first.mcp[0].url, "http://references/mcp");
 
-    // Fixed leg order: review carries the review prompt, replay the
-    // replay prompt, then the report leg gated by the derived answer
-    // schema.
     let review = &requests[1];
     assert_eq!(schema_format(review).0, "review");
     assert!(review.system.as_deref().unwrap().contains("# Omnia build — standards review"));
@@ -109,9 +102,6 @@ async fn build_runs_phase_legs_then_report() {
 #[tokio::test]
 async fn missing_output_triggers_bounded_repair_then_enforcement() {
     let tmp = TempDir::new().unwrap();
-    // The success report declares `crates/demo`, which never appears in
-    // the tree; the single bounded repair leg fires and the residual
-    // discrepancy overrides the repeated success answer.
     let model = MockModel::answering([
         PHASE_DONE,
         PHASE_DONE,
@@ -270,8 +260,6 @@ async fn merge_success_with_blocking_finding_downgrades() {
 #[tokio::test]
 async fn merge_missing_output_repairs_then_enforces() {
     let tmp = TempDir::new().unwrap();
-    // The mock never writes the declared output, so the bounded repair
-    // leg fires once and enforcement appends the residual discrepancy.
     let model = MockModel::answering([SUCCESS_WITH_MISSING_OUTPUT, SUCCESS_WITH_MISSING_OUTPUT]);
     let delta = Changeset {
         base: "rev-1".to_string(),
@@ -285,7 +273,6 @@ async fn merge_missing_output_repairs_then_enforces() {
     assert_eq!(model.requests().len(), 2, "one merge leg plus one bounded repair leg");
 }
 
-// No model call.
 #[test]
 fn describe_declares_nothing() {
     let manifest = describe();

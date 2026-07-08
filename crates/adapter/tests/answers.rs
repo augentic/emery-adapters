@@ -7,8 +7,6 @@ use adapter::answers::{
 };
 use adapter::seam::{Authority, Backing, ClaimKind, Error, Severity, Status};
 
-// The three embedded pins are the vendored crates/adapter/schemas/answers/ documents,
-// byte-identical to the files on disk.
 #[test]
 fn schema_pins_match_vendored_files() {
     for (pin, file) in [
@@ -24,8 +22,6 @@ fn schema_pins_match_vendored_files() {
     }
 }
 
-// A survey answer's `leads[]` envelope deserializes into seam leads; an
-// omitted `topics` key means unclassified, never an error.
 #[test]
 fn leads_answer_deserializes() {
     let leads = parse_leads(
@@ -45,9 +41,8 @@ fn leads_answer_deserializes() {
     assert!(parse_leads(r#"[{"lead":"bare"}]"#).is_err(), "a bare array is not the envelope");
 }
 
-// An extract answer deserializes into the Evidence shape: kebab-case
-// keys, the closed authority / kind enums, both backing variants, and
-// open per-kind body fields (`replay-digest`, `input`, …) tolerated.
+// Covers both backing variants and tolerated open per-kind body fields
+// (`replay-digest`, `input`, …).
 #[test]
 fn evidence_answer_deserializes() {
     let evidence = parse_evidence(
@@ -86,10 +81,8 @@ fn evidence_answer_deserializes() {
     assert!(claim.id.is_none() && claim.path.is_none() && claim.synopsis.is_none());
 }
 
-// The two modeled open body fields (`synopsis`, `backing`) are lenient:
-// the answer schema does not pin their shape, so a schema-valid answer
-// carrying them in an unexpected shape drops the field instead of
-// failing the whole extract.
+// The answer schema does not pin the shape of `synopsis` / `backing`, so
+// an unexpected shape drops the field instead of failing the extract.
 #[test]
 fn evidence_open_body_fields_are_lenient() {
     let evidence = parse_evidence(
@@ -111,9 +104,6 @@ fn evidence_open_body_fields_are_lenient() {
     assert_eq!(clean.backing, Some(Backing::Payload("ADR-7".to_string())));
 }
 
-// The deterministic survey tail re-checks the id grammar the leads schema
-// pins: kebab-case lead ids and content-bearing synopses pass; violations
-// come back as one findings-style internal error.
 #[test]
 fn leads_validation_tail() {
     let clean = parse_leads(
@@ -136,9 +126,6 @@ fn leads_validation_tail() {
     assert!(detail.contains("synopsis is empty"), "finding names the empty synopsis: {detail}");
 }
 
-// The deterministic extract tail mirrors the evidence schema's conditional
-// id requirement (requirement / criterion / example claims) and the
-// dotted-kebab id pattern.
 #[test]
 fn evidence_validation_tail() {
     let clean = parse_evidence(
@@ -164,9 +151,6 @@ fn evidence_validation_tail() {
     assert!(detail.contains("`Not.Valid`"), "finding names the malformed id: {detail}");
 }
 
-// The report answer carries the full diagnostic shape and projects onto
-// the compact seam report: rule-id and severity map through, prose folds
-// into detail, and omitted keys take their defaults.
 #[test]
 fn report_answer_projects_onto_seam() {
     let answer = ReportAnswer::parse(

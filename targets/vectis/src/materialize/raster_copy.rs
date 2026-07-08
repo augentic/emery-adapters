@@ -141,10 +141,3 @@ fn copy_file(assets_dir: &Path, source_rel: &str, export_rel: &str) -> Result<()
         .map_err(|err| format!("copy `{source_rel}` → `{export_rel}` failed: {err}"))?;
     Ok(())
 }
-
-// `materialize_photo_rasters` (the copy-only `role: photo` funnel) is exercised
-// end-to-end through the CLI by
-// `tests/engine/materialize_illustrations.rs::materialize_photo_copies_density_slots`,
-// which materializes both the ios imageset (`@2x`) and the android
-// drawable-density (`mdpi`) slots and asserts byte-identical copies, so the
-// `src` unit was re-homed.

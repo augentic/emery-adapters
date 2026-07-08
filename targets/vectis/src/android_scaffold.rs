@@ -1,10 +1,9 @@
 //! Android agent-immutable scaffold file sync and drift detection.
 //!
-//! `Android/Makefile`, `Android/settings.gradle.kts`, `Android/build.gradle.kts`,
-//! `Android/app/build.gradle.kts`, and `Android/shared/build.gradle.kts` are
-//! rendered exclusively from the embedded scaffold templates. Verify emits
-//! blocking findings when on-disk bytes diverge; [`sync_android_scaffold_files`]
-//! repairs drift without prepare side effects.
+//! The [`IMMUTABLE_RELATIVE_PATHS`] files are rendered exclusively from
+//! the embedded scaffold templates. Verify emits blocking findings when
+//! on-disk bytes diverge; [`sync_android_scaffold_files`] repairs drift
+//! without prepare side effects.
 
 use std::fmt::Write;
 use std::fs;

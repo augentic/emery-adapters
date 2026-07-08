@@ -1,8 +1,7 @@
 //! The embedded prose registry: coverage across all three trees,
 //! ordering, and symlink resolution.
 
-use omnia_core as core;
-use core::registry;
+use omnia::registry;
 
 #[test]
 fn registry_embeds_prompts_references_and_rules() {

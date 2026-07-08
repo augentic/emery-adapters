@@ -1,4 +1,5 @@
-//! Consolidated integration binary for `vectis-core`.
+//! Consolidated integration binary for the `vectis` adapter's
+//! wasm-free modules.
 //!
 //! One binary per crate: each former `tests/<area>.rs` is pulled in here as a
 //! `#[path]` submodule so the crate-under-test links exactly once. See

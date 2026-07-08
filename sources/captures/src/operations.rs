@@ -1,6 +1,5 @@
-//! The judgment operations: `survey` and `extract` — schema-gated legs
-//! through [`adapter::judgment`] with deterministic id-grammar
-//! tails.
+//! The judgment operations: `survey` and `extract` — schema-gated
+//! legs through [`adapter::judgment`] with id-grammar tails.
 //!
 //! The judgment detail — the capture-tree layout, the
 //! `kind: example` claim shape with `replay-digest` anchors, the 64 KiB
@@ -14,17 +13,13 @@ use adapter::{Model, judgment};
 
 use crate::registry;
 
-/// Deterministic self-description for the `describe` operation.
-///
-/// Resolve-time metadata answered from compiled-in constants: no
-/// compatibility floor is declared, matching the retired manifest.
+/// Resolve-time `describe` metadata: no compatibility floor.
 #[must_use]
 pub const fn describe() -> SourceManifest {
     SourceManifest { specify_floor: None }
 }
 
-/// How the spawned agent resolves its bound source material — the
-/// session-less state note both prompts carry.
+/// Session-less state note both prompts carry.
 const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and there is no \
                             session: every input you need lives in the workspace tree and this \
                             prompt. Resolve the bound source material from the plan — read \
@@ -35,9 +30,9 @@ const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and
                             `tests/data/replays/<handler>/` layout `/capture:wiretapper` \
                             writes).";
 
-/// Survey the bound capture tree into leads (one per captured handler) —
-/// one schema-gated judgment leg over the embedded `prompts/survey.md`,
-/// followed by the deterministic id-grammar tail.
+/// Survey the bound capture tree into leads (one per captured handler)
+/// — one schema-gated leg over `prompts/survey.md`, then the
+/// id-grammar tail.
 ///
 /// # Errors
 ///
@@ -66,9 +61,8 @@ pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>,
 
 /// Extract one lead's behavioural Evidence from the bound capture tree.
 ///
-/// One schema-gated judgment leg over the embedded `prompts/extract.md`
-/// (emitting `kind: example` claims with `replay-digest` anchors),
-/// followed by the deterministic claim-id tail.
+/// One leg over `prompts/extract.md` (emitting `kind: example` claims
+/// with `replay-digest` anchors), then the claim-id tail.
 ///
 /// # Errors
 ///

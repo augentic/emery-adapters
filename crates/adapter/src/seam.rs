@@ -1,12 +1,9 @@
-//! The wasm-free seam vocabulary shared by every adapter core.
+//! Seam vocabulary shared by every adapter core, mirroring the
+//! `specify:adapter` WIT records and variants.
 //!
-//! These types mirror the `specify:adapter` WIT records and variants —
-//! the source axis (`lead`, `evidence`, `claim`) and the target axis
-//! (`input`, `working-tree`, `report`, `finding`) plus the shared
-//! `types.error` / `types.changeset` vocabulary — so all adapter cores
-//! speak one language. The shared `crate::source` / `crate::target`
-//! bindings map these records onto the generated seam types at the
-//! export boundary; the cores stay bindgen-free and natively testable.
+//! The `crate::source` / `crate::target` bindings map these onto the
+//! generated types at the export boundary, keeping the cores
+//! bindgen-free and natively testable.
 //!
 //! Only the types an answer deserializes into carry serde derives; the
 //! rest are plain data the shims construct by hand.
@@ -17,7 +14,7 @@ use serde::Deserialize;
 
 use crate::model::McpGrant;
 
-/// The error returned by operations — mirrors the WIT `types.error` variant.
+/// Operation error — mirrors the WIT `types.error` variant.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
     /// The request itself is malformed.
@@ -43,21 +40,17 @@ impl From<crate::model::Error> for Error {
 /// Call-scoped environment the shim resolves and hands to every operation.
 #[derive(Clone, Copy, Debug)]
 pub struct Context<'a> {
-    /// The plan-bound adapter identity this call was routed by, e.g.
-    /// `target:contracts`.
+    /// Adapter identity this call was routed by, e.g. `target:contracts`.
     pub adapter_id: &'a str,
     /// The guest's `"."` preopen root (the shared project mount).
     pub project_root: &'a Path,
-    /// The adapter's own MCP references endpoint, granted to the
-    /// spawned agent so it can fetch `doc://` references lazily. Read
-    /// from the environment by the shim, never hardcoded.
+    /// The adapter's MCP references endpoint, granted to the spawned
+    /// agent so it can fetch `doc://` references lazily.
     pub mcp_url: Option<&'a str>,
 }
 
 impl<'a> Context<'a> {
-    /// The call-scoped guest context: every guest in the deployment
-    /// shares the same `[[mount]]` preopens, so the operation root is the
-    /// guest's own `"."`.
+    /// Guest-side context rooted at the guest's own `"."` preopen.
     #[must_use]
     pub fn guest(adapter_id: &'a str, mcp_url: Option<&'a str>) -> Self {
         Self {
@@ -67,10 +60,9 @@ impl<'a> Context<'a> {
         }
     }
 
-    /// The MCP grants offered on every judgment leg: the adapter's own
-    /// references, when the shim resolved its endpoint. The grant is
-    /// named `<name>-references` after the axis-stripped adapter id
-    /// (`target:contracts` grants `contracts-references`).
+    /// MCP grants offered on every judgment leg: the adapter's own
+    /// references, when an endpoint is set. Named `<name>-references`
+    /// after the axis-stripped adapter id.
     #[must_use]
     pub fn grants(&self) -> Vec<McpGrant> {
         let name = self.adapter_id.rsplit(':').next().unwrap_or(self.adapter_id);
@@ -134,9 +126,7 @@ impl Input {
     }
 }
 
-/// Names the tree an operation works on — mirrors the WIT `working-tree`
-/// record. The adapter opens its own `"."` preopen; `subpath` scopes the
-/// operation beneath the shared mount root.
+/// The tree an operation works on — mirrors the WIT `working-tree` record.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WorkingTree {
     /// The snapshot the operation applies against.
@@ -163,7 +153,7 @@ pub struct Changeset {
     pub edits: Vec<Edit>,
 }
 
-/// Closed review severity enum, ordered for sort stability.
+/// Review severity, ordered for sort stability.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "kebab-case")]
 pub enum Severity {
@@ -195,7 +185,7 @@ pub enum Status {
     Failure,
 }
 
-/// Closed target platform taxonomy.
+/// Target platform taxonomy.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum Platform {
@@ -229,7 +219,7 @@ pub struct UiSurface {
     pub screens: u32,
 }
 
-/// Compact seam projection of one diagnostic — the WIT `finding` record.
+/// One diagnostic — mirrors the WIT `finding` record.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Finding {
     /// Rule identifier, absent for findings that cite no codex policy.
@@ -253,8 +243,8 @@ impl Finding {
     }
 }
 
-/// Judgment returned by `build` and `merge` — the WIT `report` record.
-/// The resulting state lives in the working tree, not here.
+/// Judgment returned by `build` and `merge` — mirrors the WIT `report`
+/// record. The resulting state lives in the working tree, not here.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Report {
     /// Operation outcome.
@@ -267,9 +257,8 @@ pub struct Report {
     pub ui_surface: Option<UiSurface>,
 }
 
-/// A source adapter's deterministic self-description — mirrors the WIT
-/// `source.manifest` record. Metadata the host reads at resolve
-/// time, answerable from compiled-in constants.
+/// A source adapter's self-description — mirrors the WIT `source.manifest`
+/// record. Read by the host at resolve time from compiled-in constants.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SourceManifest {
     /// Optional host-CLI compatibility floor (exact minimum `specify`
@@ -299,9 +288,8 @@ pub struct PlatformsCapability {
     pub default: Vec<Platform>,
 }
 
-/// A target adapter's deterministic self-description — mirrors the WIT
-/// `target.manifest` record. Metadata the host reads at resolve
-/// time, answerable from compiled-in constants.
+/// A target adapter's self-description — mirrors the WIT `target.manifest`
+/// record. Read by the host at resolve time from compiled-in constants.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TargetManifest {
     /// Optional host-CLI compatibility floor (exact minimum `specify`
@@ -319,14 +307,11 @@ pub struct TargetManifest {
 pub struct Lead {
     /// Stable kebab-case lead identifier, unique only within its source;
     /// identity is the `(source, lead)` pair. Named `lead` to match the
-    /// schema key, so answers deserialize without a rename.
+    /// schema key.
     pub lead: String,
-    /// A reconciliation-grade per-source headline of the lead as this
-    /// source surfaced it.
+    /// Per-source headline of the lead as this source surfaced it.
     pub synopsis: String,
-    /// Agent-authored per-lead topic slugs (kebab-case). Empty means
-    /// unclassified (an answer may omit the key); never blocks
-    /// reconciliation.
+    /// Agent-authored topic slugs (kebab-case); empty means unclassified.
     #[serde(default)]
     pub topics: Vec<String>,
 }
@@ -344,9 +329,9 @@ impl Lead {
     }
 }
 
-/// Document-level authority class for an Evidence document, per the
-/// workflow's closed authority hierarchy (`intent` > `documentation` >
-/// `behaviour`). Controls who wins a cross-source disagreement.
+/// Document-level authority class for an Evidence document
+/// (`intent` > `documentation` > `behaviour`). Controls who wins a
+/// cross-source disagreement.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum Authority {
@@ -358,8 +343,8 @@ pub enum Authority {
     Behaviour,
 }
 
-/// The closed claim-kind taxonomy from `schemas/evidence.schema.json`.
-/// New kinds require updating the workflow contract and schemas together.
+/// Claim-kind taxonomy from `schemas/evidence.schema.json`. New kinds
+/// require updating the workflow contract and schemas together.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum ClaimKind {
@@ -393,8 +378,7 @@ pub enum ClaimKind {
     Leaf,
 }
 
-/// The backing data of a claim's evidence — mirrors the WIT
-/// `source.backing` variant.
+/// Backing data of a claim — mirrors the WIT `source.backing` variant.
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum Backing {
@@ -406,14 +390,10 @@ pub enum Backing {
 
 /// A claim extracted from a source — mirrors the WIT `source.claim` record.
 ///
-/// The schema leaves per-kind body fields open
-/// (`additionalProperties: true`), so unmodeled keys such as `example`'s
-/// `replay-digest` / `input` / `output` are tolerated and ignored. The
-/// two open body fields the record *does* model — `synopsis` and
-/// `backing` — deserialize leniently for the same reason: the schema gate
-/// does not pin their shape, so a value that does not match the modeled
-/// shape is dropped like any other unmodeled body field rather than
-/// failing the whole answer.
+/// The schema leaves per-kind body fields open (`additionalProperties:
+/// true`), so unmodeled keys are ignored, and the modeled open fields
+/// (`synopsis`, `backing`) deserialize leniently rather than failing the
+/// whole answer.
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct Claim {
@@ -428,22 +408,16 @@ pub struct Claim {
     /// `<path>#L<start>-L<end>`.
     #[serde(default)]
     pub path: Option<String>,
-    /// A synthesis-grade headline summarizing the semantic meaning of this
-    /// evidence. An open per-kind body field in the schema, so answers may
-    /// omit it (or shape it differently, in which case it is ignored).
+    /// Headline summarizing the semantic meaning of this evidence.
     #[serde(default, deserialize_with = "lenient")]
     pub synopsis: Option<String>,
-    /// The backing data of the claim's evidence (either a path or a raw
-    /// payload). An open per-kind body field in the schema; a shape other
-    /// than the modeled variant is ignored.
+    /// Backing data of the claim (a path or a raw payload).
     #[serde(default, deserialize_with = "lenient")]
     pub backing: Option<Backing>,
 }
 
-/// Deserialize an open per-kind body field tolerantly: the answer schema
-/// leaves these fields unpinned (`additionalProperties: true`), so a
-/// value that does not match the modeled shape is treated as absent
-/// rather than failing the whole schema-valid answer.
+/// Deserialize an open per-kind body field tolerantly: a value that does
+/// not match the modeled shape is treated as absent.
 fn lenient<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -453,9 +427,9 @@ where
     Ok(T::deserialize(value).ok())
 }
 
-/// The evidence returned by the extract operation — mirrors the WIT
-/// `source.evidence` record (the canonical Evidence shape minus the
-/// envelope `lead` key: the extract call names the lead).
+/// Evidence returned by extract — mirrors the WIT `source.evidence`
+/// record (the canonical Evidence shape minus the envelope `lead` key:
+/// the extract call names the lead).
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct Evidence {

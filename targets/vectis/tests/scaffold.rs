@@ -1,11 +1,10 @@
 //! Tests for scaffold planning, writing, and the dispatcher.
 
-use vectis_core as core;
 use std::fs;
 
 use sha2::{Digest, Sha256};
 use tempfile::tempdir;
-use core::scaffold::{
+use vectis::scaffold::{
     CommonArgs, CoreArgs, ScaffoldCommand, ScaffoldError, ScaffoldPlan, Versions, parse_caps,
     plan_android, plan_core, plan_ios, run_at, write_plan,
 };
@@ -56,11 +55,6 @@ fn golden_hashes_match_current_render_only_output() {
     assert_eq!(digest_plan(&android), ANDROID_RENDER_ONLY_SHA256);
 }
 
-// Per-target substitutions and capability gating: the core plan preserves
-// template order and substitutes the app struct + android package; the ios
-// plan renders the `http` capability block; the android plan omits the
-// network-security config without a network cap and writes it under `http`. An
-// unknown capability is rejected.
 #[test]
 fn plan_substitutions_and_caps() {
     let versions = versions();
@@ -143,8 +137,6 @@ fn plan_substitutions_and_caps() {
     }
 }
 
-// `write_plan` refuses to clobber an existing core file or an existing ios /
-// android shell root, leaving the prior tree untouched.
 #[test]
 fn write_plan_refuses_existing_roots() {
     let versions = versions();
@@ -187,9 +179,8 @@ fn write_plan_refuses_existing_roots() {
 
 #[test]
 fn write_plan_merges_existing_gitignore() {
-    // `specify init` writes a root `.gitignore` in every project, so
-    // the bootstrap path scaffolds into an initialised repo: the
-    // template's missing lines append; operator content survives.
+    // `specify init` writes a root `.gitignore` in every project, so the
+    // bootstrap path always scaffolds into an initialised repo.
     let dir = tempdir().unwrap();
     fs::write(dir.path().join(".gitignore"), ".specify/cache/\n/target\n").unwrap();
     let plan = plan_core("Counter", "com.vectis.counter", &[], &versions()).unwrap();

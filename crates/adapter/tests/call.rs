@@ -21,9 +21,6 @@ const fn ctx<'a>(mcp_url: Option<&'a str>, root: &'a Path) -> Context<'a> {
     }
 }
 
-// One leg assembles the schema-gated request — system prompt, one user
-// turn, the adapter's reference grant, the workspace lend — and
-// deserializes the validated answer.
 #[tokio::test]
 async fn judgment_assembles_request_and_deserializes() {
     let model = MockModel::answering([r#"{"done":true}"#]);
@@ -77,8 +74,6 @@ async fn judgment_without_mcp_url_offers_no_grant() {
     assert!(model.requests()[0].mcp.is_empty());
 }
 
-// Model errors map through the seam error taxonomy, and an answer that
-// does not deserialize fails internal, naming the leg.
 #[tokio::test]
 async fn judgment_maps_errors() {
     let model = MockModel::scripted([
@@ -103,7 +98,6 @@ async fn judgment_maps_errors() {
     }
 }
 
-// Context resolves an operation's tree root beneath the shared mount.
 #[test]
 fn context_resolves_tree_root() {
     let context = ctx(None, Path::new("/mnt"));

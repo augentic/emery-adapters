@@ -1,8 +1,7 @@
 //! The embedded prose registry: typescript's own prompts and its deep
 //! references ride inside.
 
-use typescript_core as core;
-use core::registry;
+use typescript::registry;
 
 #[test]
 fn registry_embeds_the_prompts() {

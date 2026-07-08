@@ -2,7 +2,7 @@
 //! sibling modules.
 
 use adapter::target::{AdapterId, Changeset, Error, Input, Manifest, Report, WorkingTree};
-use adapter::{WasiModel, seam, references};
+use adapter::{WasiModel, references, seam};
 
 use crate::{operations, registry};
 

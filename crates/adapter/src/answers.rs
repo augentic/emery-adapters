@@ -3,14 +3,12 @@
 //! Every judgment leg is gated by `format: schema(...)`, so the host
 //! validates the reply against the derived answer schema before the guest
 //! sees it. This module carries the three vendored schema pins
-//! (`crates/adapter/schemas/answers/{leads,evidence,report}.schema.json`) as embedded
-//! strings and the matching parse functions: a survey answer's `leads[]`
-//! envelope, an extract answer's Evidence body, and a build / merge
-//! answer's full diagnostic shape projected onto the compact seam-facing
-//! [`Report`]. The source-axis answers also get deterministic validation
-//! tails ([`validate_leads`] / [`validate_evidence`]) re-checking the id
-//! grammar the schemas pin, so a misconfigured host gate cannot leak a
-//! malformed answer into the workflow.
+//! (`schemas/answers/{leads,evidence,report}.schema.json`) and the
+//! matching parse functions. The source-axis answers also get
+//! deterministic validation tails ([`validate_leads`] /
+//! [`validate_evidence`]) re-checking the id grammar the schemas pin, so
+//! a misconfigured host gate cannot leak a malformed answer into the
+//! workflow.
 
 use serde::Deserialize;
 
@@ -18,38 +16,34 @@ use crate::seam::{
     BuildOutput, ClaimKind, Error, Evidence, Finding, Lead, Report, Severity, Status, UiSurface,
 };
 
-/// The derived judgment-answer schema gating `survey` replies — the
-/// vendored `crates/adapter/schemas/answers/leads.schema.json` pin.
+/// Answer schema gating `survey` replies.
 pub const LEADS_ANSWER_SCHEMA: &str = include_str!("../schemas/answers/leads.schema.json");
 
-/// The derived judgment-answer schema gating `extract` replies — the
-/// vendored `crates/adapter/schemas/answers/evidence.schema.json` pin.
+/// Answer schema gating `extract` replies.
 pub const EVIDENCE_ANSWER_SCHEMA: &str = include_str!("../schemas/answers/evidence.schema.json");
 
-/// The derived judgment-answer schema gating `build` / `merge` replies —
-/// the vendored `crates/adapter/schemas/answers/report.schema.json` pin.
+/// Answer schema gating `build` / `merge` replies.
 pub const REPORT_ANSWER_SCHEMA: &str = include_str!("../schemas/answers/report.schema.json");
 
-/// The schema-gated `survey` answer envelope: leads ride under a `leads`
-/// key so the answer stays one JSON object.
+/// The `survey` answer envelope: leads ride under a `leads` key so the
+/// answer stays one JSON object.
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 pub struct LeadsAnswer {
     /// Every lead the survey surfaced, in source order.
     pub leads: Vec<Lead>,
 }
 
-/// Deserialize a schema-gated `survey` answer body into its leads.
+/// Deserialize a `survey` answer body into its leads.
 ///
 /// # Errors
 ///
 /// Returns the underlying JSON error when the answer does not parse into
-/// the `{ "leads": [...] }` envelope — the host gate makes this
-/// unreachable in production, but a misbehaving provider must fail loudly.
+/// the `{ "leads": [...] }` envelope.
 pub fn parse_leads(answer: &str) -> Result<Vec<Lead>, serde_json::Error> {
     serde_json::from_str::<LeadsAnswer>(answer).map(|envelope| envelope.leads)
 }
 
-/// Deserialize a schema-gated `extract` answer body into its Evidence.
+/// Deserialize an `extract` answer body into its Evidence.
 ///
 /// # Errors
 ///
@@ -59,15 +53,12 @@ pub fn parse_evidence(answer: &str) -> Result<Evidence, serde_json::Error> {
     serde_json::from_str(answer)
 }
 
-/// The kebab-case pattern the answer schemas pin on lead ids
-/// (`leads.schema.json` `$defs.kebabName`).
+/// Lead-id pattern (`leads.schema.json` `$defs.kebabName`).
 const KEBAB_PATTERN: &str = "^[a-z0-9]+(-[a-z0-9]+)*$";
 
-/// The dotted-kebab pattern the answer schemas pin on claim ids
-/// (`evidence.schema.json` `$defs.claim.properties.id`).
+/// Claim-id pattern (`evidence.schema.json` `$defs.claim.properties.id`).
 const DOTTED_KEBAB_PATTERN: &str = "^[a-z0-9]+(-[a-z0-9]+)*(\\.[a-z0-9]+(-[a-z0-9]+)*)*$";
 
-/// Whether `value` matches the schemas' kebab-case name pattern.
 fn is_kebab(value: &str) -> bool {
     !value.is_empty()
         && value.split('-').all(|seg| {
@@ -75,12 +66,10 @@ fn is_kebab(value: &str) -> bool {
         })
 }
 
-/// Whether `value` matches the schemas' dotted-kebab claim-id pattern.
 fn is_dotted_kebab(value: &str) -> bool {
     !value.is_empty() && value.split('.').all(is_kebab)
 }
 
-/// Fold findings into one findings-style [`Error::Internal`], or pass.
 fn enforce(operation: &str, findings: &[String]) -> Result<(), Error> {
     if findings.is_empty() {
         return Ok(());
@@ -91,13 +80,9 @@ fn enforce(operation: &str, findings: &[String]) -> Result<(), Error> {
     )))
 }
 
-/// Deterministic tail after a schema-gated `survey` answer lands: every
-/// lead id must match the schema's kebab-case pattern and every synopsis
-/// must carry content.
-///
-/// Belt and braces — the host gate already validated the answer against
-/// the leads schema, but a misconfigured gate must not let a malformed
-/// lead reach the workflow.
+/// Re-check a `survey` answer after the host gate: every lead id must
+/// match the schema's kebab-case pattern and every synopsis must carry
+/// content.
 ///
 /// # Errors
 ///
@@ -116,12 +101,9 @@ pub fn validate_leads(leads: &[Lead]) -> Result<(), Error> {
     enforce("survey", &findings)
 }
 
-/// Deterministic tail after a schema-gated `extract` answer lands:
-/// claim ids must match the schema's dotted-kebab pattern.
-///
-/// An id is required when the claim kind is `requirement`, `criterion`,
-/// or `example` — mirroring the evidence schema's conditional
-/// requirement. Belt and braces, like [`validate_leads`].
+/// Re-check an `extract` answer after the host gate: claim ids must match
+/// the schema's dotted-kebab pattern, and `requirement` / `criterion` /
+/// `example` claims must carry one.
 ///
 /// # Errors
 ///
@@ -149,12 +131,9 @@ pub fn validate_evidence(evidence: &Evidence) -> Result<(), Error> {
     enforce("extract", &findings)
 }
 
-/// The slice of one full diagnostic the seam projection reads.
-///
-/// The answer carries the complete
-/// `schemas/diagnostics/diagnostic.schema.json` shape; unprojected fields
-/// (`id`, `source`, `evidence`, `fingerprint`, …) are host-validated and
-/// deliberately not modeled here.
+/// The slice of one full diagnostic the seam projection reads. The rest
+/// of the `diagnostic.schema.json` shape is host-validated and not
+/// modeled here.
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct Diagnostic {
@@ -172,9 +151,8 @@ pub struct Diagnostic {
 }
 
 impl Diagnostic {
-    /// Fold this full diagnostic into the compact seam-facing [`Finding`]:
-    /// `rule-id` and `severity` map through, and the `title` / `impact` /
-    /// `remediation` prose folds into `detail`.
+    /// Fold into the compact seam-facing [`Finding`], collapsing `title` /
+    /// `impact` / `remediation` into `detail`.
     #[must_use]
     pub fn into_finding(self) -> Finding {
         Finding {
@@ -185,7 +163,7 @@ impl Diagnostic {
     }
 }
 
-/// The schema-gated `build` / `merge` answer body.
+/// The `build` / `merge` answer body.
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct ReportAnswer {
@@ -203,13 +181,12 @@ pub struct ReportAnswer {
 }
 
 impl ReportAnswer {
-    /// Deserialize a schema-gated answer body.
+    /// Deserialize an answer body.
     ///
     /// # Errors
     ///
     /// Returns the underlying JSON error when the answer does not parse
-    /// into the report shape — the host gate makes this unreachable in
-    /// production, but a misbehaving provider must fail loudly.
+    /// into the report shape.
     pub fn parse(answer: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(answer)
     }

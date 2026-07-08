@@ -1,4 +1,4 @@
-//! Inline lint-suppression scan for the in-guest shell-verify gate.
+//! Inline lint-suppression scan for the shell-verify gate.
 //!
 //! Rejects agent-authored compiler / linter suppressions in core Rust and
 //! platform shell sources. Crate-level workspace lints and `generated/`

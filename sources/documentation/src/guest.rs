@@ -1,23 +1,23 @@
-//! The documentation adapter guest: `wasm32` shim over
-//! `core`. See `adapter::source` for
-//! the shim contract.
-#![cfg(target_arch = "wasm32")]
+//! The `wasm32` shim: bindings and export glue over the wasm-free
+//! sibling modules. See `adapter::source` for the shim contract.
 
 use adapter::source::{AdapterId, Error, Evidence, Guest, Lead, Manifest};
-use adapter::{WasiModel, seam, references};
+use adapter::{WasiModel, references, seam};
+
+use crate::{operations, registry};
 
 struct Adapter;
 adapter::source::export!(Adapter with_types_in adapter::source);
 
 impl Guest for Adapter {
     fn describe(_id: AdapterId) -> Manifest {
-        core::operations::describe().into()
+        operations::describe().into()
     }
 
     async fn survey(id: AdapterId) -> Result<Vec<Lead>, Error> {
         let url = references::mcp_url("documentation");
         let ctx = seam::Context::guest(&id, url.as_deref());
-        core::operations::survey(&WasiModel, &ctx)
+        operations::survey(&WasiModel, &ctx)
             .await
             .map(|leads| leads.into_iter().map(Into::into).collect())
             .map_err(Into::into)
@@ -27,10 +27,7 @@ impl Guest for Adapter {
         let lead = seam::Lead::from(lead);
         let url = references::mcp_url("documentation");
         let ctx = seam::Context::guest(&id, url.as_deref());
-        core::operations::extract(&WasiModel, &ctx, &lead)
-            .await
-            .map(Into::into)
-            .map_err(Into::into)
+        operations::extract(&WasiModel, &ctx, &lead).await.map(Into::into).map_err(Into::into)
     }
 }
 
@@ -44,7 +41,7 @@ impl wasip3::exports::http::handler::Guest for HttpGuest {
         references::References {
             server_name: "documentation-references",
             version: env!("CARGO_PKG_VERSION"),
-            docs: core::registry::docs(),
+            docs: registry::docs(),
         }
         .serve(request)
         .await

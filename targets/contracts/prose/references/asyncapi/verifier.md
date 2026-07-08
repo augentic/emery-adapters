@@ -271,7 +271,7 @@ When a caller re-surfaces an envelope finding as a `LintFinding` (see `schemas/d
 | findings | One or more findings. | Record `failure`; the merge parks. The slice's deltas remain unmerged. |
 | validator error | The validator could not run (unreadable tree, internal error). | Record `failure`; journal the diagnostic. The slice's deltas remain unmerged. |
 
-The mode is **deterministic**: the gate is `validate_baseline` in `contracts-core` ([`core/src/validate.rs`](../../../core/src/validate.rs)), embedded in the adapter guest. Repeated invocations against the same baseline produce identical findings.
+The mode is **deterministic**: the gate is `validate_baseline` in the `contracts` adapter crate ([`src/validate.rs`](../../../src/validate.rs)), embedded in the adapter guest. Repeated invocations against the same baseline produce identical findings.
 
 ### Why an in-guest gate?
 
@@ -313,7 +313,7 @@ The deterministic baseline check is the canonical post-merge gate.
 - When uncertain whether a schema is shared vocabulary or a standalone payload, use `WARN` rather than `FAIL` (in `single` mode).
 - Do not attempt to fix issues — report them. Repair belongs to the author or importer sibling.
 - **`cross-project` mode is fatal.** Treat findings and validator errors as `failure` per the contracts adapter merge contract. The merge leg MUST halt; the slice's deltas remain unmerged until the operator resolves the finding.
-- Do not re-implement the validator's checks. The verifier sibling's `cross-project` mode is descriptive; the canonical algorithm lives in [`targets/contracts/core/src/validate.rs`](../../../core/src/validate.rs).
+- Do not re-implement the validator's checks. The verifier sibling's `cross-project` mode is descriptive; the canonical algorithm lives in [`targets/contracts/src/validate.rs`](../../../src/validate.rs).
 
 ## Verification checklist
 

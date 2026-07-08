@@ -1,20 +1,21 @@
-//! The omnia adapter guest: `wasm32` shim over `core`.
-//! See `adapter::target` for the shim contract.
-#![cfg(target_arch = "wasm32")]
+//! The `wasm32` shim: bindings and export glue over the wasm-free
+//! sibling modules. See `adapter::target` for the shim contract.
 
 use adapter::target::{AdapterId, Changeset, Error, Guest, Input, Manifest, Report, WorkingTree};
-use adapter::{WasiModel, seam, references};
+use adapter::{WasiModel, references, seam};
+
+use crate::{operations, registry};
 
 struct Adapter;
 adapter::target::export!(Adapter with_types_in adapter::target);
 
 impl Guest for Adapter {
     fn describe(_id: AdapterId) -> Manifest {
-        core::operations::describe().into()
+        operations::describe().into()
     }
 
     async fn guidance(_id: AdapterId) -> Result<String, Error> {
-        Ok(core::operations::guidance().to_string())
+        Ok(operations::guidance().to_string())
     }
 
     async fn build(
@@ -24,7 +25,7 @@ impl Guest for Adapter {
         let tree = seam::WorkingTree::from(tree);
         let url = references::mcp_url("omnia");
         let ctx = seam::Context::guest(&id, url.as_deref());
-        core::operations::build(&WasiModel, &ctx, &slice, &inputs, &tree)
+        operations::build(&WasiModel, &ctx, &slice, &inputs, &tree)
             .await
             .map(Into::into)
             .map_err(Into::into)
@@ -37,7 +38,7 @@ impl Guest for Adapter {
         let tree = seam::WorkingTree::from(tree);
         let url = references::mcp_url("omnia");
         let ctx = seam::Context::guest(&id, url.as_deref());
-        core::operations::merge(&WasiModel, &ctx, &slice, &delta, &tree)
+        operations::merge(&WasiModel, &ctx, &slice, &delta, &tree)
             .await
             .map(Into::into)
             .map_err(Into::into)
@@ -54,7 +55,7 @@ impl wasip3::exports::http::handler::Guest for HttpGuest {
         references::References {
             server_name: "omnia-references",
             version: env!("CARGO_PKG_VERSION"),
-            docs: core::registry::docs(),
+            docs: registry::docs(),
         }
         .serve(request)
         .await

@@ -1,6 +1,6 @@
 # Vectis guest evals
 
-Live-backend eval harness for the vectis adapter guest. The scenario drives the guest's `build` operation end-to-end: the deterministic in-guest prepare prelude, prompt-driven judgment legs against the real cursor backend, the in-core composition validator gate with its bounded repair, then the schema-gated report and deterministic postlude.
+Live-backend eval harness for the vectis adapter guest. The scenario drives the guest's `build` operation end-to-end: the deterministic in-guest prepare prelude, prompt-driven judgment legs against the real cursor backend, the in-guest composition validator gate with its bounded repair, then the schema-gated report and deterministic postlude.
 
 ## Anatomy
 

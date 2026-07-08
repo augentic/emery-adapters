@@ -40,7 +40,7 @@ Every behavior gets a home in exactly one layer. Decide the layer **before** wri
 
 ```bash
 cargo llvm-cov nextest -p vectis-core --summary-only
-cargo llvm-cov nextest -p contracts-core --summary-only
+cargo llvm-cov nextest -p contracts --summary-only
 ```
 
 A `TOTAL` line/region drop on still-live code means real coverage was lost: backfill with an integration assertion (preferred) or revert that specific deletion. A pure collapse of redundant cases is coverage-neutral.

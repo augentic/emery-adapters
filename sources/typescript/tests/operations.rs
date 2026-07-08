@@ -1,12 +1,11 @@
 //! Typescript-specific operation behavior: the source-tree binding note,
 //! the framework-grammar survey framing, and the references pointer.
 
-use typescript_core as core;
 use std::path::Path;
 
 use adapter::seam::{Authority, ClaimKind, Context, Lead};
 use testkit::MockModel;
-use core::operations::{describe, extract, survey};
+use typescript::operations::{describe, extract, survey};
 
 fn ctx() -> Context<'static> {
     Context {
@@ -16,9 +15,6 @@ fn ctx() -> Context<'static> {
     }
 }
 
-// The survey call embeds the typescript prompt as the system channel and
-// frames the call around the prompt's framework grammar and the read-only
-// TS / JS source-tree binding.
 #[tokio::test]
 async fn survey_frames_the_framework_grammar() {
     let model = MockModel::answering([
@@ -39,8 +35,6 @@ async fn survey_frames_the_framework_grammar() {
     assert!(user.contains("read-only"), "the binding note marks the tree read-only");
 }
 
-// The extract call points the agent at the references over the MCP
-// grant, and the code-shaped claim kinds parse through the shared shape.
 #[tokio::test]
 async fn extract_points_at_the_references() {
     let model = MockModel::answering([r#"{
@@ -69,7 +63,6 @@ async fn extract_points_at_the_references() {
     assert!(user.contains("- lead: task-service"), "the lead renders as the prompt's block shape");
 }
 
-// No model call.
 #[test]
 fn describe_declares_no_floor() {
     assert_eq!(describe().specify_floor, None);

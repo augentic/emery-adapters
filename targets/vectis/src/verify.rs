@@ -17,7 +17,7 @@ use crate::android_scaffold::android_scaffold_drift_findings;
 use crate::ios_scaffold::ios_scaffold_drift_findings;
 use crate::shell::{SUPPORTED_SHELL_PLATFORMS, shell_present};
 
-/// Deterministic verification mode.
+/// Verification mode.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum VerifyMode {
     /// Build/lint-time: emit diagnostic findings for declared platforms.
@@ -35,7 +35,7 @@ struct PlatformStatus {
     present: bool,
 }
 
-/// Run one deterministic verification mode against an explicit project root.
+/// Run one verification mode against an explicit project root.
 ///
 /// # Errors
 ///

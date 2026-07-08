@@ -1,22 +1,13 @@
-//! Wasm-free core of the vectis target adapter, natively testable
-//! against a mock [`adapter::Model`]; the wasm32 shim
-//! (`vectis`) owns bindings and export glue.
+//! The vectis target adapter, natively testable against a mock
+//! [`adapter::Model`]; the wasm32-only `guest` module owns bindings
+//! and export glue.
 //!
-//! - [`operations`] — the build prompt's phase legs, the in-core
-//!   composition validator gate with its bounded repair, and the
-//!   deterministic report-coherence tail, over the shared
-//!   `adapter::phase` template.
-//! - [`validate`] / [`materialize`] / [`prepare`] / [`infer`] /
-//!   [`verify`] / [`scaffold`] / [`sync`] / [`android`] — the
-//!   deterministic libraries: schema + cross-artifact validation,
-//!   canonical-to-export asset conversion (SVG rasterisation included),
-//!   slice-build prepare orchestration, component-identity clustering
-//!   (the catalog infer report), declared-platform shell verification,
-//!   render-only Crux scaffolding, scaffold-file sync, and the Android
-//!   Gradle-wrapper bootstrap. The guest calls them directly as the
-//!   deterministic prelude and postlude around the judgment legs.
-//! - [`registry`] — the embedded prose (`prompts/` + `references/` +
-//!   `rules/`).
+//! [`operations`] carries the build prompt's phase legs and validator
+//! gate. The remaining modules are deterministic libraries the guest
+//! calls as prelude / postlude around the judgment legs: validation,
+//! asset materialization, prepare orchestration, shell verification,
+//! Crux scaffolding, scaffold sync, and the Android Gradle-wrapper
+//! bootstrap. [`registry`] holds the embedded prose.
 
 pub mod android;
 pub mod android_scaffold;
@@ -35,3 +26,6 @@ pub mod validate;
 pub mod verify;
 
 pub use error::{EXIT_FAILURE, VectisError};
+
+#[cfg(target_arch = "wasm32")]
+mod guest;

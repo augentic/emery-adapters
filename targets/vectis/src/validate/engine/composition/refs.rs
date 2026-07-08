@@ -8,37 +8,23 @@ use super::finding::Finding;
 use crate::validate::engine::assets::collect_asset_references;
 use crate::validate::engine::shared::escape_pointer_token;
 
-/// Walk a composition document and append an error for every token
-/// reference whose value is not present in `tokens` under the expected
-/// category.
+/// Append an error for every token reference not present in `tokens`
+/// under the expected category (see [`token_category_for_key`]; also
+/// `padding.<side>` → `spacing`).
 ///
-/// V1 token-ref categories:
+/// Deliberately skipped in v1:
 ///
-/// - `color`, `background`, `border.color` → `colors.<name>`
-/// - `elevation` (groupProps) → `elevation.<name>`
-/// - `gap`, `padding`, `padding.<side>` (when string-valued) →
-///   `spacing.<name>`
-/// - `corner_radius` (when string-valued) → `cornerRadius.<name>`
-///
-/// Skipped for v1 (deliberately ambiguous, deferred to a later rule):
-///
-/// - `style` — the schema declares `style: { type: string }` with no
-///   enum; it is a typography ref on `text` items but a presentation
-///   enum on `button`/`list`/etc. Without a per-item-kind classifier,
+/// - `style` — a typography ref on `text` items but a presentation
+///   enum on `button`/`list`/etc.; without a per-item-kind classifier,
 ///   autoresolving it generates false positives.
-/// - `size.width` / `size.height` — the schema's `sizingValue` only
-///   permits `"fill"` / `"hug"` strings, so these never reference
-///   tokens.
+/// - `size.width` / `size.height` — `sizingValue` only permits
+///   `"fill"` / `"hug"`, so these never reference tokens.
 pub(super) fn resolve_token_references(
     composition: &Value, tokens: &Value, errors: &mut Vec<Finding>,
 ) {
     walk_token_refs(composition, "", tokens, errors);
 }
 
-/// Recursive walker driving [`resolve_token_references`]. Matches on
-/// the well-known token-bearing keys and recurses through the rest of
-/// the document. The category lookup is centralised in
-/// [`token_category_for_key`] so the walker stays small.
 fn walk_token_refs(node: &Value, json_path: &str, tokens: &Value, errors: &mut Vec<Finding>) {
     match node {
         Value::Object(map) => {
@@ -51,9 +37,8 @@ fn walk_token_refs(node: &Value, json_path: &str, tokens: &Value, errors: &mut V
                     check_token_ref(category, name, &child_path, tokens, errors);
                 }
 
-                // `padding` may also be a paddingSpec object. Walk
-                // each side as a spacing ref. The string-valued
-                // `padding: md` case is already handled above.
+                // `padding` may also be a paddingSpec object: walk
+                // each side as a spacing ref.
                 if key == "padding"
                     && let Some(side_map) = val.as_object()
                 {
@@ -77,9 +62,8 @@ fn walk_token_refs(node: &Value, json_path: &str, tokens: &Value, errors: &mut V
     }
 }
 
-/// Map a composition-document key to the `tokens.yaml` category its
-/// string value resolves against, or `None` when the key does not
-/// carry a deterministic token reference in v1.
+/// `tokens.yaml` category a key's string value resolves against;
+/// `None` when the key carries no token reference in v1.
 const fn token_category_for_key(key: &str) -> Option<&'static str> {
     match key.as_bytes() {
         b"color" | b"background" => Some("colors"),
@@ -90,10 +74,6 @@ const fn token_category_for_key(key: &str) -> Option<&'static str> {
     }
 }
 
-/// Resolve `name` against `tokens.<category>` and append an error to
-/// `errors` when it is absent. The error message names both the
-/// category and the offending name so an operator can fix it without
-/// re-reading the manifest.
 fn check_token_ref(
     category: &str, name: &str, json_path: &str, tokens: &Value, errors: &mut Vec<Finding>,
 ) {
@@ -109,12 +89,9 @@ fn check_token_ref(
     }
 }
 
-/// Walk a composition document and append an error for every static
-/// asset reference whose name is not declared under `assets.<id>` in
-/// the supplied assets manifest. Reuses [`collect_asset_references`]
-/// so the reference shapes (`image.name`, `icon.name`,
-/// `icon-button.icon`, `fab.icon`) stay in lock-step between
-/// composition mode (this function) and assets mode's own
+/// Append an error for every static asset reference not declared
+/// under `assets.<id>`. Reuses [`collect_asset_references`] so the
+/// reference shapes stay in lock-step with assets mode's own
 /// composition-discovery path.
 pub(super) fn resolve_asset_references(
     composition: &Value, assets: &Value, errors: &mut Vec<Finding>,

@@ -3,22 +3,17 @@
 //!
 //! Unlike omnia, vectis brackets the legs with the absorbed libraries:
 //! the [`crate::prepare`] materialize step runs as the deterministic
-//! *prelude* (replacing the legacy `adapter.yaml` `prepare.argv` hook),
-//! and the [`crate::validate`] composition / tokens / assets
+//! *prelude*, and the [`crate::validate`] composition / tokens / assets
 //! cross-checks run as the deterministic *postlude*, feeding a bounded
-//! repair loop the way the contracts adapter's validators do.
+//! repair loop.
 //!
-//! `build` decomposes along the build prompt's own phase order: one
+//! `build` decomposes along the build prompt's phase order: one
 //! *composition* leg (Step 0.5 component inference plus Phase 1
-//! composition regeneration) gated in-core by the composition validator,
+//! composition regeneration) gated in-guest by the composition validator,
 //! one *core* leg (Phases 2–3), one *shell* leg per declared shell
 //! platform (Phases 4–5), one *review* leg (Phases 6–7), then one report
-//! leg (Phases 8–9). The absorbed libraries carry every leg that used to
-//! be a `vectis` CLI call: the infer report and missing-tree scaffolds
-//! run as deterministic preludes, scaffold sync as a per-shell
-//! postlude, and the shell verify gate inside the deterministic report
-//! gate. Host-command verification (cargo, xcodebuild, Gradle) is
-//! process-spawning and stays agent-side in the prompts.
+//! leg (Phases 8–9). Host-command verification (cargo, xcodebuild,
+//! Gradle) is process-spawning and stays agent-side in the prompts.
 
 use std::path::Path;
 
@@ -35,24 +30,19 @@ use crate::{
 };
 
 /// Maximum composition validator repair iterations after the
-/// composition leg, mirroring the contracts build's Phase 4 budget.
+/// composition leg.
 const MAX_VALIDATE_REPAIR_ITERATIONS: usize = 2;
 
-/// The pointer at the adapter's own MCP references every judgment
-/// leg's user prompt carries, so prompts stay lean and the agent fetches
-/// specialist material lazily instead of getting it inlined.
+/// Pointer at the adapter's own MCP references carried by every judgment
+/// leg's user prompt, so the agent fetches specialist material lazily.
 const REFERENCES_POINTER: &str = "Every prompt, reference, and rule document this adapter ships is \
      served by the granted `vectis-references` MCP references (`list_docs` / `read_doc`, \
      adapter-relative paths like `references/hard-rules-core.md` or \
      `prompts/build/ios/write.md`); fetch documents the prompts cite lazily from there.";
 
-/// Deterministic self-description for the `describe` operation.
-///
-/// Resolve-time metadata answered from compiled-in constants: no
-/// compatibility floor; three optional design-system build inputs
-/// (`tokens.yaml`, `assets.yaml`, `components.yaml`); a required
-/// platform declaration (`specify init --platforms`) over the full
-/// closed platform set, defaulting to core + the two supported shells.
+/// Deterministic self-description for the `describe` operation: three
+/// optional design-system build inputs and a required platform
+/// declaration defaulting to core + the two supported shells.
 #[must_use]
 pub fn describe() -> TargetManifest {
     let optional = |path: &str| BuildInput {
@@ -76,8 +66,8 @@ pub fn describe() -> TargetManifest {
     }
 }
 
-/// Guidance on the expected build artifacts for this target — the
-/// embedded guidance prompt, returned deterministically (no judgment leg).
+/// The embedded guidance prompt, returned deterministically (no
+/// judgment leg).
 #[must_use]
 pub fn guidance() -> &'static str {
     registry::body("prompts/guidance.md")
@@ -86,24 +76,21 @@ pub fn guidance() -> &'static str {
 /// Build a slice's Crux core, shell code, and regenerated
 /// `composition.yaml` per the build prompt's phase order:
 ///
-/// 1. **Prelude (deterministic)** — [`prepare::materialize_step`]:
-///    RFC §2.1 scope resolution plus the conditional scoped
-///    `materialize assets` run (its summary feeds the composition leg),
-///    then the §L bootstrap app-icon gate — error findings park the
-///    build before any judgment leg.
-/// 2. **Composition leg** (Step 0.5 + Phase 1), then the in-core
+/// 1. **Prelude (deterministic)** — [`prepare::materialize_step`] scope
+///    resolution and conditional materialize, then the §L bootstrap
+///    app-icon gate — error findings park the build before any
+///    judgment leg.
+/// 2. **Composition leg** (Step 0.5 + Phase 1), then the in-guest
 ///    composition validator gate with a bounded repair loop — an
-///    exhausted budget parks the slice instead of burning the
-///    downstream legs against a knowingly-broken composition.
+///    exhausted budget parks the slice.
 /// 3. **Core leg** (Phases 2–3), one **shell leg** per declared shell
 ///    platform (Phases 4–5), then the **review leg** (Phases 6–7).
 /// 4. One report leg (Phases 8–9), with the agent-run shell verify gate
 ///    instructed in its prompt.
-/// 5. **Postlude (deterministic)** — the composition cross-checks re-run
-///    in core plus the report-coherence walk, with one bounded repair
-///    leg; residual findings force `failure` regardless of the answer,
-///    and the A4 ui-surface coherence warnings ride the final report as
-///    non-blocking suggestions.
+/// 5. **Postlude (deterministic)** — the composition cross-checks plus
+///    the report-coherence walk, with one bounded repair leg; residual
+///    findings force `failure`, and the A4 ui-surface coherence
+///    warnings ride the final report as non-blocking suggestions.
 ///
 /// # Errors
 ///
@@ -125,22 +112,17 @@ pub async fn build<P: Model>(
     let build_prompt = registry::body("prompts/build.md");
 
     // Deterministic prelude — prepare scope resolution + conditional
-    // materialize over the effective assets.yaml, in-guest. The
-    // host-bootstrap legs the legacy hook also ran (app-icon verify gate,
-    // Android Gradle setup, iOS scaffold sync) are process-adjacent and
-    // ride agent-side in the shell legs' prompts instead. The platform
-    // scope derives from the same declared-platform read as the shell
-    // legs, so a core-only project materializes nothing for shells it
-    // will not build.
+    // materialize. The platform scope derives from the same
+    // declared-platform read as the shell legs, so a core-only project
+    // materializes nothing for shells it will not build.
     let shell_platforms: Vec<String> =
         declared_shell_legs(&tree_root).iter().map(|leg| leg.name.to_string()).collect();
     let prelude = prepare::materialize_step(&slice_dir, &tree_root, &shell_platforms)
         .map_err(error_from_vectis)?;
     let prelude_block = render_prelude(&prelude);
 
-    // Deterministic bootstrap gate (§L): the launcher app-icon must be
-    // satisfiable for every declared UI platform before any write leg;
-    // error findings park the build like the legacy prepare hook did.
+    // Bootstrap gate (§L): the launcher app-icon must be satisfiable for
+    // every declared UI platform before any write leg.
     let bootstrap = bootstrap_findings(&tree_root);
     if !bootstrap.is_empty() {
         return Ok(Report {
@@ -298,7 +280,7 @@ pub async fn build<P: Model>(
     );
     let report = phase::report(model, ctx, build_prompt.to_string(), user).await?;
 
-    // Deterministic postlude: the in-core validator cross-checks, the
+    // Deterministic postlude: the in-guest validator cross-checks, the
     // shell verify gate, and the report-coherence walk, one bounded
     // repair leg, then enforcement.
     let mut report = gate_report(
@@ -427,7 +409,7 @@ fn declared_platforms(project_root: &Path) -> Option<Vec<String>> {
     Some(platforms.iter().filter_map(Value::as_str).map(str::to_string).collect())
 }
 
-/// The in-core composition validator gate, with its bounded repair loop
+/// The in-guest composition validator gate, with its bounded repair loop
 /// — the per-shell write prompts require this gate passed before any
 /// platform phase, so it runs right after the composition leg rather
 /// than with the postlude. Returns the residual findings after the
@@ -463,7 +445,7 @@ fn assemble(prompts: &[&str]) -> String {
 }
 
 /// The deterministic gate after the report answer lands, with one
-/// bounded repair leg: the in-core composition cross-checks (schema,
+/// bounded repair leg: the in-guest composition cross-checks (schema,
 /// structural identity, sibling tokens / assets auto-invoke, reference
 /// resolution) re-run against `composition`, the shell verify gate
 /// re-runs when `shell_verify` is set (the build's Phase 8), and a
@@ -789,7 +771,7 @@ fn composition_declares_surface(path: &Path) -> bool {
     })
 }
 
-/// The in-core validator findings for one composition artifact, one
+/// The in-guest validator findings for one composition artifact, one
 /// findings-style line each. An absent artifact is clean by design (a
 /// core-only slice or a pre-first-merge baseline carries none); an
 /// unreadable one surfaces as a finding rather than an error so the

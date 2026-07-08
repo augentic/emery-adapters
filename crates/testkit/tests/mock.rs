@@ -21,7 +21,6 @@ fn request(task: &str) -> Request {
     }
 }
 
-// Replies serve in FIFO order and every request is recorded in call order.
 #[tokio::test]
 async fn scripted_fifo() {
     let mock = MockModel::scripted([
@@ -50,7 +49,6 @@ async fn scripted_fifo() {
     assert_eq!(requests[0].mcp[0].name, "contracts-references");
 }
 
-// The convenience constructor scripts plain successful answers.
 #[tokio::test]
 async fn answering_succeeds_in_order() {
     let mock = MockModel::answering(["one", "two"]);

@@ -41,7 +41,6 @@ use tempfile::TempDir;
 mod contracts {
     use anyhow::Result;
 
-    // The slice each scenario builds (mirrors targets/contracts/tests/).
     #[test]
     fn wiring() -> Result<()> {
         super::wiring("contracts")
@@ -250,15 +249,11 @@ fn overlay_active() -> bool {
     std::env::var("SPECIFY_EVAL_OVERLAY").is_ok_and(|value| value == "1")
 }
 
-/// Build the three run artifacts — or, in overlay mode, skip cargo
-/// entirely when all three exist and the adapter wasm still matches the
-/// stamp from the last overlay-flagged build. A prose edit changes no
-/// Rust, but unflagged builds (the composed `tests/` suite, non-overlay
-/// runs) share the same artifact path, so presence alone cannot prove
-/// the feature is compiled in — the stamp is what guards against
-/// spawning a guest that would silently serve embedded bodies. A Rust
-/// edit under the overlay is still the stale-artifact trap:
-/// re-run without it.
+/// Build the three run artifacts — or, in overlay mode, skip cargo when
+/// all three exist and the adapter wasm matches the last overlay-flagged
+/// build's stamp. Unflagged builds share the same artifact path, so
+/// presence alone cannot prove the feature is compiled in; the stamp
+/// guards against a guest that would silently serve embedded bodies.
 fn build(adapter: &str, root: &Path, target: &Path, overlay: bool) -> Result<()> {
     if overlay && overlay_fresh(target, adapter)? {
         println!("eval {adapter}: overlay active, stamped artifacts present; cargo builds skipped");
@@ -286,8 +281,6 @@ fn build(adapter: &str, root: &Path, target: &Path, overlay: bool) -> Result<()>
     Ok(())
 }
 
-// The skip predicate: all three artifacts exist and the adapter wasm's
-// digest matches the stamp written after the last overlay-flagged build.
 fn overlay_fresh(target: &Path, adapter: &str) -> Result<bool> {
     if !artifacts(target, adapter).iter().all(|path| path.is_file()) {
         return Ok(false);
@@ -298,8 +291,7 @@ fn overlay_fresh(target: &Path, adapter: &str) -> Result<bool> {
     Ok(stamp == digest(&adapter_wasm(target, adapter))?)
 }
 
-// The overlay stamp beside the adapter wasm: the raw SHA-256 of the last
-// overlay-flagged build of `<adapter>.wasm`.
+// Raw SHA-256 of the last overlay-flagged build of `<adapter>.wasm`.
 fn stamp_path(target: &Path, adapter: &str) -> PathBuf {
     target.join("wasm32-wasip2").join("debug").join(format!(".{adapter}.overlay-stamp"))
 }
@@ -308,8 +300,6 @@ fn digest(path: &Path) -> Result<Vec<u8>> {
     Ok(Sha256::digest(fs::read(path)?).to_vec())
 }
 
-// The three prebuilt artifacts a run spawns: the adapter guest, the eval
-// guest, and the native eval-driver example.
 fn artifacts(target: &Path, adapter: &str) -> [PathBuf; 3] {
     let wasm = target.join("wasm32-wasip2").join("debug");
     [adapter_wasm(target, adapter), wasm.join("examples").join("eval_guest.wasm"), driver(target)]
@@ -339,8 +329,6 @@ fn seed_overlay(adapter: &str, scratch: &Path) -> Result<()> {
     Ok(())
 }
 
-// The adapter's on-disk directory: eval adapter names match the directory
-// name under `targets/` or `sources/`.
 fn adapter_dir(adapter: &str) -> Result<PathBuf> {
     for axis in ["targets", "sources"] {
         let dir = workspace_root().join(axis).join(adapter);
@@ -351,8 +339,8 @@ fn adapter_dir(adapter: &str) -> Result<PathBuf> {
     bail!("no adapter directory for `{adapter}` under targets/ or sources/")
 }
 
-// The prose trees the adapter's core embeds — mirrors the `emit_core`
-// call in `<adapter>/core/build.rs` (pinned by `overlay::seeding`).
+// The prose trees the adapter embeds — mirrors the `prose::emit_*`
+// call in the adapter's `build.rs` (pinned by `overlay::seeding`).
 fn embedded_trees(adapter: &str) -> &'static [&'static str] {
     match adapter {
         "contracts" | "vectis" => &["prompts", "references", "rules"],
@@ -365,8 +353,8 @@ fn embedded_trees(adapter: &str) -> &'static [&'static str] {
 /// carries a file for every emitted key.
 fn seeding_parity(adapter: &str) -> Result<()> {
     let trees = embedded_trees(adapter);
-    let build_rs = adapter_dir(adapter)?.join("core").join("build.rs");
-    let declared = emit_core_trees(&fs::read_to_string(&build_rs)?)?;
+    let build_rs = adapter_dir(adapter)?.join("build.rs");
+    let declared = emit_trees(&fs::read_to_string(&build_rs)?)?;
     ensure!(
         declared.iter().map(String::as_str).eq(trees.iter().copied()),
         "embedded_trees({adapter:?}) = {trees:?} drifted from {}: {declared:?}",
@@ -388,13 +376,13 @@ fn seeding_parity(adapter: &str) -> Result<()> {
     Ok(())
 }
 
-// The tree list from a core `build.rs`'s `emit_core(&[...])` call.
-fn emit_core_trees(build_rs: &str) -> Result<Vec<String>> {
+// The tree list from a `build.rs`'s `prose::emit_adapter(&[...])` call.
+fn emit_trees(build_rs: &str) -> Result<Vec<String>> {
     let list = build_rs
-        .split_once("emit_core(&[")
+        .split_once("emit_adapter(&[")
         .and_then(|(_, rest)| rest.split_once("])"))
         .map(|(list, _)| list)
-        .context("core build.rs calls emit_core(&[...])")?;
+        .context("adapter build.rs calls emit_adapter(&[...])")?;
     Ok(list.split('"').skip(1).step_by(2).map(str::to_owned).collect())
 }
 
@@ -434,8 +422,8 @@ fn manifest(target: &Path, adapter: &str, scratch: &Path) -> String {
     harness::manifest(&guests, scratch)
 }
 
-// The HTTP trigger address: honour an operator-set HTTP_ADDR, else grab an
-// ephemeral port so parallel scenarios never contend.
+// Honour an operator-set HTTP_ADDR, else grab an ephemeral port so
+// parallel scenarios never contend.
 fn http_addr() -> Result<String> {
     if let Ok(addr) = std::env::var("HTTP_ADDR") {
         return Ok(addr);
@@ -450,7 +438,6 @@ fn cursor_agent_on_path() -> bool {
     })
 }
 
-// This package's directory (`evals/`), the root of the scenario trees.
 fn manifest_dir() -> &'static Path {
     Path::new(env!("CARGO_MANIFEST_DIR"))
 }

@@ -10,10 +10,7 @@ pub use runtime::{plan_android, plan_core, plan_ios, validate_app_name, write_pl
 pub use templates::Capability;
 pub use versions::Versions;
 
-/// Compatibility alias for the unified crate-wide error type.
-///
-/// Scaffold-side callers (and their tests) historically referred to
-/// `ScaffoldError`; the type itself lives at the crate root.
+/// Alias for the crate-wide error type used by scaffold-side callers.
 pub use crate::VectisError as ScaffoldError;
 
 /// Scaffold targets.
@@ -155,8 +152,7 @@ impl ScaffoldPlan {
 /// Execute a scaffold command against an explicit project directory.
 ///
 /// An `android` scaffold chains the vendored Gradle-wrapper setup
-/// ([`crate::android::run_for_shell_dir`]) after the write, exactly as
-/// the legacy CLI did.
+/// ([`crate::android::run_for_shell_dir`]) after the write.
 ///
 /// # Errors
 ///

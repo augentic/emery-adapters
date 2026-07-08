@@ -7,7 +7,7 @@ Source filenames are flat under `templates/android/`. Nested target paths (espec
 
 Total: 19 files (matches the Android assembly file manifest).
 
-The Gradle wrapper files (`gradlew`, `gradlew.bat`, `gradle/wrapper/gradle-wrapper.jar`, `gradle/wrapper/gradle-wrapper.properties`) are **not** emitted as scaffold templates. They are vendored inside the adapter core (`core/assets/android/gradle-wrapper/`) and copied into `Android/` by the deterministic Android scaffold-sync leg (also run after scaffolding and during the build prepare prelude when `android` is in scope). `local.properties` (`sdk.dir` from `$ANDROID_HOME`), `org.gradle.java.home`, and NDK substitution remain host-derived via `make setup-host` in the Android Makefile.
+The Gradle wrapper files (`gradlew`, `gradlew.bat`, `gradle/wrapper/gradle-wrapper.jar`, `gradle/wrapper/gradle-wrapper.properties`) are **not** emitted as scaffold templates. They are vendored inside the adapter crate (`assets/android/gradle-wrapper/`) and copied into `Android/` by the deterministic Android scaffold-sync leg (also run after scaffolding and during the build prepare prelude when `android` is in scope). `local.properties` (`sdk.dir` from `$ANDROID_HOME`), `org.gradle.java.home`, and NDK substitution remain host-derived via `make setup-host` in the Android Makefile.
 
 ## Placeholder reference
 

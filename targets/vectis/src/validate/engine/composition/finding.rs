@@ -1,5 +1,4 @@
-//! Typed finding shared by the composition sub-checks. Replaces the
-//! ad-hoc `json!({ "path": …, "message": … })` literals so every check
+//! Typed finding shared by the composition sub-checks, so every check
 //! produces the same wire fragment by construction.
 
 use serde_json::{Value, json};

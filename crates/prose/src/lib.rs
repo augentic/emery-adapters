@@ -1,37 +1,29 @@
 //! Build-time codegen for adapter guests' embedded prose registries.
 //!
-//! An adapter core's `build.rs` calls [`emit_core`] with its prose trees
-//! (typically `prompts` and `references`). Trees live under `<adapter>/prose/`
-//! on disk; registry keys omit the `prose/` prefix (`prompts/build.md`, not
-//! `prose/prompts/build.md`). The walk follows
-//! directory symlinks (such as `references/spec-runtime` into
-//! `codex/references/runtime/` — symlinks do not survive embedding, so
-//! the resolved content is inlined under the symlink-name path) and writes
-//! `<out_dir>/registry_docs.rs`: one `Doc` entry per markdown file, keyed
-//! by its adapter-relative path, with the body pulled in by `include_str!`
-//! against the resolved absolute path. The include site supplies the `Doc`
-//! type (`adapter::registry::Doc`). A dangling symlink or
-//! unreadable tree fails the build.
+//! An adapter's `build.rs` calls [`emit_adapter`] with its prose trees
+//! (typically `prompts` and `references`). Trees live under
+//! `<adapter>/prose/` on disk; registry keys omit the `prose/` prefix.
+//! The walk follows directory symlinks, inlining resolved content under
+//! the symlink-name path, and writes `<out_dir>/registry_docs.rs`: one
+//! `Doc` entry per markdown file, with the body pulled in by
+//! `include_str!`. A dangling symlink or unreadable tree fails the build.
 
 use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// [`emit`] for an adapter core's `build.rs`: resolves the adapter root
-/// from `CARGO_MANIFEST_DIR` (the core sits at `<adapter>/core`)
-/// and the output from `OUT_DIR`.
+/// [`emit`] for an adapter guest's `build.rs`: the adapter root is
+/// `CARGO_MANIFEST_DIR` and the output is `OUT_DIR`.
 ///
 /// # Panics
 ///
 /// Panics on any failure — the caller is a build script and must not
 /// limp on.
-pub fn emit_core(trees: &[&str]) {
-    let manifest_dir =
-        PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR"));
+pub fn emit_adapter(trees: &[&str]) {
     let adapter_root =
-        manifest_dir.parent().expect("core crate sits at <adapter>/core under the adapter root");
+        PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR"));
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").expect("cargo sets OUT_DIR"));
-    if let Err(err) = emit(adapter_root, trees, &out_dir) {
+    if let Err(err) = emit(&adapter_root, trees, &out_dir) {
         panic!("prose registry codegen failed for {}: {err}", adapter_root.display());
     }
 }
@@ -39,9 +31,8 @@ pub fn emit_core(trees: &[&str]) {
 const PROSE_ROOT: &str = "prose";
 
 /// Walk `trees` under `<adapter_root>/prose/` and write the sorted `DOCS`
-/// table to
-/// `<out_dir>/registry_docs.rs`, printing the `cargo:rerun-if-changed`
-/// directives for every directory and document walked.
+/// table to `<out_dir>/registry_docs.rs`, printing `cargo:rerun-if-changed`
+/// for every directory and document walked.
 ///
 /// A tree that does not exist under `adapter_root` is skipped — adapters
 /// share one canonical tree list (`prompts` + `references`) and not every
@@ -86,10 +77,8 @@ pub fn emit(adapter_root: &Path, trees: &[&str], out_dir: &Path) -> Result<(), S
     fs::write(out_dir.join("registry_docs.rs"), out).map_err(|err| err.to_string())
 }
 
-// Collect every `.md` file under `dir` as `(adapter-relative path, resolved
-// absolute path)`, descending through directory symlinks. `rel` is the
-// symlink-name path (prompts reference `references/spec-runtime/...`), while
-// the resolved path feeds `include_str!`.
+// Collect every `.md` file under `dir` as `(adapter-relative path,
+// resolved absolute path)`, descending through directory symlinks.
 fn walk(dir: &Path, rel: &str, docs: &mut Vec<(String, PathBuf)>) -> Result<(), String> {
     println!("cargo:rerun-if-changed={}", dir.display());
     let entries = fs::read_dir(dir).map_err(|err| format!("read {}: {err}", dir.display()))?;

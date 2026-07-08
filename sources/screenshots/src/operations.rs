@@ -1,10 +1,9 @@
-//! The judgment operations: `survey` and `extract` — schema-gated legs
-//! through [`adapter::judgment`] with deterministic id-grammar
-//! tails.
+//! The judgment operations: `survey` and `extract` — schema-gated
+//! legs through [`adapter::judgment`] with id-grammar tails.
 //!
 //! The judgment detail — the vision prerequisite, the
-//! spatial-inference pipeline, the `region` / `container` / `leaf` claim
-//! kinds — rides in the embedded prompts.
+//! spatial-inference pipeline, the `region` / `container` / `leaf`
+//! claim kinds — rides in the embedded prompts.
 
 use adapter::answers::{
     EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA, LeadsAnswer, validate_evidence, validate_leads,
@@ -14,17 +13,13 @@ use adapter::{Model, judgment};
 
 use crate::registry;
 
-/// Deterministic self-description for the `describe` operation.
-///
-/// Resolve-time metadata answered from compiled-in constants: no
-/// compatibility floor is declared, matching the retired manifest.
+/// Resolve-time `describe` metadata: no compatibility floor.
 #[must_use]
 pub const fn describe() -> SourceManifest {
     SourceManifest { specify_floor: None }
 }
 
-/// How the spawned agent resolves its bound source material — the
-/// session-less state note both prompts carry.
+/// Session-less state note both prompts carry.
 const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and there is no \
                             session: every input you need lives in the workspace tree and this \
                             prompt. Resolve the bound source material from the plan — read \
@@ -35,11 +30,9 @@ const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and
                             prerequisite applies: read the images themselves, never fall back \
                             to filename or metadata inference.";
 
-/// Survey the bound screen-image set into leads, one per screen.
-///
-/// One schema-gated judgment leg over the embedded `prompts/survey.md`
-/// (vision inference rides in the prompt), followed by the deterministic
-/// id-grammar tail.
+/// Survey the bound screen-image set into leads, one per screen — one
+/// schema-gated leg over `prompts/survey.md`, then the id-grammar
+/// tail.
 ///
 /// # Errors
 ///
@@ -66,11 +59,9 @@ pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>,
     Ok(answer.leads)
 }
 
-/// Extract one lead's spatial Evidence from the bound screen images.
-///
-/// One schema-gated judgment leg over the embedded `prompts/extract.md`
-/// (emitting `region` / `container` / `leaf` claims), followed by the
-/// deterministic claim-id tail.
+/// Extract one lead's spatial Evidence from the bound screen images —
+/// one schema-gated leg over `prompts/extract.md` (emitting `region` /
+/// `container` / `leaf` claims), then the claim-id tail.
 ///
 /// # Errors
 ///

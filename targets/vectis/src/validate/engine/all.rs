@@ -12,23 +12,19 @@ use crate::validate::ValidateMode;
 use crate::validate::error::VectisError;
 
 /// Run every per-mode validator against the supplied project root (or
-/// CWD when none is given) and fold the per-mode envelopes into a
-/// combined envelope.
+/// CWD) and fold the envelopes into one combined envelope.
 ///
-/// Sub-mode order: `layout`, `composition`, `tokens`, `assets` —
-/// matches the operator-friendly "structural input → wired
-/// composition → cross-artifact references" pipeline. When a sub-mode's
-/// default-resolved input does not exist on disk, the sub-report is a
-/// synthetic `{ mode, path, errors: [], warnings: [], skipped: true,
-/// message: ... }` so the combined run continues; the dispatcher's
-/// `validate_exit_code` recurses through `results[*].report` and only
-/// flips to non-zero when a real sub-report has errors.
+/// Sub-mode order `layout`, `composition`, `tokens`, `assets` matches
+/// the "structural input → wired composition → cross-artifact
+/// references" pipeline. A missing default-resolved input becomes a
+/// synthetic `skipped: true` sub-report so the combined run continues;
+/// only a real sub-report with errors flips the exit code.
 ///
 /// # Errors
 ///
-/// Returns [`VectisError::InvalidProject`] when a sub-mode whose input
-/// IS present on disk fails to read it, and [`VectisError::Internal`]
-/// if an embedded schema fails to compile.
+/// Returns [`VectisError::InvalidProject`] when a sub-mode's present
+/// input fails to read, and [`VectisError::Internal`] if an embedded
+/// schema fails to compile.
 pub(super) fn validate(path: Option<&Path>) -> Result<Value, VectisError> {
     let project_root = path.map_or_else(default_project_root, Path::to_path_buf);
 

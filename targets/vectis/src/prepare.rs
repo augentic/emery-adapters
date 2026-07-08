@@ -17,14 +17,13 @@ use crate::validate::engine::load_shell_platforms;
 use crate::verify::{VerifyMode, run as run_verify, verify_exit_code};
 use crate::{VectisError, android, ios_scaffold};
 
-/// Run the deterministic prepare materialize step for one slice build.
+/// Run the prepare materialize step for one slice build.
 ///
 /// Scope resolution over the effective `assets.yaml`, then a scoped
 /// `materialize assets` run when any in-scope asset lacks exports for a
 /// declared shell platform, or a `skipped: true` summary otherwise.
-///
-/// The returned value is the same `materialize assets` summary envelope
-/// the extension's `prepare build` embeds under its `materialized` key.
+/// Returns the summary envelope `prepare build` embeds under
+/// `materialized`.
 ///
 /// # Errors
 ///
@@ -73,8 +72,7 @@ fn skipped_materialize_summary(path: &Path, platforms: &[String]) -> Value {
 /// Run the full slice-build prepare for one slice.
 ///
 /// The scoped materialize step, the app-icon bootstrap gate, the
-/// Android Gradle-wrapper setup, and the iOS scaffold sync — the same
-/// orchestration the legacy `adapter.yaml` `prepare.argv` hook ran.
+/// Android Gradle-wrapper setup, and the iOS scaffold sync.
 /// `slice_dir` may be absolute or relative to `project_root`.
 ///
 /// # Errors

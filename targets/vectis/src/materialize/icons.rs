@@ -163,10 +163,3 @@ pub(crate) fn asset_error(asset_id: &str, message: &str) -> Value {
         "message": message,
     })
 }
-
-// `materialize_icon_vectors` (the public icon-vector export funnel) is
-// exercised end-to-end through the CLI by
-// `tests/engine/materialize.rs::materialize_icon_vector_exports_exist` (writes
-// the ios `.pdf` + android `.xml` exports with no errors) and
-// `materialize_icon_dry_run_skips_writes` (dry-run reports but writes nothing),
-// so the `src` unit duplicates were deleted.

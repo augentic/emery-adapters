@@ -1,31 +1,22 @@
-//! Default-path resolver and cross-artifact discovery helper.
+//! Default-path resolver ([`resolve_default_path`]) and cross-artifact
+//! discovery ([`discover_artifact`]).
 //!
-//! Two related questions answered in one place:
-//!
-//! * "What file should `validate <mode>` read when no `[path]`
-//!   positional is supplied?" → [`resolve_default_path`].
-//! * "What sibling artifact should cross-artifact resolution chase
-//!   from this calling artifact's location?" → [`discover_artifact`].
-//!
-//! Both walk up from a starting path looking for `.specify/`, parse
-//! the project's `schema.yaml` (if any) for an on-disk `artifacts:`
-//! block, and otherwise use the embedded defaults at
+//! Both walk up from a starting path looking for `.specify/` and
+//! resolve against the embedded defaults at
 //! [`EMBEDDED_ARTIFACT_PATHS`].
 
 use std::path::{Path, PathBuf};
 
 use crate::validate::ValidateMode;
 
-/// Embedded default paths for the four `vectis validate` modes. The
-/// canonical Vectis cascade: slice-local files first, then
-/// project-level inputs or the merged composition baseline.
+/// Embedded default paths for the four `vectis validate` modes — the
+/// canonical cascade: slice-local files first, then project-level
+/// inputs or the merged composition baseline.
 ///
-/// The order of the inner array is the resolution order; the first
-/// existing file wins. The role label (first tuple element) is
-/// retained for parity with the schema YAML even though only the
-/// template strings are consumed. The `<name>` placeholder is
-/// expanded against `.specify/slices/<dir>/` (alphabetical first
-/// match) at resolution time.
+/// Inner-array order is resolution order; the first existing file
+/// wins. The role label exists for parity with the schema YAML; only
+/// the templates are consumed. `<name>` expands against
+/// `.specify/slices/<dir>/` (alphabetical first match).
 const EMBEDDED_ARTIFACT_PATHS: &[(&str, &[(&str, &str)])] = &[
     (
         "layout",
@@ -57,23 +48,17 @@ const EMBEDDED_ARTIFACT_PATHS: &[(&str, &[(&str, &str)])] = &[
     ),
 ];
 
-/// Resolve a per-mode default path for `validate <mode>` when no
-/// `[path]` positional was supplied.
-///
-/// Walks up from CWD looking for a project root (the directory
-/// containing `.specify/`); falls through to a fixed canonical path
-/// when the resolver yields nothing, so the caller's
-/// `<file>.yaml not readable at <path>` error names the most
+/// Resolve the default path for `validate <mode>` when no `[path]`
+/// positional was supplied. Falls through to a fixed canonical path
+/// when nothing exists, so the caller's read error names the most
 /// operator-friendly path.
 pub(super) fn resolve_default_path(mode: ValidateMode) -> PathBuf {
     resolve_default_path_with_root(mode, &default_project_root())
 }
 
-/// Return the default project root for omitted `[path]` positionals.
-///
-/// WASI tool invocations receive `PROJECT_DIR` from the host. Native
-/// development walks up from CWD to a `.specify/` root when present,
-/// otherwise uses CWD.
+/// Default project root for omitted `[path]` positionals: the host's
+/// `PROJECT_DIR` when set (WASI invocations), else the `.specify/`
+/// root above CWD, else CWD.
 pub(super) fn default_project_root() -> PathBuf {
     if let Some(project_dir) = std::env::var_os("PROJECT_DIR").filter(|value| !value.is_empty()) {
         return PathBuf::from(project_dir);
@@ -85,13 +70,9 @@ pub(super) fn default_project_root() -> PathBuf {
 
 /// Resolve a per-mode default path against an explicit project root.
 ///
-/// Used both by `resolve_default_path` (where the root is derived
-/// from CWD) and by `validate all` (where the root is the operator's
-/// `[path]` positional, defaulting to CWD). When no candidate exists
-/// the function returns the *last* candidate it considered; if the
-/// candidate list itself is empty (an unknown mode key in a
-/// hand-edited `artifacts:` block), it falls back to the embedded
-/// canonical name under `<root>/`.
+/// When no candidate exists, returns the *last* candidate considered;
+/// with an empty candidate list, falls back to the embedded canonical
+/// name under `<root>/`.
 #[must_use]
 pub fn resolve_default_path_with_root(mode: ValidateMode, project_root: &Path) -> PathBuf {
     let key = artifact_key_for_mode(mode).unwrap_or("composition");
@@ -109,19 +90,12 @@ pub fn resolve_default_path_with_root(mode: ValidateMode, project_root: &Path) -
     last_candidate.unwrap_or_else(|| project_root.join(canonical_default_template(key)))
 }
 
-/// Locate a sibling artifact (in the [`ValidateMode`] sense) for a
-/// caller anchored at `start`. Returns `Some(path)` only when an
-/// existing file is found; `None` otherwise.
+/// Locate a sibling artifact for a caller anchored at `start`.
+/// Returns `Some(path)` only when an existing file is found.
 ///
-/// Resolution order:
-///
-/// 1. **Same directory as `start`** — catches the change-local case
-///    where every artifact sits next to its caller, plus standalone
-///    "files in the same folder" usage that does not rely on a
-///    Specify project layout.
-/// 2. **Embedded canonical cascade against the project root** —
-///    walks up from `start` to find `.specify/`, then tries every
-///    `paths.<role>` template in canonical order.
+/// Resolution order: (1) same directory as `start` — the change-local
+/// case, plus standalone usage without a Specify project layout;
+/// (2) the embedded canonical cascade against the project root.
 #[must_use]
 pub fn discover_artifact(start: &Path, mode: ValidateMode) -> Option<PathBuf> {
     let key = artifact_key_for_mode(mode)?;
@@ -147,8 +121,8 @@ pub fn discover_artifact(start: &Path, mode: ValidateMode) -> Option<PathBuf> {
     None
 }
 
-/// Filename half of the canonical-default template for a given
-/// artifact key. Stays in lock-step with [`canonical_default_template`].
+/// Filename half of the canonical-default template; in lock-step with
+/// [`canonical_default_template`].
 fn canonical_filename_for_key(key: &str) -> &'static str {
     match key {
         "layout" => "layout.yaml",
@@ -158,11 +132,9 @@ fn canonical_filename_for_key(key: &str) -> &'static str {
     }
 }
 
-/// Walk up from `start` until a `.specify/` directory is found.
-///
-/// `start` is treated as a directory if it is one, otherwise its
-/// parent is used. Returns the project root — the directory
-/// containing `.specify/`, *not* `.specify/` itself.
+/// Walk up from `start` (or its parent when `start` is a file) to the
+/// directory containing `.specify/` — the project root, *not*
+/// `.specify/` itself.
 #[must_use]
 pub fn find_project_root(start: &Path) -> Option<PathBuf> {
     let mut cursor =
@@ -177,12 +149,9 @@ pub fn find_project_root(start: &Path) -> Option<PathBuf> {
     }
 }
 
-/// Locate the operator-curated component catalog for a Vectis project.
-///
-/// The catalog lives at `.specify/design-system/components.yaml`
-/// relative to the project root (component catalog contract). Returns `Some(path)`
-/// when the file exists; `None` otherwise (opt-in — absent catalogs
-/// are silently skipped).
+/// Locate the operator-curated component catalog at
+/// `.specify/design-system/components.yaml` under the project root.
+/// `None` when absent (the catalog is opt-in).
 #[must_use]
 pub fn discover_catalog(start: &Path) -> Option<PathBuf> {
     let project_root = find_project_root(start)?;
@@ -190,9 +159,8 @@ pub fn discover_catalog(start: &Path) -> Option<PathBuf> {
     path.is_file().then_some(path)
 }
 
-/// Map a [`ValidateMode`] to the `artifacts:` map key it resolves
-/// against. `ValidateMode::All` has no per-mode key (the convenience
-/// verb dispatches each per-mode handler in turn) and returns `None`.
+/// Map a [`ValidateMode`] to its `artifacts:` map key.
+/// `ValidateMode::All` has no per-mode key and returns `None`.
 const fn artifact_key_for_mode(mode: ValidateMode) -> Option<&'static str> {
     match mode {
         ValidateMode::Layout => Some("layout"),
@@ -203,9 +171,8 @@ const fn artifact_key_for_mode(mode: ValidateMode) -> Option<&'static str> {
     }
 }
 
-/// Return the ordered list of `paths.<role>` templates for the given
-/// artifact `key`. The resolution order comes from the embedded
-/// canonical mapping table held privately in this module.
+/// Ordered `paths.<role>` templates for the given artifact `key`,
+/// in the embedded resolution order.
 #[must_use]
 pub fn paths_for_key(key: &str) -> Vec<String> {
     EMBEDDED_ARTIFACT_PATHS
@@ -215,11 +182,9 @@ pub fn paths_for_key(key: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// Return the operator-friendly fallback template (the project /
-/// baseline location, *not* the change-local one) for a given
-/// artifact key. Used as the very last resort when neither the
-/// on-disk `artifacts:` block nor the embedded defaults yield any
-/// candidate.
+/// Last-resort fallback template: the project / baseline location,
+/// *not* the change-local one, so error messages stay
+/// operator-friendly.
 fn canonical_default_template(key: &str) -> &'static str {
     match key {
         "layout" => "design-system/layout.yaml",

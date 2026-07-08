@@ -1,12 +1,10 @@
 //! The `Model` capability: judgment calls through `omnia:model/completion`.
 //!
-//! The request and reply types here are wasm-free mirrors of the
-//! `omnia:model@0.1.0` records, minus the one thing that cannot cross into
-//! a wasm-free core: the `grants.workspace` descriptor lend. A core asks
-//! for the lend with the plain [`Request::lend_workspace`] flag, and the
-//! `wasm32` default body resolves it against the guest's own `"."` preopen
-//! at the call site — a host call from the adapter's own instance, exactly
-//! where the descriptor belongs.
+//! The request and reply types mirror the `omnia:model@0.1.0` records,
+//! except the `grants.workspace` descriptor lend: a core asks for the
+//! lend with the plain [`Request::lend_workspace`] flag, and the `wasm32`
+//! default body resolves it against the guest's own `"."` preopen at the
+//! call site.
 
 use std::future::Future;
 
@@ -51,8 +49,7 @@ pub enum Format {
     Schema(SchemaFormat),
 }
 
-/// Remote MCP server offered to the model for this completion — the
-/// adapter's own references route, carrying its endpoint URL.
+/// Remote MCP server offered to the model for this completion.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct McpGrant {
     /// Logical server name (e.g. in `.cursor/mcp.json`).
@@ -108,9 +105,7 @@ pub enum Error {
     Backend(String),
 }
 
-/// The WASI-backed judgment provider every adapter shim hands its core:
-/// [`Model`]'s `wasm32` default method body delegates to the
-/// `omnia-wasi-model` bindings, so the unit struct carries no state.
+/// The WASI-backed judgment provider every adapter shim hands its core.
 #[cfg(target_arch = "wasm32")]
 #[derive(Clone, Copy, Debug)]
 pub struct WasiModel;
@@ -120,10 +115,9 @@ impl Model for WasiModel {}
 
 /// Issue judgment completions against the `omnia:model` host.
 ///
-/// The method carries a WASI-backed default body on `wasm32` (delegating
-/// to the `omnia-wasi-model` bindings) and a bare signature off `wasm32`,
-/// so native tests supply their own provider — the same shape as
-/// omnia-guest's capability traits.
+/// `create` has a WASI-backed default body on `wasm32` and a bare
+/// signature off it, so native tests supply their own provider — the same
+/// shape as omnia-guest's capability traits.
 pub trait Model: Send + Sync {
     /// Single-shot completion — returns one validated reply.
     #[cfg(not(target_arch = "wasm32"))]
@@ -138,9 +132,8 @@ pub trait Model: Send + Sync {
 
 #[cfg(target_arch = "wasm32")]
 mod wasi {
-    //! The WASI-backed leg: map the wasm-free request onto the
-    //! `omnia:model/completion` records and resolve the workspace lend
-    //! from the guest's own preopen table.
+    //! Map the request onto the `omnia:model/completion` records and
+    //! resolve the workspace lend from the guest's own preopen table.
 
     use omnia_wasi_model::completion;
     use wasip3::filesystem::preopens;

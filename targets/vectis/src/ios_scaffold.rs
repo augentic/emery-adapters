@@ -1,10 +1,9 @@
 //! iOS agent-immutable scaffold file sync and drift detection.
 //!
-//! `iOS/Makefile`, `iOS/project.yml`, `iOS/.vectis/sim-build.sh`, and
-//! `iOS/.vectis/sim-dev.sh` are
-//! rendered exclusively from the embedded scaffold templates. Prepare
-//! overwrites drift before agent work; verify emits blocking findings when
-//! on-disk bytes diverge.
+//! The [`IMMUTABLE_RELATIVE_PATHS`] files are rendered exclusively from
+//! the embedded scaffold templates. Prepare overwrites drift before
+//! agent work; verify emits blocking findings when on-disk bytes
+//! diverge.
 
 use std::fmt::Write;
 use std::fs;

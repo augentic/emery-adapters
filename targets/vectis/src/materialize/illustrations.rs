@@ -118,8 +118,3 @@ fn is_illustration_vector_entry(entry: &Value) -> bool {
     entry.get("role").and_then(Value::as_str) == Some("illustration")
         && entry.get("kind").and_then(Value::as_str) == Some("vector")
 }
-
-// `materialize_illustration_vectors` (public) writes the per-scale ios
-// imageset PNGs (@2x/@3x) and per-density android drawables (mdpi…xxxhdpi); it
-// is exercised end-to-end through the CLI, with the exact rendered dimensions,
-// by `tests/engine/materialize_illustrations.rs::materialize_illustration_vector_exports_exist`.

@@ -1,6 +1,6 @@
 [package]
 name = "testkit"
-description = "Test doubles for the adapter-core suites: the scripted MockModel judgment provider"
+description = "Test doubles for the adapter test suites: the scripted MockModel judgment provider"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

@@ -1,10 +1,9 @@
 //! Intent-specific operation behavior: the degenerate inline binding.
 
-use intent_core as core;
 use std::path::Path;
 
 use adapter::seam::{Authority, ClaimKind, Context, Lead};
-use core::operations::{describe, extract, survey};
+use intent::operations::{describe, extract, survey};
 use testkit::MockModel;
 
 fn ctx() -> Context<'static> {
@@ -15,9 +14,6 @@ fn ctx() -> Context<'static> {
     }
 }
 
-// The survey prompt frames intent's degenerate binding: the operator's
-// intent string rides inline as the binding's `value`, no source tree is
-// bound, and the single lead's id is the plan-derived slice name.
 #[tokio::test]
 async fn survey_prompt_frames_the_inline_binding() {
     let model = MockModel::answering([
@@ -35,8 +31,6 @@ async fn survey_prompt_frames_the_inline_binding() {
     assert!(user.contains("exactly one lead"), "prompt carries the degenerate cardinality");
 }
 
-// The extract answer echoes the operator's intent as the single
-// `kind: intent` claim under `authority: intent`.
 #[tokio::test]
 async fn extract_parses_the_intent_claim() {
     let model = MockModel::answering([
@@ -58,7 +52,6 @@ async fn extract_parses_the_intent_claim() {
     assert!(request.system.as_deref().unwrap().starts_with("# intent.extract"));
 }
 
-// No model call.
 #[test]
 fn describe_declares_no_floor() {
     assert_eq!(describe().specify_floor, None);

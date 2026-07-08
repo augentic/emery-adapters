@@ -1,12 +1,11 @@
 //! The judgment operation template: `guidance`, `build`, and `merge`,
 //! over the shared [`phase`] scaffolding.
 //!
-//! `build` decomposes into the three format sub-flows (json-schema,
-//! openapi, asyncapi) as independent legs, then a bounded verify-repair
-//! loop over the absorbed contract validators, then one report leg. The
-//! validators run again after the report lands (validate-before-visible);
-//! residual blocking findings force `status: failure` regardless of the
-//! answer.
+//! `build` runs the three format sub-flows (json-schema, openapi,
+//! asyncapi) as independent legs, a bounded verify-repair loop over
+//! the contract validators, then a report leg. The validators run
+//! again after the report lands (validate-before-visible); residual
+//! blocking findings force `status: failure`.
 
 use std::path::Path;
 
@@ -53,12 +52,9 @@ const SUB_FLOWS: [SubFlow; 3] = [
     },
 ];
 
-/// Deterministic self-description for the `describe` operation.
-///
-/// Resolve-time metadata answered from compiled-in constants: no
-/// compatibility floor; one optional build input — the slice tree's
-/// `contracts/` subtree, carrying partial deltas written by a prior
-/// pass.
+/// Resolve-time `describe` metadata: no compatibility floor; one
+/// optional build input — the slice tree's `contracts/` subtree,
+/// carrying partial deltas written by a prior pass.
 #[must_use]
 pub fn describe() -> TargetManifest {
     TargetManifest {
@@ -71,8 +67,7 @@ pub fn describe() -> TargetManifest {
     }
 }
 
-/// Guidance on the expected build artifacts for this target — the
-/// embedded guidance prompt, returned deterministically (no judgment leg).
+/// The embedded guidance prompt (no judgment leg).
 #[must_use]
 pub fn guidance() -> &'static str {
     registry::body("prompts/guidance.md")
@@ -95,9 +90,8 @@ pub async fn build<P: Model>(
     let inputs_block = phase::render_inputs(inputs);
     let build_prompt = registry::body("prompts/build.md");
 
-    // Phase 2 — author or import, fixed format order. Classification is
-    // part of each sub-flow's own judgment: the prompt tells it when to
-    // skip, and a skipped leg answers `applicable: false` without writing.
+    // Phase 2 — author or import, fixed format order. Each sub-flow
+    // judges its own applicability and self-skips.
     let mut summaries: Vec<String> = Vec::new();
     for sub_flow in &SUB_FLOWS {
         let format = sub_flow.format;
@@ -116,11 +110,10 @@ pub async fn build<P: Model>(
         summaries.push(phase::render_outcome(format, &answer));
     }
 
-    // Phase 4 — verify-repair loop over the compiled-in validators (the
-    // Phase 5 tool gate, compiled in). The prompt re-enters the owning
-    // sub-prompt per format; the session-less shape folds that into one
-    // repair call per iteration carrying every finding, with the owning
-    // sub-prompts inlined so repair does not depend on the MCP route.
+    // Phase 4 — verify-repair over the compiled-in validators. The
+    // session-less shape folds each iteration into one repair call
+    // carrying every finding, with the owning sub-prompts inlined so
+    // repair does not depend on the MCP route.
     for _ in 0..MAX_REPAIR_ITERATIONS {
         let findings = validate_baseline(&slice_contracts);
         if findings.is_empty() {
@@ -138,7 +131,7 @@ pub async fn build<P: Model>(
         phase::phase(model, ctx, system, user, "repair").await?;
     }
 
-    // Final leg — the report answer, gated by the derived answer schema.
+    // Report answer, gated by the answer schema.
     let system = build_prompt.to_string();
     let user = format!(
         "Write the build report for slice `{slice}`. Verify the delta under \
@@ -151,17 +144,17 @@ pub async fn build<P: Model>(
     );
     let report = phase::report(model, ctx, system, user).await?;
 
-    // Validate-before-visible: residual blocking findings override the
-    // judgment regardless of what the answer claimed.
+    // Validate-before-visible: residual blocking findings override
+    // the answer.
     Ok(enforce_validators(report, &validate_baseline(&slice_contracts)))
 }
 
 /// Merge a built slice's delta into the baseline `contracts/` tree.
 ///
 /// One judgment leg folds the delta and answers with the report, then
-/// the compiled-in post-merge validator gate runs with one bounded
-/// repair leg. Merge deliberately gets one repair leg where build gets two: the
-/// delta was already validated at build time, so post-merge findings are
+/// the post-merge validator gate runs with one bounded repair leg.
+/// Merge gets one repair leg where build gets two: the delta was
+/// already validated at build time, so post-merge findings are
 /// collision-shaped (`id-unique` against the baseline) and either one
 /// pass clears them or the slice needs human review.
 ///
@@ -201,11 +194,10 @@ pub async fn merge<P: Model>(
     Ok(enforce_validators(report, &findings))
 }
 
-/// Inline the sub-prompts owning the findings' files into a repair
-/// prompt, routed by the `contracts/` subdirectory each format owns.
-/// Findings that route nowhere pull in every sub-prompt, so repair never
-/// runs without the specialist material the build prompt's Phase 4
-/// re-enters.
+/// Inline the sub-prompts owning the findings' files, routed by the
+/// `contracts/` subdirectory each format owns. Findings that route
+/// nowhere pull in every sub-prompt, so repair never runs without its
+/// specialist material.
 fn owning_sub_prompts(findings: &[ContractFinding], contracts_dir: &Path) -> String {
     let unrouted = findings.iter().any(|finding| {
         !SUB_FLOWS.iter().any(|sub_flow| finding.path.starts_with(contracts_dir.join(sub_flow.dir)))
@@ -221,7 +213,6 @@ fn owning_sub_prompts(findings: &[ContractFinding], contracts_dir: &Path) -> Str
     inlined
 }
 
-/// Map one deterministic validator finding into the seam shape.
 /// Contract rules gate the build, so validator findings are blocking
 /// (`important`).
 fn validator_finding(finding: &ContractFinding) -> Finding {
@@ -232,12 +223,10 @@ fn validator_finding(finding: &ContractFinding) -> Finding {
     }
 }
 
-/// [`phase::enforce`] over the deterministic validator residue.
 fn enforce_validators(report: Report, residual: &[ContractFinding]) -> Report {
     phase::enforce(report, residual.iter().map(validator_finding).collect())
 }
 
-/// Render validator findings for a repair prompt.
 fn render_validator_findings(findings: &[ContractFinding]) -> String {
     findings
         .iter()

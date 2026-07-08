@@ -16,14 +16,16 @@ The Vectis target adapter contributes its `guidance` / `build` / `merge` prompts
 ```text
 /targets/vectis/
 ├── prompts/                         # guidance, build (with phase prompts), merge
-├── core/                            # vectis-core: engines, templates, versions.toml, schemas
-│   └── schemas/                     # composition, tokens, assets JSON Schemas
+├── src/                             # wasm-free engines + the wasm32 guest shim
+├── templates/                       # Crux scaffold templates (manifest-driven)
+├── schemas/                         # composition, tokens, assets JSON Schemas
+├── versions.toml                    # Crux + toolchain version pins
 ├── references/                      # Crux idiom prose, design-system docs, layout-inferer contract
 └── rules/
     └── vectis.mdc                   # This file
 ```
 
-The three prompts (`guidance`, `build`, `merge`), the Vectis codex, and the operator-facing `tokens.yaml` example all live under [`targets/vectis/`](..); runtime schemas ([`composition.schema.json`](https://schemas.specify.dev/vectis/composition.schema.json), [`tokens.schema.json`](https://schemas.specify.dev/vectis/tokens.schema.json), [`assets.schema.json`](https://schemas.specify.dev/vectis/assets.schema.json)) are tool-owned in **this repo** (`targets/vectis/core/schemas/`), embedded in the adapter guest. The adapter's identity and resolve-time facts are wasm-native: the guest crate's `Cargo.toml` `version` and the WIT `describe` manifest — there is no `adapter.yaml`.
+The three prompts (`guidance`, `build`, `merge`), the Vectis codex, and the operator-facing `tokens.yaml` example all live under [`targets/vectis/`](..); runtime schemas ([`composition.schema.json`](https://schemas.specify.dev/vectis/composition.schema.json), [`tokens.schema.json`](https://schemas.specify.dev/vectis/tokens.schema.json), [`assets.schema.json`](https://schemas.specify.dev/vectis/assets.schema.json)) are tool-owned in **this repo** (`targets/vectis/schemas/`), embedded in the adapter guest. The adapter's identity and resolve-time facts are wasm-native: the guest crate's `Cargo.toml` `version` and the WIT `describe` manifest — there is no `adapter.yaml`.
 
 The Vectis writer / reviewer behavior (`core-writer`, `core-reviewer`, `test-writer`, `ios-writer`, `ios-reviewer`, `android-writer`, `android-reviewer`) lives inline in [`../prompts/build.md`](../prompts/build.md) (writers and reviewers) and [`../prompts/merge.md`](../prompts/merge.md) (post-merge host cap-matrix re-verification). The `vectis:image-layout-inferer` behavior lives in the [`screenshots` source adapter](../../../sources/screenshots/).
 

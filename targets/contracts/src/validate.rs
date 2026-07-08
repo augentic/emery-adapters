@@ -2,8 +2,8 @@
 //! enforce `version-is-semver`, `id-format`, and `id-unique` against each
 //! top-level `OpenAPI` / `AsyncAPI` document.
 //!
-//! Wasm-free: the guest shim runs these validators as its
-//! validate-before-visible gate after each judgment answer lands.
+//! Runs as the validate-before-visible gate after each judgment
+//! answer lands.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -11,11 +11,6 @@ use std::path::{Path, PathBuf};
 mod parse;
 
 /// One validation finding produced by [`validate_baseline`].
-///
-/// `rule_id` is one of `contract.version-is-semver`,
-/// `contract.id-format`, or `contract.id-unique`. `path` is the
-/// absolute path to the offending YAML file, suitable to render
-/// verbatim in the operator's terminal.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContractFinding {
     /// Absolute path to the contract file the finding refers to.
@@ -35,11 +30,9 @@ pub const RULE_ID_UNIQUE: &str = "contract.id-unique";
 
 /// Run the baseline-contract validation checks across `contracts_dir`.
 ///
-/// Returns an empty vector when the directory does not exist, when it
-/// is empty, or when every walked file is well-formed. The order of
-/// findings is deterministic: rules within a file appear in the order
-/// listed in the module docs, and files appear in lexicographic path
-/// order.
+/// Returns an empty vector when the directory does not exist or every
+/// walked file is well-formed. Findings sort by path, then rule id,
+/// then detail.
 #[must_use]
 pub fn validate_baseline(contracts_dir: &Path) -> Vec<ContractFinding> {
     if std::fs::read_dir(contracts_dir).is_err() {
