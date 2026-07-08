@@ -23,6 +23,7 @@ fn embeds_all_trees() {
         "references/agent-teams.md",
         "rules/VECTIS-006-asset-render-by-kind.md",
         "rules/VECTIS-007-ios-scaffold-immutability.md",
+        "rules/VECTIS-008-prompts-forbid-named-simulator.md",
         "rules/VECTIS-009-lint-suppression-forbidden.md",
     ] {
         assert!(registry::doc(path).is_some(), "registry embeds `{path}`");

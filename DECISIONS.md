@@ -73,7 +73,7 @@ _Codified in: `Makefile.toml` (`publish`); `.github/workflows/release.yaml`._
 
 ## Codex ownership
 
-**Decision (2026-07).** Shared codex packs (`UNI-*`, `CORE-*`) are owned by the engine repo and materialize into consumer projects at init / rules sync. This repo's manually synced `codex/rules/` copy is deleted. `codex/references/` and per-adapter `prose/rules/` overlays stay here.
+**Decision (2026-07).** Cross-target codex rules (`UNI-*`) are authored under `codex/rules/universal/` in this repository. Framework `CORE-*` rules stay in `augentic/specify` (`codex/rules/core/`). The `specify` binary embeds the universal pack from this checkout at build time and materializes it into consumer projects at init / `specify adapters sync`. `codex/references/` and per-adapter `prose/rules/` overlays also stay here.
 
 Adapter prompts cite `UNI-*` ids and point readers at `specify rules export` and the materialized codex cache — not repo-relative rule paths.
 
