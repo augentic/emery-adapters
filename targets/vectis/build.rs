@@ -1,8 +1,9 @@
-//! Embeds the adapter's prose trees as the sorted `DOCS` table
-//! `src/registry.rs` includes (symlinks resolve at build time), and
-//! generates the scaffold template registry from `templates/manifest.yaml`.
+//! Embeds every markdown document under the adapter's `prose/` tree as
+//! the sorted `DOCS` table `src/registry.rs` includes (symlinks resolve
+//! at build time), and generates the scaffold template registry from
+//! `templates/manifest.yaml`.
 //!
-//! The `rules/` tree rides along because the build prompt's review flow cites
+//! `prose/rules/` rides along because the build prompt's review flow cites
 //! the Vectis rule overlay by path, so the references server must serve it.
 
 use std::collections::{BTreeSet, HashMap};
@@ -20,7 +21,7 @@ const ASSEMBLY_ORDER: &[&str] = &["core", "ios", "android"];
 const MANIFEST_IGNORED: &str = "MANIFEST.md";
 
 fn main() {
-    prose::emit_adapter(&["prompts", "references", "rules"]);
+    prose::emit();
     if let Err(err) = generate_template_registry() {
         panic!("vectis template manifest codegen failed: {err}");
     }

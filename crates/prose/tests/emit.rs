@@ -1,10 +1,10 @@
-//! The prose codegen: tree walking, ordering, symlink
+//! The prose codegen: tree discovery, ordering, symlink
 //! resolution, and failure modes.
 
 use std::fs;
 use std::path::Path;
 
-use prose::emit;
+use prose::emit_from;
 use tempfile::TempDir;
 
 fn write(root: &Path, rel: &str, body: &str) {
@@ -19,9 +19,9 @@ fn write_file(root: &Path, rel: &str, body: &str) {
     fs::write(path, body).expect("write");
 }
 
-fn generate(adapter_root: &Path, trees: &[&str]) -> Result<String, String> {
+fn generate(adapter_root: &Path) -> Result<String, String> {
     let out = TempDir::new().expect("out dir");
-    emit(adapter_root, trees, out.path())?;
+    emit_from(adapter_root, out.path())?;
     Ok(fs::read_to_string(out.path().join("registry_docs.rs")).expect("generated file"))
 }
 
@@ -33,7 +33,7 @@ fn emits_sorted_doc_table() {
     write(adapter.path(), "prompts/build.md", "# build");
     write(adapter.path(), "prompts/notes.txt", "not embedded");
 
-    let generated = generate(adapter.path(), &["prompts", "references"]).expect("emit succeeds");
+    let generated = generate(adapter.path()).expect("emit succeeds");
 
     let build = generated.find(r#"Doc { path: "prompts/build.md""#).expect("build prompt embedded");
     let guidance =
@@ -45,6 +45,25 @@ fn emits_sorted_doc_table() {
     assert!(!generated.contains("notes.txt"), "non-markdown files are skipped");
     assert!(generated.contains("include_str!"), "bodies ride as include_str! against disk");
     assert!(generated.contains("pub static DOCS"), "table binds the DOCS static");
+}
+
+// The embed set is discovered from disk: any tree under `prose/` — and
+// any document directly at the `prose/` root — is embedded without being
+// declared anywhere.
+#[test]
+fn discovers_every_tree() {
+    let adapter = TempDir::new().expect("adapter root");
+    write(adapter.path(), "prompts/build.md", "# build");
+    write(adapter.path(), "rules/CON-001.md", "# rule");
+    write(adapter.path(), "overview.md", "# overview");
+
+    let generated = generate(adapter.path()).expect("emit succeeds");
+
+    assert!(generated.contains(r#"Doc { path: "rules/CON-001.md""#), "undeclared tree is embedded");
+    assert!(
+        generated.contains(r#"Doc { path: "overview.md""#),
+        "root-level document is keyed without a tree prefix"
+    );
 }
 
 #[test]
@@ -60,7 +79,7 @@ fn resolves_directory_symlinks_inline() {
     )
     .expect("symlink");
 
-    let generated = generate(adapter.path(), &["prompts", "references"]).expect("emit succeeds");
+    let generated = generate(adapter.path()).expect("emit succeeds");
 
     assert!(
         generated.contains(r#"Doc { path: "references/spec-runtime/protocol.md""#),
@@ -69,32 +88,19 @@ fn resolves_directory_symlinks_inline() {
 }
 
 #[test]
-fn empty_trees_fail() {
+fn empty_prose_fails() {
     let adapter = TempDir::new().expect("adapter root");
     fs::create_dir_all(adapter.path().join("prose/prompts")).expect("mkdir");
 
-    let err = generate(adapter.path(), &["prompts"]).expect_err("no documents is an error");
+    let err = generate(adapter.path()).expect_err("no documents is an error");
     assert!(err.contains("no markdown documents"), "error names the failure: {err}");
 }
 
-// Adapters share one canonical tree list and an adapter may carry no
-// references tree at all.
 #[test]
-fn missing_tree_is_skipped() {
-    let adapter = TempDir::new().expect("adapter root");
-    write(adapter.path(), "prompts/survey.md", "# survey");
-
-    let generated =
-        generate(adapter.path(), &["prompts", "references"]).expect("missing tree is tolerated");
-
-    assert!(generated.contains(r#"Doc { path: "prompts/survey.md""#), "present tree is embedded");
-}
-
-#[test]
-fn all_trees_missing_fails() {
+fn missing_prose_dir_fails() {
     let adapter = TempDir::new().expect("adapter root");
 
-    let err = generate(adapter.path(), &["prompts"]).expect_err("no documents is an error");
+    let err = generate(adapter.path()).expect_err("no documents is an error");
     assert!(err.contains("no markdown documents"), "error names the failure: {err}");
 }
 
@@ -108,6 +114,6 @@ fn dangling_symlink_fails() {
     )
     .expect("symlink");
 
-    let err = generate(adapter.path(), &["prompts"]).expect_err("dangling symlink is an error");
+    let err = generate(adapter.path()).expect_err("dangling symlink is an error");
     assert!(err.contains("dangling symlink"), "error points at the symlink: {err}");
 }

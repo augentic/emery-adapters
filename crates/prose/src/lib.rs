@@ -1,61 +1,58 @@
 //! Build-time codegen for adapter guests' embedded prose registries.
 //!
-//! An adapter's `build.rs` calls [`emit_adapter`] with its prose trees
-//! (typically `prompts` and `references`). Trees live under
-//! `<adapter>/prose/` on disk; registry keys omit the `prose/` prefix.
-//! The walk follows directory symlinks, inlining resolved content under
-//! the symlink-name path, and writes `<out_dir>/registry_docs.rs`: one
-//! `Doc` entry per markdown file, with the body pulled in by
-//! `include_str!`. A dangling symlink or unreadable tree fails the build.
+//! An adapter's `build.rs` calls [`emit`]; every markdown document under
+//! the adapter's `prose/` tree is embedded — if it is in `prose/`, it
+//! ships. Registry keys omit the `prose/` prefix. The walk follows
+//! directory symlinks, inlining resolved content under the symlink-name
+//! path, and writes `<out_dir>/registry_docs.rs`: one `Doc` entry per
+//! markdown file, with the body pulled in by `include_str!`. A dangling
+//! symlink or unreadable tree fails the build.
 
 use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// [`emit`] for an adapter guest's `build.rs`: the adapter root is
+/// [`emit_from`] for an adapter guest's `build.rs`: the adapter root is
 /// `CARGO_MANIFEST_DIR` and the output is `OUT_DIR`.
 ///
 /// # Panics
 ///
 /// Panics on any failure — the caller is a build script and must not
 /// limp on.
-pub fn emit_adapter(trees: &[&str]) {
+pub fn emit() {
     let adapter_root =
         PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR"));
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").expect("cargo sets OUT_DIR"));
-    if let Err(err) = emit(&adapter_root, trees, &out_dir) {
+    if let Err(err) = emit_from(&adapter_root, &out_dir) {
         panic!("prose registry codegen failed for {}: {err}", adapter_root.display());
     }
 }
 
 const PROSE_ROOT: &str = "prose";
 
-/// Walk `trees` under `<adapter_root>/prose/` and write the sorted `DOCS`
-/// table to `<out_dir>/registry_docs.rs`, printing `cargo:rerun-if-changed`
-/// for every directory and document walked.
+/// Walk `<adapter_root>/prose/` and write the sorted `DOCS` table to
+/// `<out_dir>/registry_docs.rs`, printing `cargo:rerun-if-changed` for
+/// every directory and document walked.
 ///
-/// A tree that does not exist under `adapter_root` is skipped — adapters
-/// share one canonical tree list (`prompts` + `references`) and not every
-/// adapter carries every tree.
+/// The embed set is discovered from disk, not declared by the caller:
+/// every markdown document under `prose/` is embedded, keyed by its
+/// `prose/`-relative path.
 ///
 /// # Errors
 ///
-/// Returns a rendered message when an existing tree cannot be walked
-/// (including a dangling symlink), when no markdown documents are found
-/// across all trees, or when the generated file cannot be written — the
-/// caller (a `build.rs`) should fail the build with it.
-pub fn emit(adapter_root: &Path, trees: &[&str], out_dir: &Path) -> Result<(), String> {
+/// Returns a rendered message when the `prose/` tree is missing or holds
+/// no markdown documents, when it cannot be walked (including a dangling
+/// symlink), or when the generated file cannot be written — the caller
+/// (a `build.rs`) should fail the build with it.
+pub fn emit_from(adapter_root: &Path, out_dir: &Path) -> Result<(), String> {
+    let root = adapter_root.join(PROSE_ROOT);
     let mut docs: Vec<(String, PathBuf)> = Vec::new();
-    for tree in trees {
-        let root = adapter_root.join(PROSE_ROOT).join(tree);
-        if !root.exists() {
-            continue;
-        }
-        walk(&root, tree, &mut docs)?;
+    if root.is_dir() {
+        walk(&root, "", &mut docs)?;
     }
     docs.sort_by(|a, b| a.0.cmp(&b.0));
     if docs.is_empty() {
-        return Err(format!("no markdown documents found under {}", trees.join("/ or ")));
+        return Err(format!("no markdown documents found under {}", root.display()));
     }
 
     let mut out = String::from(
@@ -85,7 +82,8 @@ fn walk(dir: &Path, rel: &str, docs: &mut Vec<(String, PathBuf)>) -> Result<(), 
     for entry in entries {
         let entry = entry.map_err(|err| format!("walk {}: {err}", dir.display()))?;
         let path = entry.path();
-        let child_rel = format!("{rel}/{}", entry.file_name().to_string_lossy());
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let child_rel = if rel.is_empty() { name } else { format!("{rel}/{name}") };
         // `metadata` follows symlinks; a dangling link errors here, failing
         // the build as the registry contract requires.
         let metadata = fs::metadata(&path)

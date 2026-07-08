@@ -1,6 +1,6 @@
 [package]
 name = "prose"
-description = "Build-time codegen for adapter guests' embedded prose registries: walks an adapter's prose trees and emits the sorted include_str! doc table"
+description = "Build-time codegen for adapter guests' embedded prose registries: walks an adapter's prose/ tree and emits the sorted include_str! doc table"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

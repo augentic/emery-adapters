@@ -313,18 +313,16 @@ fn driver(target: &Path) -> PathBuf {
     target.join("debug").join("examples").join("eval-driver")
 }
 
-/// Seed the prose overlay: copy the adapter's embedded prose trees into
-/// `<scratch>/.eval/prose/<tree>` under the registry key convention (keys
+/// Seed the prose overlay: copy the adapter's `prose/` tree into
+/// `<scratch>/.eval/prose/` under the registry key convention (keys
 /// omit the on-disk `prose/` prefix), resolving symlinks the way the
-/// build-time embed does.
+/// build-time embed does. The embed set is whatever is on disk under
+/// `prose/`, mirroring `prose::emit_from`.
 fn seed_overlay(adapter: &str, scratch: &Path) -> Result<()> {
     let prose = adapter_dir(adapter)?.join("prose");
     let overlay = scratch.join(".eval").join("prose");
-    for tree in embedded_trees(adapter) {
-        let from = prose.join(tree);
-        if from.is_dir() {
-            harness::copy_tree(&from, &overlay.join(tree))?;
-        }
+    if prose.is_dir() {
+        harness::copy_tree(&prose, &overlay)?;
     }
     Ok(())
 }
@@ -339,30 +337,12 @@ fn adapter_dir(adapter: &str) -> Result<PathBuf> {
     bail!("no adapter directory for `{adapter}` under targets/ or sources/")
 }
 
-// The prose trees the adapter embeds — mirrors the `prose::emit_*`
-// call in the adapter's `build.rs` (pinned by `overlay::seeding`).
-fn embedded_trees(adapter: &str) -> &'static [&'static str] {
-    match adapter {
-        "contracts" | "vectis" => &["prompts", "references", "rules"],
-        _ => &["prompts", "references"],
-    }
-}
-
 /// Prove seeding parity for one adapter: run the build-time embed walk
-/// (`prose::emit`) into a scratch dir, then assert the seeded overlay
-/// carries a file for every emitted key.
+/// (`prose::emit_from`) into a scratch dir, then assert the seeded
+/// overlay carries a file for every emitted key.
 fn seeding_parity(adapter: &str) -> Result<()> {
-    let trees = embedded_trees(adapter);
-    let build_rs = adapter_dir(adapter)?.join("build.rs");
-    let declared = emit_trees(&fs::read_to_string(&build_rs)?)?;
-    ensure!(
-        declared.iter().map(String::as_str).eq(trees.iter().copied()),
-        "embedded_trees({adapter:?}) = {trees:?} drifted from {}: {declared:?}",
-        build_rs.display()
-    );
-
     let out = TempDir::new()?;
-    prose::emit(&adapter_dir(adapter)?, trees, out.path()).map_err(anyhow::Error::msg)?;
+    prose::emit_from(&adapter_dir(adapter)?, out.path()).map_err(anyhow::Error::msg)?;
     let table = fs::read_to_string(out.path().join("registry_docs.rs"))?;
     let keys = doc_keys(&table);
     ensure!(!keys.is_empty(), "embed walk found no documents for {adapter}");
@@ -376,18 +356,8 @@ fn seeding_parity(adapter: &str) -> Result<()> {
     Ok(())
 }
 
-// The tree list from a `build.rs`'s `prose::emit_adapter(&[...])` call.
-fn emit_trees(build_rs: &str) -> Result<Vec<String>> {
-    let list = build_rs
-        .split_once("emit_adapter(&[")
-        .and_then(|(_, rest)| rest.split_once("])"))
-        .map(|(list, _)| list)
-        .context("adapter build.rs calls emit_adapter(&[...])")?;
-    Ok(list.split('"').skip(1).step_by(2).map(str::to_owned).collect())
-}
-
 // The `path:` keys of a generated `registry_docs.rs` table — coupled to
-// the exact `Doc { path: "…", body: … }` line shape `prose::emit` writes.
+// the exact `Doc { path: "…", body: … }` line shape `prose::emit_from` writes.
 fn doc_keys(table: &str) -> Vec<String> {
     table
         .lines()
