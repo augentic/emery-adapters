@@ -5,7 +5,7 @@
 use intent::registry;
 
 #[test]
-fn registry_embeds_the_prompts() {
+fn embeds_prompts() {
     assert!(registry::body("prompts/survey.md").starts_with("# intent.survey"));
     assert!(registry::body("prompts/extract.md").starts_with("# intent.extract"));
 }
@@ -13,7 +13,7 @@ fn registry_embeds_the_prompts() {
 /// Intent ships no references of its own — its `references/` tree holds
 /// only the `spec-runtime` symlink, which resolves inline at build time.
 #[test]
-fn references_hold_only_the_resolved_spec_runtime_tree() {
+fn references_spec_runtime_only() {
     assert!(registry::doc("references/spec-runtime/reconciliation.md").is_some());
     assert!(
         registry::docs()

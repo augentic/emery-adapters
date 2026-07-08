@@ -13,7 +13,7 @@ use vectis::shell::{SUPPORTED_SHELL_PLATFORMS, shell_present, shell_resident_app
 // `ios_dir_without_swift_files_is_not_present`,
 // `android_dir_without_kt_files_is_not_present`.
 #[test]
-fn greenfield_all_supported_absent() {
+fn greenfield_absent() {
     let tmp = tempdir().unwrap();
     assert!(!shell_present(tmp.path(), "core"));
     assert!(!shell_present(tmp.path(), "ios"));
@@ -21,7 +21,7 @@ fn greenfield_all_supported_absent() {
 }
 
 #[test]
-fn supported_platforms_closed_set() {
+fn supported_platforms() {
     assert_eq!(SUPPORTED_SHELL_PLATFORMS, &["core", "ios", "android"]);
 }
 
@@ -51,7 +51,7 @@ fn minimal_png() -> Vec<u8> {
 // `core` (never shell-resident). The positive branches ride the probe
 // below and the guest build's bootstrap app-icon gate.
 #[test]
-fn shell_resident_app_icon_matrix() {
+fn app_icon_matrix() {
     let png_ref = r#"{
   "images": [{ "filename": "AppIcon.png", "idiom": "universal", "platform": "ios", "size": "1024x1024" }],
   "info": { "author": "xcode", "version": 1 }
@@ -79,7 +79,7 @@ fn shell_resident_app_icon_matrix() {
 // `"filename" : "AppIcon.png"` (spaced colon) must still resolve the PNG,
 // reaching the parse kernel through the public probe.
 #[test]
-fn spaced_contents_json_resolves_icon() {
+fn spaced_contents_json() {
     let spaced = r#"{
   "images": [{ "filename" : "AppIcon.png", "idiom" : "universal" }],
   "info": { "author": "xcode", "version": 1 }

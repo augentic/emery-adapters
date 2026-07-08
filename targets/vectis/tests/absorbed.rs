@@ -170,7 +170,7 @@ fn export_layout_matrix() {
 // Roles/kinds without a canonical master (`photo`, `symbol`, raster UI
 // icons) do not auto-convert.
 #[test]
-fn unsupported_roles_return_none() {
+fn unsupported_roles() {
     assert!(export_layout("photo", "raster", Platform::Ios, "hero").is_none());
     assert!(export_layout("icon", "symbol", Platform::Ios, "close").is_none());
     assert!(export_layout("icon", "raster", Platform::Android, "badge").is_none());
@@ -254,7 +254,7 @@ fn render_tree_matrix() {
 }
 
 #[test]
-fn resolve_launcher_background_matrix() {
+fn launcher_background_matrix() {
     let tmp = tempdir().expect("tempdir");
     let design = tmp.path().join("design-system");
     std::fs::create_dir_all(&design).expect("mkdir");
@@ -268,7 +268,7 @@ fn resolve_launcher_background_matrix() {
 }
 
 #[test]
-fn write_android_export_creates_required_tree() {
+fn android_export_tree() {
     let tmp = tempdir().expect("tempdir");
     let root = tmp.path().join("app-icon");
     let canvas = RgbaImage::from_pixel(1024, 1024, Rgba([20, 40, 60, 255]));
@@ -309,7 +309,7 @@ fn write_android_export_creates_required_tree() {
 }
 
 #[test]
-fn decode_to_launcher_canvas_matrix() {
+fn launcher_canvas_matrix() {
     let tmp = tempdir().expect("tempdir");
 
     let ok = tmp.path().join("app-icon.png");

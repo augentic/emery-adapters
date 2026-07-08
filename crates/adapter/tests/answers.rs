@@ -8,7 +8,7 @@ use adapter::answers::{
 use adapter::seam::{Authority, Backing, ClaimKind, Error, Severity, Status};
 
 #[test]
-fn schema_pins_match_vendored_files() {
+fn schema_pins() {
     for (pin, file) in [
         (LEADS_ANSWER_SCHEMA, "leads.schema.json"),
         (EVIDENCE_ANSWER_SCHEMA, "evidence.schema.json"),
@@ -23,7 +23,7 @@ fn schema_pins_match_vendored_files() {
 }
 
 #[test]
-fn leads_answer_deserializes() {
+fn leads_deserialize() {
     let leads = parse_leads(
         r#"{"leads":[
             {"lead":"password-reset","synopsis":"Reset flow with expiry.","topics":["auth","email"]},
@@ -44,7 +44,7 @@ fn leads_answer_deserializes() {
 // Covers both backing variants and tolerated open per-kind body fields
 // (`replay-digest`, `input`, …).
 #[test]
-fn evidence_answer_deserializes() {
+fn evidence_deserializes() {
     let evidence = parse_evidence(
         r#"{
             "authority": "behaviour",
@@ -84,7 +84,7 @@ fn evidence_answer_deserializes() {
 // The answer schema does not pin the shape of `synopsis` / `backing`, so
 // an unexpected shape drops the field instead of failing the extract.
 #[test]
-fn evidence_open_body_fields_are_lenient() {
+fn open_body_fields_lenient() {
     let evidence = parse_evidence(
         r#"{
             "authority": "documentation",
@@ -105,7 +105,7 @@ fn evidence_open_body_fields_are_lenient() {
 }
 
 #[test]
-fn leads_validation_tail() {
+fn leads_tail() {
     let clean = parse_leads(
         r#"{"leads":[{"lead":"password-reset","synopsis":"Reset flow with expiry."}]}"#,
     )
@@ -127,7 +127,7 @@ fn leads_validation_tail() {
 }
 
 #[test]
-fn evidence_validation_tail() {
+fn evidence_tail() {
     let clean = parse_evidence(
         r#"{"authority":"documentation","claims":[
             {"kind":"requirement","id":"password-reset.request"},
@@ -152,7 +152,7 @@ fn evidence_validation_tail() {
 }
 
 #[test]
-fn report_answer_projects_onto_seam() {
+fn report_projection() {
     let answer = ReportAnswer::parse(
         r#"{
             "status": "failure",

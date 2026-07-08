@@ -4,7 +4,7 @@
 use captures::registry;
 
 #[test]
-fn registry_embeds_the_prompts() {
+fn embeds_prompts() {
     assert!(registry::body("prompts/survey.md").starts_with("# Runtime capture survey"));
     assert!(registry::body("prompts/extract.md").starts_with("# Runtime capture extract"));
 }
@@ -12,7 +12,7 @@ fn registry_embeds_the_prompts() {
 /// The extract prompt instructs the agent to load both references; the
 /// references server must serve them.
 #[test]
-fn registry_embeds_the_capture_references() {
+fn embeds_references() {
     assert!(registry::doc("references/capture-format.md").is_some());
     assert!(registry::doc("references/extraction-mapping.md").is_some());
 }

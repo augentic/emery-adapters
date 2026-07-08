@@ -4,7 +4,7 @@
 use vectis::registry;
 
 #[test]
-fn registry_embeds_prompts_references_and_rules() {
+fn embeds_all_trees() {
     for path in [
         "prompts/guidance.md",
         "prompts/build.md",
@@ -36,7 +36,7 @@ fn registry_embeds_prompts_references_and_rules() {
 /// guards against a silently truncated walk without pinning the exact
 /// prose inventory.
 #[test]
-fn registry_embeds_the_full_references() {
+fn embed_floor() {
     let docs = registry::docs();
     assert!(docs.len() >= 65, "expected the full prose references, got {} docs", docs.len());
     let total: usize = docs.iter().map(|doc| doc.body.len()).sum();
@@ -46,7 +46,7 @@ fn registry_embeds_the_full_references() {
 /// Only markdown embeds: the `rules/vectis.mdc` Cursor rule stays out of
 /// the registry (the codegen walks `.md` files only).
 #[test]
-fn non_markdown_rules_are_not_embedded() {
+fn markdown_only() {
     assert!(registry::doc("rules/vectis.mdc").is_none());
 }
 
@@ -55,7 +55,7 @@ fn non_markdown_rules_are_not_embedded() {
 /// time: documents appear under their symlink-name paths with the
 /// shared content inlined.
 #[test]
-fn shared_runtime_symlinks_are_resolved_inline() {
+fn symlinks_resolved_inline() {
     let doc = registry::doc("references/spec-runtime/phase-outcome-contract.md")
         .expect("symlinked runtime reference is embedded");
     assert!(!doc.body.is_empty(), "resolved symlink content is inlined");
@@ -65,7 +65,7 @@ fn shared_runtime_symlinks_are_resolved_inline() {
 /// `registry::doc` binary-searches, so the generated table must be
 /// sorted and duplicate-free.
 #[test]
-fn docs_are_sorted_and_unique_by_path() {
+fn sorted_unique() {
     let docs = registry::docs();
     assert!(!docs.is_empty());
     for pair in docs.windows(2) {

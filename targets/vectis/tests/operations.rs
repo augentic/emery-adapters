@@ -44,12 +44,12 @@ fn schema_format(request: &Request) -> (&str, &str) {
 }
 
 #[test]
-fn guidance_returns_embedded_prompt() {
+fn guidance_prompt() {
     assert!(guidance().starts_with("# Vectis target — `guidance`"));
 }
 
 #[tokio::test]
-async fn build_runs_prelude_then_phase_legs_then_report() {
+async fn build_phase_legs() {
     let tmp = TempDir::new().unwrap();
     let model = MockModel::answering([
         PHASE_DONE,     // composition
@@ -138,7 +138,7 @@ async fn build_runs_prelude_then_phase_legs_then_report() {
 }
 
 #[tokio::test]
-async fn declared_core_only_platforms_skip_the_shell_legs() {
+async fn core_only_skips_shells() {
     let tmp = TempDir::new().unwrap();
     fs::create_dir_all(tmp.path().join(".specify")).unwrap();
     fs::write(tmp.path().join(".specify/project.yaml"), "name: demo-app\nplatforms:\n  - core\n")
@@ -166,7 +166,7 @@ async fn declared_core_only_platforms_skip_the_shell_legs() {
 }
 
 #[tokio::test]
-async fn composition_validator_findings_feed_the_bounded_repair_loop() {
+async fn composition_repair() {
     let tmp = TempDir::new().unwrap();
     // The mock never fixes the unparseable composition, so both bounded
     // repair iterations fire and no downstream leg is spent against the
@@ -195,7 +195,7 @@ async fn composition_validator_findings_feed_the_bounded_repair_loop() {
 }
 
 #[tokio::test]
-async fn missing_output_triggers_bounded_repair_then_enforcement() {
+async fn missing_output_repair() {
     let tmp = TempDir::new().unwrap();
     // The declared output never appears in the tree; the residual
     // discrepancy overrides the repeated success answer.
@@ -220,7 +220,7 @@ async fn missing_output_triggers_bounded_repair_then_enforcement() {
 }
 
 #[tokio::test]
-async fn declared_outputs_that_exist_pass_the_gate() {
+async fn outputs_pass_gate() {
     let tmp = TempDir::new().unwrap();
     // Outputs resolve beneath the working-tree subpath, mirroring how a
     // deployment scopes the shared mount.
@@ -328,7 +328,7 @@ async fn ui_surface_coherence() {
 }
 
 #[tokio::test]
-async fn merge_is_one_report_leg_with_postlude_gate() {
+async fn merge_single_leg() {
     let tmp = TempDir::new().unwrap();
     let model = MockModel::answering([SUCCESS_REPORT]);
     let delta = Changeset {
@@ -358,7 +358,7 @@ async fn merge_is_one_report_leg_with_postlude_gate() {
 }
 
 #[tokio::test]
-async fn merge_gates_the_merged_baseline_composition() {
+async fn merge_gates_composition() {
     let tmp = TempDir::new().unwrap();
     // A broken merged baseline composition is caught by the postlude's
     // in-guest validator; residual findings force failure.
@@ -378,7 +378,7 @@ async fn merge_gates_the_merged_baseline_composition() {
 }
 
 #[tokio::test]
-async fn merge_success_with_blocking_finding_downgrades() {
+async fn merge_blocking_downgrades() {
     let tmp = TempDir::new().unwrap();
     // A `success` answer carrying a blocking finding violates the report
     // contract; the deterministic guard downgrades rather than trusting it.
@@ -397,7 +397,7 @@ async fn merge_success_with_blocking_finding_downgrades() {
 }
 
 #[test]
-fn describe_declares_inputs_and_platforms() {
+fn describe_manifest() {
     let manifest = describe();
     assert_eq!(manifest.specify_floor, None);
     let declared: Vec<(&str, bool)> =

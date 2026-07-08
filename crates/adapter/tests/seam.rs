@@ -5,7 +5,7 @@ use adapter::Error as ModelError;
 use adapter::seam::{Error, Input, Severity};
 
 #[test]
-fn blocking_severities_gate_success() {
+fn blocking_severities() {
     assert!(Severity::Critical.blocking());
     assert!(Severity::Important.blocking());
     assert!(!Severity::Suggestion.blocking());
@@ -13,7 +13,7 @@ fn blocking_severities_gate_success() {
 }
 
 #[test]
-fn inputs_carry_prompt_labels_and_bodies() {
+fn input_labels() {
     let inputs = [
         (Input::Proposal("p".to_string()), "proposal"),
         (Input::Design("d".to_string()), "design"),
@@ -28,7 +28,7 @@ fn inputs_carry_prompt_labels_and_bodies() {
 }
 
 #[test]
-fn model_errors_map_onto_seam_errors() {
+fn error_mapping() {
     assert_eq!(
         Error::from(ModelError::InvalidRequest("empty".to_string())),
         Error::InvalidRequest("empty".to_string())

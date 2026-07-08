@@ -49,12 +49,12 @@ fn seed_bad_contract(dir: &Path) {
 }
 
 #[test]
-fn guidance_returns_embedded_prompt() {
+fn guidance_prompt() {
     assert!(guidance().starts_with("# contracts.guidance"));
 }
 
 #[tokio::test]
-async fn build_runs_sub_flows_then_report() {
+async fn build_sub_flows() {
     let tmp = TempDir::new().unwrap();
     let model =
         MockModel::answering([NOT_APPLICABLE, NOT_APPLICABLE, NOT_APPLICABLE, SUCCESS_REPORT]);
@@ -96,7 +96,7 @@ async fn build_runs_sub_flows_then_report() {
 }
 
 #[tokio::test]
-async fn build_repair_loop_is_bounded() {
+async fn build_repair_bounded() {
     let tmp = TempDir::new().unwrap();
     seed_bad_contract(&tmp.path().join(".specify/slices/demo/contracts"));
     let model = MockModel::answering([
@@ -132,7 +132,7 @@ async fn build_repair_loop_is_bounded() {
 }
 
 #[tokio::test]
-async fn malformed_answer_fails_internal() {
+async fn malformed_answer() {
     let tmp = TempDir::new().unwrap();
     let model = MockModel::answering(["this is not json"]);
 
@@ -145,7 +145,7 @@ async fn malformed_answer_fails_internal() {
 }
 
 #[tokio::test]
-async fn model_invalid_request_maps_through() {
+async fn invalid_request_maps() {
     let tmp = TempDir::new().unwrap();
     let model =
         MockModel::scripted([Err(ModelError::InvalidRequest("messages must not be empty".into()))]);
@@ -156,7 +156,7 @@ async fn model_invalid_request_maps_through() {
 }
 
 #[tokio::test]
-async fn merge_projects_diagnostic_onto_seam() {
+async fn merge_diagnostics() {
     let tmp = TempDir::new().unwrap();
     let model = MockModel::answering([
         r#"{"status":"failure","findings":[{"rule-id":"UNI-014","title":"Duplicate id","severity":"critical","impact":"Baseline is ambiguous.","remediation":"Rename one contract."}]}"#,
@@ -187,7 +187,7 @@ async fn merge_projects_diagnostic_onto_seam() {
 }
 
 #[tokio::test]
-async fn success_with_blocking_finding_downgrades() {
+async fn merge_blocking_downgrades() {
     let tmp = TempDir::new().unwrap();
     // A `success` answer carrying a blocking finding violates the report
     // contract; the deterministic guard downgrades rather than trusting it.
@@ -205,7 +205,7 @@ async fn success_with_blocking_finding_downgrades() {
 }
 
 #[tokio::test]
-async fn merge_post_gate_repairs_then_enforces() {
+async fn merge_post_gate() {
     let tmp = TempDir::new().unwrap();
     // Baseline under a working-tree subpath, mirroring a scoped mount.
     seed_bad_contract(&tmp.path().join("proj/contracts"));
@@ -231,7 +231,7 @@ async fn merge_post_gate_repairs_then_enforces() {
 }
 
 #[test]
-fn describe_declares_the_contracts_input() {
+fn describe_inputs() {
     let manifest = describe();
     assert_eq!(manifest.specify_floor, None);
     let declared: Vec<(&str, bool)> =

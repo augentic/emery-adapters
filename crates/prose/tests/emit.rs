@@ -26,7 +26,7 @@ fn generate(adapter_root: &Path) -> Result<String, String> {
 }
 
 #[test]
-fn emits_sorted_doc_table() {
+fn sorted_doc_table() {
     let adapter = TempDir::new().expect("adapter root");
     write(adapter.path(), "references/openapi/verifier.md", "# verifier");
     write(adapter.path(), "prompts/guidance.md", "# guidance");
@@ -51,7 +51,7 @@ fn emits_sorted_doc_table() {
 // any document directly at the `prose/` root — is embedded without being
 // declared anywhere.
 #[test]
-fn discovers_every_tree() {
+fn discovers_trees() {
     let adapter = TempDir::new().expect("adapter root");
     write(adapter.path(), "prompts/build.md", "# build");
     write(adapter.path(), "rules/CON-001.md", "# rule");
@@ -67,7 +67,7 @@ fn discovers_every_tree() {
 }
 
 #[test]
-fn resolves_directory_symlinks_inline() {
+fn resolves_symlinks_inline() {
     let adapter = TempDir::new().expect("adapter root");
     let shared = TempDir::new().expect("shared tree");
     write_file(shared.path(), "runtime/protocol.md", "# protocol");
@@ -97,7 +97,7 @@ fn empty_prose_fails() {
 }
 
 #[test]
-fn missing_prose_dir_fails() {
+fn missing_dir_fails() {
     let adapter = TempDir::new().expect("adapter root");
 
     let err = generate(adapter.path()).expect_err("no documents is an error");

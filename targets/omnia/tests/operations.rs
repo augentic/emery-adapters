@@ -41,12 +41,12 @@ fn schema_format(request: &Request) -> (&str, &str) {
 }
 
 #[test]
-fn guidance_returns_embedded_prompt() {
+fn guidance_prompt() {
     assert!(guidance().starts_with("# Omnia target — guidance prompt"));
 }
 
 #[tokio::test]
-async fn build_runs_phase_legs_then_report() {
+async fn build_phase_legs() {
     let tmp = TempDir::new().unwrap();
     let model = MockModel::answering([PHASE_DONE, PHASE_DONE, REPLAY_SKIPPED, SUCCESS_REPORT]);
     let inputs = vec![
@@ -100,7 +100,7 @@ async fn build_runs_phase_legs_then_report() {
 }
 
 #[tokio::test]
-async fn missing_output_triggers_bounded_repair_then_enforcement() {
+async fn missing_output_repair() {
     let tmp = TempDir::new().unwrap();
     let model = MockModel::answering([
         PHASE_DONE,
@@ -126,7 +126,7 @@ async fn missing_output_triggers_bounded_repair_then_enforcement() {
 }
 
 #[tokio::test]
-async fn declared_outputs_that_exist_pass_the_gate() {
+async fn outputs_pass_gate() {
     let tmp = TempDir::new().unwrap();
     // Outputs resolve beneath the working-tree subpath, mirroring how a
     // deployment scopes the shared mount.
@@ -145,7 +145,7 @@ async fn declared_outputs_that_exist_pass_the_gate() {
 }
 
 #[tokio::test]
-async fn failure_report_is_terminal_without_repair() {
+async fn failure_is_terminal() {
     let tmp = TempDir::new().unwrap();
     // A failure report parks the slice per the prompt's stop contract; the
     // gate must not spend a repair leg re-litigating its output claims.
@@ -163,7 +163,7 @@ async fn failure_report_is_terminal_without_repair() {
 }
 
 #[tokio::test]
-async fn malformed_answer_fails_internal() {
+async fn malformed_answer() {
     let tmp = TempDir::new().unwrap();
     let model = MockModel::answering(["this is not json"]);
 
@@ -176,7 +176,7 @@ async fn malformed_answer_fails_internal() {
 }
 
 #[tokio::test]
-async fn model_invalid_request_maps_through() {
+async fn invalid_request_maps() {
     let tmp = TempDir::new().unwrap();
     let model =
         MockModel::scripted([Err(ModelError::InvalidRequest("messages must not be empty".into()))]);
@@ -187,7 +187,7 @@ async fn model_invalid_request_maps_through() {
 }
 
 #[tokio::test]
-async fn merge_is_one_report_leg_with_pre_merge_gate_instructions() {
+async fn merge_single_leg() {
     let tmp = TempDir::new().unwrap();
     let model = MockModel::answering([SUCCESS_REPORT]);
     let delta = Changeset {
@@ -217,7 +217,7 @@ async fn merge_is_one_report_leg_with_pre_merge_gate_instructions() {
 }
 
 #[tokio::test]
-async fn merge_projects_diagnostic_onto_seam() {
+async fn merge_diagnostics() {
     let tmp = TempDir::new().unwrap();
     let model = MockModel::answering([
         r#"{"status":"failure","findings":[{"rule-id":"OMNIA-002","title":"Forbidden std API","severity":"critical","impact":"The wasm32 build breaks.","remediation":"Route through the provider trait."}]}"#,
@@ -240,7 +240,7 @@ async fn merge_projects_diagnostic_onto_seam() {
 }
 
 #[tokio::test]
-async fn merge_success_with_blocking_finding_downgrades() {
+async fn merge_blocking_downgrades() {
     let tmp = TempDir::new().unwrap();
     // A `success` answer carrying a blocking finding violates the report
     // contract; the deterministic guard downgrades rather than trusting it.
@@ -258,7 +258,7 @@ async fn merge_success_with_blocking_finding_downgrades() {
 }
 
 #[tokio::test]
-async fn merge_missing_output_repairs_then_enforces() {
+async fn merge_missing_output() {
     let tmp = TempDir::new().unwrap();
     let model = MockModel::answering([SUCCESS_WITH_MISSING_OUTPUT, SUCCESS_WITH_MISSING_OUTPUT]);
     let delta = Changeset {
@@ -274,7 +274,7 @@ async fn merge_missing_output_repairs_then_enforces() {
 }
 
 #[test]
-fn describe_declares_nothing() {
+fn describe_empty() {
     let manifest = describe();
     assert_eq!(manifest.specify_floor, None);
     assert!(manifest.inputs.is_empty());

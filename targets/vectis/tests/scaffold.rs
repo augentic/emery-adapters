@@ -44,7 +44,7 @@ fn digest_plan(plan: &ScaffoldPlan) -> String {
 }
 
 #[test]
-fn golden_hashes_match_current_render_only_output() {
+fn golden_hashes() {
     let versions = versions();
     let core = plan_core("Counter", "com.vectis.counter", &[], &versions).unwrap();
     let ios = plan_ios("Counter", "com.vectis.counter", &[], &versions).unwrap();
@@ -138,7 +138,7 @@ fn plan_substitutions_and_caps() {
 }
 
 #[test]
-fn write_plan_refuses_existing_roots() {
+fn refuses_existing_roots() {
     let versions = versions();
 
     let core_dir = tempdir().unwrap();
@@ -178,7 +178,7 @@ fn write_plan_refuses_existing_roots() {
 }
 
 #[test]
-fn write_plan_merges_existing_gitignore() {
+fn merges_gitignore() {
     // `specify init` writes a root `.gitignore` in every project, so the
     // bootstrap path always scaffolds into an initialised repo.
     let dir = tempdir().unwrap();
@@ -204,7 +204,7 @@ fn write_plan_merges_existing_gitignore() {
 }
 
 #[test]
-fn run_at_writes_under_project_dir() {
+fn writes_under_project_dir() {
     let dir = tempdir().unwrap();
     let command = ScaffoldCommand::Core(CoreArgs {
         common: CommonArgs::for_app("Counter".into()),

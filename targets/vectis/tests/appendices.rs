@@ -406,7 +406,7 @@ fn appendix_d_validates() {
 /// referencing every declared asset id; the android side omits
 /// `xxxhdpi`, which surfaces as a warning, not an error.
 #[test]
-fn appendix_e_with_composition_validates() {
+fn appendix_e_validates() {
     let (tmp, assets_path) = write_assets_project(APPENDIX_E_ASSETS_YAML, APPENDIX_E_FILES);
     write_specs_composition(
         tmp.path(),

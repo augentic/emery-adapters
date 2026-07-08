@@ -22,7 +22,7 @@ const fn ctx<'a>(mcp_url: Option<&'a str>, root: &'a Path) -> Context<'a> {
 }
 
 #[tokio::test]
-async fn judgment_assembles_request_and_deserializes() {
+async fn assembles_and_parses() {
     let model = MockModel::answering([r#"{"done":true}"#]);
 
     let answer: Answer = judgment(
@@ -57,7 +57,7 @@ async fn judgment_assembles_request_and_deserializes() {
 
 // Without a resolved MCP URL the leg runs grant-free rather than failing.
 #[tokio::test]
-async fn judgment_without_mcp_url_offers_no_grant() {
+async fn no_mcp_no_grant() {
     let model = MockModel::answering([r#"{"done":true}"#]);
 
     let _: Answer = judgment(
@@ -75,7 +75,7 @@ async fn judgment_without_mcp_url_offers_no_grant() {
 }
 
 #[tokio::test]
-async fn judgment_maps_errors() {
+async fn error_mapping() {
     let model = MockModel::scripted([
         Err(ModelError::InvalidRequest("messages must not be empty".to_string())),
         Ok(adapter::Reply {
@@ -99,7 +99,7 @@ async fn judgment_maps_errors() {
 }
 
 #[test]
-fn context_resolves_tree_root() {
+fn tree_root() {
     let context = ctx(None, Path::new("/mnt"));
     let bare = WorkingTree {
         base: "rev-1".to_string(),

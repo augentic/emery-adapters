@@ -19,19 +19,19 @@ static DOCS: &[Doc] = &[
 ];
 
 #[test]
-fn find_binary_searches_by_path() {
+fn find_by_path() {
     assert_eq!(find(DOCS, "prompts/guidance.md").map(|doc| doc.body), Some("# guidance"));
     assert_eq!(find(DOCS, "references/verifier.md").map(|doc| doc.body), Some("# verifier"));
     assert!(find(DOCS, "prompts/missing.md").is_none());
 }
 
 #[test]
-fn body_returns_guaranteed_documents() {
+fn body_lookup() {
     assert_eq!(body(DOCS, "prompts/build.md"), "# build");
 }
 
 #[test]
 #[should_panic(expected = "document `prompts/missing.md` is not embedded")]
-fn body_panics_on_a_registry_miss() {
+fn body_miss_panics() {
     let _ = body(DOCS, "prompts/missing.md");
 }

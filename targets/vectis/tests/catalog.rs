@@ -75,7 +75,7 @@ screens:
 // illustration density-raster *miss* — are private branches that integration
 // does not reach.
 #[test]
-fn contents_json_only_imageset_is_missing() {
+fn contents_json_only_imageset() {
     let tmp = tempdir().unwrap();
     scaffold_project(tmp.path());
     write_inventory(tmp.path());
@@ -91,7 +91,7 @@ fn contents_json_only_imageset_is_missing() {
 }
 
 #[test]
-fn symbol_references_are_skipped() {
+fn symbols_skipped() {
     let tmp = tempdir().unwrap();
     scaffold_project(tmp.path());
     write_yaml(
@@ -124,7 +124,7 @@ screens:
 }
 
 #[test]
-fn vector_icon_android_requires_drawable_xml() {
+fn android_vector_icon_missing() {
     let tmp = tempdir().unwrap();
     scaffold_project(tmp.path());
     write_yaml(
@@ -157,7 +157,7 @@ screens:
 }
 
 #[test]
-fn android_illustration_missing_density_raster_emits_finding() {
+fn android_density_raster_missing() {
     let tmp = tempdir().unwrap();
     scaffold_project(tmp.path());
     write_inventory(tmp.path());

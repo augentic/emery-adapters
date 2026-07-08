@@ -47,14 +47,14 @@ fn enter_overlay_with_dir_at(path: &str) -> TempDir {
 }
 
 #[test]
-fn overlay_body_wins() {
+fn overlay_wins() {
     let _dir = enter_overlay(&[("prompts/build.md", "# overlaid build")]);
     assert_eq!(body(DOCS, "prompts/build.md"), "# overlaid build");
     assert_eq!(resolve(DOCS, "prompts/build.md"), Some("# overlaid build"));
 }
 
 #[test]
-fn absent_overlay_serves_embedded() {
+fn absent_serves_embedded() {
     let _dir = enter_overlay(&[("prompts/build.md", "# overlaid build")]);
     assert_eq!(body(DOCS, "references/verifier.md"), "# embedded verifier");
     assert_eq!(resolve(DOCS, "references/verifier.md"), Some("# embedded verifier"));
@@ -63,7 +63,7 @@ fn absent_overlay_serves_embedded() {
 // An empty overlay file is served as-is by design: `read_to_string`
 // reads to EOF, so a partial read cannot masquerade as an empty body.
 #[test]
-fn empty_overlay_file_serves_empty_body() {
+fn empty_serves_empty() {
     let _dir = enter_overlay(&[("prompts/build.md", "")]);
     assert_eq!(body(DOCS, "prompts/build.md"), "");
 }
@@ -72,7 +72,7 @@ fn empty_overlay_file_serves_empty_body() {
 // loud rather than silently fall back to the embedded body.
 #[test]
 #[should_panic(expected = "is unreadable")]
-fn unreadable_overlay_file_panics() {
+fn unreadable_panics() {
     let _dir = enter_overlay_with_dir_at("prompts/build.md");
     let _ = body(DOCS, "prompts/build.md");
 }
@@ -87,7 +87,7 @@ fn miss_in_both_panics() {
 // An overlay file for a path outside the embedded table never extends
 // the doc set: existence is always the table's.
 #[test]
-fn overlay_never_adds_entries() {
+fn never_adds_entries() {
     let _dir = enter_overlay(&[("prompts/extra.md", "# not in the table")]);
     assert!(find(DOCS, "prompts/extra.md").is_none());
     assert_eq!(resolve(DOCS, "prompts/extra.md"), None);
@@ -95,7 +95,7 @@ fn overlay_never_adds_entries() {
 
 #[test]
 #[should_panic(expected = "document `prompts/extra.md` is not embedded")]
-fn overlay_only_path_keeps_the_panic_contract() {
+fn overlay_only_still_panics() {
     let _dir = enter_overlay(&[("prompts/extra.md", "# not in the table")]);
     let _ = body(DOCS, "prompts/extra.md");
 }

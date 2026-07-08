@@ -4,7 +4,7 @@
 use contracts::registry;
 
 #[test]
-fn registry_embeds_prompts_references_and_rules() {
+fn embeds_all_trees() {
     for path in [
         "prompts/guidance.md",
         "prompts/build.md",
@@ -29,7 +29,7 @@ fn registry_embeds_prompts_references_and_rules() {
 /// is resolved at build time: documents appear under their symlink-name
 /// paths with the shared content inlined.
 #[test]
-fn spec_runtime_symlink_is_resolved_inline() {
+fn symlinks_resolved_inline() {
     let doc = registry::doc("references/spec-runtime/phase-outcome-contract.md")
         .expect("symlinked runtime reference is embedded");
     assert!(!doc.body.is_empty(), "resolved symlink content is inlined");
@@ -38,7 +38,7 @@ fn spec_runtime_symlink_is_resolved_inline() {
 /// `registry::doc` binary-searches, so the generated table must be
 /// sorted and duplicate-free.
 #[test]
-fn docs_are_sorted_and_unique_by_path() {
+fn sorted_unique() {
     let docs = registry::docs();
     assert!(!docs.is_empty());
     for pair in docs.windows(2) {

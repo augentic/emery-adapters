@@ -50,7 +50,7 @@ async fn scripted_fifo() {
 }
 
 #[tokio::test]
-async fn answering_succeeds_in_order() {
+async fn answering_in_order() {
     let mock = MockModel::answering(["one", "two"]);
     assert_eq!(mock.create(request("a")).await.map(|r| r.answer).as_deref(), Ok("one"));
     assert_eq!(mock.create(request("b")).await.map(|r| r.answer).as_deref(), Ok("two"));

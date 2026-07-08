@@ -4,7 +4,7 @@
 use typescript::registry;
 
 #[test]
-fn registry_embeds_the_prompts() {
+fn embeds_prompts() {
     assert!(
         registry::body("prompts/survey.md").starts_with("# TypeScript / JavaScript source survey")
     );
@@ -17,7 +17,7 @@ fn registry_embeds_the_prompts() {
 /// The extraction references the extract prompt loads on demand is
 /// embedded alongside the resolved `spec-runtime` symlink content.
 #[test]
-fn registry_embeds_the_references() {
+fn embeds_references() {
     for path in [
         "references/business-logic.md",
         "references/language-mapping.md",

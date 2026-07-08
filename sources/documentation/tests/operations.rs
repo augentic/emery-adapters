@@ -34,7 +34,7 @@ fn schema_format(request: &Request) -> (&str, &str) {
 }
 
 #[tokio::test]
-async fn survey_assembles_prompt_and_parses() {
+async fn survey_leg() {
     let model = MockModel::answering([
         r#"{"leads":[{"lead":"password-reset","synopsis":"Reset flow.","topics":["identity"]}]}"#,
     ]);
@@ -64,7 +64,7 @@ async fn survey_assembles_prompt_and_parses() {
 }
 
 #[tokio::test]
-async fn survey_without_mcp_url_offers_no_grant() {
+async fn survey_no_mcp_no_grant() {
     let model = MockModel::answering([r#"{"leads":[]}"#]);
 
     survey(&model, &ctx(None)).await.unwrap();
@@ -74,7 +74,7 @@ async fn survey_without_mcp_url_offers_no_grant() {
 
 // The tail re-checks id grammar after the answer deserializes.
 #[tokio::test]
-async fn survey_tail_rejects_malformed_lead_id() {
+async fn tail_rejects_bad_lead_id() {
     let model =
         MockModel::answering([r#"{"leads":[{"lead":"Bad_Id","synopsis":"Casing violates."}]}"#]);
 
@@ -89,7 +89,7 @@ async fn survey_tail_rejects_malformed_lead_id() {
 }
 
 #[tokio::test]
-async fn survey_tail_rejects_empty_synopsis() {
+async fn tail_rejects_empty_synopsis() {
     let model = MockModel::answering([r#"{"leads":[{"lead":"account","synopsis":"  "}]}"#]);
 
     let err = survey(&model, &ctx(None)).await.unwrap_err();
@@ -98,7 +98,7 @@ async fn survey_tail_rejects_empty_synopsis() {
 }
 
 #[tokio::test]
-async fn extract_assembles_prompt_and_parses() {
+async fn extract_leg() {
     let model = MockModel::answering([r#"{
             "authority": "documentation",
             "claims": [
@@ -136,7 +136,7 @@ async fn extract_assembles_prompt_and_parses() {
 
 // The tail mirrors the evidence schema's conditional id requirement.
 #[tokio::test]
-async fn extract_tail_rejects_missing_claim_id() {
+async fn tail_rejects_missing_claim_id() {
     let model = MockModel::answering([
         r#"{"authority":"documentation","claims":[{"kind":"requirement"}]}"#,
     ]);
@@ -147,7 +147,7 @@ async fn extract_tail_rejects_missing_claim_id() {
 }
 
 #[tokio::test]
-async fn extract_tail_rejects_malformed_claim_id() {
+async fn tail_rejects_bad_claim_id() {
     let model = MockModel::answering([
         r#"{"authority":"documentation","claims":[{"kind":"criterion","id":"Not.Valid"}]}"#,
     ]);
@@ -158,7 +158,7 @@ async fn extract_tail_rejects_malformed_claim_id() {
 }
 
 #[tokio::test]
-async fn model_invalid_request_maps_through() {
+async fn invalid_request_maps() {
     let model =
         MockModel::scripted([Err(ModelError::InvalidRequest("messages must not be empty".into()))]);
 
@@ -168,6 +168,6 @@ async fn model_invalid_request_maps_through() {
 }
 
 #[test]
-fn describe_declares_no_floor() {
+fn describe_no_floor() {
     assert_eq!(describe().specify_floor, None);
 }

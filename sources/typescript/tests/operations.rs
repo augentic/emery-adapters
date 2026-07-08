@@ -16,7 +16,7 @@ fn ctx() -> Context<'static> {
 }
 
 #[tokio::test]
-async fn survey_frames_the_framework_grammar() {
+async fn survey_framework_grammar() {
     let model = MockModel::answering([
         r#"{"leads":[{"lead":"task-service","synopsis":"Task CRUD service module."}]}"#,
     ]);
@@ -36,7 +36,7 @@ async fn survey_frames_the_framework_grammar() {
 }
 
 #[tokio::test]
-async fn extract_points_at_the_references() {
+async fn extract_references_pointer() {
     let model = MockModel::answering([r#"{
             "authority": "behaviour",
             "claims": [
@@ -64,6 +64,6 @@ async fn extract_points_at_the_references() {
 }
 
 #[test]
-fn describe_declares_no_floor() {
+fn describe_no_floor() {
     assert_eq!(describe().specify_floor, None);
 }

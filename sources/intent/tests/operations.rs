@@ -15,7 +15,7 @@ fn ctx() -> Context<'static> {
 }
 
 #[tokio::test]
-async fn survey_prompt_frames_the_inline_binding() {
+async fn survey_inline_binding() {
     let model = MockModel::answering([
         r#"{"leads":[{"lead":"password-reset","synopsis":"Let users reset passwords by email."}]}"#,
     ]);
@@ -32,7 +32,7 @@ async fn survey_prompt_frames_the_inline_binding() {
 }
 
 #[tokio::test]
-async fn extract_parses_the_intent_claim() {
+async fn extract_intent_claim() {
     let model = MockModel::answering([
         r#"{"authority":"intent","claims":[{"kind":"intent","id":"password-reset","statement":"Let users reset passwords by email."}]}"#,
     ]);
@@ -53,6 +53,6 @@ async fn extract_parses_the_intent_claim() {
 }
 
 #[test]
-fn describe_declares_no_floor() {
+fn describe_no_floor() {
     assert_eq!(describe().specify_floor, None);
 }

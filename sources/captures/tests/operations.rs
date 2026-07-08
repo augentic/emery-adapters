@@ -26,7 +26,7 @@ fn lead() -> Lead {
 // The open per-kind body fields (`replay-digest`, `input`, `output`)
 // must survive the seam's claim shape.
 #[tokio::test]
-async fn extract_parses_example_claims_with_replay_digests() {
+async fn extract_example_claims() {
     let model = MockModel::answering([r#"{
             "authority": "behaviour",
             "claims": [{
@@ -55,7 +55,7 @@ async fn extract_parses_example_claims_with_replay_digests() {
 
 // The tail mirrors the evidence schema's conditional id requirement.
 #[tokio::test]
-async fn extract_tail_rejects_idless_example_claims() {
+async fn tail_rejects_idless_claims() {
     let model =
         MockModel::answering([r#"{"authority":"behaviour","claims":[{"kind":"example"}]}"#]);
 
@@ -65,6 +65,6 @@ async fn extract_tail_rejects_idless_example_claims() {
 }
 
 #[test]
-fn describe_declares_no_floor() {
+fn describe_no_floor() {
     assert_eq!(describe().specify_floor, None);
 }

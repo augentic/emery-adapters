@@ -221,7 +221,7 @@ fn skip_and_directory_matrix() {
 }
 
 #[test]
-fn id_duplicates_across_two_files_fail_both() {
+fn duplicate_ids_fail_both() {
     let tmp = TempDir::new().unwrap();
     write_contract(
         &tmp,

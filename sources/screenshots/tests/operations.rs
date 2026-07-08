@@ -7,7 +7,7 @@ use screenshots::operations::{describe, extract};
 use testkit::MockModel;
 
 #[tokio::test]
-async fn extract_parses_the_spatial_kinds() {
+async fn extract_spatial_kinds() {
     let model = MockModel::answering([r#"{
             "authority": "documentation",
             "claims": [
@@ -41,6 +41,6 @@ async fn extract_parses_the_spatial_kinds() {
 }
 
 #[test]
-fn describe_declares_no_floor() {
+fn describe_no_floor() {
     assert_eq!(describe().specify_floor, None);
 }
