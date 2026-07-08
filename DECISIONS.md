@@ -1,6 +1,6 @@
 # Decisions
 
-Standing architectural decisions for the Specify adapters repository. Read before changing the adapter guest / core split, the vectis validation or materialization engines, embedded asset homes, or the verification posture of a target's prompts.
+Standing architectural decisions for the Specify adapters repository. Read before changing the adapter crate layout, the vectis validation or materialization engines, embedded asset homes, or the verification posture of a target's prompts.
 
 Each entry records the decision, why it was taken, and the consequences a change must reckon with — not how the feature works today. Current behavior lives in module-level rustdoc and the per-target prompts; entries here point at those rather than restating them.
 
@@ -14,6 +14,15 @@ Each entry records the decision, why it was taken, and the consequences a change
 - **Model ids stay out of guests.** `SPECIFY_EVAL_MODEL` is read by the eval driver alone.
 
 The hands-off loop is the `eval-watch` cargo-make task: cargo-watch over one adapter's prose trees re-invoking a single scenario filter with the overlay active.
+
+## One crate per adapter
+
+**Decision (2026-07).** Each adapter is a single crate: the wasm-free logic modules and the wasm32-only `guest` shim module live together in `{targets,sources}/<name>/`, replacing the former guest + `<name>-core` sub-crate split. The crate is `cdylib` + `rlib`; the shim is gated behind `#[cfg(target_arch = "wasm32")]` and wasm-only dependencies (`wasip3`) behind a target-specific dependency table, the same posture the shared `adapter` crate already carries.
+
+- **Why.** No consumer outside each guest ever depended on its core crate, so the crate boundary protected nothing; flattening halves the package count and removes the `core = { package = "<name>-core" }` alias that shadowed Rust's built-in `core`.
+- **The wasm-free guarantee is held by CI, not the graph.** Native `cargo make check` compiles every ungated module for the host, so logic reaching a wasm-only API fails to compile immediately.
+- **Tests link the rlib.** Each adapter's consolidated `tests/it.rs` suite is unchanged in content; the `rlib` crate type exists so it (and doctests) can link natively.
+- **`omnia` is an ambiguous bare `-p` spec.** The workspace has both the `omnia` adapter crate and the `omnia` runtime dependency; wasm guest builds use `--workspace` (host-side members compile to empty crates on wasm32) rather than `-p` lists.
 
 ## One component, no manifest
 
@@ -30,7 +39,7 @@ The hands-off loop is the `eval-watch` cargo-make task: cargo-watch over one ada
 
 ## Vectis self-containment
 
-**Decision (2026-07).** All vectis deterministic tooling lives in `vectis-core` as plain library code consumed by the guest. Former extension modules map to core modules (`infer`, `verify`, `scaffold`, `sync`, `android`, `schema_source`, `shell`, `prepare`). Unit tests live in `core/tests/` as integration tests over the public surface. Assets (`schemas/`, `templates/`, `assets/`, `versions.toml`) are core-owned.
+**Decision (2026-07).** All vectis deterministic tooling lives in the `vectis` crate as plain library code consumed by the guest shim. Former extension modules map to library modules (`infer`, `verify`, `scaffold`, `sync`, `android`, `schema_source`, `shell`, `prepare`). Unit tests live in `tests/` as integration tests over the public surface. Assets (`schemas/`, `templates/`, `assets/`, `versions.toml`) are crate-owned.
 
 ## Prompt and prose cutover
 
@@ -70,7 +79,7 @@ Adapter prompts cite `UNI-*` ids and point readers at `specify rules export` and
 
 ## Vectis validation and materialization
 
-Provenance and rationale for the deterministic validation engine. Code citations point at `vectis-core` (`targets/vectis/core/`).
+Provenance and rationale for the deterministic validation engine. Code citations point at the `vectis` crate (`targets/vectis/`).
 
 ### Vectis UI artifact surface
 
@@ -128,19 +137,19 @@ _Codified in: `src/validate/engine/shared.rs::ASSETS_SCHEMA_SOURCE`, `assets_val
 
 > Pinned verbatim as the happy-path schema fixture; any future drift surfaces in the layout-mode test suite first.
 
-_Codified in: `core/tests/appendices.rs::APPENDIX_C_LAYOUT_YAML`._
+_Codified in: `tests/appendices.rs::APPENDIX_C_LAYOUT_YAML`._
 
 ### Appendix D — example `tokens.yaml`
 
 > Pinned verbatim as the happy-path tokens schema fixture; any future drift surfaces in the tokens-mode test suite first.
 
-_Codified in: `core/tests/appendices.rs::APPENDIX_D_TOKENS_YAML`._
+_Codified in: `tests/appendices.rs::APPENDIX_D_TOKENS_YAML`._
 
 ### Appendix E — example `assets.yaml`
 
 > Pinned verbatim as the happy-path assets schema fixture; any future drift surfaces in the assets-mode test suite first.
 
-_Codified in: `core/tests/appendices.rs::APPENDIX_E_ASSETS_YAML`._
+_Codified in: `tests/appendices.rs::APPENDIX_E_ASSETS_YAML`._
 
 ### Appendix F — patched `composition.schema.json`
 
