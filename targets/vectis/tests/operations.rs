@@ -13,7 +13,7 @@ use adapter::seam::{
 };
 use adapter::{Format, Request};
 use tempfile::TempDir;
-use testkit::MockModel;
+use testkit::{MockModel, mcp_grants};
 use vectis::operations::{build, describe, guidance, merge};
 
 const PHASE_DONE: &str = r#"{"applicable":true,"summary":"phase complete"}"#;
@@ -99,7 +99,7 @@ async fn build_phase_legs() {
     let compiled = serde_json::from_str::<serde_json::Value>(schema).unwrap();
     assert!(jsonschema::validator_for(&compiled).is_ok(), "internal schema compiles");
     assert!(first.lend_workspace);
-    assert_eq!(first.mcp[0].url, "http://references/mcp");
+    assert_eq!(mcp_grants(first)[0].url, "http://references/mcp");
 
     // Phase order: core, the two shell writes, review, then the report
     // leg gated by the derived answer schema.

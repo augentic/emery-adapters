@@ -1,24 +1,25 @@
 //! The scripted [`MockModel`] provider: FIFO replies and request recording.
 
-use adapter::{Error, Format, JudgmentModel, McpGrant, Message, Reply, Request, Role};
-use testkit::MockModel;
+use omnia_guest::Model;
+use omnia_guest::model::{Error, Format, McpGrant, Message, Reply, Request, Role, Tool};
+use testkit::{MockModel, mcp_grants};
 
 fn request(task: &str) -> Request {
-    Request {
-        model: None,
-        system: Some("You are a contracts author.".to_string()),
-        messages: vec![Message {
+    Request::builder()
+        .system("You are a contracts author.")
+        .messages(vec![Message {
             role: Role::User,
             content: task.to_string(),
-        }],
-        format: Format::Json,
-        mcp: vec![McpGrant {
-            name: "contracts-references".to_string(),
-            tools: vec![],
-            url: "http://127.0.0.1:8080/mcp/contracts".to_string(),
-        }],
-        lend_workspace: true,
-    }
+        }])
+        .format(Format::Json)
+        .tools(vec![Tool::Mcp(
+            McpGrant::builder()
+                .name("contracts-references")
+                .url("http://127.0.0.1:8080/mcp/contracts")
+                .build(),
+        )])
+        .lend_workspace(true)
+        .build()
 }
 
 #[tokio::test]
@@ -26,6 +27,7 @@ async fn scripted_fifo() {
     let mock = MockModel::scripted([
         Ok(Reply {
             answer: "{\"first\":true}".to_string(),
+            usage: None,
         }),
         Err(Error::InvalidAnswer("second".to_string())),
     ]);
@@ -34,7 +36,8 @@ async fn scripted_fifo() {
     assert_eq!(
         first,
         Ok(Reply {
-            answer: "{\"first\":true}".to_string()
+            answer: "{\"first\":true}".to_string(),
+            usage: None,
         })
     );
 
@@ -46,7 +49,7 @@ async fn scripted_fifo() {
     assert_eq!(requests[0].messages[0].content, "author the OpenAPI contract");
     assert_eq!(requests[1].messages[0].content, "verify the OpenAPI contract");
     assert!(requests[0].lend_workspace, "workspace lend flag survives recording");
-    assert_eq!(requests[0].mcp[0].name, "contracts-references");
+    assert_eq!(mcp_grants(&requests[0])[0].name, "contracts-references");
 }
 
 #[tokio::test]

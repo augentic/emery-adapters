@@ -37,14 +37,6 @@ cfg_if::cfg_if! {
         /// `None`, then delegates. Without an override every request passes
         /// through untouched.
         #[derive(Clone, Debug)]
-        #[cfg_attr(
-            test,
-            expect(
-                dead_code,
-                reason = "under `test = true` the example compiles as a test harness where the \
-                          runtime!-generated main — the only consumer — is not linked"
-            )
-        )]
         struct EvalModel {
             inner: Cursor,
             model: Option<String>,
@@ -61,14 +53,6 @@ cfg_if::cfg_if! {
         /// Connection options for [`EvalModel`]: the optional model-id
         /// override, read once from `SPECIFY_EVAL_MODEL`.
         #[derive(Clone, Debug)]
-        #[cfg_attr(
-            test,
-            expect(
-                dead_code,
-                reason = "under `test = true` the example compiles as a test harness where the \
-                          runtime!-generated main — the only consumer — is not linked"
-            )
-        )]
         struct EvalModelOptions {
             model: Option<String>,
         }

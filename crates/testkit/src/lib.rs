@@ -9,9 +9,10 @@
 use std::collections::VecDeque;
 use std::sync::Mutex;
 
-use adapter::{Error, JudgmentModel, Reply, Request};
+use omnia_guest::Model;
+use omnia_guest::model::{Error, McpGrant, Reply, Request, Tool};
 
-/// Scripted [`JudgmentModel`] provider for native tests: replies are
+/// Scripted [`Model`] provider for native tests: replies are
 /// served in FIFO order and every request is recorded for assertion.
 #[derive(Debug, Default)]
 pub struct MockModel {
@@ -35,6 +36,7 @@ impl MockModel {
         Self::scripted(answers.into_iter().map(|answer| {
             Ok(Reply {
                 answer: answer.to_string(),
+                usage: None,
             })
         }))
     }
@@ -51,7 +53,7 @@ impl MockModel {
     }
 }
 
-impl JudgmentModel for MockModel {
+impl Model for MockModel {
     async fn create(&self, request: Request) -> Result<Reply, Error> {
         self.requests.lock().expect("mock lock").push(request);
         self.replies
@@ -60,4 +62,17 @@ impl JudgmentModel for MockModel {
             .pop_front()
             .expect("MockModel exhausted: script more replies")
     }
+}
+
+/// The MCP grants a recorded request offered, in tool order.
+#[must_use]
+pub fn mcp_grants(request: &Request) -> Vec<&McpGrant> {
+    request
+        .tools
+        .iter()
+        .filter_map(|tool| match tool {
+            Tool::Mcp(grant) => Some(grant),
+            Tool::Function(_) => None,
+        })
+        .collect()
 }

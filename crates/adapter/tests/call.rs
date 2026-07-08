@@ -6,7 +6,7 @@ use std::path::Path;
 use adapter::seam::{Context, Error, WorkingTree};
 use adapter::{Error as ModelError, Format, judgment};
 use serde::Deserialize;
-use testkit::MockModel;
+use testkit::{MockModel, mcp_grants};
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 struct Answer {
@@ -50,9 +50,10 @@ async fn assembles_and_parses() {
         other => panic!("expected schema format, got {other:?}"),
     }
     assert!(request.lend_workspace, "every judgment leg lends the workspace");
-    assert_eq!(request.mcp.len(), 1);
-    assert_eq!(request.mcp[0].name, "contracts-references", "grant named after the adapter");
-    assert_eq!(request.mcp[0].url, "http://references/mcp");
+    let grants = mcp_grants(request);
+    assert_eq!(grants.len(), 1);
+    assert_eq!(grants[0].name, "contracts-references", "grant named after the adapter");
+    assert_eq!(grants[0].url, "http://references/mcp");
 }
 
 // Without a resolved MCP URL the leg runs grant-free rather than failing.
@@ -71,7 +72,7 @@ async fn no_mcp_no_grant() {
     .await
     .expect("grant-free leg succeeds");
 
-    assert!(model.requests()[0].mcp.is_empty());
+    assert!(model.requests()[0].tools.is_empty());
 }
 
 #[tokio::test]
@@ -80,6 +81,7 @@ async fn error_mapping() {
         Err(ModelError::InvalidRequest("messages must not be empty".to_string())),
         Ok(adapter::Reply {
             answer: "this is not json".to_string(),
+            usage: None,
         }),
     ]);
     let context = ctx(None, Path::new("."));

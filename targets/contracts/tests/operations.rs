@@ -11,7 +11,7 @@ use adapter::{Error as ModelError, Format, Request};
 use contracts::operations::{build, describe, guidance, merge};
 use contracts::validate::RULE_VERSION_IS_SEMVER;
 use tempfile::TempDir;
-use testkit::MockModel;
+use testkit::{MockModel, mcp_grants};
 
 const NOT_APPLICABLE: &str = r#"{"applicable":false,"summary":"no surface this format owns"}"#;
 const SUCCESS_REPORT: &str = r#"{"status":"success","findings":[]}"#;
@@ -86,7 +86,7 @@ async fn build_sub_flows() {
     let compiled = serde_json::from_str::<serde_json::Value>(schema).unwrap();
     assert!(jsonschema::validator_for(&compiled).is_ok(), "internal schema compiles");
     assert!(first.lend_workspace);
-    assert_eq!(first.mcp[0].url, "http://references/mcp");
+    assert_eq!(mcp_grants(first)[0].url, "http://references/mcp");
 
     assert_eq!(schema_format(&requests[1]).0, "openapi-sub-flow");
     assert_eq!(schema_format(&requests[2]).0, "asyncapi-sub-flow");

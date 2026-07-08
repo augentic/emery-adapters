@@ -8,7 +8,7 @@ use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA};
 use adapter::seam::{Authority, ClaimKind, Context, Error, Lead};
 use adapter::{Error as ModelError, Format, Request};
 use documentation::operations::{describe, extract, survey};
-use testkit::MockModel;
+use testkit::{MockModel, mcp_grants};
 
 fn ctx(mcp_url: Option<&str>) -> Context<'_> {
     Context {
@@ -59,8 +59,9 @@ async fn survey_leg() {
     assert_eq!(name, "leads");
     assert_eq!(schema, LEADS_ANSWER_SCHEMA);
     assert!(request.lend_workspace);
-    assert_eq!(request.mcp[0].url, "http://references/mcp");
-    assert_eq!(request.mcp[0].name, "documentation-references");
+    let grants = mcp_grants(request);
+    assert_eq!(grants[0].url, "http://references/mcp");
+    assert_eq!(grants[0].name, "documentation-references");
 }
 
 #[tokio::test]
@@ -69,7 +70,7 @@ async fn survey_no_mcp_no_grant() {
 
     survey(&model, &ctx(None)).await.unwrap();
 
-    assert!(model.requests()[0].mcp.is_empty(), "no URL means no reference grant");
+    assert!(model.requests()[0].tools.is_empty(), "no URL means no reference grant");
 }
 
 // The tail re-checks id grammar after the answer deserializes.
@@ -131,7 +132,7 @@ async fn extract_leg() {
     assert_eq!(name, "evidence");
     assert_eq!(schema, EVIDENCE_ANSWER_SCHEMA);
     assert!(request.lend_workspace);
-    assert_eq!(request.mcp[0].url, "http://references/mcp");
+    assert_eq!(mcp_grants(request)[0].url, "http://references/mcp");
 }
 
 // The tail mirrors the evidence schema's conditional id requirement.

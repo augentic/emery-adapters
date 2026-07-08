@@ -10,9 +10,8 @@
 
 use std::path::{Path, PathBuf};
 
+use omnia_guest::model::McpGrant;
 use serde::Deserialize;
-
-use crate::model::McpGrant;
 
 /// Operation error — mirrors the WIT `types.error` variant.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
@@ -28,10 +27,10 @@ pub enum Error {
     Internal(String),
 }
 
-impl From<crate::model::Error> for Error {
-    fn from(err: crate::model::Error) -> Self {
+impl From<omnia_guest::model::Error> for Error {
+    fn from(err: omnia_guest::model::Error) -> Self {
         match err {
-            crate::model::Error::InvalidRequest(detail) => Self::InvalidRequest(detail),
+            omnia_guest::model::Error::InvalidRequest(detail) => Self::InvalidRequest(detail),
             other => Self::Internal(other.to_string()),
         }
     }

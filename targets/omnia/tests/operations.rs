@@ -10,7 +10,7 @@ use adapter::seam::{Changeset, Context, Edit, Error, Input, Severity, Status, Wo
 use adapter::{Error as ModelError, Format, Request};
 use omnia::operations::{build, describe, guidance, merge};
 use tempfile::TempDir;
-use testkit::MockModel;
+use testkit::{MockModel, mcp_grants};
 
 const PHASE_DONE: &str = r#"{"applicable":true,"summary":"phase complete"}"#;
 const REPLAY_SKIPPED: &str = r#"{"applicable":false,"summary":"no captures binding"}"#;
@@ -83,7 +83,7 @@ async fn build_phase_legs() {
     let compiled = serde_json::from_str::<serde_json::Value>(schema).unwrap();
     assert!(jsonschema::validator_for(&compiled).is_ok(), "internal schema compiles");
     assert!(first.lend_workspace);
-    assert_eq!(first.mcp[0].url, "http://references/mcp");
+    assert_eq!(mcp_grants(first)[0].url, "http://references/mcp");
 
     let review = &requests[1];
     assert_eq!(schema_format(review).0, "review");

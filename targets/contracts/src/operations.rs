@@ -13,7 +13,7 @@ use adapter::seam::{
     BuildInput, Changeset, Context, Error, Finding, Input, Report, Severity, TargetManifest,
     WorkingTree,
 };
-use adapter::{JudgmentModel, phase};
+use adapter::{Model, phase};
 
 use crate::registry;
 use crate::validate::{ContractFinding, validate_baseline};
@@ -82,7 +82,7 @@ pub fn guidance() -> &'static str {
 /// # Errors
 ///
 /// As [`adapter::judgment`].
-pub async fn build<P: JudgmentModel>(
+pub async fn build<P: Model>(
     model: &P, ctx: &Context<'_>, slice: &str, inputs: &[Input], tree: &WorkingTree,
 ) -> Result<Report, Error> {
     let slice_contracts_rel = format!(".specify/slices/{slice}/contracts");
@@ -161,7 +161,7 @@ pub async fn build<P: JudgmentModel>(
 /// # Errors
 ///
 /// As [`adapter::judgment`].
-pub async fn merge<P: JudgmentModel>(
+pub async fn merge<P: Model>(
     model: &P, ctx: &Context<'_>, slice: &str, delta: &Changeset, tree: &WorkingTree,
 ) -> Result<Report, Error> {
     let baseline = ctx.tree_root(tree).join("contracts");

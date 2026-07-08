@@ -9,11 +9,11 @@
 
 use std::path::Path;
 
+use omnia_guest::Model;
 use serde::Deserialize;
 
 use crate::answers::{REPORT_ANSWER_SCHEMA, ReportAnswer};
 use crate::judgment;
-use crate::model::JudgmentModel;
 use crate::seam::{Changeset, Context, Error, Finding, Input, Report, Status};
 
 /// Answer schema for one internal phase leg.
@@ -62,7 +62,7 @@ pub struct PhaseAnswer {
 /// # Errors
 ///
 /// As [`judgment`].
-pub async fn phase<P: JudgmentModel>(
+pub async fn phase<P: Model>(
     model: &P, ctx: &Context<'_>, system: String, user: String, name: &str,
 ) -> Result<PhaseAnswer, Error> {
     judgment(model, ctx, system, user, name, PHASE_ANSWER_SCHEMA).await
@@ -74,7 +74,7 @@ pub async fn phase<P: JudgmentModel>(
 /// # Errors
 ///
 /// As [`judgment`].
-pub async fn report<P: JudgmentModel>(
+pub async fn report<P: Model>(
     model: &P, ctx: &Context<'_>, system: String, user: String,
 ) -> Result<Report, Error> {
     judgment::<P, ReportAnswer>(model, ctx, system, user, "report", REPORT_ANSWER_SCHEMA)

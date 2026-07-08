@@ -1,5 +1,5 @@
 //! The vectis target adapter, natively testable against a mock
-//! [`adapter::JudgmentModel`]; the wasm32-only `guest` module owns
+//! [`adapter::Model`]; the wasm32-only `guest` module owns
 //! bindings and export glue.
 //!
 //! [`operations`] carries the build prompt's phase legs and validator
