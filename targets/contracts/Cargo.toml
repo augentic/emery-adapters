@@ -10,8 +10,6 @@ rust-version.workspace = true
 publish.workspace = true
 autotests = false
 
-# `cdylib` is the wasm32 component; `rlib` lets the native integration
-# tests and doctests link the wasm-free modules.
 [lib]
 crate-type = ["cdylib", "rlib"]
 

@@ -3,14 +3,14 @@
 First-party Specify **adapters** — independently versioned wasm-pkg registry
 artifacts consumed by the platform `specify` binary.
 
-Each adapter is a **guest component**: the adapter root is a wasm32-only cdylib
-package (`<name>`, a hand-written export shim over `adapter`'s shared WIT
-bindings), with wasm-free core logic in a `core/` sub-crate (`<name>-core`) and
-`prose/` trees (`prompts/`, `references/`, and `rules/` where declared)
-embedded at build time. The deployable artifact is the built component — no
-manifest file, no committed wasm. The platform resolves the published component
-from the registry and reads resolve-time facts through the WIT `describe`
-operation.
+Each adapter is a **guest component**: one crate (`<name>`) whose wasm-free
+library modules carry the adapter logic — natively tested through the crate's
+own `tests/` suite — and whose wasm32-only `guest` module is the hand-written
+export shim over `adapter`'s shared WIT bindings, with `prose/` trees
+(`prompts/`, `references/`, and `rules/` where declared) embedded at build
+time. The deployable artifact is the built component — no manifest file, no
+committed wasm. The platform resolves the published component from the
+registry and reads resolve-time facts through the WIT `describe` operation.
 
 ## Layout
 
@@ -24,9 +24,9 @@ wit/                  # the contract — wit/specify.wit, the axis worlds
       prompts/        #   operation system-prompt fragments
       references/     #   lazy MCP reference corpus
       rules/          #   engineering standards (target adapters)
-    Cargo.toml        #   `<name>` — the adapter guest component (wasm32 shim); its `version` is the adapter identity semver
-    src/              #   hand-written shim: Guest impl, export glue, MCP references
-    core/             #   `<name>-core` — wasm-free logic, natively tested
+    Cargo.toml        #   `<name>` — the adapter component; its `version` is the adapter identity semver
+    src/              #   wasm-free adapter logic + the wasm32-only `guest` shim module
+    tests/            #   native integration suite (the consolidated `it` binary)
 shared/
   prose/              # cross-adapter prose, same grammar as adapter prose/
     references/       #   spec-runtime bundle, replay hook docs, …
@@ -38,7 +38,7 @@ evals/                # live eval harness against the real cursor backend,
                       # flattened like omnia's examples/: runtime.rs (the
                       # eval-driver host) + guest.rs (the eval-guest cdylib)
                       # over the per-adapter scenario trees (contracts, vectis)
-Cargo.toml            # workspace: guest roots + `{sources,targets}/*` + `{sources,targets}/*/core`
+Cargo.toml            # workspace: `crates/*` + `{sources,targets}/*` + `evals` + `tests`
 ```
 
 Identity lives in the guest crate's `Cargo.toml` `version` and the wasm-pkg
@@ -47,7 +47,7 @@ world (`source` xor `target`). The compatibility floor and — for targets — t
 declared build `inputs[]` and platforms capability are compiled into the
 `describe` operation's manifest record.
 
-Crux shell-detection heuristics live in `targets/vectis/core/src/shell.rs`.
+Crux shell-detection heuristics live in `targets/vectis/src/shell.rs`.
 
 ## Building the guests
 
