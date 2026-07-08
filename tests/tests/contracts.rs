@@ -7,13 +7,12 @@
 //! natively in the `contracts` crate against `MockModel`, and live
 //! against the cursor backend by the eval harness.
 
+use adapter_tests::{self as common, Bundle};
 use anyhow::{Context as _, Result};
 use omnia::wasmtime::component::Val;
 use omnia::{Dispatcher as _, Runtime};
 use omnia_testkit::http;
 use serde_json::{Value, json};
-
-use crate::common::{self, Bundle};
 
 /// The versioned interface name the target-adapter world exports.
 const TARGET_INTERFACE: &str = "specify:adapter/target@0.1.0";

@@ -2,6 +2,8 @@
 //! bodies win, misses fall back to the embedded table, and the doc set
 //! never changes.
 
+#![cfg(feature = "prose-overlay")]
+
 use std::fs;
 
 use adapter::registry::{Doc, body, find, resolve};

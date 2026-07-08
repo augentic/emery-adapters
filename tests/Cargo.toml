@@ -7,18 +7,12 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 publish.workspace = true
-# Integration tests compile to the single `it` binary (one binary per
-# crate); the per-area files are pulled in via tests/it.rs `#[path]`
-# includes.
-autotests = false
-
-[[test]]
-name = "it"
-path = "tests/it.rs"
 
 # Host-only: the composed tests never compile for the guest wasm32 targets,
 # so their dependencies live under the same target gate omnia itself uses.
-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+# The package's lib (`src/lib.rs`) is the shared harness the per-area test
+# binaries link, so the deps are ordinary (not dev-) dependencies.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 anyhow.workspace = true
 harness.workspace = true
 omnia.workspace = true

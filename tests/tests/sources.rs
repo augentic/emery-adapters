@@ -6,13 +6,12 @@
 //! Model-free by design, like the contracts tests: the judgment legs are
 //! covered natively in each `<name>-core` against `MockModel`.
 
+use adapter_tests::{self as common, Bundle};
 use anyhow::{Context as _, Result};
 use omnia::wasmtime::component::Val;
 use omnia::{Dispatcher as _, Runtime};
 use omnia_testkit::http;
 use serde_json::{Value, json};
-
-use crate::common::{self, Bundle};
 
 /// The versioned interface name the source-adapter world exports.
 const SOURCE_INTERFACE: &str = "specify:adapter/source@0.1.0";

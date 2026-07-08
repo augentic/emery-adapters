@@ -21,7 +21,7 @@ The hands-off loop is the `eval-watch` cargo-make task: cargo-watch over one ada
 
 - **Why.** No consumer outside each guest ever depended on its core crate, so the crate boundary protected nothing; flattening halves the package count and removes the `core = { package = "<name>-core" }` alias that shadowed Rust's built-in `core`.
 - **The wasm-free guarantee is held by CI, not the graph.** Native `cargo make check` compiles every ungated module for the host, so logic reaching a wasm-only API fails to compile immediately.
-- **Tests link the rlib.** Each adapter's consolidated `tests/it.rs` suite is unchanged in content; the `rlib` crate type exists so it (and doctests) can link natively.
+- **Tests link the rlib.** Each adapter's `tests/` suite is unchanged in content; the `rlib` crate type exists so it (and doctests) can link natively.
 - **`omnia` is an ambiguous bare `-p` spec.** The workspace has both the `omnia` adapter crate and the `omnia` runtime dependency; wasm guest builds use `--workspace` (host-side members compile to empty crates on wasm32) rather than `-p` lists.
 
 ## One component, no manifest

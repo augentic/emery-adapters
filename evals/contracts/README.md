@@ -13,7 +13,7 @@ Live-backend eval harness for the contracts adapter guest. Each scenario drives 
 | Runner | [`evals/live.rs`](../live.rs) (the `live` `[[test]]` target) — one `#[ignore]`d test per scenario under `contracts::`, plus the non-ignored `contracts::wiring` smoke CI runs model-free; `cargo make eval-contracts` runs every scenario |
 | Results | `runs/` — per-run raw output; the committed run summary lives at `runs/SUMMARY.md` |
 
-The scenarios mirror the operator-driven documents under [`targets/contracts/tests/`](../../targets/contracts/tests/), reduced to the build leg this harness exercises.
+The scenarios mirror the operator-driven documents beside them under [`scenarios/`](scenarios/README.md), reduced to the build leg this harness exercises.
 
 ## Running
 

@@ -7,14 +7,6 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 publish.workspace = true
-# Integration tests compile to the single `it` binary (one binary per
-# crate); the per-area files are pulled in via tests/it.rs `#[path]`
-# includes.
-autotests = false
-
-[[test]]
-name = "it"
-path = "tests/it.rs"
 
 [features]
 # Dev-only prose overlay: body lookups consult `.eval/prose/<path>` before

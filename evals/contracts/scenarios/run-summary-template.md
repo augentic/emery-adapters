@@ -11,7 +11,7 @@ failure, preserve the evidence directory or notes that explain the result.
 ## Run Header
 
 - **Scenario ID:** `<contracts-describe | contracts-design | contracts-update-boundary | contracts-import | contracts-source>`
-- **Scenario file:** `<relative path, e.g. adapters/targets/contracts/tests/describe.md>`
+- **Scenario file:** `<relative path, e.g. adapters/evals/contracts/scenarios/describe.md>`
 - **Adapter:** `contracts@1.0.0`
 - **Backend:** `<manual | agent | recorded | fixture>`
 - **Operator / agent:** `<name or model identifier>`

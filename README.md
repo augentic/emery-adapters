@@ -26,7 +26,7 @@ wit/                  # the contract — wit/specify.wit, the axis worlds
       rules/          #   engineering standards (target adapters)
     Cargo.toml        #   `<name>` — the adapter component; its `version` is the adapter identity semver
     src/              #   wasm-free adapter logic + the wasm32-only `guest` shim module
-    tests/            #   native integration suite (the consolidated `it` binary)
+    tests/            #   native integration suite (one auto-discovered binary per area)
 shared/
   prose/              # cross-adapter prose, same grammar as adapter prose/
     references/       #   spec-runtime bundle, replay hook docs, …

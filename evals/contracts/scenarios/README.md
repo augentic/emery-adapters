@@ -13,10 +13,11 @@ as context. They do not generate new or changed interface shapes inline.
 
 ## Relationship To Evals
 
-These are owner-local scenario documents. They live next to the `contracts`
-adapter because the behavior under test is one adapter's slice loop in
-isolation. Static checks validate their YAML frontmatter and scenario IDs; the
-scenario bodies remain human-readable operator instructions.
+These are owner-local scenario documents. They live beside the live eval
+harness's `scenarios/<name>/` seed trees because the behavior under test is
+one adapter's slice loop in isolation. Static checks validate their YAML
+frontmatter and scenario IDs; the scenario bodies remain human-readable
+operator instructions.
 
 Every scenario in this directory is operator-driven. A human or agent follows
 the prose, runs the prompts, and fills out a
@@ -94,7 +95,6 @@ negative-expectations:                # optional, free-form forbidden-condition 
 ```
 
 The fields are intentionally compatible with the canonical `schemas/authoring/scenario.schema.json` (embedded in the CLI binary).
-Static validation in `scripts/check.ts` enforces the frontmatter shape.
 
 ## Manual Test Flow
 
@@ -137,7 +137,7 @@ Use this prompt when you want an agent to run every scenario in sequence without
 asking for manual confirmation between steps:
 
 ```text
-Run all contract test scenarios in adapters/targets/contracts/tests/ in this order:
+Run all contract test scenarios in adapters/evals/contracts/scenarios/ in this order:
 1. describe.md
 2. design.md
 3. update.md

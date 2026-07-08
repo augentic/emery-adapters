@@ -5,6 +5,8 @@
 //! manifest rendering and the cargo runner come from the shared
 //! `harness` crate (`crates/harness`).
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
@@ -142,14 +144,21 @@ async fn assemble(manifest: TempManifest) -> Result<Runtime<Bundle>> {
     ))
 }
 
-/// The backend bundle a host binary's `runtime!` macro would generate for
-/// `hosts: { WasiHttp: HttpDefault, WasiModel: … }` — with the model
+/// The backend bundle a host binary's `runtime!` macro would generate.
+///
+/// Covers `hosts: { WasiHttp: HttpDefault, WasiModel: … }` — with the model
 /// backend stubbed: these composed tests are model-free (judgment legs are
 /// covered natively in each adapter crate), so any completion is a test bug.
 #[derive(Clone)]
 pub struct Bundle {
     http: HttpDefault,
     model: NoModel,
+}
+
+impl std::fmt::Debug for Bundle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Bundle").finish_non_exhaustive()
+    }
 }
 
 impl omnia::Backends for Bundle {
