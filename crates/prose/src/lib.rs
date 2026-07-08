@@ -28,8 +28,6 @@ pub fn emit() {
     }
 }
 
-const PROSE_ROOT: &str = "prose";
-
 /// Walk `<adapter_root>/prose/` and write the sorted `DOCS` table to
 /// `<out_dir>/registry_docs.rs`, printing `cargo:rerun-if-changed` for
 /// every directory and document walked.
@@ -45,7 +43,7 @@ const PROSE_ROOT: &str = "prose";
 /// symlink), or when the generated file cannot be written — the caller
 /// (a `build.rs`) should fail the build with it.
 pub fn emit_from(adapter_root: &Path, out_dir: &Path) -> Result<(), String> {
-    let root = adapter_root.join(PROSE_ROOT);
+    let root = adapter_root.join("prose");
     let mut docs: Vec<(String, PathBuf)> = Vec::new();
     if root.is_dir() {
         walk(&root, "", &mut docs)?;
