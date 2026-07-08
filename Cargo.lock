@@ -20,21 +20,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "adapter-tests"
-version = "0.4.3"
-dependencies = [
- "anyhow",
- "harness",
- "omnia 0.35.0",
- "omnia-testkit",
- "omnia-wasi-http",
- "omnia-wasi-model",
- "serde_json",
- "tempfile",
- "tokio",
-]
-
-[[package]]
 name = "addr2line"
 version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1169,9 +1154,9 @@ version = "0.4.3"
 dependencies = [
  "anyhow",
  "cfg-if",
- "harness",
  "omnia 0.35.0",
  "omnia-cursor",
+ "omnia-testkit",
  "omnia-wasi-http",
  "omnia-wasi-model",
  "prose",
@@ -1513,13 +1498,6 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
-]
-
-[[package]]
-name = "harness"
-version = "0.4.3"
-dependencies = [
- "anyhow",
 ]
 
 [[package]]

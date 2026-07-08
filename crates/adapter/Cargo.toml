@@ -11,16 +11,13 @@ publish.workspace = true
 [features]
 # Dev-only prose overlay: body lookups consult `.eval/prose/<path>` before
 # the embedded table. Never enabled by the release guest builds.
-prose-overlay = []
+overlay = []
 
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 thiserror.workspace = true
 
-# The WASI-backed default body of `Model::create`, the MCP reference
-# references, and the `specify:adapter` world bindings compile only for the
-# wasm32 guest target, mirroring omnia-guest's capability traits.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 omnia-guest.workspace = true
 omnia-wasi-http.workspace = true
@@ -28,8 +25,6 @@ omnia-wasi-model.workspace = true
 wasip3.workspace = true
 wit-bindgen.workspace = true
 
-# The dev-dependency cycle back through `testkit` is deliberate and
-# cargo-legal: dev-deps are only built for tests, never for the guest.
 [dev-dependencies]
 tempfile.workspace = true
 testkit.workspace = true

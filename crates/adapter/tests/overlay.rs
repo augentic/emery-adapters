@@ -1,8 +1,8 @@
-//! The dev-only prose overlay (`--features prose-overlay`): overlay
+//! The dev-only prose overlay (`--features overlay`): overlay
 //! bodies win, misses fall back to the embedded table, and the doc set
 //! never changes.
 
-#![cfg(feature = "prose-overlay")]
+#![cfg(feature = "overlay")]
 
 use std::fs;
 

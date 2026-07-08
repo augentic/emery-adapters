@@ -31,14 +31,18 @@ shared/
   prose/              # cross-adapter prose, same grammar as adapter prose/
     references/       #   spec-runtime bundle, replay hook docs, …
     rules/            #   UNI-* and CORE-* engineering rules
-crates/               # shared guest support (adapter, prose) + the composed-
-                      # deployment tests (tests/) hosting the built adapter
-                      # guest components on the Omnia runtime
-evals/                # live eval harness against the real cursor backend,
-                      # flattened like omnia's examples/: runtime.rs (the
+crates/               # shared guest support (adapter, prose) + test doubles
+                      # (testkit)
+evals/                # the hosted-deployment test surfaces, flattened like
+                      # omnia's examples/: harness.rs (the package lib — the
+                      # shared host-side harness) + composed.rs (the
+                      # model-free composed-deployment tests hosting the
+                      # built adapter guest components on the Omnia runtime)
+                      # + live.rs (the live eval runner) + runtime.rs (the
                       # eval-driver host) + guest.rs (the eval-guest cdylib)
-                      # over the per-adapter scenario trees (contracts, vectis)
-Cargo.toml            # workspace: `crates/*` + `{sources,targets}/*` + `evals` + `tests`
+                      # over the per-adapter scenario trees (contracts,
+                      # vectis)
+Cargo.toml            # workspace: `crates/*` + `{sources,targets}/*` + `evals`
 ```
 
 Identity lives in the guest crate's `Cargo.toml` `version` and the wasm-pkg
@@ -75,8 +79,8 @@ at `target/wasm32-wasip2/release/<name>.wasm`):
 cargo make release
 ```
 
-The composed-deployment tests build guests from source on first use when artifacts
-are absent under `target/wasm32-wasip2/debug/`.
+The composed-deployment tests (`evals/composed.rs`) build guests from source on
+first use when artifacts are absent under `target/wasm32-wasip2/debug/`.
 
 ## Publishing
 

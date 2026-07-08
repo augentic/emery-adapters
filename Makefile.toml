@@ -170,7 +170,7 @@ for dir in {targets,sources}/*/; do
 done
 '''
 
-# # Prose-overlay watch loop: re-run one live scenario on every
+# # overlay watch loop: re-run one live scenario on every
 # # save under an adapter's prose trees. With SPECIFY_EVAL_OVERLAY=1 the
 # # save-to-report loop is the overlay loop — after the one-time build a
 # # re-run spawns no cargo, only the model leg repeats. Parametrized by

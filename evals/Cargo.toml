@@ -8,9 +8,14 @@ repository.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
-# Flattened like omnia's examples/ package: no lib, just the two example
-# targets below. Deliberately outside crates/ — the harness is an eval
-# affordance for the dev loop, not mainline guest support.
+# Flattened like omnia's examples/ package: the lib is the shared host-side
+# harness both test targets link (empty on wasm32 via its crate-level cfg
+# gate), plus the two example targets below. Deliberately outside crates/ —
+# the package is a test affordance for the dev loop, not mainline guest
+# support.
+[lib]
+path = "harness.rs"
+
 [dependencies]
 cfg-if.workspace = true
 
@@ -22,7 +27,7 @@ omnia.workspace = true
 omnia-cursor.workspace = true
 omnia-wasi-http.workspace = true
 omnia-wasi-model.workspace = true
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 
 # Guest-only: the component body compiles solely for wasm32, so its
 # dependencies live under the same target gate omnia's guests use.
@@ -31,13 +36,14 @@ serde_json.workspace = true
 wasip3.workspace = true
 wit-bindgen.workspace = true
 
-# The live test's own (host-only) support; kept out of the wasm32 example
-# builds by the same target gate. `harness` is the shared host harness
-# (manifest rendering, cargo runner, target-dir discovery); `prose` is the
-# build-time embed walk the overlay seeding test replays for parity.
+# The test targets' own (host-only) support; kept out of the wasm32 example
+# builds by the same target gate. `prose` is the build-time embed walk the
+# overlay seeding test replays for parity; `omnia-testkit` and `serde_json`
+# back the composed-deployment tests.
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-harness.workspace = true
+omnia-testkit.workspace = true
 prose.workspace = true
+serde_json.workspace = true
 sha2.workspace = true
 tempfile.workspace = true
 
@@ -58,6 +64,13 @@ crate-type = ["cdylib"]
 [[test]]
 name = "live"
 path = "live.rs"
+
+# The model-free composed-deployment tests hosting the built adapter guest
+# components on the Omnia runtime (in-process via omnia-testkit); the
+# deterministic counterpart to the live evals above.
+[[test]]
+name = "composed"
+path = "composed.rs"
 
 [lints]
 workspace = true

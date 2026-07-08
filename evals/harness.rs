@@ -1,6 +1,6 @@
-//! Shared host-side harness for the hosted-deployment test surfaces: the
-//! composed-deployment tests in the root `tests/` package and the live
-//! eval harness in `evals/`.
+//! Shared host-side harness for the package's two hosted-deployment test
+//! surfaces: the composed-deployment tests (`composed.rs`) and the live
+//! eval harness (`live.rs`).
 //!
 //! Owns the pieces both suites need — cargo-target-dir discovery, a
 //! subprocess `cargo` runner, deployment-manifest rendering over [`Guest`]

@@ -20,8 +20,8 @@
 //! without building guests or spawning anything, so CI catches
 //! scenario-tree drift without a model or a cursor-agent install.
 //!
-//! `SPECIFY_EVAL_OVERLAY=1` switches a live run into prose-overlay mode:
-//! the adapter guest builds with the `adapter/prose-overlay`
+//! `SPECIFY_EVAL_OVERLAY=1` switches a live run into overlay mode:
+//! the adapter guest builds with the `adapter/overlay`
 //! feature, the adapter's prose trees seed `<scratch>/.eval/prose/`, and
 //! once the three artifacts exist on disk the cargo legs are skipped
 //! entirely — a prose-only edit re-invokes the driver with no build.
@@ -108,7 +108,7 @@ mod overlay {
     #[test]
     #[ignore = "needs the three prebuilt artifacts; run after an overlay-mode build"]
     fn artifacts_present() -> Result<()> {
-        let target = harness::target_dir()?;
+        let target = evals::target_dir()?;
         for adapter in ["contracts", "vectis"] {
             for path in super::artifacts(&target, adapter) {
                 anyhow::ensure!(path.is_file(), "missing artifact {}", path.display());
@@ -133,7 +133,7 @@ fn live(adapter: &str, scenario: &str, operation: &str, slice: &str) -> Result<(
     );
 
     let root = workspace_root();
-    let target = harness::target_dir()?;
+    let target = evals::target_dir()?;
     let overlay = overlay_active();
     build(adapter, root, &target, overlay)?;
 
@@ -198,7 +198,7 @@ fn live(adapter: &str, scenario: &str, operation: &str, slice: &str) -> Result<(
 /// manifest writer are well-formed without guests or a model.
 fn wiring(adapter: &str) -> Result<()> {
     let scenarios = manifest_dir().join(adapter).join("scenarios");
-    let target = harness::target_dir()?;
+    let target = evals::target_dir()?;
     let mut seen = 0;
     for entry in fs::read_dir(&scenarios)? {
         let entry = entry?;
@@ -228,7 +228,7 @@ fn seed(adapter: &str, scenario: &str) -> Result<TempDir> {
         tempfile::Builder::new().prefix(&format!("specify-eval-{scenario}.")).tempdir()?;
     let seed = scenario_dir.join("seed");
     if seed.is_dir() {
-        harness::copy_tree(&seed, scratch.path())?;
+        evals::copy_tree(&seed, scratch.path())?;
     }
 
     let inputs = scratch.path().join(".eval").join("inputs");
@@ -263,20 +263,20 @@ fn build(adapter: &str, root: &Path, target: &Path, overlay: bool) -> Result<()>
     if overlay {
         // Enables the `adapter` dependency's feature on the guest build;
         // the eval guest reads no prose, so only this leg carries it.
-        guest.extend(["--features", "adapter/prose-overlay"]);
+        guest.extend(["--features", "adapter/overlay"]);
     }
-    harness::cargo(&guest, root, target)?;
+    evals::cargo(&guest, root, target)?;
     if overlay {
         fs::write(stamp_path(target, adapter), digest(&adapter_wasm(target, adapter))?)?;
     }
-    harness::cargo(
+    evals::cargo(
         &["build", "-p", "evals", "--example", "eval-guest", "--target", "wasm32-wasip2"],
         root,
         target,
     )?;
-    harness::cargo(&["build", "-p", "evals", "--example", "eval-driver"], root, target)?;
+    evals::cargo(&["build", "-p", "evals", "--example", "eval-driver"], root, target)?;
     if overlay {
-        println!("eval {adapter}: cargo builds ran (prose-overlay)");
+        println!("eval {adapter}: cargo builds ran (overlay)");
     }
     Ok(())
 }
@@ -322,7 +322,7 @@ fn seed_overlay(adapter: &str, scratch: &Path) -> Result<()> {
     let prose = adapter_dir(adapter)?.join("prose");
     let overlay = scratch.join(".eval").join("prose");
     if prose.is_dir() {
-        harness::copy_tree(&prose, &overlay)?;
+        evals::copy_tree(&prose, &overlay)?;
     }
     Ok(())
 }
@@ -373,7 +373,7 @@ fn doc_keys(table: &str) -> Vec<String> {
 fn manifest(target: &Path, adapter: &str, scratch: &Path) -> String {
     let wasm = target.join("wasm32-wasip2").join("debug");
     let guests = [
-        harness::Guest {
+        evals::Guest {
             id: "eval".to_owned(),
             wasm: wasm.join("examples").join("eval_guest.wasm"),
             link: vec![
@@ -382,14 +382,14 @@ fn manifest(target: &Path, adapter: &str, scratch: &Path) -> String {
             ],
             route: None,
         },
-        harness::Guest {
+        evals::Guest {
             id: format!("target:{adapter}"),
             wasm: wasm.join(format!("{adapter}.wasm")),
             link: Vec::new(),
             route: Some(format!("/mcp/{adapter}")),
         },
     ];
-    harness::manifest(&guests, scratch)
+    evals::manifest(&guests, scratch)
 }
 
 // Honour an operator-set HTTP_ADDR, else grab an ephemeral port so

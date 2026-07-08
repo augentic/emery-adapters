@@ -25,13 +25,13 @@ pub fn find<'d>(docs: &'d [Doc], path: &str) -> Option<&'d Doc> {
 /// The body of a document the embedded table declares, or `None` when
 /// `path` is not in `docs`.
 ///
-/// Under the `prose-overlay` feature an on-disk overlay body wins, but
+/// Under the `overlay` feature an on-disk overlay body wins, but
 /// the doc *set* is always the embedded table's — the overlay overrides
 /// bodies, never entries.
 #[must_use]
 pub fn resolve(docs: &[Doc], path: &str) -> Option<&'static str> {
     let doc = find(docs, path)?;
-    #[cfg(feature = "prose-overlay")]
+    #[cfg(feature = "overlay")]
     if let Some(body) = overlay(path) {
         return Some(body);
     }
@@ -47,7 +47,7 @@ pub fn resolve(docs: &[Doc], path: &str) -> Option<&'static str> {
 ///
 /// Panics when the overlay file exists but cannot be read — the overlay
 /// must never silently fall back to a body the author is not editing.
-#[cfg(feature = "prose-overlay")]
+#[cfg(feature = "overlay")]
 fn overlay(path: &str) -> Option<&'static str> {
     let file = std::path::Path::new(".eval/prose").join(path);
     match std::fs::read_to_string(&file) {

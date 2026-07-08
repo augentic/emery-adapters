@@ -6,7 +6,7 @@ Each entry records the decision, why it was taken, and the consequences a change
 
 ## Prose overlay dev loop
 
-**Decision (2026-07).** The adapter author's prose iteration loop pays no compilation: the `adapter` crate has a dev-only `prose-overlay` cargo feature, off by default and compiled out of `cargo make release` and every published component. The overlay exists to iterate, never to certify; graded evidence comes from embedded builds only. Behavior lives in module rustdoc: `crates/adapter/src/registry.rs`, `evals/live.rs`, `evals/runtime.rs`.
+**Decision (2026-07).** The adapter author's prose iteration loop pays no compilation: the `adapter` crate has a dev-only `overlay` cargo feature, off by default and compiled out of `cargo make release` and every published component. The overlay exists to iterate, never to certify; graded evidence comes from embedded builds only. Behavior lives in module rustdoc: `crates/adapter/src/registry.rs`, `evals/live.rs`, `evals/runtime.rs`.
 
 - **The overlay overrides bodies, never the doc set.** Registry lookups consult `.eval/prose/<key>` before the embedded table, but only for paths the table declares.
 - **The cargo-skip is stamp-guarded.** In overlay mode the runner skips cargo legs when artifacts exist and a SHA-256 stamp matches the adapter wasm from the last overlay-flagged build.
@@ -55,9 +55,9 @@ The hands-off loop is the `eval-watch` cargo-make task: cargo-watch over one ada
 
 **Swap criteria.** Revisit when upstream carries MCP tool grants and a workspace-lend affordance usable from a wasm-free core.
 
-## Composed tests at root `tests/` with shared `harness` crate
+## Hosted-deployment test surfaces consolidated in `evals/`
 
-**Decision (2026-07).** The composed-deployment test package lives at the workspace-root `tests/` directory (`adapter-tests`); shared host-side helpers live in `crates/harness`. `evals/` stays a separate package for the CI/live boundary and the dual native/wasm32 build.
+**Decision (2026-07, revised 2026-07).** Both hosted-deployment test surfaces live in the single `evals` package: the model-free composed-deployment tests as the `composed` test target (`evals/composed.rs`) and the live evals as the `live` target (`live.rs`), with the shared host-side helpers (manifest rendering, the cargo runner, target-dir discovery, tree copying) as the package's own lib (`evals/harness.rs`, empty on wasm32 via its crate-level cfg gate). The former workspace-root `tests/` package (`adapter-tests`) and the `crates/harness` crate are deleted — the CI/live boundary is carried by `#[ignore]` on the live tests rather than by a package split. Runtime assembly stays per-surface: the composed tests deploy in-process via `omnia-testkit`; the evals spawn the prebuilt `eval-driver` example.
 
 ## WIT consumption
 
