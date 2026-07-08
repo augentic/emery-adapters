@@ -102,15 +102,15 @@ When all in-scope reviews complete:
 3. **Validate classifications.** Each finding already carries `code-fix` or `spec-change`. Treat that as the source of truth. Resolve disagreements between platforms by applying: spec is clear but code is wrong → `code-fix`; spec is silent, ambiguous, or problematic → `spec-change`.
 4. **Surface findings.** Findings flow to the operator alongside the build outcome. Cross-platform follow-up work is queued as a new slice via the operator's normal `/spec:plan` flow rather than letting reviewers spawn slices directly.
 
-## § Deterministic review
+## § Standards review surface
 
-The per-platform reviewers above ([`build/core/review.md`](build/core/review.md), [`build/ios/review.md`](build/ios/review.md), [`build/android/review.md`](build/android/review.md)) carry the model-assisted surface — specialist + antagonist judgment per [`agent-teams.md`](../references/agent-teams.md). `specify lint project --format json` is the **deterministic complement**. It resolves applicable rules via `specify rules export`, evaluates declarative `rule_hints`, and emits findings in the same `LintFinding` shape (`rule-id`, `fingerprint`, severity, `evidence`) operators already see in that export. The two surfaces are layered, not alternatives — model-assisted judgment sits on top of the deterministic scan.
+The per-platform reviewers above ([`build/core/review.md`](build/core/review.md), [`build/ios/review.md`](build/ios/review.md), [`build/android/review.md`](build/android/review.md)) carry the model-assisted surface — specialist + antagonist judgment per [`agent-teams.md`](../references/agent-teams.md), applying the engineering-standards rules resolved by `specify rules export`.
 
-Vectis render-by-`kind` drift ([`VECTIS-006`](../rules/VECTIS-006-asset-render-by-kind.md)) is review-scoped in v1: iOS and Android Integration specialists run **IOS-020** / **AND-028** on the first full-scope iteration (see per-platform review prompts and team protocols). Mechanical cross-artifact hints are deferred until materialize export paths are stable in consumer projects.
+Vectis render-by-`kind` drift ([`VECTIS-006`](../rules/VECTIS-006-asset-render-by-kind.md)) is review-scoped in v1: iOS and Android Integration specialists run **IOS-020** / **AND-028** on the first full-scope iteration (see per-platform review prompts and team protocols).
 
 Framework acceptance fixtures under `evals/fixtures/targets/vectis/` version-control `design-system/assets/exports/` (see [`task-list/design-system/`](https://github.com/augentic/specify/tree/main/evals/fixtures/targets/vectis/task-list/design-system)) so build prompt examples and eval pins demonstrate the materialize-then-copy hand-off without requiring image-processing deps in every CI job.
 
-Per [Standards layer](../references/spec-runtime/standards-layer-snippet.md), deterministic findings may block CI but never transition plan entries, slices, or changes. CI wiring is consumer-project policy, not adapter policy; this prompt acknowledges the surface and links out for the contract.
+Per [Standards layer](../references/spec-runtime/standards-layer-snippet.md), standards findings may block CI but never transition plan entries, slices, or changes. CI wiring is consumer-project policy, not adapter policy; this prompt acknowledges the surface and links out for the contract.
 
 ## § Template / version-pin drift handling
 

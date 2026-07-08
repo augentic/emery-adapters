@@ -30,7 +30,7 @@ wit/                  # the contract — wit/specify.wit, the axis worlds
 shared/
   prose/              # cross-adapter prose, same grammar as adapter prose/
     references/       #   spec-runtime bundle, replay hook docs, …
-    rules/            #   UNI-* and CORE-* engineering rules
+    rules/            #   UNI-* engineering rules
 crates/               # shared guest support (adapter, prose) + test doubles
                       # (testkit)
 evals/                # the hosted-deployment test surfaces, flattened like

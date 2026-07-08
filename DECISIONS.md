@@ -73,7 +73,7 @@ _Codified in: `Makefile.toml` (`publish`); `.github/workflows/release.yaml`._
 
 ## Codex ownership
 
-**Decision (2026-07).** Cross-target codex rules (`UNI-*`) are authored under `codex/rules/universal/` in this repository. Framework `CORE-*` rules stay in `augentic/specify` (`codex/rules/core/`). The `specify` binary embeds the universal pack from this checkout at build time and materializes it into consumer projects at init / `specify adapters sync`. `codex/references/` and per-adapter `prose/rules/` overlays also stay here.
+**Decision (2026-07).** Cross-target codex rules (`UNI-*`) are authored under `codex/rules/universal/` in this repository. There is no framework rule pack — `augentic/specify` enforces its own authoring invariants with plain cargo tests. The `specify` binary embeds the universal pack from this checkout at build time and materializes it into consumer projects at init / `specify adapters sync`. `codex/references/` and per-adapter `prose/rules/` overlays also stay here. Rule-shape validation (frontmatter, `## Rule` heading, id uniqueness, namespace ownership) lives here too, as the `rule_shape` cargo test in `crates/prose`.
 
 Adapter prompts cite `UNI-*` ids and point readers at `specify rules export` and the materialized codex cache — not repo-relative rule paths.
 

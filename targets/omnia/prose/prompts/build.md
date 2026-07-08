@@ -84,11 +84,11 @@ A build failure surfaces a stop hint as the body's final output — a single str
 
 Render the hint as the final visible output of the run, alongside the `status: failure` build report (see `## Build report`). Never call `specify slice transition` — the deterministic in-guest report gate checks the answer and the workflow guest owns the lifecycle, so the slice stays `refined` and the loop (or a re-invocation) re-enters cleanly.
 
-## § Deterministic review
+## § Standards review surface
 
-Phase 6 writes `$REVIEW_OUTPUT` (`REVIEW.md`) — that is the model-assisted surface: specialist + antagonist judgment per [`team-protocol-crate.md`](../references/team-protocol-crate.md) and [`build/review.md`](build/review.md). `specify lint project --format json` is the **deterministic complement**. It resolves applicable rules via `specify rules export`, evaluates declarative `rule_hints`, and emits findings in the same `LintFinding` shape (`rule-id`, `fingerprint`, severity, `evidence`) operators already see in that export. The two surfaces are layered, not alternatives — model-assisted judgment sits on top of the deterministic scan.
+Phase 6 writes `$REVIEW_OUTPUT` (`REVIEW.md`) — the model-assisted surface: specialist + antagonist judgment per [`team-protocol-crate.md`](../references/team-protocol-crate.md) and [`build/review.md`](build/review.md), applying the engineering-standards rules resolved by `specify rules export`.
 
-Per [Standards layer](../references/spec-runtime/standards-layer-snippet.md), deterministic findings may block CI but never transition plan entries, slices, or changes. CI wiring is consumer-project policy, not adapter policy; this prompt acknowledges the surface and links out for the contract.
+Per [Standards layer](../references/spec-runtime/standards-layer-snippet.md), standards findings may block CI but never transition plan entries, slices, or changes. CI wiring is consumer-project policy, not adapter policy; this prompt acknowledges the surface and links out for the contract.
 
 ## Build report
 
