@@ -71,10 +71,6 @@ criteria = "safe-to-deploy"
 version = "0.7.8"
 criteria = "safe-to-deploy"
 
-[[exemptions.assert_cmd]]
-version = "2.2.2"
-criteria = "safe-to-run"
-
 [[exemptions.atomic]]
 version = "0.6.1"
 criteria = "safe-to-deploy"
@@ -125,18 +121,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.bson]]
 version = "2.15.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.bstr]]
-version = "1.12.3"
-criteria = "safe-to-run"
-
-[[exemptions.bytecheck]]
-version = "0.8.2"
-criteria = "safe-to-deploy"
-
-[[exemptions.bytecheck_derive]]
-version = "0.8.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.bytecount]]
@@ -388,7 +372,7 @@ version = "0.33.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.granit-parser]]
-version = "0.0.2"
+version = "0.0.7"
 criteria = "safe-to-deploy"
 
 [[exemptions.h2]]
@@ -524,11 +508,11 @@ version = "0.3.103"
 criteria = "safe-to-deploy"
 
 [[exemptions.jsonschema]]
-version = "0.46.9"
+version = "0.46.10"
 criteria = "safe-to-deploy"
 
 [[exemptions.jsonschema-regex]]
-version = "0.46.9"
+version = "0.46.10"
 criteria = "safe-to-deploy"
 
 [[exemptions.kurbo]]
@@ -609,14 +593,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.moxcms]]
 version = "0.8.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.munge]]
-version = "0.4.7"
-criteria = "safe-to-deploy"
-
-[[exemptions.munge_macro]]
-version = "0.4.7"
 criteria = "safe-to-deploy"
 
 [[exemptions.num]]
@@ -743,14 +719,6 @@ criteria = "safe-to-deploy"
 version = "0.14.4"
 criteria = "safe-to-deploy"
 
-[[exemptions.ptr_meta]]
-version = "0.3.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.ptr_meta_derive]]
-version = "0.3.1"
-criteria = "safe-to-deploy"
-
 [[exemptions.pxfm]]
 version = "0.1.29"
 criteria = "safe-to-deploy"
@@ -783,10 +751,6 @@ criteria = "safe-to-deploy"
 version = "0.7.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.rancor]]
-version = "0.1.2"
-criteria = "safe-to-deploy"
-
 [[exemptions.rand]]
 version = "0.10.2"
 criteria = "safe-to-deploy"
@@ -808,11 +772,7 @@ version = "0.5.18"
 criteria = "safe-to-deploy"
 
 [[exemptions.referencing]]
-version = "0.46.9"
-criteria = "safe-to-deploy"
-
-[[exemptions.rend]]
-version = "0.5.4"
+version = "0.46.10"
 criteria = "safe-to-deploy"
 
 [[exemptions.reqwest]]
@@ -833,14 +793,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.ring]]
 version = "0.17.14"
-criteria = "safe-to-deploy"
-
-[[exemptions.rkyv]]
-version = "0.8.17"
-criteria = "safe-to-deploy"
-
-[[exemptions.rkyv_derive]]
-version = "0.8.17"
 criteria = "safe-to-deploy"
 
 [[exemptions.roxmltree]]
@@ -904,7 +856,7 @@ version = "2.17.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.serde-saphyr]]
-version = "0.0.26"
+version = "0.0.29"
 criteria = "safe-to-deploy"
 
 [[exemptions.serde_spanned]]
