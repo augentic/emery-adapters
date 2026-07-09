@@ -2600,13 +2600,10 @@ version = "0.35.0"
 dependencies = [
  "anyhow",
  "chrono",
- "fromenv",
  "futures",
  "omnia 0.35.0",
- "parking_lot",
  "polodb_core",
  "regex",
- "serde",
  "serde_json",
  "tracing",
  "wasmtime",
