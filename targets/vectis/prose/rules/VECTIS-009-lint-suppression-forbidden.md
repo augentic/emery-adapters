@@ -25,8 +25,6 @@ Agent-authored trees must compile and lint cleanly without inline suppressions. 
 | `Android/app/src/**/*.kt` (excl. `generated/`) | `@Suppress(...)`, `@file:Suppress(...)` | Gradle `allWarningsAsErrors` on `:app` in CLI-owned `app/build.gradle.kts` |
 | `Android/shared` generated UniFFI under `../generated/` | *(out of scope — bindgen output)* | `:shared` omits `allWarningsAsErrors` by design |
 
-`specify-ignore:` comments are not a build-verify escape hatch and are not scanned by this rule.
-
 ## Look For
 
 - `#[allow(dead_code)]` or `#[expect(clippy::…)]` added during verify-repair in `shared/src`.
