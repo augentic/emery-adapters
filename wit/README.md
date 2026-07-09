@@ -7,7 +7,7 @@
 Install [wkg](https://github.com/bytecodealliance/wasm-pkg-tools).
 
 ```bash
-wkg get specify:adapter@0.1.0 --config .wkg-config.toml --output ./wit/specify.wit
+wkg get specify:adapter@0.1.0 --config wit/config.toml --output ./wit/specify.wit
 ```
 
 ### `wkg` Registry
