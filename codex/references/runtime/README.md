@@ -2,9 +2,9 @@
 
 This directory is the single **spec-runtime bundle**: the canonical copy of the runtime references each adapter ships. Each source and target adapter exposes it as `references/spec-runtime/` via a single directory symlink (`{sources,targets}/<name>/prose/references/spec-runtime -> ../../../../codex/references/runtime`), so adapter prompts can link with `../references/spec-runtime/...` without escaping the adapter tree. The `prose` crate's build-time embed dereferences the symlinks when it bakes the bundle into each published component, so consumers receive self-contained regular files.
 
-**Relationship to `augentic/specify`:** these files began as a fork of the plugin-runtime references at `plugins/spec/references/` in the specify repo, and the two surfaces have since evolved independently — this tree is canonical for adapter components; `plugins/spec/references/` is canonical for the Cursor plugin cache. When a change to one surface affects prose the other mirrors, port it by hand in the same change (there is no parity script or sync step).
+**Relationship to `augentic/specify`:** this tree is canonical for adapter components; `plugins/spec/references/` in the specify repo is canonical for the Cursor plugin cache. The two surfaces evolve independently, but several files mirror each other — when a change to one surface affects prose the other mirrors, port it by hand in the same change (there is no parity script or sync step).
 
-| Bundle path                         | Historical origin (specify repo)                            |
+| Bundle path                         | Mirror (specify repo)                                       |
 | ----------------------------------- | ----------------------------------------------------------- |
 | `guardrails.md`                     | `plugins/spec/references/guardrails.md`                     |
 | `specialist-usage.md`               | `plugins/spec/references/specialist-usage.md`               |
@@ -16,7 +16,6 @@ This directory is the single **spec-runtime bundle**: the canonical copy of the 
 | `plan-lock.md`                      | `plugins/spec/references/plan-lock.md`                      |
 | `stop-conditions.md`                | `plugins/spec/references/stop-conditions.md`                |
 | `spec-to-test-mapping.md`           | `plugins/spec/references/spec-to-test-mapping.md`           |
-| `cli/plan-propose.md`               | `plugins/spec/references/cli/plan-propose.md`               |
 | `synthesis/authority.md`            | `plugins/spec/references/synthesis/authority.md`            |
 | `synthesis/tags.md`                 | `plugins/spec/references/synthesis/tags.md`                 |
 | `synthesis/provenance.md`           | `plugins/spec/references/synthesis/provenance.md`           |

@@ -18,13 +18,12 @@ BOM versions aligned with the app module the CLI scaffolded (see
 [`shell-pattern.md`](shell-pattern.md)).
 
 **Package**: `com.vectis.<appname>.ui.theme` (matching the rest of the app
-module's package convention). The previous standalone token approach emitted
-`package com.vectis.design` because it produced a separate Gradle module;
-the shell-local equivalent uses the app's own package tree so no external
-Gradle dependency is needed. However, because `ui.theme` is a sibling
-package to `ui.screens` and `ui.components`, consumer files must include
-an explicit `import com.vectis.<appname>.ui.theme.*` (Kotlin only
-auto-imports declarations within the exact same package).
+module's package convention) — never `package com.vectis.design`. Using the
+app's own package tree means no external Gradle dependency is needed.
+However, because `ui.theme` is a sibling package to `ui.screens` and
+`ui.components`, consumer files must include an explicit
+`import com.vectis.<appname>.ui.theme.*` (Kotlin only auto-imports
+declarations within the exact same package).
 
 ## File layout
 
@@ -477,10 +476,8 @@ The standard Android shell build (`make build` → `./gradlew :shared:cargoBuild
 `./gradlew :app:assembleDebug`, the U8 build-and-verify step in the
 Android shell skill) compiles every generated
 file as part of the app module. There is no separate
-`./gradlew :vectis-design:compileDebugKotlin` step — the previous
-standalone token approach emitted a `vectis-design` Gradle library that needed
-its own compile pass before the app module could pick it up; the
-shell-local equivalent compiles in lockstep with the app sources.
+`./gradlew :vectis-design:compileDebugKotlin` step — shell-local theme
+code compiles in lockstep with the app sources.
 
 When `tokens.yaml` is **absent**, the Android writer skips this entire
 emit step and falls back to platform-native Material 3 defaults — see

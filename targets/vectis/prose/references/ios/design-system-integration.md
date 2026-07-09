@@ -370,7 +370,7 @@ The `vectis-ios-reviewer` skill checks generated views for:
 1. Token-backed visual literals when `tokens.yaml` is present — `VectisColors`
    for color references, `VectisTypography` for fonts, `VectisSpacing` for
    spacing values, `VectisCornerRadius` for corner radii.
-2. **No** stale external design-system dependencies — `import VectisDesign`,
+2. **No** external design-system dependencies — `import VectisDesign`,
    `:vectis-design`, `design-system/ios`, `design-system/android`.
 3. Asset references that resolve to entries in the shell-local
    `Assets.xcassets/` (no string-literal paths into `design-system/assets/`).

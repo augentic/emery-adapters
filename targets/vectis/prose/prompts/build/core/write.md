@@ -30,7 +30,7 @@ Full set at [`hard-rules-core.md`](../../../references/hard-rules-core.md). High
 
 - Stay inside `app.rs` for domain + state-machine code; helpers live in adapter modules.
 - Generated-type conventions (`#[repr(C)]`, `#[derive(Facet)]`, kebab-case → PascalCase via uniffi rules) per [`crux/generated-type-conventions.md`](../../../references/crux/generated-type-conventions.md).
-- The `Effect` enum carries `#[effect(facet_typegen)]`; never reintroduce the retired `Capabilities` struct.
+- The `Effect` enum carries `#[effect(facet_typegen)]`; never emit a `Capabilities` struct.
 - Zero-warning policy: fix structure, never suppress — no inline `#[allow]` / `#[expect]` in `shared/src/**/*.rs` (see rule 10 in [`hard-rules-core.md`](../../../references/hard-rules-core.md)).
 
 ## Worked examples

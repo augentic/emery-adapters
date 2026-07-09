@@ -73,9 +73,9 @@ The Vectis core / test / iOS / Android writer and reviewer orchestration lives i
 
 Canonical SVG → per-platform exports (the adapter's materialize step), render-by-`kind` shell writers, build-time `plan-bootstrap-app-icon-missing` gate (the adapter's bootstrap app-icon verify at build prepare; a shell-resident launcher icon satisfies it). Inference-only symbol fallback; see [`VECTIS-006`](../rules/VECTIS-006-asset-render-by-kind.md), [`ios/design-system-integration.md`](ios/design-system-integration.md), and [`android/design-system-integration.md`](android/design-system-integration.md).
 
-### Layout inferer contract (legacy)
+### Layout inferer contract
 
-- [`layout-inferer-contract.md`](layout-inferer-contract.md) — historic contract preserved for the [`adapters/sources/screenshots/`](../../../../sources/screenshots/) adapter.
+- [`layout-inferer-contract.md`](layout-inferer-contract.md) — the inferer contract consumed by the [`sources/screenshots/`](../../../../sources/screenshots/) adapter.
 
 ### Worked examples
 

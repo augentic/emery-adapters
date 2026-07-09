@@ -2,7 +2,7 @@
 
 Closed wire shapes for the build-time `replay` hook. Recording rules and merge posture live in [`hook-contract.md`](hook-contract.md).
 
-## Journal event (v1 recorder)
+## Journal event (the recorder)
 
 Emit via `specify journal emit slice.replay.completed --payload <json>`:
 
@@ -21,11 +21,11 @@ Example NDJSON line (illustrative):
 - **`passed`** / **`failed`** / **`skipped`** — non-negative integers from the target runner's test classification.
 - **`runner`** — identifies the target adapter version and command (e.g. `omnia-target@1 (cargo nextest)`, `contracts-target@1 (in-guest contract validator)`).
 
-Taxonomy reference: [`DECISIONS.md` — journal events](https://github.com/augentic/specify/blob/main/engine/DECISIONS.md).
+Taxonomy reference: [`DECISIONS.md` — journal events](https://github.com/augentic/specify/blob/main/DECISIONS.md).
 
 ## Aspirational `metadata.yaml` block (future CLI)
 
-the capture-backed replay workflow defines an additive block targets MAY write to `$SLICE_DIR/metadata.yaml` once a CLI-owned surface lands. **Agents must not hand-edit this block in v1** — journal-only recording until then.
+The capture-backed replay workflow defines an additive block targets MAY write to `$SLICE_DIR/metadata.yaml` once a CLI-owned surface lands. **Agents must not hand-edit this block** — journal-only recording until then.
 
 ```yaml
 replay:

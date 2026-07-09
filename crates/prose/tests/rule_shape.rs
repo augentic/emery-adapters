@@ -17,9 +17,9 @@ const SEVERITIES: &[&str] = &["critical", "important", "suggestion", "optional"]
 /// Frontmatter fields every rule must carry.
 const REQUIRED_FIELDS: &[&str] = &["id", "title", "severity", "trigger"];
 
-/// Frontmatter fields retired with the lint engine; their presence is
-/// drift back toward deleted machinery.
-const RETIRED_FIELDS: &[&str] = &["rule_hints", "lint_mode"];
+/// Frontmatter fields the rule shape forbids: rules are prose read by
+/// review agents, not machine-matched lint definitions.
+const FORBIDDEN_FIELDS: &[&str] = &["rule_hints", "lint_mode"];
 
 /// Target-adapter namespace ownership: `targets/<name>/prose/rules/`
 /// may only mint ids under the owner's prefixes. Extend this map when
@@ -171,11 +171,11 @@ fn check_rules(root: &Path) -> Vec<String> {
                     findings.push(format!("{rel}: missing required frontmatter field `{field}`"));
                 }
             }
-            for field in RETIRED_FIELDS {
+            for field in FORBIDDEN_FIELDS {
                 if fields.contains_key(*field) {
                     findings.push(format!(
-                        "{rel}: carries retired frontmatter field `{field}` — rules are \
-                         agent-readable prose; deterministic hint machinery is deleted"
+                        "{rel}: carries forbidden frontmatter field `{field}` — rules are \
+                         agent-readable prose, not machine-matched lint definitions"
                     ));
                 }
             }
@@ -236,8 +236,8 @@ fn fires_on_known_bad_fixture() {
         "---\nid: UNI-001\ntitle: Duplicate id\nseverity: important\ntrigger: t\n---\n\n## Rule\n\nx\n",
     );
     write(
-        "codex/rules/universal/retired-hints.md",
-        "---\nid: UNI-002\ntitle: Retired hints\nseverity: important\ntrigger: t\nrule_hints:\n  - kind: regex\n---\n\n## Rule\n\nx\n",
+        "codex/rules/universal/forbidden-hints.md",
+        "---\nid: UNI-002\ntitle: Forbidden hints\nseverity: important\ntrigger: t\nrule_hints:\n  - kind: regex\n---\n\n## Rule\n\nx\n",
     );
     write(
         "codex/rules/universal/missing-heading.md",
@@ -263,7 +263,7 @@ fn fires_on_known_bad_fixture() {
     };
     assert_fires("severity `catastrophic`");
     assert_fires("duplicate rule id `UNI-001`");
-    assert_fires("retired frontmatter field `rule_hints`");
+    assert_fires("forbidden frontmatter field `rule_hints`");
     assert_fires("missing the required `## Rule` heading");
     assert_fires("missing `---` YAML frontmatter block");
     assert_fires("violates namespace ownership");

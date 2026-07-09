@@ -4,7 +4,7 @@ Target-agnostic rules for the optional build-time `replay` hook (the capture-bac
 
 ## When to run
 
-The hook is **OPTIONAL in v1**. Run it only when the slice's `plan.yaml.sources[]` list carries a `captures` binding. Targets that skip the step produce no `replay` surface and emit no replay journal event; **omission is not an error**.
+The hook is **OPTIONAL**. Run it only when the slice's `plan.yaml.sources[]` list carries a `captures` binding. Targets that skip the step produce no `replay` surface and emit no replay journal event; **omission is not an error**.
 
 ## Preconditions
 
@@ -18,31 +18,31 @@ Capture wire format: [`captures/references/capture-format.md`](../../../sources/
 
 ## Advisory posture
 
-Replay failures are **advisory in v1**:
+Replay failures are **advisory**:
 
 - A non-zero `failed` count does **not** park the build.
 - The slice still transitions to `built`.
-- The operator inspects replay results at merge time (journal event today; future `metadata.yaml` block when a CLI surface lands).
+- The operator inspects replay results at merge time via the journal event.
 
 This matches the current synthesis posture on `[conflict]` and `[divergence]` tags — review signals, not automatic gates. Stricter posture belongs in a custom target adapter fork, CI policy on journal events, or a future core contract.
 
 ## Recording results
 
-### v1 recorder: journal event
+### Recorder: journal event
 
-Emit `slice.replay.completed` (`EventKind::SliceReplayCompleted` in the `engine/` workspace (`specify_workflow::journal`)) via `specify journal emit slice.replay.completed --payload <json>`. Payload shape: [`journal-payload.md`](journal-payload.md).
+Emit `slice.replay.completed` (`workflow::journal::EventKind::SliceReplayCompleted` in `augentic/specify`) via `specify journal emit slice.replay.completed --payload <json>`. Payload shape: [`journal-payload.md`](journal-payload.md).
 
 The implementing target's runner prompt supplies the `runner` string (e.g. `omnia-target@1 (cargo nextest)`).
 
 ### Do not hand-edit `metadata.yaml`
 
-Agents must not write slice metadata by hand. The current phase contract has no `slice outcome set` CLI surface — see [`phase-outcome-contract.md`](../../references/runtime/phase-outcome-contract.md).
+Agents must not write slice metadata by hand. The phase contract has no `slice outcome set` CLI surface — see [`phase-outcome-contract.md`](../runtime/phase-outcome-contract.md).
 
-A future CLI surface may persist a `replay:` block to `$SLICE_DIR/metadata.yaml` (the capture-backed replay workflow). Until that lands, the journal event is the supported v1 recorder. The aspirational block shape lives in [`journal-payload.md`](journal-payload.md).
+A future CLI surface may persist a `replay:` block to `$SLICE_DIR/metadata.yaml`. Until that lands, the journal event is the sole supported recorder. The aspirational block shape lives in [`journal-payload.md`](journal-payload.md).
 
 ## Merge posture
 
-When a `replay:` block is present on `metadata.yaml` (future CLI or operator tooling), `/spec:merge` surfaces a one-line summary in its closing message:
+When a `replay:` block is present on `metadata.yaml` (operator tooling or a future CLI surface), `/spec:merge` surfaces a one-line summary in its closing message:
 
 ```text
 replay: <passed> passed, <failed> failed, <skipped> skipped
@@ -51,7 +51,7 @@ replay: <passed> passed, <failed> failed, <skipped> skipped
 Rules:
 
 - **Missing block** → omit the line; absence is not an error.
-- **`failed > 0`** → `merge` does **not** auto-refuse in v1; the operator decides whether to land.
+- **`failed > 0`** → `merge` does **not** auto-refuse; the operator decides whether to land.
 
 Capture the block before archival if present — `specify slice merge` moves the slice directory.
 

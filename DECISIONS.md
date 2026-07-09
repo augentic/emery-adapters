@@ -6,10 +6,10 @@ Each entry records the decision, why it was taken, and the consequences a change
 
 ## Prose overlay dev loop
 
-**Decision (2026-07, amended 2026-07).** The adapter author's prose iteration loop pays no compilation: the overlay probe is compiled into every build of the `adapter` crate and is **inert unless the deployment grants `SPECIFY_PROSE_OVERLAY=1`** in the guest environment. There is no cargo feature and therefore only one flavor of each guest binary. `specify`'s deployment generator never sets the variable; only the eval harness does. The overlay exists to iterate, never to certify; graded evidence comes from ungranted runs, and activation is attested by the guest itself — the registry prints a stderr marker on the first overlay-served body, which is strictly stronger than the retired build-side SHA-256 stamp (the guest attests at run time; a stamp could only hash the build). Behavior lives in module rustdoc: `crates/adapter/src/registry.rs`, `evals/live.rs`, `evals/runtime.rs`.
+**Decision (2026-07, amended 2026-07).** The adapter author's prose iteration loop pays no compilation: the overlay probe is compiled into every build of the `adapter` crate and is **inert unless the deployment grants `SPECIFY_PROSE_OVERLAY=1`** in the guest environment. There is no cargo feature and therefore only one flavor of each guest binary. `specify`'s deployment generator never sets the variable; only the eval harness does. The overlay exists to iterate, never to certify; graded evidence comes from ungranted runs, and activation is attested by the guest itself — the registry prints a stderr marker on the first overlay-served body. Behavior lives in module rustdoc: `crates/adapter/src/registry.rs`, `evals/live.rs`, `evals/runtime.rs`.
 
 - **The overlay overrides bodies, never the doc set.** Registry lookups consult `.eval/prose/<key>` before the embedded table, but only for paths the table declares.
-- **Runtime selection makes the cargo-skip trivial.** In overlay mode the runner skips cargo legs on plain artifact presence — with one binary flavor there is no stamp to guard.
+- **Runtime selection makes the cargo-skip trivial.** In overlay mode the runner skips cargo legs on plain artifact presence.
 - **Accepted consequence.** An operator who sets the variable and seeds `.eval/prose/` can override prompts in a pinned component on their own machine — visible, opt-in, and audit-loud via the stderr marker.
 - **The eval guest drives one operation per invocation.** Its argv leads with an operation selector over the judgment-bearing seam operations.
 - **Model ids stay out of guests.** `SPECIFY_EVAL_MODEL` is read by the eval driver alone.
@@ -18,9 +18,9 @@ The hands-off loop is the `eval-watch` cargo-make task: cargo-watch over one ada
 
 ## One crate per adapter
 
-**Decision (2026-07).** Each adapter is a single crate: the wasm-free logic modules and the wasm32-only `guest` shim module live together in `{targets,sources}/<name>/`, replacing the former guest + `<name>-core` sub-crate split. The crate is `cdylib` + `rlib`; the shim is gated behind `#[cfg(target_arch = "wasm32")]` and wasm-only dependencies (`wasip3`) behind a target-specific dependency table, the same posture the shared `adapter` crate already carries.
+**Decision (2026-07).** Each adapter is a single crate: the wasm-free logic modules and the wasm32-only `guest` shim module live together in `{targets,sources}/<name>/`. The crate is `cdylib` + `rlib`; the shim is gated behind `#[cfg(target_arch = "wasm32")]` and wasm-only dependencies (`wasip3`) behind a target-specific dependency table, the same posture the shared `adapter` crate already carries.
 
-- **Why.** No consumer outside each guest ever depended on its core crate, so the crate boundary protected nothing; flattening halves the package count and removes the `core = { package = "<name>-core" }` alias that shadowed Rust's built-in `core`.
+- **Why.** No consumer outside each guest depends on the logic modules, so a separate core crate boundary would protect nothing while doubling the package count.
 - **The wasm-free guarantee is held by CI, not the graph.** Native `cargo make check` compiles every ungated module for the host, so logic reaching a wasm-only API fails to compile immediately.
 - **Tests link the rlib.** Each adapter's `tests/` suite is unchanged in content; the `rlib` crate type exists so it (and doctests) can link natively.
 - **`omnia` is an ambiguous bare `-p` spec.** The workspace has both the `omnia` adapter crate and the `omnia` runtime dependency; wasm guest builds use `--workspace` (host-side members compile to empty crates on wasm32) rather than `-p` lists.
@@ -34,21 +34,17 @@ The hands-off loop is the `eval-watch` cargo-make task: cargo-watch over one ada
 - **No committed wasm.** Components are release-built to `target/wasm32-wasip2/release/<name>.wasm`, which is where the publish workflow pushes from. Runtime tests build guests from source into the cargo target directory.
 - **wasm-pkg publish.** `.github/workflows/release.yaml` release-builds guests and pushes each component with `wkg publish` under the `specify` namespace on `augentic.io`.
 
-## Prose tree rename — `briefs/` → `prompts/`
-
-**Decision (2026-07).** Every adapter's `prose/briefs/` tree is `prose/prompts/`. These files are embedded prompt fragments: `build.rs` emits them into the guest, the core assembles them into judgment-leg system prompts, and sequencing lives in Rust.
-
 ## Vectis self-containment
 
-**Decision (2026-07).** All vectis deterministic tooling lives in the `vectis` crate as plain library code consumed by the guest shim. Former extension modules map to library modules (`infer`, `verify`, `scaffold`, `sync`, `android`, `schema_source`, `shell`, `prepare`). Unit tests live in `tests/` as integration tests over the public surface. Assets (`schemas/`, `templates/`, `assets/`, `versions.toml`) are crate-owned.
+**Decision (2026-07).** All vectis deterministic tooling lives in the `vectis` crate as plain library code consumed by the guest shim: `infer`, `verify`, `scaffold`, `sync`, `android`, `schema_source`, `shell`, `prepare`. Unit tests live in `tests/` as integration tests over the public surface. Assets (`schemas/`, `templates/`, `assets/`, `versions.toml`) are crate-owned.
 
-## Prompt and prose cutover
+## In-guest tooling, agent-run builds
 
-**Decision (2026-07).** No compiled-in prompt instructs the agent to run retired CLI surfaces (`specify extension run`, `specify catalog infer`). Validation, catalog infer, scaffold, sync, Android setup, shell verify, and bootstrap app-icon gates run in-guest; host builds stay agent-run in the lent workspace per the write prompts.
+**Decision (2026-07).** No compiled-in prompt instructs the agent to run `specify` CLI verbs for adapter tooling. Validation, catalog infer, scaffold, sync, Android setup, shell verify, and bootstrap app-icon gates run in-guest; host builds stay agent-run in the lent workspace per the write prompts.
 
 ## Verification audit posture
 
-**Decision (2026-07).** Each first-party target's prompts and deterministic legs carry the verification the engine's pre-merge gate and post-merge hooks used to run. File-shaped and deterministic checks run in guest Rust; platform builds (`cargo`, `xcodebuild`, `gradlew`) stay agent-side because the guest cannot spawn host processes.
+**Decision (2026-07).** Each first-party target owns its verification in its prompts and deterministic legs. File-shaped and deterministic checks run in guest Rust; platform builds (`cargo`, `xcodebuild`, `gradlew`) stay agent-side because the guest cannot spawn host processes.
 
 ## Guest-model capability deferral
 
@@ -58,7 +54,7 @@ The hands-off loop is the `eval-watch` cargo-make task: cargo-watch over one ada
 
 ## Hosted-deployment test surfaces consolidated in `evals/`
 
-**Decision (2026-07, revised 2026-07).** Both hosted-deployment test surfaces live in the single `evals` package: the model-free composed-deployment tests as the `composed` test target (`evals/composed.rs`) and the live evals as the `live` target (`live.rs`), with the shared host-side helpers (manifest rendering, the cargo runner, target-dir discovery, tree copying) as the package's own lib (`evals/harness.rs`, empty on wasm32 via its crate-level cfg gate). The former workspace-root `tests/` package (`adapter-tests`) and the `crates/harness` crate are deleted — the CI/live boundary is carried by `#[ignore]` on the live tests rather than by a package split. Runtime assembly stays per-surface: the composed tests deploy in-process via `omnia-testkit`; the evals spawn the prebuilt `eval-driver` example.
+**Decision (2026-07, revised 2026-07).** Both hosted-deployment test surfaces live in the single `evals` package: the model-free composed-deployment tests as the `composed` test target (`evals/composed.rs`) and the live evals as the `live` target (`live.rs`), with the shared host-side helpers (manifest rendering, the cargo runner, target-dir discovery, tree copying) as the package's own lib (`evals/harness.rs`, empty on wasm32 via its crate-level cfg gate). The CI/live boundary is carried by `#[ignore]` on the live tests rather than by a package split. Runtime assembly stays per-surface: the composed tests deploy in-process via `omnia-testkit`; the evals spawn the prebuilt `eval-driver` example.
 
 ## WIT consumption
 
@@ -74,11 +70,11 @@ _Codified in: `Makefile.toml` (`publish`); `.github/workflows/release.yaml`._
 
 ## Codex ownership
 
-**Decision (2026-07, amended 2026-07).** Cross-target codex rules (`UNI-*`) are authored under `codex/rules/universal/` in this repository. There is no framework rule pack — `augentic/specify` enforces its own authoring invariants with plain cargo tests. `codex/references/` and per-adapter `prose/rules/` overlays also stay here. Rule-shape validation (frontmatter, `## Rule` heading, id uniqueness, namespace ownership) lives here too, as the `rule_shape` cargo test in `crates/prose`.
+**Decision (2026-07).** Cross-target codex rules (`UNI-*`) are authored under `codex/rules/universal/` in this repository, alongside `codex/references/` and the per-adapter `prose/rules/` overlays. There is no framework rule pack — `augentic/specify` enforces its own authoring invariants with plain cargo tests. Rule-shape validation (frontmatter, `## Rule` heading, id uniqueness, namespace ownership) lives here too, as the `rule_shape` cargo test in `crates/prose`.
 
-**Amendment — adapters distribute their own rules.** The engine-side distribution chain (`specify` binary embed, init-time codex cache materialization, `specify rules export`, and the `standards` crate behind it) is deleted: the rules' sole consumers are the target adapters' review prompts, so distribution follows the validators in-guest. Each code-generating target (omnia, vectis) symlinks `prose/rules/universal -> codex/rules/universal` and the standard prose embed carries the pack into the component; review agents read it through the adapter's references server at `rules/universal/…`. The rule-shape test skips symlinked overlay subdirectories so the pack is validated once, as its own tree.
+**Adapters distribute their own rules.** The rules' sole consumers are the target adapters' review prompts, so distribution rides the component: each code-generating target (omnia, vectis) symlinks `prose/rules/universal -> codex/rules/universal` and the standard prose embed carries the pack into the component; review agents read it through the adapter's references server at `rules/universal/…`. The rule-shape test skips symlinked overlay subdirectories so the pack is validated once, as its own tree.
 
-Adapter prompts cite `UNI-*` ids and link the embedded `rules/universal/` paths — not `specify` CLI verbs or engine-materialized caches.
+Adapter prompts cite `UNI-*` ids and link the embedded `rules/universal/` paths — never `specify` CLI verbs.
 
 ## Vectis validation and materialization
 

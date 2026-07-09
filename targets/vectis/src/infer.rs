@@ -1,4 +1,5 @@
-//! Component-identity detection (the catalog infer report phase).
+//! Component-identity detection: cluster recurring composition groups
+//! into the infer report's catalog candidates.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};

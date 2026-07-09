@@ -153,5 +153,5 @@ Three scenarios, three claims, three digests. Synthesis reconciles these with si
 
 - [`capture-format.md`](capture-format.md) — on-disk wire format
 - [`../prompts/extract.md`](../prompts/extract.md) — binding, inputs, claim grain
-- [workflow §`extract` output](https://github.com/augentic/specify/blob/main/engine/docs/standards/workflow.md#extract-output)
-- [workflow §Runtime source adapter (D1)](https://github.com/augentic/specify/blob/main/engine/docs/standards/workflow.md#runtime-source-adapter-d1)
+- [workflow §Extraction](https://github.com/augentic/specify/blob/main/docs/standards/workflow.md#extraction)
+- [workflow §D1 — Runtime source adapter](https://github.com/augentic/specify/blob/main/docs/standards/workflow.md#d1--runtime-source-adapter-captures)

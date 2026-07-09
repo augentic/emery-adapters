@@ -504,7 +504,7 @@ The `vectis-android-reviewer` skill checks generated composables for:
    `MaterialTheme.typography` (or `VectisTypography`) for text styles,
    `VectisSpacing` for spacing values, `VectisCornerRadius` for corner
    radii, `VectisElevation` for elevation values.
-2. **No** stale external design-system dependencies —
+2. **No** external design-system dependencies —
    `implementation(project(":vectis-design"))`,
    `include(":vectis-design")`, `import com.vectis.design.*`,
    `design-system/android/`, `design-system/ios/` (per the reviewer surface and generated-layout compatibility policy).

@@ -76,4 +76,4 @@ When a reconciled `id` group the agent marked `disagreed` carries claims from mu
 
 ## Plan-time reconciliation is a separate playbook
 
-Plan-time `Lead[]` reconciliation — the `propose` sub-step inside `/spec:plan` that writes `slices[]` rows — is documented by [`specify plan propose`](../cli/plan-propose.md). Cross-source matching is agent judgment; the kernel validates partition shape only. The operator curates at Gate 1 via `change.md` and `specify plan amend`.
+Plan-time `Lead[]` reconciliation — the step inside `/spec:plan` that writes `slices[]` rows — runs through the guest-routed `specify plan author` orchestration. Cross-source matching is agent judgment; the kernel validates partition shape only. The operator curates at Gate 1 via `change.md` and `specify plan amend`.

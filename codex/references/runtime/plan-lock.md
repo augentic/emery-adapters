@@ -34,7 +34,7 @@ error: plan-lock-busy: another driver session holds the plan lock: holder-pid=12
 
 ## Re-entrancy
 
-The wrapper exports `SPECIFY_PLAN_LOCK_HELD=1` into the child's environment. A nested `specify plan lock -- <cmd>` — a breakout phase spawned under a parent `/spec:execute` that already holds the lock — sees the variable, **skips re-acquisition**, and just runs its command. Skills no longer need to read or propagate the variable themselves; the CLI owns the re-entrant handshake.
+The wrapper exports `SPECIFY_PLAN_LOCK_HELD=1` into the child's environment. A nested `specify plan lock -- <cmd>` — a breakout phase spawned under a parent driver that already holds the lock — sees the variable, **skips re-acquisition**, and just runs its command. Skills never read or propagate the variable themselves; the CLI owns the re-entrant handshake.
 
 ## Release semantics
 
