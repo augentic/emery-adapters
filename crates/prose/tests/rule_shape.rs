@@ -3,16 +3,15 @@
 //! (`{sources,targets}/<name>/prose/rules/`). Structural checks only —
 //! required frontmatter fields, the severity enum, id grammar, the
 //! `## Rule` body heading, id uniqueness across every tree, and
-//! namespace ownership. The canonical JSON Schema in `augentic/specify`
-//! (`schemas/rules/rule.schema.json`) re-validates the same shape at
-//! every `specify rules export`; this test is the authoring-time gate
-//! in the repo that owns the rules.
+//! namespace ownership. This test is the authoring gate in the repo
+//! that owns the rules; the adapters that embed them ship the files
+//! verbatim, so there is no downstream re-validation.
 
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// The closed severity enum from `schemas/rules/rule.schema.json`.
+/// The closed rule severity enum.
 const SEVERITIES: &[&str] = &["critical", "important", "suggestion", "optional"];
 
 /// Frontmatter fields every rule must carry.
@@ -91,7 +90,10 @@ fn discover_trees(root: &Path, findings: &mut Vec<String>) -> Vec<RuleTree> {
 }
 
 /// Every markdown rule file in `dir`, recursively. `README.md`
-/// (case-insensitive) is an index page, never a rule.
+/// (case-insensitive) is an index page, never a rule. Symlinked
+/// subdirectories are skipped: the `rules/universal` embed links in
+/// each target overlay point back at `codex/rules/universal/`, which
+/// is already validated as its own tree with its own namespace.
 fn rule_files(dir: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
     let entries = fs::read_dir(dir)
@@ -99,7 +101,10 @@ fn rule_files(dir: &Path) -> Vec<PathBuf> {
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
-            files.extend(rule_files(&path));
+            let is_symlink = fs::symlink_metadata(&path).is_ok_and(|meta| meta.is_symlink());
+            if !is_symlink {
+                files.extend(rule_files(&path));
+            }
             continue;
         }
         let is_markdown = path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("md"));

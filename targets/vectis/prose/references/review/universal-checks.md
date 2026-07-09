@@ -2,7 +2,7 @@
 
 Read this at step 2c of the review-fix cycle, after the specialists complete and before the antagonist runs.
 
-The lead applies every `UNI-*` rule from the shared universal codex pack. Resolve the rule bodies via `specify rules export` (the pack ships with the `specify` binary and materializes into the project's codex cache). Several universal checks overlap with categories already covered by the specialists; skip those:
+The lead applies every `UNI-*` rule from the shared universal codex pack, embedded in this adapter at [`../../rules/universal/`](../../rules/universal/) (served by the references server under `rules/universal/`). Several universal checks overlap with categories already covered by the specialists; skip those:
 
 | Universal check | Already covered by | Action |
 |---|---|---|

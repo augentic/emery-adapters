@@ -23,6 +23,8 @@ fn embeds_all_trees() {
         "rules/wasm-guest-runtime-constraints.md",
         "rules/classified-errors-no-panics.md",
         "rules/host-managed-secrets-identity.md",
+        "rules/universal/hardcoded-secrets.md",
+        "rules/universal/unvalidated-input.md",
     ] {
         assert!(registry::doc(path).is_some(), "registry embeds `{path}`");
     }

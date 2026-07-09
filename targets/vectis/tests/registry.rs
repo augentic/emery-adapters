@@ -25,6 +25,8 @@ fn embeds_all_trees() {
         "rules/VECTIS-007-ios-scaffold-immutability.md",
         "rules/VECTIS-008-prompts-forbid-named-simulator.md",
         "rules/VECTIS-009-lint-suppression-forbidden.md",
+        "rules/universal/hardcoded-secrets.md",
+        "rules/universal/unvalidated-input.md",
     ] {
         assert!(registry::doc(path).is_some(), "registry embeds `{path}`");
     }

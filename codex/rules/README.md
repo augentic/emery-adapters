@@ -10,4 +10,4 @@ Shared engineering standards that apply across every target adapter.
 
 There is no framework rule pack: the [`augentic/specify`](https://github.com/augentic/specify) repository enforces its own authoring invariants with plain cargo tests (`tests/framework/`), not codex rules.
 
-The `specify` binary embeds `universal/` at build time from this checkout (sibling `../specify-adapters` or `SPECIFY_ADAPTERS`) and materializes it into the out-of-tree project codex cache at `specify init` / `specify adapters sync`.
+Each code-generating target adapter (omnia, vectis) embeds `universal/` into its own component via a `prose/rules/universal` symlink, alongside its overlay rules; review agents read the pack through the adapter's references server (`rules/universal/…`). The `specify` engine carries no rule distribution machinery.

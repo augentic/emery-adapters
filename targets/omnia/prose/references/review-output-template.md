@@ -11,7 +11,7 @@ Every finding in `REVIEW.md` carries a review-local prefix so the originating re
 | `SEC-` | Security Reviewer          | Security, WASM Constraints                        | critical                                                                   |
 | `COR-` | Correctness Reviewer       | Error Handling, Validation Logic, Provider Misuse | critical (errors) / important (validation, provider)                       |
 | `QUA-` | Quality Reviewer           | Performance, Code Quality                         | suggestion (perf) / optional (quality)                                     |
-| `UNI-` | Lead universal-checks pass | Gaps not covered by SEC/COR/QUA                   | Per the shared `UNI-*` rules (`specify rules export`) |
+| `UNI-` | Lead universal-checks pass | Gaps not covered by SEC/COR/QUA                   | Per the shared `UNI-*` rules (embedded at `rules/universal/`) |
 | `NEW-` | Antagonist counter-scan    | Anything missed by the four passes above          | As supplied by antagonist                                                  |
 
 Severity values use the closed `LintFinding` severity enum: `critical`, `important`, `suggestion`, `optional`. Numbering restarts at 1 within each prefix (`SEC-1`, `SEC-2`, …). When the antagonist upgrades or downgrades a finding, the original prefix is preserved and the severity change is recorded in the **Adversarial Review** section.

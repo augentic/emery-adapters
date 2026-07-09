@@ -14,7 +14,7 @@ These prefixes are **report-local occurrence ids** — the `id` field on a struc
 Stable codex sources for this reviewer:
 
 - [`adapters/targets/omnia/prose/rules/`](../rules/) — Omnia-specific rules: `OMNIA-001` Provider-Only Host Access, `OMNIA-002` WASM Guest Runtime Constraints, `RUST-001` Classified SDK Errors, No Panic Paths, and `SEC-001` Host-Managed Secrets and Identity.
-- Shared `UNI-001` through `UNI-021` rules — resolve them via `specify rules export`; the universal pack ships with the `specify` binary and materializes into the project's codex cache.
+- Shared `UNI-001` through `UNI-021` rules — the universal pack is embedded in this adapter at [`../rules/universal/`](../rules/universal/) and served by the references server.
 
 Prefer the most specific matching rule. For example, direct `std::env` access for a secret maps to `SEC-001`; direct `std::env` access for ordinary configuration maps to `OMNIA-002` or `OMNIA-001` depending on whether the core violation is WASM runtime behavior or provider bypass.
 
@@ -128,7 +128,7 @@ Readability and maintainability issues.
 
 ## Universal checks (`UNI-` prefix)
 
-After all three specialists report, the lead applies every `UNI-*` rule from the shared universal codex pack with Omnia/WASM-specific detection. Resolve the rule bodies via `specify rules export` (the pack ships with the `specify` binary and materializes into the project's codex cache). Several universal checks overlap with categories already assigned to the specialists. Skip those and focus on the gaps:
+After all three specialists report, the lead applies every `UNI-*` rule from the shared universal codex pack with Omnia/WASM-specific detection. The rule bodies are embedded in this adapter at [`../rules/universal/`](../rules/universal/) (served by the references server under `rules/universal/`). Several universal checks overlap with categories already assigned to the specialists. Skip those and focus on the gaps:
 
 | Universal check                    | Already covered by                           | Action                |
 | ---------------------------------- | -------------------------------------------- | --------------------- |

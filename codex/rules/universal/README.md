@@ -1,6 +1,6 @@
 # Shared engineering standards (UNI-\*)
 
-Shared **engineering standards** catalog — target-agnostic rules under `codex/`. Codex is the on-disk rule format; these files are durable policy, not workflow state or slice artifacts. Read by every target adapter's build review prompt during `/spec:build` and exported to consumer projects by `specify rules export`. Findings cite a rule here as a stable `rule_id` (for example `UNI-014`) alongside a report-local occurrence id (for example `UNI-3`) in `REVIEW.md`.
+Shared **engineering standards** catalog — target-agnostic rules under `codex/`. Codex is the on-disk rule format; these files are durable policy, not workflow state or slice artifacts. Read by every code-generating target adapter's build review prompt during `/spec:build`: the pack is embedded into each adapter component via a `prose/rules/universal` symlink and served by the adapter's references server. Findings cite a rule here as a stable `rule_id` (for example `UNI-014`) alongside a report-local occurrence id (for example `UNI-3`) in `REVIEW.md`.
 
 See [docs/explanation/standards-layer.md](https://github.com/augentic/specify/blob/main/docs/explanation/standards-layer.md) for how engineering standards relate to workflow, artifacts, and `docs/standards/` (authoring house style).
 
@@ -54,7 +54,7 @@ Rules are grouped by severity (highest first). `UNI-*` ids are stable citation k
 
 ## File shape
 
-Each rule is a small markdown file with YAML frontmatter followed by a required `## Rule` heading. The canonical schema lives in [`augentic/specify`](https://github.com/augentic/specify) at `schemas/rules/rule.schema.json` and is embedded in the CLI binary, which validates every rule at `specify rules export`; this repo's rule-shape cargo test enforces the same shape at CI time. The minimum form:
+Each rule is a small markdown file with YAML frontmatter followed by a required `## Rule` heading. This repo's rule-shape cargo test (`crates/prose/tests/rule_shape.rs`) is the authoring gate enforcing the shape at CI time. The minimum form:
 
 ```markdown
 ---
@@ -73,7 +73,7 @@ What the rule actually requires, in prose.
 - Concrete code patterns or smells that hint the rule is being violated.
 ```
 
-Optional frontmatter fields (`applicability`, `references`, `deprecated`) are documented in the schema. `id` must be globally unique across every codex tree the checker discovers.
+Optional frontmatter fields (`applicability`, `references`, `deprecated`) may ride along; the rule-shape test only enforces the required set. `id` must be globally unique across every codex tree the checker discovers.
 
 ## How rules are consumed
 

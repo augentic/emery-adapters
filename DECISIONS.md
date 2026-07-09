@@ -74,9 +74,11 @@ _Codified in: `Makefile.toml` (`publish`); `.github/workflows/release.yaml`._
 
 ## Codex ownership
 
-**Decision (2026-07).** Cross-target codex rules (`UNI-*`) are authored under `codex/rules/universal/` in this repository. There is no framework rule pack — `augentic/specify` enforces its own authoring invariants with plain cargo tests. The `specify` binary embeds the universal pack from this checkout at build time and materializes it into consumer projects at init / `specify adapters sync`. `codex/references/` and per-adapter `prose/rules/` overlays also stay here. Rule-shape validation (frontmatter, `## Rule` heading, id uniqueness, namespace ownership) lives here too, as the `rule_shape` cargo test in `crates/prose`.
+**Decision (2026-07, amended 2026-07).** Cross-target codex rules (`UNI-*`) are authored under `codex/rules/universal/` in this repository. There is no framework rule pack — `augentic/specify` enforces its own authoring invariants with plain cargo tests. `codex/references/` and per-adapter `prose/rules/` overlays also stay here. Rule-shape validation (frontmatter, `## Rule` heading, id uniqueness, namespace ownership) lives here too, as the `rule_shape` cargo test in `crates/prose`.
 
-Adapter prompts cite `UNI-*` ids and point readers at `specify rules export` and the materialized codex cache — not repo-relative rule paths.
+**Amendment — adapters distribute their own rules.** The engine-side distribution chain (`specify` binary embed, init-time codex cache materialization, `specify rules export`, and the `standards` crate behind it) is deleted: the rules' sole consumers are the target adapters' review prompts, so distribution follows the validators in-guest. Each code-generating target (omnia, vectis) symlinks `prose/rules/universal -> codex/rules/universal` and the standard prose embed carries the pack into the component; review agents read it through the adapter's references server at `rules/universal/…`. The rule-shape test skips symlinked overlay subdirectories so the pack is validated once, as its own tree.
+
+Adapter prompts cite `UNI-*` ids and link the embedded `rules/universal/` paths — not `specify` CLI verbs or engine-materialized caches.
 
 ## Vectis validation and materialization
 
