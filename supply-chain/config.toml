@@ -37,13 +37,34 @@ audit-as-crates-io = false
 [policy.omnia-testkit]
 audit-as-crates-io = false
 
+[policy.omnia-wasi-blobstore]
+audit-as-crates-io = false
+
 [policy.omnia-wasi-config]
 audit-as-crates-io = false
 
 [policy.omnia-wasi-http]
 audit-as-crates-io = false
 
+[policy.omnia-wasi-identity]
+audit-as-crates-io = false
+
+[policy.omnia-wasi-keyvalue]
+audit-as-crates-io = false
+
+[policy.omnia-wasi-messaging]
+audit-as-crates-io = false
+
 [policy.omnia-wasi-model]
+audit-as-crates-io = false
+
+[policy.omnia-wasi-otel]
+audit-as-crates-io = false
+
+[policy.omnia-wasi-sql]
+audit-as-crates-io = false
+
+[policy.omnia-wasi-websocket]
 audit-as-crates-io = false
 
 [policy.wrpc-introspect]
@@ -181,6 +202,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.clang-sys]]
 version = "1.8.1"
+criteria = "safe-to-deploy"
+
+[[exemptions.clap_complete]]
+version = "4.6.7"
 criteria = "safe-to-deploy"
 
 [[exemptions.combine]]

@@ -8,37 +8,9 @@ user-id = 189
 user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
-[[publisher.anstream]]
-version = "1.0.0"
-when = "2026-02-11"
-user-id = 6743
-user-login = "epage"
-user-name = "Ed Page"
-
 [[publisher.anstyle]]
 version = "1.0.14"
 when = "2026-03-13"
-user-id = 6743
-user-login = "epage"
-user-name = "Ed Page"
-
-[[publisher.anstyle-parse]]
-version = "1.0.0"
-when = "2026-02-11"
-user-id = 6743
-user-login = "epage"
-user-name = "Ed Page"
-
-[[publisher.anstyle-query]]
-version = "1.1.5"
-when = "2025-11-13"
-user-id = 6743
-user-login = "epage"
-user-name = "Ed Page"
-
-[[publisher.anstyle-wincon]]
-version = "3.0.11"
-when = "2025-11-13"
 user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
@@ -118,13 +90,6 @@ version = "0.1.58"
 when = "2026-03-26"
 user-id = 55123
 user-login = "rust-lang-owner"
-
-[[publisher.colorchoice]]
-version = "1.0.5"
-when = "2026-03-13"
-user-id = 6743
-user-login = "epage"
-user-name = "Ed Page"
 
 [[publisher.core-foundation]]
 version = "0.9.3"
@@ -266,13 +231,6 @@ user-id = 539
 user-login = "cuviper"
 user-name = "Josh Stone"
 
-[[publisher.is_terminal_polyfill]]
-version = "1.70.2"
-when = "2025-10-21"
-user-id = 6743
-user-login = "epage"
-user-name = "Ed Page"
-
 [[publisher.libc]]
 version = "0.2.186"
 when = "2026-04-23"
@@ -305,13 +263,6 @@ when = "2026-06-12"
 user-id = 189
 user-login = "BurntSushi"
 user-name = "Andrew Gallant"
-
-[[publisher.once_cell_polyfill]]
-version = "1.70.2"
-when = "2025-10-21"
-user-id = 6743
-user-login = "epage"
-user-name = "Ed Page"
 
 [[publisher.parking_lot]]
 version = "0.12.5"
