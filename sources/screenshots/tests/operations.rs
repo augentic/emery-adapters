@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use adapter::seam::{Authority, ClaimKind, Context, Lead};
-use screenshots::operations::{metadata, extract};
+use screenshots::operations::{extract, metadata};
 use testkit::MockModel;
 
 #[tokio::test]

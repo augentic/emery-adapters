@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use adapter::seam::{Authority, ClaimKind, Context, Error, Lead};
-use captures::operations::{metadata, extract};
+use captures::operations::{extract, metadata};
 use testkit::MockModel;
 
 fn ctx() -> Context<'static> {

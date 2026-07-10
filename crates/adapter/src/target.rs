@@ -51,7 +51,7 @@ impl From<crate::seam::PlatformsCapability> for PlatformsCapability {
     }
 }
 
-impl From<crate::seam::TargetMetadata> for Metadata {
+impl From<crate::seam::TargetMetadata> for AdapterMetadata {
     fn from(metadata: crate::seam::TargetMetadata) -> Self {
         Self {
             specify_floor: metadata.specify_floor,

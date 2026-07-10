@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use adapter::seam::{Authority, ClaimKind, Context, Lead};
-use intent::operations::{metadata, extract, survey};
+use intent::operations::{extract, metadata, survey};
 use testkit::MockModel;
 
 fn ctx() -> Context<'static> {

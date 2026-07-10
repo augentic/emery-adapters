@@ -32,7 +32,7 @@ mod generated {
 pub use generated::exports::specify::adapter::source::*;
 pub use generated::*;
 
-impl From<crate::seam::SourceMetadata> for Metadata {
+impl From<crate::seam::SourceMetadata> for AdapterMetadata {
     fn from(metadata: crate::seam::SourceMetadata) -> Self {
         Self {
             specify_floor: metadata.specify_floor,

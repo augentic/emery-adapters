@@ -1,7 +1,7 @@
 //! The `wasm32` shim: bindings and export glue over the wasm-free
 //! sibling modules.
 
-use adapter::target::{AdapterId, Changeset, Error, Input, Metadata, Report, WorkingTree};
+use adapter::target::{AdapterId, AdapterMetadata, Changeset, Error, Input, Report, WorkingTree};
 use adapter::{WasiModel, references, seam};
 
 use crate::{operations, registry};
@@ -10,7 +10,7 @@ struct Adapter;
 adapter::target::export!(Adapter with_types_in adapter::target);
 
 impl adapter::target::Guest for Adapter {
-    fn metadata(_id: AdapterId) -> Metadata {
+    fn metadata(_id: AdapterId) -> AdapterMetadata {
         operations::metadata().into()
     }
 

@@ -8,7 +8,7 @@ use std::path::Path;
 use adapter::answers::REPORT_ANSWER_SCHEMA;
 use adapter::seam::{Changeset, Context, Edit, Error, Input, Severity, Status, WorkingTree};
 use adapter::{Error as ModelError, Format, Request};
-use contracts::operations::{build, metadata, guidance, merge};
+use contracts::operations::{build, guidance, merge, metadata};
 use contracts::validate::RULE_VERSION_IS_SEMVER;
 use tempfile::TempDir;
 use testkit::{MockModel, mcp_grants};

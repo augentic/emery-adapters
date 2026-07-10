@@ -5,7 +5,7 @@ use std::path::Path;
 
 use adapter::seam::{Authority, ClaimKind, Context, Lead};
 use testkit::MockModel;
-use typescript::operations::{metadata, extract, survey};
+use typescript::operations::{extract, metadata, survey};
 
 fn ctx() -> Context<'static> {
     Context {

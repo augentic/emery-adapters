@@ -14,7 +14,7 @@ use adapter::seam::{
 use adapter::{Format, Request};
 use tempfile::TempDir;
 use testkit::{MockModel, mcp_grants};
-use vectis::operations::{build, metadata, guidance, merge};
+use vectis::operations::{build, guidance, merge, metadata};
 
 const PHASE_DONE: &str = r#"{"applicable":true,"summary":"phase complete"}"#;
 const SHELL_SKIPPED: &str = r#"{"applicable":false,"summary":"no shell work in this slice"}"#;

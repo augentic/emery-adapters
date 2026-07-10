@@ -8,7 +8,7 @@ use std::path::Path;
 use adapter::answers::REPORT_ANSWER_SCHEMA;
 use adapter::seam::{Changeset, Context, Edit, Error, Input, Severity, Status, WorkingTree};
 use adapter::{Error as ModelError, Format, Request};
-use omnia::operations::{build, metadata, guidance, merge};
+use omnia::operations::{build, guidance, merge, metadata};
 use tempfile::TempDir;
 use testkit::{MockModel, mcp_grants};
 
