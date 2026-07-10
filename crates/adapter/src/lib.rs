@@ -16,8 +16,9 @@
 //! - [`phase`] — per-leg scaffolding for target operation templates.
 //! - [`registry`] — the embedded prose vocabulary plus the
 //!   [`embed_registry!`] module generator.
-//! - [`references`] — the MCP URL env convention plus (on `wasm32`) the
-//!   generic `McpServer` over an embedded doc table.
+//! - [`references`] — the MCP URL env convention plus the target-neutral
+//!   generic `McpServer` over an embedded doc table (only the
+//!   `wasi:http` `serve` bridge is `wasm32`-gated).
 //! - `source` / `target` (`wasm32` only) — the `specify:adapter` world
 //!   bindings each adapter-root crate hand-writes its thin shim over.
 

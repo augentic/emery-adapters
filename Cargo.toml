@@ -23,7 +23,10 @@ serde_json = "1"
 sha2 = "0.11"
 adapter = { path = "crates/adapter" }
 prose = { path = "crates/prose" }
-testkit = { path = "crates/testkit" }
+# Dev-only sibling path (consistent with the ../omnia/* patches): the
+# scripted Model mock is single-sourced in specify's crates/testkit and
+# never reaches a shipped component's dependency graph.
+testkit = { path = "../specify/crates/testkit" }
 thiserror = "2"
 toml = "1"
 tempfile = "3"

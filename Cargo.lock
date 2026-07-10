@@ -2527,6 +2527,7 @@ dependencies = [
  "sea-query",
  "serde",
  "serde_json",
+ "serde_urlencoded",
  "thiserror 2.0.18",
  "tracing",
  "wasip3",
@@ -2748,6 +2749,7 @@ dependencies = [
  "rusqlite",
  "sea-query",
  "serde_json",
+ "tokio",
  "tracing",
  "wasmtime",
  "wasmtime-wasi",
@@ -2760,7 +2762,6 @@ version = "0.35.0"
 dependencies = [
  "anyhow",
  "dashmap",
- "fromenv",
  "futures",
  "futures-channel",
  "futures-util",
@@ -4184,10 +4185,9 @@ dependencies = [
 
 [[package]]
 name = "testkit"
-version = "0.1.0"
+version = "0.27.2"
 dependencies = [
  "omnia-guest",
- "tokio",
 ]
 
 [[package]]

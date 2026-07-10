@@ -43,8 +43,8 @@ const SOURCE_INTERFACE: &str = "specify:adapter/source@0.1.0";
 /// `references/spec-runtime` symlink content.
 mod contracts {
     use anyhow::{Context as _, Result};
+    use omnia::Runtime;
     use omnia::wasmtime::component::Val;
-    use omnia::{Dispatcher as _, Runtime};
     use omnia_testkit::http;
     use serde_json::{Value, json};
 
@@ -56,6 +56,7 @@ mod contracts {
         let runtime = super::runtime(mount.path()).await?;
 
         let results = runtime
+            .dispatcher()
             .invoke(
                 "target:contracts".into(),
                 Some(TARGET_INTERFACE.to_string()),
@@ -89,6 +90,7 @@ mod contracts {
         let runtime = super::runtime(mount.path()).await?;
 
         let results = runtime
+            .dispatcher()
             .invoke(
                 "target:contracts".into(),
                 Some(TARGET_INTERFACE.to_string()),
@@ -200,8 +202,8 @@ mod contracts {
 /// symlink content.
 mod omnia_guest {
     use anyhow::{Context as _, Result};
+    use omnia::Runtime;
     use omnia::wasmtime::component::Val;
-    use omnia::{Dispatcher as _, Runtime};
     use omnia_testkit::http;
     use serde_json::{Value, json};
 
@@ -213,6 +215,7 @@ mod omnia_guest {
         let runtime = super::composed_runtime(mount.path()).await?;
 
         let results = runtime
+            .dispatcher()
             .invoke(
                 "target:omnia".into(),
                 Some(TARGET_INTERFACE.to_string()),
@@ -293,8 +296,8 @@ mod omnia_guest {
 /// and the build-time-resolved `references/agent-teams.md` symlink content.
 mod vectis {
     use anyhow::{Context as _, Result};
+    use omnia::Runtime;
     use omnia::wasmtime::component::Val;
-    use omnia::{Dispatcher as _, Runtime};
     use omnia_testkit::http;
     use serde_json::{Value, json};
 
@@ -306,6 +309,7 @@ mod vectis {
         let runtime = super::composed_runtime(mount.path()).await?;
 
         let results = runtime
+            .dispatcher()
             .invoke(
                 "target:vectis".into(),
                 Some(TARGET_INTERFACE.to_string()),
@@ -371,6 +375,7 @@ mod vectis {
         let runtime = super::composed_runtime(mount.path()).await?;
 
         let results = runtime
+            .dispatcher()
             .invoke(
                 "target:vectis".into(),
                 Some(TARGET_INTERFACE.to_string()),
@@ -450,8 +455,8 @@ mod vectis {
 /// the source guest's own MCP references on its own HTTP route.
 mod documentation {
     use anyhow::{Context as _, Result};
+    use omnia::Runtime;
     use omnia::wasmtime::component::Val;
-    use omnia::{Dispatcher as _, Runtime};
     use omnia_testkit::http;
     use serde_json::{Value, json};
 
@@ -463,6 +468,7 @@ mod documentation {
         let runtime = super::composed_runtime(mount.path()).await?;
 
         let results = runtime
+            .dispatcher()
             .invoke(
                 "source:documentation".into(),
                 Some(SOURCE_INTERFACE.to_string()),
@@ -492,6 +498,7 @@ mod documentation {
         let runtime = super::composed_runtime(mount.path()).await?;
 
         let results = runtime
+            .dispatcher()
             .invoke(
                 "source:documentation".into(),
                 Some(SOURCE_INTERFACE.to_string()),
@@ -582,8 +589,8 @@ mod documentation {
 /// references on its own HTTP route.
 mod sources {
     use anyhow::{Context as _, Result};
+    use omnia::Runtime;
     use omnia::wasmtime::component::Val;
-    use omnia::{Dispatcher as _, Runtime};
     use omnia_testkit::http;
     use serde_json::{Value, json};
 
@@ -618,6 +625,7 @@ mod sources {
 
         for (guest, _, _, _) in GUESTS {
             let results = runtime
+                .dispatcher()
                 .invoke(
                     guest.into(),
                     Some(SOURCE_INTERFACE.to_string()),
