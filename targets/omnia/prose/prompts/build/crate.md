@@ -26,14 +26,14 @@ The full Hard Rules + Authority Hierarchy live in [`../../references/hard-rules.
 
 ## Create mode
 
-1. Author the workspace `Cargo.toml` and the crate `Cargo.toml` per [`cargo-toml.md`](../../references/cargo-toml.md). Workspace dependencies pin `omnia-sdk` plus the `omnia-wasi-*` adapters for the provider traits the design declares. No private registries — every `omnia-*` crate lives on crates.io.
-2. Generate `src/lib.rs` (or `src/main.rs` for non-library crates) with one module per handler. Module layout follows the convention: `handlers/<surface>.rs`, `types.rs`, `error.rs`, `provider.rs`.
-3. For each handler, emit:
-   - A request struct with the `Handler<P>` impl per [`guidance.md`](../guidance.md) §Idiom: provider-based DI and [`sdk-api.md`](../../references/sdk-api.md) (`Handler<P>`, `Context`, `Reply`, `IntoBody`, `Client`, `Error`; Input Type Decision Tree; Response Types). `type Input` is one of `Vec<u8>` (POST / message body), `String` (single path param), `(String, String)` (tuple path params), `Option<String>` (query string), or `()` (scheduled / cron). Never `type Input = MyRequest`.
-   - A standalone `async fn handle(owner: &str, request: …, provider: &P) -> Result<Reply<…>>` that the `Handler::handle` impl delegates to.
-   - Response types implementing `IntoBody` for HTTP handlers (`fn into_body(self) -> anyhow::Result<Vec<u8>>`). Messaging handlers use `type Output = ()` and do not need `IntoBody`.
-4. Emit a domain error enum via `thiserror`, plus `impl From<DomainError> for omnia_sdk::Error` mapping each variant to the right `BadRequest` / `NotFound` / `ServerError` / `BadGateway` constructor with stable `code` strings. See [`error-handling.md`](../../references/error-handling.md) for the macros, domain enums, context patterns, and troubleshooting.
-5. Author the provider trait bundle: an `AppProvider` trait that composes the per-handler trait bounds, plus a `Provider` struct in the guest wrapper that implements it via the `WasiConfig` / `WasiHttp` / … defaults.
+1. Author the workspace `Cargo.toml` and the crate `Cargo.toml` per [`cargo-toml.md`](../../references/cargo-toml.md). Workspace dependencies pin `omnia-guest` plus the `omnia-wasi-*` adapters for the provider traits the design declares. No private registries — every `omnia-*` crate lives on crates.io.
+2. Generate `src/lib.rs` (or `src/main.rs` for non-library crates) with one module per operation. Module layout follows the convention: `operations/<surface>.rs`, `types.rs`, `error.rs`, `provider.rs`.
+3. For each use case, emit:
+   - A zero-sized operation type implementing `Operation<P>` with a typed request DTO as `Input`, a plain domain value as `Output`, and the exact provider capability bounds from the design. The transport router, not the operation, deserializes bytes/path/query fields.
+   - `Operation::call(input, CallContext)` with structural validation as its first step, followed by context loading and temporal/contextual validation, then delegation to a standalone business function where that improves readability.
+   - No transport serialization behavior on domain types. HTTP status, headers, body encoding, and error envelopes belong in `http::Projector<O, P>` implementations at the guest boundary; messaging acknowledgement/retry policy belongs in messaging projectors.
+4. Emit a domain error enum via `thiserror`, plus `impl From<DomainError> for omnia_guest::Error` mapping each variant to the right `BadRequest` / `NotFound` / `ServerError` / `BadGateway` constructor with stable `code` strings. See [`error-handling.md`](../../references/error-handling.md) for the macros, domain enums, context patterns, and troubleshooting.
+5. Author the provider trait bundle: an `AppProvider` trait that composes the per-operation trait bounds, plus a `Provider` type in the guest wrapper; on wasm32 the capability traits use their WASI-backed default methods.
 6. Apply [`guardrails.md`](../../references/guardrails.md) serde, timestamp, and DST rules verbatim: `#[serde(rename_all = "camelCase")]` on output types, `#[serde(skip_serializing_if = "Option::is_none")]` on optional fields, `#[serde(default)]` + `#[serde(rename(deserialize = …))]` on input-only types, `.earliest()` (not `.single()`) for DST-safe local-time conversion, `received_at = Utc::now()` semantics.
 7. Honour TODO markers, adapter overrides, and cache-aside patterns per [`todo-markers.md`](../../references/todo-markers.md).
 8. Emit accompanying output documents (`Migration.md`, `Architecture.md`, `CHANGELOG.md`, `.env.example`) per [`output-documents.md`](../../references/output-documents.md).
@@ -45,9 +45,9 @@ Worked examples: [`examples/crates/single-handler.md`](../../references/examples
 Walk the four categories in fixed order; re-scan after structural before proceeding. The strategy library per category lives at [`update-patterns.md`](../../references/update-patterns.md); diff classification rules live at [`change-classification.md`](../../references/change-classification.md).
 
 1. **Structural** — type renames, file moves, module reshuffles. Apply via small, semantics-preserving rewrites. Re-run `cargo check` before moving on. Worked example: [`examples/crates/updates/structural.md`](../../references/examples/crates/updates/structural.md).
-2. **Subtractive** — delete handlers / fields / types the new artifacts no longer name. Removing a topic subscription deletes the matching arm in the guest's messaging dispatcher (see [guest writer](guest.md) for the four-category guest cadence). Worked example: [`examples/crates/updates/subtractive.md`](../../references/examples/crates/updates/subtractive.md).
-3. **Modifying** — change a handler's behaviour, response shape, validation rules, or provider dependencies in place. Update the matching `Cargo.toml` adapter dependency if a new provider trait is consumed. Worked example: [`examples/crates/updates/modifying.md`](../../references/examples/crates/updates/modifying.md).
-4. **Additive** — add new handlers, new types, new variants. Additive code MUST compile against the already-updated structural layer. Worked example: [`examples/crates/updates/additive.md`](../../references/examples/crates/updates/additive.md).
+2. **Subtractive** — delete operations / fields / types the new artifacts no longer name and remove their typed HTTP route or exact messaging-topic registration. Worked example: [`examples/crates/updates/subtractive.md`](../../references/examples/crates/updates/subtractive.md).
+3. **Modifying** — change an operation's behaviour, output shape, validation rules, provider dependencies, or projector in place. Update the matching `Cargo.toml` adapter dependency if a new provider trait is consumed. Worked example: [`examples/crates/updates/modifying.md`](../../references/examples/crates/updates/modifying.md).
+4. **Additive** — add new operations, typed routes, types, and variants. Additive code MUST compile against the already-updated structural layer. Worked example: [`examples/crates/updates/additive.md`](../../references/examples/crates/updates/additive.md).
 
 When a `cargo` failure surfaces during this pass, apply minimum-change repair via [`repair-patterns.md`](../../references/repair-patterns.md) before re-entering the parent verify-repair loop.
 
@@ -55,10 +55,10 @@ When a `cargo` failure surfaces during this pass, apply minimum-change repair vi
 
 The full checklist lives at [`checklists.md`](../../references/checklists.md). Highlights:
 
-- Every handler in `design.md` has a matching module / function in `$CRATE_PATH`.
-- Every external surface (HTTP route, topic publish/subscribe, WebSocket export, scheduled job) is wired in `src/lib.rs` if the crate exports guest types.
-- Every provider trait bound on a handler appears in the `AppProvider` composition.
-- Every `Config::get` key in `design.md` has a matching read in the handler (or in `Provider::new`).
-- Every `omnia_sdk::Error` mapping in `design.md` has a matching arm in `impl From<DomainError>`.
+- Every operation in `design.md` has a matching zero-sized `Operation<P>` implementation in `$CRATE_PATH`.
+- Every external surface is registered in an explicit typed router and exported through its WIT interface.
+- Every provider trait bound on an operation appears in the `AppProvider` composition.
+- Every `Config::get` key in `design.md` has a matching read in the operation (or in `Provider::new`).
+- Every `omnia_guest::Error` mapping in `design.md` has a matching arm in `impl From<DomainError>`.
 - No forbidden crate or forbidden std API per [`guardrails.md`](../../references/guardrails.md).
 - `cargo fmt`, `cargo check`, `cargo clippy -- -D warnings` all pass before entering the build prompt's verify-repair loop.

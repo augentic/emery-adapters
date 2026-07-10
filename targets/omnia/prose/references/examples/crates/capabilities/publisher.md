@@ -10,12 +10,14 @@ The `Publish` trait enables publishing messages to a variety of messaging servic
 
 ## Simple Message Publishing
 
-A handler that processes an incoming request and publishes an event:
+An operation that processes an incoming request and publishes an event:
 
 ```rust
+use omnia_guest::api::invoke::CallContext;
+use omnia_guest::api::operation::Operation;
 use anyhow::Context as _;
-use omnia_sdk::{
-    Config, Context, Error, Handler, Message, Publish, Reply, Result,
+use omnia_guest::{
+    Config, Error, Message, Publish, Result,
 };
 use serde::{Deserialize, Serialize};
 
@@ -70,26 +72,27 @@ where
     })
 }
 
-impl<P: Config + Publish> Handler<P> for OrderRequest {
+pub struct OrderRequestOperation;
+
+impl<P: omnia_guest::api::Provider + Config + Publish> Operation<P> for OrderRequestOperation
+{
     type Error = Error;
-    type Input = Vec<u8>;
+    type Input = OrderRequest;
     type Output = OrderResponse;
 
-    async fn handle(self, ctx: Context<'_, P>) -> Result<Reply<OrderResponse>> {
-        Ok(create_order(ctx.owner, ctx.provider, self).await?.into())
-    }
-
-    fn from_input(input: Self::Input) -> Result<Self> {
-        serde_json::from_slice(&input)
-            .context("deserializing OrderRequest")
-            .map_err(Into::into)
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        // Structural validation is the first step; omit only when no checks apply.
+        create_order(context.owner, context.provider, input).await
     }
 }
 ```
 
 ## Multi-Topic Publishing
 
-Publishing to multiple topics in a single handler:
+Publishing to multiple topics in a single operation:
 
 ```rust
 const OUTPUT_TOPIC: &str = "events-output.v1";
@@ -211,5 +214,5 @@ ENV=dev
 
 - See [../../references/capabilities.md](../../../capabilities.md) for the full `Publish` and `Message` definitions
 - See [identity.md](identity.md) for the authentication flow
-- See [../../references/sdk-api.md](../../../sdk-api.md) for the Handler trait pattern
+- See [../../references/sdk-api.md](../../../sdk-api.md) for the `Operation<P>` trait pattern
 - See [../../references/providers.md](../../../providers/README.md) for provider bound composition

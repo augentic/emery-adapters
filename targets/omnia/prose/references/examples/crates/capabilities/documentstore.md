@@ -1,4 +1,4 @@
-# DocumentStore Handler Patterns
+# DocumentStore Operation Patterns
 
 This document covers the `DocumentStore` trait pattern used for JSON document storage operations in Omnia business logic crates. `DocumentStore` is backed by `omnia_wasi_jsondb` and covers Azure Table Storage, Cosmos DB (document API), MongoDB, and PoloDB.
 
@@ -11,7 +11,7 @@ The `DocumentStore` trait provides CRUD and query operations for JSON documents 
 ## Trait Definition
 
 ```rust
-use omnia_sdk::document_store::{Document, QueryOptions, QueryResult};
+use omnia_guest::document_store::{Document, QueryOptions, QueryResult};
 
 pub trait DocumentStore: Send + Sync {
     fn get(&self, store: &str, id: &str)
@@ -59,7 +59,7 @@ pub struct QueryResult {
 ### Get by ID
 
 ```rust
-use omnia_sdk::document_store::Document;
+use omnia_guest::document_store::Document;
 
 let doc = DocumentStore::get(provider, &collection, &id)
     .await?
@@ -96,7 +96,7 @@ if !removed {
 ### Query with Filter and Pagination
 
 ```rust
-use omnia_sdk::document_store::{Filter, QueryOptions};
+use omnia_guest::document_store::{Filter, QueryOptions};
 
 let options = QueryOptions {
     filter: Some(Filter::eq("status", "active")),
@@ -122,14 +122,16 @@ if let Some(token) = result.continuation {
 }
 ```
 
-## Complete Handler Examples
+## Complete Operation Examples
 
-### Get Document Handler
+### Get Document Operation
 
 ```rust
+use omnia_guest::api::invoke::CallContext;
+use omnia_guest::api::operation::Operation;
 use anyhow::Context as _;
-use omnia_sdk::{bad_request, Config, Context, DocumentStore, Error, Handler, Reply, Result};
-use omnia_sdk::document_store::Document;
+use omnia_guest::{bad_request, Config, DocumentStore, Error, Result};
+use omnia_guest::document_store::Document;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -155,31 +157,36 @@ async fn get_customer<P: Config + DocumentStore>(
     let doc = DocumentStore::get(provider, &collection, &req.id)
         .await
         .context("fetching customer document")?
-        .ok_or_else(|| bad_request!("customer_not_found", "Customer not found: {}", req.id))?;
+        .ok_or_else(|| bad_request!("Customer not found: {}", req.id))?;
 
     serde_json::from_slice(&doc.data)
         .context("deserializing customer")
         .map_err(Into::into)
 }
 
-impl<P: Config + DocumentStore> Handler<P> for GetCustomerRequest {
+pub struct GetCustomerRequestOperation;
+
+impl<P: omnia_guest::api::Provider + Config + DocumentStore> Operation<P> for GetCustomerRequestOperation
+{
     type Error = Error;
-    type Input = String;
+    type Input = GetCustomerRequest;
     type Output = Customer;
 
-    async fn handle(self, ctx: Context<'_, P>) -> Result<Reply<Customer>> {
-        Ok(get_customer(ctx.owner, ctx.provider, self).await?.into())
-    }
-
-    fn from_input(input: Self::Input) -> Result<Self> {
-        Ok(Self { id: input })
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        // Structural validation is the first step; omit only when no checks apply.
+        get_customer(context.owner, context.provider, input).await
     }
 }
 ```
 
-### Upsert Document Handler
+### Upsert Document Operation
 
 ```rust
+use omnia_guest::api::invoke::CallContext;
+use omnia_guest::api::operation::Operation;
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct UpsertCustomerRequest {
     pub id: String,
@@ -218,19 +225,20 @@ async fn upsert_customer<P: Config + DocumentStore>(
     Ok(UpsertCustomerResponse { id: req.id })
 }
 
-impl<P: Config + DocumentStore> Handler<P> for UpsertCustomerRequest {
+pub struct UpsertCustomerRequestOperation;
+
+impl<P: omnia_guest::api::Provider + Config + DocumentStore> Operation<P> for UpsertCustomerRequestOperation
+{
     type Error = Error;
-    type Input = Vec<u8>;
+    type Input = UpsertCustomerRequest;
     type Output = UpsertCustomerResponse;
 
-    async fn handle(self, ctx: Context<'_, P>) -> Result<Reply<UpsertCustomerResponse>> {
-        Ok(upsert_customer(ctx.owner, ctx.provider, self).await?.into())
-    }
-
-    fn from_input(input: Self::Input) -> Result<Self> {
-        serde_json::from_slice(&input)
-            .context("deserializing UpsertCustomerRequest")
-            .map_err(Into::into)
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        // Structural validation is the first step; omit only when no checks apply.
+        upsert_customer(context.owner, context.provider, input).await
     }
 }
 ```
@@ -261,8 +269,8 @@ pub struct RawVehicle {
 
 ```rust
 use anyhow::Context as _;
-use omnia_sdk::{bad_gateway, Config, DocumentStore, Result};
-use omnia_sdk::document_store::QueryOptions;
+use omnia_guest::{bad_gateway, Config, DocumentStore, Result};
+use omnia_guest::document_store::QueryOptions;
 
 async fn fetch_all_vehicles<P>(provider: &P) -> Result<Vec<RawVehicle>>
 where
@@ -289,7 +297,7 @@ where
 ### Fetch with Filter (Azure Table Storage)
 
 ```rust
-use omnia_sdk::document_store::Filter;
+use omnia_guest::document_store::Filter;
 
 async fn fetch_vehicles_by_type<P>(provider: &P, vehicle_type: &str) -> Result<Vec<RawVehicle>>
 where
@@ -326,13 +334,13 @@ When the legacy component loads data from Azure Table Storage on startup into an
 
 ```rust
 // DocumentStore trait
-use omnia_sdk::DocumentStore;
+use omnia_guest::DocumentStore;
 
 // Document types
-use omnia_sdk::document_store::{Document, Filter, QueryOptions, QueryResult, SortField};
+use omnia_guest::document_store::{Document, Filter, QueryOptions, QueryResult, SortField};
 
 // SDK types
-use omnia_sdk::{bad_request, Config, Context, Error, Handler, Reply, Result};
+use omnia_guest::{bad_request, Config, Error, Result};
 
 // Other common imports
 use anyhow::Context as _;
@@ -341,12 +349,12 @@ use serde::{Deserialize, Serialize};
 
 ## Key Rules
 
-1. **Target Architecture**: DocumentStore handlers are designed for `wasm32-wasip2` only
+1. **Target Architecture**: DocumentStore operations are designed for `wasm32-wasip2` only
 2. **Serialize to bytes**: Document `data` is `Vec<u8>` — serialize domain types with `serde_json::to_vec` before storing
 3. **Config for collection name**: Get collection/store name from `Config` trait
 4. **Validation first**: Validate input parameters before performing document operations
 5. **insert vs put**: Use `insert` when the document must not already exist (fail on duplicate); use `put` for upsert semantics
-6. **Error mapping**: Map document errors to `omnia_sdk::Error` with context
+6. **Error mapping**: Map document errors to `omnia_guest::Error` with context
 7. **Pagination**: Use `continuation` tokens for large result sets; respect `limit`
 
 ## Choosing Between Storage Traits
@@ -355,7 +363,7 @@ use serde::{Deserialize, Serialize};
 |------------|-------|------|
 | Tabular rows, SQL queries | `TableStore` | Relational data, SQL CRUD |
 | JSON documents by key/query | `DocumentStore` | Azure Table Storage, Cosmos DB documents, MongoDB, flexible schema |
-| Binary blobs by key | `Blobstore` | Files, images, large payloads |
+| Binary blobs by key | `BlobStore` | Files, images, large payloads |
 | Small key-value cache entries | `StateStore` | Redis cache, session state, TTL-based expiry |
 
 ## References

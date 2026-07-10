@@ -1,4 +1,4 @@
-# Example 01: Simple HTTP Handler
+# Example 01: Simple HTTP Operation
 
 Complete working example of the Simple Fixture Pattern based on the `ex-http` crate from the context workspace.
 
@@ -6,7 +6,7 @@ Complete working example of the Simple Fixture Pattern based on the `ex-http` cr
 
 ## Scenario
 
-Generate test harness for a basic HTTP handler crate with two handlers:
+Generate test harness for a basic HTTP operation crate with two operations:
 - `EchoRequest` - URL decodes and echoes back input
 - `GreetingRequest` - Returns greeting with configured name
 
@@ -26,12 +26,14 @@ ex-http/
 └── Cargo.toml
 ```
 
-## Handler Code (Reference)
+## Operation Code (Reference)
 
 ### handlers.rs
 
 ```rust
-use omnia_sdk::{Config, Handler};
+use omnia_guest::api::invoke::CallContext;
+use omnia_guest::api::operation::Operation;
+use omnia_guest::{Config};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -46,14 +48,20 @@ pub struct EchoResponse {
     pub b: String,
 }
 
-impl<P: Config> Handler<P> for EchoRequest {
+pub struct EchoRequestOperation;
+
+impl<P: omnia_guest::api::Provider + Config> Operation<P> for EchoRequestOperation
+{
+    type Error = Error;
+    type Input = EchoRequest;
     type Output = EchoResponse;
 
-    async fn handle(self, _provider: &P) -> anyhow::Result<Self::Output> {
-        Ok(EchoResponse {
-            a: urlencoding::decode(&self.a)?.into_owned(),
-            b: self.b,
-        })
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        // Structural validation is the first step; omit only when no checks apply.
+        handle(context.owner, input, context.provider).await
     }
 }
 
@@ -68,15 +76,20 @@ pub struct GreetingResponse {
     pub reply: String,
 }
 
-impl<P: Config> Handler<P> for GreetingRequest {
+pub struct GreetingRequestOperation;
+
+impl<P: omnia_guest::api::Provider + Config> Operation<P> for GreetingRequestOperation
+{
+    type Error = Error;
+    type Input = GreetingRequest;
     type Output = GreetingResponse;
 
-    async fn handle(self, provider: &P) -> anyhow::Result<Self::Output> {
-        let name = Config::get(provider, "name").await?;
-        Ok(GreetingResponse {
-            respondent: name,
-            reply: self.message,
-        })
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        // Structural validation is the first step; omit only when no checks apply.
+        handle(context.owner, input, context.provider).await
     }
 }
 ```
@@ -89,8 +102,13 @@ impl<P: Config> Handler<P> for GreetingRequest {
 #[cfg(test)]
 mod tests {
     use anyhow::bail;
-    use ex_http::handlers::{EchoRequest, EchoResponse, GreetingRequest, GreetingResponse};
-    use omnia_sdk::{Client, Config};
+    use ex_http::handlers::{
+        EchoRequest, EchoRequestOperation, EchoResponse, GreetingRequest,
+        GreetingRequestOperation, GreetingResponse,
+    };
+    use omnia_guest::api::invocation::Invocation;
+use omnia_guest::api::invoke::Invoker;
+use omnia_guest::{Config};
     use serde::Deserialize;
 
     struct MockProvider;
@@ -121,10 +139,10 @@ mod tests {
         let fixture = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/echo1.json"));
         let test_case: EchoTestCase =
             serde_json::from_str(fixture).expect("fixture JSON should deserialize");
-        let client = Client::new("tester").provider(MockProvider);
+        let invoker = Invoker::new("tester", MockProvider);
         let request = test_case.request.clone();
 
-        let response = client.request(request).await.expect("echo should succeed");
+        let response = invoker.invoke::<EchoRequestOperation>(Invocation::new(request)).await.expect("echo should succeed");
 
         assert_eq!(response.a, test_case.response.a);
         assert_eq!(response.b, test_case.response.b);
@@ -136,10 +154,10 @@ mod tests {
             include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/greeting1.json"));
         let test_case: GreetingTestCase =
             serde_json::from_str(fixture).expect("fixture JSON should deserialize");
-        let client = Client::new("tester").provider(MockProvider);
+        let invoker = Invoker::new("tester", MockProvider);
         let request = test_case.request.clone();
 
-        let response = client.request(request).await.expect("greeting should succeed");
+        let response = invoker.invoke::<GreetingRequestOperation>(Invocation::new(request)).await.expect("greeting should succeed");
 
         assert_eq!(response.respondent, test_case.response.respondent);
         assert_eq!(response.reply, test_case.response.reply);
@@ -169,7 +187,7 @@ mod tests {
 ```json
 {
     "request": {
-        "message": "Hello, World!"        
+        "message": "Hello, World!"
     },
     "response": {
         "respondent": "Test User",
@@ -183,7 +201,7 @@ mod tests {
 ### 1. MockProvider Implementation
 
 - **Simple**: Only implements `Config` trait
-- **Focused**: Returns only the config values needed by handlers
+- **Focused**: Returns only the config values needed by operations
 - **Error handling**: Returns error for unknown keys
 
 ### 2. Test Structure
@@ -192,14 +210,14 @@ mod tests {
 - **Type safety**: Deserializes into typed test case structs
 - **Clear assertions**: Compares individual fields
 
-### 3. Client Usage
+### 3. Invoker Usage
 
 ```rust
-let client = Client::new("tester").provider(MockProvider);
-let response = client.request(request).await.expect("should succeed");
+let invoker = Invoker::new("tester", MockProvider);
+let response = invoker.invoke::<EchoRequestOperation>(Invocation::new(request)).await.expect("should succeed");
 ```
 
-This is the standard pattern - **never call handlers directly**.
+This is the standard pattern - **never call operations directly**.
 
 ## Running Tests
 
@@ -251,10 +269,10 @@ Add corresponding test:
 async fn echo_test_case_2() {
     let fixture = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/echo2.json"));
     let test_case: EchoTestCase = serde_json::from_str(fixture).unwrap();
-    let client = Client::new("tester").provider(MockProvider);
-    
-    let response = client.request(test_case.request).await.unwrap();
-    
+    let invoker = Invoker::new("tester", MockProvider);
+
+    let response = invoker.invoke::<EchoRequestOperation>(Invocation::new(test_case.request)).await.unwrap();
+
     assert_eq!(response, test_case.response);
 }
 ```
@@ -265,16 +283,16 @@ async fn echo_test_case_2() {
 #[tokio::test]
 async fn run_all_echo_fixtures() {
     let data_dir = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data"));
-    
+
     for entry in std::fs::read_dir(data_dir).unwrap() {
         let path = entry.unwrap().path();
         if path.file_name().unwrap().to_str().unwrap().starts_with("echo") {
             let fixture = std::fs::read_to_string(&path).unwrap();
             let test_case: EchoTestCase = serde_json::from_str(&fixture).unwrap();
-            
-            let client = Client::new("tester").provider(MockProvider);
-            let response = client.request(test_case.request).await.unwrap();
-            
+
+            let invoker = Invoker::new("tester", MockProvider);
+            let response = invoker.invoke::<EchoRequestOperation>(Invocation::new(test_case.request)).await.unwrap();
+
             assert_eq!(response, test_case.response, "Failed for {:?}", path);
         }
     }
@@ -292,7 +310,7 @@ async fn run_all_echo_fixtures() {
 ## When to Use
 
 ✅ **Use this pattern for**:
-- Standard request/response handlers
+- Standard request/response operations
 - Components without time-sensitive logic
 - Quick test development
 - Most components (90%+ of cases)
@@ -313,6 +331,6 @@ This example demonstrates the **recommended testing pattern** for most Rust WASM
 - Simple MockProvider with required traits
 - JSON fixtures loaded with `include_str!()`
 - Standard tokio async tests
-- Client abstraction for handler execution
+- Invoker-based operation execution
 
 **Total lines of test code**: ~50 lines **Setup time**: ~10 minutes **Maintenance**: Low

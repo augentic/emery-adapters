@@ -26,7 +26,7 @@ crate-type = ["lib"]
 
 [dependencies]
 anyhow.workspace = true
-omnia-sdk.workspace = true
+omnia-guest.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 tracing.workspace = true
@@ -38,21 +38,21 @@ tokio.workspace = true
 
 ## Dependency Decision Tree
 
-Add dependencies based on what the handler needs:
+Add dependencies based on what the operation needs:
 
 ### Always Required
 
 | Dependency              | Purpose                               |
 | ----------------------- | ------------------------------------- |
 | `anyhow`                | Error chaining with `.context()`      |
-| `omnia-sdk`             | Handler trait, Error, provider traits |
+| `omnia-guest`           | Operations, routers, errors, and provider traits |
 | `serde` (with `derive`) | Serialization/deserialization         |
 | `serde_json`            | JSON parsing and serialization        |
 | `tracing`               | Logging and metrics                   |
 
-### When Handler Uses HttpRequest
+### When an Operation Uses HttpRequest
 
-Add these when the handler makes outbound HTTP calls (`P: HttpRequest`):
+Add these when the operation makes outbound HTTP calls (`P: HttpRequest`):
 
 ```toml
 bytes.workspace = true
@@ -61,7 +61,7 @@ http-body.workspace = true
 http-body-util.workspace = true
 ```
 
-### When Handler Has Domain Errors
+### When an Operation Has Domain Errors
 
 Add when the crate defines domain error enums with `thiserror`:
 
@@ -69,7 +69,7 @@ Add when the crate defines domain error enums with `thiserror`:
 thiserror.workspace = true
 ```
 
-### When Handler Parses XML
+### When an Operation Parses XML
 
 Add when artifacts indicate XML input:
 
@@ -77,40 +77,40 @@ Add when artifacts indicate XML input:
 quick-xml = { workspace = true, features = ["serde", "serialize"] }
 ```
 
-### When Handler Uses Date/Time
+### When an Operation Uses Date/Time
 
 ```toml
 chrono = { workspace = true, features = ["serde"] }
 ```
 
-### When Handler Uses Timezone Conversion
+### When an Operation Uses Timezone Conversion
 
 ```toml
 chrono-tz.workspace = true
 ```
 
-### When Handler Uses Integer-Backed Enums
+### When an Operation Uses Integer-Backed Enums
 
 ```toml
 serde_repr.workspace = true
 ```
 
-### When Handler Parses Query Strings
+### When an Operation Parses Query Strings
 
-Add when a handler uses `type Input = Option<String>` with URL-encoded parameters:
+Add when a typed HTTP GET input includes URL-encoded query fields:
 
 ```toml
 serde_urlencoded.workspace = true
 ```
 
-### When Handler Uses Streaming/Pagination
+### When an Operation Uses Streaming/Pagination
 
 ```toml
 async-stream = "0.3.6"
 futures.workspace = true
 ```
 
-### When Handler Uses URL Encoding
+### When an Operation Uses URL Encoding
 
 ```toml
 percent-encoding = "2.3.2"
@@ -169,7 +169,7 @@ serde_json.workspace = true
 serde_repr.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
-omnia-sdk.workspace = true
+omnia-guest.workspace = true
 
 [dev-dependencies]
 augentic-test.workspace = true
@@ -204,7 +204,7 @@ http.workspace = true
 http-body.workspace = true
 http-body-util.workspace = true
 percent-encoding = "2.3.2"
-omnia-sdk.workspace = true
+omnia-guest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_urlencoded.workspace = true

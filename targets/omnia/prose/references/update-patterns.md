@@ -41,8 +41,8 @@ pub struct PurchaseEvent {
 - [ ] Struct definition renamed
 - [ ] All `use` imports updated
 - [ ] All variable bindings and function parameters updated
-- [ ] Handler `type Output` updated if applicable
-- [ ] `IntoBody` impl updated
+- [ ] Operation `type Output` updated if applicable
+- [ ] HTTP projector updated when status/body/header/error policy changed
 - [ ] `From` impls updated
 - [ ] Test fixtures and assertions updated
 - [ ] Doc comments updated
@@ -50,17 +50,17 @@ pub struct PurchaseEvent {
 
 ### Rename a Module
 
-**Artifact Change**: Handler moved from single-handler layout to multi-handler barrel.
+**Artifact Change**: Operation moved from single-operation layout to multi-operation barrel.
 
-**Before** (single handler):
+**Before** (single operation):
 
 ```
 src/
 ├── lib.rs      # mod handler; pub use handler::*;
-└── handler.rs  # single Handler<P> impl
+└── handler.rs  # single Operation<P> impl
 ```
 
-**After** (multi-handler barrel):
+**After** (multi-operation barrel):
 
 ```
 src/
@@ -80,14 +80,14 @@ src/
 5. Update `pub use` declarations
 6. Run `cargo check` to verify
 
-### Split a Handler
+### Split an Operation
 
-**Artifact Change**: A handler that processed multiple message types is split into separate handlers.
+**Artifact Change**: An operation that processed multiple message types is split into separate operations.
 
 **Before** (`src/handler.rs`):
 
 ```rust
-async fn handle<P>(_owner: &str, request: MultiMessage, provider: &P) -> Result<Reply<()>>
+async fn handle<P>(_owner: &str, request: MultiMessage, provider: &P) -> Result<()>
 where
     P: Config + Publish,
 {
@@ -99,29 +99,29 @@ where
 }
 ```
 
-**After** (two separate handler files):
+**After** (two separate operation files):
 
 `src/handlers/type_a.rs`:
 
 ```rust
-async fn handle<P>(_owner: &str, request: TypeAMessage, provider: &P) -> Result<Reply<()>>
+async fn handle<P>(_owner: &str, request: TypeAMessage, provider: &P) -> Result<()>
 where
     P: Config + Publish,
 {
     // type_a logic extracted here
-    Ok(Reply::ok(()))
+    Ok(())
 }
 ```
 
 `src/handlers/type_b.rs`:
 
 ```rust
-async fn handle<P>(_owner: &str, request: TypeBMessage, provider: &P) -> Result<Reply<()>>
+async fn handle<P>(_owner: &str, request: TypeBMessage, provider: &P) -> Result<()>
 where
     P: Config + Publish,
 {
     // type_b logic extracted here
-    Ok(Reply::ok(()))
+    Ok(())
 }
 ```
 
@@ -137,47 +137,47 @@ Subtractive changes remove code. Every removal is documented in CHANGELOG.md.
 
 **Steps**:
 
-1. **Delete handler**: Remove `src/handlers/legacy_status.rs` (or remove the handler function from a shared file)
+1. **Delete operation**: Remove `src/handlers/legacy_status.rs` (or remove the operation adapter function from a shared file)
 2. **Update barrel**: Remove `mod legacy_status;` and `pub use legacy_status::*;` from `src/handlers.rs`
-3. **Delete types**: Remove `LegacyStatusRequest` and `LegacyStatusResponse` from `src/types.rs` (only if no other handler uses them)
+3. **Delete types**: Remove `LegacyStatusRequest` and `LegacyStatusResponse` from `src/types.rs` (only if no other operation uses them)
 4. **Delete tests**: Remove `tests/legacy_status.rs`
 5. **Update guest**: Remove the route from `src/lib.rs`:
 
    ```rust
-   // REMOVE this line:
+// REMOVE this line:
    .route("/legacy-status", get(legacy_status_handler))
-   ```
+```
 
 6. **Remove import**: Remove `use my_crate::LegacyStatusRequest;` from guest
-7. **Remove handler function**: Remove `async fn legacy_status_handler(...)` from guest
+7. **Remove operation adapter function**: Remove `async fn legacy_status_handler(...)` from guest
 8. **Clean dependencies**: Remove unused dependencies from `Cargo.toml`
 9. **Document**: Add entry to CHANGELOG.md under `### Removed`
 
-### Remove a Messaging Topic Handler
+### Remove a Messaging Topic Operation
 
 **Artifact Change**: Topic `events.legacy.v1` no longer appears in API Contracts.
 
 **Steps**:
 
-1. Delete or remove the handler implementation
+1. Delete or remove the operation implementation
 2. Remove the topic match arm from the guest messaging dispatcher:
 
    ```rust
-   // REMOVE this arm:
+// REMOVE this arm:
    t if t.contains("events.legacy.v1") => legacy_handler(message.data()).await,
-   ```
+```
 
-3. Remove the handler function from the guest
+3. Remove the operation adapter function from the guest
 4. Remove the import from the guest
 5. Delete corresponding tests
 6. Document in CHANGELOG.md
 
 ### Remove a Type
 
-**Before removing a type**, verify it is not referenced by any remaining handler:
+**Before removing a type**, verify it is not referenced by any remaining operation:
 
 ```text
-Does any remaining handler reference this type?
+Does any remaining operation reference this type?
 ├─ YES → Do NOT remove; the type is still needed
 └─ NO → Safe to remove
     └─ Is the type part of a public API response?
@@ -245,12 +245,12 @@ const MAX_DELAY_SECS: i64 = 120;
 
 ### Add a Provider Trait Bound
 
-**Artifact Change**: Handler now requires `StateStore` for caching (new provider in Required Providers).
+**Artifact Change**: Operation now requires `StateStore` for caching (new provider in Required Providers).
 
 **Before** (`src/handler.rs`):
 
 ```rust
-async fn handle<P>(_owner: &str, request: MyRequest, provider: &P) -> Result<Reply<()>>
+async fn handle<P>(_owner: &str, request: MyRequest, provider: &P) -> Result<()>
 where
     P: Config + HttpRequest,
 ```
@@ -258,19 +258,19 @@ where
 **After** (`src/handler.rs`):
 
 ```rust
-async fn handle<P>(_owner: &str, request: MyRequest, provider: &P) -> Result<Reply<()>>
+async fn handle<P>(_owner: &str, request: MyRequest, provider: &P) -> Result<()>
 where
     P: Config + HttpRequest + StateStore,
 ```
 
 **Propagation**:
 
-- Update `Handler<P>` impl bounds to match
-- Add `use omnia_sdk::StateStore;` import
+- Update `Operation<P>` impl bounds to match
+- Add `use omnia_guest::StateStore;` import
 - Update MockProvider:
 
   ```rust
-  impl StateStore for MockProvider {
+impl StateStore for MockProvider {
       async fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
           Ok(None) // or return test fixture data
       }
@@ -279,13 +279,13 @@ where
       }
       // ... implement remaining StateStore methods
   }
-  ```
+```
 
 - Update guest Provider if not already implementing `StateStore`:
 
   ```rust
-  impl StateStore for Provider {}
-  ```
+impl StateStore for Provider {}
+```
 
 ### Change Error Handling
 
@@ -342,11 +342,11 @@ Note: `rename(deserialize = ...)` changes to `rename = ...` for round-trip types
 
 Additive changes add new code following crate-writer patterns exactly. The existing crate structure determines where new code goes.
 
-### Add a Handler to a Single-Handler Crate
+### Add an Operation to a Single-operation Crate
 
-When a single-handler crate gains a second handler, it transitions to multi-handler layout.
+When a single-operation crate gains a second operation, it transitions to a multi-operation layout.
 
-**Before** (single handler):
+**Before** (single operation):
 
 ```
 src/
@@ -355,7 +355,7 @@ src/
 └── types.rs
 ```
 
-**After** (multi-handler):
+**After** (multi-operation):
 
 ```
 src/
@@ -363,17 +363,17 @@ src/
 ├── handlers.rs     # barrel: mod existing; mod new_handler; pub use ...;
 ├── handlers/
 │   ├── existing.rs # content from former handler.rs
-│   └── new_one.rs  # new handler
+│   └── new_one.rs  # new operation
 └── types.rs
 ```
 
-This is a combined structural + additive change. The structural transition happens first, then the additive handler is placed into the new layout.
+This is a combined structural + additive change. The structural transition happens first, then the additive operation is placed into the new layout.
 
-### Add a Handler to a Multi-Handler Crate
+### Add an Operation to a Multi-operation Crate
 
 **Steps**:
 
-1. Create `src/handlers/new_handler.rs` following the Handler pattern
+1. Create `src/handlers/new_handler.rs` following the `Operation<P>` pattern
 2. Add `mod new_handler;` and `pub use new_handler::*;` to `src/handlers.rs`
 3. Add new types to `src/types.rs` or create domain-specific type modules
 4. Add dependencies to `Cargo.toml` if needed
@@ -391,7 +391,7 @@ This is a combined structural + additive change. The structural transition happe
    - Output: `Serialize + Deserialize`, `#[serde(rename_all = "camelCase")]`
    - Round-trip: `Serialize + Deserialize`, `#[serde(rename = "...")]`
 3. Add doc comments
-4. If it's an HTTP response type, implement `IntoBody`
+4. Register the operation in the HTTP router and add a custom projector only when default 200 JSON projection is insufficient
 5. Update tests to use the new type
 
 ### Add a Test
@@ -403,15 +403,15 @@ This is a combined structural + additive change. The structural transition happe
 3. Follow the test structure:
 
    ```rust
-   #[tokio::test]
+#[tokio::test]
    async fn happy_path() {
        let provider = MockProvider::new();
-       let client = Client::new("owner").provider(provider.clone());
+       let invoker = Invoker::new("owner", provider.clone());
        let request = MyRequest { /* ... */ };
-       let response = client.request(request).await.expect("should succeed");
-       assert_eq!(response.status, 200);
+       let output = invoker.invoke::<MyOperation>(Invocation::new(request)).await.expect("should succeed");
+       assert_eq!(output.value, expected);
    }
-   ```
+```
 
 4. Add error case tests for validation failures
 5. Update MockProvider if new fixtures or trait methods are needed

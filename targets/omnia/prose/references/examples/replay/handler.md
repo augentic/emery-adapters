@@ -1,6 +1,6 @@
-# Handler Example: r9k-adapter
+# Operation Example: r9k-adapter
 
-This is an example of a handler in the expected format after Specify-driven generation. The corresponding [tests](tests.md) and [fixtures](fixtures.md) examples correspond to this handler.
+This is an example of an operation in the expected format after Specify-driven generation. The corresponding [tests](tests.md) and [fixtures](fixtures.md) examples correspond to this operation.
 
 ## Crate entry point (lib.rs)
 
@@ -14,7 +14,7 @@ mod r9k;
 mod smartrak;
 mod stops;
 
-use omnia_sdk::Error;
+use omnia_guest::Error;
 use thiserror::Error;
 
 pub use self::handler::*;
@@ -63,20 +63,21 @@ impl From<quick_xml::DeError> for R9kError {
 }
 ```
 
-## Handler (handler.rs)
+## Operation (`handler.rs`)
 
 ```rust
 //! R9K Position Adapter
 //!
 //! Transform an R9K XML message into a SmarTrak[`TrainUpdate`].
 
+use omnia_guest::api::invoke::CallContext;
+use omnia_guest::api::operation::Operation;
 use anyhow::Context as _;
 use bytes::Bytes;
 use chrono::Utc;
 use http::header::AUTHORIZATION;
 use http_body_util::Empty;
-use omnia_sdk::api::{Context, Handler, Reply};
-use omnia_sdk::{Config, Error, HttpRequest, Identity, Message, Publisher, Result};
+use omnia_guest::{Config, Error, HttpRequest, Identity, Message, Publish, Result};
 use serde::Deserialize;
 
 use crate::r9k::TrainUpdate;
@@ -95,9 +96,9 @@ pub struct R9kMessage {
     pub train_update: TrainUpdate,
 }
 
-async fn handle<P>(owner: &str, request: R9kMessage, provider: &P) -> Result<Reply<()>>
+async fn handle<P>(owner: &str, request: R9kMessage, provider: &P) -> Result<()>
 where
-    P: Config + HttpRequest + Identity + Publisher,
+    P: Config + HttpRequest + Identity + Publish,
 {
     // validate message
     let update = request.train_update;
@@ -125,29 +126,29 @@ where
             let mut message = Message::new(&payload);
             message.headers.insert("key".to_string(), external_id.clone());
 
-            Publisher::send(provider, &topic, &message).await?;
+            Publish::send(provider, &topic, &message).await?;
         }
     }
 
-    Ok(Reply::ok(()))
+    Ok(())
 }
 
-impl<P> Handler<P> for R9kMessage
+pub struct R9kMessageOperation;
+
+impl<P> Operation<P> for R9kMessageOperation
 where
-    P: Config + HttpRequest + Identity + Publisher,
+    P: omnia_guest::api::Provider + Config + HttpRequest + Identity + Publish,
 {
     type Error = Error;
-    type Input = Vec<u8>;
+    type Input = R9kMessage;
     type Output = ();
 
-    fn from_input(input: Vec<u8>) -> Result<Self> {
-        quick_xml::de::from_reader(input.as_ref())
-            .context("deserializing R9kMessage")
-            .map_err(Into::into)
-    }
-
-    async fn handle(self, ctx: Context<'_, P>) -> Result<Reply<()>> {
-        handle(ctx.owner, self, ctx.provider).await
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        // Structural validation is the first step; omit only when no checks apply.
+        handle(context.owner, input, context.provider).await
     }
 }
 
@@ -155,7 +156,7 @@ impl TrainUpdate {
     /// Transform the R9K message to SmarTrak events
     async fn into_events<P>(self, owner: &str, provider: &P) -> Result<Vec<SmarTrakEvent>>
     where
-        P: Config + HttpRequest + Identity + Publisher,
+        P: Config + HttpRequest + Identity + Publish,
     {
         let changes = &self.changes;
         let change_type = changes[0].r#type;
@@ -239,7 +240,7 @@ use std::fmt::{Display, Formatter};
 
 use chrono::{NaiveDate, Utc};
 use chrono_tz::Pacific;
-use omnia_sdk::Result;
+use omnia_guest::Result;
 use serde::Deserialize;
 use serde_repr::Deserialize_repr;
 
@@ -286,7 +287,7 @@ pub struct TrainUpdate {
     #[serde(rename(deserialize = "origenActualizaTren"))]
     pub source: String,
 
-    /// Changes to train trip by station.     
+    /// Changes to train trip by station.
     ///
     /// The list includes one entry for the station that the train has arrived
     /// at, with additional entries for stations not yet visited.
@@ -787,10 +788,10 @@ pub struct DecodedSerialData {
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Result, anyhow};
 use bytes::Bytes;
 use http_body_util::Empty;
-use omnia_sdk::{Config, HttpRequest, Identity, Publisher};
+use omnia_guest::{Config, HttpRequest, Identity, Publish};
 use serde::{Deserialize, Serialize};
 
 /// Stop information from GTFS
@@ -808,7 +809,7 @@ pub async fn stop_info<P>(
     _owner: &str, provider: &P, station: u32, is_arrival: bool,
 ) -> Result<Option<StopInfo>>
 where
-    P: Config + HttpRequest + Identity + Publisher,
+    P: Config + HttpRequest + Identity + Publish,
 {
     if !ACTIVE_STATIONS.contains(&station) {
         return Ok(None);

@@ -1,6 +1,6 @@
-# Multi Handler Example: cars
+# Multi-operation Example: cars
 
-An API crate with multiple HTTP handlers for querying external APIs, featuring query string parsing, filter builders, and related data fetching. From the `traffic` project.
+An API crate with multiple HTTP operations for querying external APIs, featuring query string parsing, filter builders, and related data fetching. From the `traffic` project.
 
 ## Crate Structure
 
@@ -37,7 +37,7 @@ mod filter;
 mod handlers;
 
 pub use handlers::*;
-pub use omnia_sdk::{Config, Error, HttpError, HttpRequest, Result};
+pub use omnia_guest::{Config, Error, HttpError, HttpRequest, Result};
 
 pub const MWS_URI: &str = "https://api.myworksites.co.nz/v1/prod";
 ```
@@ -50,10 +50,10 @@ pub const MWS_URI: &str = "https://api.myworksites.co.nz/v1/prod";
 
 ## src/handlers.rs
 
-Barrel module declaring sub-modules and shared types used across handlers.
+Barrel module declaring sub-modules and shared types used across operations.
 
 ```rust
-//! Handlers for processing CARS-related requests.
+//! Operations for processing CARS-related requests.
 
 mod feature;
 mod feature_list;
@@ -103,23 +103,25 @@ impl Default for Geometry {
 ### Key Patterns
 
 - Barrel module with `pub use` for all sub-module exports
-- Shared types (`Worksite`, `Geometry`) that multiple handlers reference
+- Shared types (`Worksite`, `Geometry`) that multiple operations reference
 - `#[serde(rename_all = "camelCase", default)]` for API response types
 - Tagged enum for polymorphic JSON (`#[serde(tag = "type")]`)
 - Manual `Default` impl when automatic derivation is not possible
 
 ## src/handlers/feature.rs
 
-Single feature lookup by ID. Demonstrates `type Input = String` for path parameter handlers.
+Single feature lookup by ID. Demonstrates `type Input = String` for path-parameter operations.
 
 ```rust
 //! Fetches a single CARS feature by worksite ID.
 
+use omnia_guest::api::invoke::CallContext;
+use omnia_guest::api::operation::Operation;
 use anyhow::Context as _;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use http_body_util::Empty;
-use omnia_sdk::{Config, Context, Error, Handler, IntoBody, Reply, Result, bad_gateway};
+use omnia_guest::{Config, Error, Result, bad_gateway};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -166,26 +168,24 @@ pub struct FeatureRequest {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FeatureResponse(pub MwsFeature);
 
-impl IntoBody for FeatureResponse {
-    fn into_body(self) -> anyhow::Result<Vec<u8>> {
-        serde_json::to_vec(&self).context("serializing reply")
-    }
-}
 
-impl<P> Handler<P> for FeatureRequest
+
+pub struct FeatureRequestOperation;
+
+impl<P> Operation<P> for FeatureRequestOperation
 where
-    P: Config + HttpRequest,
+    P: omnia_guest::api::Provider + Config + HttpRequest,
 {
     type Error = Error;
-    type Input = String;      // <-- single path parameter
+    type Input = FeatureRequest;
     type Output = FeatureResponse;
 
-    fn from_input(input: String) -> Result<Self> {
-        Ok(Self { id: input })
-    }
-
-    async fn handle(self, ctx: Context<'_, P>) -> Result<Reply<FeatureResponse>> {
-        Ok(handle(ctx.owner, self, ctx.provider).await?.into())
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        // Structural validation is the first step; omit only when no checks apply.
+        handle(context.owner, input, context.provider).await
     }
 }
 
@@ -228,12 +228,12 @@ pub struct MwsProperties {
 
 ### Key Patterns
 
-- `type Input = String` for single path parameter
-- `IntoBody` implementation for HTTP response types
+- Typed `FeatureRequest` input populated from the path parameter
+- Default JSON projection, with a route-specific HTTP projector only when transport policy differs
 - `From<Worksite> for MwsFeature` conversion with struct update syntax
 - `bad_gateway!` macro for upstream API failures
 - `Error::NotFound` for missing resources
-- `handle()` returns the domain response type; the `Handler` impl wraps it in `Reply` via `.into()`
+- `Operation::call()` returns the plain domain response type; the HTTP router projects it
 
 ## src/handlers/worksite.rs
 
@@ -242,12 +242,13 @@ Worksite lookup with query string parsing and optional related data. Demonstrate
 ```rust
 //! Returns worksite details with optional TMPs.
 
+use omnia_guest::api::invoke::CallContext;
+use omnia_guest::api::operation::Operation;
 use anyhow::Context as _;
 use bytes::Bytes;
 use chrono::NaiveDate;
 use http_body_util::Empty;
-use omnia_sdk::api::{Context, Handler, Reply};
-use omnia_sdk::{Config, IntoBody, bad_gateway};
+use omnia_guest::{Config, bad_gateway};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -321,28 +322,24 @@ pub struct WorksiteRequest {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct WorksiteResponse(pub Worksite);
 
-impl IntoBody for WorksiteResponse {
-    fn into_body(self) -> anyhow::Result<Vec<u8>> {
-        serde_json::to_vec(&self).context("serializing reply")
-    }
-}
 
-impl<P> Handler<P> for WorksiteRequest
+
+pub struct WorksiteRequestOperation;
+
+impl<P> Operation<P> for WorksiteRequestOperation
 where
-    P: Config + HttpRequest,
+    P: omnia_guest::api::Provider + Config + HttpRequest,
 {
     type Error = Error;
-    type Input = Option<String>;   // <-- query string
+    type Input = WorksiteRequest;
     type Output = WorksiteResponse;
 
-    fn from_input(input: Option<String>) -> Result<Self> {
-        let request = serde_urlencoded::from_str(&input.unwrap_or_default())
-            .context("deserializing request")?;
-        Ok(request)
-    }
-
-    async fn handle(self, ctx: Context<'_, P>) -> Result<Reply<WorksiteResponse>> {
-        Ok(handle(ctx.owner, self, ctx.provider).await?.into())
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        // Structural validation is the first step; omit only when no checks apply.
+        handle(context.owner, input, context.provider).await
     }
 }
 
@@ -388,7 +385,7 @@ pub struct Tmp {
 
 ### Key Patterns
 
-- `type Input = Option<String>` for query string handlers
+- `type Input = Option<String>` for query-backed operations
 - `serde_urlencoded::from_str` for parsing URL-encoded parameters
 - Optional related data fetching controlled by a boolean parameter
 - Filter builder methods on the request struct itself

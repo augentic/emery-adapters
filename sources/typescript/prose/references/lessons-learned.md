@@ -338,16 +338,16 @@ All external API calls — including best-effort, secondary, and audit calls —
 
 ---
 
-## 27. IntoBody / Response Serialization Deduplication
+## 27. Transport Projection Ownership
 
 ### What Happened
-Five handlers returned the same response type as another handler but relied on the other handler's file to provide the serialization implementation. A code generator that emitted serialization impls in every handler file produced duplicate implementations, causing compilation errors.
+Several operations returned the same response type, but transport status, headers, and serialization policy were mixed into domain modules. Generation duplicated policy and coupled the domain type to one transport.
 
 ### Why It Happened
-The design listed response types per handler but did not flag which file "owns" the serialization impl. Without this information, a generator cannot know which handler file should contain the impl.
+The design captured domain outputs but did not identify which transport projector owns their wire representation.
 
 ### How We Prevent It
-The design must include a table showing which handlers share response types and which file contains the canonical serialization implementation. Code generators should only emit the impl once.
+The design must identify shared plain outputs and the canonical HTTP, messaging, WebSocket, or command projector for each exposed surface. Domain outputs stay transport-neutral; each projector is emitted once at its router boundary.
 
 ---
 
@@ -369,4 +369,4 @@ The skill's structure directly addresses each:
 - **Assumption** → Clarification checkpoints, ask-don't-guess guardrails (Phase 1-2, guardrails); verify each handler independently
 - **Version drift** → Lock file version capture, dependency version validation (Phase 1.1b, V6)
 - **Scope blindness** → Phase 1 scan includes guest layer; V3 validates entry-point behaviors
-- **Deduplication blindness** → Track shared response types and serialization impl ownership (Phase 3, design)
+- **Deduplication blindness** → Track shared outputs and transport-projector ownership (Phase 3, design)

@@ -1,10 +1,10 @@
 # Subtractive Example: Remove an Endpoint from the Cars Crate
 
-Removing the `GET /feature/{id}` endpoint from the `cars` multi-handler crate because the feature lookup is no longer in the updated artifacts.
+Removing the `GET /feature/{id}` endpoint from the `cars` multi-operation crate because the feature lookup is no longer in the updated artifacts.
 
 ## Starting State
 
-The `cars` multi-handler crate as shown in the [crate-writer multi-handler example](../multi-handler.md):
+The `cars` multi-operation crate as shown in the [crate-writer multi-handler example](../multi-handler.md):
 
 ```
 crates/cars/
@@ -34,7 +34,7 @@ crates/cars/
 
 The updated artifacts no longer contain the `GET /feature/{id}` endpoint in the API Contracts section. All other endpoints remain.
 
-The types `FeatureRequest`, `FeatureResponse`, `MwsFeature`, and `MwsProperties` are used ONLY by the feature handler.
+The types `FeatureRequest`, `FeatureResponse`, `MwsFeature`, and `MwsProperties` are used ONLY by the feature operation.
 
 ## Derived Change Set
 
@@ -44,7 +44,7 @@ The types `FeatureRequest`, `FeatureResponse`, `MwsFeature`, and `MwsProperties`
   2. Remove module declaration and re-export from `src/handlers.rs`
   3. Delete `tests/feature.rs`
   4. Delete `tests/data/feature_response.json` (if no other tests use it)
-  5. Remove guest wiring (route, import, handler function)
+  5. Remove guest wiring (route, import, operation adapter function)
   6. Document in CHANGELOG.md
 
 ## Pre-Removal Safety Check
@@ -59,12 +59,12 @@ Before removing, verify:
 
 ## Applied Changes
 
-### 1. Delete Handler File
+### 1. Delete Operation File
 
 Delete `src/handlers/feature.rs` entirely. This removes:
 
-- `FeatureRequest` struct and its `Handler<P>` impl
-- `FeatureResponse` struct and its `IntoBody` impl
+- `FeatureRequest` struct and its `Operation<P>` impl
+- `FeatureResponse` and any route-specific HTTP projector
 - `MwsFeature` and `MwsProperties` types
 - The standalone `handle` function
 - The `From<Worksite> for MwsFeature` conversion
@@ -127,23 +127,16 @@ Remove the import:
 use cars::{FeatureRequest, FeatureResponse};
 ```
 
-Remove the handler function:
+Remove the typed route registration:
 
 ```rust
-// REMOVE this entire function:
-#[omnia_wasi_otel::instrument]
-async fn feature_handler(Path(id): Path<String>) -> HttpResult<Reply<FeatureResponse>> {
-    FeatureRequest::handler(id)?
-        .provider(&Provider::new())
-        .owner("at")
-        .await
-        .map_err(Into::into)
-}
+// REMOVE:
+.route("/feature/{id}", get::<Feature, Provider>())
 ```
 
 ### 6. Check for Orphaned Dependencies
 
-After removal, check if any dependencies in `Cargo.toml` are now unused. In this case, `serde_json` is still used by other handlers, so no dependency changes are needed.
+After removal, check if any dependencies in `Cargo.toml` are now unused. In this case, `serde_json` is still used by other operations, so no dependency changes are needed.
 
 If `feature.rs` had unique dependencies (e.g., a crate only it imported), remove those from `Cargo.toml`.
 
@@ -167,15 +160,15 @@ If `feature.rs` had unique dependencies (e.g., a crate only it imported), remove
 - `src/handlers/worksite.rs` -- unrelated handler
 - `tests/provider.rs` -- MockProvider still needed by other tests
 - `Cargo.toml` -- all dependencies still in use
-- `.env.example` -- `MWS_API_KEY` still used by other handlers
+- `.env.example` -- `MWS_API_KEY` still used by other operations
 
 ## Verification
 
 - [x] Baseline `cargo test` captured (all existing tests pass)
-- [x] Removed handler file, test file, and fixture
+- [x] Removed operation file, test file, and fixture
 - [x] Barrel module updated (no orphaned `mod` or `pub use`)
 - [x] No remaining references to `FeatureRequest`, `FeatureResponse`, `MwsFeature`, `MwsProperties`
-- [x] Guest wiring updated: route, import, and handler function removed
+- [x] Guest wiring updated: route, import, and operation adapter function removed
 - [x] No orphaned dependencies in `Cargo.toml`
 - [x] No regressions: all remaining tests still pass
 - [x] `cargo check` passes

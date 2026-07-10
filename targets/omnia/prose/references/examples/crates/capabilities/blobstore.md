@@ -1,31 +1,33 @@
-# Blobstore Handler Patterns
+# BlobStore Operation Patterns
 
-This document covers the `Blobstore` trait pattern used for binary object storage operations in Omnia business logic crates. `Blobstore` is backed by `omnia_wasi_blobstore` and covers Azure Blob Storage, AWS S3, and other object storage services.
+This document covers the `BlobStore` trait pattern used for binary object storage operations in Omnia business logic crates. `BlobStore` is backed by `omnia_wasi_blobstore` and covers Azure Blob Storage, AWS S3, and other object storage services.
 
-**Demonstrates:** `Blobstore` and `Config` capability traits
+**Demonstrates:** `BlobStore` and `Config` capability traits
 
 ## Overview
 
-The `Blobstore` trait provides operations for storing, retrieving, and managing binary objects (blobs) organized in containers. Use `Blobstore` for file uploads/downloads, report storage, image/media assets, or any binary content addressed by key.
+The `BlobStore` trait provides operations for storing, retrieving, and managing binary objects (blobs) organized in containers. Use `BlobStore` for file uploads/downloads, report storage, image/media assets, or any binary content addressed by key.
 
 ## Trait Definition
 
 ```rust
-pub trait Blobstore: Send + Sync {
-    fn get_data(&self, container: &str, name: &str, start: u64, end: u64)
+pub trait BlobStore: Send + Sync {
+    fn get(&self, container: &str, name: &str)
         -> impl Future<Output = Result<Option<Vec<u8>>>> + Send;
-    fn write_data(&self, container: &str, name: &str, data: &[u8])
+    fn put(&self, container: &str, name: &str, data: &[u8])
         -> impl Future<Output = Result<()>> + Send;
-    fn delete_object(&self, container: &str, name: &str)
+    fn delete(&self, container: &str, name: &str)
         -> impl Future<Output = Result<()>> + Send;
-    fn has_object(&self, container: &str, name: &str)
+    fn has(&self, container: &str, name: &str)
         -> impl Future<Output = Result<bool>> + Send;
-    fn list_objects(&self, container: &str)
+    fn list(&self, container: &str)
         -> impl Future<Output = Result<Vec<String>>> + Send;
+    fn get_range(&self, container: &str, name: &str, start: u64, end: u64)
+        -> impl Future<Output = Result<Vec<u8>>> + Send;
 }
 ```
 
-For guest code, an empty `impl Blobstore for Provider {}` is sufficient to use the default implementations that connect to WASI Blobstore resources.
+For guest code, an empty `impl BlobStore for Provider {}` is sufficient to use the default implementations that connect to WASI BlobStore resources.
 
 ## CRUD Patterns
 
@@ -33,13 +35,13 @@ For guest code, an empty `impl Blobstore for Provider {}` is sufficient to use t
 
 ```rust
 let data = serde_json::to_vec(&report).context("serializing report")?;
-Blobstore::write_data(provider, &container, &key, &data).await?;
+BlobStore::put(provider, &container, &key, &data).await?;
 ```
 
 ### Read a Blob (full)
 
 ```rust
-let bytes = Blobstore::get_data(provider, &container, &key, 0, 0)
+let bytes = BlobStore::get(provider, &container, &key)
     .await?
     .ok_or_else(|| bad_request!("blob not found: {key}"))?;
 let report: Report = serde_json::from_slice(&bytes)
@@ -49,7 +51,7 @@ let report: Report = serde_json::from_slice(&bytes)
 ### Check Existence
 
 ```rust
-if Blobstore::has_object(provider, &container, &key).await? {
+if BlobStore::has(provider, &container, &key).await? {
     tracing::info!("blob already exists: {key}");
 }
 ```
@@ -57,23 +59,25 @@ if Blobstore::has_object(provider, &container, &key).await? {
 ### Delete a Blob
 
 ```rust
-Blobstore::delete_object(provider, &container, &key).await?;
+BlobStore::delete(provider, &container, &key).await?;
 ```
 
 ### List Objects in a Container
 
 ```rust
-let keys = Blobstore::list_objects(provider, &container).await?;
+let keys = BlobStore::list(provider, &container).await?;
 tracing::info!("container has {} objects", keys.len());
 ```
 
-## Complete Handler Examples
+## Complete Operation Examples
 
-### Upload Blob Handler
+### Upload Blob Operation
 
 ```rust
+use omnia_guest::api::invoke::CallContext;
+use omnia_guest::api::operation::Operation;
 use anyhow::Context as _;
-use omnia_sdk::{bad_request, Blobstore, Config, Context, Error, Handler, Reply, Result};
+use omnia_guest::{bad_request, BlobStore, Config, Error, Result};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize)]
@@ -88,7 +92,7 @@ pub struct UploadResponse {
     pub key: String,
 }
 
-async fn upload_blob<P: Config + Blobstore>(
+async fn upload_blob<P: Config + BlobStore>(
     _owner: &str, provider: &P, req: UploadRequest,
 ) -> Result<UploadResponse> {
     if req.name.trim().is_empty() {
@@ -102,67 +106,73 @@ async fn upload_blob<P: Config + Blobstore>(
         .await
         .context("getting BLOB_CONTAINER")?;
 
-    Blobstore::write_data(provider, &container, &req.name, &req.data)
+    BlobStore::put(provider, &container, &req.name, &req.data)
         .await
         .context("writing blob")?;
 
     Ok(UploadResponse { key: req.name })
 }
 
-impl<P: Config + Blobstore> Handler<P> for UploadRequest {
+pub struct UploadRequestOperation;
+
+impl<P: omnia_guest::api::Provider + Config + BlobStore> Operation<P> for UploadRequestOperation
+{
     type Error = Error;
-    type Input = Vec<u8>;
+    type Input = UploadRequest;
     type Output = UploadResponse;
 
-    async fn handle(self, ctx: Context<'_, P>) -> Result<Reply<UploadResponse>> {
-        Ok(upload_blob(ctx.owner, ctx.provider, self).await?.into())
-    }
-
-    fn from_input(input: Self::Input) -> Result<Self> {
-        serde_json::from_slice(&input)
-            .context("deserializing UploadRequest")
-            .map_err(Into::into)
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        // Structural validation is the first step; omit only when no checks apply.
+        upload_blob(context.owner, context.provider, input).await
     }
 }
 ```
 
-### Download Blob Handler
+### Download Blob Operation
 
 ```rust
+use omnia_guest::api::invoke::CallContext;
+use omnia_guest::api::operation::Operation;
 #[derive(Clone, Debug, Deserialize)]
 pub struct DownloadRequest {
     pub name: String,
 }
 
-async fn download_blob<P: Config + Blobstore>(
+async fn download_blob<P: Config + BlobStore>(
     _owner: &str, provider: &P, req: DownloadRequest,
 ) -> Result<Vec<u8>> {
     let container = Config::get(provider, "BLOB_CONTAINER")
         .await
         .context("getting BLOB_CONTAINER")?;
 
-    Blobstore::get_data(provider, &container, &req.name, 0, 0)
+    BlobStore::get(provider, &container, &req.name)
         .await
         .context("reading blob")?
-        .ok_or_else(|| bad_request!("blob_not_found", "Blob not found: {}", req.name))
+        .ok_or_else(|| bad_request!("Blob not found: {}", req.name))
 }
 
-impl<P: Config + Blobstore> Handler<P> for DownloadRequest {
+pub struct DownloadRequestOperation;
+
+impl<P: omnia_guest::api::Provider + Config + BlobStore> Operation<P> for DownloadRequestOperation
+{
     type Error = Error;
-    type Input = String;
+    type Input = DownloadRequest;
     type Output = Vec<u8>;
 
-    async fn handle(self, ctx: Context<'_, P>) -> Result<Reply<Vec<u8>>> {
-        Ok(download_blob(ctx.owner, ctx.provider, self).await?.into())
-    }
-
-    fn from_input(input: Self::Input) -> Result<Self> {
-        Ok(Self { name: input })
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        // Structural validation is the first step; omit only when no checks apply.
+        download_blob(context.owner, context.provider, input).await
     }
 }
 ```
 
-### List and Cleanup Handler
+### List and Cleanup Operation
 
 ```rust
 #[derive(Clone, Debug, Serialize)]
@@ -171,14 +181,14 @@ pub struct ListResponse {
     pub count: usize,
 }
 
-async fn list_blobs<P: Config + Blobstore>(
+async fn list_blobs<P: Config + BlobStore>(
     _owner: &str, provider: &P,
 ) -> Result<ListResponse> {
     let container = Config::get(provider, "BLOB_CONTAINER")
         .await
         .context("getting BLOB_CONTAINER")?;
 
-    let objects = Blobstore::list_objects(provider, &container)
+    let objects = BlobStore::list(provider, &container)
         .await
         .context("listing blobs")?;
     let count = objects.len();
@@ -190,11 +200,11 @@ async fn list_blobs<P: Config + Blobstore>(
 ## Required Imports
 
 ```rust
-// Blobstore trait
-use omnia_sdk::Blobstore;
+// BlobStore trait
+use omnia_guest::BlobStore;
 
 // SDK types
-use omnia_sdk::{bad_request, Config, Context, Error, Handler, Reply, Result};
+use omnia_guest::{bad_request, Config, Error, Result};
 
 // Other common imports
 use anyhow::Context as _;
@@ -203,18 +213,18 @@ use serde::{Deserialize, Serialize};
 
 ## Key Rules
 
-1. **Target Architecture**: Blobstore handlers are designed for `wasm32-wasip2` only
-2. **Range reads**: Pass `0, 0` for full reads; use `start` and `end` byte offsets for partial reads
+1. **Target Architecture**: BlobStore operations are designed for `wasm32-wasip2` only
+2. **Range reads**: Use `get` for full reads and `get_range` with inclusive `start` and `end` byte offsets for partial reads
 3. **Config for container name**: Get container/bucket name from `Config` trait
 4. **Validation first**: Validate input (non-empty name, non-empty data) before performing blob operations
-5. **Error mapping**: Map blob errors to `omnia_sdk::Error` with context
+5. **Error mapping**: Map blob errors to `omnia_guest::Error` with context
 6. **Binary data**: Blob `data` is `&[u8]` / `Vec<u8>` — no serialization format is assumed; use `serde_json::to_vec` for JSON, raw bytes for images/files
 
 ## Choosing Between Storage Traits
 
 | Data Shape | Trait | When |
 |------------|-------|------|
-| Binary blobs by key | `Blobstore` | Files, images, large payloads, opaque binary data |
+| Binary blobs by key | `BlobStore` | Files, images, large payloads, opaque binary data |
 | JSON documents by key/query | `DocumentStore` | Azure Table Storage, Cosmos DB documents, MongoDB, flexible schema |
 | Tabular rows, SQL queries | `TableStore` | Relational data, SQL CRUD |
 | Small key-value cache entries | `StateStore` | Redis cache, session state, TTL-based expiry |

@@ -32,7 +32,7 @@ Before completing, verify all items from the [Specify Artifact Validation Checkl
 - [ ] **Unconditional serialization skips**: Unconditional skip attributes distinguished from conditional ones; both documented explicitly
 - [ ] **Collection field defaults**: Each collection/array field's default-when-absent behavior checked individually (not assumed universal)
 - [ ] **Guest/entry-point behaviors**: Middleware, error mapping, body injection, parameter sourcing documented
-- [ ] **Response type ownership**: Deduplication table showing which module owns canonical serialization impl for shared types
+- [ ] **Transport projection ownership**: Deduplication table showing which HTTP/messaging/WebSocket/command boundary owns projection for shared plain outputs
 - [ ] **Dependency versions**: Lock file versions captured; manifest specifiers used as primary in Dependencies section
 
 ## Error handling

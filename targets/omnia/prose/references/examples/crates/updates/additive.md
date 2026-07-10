@@ -1,6 +1,6 @@
-# Additive Example: Add a New Handler to the Cars Crate
+# Additive Example: Add a New Operation to the Cars Crate
 
-Adding a `POST /worksite` endpoint to the existing `cars` multi-handler crate. The crate already has `GET /feature`, `GET /features`, `GET /layout`, and `GET /worksite` handlers.
+Adding a `POST /worksite` endpoint to the existing `cars` multi-operation crate. The crate already has `GET /feature`, `GET /features`, `GET /layout`, and `GET /worksite` operations.
 
 ## Starting State
 
@@ -10,7 +10,7 @@ crates/cars/
 ├── src/
 │   ├── lib.rs
 │   ├── filter.rs
-│   ├── handlers.rs         # barrel: feature, feature_list, layout, worksite
+│   ├── operations.rs         # barrel: feature, feature_list, layout, worksite
 │   └── handlers/
 │       ├── feature.rs
 │       ├── feature_list.rs
@@ -54,25 +54,26 @@ The updated artifacts add a new endpoint in the API Contracts section:
 
 - **Category**: Additive
 - **Changes**:
-  1. New handler file `src/handlers/create_worksite.rs`
-  2. New type `CreateWorksiteInput` in handler file
-  3. New barrel entry in `src/handlers.rs`
+  1. New operation file `src/handlers/create_worksite.rs`
+  2. New type `CreateWorksiteInput` in the operation file
+  3. New barrel entry in `src/operations.rs`
   4. New test file `tests/create_worksite.rs`
   5. MockProvider update (if needed -- in this case `Config + HttpRequest` already implemented)
   6. Guest wiring: new route
 
 ## Applied Changes
 
-### 1. New Handler (`src/handlers/create_worksite.rs`)
+### 1. New Operation (`src/handlers/create_worksite.rs`)
 
 ```rust
 //! Creates a new worksite via the MWS API.
 
+use omnia_guest::api::invoke::CallContext;
+use omnia_guest::api::operation::Operation;
 use anyhow::Context as _;
 use bytes::Bytes;
 use http_body_util::Full;
-use omnia_sdk::api::{Context, Handler, Reply};
-use omnia_sdk::{Config, Error, IntoBody, Result, bad_gateway};
+use omnia_guest::{Config, Error, Result, bad_gateway};
 use serde::{Deserialize, Serialize};
 
 use crate::handlers::Worksite;
@@ -90,11 +91,7 @@ pub struct CreateWorksiteInput {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct CreateWorksiteResponse(pub Worksite);
 
-impl IntoBody for CreateWorksiteResponse {
-    fn into_body(self) -> anyhow::Result<Vec<u8>> {
-        serde_json::to_vec(&self).context("serializing reply")
-    }
-}
+
 
 async fn handle<P>(
     _owner: &str,
@@ -126,33 +123,27 @@ where
     Ok(CreateWorksiteResponse(worksite))
 }
 
-impl<P> Handler<P> for CreateWorksiteInput
+pub struct CreateWorksiteInputOperation;
+
+impl<P> Operation<P> for CreateWorksiteInputOperation
 where
-    P: Config + HttpRequest,
+    P: omnia_guest::api::Provider + Config + HttpRequest,
 {
     type Error = Error;
-    type Input = Vec<u8>;
+    type Input = CreateWorksiteInput;
     type Output = CreateWorksiteResponse;
 
-    fn from_input(input: Vec<u8>) -> Result<Self> {
-        let parsed: Self =
-            serde_json::from_slice(&input).context("deserializing CreateWorksiteInput")?;
-        if parsed.worksite_code.is_empty() {
-            return Err(Error::BadRequest {
-                code: "invalid_input".to_string(),
-                description: "worksite_code must not be empty".to_string(),
-            });
-        }
-        Ok(parsed)
-    }
-
-    async fn handle(self, ctx: Context<'_, P>) -> Result<Reply<CreateWorksiteResponse>> {
-        Ok(handle(ctx.owner, self, ctx.provider).await?.into())
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        // Structural validation is the first step; omit only when no checks apply.
+        handle(context.owner, input, context.provider).await
     }
 }
 ```
 
-### 2. Update Barrel (`src/handlers.rs`)
+### 2. Update Barrel (`src/operations.rs`)
 
 Add module declaration and re-export:
 
@@ -176,13 +167,14 @@ pub use worksite::*;
 mod provider;
 
 use cars::CreateWorksiteInput;
-use omnia_sdk::api::Client;
+use omnia_guest::api::invocation::Invocation;
+use omnia_guest::api::invoke::Invoker;
 use provider::MockProvider;
 
 #[tokio::test]
 async fn create_worksite_happy_path() {
     let provider = MockProvider::new();
-    let client = Client::new("owner").provider(provider);
+    let invoker = Invoker::new("owner", provider);
 
     let input = CreateWorksiteInput {
         worksite_code: "WS-001".to_string(),
@@ -190,14 +182,14 @@ async fn create_worksite_happy_path() {
         project_name: "Test Project".to_string(),
     };
 
-    let response = client.request(input).await.expect("should succeed");
-    assert_eq!(response.status, 200);
+    let output = invoker.invoke::<CreateWorksiteInputOperation>(Invocation::new(input)).await.expect("should succeed");
+    assert_eq!(output.0.worksite_code, "WS-001");
 }
 
 #[tokio::test]
 async fn create_worksite_empty_code_rejected() {
     let provider = MockProvider::new();
-    let client = Client::new("owner").provider(provider);
+    let invoker = Invoker::new("owner", provider);
 
     let input = CreateWorksiteInput {
         worksite_code: String::new(),
@@ -205,7 +197,7 @@ async fn create_worksite_empty_code_rejected() {
         project_name: "Test Project".to_string(),
     };
 
-    let response = client.request(input).await;
+    let response = invoker.invoke::<CreateWorksiteInputOperation>(Invocation::new(input)).await;
     assert!(response.is_err());
 }
 ```
@@ -216,20 +208,10 @@ Append to `src/lib.rs`:
 
 ```rust
 // New import
-use cars::CreateWorksiteInput;
+use cars::CreateWorksiteInputOperation;
 
-// New route (appended to existing router)
-.route("/worksite", post(create_worksite_handler))
-
-// New handler function
-#[omnia_wasi_otel::instrument]
-async fn create_worksite_handler(body: Vec<u8>) -> HttpResult<Reply<CreateWorksiteResponse>> {
-    CreateWorksiteInput::handler(body)?
-        .provider(&Provider::new())
-        .owner("at")
-        .await
-        .map_err(Into::into)
-}
+// New typed route (appended to the existing Omnia HTTP router)
+.route("/worksite", post::<CreateWorksiteInputOperation, Provider>())
 ```
 
 ### 5. CHANGELOG.md Entry
@@ -238,18 +220,18 @@ async fn create_worksite_handler(body: Vec<u8>) -> HttpResult<Reply<CreateWorksi
 ## [Update: 2026-03-01]
 
 ### Added
-- New handler `POST /worksite` (CreateWorksiteInput) for creating worksites via MWS API
+- New operation `POST /worksite` (CreateWorksiteInput) for creating worksites via MWS API
 - New types: `CreateWorksiteInput`, `CreateWorksiteResponse`
 ```
 
 ## Verification
 
 - [x] Baseline `cargo test` captured (all existing tests pass)
-- [x] New handler follows Handler<P> pattern with delegation
-- [x] `from_input` validates worksite_code not empty
+- [x] New operation follows the `Operation<P>` pattern with delegation
+- [x] `Operation::call` validates `worksite_code` before loading context
 - [x] Provider bounds match existing pattern (Config + HttpRequest)
 - [x] MockProvider already implements needed traits (no update required)
-- [x] `IntoBody` implemented for response type
+- [x] HTTP route uses the default JSON projector
 - [x] Tests cover happy path and validation error
 - [x] Guest wiring appended (not reordered)
 - [x] CHANGELOG.md updated

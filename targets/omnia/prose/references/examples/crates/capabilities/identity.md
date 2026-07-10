@@ -10,14 +10,16 @@ The `Identity` trait fetches access tokens from identity providers (e.g., Azure 
 
 ## Basic Authentication Flow
 
-A handler that fetches data from an authenticated API:
+An operation that fetches data from an authenticated API:
 
 ```rust
+use omnia_guest::api::invoke::CallContext;
+use omnia_guest::api::operation::Operation;
 use anyhow::Context as _;
 use bytes::Bytes;
 use http_body_util::Empty;
-use omnia_sdk::{
-    Config, Context, Error, Handler, HttpRequest, Identity, Reply, Result,
+use omnia_guest::{
+    Config, Error, HttpRequest, Identity, Result,
     bad_gateway, server_error,
 };
 use serde::{Deserialize, Serialize};
@@ -71,19 +73,20 @@ where
     Ok(adapter)
 }
 
-impl<P: Config + Identity + HttpRequest> Handler<P> for UserProfileRequest {
+pub struct UserProfileRequestOperation;
+
+impl<P: omnia_guest::api::Provider + Config + Identity + HttpRequest> Operation<P> for UserProfileRequestOperation
+{
     type Error = Error;
-    type Input = Vec<u8>;
+    type Input = UserProfileRequest;
     type Output = UserProfileResponse;
 
-    async fn handle(self, ctx: Context<'_, P>) -> Result<Reply<UserProfileResponse>> {
-        Ok(fetch_user_adapter(ctx.owner, ctx.provider, self).await?.into())
-    }
-
-    fn from_input(input: Self::Input) -> Result<Self> {
-        serde_json::from_slice(&input)
-            .context("deserializing UserProfileRequest")
-            .map_err(Into::into)
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        // Structural validation is the first step; omit only when no checks apply.
+        fetch_user_adapter(context.owner, context.provider, input).await
     }
 }
 ```
@@ -124,7 +127,7 @@ where
 
 ## Multiple Authenticated Calls
 
-When a handler makes multiple authenticated calls, fetch the token once and reuse it:
+When an operation makes multiple authenticated calls, fetch the token once and reuse it:
 
 ```rust
 async fn sync_data<P>(provider: &P, ids: &[String]) -> Result<Vec<SyncResult>>
@@ -193,8 +196,8 @@ where
 
 1. **Config -> Identity -> HttpRequest** -- always follow this sequence for authenticated calls
 2. **Read identity name from Config** -- never hardcode identity strings; use `Config::get(provider, "AZURE_IDENTITY")`
-3. **Include Identity in bounds** -- if ANY HTTP call requires auth, the handler must have `P: Config + Identity + HttpRequest`
-4. **Reuse tokens within a handler** -- call `Identity::access_token` once and reuse the token for multiple requests within the same handler invocation
+3. **Include Identity in bounds** -- if ANY HTTP call requires auth, the operation must have `P: Config + Identity + HttpRequest`
+4. **Reuse tokens within an operation** -- call `Identity::access_token` once and reuse the token for multiple requests within the same operation invocation
 5. **Bearer format** -- always use `format!("Bearer {token}")` in the `Authorization` header
 
 ```bash
@@ -212,5 +215,5 @@ API_URL=https://api.example.com
 - See [../../references/capabilities.md](../../../capabilities.md) for the full `Identity` trait definition
 - See [http-request.md](http-request.md) for basic HTTP patterns
 - See [publisher.md](publisher.md) for the publishing pattern
-- See [../../references/sdk-api.md](../../../sdk-api.md) for the Handler trait pattern
+- See [../../references/sdk-api.md](../../../sdk-api.md) for the `Operation<P>` trait pattern
 - See [../../references/providers.md](../../../providers/README.md) for provider bound composition

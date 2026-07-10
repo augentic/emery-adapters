@@ -14,14 +14,14 @@ use reqwest::Client;
 async fn fetch_data(url: &str) -> Result<String> {
     let client = Client::new();
     let response = client.get(url).send().await?;
-    Ok(response.text().await?)
+    response.text().await
 }
 ```
 
 **Right:**
 
 ```rust
-use omnia_sdk::{HttpRequest, Result};
+use omnia_guest::{HttpRequest, Result};
 
 async fn fetch_data<P: HttpRequest>(provider: &P, url: &str) -> Result<Vec<u8>> {
     let request = http::Request::builder()
@@ -51,7 +51,7 @@ fn get_api_url() -> String {
 **Right:**
 
 ```rust
-use omnia_sdk::{Config, Result};
+use omnia_guest::{Config, Result};
 
 async fn get_api_url<P: Config>(provider: &P) -> Result<String> {
     Config::get(provider, "API_URL").await
@@ -60,62 +60,66 @@ async fn get_api_url<P: Config>(provider: &P) -> Result<String> {
 
 **Why:** `std::env` is not available in wasm32. Even if it compiled, environment variables are not how WASI components receive configuration. The `Config` trait provides the host-managed configuration store.
 
-## 3. Using typed `Input` instead of `Vec<u8>` with deserialization
+## 3. Deserializing transport bytes in the operation
 
-The Omnia runtime delivers raw bytes to handlers. The `from_input` method must deserialize from `Vec<u8>`.
-
-**Wrong:**
-
-```rust
-impl<P: Config> Handler<P> for MyRequest {
-    type Input = MyRequest;  // Typed input — bypasses deserialization
-    type Output = MyResponse;
-    type Error = omnia_sdk::Error;
-
-    fn from_input(input: Self::Input) -> Result<Self> {
-        Ok(input)  // Identity — no actual parsing
-    }
-}
-```
+Typed HTTP and messaging routers decode wire input before invocation. Operations receive domain DTOs.
 
 **Right:**
 
 ```rust
-use anyhow::Context as _;
+use omnia_guest::api::invoke::CallContext;
+use omnia_guest::api::operation::Operation;
+pub struct MyRequestOperation;
 
-impl<P: Config> Handler<P> for MyRequest {
-    type Input = Vec<u8>;  // Raw bytes from runtime
+impl<P: omnia_guest::api::Provider + Config> Operation<P> for MyRequestOperation {
+    type Error = omnia_guest::Error;
+    type Input = MyRequest;
     type Output = MyResponse;
-    type Error = omnia_sdk::Error;
 
-    fn from_input(input: Self::Input) -> Result<Self> {
-        serde_json::from_slice(&input)
-            .context("deserializing MyRequest")
-            .map_err(Into::into)
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        // Structural validation is the first step; omit only when no checks apply.
+        handle(context.owner, input, context.provider).await
     }
 }
 ```
 
-**Why:** The Omnia runtime dispatches raw byte payloads to handlers. Using a typed `Input` means the handler cannot be invoked by the runtime. Always deserialize from `Vec<u8>` in `from_input`.
+Use the default JSON decoder or a custom transport decoder. Scheduled/cron/health-check operations may use `Input = ()`.
 
-**Exception:** Scheduled/cron/health-check handlers that receive no payload use `type Input = ()`.
+## 4. Missing `Identity` in operation bounds when auth is needed
 
-## 4. Missing `Identity` in handler bounds when auth is needed
-
-When any HTTP call requires an authentication token, the handler must include `Identity` in its provider bounds and follow the Config → Identity → HttpRequest sequence.
+When any HTTP call requires an authentication token, the operation must include `Identity` in its provider bounds and follow the Config → Identity → HttpRequest sequence.
 
 **Wrong:**
 
 ```rust
-impl<P: Config + HttpRequest> Handler<P> for AuthenticatedRequest {
-    async fn handle(self, ctx: Context<'_, P>) -> Result<Reply<Self::Output>> {
+use omnia_guest::api::invoke::CallContext;
+use omnia_guest::api::operation::Operation;
+pub struct AuthenticatedRequestOperation;
+
+impl<P: omnia_guest::api::Provider + Config + HttpRequest> Operation<P> for AuthenticatedRequestOperation
+{
+    type Error = Error;
+    type Input = AuthenticatedRequest;
+    type Output = ();
+
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        // Structural validation is the first step; omit only when no checks apply.
         // No way to get a token — Identity is not in bounds!
         let request = http::Request::builder()
             .header("Authorization", "Bearer ???")
             .body(http_body_util::Empty::<bytes::Bytes>::new())?;
 
-        let response = HttpRequest::fetch(ctx.provider, request).await?;
+        let response = HttpRequest::fetch(context.provider, request).await?;
         // ...
+        let _ = input;
+        let _ = response;
+        Ok(())
     }
 }
 ```
@@ -123,17 +127,33 @@ impl<P: Config + HttpRequest> Handler<P> for AuthenticatedRequest {
 **Right:**
 
 ```rust
-impl<P: Config + HttpRequest + Identity> Handler<P> for AuthenticatedRequest {
-    async fn handle(self, ctx: Context<'_, P>) -> Result<Reply<Self::Output>> {
-        let identity = Config::get(ctx.provider, "AZURE_IDENTITY").await?;
-        let token = Identity::access_token(ctx.provider, identity).await?;
+use omnia_guest::api::invoke::CallContext;
+use omnia_guest::api::operation::Operation;
+pub struct AuthenticatedRequestOperation;
+
+impl<P: omnia_guest::api::Provider + Config + HttpRequest + Identity> Operation<P> for AuthenticatedRequestOperation
+{
+    type Error = Error;
+    type Input = AuthenticatedRequest;
+    type Output = ();
+
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        // Structural validation is the first step; omit only when no checks apply.
+        let identity = Config::get(context.provider, "AZURE_IDENTITY").await?;
+        let token = Identity::access_token(context.provider, identity).await?;
 
         let request = http::Request::builder()
             .header("Authorization", format!("Bearer {token}"))
             .body(http_body_util::Empty::<bytes::Bytes>::new())?;
 
-        let response = HttpRequest::fetch(ctx.provider, request).await?;
+        let response = HttpRequest::fetch(context.provider, request).await?;
         // ...
+        let _ = input;
+        let _ = response;
+        Ok(())
     }
 }
 ```
@@ -159,7 +179,7 @@ fn get_cached(key: &str) -> Option<&String> {
 **Right:**
 
 ```rust
-use omnia_sdk::{StateStore, Result};
+use omnia_guest::{StateStore, Result};
 
 async fn get_cached<P: StateStore>(provider: &P, key: &str) -> Result<Option<Vec<u8>>> {
     StateStore::get(provider, key).await
@@ -246,104 +266,63 @@ Publish::send(provider, &topic, &message).await?;
 
 **Why:** Without a partition key, Kafka distributes messages across partitions arbitrarily. Downstream consumers that depend on ordering (e.g., processing all events for a vehicle in order) will see interleaved messages. Always set the key when the artifacts document one.
 
-## 8. Temporal validation in `from_input()`
+## 8. Contextual validation before context load
 
-Validation that compares against current time must NOT be in `from_input()` because it runs at parse time, not invocation time.
+Validation that compares against time or provider state must not run in the structural prelude.
 
 **Wrong:**
 
 ```rust
-fn from_input(input: Self::Input) -> Result<Self> {
-    let msg: Self = quick_xml::de::from_reader(input.as_ref())
-        .context("parsing XML")
-        .map_err(Into::into)?;
-
-    // WRONG: Uses Utc::now() — will compute delay at PARSE time
-    let delay_secs = compute_delay(&msg.created_date)?;
+async fn call(input: Self::Input, context: CallContext<'_, P>) -> Result<Self::Output> {
+    // WRONG: contextual validation runs before configuration/state is loaded.
+    let delay_secs = compute_delay(&input.created_date, Utc::now())?;
     if delay_secs > MAX_DELAY_SECS {
         return Err(R9kError::BadTime("outdated".into()).into());
     }
-
-    Ok(msg)
+    handle(context.owner, input, context.provider).await
 }
 ```
 
 **Right:**
 
 ```rust
-fn from_input(input: Self::Input) -> Result<Self> {
-    quick_xml::de::from_reader(input.as_ref())
-        .context("parsing XML")
-        .map_err(Into::into)
-    // NO time-based validation here
-}
-
-impl R9kMessage {
-    fn validate(&self) -> Result<()> {
-        // Temporal validation HERE — runs at invocation time
-        let delay_secs = compute_delay(&self.created_date)?;
-        if delay_secs > MAX_DELAY_SECS {
-            return Err(R9kError::BadTime(format!("outdated by {delay_secs}s")).into());
-        }
-        Ok(())
-    }
-}
-
-async fn handle<P>(_owner: &str, request: R9kMessage, provider: &P) -> Result<Reply<()>>
-where
-    P: Config + HttpRequest + Publish,
-{
-    request.validate()?; // Time validation here
-    // ... business logic ...
+async fn call(input: Self::Input, context: CallContext<'_, P>) -> Result<Self::Output> {
+    // Structural validation is the first step; omit only when no checks apply.
+    let clock_policy = load_clock_policy(context.provider).await?;
+    input.validate_contextual(Utc::now(), &clock_policy)?;
+    handle(context.owner, input, context.provider).await
 }
 ```
 
-**Why:** Message replay and test fixtures cannot shift time in `from_input()`. Validation using `Utc::now()` must run in `handle()`.
+**Why:** Structural validation is deterministic. Time/state-dependent checks run only after their context is loaded and remain controllable in replay tests.
 
-## 9. Handler Input Type Confusion
+## 9. Transport-coupled operation input
 
-The Omnia runtime delivers raw bytes. Using typed `Input` bypasses deserialization and causes type errors.
-
-**Wrong:**
-
-```rust
-impl<P: Config> Handler<P> for R9kMessage {
-    type Input = R9kMessage;  // Typed input
-    type Output = ();
-    type Error = Error;
-
-    fn from_input(input: Self::Input) -> Result<Self> {
-        Ok(input)  // Identity function — no parsing
-    }
-}
-```
-
-**Errors you'll see:**
-
-```text
-the trait bound `Vec<u8>: omnia_sdk::Handler<MockProvider>` is not satisfied
-the trait `omnia_sdk::Handler<MockProvider>` is not implemented for `Vec<u8>`
-```
+Do not use raw delivery bytes as an operation input or deserialize inside `Operation::call`. Typed routers own wire decoding.
 
 **Right:**
 
 ```rust
-impl<P: Config> Handler<P> for R9kMessage {
-    type Input = Vec<u8>;  // Raw bytes from runtime
-    type Output = ();
-    type Error = Error;
+use omnia_guest::api::invoke::CallContext;
+use omnia_guest::api::operation::Operation;
+pub struct R9kMessageOperation;
 
-    fn from_input(input: Self::Input) -> Result<Self> {
-        quick_xml::de::from_reader(input.as_ref())
-            .context("deserializing R9K message")
-            .map_err(Into::into)
+impl<P: omnia_guest::api::Provider + Config> Operation<P> for R9kMessageOperation {
+    type Error = Error;
+    type Input = R9kMessage;
+    type Output = ();
+
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        // Structural validation is the first step; omit only when no checks apply.
+        handle(context.owner, input, context.provider).await
     }
 }
 ```
 
-**Why:** The Omnia runtime dispatches raw byte payloads to handlers. Using a typed `Input` means the handler cannot be invoked by the runtime. Always deserialize from `Vec<u8>` in `from_input`.
-
-**Exception:** Scheduled/cron/health-check handlers use `type Input = ()` because they receive no payload.
+Register `consume::<R9kMessageOperation>()` for messaging JSON or a custom decoder for another format. Scheduled/cron/health-check operations may use `Input = ()`.
 
 ## 10. Using `HttpRequest` for Azure Table Storage instead of `DocumentStore`
 
@@ -352,7 +331,7 @@ When the source code or artifacts describe access to Azure Table Storage (via `@
 **Wrong:**
 
 ```rust
-use omnia_sdk::{Config, HttpRequest, Result};
+use omnia_guest::{Config, HttpRequest, Result};
 
 async fn fetch_fleet_data<P>(provider: &P) -> Result<Vec<RawVehicle>>
 where
@@ -382,8 +361,8 @@ where
 
 ```rust
 use anyhow::Context as _;
-use omnia_sdk::{bad_gateway, Config, DocumentStore, Result};
-use omnia_sdk::document_store::QueryOptions;
+use omnia_guest::{bad_gateway, Config, DocumentStore, Result};
+use omnia_guest::document_store::QueryOptions;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -437,8 +416,8 @@ async fn find_orders(connection_str: &str) -> anyhow::Result<Vec<Order>> {
 
 ```rust
 use anyhow::Context as _;
-use omnia_sdk::{bad_gateway, Config, DocumentStore, Result};
-use omnia_sdk::document_store::{Filter, QueryOptions};
+use omnia_guest::{bad_gateway, Config, DocumentStore, Result};
+use omnia_guest::document_store::{Filter, QueryOptions};
 
 async fn find_orders<P>(provider: &P) -> Result<Vec<Order>>
 where
@@ -463,9 +442,9 @@ where
 
 **Why:** The `mongodb` crate requires native TCP connections and TLS, which are unavailable in WASM. The `DocumentStore` trait provides the same document-oriented CRUD through the Omnia runtime's managed adapter.
 
-## 12. Using blob storage SDKs directly instead of `Blobstore`
+## 12. Using blob storage SDKs directly instead of `BlobStore`
 
-When the source code uses `azure_storage_blobs` or `aws-sdk-s3` for object storage, use `Blobstore` — not a direct SDK. Both crates are forbidden in WASM builds.
+When the source code uses `azure_storage_blobs` or `aws-sdk-s3` for object storage, use `BlobStore` — not a direct SDK. Both crates are forbidden in WASM builds.
 
 **Wrong:**
 
@@ -483,19 +462,19 @@ async fn download_report(account: &str, container: &str, blob: &str) -> anyhow::
 **Right:**
 
 ```rust
-use omnia_sdk::{bad_gateway, bad_request, Blobstore, Config, Result};
+use omnia_guest::{bad_gateway, bad_request, BlobStore, Config, Result};
 
 async fn download_report<P>(provider: &P) -> Result<Vec<u8>>
 where
-    P: Config + Blobstore,
+    P: Config + BlobStore,
 {
     let container = Config::get(provider, "REPORTS_CONTAINER").await?;
     let blob_name = "monthly-report.pdf";
-    Blobstore::get_data(provider, &container, blob_name, 0, 0)
+    BlobStore::get(provider, &container, blob_name)
         .await
         .map_err(|e| bad_gateway!("failed to download report: {e}"))?
         .ok_or_else(|| bad_request!("report not found: {blob_name}"))
 }
 ```
 
-**Why:** The `azure_storage_blobs` and `aws-sdk-s3` crates require native networking and credential handling unavailable in WASM. The `Blobstore` trait provides binary object CRUD through the Omnia runtime's managed adapter.
+**Why:** The `azure_storage_blobs` and `aws-sdk-s3` crates require native networking and credential handling unavailable in WASM. The `BlobStore` trait provides binary object CRUD through the Omnia runtime's managed adapter.

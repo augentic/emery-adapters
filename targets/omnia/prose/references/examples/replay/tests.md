@@ -36,7 +36,7 @@ use bytes::Bytes;
 use chrono::{Timelike, Utc};
 use chrono_tz::Pacific::Auckland;
 use http::{Request, Response};
-use omnia_sdk::{Config, HttpRequest, Identity, Message, Publish};
+use omnia_guest::{Config, HttpRequest, Identity, Message, Publish};
 use r9k_adapter::{R9kMessage, SmarTrakEvent};
 use serde::Deserialize;
 use serde_json::Value;
@@ -47,12 +47,12 @@ use serde_json::Value;
 /// constructing (say by deserialization) an input and an output.
 pub trait Fixture {
     /// Type of input data needed by the test case. In most cases this is likely
-    /// to be the request type of the handler under test.
+    /// to be the request type of the operation under test.
     type Input: Default;
 
     /// Type of output data produced by the test case. This could be the
-    /// expected output type of the handler under test, or an error type for
-    /// failure cases. Many tests cases don't care about the handler's output
+    /// expected output type of the operation under test, or an error type for
+    /// failure cases. Many tests cases don't care about the operation's output
     /// type but a type that represents success or failure of some internal
     /// processing.
     type Output;
@@ -61,7 +61,7 @@ pub trait Fixture {
     type Error: std::error::Error;
 
     /// Sometimes the raw input data needs to be transformed before being
-    /// passed to the test case handler, for example to adjust timestamps to
+    /// passed to the test case operation, for example to adjust timestamps to
     /// be relative to 'now'.
     type TransformParams;
 
@@ -69,7 +69,7 @@ pub trait Fixture {
     /// this trait.
     fn from_data(data_def: &TestDef<Self::Error>) -> Self;
 
-    /// Convert input data into the input type needed by the test case handler.
+    /// Convert input data into the input type needed by the test case operation.
     fn input(&self) -> Option<Self::Input>;
 
     /// Convert input data into transformation parameters for the test case
@@ -79,7 +79,7 @@ pub trait Fixture {
     }
 
     /// Apply a transformation function to the input data before passing it to
-    /// the test case handler.
+    /// the test case operation.
     ///
     /// The default implementation returns a default input when there is no
     /// input data or applies the given transformation function to the input
@@ -120,7 +120,7 @@ pub struct PreparedTestCase<D>
 where
     D: Fixture + Clone,
 {
-    /// Prepared input data ready for the handler under test.
+    /// Prepared input data ready for the operation under test.
     pub input: Option<D::Input>,
     /// Optional http request mocks required by the handler.
     pub http_requests: Option<Vec<Fetch>>,
@@ -139,7 +139,7 @@ where
     }
 
     /// Apply input transformation and translation of input data types into
-    /// the types needed by the test case handler.
+    /// the types needed by the test case operation.
     pub fn prepare<F>(&self, transform: F) -> PreparedTestCase<D>
     where
         F: FnOnce(&D::Input, Option<&D::TransformParams>) -> D::Input,
@@ -161,14 +161,14 @@ pub struct TestDef<E: std::error::Error> {
     /// Input data.
     ///
     /// The `Value` is expected to be deserialized into the input
-    /// type needed by the test case handler.
+    /// type needed by the test case operation.
     pub input: Option<Value>,
 
     /// Transform parameters.
     ///
     /// Optional parameters that can be used to transform the input data
-    /// before passing it to the test case handler. The type of this field
-    /// depends on the specific test case handler so we use generic JSON here.
+    /// before passing it to the test case operation. The type of this field
+    /// depends on the specific test case operation so we use generic JSON here.
     pub params: Option<Value>,
 
     /// Outgoing HTTP requests that need to be mocked.
@@ -176,14 +176,14 @@ pub struct TestDef<E: std::error::Error> {
 
     /// Output data.
     ///
-    /// The expected output from the test case handler. This can either be an
+    /// The expected output from the test case operation. This can either be an
     /// error or a successful output, depending on the test case. The type of
-    /// this field depends on the specific test case handler so we use generic
+    /// this field depends on the specific test case operation so we use generic
     /// JSON here.
     ///
-    /// Note: The "output" need not be the return type of the underlying handler
+    /// Note: The "output" need not be the return type of the underlying operation
     /// under test. It could be a database query or published message that is
-    /// sent out from the handler.
+    /// sent out from the operation.
     pub output: Option<TestResult<E>>,
 }
 
@@ -347,7 +347,7 @@ pub struct Replay {
 #[serde(untagged)]
 pub enum ReplayOutput {
     Events(Vec<SmarTrakEvent>),
-    Error(omnia_sdk::Error),
+    Error(omnia_guest::Error),
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -357,7 +357,7 @@ pub struct ReplayTransform {
 }
 
 impl Fixture for Replay {
-    type Error = omnia_sdk::Error;
+    type Error = omnia_guest::Error;
     type Input = R9kMessage;
     type Output = Vec<SmarTrakEvent>;
     type TransformParams = ReplayTransform;
@@ -499,7 +499,7 @@ pub fn shift_time(input: &R9kMessage, params: Option<&ReplayTransform>) -> R9kMe
 
 ## tests/replay.rs
 
-The replay runner iterates all fixtures in `data/replay/` and runs each through the handler.
+The replay runner iterates all fixtures in `data/replay/` and runs each through the operation.
 
 ```rust
 #![allow(missing_docs)]
@@ -511,7 +511,9 @@ use std::fs::{self, File};
 
 use chrono::Utc;
 use chrono_tz::Pacific::Auckland;
-use omnia_sdk::{Client, Error};
+use omnia_guest::api::invocation::Invocation;
+use omnia_guest::api::invoke::Invoker;
+use omnia_guest::{Error};
 
 use crate::provider::{Replay, shift_time};
 use crate::{TestCase, TestDef};
@@ -529,13 +531,13 @@ async fn run() {
 async fn replay(test_def: TestDef<Error>) {
     let test_case = TestCase::<Replay>::new(test_def).prepare(shift_time);
     let provider = provider::MockProvider::new(test_case.clone());
-    let client = Client::new("at").provider(provider.clone());
+    let invoker = Invoker::new("at", provider.clone());
 
-    let result = client.request(test_case.input.expect("replay test input expected")).await;
+    let result = invoker.invoke::<R9kMessageOperation>(Invocation::new(test_case.input.expect("replay test input expected"))).await;
     let curr_events = provider.events();
 
     let Some(expected_result) = &test_case.output else {
-        // No expected output: handler should succeed with no side effects
+        // No expected output: operation should succeed with no side effects
         assert!(curr_events.is_empty());
         return;
     };
@@ -571,11 +573,11 @@ async fn replay(test_def: TestDef<Error>) {
 
 - Single `#[tokio::test]` function `run()` iterates all `data/replay/*.json` files
 - `replay()` handles three outcome types:
-  1. **No output** -- handler succeeds, no events produced (e.g., unmapped station)
+  1. **No output** -- operation succeeds, no events produced (e.g., unmapped station)
   2. **Success** -- zip expected events with actual, normalize timestamps (3s drift tolerance), compare full JSON
   3. **Error** -- compare error `code()` and `description()`
 - `#![cfg(not(miri))]` disables under Miri (filesystem access)
-- Timestamp normalization: set `received_at` and `message_data.timestamp` to expected values before comparison, since these are always `Utc::now()` in the handler
+- Timestamp normalization: set `received_at` and `message_data.timestamp` to expected values before comparison, since these are always `Utc::now()` in the operation
 
 ## Replay Assertion Flow
 
@@ -586,7 +588,7 @@ TestCase::<Replay>::new(test_def).prepare(shift_time)
     |
 MockProvider::new(prepared_test_case)
     |
-client.request(input).await
+invoker.invoke::<R9kMessageOperation>(Invocation::new(input)).await
     |
 +-- No expected output? --> assert events empty
 |

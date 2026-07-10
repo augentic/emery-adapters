@@ -1,12 +1,12 @@
-# Cache Handler Example
+# Cache Operation Example
 
-This document contains a complete cache handler implementation from the `ex-cache` crate, demonstrating manual caching with the `StateStore` provider.
+This document contains a complete cache operation implementation from the `ex-cache` crate, demonstrating manual caching with the `StateStore` provider.
 
 **Demonstrates:** `StateStore`, `Config`, and `HttpRequest` capability traits
 
 ## Overview
 
-Unlike simple handlers, caching handlers:
+Unlike simple operations, caching operations:
 
 - Check cache before making upstream requests (cache-first strategy)
 - Use `StateStore` provider for explicit caching
@@ -16,7 +16,7 @@ Unlike simple handlers, caching handlers:
 ## Complete Implementation
 
 ```rust
-//! Handlers for fetching post items from an upstream API with caching.
+//! Operations for fetching post items from an upstream API with caching.
 //!
 //! ## Key Patterns
 //!
@@ -25,10 +25,12 @@ Unlike simple handlers, caching handlers:
 //! - **Data transformation**: Cache transformed/enriched data, not raw responses
 //! - **Multiple providers**: Requires `Config`, `HttpRequest`, and `StateStore`
 
+use omnia_guest::api::invoke::CallContext;
+use omnia_guest::api::operation::Operation;
 use anyhow::Context as _;
 use bytes::Bytes;
-use omnia_sdk::{
-    Config, Context, Error, Handler, HttpRequest, Reply, Result, StateStore,
+use omnia_guest::{
+    Config, Error, HttpRequest, Result, StateStore,
     bad_gateway, server_error,
 };
 use serde::{Deserialize, Serialize};
@@ -47,9 +49,9 @@ pub struct PostResponse {
     pub item: Post,
 }
 
-/// A handler that fetches a post item by ID from the upstream API.
+/// An operation that fetches a post item by ID from the upstream API.
 ///
-/// The handler implements a cache-first strategy:
+/// The operation implements a cache-first strategy:
 /// 1. Check if post exists in cache
 /// 2. If cached, return immediately
 /// 3. If not cached, fetch from upstream, transform, and cache
@@ -102,30 +104,32 @@ where
     Ok(PostResponse { item })
 }
 
-/// Handler trait implementation.
-impl<P> Handler<P> for PostRequest
+/// Operation trait implementation.
+pub struct PostRequestOperation;
+
+impl<P> Operation<P> for PostRequestOperation
 where
-    P: Config + HttpRequest + StateStore,
+    P: omnia_guest::api::Provider + Config + HttpRequest + StateStore,
 {
     type Error = Error;
-    type Input = Vec<u8>;
+    type Input = PostRequest;
     type Output = PostResponse;
 
-    async fn handle(self, ctx: Context<'_, P>) -> Result<Reply<PostResponse>> {
-        Ok(fetch_post(ctx.owner, ctx.provider, self).await?.into())
-    }
-
-    fn from_input(input: Self::Input) -> Result<Self> {
-        serde_json::from_slice(&input)
-            .context("deserializing PostRequest")
-            .map_err(Into::into)
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        // Structural validation is the first step; omit only when no checks apply.
+        fetch_post(context.owner, context.provider, input).await
     }
 }
 ```
 
-## List Handler with Bulk Caching
+## List Operation with Bulk Caching
 
 ```rust
+use omnia_guest::api::invoke::CallContext;
+use omnia_guest::api::operation::Operation;
 /// Request for fetching a list of post items optionally filtered by author ID.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -139,9 +143,9 @@ pub struct PostListResponse {
     pub items: Vec<Post>,
 }
 
-/// A handler that fetches a list of post items with individual caching.
+/// An operation that fetches a list of post items with individual caching.
 ///
-/// Instead of caching the entire list, this handler:
+/// Instead of caching the entire list, this operation:
 /// 1. Fetches the list from upstream
 /// 2. For each item, checks if it's already cached
 /// 3. If cached, uses the cached version
@@ -207,22 +211,22 @@ where
     Ok(PostListResponse { items })
 }
 
-impl<P> Handler<P> for PostListRequest
+pub struct PostListRequestOperation;
+
+impl<P> Operation<P> for PostListRequestOperation
 where
-    P: Config + HttpRequest + StateStore,
+    P: omnia_guest::api::Provider + Config + HttpRequest + StateStore,
 {
     type Error = Error;
-    type Input = Vec<u8>;
+    type Input = PostListRequest;
     type Output = PostListResponse;
 
-    async fn handle(self, ctx: Context<'_, P>) -> Result<Reply<PostListResponse>> {
-        Ok(fetch_post_list(ctx.owner, ctx.provider, self).await?.into())
-    }
-
-    fn from_input(input: Self::Input) -> Result<Self> {
-        serde_json::from_slice(&input)
-            .context("deserializing PostListRequest")
-            .map_err(Into::into)
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        // Structural validation is the first step; omit only when no checks apply.
+        fetch_post_list(context.owner, context.provider, input).await
     }
 }
 ```
@@ -317,15 +321,15 @@ if let Err(err) = StateStore::set(provider, &key, &data, None).await {
 
 ## Cache-Aside with DocumentStore (On-Demand Loading)
 
-When the legacy component loads data from a managed data store (e.g., Azure Table Storage) on startup into an in-memory cache, the WASM translation is **on-demand cache-aside**: `StateStore` for caching + `DocumentStore` as the data source. The handler fetches from the data store on cache miss — no separate cron/ETL component is needed.
+When the legacy component loads data from a managed data store (e.g., Azure Table Storage) on startup into an in-memory cache, the WASM translation is **on-demand cache-aside**: `StateStore` for caching + `DocumentStore` as the data source. The operation fetches from the data store on cache miss — no separate cron/ETL component is needed.
 
 ```rust
 use anyhow::Context as _;
-use omnia_sdk::{
+use omnia_guest::{
     Config, DocumentStore, Result, StateStore,
     bad_gateway, server_error,
 };
-use omnia_sdk::document_store::QueryOptions;
+use omnia_guest::document_store::QueryOptions;
 use serde::{Deserialize, Serialize};
 
 const FLEET_CACHE_KEY: &str = "fleet-data";
@@ -400,14 +404,14 @@ where
 | Aspect | HttpRequest upstream | DocumentStore upstream |
 |--------|---------------------|------------------------|
 | Data source trait | `HttpRequest` | `DocumentStore` |
-| Handler bounds | `P: Config + HttpRequest + StateStore` | `P: Config + DocumentStore + StateStore` |
+| Operation bounds | `P: Config + HttpRequest + StateStore` | `P: Config + DocumentStore + StateStore` |
 | Fetch call | `HttpRequest::fetch(provider, request)` | `DocumentStore::query(provider, &store, options)` |
 | Auth | Explicit (Identity, API keys) | Handled by runtime |
 | Use when | External REST APIs | Azure Table Storage, Cosmos DB, MongoDB |
 
 ## References
 
-- See [../../references/sdk-api.md](../../../sdk-api.md) for the Handler trait pattern
+- See [../../references/sdk-api.md](../../../sdk-api.md) for the `Operation<P>` trait pattern
 - See [../../references/capabilities.md](../../../capabilities.md) for trait definitions
 - See [../../references/providers.md](../../../providers/README.md) for provider bound composition
 - See [./tablestore.md](./tablestore.md) for TableStore ORM patterns

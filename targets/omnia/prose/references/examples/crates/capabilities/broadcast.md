@@ -4,18 +4,20 @@
 
 ## Overview
 
-The `Broadcast` trait enables sending data to connected WebSocket clients. It is the Omnia equivalent of `ws.send()`, `socket.write()`, or `connection.send()` in source code. Use it whenever a handler needs to send data back over a WebSocket channel -- whether broadcasting to all clients or replying to a specific connection.
+The `Broadcast` trait enables sending data to connected WebSocket clients. It is the Omnia equivalent of `ws.send()`, `socket.write()`, or `connection.send()` in source code. Use it whenever an operation needs to send data back over a WebSocket channel -- whether broadcasting to all clients or replying to a specific connection.
 
 **Trait definition:** See [../../references/capabilities.md](../../../capabilities.md#broadcast)
 
 ## Simple WebSocket Reply
 
-A handler that receives a WebSocket event and sends a reply back to all clients on the channel:
+An operation that receives a WebSocket event and sends a reply back to all clients on the channel:
 
 ```rust
+use omnia_guest::api::invoke::CallContext;
+use omnia_guest::api::operation::Operation;
 use anyhow::Context as _;
-use omnia_sdk::{
-    Broadcast, Config, Context, Error, Handler, Reply, Result,
+use omnia_guest::{
+    Broadcast, Config, Error, Result,
 };
 use serde::{Deserialize, Serialize};
 
@@ -52,31 +54,32 @@ where
     Ok(())
 }
 
-impl<P: Config + Broadcast> Handler<P> for PingEvent {
+pub struct PingEventOperation;
+
+impl<P: omnia_guest::api::Provider + Config + Broadcast> Operation<P> for PingEventOperation
+{
     type Error = Error;
-    type Input = Vec<u8>;
+    type Input = PingEvent;
     type Output = ();
 
-    fn from_input(input: Self::Input) -> Result<Self> {
-        serde_json::from_slice(&input)
-            .context("deserializing PingEvent")
-            .map_err(Into::into)
-    }
-
-    async fn handle(self, ctx: Context<'_, P>) -> Result<Reply<()>> {
-        handle_ping(ctx.owner, ctx.provider, self).await?;
-        Ok(Reply::ok(()))
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        // Structural validation is the first step; omit only when no checks apply.
+        handle_ping(context.owner, context.provider, input).await?;
+        Ok(())
     }
 }
 ```
 
 ## WebSocket Protocol Handshake
 
-A handler that implements a multi-step authentication handshake over WebSocket. Each incoming event triggers a specific reply:
+An operation that implements a multi-step authentication handshake over WebSocket. Each incoming event triggers a specific reply:
 
 ```rust
 use anyhow::Context as _;
-use omnia_sdk::{Broadcast, Config, Result};
+use omnia_guest::{Broadcast, Config, Result};
 use serde::{Deserialize, Serialize};
 
 const WS_CHANNEL: &str = "default";
@@ -159,10 +162,10 @@ async fn send_to_client<P: Broadcast>(
 
 ## Combined WebSocket + Publish
 
-A handler that receives WebSocket events, sends a reply back, and also publishes to a message topic:
+An operation that receives WebSocket events, sends a reply back, and also publishes to a message topic:
 
 ```rust
-use omnia_sdk::{Broadcast, Config, Message, Publish, Result};
+use omnia_guest::{Broadcast, Config, Message, Publish, Result};
 
 const WS_CHANNEL: &str = "default";
 const OUTPUT_TOPIC: &str = "position-updates.v1";
@@ -190,12 +193,12 @@ where
 1. **Channel name as constant** -- Define the WebSocket channel name as a `const &str` (e.g., `"default"`)
 2. **`None` for broadcast, `Some(vec![...])` for targeted** -- Third argument controls recipient scope
 3. **Serialize to `Vec<u8>`** -- `Broadcast::send` takes `&[u8]`, use `serde_json::to_vec`
-4. **Combine with `Publish`** -- WebSocket handlers often need both `Broadcast` (reply) and `Publish` (message queue)
+4. **Combine with `Publish`** -- WebSocket operations often need both `Broadcast` (reply) and `Publish` (message queue)
 5. **Not just for "broadcasting"** -- Despite the name, `Broadcast` is also used for point-to-point WebSocket replies
 
 ## References
 
 - See [../../references/capabilities.md](../../../capabilities.md#broadcast) for the full `Broadcast` trait definition
-- See [../../references/sdk-api.md](../../../sdk-api.md) for the Handler trait pattern
+- See [../../references/sdk-api.md](../../../sdk-api.md) for the `Operation<P>` trait pattern
 - See [../../references/guest-patterns.md](../../../guest-patterns.md#websocket-handler-setup) for WebSocket guest wiring
 - See [../../references/providers.md](../../../providers/README.md) for provider bound composition

@@ -10,11 +10,11 @@ Errors are treated as:
 - **A stable machine code** (`code: String`) for logs/metrics/clients
 - **A human description** (`description: String`) for debugging
 
-This is why we return SDK errors (`omnia_sdk::Error`) instead of ad-hoc `anyhow::Error` at the domain layer.
+This is why we return SDK errors (`omnia_guest::Error`) instead of ad-hoc `anyhow::Error` at the domain layer.
 
-## `omnia_sdk::Error` Enum Definition
+## `omnia_guest::Error` Enum Definition
 
-The SDK error enum has four variants, each with `code` and `description` fields:
+The error enum has four classified variants with `code` and `description` fields, plus `Json` for a domain-controlled JSON error body:
 
 ```rust
 #[derive(Error, Debug, Clone, Serialize, Deserialize)]
@@ -34,6 +34,10 @@ pub enum Error {
     /// An upstream dependency failed while fulfilling the request. (HTTP 502)
     #[error("code: {code}, description: {description}")]
     BadGateway { code: String, description: String },
+
+    /// A domain-controlled JSON response. The numeric code supplies the HTTP status.
+    #[error("code: {code}")]
+    Json { code: String, body: serde_json::Value },
 }
 ```
 
@@ -57,17 +61,17 @@ return Err(Error::not_found("customer not found"));    // DOES NOT COMPILE
 
 ## Standard Error Flow (Domain → Boundary → HTTP)
 
-1. **Domain crate** returns `omnia_sdk::Result<Reply<T>>`
-2. Domain code creates errors using `omnia_sdk::Error` + macros (`bad_request!`, `server_error!`, `bad_gateway!`)
+1. **Domain crate** returns `omnia_guest::Result<T>`
+2. Domain code creates errors using `omnia_guest::Error` + macros (`bad_request!`, `server_error!`, `bad_gateway!`)
 3. Domain code adds context with `anyhow::Context`
-4. **Boundary code** converts domain errors into HTTP responses via `omnia_sdk::api::HttpError`
+4. **Boundary code** converts domain errors into HTTP responses via `omnia_guest::api::http::HttpError`
 
 ## Error Macros
 
 ### `bad_request!` — Input Validation Failures (400)
 
 ```rust
-use omnia_sdk::bad_request;
+use omnia_guest::bad_request;
 
 // Simple message (description only)
 let err = bad_request!("missing vehicle identifier");
@@ -75,16 +79,18 @@ let err = bad_request!("missing vehicle identifier");
 // With formatting
 let err = bad_request!("invalid timestamp: {}", timestamp);
 
-// With stable code + description (preferred for domain errors)
-let err = bad_request!("customer_not_found", "Customer not found");
-let err = bad_request!("empty_order", format!("Order {} has no items", order_id));
+// For a custom stable code, construct the classified variant.
+let err = Error::BadRequest {
+    code: "customer_not_found".to_string(),
+    description: "Customer not found".to_string(),
+};
 
 // In validation
 let vehicle_id = message.vehicle_id()
     .ok_or_else(|| bad_request!("missing vehicle identifier"))?;
 ```
 
-The two-argument form `bad_request!(code, description)` is preferred when you want a stable machine-readable error code for logs, metrics, and clients. The single-argument form uses the message as both code and description.
+The macro accepts a description or a format string plus format arguments and always uses the stable code `bad_request`. Construct `Error::BadRequest` directly when the domain requires another stable code.
 
 **Use for:**
 
@@ -96,7 +102,7 @@ The two-argument form `bad_request!(code, description)` is preferred when you wa
 ### `server_error!` — Internal Failures (500)
 
 ```rust
-use omnia_sdk::server_error;
+use omnia_guest::server_error;
 
 // Internal invariant violations
 let err = server_error!("unexpected state: {}", state);
@@ -115,7 +121,7 @@ let payload = serde_json::to_vec(&event)
 ### `bad_gateway!` — Upstream Failures (502)
 
 ```rust
-use omnia_sdk::bad_gateway;
+use omnia_guest::bad_gateway;
 
 // Upstream API failure
 let response = HttpRequest::fetch(provider, request)
@@ -134,7 +140,7 @@ let response = HttpRequest::fetch(provider, request)
 The most common pattern: validate early, return 400-class error.
 
 ```rust
-use omnia_sdk::{bad_request, Result};
+use omnia_guest::{bad_request, Result};
 
 pub fn validate_message(message: &InboundMessage) -> Result<()> {
     // Check required fields
@@ -161,7 +167,7 @@ When you need named domain failures with stable codes:
 
 ```rust
 use thiserror::Error;
-use omnia_sdk::Error as SdkError;
+use omnia_guest::Error as SdkError;
 
 #[derive(Error, Debug)]
 pub enum DomainError {
@@ -218,7 +224,7 @@ Use `anyhow::Context` for serialization/decoding/formatting failures:
 
 ```rust
 use anyhow::Context as _;
-use omnia_sdk::Result;
+use omnia_guest::Result;
 
 pub fn parse_message(input: &[u8]) -> Result<MyMessage> {
     serde_json::from_slice(input)
@@ -241,52 +247,44 @@ pub async fn fetch_and_parse<P: HttpRequest>(provider: &P, url: &str) -> Result<
 
 **Why:** You keep a readable error chain without losing the SDK's classification model.
 
-## Pattern 4: Handler Error Pattern
+## Pattern 4: Operation error pattern
 
-Handlers use `from_input` for parsing and `handle` for business logic:
+Operations validate typed input and return classified errors directly:
 
 ```rust
-use anyhow::Context as _;
-use omnia_sdk::{Context, Error, Handler, Reply, Result};
+use omnia_guest::api::invoke::CallContext;
+use omnia_guest::api::operation::Operation;
+use omnia_guest::{Error, Result};
 
-impl<P: Config> Handler<P> for MyRequest {
+pub struct ProcessRequest;
+
+impl<P: omnia_guest::api::Provider + Config> Operation<P> for ProcessRequest {
     type Error = Error;
-    type Input = Vec<u8>;
+    type Input = MyRequest;
     type Output = MyResponse;
 
-    fn from_input(input: Self::Input) -> Result<Self> {
-        serde_json::from_slice(&input)
-            .context("deserializing MyRequest")
-            .map_err(Into::into)
-    }
-
-    async fn handle(self, ctx: Context<'_, P>) -> Result<Reply<MyResponse>> {
-        // Validation
-        self.validate()?;
-
-        // Business logic
-        let result = process(ctx.provider, &self).await?;
-
-        Ok(result.into())
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        input.validate_structural()?;
+        let settings = load_settings(context.provider).await?;
+        input.validate_contextual(&settings)?;
+        process(context.provider, input).await
     }
 }
 ```
 
 ## Pattern 5: Boundary Conversion
 
-At the HTTP boundary, preserve classification with `.map_err(Into::into)`:
+At the HTTP boundary, register the operation with the typed router. Its projector preserves classification:
 
 ```rust
-// In boundary code (NOT generated by this skill)
-use omnia_sdk::api::HttpResult;
+use omnia_guest::api::http::{Router, post};
+use omnia_guest::api::invoke::Invoker;
 
-pub async fn route(body: Bytes, provider: &Provider) -> HttpResult<Reply<MyResponse>> {
-    MyRequest::handler(body.to_vec())?
-        .owner("at")
-        .provider(provider)
-        .await
-        .map_err(Into::into)
-}
+let router = Router::new(Invoker::new("at", provider))
+    .route("/process", post::<ProcessRequest, Provider>());
 ```
 
 **Why:** This ensures the SDK error becomes the appropriate HTTP status (400/404/500/502) while preserving the stable `code`.
@@ -351,7 +349,7 @@ format!("error_{}", error_code)           // Don't use dynamic codes
 
 ```rust
 // Error handling imports
-use omnia_sdk::{Error, Result, bad_request, server_error, bad_gateway};
+use omnia_guest::{Error, Result, bad_request, server_error, bad_gateway};
 use anyhow::Context as _;
 use thiserror::Error;
 ```
@@ -387,13 +385,13 @@ use thiserror::Error;
 | Baseline `cargo test` fails to compile | Existing crate has compilation errors | Record errors; do not introduce additional failures; fix if the update touches affected code |
 | Change classification ambiguous | Artifact difference could be modifying or structural | Prefer the simpler classification (modifying over structural); see [change-classification.md](change-classification.md) |
 | Structural change breaks compilation | Rename or restructure missed a reference | Re-scan crate after structural changes (Hard Rule 16); fix remaining references |
-| Regression detected | Previously-passing test now fails | Compare handler implementation against updated artifacts; repair using the strategies above |
-| Artifacts remove behavior that other crates depend on | Cross-crate dependency on removed handler/type | Document in CHANGELOG.md; mark removal with `// BREAKING:` comment; warn in Migration.md |
-| MockProvider missing new trait | Handler gained a new provider bound | Add trait impl to `tests/provider.rs` with appropriate test fixtures |
-| Guest wiring conflict | Route path or topic already exists for a different handler | Update the existing route rather than adding a duplicate; document the replacement in CHANGELOG.md |
-| Update too complex for automation | Complete handler rewrite or fundamental architecture change | Abort and recommend re-running the greenfield pipeline (create mode); document rationale |
+| Regression detected | Previously-passing test now fails | Compare operation implementation against updated artifacts; repair using the strategies above |
+| Artifacts remove behavior that other crates depend on | Cross-crate dependency on removed operation/type | Document in CHANGELOG.md; mark removal with `// BREAKING:` comment; warn in Migration.md |
+| MockProvider missing new trait | Operation gained a new provider bound | Add trait impl to `tests/provider.rs` with appropriate test fixtures |
+| Guest wiring conflict | Route path or topic already exists for a different operation | Update the existing route rather than adding a duplicate; document the replacement in CHANGELOG.md |
+| Update too complex for automation | Complete operation rewrite or fundamental architecture change | Abort and recommend re-running the greenfield pipeline (create mode); document rationale |
 
 ## References
 
-- See [sdk-api.md](sdk-api.md) for Handler, Context, Reply types
+- See [sdk-api.md](sdk-api.md) for operations, call context, routers, and projectors
 - See [guardrails.md](guardrails.md) for error model guardrails

@@ -1,4 +1,4 @@
-# TableStore Handler Patterns
+# TableStore Operation Patterns
 
 This document covers the `TableStore` trait pattern used for SQL database operations in Omnia business logic crates.
 
@@ -12,7 +12,7 @@ The `TableStore` trait provides data access for SQL databases (PostgreSQL, MySQL
 
 **Source:** `omnia_wasi_sql::orm::TableStore`
 
-**Note:** The SDK re-exports `TableStore` as `omnia_sdk::TableStore` for wasm32 targets, but the canonical definition is in `omnia_wasi_sql::orm`.
+**Note:** The SDK re-exports `TableStore` as `omnia_guest::TableStore` for wasm32 targets, but the canonical definition is in `omnia_wasi_sql::orm`.
 
 ## Trait Definition
 
@@ -205,13 +205,15 @@ DeleteBuilder::<Article>::new()
     .await?;
 ```
 
-## Complete Handler Examples
+## Complete Operation Examples
 
-### List Handler with Filters
+### List Operation with Filters
 
 ```rust
+use omnia_guest::api::invoke::CallContext;
+use omnia_guest::api::operation::Operation;
 use anyhow::Context as _;
-use omnia_sdk::{bad_request, Config, Context, Error, Handler, Reply, Result};
+use omnia_guest::{bad_request, Config, Error, Result};
 use omnia_wasi_sql::orm::{Filter, SelectBuilder, TableStore};
 use serde::{Deserialize, Serialize};
 
@@ -263,26 +265,29 @@ async fn fetch_user_list<P: Config + TableStore>(
     Ok(UserListResponse { items: users })
 }
 
-impl<P: Config + TableStore> Handler<P> for UserListRequest {
+pub struct UserListRequestOperation;
+
+impl<P: omnia_guest::api::Provider + Config + TableStore> Operation<P> for UserListRequestOperation
+{
     type Error = Error;
-    type Input = Vec<u8>;
+    type Input = UserListRequest;
     type Output = UserListResponse;
 
-    async fn handle(self, ctx: Context<'_, P>) -> Result<Reply<UserListResponse>> {
-        Ok(fetch_user_list(ctx.owner, ctx.provider, self).await?.into())
-    }
-
-    fn from_input(input: Self::Input) -> Result<Self> {
-        serde_json::from_slice(&input)
-            .context("deserializing UserListRequest")
-            .map_err(Into::into)
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        // Structural validation is the first step; omit only when no checks apply.
+        fetch_user_list(context.owner, context.provider, input).await
     }
 }
 ```
 
-### Single Item Handler
+### Single Item Operation
 
 ```rust
+use omnia_guest::api::invoke::CallContext;
+use omnia_guest::api::operation::Operation;
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ArticleRequest {
     pub id: i32,
@@ -316,26 +321,29 @@ async fn fetch_article<P: Config + TableStore>(
         .map(|item| ArticleResponse { item })
 }
 
-impl<P: Config + TableStore> Handler<P> for ArticleRequest {
+pub struct ArticleRequestOperation;
+
+impl<P: omnia_guest::api::Provider + Config + TableStore> Operation<P> for ArticleRequestOperation
+{
     type Error = Error;
-    type Input = Vec<u8>;
+    type Input = ArticleRequest;
     type Output = ArticleResponse;
 
-    async fn handle(self, ctx: Context<'_, P>) -> Result<Reply<ArticleResponse>> {
-        Ok(fetch_article(ctx.owner, ctx.provider, self).await?.into())
-    }
-
-    fn from_input(input: Self::Input) -> Result<Self> {
-        serde_json::from_slice(&input)
-            .context("deserializing ArticleRequest")
-            .map_err(Into::into)
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        // Structural validation is the first step; omit only when no checks apply.
+        fetch_article(context.owner, context.provider, input).await
     }
 }
 ```
 
-### Create Handler (INSERT)
+### Create Operation (INSERT)
 
 ```rust
+use omnia_guest::api::invoke::CallContext;
+use omnia_guest::api::operation::Operation;
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ArticleCreateRequest {
     pub title: String,
@@ -392,26 +400,29 @@ async fn create_article<P: Config + TableStore>(
     })
 }
 
-impl<P: Config + TableStore> Handler<P> for ArticleCreateRequest {
+pub struct ArticleCreateRequestOperation;
+
+impl<P: omnia_guest::api::Provider + Config + TableStore> Operation<P> for ArticleCreateRequestOperation
+{
     type Error = Error;
-    type Input = Vec<u8>;
+    type Input = ArticleCreateRequest;
     type Output = ArticleCreateResponse;
 
-    async fn handle(self, ctx: Context<'_, P>) -> Result<Reply<ArticleCreateResponse>> {
-        Ok(create_article(ctx.owner, ctx.provider, self).await?.into())
-    }
-
-    fn from_input(input: Self::Input) -> Result<Self> {
-        serde_json::from_slice(&input)
-            .context("deserializing ArticleCreateRequest")
-            .map_err(Into::into)
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        // Structural validation is the first step; omit only when no checks apply.
+        create_article(context.owner, context.provider, input).await
     }
 }
 ```
 
-### Update Handler
+### Update Operation
 
 ```rust
+use omnia_guest::api::invoke::CallContext;
+use omnia_guest::api::operation::Operation;
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ArticlePublishRequest {
     pub id: i32,
@@ -454,19 +465,20 @@ async fn publish_article<P: Config + TableStore>(
     })
 }
 
-impl<P: Config + TableStore> Handler<P> for ArticlePublishRequest {
+pub struct ArticlePublishRequestOperation;
+
+impl<P: omnia_guest::api::Provider + Config + TableStore> Operation<P> for ArticlePublishRequestOperation
+{
     type Error = Error;
-    type Input = Vec<u8>;
+    type Input = ArticlePublishRequest;
     type Output = ArticlePublishResponse;
 
-    async fn handle(self, ctx: Context<'_, P>) -> Result<Reply<ArticlePublishResponse>> {
-        Ok(publish_article(ctx.owner, ctx.provider, self).await?.into())
-    }
-
-    fn from_input(input: Self::Input) -> Result<Self> {
-        serde_json::from_slice(&input)
-            .context("deserializing ArticlePublishRequest")
-            .map_err(Into::into)
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        // Structural validation is the first step; omit only when no checks apply.
+        publish_article(context.owner, context.provider, input).await
     }
 }
 ```
@@ -508,7 +520,7 @@ use omnia_wasi_sql::orm::{
 };
 
 // SDK types
-use omnia_sdk::{bad_request, Config, Context, Error, Handler, Reply, Result};
+use omnia_guest::{bad_request, Config, Error, Result};
 
 // Other common imports
 use anyhow::Context as _;
@@ -518,11 +530,11 @@ use serde::{Deserialize, Serialize};
 
 ## Key Rules
 
-1. **Target Architecture**: TableStore handlers are designed for `wasm32-wasip2` only
+1. **Target Architecture**: TableStore operations are designed for `wasm32-wasip2` only
 2. **Entity Macro**: Always use `entity!` macro for SQL database models
 3. **Config for Database Name**: Get database/table store connection name from `Config` trait
 4. **Validation First**: Validate input parameters before building queries
-5. **Error Mapping**: Map ORM errors to `omnia_sdk::Error` with context
+5. **Error Mapping**: Map ORM errors to `omnia_guest::Error` with context
 6. **Prefer ORM**: Use `SelectBuilder`, `InsertBuilder`, `UpdateBuilder`, `DeleteBuilder` and `Filter` for CRUD and simple queries. Use **raw SQL** (`TableStore::query` / `TableStore::exec`) only when legacy code requires:
    - **GeoSearch / spatial queries** (e.g. PostGIS `ST_AsText`, `ST_Simplify`, `ST_MakeLine`, geofence filters)
    - **Nested subqueries** or complex expressions that the ORM builders do not support
@@ -531,7 +543,7 @@ use serde::{Deserialize, Serialize};
 
 ## References
 
-- See [../../references/sdk-api.md](../../../sdk-api.md) for the Handler trait pattern
+- See [../../references/sdk-api.md](../../../sdk-api.md) for the `Operation<P>` trait pattern
 - See [../../references/capabilities.md](../../../capabilities.md) for trait definitions
 - See [../../references/providers.md](../../../providers/README.md) for provider bound composition
 - See [../../references/error-handling.md](../../../error-handling.md) for error conventions

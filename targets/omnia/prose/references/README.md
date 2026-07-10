@@ -33,9 +33,9 @@ The Omnia crate / test / guest / review instructions live in [`../prompts/build.
 
 ### Crate writer depth
 
-- [`sdk-api.md`](sdk-api.md) — `Handler<P>`, `Context`, `Reply`, `IntoBody`, `Client`, `Error`; Input Type Decision Tree; Response Types.
+- [`sdk-api.md`](sdk-api.md) — `Operation<P>`, `CallContext`, `Invoker`, typed HTTP/messaging routers, projectors, command routing, and explicit exports.
 - [`cargo-toml.md`](cargo-toml.md) — workspace and crate `Cargo.toml` templates.
-- [`error-handling.md`](error-handling.md) — domain error enums, `omnia_sdk::Error` mapping, troubleshooting.
+- [`error-handling.md`](error-handling.md) — domain error enums, `omnia_guest::Error` mapping, troubleshooting.
 - [`cross-cutting-matrices.md`](cross-cutting-matrices.md) — Side-Effect / Outbound-Message / Transaction-Boundary matrices.
 - [`update-patterns.md`](update-patterns.md) — strategy patterns per update category.
 - [`change-classification.md`](change-classification.md) — classifying artifact-vs-code diffs.
@@ -54,7 +54,7 @@ The Omnia crate / test / guest / review instructions live in [`../prompts/build.
 ### Guest writer depth
 
 - [`configuration.md`](configuration.md) — guest workspace `Cargo.toml`, `.cargo/config.toml`, `deny.toml`, the five GitHub workflows, `.env.example` shape (templates).
-- [`handlers.md`](handlers.md) — HTTP routing, message subscriptions, WebSocket events, `lib.rs` wiring patterns.
+- [`handlers.md`](handlers.md) — typed operation routing, message subscriptions, WebSocket events, and explicit guest exports.
 - [`guest-patterns.md`](guest-patterns.md) — HTTP / Messaging / WebSocket guest export patterns.
 - [`guest-wiring.md`](guest-wiring.md) — crate → guest injection contract.
 - [`runtime.md`](runtime.md) — `omnia::runtime!` macro, WASI host options, `.env.example` shape.
@@ -72,6 +72,6 @@ The Omnia crate / test / guest / review instructions live in [`../prompts/build.
 
 ### Worked examples
 
-- [`examples/crates/`](examples/crates/) — single-handler, multi-handler, anti-patterns; per-capability walkthroughs under `capabilities/`; per-update-category walkthroughs under `updates/`.
-- [`examples/tests/`](examples/tests/) — per-provider testing patterns (HTTP, StateStore, Publisher, Blobstore, DocumentStore).
-- [`examples/replay/`](examples/replay/) — runtime capture replay (worked handler, test, and capture examples for migration).
+- [`examples/crates/`](examples/crates/) — single-operation, multi-operation, anti-patterns; per-capability walkthroughs under `capabilities/`; per-update-category walkthroughs under `updates/`.
+- [`examples/tests/`](examples/tests/) — per-provider testing patterns (HTTP, StateStore, Publish, BlobStore, DocumentStore).
+- [`examples/replay/`](examples/replay/) — runtime capture replay (worked operation, test, and capture examples for migration).

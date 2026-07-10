@@ -165,7 +165,7 @@ Type mismatches are the single largest source of errors in extraction. Observe t
   - Body fields set to null/default — document explicitly even when identical to another handler
   - Conditional field values (e.g., `adjustment_amount = None` for full operations vs `Some(value)` for partial)
 - **Secondary/audit API calls**: All outbound calls (including best-effort, non-critical, audit writes) must document exact request bodies with vendor-specific field names. "Best-effort" does not mean "under-specified."
-- **Response type ownership**: Track which module/file defines the canonical serialization implementation for each response type. When multiple handlers share a response type, only one should contain the impl. Document this in a deduplication table.
+- **Transport projection ownership**: Track which HTTP, messaging, WebSocket, or command boundary owns projection for each shared plain output. Keep domain outputs transport-neutral and document each canonical projector in a deduplication table.
 - **Cross-reference check**: After documenting all handlers in a domain, verify every type field referenced in handler logic exists in the type definition, and vice versa.
 
 ## Per-function VERIFY checklist

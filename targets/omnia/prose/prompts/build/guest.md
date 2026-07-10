@@ -8,11 +8,11 @@ The guest is a thin WASI/wasm32 wrapper — it owns HTTP routing, topic dispatch
 
 - **Never put business logic in the guest.** All domain logic lives in the project's domain crates; the guest is wiring only.
 - **Gate the guest with `#![cfg(target_arch = "wasm32")]`** — wasm32 is the only supported target.
-- **Forbid `std::env`, `std::fs`, `std::net`, `std::thread::spawn`** in guest code. All I/O routes through provider traits; configuration via `omnia_sdk::Config`. Async only — no blocking operations.
-- **Dispatch messaging handlers explicitly.** Match topics directly and return `Err` for any unhandled topic.
-- **Export WebSocket handlers via `omnia_wasi_websocket::export!`** and implement `omnia_wasi_websocket::incoming_handler::Guest`.
-- **Always pass an owner.** Every handler invocation must include `.owner("...")` in the builder chain.
-- **Use the builder API** — `.provider(&p).owner("o").await`, never the legacy `.process(&p)` form.
+- **Forbid `std::env`, `std::fs`, `std::net`, `std::thread::spawn`** in guest code. All I/O routes through provider traits; configuration via `omnia_guest::Config`. Async only — no blocking operations.
+- **Use typed transport routers.** Register HTTP operations with `api::http::Router` and exact messaging topics with `api::messaging::Router`; missing or unhandled topics return errors.
+- **Export every transport explicitly.** Use the HTTP, messaging, WebSocket, and command export macros only for interfaces this component exposes.
+- **Use one shared invoker per router.** Construct `Invoker::new("owner", provider)` and let it supply `CallContext`.
+- **Keep projection at the boundary.** HTTP status/body/error and messaging acknowledgement/retry policy belong in transport projectors.
 - **Axum 0.8 route params use `{param}` brace syntax**, never `:param`.
 
 The full constraint list lives at [`guardrails.md`](../../references/guardrails.md) and [`wasm-constraints.md`](../../references/wasm-constraints.md).
@@ -20,7 +20,7 @@ The full constraint list lives at [`guardrails.md`](../../references/guardrails.
 ## Process
 
 1. **Lay down the root workspace** per [`configuration.md`](../../references/configuration.md) — `Cargo.toml` (workspace), `.cargo/config.toml`, `rust-toolchain.toml`, `rustfmt.toml`, `clippy.toml`, `Makefile.toml`, `.vscode/settings.json`. The configuration reference carries the full template bodies, including the five GitHub workflows (`audit`, `ci`, `patch`, `publish`, `release`) and the supply-chain files (`deny.toml`, `cargo-vet` config).
-2. **Generate `src/lib.rs`** with Axum HTTP routing, message-topic dispatcher (`match topic { … }`), and WebSocket export hooks. Pattern catalogue: [`handlers.md`](../../references/handlers.md) and [`guest-patterns.md`](../../references/guest-patterns.md).
+2. **Generate `src/lib.rs`** with explicit WIT exports and typed HTTP / messaging / command router assembly over the shared operation kernel. Pattern catalogue: [`handlers.md`](../../references/handlers.md) and [`guest-patterns.md`](../../references/guest-patterns.md).
 3. **Implement the `Provider` struct** that satisfies the consumed `omnia-wasi-*` adapter traits. Validate every required `Config::get` key in `Provider::new()` and document each in `examples/.env.example`. The crate → guest injection contract is at [`guest-wiring.md`](../../references/guest-wiring.md).
 4. **Author `examples/<guest-name>.rs`** with the `omnia::runtime!({ main: true, hosts: { … } });` block enumerating every WASI host the guest consumes. See [`runtime.md`](../../references/runtime.md) for the macro, host options, and `.env.example` shape.
 5. **Author the supply-chain files** per [`configuration.md`](../../references/configuration.md): `deny.toml`, `cargo-vet` config (`exemptions.lock`, `imports.lock`, `audits.toml`). After the workspace builds for the first time and produces `Cargo.lock`, run `cargo vet regenerate {imports,exemptions,unpublished}`.

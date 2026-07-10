@@ -58,12 +58,12 @@ Violations prevent compilation or cause runtime errors in WASM.
 **Check for**:
 
 - `std::env` usage (must use Config provider) (`rule_id: OMNIA-002`; use `SEC-001` when reading secrets)
-- `std::fs` usage (must use `StateStore` for key-value state, `Blobstore` for binary files, `DocumentStore` for JSON documents, or `HttpRequest` for remote resources) (`rule_id: OMNIA-002`)
+- `std::fs` usage (must use `StateStore` for key-value state, `BlobStore` for binary files, `DocumentStore` for JSON documents, or `HttpRequest` for remote resources) (`rule_id: OMNIA-002`)
 - `std::net` usage (must use HttpRequest provider) (`rule_id: OMNIA-002`)
 - `std::thread` usage (must be async) (`rule_id: OMNIA-002`)
 - Mutable global state (`static mut`, `OnceCell` outside `LazyLock` pattern) (`rule_id: OMNIA-002`)
 - `unsafe` code blocks (`rule_id: OMNIA-002`)
-- Direct blob/document client crates (`mongodb`, `azure_storage_blobs`, `aws-sdk-s3`) -- must use Blobstore/DocumentStore provider (`rule_id: OMNIA-001`)
+- Direct blob/document client crates (`mongodb`, `azure_storage_blobs`, `aws-sdk-s3`) -- must use BlobStore/DocumentStore provider (`rule_id: OMNIA-001`)
 - Blocking operations (synchronous I/O) (`rule_id: OMNIA-002`)
 
 **Severity**: critical (build failure or runtime crash)
@@ -74,7 +74,7 @@ Incorrect use of Omnia SDK providers.
 
 **Check for**:
 
-- Missing provider trait bounds on handlers (`rule_id: OMNIA-001`)
+- Missing or over-broad provider trait bounds on operations (`rule_id: OMNIA-001`)
 - Direct system calls instead of providers (`rule_id: OMNIA-001`)
 - Provider methods called incorrectly (`rule_id: OMNIA-001`)
 - Missing error handling on provider calls (`rule_id: RUST-001`)
@@ -88,8 +88,8 @@ Missing or misplaced validation causes incorrect behavior.
 **Check for**:
 
 - No validation on required fields (`rule_id: UNI-002`)
-- Structural validation in `handle()` instead of `from_input()` (`rule_id: UNI-002`)
-- Temporal validation in `from_input()` instead of `handle()` (`rule_id: UNI-004`)
+- Structural validation not performed at the start of `Operation::call()` (`rule_id: UNI-002`)
+- Temporal/contextual validation performed before its context is loaded (`rule_id: UNI-004`)
 - Missing format validation (email, URL, phone) (`rule_id: UNI-002`)
 - Missing range checks (amount > 0, length <= 1000) (`rule_id: UNI-002`)
 - No business rule validation (`rule_id: UNI-004`)
@@ -145,10 +145,10 @@ After all three specialists report, the lead applies every `UNI-*` rule from the
 
 Apply the remaining checks with these Omnia/WASM-specific heuristics:
 
-- **UNI-001** (uninitialised values): Look for `#[derive(Default)]` on request or response structs where the default value has no valid domain meaning. Check `Option::None` fields used in handler logic without distinguishing "not provided" from "intentionally empty".
-- **UNI-004** (logic bugs): Reason about handler control flow for inverted conditions, off-by-one errors in pagination or batch processing, and match arms that are always true or always false. Check `from_input()` for conditions that silently accept invalid data.
-- **UNI-005** (unbounded growth): Look for `Vec` or `HashMap` fields built up inside handler functions without size limits. Check for loops that accumulate results from paginated API calls without a maximum page guard.
-- **UNI-007** (chatty calls): Look for duplicate `HttpRequest::fetch` calls fetching the same URL within a single handler invocation. Check for handlers that re-fetch data obtainable from the request payload or from a prior call in the same flow.
+- **UNI-001** (uninitialised values): Look for `#[derive(Default)]` on request or response structs where the default value has no valid domain meaning. Check `Option::None` fields used in operation logic without distinguishing "not provided" from "intentionally empty".
+- **UNI-004** (logic bugs): Reason about operation control flow for inverted conditions, off-by-one errors in pagination or batch processing, and branches that are always true or false. Check `Operation::call()` for structural validation after side effects or contextual validation before context load.
+- **UNI-005** (unbounded growth): Look for `Vec` or `HashMap` values built up inside operations without size limits. Check for loops that accumulate results from paginated API calls without a maximum page guard.
+- **UNI-007** (chatty calls): Look for duplicate `HttpRequest::fetch` calls fetching the same URL within a single operation invocation. Check for operations that re-fetch data obtainable from the request payload or from a prior call in the same flow.
 - **UNI-008** (instrumentation balance): Look for `Err` branches with no `tracing::error!` or `tracing::warn!`. Flag `tracing::debug!` or `tracing::info!` inside loops over collection items. Check for PII (names, emails, tokens) interpolated into tracing spans.
 - **UNI-009** (handle-then-throw): Look for error paths that mutate provider-backed state (`StateStore::set`, `Publish::send`) before returning an error, leaving the external system in an inconsistent state while the caller sees a failure.
 - **UNI-011** (timeout/retry): Check whether `HttpRequest::fetch` calls account for upstream timeouts or transient failures. Flag handlers that have no retry or fallback path for external calls that may hang.

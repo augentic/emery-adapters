@@ -26,12 +26,14 @@ ex-cache/
 └── Cargo.toml
 ```
 
-## Handler Code (Reference)
+## Operation Code (Reference)
 
 ### handlers.rs
 
 ```rust
-use omnia_sdk::{Config, Handler, HttpRequest, StateStore};
+use omnia_guest::api::invoke::CallContext;
+use omnia_guest::api::operation::Operation;
+use omnia_guest::{Config, HttpRequest, StateStore};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -53,41 +55,20 @@ pub struct Post {
     pub word_count: usize,
 }
 
-impl<P: Config + HttpRequest + StateStore> Handler<P> for PostRequest {
+pub struct PostRequestOperation;
+
+impl<P: omnia_guest::api::Provider + Config + HttpRequest + StateStore> Operation<P> for PostRequestOperation
+{
+    type Error = Error;
+    type Input = PostRequest;
     type Output = PostResponse;
 
-    async fn handle(self, provider: &P) -> anyhow::Result<Self::Output> {
-        let cache_key = format!("post-{}", self.id);
-        
-        // Check cache first
-        if let Some(cached) = StateStore::get(provider, &cache_key).await? {
-            let item: Post = serde_json::from_slice(&cached)?;
-            return Ok(PostResponse { item });
-        }
-        
-        // Fetch from API
-        let base_url = Config::get(provider, "PROXY_URI").await?;
-        let url = format!("{}/posts/{}", base_url, self.id);
-        let request = http::Request::builder()
-            .uri(url)
-            .body(())?;
-        
-        let response = HttpRequest::fetch(provider, request).await?;
-        let raw_post: RawPost = serde_json::from_slice(&response.body())?;
-        
-        // Transform and cache
-        let post = Post {
-            id: raw_post.id,
-            user_id: raw_post.user_id,
-            title: raw_post.title.clone(),
-            body: raw_post.body.clone(),
-            word_count: raw_post.body.split_whitespace().count(),
-        };
-        
-        let cached_data = serde_json::to_vec(&post)?;
-        StateStore::set(provider, &cache_key, &cached_data, Some(3600)).await?;
-        
-        Ok(PostResponse { item: post })
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        // Structural validation is the first step; omit only when no checks apply.
+        handle(context.owner, input, context.provider).await
     }
 }
 ```
@@ -102,7 +83,7 @@ use std::sync::Mutex;
 
 use ex_cache::types::{RawPost, Todo};
 use once_cell::sync::OnceCell;
-use omnia_sdk::{Config, HttpRequest, StateStore};
+use omnia_guest::{Config, HttpRequest, StateStore};
 
 static CACHE: OnceCell<Mutex<HashMap<String, Vec<u8>>>> = OnceCell::new();
 
@@ -256,20 +237,24 @@ impl StateStore for MockProvider {
 ```rust
 mod provider;
 
-use ex_cache::handlers::{PostListRequest, PostRequest};
+use ex_cache::handlers::{
+    PostListRequest, PostListRequestOperation, PostRequest, PostRequestOperation,
+};
 use ex_cache::types::Post;
-use omnia_sdk::{Client, StateStore};
+use omnia_guest::api::invocation::Invocation;
+use omnia_guest::api::invoke::Invoker;
+use omnia_guest::{StateStore};
 
 use crate::provider::MockProvider;
 
 #[tokio::test]
 async fn post_item_handler_populates_cache() {
     let provider = MockProvider::new();
-    let client = Client::new("tester").provider(provider.clone());
+    let invoker = Invoker::new("tester", provider.clone());
     let request = PostRequest { id: 42 };
 
     // Request should fetch from upstream and populate the cache.
-    let response = client.request(request).await.expect("post item request should succeed");
+    let response = invoker.invoke::<PostRequestOperation>(Invocation::new(request)).await.expect("post item request should succeed");
     assert_eq!(response.item.id, 42);
     assert_eq!(response.item.user_id, 5);
     assert_eq!(
@@ -291,11 +276,11 @@ async fn post_item_handler_populates_cache() {
 
 #[tokio::test]
 async fn post_list_handler_returns_expected() {
-    let client = Client::new("tester").provider(MockProvider::new());
+    let invoker = Invoker::new("tester", MockProvider::new());
     let request = PostListRequest { user_id: Some(3) };
 
     // Request should return only post items from the specific user.
-    let response = client.request(request).await.expect("first fetch_post_list should succeed");
+    let response = invoker.invoke::<PostListRequestOperation>(Invocation::new(request)).await.expect("first fetch_post_list should succeed");
     assert_eq!(response.items.len(), 10);
     for post in &response.items {
         assert_eq!(post.user_id, 3);
@@ -305,19 +290,19 @@ async fn post_list_handler_returns_expected() {
 
 #[tokio::test]
 async fn post_list_handler_no_user_id_returns_all() {
-    let client = Client::new("tester").provider(MockProvider::new());
+    let invoker = Invoker::new("tester", MockProvider::new());
     let request = PostListRequest { user_id: None };
     // Request should return all post items.
-    let response = client.request(request).await.expect("first fetch_post_list should succeed");
+    let response = invoker.invoke::<PostListRequestOperation>(Invocation::new(request)).await.expect("first fetch_post_list should succeed");
     assert_eq!(response.items.len(), 100);
     assert_eq!(response.items[0].id, 1);
 }
 
 #[tokio::test]
 async fn post_item_handler_not_found() {
-    let client = Client::new("tester").provider(MockProvider::new());
+    let invoker = Invoker::new("tester", MockProvider::new());
     let request = PostRequest { id: 9999 }; // Non-existent post ID
-    let result = client.request(request).await;
+    let result = invoker.invoke::<PostRequestOperation>(Invocation::new(request)).await;
     assert!(result.is_err(), "fetch_post should return error for non-existent post");
 }
 ```
@@ -435,22 +420,22 @@ test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 #[tokio::test]
 async fn post_item_handler_uses_cache() {
     let provider = MockProvider::new();
-    let client = Client::new("tester").provider(provider.clone());
-    
+    let invoker = Invoker::new("tester", provider.clone());
+
     // First request - cache miss
     let request1 = PostRequest { id: 42 };
-    let response1 = client.request(request1).await.unwrap();
-    
+    let response1 = invoker.invoke::<PostRequestOperation>(Invocation::new(request1)).await.unwrap();
+
     // Manually modify cache
     let mut modified_post = response1.item.clone();
     modified_post.word_count = 999;
     let cached_data = serde_json::to_vec(&modified_post).unwrap();
     StateStore::set(&provider, "post-42", &cached_data, None).await.unwrap();
-    
+
     // Second request - should use cache
     let request2 = PostRequest { id: 42 };
-    let response2 = client.request(request2).await.unwrap();
-    
+    let response2 = invoker.invoke::<PostRequestOperation>(Invocation::new(request2)).await.unwrap();
+
     // Verify cached value was used
     assert_eq!(response2.item.word_count, 999);
 }
@@ -463,17 +448,17 @@ async fn post_item_handler_uses_cache() {
 #[tokio::test]
 async fn cache_entry_expires() {
     let provider = MockProvider::new();
-    
+
     // Set with 1 second TTL
     StateStore::set(&provider, "test-key", b"test-value", Some(1)).await.unwrap();
-    
+
     // Immediate get - should exist
     let value1 = StateStore::get(&provider, "test-key").await.unwrap();
     assert!(value1.is_some());
-    
+
     // Wait for expiration
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-    
+
     // Get after expiration - should be None
     let value2 = StateStore::get(&provider, "test-key").await.unwrap();
     assert!(value2.is_none());
@@ -501,7 +486,7 @@ let cache = cache().lock().map_err(|e| anyhow::anyhow!("cache lock poisoned: {e}
 async fn test_with_clean_cache() {
     // Clear cache at start
     provider::cache().lock().unwrap().clear();
-    
+
     // Run test...
 }
 ```
@@ -522,7 +507,7 @@ println!("Requested URI: {}", uri);  // Add debug output
 
 ```toml
 [dependencies]
-omnia-sdk.workspace = true
+omnia-guest.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 anyhow.workspace = true

@@ -1,6 +1,6 @@
 # Testing Patterns
 
-How to generate tests for Omnia crates. Tests use a `MockProvider` that implements the required adapter traits, and the `Client` typestate builder to invoke handlers.
+How to generate tests for Omnia crates. Tests use a `MockProvider` that implements the required capability traits and an `Invoker` to call operations. In generic snippets, `MyOperation` means the concrete operation under test.
 
 ## Test Directory Structure
 
@@ -8,8 +8,8 @@ How to generate tests for Omnia crates. Tests use a `MockProvider` that implemen
 $CRATE_PATH/
 ├── tests/
 │   ├── provider.rs         # MockProvider (shared across tests)
-│   ├── <handler_a>.rs      # Tests for handler A
-│   └── <handler_b>.rs      # Tests for handler B
+│   ├── <operation_a>.rs      # Tests for operation A
+│   └── <operation_b>.rs      # Tests for operation B
 └── tests/data/             # JSON/XML fixture files (optional)
     ├── response-a.json
     └── response-b.json
@@ -140,7 +140,7 @@ use std::sync::{Arc, Mutex};
 use anyhow::{Context, Result, anyhow};
 use bytes::Bytes;
 use http::{Request, Response};
-use omnia_sdk::{Config, HttpRequest, Identity, Message, Publish};
+use omnia_guest::{Config, HttpRequest, Identity, Message, Publish};
 use r9k_adapter::SmarTrakEvent;
 
 #[derive(Clone)]
@@ -219,19 +219,16 @@ mod provider;
 
 use cars::FeatureRequest;
 use provider::MockProvider;
-use omnia_sdk::api::Client;
+use omnia_guest::api::invocation::Invocation;
+use omnia_guest::api::invoke::Invoker;
 
 #[tokio::test]
 async fn single_feature() {
     let provider = MockProvider::new();
-    let client = Client::new("owner").provider(provider.clone());
+    let invoker = Invoker::new("owner", provider.clone());
 
     let request = FeatureRequest { id: "899".to_string() };
-    let response = client.request(request).await.expect("request should succeed");
-
-    assert_eq!(response.status, 200);
-
-    let feature = response.body.0;
+    let feature = invoker.invoke::<MyOperation>(Invocation::new(request)).await.expect("request should succeed");
     assert_eq!(feature.properties.worksite_code, "AT-1");
     assert_eq!(feature.properties.work_status, "READY_TO_START");
 }
@@ -239,16 +236,16 @@ async fn single_feature() {
 
 ## Test Structure: Verify API Calls
 
-Assert what HTTP calls the handler made and what filters it used.
+Assert what HTTP calls the operation made and what filters it used.
 
 ```rust
 #[tokio::test]
 async fn verify_filter() {
     let provider = MockProvider::new();
-    let client = Client::new("owner").provider(provider.clone());
+    let invoker = Invoker::new("owner", provider.clone());
 
     let request = FeatureRequest { id: "899".to_string() };
-    client.request(request).await.expect("request should succeed");
+    invoker.invoke::<MyOperation>(Invocation::new(request)).await.expect("request should succeed");
 
     // Verify the HTTP call was made
     let calls = provider.requests_for("/v1/prod/worksite-search");
@@ -273,7 +270,7 @@ Test that optional data fetching is controlled by request parameters.
 #[tokio::test]
 async fn without_tmps() {
     let provider = MockProvider::new();
-    let client = Client::new("owner").provider(provider.clone());
+    let invoker = Invoker::new("owner", provider.clone());
 
     let request = WorksiteRequest {
         worksite_code: "AT-1".to_string(),
@@ -282,8 +279,8 @@ async fn without_tmps() {
         date_to: None,
     };
 
-    let response = client.request(request).await.expect("should succeed");
-    assert!(response.body.0.tmps.is_none());
+    let response = invoker.invoke::<MyOperation>(Invocation::new(request)).await.expect("should succeed");
+    assert!(response.tmps.is_none());
 
     // Verify TMP search was NOT called
     let tmp_calls = provider.requests_for("/v1/prod/tmp-search");
@@ -293,17 +290,17 @@ async fn without_tmps() {
 
 ## Test Structure: Error Cases
 
-Test that handlers return expected errors for invalid input.
+Test that operations return expected errors for invalid input.
 
 ```rust
 #[tokio::test]
 async fn no_changes() {
     let provider = MockProvider::new();
-    let client = Client::new("at").provider(provider.clone());
+    let invoker = Invoker::new("at", provider.clone());
 
     let message = R9kMessage { train_update: TrainUpdate::default() };
 
-    let error = client.request(message).await.expect_err("should have error");
+    let error = invoker.invoke::<MyOperation>(Invocation::new(message)).await.expect_err("should have error");
     assert_eq!(error.code(), "no_update");
     assert_eq!(error.description(), "contains no updates");
 }
@@ -311,16 +308,16 @@ async fn no_changes() {
 
 ## Test Structure: Published Events
 
-For messaging handlers, assert on the events that were published.
+For messaging operations, assert on the events that were published.
 
 ```rust
 #[tokio::test]
 async fn arrival_event() {
     let provider = MockProvider::new();
-    let client = Client::new("at").provider(provider.clone());
+    let invoker = Invoker::new("at", provider.clone());
 
     let message = build_test_message(/* ... */);
-    client.request(message).await.expect("should process");
+    invoker.invoke::<MyOperation>(Invocation::new(message)).await.expect("should process");
 
     let events = provider.events();
     assert_eq!(events.len(), 2);  // published 2x for departure signaling
@@ -354,9 +351,9 @@ Reference in MockProvider with `include_bytes!`:
 
 1. **Each test file** starts with `mod provider;`
 2. **Create provider** with `MockProvider::new()`
-3. **Create client** with `Client::new("owner").provider(provider.clone())`
-4. **Invoke handler** with `client.request(request).await`
-5. **Assert on response**: `response.status`, `response.body`
+3. **Create invoker** with `Invoker::new("owner", provider.clone())`
+4. **Invoke operation** with `invoker.invoke::<MyOperation>(Invocation::new(request)).await`
+5. **Assert on the plain operation output**
 6. **Assert on side effects**: `provider.events()`, `provider.requests_for(path)`
 7. **Error testing**: `.expect_err("message")` then assert `error.code()` and `error.description()`
 8. **Async runtime**: `#[tokio::test]`

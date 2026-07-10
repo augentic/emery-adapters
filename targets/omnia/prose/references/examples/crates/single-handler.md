@@ -1,6 +1,6 @@
-# Single Handler Example: r9k-adapter
+# Single-operation Example: r9k-adapter
 
-A messaging adapter crate with a single handler that receives XML messages, validates them, transforms them into domain events, and publishes to a topic. From the `train` project.
+A messaging adapter crate with a single operation that receives XML messages, validates them, transforms them into domain events, and publishes to a topic. From the `train` project.
 
 ## Crate Structure
 
@@ -9,7 +9,7 @@ crates/r9k-adapter/
 ├── Cargo.toml
 ├── src/
 │   ├── lib.rs          # Module declarations, error type, re-exports
-│   ├── handler.rs      # Handler<P> impl + standalone handle fn
+│   ├── handler.rs      # `Operation<P>` impl + standalone handle fn
 │   ├── r9k.rs          # Input types (XML deserialization, validation)
 │   ├── smartrak.rs     # Output types (event serialization)
 │   └── stops.rs        # Domain helper (stop info lookup)
@@ -34,7 +34,7 @@ mod r9k;
 mod smartrak;
 mod stops;
 
-use omnia_sdk::Error;
+use omnia_guest::Error;
 use thiserror::Error;
 
 pub use self::handler::*;
@@ -81,23 +81,24 @@ impl From<quick_xml::DeError> for R9kError {
 
 - Domain errors derive `thiserror::Error`
 - Each variant has a stable `code()` method for machine-readable error codes
-- `From<DomainError> for omnia_sdk::Error` maps all domain errors to an appropriate SDK variant
+- `From<DomainError> for omnia_guest::Error` maps all domain errors to an appropriate SDK variant
 - Additional `From` impls for library errors (e.g., `quick_xml::DeError`)
 
 ## src/handler.rs
 
-The Handler implementation and standalone handle function.
+The operation implementation and standalone business function.
 
 ```rust
 //! R9K Position Adapter
 
+use omnia_guest::api::invoke::CallContext;
+use omnia_guest::api::operation::Operation;
 use anyhow::Context as _;
 use bytes::Bytes;
 use chrono::Utc;
 use http::header::AUTHORIZATION;
 use http_body_util::Empty;
-use omnia_sdk::api::{Context, Handler, Reply};
-use omnia_sdk::{Config, Error, HttpRequest, Identity, Message, Publish, Result};
+use omnia_guest::{Config, Error, HttpRequest, Identity, Message, Publish, Result};
 use serde::Deserialize;
 
 use crate::r9k::TrainUpdate;
@@ -114,8 +115,8 @@ pub struct R9kMessage {
     pub train_update: TrainUpdate,
 }
 
-// Standalone handle function -- business logic lives here
-async fn handle<P>(owner: &str, request: R9kMessage, provider: &P) -> Result<Reply<()>>
+// Standalone business function; structural validation starts here.
+async fn handle<P>(owner: &str, request: R9kMessage, provider: &P) -> Result<()>
 where
     P: Config + HttpRequest + Identity + Publish,
 {
@@ -144,34 +145,35 @@ where
         }
     }
 
-    Ok(Reply::ok(()))
+    Ok(())
 }
 
-// Handler trait -- delegates to standalone function
-impl<P> Handler<P> for R9kMessage
+// Operation delegates to the standalone business function.
+pub struct R9kMessageOperation;
+
+impl<P> Operation<P> for R9kMessageOperation
 where
-    P: Config + HttpRequest + Identity + Publish,
+    P: omnia_guest::api::Provider + Config + HttpRequest + Identity + Publish,
 {
     type Error = Error;
-    type Input = Vec<u8>;
+    type Input = R9kMessage;
     type Output = ();
 
-    fn from_input(input: Vec<u8>) -> Result<Self> {
-        quick_xml::de::from_reader(input.as_ref())
-            .context("deserializing R9kMessage")
-            .map_err(Into::into)
-    }
-
-    async fn handle(self, ctx: Context<'_, P>) -> Result<Reply<()>> {
-        handle(ctx.owner, self, ctx.provider).await
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        // Structural validation is the first step; omit only when no checks apply.
+        handle(context.owner, input, context.provider).await
     }
 }
 ```
 
 ### Key Patterns
 
-- `from_input` uses `.context("...").map_err(Into::into)` -- never wraps in domain errors
-- `handle()` delegates to a standalone `async fn handle<P>(...)`
+- `Operation::call` receives typed input; transport decoding stays in the router
+- Structural validation precedes context loading; temporal/contextual validation follows it
+- `Operation::call` may delegate business logic to a standalone async function
 - Provider bounds list exactly the traits needed: `Config + HttpRequest + Identity + Publish`
 - Topic naming uses `{env}-{CONSTANT}` pattern
 - Repeated publication: `for _ in 0..N { sleep; publish; }` with no payload mutation
@@ -188,7 +190,7 @@ use std::fmt::{Display, Formatter};
 
 use chrono::{NaiveDate, Utc};
 use chrono_tz::Pacific;
-use omnia_sdk::Result;
+use omnia_guest::Result;
 use serde::Deserialize;
 use serde_repr::Deserialize_repr;
 
@@ -234,7 +236,7 @@ impl TrainUpdate {
             .unwrap_or_else(|| self.odd_train_id.clone().unwrap_or_default())
     }
 
-    /// Temporal validation -- uses Utc::now(), so must be in handle() not from_input().
+    /// Contextual validation; call only after loading runtime context.
     pub fn validate(&self) -> Result<()> {
         if self.changes.is_empty() {
             return Err(R9kError::NoUpdate("contains no updates".to_string()).into());
@@ -342,7 +344,7 @@ pub enum Direction {
 - Integer enums use `serde_repr::Deserialize_repr` with `#[repr(u8)]` or `#[repr(i8)]`
 - String enums use `#[serde(rename_all = "...")]`
 - Custom date deserializer for non-standard formats
-- Validation using `Utc::now()` is in a `validate()` method called from `handle()`, not `from_input()`
+- Validation using `Utc::now()` runs in the contextual phase after runtime policy is loaded
 - DST-safe timezone: `.earliest()` not `.single()`
 - Constants for validation thresholds: `MAX_DELAY_SECS`, `MIN_DELAY_SECS`
 
@@ -437,10 +439,10 @@ Domain helper that performs an external API lookup.
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Result, anyhow};
 use bytes::Bytes;
 use http_body_util::Empty;
-use omnia_sdk::{Config, HttpRequest, Identity, Publish};
+use omnia_guest::{Config, HttpRequest, Identity, Publish};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]

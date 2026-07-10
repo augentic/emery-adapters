@@ -4,7 +4,7 @@ Modifying the r9k-adapter crate to change validation thresholds and add a new op
 
 ## Starting State
 
-The `r9k-adapter` single-handler crate as shown in the [crate-writer single-handler example](../single-handler.md):
+The `r9k-adapter` single-operation crate as shown in the [crate-writer single-handler example](../single-handler.md):
 
 ```
 crates/r9k-adapter/
@@ -156,7 +156,7 @@ async fn rejects_outdated_message() {
     // Set up a message that is 65 seconds old
     let delay = 65;
     // ...
-    let result = client.request(request).await;
+    let result = invoker.invoke::<R9kMessageOperation>(Invocation::new(request)).await;
     assert!(result.is_err());
 }
 ```
@@ -169,7 +169,7 @@ async fn rejects_outdated_message() {
     // Set up a message that is 125 seconds old (exceeds new 120s threshold)
     let delay = 125;
     // ...
-    let result = client.request(request).await;
+    let result = invoker.invoke::<R9kMessageOperation>(Invocation::new(request)).await;
     assert!(result.is_err());
 }
 
@@ -178,17 +178,17 @@ async fn accepts_message_within_new_threshold() {
     // Set up a message that is 90 seconds old (within new 120s threshold)
     let delay = 90;
     // ...
-    let result = client.request(request).await;
+    let result = invoker.invoke::<R9kMessageOperation>(Invocation::new(request)).await;
     assert!(result.is_ok());
 }
 ```
 
 Update future-event tests similarly for the new -45 second boundary.
 
-If test assertions check the serialized output, verify `source_system` appears:
+In an HTTP-router integration test, verify the projector serializes `source_system`:
 
 ```rust
-let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+let body: serde_json::Value = serde_json::from_slice(response.body()).unwrap();
 assert_eq!(body["sourceSystem"], "r9k");
 ```
 

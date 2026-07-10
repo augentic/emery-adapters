@@ -16,7 +16,7 @@ For trait definitions and method signatures, see [capabilities.md](../capabiliti
 | **Identity**    | ANY HTTP call uses Bearer authentication            | Return realistic tokens; track requests           | [identity.md](identity.md)         |
 | **StateStore**  | Component uses caching or key-value storage         | OnceCell + Mutex; handle TTL                      | [state-store.md](state-store.md)   |
 | **Broadcast**   | Handler sends data to WebSocket clients             | Capture sends; verify channel and targets         | [broadcast.md](broadcast.md)       |
-| **Blobstore**   | Component stores or retrieves binary blobs          | In-memory HashMap; track writes                   | [blobstore.md](blobstore.md)       |
+| **BlobStore**   | Component stores or retrieves binary blobs          | In-memory HashMap; track writes                   | [blobstore.md](blobstore.md)       |
 | **DocumentStore** | Component stores or queries JSON documents        | In-memory HashMap; track operations               | [document-store.md](document-store.md) |
 
 ---
@@ -29,17 +29,15 @@ The Provider struct implements WASI capability traits, bridging domain logic to 
 
 ### Owner
 
-Every handler invocation requires an `owner` parameter -- a hardcoded string identifying the Omnia component owner (e.g. `"at"`). This is specified in the builder chain:
+Every operation invocation receives an owner from its shared `Invoker`:
 
 ```rust
-MyRequest::handler(input)?
-    .provider(&Provider::new())
-    .owner("at")        // <-- required owner identifier
-    .await
-    .map_err(Into::into)
+use omnia_guest::api::invoke::Invoker;
+
+let invoker = Invoker::new("at", Provider::new());
 ```
 
-The owner value is determined by the organization or tenant that owns the Omnia deployment. It is typically a short string (e.g. `"at"`) and must be consistent across all handlers in a guest.
+The owner value is determined by the organization or tenant that owns the Omnia deployment. It must be consistent across every transport router in a guest.
 
 ### Available Traits
 
@@ -54,7 +52,7 @@ Use when default SDK behavior is sufficient. Only implement the traits that doma
 Use `ensure_env!` when the guest requires environment variables at startup:
 
 ```rust
-use omnia_sdk::{Broadcast, Config, HttpRequest, Identity, Publish, StateStore, ensure_env};
+use omnia_guest::{Broadcast, Config, HttpRequest, Identity, Publish, StateStore, ensure_env};
 
 #[derive(Clone, Default)]
 pub struct Provider;
@@ -85,7 +83,7 @@ impl StateStore for Provider {}
 When no environment variables are needed, Provider can be a `const fn`:
 
 ```rust
-use omnia_sdk::{Config, HttpRequest, StateStore};
+use omnia_guest::{Config, HttpRequest, StateStore};
 
 #[derive(Clone, Default)]
 pub struct Provider;
@@ -120,7 +118,7 @@ Fails fast with clear error messages if any variable is missing. If the guest ha
 
 ## Provider Trait Composition
 
-Domain crates declare provider trait bounds on their functions and handler implementations. They never implement providers, construct host-side types, or call raw WASI modules directly. All external I/O flows through the generic `provider: &P` parameter.
+Domain crates declare provider trait bounds on their functions and operation implementations. They never implement providers, construct host-side types, or call raw WASI modules directly. All external I/O flows through the generic `provider: &P` parameter.
 
 ### Provider Bounds on Functions
 
@@ -147,58 +145,73 @@ Include **only** the traits the function actually calls. If a function only read
 
 This keeps the function testable (fewer mock traits) and self-documenting (bounds declare exactly what I/O occurs).
 
-### Provider Bounds on Handlers
+### Provider Bounds on Operations
 
-The `Handler<P>` implementation declares the full set of traits needed by the handler and all functions it calls:
+The `Operation<P>` implementation declares the full set of traits needed by the operation and all functions it calls:
 
 ```rust
-impl<P> Handler<P> for MyRequest
+use omnia_guest::api::invoke::CallContext;
+use omnia_guest::api::operation::Operation;
+pub struct MyRequestOperation;
+
+impl<P> Operation<P> for MyRequestOperation
 where
-    P: Config + HttpRequest + Publish,
+    P: omnia_guest::api::Provider + Config + HttpRequest + Publish,
 {
-    type Input = Vec<u8>;
+    type Error = omnia_guest::Error;
+    type Input = MyRequest;
     type Output = MyResponse;
-    type Error = omnia_sdk::Error;
 
-    fn from_input(input: Self::Input) -> Result<Self> {
-        serde_json::from_slice(&input)
-            .context("deserializing MyRequest")
-            .map_err(Into::into)
-    }
-
-    async fn handle(self, ctx: Context<'_, P>) -> Result<Reply<Self::Output>> {
-        let result = process_logic(ctx.provider, &self).await?;
-        Ok(result.into())
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        // Perform all structural validation here, before loading contextual state.
+        let result = process_logic(context.provider, &input).await?;
+        Ok(result)
     }
 }
 ```
 
-The handler's trait bounds are the **union** of all traits required by the internal functions it calls.
+The operation's trait bounds are the **union** of all traits required by the internal functions it calls.
 
 ### Composing Trait Bounds
 
-When a handler calls multiple functions with different bounds, the handler's bound is the union:
+When an operation calls multiple functions with different bounds, the operation's bound is the union:
 
 ```rust
+use omnia_guest::api::invoke::CallContext;
+use omnia_guest::api::operation::Operation;
 // Function A needs Config + HttpRequest
 async fn fetch_data<P: Config + HttpRequest>(provider: &P, id: &str) -> Result<Data> { ... }
 
 // Function B needs Config + Publish
 async fn publish_event<P: Config + Publish>(provider: &P, event: &Event) -> Result<()> { ... }
 
-// Handler needs Config + HttpRequest + Publish (the union)
-impl<P: Config + HttpRequest + Publish> Handler<P> for MyRequest {
-    async fn handle(self, ctx: Context<'_, P>) -> Result<Reply<MyResponse>> {
-        let data = fetch_data(ctx.provider, &self.id).await?;
-        publish_event(ctx.provider, &data.event).await?;
-        Ok(MyResponse { data }.into())
+// needs Config + HttpRequest + Publish (the union)
+pub struct MyRequestOperation;
+
+impl<P: omnia_guest::api::Provider + Config + HttpRequest + Publish> Operation<P> for MyRequestOperation
+{
+    type Error = Error;
+    type Input = MyRequest;
+    type Output = ();
+
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        // Perform all structural validation here, before loading contextual state.
+        let data = fetch_data(context.provider, &input.id).await?;
+        publish_event(context.provider, &data.event).await?;
+        Ok(MyResponse { data })
     }
 }
 ```
 
 ### The Authentication Pattern
 
-When any HTTP call requires a Bearer token, the handler must include `Identity` in its bounds and follow this sequence:
+When any HTTP call requires a Bearer token, the operation must include `Identity` in its bounds and follow this sequence:
 
 ```rust
 // 1. Read identity name from config
@@ -213,7 +226,7 @@ let request = http::Request::builder()
     // ...
 ```
 
-This means the handler bounds become `P: Config + Identity + HttpRequest` at minimum.
+This means the operation bounds become `P: Config + Identity + HttpRequest` at minimum.
 
 See [identity.md](identity.md) for mock implementations of the Identity trait.
 
@@ -221,7 +234,7 @@ See [identity.md](identity.md) for mock implementations of the Identity trait.
 
 1. **Never construct host-side types** -- No `Client::new()`, `RedisClient::connect()`, `Producer::new()`, etc.
 2. **Never create I/O abstractions** -- Don't wrap provider traits in custom abstractions.
-3. **Never call raw WASI modules** -- Domain crates use only `omnia_sdk` traits. Raw WASI calls (`omnia_wasi_http::handle`, etc.) belong in boundary/provider code.
+3. **Never call raw WASI modules** -- Domain crates use only `omnia_guest` traits. Raw WASI calls (`omnia_wasi_http::handle`, etc.) belong in boundary/provider code.
 4. **All state is explicit** -- No caching, memoization, or global state. All state flows through function parameters and provider calls.
 5. **Config, not env vars** -- Use `Config::get(provider, "KEY")`, never `std::env::var("KEY")`.
 
@@ -242,7 +255,7 @@ When a component uses multiple traits, combine the individual implementations. A
 ### Complete Example
 
 ```rust
-use omnia_sdk::{Config, HttpRequest, Publish, Identity, StateStore, Message};
+use omnia_guest::{Config, HttpRequest, Publish, Identity, StateStore, Message};
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use once_cell::sync::OnceCell;

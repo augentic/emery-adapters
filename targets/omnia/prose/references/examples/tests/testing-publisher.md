@@ -25,12 +25,14 @@ ex-messaging/
 └── Cargo.toml
 ```
 
-## Handler Code (Reference)
+## Operation Code (Reference)
 
 ### handlers.rs
 
 ```rust
-use omnia_sdk::{Config, Handler, Publish, Message};
+use omnia_guest::api::invoke::CallContext;
+use omnia_guest::api::operation::Operation;
+use omnia_guest::{Config, Publish, Message};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -43,18 +45,20 @@ pub struct PublishResponse {
     pub message: String,
 }
 
-impl<P: Config + Publish> Handler<P> for PublishRequest {
+pub struct PublishRequestOperation;
+
+impl<P: omnia_guest::api::Provider + Config + Publish> Operation<P> for PublishRequestOperation
+{
+    type Error = Error;
+    type Input = PublishRequest;
     type Output = PublishResponse;
 
-    async fn handle(self, provider: &P) -> anyhow::Result<Self::Output> {
-        let topic = Config::get(provider, "PUB_SUB_TOPIC").await?;
-        
-        let message = Message::new(self.message.as_bytes());
-        Publish::send(provider, &topic, &message).await?;
-        
-        Ok(PublishResponse {
-            message: format!("Published: {}", self.message),
-        })
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        // Structural validation is the first step; omit only when no checks apply.
+        handle(context.owner, input, context.provider).await
     }
 }
 ```
@@ -67,10 +71,13 @@ impl<P: Config + Publish> Handler<P> for PublishRequest {
 #[cfg(test)]
 mod tests {
     use ex_messaging::handlers::{
-        PublishRequest, PublishResponse, SendReceiveRequest, SendReceiveResponse,
+        PublishRequest, PublishRequestOperation, PublishResponse, SendReceiveRequest,
+        SendReceiveRequestOperation, SendReceiveResponse,
     };
-    use ex_messaging::request_reply::RequestReply;
-    use omnia_sdk::{Client, Config, Publish};
+    use ex_messaging::request_reply::Request;
+    use omnia_guest::api::invocation::Invocation;
+    use omnia_guest::api::invoke::Invoker;
+    use omnia_guest::{Config, Publish};
     use serde::Deserialize;
 
     struct MockProvider;
@@ -86,18 +93,18 @@ mod tests {
     }
 
     impl Publish for MockProvider {
-        async fn send(&self, topic: &str, message: &omnia_sdk::Message) -> anyhow::Result<()> {
+        async fn send(&self, topic: &str, message: &omnia_guest::Message) -> anyhow::Result<()> {
             tracing::debug!("Mock publish to topic '{topic}' with message: {:?}", message);
             Ok(())
         }
     }
 
-    impl RequestReply for MockProvider {
+    impl Request for MockProvider {
         async fn send_receive(
-            &self, _topic: &str, _message: &omnia_sdk::Message,
-        ) -> anyhow::Result<omnia_sdk::Message> {
+            &self, _topic: &str, _message: &omnia_guest::Message,
+        ) -> anyhow::Result<omnia_guest::Message> {
             let reply_payload = b"ACK".to_vec();
-            Ok(omnia_sdk::Message::new(&reply_payload))
+            Ok(omnia_guest::Message::new(&reply_payload))
         }
     }
 
@@ -112,10 +119,10 @@ mod tests {
         let fixture = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/pubsub1.json"));
         let test_case: PubSubTestCase =
             serde_json::from_str(fixture).expect("fixture JSON should deserialize");
-        let client = Client::new("tester").provider(MockProvider);
+        let invoker = Invoker::new("tester", MockProvider);
         let request = test_case.request.clone();
 
-        let response = client.request(request).await.expect("publish should succeed");
+        let response = invoker.invoke::<PublishRequestOperation>(Invocation::new(request)).await.expect("publish should succeed");
 
         assert_eq!(response.message, test_case.response.message);
     }
@@ -133,9 +140,9 @@ mod tests {
         let test_case: SendReceiveTestCase =
             serde_json::from_str(fixture).expect("fixture JSON should deserialize");
         let request = test_case.request.clone();
-        let client = Client::new("tester").provider(MockProvider);
+        let invoker = Invoker::new("tester", MockProvider);
 
-        let response = client.request(request).await.expect("send_receive should succeed");
+        let response = invoker.invoke::<SendReceiveRequestOperation>(Invocation::new(request)).await.expect("send_receive should succeed");
 
         assert_eq!(response.message, test_case.response.message);
     }
@@ -148,8 +155,10 @@ mod tests {
 
 ```rust
 mod tests {
-    use ex_messaging::handlers::{PublishRequest, PublishResponse};
-    use omnia_sdk::{Client, Config, Publish, Message};
+    use ex_messaging::handlers::{PublishRequest, PublishRequestOperation, PublishResponse};
+    use omnia_guest::api::invocation::Invocation;
+use omnia_guest::api::invoke::Invoker;
+use omnia_guest::{Config, Publish, Message};
     use std::sync::{Arc, Mutex};
 
     #[derive(Clone)]
@@ -199,12 +208,12 @@ mod tests {
     #[tokio::test]
     async fn publish_sends_to_correct_topic() {
         let provider = MockProvider::new();
-        let client = Client::new("tester").provider(provider.clone());
+        let invoker = Invoker::new("tester", provider.clone());
         let request = PublishRequest {
             message: "Hello, World!".to_string(),
         };
 
-        let response = client.request(request).await.expect("publish should succeed");
+        let response = invoker.invoke::<PublishRequestOperation>(Invocation::new(request)).await.expect("publish should succeed");
 
         // Verify response
         assert_eq!(response.message, "Published: Hello, World!");
@@ -222,14 +231,14 @@ mod tests {
     #[tokio::test]
     async fn multiple_publishes_captured() {
         let provider = MockProvider::new();
-        let client = Client::new("tester").provider(provider.clone());
+        let invoker = Invoker::new("tester", provider.clone());
 
         // Publish multiple messages
         for i in 1..=3 {
             let request = PublishRequest {
                 message: format!("Message {}", i),
             };
-            client.request(request).await.expect("publish should succeed");
+            invoker.invoke::<PublishRequestOperation>(Invocation::new(request)).await.expect("publish should succeed");
         }
 
         // Verify all messages captured
@@ -254,13 +263,13 @@ mod tests {
         }
 
         let provider = MockProvider::new();
-        let client = Client::new("tester").provider(provider.clone());
+        let invoker = Invoker::new("tester", provider.clone());
 
-        // Assume handler publishes structured events
+        // Assume operation publishes structured events
         let request = PublishRequest {
             message: "test".to_string(),
         };
-        client.request(request).await.expect("publish should succeed");
+        invoker.invoke::<PublishRequestOperation>(Invocation::new(request)).await.expect("publish should succeed");
 
         // Deserialize and verify event structure
         let published = provider.published_messages();
@@ -389,10 +398,10 @@ assert_eq!(event.data, "test");
 #[tokio::test]
 async fn publishes_to_correct_topic() {
     let provider = MockProvider::new();
-    let client = Client::new("tester").provider(provider.clone());
+    let invoker = Invoker::new("tester", provider.clone());
 
     let request = PublishRequest { message: "test".to_string() };
-    client.request(request).await.unwrap();
+    invoker.invoke::<PublishRequestOperation>(Invocation::new(request)).await.unwrap();
 
     let messages = provider.published_to_topic("test-topic");
     assert_eq!(messages.len(), 1);
@@ -446,11 +455,11 @@ assert_eq!(events[0].event_type, "Created");
 #[tokio::test]
 async fn handler_publishes_async_events() {
     let provider = MockProvider::new();
-    let client = Client::new("tester").provider(provider.clone());
+    let invoker = Invoker::new("tester", provider.clone());
 
-    // Handler may publish multiple events asynchronously
+    // may publish multiple events asynchronously
     let request = ComplexRequest { /* ... */ };
-    client.request(request).await.unwrap();
+    invoker.invoke::<PublishRequestOperation>(Invocation::new(request)).await.unwrap();
 
     // Wait for async publishing to complete
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
@@ -465,10 +474,10 @@ async fn handler_publishes_async_events() {
 ### request_reply.rs
 
 ```rust
-use omnia_sdk::Message;
+use omnia_guest::Message;
 
 #[async_trait::async_trait]
-pub trait RequestReply {
+pub trait Request {
     async fn send_receive(
         &self,
         topic: &str,
@@ -480,7 +489,7 @@ pub trait RequestReply {
 ### Mock Implementation
 
 ```rust
-impl RequestReply for MockProvider {
+impl Request for MockProvider {
     async fn send_receive(
         &self, _topic: &str, _message: &Message,
     ) -> anyhow::Result<Message> {
@@ -525,7 +534,7 @@ test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 **Solution**: Ensure provider is cloned before passing to client
 ```rust
 let provider = MockProvider::new();
-let client = Client::new("tester").provider(provider.clone());
+let invoker = Invoker::new("tester", provider.clone());
 // Use provider.published_messages() after request
 ```
 
@@ -561,7 +570,7 @@ some_async_call().await;
 
 ```toml
 [dependencies]
-omnia-sdk.workspace = true
+omnia-guest.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 anyhow.workspace = true

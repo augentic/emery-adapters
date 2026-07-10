@@ -26,7 +26,7 @@ SECURITY: Scan every .rs file in src/ for:
 
 WASM CONSTRAINTS: Scan every .rs file in src/ for:
 - std::env usage (must use Config provider)
-- std::fs usage (must use StateStore for key-value state, Blobstore for binary files, DocumentStore for JSON documents, or HttpRequest for remote resources)
+- std::fs usage (must use StateStore for key-value state, BlobStore for binary files, DocumentStore for JSON documents, or HttpRequest for remote resources)
 - std::net usage (must use HttpRequest provider)
 - std::thread usage (must be async)
 - Mutable global state (static mut, OnceCell outside LazyLock)
@@ -61,13 +61,18 @@ ERROR HANDLING: Search all .rs files in src/ for:
 - Generic error messages without context
 - Swallowed errors (caught but not logged or returned)
 
-VALIDATION LOGIC: Read all from_input() and handle() methods:
-- Structural validation (required fields, format, range) must be in from_input()
-- Temporal validation (Utc::now(), runtime state) must be in handle()
+VALIDATION LOGIC: Read every Operation::call implementation:
+- Structural validation (required fields, format, constant ranges) must run first
+- Temporal/contextual validation must run only after its time, config, identity, or persisted state is loaded
 - Missing validation on required fields or user input
 - Missing format validation (email, URL, phone)
 
-PROVIDER MISUSE: Check handler functions for:
+TRANSPORT ROUTING: Read every guest router, projector, and WIT export:
+- Typed HTTP/messaging/command routes point to the intended operations
+- Status/body/error and acknowledgement/retry policy live in projectors
+- Every exposed transport has an explicit export; unknown routes/topics fail
+
+PROVIDER MISUSE: Check operation functions for:
 - Missing provider trait bounds
 - Direct system calls instead of provider methods
 - Provider methods called incorrectly
@@ -138,7 +143,7 @@ For EACH finding (SEC-, COR-, QUA-, and UNI- prefixed):
 
 Then perform a COUNTER-SCAN of all .rs files in src/ looking for issues ALL
 THREE specialists missed. Common blind spots:
-- Error handling in edge paths (not just main handlers)
+- Error handling in edge paths (not just main operations)
 - Subtle type confusion (newtypes used inconsistently)
 - Race conditions in async code
 - Missing error context chains (? without .context())

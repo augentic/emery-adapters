@@ -4,17 +4,19 @@
 
 ## Overview
 
-The `Config` trait provides access to environment variables and configuration values. It is the most commonly used capability -- virtually every handler needs at least one config value for URLs, database names, topic names, or identity references.
+The `Config` trait provides access to environment variables and configuration values. It is the most commonly used capability -- virtually every operation needs at least one config value for URLs, database names, topic names, or identity references.
 
 **Trait definition:** See [../../references/capabilities.md](../../../capabilities.md#config)
 
 ## Simple Config Usage
 
-A handler that reads configuration values to build a greeting:
+An operation that reads configuration values to build a greeting:
 
 ```rust
+use omnia_guest::api::invoke::CallContext;
+use omnia_guest::api::operation::Operation;
 use anyhow::Context as _;
-use omnia_sdk::{Config, Context, Error, Handler, Reply, Result};
+use omnia_guest::{Config, Error, Result};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -42,19 +44,20 @@ async fn greeting<P: Config>(
     })
 }
 
-impl<P: Config> Handler<P> for GreetingRequest {
+pub struct GreetingRequestOperation;
+
+impl<P: omnia_guest::api::Provider + Config> Operation<P> for GreetingRequestOperation
+{
     type Error = Error;
-    type Input = Vec<u8>;
+    type Input = GreetingRequest;
     type Output = GreetingResponse;
 
-    async fn handle(self, ctx: Context<'_, P>) -> Result<Reply<GreetingResponse>> {
-        Ok(greeting(ctx.owner, ctx.provider, self).await?.into())
-    }
-
-    fn from_input(input: Self::Input) -> Result<Self> {
-        serde_json::from_slice(&input)
-            .context("deserializing GreetingRequest")
-            .map_err(Into::into)
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        // Structural validation is the first step; omit only when no checks apply.
+        greeting(context.owner, context.provider, input).await
     }
 }
 ```
@@ -142,10 +145,10 @@ AZURE_IDENTITY=my-identity
 2. **Parse explicitly** -- Config returns `String`, parse to the required type
 3. **Document all keys** -- Every key must appear in `.env.example`
 4. **Use descriptive key names** -- `API_URL`, not `URL`; `DATABASE_NAME`, not `DB`
-5. **Config is always in bounds** -- Include `Config` in every handler's provider bounds
+5. **Config is always in bounds** -- Include `Config` in every operation's provider bounds
 
 ## References
 
 - See [../../references/capabilities.md](../../../capabilities.md) for the full trait definition
-- See [../../references/sdk-api.md](../../../sdk-api.md) for the Handler trait pattern
+- See [../../references/sdk-api.md](../../../sdk-api.md) for the `Operation<P>` trait pattern
 - See [../../references/providers.md](../../../providers/README.md) for provider bound composition

@@ -1,14 +1,14 @@
 # Provider Capability Traits
 
-All 9 traits from `omnia_sdk::capabilities`. Each trait has default WASM32 implementations that use WASI bindings -- the guest Provider struct needs only empty `impl` blocks.
+All 9 traits from `omnia_guest::capabilities`. Each trait has default WASM32 implementations that use WASI bindings -- the guest Provider struct needs only empty `impl` blocks.
 
-**Source of truth:** [`omnia-sdk/src/capabilities.rs`](https://github.com/augentic/omnia/blob/main/crates/omnia-sdk/src/capabilities.rs)
+**Source of truth:** [`omnia-guest/src/capabilities.rs`](https://github.com/augentic/omnia/blob/main/crates/omnia-guest/src/capabilities.rs)
 
 ## Overview
 
-Generated domain crates run as WASI guests inside the Omnia runtime. They cannot access the OS directly (no `std::fs`, `std::net`, `std::env`, `std::thread`). Instead, all external I/O flows through **capability traits** defined in `omnia-sdk`. The runtime provides concrete implementations of these traits via the provider.
+Generated domain crates run as WASI guests inside the Omnia runtime. They cannot access the OS directly (no `std::fs`, `std::net`, `std::env`, `std::thread`). Instead, all external I/O flows through **capability traits** defined in `omnia-guest`. The runtime provides concrete implementations of these traits via the provider.
 
-Domain crate code uses the traits as generic bounds on functions and handler implementations. The code never implements or constructs the provider -- it only declares which capabilities it needs.
+Domain crate code uses the traits as generic bounds on functions and operation implementations. The code never implements or constructs the provider -- it only declares which capabilities it needs.
 
 ## Config
 
@@ -16,10 +16,10 @@ Read runtime configuration values (environment variables, config store).
 
 | Entity              | Name                                                         |
 | ------------------- | ------------------------------------------------------------ |
-| **Crate**           | `omnia_sdk`                                                  |
+| **Crate**           | `omnia_guest`                                                  |
 | **WASI module**     | `omnia_wasi_config`                                          |
-| **Import**          | `use omnia_sdk::Config;`                                     |
-| **Always required** | Yes -- virtually all handlers need at least one config value |
+| **Import**          | `use omnia_guest::Config;`                                     |
+| **Always required** | Yes -- virtually all operations need at least one config value |
 
 ```rust
 pub trait Config: Send + Sync {
@@ -34,9 +34,9 @@ let env = Config::get(provider, "ENV").await.unwrap_or_else(|_| "dev".to_string(
 let url = Config::get(provider, "BLOCK_MGT_URL").await?;
 ```
 
-**Include when**: handler needs environment variables, API URLs, feature flags.
+**Include when**: operation needs environment variables, API URLs, feature flags.
 
-**Specify triggers**: any environment variable or configuration value referenced in the artifacts. Always include `Config` in handler bounds as a baseline.
+**Specify triggers**: any environment variable or configuration value referenced in the artifacts. Always include `Config` in operation bounds as a baseline.
 
 **Cargo.toml**: no extra dependencies needed.
 
@@ -46,9 +46,9 @@ Make outbound HTTP requests to external APIs.
 
 |                 |                               |
 | --------------- | ----------------------------- |
-| **Crate**       | `omnia_sdk`                   |
+| **Crate**       | `omnia_guest`                   |
 | **WASI module** | `omnia_wasi_http`             |
-| **Import**      | `use omnia_sdk::HttpRequest;` |
+| **Import**      | `use omnia_guest::HttpRequest;` |
 
 ```rust
 pub trait HttpRequest: Send + Sync {
@@ -95,7 +95,7 @@ let response = HttpRequest::fetch(provider, request)
     .map_err(|e| bad_gateway!("fetching worksites: {e}"))?;
 ```
 
-**Include when**: handler calls external HTTP APIs (third-party REST services, partner integrations, external microservices).
+**Include when**: operation calls external HTTP APIs (third-party REST services, partner integrations, external microservices).
 
 **Specify triggers**: external HTTP calls, REST API integrations; any `fetch`, `axios`, `got`, or HTTP client usage in code-analysis artifacts; any API endpoint calls in requirements artifacts.
 
@@ -107,8 +107,8 @@ let response = HttpRequest::fetch(provider, request)
 | Azure Cosmos DB (SQL/table) | `TableStore` | Never raw HTTP to `*.documents.azure.com` |
 | Azure Cosmos DB (document) | `DocumentStore` | Never raw HTTP to `*.documents.azure.com` |
 | MongoDB / document DBs | `DocumentStore` | Never raw HTTP to document store endpoints |
-| Azure Blob Storage | `Blobstore` | Never raw HTTP to `*.blob.core.windows.net` |
-| AWS S3 | `Blobstore` | Never raw HTTP to S3 endpoints |
+| Azure Blob Storage | `BlobStore` | Never raw HTTP to `*.blob.core.windows.net` |
+| AWS S3 | `BlobStore` | Never raw HTTP to S3 endpoints |
 | Redis / Memcached | `StateStore` | Never raw HTTP to cache endpoints |
 | SQL databases | `TableStore` | Never raw HTTP to database endpoints |
 
@@ -118,21 +118,21 @@ The Omnia runtime provides native adapters for these services behind the respect
 
 ### HttpError
 
-The SDK exports `HttpError` as the standard Axum-compatible error type for HTTP guest handlers:
+`omnia-guest` exports `HttpError` as the standard Axum-compatible error type for HTTP guest routing:
 
 ```rust
 use axum::response::IntoResponse;
-use omnia_sdk::{HttpError, Reply};
+use omnia_guest::api::http::HttpError;
 
 pub type HttpResult<T: IntoResponse, E: IntoResponse = HttpError> = Result<T, E>;
 ```
 
 `HttpError` is a struct with **private fields**. It cannot be constructed directly -- it is created via `From` implementations:
 
-- `From<omnia_sdk::Error>` -- maps SDK error variants to HTTP status codes
+- `From<omnia_guest::Error>` -- maps SDK error variants to HTTP status codes
 - `From<anyhow::Error>` -- maps to 500 Internal Server Error
 
-The resulting HTTP status codes are limited to the four `omnia_sdk::Error` variants:
+The four classified variants map to fixed statuses:
 
 | SDK Variant    | HTTP Status |
 | -------------- | ----------- |
@@ -141,7 +141,7 @@ The resulting HTTP status codes are limited to the four `omnia_sdk::Error` varia
 | `ServerError`  | 500         |
 | `BadGateway`   | 502         |
 
-Status codes outside this set (e.g., 401 Unauthorized, 403 Forbidden, 409 Conflict) are **not available** through the standard `HttpError` path. When additional status codes are needed, use a custom guest error type -- see [guest-patterns.md](guest-patterns.md#custom-guest-error-type).
+`Error::Json` parses its `code` as an HTTP status and carries a domain-controlled JSON body; an invalid numeric code falls back to 500.
 
 ## Publish
 
@@ -149,9 +149,9 @@ Send messages to topics (Kafka, message broker).
 
 |                 |                                      |
 | --------------- | ------------------------------------ |
-| **Crate**       | `omnia_sdk`                          |
+| **Crate**       | `omnia_guest`                          |
 | **WASI module** | `omnia_wasi_messaging`               |
-| **Import**      | `use omnia_sdk::{Publish, Message};` |
+| **Import**      | `use omnia_guest::{Publish, Message};` |
 
 ```rust
 #[derive(Clone, Debug)]
@@ -177,7 +177,7 @@ pub trait Publish: Send + Sync {
 **Usage** (from r9k-adapter):
 
 ```rust
-use omnia_sdk::Message;
+use omnia_guest::Message;
 
 let payload = serde_json::to_vec(&event).context("serializing event")?;
 let mut message = Message::new(&payload);
@@ -195,7 +195,7 @@ let env = Config::get(provider, "ENV").await.unwrap_or_else(|_| "dev".to_string(
 let topic = format!("{env}-{OUTPUT_TOPIC}");
 ```
 
-**Include when**: handler publishes messages to topics.
+**Include when**: operation publishes messages to topics.
 
 **Specify triggers**: event publishing, message sending, queue operations; any `producer.send`, `producer.sendBatch` in code-analysis artifacts; any messaging/event publishing in requirements artifacts.
 
@@ -207,9 +207,9 @@ Key-value store for caching (Redis-backed).
 
 |                 |                              |
 | --------------- | ---------------------------- |
-| **Crate**       | `omnia_sdk`                  |
+| **Crate**       | `omnia_guest`                  |
 | **WASI module** | `omnia_wasi_keyvalue`        |
-| **Import**      | `use omnia_sdk::StateStore;` |
+| **Import**      | `use omnia_guest::StateStore;` |
 
 ```rust
 pub trait StateStore: Send + Sync {
@@ -244,7 +244,7 @@ StateStore::set(provider, "cache-key", &bytes, Some(300)).await?;
 StateStore::delete(provider, "cache-key").await?;
 ```
 
-**Include when**: handler needs caching or state persistence across invocations. Common methods using global singletons for managing state must be avoided (see [guardrails.md](guardrails.md)); use `StateStore` instead.
+**Include when**: operation needs caching or state persistence across invocations. Common methods using global singletons for managing state must be avoided (see [guardrails.md](guardrails.md)); use `StateStore` instead.
 
 **Specify triggers**: state storage, caching, Redis operations; any `redis.get`, `redis.set`, `redis.del` in code-analysis artifacts; any state/cache requirements in requirements artifacts.
 
@@ -258,9 +258,9 @@ Obtain access tokens from identity providers (Azure AD, etc.).
 
 |                 |                            |
 | --------------- | -------------------------- |
-| **Crate**       | `omnia_sdk`                |
+| **Crate**       | `omnia_guest`                |
 | **WASI module** | `omnia_wasi_identity`      |
-| **Import**      | `use omnia_sdk::Identity;` |
+| **Import**      | `use omnia_guest::Identity;` |
 
 ```rust
 pub trait Identity: Send + Sync {
@@ -295,7 +295,7 @@ Database access (queries, CRUD, and statements) for SQL databases. An ORM layer 
 
 |                 |                                                                                        |
 | --------------- | -------------------------------------------------------------------------------------- |
-| **Crate**       | `omnia_sdk`                                                                            |
+| **Crate**       | `omnia_guest`                                                                            |
 | **WASI module** | `omnia_wasi_sql` (covers both SQL and NoSQL stores)               |
 | **Import**      | `use omnia_orm::{SelectBuilder, InsertBuilder, UpdateBuilder, DeleteBuilder, Filter};` |
 
@@ -357,11 +357,11 @@ let users = SelectBuilder::<User>::new()
     .await?;
 ```
 
-**Include when**: handler needs SQL database access — PostgreSQL, MySQL, SQL Server, Cosmos DB SQL API, or any relational/SQL data store.
+**Include when**: operation needs SQL database access — PostgreSQL, MySQL, SQL Server, Cosmos DB SQL API, or any relational/SQL data store.
 
 **Specify triggers**: SQL database operations, CRUD patterns; any database queries or table references in requirements artifacts; any SQL/ORM operations in code-analysis artifacts; any "Table/database access" capability in the Source Capabilities Summary; any external service with type "database" (SQL). Azure Table Storage is **not** a trigger for `TableStore` — use `DocumentStore` instead.
 
-**Cargo.toml**: no extra dependencies (types come from `omnia-sdk` re-exports). ORM requires `omnia-orm`.
+**Cargo.toml**: no extra dependencies (types come from `omnia-guest` re-exports). ORM requires `omnia-orm`.
 
 ## Broadcast
 
@@ -369,9 +369,9 @@ Send events to WebSocket clients.
 
 |                 |                             |
 | --------------- | --------------------------- |
-| **Crate**       | `omnia_sdk`                 |
+| **Crate**       | `omnia_guest`                 |
 | **WASI module** | `omnia_wasi_websocket`      |
-| **Import**      | `use omnia_sdk::Broadcast;` |
+| **Import**      | `use omnia_guest::Broadcast;` |
 
 ```rust
 pub trait Broadcast: Send + Sync {
@@ -405,13 +405,13 @@ Broadcast::send(provider, "default", &payload, None).await?;
 Broadcast::send(provider, "channel", &data, Some(vec![socket_id])).await?;
 ```
 
-**Include when**: handler sends replies over WebSocket connections. This is the Omnia equivalent of `ws.send()`. When migrating a WebSocket client that both receives and sends messages, use a WebSocket handler (for receiving) combined with `Broadcast` (for sending replies). Do NOT mark WebSocket send/reply as a missing capability.
+**Include when**: operation sends replies over WebSocket connections. This is the Omnia equivalent of `ws.send()`. When migrating a WebSocket client that both receives and sends messages, use a WebSocket handler (for receiving) combined with `Broadcast` (for sending replies). Do NOT mark WebSocket send/reply as a missing capability.
 
 **Specify triggers**:
 
 - Real-time push notifications, live updates to connected clients
 - WebSocket event publishing
-- **WebSocket reply/response patterns** — handler receives a WebSocket event and sends data back (e.g., auth handshake responses, protocol acknowledgements, command replies)
+- **WebSocket reply/response patterns** — operation receives a WebSocket event and sends data back (e.g., auth handshake responses, protocol acknowledgements, command replies)
 - **Bidirectional WebSocket communication** — inbound events trigger outbound messages on the same channel
 - **Protocol handshake sequences** — auth request/response, command/ack patterns over WebSocket
 - Any `ws.send()`, `socket.send()`, `socket.write()`, `connection.send()`, `connection.write()`, `websocket.send`, `io.emit`, or broadcast patterns in code-analysis artifacts
@@ -419,70 +419,74 @@ Broadcast::send(provider, "channel", &data, Some(vec![socket_id])).await?;
 
 **Cargo.toml**: no extra dependencies.
 
-## Blobstore
+## BlobStore
 
 Binary object storage (Azure Blob Storage, AWS S3, local filesystem blobs).
 
 ||                 |                              |
 || --------------- | ---------------------------- |
-|| **Crate**       | `omnia_sdk`                  |
+|| **Crate**       | `omnia_guest`                  |
 || **WASI module** | `omnia_wasi_blobstore`       |
-|| **Import**      | `use omnia_sdk::Blobstore;`  |
+|| **Import**      | `use omnia_guest::BlobStore;`  |
 
 ```rust
-pub trait Blobstore: Send + Sync {
-    fn get_data(
-        &self, container: &str, name: &str, start: u64, end: u64,
+pub trait BlobStore: Send + Sync {
+    fn get(
+        &self, container: &str, name: &str,
     ) -> impl Future<Output = Result<Option<Vec<u8>>>> + Send;
 
-    fn write_data(
+    fn put(
         &self, container: &str, name: &str, data: &[u8],
     ) -> impl Future<Output = Result<()>> + Send;
 
-    fn delete_object(
+    fn delete(
         &self, container: &str, name: &str,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    fn has_object(
+    fn has(
         &self, container: &str, name: &str,
     ) -> impl Future<Output = Result<bool>> + Send;
 
-    fn list_objects(
+    fn list(
         &self, container: &str,
     ) -> impl Future<Output = Result<Vec<String>>> + Send;
+
+    fn get_range(
+        &self, container: &str, name: &str, start: u64, end: u64,
+    ) -> impl Future<Output = Result<Vec<u8>>> + Send;
 }
 ```
 
 - `container` — logical container / bucket name
 - `name` — object key within the container
-- `start` / `end` — byte range for partial reads (pass `0, 0` for full read)
+- `start` / `end` — inclusive byte range for `get_range`; use `get` for a full read
 
 **Usage**:
 
 ```rust
 // Write a blob
 let data = serde_json::to_vec(&report)?;
-Blobstore::write_data(provider, "reports", &key, &data).await?;
+BlobStore::put(provider, "reports", &key, &data).await?;
 
 // Read a blob
-let bytes = Blobstore::get_data(provider, "reports", &key, 0, 0)
+let bytes = BlobStore::get(provider, "reports", &key)
     .await?
     .ok_or_else(|| bad_request!("blob not found: {key}"))?;
 
 // Check existence
-if Blobstore::has_object(provider, "reports", &key).await? {
-    Blobstore::delete_object(provider, "reports", &key).await?;
+if BlobStore::has(provider, "reports", &key).await? {
+    BlobStore::delete(provider, "reports", &key).await?;
 }
 
 // List all objects in a container
-let keys = Blobstore::list_objects(provider, "reports").await?;
+let keys = BlobStore::list(provider, "reports").await?;
 ```
 
-**Include when**: handler stores or retrieves binary blobs, files, or large unstructured payloads. Use for file uploads/downloads, report storage, image/media assets, or any binary content addressed by key.
+**Include when**: an operation stores or retrieves binary blobs, files, or large unstructured payloads. Use for file uploads/downloads, report storage, image/media assets, or any binary content addressed by key.
 
 **Specify triggers**: blob storage, file uploads/downloads, Azure Blob Storage, AWS S3, object storage; any `BlobServiceClient`, `ContainerClient`, `uploadBlob`, `downloadBlob`, `S3Client`, `putObject`, `getObject` in code-analysis artifacts; any binary storage requirements in requirements artifacts.
 
-**Exclusion — do NOT use for structured data**: Use `TableStore` for tabular/row data, `DocumentStore` for JSON documents, and `StateStore` for small key-value cache entries. `Blobstore` is for opaque binary payloads.
+**Exclusion — do NOT use for structured data**: Use `TableStore` for tabular/row data, `DocumentStore` for JSON documents, and `StateStore` for small key-value cache entries. `BlobStore` is for opaque binary payloads.
 
 **Cargo.toml**: no extra dependencies.
 
@@ -492,13 +496,13 @@ JSON document storage (Azure Table Storage, Cosmos DB, MongoDB, PoloDB, and othe
 
 ||                 |                                   |
 || --------------- | --------------------------------- |
-|| **Crate**       | `omnia_sdk`                       |
+|| **Crate**       | `omnia_guest`                       |
 || **WASI module** | `omnia_wasi_jsondb`               |
-|| **Import**      | `use omnia_sdk::DocumentStore;`   |
-|| **Types**       | `use omnia_sdk::document_store::{Document, QueryOptions, QueryResult, Filter, SortField};` |
+|| **Import**      | `use omnia_guest::DocumentStore;`   |
+|| **Types**       | `use omnia_guest::document_store::{Document, QueryOptions, QueryResult, Filter, SortField};` |
 
 ```rust
-use omnia_sdk::document_store::{Document, QueryOptions, QueryResult};
+use omnia_guest::document_store::{Document, QueryOptions, QueryResult};
 
 pub trait DocumentStore: Send + Sync {
     fn get(
@@ -557,7 +561,7 @@ pub struct QueryResult {
 **Usage**:
 
 ```rust
-use omnia_sdk::document_store::{Document, QueryOptions, Filter};
+use omnia_guest::document_store::{Document, QueryOptions, Filter};
 
 // Store a document
 let payload = serde_json::to_vec(&customer)?;
@@ -584,7 +588,7 @@ for doc in &result.documents {
 }
 ```
 
-**Include when**: handler stores or retrieves JSON documents by key or query. Use for document databases, Azure Table Storage, flexible schema storage, or any data where the natural shape is a JSON document rather than a tabular row. For Azure Table Storage, model `PartitionKey` and `RowKey` as regular fields in the serialized document.
+**Include when**: operation stores or retrieves JSON documents by key or query. Use for document databases, Azure Table Storage, flexible schema storage, or any data where the natural shape is a JSON document rather than a tabular row. For Azure Table Storage, model `PartitionKey` and `RowKey` as regular fields in the serialized document.
 
 **CRITICAL — Azure Table Storage is DocumentStore, NOT TableStore or HttpRequest**: When the source code or artifacts describe access to Azure Table Storage (via `@azure/data-tables` SDK, REST API calls to `*.table.core.windows.net`, SharedKey/SAS authentication, or `TableClient.listEntities`), use `DocumentStore` — never `TableStore` or `HttpRequest`. The Omnia runtime provides a native Azure Table Storage adapter behind the `DocumentStore` trait.
 
@@ -596,46 +600,45 @@ for doc in &result.documents {
 |------------|-------|------|
 | Tabular rows, SQL queries | `TableStore` | Relational data, SQL CRUD |
 | JSON documents by key/query | `DocumentStore` | Cosmos DB documents, MongoDB collections, flexible schema |
-| Binary blobs by key | `Blobstore` | Files, images, large payloads, opaque binary data |
+| Binary blobs by key | `BlobStore` | Files, images, large payloads, opaque binary data |
 | Small key-value cache entries | `StateStore` | Redis cache, session state, TTL-based expiry |
 
-**Cargo.toml**: no extra dependencies (types come from `omnia-sdk` re-exports via `omnia_wasi_jsondb`).
+**Cargo.toml**: no extra dependencies (types come from `omnia-guest` re-exports via `omnia_wasi_jsondb`).
 
-## IntoBody
+## HTTP projector
 
-Custom response body serialization for HTTP handler output types.
+HTTP projection is transport policy, not a provider capability or a trait on output types.
 
 |            |                            |
 | ---------- | -------------------------- |
-| **Crate**  | `omnia_sdk`                |
-| **Import** | `use omnia_sdk::IntoBody;` |
+| **Crate**  | `omnia-guest` |
+| **Import** | `use omnia_guest::api::http::Projector;` |
 
 ```rust
-pub trait IntoBody: Body {
-    fn into_body(self) -> anyhow::Result<Vec<u8>>;
+pub trait Projector<O, P>
+where
+    O: Operation<P>,
+    P: Provider,
+{
+    fn output(&self, output: O::Output) -> Response;
+    fn error(&self, error: O::Error) -> Response;
 }
 ```
 
 **Usage**:
 
 ```rust
-use anyhow::Context as _;
-use omnia_sdk::IntoBody;
-
-impl IntoBody for DetectionReply {
-    fn into_body(self) -> anyhow::Result<Vec<u8>> {
-        serde_json::to_vec(&self).context("serializing DetectionReply")
-    }
-}
+use axum::response::Response;
+use omnia_guest::api::http::Projector;
 ```
 
-**Include when**: non-JSON response formats (XML, binary, plain text), custom serialization logic, or types that need explicit control over their wire representation. For standard JSON responses, `IntoBody` is not needed -- the default `Reply` serialization handles it. Messaging handlers use `type Output = ()` and do not need `IntoBody`.
+**Include when**: status is not 200, headers are required, output is XML/binary/plain text, or errors need a custom envelope. Standard JSON routes use the default `Json` projector.
 
 **Cargo.toml**: no extra dependencies.
 
 ## Capability Selection Summary
 
-| Specify Pattern                      | Trait         | Handler Bound                     |
+| Specify Pattern                      | Trait         | Operation bound                   |
 | ------------------------------- | ------------- | --------------------------------- |
 | Environment variables, URLs     | `Config`      | `P: Config`                       |
 | Outbound HTTP calls             | `HttpRequest` | `P: HttpRequest`                  |
@@ -646,11 +649,11 @@ impl IntoBody for DetectionReply {
 | Azure Table Store               | `DocumentStore` | `P: DocumentStore`              |
 | Object-relational mapping (SQL) | `TableStore`  | `P: TableStore` (use `omnia_orm`) |
 | WebSocket send/reply            | `Broadcast`      | `P: Broadcast`                    |
-| Binary blobs (Azure Blob Storage, AWS S3, etc) | `Blobstore` | `P: Blobstore`           |
+| Binary blobs (Azure Blob Storage, AWS S3, etc) | `BlobStore` | `P: BlobStore`           |
 | JSON document storage (Cosmos DB, MongoDB, etc) | `DocumentStore` | `P: DocumentStore`    |
-| HTTP response serialization     | `IntoBody`       | impl on Output type               |
+| HTTP response projection        | `http::Projector<O, P>` | transport-boundary policy         |
 
-**Managed data store override**: When the artifacts or source code describe direct HTTP/REST API access to a managed data store (Azure Table Storage, Azure Cosmos DB, MongoDB, Redis, Azure Blob Storage, etc.), do NOT use `HttpRequest`. Use the appropriate storage trait (`TableStore` for SQL databases, `DocumentStore` for Azure Table Storage and document databases, `Blobstore` for blob storage, `StateStore` for key-value caches). The Omnia runtime provides native adapters for these services. Constructing raw HTTP requests with storage-specific authentication (SharedKey, HMAC-SHA256, SAS tokens) to storage service REST APIs is always wrong — the runtime handles authentication internally.
+**Managed data store override**: When the artifacts or source code describe direct HTTP/REST API access to a managed data store (Azure Table Storage, Azure Cosmos DB, MongoDB, Redis, Azure Blob Storage, etc.), do NOT use `HttpRequest`. Use the appropriate storage trait (`TableStore` for SQL databases, `DocumentStore` for Azure Table Storage and document databases, `BlobStore` for blob storage, `StateStore` for key-value caches). The Omnia runtime provides native adapters for these services. Constructing raw HTTP requests with storage-specific authentication (SharedKey, HMAC-SHA256, SAS tokens) to storage service REST APIs is always wrong — the runtime handles authentication internally.
 
 **Cache-aside / on-demand loading (data source + StateStore):** When the artifacts list both a data store (e.g. Azure Table Storage, SQL database) as the source of truth and a cache for the same data, or when the legacy loads data from a data store on startup into an in-memory cache, include **both** the data source trait (`DocumentStore` for Azure Table Storage/document databases, `TableStore` for SQL databases, or `HttpRequest` for external APIs) and `StateStore` and implement cache-aside:
 1. Read from `StateStore` (cache).
@@ -658,20 +661,20 @@ impl IntoBody for DetectionReply {
 3. Write the result to `StateStore` with a TTL (replacing legacy periodic refresh with TTL-based expiry).
 4. Return the data.
 
-Do **not** assume a separate cron/ETL component pre-populates the cache. The handler is self-sufficient and fetches data on demand. The legacy "load on startup" pattern becomes "load on first request" in the WASM guest.
+Do **not** assume a separate cron/ETL component pre-populates the cache. The operation is self-sufficient and fetches data on demand. The legacy "load on startup" pattern becomes "load on first request" in the WASM guest.
 
 When an HTTP call requires authentication, include **both** `HttpRequest` and `Identity`.
 
-Handlers declare **only** the traits they actually use:
+Operations declare **only** the provider traits they actually use:
 
 ```rust
 // Only needs config and HTTP
-async fn handle<P>(_owner: &str, req: MyRequest, provider: &P) -> Result<Reply<MyResponse>>
+async fn handle<P>(_owner: &str, req: MyRequest, provider: &P) -> Result<MyResponse>
 where
     P: Config + HttpRequest,
 
 // Needs config, HTTP, auth, and publishing
-async fn handle<P>(_owner: &str, req: R9kMessage, provider: &P) -> Result<Reply<()>>
+async fn handle<P>(_owner: &str, req: R9kMessage, provider: &P) -> Result<()>
 where
     P: Config + HttpRequest + Identity + Publish,
 ```

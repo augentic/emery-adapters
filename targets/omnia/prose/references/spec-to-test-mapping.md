@@ -20,12 +20,12 @@ Omnia tests are async and run on the Tokio runtime:
 
 ## WHEN clause to test setup
 
-The WHEN clause determines test input construction against the service client and its mock provider:
+The WHEN clause determines typed operation input construction against the invoker and its mock provider:
 
 | WHEN Pattern | Test Setup |
 | --- | --- |
-| WHEN user sends valid request with field X = Y | `let request = Handler { x: "Y".to_string(), .. };` |
-| WHEN request is missing required field | `let request = Handler { field: "".to_string(), .. };` |
+| WHEN user sends valid request with field X = Y | `let input = MyInput { x: "Y".to_string(), .. };` |
+| WHEN request is missing required field | `let input = MyInput { field: "".to_string(), .. };` |
 | WHEN external API returns error | Configure MockProvider to return error for that path |
 | WHEN message arrives on topic T | `let message = build_message(/* topic T payload */);` |
 
@@ -35,15 +35,15 @@ The THEN clause determines test assertions against the response, provider, and s
 
 | THEN Pattern | Assertion |
 | --- | --- |
-| THEN system returns HTTP 200 with data | `assert_eq!(response.status, 200);` + body field assertions |
-| THEN system returns error CODE | `let err = client.request(req).await.expect_err("...");` + `assert_eq!(err.code(), "CODE");` |
+| THEN operation succeeds with data | Assert fields on the plain operation output |
+| THEN system returns error CODE | `let err = invoker.invoke::<MyOperation>(Invocation::new(input)).await.expect_err("...");` + `assert_eq!(err.code(), "CODE");` |
 | THEN system publishes event to topic T | `let events = provider.events();` + topic and payload assertions |
 | THEN system caches result for N seconds | Assert StateStore was called with expected TTL |
 | THEN system calls external API at path P | `let calls = provider.requests_for("P");` + `assert_eq!(calls.len(), 1);` |
 
 ## Worked example — validation requirement
 
-Validation requirements (per the shared base) construct invalid input and assert the resulting error. The Omnia idiom uses `MockProvider` + `Client`:
+Validation requirements construct invalid typed input and assert the resulting error through `MockProvider` + `Invoker`:
 
 ```markdown
 ### Requirement: Input validation
@@ -58,10 +58,13 @@ ID: REQ-002
 #[tokio::test]
 async fn test_fleet_api_missing_worksite_code() {
     let provider = MockProvider::new();
-    let client = Client::new("owner").provider(provider.clone());
+    let invoker = Invoker::new("owner", provider.clone());
 
     let request = GetWorksiteRequest { worksite_code: "".to_string(), .. };
-    let error = client.request(request).await.expect_err("should reject empty code");
+    let error = invoker
+        .invoke::<GetWorksite>(Invocation::new(request))
+        .await
+        .expect_err("should reject empty code");
     assert_eq!(error.code(), "missing_worksite_code");
 }
 ```
