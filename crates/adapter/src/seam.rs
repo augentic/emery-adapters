@@ -256,7 +256,7 @@ pub struct Report {
     pub ui_surface: Option<UiSurface>,
 }
 
-/// A source adapter's self-description — mirrors the WIT `source.manifest`
+/// A source adapter's metadata — mirrors the WIT `source.metadata`
 /// record. Read by the host at resolve time from compiled-in constants.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SourceMetadata {
@@ -287,7 +287,7 @@ pub struct PlatformsCapability {
     pub default: Vec<Platform>,
 }
 
-/// A target adapter's self-description — mirrors the WIT `target.manifest`
+/// A target adapter's metadata — mirrors the WIT `target.metadata`
 /// record. Read by the host at resolve time from compiled-in constants.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TargetMetadata {

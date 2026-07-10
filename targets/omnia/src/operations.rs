@@ -22,7 +22,7 @@ const REFERENCES_POINTER: &str = "Every prompt, reference, and rule document thi
      served by the granted `omnia-references` MCP references (`list_docs` / `read_doc`, adapter-relative \
      paths like `references/guardrails.md`); fetch documents the prompts cite lazily from there.";
 
-/// Resolve-time `describe` metadata: no compatibility floor, no
+/// Resolve-time `metadata`: no compatibility floor, no
 /// declared build inputs (omnia reads the working tree's `Cargo.toml`
 /// directly, not a slice-tree input), no platform capability.
 #[must_use]

@@ -23,7 +23,7 @@ mod generated {
     wit_bindgen::generate!({
         world: "source-adapter",
         path: "../../wit",
-        // Judgment ops are async; `describe` is sync.
+        // Judgment ops are async; `metadata` is sync.
         generate_all,
         pub_export_macro: true,
     });
@@ -32,10 +32,10 @@ mod generated {
 pub use generated::exports::specify::adapter::source::*;
 pub use generated::*;
 
-impl From<crate::seam::SourceMetadata> for Manifest {
-    fn from(manifest: crate::seam::SourceMetadata) -> Self {
+impl From<crate::seam::SourceMetadata> for Metadata {
+    fn from(metadata: crate::seam::SourceMetadata) -> Self {
         Self {
-            specify_floor: manifest.specify_floor,
+            specify_floor: metadata.specify_floor,
         }
     }
 }

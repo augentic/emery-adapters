@@ -23,7 +23,7 @@ mod generated {
     wit_bindgen::generate!({
         world: "target-adapter",
         path: "../../wit",
-        // Judgment ops are async; `describe` is sync.
+        // Judgment ops are async; `metadata` is sync.
         generate_all,
         pub_export_macro: true,
     });
@@ -51,12 +51,12 @@ impl From<crate::seam::PlatformsCapability> for PlatformsCapability {
     }
 }
 
-impl From<crate::seam::TargetMetadata> for Manifest {
-    fn from(manifest: crate::seam::TargetMetadata) -> Self {
+impl From<crate::seam::TargetMetadata> for Metadata {
+    fn from(metadata: crate::seam::TargetMetadata) -> Self {
         Self {
-            specify_floor: manifest.specify_floor,
-            inputs: manifest.inputs.into_iter().map(Into::into).collect(),
-            platforms: manifest.platforms.map(Into::into),
+            specify_floor: metadata.specify_floor,
+            inputs: metadata.inputs.into_iter().map(Into::into).collect(),
+            platforms: metadata.platforms.map(Into::into),
         }
     }
 }

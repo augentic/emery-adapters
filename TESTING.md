@@ -19,7 +19,7 @@ cargo make test               # the whole workspace, matching CI
 
 ### 2. Composed-deployment tests — model-free component checks
 
-`evals/composed.rs` (the `composed` test target of the `evals` package) hosts the built adapter components on the Omnia runtime and exercises the deterministic seams: `describe` / `guidance` through host-mediated dispatch, the judgment legs against a stub model backend (which must come back as the WIT error variant, not a trap), and each guest's MCP references over `wasi:http`. Guests build from source on first use when artifacts are absent under `target/wasm32-wasip2/debug/`.
+`evals/composed.rs` (the `composed` test target of the `evals` package) hosts the built adapter components on the Omnia runtime and exercises the deterministic seams: `metadata` / `guidance` through host-mediated dispatch, the judgment legs against a stub model backend (which must come back as the WIT error variant, not a trap), and each guest's MCP references over `wasi:http`. Guests build from source on first use when artifacts are absent under `target/wasm32-wasip2/debug/`.
 
 ```bash
 cargo test -p evals --test composed
@@ -32,7 +32,7 @@ The `#[ignore]`d tests in `evals/live.rs` drive one adapter operation end-to-end
 ```bash
 cargo make eval-contracts   # every contracts scenario
 cargo make eval-vectis
-cargo test -p evals --test live -- --ignored --nocapture contracts::describe   # one scenario
+cargo test -p evals --test live -- --ignored --nocapture contracts::metadata   # one scenario
 cargo test -p evals --test live wiring   # the model-free smokes (not ignored; CI runs them)
 ```
 

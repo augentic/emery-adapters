@@ -1,5 +1,5 @@
 ---
-id: contracts-describe
+id: contracts-metadata
 owner: contracts
 kind: adapter
 adapter: contracts@1.0.0

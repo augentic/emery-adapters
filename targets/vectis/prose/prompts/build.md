@@ -16,7 +16,7 @@ The build runs against the build request the CLI prepared at `.specify/slices/<s
 - `inputs.artifacts.specs[]` (`specs/<domain>/spec.md`) — behavioural requirements per domain: screen titles, scenarios, platform-specific behaviour, validation rules.
 - `inputs.artifacts.design` (`design.md`) — domain model: ViewModel / `Event` / `Route` variants, per-page view structs, capability matrix.
 - `inputs.artifacts.tasks` (`tasks.md`) — phase-completion tracking.
-- `inputs.artifacts.additional[]` — the three design-system inputs the adapter's `describe` manifest declares, **all optional** (`required: false`), each with an explicit absent-fallback:
+- `inputs.artifacts.additional[]` — the three design-system inputs the adapter's `metadata` record declares, **all optional** (`required: false`), each with an explicit absent-fallback:
   - `tokens.yaml` — design tokens; absent → HIG (iOS) / Material 3 (Android) theme fallback in the shell writers.
   - `assets.yaml` — asset inventory; the composition validator's `tokens` / `assets` modes run only when the respective file is present.
   - `components.yaml` — the agent-inferred component catalog (surfaced as `CATALOG_PATH`); written by the workflow's deterministic bind bookkeeping from the Step 0.5 bindings file and read back during composition regeneration; absent → no component factoring.

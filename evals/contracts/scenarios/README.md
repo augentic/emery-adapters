@@ -27,7 +27,7 @@ the prose, runs the prompts, and fills out a
 
 | Scenario file                              | Scenario ID                  | Kind                  | Authorship mode          |
 | ------------------------------------------ | ---------------------------- | --------------------- | ------------------------ |
-| [`describe.md`](describe.md)               | `contracts-describe`         | `adapter`          | Generate from prose      |
+| [`metadata.md`](metadata.md)               | `contracts-metadata`         | `adapter`          | Generate from prose      |
 | [`design.md`](design.md)                   | `contracts-design`           | `adapter`          | Generate from prose      |
 | [`update.md`](update.md)                   | `contracts-update-boundary`  | `adapter-boundary` | Generate from prose      |
 | [`import.md`](import.md)                   | `contracts-import`           | `adapter`          | Import existing contracts |
@@ -76,7 +76,7 @@ The body remains canonical for human-readable prose.
 
 ```yaml
 ---
-id: contracts-describe                # required, kebab-case, globally unique
+id: contracts-metadata                # required, kebab-case, globally unique
 owner: contracts                      # required
 kind: adapter                      # required: adapter | adapter-boundary
 adapter: contracts@1.0.0              # required for adapter and adapter-boundary
@@ -138,7 +138,7 @@ asking for manual confirmation between steps:
 
 ```text
 Run all contract test scenarios in adapters/evals/contracts/scenarios/ in this order:
-1. describe.md
+1. metadata.md
 2. design.md
 3. update.md
 4. import.md

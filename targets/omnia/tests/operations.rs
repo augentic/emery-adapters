@@ -8,7 +8,7 @@ use std::path::Path;
 use adapter::answers::REPORT_ANSWER_SCHEMA;
 use adapter::seam::{Changeset, Context, Edit, Error, Input, Severity, Status, WorkingTree};
 use adapter::{Error as ModelError, Format, Request};
-use omnia::operations::{build, describe, guidance, merge};
+use omnia::operations::{build, metadata, guidance, merge};
 use tempfile::TempDir;
 use testkit::{MockModel, mcp_grants};
 
@@ -275,8 +275,8 @@ async fn merge_missing_output() {
 
 #[test]
 fn metadata_empty() {
-    let manifest = describe();
-    assert_eq!(manifest.specify_floor, None);
-    assert!(manifest.inputs.is_empty());
-    assert_eq!(manifest.platforms, None);
+    let metadata = metadata();
+    assert_eq!(metadata.specify_floor, None);
+    assert!(metadata.inputs.is_empty());
+    assert_eq!(metadata.platforms, None);
 }

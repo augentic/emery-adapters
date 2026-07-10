@@ -13,7 +13,7 @@ use adapter::{Model, judgment};
 
 use crate::registry;
 
-/// Resolve-time `describe` metadata: no compatibility floor.
+/// Resolve-time `metadata`: no compatibility floor.
 #[must_use]
 pub const fn metadata() -> SourceMetadata {
     SourceMetadata { specify_floor: None }

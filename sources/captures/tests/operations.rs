@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use adapter::seam::{Authority, ClaimKind, Context, Error, Lead};
-use captures::operations::{describe, extract};
+use captures::operations::{metadata, extract};
 use testkit::MockModel;
 
 fn ctx() -> Context<'static> {
@@ -66,5 +66,5 @@ async fn tail_rejects_idless_claims() {
 
 #[test]
 fn metadata_no_floor() {
-    assert_eq!(describe().specify_floor, None);
+    assert_eq!(metadata().specify_floor, None);
 }

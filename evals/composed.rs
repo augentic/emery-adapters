@@ -4,7 +4,7 @@
 //! Each module deploys one manifest shape — the single-guest contracts
 //! deployment, the multi-guest composed deployment (three targets plus
 //! the documentation source), or the remaining source-guest set — and
-//! exercises the deterministic seams: `describe` / `guidance` through
+//! exercises the deterministic seams: `metadata` / `guidance` through
 //! host-mediated dispatch, the async-lifted judgment legs against the
 //! stub model backend (which must come back as the WIT error variant,
 //! not a trap), and each guest's MCP references over `wasi:http` on its
@@ -289,7 +289,7 @@ mod omnia_guest {
     }
 }
 
-/// Composed-deployment tests for the vectis adapter guest: the `describe`
+/// Composed-deployment tests for the vectis adapter guest: the `metadata`
 /// and `guidance` seams through host-mediated dispatch, and the ~600 KB
 /// embedded references served over `wasi:http` on the guest's own
 /// `/mcp/vectis` route — including the nested per-platform build prompts
@@ -313,14 +313,14 @@ mod vectis {
             .invoke(
                 "target:vectis".into(),
                 Some(TARGET_INTERFACE.to_string()),
-                "describe".to_string(),
+                "metadata".to_string(),
                 vec![Val::String("target:vectis".to_string())],
             )
             .await
-            .context("dispatching describe")?;
+            .context("dispatching metadata")?;
 
         let [Val::Record(fields)] = results.as_slice() else {
-            anyhow::bail!("describe returned an unexpected shape: {results:?}");
+            anyhow::bail!("metadata returned an unexpected shape: {results:?}");
         };
         let field = |name: &str| {
             fields
@@ -472,14 +472,14 @@ mod documentation {
             .invoke(
                 "source:documentation".into(),
                 Some(SOURCE_INTERFACE.to_string()),
-                "describe".to_string(),
+                "metadata".to_string(),
                 vec![Val::String("source:documentation".to_string())],
             )
             .await
-            .context("dispatching describe")?;
+            .context("dispatching metadata")?;
 
         let [Val::Record(fields)] = results.as_slice() else {
-            anyhow::bail!("describe returned an unexpected shape: {results:?}");
+            anyhow::bail!("metadata returned an unexpected shape: {results:?}");
         };
         assert!(
             fields.iter().any(|(key, value)| key == "specify-floor" && *value == Val::Option(None)),

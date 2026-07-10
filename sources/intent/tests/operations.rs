@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use adapter::seam::{Authority, ClaimKind, Context, Lead};
-use intent::operations::{describe, extract, survey};
+use intent::operations::{metadata, extract, survey};
 use testkit::MockModel;
 
 fn ctx() -> Context<'static> {
@@ -54,5 +54,5 @@ async fn extract_intent_claim() {
 
 #[test]
 fn metadata_no_floor() {
-    assert_eq!(describe().specify_floor, None);
+    assert_eq!(metadata().specify_floor, None);
 }

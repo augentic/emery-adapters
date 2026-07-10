@@ -5,7 +5,7 @@ use std::path::Path;
 
 use adapter::seam::{Authority, ClaimKind, Context, Lead};
 use testkit::MockModel;
-use typescript::operations::{describe, extract, survey};
+use typescript::operations::{metadata, extract, survey};
 
 fn ctx() -> Context<'static> {
     Context {
@@ -65,5 +65,5 @@ async fn extract_references_pointer() {
 
 #[test]
 fn metadata_no_floor() {
-    assert_eq!(describe().specify_floor, None);
+    assert_eq!(metadata().specify_floor, None);
 }

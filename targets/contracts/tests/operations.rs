@@ -8,7 +8,7 @@ use std::path::Path;
 use adapter::answers::REPORT_ANSWER_SCHEMA;
 use adapter::seam::{Changeset, Context, Edit, Error, Input, Severity, Status, WorkingTree};
 use adapter::{Error as ModelError, Format, Request};
-use contracts::operations::{build, describe, guidance, merge};
+use contracts::operations::{build, metadata, guidance, merge};
 use contracts::validate::RULE_VERSION_IS_SEMVER;
 use tempfile::TempDir;
 use testkit::{MockModel, mcp_grants};
@@ -232,10 +232,10 @@ async fn merge_post_gate() {
 
 #[test]
 fn metadata_inputs() {
-    let manifest = describe();
-    assert_eq!(manifest.specify_floor, None);
+    let metadata = metadata();
+    assert_eq!(metadata.specify_floor, None);
     let declared: Vec<(&str, bool)> =
-        manifest.inputs.iter().map(|input| (input.path.as_str(), input.required)).collect();
+        metadata.inputs.iter().map(|input| (input.path.as_str(), input.required)).collect();
     assert_eq!(declared, [("contracts", false)]);
-    assert_eq!(manifest.platforms, None);
+    assert_eq!(metadata.platforms, None);
 }

@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use adapter::seam::{Authority, ClaimKind, Context, Lead};
-use screenshots::operations::{describe, extract};
+use screenshots::operations::{metadata, extract};
 use testkit::MockModel;
 
 #[tokio::test]
@@ -42,5 +42,5 @@ async fn extract_spatial_kinds() {
 
 #[test]
 fn metadata_no_floor() {
-    assert_eq!(describe().specify_floor, None);
+    assert_eq!(metadata().specify_floor, None);
 }

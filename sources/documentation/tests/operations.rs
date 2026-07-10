@@ -7,7 +7,7 @@ use std::path::Path;
 use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA};
 use adapter::seam::{Authority, ClaimKind, Context, Error, Lead};
 use adapter::{Error as ModelError, Format, Request};
-use documentation::operations::{describe, extract, survey};
+use documentation::operations::{metadata, extract, survey};
 use testkit::{MockModel, mcp_grants};
 
 fn ctx(mcp_url: Option<&str>) -> Context<'_> {
@@ -170,5 +170,5 @@ async fn invalid_request_maps() {
 
 #[test]
 fn metadata_no_floor() {
-    assert_eq!(describe().specify_floor, None);
+    assert_eq!(metadata().specify_floor, None);
 }

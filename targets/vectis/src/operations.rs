@@ -34,7 +34,7 @@ const REFERENCES_POINTER: &str = "Every prompt, reference, and rule document thi
      adapter-relative paths like `references/hard-rules-core.md` or \
      `prompts/build/ios/write.md`); fetch documents the prompts cite lazily from there.";
 
-/// Deterministic self-description for the `describe` operation: three
+/// Deterministic metadata for the `metadata` operation: three
 /// optional design-system build inputs and a required platform
 /// declaration defaulting to core + the two supported shells.
 #[must_use]

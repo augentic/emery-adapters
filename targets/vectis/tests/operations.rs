@@ -14,7 +14,7 @@ use adapter::seam::{
 use adapter::{Format, Request};
 use tempfile::TempDir;
 use testkit::{MockModel, mcp_grants};
-use vectis::operations::{build, describe, guidance, merge};
+use vectis::operations::{build, metadata, guidance, merge};
 
 const PHASE_DONE: &str = r#"{"applicable":true,"summary":"phase complete"}"#;
 const SHELL_SKIPPED: &str = r#"{"applicable":false,"summary":"no shell work in this slice"}"#;
@@ -398,15 +398,15 @@ async fn merge_blocking_downgrades() {
 
 #[test]
 fn metadata_manifest() {
-    let manifest = describe();
-    assert_eq!(manifest.specify_floor, None);
+    let metadata = metadata();
+    assert_eq!(metadata.specify_floor, None);
     let declared: Vec<(&str, bool)> =
-        manifest.inputs.iter().map(|input| (input.path.as_str(), input.required)).collect();
+        metadata.inputs.iter().map(|input| (input.path.as_str(), input.required)).collect();
     assert_eq!(
         declared,
         [("tokens.yaml", false), ("assets.yaml", false), ("components.yaml", false)]
     );
-    let platforms = manifest.platforms.expect("vectis declares a platforms capability");
+    let platforms = metadata.platforms.expect("vectis declares a platforms capability");
     assert!(platforms.required);
     assert_eq!(platforms.allowed.len(), 5);
     assert_eq!(platforms.default, [Platform::Core, Platform::Ios, Platform::Android]);

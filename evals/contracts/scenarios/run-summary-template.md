@@ -10,8 +10,8 @@ failure, preserve the evidence directory or notes that explain the result.
 
 ## Run Header
 
-- **Scenario ID:** `<contracts-describe | contracts-design | contracts-update-boundary | contracts-import | contracts-source>`
-- **Scenario file:** `<relative path, e.g. adapters/evals/contracts/scenarios/describe.md>`
+- **Scenario ID:** `<contracts-metadata | contracts-design | contracts-update-boundary | contracts-import | contracts-source>`
+- **Scenario file:** `<relative path, e.g. adapters/evals/contracts/scenarios/metadata.md>`
 - **Adapter:** `contracts@1.0.0`
 - **Backend:** `<manual | agent | recorded | fixture>`
 - **Operator / agent:** `<name or model identifier>`
@@ -27,7 +27,7 @@ description. These come from the scenario's **Inputs** section.
 
 - `<path>` — `<one-line description>`
 
-(For `describe.md` this list is typically empty: the prose is in the prompt.)
+(For `metadata.md` this list is typically empty: the prose is in the prompt.)
 
 ## Invocation
 

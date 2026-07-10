@@ -10,7 +10,7 @@ export shim over `adapter`'s shared WIT bindings, with `prose/` trees
 (`prompts/`, `references/`, and `rules/` where declared) embedded at build
 time. The deployable artifact is the built component — no manifest file, no
 committed wasm. The platform resolves the published component from the
-registry and reads resolve-time facts through the WIT `describe` operation.
+registry and reads resolve-time facts through the WIT `metadata` operation.
 
 ## Layout
 

@@ -52,7 +52,7 @@ const SUB_FLOWS: [SubFlow; 3] = [
     },
 ];
 
-/// Resolve-time `describe` metadata: no compatibility floor; one
+/// Resolve-time `metadata`: no compatibility floor; one
 /// optional build input — the slice tree's `contracts/` subtree,
 /// carrying partial deltas written by a prior pass.
 #[must_use]
