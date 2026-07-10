@@ -397,7 +397,7 @@ async fn merge_blocking_downgrades() {
 }
 
 #[test]
-fn describe_manifest() {
+fn metadata_manifest() {
     let manifest = describe();
     assert_eq!(manifest.specify_floor, None);
     let declared: Vec<(&str, bool)> =

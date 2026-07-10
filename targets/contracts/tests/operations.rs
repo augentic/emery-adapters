@@ -231,7 +231,7 @@ async fn merge_post_gate() {
 }
 
 #[test]
-fn describe_inputs() {
+fn metadata_inputs() {
     let manifest = describe();
     assert_eq!(manifest.specify_floor, None);
     let declared: Vec<(&str, bool)> =

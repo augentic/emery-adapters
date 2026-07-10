@@ -51,8 +51,8 @@ impl From<crate::seam::PlatformsCapability> for PlatformsCapability {
     }
 }
 
-impl From<crate::seam::TargetManifest> for Manifest {
-    fn from(manifest: crate::seam::TargetManifest) -> Self {
+impl From<crate::seam::TargetMetadata> for Manifest {
+    fn from(manifest: crate::seam::TargetMetadata) -> Self {
         Self {
             specify_floor: manifest.specify_floor,
             inputs: manifest.inputs.into_iter().map(Into::into).collect(),

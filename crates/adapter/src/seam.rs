@@ -259,7 +259,7 @@ pub struct Report {
 /// A source adapter's self-description — mirrors the WIT `source.manifest`
 /// record. Read by the host at resolve time from compiled-in constants.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SourceManifest {
+pub struct SourceMetadata {
     /// Optional host-CLI compatibility floor (exact minimum `specify`
     /// version). Absent means no floor.
     pub specify_floor: Option<String>,
@@ -290,7 +290,7 @@ pub struct PlatformsCapability {
 /// A target adapter's self-description — mirrors the WIT `target.manifest`
 /// record. Read by the host at resolve time from compiled-in constants.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TargetManifest {
+pub struct TargetMetadata {
     /// Optional host-CLI compatibility floor (exact minimum `specify`
     /// version). Absent means no floor.
     pub specify_floor: Option<String>,

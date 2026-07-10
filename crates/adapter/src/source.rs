@@ -32,8 +32,8 @@ mod generated {
 pub use generated::exports::specify::adapter::source::*;
 pub use generated::*;
 
-impl From<crate::seam::SourceManifest> for Manifest {
-    fn from(manifest: crate::seam::SourceManifest) -> Self {
+impl From<crate::seam::SourceMetadata> for Manifest {
+    fn from(manifest: crate::seam::SourceMetadata) -> Self {
         Self {
             specify_floor: manifest.specify_floor,
         }

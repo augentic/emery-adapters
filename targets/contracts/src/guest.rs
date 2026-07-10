@@ -10,8 +10,8 @@ struct Adapter;
 adapter::target::export!(Adapter with_types_in adapter::target);
 
 impl adapter::target::Guest for Adapter {
-    fn describe(_id: AdapterId) -> Manifest {
-        operations::describe().into()
+    fn metadata(_id: AdapterId) -> Manifest {
+        operations::metadata().into()
     }
 
     async fn guidance(_id: AdapterId) -> Result<String, Error> {

@@ -13,7 +13,7 @@ use std::path::Path;
 
 use adapter::seam::{
     BuildInput, Changeset, Context, Error, Finding, Input, Platform, PlatformsCapability, Report,
-    Severity, Status, TargetManifest, WorkingTree,
+    Severity, Status, TargetMetadata, WorkingTree,
 };
 use adapter::{Model, phase};
 use serde_json::Value;
@@ -38,12 +38,12 @@ const REFERENCES_POINTER: &str = "Every prompt, reference, and rule document thi
 /// optional design-system build inputs and a required platform
 /// declaration defaulting to core + the two supported shells.
 #[must_use]
-pub fn describe() -> TargetManifest {
+pub fn metadata() -> TargetMetadata {
     let optional = |path: &str| BuildInput {
         path: path.to_string(),
         required: false,
     };
-    TargetManifest {
+    TargetMetadata {
         specify_floor: None,
         inputs: vec![optional("tokens.yaml"), optional("assets.yaml"), optional("components.yaml")],
         platforms: Some(PlatformsCapability {

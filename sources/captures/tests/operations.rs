@@ -65,6 +65,6 @@ async fn tail_rejects_idless_claims() {
 }
 
 #[test]
-fn describe_no_floor() {
+fn metadata_no_floor() {
     assert_eq!(describe().specify_floor, None);
 }

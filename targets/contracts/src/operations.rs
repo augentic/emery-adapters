@@ -10,7 +10,7 @@
 use std::path::Path;
 
 use adapter::seam::{
-    BuildInput, Changeset, Context, Error, Finding, Input, Report, Severity, TargetManifest,
+    BuildInput, Changeset, Context, Error, Finding, Input, Report, Severity, TargetMetadata,
     WorkingTree,
 };
 use adapter::{Model, phase};
@@ -56,8 +56,8 @@ const SUB_FLOWS: [SubFlow; 3] = [
 /// optional build input — the slice tree's `contracts/` subtree,
 /// carrying partial deltas written by a prior pass.
 #[must_use]
-pub fn describe() -> TargetManifest {
-    TargetManifest {
+pub fn metadata() -> TargetMetadata {
+    TargetMetadata {
         specify_floor: None,
         inputs: vec![BuildInput {
             path: "contracts".to_string(),

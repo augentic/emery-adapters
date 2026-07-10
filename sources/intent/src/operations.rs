@@ -8,15 +8,15 @@
 use adapter::answers::{
     EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA, LeadsAnswer, validate_evidence, validate_leads,
 };
-use adapter::seam::{Context, Error, Evidence, Lead, SourceManifest};
+use adapter::seam::{Context, Error, Evidence, Lead, SourceMetadata};
 use adapter::{Model, judgment};
 
 use crate::registry;
 
 /// Resolve-time `describe` metadata: no compatibility floor.
 #[must_use]
-pub const fn describe() -> SourceManifest {
-    SourceManifest { specify_floor: None }
+pub const fn metadata() -> SourceMetadata {
+    SourceMetadata { specify_floor: None }
 }
 
 /// Session-less state note both prompts carry. Intent bindings are

@@ -274,7 +274,7 @@ async fn merge_missing_output() {
 }
 
 #[test]
-fn describe_empty() {
+fn metadata_empty() {
     let manifest = describe();
     assert_eq!(manifest.specify_floor, None);
     assert!(manifest.inputs.is_empty());

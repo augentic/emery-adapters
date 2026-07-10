@@ -10,8 +10,8 @@ struct Adapter;
 adapter::source::export!(Adapter with_types_in adapter::source);
 
 impl Guest for Adapter {
-    fn describe(_id: AdapterId) -> Manifest {
-        operations::describe().into()
+    fn metadata(_id: AdapterId) -> Manifest {
+        operations::metadata().into()
     }
 
     async fn survey(id: AdapterId) -> Result<Vec<Lead>, Error> {

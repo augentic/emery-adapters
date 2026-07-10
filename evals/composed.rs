@@ -304,7 +304,7 @@ mod vectis {
     use super::{Bundle, TARGET_INTERFACE};
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn describe() -> Result<()> {
+    async fn metadata() -> Result<()> {
         let mount = tempfile::tempdir()?;
         let runtime = super::composed_runtime(mount.path()).await?;
 
@@ -463,7 +463,7 @@ mod documentation {
     use super::{Bundle, SOURCE_INTERFACE};
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn describe() -> Result<()> {
+    async fn metadata() -> Result<()> {
         let mount = tempfile::tempdir()?;
         let runtime = super::composed_runtime(mount.path()).await?;
 

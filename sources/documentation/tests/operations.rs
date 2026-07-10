@@ -169,6 +169,6 @@ async fn invalid_request_maps() {
 }
 
 #[test]
-fn describe_no_floor() {
+fn metadata_no_floor() {
     assert_eq!(describe().specify_floor, None);
 }

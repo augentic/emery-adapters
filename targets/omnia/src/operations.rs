@@ -10,7 +10,7 @@
 use std::path::Path;
 
 use adapter::seam::{
-    Changeset, Context, Error, Finding, Input, Report, TargetManifest, WorkingTree,
+    Changeset, Context, Error, Finding, Input, Report, TargetMetadata, WorkingTree,
 };
 use adapter::{Model, phase};
 
@@ -26,8 +26,8 @@ const REFERENCES_POINTER: &str = "Every prompt, reference, and rule document thi
 /// declared build inputs (omnia reads the working tree's `Cargo.toml`
 /// directly, not a slice-tree input), no platform capability.
 #[must_use]
-pub const fn describe() -> TargetManifest {
-    TargetManifest {
+pub const fn metadata() -> TargetMetadata {
+    TargetMetadata {
         specify_floor: None,
         inputs: Vec::new(),
         platforms: None,

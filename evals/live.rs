@@ -48,7 +48,7 @@ mod contracts {
 
     #[test]
     #[ignore = "live: needs an authenticated cursor-agent on PATH; run with -- --ignored"]
-    fn describe() -> Result<()> {
+    fn metadata() -> Result<()> {
         super::live("contracts", "describe", "build", "user-adapter-api")
     }
 

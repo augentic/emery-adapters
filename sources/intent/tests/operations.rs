@@ -53,6 +53,6 @@ async fn extract_intent_claim() {
 }
 
 #[test]
-fn describe_no_floor() {
+fn metadata_no_floor() {
     assert_eq!(describe().specify_floor, None);
 }
