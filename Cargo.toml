@@ -15,7 +15,7 @@ publish = false
 [workspace.dependencies]
 anyhow = "1"
 cfg-if = "1"
-jsonschema = { version = "0.46.10", default-features = false }
+jsonschema = { version = "0.47.0", default-features = false }
 semver = "1"
 serde = { version = "1", features = ["derive"] }
 serde-saphyr = "0.0.29"
@@ -23,9 +23,6 @@ serde_json = "1"
 sha2 = "0.11"
 adapter = { path = "crates/adapter" }
 prose = { path = "crates/prose" }
-# Dev-only sibling path (consistent with the ../omnia/* patches): the
-# scripted Model mock is single-sourced in specify's crates/testkit and
-# never reaches a shipped component's dependency graph.
 testkit = { path = "../specify/crates/testkit" }
 thiserror = "2"
 toml = "1"
@@ -40,24 +37,29 @@ image = { version = "0.25", default-features = false, features = [
     "webp",
 ] }
 wasip3 = { version = "0.7.0", features = ["http-compat"] }
-wit-bindgen = { version = "0.58.0", features = ["async-spawn"] }
+wit-bindgen = { version = "0.59.0", features = ["async-spawn"] }
 
 omnia = "0.35.0"
+omnia-cursor = "0.28.0"
 omnia-guest = "0.35.0"
 omnia-testkit = "0.35.0"
 omnia-wasi-http = "0.35.0"
 omnia-wasi-model = "0.35.0"
-omnia-cursor = { git = "https://github.com/augentic/backends.git" }
 
 [patch.crates-io]
-omnia = { path = "../omnia/crates/omnia" }
-omnia-guest = { path = "../omnia/crates/omnia-guest" }
-omnia-guest-macros = { path = "../omnia/crates/guest-macros" }
-omnia-host-macros = { path = "../omnia/crates/host-macros" }
-omnia-testkit = { path = "../omnia/crates/testkit" }
-omnia-wasi-config = { path = "../omnia/crates/wasi-config" }
-omnia-wasi-http = { path = "../omnia/crates/wasi-http" }
-omnia-wasi-model = { path = "../omnia/crates/wasi-model" }
+omnia = { git = "https://github.com/augentic/omnia.git" }
+omnia-cursor = { git = "https://github.com/augentic/backends.git" }
+omnia-guest = { git = "https://github.com/augentic/omnia.git" }
+omnia-testkit = { git = "https://github.com/augentic/omnia.git" }
+omnia-wasi-http = { git = "https://github.com/augentic/omnia.git" }
+omnia-wasi-model = { git = "https://github.com/augentic/omnia.git" }
+
+# omnia = { path = "../omnia/crates/omnia" }
+# omnia-cursor = { path = "../backends/crates/cursor" }
+# omnia-guest = { path = "../omnia/crates/omnia-guest" }
+# omnia-testkit = { path = "../omnia/crates/testkit" }
+# omnia-wasi-http = { path = "../omnia/crates/wasi-http" }
+# omnia-wasi-model = { path = "../omnia/crates/wasi-model" }
 
 wrpc-transport = { git = "https://github.com/bytecodealliance/wrpc" }
 wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }
