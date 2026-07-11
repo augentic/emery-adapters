@@ -63,6 +63,13 @@ async fn metadata(runtime: &Runtime<Bundle>, guest: &str) -> Result<()> {
     if guest.starts_with("source:") {
         return Ok(());
     }
+    assert_target_metadata(guest, fields)
+}
+
+fn assert_target_metadata(
+    guest: &str, fields: &[(String, omnia::wasmtime::component::Val)],
+) -> Result<()> {
+    use omnia::wasmtime::component::Val;
 
     let field = |name: &str| {
         fields
