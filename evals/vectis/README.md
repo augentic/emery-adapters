@@ -4,19 +4,19 @@ Live-backend eval harness for the vectis adapter guest. The scenario drives the 
 
 ## Anatomy
 
-| Piece | Where |
-| ----- | ----- |
-| Host binary | [`evals/runtime.rs`](../runtime.rs) (the `eval-driver` example of the flattened `adapter-host-tests` package) |
-| Driver guest | [`evals/guest.rs`](../guest.rs) (the `eval-guest` cdylib example) |
-| Adapter guest | [`targets/vectis`](../../targets/vectis) — the component under test (`vectis.wasm`) |
-| Scenario seeds | `scenarios/<name>/inputs/*.md` and `scenarios/<name>/seed/**` |
-| Runner | [`evals/live.rs`](../live.rs) — `cargo make eval-vectis` runs the scenario |
-| Results | `runs/` — per-run raw output |
+| Piece          | Where                                                                                            |
+| -------------- | ------------------------------------------------------------------------------------------------ |
+| Host binary    | [`evals/runtime.rs`](../runtime.rs) (the `eval-driver` example of the flattened `evals` package) |
+| Driver guest   | [`evals/guest.rs`](../guest.rs) (the `eval-guest` cdylib example)                                |
+| Adapter guest  | [`targets/vectis`](../../targets/vectis) — the component under test (`vectis.wasm`)              |
+| Scenario seeds | `scenarios/<name>/inputs/*.md` and `scenarios/<name>/seed/**`                                    |
+| Runner         | [`evals/live.rs`](../live.rs) — the ignored `vectis::single_screen` test runs the scenario       |
+| Results        | `runs/` — per-run raw output                                                                     |
 
 ## Scenarios
 
-| Scenario | Slice | Shape |
-| -------- | ----- | ----- |
+| Scenario        | Slice         | Shape                                                                                                            |
+| --------------- | ------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `single-screen` | `daily-quote` | A tiny single-screen feature on a `core + ios` platform set — composition, Crux core, iOS shell, review, report. |
 
 ## Running
@@ -24,13 +24,11 @@ Live-backend eval harness for the vectis adapter guest. The scenario drives the 
 Requires [`cursor-agent`](https://cursor.com/docs/cli) on `PATH`. Set `SPECIFY_EVAL_MODEL=<model-id>` to override the model driver-side.
 
 ```bash
-cargo make eval-vectis
-
-cargo test -p adapter-host-tests --test live -- --ignored --nocapture vectis::single_screen
+make dev-live ADAPTER=vectis SCENARIO=single_screen
 ```
 
 ## Smoke-checking without a model
 
 ```bash
-cargo test -p adapter-host-tests --test live vectis::wiring
+cargo test -p evals --test live vectis::wiring
 ```

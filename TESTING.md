@@ -21,10 +21,10 @@ cargo make test               # the whole workspace, matching CI
 
 ### 2. Composed-deployment tests — model-free component checks
 
-`evals/composed.rs` (the `composed` test target of the `adapter-host-tests` package) hosts every built adapter component in one Omnia runtime and runs one consolidated component smoke. It owns only WASM/WIT conformance at deployment-specific seams: WIT dispatch, async judgment-leg bridging against a failing stub model (a WIT error, never a trap), per-guest MCP references over `wasi:http`, and guest route isolation. Omnia-testkit supplies the runtime mechanics; adapter behavior and prompt assembly stay in the faster native crate tests. The single test process also avoids repeating the runtime's expensive, process-global telemetry initialization. Guests build from source on first use when artifacts are absent under `target/wasm32-wasip2/debug/`.
+`evals/composed.rs` (the `composed` test target of the `evals` package) hosts every built adapter component in one Omnia runtime and runs one consolidated component smoke. It owns only WASM/WIT conformance at deployment-specific seams: WIT dispatch, async judgment-leg bridging against a failing stub model (a WIT error, never a trap), per-guest MCP references over `wasi:http`, and guest route isolation. Omnia-testkit supplies the runtime mechanics; adapter behavior and prompt assembly stay in the faster native crate tests. The single test process also avoids repeating the runtime's expensive, process-global telemetry initialization. Guests build from source on first use when artifacts are absent under `target/wasm32-wasip2/debug/`.
 
 ```bash
-cargo test -p adapter-host-tests --test composed
+cargo test -p evals --test composed
 ```
 
 ### 3. Live evals — the only rung that judges prose effect
@@ -32,10 +32,10 @@ cargo test -p adapter-host-tests --test composed
 The `live` target remains separate from `composed`: its `#[ignore]`d tests in `evals/live.rs` drive one adapter operation end-to-end against the real cursor backend and own prompt-quality evaluation only. They require [`cursor-agent`](https://cursor.com/docs/cli) on `PATH`; `SPECIFY_EVAL_MODEL=<model-id>` overrides the model. Each run retains a raw log and a structured JSON envelope using the shared scenario/profile/runtime/model/gate/assertion vocabulary under `evals/<adapter>/runs/`; a failing adapter report fails the test.
 
 ```bash
-cargo make eval-contracts   # every contracts scenario
-cargo make eval-vectis
-cargo test -p adapter-host-tests --test live -- --ignored --nocapture contracts::metadata   # one scenario
-cargo test -p adapter-host-tests --test live wiring   # the model-free smokes (not ignored; CI runs them)
+cargo test -p evals --test live -- --ignored --nocapture contracts::   # every contracts scenario
+make dev-live ADAPTER=vectis SCENARIO=single_screen
+cargo test -p evals --test live -- --ignored --nocapture contracts::metadata   # one scenario
+cargo test -p evals --test live wiring   # the model-free smokes (not ignored; CI runs them)
 ```
 
 Scenario anatomy and seeds are documented beside the scenarios: [`evals/contracts/README.md`](evals/contracts/README.md), [`evals/vectis/README.md`](evals/vectis/README.md).
@@ -45,25 +45,25 @@ Scenario anatomy and seeds are documented beside the scenarios: [`evals/contract
 `SPECIFY_PROSE_OVERLAY=1` switches a live run into overlay mode: the harness seeds the adapter's `prose/` tree into the scratch `.eval/prose/`, forwards the grant to the guest (whose registry probes the overlay at runtime), and skips the cargo legs entirely once the run artifacts exist. Edit `{targets,sources}/<name>/prose/**` and re-run — one model leg per save, no build. The overlay overrides document bodies only (the doc set stays the embedded table's), and the guest prints an attestation to stderr so an overlaid run can never pass as an embedded run.
 
 ```bash
-SPECIFY_PROSE_OVERLAY=1 cargo test -p adapter-host-tests --test live -- --ignored --nocapture contracts::design
+SPECIFY_PROSE_OVERLAY=1 cargo test -p evals --test live -- --ignored --nocapture contracts::design
 ```
 
 ### 5. Consumer project — code changes through the engine
 
-For code (not prose) iteration against a real consumer project, `cargo make dev [adapter]` builds components with fast profile settings (LTO off, opt-level 1) into `target/wasm32-wasip2/release/<name>.wasm` — the exact path the engine's bare-name resolution probes from a sibling checkout — in seconds instead of a full `cargo make release`. Caveat: switching between the `dev` and `release` flavors changes the profile fingerprint and forces a rebuild; publishing is rare, so the trade is accepted.
+For code (not prose) iteration against a real consumer project, `cargo make adapter [adapter]` builds components with fast profile settings (LTO off, opt-level 1) into `target/wasm32-wasip2/release/<name>.wasm` — the exact path the engine's bare-name resolution probes from a sibling checkout — in seconds instead of a full `cargo make release`. Caveat: switching between the `adapter` and `release` flavors changes the profile fingerprint and forces a rebuild; publishing is rare, so the trade is accepted.
 
 ```bash
-cargo make dev contracts   # one adapter; bare `cargo make dev` builds the workspace
+cargo make adapter contracts   # one adapter; no argument builds every adapter
 ```
 
 ## The two layers — minimize the unit layer
 
 Every behavior gets a home in exactly one layer. Decide the layer **before** writing the test. The standing bias is **fewer unit tests**.
 
-| Layer | Location | Required when | Forbidden when |
-| --- | --- | --- | --- |
-| **Kernel unit** | `#[cfg(test)] mod tests` / sibling `tests.rs` next to the code | The branch is genuinely unreachable through the public API (a defensive guard, an error variant no caller triggers), **or** the behavior is a dense pure parse/projection/render-math matrix whose case-per-cell integration port would inflate the suite | The behavior is reachable through the crate's public surface and an integration test already covers it — or could, without a matrix explosion |
-| **Crate integration** | `<adapter>/tests/` (one auto-discovered binary per area) | The behavior is reachable through the library API: engine invariants, filesystem-shape corners, render output, judgment-leg prompts against a mock `Model` | The same observable behavior is already asserted elsewhere and needs no coverage backfill |
+| Layer                 | Location                                                       | Required when                                                                                                                                                                                                                                             | Forbidden when                                                                                                                                |
+| --------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Kernel unit**       | `#[cfg(test)] mod tests` / sibling `tests.rs` next to the code | The branch is genuinely unreachable through the public API (a defensive guard, an error variant no caller triggers), **or** the behavior is a dense pure parse/projection/render-math matrix whose case-per-cell integration port would inflate the suite | The behavior is reachable through the crate's public surface and an integration test already covers it — or could, without a matrix explosion |
+| **Crate integration** | `<adapter>/tests/` (one auto-discovered binary per area)       | The behavior is reachable through the library API: engine invariants, filesystem-shape corners, render output, judgment-leg prompts against a mock `Model`                                                                                                | The same observable behavior is already asserted elsewhere and needs no coverage backfill                                                     |
 
 ## Triage rubric
 

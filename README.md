@@ -33,7 +33,7 @@ shared/
     rules/            #   UNI-* engineering rules
 crates/               # shared guest support (adapter, prose); native tests use
                       # Omnia's recorded scripted model harness
-evals/                # `adapter-host-tests`, the hosted-deployment test
+evals/                # `evals`, the hosted-deployment test
                       # package flattened like omnia's examples/: harness.rs
                       # (the package lib — the
                       # shared host-side harness) + composed.rs (the
@@ -63,24 +63,16 @@ cargo make check   # fmt-check + clippy + nextest + doctests + doc
 cargo make ci      # the full gate — adds cargo-vet + cargo-deny
 ```
 
-The `fmt-check` arm shells out to nightly `rustfmt`, so a nightly toolchain
-plus the `cargo-make`, `cargo-nextest`, `cargo-deny`, and `cargo-vet` tools must
-be installed; the tasks are defined in `Makefile.toml`.
+The `fmt-check` arm uses nightly `rustfmt`, while component development and publishing use nightly Cargo Script. Install a nightly toolchain plus the `cargo-make`, `cargo-nextest`, `cargo-deny`, and `cargo-vet` tools; the tasks are defined in `Makefile.toml`.
 
-Debug-build the eval guest only:
-
-```bash
-cargo make debug
-```
-
-Release-build every workspace member for wasm32-wasip2 (adapter components land
+Release-build every adapter for wasm32-wasip2 (components land
 at `target/wasm32-wasip2/release/<name>.wasm`):
 
 ```bash
 cargo make release
 ```
 
-The `adapter-host-tests` package keeps composed WASM/WIT conformance (`evals/composed.rs`) distinct from live prompt-quality evaluation (`evals/live.rs`). Composed tests build guests from source on first use when artifacts are absent under `target/wasm32-wasip2/debug/`.
+The `evals` package keeps composed WASM/WIT conformance (`evals/composed.rs`) distinct from live prompt-quality evaluation (`evals/live.rs`). Composed tests build guests from source on first use when artifacts are absent under `target/wasm32-wasip2/debug/`.
 
 ## Publishing
 

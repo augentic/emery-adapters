@@ -19,25 +19,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "adapter-host-tests"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "cfg-if",
- "omnia 0.35.0",
- "omnia-cursor",
- "omnia-testkit",
- "omnia-wasi-http",
- "omnia-wasi-model",
- "prose",
- "serde_json",
- "tempfile",
- "tokio",
- "wasip3",
- "wit-bindgen 0.59.0",
-]
-
-[[package]]
 name = "addr2line"
 version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1080,6 +1061,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1a05365e3b1c6d1650318537c7460c6923f1abdd272ad6842baa2b509957a06"
 dependencies = [
  "num-traits",
+]
+
+[[package]]
+name = "evals"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cfg-if",
+ "omnia 0.35.0",
+ "omnia-cursor",
+ "omnia-testkit",
+ "omnia-wasi-http",
+ "omnia-wasi-model",
+ "prose",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "wasip3",
+ "wit-bindgen 0.59.0",
 ]
 
 [[package]]

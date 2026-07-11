@@ -3,11 +3,11 @@
 //! Binds the live cursor backend behind `wasi-model`: command mode drives
 //! the eval guest's `wasi:cli/run` export once and exits with its status,
 //! while the HTTP trigger serves the adapter guest's MCP reference route in
-//! the background for the spawned `cursor-agent`. Runs via the `eval-contracts`
-//! cargo-make task, or by hand:
+//! the background for the spawned `cursor-agent`. Run by `evals/live.rs`, or
+//! by hand:
 //!
 //! ```text
-//! cargo run -p adapter-host-tests --example eval-driver -- run --config <manifest> -- build target:contracts <slice> <inputs-dir>
+//! cargo run -p evals --example eval-driver -- run --config <manifest> -- build target:contracts <slice> <inputs-dir>
 //! ```
 //!
 //! Requires `cursor-agent` on `PATH`, authenticated via `CURSOR_API_KEY` or a

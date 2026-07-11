@@ -12,7 +12,7 @@
 //! a prior `cursor-agent login`:
 //!
 //! ```text
-//! cargo test -p adapter-host-tests --test live -- --ignored --nocapture contracts::
+//! cargo test -p evals --test live -- --ignored --nocapture contracts::
 //! ```
 //!
 //! The non-ignored `wiring` test beside each adapter's live tests is the
@@ -281,23 +281,11 @@ fn build(adapter: &str, root: &Path, target: &Path, overlay: bool) -> Result<()>
         target,
     )?;
     adapter_host_tests::cargo(
-        &[
-            "build",
-            "-p",
-            "adapter-host-tests",
-            "--example",
-            "eval-guest",
-            "--target",
-            "wasm32-wasip2",
-        ],
+        &["build", "-p", "evals", "--example", "eval-guest", "--target", "wasm32-wasip2"],
         root,
         target,
     )?;
-    adapter_host_tests::cargo(
-        &["build", "-p", "adapter-host-tests", "--example", "eval-driver"],
-        root,
-        target,
-    )?;
+    adapter_host_tests::cargo(&["build", "-p", "evals", "--example", "eval-driver"], root, target)?;
     Ok(())
 }
 
