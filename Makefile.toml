@@ -194,36 +194,39 @@ for dir in {targets,sources}/*/; do
 done
 '''
 
-# # overlay watch loop: re-run one live scenario on every
-# # save under an adapter's prose trees. With SPECIFY_PROSE_OVERLAY=1 the
-# # save-to-report loop is the overlay loop — after the one-time build a
-# # re-run spawns no cargo, only the model leg repeats. Parametrized by
-# # EVAL_ADAPTER (default contracts) and EVAL_FILTER (required: a
-# # single-scenario live-test filter, e.g. contracts::design — one model
-# # leg per save is the loop's whole point). Watches
-# # targets/<adapter>/prose — the adapters the evals exercise today are
-# # all targets; a sources/ adapter would need the prefix taught here. A
-# # script task over cargo-watch (installed on demand) rather than
-# # cargo-make's native `watch` attribute: the watched path is
-# # env-parametrized, which the shell expresses directly. Requires
-# # cursor-agent on PATH.
-# [tasks.eval-watch]
-# script = '''
-# adapter="${EVAL_ADAPTER:-contracts}"
-# if [ -z "${EVAL_FILTER:-}" ]; then
-#   echo "eval-watch: EVAL_FILTER is required — name one scenario, e.g." >&2
-#   echo "  EVAL_FILTER=contracts::design cargo make eval-watch" >&2
-#   echo "(a bare \`${adapter}::\` prefix fans out to every live scenario of the adapter)" >&2
-#   exit 1
-# fi
-# prose="targets/${adapter}/prose"
-# if [ ! -d "$prose" ]; then
-#   echo "eval-watch: no prose tree at $prose (sources/ adapters need a different prefix)" >&2
-#   exit 1
-# fi
-# # EVAL_FILTER is re-evaluated by the `sh -c` cargo-watch spawns: a value
-# # with spaces becomes multiple filters; metacharacters execute.
-# # Operator-supplied env, so informational only.
-# cargo watch -w "$prose" -s "SPECIFY_PROSE_OVERLAY=1 cargo test -p evals --test live -- --ignored --nocapture $EVAL_FILTER"
-# '''
-# install_crate = "cargo-watch"
+# Overlay watch loop: re-run one live scenario on every save under an
+# adapter's prose trees. With SPECIFY_PROSE_OVERLAY=1 the save-to-report
+# loop is the overlay loop — after the one-time build a re-run spawns no
+# cargo, only the model leg repeats. Parametrized by EVAL_ADAPTER
+# (default contracts) and EVAL_FILTER (required: exactly one live-test
+# name from evals/live.rs, e.g. contracts::design — one model leg per
+# save is the loop's whole point, enforced with --exact). Watches
+# targets/<adapter>/prose — the adapters the evals exercise today are
+# all targets; a sources/ adapter would need the prefix taught here.
+# Requires cursor-agent on PATH (`make dev-doctor LIVE=1` proves the
+# command-mode credentials first).
+#
+# The command string handed to cargo-watch is a fixed literal: the
+# spawned shell expands "$EVAL_FILTER" itself as one quoted word, so an
+# operator value with spaces or metacharacters stays a single test
+# filter instead of re-parsing as shell.
+[tasks.eval-watch]
+script_runner = "bash"
+script = '''
+set -euo pipefail
+adapter="${EVAL_ADAPTER:-contracts}"
+if [ -z "${EVAL_FILTER:-}" ]; then
+  echo "eval-watch: EVAL_FILTER is required — name one scenario, e.g." >&2
+  echo "  EVAL_FILTER=contracts::design cargo make eval-watch" >&2
+  exit 1
+fi
+prose="targets/${adapter}/prose"
+if [ ! -d "$prose" ]; then
+  echo "eval-watch: no prose tree at $prose (sources/ adapters need a different prefix)" >&2
+  exit 1
+fi
+export EVAL_FILTER
+cargo watch -w "$prose" \
+  -s 'SPECIFY_PROSE_OVERLAY=1 cargo test -p evals --test live -- --ignored --nocapture --exact "$EVAL_FILTER"'
+'''
+install_crate = "cargo-watch"

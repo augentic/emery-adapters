@@ -4,6 +4,8 @@ Integration-first test posture for `specify-adapters`: integration owns every pu
 
 ## The development loop
 
+The cross-repo command surface over these rungs is the `make dev-*` loop shared with the sibling `specify` checkout — `dev-check` (model-free), `dev-live` (live model), `dev-full` (WASM boundary) — documented in [the developer loop guide](https://github.com/augentic/specify/blob/main/docs/contributing/dev-loop.md). The rungs below are this repo's own test strata that those commands compose.
+
 Five rungs, fastest feedback first. Every behavior is asserted on exactly one rung — duplicating an assertion across rungs is a defect, not extra safety. In particular: prompt-assembly checks belong on rung 1, seam and wiring checks on rung 2, and only prose-effectiveness judgments on rung 3.
 
 ### 1. Native crate tests — the inner loop
