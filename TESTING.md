@@ -19,7 +19,7 @@ cargo make test               # the whole workspace, matching CI
 
 ### 2. Composed-deployment tests — model-free component checks
 
-`evals/composed.rs` (the `composed` test target of the `evals` package) hosts the built adapter components on the Omnia runtime and exercises the deterministic seams: `metadata` / `guidance` through host-mediated dispatch, the judgment legs against a stub model backend (which must come back as the WIT error variant, not a trap), and each guest's MCP references over `wasi:http`. Guests build from source on first use when artifacts are absent under `target/wasm32-wasip2/debug/`.
+`evals/composed.rs` (the `composed` test target of the `evals` package) hosts every built adapter component in one Omnia runtime and runs one consolidated component smoke. It covers only deployment-specific seams: WIT dispatch, async judgment-leg bridging against a failing stub model (a WIT error, never a trap), per-guest MCP references over `wasi:http`, and guest route isolation. Adapter behavior and prompt assembly stay in the faster native crate tests. The single test process also avoids repeating the runtime's expensive, process-global telemetry initialization. Guests build from source on first use when artifacts are absent under `target/wasm32-wasip2/debug/`.
 
 ```bash
 cargo test -p evals --test composed

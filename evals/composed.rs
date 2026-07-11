@@ -1,14 +1,13 @@
 //! Composed-deployment tests hosting the built adapter guest components
 //! on the Omnia runtime — model-free by design.
 //!
-//! Each module deploys one manifest shape — the single-guest contracts
-//! deployment, the multi-guest composed deployment (three targets plus
-//! the documentation source), or the remaining source-guest set — and
-//! exercises the deterministic seams: `metadata` / `guidance` through
-//! host-mediated dispatch, the async-lifted judgment legs against the
-//! stub model backend (which must come back as the WIT error variant,
-//! not a trap), and each guest's MCP references over `wasi:http` on its
-//! own route.
+//! One smoke test deploys every adapter in a shared runtime and exercises
+//! the component-only seams: `metadata` / `guidance` through host-mediated
+//! dispatch, async-lifted judgment legs against the stub model backend
+//! (which must come back as the WIT error variant, not a trap), and each
+//! guest's MCP references over `wasi:http` on its own route. Keeping one
+//! test process avoids repeating the runtime's expensive, process-global
+//! telemetry initialization.
 //!
 //! The judgment legs themselves are covered natively in each adapter
 //! crate against `MockModel`, and live against the cursor backend by
@@ -50,11 +49,7 @@ mod contracts {
 
     use super::{Bundle, TARGET_INTERFACE};
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn guidance() -> Result<()> {
-        let mount = tempfile::tempdir()?;
-        let runtime = super::runtime(mount.path()).await?;
-
+    pub async fn guidance(runtime: &Runtime<Bundle>) -> Result<()> {
         let results = runtime
             .dispatcher()
             .invoke(
@@ -84,11 +79,7 @@ mod contracts {
     // the stub backend pends then fails, so the leg must come back as the WIT
     // error variant — not a trap — proving a pending host future survives
     // host-mediated dispatch.
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn build_bridge() -> Result<()> {
-        let mount = tempfile::tempdir()?;
-        let runtime = super::runtime(mount.path()).await?;
-
+    pub async fn build_bridge(runtime: &Runtime<Bundle>) -> Result<()> {
         let results = runtime
             .dispatcher()
             .invoke(
@@ -133,13 +124,9 @@ mod contracts {
         serde_json::from_slice(response.body()).context("MCP reply is JSON")
     }
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn references() -> Result<()> {
-        let mount = tempfile::tempdir()?;
-        let runtime = super::runtime(mount.path()).await?;
-
+    pub async fn references(runtime: &Runtime<Bundle>) -> Result<()> {
         let init = post(
-            &runtime,
+            runtime,
             &json!({
                 "jsonrpc": "2.0", "id": 1, "method": "initialize",
                 "params": { "protocolVersion": "2025-06-18" }
@@ -149,7 +136,7 @@ mod contracts {
         assert_eq!(init["result"]["serverInfo"]["name"], "contracts-references");
 
         let resources =
-            post(&runtime, &json!({ "jsonrpc": "2.0", "id": 2, "method": "resources/list" }))
+            post(runtime, &json!({ "jsonrpc": "2.0", "id": 2, "method": "resources/list" }))
                 .await?;
         let uris: Vec<&str> = resources["result"]["resources"]
             .as_array()
@@ -167,7 +154,7 @@ mod contracts {
         );
 
         let prompt = post(
-            &runtime,
+            runtime,
             &json!({
                 "jsonrpc": "2.0", "id": 3, "method": "tools/call",
                 "params": { "name": "read_doc", "arguments": { "path": "prompts/build.md" } }
@@ -181,7 +168,7 @@ mod contracts {
         );
 
         let runtime_doc = post(
-            &runtime,
+            runtime,
             &json!({
                 "jsonrpc": "2.0", "id": 4, "method": "resources/read",
                 "params": { "uri": "doc://references/spec-runtime/phase-outcome-contract.md" }
@@ -209,11 +196,7 @@ mod omnia_guest {
 
     use super::{Bundle, TARGET_INTERFACE};
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn guidance() -> Result<()> {
-        let mount = tempfile::tempdir()?;
-        let runtime = super::composed_runtime(mount.path()).await?;
-
+    pub async fn guidance(runtime: &Runtime<Bundle>) -> Result<()> {
         let results = runtime
             .dispatcher()
             .invoke(
@@ -245,13 +228,9 @@ mod omnia_guest {
         serde_json::from_slice(response.body()).context("MCP reply is JSON")
     }
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn references() -> Result<()> {
-        let mount = tempfile::tempdir()?;
-        let runtime = super::composed_runtime(mount.path()).await?;
-
+    pub async fn references(runtime: &Runtime<Bundle>) -> Result<()> {
         let init = post(
-            &runtime,
+            runtime,
             &json!({
                 "jsonrpc": "2.0", "id": 1, "method": "initialize",
                 "params": { "protocolVersion": "2025-06-18" }
@@ -261,7 +240,7 @@ mod omnia_guest {
         assert_eq!(init["result"]["serverInfo"]["name"], "omnia-references");
 
         let reference = post(
-            &runtime,
+            runtime,
             &json!({
                 "jsonrpc": "2.0", "id": 2, "method": "tools/call",
                 "params": { "name": "read_doc", "arguments": { "path": "references/guardrails.md" } }
@@ -275,7 +254,7 @@ mod omnia_guest {
         );
 
         let runtime_doc = post(
-            &runtime,
+            runtime,
             &json!({
                 "jsonrpc": "2.0", "id": 3, "method": "resources/read",
                 "params": { "uri": "doc://references/spec-runtime/phase-outcome-contract.md" }
@@ -303,11 +282,7 @@ mod vectis {
 
     use super::{Bundle, TARGET_INTERFACE};
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn metadata() -> Result<()> {
-        let mount = tempfile::tempdir()?;
-        let runtime = super::composed_runtime(mount.path()).await?;
-
+    pub async fn metadata(runtime: &Runtime<Bundle>) -> Result<()> {
         let results = runtime
             .dispatcher()
             .invoke(
@@ -369,11 +344,7 @@ mod vectis {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn guidance() -> Result<()> {
-        let mount = tempfile::tempdir()?;
-        let runtime = super::composed_runtime(mount.path()).await?;
-
+    pub async fn guidance(runtime: &Runtime<Bundle>) -> Result<()> {
         let results = runtime
             .dispatcher()
             .invoke(
@@ -405,13 +376,9 @@ mod vectis {
         serde_json::from_slice(response.body()).context("MCP reply is JSON")
     }
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn references() -> Result<()> {
-        let mount = tempfile::tempdir()?;
-        let runtime = super::composed_runtime(mount.path()).await?;
-
+    pub async fn references(runtime: &Runtime<Bundle>) -> Result<()> {
         let init = post(
-            &runtime,
+            runtime,
             &json!({
                 "jsonrpc": "2.0", "id": 1, "method": "initialize",
                 "params": { "protocolVersion": "2025-06-18" }
@@ -421,7 +388,7 @@ mod vectis {
         assert_eq!(init["result"]["serverInfo"]["name"], "vectis-references");
 
         let reference = post(
-            &runtime,
+            runtime,
             &json!({
                 "jsonrpc": "2.0", "id": 2, "method": "tools/call",
                 "params": { "name": "read_doc", "arguments": { "path": "references/hard-rules-core.md" } }
@@ -432,7 +399,7 @@ mod vectis {
         assert!(!text.is_empty(), "read_doc returns the reference body: {reference}");
 
         let leg_prompt = post(
-            &runtime,
+            runtime,
             &json!({
                 "jsonrpc": "2.0", "id": 3, "method": "resources/read",
                 "params": { "uri": "doc://prompts/build/ios/write.md" }
@@ -462,11 +429,7 @@ mod documentation {
 
     use super::{Bundle, SOURCE_INTERFACE};
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn metadata() -> Result<()> {
-        let mount = tempfile::tempdir()?;
-        let runtime = super::composed_runtime(mount.path()).await?;
-
+    pub async fn metadata(runtime: &Runtime<Bundle>) -> Result<()> {
         let results = runtime
             .dispatcher()
             .invoke(
@@ -492,11 +455,7 @@ mod documentation {
     // the stub backend pends then fails, so the leg must come back as the WIT
     // error variant — not a trap — proving the source axis survives
     // host-mediated dispatch in a multi-guest deployment.
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn survey_bridge() -> Result<()> {
-        let mount = tempfile::tempdir()?;
-        let runtime = super::composed_runtime(mount.path()).await?;
-
+    pub async fn survey_bridge(runtime: &Runtime<Bundle>) -> Result<()> {
         let results = runtime
             .dispatcher()
             .invoke(
@@ -533,13 +492,9 @@ mod documentation {
         serde_json::from_slice(response.body()).context("MCP reply is JSON")
     }
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn per_guest_shelves() -> Result<()> {
-        let mount = tempfile::tempdir()?;
-        let runtime = super::composed_runtime(mount.path()).await?;
-
+    pub async fn per_guest_shelves(runtime: &Runtime<Bundle>) -> Result<()> {
         let init = post(
-            &runtime,
+            runtime,
             "/mcp/documentation",
             &json!({
                 "jsonrpc": "2.0", "id": 1, "method": "initialize",
@@ -550,7 +505,7 @@ mod documentation {
         assert_eq!(init["result"]["serverInfo"]["name"], "documentation-references");
 
         let prompt = post(
-            &runtime,
+            runtime,
             "/mcp/documentation",
             &json!({
                 "jsonrpc": "2.0", "id": 2, "method": "tools/call",
@@ -565,7 +520,7 @@ mod documentation {
         );
 
         let contracts_init = post(
-            &runtime,
+            runtime,
             "/mcp/contracts",
             &json!({
                 "jsonrpc": "2.0", "id": 3, "method": "initialize",
@@ -618,11 +573,7 @@ mod sources {
     // Each async-lifted `survey` export awaits `omnia:model/completion.create`;
     // the stub backend pends then fails, so each leg must come back as the WIT
     // error variant — not a trap — for all four guests in one deployment.
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn survey_bridges() -> Result<()> {
-        let mount = tempfile::tempdir()?;
-        let runtime = super::source_guests_runtime(mount.path()).await?;
-
+    pub async fn survey_bridges(runtime: &Runtime<Bundle>) -> Result<()> {
         for (guest, _, _, _) in GUESTS {
             let results = runtime
                 .dispatcher()
@@ -665,14 +616,10 @@ mod sources {
         serde_json::from_slice(response.body()).context("MCP reply is JSON")
     }
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn per_guest_shelves() -> Result<()> {
-        let mount = tempfile::tempdir()?;
-        let runtime = super::source_guests_runtime(mount.path()).await?;
-
+    pub async fn per_guest_shelves(runtime: &Runtime<Bundle>) -> Result<()> {
         for (guest, route, server, heading) in GUESTS {
             let init = post(
-                &runtime,
+                runtime,
                 route,
                 &json!({
                     "jsonrpc": "2.0", "id": 1, "method": "initialize",
@@ -686,7 +633,7 @@ mod sources {
             );
 
             let prompt = post(
-                &runtime,
+                runtime,
                 route,
                 &json!({
                     "jsonrpc": "2.0", "id": 2, "method": "tools/call",
@@ -704,45 +651,46 @@ mod sources {
     }
 }
 
+/// One deployment proves the component-only boundary while native and
+/// crate suites own adapter behavior and prose content.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn component_smoke() -> Result<()> {
+    let mount = tempfile::tempdir()?;
+    let runtime = component_runtime(mount.path()).await?;
+
+    contracts::guidance(&runtime).await?;
+    contracts::build_bridge(&runtime).await?;
+    contracts::references(&runtime).await?;
+    omnia_guest::guidance(&runtime).await?;
+    omnia_guest::references(&runtime).await?;
+    vectis::metadata(&runtime).await?;
+    vectis::guidance(&runtime).await?;
+    vectis::references(&runtime).await?;
+    documentation::metadata(&runtime).await?;
+    documentation::survey_bridge(&runtime).await?;
+    documentation::per_guest_shelves(&runtime).await?;
+    sources::survey_bridges(&runtime).await?;
+    sources::per_guest_shelves(&runtime).await
+}
+
 /// One deployed guest: its manifest id and built artifact name.
 type Guest = (&'static str, &'static str);
 
-/// The single-guest contracts deployment.
-const CONTRACTS: &[Guest] = &[("target:contracts", "contracts.wasm")];
-
-/// The multi-guest composed deployment: three target guests plus one
-/// source guest.
-const COMPOSED: &[Guest] = &[
+/// Every adapter component in one deployment.
+const COMPONENTS: &[Guest] = &[
     ("target:contracts", "contracts.wasm"),
     ("target:omnia", "omnia.wasm"),
     ("target:vectis", "vectis.wasm"),
     ("source:documentation", "documentation.wasm"),
-];
-
-/// The remaining source guests, composed together.
-const SOURCES: &[Guest] = &[
     ("source:intent", "intent.wasm"),
     ("source:typescript", "typescript.wasm"),
     ("source:screenshots", "screenshots.wasm"),
     ("source:captures", "captures.wasm"),
 ];
 
-/// Assemble the contracts deployment into a runtime the tests can
-/// dispatch into and serve HTTP through, with `"."` mounted at `mount`.
-async fn runtime(mount: &Path) -> Result<Runtime<Bundle>> {
-    assemble(manifest(CONTRACTS, mount)?).await
-}
-
-/// Assemble the multi-guest deployment (contracts + omnia + vectis +
-/// documentation) into a runtime, with `"."` mounted at `mount`.
-async fn composed_runtime(mount: &Path) -> Result<Runtime<Bundle>> {
-    assemble(manifest(COMPOSED, mount)?).await
-}
-
-/// Assemble the source-guest deployment (intent + typescript +
-/// screenshots + captures) into a runtime, with `"."` mounted at `mount`.
-async fn source_guests_runtime(mount: &Path) -> Result<Runtime<Bundle>> {
-    assemble(manifest(SOURCES, mount)?).await
+/// Assemble every adapter component into one shared runtime.
+async fn component_runtime(mount: &Path) -> Result<Runtime<Bundle>> {
+    assemble(manifest(COMPONENTS, mount)?).await
 }
 
 /// A deployment manifest over `guests`: each guest's MCP references routed at

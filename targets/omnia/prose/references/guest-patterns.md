@@ -65,7 +65,7 @@ omnia_wasi_websocket::export!(WebSocketGuest);
 
 ## Command
 
-For a WASI command surface, assemble an `omnia_guest::api::command::Router` over the same `Invoker`, register typed `run::<Args, Operation>()` routes, provide an output/error projector, and export `wasip3::cli::command::export!(CliGuest)`.
+For a WASI command surface, assemble an `omnia_guest::api::command::RouterBuilder` over a `clap::Command` root and the same `Invoker`, register typed `run::<Args, Operation>()` routes, provide an output/error projector, and `build()` into the executable `command::Router`; export `wasip3::cli::command::export!(CliGuest)`.
 
 ## Checklist
 

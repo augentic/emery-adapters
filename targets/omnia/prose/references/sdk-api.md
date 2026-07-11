@@ -10,7 +10,7 @@ use omnia_guest::api::Provider;
 use omnia_guest::api::invoke::CallContext;
 use omnia_guest::api::operation::Operation;
 
-pub trait Operation<P: Provider>: Sized + Send + 'static {
+pub trait Operation<P: Provider>: 'static {
     type Input: Send + 'static;
     type Output: Send + 'static;
     type Error: std::error::Error + Send + Sync + 'static;
@@ -96,7 +96,7 @@ The default decoder deserializes JSON. The default `Acknowledge` projector ackno
 
 ## Command router
 
-When a component exports WASI command, use `omnia_guest::api::command::Router`. Parse CLI args into the operation input, register `run::<Args, Operation>()`, and project `Outcome::{Output, Operation, Decode}` into stdout, stderr, and exit status. Do not hand-match argument vectors or call domain functions around the operation kernel.
+When a component exports WASI command, assemble `omnia_guest::api::command::RouterBuilder::new(clap_command, invoker)` and `build()` it into the executable `command::Router`. Parse CLI args into the operation input, register `run::<Args, Operation>()`, and project `Outcome::{Output, Operation, Decode}` into stdout, stderr, and exit status. Do not hand-match argument vectors or call domain functions around the operation kernel.
 
 ## Explicit exports
 
