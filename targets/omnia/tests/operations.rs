@@ -7,8 +7,8 @@ use std::path::Path;
 use adapter::answers::REPORT_ANSWER_SCHEMA;
 use adapter::seam::{Changeset, Context, Edit, Input, Severity, Status, WorkingTree};
 use adapter::{Format, Request};
-use omnia_testkit::model::{Harness, mcp_grants};
 use omnia::operations::{build, merge};
+use omnia_testkit::model::{Harness, mcp_grants};
 use tempfile::TempDir;
 
 const PHASE_DONE: &str = r#"{"applicable":true,"summary":"phase complete"}"#;

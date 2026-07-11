@@ -46,12 +46,12 @@ omnia-wasi-http = "0.35.0"
 omnia-wasi-model = "0.35.0"
 
 [patch.crates-io]
-omnia = { path = "../omnia/crates/omnia" }
+omnia = { git = "https://github.com/augentic/omnia.git" }
 omnia-cursor = { git = "https://github.com/augentic/backends.git" }
-omnia-guest = { path = "../omnia/crates/omnia-guest" }
-omnia-testkit = { path = "../omnia/crates/testkit" }
-omnia-wasi-http = { path = "../omnia/crates/wasi-http" }
-omnia-wasi-model = { path = "../omnia/crates/wasi-model" }
+omnia-guest = { git = "https://github.com/augentic/omnia.git" }
+omnia-testkit = { git = "https://github.com/augentic/omnia.git" }
+omnia-wasi-http = { git = "https://github.com/augentic/omnia.git" }
+omnia-wasi-model = { git = "https://github.com/augentic/omnia.git" }
 
 # omnia = { path = "../omnia/crates/omnia" }
 # omnia-cursor = { path = "../backends/crates/cursor" }
