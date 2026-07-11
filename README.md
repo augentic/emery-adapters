@@ -33,8 +33,9 @@ shared/
     rules/            #   UNI-* engineering rules
 crates/               # shared guest support (adapter, prose); native tests use
                       # Omnia's recorded scripted model harness
-evals/                # the hosted-deployment test surfaces, flattened like
-                      # omnia's examples/: harness.rs (the package lib — the
+evals/                # `adapter-host-tests`, the hosted-deployment test
+                      # package flattened like omnia's examples/: harness.rs
+                      # (the package lib — the
                       # shared host-side harness) + composed.rs (the
                       # model-free composed-deployment tests hosting the
                       # built adapter guest components on the Omnia runtime)
@@ -79,8 +80,7 @@ at `target/wasm32-wasip2/release/<name>.wasm`):
 cargo make release
 ```
 
-The composed-deployment tests (`evals/composed.rs`) build guests from source on
-first use when artifacts are absent under `target/wasm32-wasip2/debug/`.
+The `adapter-host-tests` package keeps composed WASM/WIT conformance (`evals/composed.rs`) distinct from live prompt-quality evaluation (`evals/live.rs`). Composed tests build guests from source on first use when artifacts are absent under `target/wasm32-wasip2/debug/`.
 
 ## Publishing
 

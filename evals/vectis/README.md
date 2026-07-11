@@ -6,7 +6,7 @@ Live-backend eval harness for the vectis adapter guest. The scenario drives the 
 
 | Piece | Where |
 | ----- | ----- |
-| Host binary | [`evals/runtime.rs`](../runtime.rs) (the `eval-driver` example of the flattened `evals` package) |
+| Host binary | [`evals/runtime.rs`](../runtime.rs) (the `eval-driver` example of the flattened `adapter-host-tests` package) |
 | Driver guest | [`evals/guest.rs`](../guest.rs) (the `eval-guest` cdylib example) |
 | Adapter guest | [`targets/vectis`](../../targets/vectis) — the component under test (`vectis.wasm`) |
 | Scenario seeds | `scenarios/<name>/inputs/*.md` and `scenarios/<name>/seed/**` |
@@ -26,11 +26,11 @@ Requires [`cursor-agent`](https://cursor.com/docs/cli) on `PATH`. Set `SPECIFY_E
 ```bash
 cargo make eval-vectis
 
-cargo test -p evals --test live -- --ignored --nocapture vectis::single_screen
+cargo test -p adapter-host-tests --test live -- --ignored --nocapture vectis::single_screen
 ```
 
 ## Smoke-checking without a model
 
 ```bash
-cargo test -p evals --test live vectis::wiring
+cargo test -p adapter-host-tests --test live vectis::wiring
 ```

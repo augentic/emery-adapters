@@ -57,16 +57,7 @@ script = "cargo +nightly fmt --all -- --check"
 # Lint
 [tasks.lint]
 command = "cargo"
-args = [
-  "clippy",
-  "--locked",
-  "--workspace",
-  "--all-targets",
-  "--all-features",
-  "--",
-  "-D",
-  "warnings",
-]
+args = ["clippy", "--workspace", "--all-targets", "--all-features", "--", "-D", "warnings"]
 install_crate = { rustup_component_name = "clippy" }
 
 # Outdated (advisory — never part of `ci`: any upstream release would
@@ -114,16 +105,6 @@ cargo vet --locked
 '''
 install_crate = "cargo-vet"
 
-# Vet regenerate (manual, on dependency add/update — refresh imports and
-# exemptions, then review the `supply-chain/` diff before committing)
-[tasks.vet-regenerate]
-script = '''
-cargo vet regenerate imports
-cargo vet regenerate exemptions
-cargo vet regenerate unpublished
-'''
-install_crate = "cargo-vet"
-
 [tasks.debug]
 script = '''
 cargo build --workspace --example eval-guest --target wasm32-wasip2
@@ -163,7 +144,7 @@ cargo build "${scope[@]}" --target wasm32-wasip2 --release
 # on PATH; see evals/contracts/README.md.
 [tasks.eval-contracts]
 script = '''
-cargo test -p evals --test live -- --ignored --nocapture contracts::
+cargo test -p adapter-host-tests --test live -- --ignored --nocapture contracts::
 '''
 
 # Live vectis eval: the single-screen scenario through the `#[ignore]`d
@@ -171,7 +152,7 @@ cargo test -p evals --test live -- --ignored --nocapture contracts::
 # cursor-agent on PATH; see evals/vectis/README.md.
 [tasks.eval-vectis]
 script = '''
-cargo test -p evals --test live -- --ignored --nocapture vectis::
+cargo test -p adapter-host-tests --test live -- --ignored --nocapture vectis::
 '''
 
 # Publish every adapter component as `specify:<name>@<ver>`. For example:
@@ -229,6 +210,6 @@ if [ ! -d "$prose" ]; then
 fi
 export EVAL_FILTER
 cargo watch -w "$prose" \
-  -s 'SPECIFY_PROSE_OVERLAY=1 cargo test -p evals --test live -- --ignored --nocapture --exact "$EVAL_FILTER"'
+  -s 'SPECIFY_PROSE_OVERLAY=1 cargo test -p adapter-host-tests --test live -- --ignored --nocapture --exact "$EVAL_FILTER"'
 '''
 install_crate = "cargo-watch"

@@ -7,7 +7,7 @@
 //! cargo-make task, or by hand:
 //!
 //! ```text
-//! cargo run -p evals --example eval-driver -- run --config <manifest> -- build target:contracts <slice> <inputs-dir>
+//! cargo run -p adapter-host-tests --example eval-driver -- run --config <manifest> -- build target:contracts <slice> <inputs-dir>
 //! ```
 //!
 //! Requires `cursor-agent` on `PATH`, authenticated via `CURSOR_API_KEY` or a

@@ -731,11 +731,11 @@ async fn component_runtime(mount: &Path) -> Result<Runtime<Bundle>> {
 /// `/mcp/<name>`, sharing one writable `"."` mount — the shared project
 /// tree every guest opens through its own preopen.
 fn manifest(guests: &[Guest], mount: &Path) -> Result<TempManifest> {
-    let entries: Vec<evals::Guest> = guests
+    let entries: Vec<adapter_host_tests::Guest> = guests
         .iter()
         .map(|(id, file)| {
             let name = id.split_once(':').expect("guest id is `<axis>:<name>`").1;
-            evals::Guest {
+            adapter_host_tests::Guest {
                 id: (*id).to_owned(),
                 wasm: guest_wasm(file),
                 link: Vec::new(),
@@ -743,7 +743,7 @@ fn manifest(guests: &[Guest], mount: &Path) -> Result<TempManifest> {
             }
         })
         .collect();
-    temp_manifest(&evals::manifest(&entries, mount))
+    temp_manifest(&adapter_host_tests::manifest(&entries, mount))
 }
 
 /// Locate a built wasm32-wasip2 guest component, building on first use.
@@ -764,18 +764,18 @@ fn build_guests() {
     GUESTS.get_or_init(|| {
         let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
-            .expect("evals manifest dir is <workspace>/evals");
+            .expect("adapter-host-tests manifest dir is <workspace>/evals");
         // `--workspace` rather than a `-p` list: the bare spec `omnia` is
         // ambiguous between the guest crate and the runtime dependency
         // of the same name. Host-side members compile to empty crates on
         // wasm32, so the whole-workspace build is equivalent.
         let args = ["build", "--workspace", "--target", "wasm32-wasip2"];
-        evals::cargo(&args, workspace_root, &target_dir()).expect("guest build");
+        adapter_host_tests::cargo(&args, workspace_root, &target_dir()).expect("guest build");
     });
 }
 
 fn target_dir() -> PathBuf {
-    evals::target_dir().expect("test exe sits at <target>/<profile>/deps/<exe>")
+    adapter_host_tests::target_dir().expect("test exe sits at <target>/<profile>/deps/<exe>")
 }
 
 async fn assemble(manifest: TempManifest) -> Result<Runtime<Bundle>> {

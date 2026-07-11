@@ -1,6 +1,6 @@
 [package]
-name = "evals"
-description = "Live adapter-guest eval harness: the cursor-backed runtime host and driver guest over the per-adapter scenario trees"
+name = "adapter-host-tests"
+description = "Adapter host test package for composed WASM/WIT conformance and live prompt-quality evaluation"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -64,9 +64,8 @@ crate-type = ["cdylib"]
 name = "live"
 path = "live.rs"
 
-# The model-free composed-deployment tests hosting the built adapter guest
-# components on the Omnia runtime (in-process via omnia-testkit); the
-# deterministic counterpart to the live evals above.
+# The model-free composed-deployment tests host built adapter components on
+# the Omnia runtime via omnia-testkit and own WASM/WIT conformance only.
 [[test]]
 name = "composed"
 path = "composed.rs"

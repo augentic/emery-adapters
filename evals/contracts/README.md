@@ -6,7 +6,7 @@ Live-backend eval harness for the contracts adapter guest. Each scenario drives 
 
 | Piece | Where |
 | ----- | ----- |
-| Host binary | [`evals/runtime.rs`](../runtime.rs) (the `eval-driver` example of the flattened `evals` package) — `omnia::runtime!({ mode: command, hosts: { WasiHttp: HttpDefault, WasiModel: EvalModel } })` — the cursor backend behind the `SPECIFY_EVAL_MODEL` decorator |
+| Host binary | [`evals/runtime.rs`](../runtime.rs) (the `eval-driver` example of the flattened `adapter-host-tests` package) — `omnia::runtime!({ mode: command, hosts: { WasiHttp: HttpDefault, WasiModel: EvalModel } })` — the cursor backend behind the `SPECIFY_EVAL_MODEL` decorator |
 | Driver guest | [`evals/guest.rs`](../guest.rs) (the `eval-guest` cdylib example) — the deployment's `wasi:cli/run` exporter; drives one seam operation per invocation (`survey` / `extract` / `guidance` / `build` / `merge`, selected by the first argument — these scenarios drive `build`), reads its inputs from the mount, prints the typed answer as one JSON line |
 | Adapter guest | [`targets/contracts`](../../targets/contracts) — the component under test |
 | Scenario seeds | `scenarios/<name>/inputs/*.md` (typed slice inputs by file stem) and `scenarios/<name>/seed/**` (files copied into the scratch project root) |
@@ -22,7 +22,7 @@ Requires [`cursor-agent`](https://cursor.com/docs/cli) on `PATH`, authenticated 
 ```bash
 cargo make eval-contracts
 
-cargo test -p evals --test live -- --ignored --nocapture contracts::metadata
+cargo test -p adapter-host-tests --test live -- --ignored --nocapture contracts::metadata
 ```
 
 Each test builds the guests, seeds a scratch tree under a temp dir, writes the deployment manifest, and spawns the prebuilt `eval-driver` example for one command-mode run. The report JSON line and full log land under `runs/<scenario>/`; the test fails on a failing report `status`.
