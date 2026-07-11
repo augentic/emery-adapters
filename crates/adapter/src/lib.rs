@@ -6,7 +6,7 @@
 //! - the model capability is the upstream [`omnia_guest::Model`]
 //!   (re-exported here with its request/reply vocabulary); cores take
 //!   `P: Model` bounds, `wasm32` binds `WasiModel`, tests bind the
-//!   `testkit` crate's scripted `MockModel`.
+//!   `specify-testkit` crate's scripted `MockModel`.
 //! - [`seam`] — the DTO vocabulary mirroring the `specify:adapter` WIT
 //!   records.
 //! - [`answers`] — the vendored judgment-answer schema pins and their

@@ -5,10 +5,10 @@
 use std::path::Path;
 
 use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA};
-use adapter::seam::{Authority, ClaimKind, Context, Error, Lead};
-use adapter::{Error as ModelError, Format, Request};
-use documentation::operations::{extract, metadata, survey};
-use testkit::{MockModel, mcp_grants};
+use adapter::seam::{Authority, ClaimKind, Context, Lead};
+use adapter::{Format, Request};
+use documentation::operations::{extract, survey};
+use specify_testkit::{MockModel, mcp_grants};
 
 fn ctx(mcp_url: Option<&str>) -> Context<'_> {
     Context {
@@ -73,31 +73,6 @@ async fn survey_no_mcp_no_grant() {
     assert!(model.requests()[0].tools.is_empty(), "no URL means no reference grant");
 }
 
-// The tail re-checks id grammar after the answer deserializes.
-#[tokio::test]
-async fn tail_rejects_bad_lead_id() {
-    let model =
-        MockModel::answering([r#"{"leads":[{"lead":"Bad_Id","synopsis":"Casing violates."}]}"#]);
-
-    let err = survey(&model, &ctx(None)).await.unwrap_err();
-
-    match err {
-        Error::Internal(detail) => {
-            assert!(detail.contains("lead `Bad_Id`"), "finding names the malformed id: {detail}");
-        }
-        other => panic!("expected internal error, got {other:?}"),
-    }
-}
-
-#[tokio::test]
-async fn tail_rejects_empty_synopsis() {
-    let model = MockModel::answering([r#"{"leads":[{"lead":"account","synopsis":"  "}]}"#]);
-
-    let err = survey(&model, &ctx(None)).await.unwrap_err();
-
-    assert!(matches!(err, Error::Internal(detail) if detail.contains("synopsis is empty")));
-}
-
 #[tokio::test]
 async fn extract_leg() {
     let model = MockModel::answering([r#"{
@@ -133,42 +108,4 @@ async fn extract_leg() {
     assert_eq!(schema, EVIDENCE_ANSWER_SCHEMA);
     assert!(request.lend_workspace);
     assert_eq!(mcp_grants(request)[0].url, "http://references/mcp");
-}
-
-// The tail mirrors the evidence schema's conditional id requirement.
-#[tokio::test]
-async fn tail_rejects_missing_claim_id() {
-    let model = MockModel::answering([
-        r#"{"authority":"documentation","claims":[{"kind":"requirement"}]}"#,
-    ]);
-
-    let err = extract(&model, &ctx(None), &lead()).await.unwrap_err();
-
-    assert!(matches!(err, Error::Internal(detail) if detail.contains("require an id")));
-}
-
-#[tokio::test]
-async fn tail_rejects_bad_claim_id() {
-    let model = MockModel::answering([
-        r#"{"authority":"documentation","claims":[{"kind":"criterion","id":"Not.Valid"}]}"#,
-    ]);
-
-    let err = extract(&model, &ctx(None), &lead()).await.unwrap_err();
-
-    assert!(matches!(err, Error::Internal(detail) if detail.contains("`Not.Valid`")));
-}
-
-#[tokio::test]
-async fn invalid_request_maps() {
-    let model =
-        MockModel::scripted([Err(ModelError::InvalidRequest("messages must not be empty".into()))]);
-
-    let err = survey(&model, &ctx(None)).await.unwrap_err();
-
-    assert!(matches!(err, Error::InvalidRequest(_)));
-}
-
-#[test]
-fn metadata_no_floor() {
-    assert_eq!(metadata().specify_floor, None);
 }

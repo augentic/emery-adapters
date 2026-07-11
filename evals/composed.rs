@@ -36,6 +36,116 @@ const TARGET_INTERFACE: &str = "specify:adapter/target@0.1.0";
 /// The versioned interface name the source-adapter world exports.
 const SOURCE_INTERFACE: &str = "specify:adapter/source@0.1.0";
 
+/// Exercise the metadata WIT export for every deployed component.
+async fn metadata(runtime: &Runtime<Bundle>, guest: &str) -> Result<()> {
+    use omnia::wasmtime::component::Val;
+
+    let interface = if guest.starts_with("target:") { TARGET_INTERFACE } else { SOURCE_INTERFACE };
+    let results = runtime
+        .dispatcher()
+        .invoke(
+            guest.into(),
+            Some(interface.to_string()),
+            "metadata".to_string(),
+            vec![Val::String(guest.to_string())],
+        )
+        .await
+        .with_context(|| format!("dispatching metadata to {guest}"))?;
+
+    let [Val::Record(fields)] = results.as_slice() else {
+        anyhow::bail!("{guest} metadata returned an unexpected shape: {results:?}");
+    };
+    assert!(
+        fields.iter().any(|(key, value)| key == "specify-floor" && *value == Val::Option(None)),
+        "{guest} declares no compatibility floor: {fields:?}"
+    );
+
+    if guest.starts_with("source:") {
+        return Ok(());
+    }
+
+    let field = |name: &str| {
+        fields
+            .iter()
+            .find(|(key, _)| key == name)
+            .map(|(_, value)| value)
+            .with_context(|| format!("{guest} metadata carries `{name}`: {fields:?}"))
+    };
+    let Val::List(inputs) = field("inputs")? else {
+        anyhow::bail!("{guest} metadata `inputs` is a list: {fields:?}");
+    };
+    let declared: Vec<(&str, bool)> = inputs
+        .iter()
+        .map(|input| {
+            let Val::Record(entries) = input else {
+                panic!("{guest} build input is a record: {input:?}");
+            };
+            let path = entries.iter().find_map(|(key, value)| match (key.as_str(), value) {
+                ("path", Val::String(path)) => Some(path.as_str()),
+                _ => None,
+            });
+            let required = entries.iter().find_map(|(key, value)| match (key.as_str(), value) {
+                ("required", Val::Bool(required)) => Some(*required),
+                _ => None,
+            });
+            (
+                path.unwrap_or_else(|| panic!("{guest} build input carries a path: {entries:?}")),
+                required
+                    .unwrap_or_else(|| panic!("{guest} build input carries required: {entries:?}")),
+            )
+        })
+        .collect();
+
+    match guest {
+        "target:contracts" => {
+            assert_eq!(declared, [("contracts", false)]);
+            assert_eq!(field("platforms")?, &Val::Option(None));
+        }
+        "target:omnia" => {
+            assert!(declared.is_empty());
+            assert_eq!(field("platforms")?, &Val::Option(None));
+        }
+        "target:vectis" => {
+            assert_eq!(
+                declared,
+                [("tokens.yaml", false), ("assets.yaml", false), ("components.yaml", false)]
+            );
+            let Val::Option(Some(platforms)) = field("platforms")? else {
+                anyhow::bail!("vectis declares a platforms capability: {fields:?}");
+            };
+            let Val::Record(capability) = platforms.as_ref() else {
+                anyhow::bail!("vectis platforms capability is a record: {platforms:?}");
+            };
+            let capability_field = |name: &str| {
+                capability
+                    .iter()
+                    .find(|(key, _)| key == name)
+                    .map(|(_, value)| value)
+                    .with_context(|| format!("vectis platforms capability carries `{name}`"))
+            };
+            assert_eq!(capability_field("required")?, &Val::Bool(true));
+            let platform_names = |name: &str| -> Result<Vec<&str>> {
+                let Val::List(platforms) = capability_field(name)? else {
+                    anyhow::bail!("vectis platforms capability `{name}` is a list");
+                };
+                Ok(platforms
+                    .iter()
+                    .map(|platform| {
+                        let Val::Enum(name) = platform else {
+                            panic!("vectis platform is an enum: {platform:?}");
+                        };
+                        name.as_str()
+                    })
+                    .collect())
+            };
+            assert_eq!(platform_names("allowed")?, ["core", "ios", "android", "web", "desktop"]);
+            assert_eq!(platform_names("default")?, ["core", "ios", "android"]);
+        }
+        _ => anyhow::bail!("unexpected target component `{guest}`"),
+    }
+    Ok(())
+}
+
 /// Composed-deployment tests for the contracts adapter guest: the
 /// `guidance` seam through host-mediated dispatch, and the MCP reference
 /// references over `wasi:http` — including the build-time-resolved
@@ -282,68 +392,6 @@ mod vectis {
 
     use super::{Bundle, TARGET_INTERFACE};
 
-    pub async fn metadata(runtime: &Runtime<Bundle>) -> Result<()> {
-        let results = runtime
-            .dispatcher()
-            .invoke(
-                "target:vectis".into(),
-                Some(TARGET_INTERFACE.to_string()),
-                "metadata".to_string(),
-                vec![Val::String("target:vectis".to_string())],
-            )
-            .await
-            .context("dispatching metadata")?;
-
-        let [Val::Record(fields)] = results.as_slice() else {
-            anyhow::bail!("metadata returned an unexpected shape: {results:?}");
-        };
-        let field = |name: &str| {
-            fields
-                .iter()
-                .find(|(key, _)| key == name)
-                .map(|(_, value)| value)
-                .with_context(|| format!("manifest record carries `{name}`: {fields:?}"))
-        };
-
-        let Val::Option(None) = field("specify-floor")? else {
-            anyhow::bail!("vectis declares no compatibility floor: {fields:?}");
-        };
-
-        let Val::List(inputs) = field("inputs")? else {
-            anyhow::bail!("manifest `inputs` is a list: {fields:?}");
-        };
-        let paths: Vec<&str> = inputs
-            .iter()
-            .filter_map(|input| {
-                let Val::Record(entries) = input else { return None };
-                entries.iter().find_map(|(key, value)| {
-                    if let ("path", Val::String(path)) = (key.as_str(), value) {
-                        Some(path.as_str())
-                    } else {
-                        None
-                    }
-                })
-            })
-            .collect();
-        assert_eq!(
-            paths,
-            ["tokens.yaml", "assets.yaml", "components.yaml"],
-            "vectis declares the three optional design-system inputs"
-        );
-
-        let Val::Option(Some(platforms)) = field("platforms")? else {
-            anyhow::bail!("vectis declares a platforms capability: {fields:?}");
-        };
-        let Val::Record(capability) = platforms.as_ref() else {
-            anyhow::bail!("platforms capability is a record: {platforms:?}");
-        };
-        assert!(
-            capability.iter().any(|(key, value)| key == "required" && *value == Val::Bool(true)),
-            "vectis requires a declared platform set: {capability:?}"
-        );
-        Ok(())
-    }
-
     pub async fn guidance(runtime: &Runtime<Bundle>) -> Result<()> {
         let results = runtime
             .dispatcher()
@@ -428,28 +476,6 @@ mod documentation {
     use serde_json::{Value, json};
 
     use super::{Bundle, SOURCE_INTERFACE};
-
-    pub async fn metadata(runtime: &Runtime<Bundle>) -> Result<()> {
-        let results = runtime
-            .dispatcher()
-            .invoke(
-                "source:documentation".into(),
-                Some(SOURCE_INTERFACE.to_string()),
-                "metadata".to_string(),
-                vec![Val::String("source:documentation".to_string())],
-            )
-            .await
-            .context("dispatching metadata")?;
-
-        let [Val::Record(fields)] = results.as_slice() else {
-            anyhow::bail!("metadata returned an unexpected shape: {results:?}");
-        };
-        assert!(
-            fields.iter().any(|(key, value)| key == "specify-floor" && *value == Val::Option(None)),
-            "documentation declares no compatibility floor: {fields:?}"
-        );
-        Ok(())
-    }
 
     // The async-lifted `survey` export awaits `omnia:model/completion.create`;
     // the stub backend pends then fails, so the leg must come back as the WIT
@@ -658,15 +684,16 @@ async fn component_smoke() -> Result<()> {
     let mount = tempfile::tempdir()?;
     let runtime = component_runtime(mount.path()).await?;
 
+    for (guest, _) in COMPONENTS {
+        metadata(&runtime, guest).await?;
+    }
     contracts::guidance(&runtime).await?;
     contracts::build_bridge(&runtime).await?;
     contracts::references(&runtime).await?;
     omnia_guest::guidance(&runtime).await?;
     omnia_guest::references(&runtime).await?;
-    vectis::metadata(&runtime).await?;
     vectis::guidance(&runtime).await?;
     vectis::references(&runtime).await?;
-    documentation::metadata(&runtime).await?;
     documentation::survey_bridge(&runtime).await?;
     documentation::per_guest_shelves(&runtime).await?;
     sources::survey_bridges(&runtime).await?;

@@ -21,7 +21,7 @@ wit-bindgen.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
-testkit.workspace = true
+specify-testkit.workspace = true
 tokio.workspace = true
 
 [lints]

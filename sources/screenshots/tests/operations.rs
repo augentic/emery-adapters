@@ -3,8 +3,8 @@
 use std::path::Path;
 
 use adapter::seam::{Authority, ClaimKind, Context, Lead};
-use screenshots::operations::{extract, metadata};
-use testkit::MockModel;
+use screenshots::operations::extract;
+use specify_testkit::MockModel;
 
 #[tokio::test]
 async fn extract_spatial_kinds() {
@@ -38,9 +38,4 @@ async fn extract_spatial_kinds() {
         request.messages[0].content.contains("screen images"),
         "the binding note names the image-set material"
     );
-}
-
-#[test]
-fn metadata_no_floor() {
-    assert_eq!(metadata().specify_floor, None);
 }

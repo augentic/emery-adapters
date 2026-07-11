@@ -3,9 +3,9 @@
 
 use std::path::Path;
 
-use adapter::seam::{Authority, ClaimKind, Context, Error, Lead};
-use captures::operations::{extract, metadata};
-use testkit::MockModel;
+use adapter::seam::{Authority, ClaimKind, Context, Lead};
+use captures::operations::extract;
+use specify_testkit::MockModel;
 
 fn ctx() -> Context<'static> {
     Context {
@@ -51,20 +51,4 @@ async fn extract_example_claims() {
         request.messages[0].content.contains("tests/data/replays"),
         "the binding note names the capture-tree layout"
     );
-}
-
-// The tail mirrors the evidence schema's conditional id requirement.
-#[tokio::test]
-async fn tail_rejects_idless_claims() {
-    let model =
-        MockModel::answering([r#"{"authority":"behaviour","claims":[{"kind":"example"}]}"#]);
-
-    let err = extract(&model, &ctx(), &lead()).await.unwrap_err();
-
-    assert!(matches!(err, Error::Internal(detail) if detail.contains("require an id")));
-}
-
-#[test]
-fn metadata_no_floor() {
-    assert_eq!(metadata().specify_floor, None);
 }

@@ -10,7 +10,7 @@ Five rungs, fastest feedback first. Every behavior is asserted on exactly one ru
 
 ### 1. Native crate tests — the inner loop
 
-Each adapter crate is `cdylib` + `rlib`, so its wasm-free logic links natively and tests through the standard auto-discovered suite at `{targets,sources}/<name>/tests/<area>.rs`. Judgment-leg prompts are asserted here against the mock `Model` from `crates/testkit` — "did my prompt edit land in the assembled text". The wasm32-only guest shims (`src/guest.rs`) are hand-written export glue and carry no native tests.
+Each adapter crate is `cdylib` + `rlib`, so its wasm-free logic links natively and tests through the standard auto-discovered suite at `{targets,sources}/<name>/tests/<area>.rs`. Judgment-leg prompts are asserted here against the mock `Model` from the sibling Specify repository's `specify-testkit` crate — "did my prompt edit land in the assembled text". The wasm32-only guest shims (`src/guest.rs`) are hand-written export glue and carry no native tests.
 
 ```bash
 cargo nextest run -p vectis   # one adapter

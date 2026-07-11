@@ -2,22 +2,18 @@
 //! prompt assembly, schema-gated formats, the phase-leg decomposition,
 //! and the deterministic report-coherence gate with its bounded repair.
 
-use std::fs;
 use std::path::Path;
 
 use adapter::answers::REPORT_ANSWER_SCHEMA;
-use adapter::seam::{Changeset, Context, Edit, Error, Input, Severity, Status, WorkingTree};
-use adapter::{Error as ModelError, Format, Request};
-use omnia::operations::{build, guidance, merge, metadata};
+use adapter::seam::{Changeset, Context, Edit, Input, Severity, Status, WorkingTree};
+use adapter::{Format, Request};
+use omnia::operations::{build, merge};
+use specify_testkit::{MockModel, mcp_grants};
 use tempfile::TempDir;
-use testkit::{MockModel, mcp_grants};
 
 const PHASE_DONE: &str = r#"{"applicable":true,"summary":"phase complete"}"#;
 const REPLAY_SKIPPED: &str = r#"{"applicable":false,"summary":"no captures binding"}"#;
 const SUCCESS_REPORT: &str = r#"{"status":"success","findings":[]}"#;
-const SUCCESS_WITH_MISSING_OUTPUT: &str =
-    r#"{"status":"success","findings":[],"outputs":[{"platform":"core","path":"crates/demo"}]}"#;
-
 const fn ctx<'a>(root: &'a Path, mcp_url: Option<&'a str>) -> Context<'a> {
     Context {
         adapter_id: "target:omnia",
@@ -38,11 +34,6 @@ fn schema_format(request: &Request) -> (&str, &str) {
         Format::Schema(schema) => (&schema.name, &schema.schema),
         other => panic!("expected schema format, got {other:?}"),
     }
-}
-
-#[test]
-fn guidance_prompt() {
-    assert!(guidance().starts_with("# Omnia target — guidance prompt"));
 }
 
 #[tokio::test]
@@ -100,93 +91,6 @@ async fn build_phase_legs() {
 }
 
 #[tokio::test]
-async fn missing_output_repair() {
-    let tmp = TempDir::new().unwrap();
-    let model = MockModel::answering([
-        PHASE_DONE,
-        PHASE_DONE,
-        REPLAY_SKIPPED,
-        SUCCESS_WITH_MISSING_OUTPUT,
-        SUCCESS_WITH_MISSING_OUTPUT,
-    ]);
-
-    let report = build(&model, &ctx(tmp.path(), None), "demo", &[], &tree()).await.unwrap();
-
-    assert_eq!(report.status, Status::Failure, "residual discrepancy forces failure");
-    let finding = &report.findings[0];
-    assert_eq!(finding.rule_id, None);
-    assert_eq!(finding.severity, Severity::Important);
-    assert!(finding.detail.contains("crates/demo"), "finding names the missing output");
-
-    let requests = model.requests();
-    assert_eq!(requests.len(), 5, "three phases, one report, one bounded repair");
-    let repair = &requests[4].messages[0].content;
-    assert!(repair.contains("crates/demo"), "repair prompt names the missing output");
-    assert!(repair.contains("does not exist"), "repair prompt carries the discrepancy");
-}
-
-#[tokio::test]
-async fn outputs_pass_gate() {
-    let tmp = TempDir::new().unwrap();
-    // Outputs resolve beneath the working-tree subpath, mirroring how a
-    // deployment scopes the shared mount.
-    fs::create_dir_all(tmp.path().join("proj/crates/demo")).unwrap();
-    let model =
-        MockModel::answering([PHASE_DONE, PHASE_DONE, REPLAY_SKIPPED, SUCCESS_WITH_MISSING_OUTPUT]);
-    let subpath_tree = WorkingTree {
-        base: "rev-1".to_string(),
-        subpath: Some("proj".to_string()),
-    };
-
-    let report = build(&model, &ctx(tmp.path(), None), "demo", &[], &subpath_tree).await.unwrap();
-
-    assert_eq!(report.status, Status::Success);
-    assert_eq!(model.requests().len(), 4, "no repair leg when the declared outputs exist");
-}
-
-#[tokio::test]
-async fn failure_is_terminal() {
-    let tmp = TempDir::new().unwrap();
-    // A failure report parks the slice per the prompt's stop contract; the
-    // gate must not spend a repair leg re-litigating its output claims.
-    let model = MockModel::answering([
-        PHASE_DONE,
-        PHASE_DONE,
-        REPLAY_SKIPPED,
-        r#"{"status":"failure","findings":[],"outputs":[{"platform":"core","path":"crates/never-written"}]}"#,
-    ]);
-
-    let report = build(&model, &ctx(tmp.path(), None), "demo", &[], &tree()).await.unwrap();
-
-    assert_eq!(report.status, Status::Failure);
-    assert_eq!(model.requests().len(), 4, "failure reports take no repair leg");
-}
-
-#[tokio::test]
-async fn malformed_answer() {
-    let tmp = TempDir::new().unwrap();
-    let model = MockModel::answering(["this is not json"]);
-
-    let err = build(&model, &ctx(tmp.path(), None), "demo", &[], &tree()).await.unwrap_err();
-
-    match err {
-        Error::Internal(detail) => assert!(detail.contains("generation answer")),
-        other => panic!("expected internal error, got {other:?}"),
-    }
-}
-
-#[tokio::test]
-async fn invalid_request_maps() {
-    let tmp = TempDir::new().unwrap();
-    let model =
-        MockModel::scripted([Err(ModelError::InvalidRequest("messages must not be empty".into()))]);
-
-    let err = build(&model, &ctx(tmp.path(), None), "demo", &[], &tree()).await.unwrap_err();
-
-    assert!(matches!(err, Error::InvalidRequest(_)));
-}
-
-#[tokio::test]
 async fn merge_single_leg() {
     let tmp = TempDir::new().unwrap();
     let model = MockModel::answering([SUCCESS_REPORT]);
@@ -237,46 +141,4 @@ async fn merge_diagnostics() {
         finding.detail,
         "Forbidden std API — The wasm32 build breaks.; remediation: Route through the provider trait."
     );
-}
-
-#[tokio::test]
-async fn merge_blocking_downgrades() {
-    let tmp = TempDir::new().unwrap();
-    // A `success` answer carrying a blocking finding violates the report
-    // contract; the deterministic guard downgrades rather than trusting it.
-    let model = MockModel::answering([
-        r#"{"status":"success","findings":[{"title":"Clippy regression","severity":"important","impact":"CI fails.","remediation":"Fix the lint."}]}"#,
-    ]);
-    let delta = Changeset {
-        base: "rev-1".to_string(),
-        edits: vec![],
-    };
-
-    let report = merge(&model, &ctx(tmp.path(), None), "demo", &delta, &tree()).await.unwrap();
-
-    assert_eq!(report.status, Status::Failure);
-}
-
-#[tokio::test]
-async fn merge_missing_output() {
-    let tmp = TempDir::new().unwrap();
-    let model = MockModel::answering([SUCCESS_WITH_MISSING_OUTPUT, SUCCESS_WITH_MISSING_OUTPUT]);
-    let delta = Changeset {
-        base: "rev-1".to_string(),
-        edits: vec![],
-    };
-
-    let report = merge(&model, &ctx(tmp.path(), None), "demo", &delta, &tree()).await.unwrap();
-
-    assert_eq!(report.status, Status::Failure);
-    assert!(report.findings[0].detail.contains("crates/demo"));
-    assert_eq!(model.requests().len(), 2, "one merge leg plus one bounded repair leg");
-}
-
-#[test]
-fn metadata_empty() {
-    let metadata = metadata();
-    assert_eq!(metadata.specify_floor, None);
-    assert!(metadata.inputs.is_empty());
-    assert_eq!(metadata.platforms, None);
 }

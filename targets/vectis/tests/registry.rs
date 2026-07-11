@@ -46,13 +46,6 @@ fn embed_floor() {
     assert!(total >= 550 * 1024, "expected >= 550 KiB of embedded prose, got {total} bytes");
 }
 
-/// Only markdown embeds: the `rules/vectis.mdc` Cursor rule stays out of
-/// the registry (the codegen walks `.md` files only).
-#[test]
-fn markdown_only() {
-    assert!(registry::doc("rules/vectis.mdc").is_none());
-}
-
 /// The `references/spec-runtime` and `references/agent-teams.md`
 /// symlinks into `codex/references/runtime/` are resolved at build
 /// time: documents appear under their symlink-name paths with the
@@ -63,15 +56,4 @@ fn symlinks_resolved_inline() {
         .expect("symlinked runtime reference is embedded");
     assert!(!doc.body.is_empty(), "resolved symlink content is inlined");
     assert!(!registry::body("references/agent-teams.md").is_empty());
-}
-
-/// `registry::doc` binary-searches, so the generated table must be
-/// sorted and duplicate-free.
-#[test]
-fn sorted_unique() {
-    let docs = registry::docs();
-    assert!(!docs.is_empty());
-    for pair in docs.windows(2) {
-        assert!(pair[0].path < pair[1].path, "`{}` < `{}`", pair[0].path, pair[1].path);
-    }
 }

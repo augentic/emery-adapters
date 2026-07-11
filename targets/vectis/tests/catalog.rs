@@ -65,15 +65,10 @@ screens:
     );
 }
 
-// The fully-missing-imageset finding and the all-present clean case are covered
-// end-to-end through `verify::run` by `tests/engine/verify.rs`
-// (`verify_catalog_missing_imageset_exits_one` /
-// `verify_catalog_present_imageset_exits_clean`), and the android vector-icon
-// *satisfied* branch by `verify_catalog_skips_app_icon_dedups_and_ignores_unknown_refs`
-// (drawable xml present). The cases kept below — Contents.json-only imageset,
-// symbol-kind skip, android vector-icon *missing*, and the android
-// illustration density-raster *miss* — are private branches that integration
-// does not reach.
+// The fully missing and materialized iOS imageset branches are covered through
+// `verify::run` in `tests/verify.rs`. The cases kept below exercise the bounded
+// catalog matrix directly: Contents.json-only imagesets, symbol-kind skips,
+// Android vector-icon misses, and Android illustration density-raster misses.
 #[test]
 fn contents_json_only_imageset() {
     let tmp = tempdir().unwrap();

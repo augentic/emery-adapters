@@ -4,8 +4,8 @@
 use std::path::Path;
 
 use adapter::seam::{Authority, ClaimKind, Context, Lead};
-use testkit::MockModel;
-use typescript::operations::{extract, metadata, survey};
+use specify_testkit::MockModel;
+use typescript::operations::{extract, survey};
 
 fn ctx() -> Context<'static> {
     Context {
@@ -61,9 +61,4 @@ async fn extract_references_pointer() {
     let user = &request.messages[0].content;
     assert!(user.contains("references"), "the prompt points at the MCP-served references");
     assert!(user.contains("- lead: task-service"), "the lead renders as the prompt's block shape");
-}
-
-#[test]
-fn metadata_no_floor() {
-    assert_eq!(metadata().specify_floor, None);
 }

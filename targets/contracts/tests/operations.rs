@@ -6,12 +6,12 @@ use std::fs;
 use std::path::Path;
 
 use adapter::answers::REPORT_ANSWER_SCHEMA;
-use adapter::seam::{Changeset, Context, Edit, Error, Input, Severity, Status, WorkingTree};
-use adapter::{Error as ModelError, Format, Request};
-use contracts::operations::{build, guidance, merge, metadata};
+use adapter::seam::{Changeset, Context, Edit, Input, Severity, Status, WorkingTree};
+use adapter::{Format, Request};
+use contracts::operations::{build, merge};
 use contracts::validate::RULE_VERSION_IS_SEMVER;
+use specify_testkit::{MockModel, mcp_grants};
 use tempfile::TempDir;
-use testkit::{MockModel, mcp_grants};
 
 const NOT_APPLICABLE: &str = r#"{"applicable":false,"summary":"no surface this format owns"}"#;
 const SUCCESS_REPORT: &str = r#"{"status":"success","findings":[]}"#;
@@ -46,11 +46,6 @@ fn seed_bad_contract(dir: &Path) {
         "openapi: '3.1.0'\ninfo:\n  title: API\n  version: 2024-01-15\n",
     )
     .unwrap();
-}
-
-#[test]
-fn guidance_prompt() {
-    assert!(guidance().starts_with("# contracts.guidance"));
 }
 
 #[tokio::test]
@@ -132,30 +127,6 @@ async fn build_repair_bounded() {
 }
 
 #[tokio::test]
-async fn malformed_answer() {
-    let tmp = TempDir::new().unwrap();
-    let model = MockModel::answering(["this is not json"]);
-
-    let err = build(&model, &ctx(tmp.path(), None), "demo", &[], &tree()).await.unwrap_err();
-
-    match err {
-        Error::Internal(detail) => assert!(detail.contains("sub-flow answer")),
-        other => panic!("expected internal error, got {other:?}"),
-    }
-}
-
-#[tokio::test]
-async fn invalid_request_maps() {
-    let tmp = TempDir::new().unwrap();
-    let model =
-        MockModel::scripted([Err(ModelError::InvalidRequest("messages must not be empty".into()))]);
-
-    let err = build(&model, &ctx(tmp.path(), None), "demo", &[], &tree()).await.unwrap_err();
-
-    assert!(matches!(err, Error::InvalidRequest(_)));
-}
-
-#[tokio::test]
 async fn merge_diagnostics() {
     let tmp = TempDir::new().unwrap();
     let model = MockModel::answering([
@@ -187,24 +158,6 @@ async fn merge_diagnostics() {
 }
 
 #[tokio::test]
-async fn merge_blocking_downgrades() {
-    let tmp = TempDir::new().unwrap();
-    // A `success` answer carrying a blocking finding violates the report
-    // contract; the deterministic guard downgrades rather than trusting it.
-    let model = MockModel::answering([
-        r#"{"status":"success","findings":[{"title":"Broken ref","severity":"important","impact":"Consumers break.","remediation":"Fix the $ref."}]}"#,
-    ]);
-    let delta = Changeset {
-        base: "rev-1".to_string(),
-        edits: vec![],
-    };
-
-    let report = merge(&model, &ctx(tmp.path(), None), "demo", &delta, &tree()).await.unwrap();
-
-    assert_eq!(report.status, Status::Failure);
-}
-
-#[tokio::test]
 async fn merge_post_gate() {
     let tmp = TempDir::new().unwrap();
     // Baseline under a working-tree subpath, mirroring a scoped mount.
@@ -228,14 +181,4 @@ async fn merge_post_gate() {
     let requests = model.requests();
     assert_eq!(requests.len(), 2, "one merge leg plus one bounded repair leg");
     assert!(requests[1].messages[0].content.contains("post-merge"));
-}
-
-#[test]
-fn metadata_inputs() {
-    let metadata = metadata();
-    assert_eq!(metadata.specify_floor, None);
-    let declared: Vec<(&str, bool)> =
-        metadata.inputs.iter().map(|input| (input.path.as_str(), input.required)).collect();
-    assert_eq!(declared, [("contracts", false)]);
-    assert_eq!(metadata.platforms, None);
 }

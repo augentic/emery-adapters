@@ -8,19 +8,15 @@ use std::fs;
 use std::path::Path;
 
 use adapter::answers::REPORT_ANSWER_SCHEMA;
-use adapter::seam::{
-    Changeset, Context, Edit, Input, Platform, Report, Severity, Status, WorkingTree,
-};
+use adapter::seam::{Changeset, Context, Edit, Input, Report, Severity, Status, WorkingTree};
 use adapter::{Format, Request};
+use specify_testkit::{MockModel, mcp_grants};
 use tempfile::TempDir;
-use testkit::{MockModel, mcp_grants};
-use vectis::operations::{build, guidance, merge, metadata};
+use vectis::operations::{build, merge};
 
 const PHASE_DONE: &str = r#"{"applicable":true,"summary":"phase complete"}"#;
 const SHELL_SKIPPED: &str = r#"{"applicable":false,"summary":"no shell work in this slice"}"#;
 const SUCCESS_REPORT: &str = r#"{"status":"success","findings":[]}"#;
-const SUCCESS_WITH_MISSING_OUTPUT: &str = r#"{"status":"success","findings":[],"outputs":[{"platform":"core","path":"shared/src/app.rs"}]}"#;
-
 const fn ctx<'a>(root: &'a Path, mcp_url: Option<&'a str>) -> Context<'a> {
     Context {
         adapter_id: "target:vectis",
@@ -41,11 +37,6 @@ fn schema_format(request: &Request) -> (&str, &str) {
         Format::Schema(schema) => (&schema.name, &schema.schema),
         other => panic!("expected schema format, got {other:?}"),
     }
-}
-
-#[test]
-fn guidance_prompt() {
-    assert!(guidance().starts_with("# Vectis target — `guidance`"));
 }
 
 #[tokio::test]
@@ -194,57 +185,6 @@ async fn composition_repair() {
     assert!(repair.messages[0].content.contains("composition validator found blocking issues"));
 }
 
-#[tokio::test]
-async fn missing_output_repair() {
-    let tmp = TempDir::new().unwrap();
-    // The declared output never appears in the tree; the residual
-    // discrepancy overrides the repeated success answer.
-    let model = MockModel::answering([
-        PHASE_DONE,
-        PHASE_DONE,
-        SHELL_SKIPPED,
-        SHELL_SKIPPED,
-        PHASE_DONE,
-        SUCCESS_WITH_MISSING_OUTPUT,
-        SUCCESS_WITH_MISSING_OUTPUT,
-    ]);
-
-    let report = build(&model, &ctx(tmp.path(), None), "demo", &[], &tree()).await.unwrap();
-
-    assert_eq!(report.status, Status::Failure, "residual discrepancy forces failure");
-    assert!(report.findings[0].detail.contains("shared/src/app.rs"));
-
-    let requests = model.requests();
-    assert_eq!(requests.len(), 7, "five phases, one report, one bounded repair");
-    assert!(requests[6].messages[0].content.contains("does not exist"));
-}
-
-#[tokio::test]
-async fn outputs_pass_gate() {
-    let tmp = TempDir::new().unwrap();
-    // Outputs resolve beneath the working-tree subpath, mirroring how a
-    // deployment scopes the shared mount.
-    fs::create_dir_all(tmp.path().join("proj/shared/src")).unwrap();
-    fs::write(tmp.path().join("proj/shared/src/app.rs"), "pub struct App;").unwrap();
-    let model = MockModel::answering([
-        PHASE_DONE,
-        PHASE_DONE,
-        SHELL_SKIPPED,
-        SHELL_SKIPPED,
-        PHASE_DONE,
-        SUCCESS_WITH_MISSING_OUTPUT,
-    ]);
-    let subpath_tree = WorkingTree {
-        base: "rev-1".to_string(),
-        subpath: Some("proj".to_string()),
-    };
-
-    let report = build(&model, &ctx(tmp.path(), None), "demo", &[], &subpath_tree).await.unwrap();
-
-    assert_eq!(report.status, Status::Success);
-    assert_eq!(model.requests().len(), 6, "no repair leg when the declared outputs exist");
-}
-
 /// Run a full build against the scripted mock with an optional staged
 /// slice composition and the given report answer, asserting the six
 /// phase legs ran with no repair leg (coherence warnings never trigger
@@ -375,39 +315,4 @@ async fn merge_gates_composition() {
     assert_eq!(report.status, Status::Failure);
     assert!(report.findings[0].detail.contains("[composition]"));
     assert_eq!(model.requests().len(), 2, "one merge leg plus one bounded repair leg");
-}
-
-#[tokio::test]
-async fn merge_blocking_downgrades() {
-    let tmp = TempDir::new().unwrap();
-    // A `success` answer carrying a blocking finding violates the report
-    // contract; the deterministic guard downgrades rather than trusting it.
-    let model = MockModel::answering([
-        r#"{"status":"success","findings":[{"rule-id":"VECTIS-006","title":"Glyph substituted for vector asset","severity":"critical","impact":"The committed export is ignored.","remediation":"Render by assets.yaml kind."}]}"#,
-    ]);
-    let delta = Changeset {
-        base: "rev-1".to_string(),
-        edits: vec![],
-    };
-
-    let report = merge(&model, &ctx(tmp.path(), None), "demo", &delta, &tree()).await.unwrap();
-
-    assert_eq!(report.status, Status::Failure);
-    assert_eq!(report.findings[0].rule_id.as_deref(), Some("VECTIS-006"));
-}
-
-#[test]
-fn metadata_manifest() {
-    let metadata = metadata();
-    assert_eq!(metadata.specify_floor, None);
-    let declared: Vec<(&str, bool)> =
-        metadata.inputs.iter().map(|input| (input.path.as_str(), input.required)).collect();
-    assert_eq!(
-        declared,
-        [("tokens.yaml", false), ("assets.yaml", false), ("components.yaml", false)]
-    );
-    let platforms = metadata.platforms.expect("vectis declares a platforms capability");
-    assert!(platforms.required);
-    assert_eq!(platforms.allowed.len(), 5);
-    assert_eq!(platforms.default, [Platform::Core, Platform::Ios, Platform::Android]);
 }

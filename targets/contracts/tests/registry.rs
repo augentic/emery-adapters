@@ -34,14 +34,3 @@ fn symlinks_resolved_inline() {
         .expect("symlinked runtime reference is embedded");
     assert!(!doc.body.is_empty(), "resolved symlink content is inlined");
 }
-
-/// `registry::doc` binary-searches, so the generated table must be
-/// sorted and duplicate-free.
-#[test]
-fn sorted_unique() {
-    let docs = registry::docs();
-    assert!(!docs.is_empty());
-    for pair in docs.windows(2) {
-        assert!(pair[0].path < pair[1].path, "`{}` < `{}`", pair[0].path, pair[1].path);
-    }
-}

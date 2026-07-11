@@ -6,7 +6,7 @@ use std::path::Path;
 use adapter::seam::{Context, Error, WorkingTree};
 use adapter::{Error as ModelError, Format, judgment};
 use serde::Deserialize;
-use testkit::{MockModel, mcp_grants};
+use specify_testkit::{MockModel, mcp_grants};
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 struct Answer {

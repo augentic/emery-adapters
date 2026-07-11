@@ -3,8 +3,8 @@
 use std::path::Path;
 
 use adapter::seam::{Authority, ClaimKind, Context, Lead};
-use intent::operations::{extract, metadata, survey};
-use testkit::MockModel;
+use intent::operations::{extract, survey};
+use specify_testkit::MockModel;
 
 fn ctx() -> Context<'static> {
     Context {
@@ -50,9 +50,4 @@ async fn extract_intent_claim() {
     assert_eq!(evidence.claims[0].id.as_deref(), Some("password-reset"));
     let request = &model.requests()[0];
     assert!(request.system.as_deref().unwrap().starts_with("# intent.extract"));
-}
-
-#[test]
-fn metadata_no_floor() {
-    assert_eq!(metadata().specify_floor, None);
 }
