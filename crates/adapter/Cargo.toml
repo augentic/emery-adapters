@@ -21,7 +21,7 @@ wit-bindgen.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
-specify-testkit.workspace = true
+omnia-testkit = { workspace = true, features = ["model"] }
 tokio.workspace = true
 
 [lints]

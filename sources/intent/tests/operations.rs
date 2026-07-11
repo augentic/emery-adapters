@@ -4,7 +4,7 @@ use std::path::Path;
 
 use adapter::seam::{Authority, ClaimKind, Context, Lead};
 use intent::operations::{extract, survey};
-use specify_testkit::MockModel;
+use omnia_testkit::model::Harness;
 
 fn ctx() -> Context<'static> {
     Context {
@@ -16,7 +16,7 @@ fn ctx() -> Context<'static> {
 
 #[tokio::test]
 async fn survey_inline_binding() {
-    let model = MockModel::answering([
+    let model = Harness::answering([
         r#"{"leads":[{"lead":"password-reset","synopsis":"Let users reset passwords by email."}]}"#,
     ]);
 
@@ -33,7 +33,7 @@ async fn survey_inline_binding() {
 
 #[tokio::test]
 async fn extract_intent_claim() {
-    let model = MockModel::answering([
+    let model = Harness::answering([
         r#"{"authority":"intent","claims":[{"kind":"intent","id":"password-reset","statement":"Let users reset passwords by email."}]}"#,
     ]);
     let lead = Lead {

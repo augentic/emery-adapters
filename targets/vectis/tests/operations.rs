@@ -1,4 +1,4 @@
-//! The judgment operation template against the scripted [`MockModel`]:
+//! The judgment operation template against Omnia's recorded scripted harness:
 //! the deterministic prepare prelude, the prompt-driven phase legs, the
 //! in-guest composition validator gate with its bounded repair, the
 //! declared-platform shell-leg filter, and the deterministic report
@@ -10,7 +10,7 @@ use std::path::Path;
 use adapter::answers::REPORT_ANSWER_SCHEMA;
 use adapter::seam::{Changeset, Context, Edit, Input, Report, Severity, Status, WorkingTree};
 use adapter::{Format, Request};
-use specify_testkit::{MockModel, mcp_grants};
+use omnia_testkit::model::{Harness, mcp_grants};
 use tempfile::TempDir;
 use vectis::operations::{build, merge};
 
@@ -42,7 +42,7 @@ fn schema_format(request: &Request) -> (&str, &str) {
 #[tokio::test]
 async fn build_phase_legs() {
     let tmp = TempDir::new().unwrap();
-    let model = MockModel::answering([
+    let model = Harness::answering([
         PHASE_DONE,     // composition
         PHASE_DONE,     // core
         SHELL_SKIPPED,  // ios
@@ -134,7 +134,7 @@ async fn core_only_skips_shells() {
     fs::create_dir_all(tmp.path().join(".specify")).unwrap();
     fs::write(tmp.path().join(".specify/project.yaml"), "name: demo-app\nplatforms:\n  - core\n")
         .unwrap();
-    let model = MockModel::answering([PHASE_DONE, PHASE_DONE, PHASE_DONE, SUCCESS_REPORT]);
+    let model = Harness::answering([PHASE_DONE, PHASE_DONE, PHASE_DONE, SUCCESS_REPORT]);
 
     let report = build(&model, &ctx(tmp.path(), None), "demo", &[], &tree()).await.unwrap();
 
@@ -165,7 +165,7 @@ async fn composition_repair() {
     let slice_dir = tmp.path().join(".specify/slices/demo");
     fs::create_dir_all(&slice_dir).unwrap();
     fs::write(slice_dir.join("composition.yaml"), "screens: [broken\n").unwrap();
-    let model = MockModel::answering([
+    let model = Harness::answering([
         PHASE_DONE, // composition
         PHASE_DONE, // composition-repair 1
         PHASE_DONE, // composition-repair 2
@@ -196,7 +196,7 @@ async fn build_with_composition(composition: Option<&str>, report_answer: &'stat
         fs::create_dir_all(&slice_dir).unwrap();
         fs::write(slice_dir.join("composition.yaml"), body).unwrap();
     }
-    let model = MockModel::answering([
+    let model = Harness::answering([
         PHASE_DONE,
         PHASE_DONE,
         SHELL_SKIPPED,
@@ -270,7 +270,7 @@ async fn ui_surface_coherence() {
 #[tokio::test]
 async fn merge_single_leg() {
     let tmp = TempDir::new().unwrap();
-    let model = MockModel::answering([SUCCESS_REPORT]);
+    let model = Harness::answering([SUCCESS_REPORT]);
     let delta = Changeset {
         base: "rev-1".to_string(),
         edits: vec![
@@ -304,7 +304,7 @@ async fn merge_gates_composition() {
     // in-guest validator; residual findings force failure.
     fs::create_dir_all(tmp.path().join(".specify/specs")).unwrap();
     fs::write(tmp.path().join(".specify/specs/composition.yaml"), "screens: [broken\n").unwrap();
-    let model = MockModel::answering([SUCCESS_REPORT, SUCCESS_REPORT]);
+    let model = Harness::answering([SUCCESS_REPORT, SUCCESS_REPORT]);
     let delta = Changeset {
         base: "rev-1".to_string(),
         edits: vec![],

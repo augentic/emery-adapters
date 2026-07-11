@@ -10,7 +10,7 @@
 //! telemetry initialization.
 //!
 //! The judgment legs themselves are covered natively in each adapter
-//! crate against `MockModel`, and live against the cursor backend by
+//! crate against Omnia's recorded scripted harness, and live against the cursor backend by
 //! the `live` test target beside this one. The model backend here is a
 //! stub that fails every completion: these tests are model-free, so any
 //! completion is a test bug.

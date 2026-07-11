@@ -28,5 +28,5 @@ prose.workspace = true
 jsonschema.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
-specify-testkit.workspace = true
+omnia-testkit = { workspace = true, features = ["model"] }
 tokio.workspace = true

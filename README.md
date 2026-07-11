@@ -32,7 +32,7 @@ shared/
     references/       #   spec-runtime bundle, replay hook docs, …
     rules/            #   UNI-* engineering rules
 crates/               # shared guest support (adapter, prose); native tests use
-                      # specify-testkit from the sibling Specify repository
+                      # Omnia's recorded scripted model harness
 evals/                # the hosted-deployment test surfaces, flattened like
                       # omnia's examples/: harness.rs (the package lib — the
                       # shared host-side harness) + composed.rs (the

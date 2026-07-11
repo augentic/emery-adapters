@@ -11,7 +11,7 @@ use adapter::seam::{
     BuildOutput, Changeset, Context, Edit, Finding, Input, Platform, Report, Severity, Status,
     WorkingTree,
 };
-use specify_testkit::MockModel;
+use omnia_testkit::model::Harness;
 use tempfile::tempdir;
 
 const fn context(root: &Path) -> Context<'_> {
@@ -50,7 +50,7 @@ fn tree_roots() {
 #[tokio::test]
 async fn judgment_legs() {
     let tmp = tempdir().unwrap();
-    let model = MockModel::answering([
+    let model = Harness::answering([
         r#"{"applicable":true,"summary":"wrote core","written":["shared/src/app.rs"]}"#,
         r#"{"status":"success","findings":[]}"#,
     ]);

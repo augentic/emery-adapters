@@ -5,8 +5,8 @@ use std::path::Path;
 
 use adapter::seam::{Context, Error, WorkingTree};
 use adapter::{Error as ModelError, Format, judgment};
+use omnia_testkit::model::{Harness, mcp_grants};
 use serde::Deserialize;
-use specify_testkit::{MockModel, mcp_grants};
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 struct Answer {
@@ -23,7 +23,7 @@ const fn ctx<'a>(mcp_url: Option<&'a str>, root: &'a Path) -> Context<'a> {
 
 #[tokio::test]
 async fn assembles_and_parses() {
-    let model = MockModel::answering([r#"{"done":true}"#]);
+    let model = Harness::answering([r#"{"done":true}"#]);
 
     let answer: Answer = judgment(
         &model,
@@ -59,7 +59,7 @@ async fn assembles_and_parses() {
 // Without a resolved MCP URL the leg runs grant-free rather than failing.
 #[tokio::test]
 async fn no_mcp_no_grant() {
-    let model = MockModel::answering([r#"{"done":true}"#]);
+    let model = Harness::answering([r#"{"done":true}"#]);
 
     let _: Answer = judgment(
         &model,
@@ -77,7 +77,7 @@ async fn no_mcp_no_grant() {
 
 #[tokio::test]
 async fn error_mapping() {
-    let model = MockModel::scripted([
+    let model = Harness::scripted([
         Err(ModelError::InvalidRequest("messages must not be empty".to_string())),
         Ok(adapter::Reply {
             answer: "this is not json".to_string(),

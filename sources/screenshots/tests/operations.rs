@@ -3,12 +3,12 @@
 use std::path::Path;
 
 use adapter::seam::{Authority, ClaimKind, Context, Lead};
+use omnia_testkit::model::Harness;
 use screenshots::operations::extract;
-use specify_testkit::MockModel;
 
 #[tokio::test]
 async fn extract_spatial_kinds() {
-    let model = MockModel::answering([r#"{
+    let model = Harness::answering([r#"{
             "authority": "documentation",
             "claims": [
                 {"kind": "region", "id": "task-list.header", "path": "task-list.png"},

@@ -1,5 +1,5 @@
 //! The survey / extract judgment operations against the scripted
-//! [`MockModel`]: prompt assembly, schema-gated formats, answer
+//! Omnia's recorded scripted harness: prompt assembly, schema-gated formats, answer
 //! deserialization, and the deterministic validation tails.
 
 use std::path::Path;
@@ -8,7 +8,7 @@ use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA};
 use adapter::seam::{Authority, ClaimKind, Context, Lead};
 use adapter::{Format, Request};
 use documentation::operations::{extract, survey};
-use specify_testkit::{MockModel, mcp_grants};
+use omnia_testkit::model::{Harness, mcp_grants};
 
 fn ctx(mcp_url: Option<&str>) -> Context<'_> {
     Context {
@@ -35,7 +35,7 @@ fn schema_format(request: &Request) -> (&str, &str) {
 
 #[tokio::test]
 async fn survey_leg() {
-    let model = MockModel::answering([
+    let model = Harness::answering([
         r#"{"leads":[{"lead":"password-reset","synopsis":"Reset flow.","topics":["identity"]}]}"#,
     ]);
 
@@ -66,7 +66,7 @@ async fn survey_leg() {
 
 #[tokio::test]
 async fn survey_no_mcp_no_grant() {
-    let model = MockModel::answering([r#"{"leads":[]}"#]);
+    let model = Harness::answering([r#"{"leads":[]}"#]);
 
     survey(&model, &ctx(None)).await.unwrap();
 
@@ -75,7 +75,7 @@ async fn survey_no_mcp_no_grant() {
 
 #[tokio::test]
 async fn extract_leg() {
-    let model = MockModel::answering([r#"{
+    let model = Harness::answering([r#"{
             "authority": "documentation",
             "claims": [
                 {"kind": "requirement", "id": "password-reset.request", "path": "password-reset.md#L3"},

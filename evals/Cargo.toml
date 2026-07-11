@@ -41,7 +41,7 @@ wit-bindgen.workspace = true
 # overlay seeding test replays for parity; `omnia-testkit` and `serde_json`
 # back the composed-deployment tests.
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-omnia-testkit.workspace = true
+omnia-testkit = { workspace = true, features = ["runtime"] }
 prose.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true

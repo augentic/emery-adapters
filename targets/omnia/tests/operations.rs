@@ -1,4 +1,4 @@
-//! The judgment operation template against the scripted [`MockModel`]:
+//! The judgment operation template against Omnia's recorded scripted harness:
 //! prompt assembly, schema-gated formats, the phase-leg decomposition,
 //! and the deterministic report-coherence gate with its bounded repair.
 
@@ -7,8 +7,8 @@ use std::path::Path;
 use adapter::answers::REPORT_ANSWER_SCHEMA;
 use adapter::seam::{Changeset, Context, Edit, Input, Severity, Status, WorkingTree};
 use adapter::{Format, Request};
+use omnia_testkit::model::{Harness, mcp_grants};
 use omnia::operations::{build, merge};
-use specify_testkit::{MockModel, mcp_grants};
 use tempfile::TempDir;
 
 const PHASE_DONE: &str = r#"{"applicable":true,"summary":"phase complete"}"#;
@@ -39,7 +39,7 @@ fn schema_format(request: &Request) -> (&str, &str) {
 #[tokio::test]
 async fn build_phase_legs() {
     let tmp = TempDir::new().unwrap();
-    let model = MockModel::answering([PHASE_DONE, PHASE_DONE, REPLAY_SKIPPED, SUCCESS_REPORT]);
+    let model = Harness::answering([PHASE_DONE, PHASE_DONE, REPLAY_SKIPPED, SUCCESS_REPORT]);
     let inputs = vec![
         Input::Proposal("PROPOSAL-BODY".to_string()),
         Input::Spec("SPEC-BODY".to_string()),
@@ -93,7 +93,7 @@ async fn build_phase_legs() {
 #[tokio::test]
 async fn merge_single_leg() {
     let tmp = TempDir::new().unwrap();
-    let model = MockModel::answering([SUCCESS_REPORT]);
+    let model = Harness::answering([SUCCESS_REPORT]);
     let delta = Changeset {
         base: "rev-1".to_string(),
         edits: vec![
@@ -123,7 +123,7 @@ async fn merge_single_leg() {
 #[tokio::test]
 async fn merge_diagnostics() {
     let tmp = TempDir::new().unwrap();
-    let model = MockModel::answering([
+    let model = Harness::answering([
         r#"{"status":"failure","findings":[{"rule-id":"OMNIA-002","title":"Forbidden std API","severity":"critical","impact":"The wasm32 build breaks.","remediation":"Route through the provider trait."}]}"#,
     ]);
     let delta = Changeset {

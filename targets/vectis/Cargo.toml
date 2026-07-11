@@ -40,5 +40,5 @@ serde_json.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
-specify-testkit.workspace = true
+omnia-testkit = { workspace = true, features = ["model"] }
 tokio.workspace = true

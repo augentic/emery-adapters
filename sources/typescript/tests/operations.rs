@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use adapter::seam::{Authority, ClaimKind, Context, Lead};
-use specify_testkit::MockModel;
+use omnia_testkit::model::Harness;
 use typescript::operations::{extract, survey};
 
 fn ctx() -> Context<'static> {
@@ -17,7 +17,7 @@ fn ctx() -> Context<'static> {
 
 #[tokio::test]
 async fn survey_framework_grammar() {
-    let model = MockModel::answering([
+    let model = Harness::answering([
         r#"{"leads":[{"lead":"task-service","synopsis":"Task CRUD service module."}]}"#,
     ]);
 
@@ -37,7 +37,7 @@ async fn survey_framework_grammar() {
 
 #[tokio::test]
 async fn extract_references_pointer() {
-    let model = MockModel::answering([r#"{
+    let model = Harness::answering([r#"{
             "authority": "behaviour",
             "claims": [
                 {"kind": "type", "path": "src/tasks/model.ts#L4-L18"},

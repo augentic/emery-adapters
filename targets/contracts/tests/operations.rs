@@ -1,4 +1,4 @@
-//! The judgment operation template against the scripted [`MockModel`]:
+//! The judgment operation template against Omnia's recorded scripted harness:
 //! prompt assembly, schema-gated formats, answer projection, the
 //! bounded verify-repair loop, and validate-before-visible enforcement.
 
@@ -10,7 +10,7 @@ use adapter::seam::{Changeset, Context, Edit, Input, Severity, Status, WorkingTr
 use adapter::{Format, Request};
 use contracts::operations::{build, merge};
 use contracts::validate::RULE_VERSION_IS_SEMVER;
-use specify_testkit::{MockModel, mcp_grants};
+use omnia_testkit::model::{Harness, mcp_grants};
 use tempfile::TempDir;
 
 const NOT_APPLICABLE: &str = r#"{"applicable":false,"summary":"no surface this format owns"}"#;
@@ -52,7 +52,7 @@ fn seed_bad_contract(dir: &Path) {
 async fn build_sub_flows() {
     let tmp = TempDir::new().unwrap();
     let model =
-        MockModel::answering([NOT_APPLICABLE, NOT_APPLICABLE, NOT_APPLICABLE, SUCCESS_REPORT]);
+        Harness::answering([NOT_APPLICABLE, NOT_APPLICABLE, NOT_APPLICABLE, SUCCESS_REPORT]);
     let inputs = vec![
         Input::Proposal("PROPOSAL-BODY".to_string()),
         Input::Design("DESIGN-BODY".to_string()),
@@ -94,7 +94,7 @@ async fn build_sub_flows() {
 async fn build_repair_bounded() {
     let tmp = TempDir::new().unwrap();
     seed_bad_contract(&tmp.path().join(".specify/slices/demo/contracts"));
-    let model = MockModel::answering([
+    let model = Harness::answering([
         NOT_APPLICABLE,
         NOT_APPLICABLE,
         NOT_APPLICABLE,
@@ -129,7 +129,7 @@ async fn build_repair_bounded() {
 #[tokio::test]
 async fn merge_diagnostics() {
     let tmp = TempDir::new().unwrap();
-    let model = MockModel::answering([
+    let model = Harness::answering([
         r#"{"status":"failure","findings":[{"rule-id":"UNI-014","title":"Duplicate id","severity":"critical","impact":"Baseline is ambiguous.","remediation":"Rename one contract."}]}"#,
     ]);
     let delta = Changeset {
@@ -162,7 +162,7 @@ async fn merge_post_gate() {
     let tmp = TempDir::new().unwrap();
     // Baseline under a working-tree subpath, mirroring a scoped mount.
     seed_bad_contract(&tmp.path().join("proj/contracts"));
-    let model = MockModel::answering([SUCCESS_REPORT, SUCCESS_REPORT]);
+    let model = Harness::answering([SUCCESS_REPORT, SUCCESS_REPORT]);
     let delta = Changeset {
         base: "rev-1".to_string(),
         edits: vec![],

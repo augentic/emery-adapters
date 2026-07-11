@@ -5,7 +5,7 @@ use std::path::Path;
 
 use adapter::seam::{Authority, ClaimKind, Context, Lead};
 use captures::operations::extract;
-use specify_testkit::MockModel;
+use omnia_testkit::model::Harness;
 
 fn ctx() -> Context<'static> {
     Context {
@@ -27,7 +27,7 @@ fn lead() -> Lead {
 // must survive the seam's claim shape.
 #[tokio::test]
 async fn extract_example_claims() {
-    let model = MockModel::answering([r#"{
+    let model = Harness::answering([r#"{
             "authority": "behaviour",
             "claims": [{
                 "kind": "example",
