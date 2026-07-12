@@ -1,5 +1,5 @@
 [package]
-name = "evals"
+name = "adapter-host-tests"
 description = "Adapter host test package for composed WASM/WIT conformance and live prompt-quality evaluation"
 version.workspace = true
 edition.workspace = true
@@ -59,7 +59,7 @@ path = "guest.rs"
 crate-type = ["cdylib"]
 
 # The scenario runner: non-ignored `wiring` smokes for CI plus
-# `#[ignore]`d live evals selected directly through Cargo's test filter.
+# `#[ignore]`d live quality tests selected directly through Cargo's test filter.
 [[test]]
 name = "live"
 path = "live.rs"

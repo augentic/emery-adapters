@@ -81,7 +81,7 @@ Expected output (alphabetically by `lead`; `task-list-populated.png` and `task-l
 - synopsis: Task list: today's open tasks for the signed-in user.
 ```
 
-A full input / output fixture for this example lives at [`evals/fixtures/sources/screenshots/task-list-two-screen/`](https://github.com/augentic/specify/tree/main/evals/fixtures/sources/screenshots/task-list-two-screen/) in the repo.
+A full input / output fixture for this example lives at [`quality/fixtures/reference/sources/screenshots/task-list-two-screen/`](https://github.com/augentic/specify/tree/main/quality/fixtures/reference/sources/screenshots/task-list-two-screen/) in the repo.
 
 ## Determinism
 

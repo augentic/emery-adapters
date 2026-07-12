@@ -104,7 +104,7 @@ claims:
     decision: "Use the existing transactional email provider rather than introducing a new notification service."
 ```
 
-A full input/output fixture for this example lives at [`evals/fixtures/sources/documentation/`](https://github.com/augentic/specify/tree/main/evals/fixtures/sources/documentation/) in the repo.
+A full input/output fixture for this example lives at [`quality/fixtures/reference/sources/documentation/`](https://github.com/augentic/specify/tree/main/quality/fixtures/reference/sources/documentation/) in the repo.
 
 ## Determinism
 

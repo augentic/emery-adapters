@@ -4,7 +4,7 @@ Integration-first test posture for `specify-adapters`: integration owns every pu
 
 ## The development loop
 
-The cross-repo command surface over these rungs is the `make dev-*` loop shared with the sibling `specify` checkout — `dev-check` (model-free), `dev-live` (live model), `dev-full` (WASM boundary) — documented in [the developer loop guide](https://github.com/augentic/specify/blob/main/docs/contributing/dev-loop.md). The rungs below are this repo's own test strata that those commands compose.
+The cross-repo command surface over these rungs is the `cargo make dev -- <command>` loop shared with the sibling `specify` checkout — `check` (model-free), `live` (live model), `full` (WASM boundary) — documented in [the developer loop guide](https://github.com/augentic/specify/blob/main/docs/contributing/dev-loop.md). The rungs below are this repo's own test strata that those commands compose.
 
 Five rungs, fastest feedback first. Every behavior is asserted on exactly one rung — duplicating an assertion across rungs is a defect, not extra safety. Omnia-testkit owns reusable model and runtime test mechanics; do not recreate its scripted-model, recording, or runtime helpers here. Adapter native tests own operation behavior, composed tests own WASM/WIT conformance, and live tests own prompt quality.
 
@@ -21,31 +21,31 @@ cargo make test               # the whole workspace, matching CI
 
 ### 2. Composed-deployment tests — model-free component checks
 
-`evals/composed.rs` (the `composed` test target of the `evals` package) hosts every built adapter component in one Omnia runtime and runs one consolidated component smoke. It owns only WASM/WIT conformance at deployment-specific seams: WIT dispatch, async judgment-leg bridging against a failing stub model (a WIT error, never a trap), per-guest MCP references over `wasi:http`, and guest route isolation. Omnia-testkit supplies the runtime mechanics; adapter behavior and prompt assembly stay in the faster native crate tests. The single test process also avoids repeating the runtime's expensive, process-global telemetry initialization. Guests build from source on first use when artifacts are absent under `target/wasm32-wasip2/debug/`.
+`adapter-host-tests/composed.rs` (the `composed` test target of the `adapter-host-tests` package) hosts every built adapter component in one Omnia runtime and runs one consolidated component smoke. It owns only WASM/WIT conformance at deployment-specific seams: WIT dispatch, async judgment-leg bridging against a failing stub model (a WIT error, never a trap), per-guest MCP references over `wasi:http`, and guest route isolation. Omnia-testkit supplies the runtime mechanics; adapter behavior and prompt assembly stay in the faster native crate tests. The single test process also avoids repeating the runtime's expensive, process-global telemetry initialization. Guests build from source on first use when artifacts are absent under `target/wasm32-wasip2/debug/`.
 
 ```bash
-cargo test -p evals --test composed
+cargo test -p adapter-host-tests --test composed
 ```
 
-### 3. Live evals — the only rung that judges prose effect
+### 3. Live quality tests — the only rung that judges prose effect
 
-The `live` target remains separate from `composed`: its `#[ignore]`d tests in `evals/live.rs` drive one adapter operation end-to-end against the real cursor backend and own prompt-quality evaluation only. They require [`cursor-agent`](https://cursor.com/docs/cli) on `PATH`; `SPECIFY_EVAL_MODEL=<model-id>` overrides the model. Each run retains a raw log and a structured JSON envelope using the shared scenario/profile/runtime/model/gate/assertion vocabulary under `evals/<adapter>/runs/`; a failing adapter report fails the test.
+The `live` target remains separate from `composed`: its `#[ignore]`d tests in `adapter-host-tests/live.rs` drive one adapter operation end-to-end against the real cursor backend and own prompt-quality evaluation only. They require [`cursor-agent`](https://cursor.com/docs/cli) on `PATH`; `SPECIFY_EVAL_MODEL=<model-id>` overrides the model. Each run retains a raw log and a structured JSON envelope using the shared scenario/profile/runtime/model/gate/assertion vocabulary under `adapter-host-tests/<adapter>/runs/`; a failing adapter report fails the test.
 
 ```bash
-cargo test -p evals --test live -- --ignored --nocapture contracts::   # every contracts scenario
-make dev-live ADAPTER=vectis SCENARIO=single_screen
-cargo test -p evals --test live -- --ignored --nocapture contracts::metadata   # one scenario
-cargo test -p evals --test live wiring   # the model-free smokes (not ignored; CI runs them)
+cargo test -p adapter-host-tests --test live -- --ignored --nocapture contracts::   # every contracts scenario
+cargo make dev -- live vectis single_screen
+cargo test -p adapter-host-tests --test live -- --ignored --nocapture contracts::metadata   # one scenario
+cargo test -p adapter-host-tests --test live wiring   # the model-free smokes (not ignored; CI runs them)
 ```
 
-Scenario anatomy and seeds are documented beside the scenarios: [`evals/contracts/README.md`](evals/contracts/README.md), [`evals/vectis/README.md`](evals/vectis/README.md).
+Scenario anatomy and seeds are documented beside the scenarios: [`adapter-host-tests/contracts/README.md`](adapter-host-tests/contracts/README.md), [`adapter-host-tests/vectis/README.md`](adapter-host-tests/vectis/README.md).
 
 ### 4. Prose overlay — iterate on prompts without rebuilding
 
 `SPECIFY_PROSE_OVERLAY=1` switches a live run into overlay mode: the harness seeds the adapter's `prose/` tree into the scratch `.eval/prose/`, forwards the grant to the guest (whose registry probes the overlay at runtime), and skips the cargo legs entirely once the run artifacts exist. Edit `{targets,sources}/<name>/prose/**` and re-run — one model leg per save, no build. The overlay overrides document bodies only (the doc set stays the embedded table's), and the guest prints an attestation to stderr so an overlaid run can never pass as an embedded run.
 
 ```bash
-SPECIFY_PROSE_OVERLAY=1 cargo test -p evals --test live -- --ignored --nocapture contracts::design
+SPECIFY_PROSE_OVERLAY=1 cargo test -p adapter-host-tests --test live -- --ignored --nocapture contracts::design
 ```
 
 ### 5. Consumer project — code changes through the engine

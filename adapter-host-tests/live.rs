@@ -1,18 +1,18 @@
-//! Live adapter-guest evals over the per-adapter scenario trees.
+//! Live adapter-guest quality tests over the per-adapter scenario trees.
 //!
 //! Each `#[ignore]`d test seeds a scratch project tree from
-//! `evals/<adapter>/scenarios/<scenario>/` (`seed/` copied to the root,
+//! `adapter-host-tests/<adapter>/scenarios/<scenario>/` (`seed/` copied to the root,
 //! `inputs/*.md` to `.eval/inputs/`), builds the adapter and eval guests,
 //! writes the deployment manifest, and drives one command-mode eval by
 //! spawning the prebuilt `eval-driver` example against the live cursor
 //! backend. The report JSON line and full log land under
-//! `evals/<adapter>/runs/<scenario>/`; the test fails on a failing report.
+//! `adapter-host-tests/<adapter>/runs/<scenario>/`; the test fails on a failing report.
 //!
 //! Requires `cursor-agent` on `PATH`, authenticated via `CURSOR_API_KEY` or
 //! a prior `cursor-agent login`:
 //!
 //! ```text
-//! cargo test -p evals --test live -- --ignored --nocapture contracts::
+//! cargo test -p adapter-host-tests --test live -- --ignored --nocapture contracts::
 //! ```
 //!
 //! The non-ignored `wiring` test beside each adapter's live tests is the
@@ -111,7 +111,7 @@ mod overlay {
 fn live(adapter: &str, scenario: &str, operation: &str, slice: &str) -> Result<()> {
     ensure!(
         cursor_agent_on_path(),
-        "cursor-agent not found on PATH; see evals/{adapter}/README.md"
+        "cursor-agent not found on PATH; see adapter-host-tests/{adapter}/README.md"
     );
 
     let root = workspace_root();
@@ -281,11 +281,23 @@ fn build(adapter: &str, root: &Path, target: &Path, overlay: bool) -> Result<()>
         target,
     )?;
     adapter_host_tests::cargo(
-        &["build", "-p", "evals", "--example", "eval-guest", "--target", "wasm32-wasip2"],
+        &[
+            "build",
+            "-p",
+            "adapter-host-tests",
+            "--example",
+            "eval-guest",
+            "--target",
+            "wasm32-wasip2",
+        ],
         root,
         target,
     )?;
-    adapter_host_tests::cargo(&["build", "-p", "evals", "--example", "eval-driver"], root, target)?;
+    adapter_host_tests::cargo(
+        &["build", "-p", "adapter-host-tests", "--example", "eval-driver"],
+        root,
+        target,
+    )?;
     Ok(())
 }
 
@@ -402,5 +414,5 @@ fn manifest_dir() -> &'static Path {
 }
 
 fn workspace_root() -> &'static Path {
-    manifest_dir().parent().expect("evals/ sits at <workspace>/evals")
+    manifest_dir().parent().expect("adapter-host-tests/ sits at the workspace root")
 }

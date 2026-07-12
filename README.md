@@ -33,7 +33,7 @@ shared/
     rules/            #   UNI-* engineering rules
 crates/               # shared guest support (adapter, prose); native tests use
                       # Omnia's recorded scripted model harness
-evals/                # `evals`, the hosted-deployment test
+adapter-host-tests/                # `adapter-host-tests`, the hosted-deployment test
                       # package flattened like omnia's examples/: harness.rs
                       # (the package lib — the
                       # shared host-side harness) + composed.rs (the
@@ -43,7 +43,7 @@ evals/                # `evals`, the hosted-deployment test
                       # eval-driver host) + guest.rs (the eval-guest cdylib)
                       # over the per-adapter scenario trees (contracts,
                       # vectis)
-Cargo.toml            # workspace: `crates/*` + `{sources,targets}/*` + `evals`
+Cargo.toml            # workspace: `crates/*` + `{sources,targets}/*` + `adapter-host-tests`
 ```
 
 Identity lives in the guest crate's `Cargo.toml` `version` and the wasm-pkg
@@ -72,7 +72,7 @@ at `target/wasm32-wasip2/release/<name>.wasm`):
 cargo make release
 ```
 
-The `evals` package keeps composed WASM/WIT conformance (`evals/composed.rs`) distinct from live prompt-quality evaluation (`evals/live.rs`). Composed tests build guests from source on first use when artifacts are absent under `target/wasm32-wasip2/debug/`.
+The `adapter-host-tests` package keeps composed WASM/WIT conformance (`adapter-host-tests/composed.rs`) distinct from live prompt-quality evaluation (`adapter-host-tests/live.rs`). Composed tests build guests from source on first use when artifacts are absent under `target/wasm32-wasip2/debug/`.
 
 ## Publishing
 

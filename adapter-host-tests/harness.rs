@@ -6,7 +6,7 @@
 //! subprocess `cargo` runner, deployment-manifest rendering over [`Guest`]
 //! entries, and tree copying. The omnia runtime assembly itself stays with
 //! each consumer: the composed tests deploy in-process via `omnia-testkit`,
-//! the evals spawn the prebuilt `eval-driver` example.
+//! the quality tests spawn the prebuilt `eval-driver` example.
 
 #![cfg(not(target_arch = "wasm32"))]
 

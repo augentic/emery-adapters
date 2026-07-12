@@ -60,7 +60,7 @@ Expected output (alphabetically by `lead`):
 - synopsis: Account service that lets a registered user request a password reset link by email.
 ```
 
-A full input/output fixture for this example lives at [`evals/fixtures/sources/documentation/`](https://github.com/augentic/specify/tree/main/evals/fixtures/sources/documentation/) in the repo.
+A full input/output fixture for this example lives at [`quality/fixtures/reference/sources/documentation/`](https://github.com/augentic/specify/tree/main/quality/fixtures/reference/sources/documentation/) in the repo.
 
 ## Determinism
 

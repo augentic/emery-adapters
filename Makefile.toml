@@ -24,6 +24,20 @@ dependencies = ["fmt-check", "lint", "test", "test-docs", "doc", "vet", "deny"]
 # Individual Actions
 # -------------------------------------
 
+# Cross-repo developer loop. The sibling specify checkout owns command
+# dispatch; pass its subcommand and arguments after `--`.
+[tasks.dev]
+cwd = "${CARGO_MAKE_WORKING_DIRECTORY}/../specify"
+command = "rustup"
+args = [
+  "run",
+  "nightly",
+  "cargo",
+  "-Zscript",
+  "scripts/dev.rs",
+  "${@}",
+]
+
 # Audit
 [tasks.audit]
 command = "cargo"
@@ -119,7 +133,7 @@ args = [
   "build",
   "--workspace",
   "--exclude",
-  "evals",
+  "adapter-host-tests",
   "--target",
   "wasm32-wasip2",
   "--release",

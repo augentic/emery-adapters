@@ -764,7 +764,7 @@ fn build_guests() {
     GUESTS.get_or_init(|| {
         let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
-            .expect("evals manifest dir is <workspace>/evals");
+            .expect("adapter-host-tests manifest dir is at the workspace root");
         // `--workspace` rather than a `-p` list: the bare spec `omnia` is
         // ambiguous between the guest crate and the runtime dependency
         // of the same name. Host-side members compile to empty crates on
