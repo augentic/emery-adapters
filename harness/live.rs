@@ -1,18 +1,18 @@
 //! Live adapter-guest quality tests over the per-adapter scenario trees.
 //!
 //! Each `#[ignore]`d test seeds a scratch project tree from
-//! `adapter-host-tests/<adapter>/scenarios/<scenario>/` (`seed/` copied to the root,
+//! `harness/<adapter>/scenarios/<scenario>/` (`seed/` copied to the root,
 //! `inputs/*.md` to `.eval/inputs/`), builds the adapter and eval guests,
 //! writes the deployment manifest, and drives one command-mode eval by
 //! spawning the prebuilt `eval-driver` example against the live cursor
 //! backend. The report JSON line and full log land under
-//! `adapter-host-tests/<adapter>/runs/<scenario>/`; the test fails on a failing report.
+//! `harness/<adapter>/runs/<scenario>/`; the test fails on a failing report.
 //!
 //! Requires `cursor-agent` on `PATH`, authenticated via `CURSOR_API_KEY` or
 //! a prior `cursor-agent login`:
 //!
 //! ```text
-//! cargo test -p adapter-host-tests --test live -- --ignored --nocapture contracts::
+//! cargo test -p harness --test live -- --ignored --nocapture contracts::
 //! ```
 //!
 //! The non-ignored `wiring` test beside each adapter's live tests is the
@@ -111,11 +111,11 @@ mod overlay {
 fn live(adapter: &str, scenario: &str, operation: &str, slice: &str) -> Result<()> {
     ensure!(
         cursor_agent_on_path(),
-        "cursor-agent not found on PATH; see adapter-host-tests/{adapter}/README.md"
+        "cursor-agent not found on PATH; see harness/{adapter}/README.md"
     );
 
     let root = workspace_root();
-    let target = adapter_host_tests::target_dir()?;
+    let target = harness::target_dir()?;
     let overlay = overlay_active();
     build(adapter, root, &target, overlay)?;
 
@@ -216,7 +216,7 @@ fn live(adapter: &str, scenario: &str, operation: &str, slice: &str) -> Result<(
 /// manifest writer are well-formed without guests or a model.
 fn wiring(adapter: &str) -> Result<()> {
     let scenarios = manifest_dir().join(adapter).join("scenarios");
-    let target = adapter_host_tests::target_dir()?;
+    let target = harness::target_dir()?;
     let mut seen = 0;
     for entry in fs::read_dir(&scenarios)? {
         let entry = entry?;
@@ -246,7 +246,7 @@ fn seed(adapter: &str, scenario: &str) -> Result<TempDir> {
         tempfile::Builder::new().prefix(&format!("specify-eval-{scenario}.")).tempdir()?;
     let seed = scenario_dir.join("seed");
     if seed.is_dir() {
-        adapter_host_tests::copy_tree(&seed, scratch.path())?;
+        harness::copy_tree(&seed, scratch.path())?;
     }
 
     let inputs = scratch.path().join(".eval").join("inputs");
@@ -275,29 +275,13 @@ fn build(adapter: &str, root: &Path, target: &Path, overlay: bool) -> Result<()>
         println!("eval {adapter}: overlay active, artifacts present; cargo builds skipped");
         return Ok(());
     }
-    adapter_host_tests::cargo(
-        &["build", "-p", adapter, "--target", "wasm32-wasip2"],
+    harness::cargo(&["build", "-p", adapter, "--target", "wasm32-wasip2"], root, target)?;
+    harness::cargo(
+        &["build", "-p", "harness", "--example", "eval-guest", "--target", "wasm32-wasip2"],
         root,
         target,
     )?;
-    adapter_host_tests::cargo(
-        &[
-            "build",
-            "-p",
-            "adapter-host-tests",
-            "--example",
-            "eval-guest",
-            "--target",
-            "wasm32-wasip2",
-        ],
-        root,
-        target,
-    )?;
-    adapter_host_tests::cargo(
-        &["build", "-p", "adapter-host-tests", "--example", "eval-driver"],
-        root,
-        target,
-    )?;
+    harness::cargo(&["build", "-p", "harness", "--example", "eval-driver"], root, target)?;
     Ok(())
 }
 
@@ -323,7 +307,7 @@ fn seed_overlay(adapter: &str, scratch: &Path) -> Result<()> {
     let prose = adapter_dir(adapter)?.join("prose");
     let overlay = scratch.join(".eval").join("prose");
     if prose.is_dir() {
-        adapter_host_tests::copy_tree(&prose, &overlay)?;
+        harness::copy_tree(&prose, &overlay)?;
     }
     Ok(())
 }
@@ -374,7 +358,7 @@ fn doc_keys(table: &str) -> Vec<String> {
 fn manifest(target: &Path, adapter: &str, scratch: &Path) -> String {
     let wasm = target.join("wasm32-wasip2").join("debug");
     let guests = [
-        adapter_host_tests::Guest {
+        harness::Guest {
             id: "eval".to_owned(),
             wasm: wasm.join("examples").join("eval_guest.wasm"),
             link: vec![
@@ -383,14 +367,14 @@ fn manifest(target: &Path, adapter: &str, scratch: &Path) -> String {
             ],
             route: None,
         },
-        adapter_host_tests::Guest {
+        harness::Guest {
             id: format!("target:{adapter}"),
             wasm: wasm.join(format!("{adapter}.wasm")),
             link: Vec::new(),
             route: Some(format!("/mcp/{adapter}")),
         },
     ];
-    adapter_host_tests::manifest(&guests, scratch)
+    harness::manifest(&guests, scratch)
 }
 
 // Honour an operator-set HTTP_ADDR, else grab an ephemeral port so
@@ -414,5 +398,5 @@ fn manifest_dir() -> &'static Path {
 }
 
 fn workspace_root() -> &'static Path {
-    manifest_dir().parent().expect("adapter-host-tests/ sits at the workspace root")
+    manifest_dir().parent().expect("harness/ sits at the workspace root")
 }

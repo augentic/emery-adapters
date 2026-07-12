@@ -6,11 +6,11 @@ Live-backend eval harness for the vectis adapter guest. The scenario drives the 
 
 | Piece          | Where                                                                                            |
 | -------------- | ------------------------------------------------------------------------------------------------ |
-| Host binary    | [`adapter-host-tests/runtime.rs`](../runtime.rs) (the `eval-driver` example of the flattened `adapter-host-tests` package) |
-| Driver guest   | [`adapter-host-tests/guest.rs`](../guest.rs) (the `eval-guest` cdylib example)                                |
+| Host binary    | [`harness/runtime.rs`](../runtime.rs) (the `eval-driver` example of the flattened `harness` package) |
+| Driver guest   | [`harness/guest.rs`](../guest.rs) (the `eval-guest` cdylib example)                                |
 | Adapter guest  | [`targets/vectis`](../../targets/vectis) — the component under test (`vectis.wasm`)              |
 | Scenario seeds | `scenarios/<name>/inputs/*.md` and `scenarios/<name>/seed/**`                                    |
-| Runner         | [`adapter-host-tests/live.rs`](../live.rs) — the ignored `vectis::single_screen` test runs the scenario       |
+| Runner         | [`harness/live.rs`](../live.rs) — the ignored `vectis::single_screen` test runs the scenario       |
 | Results        | `runs/` — per-run raw output                                                                     |
 
 ## Scenarios
@@ -30,5 +30,5 @@ cargo make dev -- live vectis single_screen
 ## Smoke-checking without a model
 
 ```bash
-cargo test -p adapter-host-tests --test live vectis::wiring
+cargo test -p harness --test live vectis::wiring
 ```

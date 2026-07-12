@@ -1,0 +1,58 @@
+# The Rust-native shim: `specify-dev` drives the same verb handlers as the
+# wasm guest against a NativeProvider — in-process dispatch to this workspace's
+# adapter operations plus a native Model backend.
+[package]
+name = "specify-dev"
+description = "Specify native dev shim — the Rust-native execution path"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "specify-dev"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+axum.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "sync"] }
+
+artifacts.workspace = true
+transport.workspace = true
+error.workspace = true
+schema.workspace = true
+scenario.workspace = true
+workflow.workspace = true
+
+omnia.workspace = true
+omnia-cursor.workspace = true
+omnia-guest.workspace = true
+omnia-testkit = { workspace = true, features = ["model", "replay"] }
+omnia-wasi-model.workspace = true
+
+# The local adapter crates, consumed as rlibs (the same crates whose cdylib
+# halves ship as wasm components). `targets/omnia` is renamed to dodge the host
+# `omnia` crate.
+adapter.workspace = true
+captures = { path = "../../sources/captures" }
+contracts = { path = "../../targets/contracts" }
+documentation = { path = "../../sources/documentation" }
+intent = { path = "../../sources/intent" }
+omnia-target = { package = "omnia", path = "../../targets/omnia" }
+screenshots = { path = "../../sources/screenshots" }
+typescript = { path = "../../sources/typescript" }
+vectis = { path = "../../targets/vectis" }
+
+[dev-dependencies]
+jiff.workspace = true
+serde-saphyr.workspace = true
+tempfile.workspace = true
+tower.workspace = true
+
+[lints]
+workspace = true

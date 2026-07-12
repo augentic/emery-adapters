@@ -33,7 +33,7 @@ shared/
     rules/            #   UNI-* engineering rules
 crates/               # shared guest support (adapter, prose); native tests use
                       # Omnia's recorded scripted model harness
-adapter-host-tests/                # `adapter-host-tests`, the hosted-deployment test
+harness/                # hosted-deployment and native workflow harnesses
                       # package flattened like omnia's examples/: harness.rs
                       # (the package lib — the
                       # shared host-side harness) + composed.rs (the
@@ -43,7 +43,9 @@ adapter-host-tests/                # `adapter-host-tests`, the hosted-deployment
                       # eval-driver host) + guest.rs (the eval-guest cdylib)
                       # over the per-adapter scenario trees (contracts,
                       # vectis)
-Cargo.toml            # workspace: `crates/*` + `{sources,targets}/*` + `adapter-host-tests`
+  native/             # `specify-dev`: linked-adapter engine runtime and
+                      # scripted/replay full-loop integration suite
+Cargo.toml            # workspace: `crates/*` + `{sources,targets}/*` + `harness{,/native}`
 ```
 
 Identity lives in the guest crate's `Cargo.toml` `version` and the wasm-pkg
@@ -72,7 +74,16 @@ at `target/wasm32-wasip2/release/<name>.wasm`):
 cargo make release
 ```
 
-The `adapter-host-tests` package keeps composed WASM/WIT conformance (`adapter-host-tests/composed.rs`) distinct from live prompt-quality evaluation (`adapter-host-tests/live.rs`). Composed tests build guests from source on first use when artifacts are absent under `target/wasm32-wasip2/debug/`.
+The `harness` package keeps composed WASM/WIT conformance (`harness/composed.rs`) distinct from live prompt-quality evaluation (`harness/live.rs`). Composed tests build guests from source on first use when artifacts are absent under `target/wasm32-wasip2/debug/`.
+
+The `specify-dev` package under `harness/native/` links every adapter crate in-process and consumes Specify's engine crates from a revision-pinned git source. It provides the fast, model-free full-loop and seam suite without coupling the engine repository back to concrete adapters:
+
+```bash
+cargo nextest run -p specify-dev --no-tests=pass
+cargo run -p specify-dev -- --project-dir /path/to/project plan status
+```
+
+For sibling co-development against uncommitted engine changes, enable the documented `https://github.com/augentic/specify.git` path patch in the root `Cargo.toml`.
 
 ## Publishing
 

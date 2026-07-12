@@ -1,6 +1,6 @@
 [package]
-name = "adapter-host-tests"
-description = "Adapter host test package for composed WASM/WIT conformance and live prompt-quality evaluation"
+name = "harness"
+description = "Hosted-deployment harness for composed WASM/WIT conformance and live prompt-quality evaluation"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

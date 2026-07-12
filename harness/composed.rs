@@ -731,11 +731,11 @@ async fn component_runtime(mount: &Path) -> Result<Runtime<Bundle>> {
 /// `/mcp/<name>`, sharing one writable `"."` mount — the shared project
 /// tree every guest opens through its own preopen.
 fn manifest(guests: &[Guest], mount: &Path) -> Result<TempManifest> {
-    let entries: Vec<adapter_host_tests::Guest> = guests
+    let entries: Vec<harness::Guest> = guests
         .iter()
         .map(|(id, file)| {
             let name = id.split_once(':').expect("guest id is `<axis>:<name>`").1;
-            adapter_host_tests::Guest {
+            harness::Guest {
                 id: (*id).to_owned(),
                 wasm: guest_wasm(file),
                 link: Vec::new(),
@@ -743,7 +743,7 @@ fn manifest(guests: &[Guest], mount: &Path) -> Result<TempManifest> {
             }
         })
         .collect();
-    temp_manifest(&adapter_host_tests::manifest(&entries, mount))
+    temp_manifest(&harness::manifest(&entries, mount))
 }
 
 /// Locate a built wasm32-wasip2 guest component, building on first use.
@@ -753,7 +753,7 @@ fn guest_wasm(file: &str) -> PathBuf {
     let path = target_dir().join("wasm32-wasip2").join("debug").join(file);
     assert!(
         path.exists(),
-        "guest `{file}` not found at {path}; run `cargo build --workspace --target wasm32-wasip2`",
+        "guest `{file}` not found at {path}; run `cargo build --workspace --exclude specify-dev --target wasm32-wasip2`",
         path = path.display()
     );
     path
@@ -764,18 +764,19 @@ fn build_guests() {
     GUESTS.get_or_init(|| {
         let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
-            .expect("adapter-host-tests manifest dir is at the workspace root");
+            .expect("harness manifest dir is at the workspace root");
         // `--workspace` rather than a `-p` list: the bare spec `omnia` is
         // ambiguous between the guest crate and the runtime dependency
-        // of the same name. Host-side members compile to empty crates on
-        // wasm32, so the whole-workspace build is equivalent.
-        let args = ["build", "--workspace", "--target", "wasm32-wasip2"];
-        adapter_host_tests::cargo(&args, workspace_root, &target_dir()).expect("guest build");
+        // of the same name. The host-only `specify-dev` package is the
+        // sole exclusion; the remaining host members compile empty on wasm32.
+        let args =
+            ["build", "--workspace", "--exclude", "specify-dev", "--target", "wasm32-wasip2"];
+        harness::cargo(&args, workspace_root, &target_dir()).expect("guest build");
     });
 }
 
 fn target_dir() -> PathBuf {
-    adapter_host_tests::target_dir().expect("test exe sits at <target>/<profile>/deps/<exe>")
+    harness::target_dir().expect("test exe sits at <target>/<profile>/deps/<exe>")
 }
 
 async fn assemble(manifest: TempManifest) -> Result<Runtime<Bundle>> {

@@ -1,5 +1,5 @@
 [workspace]
-members = ["adapter-host-tests", "crates/*", "sources/*", "targets/*"]
+members = ["harness", "harness/native", "crates/*", "sources/*", "targets/*"]
 resolver = "3"
 
 [workspace.package]
@@ -14,7 +14,10 @@ publish = false
 
 [workspace.dependencies]
 anyhow = "1"
+axum = "0.8.9"
 cfg-if = "1"
+clap = { version = "4.6.1", features = ["derive", "env"] }
+jiff = { version = "0.2.32", default-features = false, features = ["serde", "std"] }
 jsonschema = { version = "0.47.0", default-features = false }
 semver = "1"
 serde = { version = "1", features = ["derive"] }
@@ -27,6 +30,7 @@ thiserror = "2"
 toml = "1"
 tempfile = "3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tower = "0.5.3"
 resvg = { version = "0.47", default-features = false }
 usvg = { version = "0.47", default-features = false }
 tiny-skia = { version = "0.12", default-features = false }
@@ -45,6 +49,13 @@ omnia-testkit = { version = "0.35.0", default-features = false }
 omnia-wasi-http = "0.35.0"
 omnia-wasi-model = "0.35.0"
 
+artifacts = { git = "https://github.com/augentic/specify.git", rev = "9dca531c0b0ef0dc7937938bf2c98b6dbfb8b327" }
+error = { git = "https://github.com/augentic/specify.git", rev = "9dca531c0b0ef0dc7937938bf2c98b6dbfb8b327" }
+scenario = { git = "https://github.com/augentic/specify.git", rev = "9dca531c0b0ef0dc7937938bf2c98b6dbfb8b327" }
+schema = { git = "https://github.com/augentic/specify.git", rev = "9dca531c0b0ef0dc7937938bf2c98b6dbfb8b327" }
+transport = { git = "https://github.com/augentic/specify.git", rev = "9dca531c0b0ef0dc7937938bf2c98b6dbfb8b327" }
+workflow = { git = "https://github.com/augentic/specify.git", rev = "9dca531c0b0ef0dc7937938bf2c98b6dbfb8b327" }
+
 [patch.crates-io]
 omnia = { git = "https://github.com/augentic/omnia.git" }
 omnia-cursor = { git = "https://github.com/augentic/backends.git" }
@@ -62,6 +73,15 @@ omnia-wasi-model = { git = "https://github.com/augentic/omnia.git" }
 
 wrpc-transport = { git = "https://github.com/bytecodealliance/wrpc" }
 wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }
+
+# Uncomment for sibling co-development against an uncommitted Specify checkout.
+# [patch."https://github.com/augentic/specify.git"]
+# artifacts = { path = "../specify/crates/artifacts" }
+# error = { path = "../specify/crates/error" }
+# scenario = { path = "../specify/crates/scenario" }
+# schema = { path = "../specify/crates/schema" }
+# transport = { path = "../specify/crates/transport" }
+# workflow = { path = "../specify/crates/workflow" }
 
 [workspace.lints.rust]
 # https://dirname.github.io/rust-std-doc/rustc/lints/listing/allowed-by-default.html
