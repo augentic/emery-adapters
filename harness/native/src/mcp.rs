@@ -47,3 +47,17 @@ pub fn router() -> Router {
         router.nest(&format!("/mcp/{}", shelf.name), omnia_guest::mcp::router(shelf.references))
     })
 }
+
+/// Serve the shelves on an ephemeral background listener.
+///
+/// Returns the base URL for `Provider::mcp_base`, or `None` when no
+/// port can be bound — deterministic verbs never need the shelves, so
+/// CLI-style callers degrade instead of failing.
+pub async fn ephemeral_base() -> Option<String> {
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0)).await.ok()?;
+    let base = format!("http://127.0.0.1:{}", listener.local_addr().ok()?.port());
+    tokio::spawn(async move {
+        drop(axum::serve(listener, router()).await);
+    });
+    Some(base)
+}

@@ -6,7 +6,6 @@ use omnia_guest::api::invoke::Invoker;
 use specify_dev::mcp;
 use specify_dev::model::DevModel;
 use specify_dev::provider::Provider;
-use tokio::net::TcpListener;
 
 /// Split a leading shim-global `--project-dir <path>` /
 /// `--project-dir=<path>` off `argv` — the CLI-mode counterpart of
@@ -57,7 +56,7 @@ pub async fn run(mut argv: Vec<String>) -> u8 {
         }
     };
     let mut provider = Provider::new(root, model);
-    if let Some(base) = shelves().await {
+    if let Some(base) = mcp::ephemeral_base().await {
         provider = provider.mcp_base(base);
     }
     let router = match transport::command::router(Invoker::new("specify", provider)) {
@@ -72,13 +71,4 @@ pub async fn run(mut argv: Vec<String>) -> u8 {
         return 1;
     }
     response.exit
-}
-
-async fn shelves() -> Option<String> {
-    let listener = TcpListener::bind(("127.0.0.1", 0)).await.ok()?;
-    let base = format!("http://127.0.0.1:{}", listener.local_addr().ok()?.port());
-    tokio::spawn(async move {
-        drop(axum::serve(listener, mcp::router()).await);
-    });
-    Some(base)
 }

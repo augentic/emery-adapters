@@ -110,11 +110,17 @@ impl Model for DevModel {
 pub struct CursorModel {
     client: omnia_cursor::Client,
     root: PathBuf,
+    /// Driver-side model-id override from `SPECIFY_EVAL_MODEL` — the
+    /// same knob the wasm eval driver honours. Applied only when the
+    /// guest left `Request.model` empty; never enters the guest.
+    model: Option<String>,
 }
 
 impl CursorModel {
     /// Connect cursor-agent (asserting it is on `PATH`) rooted at the
-    /// project directory the workspace lend resolves to.
+    /// project directory the workspace lend resolves to. Reads the
+    /// optional `SPECIFY_EVAL_MODEL` override once; unset or blank
+    /// means no override.
     ///
     /// # Errors
     ///
@@ -124,12 +130,17 @@ impl CursorModel {
         Ok(Self {
             client,
             root: root.into(),
+            model: std::env::var("SPECIFY_EVAL_MODEL").ok().filter(|id| !id.trim().is_empty()),
         })
     }
 }
 
 impl Model for CursorModel {
-    async fn create(&self, request: Request) -> Result<Reply, Error> {
+    async fn create(&self, mut request: Request) -> Result<Reply, Error> {
+        // A guest-supplied model id always wins over the driver override.
+        if request.model.is_none() {
+            request.model = self.model.clone();
+        }
         // The lend translation: in-guest the `"."` preopen resolves the
         // lent workspace; natively the project root plays that part.
         // Cursor reads exactly one thing from the tool host — the

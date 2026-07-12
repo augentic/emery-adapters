@@ -22,6 +22,7 @@
 //! guest (see `harness/README.md`).
 
 pub mod catalog;
+pub mod guest_loop;
 pub mod mcp;
 pub mod model;
 pub mod provider;
