@@ -11,10 +11,13 @@
 //!   with the `/mcp/<name>` shelves on one `TcpListener`; carries its
 //!   own `--project-dir` flag.
 //!
-//! One driver mode sits beside them: **`guest-loop`**
+//! Two quality modes sit beside them: **`guest-loop`**
 //! ([`specify_dev::guest_loop`]) executes the canonical
-//! `guest-execute-loop` scenario in-process for the quality
-//! orchestrator, emitting captured step results as JSON.
+//! `guest-execute-loop` scenario in-process once, emitting captured
+//! step results as JSON; **`quality`** ([`specify_dev::quality`]) is
+//! this repo's native-live runner — repeated in-process trials graded
+//! through the pinned `scenario` crate and persisted as a validated
+//! `scenario::bundle` under `quality/runs/`.
 
 mod command;
 mod http;
@@ -33,6 +36,13 @@ async fn main() -> ExitCode {
             }
         },
         Some("guest-loop") => match specify_dev::guest_loop::run(&argv[1..]).await {
+            Ok(code) => code,
+            Err(err) => {
+                eprintln!("specify-dev: {err:#}");
+                ExitCode::FAILURE
+            }
+        },
+        Some("quality") => match specify_dev::quality::run(&argv[1..]).await {
             Ok(code) => code,
             Err(err) => {
                 eprintln!("specify-dev: {err:#}");

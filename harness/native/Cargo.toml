@@ -33,17 +33,18 @@ path = "src/main.rs"
 anyhow = "1"
 axum = "0.8.9"
 clap = { version = "4.6.1", features = ["derive", "env"] }
+jiff = { version = "0.2.32", default-features = false, features = ["serde", "std"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "sync"] }
 
 # The engine pin: the Specify revision this harness is verified against.
-artifacts = { git = "https://github.com/augentic/specify.git", rev = "bc8a4018389e28bdbb4ca46d63f0c2e9731233b3" }
-error = { git = "https://github.com/augentic/specify.git", rev = "bc8a4018389e28bdbb4ca46d63f0c2e9731233b3" }
-scenario = { git = "https://github.com/augentic/specify.git", rev = "bc8a4018389e28bdbb4ca46d63f0c2e9731233b3" }
-schema = { git = "https://github.com/augentic/specify.git", rev = "bc8a4018389e28bdbb4ca46d63f0c2e9731233b3" }
-transport = { git = "https://github.com/augentic/specify.git", rev = "bc8a4018389e28bdbb4ca46d63f0c2e9731233b3" }
-workflow = { git = "https://github.com/augentic/specify.git", rev = "bc8a4018389e28bdbb4ca46d63f0c2e9731233b3" }
+artifacts = { git = "https://github.com/augentic/specify.git", rev = "70e7e465e7059ed5fb10a984e8323af54ac4df87" }
+error = { git = "https://github.com/augentic/specify.git", rev = "70e7e465e7059ed5fb10a984e8323af54ac4df87" }
+scenario = { git = "https://github.com/augentic/specify.git", rev = "70e7e465e7059ed5fb10a984e8323af54ac4df87" }
+schema = { git = "https://github.com/augentic/specify.git", rev = "70e7e465e7059ed5fb10a984e8323af54ac4df87" }
+transport = { git = "https://github.com/augentic/specify.git", rev = "70e7e465e7059ed5fb10a984e8323af54ac4df87" }
+workflow = { git = "https://github.com/augentic/specify.git", rev = "70e7e465e7059ed5fb10a984e8323af54ac4df87" }
 
 omnia = "0.35.0"
 omnia-cursor = "0.28.0"
@@ -66,7 +67,6 @@ typescript = { path = "../../sources/typescript" }
 vectis = { path = "../../targets/vectis" }
 
 [dev-dependencies]
-jiff = { version = "0.2.32", default-features = false, features = ["serde", "std"] }
 serde-saphyr = "0.0.29"
 tempfile = "3"
 tower = "0.5.3"

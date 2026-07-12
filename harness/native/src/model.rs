@@ -253,8 +253,9 @@ fn reply(answer: wire::Answer) -> Result<Reply, Error> {
 /// The minimal per-completion tool host the cursor backend reads: only
 /// `local_path` matters (cursor-agent does its own filesystem work);
 /// the bounded-capability methods are never called on this backend.
-struct LocalToolHost {
-    workspace: Option<PathBuf>,
+/// Shared with the [`crate::quality`] runner's semantic judge.
+pub(crate) struct LocalToolHost {
+    pub(crate) workspace: Option<PathBuf>,
 }
 
 impl wire::ToolHost for LocalToolHost {

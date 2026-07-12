@@ -5,15 +5,15 @@
 //! (generic probes plus the registered guest evaluators).
 //!
 //! `#[ignore]`: requires an authenticated cursor-agent on `PATH` and
-//! makes real model calls. The quality orchestrator
-//! (`specify/scripts/quality.rs`) owns repeated trials and semantic
-//! rubric grading; this test proves one trial of the driver.
+//! makes real model calls. The native-live runner (`specify-dev
+//! quality`) owns repeated trials and semantic rubric grading; this
+//! test proves one trial of the driver.
 
-use std::collections::BTreeMap;
 use std::{env, fs};
 
-use scenario::{Grading, ModelBackend, Outcome, Runtime, catalog, evaluate, grade};
-use specify_dev::guest_loop;
+use scenario::grade::Evaluators;
+use scenario::{AssertionId, Grading, ModelBackend, Outcome, Runtime, catalog, evaluate, grade};
+use specify_dev::{guest_loop, verify};
 
 fn cursor_agent_on_path() -> bool {
     env::var_os("PATH").is_some_and(|paths| {
@@ -53,28 +53,15 @@ async fn native_live_trial_passes() {
     eprintln!("sandbox: {}", sandbox.display());
 
     let steps = guest_loop::drive(&sandbox).await.expect("the driver completes setup");
-    for step in &steps {
-        assert_eq!(step.exit_code, 0, "step `{}` failed:\n{}\n{}", step.id, step.stdout, step.stderr);
+    for (id, step) in &steps {
+        assert_eq!(step.exit_code, 0, "step `{id}` failed:\n{}\n{}", step.stdout, step.stderr);
     }
 
-    let execution = grade::Execution::new(
-        &sandbox,
-        steps
-            .iter()
-            .map(|step| {
-                (
-                    step.id.clone(),
-                    grade::StepResult {
-                        exit_code: step.exit_code,
-                        stdout: step.stdout.clone(),
-                        stderr: step.stderr.clone(),
-                    },
-                )
-            })
-            .collect::<BTreeMap<_, _>>(),
-    );
-    let mut results = grade::hard(&scenario, &execution);
-    evaluate::guest::guest(&mut results, &sandbox);
+    let execution = grade::Execution::new(&sandbox, steps);
+    let evaluators = Evaluators::default()
+        .with(AssertionId::GuestJournalCadence, evaluate::guest::journal_cadence)
+        .with(AssertionId::GuestGeneratedCrateVerifies, verify::generated_crates_verify);
+    let results = grade::hard_with(&scenario, &execution, &evaluators);
     for result in &results {
         assert_eq!(
             result.outcome,

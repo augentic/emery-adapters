@@ -26,3 +26,5 @@ pub mod guest_loop;
 pub mod mcp;
 pub mod model;
 pub mod provider;
+pub mod quality;
+pub mod verify;

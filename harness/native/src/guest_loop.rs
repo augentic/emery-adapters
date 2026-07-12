@@ -16,7 +16,7 @@ use anyhow::{Context as _, Result, anyhow};
 use clap::Parser;
 use omnia_guest::api::command::Router;
 use omnia_guest::api::invoke::Invoker;
-use serde::Serialize;
+use scenario::grade::StepResult;
 use transport::command::Globals;
 
 use crate::model::DevModel;
@@ -26,30 +26,19 @@ use crate::mcp;
 /// The canonical scenario this driver executes.
 pub const SCENARIO: &str = "guest-execute-loop";
 
-/// Captured result of one driven step, in execution order.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub struct StepOutcome {
-    /// Scenario workflow step id (`init` for the clerical seed step).
-    pub id: String,
-    /// Process-equivalent exit code.
-    pub exit_code: i32,
-    /// Captured standard output.
-    pub stdout: String,
-    /// Captured standard error.
-    pub stderr: String,
-}
-
 /// Drive the full loop inside `sandbox` (created when absent) and
-/// return every captured step. Driving stops at the first failing
-/// step; the failure stays in the returned steps for grading.
+/// return every captured step in execution order.
+///
+/// Steps are `init` first (the clerical seed), then the scenario
+/// workflow ids. Driving stops at the first failing step; the failure
+/// stays in the returned steps for grading.
 ///
 /// # Errors
 ///
 /// Returns setup errors only — an unloadable scenario, an unusable
 /// sandbox, or a router that cannot be built. Step failures are data,
 /// not errors.
-pub async fn drive(sandbox: &Path) -> Result<Vec<StepOutcome>> {
+pub async fn drive(sandbox: &Path) -> Result<Vec<(String, StepResult)>> {
     let scenario = scenario::catalog::load(SCENARIO)
         .map_err(|error| anyhow!("loading the canonical scenario: {error}"))?;
     fs::create_dir_all(sandbox)
@@ -86,20 +75,19 @@ pub async fn drive(sandbox: &Path) -> Result<Vec<StepOutcome>> {
 /// report whether the step succeeded.
 async fn execute(
     router: &Router<Provider<DevModel>, Globals>, id: &str, argv: Vec<String>,
-    steps: &mut Vec<StepOutcome>,
+    steps: &mut Vec<(String, StepResult)>,
 ) -> bool {
     eprintln!("==> {}", argv.join(" "));
     let response = router.execute(argv).await;
-    let outcome = StepOutcome {
-        id: id.to_owned(),
+    let result = StepResult {
         exit_code: i32::from(response.exit),
         stdout: String::from_utf8_lossy(&response.stdout).into_owned(),
         stderr: String::from_utf8_lossy(&response.stderr).into_owned(),
     };
-    eprint!("{}", outcome.stdout);
-    eprint!("{}", outcome.stderr);
-    let succeeded = outcome.exit_code == 0;
-    steps.push(outcome);
+    eprint!("{}", result.stdout);
+    eprint!("{}", result.stderr);
+    let succeeded = result.exit_code == 0;
+    steps.push((id.to_owned(), result));
     succeeded
 }
 
@@ -112,8 +100,9 @@ struct Args {
     sandbox: PathBuf,
 }
 
-/// Run the driver from the CLI: progress on stderr, the captured step
-/// array as JSON on stdout, exit 0 only when every step succeeded.
+/// Run the driver from the CLI: progress on stderr, the ordered
+/// `(id, step)` pairs as JSON on stdout (the `scenario::grade`
+/// `StepResult` wire shape), exit 0 only when every step succeeded.
 ///
 /// # Errors
 ///
@@ -126,6 +115,6 @@ pub async fn run(argv: &[String]) -> Result<ExitCode> {
     io::Write::write_all(&mut io::stdout().lock(), body.as_bytes())
         .context("writing the step results")?;
     println!();
-    let drained = steps.iter().all(|step| step.exit_code == 0);
+    let drained = steps.iter().all(|(_, step)| step.exit_code == 0);
     Ok(if drained { ExitCode::SUCCESS } else { ExitCode::FAILURE })
 }

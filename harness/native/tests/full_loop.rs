@@ -11,7 +11,8 @@ use omnia_guest::api::invocation::Invocation;
 use omnia_guest::api::invoke::Invoker;
 use omnia_guest::api::operation::Operation;
 use omnia_testkit::model::{Harness, Scripted};
-use scenario::{ModelBackend, Runtime, catalog};
+use scenario::grade::{Evaluators, Execution, StepResult};
+use scenario::{AssertionId, ModelBackend, Outcome, Runtime, catalog, evaluate};
 use serde_json::json;
 use specify_dev::provider::Provider;
 use workflow::change::plan::wire::SourceAssign;
@@ -186,6 +187,44 @@ async fn author_approve_execute_drains() {
     assert_eq!(requests.len(), 8, "survey, reconcile, extract, synthesis, and four build legs");
     assert!(requests[4].lend_workspace, "the omnia generation leg lends the workspace");
     invoker.provider().model().assert_exhausted();
+
+    let execute_stdout = serde_json::to_string(&executed).expect("executed body serialises");
+    grade_pilot(&scenario, project.root(), execute_stdout);
+}
+
+/// Grade the scenario's own hard assertions through the shared
+/// registry pipeline: typed bodies stand in for step stdout, the
+/// journal-cadence evaluator is the same pure implementation every
+/// profile registers, and crate verification stays deliberately
+/// unsettled — a scripted model writes no crate to verify.
+fn grade_pilot(scenario: &scenario::Scenario, root: &std::path::Path, execute_stdout: String) {
+    let step = |body: String| StepResult { exit_code: 0, stdout: body, stderr: String::new() };
+    let execution = Execution::new(
+        root,
+        [
+            ("author".to_owned(), step(String::new())),
+            ("approve".to_owned(), step(String::new())),
+            ("execute".to_owned(), step(execute_stdout)),
+        ],
+    );
+    let evaluators = Evaluators::default()
+        .with(AssertionId::GuestJournalCadence, evaluate::guest::journal_cadence);
+    let results = scenario::grade::hard_with(scenario, &execution, &evaluators);
+    for result in &results {
+        if result.id == AssertionId::GuestGeneratedCrateVerifies {
+            assert_eq!(result.outcome, Outcome::Fail);
+            let detail = result.detail.as_deref().expect("unsettled detail");
+            assert!(detail.contains("requires a profile-specific evaluator"), "{detail}");
+        } else {
+            assert_eq!(
+                result.outcome,
+                Outcome::Pass,
+                "hard assertion `{}` failed: {:?}",
+                result.id,
+                result.detail
+            );
+        }
+    }
 }
 
 #[tokio::test]
