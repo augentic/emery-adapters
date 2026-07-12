@@ -21,11 +21,14 @@ cargo make test               # the whole workspace, matching CI
 
 ### 2. Native workflow harness — linked-adapter integration
 
-`harness/native/` is the `specify-dev` package. It links this workspace's adapter crates with Specify's revision-pinned engine crates and runs the full workflow loop, seam projections, replay compatibility, CLI anchoring, and MCP shelves without building WebAssembly or calling a live model. Its `scenarios/` directory carries the native profile fixtures at that engine revision; update those fixtures with the engine pin.
+`harness/native/` is the `specify-dev` package — a standalone workspace excluded from the root, with its own manifest and lockfile. It links this repo's adapter crates with Specify's revision-pinned engine crates and runs the full workflow loop, seam projections, replay compatibility, CLI anchoring, and MCP shelves without building WebAssembly or calling a live model. Canonical scenarios come embedded in the pinned `scenario` crate's catalog (`scenario::catalog::load(id)`), so the fixtures always match the engine revision the pin declares — there are no scenario copies in this repo. The dedicated `native-harness` CI job (the only job holding `SPECIFY_READ_TOKEN`) tests and clippies this workspace against its declared pin; `cargo make ci` never touches it.
 
 ```bash
-cargo nextest run -p specify-dev --no-tests=pass
+cargo make native-test
+cargo make native-lint
 ```
+
+For sibling co-development against uncommitted engine changes, run `cargo make dev -- check` — the specify checkout's dev script overrides the pin with generated `--config` path patches and restores the pinned lockfile afterwards.
 
 ### 3. Composed-deployment tests — model-free component checks
 

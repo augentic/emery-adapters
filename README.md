@@ -44,8 +44,11 @@ harness/                # hosted-deployment and native workflow harnesses
                       # over the per-adapter scenario trees (contracts,
                       # vectis)
   native/             # `specify-dev`: linked-adapter engine runtime and
-                      # scripted/replay full-loop integration suite
-Cargo.toml            # workspace: `crates/*` + `{sources,targets}/*` + `harness{,/native}`
+                      # scripted/replay full-loop integration suite — a
+                      # standalone workspace excluded from the root, pinned
+                      # to a declared Specify engine revision
+Cargo.toml            # workspace: `crates/*` + `{sources,targets}/*` + `harness`
+                      # (excludes `harness/native`)
 ```
 
 Identity lives in the guest crate's `Cargo.toml` `version` and the wasm-pkg
@@ -76,14 +79,17 @@ cargo make release
 
 The `harness` package keeps composed WASM/WIT conformance (`harness/composed.rs`) distinct from live prompt-quality evaluation (`harness/live.rs`). Composed tests build guests from source on first use when artifacts are absent under `target/wasm32-wasip2/debug/`.
 
-The `specify-dev` package under `harness/native/` links every adapter crate in-process and consumes Specify's engine crates from a revision-pinned git source. It provides the fast, model-free full-loop and seam suite without coupling the engine repository back to concrete adapters:
+The `specify-dev` package under `harness/native/` is a **standalone workspace**, deliberately excluded from the root: it links every adapter crate in-process and consumes Specify's engine crates from a revision-pinned git source, so ordinary adapter commands never resolve (or authenticate to) that private dependency. It provides the fast, model-free full-loop and seam suite without coupling the engine repository back to concrete adapters:
 
 ```bash
-cargo nextest run -p specify-dev --no-tests=pass
-cargo run -p specify-dev -- --project-dir /path/to/project plan status
+cargo make native-test     # nextest over harness/native (its own manifest/lock)
+cargo make native-lint     # clippy -D warnings over harness/native
+cargo make native-run -- --project-dir /path/to/project plan status
 ```
 
-For sibling co-development against uncommitted engine changes, enable the documented `https://github.com/augentic/specify.git` path patch in the root `Cargo.toml`.
+Two compatibility choices are independent, for first- and third-party adapter authors alike: the **WIT contract version** an adapter targets (`wit/specify.wit`, the publish-time compatibility floor), and — only for this optional native harness — the **engine revision** its manifest pins. The pin is the harness's declared, verified engine revision; it advances deliberately (edit the `rev` values in `harness/native/Cargo.toml`, run `cargo update --manifest-path harness/native/Cargo.toml`, and commit its lockfile), not with every engine commit.
+
+For sibling co-development against uncommitted engine changes, use the `cargo make dev -- {check,run,live}` loop: the sibling specify checkout's dev script patches the pin to its working tree with generated `--config` flags. Never commit path patches or hand-edit the pin for local work.
 
 ## Publishing
 

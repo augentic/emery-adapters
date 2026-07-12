@@ -7,3 +7,32 @@ jobs:
   ci:
     uses: augentic/.github/.github/workflows/ci.yaml@main
     secrets: inherit
+
+  # Compatibility gate for the standalone native harness: builds, tests,
+  # and clippies `harness/native` against its declared revision-pinned
+  # Specify engine source. Deliberately not a cross-repo HEAD gate — the
+  # repositories move independently, and this job only proves the harness
+  # still matches the engine revision it pins. `SPECIFY_READ_TOKEN` is a
+  # read-only token (preferably GitHub App-issued) for the private
+  # augentic git dependencies; it is scoped to this job only, so ordinary
+  # adapter CI never resolves or authenticates to Specify.
+  native-harness:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Authenticate private augentic git dependencies
+        env:
+          SPECIFY_READ_TOKEN: ${{ secrets.SPECIFY_READ_TOKEN }}
+        run: |
+          git config --global \
+            url."https://x-access-token:${SPECIFY_READ_TOKEN}@github.com/augentic/".insteadOf \
+            "https://github.com/augentic/"
+      - name: Test against the declared engine revision
+        run: cargo test --locked --manifest-path harness/native/Cargo.toml
+      - name: Clippy against the declared engine revision
+        run: |
+          rustup component add clippy
+          cargo clippy --locked --manifest-path harness/native/Cargo.toml \
+            --all-targets -- -D warnings

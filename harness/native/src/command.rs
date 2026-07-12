@@ -60,7 +60,7 @@ pub async fn run(mut argv: Vec<String>) -> u8 {
     if let Some(base) = shelves().await {
         provider = provider.mcp_base(base);
     }
-    let router = match transport::command::router(Invoker::new("specify", provider), |_| Ok(())) {
+    let router = match transport::command::router(Invoker::new("specify", provider)) {
         Ok(router) => router,
         Err(error) => {
             eprintln!("error: {error}");

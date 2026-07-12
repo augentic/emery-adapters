@@ -11,7 +11,7 @@ use omnia_guest::api::invocation::Invocation;
 use omnia_guest::api::invoke::Invoker;
 use omnia_guest::api::operation::Operation;
 use omnia_testkit::model::{Harness, Scripted};
-use scenario::{ModelBackend, Runtime, Scenario};
+use scenario::{ModelBackend, Runtime, catalog};
 use serde_json::json;
 use specify_dev::provider::Provider;
 use workflow::change::plan::wire::SourceAssign;
@@ -100,10 +100,7 @@ fn scripted_answers() -> Vec<&'static str> {
 
 #[tokio::test]
 async fn author_approve_execute_drains() {
-    let scenario = Scenario::load(
-        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("scenarios/guest-execute-loop.yaml"),
-    )
-    .expect("canonical full-loop scenario");
+    let scenario = catalog::load("guest-execute-loop").expect("canonical full-loop scenario");
     let profile = scenario
         .profiles
         .iter()
@@ -193,10 +190,7 @@ async fn author_approve_execute_drains() {
 
 #[tokio::test]
 async fn intent_pilot_refines() {
-    let scenario = Scenario::load(
-        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("scenarios/intent-only.yaml"),
-    )
-    .expect("canonical intent scenario");
+    let scenario = catalog::load("intent-only").expect("canonical intent scenario");
     assert_eq!(
         scenario.workflow.iter().map(|step| step.id.as_str()).collect::<Vec<_>>(),
         ["author", "approve", "claim", "refine"]
@@ -249,11 +243,7 @@ async fn intent_pilot_refines() {
 
 #[tokio::test]
 async fn failure_pilot_resumes() {
-    let scenario = Scenario::load(
-        &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("scenarios/execute-fail-resume.yaml"),
-    )
-    .expect("canonical failure scenario");
+    let scenario = catalog::load("execute-fail-resume").expect("canonical failure scenario");
     assert_eq!(
         scenario.workflow.iter().map(|step| step.id.as_str()).collect::<Vec<_>>(),
         ["author", "approve", "execute-fails", "build-resumes", "execute-resumes"]

@@ -131,11 +131,55 @@ args = [
   "--workspace",
   "--exclude",
   "harness",
-  "--exclude",
-  "specify-dev",
   "--target",
   "wasm32-wasip2",
   "--release",
+]
+
+# -------------------------------------
+# Native compatibility harness
+# -------------------------------------
+# `harness/native` is a standalone workspace excluded from the root: it
+# consumes Specify's engine crates from a revision-pinned git source, so
+# it stays out of `ci` and runs through these focused tasks instead.
+# Cross-repo sibling development goes through `cargo make dev` (the
+# specify checkout's dev script), which patches the pin automatically.
+
+[tasks.native-test]
+command = "cargo"
+args = [
+  "nextest",
+  "run",
+  "--manifest-path",
+  "harness/native/Cargo.toml",
+  "--all-features",
+  "--no-tests=pass",
+]
+env = { RUSTFLAGS = "-Dwarnings" }
+
+[tasks.native-lint]
+command = "cargo"
+args = [
+  "clippy",
+  "--manifest-path",
+  "harness/native/Cargo.toml",
+  "--all-targets",
+  "--all-features",
+  "--",
+  "-D",
+  "warnings",
+]
+install_crate = { rustup_component_name = "clippy" }
+
+[tasks.native-run]
+command = "cargo"
+args = [
+  "run",
+  "-q",
+  "--manifest-path",
+  "harness/native/Cargo.toml",
+  "--",
+  "${@}",
 ]
 
 # Fast dev-loop builds of the adapter components: same `--release`
