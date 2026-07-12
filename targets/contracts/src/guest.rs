@@ -1,7 +1,7 @@
 //! The `wasm32` shim: bindings and export glue over the wasm-free
 //! sibling modules.
 
-use adapter::target::{AdapterId, AdapterMetadata, Changeset, Error, Input, Report, WorkingTree};
+use adapter::target::{AdapterId, AdapterMetadata, Error, Input, MergePhase, Report, WorkingTree};
 use adapter::{WasiModel, references, seam};
 
 use crate::{operations, registry};
@@ -32,13 +32,13 @@ impl adapter::target::Guest for Adapter {
     }
 
     async fn merge(
-        id: AdapterId, slice: String, delta: Changeset, tree: WorkingTree,
+        id: AdapterId, slice: String, phase: MergePhase, tree: WorkingTree,
     ) -> Result<Report, Error> {
-        let delta = seam::Changeset::from(delta);
+        let phase = seam::MergePhase::from(phase);
         let tree = seam::WorkingTree::from(tree);
         let url = references::mcp_url("contracts");
         let ctx = seam::Context::guest(&id, url.as_deref());
-        operations::merge(&WasiModel, &ctx, &slice, &delta, &tree)
+        operations::merge(&WasiModel, &ctx, &slice, phase, &tree)
             .await
             .map(Into::into)
             .map_err(Into::into)

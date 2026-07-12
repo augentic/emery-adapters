@@ -89,7 +89,7 @@ cargo make native-run -- --project-dir /path/to/project plan status
 
 Two compatibility choices are independent, for first- and third-party adapter authors alike: the **WIT contract version** an adapter targets (`wit/specify.wit`, the publish-time compatibility floor), and — only for this optional native harness — the **engine revision** its manifest pins. The pin is the harness's declared, verified engine revision; it advances deliberately (edit the `rev` values in `harness/native/Cargo.toml`, run `cargo update --manifest-path harness/native/Cargo.toml`, and commit its lockfile), not with every engine commit.
 
-For sibling co-development against uncommitted engine changes, use the `cargo make dev -- {check,run,live}` loop: the sibling specify checkout's dev script patches the pin to its working tree with generated `--config` flags. Never commit path patches or hand-edit the pin for local work.
+For sibling co-development against uncommitted engine changes, override the pin locally with hand-supplied `--config` path patches against the sibling working tree. Never commit path patches or hand-edit the pin for local work.
 
 ## Publishing
 

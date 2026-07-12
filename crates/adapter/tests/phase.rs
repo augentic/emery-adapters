@@ -4,12 +4,11 @@ use std::path::Path;
 
 use adapter::Format;
 use adapter::phase::{
-    PhaseAnswer, assemble_system, enforce, missing_outputs, phase, render_delta, render_inputs,
-    render_outcome, report,
+    PhaseAnswer, assemble_system, enforce, missing_outputs, phase, render_inputs, render_outcome,
+    report,
 };
 use adapter::seam::{
-    BuildOutput, Changeset, Context, Edit, Finding, Input, Platform, Report, Severity, Status,
-    WorkingTree,
+    BuildOutput, Context, Finding, Input, Platform, Report, Severity, Status, WorkingTree,
 };
 use omnia_testkit::model::Harness;
 use tempfile::tempdir;
@@ -92,30 +91,6 @@ fn renderers() {
         ]),
         "### input: proposal\n\nproposal body\n\n### input: spec\n\nspec body"
     );
-
-    let empty = Changeset {
-        base: "rev-1".to_string(),
-        edits: Vec::new(),
-    };
-    assert_eq!(render_delta(&empty), "### delta\n\n(empty changeset — the slice wrote no files)");
-
-    let delta = Changeset {
-        base: "rev-2".to_string(),
-        edits: vec![
-            Edit {
-                path: "src/lib.rs".to_string(),
-                content: Some("pub fn run() {}".to_string()),
-            },
-            Edit {
-                path: "src/old.rs".to_string(),
-                content: None,
-            },
-        ],
-    };
-    let rendered = render_delta(&delta);
-    assert!(rendered.starts_with("### delta (base rev-2)"));
-    assert!(rendered.contains("- src/lib.rs (content: pub fn run() {})"));
-    assert!(rendered.contains("- src/old.rs (deleted)"));
 
     let outcome = render_outcome(
         "core",

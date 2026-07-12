@@ -165,6 +165,29 @@ impl<M: Model> TargetSeam for Provider<M> {
             .map_err(map_error)?;
         Ok(widen_report(&id, slice, report))
     }
+
+    async fn merge(
+        &self, id: String, slice: String, phase: seam::MergePhase, tree: WorkingTree,
+    ) -> Result<BuildReport, seam::Error> {
+        let url = self.mcp_url(&id);
+        let ctx = Context {
+            adapter_id: &id,
+            project_root: &self.project_dir,
+            mcp_url: url.as_deref(),
+        };
+        let phase = match phase {
+            seam::MergePhase::Preflight => aseam::MergePhase::Preflight,
+            seam::MergePhase::Postflight => aseam::MergePhase::Postflight,
+        };
+        let tree = aseam::WorkingTree {
+            base: tree.base,
+            subpath: tree.subpath,
+        };
+        let report = catalog::merge(&self.model, &ctx, &id, &slice, phase, &tree)
+            .await
+            .map_err(map_error)?;
+        Ok(widen_report(&id, slice, report))
+    }
 }
 
 /// In-process metadata dispatch used by seam-level parity tests.

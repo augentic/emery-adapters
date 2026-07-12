@@ -21,7 +21,7 @@ Load on demand when the lead's surface needs deeper analysis. The bodies carry T
 - [`references/observability.md`](../references/observability.md) — metric and trace capture: names, types, emission points, labels.
 - [`references/scope-filters.md`](../references/scope-filters.md) — include / exclude / manifest filter semantics.
 - [`references/verification.md`](../references/verification.md) — final validation checklist before emitting evidence.
-- [`references/design-template.md`](../references/design-template.md) — 14-section design.md template (used by downstream synthesis).
+- [`references/design-template.md`](../references/design-template.md) — the design surface downstream synthesis fills; the claim-coverage checklist extraction must satisfy.
 - [`references/language-mapping.md`](../references/language-mapping.md) — TypeScript → Rust mapping cheatsheet (idioms, error handling, async, serialization).
 - [`references/context-gaps.md`](../references/context-gaps.md) — strategies for inferring missing context when source is incomplete.
 - [`references/lessons-learned.md`](../references/lessons-learned.md) — empirical wisdom from past extraction passes.

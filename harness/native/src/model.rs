@@ -90,8 +90,8 @@ impl Model for DevModel {
                     .map_err(|err| {
                         Error::Backend(format!(
                             "cursor-agent backend unavailable: {err:#}; install cursor-agent, \
-                             then `cursor-agent login` or export CURSOR_API_KEY (`cargo make dev \
-                             -- doctor --live` verifies command-mode credentials)"
+                             then `cursor-agent login` or export CURSOR_API_KEY (command-mode \
+                             credentials, not the IDE login `cursor-agent status` reports)"
                         ))
                     })?;
                 model.create(request).await

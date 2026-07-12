@@ -24,7 +24,7 @@ Live-backend eval harness for the vectis adapter guest. The scenario drives the 
 Requires [`cursor-agent`](https://cursor.com/docs/cli) on `PATH`. Set `SPECIFY_EVAL_MODEL=<model-id>` to override the model driver-side.
 
 ```bash
-cargo make dev -- live vectis single_screen
+cargo test -p harness --test live -- --ignored --nocapture vectis::single_screen
 ```
 
 ## Smoke-checking without a model

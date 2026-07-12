@@ -109,6 +109,20 @@ In multi-repo initiatives, contracts live in the initiating repo's root `contrac
 
 Phase skills always read from root `contracts/` relative to their working directory — they do not need to know whether contracts were authored locally or materialised from a central source.
 
+## Authoring Checklist
+
+Self-review before the deterministic validator gate runs:
+
+- Every JSON Schema file has `$id`, `title`, and `description`
+- `$id` values use the `urn:specify:schemas/<name>` format
+- One type per schema file
+- All `$ref` pointers in OpenAPI and AsyncAPI files resolve to existing schema files
+- Request/response schemas in OpenAPI bindings use `$ref` to `../schemas/`, not inline definitions
+- Message payload schemas in AsyncAPI bindings use `$ref` to `../schemas/`
+- Every schema that appears as a top-level payload in a spec scenario has at least one protocol binding
+- File names use kebab-case with `.yaml` extensions
+- Contract files capture interface shape only; auth, rate limits, and retry policies remain in `design.md`
+
 ## See Also
 
 - [json-schema-conventions.md](json-schema-conventions.md) -- JSON Schema payload rules

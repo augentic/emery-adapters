@@ -2,7 +2,7 @@
 //! sibling modules. See `adapter::target` for the shim contract.
 
 use adapter::target::{
-    AdapterId, AdapterMetadata, Changeset, Error, Guest, Input, Report, WorkingTree,
+    AdapterId, AdapterMetadata, Error, Guest, Input, MergePhase, Report, WorkingTree,
 };
 use adapter::{WasiModel, references, seam};
 
@@ -34,13 +34,13 @@ impl Guest for Adapter {
     }
 
     async fn merge(
-        id: AdapterId, slice: String, delta: Changeset, tree: WorkingTree,
+        id: AdapterId, slice: String, phase: MergePhase, tree: WorkingTree,
     ) -> Result<Report, Error> {
-        let delta = seam::Changeset::from(delta);
+        let phase = seam::MergePhase::from(phase);
         let tree = seam::WorkingTree::from(tree);
         let url = references::mcp_url("vectis");
         let ctx = seam::Context::guest(&id, url.as_deref());
-        operations::merge(&WasiModel, &ctx, &slice, &delta, &tree)
+        operations::merge(&WasiModel, &ctx, &slice, phase, &tree)
             .await
             .map(Into::into)
             .map_err(Into::into)

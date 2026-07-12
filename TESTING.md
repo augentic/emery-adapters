@@ -4,7 +4,7 @@ Integration-first test posture for `specify-adapters`: integration owns every pu
 
 ## The development loop
 
-The cross-repo command surface over these rungs is the `cargo make dev -- <command>` loop shared with the sibling `specify` checkout — `check` (model-free), `live` (live model), `full` (WASM boundary) — documented in [the developer loop guide](https://github.com/augentic/specify/blob/main/docs/contributing/dev-loop.md). The rungs below are this repo's own test strata that those commands compose.
+Every rung runs from this repository with its own `cargo make` tasks; the engine repository tests itself independently (see [its developer loop guide](https://github.com/augentic/specify/blob/main/docs/contributing/dev-loop.md)). There is no cross-repo command surface — the rungs below are this repo's own test strata.
 
 Six rungs, fastest feedback first. Every behavior is asserted on exactly one rung — duplicating an assertion across rungs is a defect, not extra safety. Omnia-testkit owns reusable model and runtime test mechanics; do not recreate its scripted-model, recording, or runtime helpers here. Adapter native tests own operation behavior, the native workflow harness owns cross-phase integration, composed tests own WASM/WIT conformance, and live tests own prompt quality.
 
@@ -28,7 +28,7 @@ cargo make native-test
 cargo make native-lint
 ```
 
-For sibling co-development against uncommitted engine changes, run `cargo make dev -- check` — the specify checkout's dev script overrides the pin with generated `--config` path patches and restores the pinned lockfile afterwards.
+For sibling co-development against uncommitted engine changes, override the pin locally with hand-supplied `--config` path patches (`cargo nextest run --manifest-path harness/native/Cargo.toml --config 'patch."https://github.com/augentic/specify".workflow.path="../specify/crates/workflow"' …`); never commit path patches or the patched lockfile.
 
 ### 3. Composed-deployment tests — model-free component checks
 
@@ -44,7 +44,7 @@ The `live` target remains separate from `composed`: its `#[ignore]`d tests in `h
 
 ```bash
 cargo test -p harness --test live -- --ignored --nocapture contracts::   # every contracts scenario
-cargo make dev -- live vectis single_screen
+cargo test -p harness --test live -- --ignored --nocapture vectis::single_screen
 cargo test -p harness --test live -- --ignored --nocapture contracts::metadata   # one scenario
 cargo test -p harness --test live wiring   # the model-free smokes (not ignored; CI runs them)
 ```
@@ -61,7 +61,7 @@ SPECIFY_PROSE_OVERLAY=1 cargo test -p harness --test live -- --ignored --nocaptu
 
 ### 6. Consumer project — code changes through the engine
 
-For code (not prose) iteration against a real consumer project, `cargo make adapter [adapter]` builds components with fast profile settings (LTO off, opt-level 1) into `target/wasm32-wasip2/release/<name>.wasm` — the exact path the engine's bare-name resolution probes from a sibling checkout — in seconds instead of a full `cargo make release`. Caveat: switching between the `adapter` and `release` flavors changes the profile fingerprint and forces a rebuild; publishing is rare, so the trade is accepted.
+For code (not prose) iteration against a real consumer project, `cargo make adapter [adapter]` builds components with fast profile settings (LTO off, opt-level 1) into `target/wasm32-wasip2/release/<name>.wasm` in seconds instead of a full `cargo make release`. The engine's bare-name resolution is project-contained (no sibling-checkout probe), so supply the built component to the consumer project explicitly — `specify init /path/to/specify-adapters/target/wasm32-wasip2/release/<name>.wasm` mirrors it into that project's component cache. Caveat: switching between the `adapter` and `release` flavors changes the profile fingerprint and forces a rebuild; publishing is rare, so the trade is accepted.
 
 ```bash
 cargo make adapter contracts   # one adapter; no argument builds every adapter

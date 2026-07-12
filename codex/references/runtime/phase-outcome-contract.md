@@ -1,9 +1,7 @@
 # Phase outcome contract
 
-Specify has no per-slice `PhaseOutcome` stamp or `slice outcome set` CLI verb. The `/spec:execute` driver parks on `specify plan status`, which projects phase outcomes from slice lifecycle, plan entry status, and the journal's phase-terminal events — not from an on-disk outcome field.
+Specify has no per-slice `PhaseOutcome` stamp or `slice outcome set` CLI verb. `specify plan execute` (and the read-only `specify plan status` projection) classifies each phase's outcome from slice lifecycle, plan entry status, and the journal's phase-terminal events — not from an on-disk outcome field.
 
-> See [Stop conditions](https://specify.augentic.io/reference/change-skills/execute.html) halt paths in the execute skill references, and `references/spec-runtime/stop-conditions.md` in cached adapters.
+Durable run telemetry lives at `.specify/journal.jsonl`; the closed journal event taxonomy is implemented in the engine. CLI verbs append structured JSON lines there as a side effect of each phase; adapter operations never read or write the file — their contribution to an outcome is the schema-gated report each operation answers with.
 
-Durable run telemetry lives at `.specify/journal.jsonl`; the journal event taxonomy is implemented in the CLI repo and summarized by the lifecycle references. CLI verbs append structured JSON lines there as a side effect of each phase; skills never read the file directly — `specify plan status` is the projection that turns the journal tail into the loop's stop classification.
-
-Target adapter prompts link here for navigation; prompt-local deltas describe merge/build failure handling under the stop-conditions model.
+For adapter prompts the contract is: a `status: failure` report (or blocking findings the deterministic gates enforce) is how a phase signals a halt — the engine owns the resulting lifecycle state, journaling, and the loop's stop classification. Prompt-local sections describe what makes each phase's report blocking; none of them transition lifecycle or touch the journal.

@@ -8,7 +8,7 @@ use std::fs;
 use std::path::Path;
 
 use adapter::answers::REPORT_ANSWER_SCHEMA;
-use adapter::seam::{Changeset, Context, Edit, Input, Report, Severity, Status, WorkingTree};
+use adapter::seam::{Context, Input, MergePhase, Report, Severity, Status, WorkingTree};
 use adapter::{Format, Request};
 use omnia_testkit::model::{Harness, mcp_grants};
 use tempfile::TempDir;
@@ -268,49 +268,59 @@ async fn ui_surface_coherence() {
 }
 
 #[tokio::test]
-async fn merge_single_leg() {
+async fn merge_preflight_deterministic() {
+    let tmp = TempDir::new().unwrap();
+    let model = Harness::answering::<&str>([]);
+
+    // A clean (absent) staged composition passes without a judgment leg.
+    let report = merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
+        .await
+        .unwrap();
+    assert_eq!(report.status, Status::Success);
+    assert!(model.requests().is_empty(), "preflight is deterministic: no leg");
+
+    // A broken staged slice composition parks the merge before the fold.
+    fs::create_dir_all(tmp.path().join(".specify/slices/demo")).unwrap();
+    fs::write(tmp.path().join(".specify/slices/demo/composition.yaml"), "screens: [broken\n")
+        .unwrap();
+    let report = merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
+        .await
+        .unwrap();
+    assert_eq!(report.status, Status::Failure);
+    assert!(report.findings[0].detail.contains("[composition]"));
+    assert!(model.requests().is_empty(), "a staged failure still spends no judgment leg");
+}
+
+#[tokio::test]
+async fn merge_postflight_single_leg() {
     let tmp = TempDir::new().unwrap();
     let model = Harness::answering([SUCCESS_REPORT]);
-    let delta = Changeset {
-        base: "rev-1".to_string(),
-        edits: vec![
-            Edit {
-                path: "shared/src/app.rs".to_string(),
-                content: Some("pub struct App;".to_string()),
-            },
-            Edit {
-                path: "shared/src/old.rs".to_string(),
-                content: None,
-            },
-        ],
-    };
 
-    let report = merge(&model, &ctx(tmp.path(), None), "demo", &delta, &tree()).await.unwrap();
+    let report = merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Postflight, &tree())
+        .await
+        .unwrap();
 
     assert_eq!(report.status, Status::Success);
     let requests = model.requests();
     assert_eq!(requests.len(), 1, "a coherent report needs no repair leg");
     assert!(requests[0].system.as_deref().unwrap().contains("# Vectis target — `merge`"));
     let user = &requests[0].messages[0].content;
+    assert!(user.contains("postflight merge gate"), "phase named");
     assert!(user.contains("cap-matrix re-verification"), "agent-run host gates instructed");
-    assert!(user.contains("shared/src/old.rs (deleted)"), "delta rendered");
-    assert!(user.contains("base `rev-1`"), "delta base named");
 }
 
 #[tokio::test]
-async fn merge_gates_composition() {
+async fn merge_postflight_gates_composition() {
     let tmp = TempDir::new().unwrap();
     // A broken merged baseline composition is caught by the postlude's
     // in-guest validator; residual findings force failure.
     fs::create_dir_all(tmp.path().join(".specify/specs")).unwrap();
     fs::write(tmp.path().join(".specify/specs/composition.yaml"), "screens: [broken\n").unwrap();
     let model = Harness::answering([SUCCESS_REPORT, SUCCESS_REPORT]);
-    let delta = Changeset {
-        base: "rev-1".to_string(),
-        edits: vec![],
-    };
 
-    let report = merge(&model, &ctx(tmp.path(), None), "demo", &delta, &tree()).await.unwrap();
+    let report = merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Postflight, &tree())
+        .await
+        .unwrap();
 
     assert_eq!(report.status, Status::Failure);
     assert!(report.findings[0].detail.contains("[composition]"));

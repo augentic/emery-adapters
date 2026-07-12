@@ -168,7 +168,6 @@ checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
 [[package]]
 name = "artifacts"
 version = "0.27.2"
-source = "git+https://github.com/augentic/specify.git?rev=2e4ca5b8ed14235984d8dbe6a0336757ff87db62#2e4ca5b8ed14235984d8dbe6a0336757ff87db62"
 dependencies = [
  "error",
  "glob",
@@ -1162,7 +1161,6 @@ dependencies = [
 [[package]]
 name = "error"
 version = "0.27.2"
-source = "git+https://github.com/augentic/specify.git?rev=2e4ca5b8ed14235984d8dbe6a0336757ff87db62#2e4ca5b8ed14235984d8dbe6a0336757ff87db62"
 dependencies = [
  "serde-saphyr",
  "thiserror 2.0.18",
@@ -3718,7 +3716,6 @@ dependencies = [
 [[package]]
 name = "schema"
 version = "0.27.2"
-source = "git+https://github.com/augentic/specify.git?rev=2e4ca5b8ed14235984d8dbe6a0336757ff87db62#2e4ca5b8ed14235984d8dbe6a0336757ff87db62"
 dependencies = [
  "base16ct",
  "error",
@@ -4604,7 +4601,6 @@ dependencies = [
 [[package]]
 name = "transport"
 version = "0.27.2"
-source = "git+https://github.com/augentic/specify.git?rev=2e4ca5b8ed14235984d8dbe6a0336757ff87db62#2e4ca5b8ed14235984d8dbe6a0336757ff87db62"
 dependencies = [
  "artifacts",
  "clap",
@@ -5705,7 +5701,6 @@ dependencies = [
 [[package]]
 name = "workflow"
 version = "0.27.2"
-source = "git+https://github.com/augentic/specify.git?rev=2e4ca5b8ed14235984d8dbe6a0336757ff87db62#2e4ca5b8ed14235984d8dbe6a0336757ff87db62"
 dependencies = [
  "anyhow",
  "artifacts",

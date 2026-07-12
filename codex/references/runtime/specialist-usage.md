@@ -2,7 +2,7 @@
 
 Augentic-specific supplement: how specialist skills (Omnia, Vectis, and friends) *consume* the standard artifacts. For artifact structure see [Artifact format](https://specify.augentic.io/reference/artifact-format.html) and [Artifacts in depth](https://specify.augentic.io/explanation/artifacts.html).
 
-Augentic uses stock Specify as its executable workflow contract. Specialist skills read the four artifacts `proposal.md`, `spec.md`, `design.md`, and `tasks.md` during `/spec:plan → /spec:execute` (which drives `/spec:refine → /spec:build → /spec:merge` per slice), but they must not redefine the runtime contract. Artifact validation runs automatically inside `/spec:build` before implementation begins.
+Augentic uses stock Specify as its executable workflow contract. Specialist operations read the four artifacts `proposal.md`, `spec.md`, `design.md`, and `tasks.md` during `/spec:plan → specify plan execute` (which drives refine → build → merge per slice), but they must not redefine the runtime contract. Artifact validation runs automatically inside `specify slice build` before implementation begins.
 
 ## Where specialists read and write
 
@@ -44,13 +44,13 @@ When a source adapter's `extract` reconstructs behaviour from legacy code, the s
 
 Never generate tasks that require human-only action: manual app testing, visual inspection, real-world API credentials, production services, physical-device checks, app-store review, or "ask the user to verify". When behaviour appears to need manual validation, write the agent-verifiable equivalent instead (a mocked API test, a replay, a simulator or build check, a contract test, or a scripted smoke test).
 
-`specify slice validate` checks only the checkbox and grouping *shape* of `tasks.md`; it does not inspect task intent. Agent-completability is therefore judged at write time and re-checked by `/spec:build` as a preflight.
+`specify slice validate` checks only the checkbox and grouping *shape* of `tasks.md`; it does not inspect task intent. Agent-completability is therefore judged at write time and re-checked by the build phase as a preflight.
 
 Tasks are implemented by the active target adapter's build operation, which carries the specialist orchestration inline; they do not route to standalone specialist skills.
 
 ## Decision Records
 
-A slice may author **Decision Records** at `$DECISIONS_DIR/<slug>.md` for the durable *why* behind a design choice. `/spec:merge` promotes them into `$BASELINE_DECISIONS/DEC-NNNN-<slug>.md`. See [Decision Records](https://specify.augentic.io/reference/artifact-format.html#decision-records-design-why) for the format and promotion rules. Accepted decisions also sharpen the project's plan-time routing identity (a third axis beside what the project does and what recently changed).
+A slice may author **Decision Records** at `$DECISIONS_DIR/<slug>.md` for the durable *why* behind a design choice — the engine's synthesis authors them structurally, and `specify slice merge` promotes them into `$BASELINE_DECISIONS/DEC-NNNN-<slug>.md`. See [Decision Records](https://specify.augentic.io/reference/artifact-format.html#decision-records-design-why) for the format and promotion rules. Accepted decisions also sharpen the project's plan-time routing identity (a third axis beside what the project does and what recently changed).
 
 ## See also
 
