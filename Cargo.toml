@@ -1,15 +1,11 @@
 [workspace]
+members = ["harness", "crates/*", "sources/*", "targets/*"]
+# The native compatibility harness is a standalone workspace: it consumes
+# Specify's engine crates from a revision-pinned git source, and keeping it
+# excluded means ordinary adapter metadata/test/lint/vet commands never
+# resolve (or authenticate to) that private dependency.
+exclude = ["harness/native"]
 resolver = "3"
-members = [
-    "targets/contracts/extension",
-    "targets/vectis/extension",
-    "tools/rust-quality",
-]
-
-# The Specify adapters repo (RFC-48 / RFC-49 T6). Each bundled adapter
-# co-locates its WASI extension crate under `{sources,targets}/**/extension/`;
-# the extension wasm builds here and is committed beside `adapter.yaml` as the
-# adapter's `adapter.wasm`.
 
 [workspace.package]
 authors = ["Augentic"]
@@ -18,25 +14,59 @@ homepage = "https://augentic.io"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/augentic/specify-adapters"
 rust-version = "1.95"
-version = "0.4.3"
+version = "0.1.0"
 publish = false
 
 [workspace.dependencies]
-clap = { version = "4", features = ["derive", "env"] }
-jsonschema = { version = "0.46", default-features = false }
+anyhow = "1"
+cfg-if = "1"
+jsonschema = { version = "0.47.0", default-features = false }
 semver = "1"
 serde = { version = "1", features = ["derive"] }
-serde-saphyr = "0.0.26"
+serde-saphyr = "0.0.29"
 serde_json = "1"
 sha2 = "0.11"
+adapter = { path = "crates/adapter" }
+prose = { path = "crates/prose" }
 thiserror = "2"
 toml = "1"
-assert_cmd = "2"
 tempfile = "3"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 resvg = { version = "0.47", default-features = false }
 usvg = { version = "0.47", default-features = false }
 tiny-skia = { version = "0.12", default-features = false }
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+image = { version = "0.25", default-features = false, features = [
+    "png",
+    "jpeg",
+    "webp",
+] }
+wasip3 = { version = "0.7.0", features = ["http-compat"] }
+wit-bindgen = { version = "0.59.0", features = ["async-spawn"] }
+
+omnia = "0.35.0"
+omnia-cursor = "0.28.0"
+omnia-guest = "0.35.0"
+omnia-testkit = { version = "0.35.0", default-features = false }
+omnia-wasi-http = "0.35.0"
+omnia-wasi-model = "0.35.0"
+
+[patch.crates-io]
+omnia = { git = "https://github.com/augentic/omnia.git" }
+omnia-cursor = { git = "https://github.com/augentic/backends.git" }
+omnia-guest = { git = "https://github.com/augentic/omnia.git" }
+omnia-testkit = { git = "https://github.com/augentic/omnia.git" }
+omnia-wasi-http = { git = "https://github.com/augentic/omnia.git" }
+omnia-wasi-model = { git = "https://github.com/augentic/omnia.git" }
+
+# omnia = { path = "../omnia/crates/omnia" }
+# omnia-cursor = { path = "../backends/crates/cursor" }
+# omnia-guest = { path = "../omnia/crates/omnia-guest" }
+# omnia-testkit = { path = "../omnia/crates/testkit" }
+# omnia-wasi-http = { path = "../omnia/crates/wasi-http" }
+# omnia-wasi-model = { path = "../omnia/crates/wasi-model" }
+
+wrpc-transport = { git = "https://github.com/bytecodealliance/wrpc" }
+wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }
 
 [workspace.lints.rust]
 # https://dirname.github.io/rust-std-doc/rustc/lints/listing/allowed-by-default.html
@@ -114,16 +144,6 @@ unneeded_field_pattern = "warn"
 unseparated_literal_suffix = "warn"
 unused_result_ok = "warn"
 verbose_file_reads = "warn"
-
-# Recommended-but-skipped restriction lints with rationale:
-# - `tests_outside_test_module`: fires on every integration test in `tests/*.rs`
-#   (by construction, integration tests are top-level fns in their own crate
-#   and cannot be inside `#[cfg(test)] mod tests`).
-# - `str_to_string` / `string_to_string`: opinionated against `.to_string()` on
-#   `&str`; `string_to_string` was also removed from clippy in 1.95 in favour of
-#   `clippy::implicit_clone`.
-# - `field_scoped_visibility_modifiers`: the workspace deliberately uses
-#   `pub(crate)` / `pub(super)` on struct fields throughout.
 
 [profile.release]
 lto = true

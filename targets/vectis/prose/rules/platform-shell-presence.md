@@ -1,0 +1,22 @@
+---
+id: VECTIS-005
+title: Declared Platform Shells Must Be Present
+severity: important
+trigger: A Vectis project declares platforms in project.yaml and a proposal.md carries the platform set.
+---
+
+## Rule
+
+Every platform declared in `project.yaml.platforms` and carried through `proposal.md ## Platforms` must have a corresponding on-disk shell tree by the time the slice reaches `built`. The adapter's deterministic shell verify gate (run in-guest at the build's report leg) is the authority: `core` requires `shared/src/app.rs`, `ios` requires the `iOS/` tree with at least one `.swift` file and the Crux bridge, `android` requires the `Android/` tree with at least one `.kt` file and the Gradle/Cargo bridge.
+
+`web` and `desktop` are valid platform tokens but have no on-disk interpretation yet — the tool emits a `platform-not-yet-supported` info finding and treats them as present.
+
+## Look For
+
+- A `proposal.md ## Platforms` section that lists platforms not present on disk (no shell tree or an empty scaffold).
+- A build report with `status: success` but missing `outputs[]` entries for declared supported platforms.
+- A slice that reaches `built` without the verify gate having run.
+
+## Spec Guidance
+
+Platforms are an app-level fact carried to every slice from `project.yaml.platforms`. When a declared platform's shell tree is absent, the slice's own build stands it up (`scaffold <platform>` — the adapter's build-time `create` path); there is no separate plan-time bootstrap slice. If the shell is still missing when the slice reaches `built`, the verify gate prevents the transition.

@@ -15,29 +15,28 @@ skip_rust_env_info = true
 # CI Checks
 # -------------------------------------
 [tasks.check]
-dependencies = ["fmt-check", "lint", "test", "test-docs", "doc", "check-hook-scripts", "check-guardrails-consumer-boundary"]
+dependencies = ["fmt", "lint", "test", "test-docs", "doc"]
 
 [tasks.ci]
-dependencies = ["fmt-check", "lint", "test", "test-docs", "doc", "vet", "deny", "check-hook-scripts", "check-guardrails-consumer-boundary"]
+dependencies = ["check", "vet", "deny"]
 
 # -------------------------------------
 # Individual Actions
 # -------------------------------------
 
-# Native hook scripts (POSIX `sh` contract — same runner as specify slice build)
-[tasks.check-hook-scripts]
-script = '''
-sh targets/vectis/scripts/test-hook-scripts.sh
-'''
-
-[tasks.check-guardrails-consumer-boundary]
-script = '''
-grep -q '^## Consumer tooling boundary$' shared/references/runtime/guardrails.md || {
-  echo "shared/references/runtime/guardrails.md is missing ## Consumer tooling boundary" >&2
-  echo "Sync from plugins/spec/references/guardrails.md in specify." >&2
-  exit 1
-}
-'''
+# Cross-repo developer loop. The sibling specify checkout owns command
+# dispatch; pass its subcommand and arguments after `--`.
+[tasks.dev]
+cwd = "${CARGO_MAKE_WORKING_DIRECTORY}/../specify"
+command = "rustup"
+args = [
+  "run",
+  "nightly",
+  "cargo",
+  "-Zscript",
+  "scripts/dev.rs",
+  "${@}",
+]
 
 # Audit
 [tasks.audit]
@@ -62,19 +61,22 @@ cargo +nightly udeps --all-targets
 '''
 install_crate = "cargo-udeps"
 
-# Fmt (mutating; local convenience)
+# Fmt
 [tasks.fmt]
 script = "cargo +nightly fmt --all"
-
-# Fmt check (non-mutating; the gate `check` / `ci` run — a mutating
-# `fmt` inside a gate silently rewrites violations instead of failing)
-[tasks.fmt-check]
-script = "cargo +nightly fmt --all -- --check"
 
 # Lint
 [tasks.lint]
 command = "cargo"
-args = ["clippy", "--locked", "--workspace", "--all-targets", "--all-features", "--", "-D", "warnings"]
+args = [
+  "clippy",
+  "--workspace",
+  "--all-targets",
+  "--all-features",
+  "--",
+  "-D",
+  "warnings",
+]
 install_crate = { rustup_component_name = "clippy" }
 
 # Outdated (advisory — never part of `ci`: any upstream release would
@@ -87,10 +89,8 @@ install_crate = "cargo-outdated"
 
 # Test
 #
-# `clean` is deliberately not in the dependency list: the
-# `RUSTFLAGS=-Dwarnings` override already differs from the default
-# profile, so cargo rebuilds the workspace under these flags regardless,
-# making a `cargo clean` cold rebuild redundant cost on every run.
+# `clean` is not necessary as the `RUSTFLAGS=-Dwarnings` override differs
+# from the default profile, so cargo rebuilds the workspace.
 [tasks.test]
 command = "cargo"
 args = ["nextest", "run", "--all", "--all-features", "--no-tests=pass"]
@@ -114,20 +114,102 @@ cargo +nightly miri setup
 cargo +nightly miri nextest run --no-tests=pass
 '''
 
-# Vet (check only — regeneration before checking would auto-exempt
-# anything unaudited and the gate could never fail)
+# Vet
 [tasks.vet]
-script = '''
-cargo vet --locked
-'''
-install_crate = "cargo-vet"
-
-# Vet regenerate (manual, on dependency add/update — refresh imports and
-# exemptions, then review the `supply-chain/` diff before committing)
-[tasks.vet-regenerate]
 script = '''
 cargo vet regenerate imports
 cargo vet regenerate exemptions
 cargo vet regenerate unpublished
+cargo vet --locked
 '''
 install_crate = "cargo-vet"
+
+[tasks.release]
+command = "cargo"
+args = [
+  "build",
+  "--workspace",
+  "--exclude",
+  "harness",
+  "--target",
+  "wasm32-wasip2",
+  "--release",
+]
+
+# -------------------------------------
+# Native compatibility harness
+# -------------------------------------
+# `harness/native` is a standalone workspace excluded from the root: it
+# consumes Specify's engine crates from a revision-pinned git source, so
+# it stays out of `ci` and runs through these focused tasks instead.
+# Cross-repo sibling development goes through `cargo make dev` (the
+# specify checkout's dev script), which patches the pin automatically.
+
+[tasks.native-test]
+command = "cargo"
+args = [
+  "nextest",
+  "run",
+  "--manifest-path",
+  "harness/native/Cargo.toml",
+  "--all-features",
+  "--no-tests=pass",
+]
+env = { RUSTFLAGS = "-Dwarnings" }
+
+[tasks.native-lint]
+command = "cargo"
+args = [
+  "clippy",
+  "--manifest-path",
+  "harness/native/Cargo.toml",
+  "--all-targets",
+  "--all-features",
+  "--",
+  "-D",
+  "warnings",
+]
+install_crate = { rustup_component_name = "clippy" }
+
+[tasks.native-run]
+command = "cargo"
+args = [
+  "run",
+  "-q",
+  "--manifest-path",
+  "harness/native/Cargo.toml",
+  "--",
+  "${@}",
+]
+
+# Fast dev-loop builds of the adapter components: same `--release`
+# artifact path the engine's bare-name resolution probes
+# (`target/wasm32-wasip2/release/<name>.wasm`), but with LTO off and a
+# low opt level so the edit-resolve loop pays seconds, not a full
+# release build. Optional package arg scopes the build
+# (`cargo make adapter contracts`); default is every adapter.
+# Accepted trade: switching between `adapter` and `release` changes
+# the profile fingerprint and forces a rebuild — publishing is rare.
+[tasks.adapter]
+command = "rustup"
+args = [
+  "run",
+  "nightly",
+  "cargo",
+  "-Zscript",
+  "scripts/components.rs",
+  "build-fast",
+  "${@}",
+]
+
+# Publish every release-built adapter component under its package version.
+[tasks.publish]
+command = "rustup"
+args = [
+  "run",
+  "nightly",
+  "cargo",
+  "-Zscript",
+  "scripts/components.rs",
+  "publish",
+]

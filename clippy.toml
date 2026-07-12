@@ -1,9 +1,12 @@
 doc-valid-idents = [
   "GitHub",
+  "JavaScript",
+  "KiB",
   "MiB",
   "OAuth",
   "OpenTelemetry",
   "SemVer",
+  "TypeScript",
   "WebAssembly",
   "YAML",
 ]

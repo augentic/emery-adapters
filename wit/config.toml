@@ -1,0 +1,4 @@
+# wkg client config for vendoring the `specify:adapter` WIT.
+# The `specify:` namespace routes to augentic.io.
+[namespace_registries]
+specify = "augentic.io"

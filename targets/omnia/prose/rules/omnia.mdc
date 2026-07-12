@@ -1,0 +1,75 @@
+---
+description: Omnia operation-kernel, provider, transport-router, error, and validation rules for Rust WASM components.
+globs: "**/*.rs"
+alwaysApply: false
+---
+
+# Omnia Rust SDK Patterns
+
+## WASM constraints
+
+1. External I/O uses Omnia provider capabilities; no direct environment, filesystem, network, process, or thread APIs.
+2. Components are stateless. Mutable globals and runtime caches are forbidden.
+3. Public failures converge on classified `omnia_guest::Error` variants.
+4. All operation and provider I/O is async.
+5. Domain concepts use newtypes and enums instead of interchangeable primitives.
+
+## Operation kernel
+
+Use a zero-sized type implementing `omnia_guest::api::operation::Operation<P>`. Inputs are typed DTOs, outputs are plain domain values, and provider bounds name exactly the capabilities used by the operation and its helpers.
+
+```rust
+use omnia_guest::api::invoke::CallContext;
+use omnia_guest::api::operation::Operation;
+use omnia_guest::{Config, Error, HttpRequest, Result};
+
+pub struct FetchItem;
+
+impl<P> Operation<P> for FetchItem
+where
+    P: omnia_guest::api::Provider + Config + HttpRequest,
+{
+    type Input = FetchItemInput;
+    type Output = FetchItemOutput;
+    type Error = Error;
+
+    async fn call(
+        input: Self::Input,
+        context: CallContext<'_, P>,
+    ) -> Result<Self::Output> {
+        validate_structural(&input)?;
+        let settings = load_settings(context.provider).await?;
+        validate_contextual(&input, &settings)?;
+        fetch(context.owner, input, context.provider).await
+    }
+}
+```
+
+Do not parse raw transport bytes in the operation. HTTP and messaging decoders construct `Input`. Do not wrap `Output` in a transport response type.
+
+## Validation placement
+
+- Structural checks are the first work in `Operation::call`: required fields, format, constant ranges, and input-only conversions.
+- Temporal/contextual checks run after loading the required time, config, identity, or persisted state.
+- Never read time or provider state during structural validation. Replay time shifting cannot repair a parse-time clock read.
+
+## Transport routers and projectors
+
+- HTTP uses `omnia_guest::api::http::Router` and typed `get` / `post` registrations. Use `{param}` path syntax.
+- HTTP serialization, status, headers, and error envelopes live in `http::Projector<O, P>`.
+- Messaging uses `omnia_guest::api::messaging::Router`, exact topics, typed decoders, and acknowledgement/retry projectors.
+- Command surfaces use typed `omnia_guest::api::command` routes and command projectors.
+- WebSocket adapters create typed invocations and project their results at the boundary.
+- Missing, malformed, duplicate, or unhandled routes/topics must not silently succeed.
+
+## Explicit exports
+
+Declare each exposed WIT interface explicitly with `wasip3::http::service::export!`, `omnia_wasi_messaging::export!`, `omnia_wasi_websocket::export!`, or `wasip3::cli::command::export!`. Guest implementations only construct provider/invoker/router and delegate.
+
+## Errors and quality
+
+Use `bad_request!`, `server_error!`, and `bad_gateway!`, or a domain error converted to `omnia_guest::Error` with a stable code and useful description. Production paths do not use `unwrap`, `expect`, `println!`, `dbg!`, `unsafe`, blocking I/O, or forbidden crates. Use `anyhow::Context` to retain error chains.
+
+## Provider capabilities
+
+The closed capability set is `Config`, `HttpRequest`, `Publish`, `StateStore`, `Identity`, `TableStore`, `Broadcast`, `BlobStore`, and `DocumentStore`. Preserve the narrow bound union through migration; transport refactoring must not add or remove business capabilities.
