@@ -12,6 +12,8 @@ time. The deployable artifact is the built component — no manifest file, no
 committed wasm. The platform resolves the published component from the
 registry and reads resolve-time facts through the WIT `metadata` operation.
 
+Repository-wide contributor guidance lives in [`AGENTS.md`](AGENTS.md); adapter-local guidance extends it from nested `AGENTS.md` files such as [`targets/vectis/AGENTS.md`](targets/vectis/AGENTS.md).
+
 ## Layout
 
 Every adapter — the three targets and the five sources — shares the same guest anatomy:
