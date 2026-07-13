@@ -74,11 +74,11 @@ Adapter prompts are markdown documents compiled into the guest and driven by the
 The local gate mirrors CI — run it from the repo root:
 
 ```bash
-cargo make check   # fmt-check + clippy + nextest + doctests + doc
+cargo make check   # fmt + clippy + nextest + doctests + doc
 cargo make ci      # the full gate — adds cargo-vet + cargo-deny
 ```
 
-The `fmt-check` arm uses nightly `rustfmt`, while component development and publishing use nightly Cargo Script. Install a nightly toolchain plus the `cargo-make`, `cargo-nextest`, `cargo-deny`, and `cargo-vet` tools; the tasks are defined in `Makefile.toml`.
+The `fmt` arm uses nightly `rustfmt`, while component development and publishing use nightly Cargo Script. Install a nightly toolchain plus the `cargo-make`, `cargo-nextest`, `cargo-deny`, and `cargo-vet` tools; the tasks are defined in `Makefile.toml`.
 
 Release-build every adapter for wasm32-wasip2 (components land
 at `target/wasm32-wasip2/release/<name>.wasm`):

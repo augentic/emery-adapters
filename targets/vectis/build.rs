@@ -154,7 +154,7 @@ fn emit_assembly(
     out: &mut String, assembly: &str, spec: &AssemblySpec, templates_root: &Path,
 ) -> Result<(), String> {
     // Generated in-tree on every build: exempt from rustfmt so a long
-    // `include_str!` path cannot flip `fmt-check` after a rebuild.
+    // `include_str!` path cannot flip `fmt` after a rebuild.
     out.push_str("#[rustfmt::skip]\n");
     let _ = writeln!(out, "pub mod {assembly} {{");
     if spec.files.iter().any(|entry| entry.include_when.is_some()) {
