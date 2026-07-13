@@ -30,7 +30,7 @@ Adapter `prose/` trees are compiled into their components:
 
 - Parent prompts orchestrate an operation and load phase prompts by relative link. Keep them below roughly 150 non-blank lines.
 - Phase prompts carry one operational phase. Prefer splitting or moving depth into references before approaching the 800-line hard cap.
-- References are linked, not inlined. The embed-time walker follows symlinks and fails on dangling relative links.
+- References are linked, not inlined. The embed-time walker includes Markdown documents and follows symlinks; keep relative links resolvable.
 - Engineering standards are Markdown rules under `codex/rules/` and adapter-local `prose/rules/` overlays. Preserve stable rule IDs and namespace ownership.
 - Contributor guidance belongs in `AGENTS.md`, not in the embedded engineering-rule corpus.
 
