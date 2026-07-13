@@ -42,7 +42,7 @@ interface types {
   /// backend). Portable: it names a build's starting point independently of
   /// which node the working tree lives on. With today's shared mounts it
   /// names the state of the one live project tree; it is the forward hook
-  /// for distributed working trees (RFC-55, deferred).
+  /// for distributed working trees (deferred).
   type revision = string;
 }
 
@@ -139,7 +139,7 @@ interface source {
     claims: list<claim>,
   }
 
-  /// The adapter's deterministic metadata (RFC-64) — the facts
+  /// The adapter's deterministic metadata — the facts
   /// the host consumes before dispatching an operation. Identity lives
   /// in the wasm-pkg package reference and axis in the exported world,
   /// so only the compatibility floor remains on the record.
@@ -310,7 +310,7 @@ interface target {
     default: list<platform>,
   }
 
-  /// The adapter's deterministic metadata (RFC-64) — the facts
+  /// The adapter's deterministic metadata — the facts
   /// the host consumes before dispatching an operation. Identity lives
   /// in the wasm-pkg package reference and axis in the exported world;
   /// the record carries the compatibility floor plus the target's
