@@ -102,6 +102,17 @@ impl<M: Send + Sync> Resolver for Provider<M> {
     }
 }
 
+impl<M: Send + Sync> workflow::adapter::Hydrator for Provider<M> {
+    async fn fetch(&self, url: &str) -> Result<Vec<u8>, Error> {
+        Err(Error::Diag {
+            code: "adapter-hydrate-unavailable",
+            detail: format!(
+                "the native harness links adapters directly and fetches nothing (requested {url})"
+            ),
+        })
+    }
+}
+
 impl<M: Model> Model for Provider<M> {
     async fn create(&self, request: Request) -> Result<Reply, omnia_guest::model::Error> {
         self.model.create(request).await

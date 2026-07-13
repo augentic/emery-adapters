@@ -2,7 +2,7 @@
 
 This directory is the single **spec-runtime bundle**: the canonical copy of the runtime references each adapter ships. Each source and target adapter exposes it as `references/spec-runtime/` via a single directory symlink (`{sources,targets}/<name>/prose/references/spec-runtime -> ../../../../codex/references/runtime`), so adapter prompts can link with `../references/spec-runtime/...` without escaping the adapter tree. The `prose` crate's build-time embed dereferences the symlinks when it bakes the bundle into each published component, so consumers receive self-contained regular files.
 
-**Relationship to `augentic/specify`:** the engine's core judgment prose (reconciliation and synthesis playbooks, spec formatting, tags, Decision Record authoring) is embedded in the `workflow` crate's prompt corpus (`crates/workflow/prompts/`) and is not mirrored here. This bundle carries only the *adapter-facing boundary* references — the vocabulary and contracts an adapter prompt needs to align with the engine without depending on the engine repo's `docs/` tree at runtime. There is no hand-maintained cross-repo parity table.
+**Relationship to `augentic/specify`:** the engine's core judgment prose (reconciliation and synthesis playbooks, spec formatting, tags, Decision Record authoring) is embedded in the workflow crates' prompt corpora (`crates/slice/prompts/` and `crates/change/prompts/`) and is not mirrored here. This bundle carries only the *adapter-facing boundary* references — the vocabulary and contracts an adapter prompt needs to align with the engine without depending on the engine repo's `docs/` tree at runtime. There is no hand-maintained cross-repo parity table.
 
 The bundle:
 

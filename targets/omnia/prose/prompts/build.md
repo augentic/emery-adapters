@@ -82,7 +82,7 @@ A build failure surfaces a stop hint as the body's final output — a single str
 - `log-path` — absolute path to the captured stdout/stderr.
 - `next-action` — typically `re-run /spec:build $SLICE after fix`.
 
-Render the hint as the final visible output of the run, alongside the `status: failure` build report (see `## Build report`). Never call `specify slice transition` — the deterministic in-guest report gate checks the answer and the workflow guest owns the lifecycle, so the slice stays `refined` and the loop (or a re-invocation) re-enters cleanly.
+Render the hint as the final visible output of the run, alongside the `status: failure` build report (see `## Build report`). Never write the lifecycle yourself — the deterministic in-guest report gate checks the answer and the workflow guest owns the lifecycle, so the slice stays `refined` and the loop (or a re-invocation) re-enters cleanly.
 
 ## § Standards review surface
 

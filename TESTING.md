@@ -28,7 +28,7 @@ cargo make native-test
 cargo make native-lint
 ```
 
-For sibling co-development against uncommitted engine changes, override the pin locally with hand-supplied `--config` path patches (`cargo nextest run --manifest-path harness/native/Cargo.toml --config 'patch."https://github.com/augentic/specify".workflow.path="../specify/crates/workflow"' …`); never commit path patches or the patched lockfile.
+For sibling co-development against uncommitted engine changes, override the pin locally with hand-supplied `--config` path patches (`cargo nextest run --manifest-path harness/native/Cargo.toml --config 'patch."https://github.com/augentic/specify".project.path="../specify/crates/project"' …`, repeated per engine crate the harness links — `project`, `slice`, `change`, `transport`, …); never commit path patches or the patched lockfile.
 
 ### 3. Composed-deployment tests — model-free component checks
 

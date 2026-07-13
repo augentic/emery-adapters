@@ -30,7 +30,7 @@ This matches the current synthesis posture on `[conflict]` and `[divergence]` ta
 
 ### Recorder: journal event
 
-Emit `slice.replay.completed` (`workflow::journal::EventKind::SliceReplayCompleted` in `augentic/specify`) via `specify journal emit slice.replay.completed --payload <json>`. Payload shape: [`journal-payload.md`](journal-payload.md).
+Emit `slice.replay.completed` (`project::journal::EventKind::SliceReplayCompleted` in `augentic/specify`) via `specify journal emit slice.replay.completed --payload <json>`. Payload shape: [`journal-payload.md`](journal-payload.md).
 
 The implementing target's runner prompt supplies the `runner` string (e.g. `omnia-target@1 (cargo nextest)`).
 
