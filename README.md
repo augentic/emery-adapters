@@ -59,7 +59,15 @@ declared build `inputs[]` and platforms capability are compiled into the
 
 Crux shell-detection heuristics live in `targets/vectis/src/shell.rs`.
 
-## Building the guests
+## Prompt authoring
+
+Adapter prompts are markdown documents compiled into the guest and driven by the engine's orchestrations. They are not skills: no YAML frontmatter, no discovery metadata. Two roles, one discipline:
+
+- **Parent prompts** (`prose/prompts/{guidance,build,merge}.md` for targets, `prose/prompts/{survey,extract}.md` for sources) orchestrate — bindings, mode dispatch, phase order, the stop-hint contract — and load phase sub-prompts by relative-link instruction. Cap ~150 non-blank lines; orchestration that needs more means a sub-prompt is missing.
+- **Phase sub-prompts** (`prose/prompts/build/<phase>.md`, or `build/<platform>/<phase>.md` for per-platform targets) carry one phase's operational body. Soft cap ~500 non-blank lines, hard cap 800 — above that, split into sub-phase prompts or move material to `prose/references/`.
+- **References are cited via relative markdown links, never inlined** — the `prose` crate's build-time embed link-checks the tree, so a dangling reference fails the build. Worked examples live under `prose/references/examples/<flavour>/` (exempt from prompt caps).
+
+
 
 The local gate mirrors CI — run it from the repo root:
 

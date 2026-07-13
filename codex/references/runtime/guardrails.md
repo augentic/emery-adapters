@@ -1,6 +1,6 @@
 # Shared guardrails
 
-Cross-cutting "do not / never / always" rules that apply across many skills. Skills should **link** to the relevant section here rather than restating these rules verbatim in their `SKILL.md` body. Contributor house style for skill bodies lives in the published [Skill authoring guide](https://specify.augentic.io/standards/skill-authoring.html).
+Cross-cutting "do not / never / always" rules that apply across many adapter prompts. Prompts should **link** to the relevant section here rather than restating these rules verbatim.
 
 Per-skill guardrails — rules that only make sense for one skill ("never auto-promote a `component:` slug", "never invent cost figures", etc.) — stay in the owning `SKILL.md`. Lift to this file only when 3+ skills repeat the same rule.
 
