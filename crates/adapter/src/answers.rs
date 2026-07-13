@@ -1,14 +1,13 @@
 //! Judgment-answer schemas and deserialization.
 //!
 //! Every judgment leg is gated by `format: schema(...)`, so the host
-//! validates the reply against the derived answer schema before the guest
-//! sees it. This module carries the three vendored schema pins
-//! (`schemas/answers/{leads,evidence,report}.schema.json`) and the
-//! matching parse functions. The source-axis answers also get
-//! deterministic validation tails ([`validate_leads`] /
-//! [`validate_evidence`]) re-checking the id grammar the schemas pin, so
-//! a misconfigured host gate cannot leak a malformed answer into the
-//! workflow.
+//! validates the reply against the generated answer schema before the
+//! guest sees it. This module carries the three vendored schema pins
+//! (`schemas/answers/{leads,evidence,report}.schema.json`, generated
+//! upstream from the Rust wire types) and the matching parse functions.
+//! The source-axis answers also get deterministic validation tails
+//! ([`validate_leads`] / [`validate_evidence`]) enforcing the id
+//! grammars the generated schemas intentionally leave open.
 
 use serde::Deserialize;
 
@@ -53,10 +52,12 @@ pub fn parse_evidence(answer: &str) -> Result<Evidence, serde_json::Error> {
     serde_json::from_str(answer)
 }
 
-/// Lead-id pattern (`leads.schema.json` `$defs.kebabName`).
+/// Lead-id kebab grammar, enforced deterministically (the generated
+/// answer schema leaves lead ids as plain strings).
 const KEBAB_PATTERN: &str = "^[a-z0-9]+(-[a-z0-9]+)*$";
 
-/// Claim-id pattern (`evidence.schema.json` `$defs.claim.properties.id`).
+/// Claim-id dotted-kebab grammar, enforced deterministically (the
+/// generated answer schema leaves claim ids as plain strings).
 const DOTTED_KEBAB_PATTERN: &str = "^[a-z0-9]+(-[a-z0-9]+)*(\\.[a-z0-9]+(-[a-z0-9]+)*)*$";
 
 fn is_kebab(value: &str) -> bool {
@@ -81,7 +82,7 @@ fn enforce(operation: &str, findings: &[String]) -> Result<(), Error> {
 }
 
 /// Re-check a `survey` answer after the host gate: every lead id must
-/// match the schema's kebab-case pattern and every synopsis must carry
+/// match the kebab-case grammar and every synopsis must carry
 /// content.
 ///
 /// # Errors
@@ -102,7 +103,7 @@ pub fn validate_leads(leads: &[Lead]) -> Result<(), Error> {
 }
 
 /// Re-check an `extract` answer after the host gate: claim ids must match
-/// the schema's dotted-kebab pattern, and `requirement` / `criterion` /
+/// the dotted-kebab grammar, and `requirement` / `criterion` /
 /// `example` claims must carry one.
 ///
 /// # Errors

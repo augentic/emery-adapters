@@ -1,31 +1,14 @@
 # Replay payload shapes
 
-Closed wire shapes for the build-time `replay` hook. Recording rules and merge posture live in [`hook-contract.md`](hook-contract.md).
+Closed shapes for the build-time `replay` hook. Recording rules and merge posture live in [`hook-contract.md`](hook-contract.md).
 
-## Journal event (the recorder)
+## No journal event
 
-Emit via `specify journal emit slice.replay.completed --payload <json>`:
-
-| Field | Value |
-|---|---|
-| Event kind | `slice.replay.completed` |
-| Rust enum | `EventKind::SliceReplayCompleted` |
-| Payload keys | `passed`, `failed`, `skipped`, `runner` |
-
-Example NDJSON line (illustrative):
-
-```json
-{"event":"slice.replay.completed","passed":47,"failed":0,"skipped":2,"runner":"omnia-target@1 (cargo nextest)"}
-```
-
-- **`passed`** / **`failed`** / **`skipped`** — non-negative integers from the target runner's test classification.
-- **`runner`** — identifies the target adapter version and command (e.g. `omnia-target@1 (cargo nextest)`, `contracts-target@1 (in-guest contract validator)`).
-
-Taxonomy reference: [`DECISIONS.md` — journal events](https://github.com/augentic/specify/blob/main/DECISIONS.md).
+Specify core does **not** define a `slice.replay.completed` journal event. Replay results are advisory in the build transcript only — classify `passed` / `failed` / `skipped` there and stop. Do not call `specify journal emit` for replay.
 
 ## Aspirational `metadata.yaml` block (future CLI)
 
-The capture-backed replay workflow defines an additive block targets MAY write to `$SLICE_DIR/metadata.yaml` once a CLI-owned surface lands. **Agents must not hand-edit this block** — journal-only recording until then.
+The capture-backed replay workflow defines an additive block targets MAY write to `$SLICE_DIR/metadata.yaml` once a CLI-owned surface lands. **Agents must not hand-edit this block** — there is no core recorder until then.
 
 ```yaml
 replay:
@@ -45,5 +28,5 @@ The block is additive; it must not reshape other `metadata.yaml` fields. `/spec:
 
 ## See also
 
-- [`hook-contract.md`](hook-contract.md) — when to emit, advisory posture, merge rules
-- [`../../../targets/omnia/prose/prompts/build/replay.md`](../../../targets/omnia/prose/prompts/build/replay.md) — Omnia runner that produces these payloads
+- [`hook-contract.md`](hook-contract.md) — when to run, advisory posture, merge rules
+- [`../../../targets/omnia/prose/prompts/build/replay.md`](../../../targets/omnia/prose/prompts/build/replay.md) — Omnia runner

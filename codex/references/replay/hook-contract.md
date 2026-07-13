@@ -4,7 +4,7 @@ Target-agnostic rules for the optional build-time `replay` hook (the capture-bac
 
 ## When to run
 
-The hook is **OPTIONAL**. Run it only when the slice's `plan.yaml.sources[]` list carries a `captures` binding. Targets that skip the step produce no `replay` surface and emit no replay journal event; **omission is not an error**.
+The hook is **OPTIONAL**. Run it only when the slice's `plan.yaml.sources[]` list carries a `captures` binding. Targets that skip the step produce no `replay` surface; **omission is not an error**.
 
 ## Preconditions
 
@@ -22,23 +22,23 @@ Replay failures are **advisory**:
 
 - A non-zero `failed` count does **not** park the build.
 - The slice still transitions to `built`.
-- The operator inspects replay results at merge time via the journal event.
+- Results are for the operator / agent to inspect in the build transcript; there is **no** core journal or metadata recorder for replay counts in v1.
 
-This matches the current synthesis posture on `[conflict]` and `[divergence]` tags — review signals, not automatic gates. Stricter posture belongs in a custom target adapter fork, CI policy on journal events, or a future core contract.
+This matches the current synthesis posture on `[conflict]` and `[divergence]` tags — review signals, not automatic gates. Stricter posture belongs in a custom target adapter fork, CI policy on build transcripts, or a future core contract.
 
 ## Recording results
 
-### Recorder: journal event
+### No core recorder
 
-Emit `slice.replay.completed` (`project::journal::EventKind::SliceReplayCompleted` in `augentic/specify`) via `specify journal emit slice.replay.completed --payload <json>`. Payload shape: [`journal-payload.md`](journal-payload.md).
+Specify core does **not** record replay pass/fail/skipped counts. Do **not** emit a journal event for replay, and do **not** hand-edit `metadata.yaml`.
 
-The implementing target's runner prompt supplies the `runner` string (e.g. `omnia-target@1 (cargo nextest)`).
+Classify results in the build transcript (passed / failed / skipped) so the operator can review them. That is the full v1 recording surface.
 
 ### Do not hand-edit `metadata.yaml`
 
 Agents must not write slice metadata by hand. The phase contract has no `slice outcome set` CLI surface — see [`phase-outcome-contract.md`](../runtime/phase-outcome-contract.md).
 
-A future CLI surface may persist a `replay:` block to `$SLICE_DIR/metadata.yaml`. Until that lands, the journal event is the sole supported recorder. The aspirational block shape lives in [`journal-payload.md`](journal-payload.md).
+A future CLI surface may persist a `replay:` block to `$SLICE_DIR/metadata.yaml`. Until that lands, replay results stay advisory in the build transcript only. The aspirational block shape lives in [`journal-payload.md`](journal-payload.md).
 
 ## Merge posture
 
@@ -50,7 +50,7 @@ replay: <passed> passed, <failed> failed, <skipped> skipped
 
 Rules:
 
-- **Missing block** → omit the line; absence is not an error.
+- **Missing block** → omit the line; absence is not an error (the normal v1 case).
 - **`failed > 0`** → `merge` does **not** auto-refuse; the operator decides whether to land.
 
 Capture the block before archival if present — `specify slice merge` moves the slice directory.
@@ -58,5 +58,5 @@ Capture the block before archival if present — `specify slice merge` moves the
 ## See also
 
 - [`README.md`](README.md) — target adoption table
-- [`journal-payload.md`](journal-payload.md) — closed payload shapes
+- [`journal-payload.md`](journal-payload.md) — aspirational `metadata.yaml` shape
 - [`../../../targets/omnia/prose/prompts/build/replay.md`](../../../targets/omnia/prose/prompts/build/replay.md) — Omnia runner (reference implementation)

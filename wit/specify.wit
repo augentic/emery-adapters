@@ -9,13 +9,13 @@
 /// `format: schema(...)` so the host gate validates the answer before the
 /// guest deserializes it into the records below.
 ///
-/// The answer schemas are not hand-written: they derive from the embedded
-/// canonical schemas (`schemas/discovery/lead.schema.json`,
-/// `schemas/evidence.schema.json`, `schemas/target/build-report.schema.json`)
-/// as the generated documents under `schemas/answers/`, and the records below
-/// mirror what those schemas carry minus call-scoped envelope fields (the
-/// surveyed source, the extracted lead, the built slice and target) that the
-/// caller already knows.
+/// The answer schemas are not hand-written: upstream `augentic/specify`
+/// generates them from the Rust wire types that deserialize each answer
+/// (`project::answers`), and this repo vendors the documents under
+/// `crates/adapter/schemas/answers/`. The records below mirror what those
+/// types carry minus call-scoped envelope fields (the surveyed source, the
+/// extracted lead, the built slice and target) that the caller already
+/// knows.
 ///
 /// No resource types cross the guest-to-guest seam: Omnia's host-mediated
 /// dispatch carries plain values only, routed by each call's `adapter-id`

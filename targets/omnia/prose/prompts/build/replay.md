@@ -4,7 +4,7 @@ Loaded by [../build.md](../build.md) phase 7 when the slice's `plan.yaml.sources
 
 ## Shared contract
 
-Read [`../../../../codex/references/replay/hook-contract.md`](../../../../../codex/references/replay/hook-contract.md) first — skip rules, generic preconditions, advisory posture, journal recording, merge summary, and the ban on hand-editing `metadata.yaml`. Payload shapes: [`../../../../codex/references/replay/journal-payload.md`](../../../../../codex/references/replay/journal-payload.md).
+Read [`../../../../codex/references/replay/hook-contract.md`](../../../../../codex/references/replay/hook-contract.md) first — skip rules, generic preconditions, advisory posture, no core recorder, merge summary, and the ban on hand-editing `metadata.yaml`. Aspirational payload shapes: [`../../../../codex/references/replay/journal-payload.md`](../../../../../codex/references/replay/journal-payload.md).
 
 ## Omnia preconditions
 
@@ -27,9 +27,7 @@ Capture wire format: [`captures/references/capture-format.md`](../../../../../so
 
    Fall back to `cargo test` when nextest is unavailable. The operator's `captures` binding may point at a different root than the crate copy — replay always runs against `$CRATE_PATH/tests/data/replays/`.
 
-3. **Classify results** per the shared contract (advisory in v1).
-
-4. **Record the journal event** per [`journal-payload.md`](../../../../../codex/references/replay/journal-payload.md) with `runner: omnia-target@1 (cargo nextest)` (adjust version suffix to match the resolved Omnia target adapter version when known).
+3. **Classify results** in the build transcript (passed / failed / skipped) per the shared contract (advisory in v1). Do **not** emit a journal event and do **not** hand-edit `metadata.yaml`.
 
 ## References
 
