@@ -21,12 +21,9 @@
 //!   directory's `*.md` files become the typed inputs, mapped by file stem
 //!   (`proposal` / `design` / `tasks` / `spec*`; anything else rides as
 //!   `other`); prints the report as one JSON line.
-//! - `merge <adapter-id> <slice> <inputs-dir>` — target merge; reads the
-//!   build delta from `<inputs-dir>/changeset.json`, an object mirroring
-//!   the WIT `changeset` record (string `base`, `edits` array of
-//!   `{"path": …, "content": …}` objects where an absent or `null`
-//!   `content` is a deletion and a present one is a content-addressed
-//!   artifact handle); prints the report as one JSON line.
+//! - `merge <adapter-id> <slice> <phase>` — one target merge gate;
+//!   `phase` is `preflight` or `postflight`, mirroring the WIT
+//!   `merge-phase` enum; prints the report as one JSON line.
 //!
 //! Every operation prints its typed answer as one JSON line on stdout with
 //! kebab-case keys mirroring the WIT records, and carries its outcome in
@@ -59,8 +56,7 @@ mod generated {
 }
 
 use generated::specify::adapter::source::{self, Backing, Evidence, Lead};
-use generated::specify::adapter::target::{self, Input, Report, Status, WorkingTree};
-use generated::specify::adapter::types::{Changeset, Edit};
+use generated::specify::adapter::target::{self, Input, MergePhase, Report, Status, WorkingTree};
 use serde_json::{Value, json};
 
 struct CliGuest;
@@ -80,9 +76,7 @@ impl wasip3::exports::cli::run::Guest for CliGuest {
             ("build", [adapter_id, slice, inputs_dir]) => {
                 build(adapter_id, slice, inputs_dir).await
             }
-            ("merge", [adapter_id, slice, inputs_dir]) => {
-                merge(adapter_id, slice, inputs_dir).await
-            }
+            ("merge", [adapter_id, slice, phase]) => merge(adapter_id, slice, phase).await,
             _ => {
                 usage(&args);
                 Err(())
@@ -100,7 +94,7 @@ fn usage(args: &[String]) {
          \x20 extract  <adapter-id> <inputs-dir>          reads <inputs-dir>/lead.json\n\
          \x20 guidance <adapter-id>\n\
          \x20 build    <adapter-id> <slice> <inputs-dir>\n\
-         \x20 merge    <adapter-id> <slice> <inputs-dir>  reads <inputs-dir>/changeset.json"
+         \x20 merge    <adapter-id> <slice> <phase>       phase: preflight | postflight"
     );
 }
 
@@ -149,14 +143,20 @@ async fn build(adapter_id: &str, slice: &str, inputs_dir: &str) -> Result<(), ()
     conclude(&report)
 }
 
-/// Drive one target `merge` over the changeset read from
-/// `<inputs-dir>/changeset.json`; print the report as one JSON line and
-/// carry its status in the exit.
-async fn merge(adapter_id: &str, slice: &str, inputs_dir: &str) -> Result<(), ()> {
-    let delta = read_changeset(inputs_dir)?;
-    eprintln!("eval: merging `{slice}` via `{adapter_id}` with {} edits", delta.edits.len());
+/// Drive one target merge gate for the named phase; print the report as
+/// one JSON line and carry its status in the exit.
+async fn merge(adapter_id: &str, slice: &str, phase: &str) -> Result<(), ()> {
+    let phase = match phase {
+        "preflight" => MergePhase::Preflight,
+        "postflight" => MergePhase::Postflight,
+        other => {
+            eprintln!("merge phase must be `preflight` or `postflight`; got `{other}`");
+            return Err(());
+        }
+    };
+    eprintln!("eval: merging `{slice}` via `{adapter_id}` ({phase:?})");
 
-    let report = target::merge(adapter_id.to_owned(), slice.to_owned(), delta, eval_tree()).await;
+    let report = target::merge(adapter_id.to_owned(), slice.to_owned(), phase, eval_tree()).await;
     let report = report.map_err(|error| {
         eprintln!("merge failed: {error:?}");
     })?;
@@ -229,38 +229,6 @@ fn parse_lead(value: &Value) -> Option<Lead> {
             None | Some(Value::Null) => Vec::new(),
             Some(topics) => strings(topics)?,
         },
-    })
-}
-
-/// Read and parse `<dir>/changeset.json` into the seam `changeset` record.
-fn read_changeset(dir: &str) -> Result<Changeset, ()> {
-    let value = read_json(&format!("{dir}/changeset.json"))?;
-    parse_changeset(&value).ok_or_else(|| {
-        eprintln!(
-            "changeset.json must mirror the `changeset` record: string `base`, `edits` \
-             array of {{\"path\", \"content\"?}} objects (string or null `content`)"
-        );
-    })
-}
-
-fn parse_changeset(value: &Value) -> Option<Changeset> {
-    let edits = value
-        .get("edits")?
-        .as_array()?
-        .iter()
-        .map(|edit| {
-            Some(Edit {
-                path: edit.get("path")?.as_str()?.to_owned(),
-                content: match edit.get("content") {
-                    None | Some(Value::Null) => None,
-                    Some(content) => Some(content.as_str()?.to_owned()),
-                },
-            })
-        })
-        .collect::<Option<Vec<_>>>()?;
-    Some(Changeset {
-        base: value.get("base")?.as_str()?.to_owned(),
-        edits,
     })
 }
 

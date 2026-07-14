@@ -56,9 +56,7 @@ pub async fn drive(sandbox: &Path) -> Result<Vec<(String, StepResult)>> {
     let mut steps = Vec::new();
     // The clerical seed the scenario presumes: a scaffolded project
     // bound to the omnia target through the linked-crate catalog.
-    let init = ["specify", "init", "omnia", "--name", "demo", "--scaffold-only"]
-        .map(str::to_owned)
-        .to_vec();
+    let init = ["specify", "init", "omnia", "--name", "demo"].map(str::to_owned).to_vec();
     if !execute(&router, "init", init, &mut steps).await {
         return Ok(steps);
     }

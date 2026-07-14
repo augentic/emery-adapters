@@ -5,7 +5,7 @@
 use std::path::Path;
 
 use adapter::answers::REPORT_ANSWER_SCHEMA;
-use adapter::seam::{Changeset, Context, Edit, Input, Severity, Status, WorkingTree};
+use adapter::seam::{Context, Input, MergePhase, Severity, Status, WorkingTree};
 use adapter::{Format, Request};
 use omnia::operations::{build, merge};
 use omnia_testkit::model::{Harness, mcp_grants};
@@ -91,33 +91,35 @@ async fn build_phase_legs() {
 }
 
 #[tokio::test]
-async fn merge_single_leg() {
+async fn merge_preflight_single_leg() {
     let tmp = TempDir::new().unwrap();
     let model = Harness::answering([SUCCESS_REPORT]);
-    let delta = Changeset {
-        base: "rev-1".to_string(),
-        edits: vec![
-            Edit {
-                path: "crates/demo/src/lib.rs".to_string(),
-                content: Some("pub fn demo() {}".to_string()),
-            },
-            Edit {
-                path: "crates/demo/old.rs".to_string(),
-                content: None,
-            },
-        ],
-    };
 
-    let report = merge(&model, &ctx(tmp.path(), None), "demo", &delta, &tree()).await.unwrap();
+    let report = merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
+        .await
+        .unwrap();
 
     assert_eq!(report.status, Status::Success);
     let requests = model.requests();
     assert_eq!(requests.len(), 1, "a coherent report needs no repair leg");
     assert!(requests[0].system.as_deref().unwrap().contains("# Omnia target — merge prompt"));
     let user = &requests[0].messages[0].content;
+    assert!(user.contains("preflight merge gate"), "phase named");
     assert!(user.contains("pre-merge gate"), "agent-run cargo verification instructed");
-    assert!(user.contains("crates/demo/old.rs (deleted)"), "delta rendered");
-    assert!(user.contains("base `rev-1`"), "delta base named");
+}
+
+#[tokio::test]
+async fn merge_postflight_deterministic() {
+    let tmp = TempDir::new().unwrap();
+    let model = Harness::answering::<&str>([]);
+
+    let report = merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Postflight, &tree())
+        .await
+        .unwrap();
+
+    assert_eq!(report.status, Status::Success);
+    assert!(report.findings.is_empty());
+    assert!(model.requests().is_empty(), "omnia declares no postflight validator: no leg");
 }
 
 #[tokio::test]
@@ -126,12 +128,10 @@ async fn merge_diagnostics() {
     let model = Harness::answering([
         r#"{"status":"failure","findings":[{"rule-id":"OMNIA-002","title":"Forbidden std API","severity":"critical","impact":"The wasm32 build breaks.","remediation":"Route through the provider trait."}]}"#,
     ]);
-    let delta = Changeset {
-        base: "rev-1".to_string(),
-        edits: vec![],
-    };
 
-    let report = merge(&model, &ctx(tmp.path(), None), "demo", &delta, &tree()).await.unwrap();
+    let report = merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
+        .await
+        .unwrap();
 
     assert_eq!(report.status, Status::Failure);
     let finding = &report.findings[0];

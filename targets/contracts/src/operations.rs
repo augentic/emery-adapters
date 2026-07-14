@@ -10,7 +10,7 @@
 use std::path::Path;
 
 use adapter::seam::{
-    BuildInput, Changeset, Context, Error, Finding, Input, Report, Severity, TargetMetadata,
+    BuildInput, Context, Error, Finding, Input, MergePhase, Report, Severity, TargetMetadata,
     WorkingTree,
 };
 use adapter::{Model, phase};
@@ -149,42 +149,43 @@ pub async fn build<P: Model>(
     Ok(enforce_validators(report, &validate_baseline(&slice_contracts)))
 }
 
-/// Merge a built slice's delta into the baseline `contracts/` tree.
+/// Run one merge gate around the engine's deterministic promotion of
+/// the slice's `contracts/` delta into the baseline tree.
 ///
-/// One judgment leg folds the delta and answers with the report, then
-/// the post-merge validator gate runs with one bounded repair leg.
-/// Merge gets one repair leg where build gets two: the delta was
-/// already validated at build time, so post-merge findings are
-/// collision-shaped (`id-unique` against the baseline) and either one
-/// pass clears them or the slice needs human review.
+/// `preflight` is fully deterministic: the contract validators run over
+/// the staged slice delta, and blocking findings park the merge with
+/// the slice still `built` — no judgment leg. `postflight` runs the
+/// validators over the now-merged `contracts/` baseline; findings get
+/// one bounded repair judgment leg (post-merge findings are
+/// collision-shaped — `id-unique` against the baseline — so either one
+/// pass clears them or the slice needs human review), and residual
+/// findings force `status: failure`.
 ///
 /// # Errors
 ///
 /// As [`adapter::judgment`].
 pub async fn merge<P: Model>(
-    model: &P, ctx: &Context<'_>, slice: &str, delta: &Changeset, tree: &WorkingTree,
+    model: &P, ctx: &Context<'_>, slice: &str, phase: MergePhase, tree: &WorkingTree,
 ) -> Result<Report, Error> {
+    if phase == MergePhase::Preflight {
+        let staged = ctx.tree_root(tree).join(format!(".specify/slices/{slice}/contracts"));
+        return Ok(enforce_validators(Report::success(), &validate_baseline(&staged)));
+    }
+
     let baseline = ctx.tree_root(tree).join("contracts");
     let merge_prompt = registry::body("prompts/merge.md");
-    let delta_block = phase::render_delta(delta);
 
-    let user = format!(
-        "Merge slice `{slice}`'s built contract delta into the baseline `contracts/` \
-         tree (adapter `{}`). The project workspace is lent to you; the delta below \
-         applies against base `{}` (a 3-way merge: the baseline is ours, the delta is \
-         theirs). Fold the changes in place, resolving conflicts per the merge prompt, \
-         then answer with the report body.\n\n{delta_block}",
-        ctx.adapter_id, delta.base,
-    );
-    let mut report = phase::report(model, ctx, merge_prompt.to_string(), user).await?;
-
-    // Post-merge validator gate with one bounded repair leg.
+    // Post-merge validator gate with one bounded repair leg; a clean
+    // baseline answers deterministically without a judgment leg.
+    let mut report = Report::success();
     let mut findings = validate_baseline(&baseline);
     if !findings.is_empty() {
         let user = format!(
-            "The post-merge contract validators found blocking issues in the merged \
-             `contracts/` baseline. Repair the files in place, then answer with the \
-             corrected report body.\n\n{}",
+            "The postflight contract validators found blocking issues in the merged \
+             `contracts/` baseline (slice `{slice}`, adapter `{}`). The engine has \
+             already promoted the slice's delta and archived the slice. Repair the \
+             baseline files in place, then answer with the corrected report body.\n\n{}",
+            ctx.adapter_id,
             render_validator_findings(&findings),
         );
         report = phase::report(model, ctx, merge_prompt.to_string(), user).await?;

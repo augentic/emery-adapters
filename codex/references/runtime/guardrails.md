@@ -1,6 +1,6 @@
 # Shared guardrails
 
-Cross-cutting "do not / never / always" rules that apply across many skills. Skills should **link** to the relevant section here rather than restating these rules verbatim in their `SKILL.md` body. Contributor house style for skill bodies lives in the published [Skill authoring guide](https://specify.augentic.io/standards/skill-authoring.html).
+Cross-cutting "do not / never / always" rules that apply across many adapter prompts. Prompts should **link** to the relevant section here rather than restating these rules verbatim.
 
 Per-skill guardrails — rules that only make sense for one skill ("never auto-promote a `component:` slug", "never invent cost figures", etc.) — stay in the owning `SKILL.md`. Lift to this file only when 3+ skills repeat the same rule.
 
@@ -9,8 +9,8 @@ Per-skill guardrails — rules that only make sense for one skill ("never auto-p
 The CLI is the **only** writer for change and slice lifecycle state. Skills route every write through a CLI verb; they never edit the underlying files by hand.
 
 - **Never hand-edit `plan.yaml`.** Append entries through `specify plan add`; transition entries through `specify plan transition`; close out the plan through `specify plan archive`. The single-writer contract lives in the [`plan` skill](https://specify.augentic.io/reference/change-skills/plan.html).
-- **Never hand-edit `.specify/slices/<name>/metadata.yaml`.** Status transitions and timestamp writes go through `specify slice transition`. The CLI enforces the legal lifecycle edges — skills do not need to track them.
-- **Never hand-edit `.specify/archive/`.** Archive moves are atomic operations performed by `specify slice merge`, `specify slice transition <name> dropped`, and `specify plan archive`.
+- **Never hand-edit `.specify/slices/<name>/metadata.yaml`.** Status transitions and timestamp writes are owned by the guest orchestrations (`specify slice refine` / `build` / `merge` / `drop`). The CLI enforces the legal lifecycle edges — skills do not need to track them.
+- **Never hand-edit `.specify/archive/`.** Archive moves are atomic operations performed by `specify slice merge`, `specify slice drop`, and `specify plan archive`.
 - **Never hand-roll `AGENTS.md` during init.** `specify init` generates it when absent, preserves an existing root `AGENTS.md`, and writes `.specify/context.lock` as the generation fingerprint.
 
 ## Baseline immutability for contract authoring

@@ -9,9 +9,15 @@
 //!   wasm default body performs — and translate `lend_workspace: true`
 //!   into a `ToolHost` whose `local_path` is the project root, which
 //!   is the only thing cursor-agent reads from it. Live-only: dev loop
-//!   and on-demand tasks, never CI.
+//!   and on-demand tasks, never CI. The shim stays local by design
+//!   (`augentic/specify`'s prompt-eval example carries its own copy);
+//!   omnia ships no native guest-Model-over-`WasiModelCtx` adapter.
 //! - [`omnia_testkit::model::Replay`] — recorded fixtures served through
 //!   `omnia_wasi_model::ModelDefault`'s canonical request-key replay.
+//!   Upstream omnia has since retired both `Replay` and `Harness` in
+//!   favour of the FIFO `Scripted`; retire the `Replay` variant, the
+//!   `features = ["model", "replay"]` pin, and the tests' `Harness`
+//!   wrappers with the next omnia bump.
 //!
 //! [`DevModel`] is the closed selection the `specify-dev` binary
 //! constructs from the environment; tests bypass it and bind
@@ -90,8 +96,8 @@ impl Model for DevModel {
                     .map_err(|err| {
                         Error::Backend(format!(
                             "cursor-agent backend unavailable: {err:#}; install cursor-agent, \
-                             then `cursor-agent login` or export CURSOR_API_KEY (`cargo make dev \
-                             -- doctor --live` verifies command-mode credentials)"
+                             then `cursor-agent login` or export CURSOR_API_KEY (command-mode \
+                             credentials, not the IDE login `cursor-agent status` reports)"
                         ))
                     })?;
                 model.create(request).await

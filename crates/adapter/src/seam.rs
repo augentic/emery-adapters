@@ -134,22 +134,27 @@ pub struct WorkingTree {
     pub subpath: Option<String>,
 }
 
-/// One path-scoped edit — mirrors the WIT `types.edit` record.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Edit {
-    /// The edited file's path, relative to the working tree root.
-    pub path: String,
-    /// The new content handle, or absent for a deletion.
-    pub content: Option<String>,
+/// Which side of the deterministic core merge a `merge` dispatch runs
+/// on — mirrors the WIT `target.merge-phase` enum.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MergePhase {
+    /// Before the deterministic commit: staged checks over the built
+    /// slice. A blocking finding aborts the merge with the slice still
+    /// `built`.
+    Preflight,
+    /// After the deterministic commit: merged-baseline validators over
+    /// the updated tree. A blocking finding is a terminal diagnostic,
+    /// never a rollback.
+    Postflight,
 }
 
-/// A build's portable delta — mirrors the WIT `types.changeset` record.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Changeset {
-    /// The revision the edits apply against.
-    pub base: String,
-    /// The per-path edits the build produced.
-    pub edits: Vec<Edit>,
+impl std::fmt::Display for MergePhase {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Preflight => "preflight",
+            Self::Postflight => "postflight",
+        })
+    }
 }
 
 /// Review severity, ordered for sort stability.
@@ -254,6 +259,20 @@ pub struct Report {
     pub outputs: Vec<BuildOutput>,
     /// Optional UI-surface signal.
     pub ui_surface: Option<UiSurface>,
+}
+
+impl Report {
+    /// A clean success report — the shape a deterministic merge gate
+    /// answers with when it raises no findings and runs no judgment leg.
+    #[must_use]
+    pub const fn success() -> Self {
+        Self {
+            status: Status::Success,
+            findings: Vec::new(),
+            outputs: Vec::new(),
+            ui_surface: None,
+        }
+    }
 }
 
 /// A source adapter's metadata — mirrors the WIT `source.metadata`

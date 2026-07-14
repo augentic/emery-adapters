@@ -102,6 +102,17 @@ impl<M: Send + Sync> Resolver for Provider<M> {
     }
 }
 
+impl<M: Send + Sync> workflow::adapter::Hydrator for Provider<M> {
+    async fn fetch(&self, url: &str) -> Result<Vec<u8>, Error> {
+        Err(Error::Diag {
+            code: "adapter-hydrate-unavailable",
+            detail: format!(
+                "the native harness links adapters directly and fetches nothing (requested {url})"
+            ),
+        })
+    }
+}
+
 impl<M: Model> Model for Provider<M> {
     async fn create(&self, request: Request) -> Result<Reply, omnia_guest::model::Error> {
         self.model.create(request).await
@@ -161,6 +172,29 @@ impl<M: Model> TargetSeam for Provider<M> {
             subpath: tree.subpath,
         };
         let report = catalog::build(&self.model, &ctx, &id, &slice, &inputs, &tree)
+            .await
+            .map_err(map_error)?;
+        Ok(widen_report(&id, slice, report))
+    }
+
+    async fn merge(
+        &self, id: String, slice: String, phase: seam::MergePhase, tree: WorkingTree,
+    ) -> Result<BuildReport, seam::Error> {
+        let url = self.mcp_url(&id);
+        let ctx = Context {
+            adapter_id: &id,
+            project_root: &self.project_dir,
+            mcp_url: url.as_deref(),
+        };
+        let phase = match phase {
+            seam::MergePhase::Preflight => aseam::MergePhase::Preflight,
+            seam::MergePhase::Postflight => aseam::MergePhase::Postflight,
+        };
+        let tree = aseam::WorkingTree {
+            base: tree.base,
+            subpath: tree.subpath,
+        };
+        let report = catalog::merge(&self.model, &ctx, &id, &slice, phase, &tree)
             .await
             .map_err(map_error)?;
         Ok(widen_report(&id, slice, report))

@@ -22,13 +22,22 @@ fn run_from(cwd: &Path, args: &[&str]) -> Output {
 fn assert_created(project: &Path, elsewhere: &Path, output: &Output) {
     assert!(
         output.status.success(),
-        "plan create failed: stdout={} stderr={}",
+        "journal emit failed: stdout={} stderr={}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr),
     );
-    assert!(project.join("plan.yaml").is_file(), "plan.yaml lands under --project-dir");
-    assert!(!elsewhere.join("plan.yaml").exists(), "nothing written at the working directory");
+    assert!(
+        project.join(".specify/journal.jsonl").is_file(),
+        "the journal lands under --project-dir"
+    );
+    assert!(
+        !elsewhere.join(".specify/journal.jsonl").exists(),
+        "nothing written at the working directory"
+    );
 }
+
+const EMIT: &[&str] =
+    &["journal", "emit", "slice.build.started", "--payload", r#"{"slice": "demo"}"#];
 
 mod project_dir_forms {
     use super::*;
@@ -39,10 +48,9 @@ mod project_dir_forms {
         let elsewhere = TempDir::new().expect("tempdir");
 
         let root = project.root().to_string_lossy().into_owned();
-        let output = run_from(
-            elsewhere.path(),
-            &["--project-dir", &root, "plan", "create", "demo-change", "--intent", "Say hello"],
-        );
+        let args: Vec<&str> =
+            ["--project-dir", &root].iter().chain(EMIT.iter()).copied().collect();
+        let output = run_from(elsewhere.path(), &args);
         assert_created(project.root(), elsewhere.path(), &output);
     }
 
@@ -52,10 +60,8 @@ mod project_dir_forms {
         let elsewhere = TempDir::new().expect("tempdir");
 
         let flag = format!("--project-dir={}", project.root().display());
-        let output = run_from(
-            elsewhere.path(),
-            &[&flag, "plan", "create", "demo-change", "--intent", "Say hello"],
-        );
+        let args: Vec<&str> = [flag.as_str()].iter().chain(EMIT.iter()).copied().collect();
+        let output = run_from(elsewhere.path(), &args);
         assert_created(project.root(), elsewhere.path(), &output);
     }
 }
@@ -70,7 +76,7 @@ fn scaffold_component_free() {
     let root = project.path().canonicalize().expect("canonical tempdir");
     let flag = format!("--project-dir={}", root.display());
     let output =
-        run_from(elsewhere.path(), &[&flag, "init", "omnia", "--name", "demo", "--scaffold-only"]);
+        run_from(elsewhere.path(), &[&flag, "init", "omnia", "--name", "demo"]);
     assert!(
         output.status.success(),
         "component-free init failed: stdout={} stderr={}",

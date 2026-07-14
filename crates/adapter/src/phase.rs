@@ -14,7 +14,7 @@ use serde::Deserialize;
 
 use crate::answers::{REPORT_ANSWER_SCHEMA, ReportAnswer};
 use crate::judgment;
-use crate::seam::{Changeset, Context, Error, Finding, Input, Report, Status};
+use crate::seam::{Context, Error, Finding, Input, Report, Status};
 
 /// Answer schema for one internal phase leg.
 ///
@@ -99,26 +99,6 @@ pub fn render_inputs(inputs: &[Input]) -> String {
         .map(|input| format!("### input: {}\n\n{}", input.label(), input.body()))
         .collect::<Vec<_>>()
         .join("\n\n")
-}
-
-/// Render a changeset's edits for the merge prompt.
-#[must_use]
-pub fn render_delta(delta: &Changeset) -> String {
-    if delta.edits.is_empty() {
-        return "### delta\n\n(empty changeset — the slice wrote no files)".to_string();
-    }
-    let edits = delta
-        .edits
-        .iter()
-        .map(|edit| {
-            edit.content.as_ref().map_or_else(
-                || format!("- {} (deleted)", edit.path),
-                |content| format!("- {} (content: {content})", edit.path),
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    format!("### delta (base {})\n\n{edits}", delta.base)
 }
 
 /// Render one phase leg's outcome for the report prompt.

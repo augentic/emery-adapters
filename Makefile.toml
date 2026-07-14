@@ -24,20 +24,6 @@ dependencies = ["check", "vet", "deny"]
 # Individual Actions
 # -------------------------------------
 
-# Cross-repo developer loop. The sibling specify checkout owns command
-# dispatch; pass its subcommand and arguments after `--`.
-[tasks.dev]
-cwd = "${CARGO_MAKE_WORKING_DIRECTORY}/../specify"
-command = "rustup"
-args = [
-  "run",
-  "nightly",
-  "cargo",
-  "-Zscript",
-  "scripts/dev.rs",
-  "${@}",
-]
-
 # Audit
 [tasks.audit]
 command = "cargo"
@@ -142,8 +128,9 @@ args = [
 # `harness/native` is a standalone workspace excluded from the root: it
 # consumes Specify's engine crates from a revision-pinned git source, so
 # it stays out of `ci` and runs through these focused tasks instead.
-# Cross-repo sibling development goes through `cargo make dev` (the
-# specify checkout's dev script), which patches the pin automatically.
+# Co-development against uncommitted engine changes uses hand-supplied
+# `--config` path overrides for the pinned git source; never commit
+# path patches or the patched lockfile.
 
 [tasks.native-test]
 command = "cargo"

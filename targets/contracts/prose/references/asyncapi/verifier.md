@@ -218,7 +218,7 @@ All checks passed (9 $ref pointers, 6 schemas, 4 channels, 5 operations verified
 
 ## Cross-project mode
 
-`cross-project` mode runs **after** a producer's contract change merges. The contracts adapter merge prompt invokes it as the post-merge baseline gate (the contracts adapter merge contract); `/spec:execute` re-uses the same gate per project after a producer-side merge (the workspace execution contract).
+`cross-project` mode runs **after** a producer's contract change merges. The contracts adapter merge prompt invokes it as the post-merge baseline gate (the contracts adapter merge contract); `specify plan execute` re-uses the same gate per project after a producer-side merge (the workspace execution contract).
 
 The mode describes the adapter's deterministic in-guest contract validator. The verifier sibling does not implement an independent cross-project algorithm — the merge gate runs the embedded validator and consumes its findings directly. The deterministic checks the validator enforces are the contract identity/version validation rules:
 

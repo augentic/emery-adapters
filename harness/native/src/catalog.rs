@@ -111,6 +111,16 @@ macro_rules! build_leg {
     (source, $name:ident, $krate:ident, ($($arg:expr),+), $id:expr) => {};
 }
 
+/// One `merge` dispatch leg; expands to nothing for sources.
+macro_rules! merge_leg {
+    (target, $name:ident, $krate:ident, ($($arg:expr),+), $id:expr) => {
+        if $id == concat!("target:", stringify!($name)) {
+            return $krate::operations::merge($($arg),+).await;
+        }
+    };
+    (source, $name:ident, $krate:ident, ($($arg:expr),+), $id:expr) => {};
+}
+
 /// The declarative linked-adapter table: generates [`entries`] and the
 /// dispatch functions from one line per adapter.
 macro_rules! linked {
@@ -160,6 +170,15 @@ macro_rules! linked {
             inputs: &[aseam::Input], tree: &aseam::WorkingTree,
         ) -> Result<aseam::Report, aseam::Error> {
             $( build_leg!($axis, $name, $krate, (model, ctx, slice, inputs, tree), id); )+
+            Err(unlinked(id))
+        }
+
+        /// Dispatch one `merge` gate to the linked target adapter behind `id`.
+        pub(crate) async fn merge<M: Model>(
+            model: &M, ctx: &Context<'_>, id: &str, slice: &str,
+            phase: aseam::MergePhase, tree: &aseam::WorkingTree,
+        ) -> Result<aseam::Report, aseam::Error> {
+            $( merge_leg!($axis, $name, $krate, (model, ctx, slice, phase, tree), id); )+
             Err(unlinked(id))
         }
     };

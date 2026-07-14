@@ -82,18 +82,11 @@ impl From<WorkingTree> for crate::seam::WorkingTree {
     }
 }
 
-impl From<Changeset> for crate::seam::Changeset {
-    fn from(delta: Changeset) -> Self {
-        Self {
-            base: delta.base,
-            edits: delta
-                .edits
-                .into_iter()
-                .map(|edit| crate::seam::Edit {
-                    path: edit.path,
-                    content: edit.content,
-                })
-                .collect(),
+impl From<MergePhase> for crate::seam::MergePhase {
+    fn from(phase: MergePhase) -> Self {
+        match phase {
+            MergePhase::Preflight => Self::Preflight,
+            MergePhase::Postflight => Self::Postflight,
         }
     }
 }

@@ -2,29 +2,25 @@
 
 This directory is the single **spec-runtime bundle**: the canonical copy of the runtime references each adapter ships. Each source and target adapter exposes it as `references/spec-runtime/` via a single directory symlink (`{sources,targets}/<name>/prose/references/spec-runtime -> ../../../../codex/references/runtime`), so adapter prompts can link with `../references/spec-runtime/...` without escaping the adapter tree. The `prose` crate's build-time embed dereferences the symlinks when it bakes the bundle into each published component, so consumers receive self-contained regular files.
 
-**Relationship to `augentic/specify`:** this tree is canonical for adapter components; `plugins/spec/references/` in the specify repo is canonical for the Cursor plugin cache. The two surfaces evolve independently, but several files mirror each other — when a change to one surface affects prose the other mirrors, port it by hand in the same change (there is no parity script or sync step).
+**Relationship to `augentic/specify`:** the engine's core judgment prose (reconciliation and synthesis playbooks, spec formatting, tags, Decision Record authoring) is embedded in the workflow crates' prompt corpora (`crates/slice/prompts/` and `crates/change/prompts/`) and is not mirrored here. This bundle carries only the *adapter-facing boundary* references — the vocabulary and contracts an adapter prompt needs to align with the engine without depending on the engine repo's `docs/` tree at runtime. There is no hand-maintained cross-repo parity table.
 
-| Bundle path                         | Mirror (specify repo)                                       |
-| ----------------------------------- | ----------------------------------------------------------- |
-| `guardrails.md`                     | `plugins/spec/references/guardrails.md`                     |
-| `specialist-usage.md`               | `plugins/spec/references/specialist-usage.md`               |
-| `reconciliation.md`                 | `plugins/spec/references/reconciliation.md`                 |
-| `components.md`                     | `plugins/spec/references/components.md`                     |
-| `standards-layer-snippet.md`        | `plugins/spec/references/standards-layer-snippet.md`        |
-| `artifact-validation-checklist.md`  | `plugins/spec/references/artifact-validation-checklist.md`  |
-| `phase-outcome-contract.md`         | `plugins/spec/references/phase-outcome-contract.md`         |
-| `plan-lock.md`                      | `plugins/spec/references/plan-lock.md`                      |
-| `stop-conditions.md`                | `plugins/spec/references/stop-conditions.md`                |
-| `spec-to-test-mapping.md`           | `plugins/spec/references/spec-to-test-mapping.md`           |
-| `synthesis/authority.md`            | `plugins/spec/references/synthesis/authority.md`            |
-| `synthesis/tags.md`                 | `plugins/spec/references/synthesis/tags.md`                 |
-| `synthesis/provenance.md`           | `plugins/spec/references/synthesis/provenance.md`           |
-| `synthesis/claim-reconciliation.md` | `plugins/spec/references/synthesis/claim-reconciliation.md` |
+The bundle:
+
+| Document                            | What adapters consume it for                                                                     |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `guardrails.md`                     | Consumer-project boundaries every phase respects                                                  |
+| `reconciliation.md`                 | How leads become slices and Evidence becomes a spec — the survey/extract vocabulary               |
+| `specialist-usage.md`               | Where adapters read and write; the artifact-vs-specialist dividing line                           |
+| `artifact-validation-checklist.md`  | Source-facing artifact self-review (target-specific checklists live with their owning adapters)   |
+| `phase-outcome-contract.md`         | How a phase's report becomes the loop's outcome classification                                    |
+| `spec-to-test-mapping.md`           | Shared requirement-to-test derivation rules build prompts cite                                    |
+| `standards-layer-snippet.md`        | The workflow / artifacts / engineering-standards triad build prompts restate                      |
+| `synthesis/authority.md`            | The authority hierarchy source adapters declare Evidence against                                  |
 
 ## Editing rules
 
 - Edit the file here — this tree is the canonical bundle for adapters. Never replace an adapter's `references/spec-runtime` symlink with a directory of copies.
-- Adding a new shared reference: drop the file here. Every adapter inherits it through its directory symlink automatically.
+- Adding a new shared reference: drop the file here. Every adapter inherits it through its directory symlink automatically. Add a reference here only when at least two adapters consume it; single-adapter material belongs in that adapter's own `references/`.
 - Keep agent-critical prose in this bundle (or the adapter's own `references/`); do not make prompts depend on the specify repo's `docs/` tree at runtime.
 
 ## Review-team protocol

@@ -10,7 +10,7 @@
 use std::path::Path;
 
 use adapter::seam::{
-    Changeset, Context, Error, Finding, Input, Report, TargetMetadata, WorkingTree,
+    Context, Error, Finding, Input, MergePhase, Report, TargetMetadata, WorkingTree,
 };
 use adapter::{Model, phase};
 
@@ -121,36 +121,43 @@ pub async fn build<P: Model>(
     gate_report(model, ctx, build_prompt, report, &tree_root, "build").await
 }
 
-/// Gate a built slice's landing on the merge prompt's pre-merge
-/// verification.
+/// Gate a built slice's landing on the merge prompt's preflight
+/// verification, dispatched once per merge phase around the engine's
+/// deterministic core merge.
 ///
-/// One judgment leg folds the delta and runs the merge prompt's
-/// § Omnia pre-merge gate (agent-run cargo / clippy / test / wasm32 in
-/// the lent workspace), then the report-coherence gate runs in core.
+/// `preflight` runs one judgment leg over the merge prompt's § Omnia
+/// pre-merge gate (agent-run cargo / clippy / test / wasm32 in the lent
+/// workspace, where the build already wrote the slice's code in place),
+/// then the report-coherence gate runs in core. Omnia declares no
+/// merged-baseline validator, so `postflight` answers a clean success
+/// report deterministically — no judgment leg.
 ///
 /// # Errors
 ///
 /// As [`adapter::judgment`].
 pub async fn merge<P: Model>(
-    model: &P, ctx: &Context<'_>, slice: &str, delta: &Changeset, tree: &WorkingTree,
+    model: &P, ctx: &Context<'_>, slice: &str, phase: MergePhase, tree: &WorkingTree,
 ) -> Result<Report, Error> {
+    if phase == MergePhase::Postflight {
+        return Ok(Report::success());
+    }
+
     let tree_root = ctx.tree_root(tree);
     let merge_prompt = registry::body("prompts/merge.md");
-    let delta_block = phase::render_delta(delta);
 
     let user = format!(
-        "Merge slice `{slice}`'s built delta (adapter `{}`). The project workspace is \
-         lent to you; the delta below applies against base `{}` (a 3-way merge: the \
-         baseline is ours, the delta is theirs). Fold the changes in place, then run \
+        "Run the preflight merge gate for slice `{slice}` (adapter `{}`). The project \
+         workspace is lent to you; the build already wrote the slice's code in place, \
+         and the engine folds the slice's spec deltas only after this gate passes. Run \
          the merge prompt's `## § Omnia pre-merge gate` yourself — the cargo / clippy \
          / test / wasm32-wasip2 commands run in the lent workspace; this adapter \
          cannot spawn them. Any gate failure means `status: failure`. Answer with the \
-         report body. {REFERENCES_POINTER}\n\n{delta_block}",
-        ctx.adapter_id, delta.base,
+         report body. {REFERENCES_POINTER}",
+        ctx.adapter_id,
     );
     let report = phase::report(model, ctx, merge_prompt.to_string(), user).await?;
 
-    gate_report(model, ctx, merge_prompt, report, &tree_root, "merge").await
+    gate_report(model, ctx, merge_prompt, report, &tree_root, "merge-preflight").await
 }
 
 fn assemble(prompts: &[&str]) -> String {

@@ -1,6 +1,6 @@
 # Omnia target — merge prompt
 
-> The omnia adapter core inlines this document into the system prompt of the merge leg (`src/operations.rs`). The leg receives the slice's built delta and a lent workspace: fold the delta in place (a 3-way merge — the baseline is ours, the delta is theirs), run the § Omnia pre-merge gate, and answer with the merge report. The engine owns baseline coherence, the lifecycle transition to `merged`, and the archive move; this prompt only enforces the Omnia-specific *pre-merge* gate: the generated crate compiles, its tests pass, and the WASM target builds.
+> The omnia adapter core inlines this document into the system prompt of the merge leg (`src/operations.rs`). The engine dispatches the adapter's merge operation twice around its deterministic core merge — `preflight` before the engine folds the slice's spec deltas into the baseline, `postflight` after the commit and archive. Only the preflight gate carries Omnia judgment: the build already wrote the slice's code in place in the lent workspace, so the preflight leg runs the § Omnia pre-merge gate over it and answers with the merge report. Omnia declares no merged-baseline validator, so the adapter answers postflight deterministically without a judgment leg. The engine owns spec-delta folding, baseline coherence, the lifecycle transition to `merged`, and the archive move; never perform any of those from this prompt.
 
 ## Inputs and bindings
 
@@ -11,11 +11,11 @@ $CRATE_PATH     = crates/$CRATE_NAME
 $WORKSPACE_ROOT = repo root (carries the Cargo workspace `Cargo.toml` and the guest `src/lib.rs`)
 ```
 
-The delta arrives rendered in the user prompt (path + content per edit, deletions marked); apply it against the lent workspace before running the gate.
+The slice's built code is already present in the lent workspace — the build phase wrote it in place. There is no delta to apply; the gate verifies the workspace as it stands.
 
 ## § Omnia pre-merge gate
 
-Run these from `$WORKSPACE_ROOT` (or `$CRATE_PATH` where noted) after folding the delta. All four MUST pass. Any failure means the merge report is `status: failure` (see `## Merge report`).
+Run these from `$WORKSPACE_ROOT` (or `$CRATE_PATH` where noted). All four MUST pass. Any failure means the merge report is `status: failure` (see `## Merge report`).
 
 ### 1. Format and lint
 
@@ -52,7 +52,7 @@ The wasm32-wasip2 build is the definitive deployment-target check. A native `car
 
 ## Merge report
 
-Answer the leg with a schema-valid merge report (the schema-gated report answer — no report file is written). A `status: success` report means the delta is folded and all four gate steps passed. Any gate failure means `status: failure`, with the failing step's output mapped into blocking `findings[]` (the same diagnostic shape as the build report); the engine parks the slice at `built` for human review — never transition the lifecycle yourself. Omnia adds no post-merge validator or adapter-specific adoption mechanics — every artefact under `specs/` is promoted by the standard delta merge, and there are no generated outputs to refresh at merge time.
+Answer the leg with a schema-valid merge report (the schema-gated report answer — no report file is written). A `status: success` report means all four gate steps passed. Any gate failure means `status: failure`, with the failing step's output mapped into blocking `findings[]` (the same diagnostic shape as the build report); the engine then aborts the merge with the slice still at `built` for human review — never transition the lifecycle yourself. Omnia adds no postflight validator or adapter-specific adoption mechanics — every artefact under `specs/` is promoted by the engine's deterministic merge, and there are no generated outputs to refresh at merge time.
 
 ## References
 

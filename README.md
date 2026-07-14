@@ -12,6 +12,8 @@ time. The deployable artifact is the built component — no manifest file, no
 committed wasm. The platform resolves the published component from the
 registry and reads resolve-time facts through the WIT `metadata` operation.
 
+Repository-wide contributor guidance lives in [`AGENTS.md`](AGENTS.md); adapter-local guidance extends it from nested `AGENTS.md` files such as [`targets/vectis/AGENTS.md`](targets/vectis/AGENTS.md).
+
 ## Layout
 
 Every adapter — the three targets and the five sources — shares the same guest anatomy:
@@ -59,16 +61,24 @@ declared build `inputs[]` and platforms capability are compiled into the
 
 Crux shell-detection heuristics live in `targets/vectis/src/shell.rs`.
 
-## Building the guests
+## Prompt authoring
+
+Adapter prompts are markdown documents compiled into the guest and driven by the engine's orchestrations. They are not skills: no YAML frontmatter, no discovery metadata. Two roles, one discipline:
+
+- **Parent prompts** (`prose/prompts/{guidance,build,merge}.md` for targets, `prose/prompts/{survey,extract}.md` for sources) orchestrate — bindings, mode dispatch, phase order, the stop-hint contract — and load phase sub-prompts by relative-link instruction. Cap ~150 non-blank lines; orchestration that needs more means a sub-prompt is missing.
+- **Phase sub-prompts** (`prose/prompts/build/<phase>.md`, or `build/<platform>/<phase>.md` for per-platform targets) carry one phase's operational body. Soft cap ~500 non-blank lines, hard cap 800 — above that, split into sub-phase prompts or move material to `prose/references/`.
+- **References are cited via relative markdown links, never inlined** — the `prose` crate's build-time embed includes Markdown documents and follows symlinks, so keep every relative reference resolvable. Worked examples live under `prose/references/examples/<flavour>/` (exempt from prompt caps).
+
+
 
 The local gate mirrors CI — run it from the repo root:
 
 ```bash
-cargo make check   # fmt-check + clippy + nextest + doctests + doc
+cargo make check   # fmt + clippy + nextest + doctests + doc
 cargo make ci      # the full gate — adds cargo-vet + cargo-deny
 ```
 
-The `fmt-check` arm uses nightly `rustfmt`, while component development and publishing use nightly Cargo Script. Install a nightly toolchain plus the `cargo-make`, `cargo-nextest`, `cargo-deny`, and `cargo-vet` tools; the tasks are defined in `Makefile.toml`.
+The `fmt` arm uses nightly `rustfmt`, while component development and publishing use nightly Cargo Script. Install a nightly toolchain plus the `cargo-make`, `cargo-nextest`, `cargo-deny`, and `cargo-vet` tools; the tasks are defined in `Makefile.toml`.
 
 Release-build every adapter for wasm32-wasip2 (components land
 at `target/wasm32-wasip2/release/<name>.wasm`):
@@ -89,7 +99,7 @@ cargo make native-run -- --project-dir /path/to/project plan status
 
 Two compatibility choices are independent, for first- and third-party adapter authors alike: the **WIT contract version** an adapter targets (`wit/specify.wit`, the publish-time compatibility floor), and — only for this optional native harness — the **engine revision** its manifest pins. The pin is the harness's declared, verified engine revision; it advances deliberately (edit the `rev` values in `harness/native/Cargo.toml`, run `cargo update --manifest-path harness/native/Cargo.toml`, and commit its lockfile), not with every engine commit.
 
-For sibling co-development against uncommitted engine changes, use the `cargo make dev -- {check,run,live}` loop: the sibling specify checkout's dev script patches the pin to its working tree with generated `--config` flags. Never commit path patches or hand-edit the pin for local work.
+For sibling co-development against uncommitted engine changes, override the pin locally with hand-supplied `--config` path patches against the sibling working tree. Never commit path patches or hand-edit the pin for local work.
 
 ## Publishing
 

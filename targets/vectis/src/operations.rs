@@ -12,7 +12,7 @@
 use std::path::Path;
 
 use adapter::seam::{
-    BuildInput, Changeset, Context, Error, Finding, Input, Platform, PlatformsCapability, Report,
+    BuildInput, Context, Error, Finding, Input, MergePhase, Platform, PlatformsCapability, Report,
     Severity, Status, TargetMetadata, WorkingTree,
 };
 use adapter::{Model, phase};
@@ -279,32 +279,37 @@ pub async fn build<P: Model>(
     Ok(report)
 }
 
-/// Merge a built slice's delta into the baseline per the merge prompt.
+/// Run one merge gate per the merge prompt, dispatched once per phase
+/// around the engine's deterministic core merge.
 ///
-/// A deterministic pre-merge gate validates the staged slice
-/// composition (blocking findings park the merge before the delta
-/// folds). One judgment leg then folds the delta and runs the prompt's
-/// host cap-matrix re-verification (agent-run in the lent workspace),
-/// and the deterministic postlude re-runs the composition validator
-/// against the merged baseline (`.specify/specs/composition.yaml`) plus
-/// the report-coherence walk, with one bounded repair leg.
+/// `preflight` is fully deterministic: the composition validator runs
+/// against the staged slice composition, and blocking findings park the
+/// merge with the slice still `built` — no judgment leg. `postflight`
+/// runs one judgment leg over the prompt's host cap-matrix
+/// re-verification (agent-run in the lent workspace, after the engine
+/// folded the slice's deltas — including `composition.yaml` — into the
+/// baseline), then the deterministic postlude re-runs the composition
+/// validator against the merged baseline
+/// (`.specify/specs/composition.yaml`) plus the report-coherence walk,
+/// with one bounded repair leg.
 ///
 /// # Errors
 ///
 /// As [`adapter::judgment`].
 pub async fn merge<P: Model>(
-    model: &P, ctx: &Context<'_>, slice: &str, delta: &Changeset, tree: &WorkingTree,
+    model: &P, ctx: &Context<'_>, slice: &str, phase: MergePhase, tree: &WorkingTree,
 ) -> Result<Report, Error> {
     let tree_root = ctx.tree_root(tree);
-    let baseline_composition = tree_root.join(".specify/specs/composition.yaml");
     let merge_prompt = registry::body("prompts/merge.md");
-    let delta_block = phase::render_delta(delta);
 
-    // Deterministic pre-merge gate: an invalid staged slice composition
-    // blocks the merge before the delta folds, per the merge prompt.
-    let staged = tree_root.join(format!(".specify/slices/{slice}/composition.yaml"));
-    let staged_findings = validation_findings(&staged);
-    if !staged_findings.is_empty() {
+    if phase == MergePhase::Preflight {
+        // Deterministic gate: an invalid staged slice composition blocks
+        // the merge before the engine folds it, per the merge prompt.
+        let staged = tree_root.join(format!(".specify/slices/{slice}/composition.yaml"));
+        let staged_findings = validation_findings(&staged);
+        if staged_findings.is_empty() {
+            return Ok(Report::success());
+        }
         return Ok(Report {
             status: Status::Failure,
             findings: staged_findings.into_iter().map(Finding::blocking).collect(),
@@ -313,23 +318,32 @@ pub async fn merge<P: Model>(
         });
     }
 
+    let baseline_composition = tree_root.join(".specify/specs/composition.yaml");
     let user = format!(
-        "Merge slice `{slice}`'s built delta (adapter `{}`). The project workspace is \
-         lent to you; the delta below applies against base `{}` (a 3-way merge: the \
-         baseline is ours, the delta is theirs). Fold the changes in place — including \
-         the slice's `composition.yaml` into the baseline and any operator-curated \
-         `tokens.yaml` / `assets.yaml` updates into `design-system/` — then run the \
-         merge prompt's `## Post-merge — host cap-matrix re-verification` yourself: the \
-         cargo / make / gradlew commands run in the lent workspace; this adapter \
-         cannot spawn them. The composition validator re-runs deterministically \
-         in-guest after your answer. Any gate failure means `status: failure`. Answer \
-         with the report body. {REFERENCES_POINTER}\n\n{delta_block}",
-        ctx.adapter_id, delta.base,
+        "Run the postflight merge gate for slice `{slice}` (adapter `{}`). The engine \
+         has already folded the slice's deltas — including its `composition.yaml` and \
+         any operator-curated `tokens.yaml` / `assets.yaml` updates — into the \
+         baseline and archived the slice. Run the merge prompt's `## Postflight — \
+         host cap-matrix re-verification` yourself: the cargo / make / gradlew \
+         commands run in the lent workspace; this adapter cannot spawn them. The \
+         composition validator re-runs deterministically in-guest after your answer. \
+         Any gate failure means `status: failure`. Answer with the report body. \
+         {REFERENCES_POINTER}",
+        ctx.adapter_id,
     );
     let report = phase::report(model, ctx, merge_prompt.to_string(), user).await?;
 
-    gate_report(model, ctx, merge_prompt, report, &tree_root, &baseline_composition, "merge", false)
-        .await
+    gate_report(
+        model,
+        ctx,
+        merge_prompt,
+        report,
+        &tree_root,
+        &baseline_composition,
+        "merge-postflight",
+        false,
+    )
+    .await
 }
 
 /// One per-shell write leg the declared platform set enables.

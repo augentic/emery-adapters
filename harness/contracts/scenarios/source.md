@@ -72,7 +72,8 @@ guessing.
 
 This test assumes a prior `/spec:plan legacy-code` run against
 `vendor/orders-service/` has appended this adapter block to the plan's
-`discovery.md` (shape pinned by `plugins/spec/skills/plan/SKILL.md`):
+`discovery.md` (shape pinned by the engine's `plan author` orchestration
+and lead schema):
 
 ````markdown
 ### orders
