@@ -9,7 +9,12 @@
 //!   wasm default body performs — and translate `lend_workspace: true`
 //!   into a `ToolHost` whose `local_path` is the project root, which
 //!   is the only thing cursor-agent reads from it. Live-only: dev loop
-//!   and on-demand tasks, never CI.
+//!   and on-demand tasks, never CI. Follow-up once omnia main carries
+//!   `omnia_testkit::model::Native`: collapse this shim onto that
+//!   adapter (`Native::with_workspace(client, root)`), keeping only
+//!   [`DevModel`] selection and the `SPECIFY_EVAL_MODEL` default; the
+//!   `Replay` variant and the `features = ["model", "replay"]` pin go
+//!   with the same bump (upstream replay was replaced by `Scripted`).
 //! - [`omnia_testkit::model::Replay`] — recorded fixtures served through
 //!   `omnia_wasi_model::ModelDefault`'s canonical request-key replay.
 //!
