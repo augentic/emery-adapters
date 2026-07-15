@@ -13,6 +13,8 @@
 //!   deserializers.
 //! - [`judgment`] — the shared judgment-call helper: one schema-gated
 //!   `create` with the reference grant and workspace lend attached.
+//! - [`schema_gated`] — the source-leg variant: the same call bracketed
+//!   by a deterministic answer tail inside a bounded repair loop.
 //! - [`phase`] — per-leg scaffolding for target operation templates.
 //! - [`registry`] — the embedded prose vocabulary plus the
 //!   [`embed_registry!`] module generator.
@@ -34,7 +36,7 @@ pub mod source;
 #[cfg(target_arch = "wasm32")]
 pub mod target;
 
-pub use call::judgment;
+pub use call::{MAX_REPAIRS, judgment, schema_gated};
 pub use omnia_guest::Model;
 #[cfg(target_arch = "wasm32")]
 pub use omnia_guest::model::WasiModel;

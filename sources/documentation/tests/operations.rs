@@ -1,12 +1,13 @@
 //! The survey / extract judgment operations against the scripted
 //! Omnia's recorded scripted harness: prompt assembly, schema-gated formats, answer
-//! deserialization, and the deterministic validation tails.
+//! deserialization, and the deterministic validation tails inside the
+//! bounded repair loop.
 
 use std::path::Path;
 
 use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA};
-use adapter::seam::{Authority, ClaimKind, Context, Lead};
-use adapter::{Format, Request};
+use adapter::seam::{Authority, ClaimKind, Context, Error, Lead};
+use adapter::{Format, MAX_REPAIRS, Request};
 use documentation::operations::{extract, survey};
 use omnia_testkit::model::{Harness, mcp_grants};
 
@@ -64,6 +65,45 @@ async fn survey_leg() {
     assert_eq!(grants[0].name, "documentation-references");
 }
 
+// A tail-invalid survey answer is repaired: the second leg carries the
+// findings and its clean answer is the result.
+#[tokio::test]
+async fn survey_repaired() {
+    let model = Harness::answering([
+        r#"{"leads":[{"lead":"Bad_Id","synopsis":"Casing violates the kebab grammar."}]}"#,
+        r#"{"leads":[{"lead":"password-reset","synopsis":"Reset flow."}]}"#,
+    ]);
+
+    let leads = survey(&model, &ctx(None)).await.expect("repaired survey succeeds");
+
+    assert_eq!(leads.len(), 1);
+    assert_eq!(leads[0].lead, "password-reset");
+    let requests = model.requests();
+    assert_eq!(requests.len(), 2, "one repair after the failed tail");
+    let repair = &requests[1].messages[0].content;
+    assert!(repair.contains("lead `Bad_Id`"), "repair prompt carries the findings: {repair}");
+    assert!(repair.contains("## Previous answer"), "and the rejected answer");
+}
+
+// A survey answer that never passes the tail exhausts the repair
+// budget and surfaces the last failure.
+#[tokio::test]
+async fn survey_budget_exhausted() {
+    let model = Harness::answering(
+        [r#"{"leads":[{"lead":"still-bad","synopsis":"   "}]}"#; 1 + MAX_REPAIRS],
+    );
+
+    let result = survey(&model, &ctx(None)).await;
+
+    match result {
+        Err(Error::Internal(detail)) => {
+            assert!(detail.contains("synopsis is empty"), "detail: {detail}");
+        }
+        other => panic!("expected the last tail failure, got {other:?}"),
+    }
+    assert_eq!(model.requests().len(), 1 + MAX_REPAIRS, "initial answer plus the repair budget");
+}
+
 #[tokio::test]
 async fn survey_no_mcp_no_grant() {
     let model = Harness::answering([r#"{"leads":[]}"#]);
@@ -108,4 +148,43 @@ async fn extract_leg() {
     assert_eq!(schema, EVIDENCE_ANSWER_SCHEMA);
     assert!(request.lend_workspace);
     assert_eq!(mcp_grants(request)[0].url, "http://references/mcp");
+}
+
+// A tail-invalid extract answer is repaired: the second leg carries
+// the findings and its clean answer is the result.
+#[tokio::test]
+async fn extract_repaired() {
+    let model = Harness::answering([
+        r#"{"authority":"documentation","claims":[{"kind":"requirement"}]}"#,
+        r#"{"authority":"documentation","claims":[{"kind":"requirement","id":"password-reset.request"}]}"#,
+    ]);
+
+    let evidence = extract(&model, &ctx(None), &lead()).await.expect("repaired extract succeeds");
+
+    assert_eq!(evidence.claims[0].id.as_deref(), Some("password-reset.request"));
+    let requests = model.requests();
+    assert_eq!(requests.len(), 2, "one repair after the failed tail");
+    let repair = &requests[1].messages[0].content;
+    assert!(repair.contains("claims require an id"), "repair prompt carries the findings");
+    assert!(repair.contains("## Previous answer"), "and the rejected answer");
+}
+
+// An extract answer that never passes the tail exhausts the repair
+// budget and surfaces the last failure.
+#[tokio::test]
+async fn extract_budget_exhausted() {
+    let model = Harness::answering(
+        [r#"{"authority":"documentation","claims":[{"kind":"criterion","id":"Not.Valid"}]}"#;
+            1 + MAX_REPAIRS],
+    );
+
+    let result = extract(&model, &ctx(None), &lead()).await;
+
+    match result {
+        Err(Error::Internal(detail)) => {
+            assert!(detail.contains("`Not.Valid`"), "detail: {detail}");
+        }
+        other => panic!("expected the last tail failure, got {other:?}"),
+    }
+    assert_eq!(model.requests().len(), 1 + MAX_REPAIRS, "initial answer plus the repair budget");
 }

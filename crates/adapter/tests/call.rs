@@ -1,5 +1,6 @@
-//! The shared judgment-call helper: request assembly, grant and lend
-//! wiring, and error mapping.
+//! The shared judgment-call helpers: request assembly, grant and lend
+//! wiring, error mapping, and the bounded source answer-tail repair
+//! loop.
 
 use std::path::Path;
 
@@ -97,6 +98,109 @@ async fn error_mapping() {
             assert!(detail.contains("probe answer did not deserialize"), "detail: {detail}");
         }
         other => panic!("expected internal error, got {other:?}"),
+    }
+}
+
+// The bounded repair loop around source answer tails: tail failures
+// re-prompt with the findings inlined; everything else returns
+// immediately.
+mod schema_gated {
+    use adapter::{MAX_REPAIRS, schema_gated};
+
+    use super::*;
+
+    fn tail(answer: &str) -> Result<Answer, Error> {
+        let parsed: Answer = serde_json::from_str(answer)
+            .map_err(|err| Error::Internal(format!("probe answer did not deserialize: {err}")))?;
+        if parsed.done {
+            Ok(parsed)
+        } else {
+            Err(Error::Internal("- probe: done must be true".to_string()))
+        }
+    }
+
+    // A tail failure triggers one repair; the repair prompt carries the
+    // original request, the rejected answer, and the findings.
+    #[tokio::test]
+    async fn repairs_tail_failure() {
+        let model = Harness::answering([r#"{"done":false}"#, r#"{"done":true}"#]);
+
+        let answer = schema_gated(
+            &model,
+            &ctx(None, Path::new(".")),
+            "SYSTEM".to_string(),
+            "USER".to_string(),
+            "probe",
+            "{}",
+            tail,
+        )
+        .await
+        .expect("repaired answer passes the tail");
+        assert_eq!(answer, Answer { done: true });
+
+        let requests = model.requests();
+        assert_eq!(requests.len(), 2, "one repair after the failed tail");
+        assert_eq!(requests[1].system.as_deref(), Some("SYSTEM"), "system channel is unchanged");
+        let repair = &requests[1].messages[0].content;
+        assert!(repair.starts_with("USER"), "repair prompt opens with the original request");
+        assert!(repair.contains(r#"{"done":false}"#), "and carries the rejected answer");
+        assert!(repair.contains("- probe: done must be true"), "and the findings");
+    }
+
+    // After the initial answer plus MAX_REPAIRS failed repairs the last
+    // tail failure surfaces; repair prompts rebuild from the original
+    // request rather than nesting.
+    #[tokio::test]
+    async fn budget_exhausted() {
+        let model = Harness::answering([r#"{"done":false}"#; 1 + MAX_REPAIRS]);
+
+        let result: Result<Answer, Error> = schema_gated(
+            &model,
+            &ctx(None, Path::new(".")),
+            String::new(),
+            "USER".to_string(),
+            "probe",
+            "{}",
+            tail,
+        )
+        .await;
+        match result {
+            Err(Error::Internal(detail)) => {
+                assert!(detail.contains("done must be true"), "detail: {detail}");
+            }
+            other => panic!("expected the last tail failure, got {other:?}"),
+        }
+
+        let requests = model.requests();
+        assert_eq!(requests.len(), 1 + MAX_REPAIRS, "initial answer plus the repair budget");
+        let last = &requests[requests.len() - 1].messages[0].content;
+        assert_eq!(
+            last.matches("## Previous answer").count(),
+            1,
+            "repair prompts rebuild from the original request, never nest"
+        );
+    }
+
+    // A model failure returns immediately: the request did not change,
+    // so replaying it is pointless.
+    #[tokio::test]
+    async fn model_failure_not_retried() {
+        let model = Harness::scripted([Err(ModelError::InvalidRequest(
+            "messages must not be empty".to_string(),
+        ))]);
+
+        let result: Result<Answer, Error> = schema_gated(
+            &model,
+            &ctx(None, Path::new(".")),
+            String::new(),
+            "USER".to_string(),
+            "probe",
+            "{}",
+            tail,
+        )
+        .await;
+        assert!(matches!(result, Err(Error::InvalidRequest(_))));
+        assert_eq!(model.requests().len(), 1, "a model failure is never replayed");
     }
 }
 

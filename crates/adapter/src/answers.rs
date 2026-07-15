@@ -6,8 +6,11 @@
 //! (`schemas/answers/{leads,evidence,report}.schema.json`, generated
 //! upstream from the Rust wire types) and the matching parse functions.
 //! The source-axis answers also get deterministic validation tails
-//! ([`validate_leads`] / [`validate_evidence`]) enforcing the id
-//! grammars the generated schemas intentionally leave open.
+//! ([`validate_leads`] / [`validate_evidence`]) re-checking the id
+//! grammars alongside what the schemas cannot express (trim-aware
+//! synopses), plus the composed [`leads_tail`] / [`evidence_tail`]
+//! source operations run inside [`crate::schema_gated`]'s bounded
+//! repair loop.
 
 use serde::Deserialize;
 
@@ -81,9 +84,12 @@ fn enforce(operation: &str, findings: &[String]) -> Result<(), Error> {
     )))
 }
 
-/// Re-check a `survey` answer after the host gate: every lead id must
-/// match the kebab-case grammar and every synopsis must carry
-/// content.
+/// Re-check a `survey` answer after the host gate.
+///
+/// Every lead id and topic slug must match the kebab-case grammar and
+/// every synopsis must carry content — the same set the engine's
+/// `artifacts::discovery::validate_leads` enforces before merging into
+/// `discovery.md`.
 ///
 /// # Errors
 ///
@@ -98,8 +104,30 @@ pub fn validate_leads(leads: &[Lead]) -> Result<(), Error> {
         if lead.synopsis.trim().is_empty() {
             findings.push(format!("- lead `{}`: synopsis is empty", lead.lead));
         }
+        for topic in &lead.topics {
+            if !is_kebab(topic) {
+                findings.push(format!(
+                    "- lead `{}`: topic `{topic}` does not match `{KEBAB_PATTERN}`",
+                    lead.lead
+                ));
+            }
+        }
     }
     enforce("survey", &findings)
+}
+
+/// The composed `survey` answer tail: typed parse plus deterministic
+/// validation, the shape [`crate::schema_gated`]'s repair loop retries.
+///
+/// # Errors
+///
+/// Returns [`Error::Internal`] when the answer does not parse into the
+/// `{ "leads": [...] }` envelope or fails [`validate_leads`].
+pub fn leads_tail(answer: &str) -> Result<Vec<Lead>, Error> {
+    let leads = parse_leads(answer)
+        .map_err(|err| Error::Internal(format!("leads answer did not deserialize: {err}")))?;
+    validate_leads(&leads)?;
+    Ok(leads)
 }
 
 /// Re-check an `extract` answer after the host gate: claim ids must match
@@ -130,6 +158,20 @@ pub fn validate_evidence(evidence: &Evidence) -> Result<(), Error> {
         }
     }
     enforce("extract", &findings)
+}
+
+/// The composed `extract` answer tail: typed parse plus deterministic
+/// validation, the shape [`crate::schema_gated`]'s repair loop retries.
+///
+/// # Errors
+///
+/// Returns [`Error::Internal`] when the answer does not parse into the
+/// Evidence shape or fails [`validate_evidence`].
+pub fn evidence_tail(answer: &str) -> Result<Evidence, Error> {
+    let evidence = parse_evidence(answer)
+        .map_err(|err| Error::Internal(format!("evidence answer did not deserialize: {err}")))?;
+    validate_evidence(&evidence)?;
+    Ok(evidence)
 }
 
 /// The slice of one full diagnostic the seam projection reads. The rest

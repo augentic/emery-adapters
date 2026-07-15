@@ -1,14 +1,13 @@
 //! The judgment operations: `survey` and `extract` — schema-gated
-//! legs through [`adapter::judgment`] with id-grammar tails.
+//! legs through [`adapter::schema_gated`], with the id-grammar answer
+//! tails repaired inside its bounded loop.
 //!
 //! The session-less prompts point the spawned agent at the bound
 //! documentation tree (the `plan.yaml` source binding).
 
-use adapter::answers::{
-    EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA, LeadsAnswer, validate_evidence, validate_leads,
-};
+use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA, evidence_tail, leads_tail};
 use adapter::seam::{Context, Error, Evidence, Lead, SourceMetadata};
-use adapter::{Model, judgment};
+use adapter::{Model, schema_gated};
 
 use crate::registry;
 
@@ -27,13 +26,15 @@ const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and
                             (relative to the workspace root) is the read-only documentation \
                             tree the prompt calls `$SOURCE_DIR`.";
 
-/// Survey the bound documentation tree into leads — one schema-gated
-/// leg over `prompts/survey.md`, then the id-grammar tail.
+/// Survey the bound documentation tree into leads.
+///
+/// One schema-gated leg over `prompts/survey.md`, with the id-grammar
+/// tail repaired inside the bounded loop.
 ///
 /// # Errors
 ///
-/// As [`adapter::judgment`]; a validation-tail failure is
-/// [`Error::Internal`].
+/// As [`adapter::schema_gated`]; a tail failure that survives the
+/// repair budget is [`Error::Internal`].
 pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>, Error> {
     let system = registry::body("prompts/survey.md").to_string();
     let user = format!(
@@ -49,20 +50,18 @@ pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>,
          yourself.",
         id = ctx.adapter_id,
     );
-    let answer: LeadsAnswer =
-        judgment(model, ctx, system, user, "leads", LEADS_ANSWER_SCHEMA).await?;
-    validate_leads(&answer.leads)?;
-    Ok(answer.leads)
+    schema_gated(model, ctx, system, user, "leads", LEADS_ANSWER_SCHEMA, leads_tail).await
 }
 
-/// Extract one lead's Evidence from the bound documentation tree —
-/// one schema-gated leg over `prompts/extract.md`, then the claim-id
-/// tail.
+/// Extract one lead's Evidence from the bound documentation tree.
+///
+/// One schema-gated leg over `prompts/extract.md`, with the claim-id
+/// tail repaired inside the bounded loop.
 ///
 /// # Errors
 ///
-/// As [`adapter::judgment`]; a validation-tail failure is
-/// [`Error::Internal`].
+/// As [`adapter::schema_gated`]; a tail failure that survives the
+/// repair budget is [`Error::Internal`].
 pub async fn extract<P: Model>(
     model: &P, ctx: &Context<'_>, lead: &Lead,
 ) -> Result<Evidence, Error> {
@@ -78,8 +77,5 @@ pub async fn extract<P: Model>(
         id = ctx.adapter_id,
         lead = lead.render(),
     );
-    let evidence: Evidence =
-        judgment(model, ctx, system, user, "evidence", EVIDENCE_ANSWER_SCHEMA).await?;
-    validate_evidence(&evidence)?;
-    Ok(evidence)
+    schema_gated(model, ctx, system, user, "evidence", EVIDENCE_ANSWER_SCHEMA, evidence_tail).await
 }
