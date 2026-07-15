@@ -9,7 +9,7 @@
 //! ([`validate_leads`] / [`validate_evidence`]) re-checking the id
 //! grammars alongside what the schemas cannot express (trim-aware
 //! synopses), plus the composed [`leads_tail`] / [`evidence_tail`]
-//! source operations run inside [`crate::schema_gated`]'s bounded
+//! source operations run inside [`crate::repaired`]'s bounded
 //! repair loop.
 
 use serde::Deserialize;
@@ -117,7 +117,7 @@ pub fn validate_leads(leads: &[Lead]) -> Result<(), Error> {
 }
 
 /// The composed `survey` answer tail: typed parse plus deterministic
-/// validation, the shape [`crate::schema_gated`]'s repair loop retries.
+/// validation, the shape [`crate::repaired`]'s repair loop retries.
 ///
 /// # Errors
 ///
@@ -161,7 +161,7 @@ pub fn validate_evidence(evidence: &Evidence) -> Result<(), Error> {
 }
 
 /// The composed `extract` answer tail: typed parse plus deterministic
-/// validation, the shape [`crate::schema_gated`]'s repair loop retries.
+/// validation, the shape [`crate::repaired`]'s repair loop retries.
 ///
 /// # Errors
 ///

@@ -5,7 +5,7 @@
 //! adapter's own MCP reference grant, lend the shared workspace, and
 //! deserialize the host-validated answer into the leg's typed shape.
 //!
-//! Source legs run through [`schema_gated`], which brackets the call
+//! Source legs run through [`repaired`], which brackets the call
 //! with a deterministic answer tail inside a bounded repair loop
 //! (mirroring the engine's `project::judgment` kernel). Target legs
 //! keep the one-shot [`judgment`] helper — build and merge mutate the
@@ -58,7 +58,7 @@ pub async fn judgment<P: Model, T: DeserializeOwned>(
 ///
 /// The mapped model failure, a non-repairable tail failure, or the last
 /// tail failure once the repair budget is exhausted.
-pub async fn schema_gated<P, T, F>(
+pub async fn repaired<P, T, F>(
     model: &P, ctx: &Context<'_>, system: String, user: String, schema_name: &str, schema: &str,
     mut tail: F,
 ) -> Result<T, Error>

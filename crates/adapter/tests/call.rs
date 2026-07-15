@@ -104,8 +104,8 @@ async fn error_mapping() {
 // The bounded repair loop around source answer tails: tail failures
 // re-prompt with the findings inlined; everything else returns
 // immediately.
-mod schema_gated {
-    use adapter::{MAX_REPAIRS, schema_gated};
+mod repaired {
+    use adapter::{MAX_REPAIRS, repaired};
 
     use super::*;
 
@@ -125,7 +125,7 @@ mod schema_gated {
     async fn repairs_tail_failure() {
         let model = Harness::answering([r#"{"done":false}"#, r#"{"done":true}"#]);
 
-        let answer = schema_gated(
+        let answer = repaired(
             &model,
             &ctx(None, Path::new(".")),
             "SYSTEM".to_string(),
@@ -154,7 +154,7 @@ mod schema_gated {
     async fn budget_exhausted() {
         let model = Harness::answering([r#"{"done":false}"#; 1 + MAX_REPAIRS]);
 
-        let result: Result<Answer, Error> = schema_gated(
+        let result: Result<Answer, Error> = repaired(
             &model,
             &ctx(None, Path::new(".")),
             String::new(),
@@ -189,7 +189,7 @@ mod schema_gated {
             "messages must not be empty".to_string(),
         ))]);
 
-        let result: Result<Answer, Error> = schema_gated(
+        let result: Result<Answer, Error> = repaired(
             &model,
             &ctx(None, Path::new(".")),
             String::new(),

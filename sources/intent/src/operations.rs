@@ -1,5 +1,5 @@
 //! The judgment operations: `survey` and `extract` — schema-gated
-//! legs through [`adapter::schema_gated`], with the id-grammar answer
+//! legs through [`adapter::repaired`], with the id-grammar answer
 //! tails repaired inside its bounded loop.
 //!
 //! The intent source is degenerate by construction: the binding
@@ -8,7 +8,7 @@
 
 use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA, evidence_tail, leads_tail};
 use adapter::seam::{Context, Error, Evidence, Lead, SourceMetadata};
-use adapter::{Model, schema_gated};
+use adapter::{Model, repaired};
 
 use crate::registry;
 
@@ -36,7 +36,7 @@ const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and
 ///
 /// # Errors
 ///
-/// As [`adapter::schema_gated`]; a tail failure that survives the
+/// As [`adapter::repaired`]; a tail failure that survives the
 /// repair budget is [`Error::Internal`].
 pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>, Error> {
     let system = registry::body("prompts/survey.md").to_string();
@@ -54,7 +54,7 @@ pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>,
          yourself.",
         id = ctx.adapter_id,
     );
-    schema_gated(model, ctx, system, user, "leads", LEADS_ANSWER_SCHEMA, leads_tail).await
+    repaired(model, ctx, system, user, "leads", LEADS_ANSWER_SCHEMA, leads_tail).await
 }
 
 /// Extract the lead's Evidence: the single `kind: intent` claim
@@ -65,7 +65,7 @@ pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>,
 ///
 /// # Errors
 ///
-/// As [`adapter::schema_gated`]; a tail failure that survives the
+/// As [`adapter::repaired`]; a tail failure that survives the
 /// repair budget is [`Error::Internal`].
 pub async fn extract<P: Model>(
     model: &P, ctx: &Context<'_>, lead: &Lead,
@@ -84,5 +84,5 @@ pub async fn extract<P: Model>(
         id = ctx.adapter_id,
         lead = lead.render(),
     );
-    schema_gated(model, ctx, system, user, "evidence", EVIDENCE_ANSWER_SCHEMA, evidence_tail).await
+    repaired(model, ctx, system, user, "evidence", EVIDENCE_ANSWER_SCHEMA, evidence_tail).await
 }
