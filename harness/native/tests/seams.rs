@@ -10,7 +10,7 @@ use specify_dev::provider::{Provider, metadata};
 use tempfile::TempDir;
 use workflow::adapter::metadata::Request as MetadataRequest;
 use workflow::adapter::{AdapterRef, Axis, Resolver};
-use workflow::seam::{Error, Input, Lead, SourceSeam as _, TargetSeam as _, WorkingTree};
+use workflow::seam::{Error, Input, Lead, Source as _, Target as _, WorkingTree};
 use workflow::slice::BuildStatus;
 
 fn lead(id: &str) -> Lead {

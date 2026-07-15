@@ -6,7 +6,7 @@
 //! without a wasm runtime:
 //!
 //! - [`provider`] — [`provider::Provider`]: `workflow::handler::Anchor` +
-//!   `omnia_guest::Model` + `SourceSeam` / `TargetSeam` as an
+//!   `omnia_guest::Model` + `Source` / `Target` as an
 //!   in-process dispatch table over the sibling adapter crates'
 //!   `operations` modules, plus the matching describe runner.
 //! - [`model`] — the native `Model` backends: [`model::CursorModel`]
