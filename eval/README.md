@@ -54,7 +54,7 @@ Scenario anatomy and the index live in [`scenarios/README.md`](scenarios/README.
 
 ## The harness / `engine` wrapper split
 
-The reusable, adapter-agnostic core lives in Specify as [`specify/crates/harness`](https://github.com/augentic/specify/tree/main/crates/harness): the typed `Catalog` builder over the per-axis operations traits (`adapter::Source` / `adapter::Target`), the native seam `Provider`, the guest-side `Model` bridge, the lazy `DevModel` connection with the `SPECIFY_EVAL_MODEL` override, the request `telemetry` tally, the MCP reference shelves, and the generic trial / scenario / command / HTTP drivers behind one `catalog::Binding` hook. It carries **no dependency on any concrete adapter crate** (enforced by its `tests/boundary.rs`) — the invariant that lets Specify's `crates/eval` instantiate it with the testkit fixture and this repository instantiate it with the real implementors. [`engine/`](engine/) is this repository's wrapper: one builder call per linked first-party adapter in [`src/lib.rs`](engine/src/lib.rs), the trial [`Profile`](engine/src/main.rs) over the shared `trial.env` inputs, the contracts-specific deterministic grading in [`src/grade.rs`](engine/src/grade.rs), and the scenario definitions — everything that names an adapter or a repo path stays here.
+The reusable, adapter-agnostic core lives in Specify as [`specify/crates/harness`](https://github.com/augentic/specify/tree/main/crates/harness): the typed `Catalog` builder over the per-axis operations traits (`adapter::Source` / `adapter::Target`), the native seam `Provider`, the guest-side `Model` bridge, the lazy `DevModel` connection with the `SPECIFY_EVAL_MODEL` override, the request `telemetry` tally, the MCP reference shelves, and the generic trial / scenario / command / HTTP drivers behind one `catalog::Binding` hook. It carries **no dependency on any concrete adapter crate** (enforced by its `tests/boundary.rs`) — the invariant that lets Specify's `crates/eval` instantiate it with the testkit fixture and this repository instantiate it with the real implementors. [`engine/`](engine/) is this repository's wrapper: one builder call per linked first-party adapter in [`src/lib.rs`](engine/src/lib.rs), the trial [`Profile`](engine/src/main.rs) over the shared `trial.env` inputs, the contracts-specific deterministic grading in [`src/main.rs`](engine/src/main.rs), and the scenario definitions — everything that names an adapter or a repo path stays here.
 
 ## Model judgment
 
@@ -82,7 +82,7 @@ Every step runs the production operation through the shared typed command router
 
 ## Grading
 
-Hard assertions only (`engine/src/grade.rs`):
+Hard assertions only (`engine/src/main.rs`):
 
 | Stage   | Check              | Pass condition                                                        |
 | ------- | ------------------ | ---------------------------------------------------------------------- |
