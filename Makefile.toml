@@ -3,6 +3,9 @@
 
 [env]
 CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
+# The published `specify:core` component the wasm change example runs.
+# Advances together with the engine pin in harness/native/Cargo.toml.
+SPECIFY_CORE_VERSION = "0.27.2"
 
 [config]
 default_to_workspace = true
@@ -168,6 +171,97 @@ args = [
   "--",
   "${@}",
 ]
+
+# The native live-model trial (`specify-dev eval`): the operator rhythm
+# over a persistent `sandbox/eval/` project with the linked adapters,
+# graded by deterministic validators only. Live-only — needs an
+# authenticated cursor-agent on PATH; never part of `ci`. A full pass
+# cleans the sandbox; a failing phase retains it for in-place review
+# and per-phase re-runs (`cargo make eval execute`).
+[tasks.eval]
+command = "cargo"
+args = [
+  "run",
+  "-q",
+  "--manifest-path",
+  "harness/native/Cargo.toml",
+  "--",
+  "eval",
+  "${@}",
+]
+env_files = [".env"]
+
+# -------------------------------------
+# The wasm change example
+# -------------------------------------
+# The end-to-end example over the real WIT seam: the published
+# `specify:core` guest composed with this repo's built adapter
+# components in one Omnia deployment, driven through the operator
+# rhythm by the eval-driver host. Operator-invoked demo posture — exit
+# codes plus a final artifact-exists check, not a graded test.
+
+# Fetch the pinned core component into the gitignored cache. Uses the
+# same wkg vendoring pattern as wit/ (see wit/README.md); the registry
+# requires authenticated wkg credentials.
+[tasks.core-fetch]
+script = '''
+set -euo pipefail
+mkdir -p target/core
+wkg get "specify:core@${SPECIFY_CORE_VERSION}" \
+  --config wit/config.toml \
+  --output target/core/specify.wasm
+echo "fetched specify:core@${SPECIFY_CORE_VERSION} -> target/core/specify.wasm"
+'''
+
+[tasks.change-clean]
+script = '''
+rm -rf sandbox/change
+'''
+
+[tasks.change-run]
+dependencies = ["change-clean", "adapter"]
+env_files = [".env"]
+script = '''
+set -euo pipefail
+
+test -f target/core/specify.wasm || {
+  echo "missing target/core/specify.wasm; run \`cargo make core-fetch\` first" >&2
+  exit 1
+}
+
+mkdir -p sandbox/change/{workspace,cache,store}
+cp -R examples/change/seed/. sandbox/change/workspace/
+cp target/wasm32-wasip2/release/contracts.wasm sandbox/change/workspace/contracts.wasm
+
+cargo build -p harness --example eval-driver
+
+# The HTTP trigger serves every adapter's /mcp/<name> reference route;
+# the env grants point the adapters' spawned agents at it.
+export HTTP_ADDR="${HTTP_ADDR:-127.0.0.1:7791}"
+export SPECIFY_DOCUMENTATION_MCP_URL="http://$HTTP_ADDR/mcp/documentation"
+export SPECIFY_INTENT_MCP_URL="http://$HTTP_ADDR/mcp/intent"
+export SPECIFY_CONTRACTS_MCP_URL="http://$HTTP_ADDR/mcp/contracts"
+
+run() {
+  ./target/debug/examples/eval-driver run --config examples/change/omnia.toml -- "$@"
+}
+
+# The operator rhythm
+run init ./contracts.wasm --name change
+run plan author change \
+  --intent "Author the API contracts for the orders service described under docs/: the JSON Schema vocabulary plus the HTTP (OpenAPI) surface. Contracts only - no service implementation." \
+  --source docs=documentation:docs
+run plan transition change approved
+run plan execute
+
+# The final artifact-exists check: the merged contracts baseline.
+found="$(find sandbox/change/workspace/contracts -name '*.yaml' -print -quit 2>/dev/null || true)"
+test -n "$found" || {
+  echo "change example produced no merged contract under sandbox/change/workspace/contracts/" >&2
+  exit 1
+}
+echo "change example: merged contracts baseline at sandbox/change/workspace/contracts/"
+'''
 
 # Fast dev-loop builds of the adapter components: same `--release`
 # artifact path the engine's bare-name resolution probes

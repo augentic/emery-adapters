@@ -44,7 +44,7 @@ pub async fn serve(argv: &[String]) -> Result<ExitCode> {
     let base = format!("http://127.0.0.1:{}", listener.local_addr()?.port());
     println!("specify-dev serving {} at {base}", project_dir.display());
 
-    let model = DevModel::from_env(&project_dir)?;
+    let model = DevModel::new(&project_dir);
     let provider = Provider::new(project_dir, model).mcp_base(base);
     let router = transport::http::router(Invoker::new("specify", provider))
         .into_axum()

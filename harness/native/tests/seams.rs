@@ -1,17 +1,21 @@
 //! Seam-level coverage of the native [`Provider`]: the in-process dispatch
 //! table reaches the real adapter operations (scripted through
-//! `omnia_testkit::model::Harness`), the DTO mappings match the guest shim's WIT
-//! projections (claim JSON keys, report widening), and the metadata
-//! runner answers both axes.
+//! `omnia_testkit::model::Scripted`), the DTO mappings match the guest
+//! shim's WIT projections (typed claims, report widening), and the
+//! metadata runner answers both axes.
 
-use omnia_testkit::model::{Harness, Scripted, mcp_grants};
-use serde_json::json;
+use std::sync::{Arc, Mutex};
+
+use artifacts::evidence::{Claim, ClaimKind};
+use omnia_guest::Model;
+use omnia_guest::model::{Reply, Request, Tool};
+use omnia_testkit::model::Scripted;
+use project::adapter::metadata::Request as MetadataRequest;
+use project::adapter::{AdapterRef, Axis, Resolver};
+use project::seam::wire::BuildStatus;
+use project::seam::{Error, Input, Lead, Source as _, Target as _, WorkingTree};
 use specify_dev::provider::{Provider, metadata};
 use tempfile::TempDir;
-use workflow::adapter::metadata::Request as MetadataRequest;
-use workflow::adapter::{AdapterRef, Axis, Resolver};
-use workflow::seam::{Error, Input, Lead, Source as _, Target as _, WorkingTree};
-use workflow::slice::BuildStatus;
 
 fn lead(id: &str) -> Lead {
     Lead {
@@ -28,8 +32,37 @@ fn tree() -> WorkingTree {
     }
 }
 
-fn model(answers: impl IntoIterator<Item = &'static str>) -> Harness<Scripted> {
-    Harness::new(Scripted::answers(answers))
+fn model(answers: impl IntoIterator<Item = &'static str>) -> Scripted {
+    Scripted::answers(answers)
+}
+
+/// A transparent [`Model`] wrapper recording every request, standing
+/// in for the retired testkit harness where a test asserts on the
+/// request the seam dispatch issued.
+#[derive(Clone)]
+struct Recording {
+    inner: Scripted,
+    requests: Arc<Mutex<Vec<Request>>>,
+}
+
+impl Recording {
+    fn new(inner: Scripted) -> Self {
+        Self {
+            inner,
+            requests: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    fn requests(&self) -> Vec<Request> {
+        self.requests.lock().expect("the request log is never poisoned").clone()
+    }
+}
+
+impl Model for Recording {
+    async fn create(&self, request: Request) -> Result<Reply, omnia_guest::model::Error> {
+        self.requests.lock().expect("the request log is never poisoned").push(request.clone());
+        self.inner.create(request).await
+    }
 }
 
 #[tokio::test]
@@ -46,7 +79,7 @@ async fn survey_dispatches_intent() {
 }
 
 #[tokio::test]
-async fn extract_claim_json_projection() {
+async fn extract_typed_claim_projection() {
     let tmp = TempDir::new().expect("tempdir");
     let model = model([
         r#"{"authority":"intent","claims":[{"kind":"intent","id":"password-reset","statement":"Let users reset passwords."}]}"#,
@@ -61,19 +94,28 @@ async fn extract_claim_json_projection() {
     assert_eq!(evidence.authority, artifacts::evidence::AuthorityClass::Intent);
     // The claim crosses through the compact seam record, exactly like
     // the WIT path: modeled keys survive, open per-kind fields do not.
-    assert_eq!(evidence.claims, vec![json!({ "kind": "intent", "id": "password-reset" })]);
+    let mut expected = Claim::new(ClaimKind::Intent);
+    expected.id = Some("password-reset".to_string());
+    assert_eq!(evidence.claims, vec![expected]);
 }
 
 #[tokio::test]
 async fn mcp_base_reference_grant() {
     let tmp = TempDir::new().expect("tempdir");
-    let model = model([r#"{"leads":[]}"#]);
+    let model = Recording::new(model([r#"{"leads":[]}"#]));
     let provider = Provider::new(tmp.path(), model).mcp_base("http://127.0.0.1:7737".to_string());
 
     provider.survey("source:intent".to_string()).await.expect("survey");
 
     let requests = provider.model().requests();
-    let grants = mcp_grants(&requests[0]);
+    let grants: Vec<_> = requests[0]
+        .tools
+        .iter()
+        .filter_map(|tool| match tool {
+            Tool::Mcp(grant) => Some(grant),
+            Tool::Function(_) => None,
+        })
+        .collect();
     assert_eq!(grants.len(), 1, "one references grant per judgment leg");
     assert_eq!(grants[0].name, "intent-references");
     assert_eq!(grants[0].url, "http://127.0.0.1:7737/mcp/intent");

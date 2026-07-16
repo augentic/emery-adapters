@@ -168,12 +168,13 @@ checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
 [[package]]
 name = "artifacts"
 version = "0.27.2"
-source = "git+https://github.com/augentic/specify.git?rev=2e4ca5b8ed14235984d8dbe6a0336757ff87db62#2e4ca5b8ed14235984d8dbe6a0336757ff87db62"
+source = "git+https://github.com/augentic/specify.git?rev=46e93f1ae58d066430f73fd68bab5f0bd5120620#46e93f1ae58d066430f73fd68bab5f0bd5120620"
 dependencies = [
+ "diagnostics",
  "error",
  "glob",
  "regex",
- "schema",
+ "schemars",
  "serde",
  "serde-saphyr",
  "serde_json",
@@ -491,7 +492,7 @@ name = "captures"
 version = "0.1.0"
 dependencies = [
  "adapter",
- "prose",
+ "prose 0.1.0",
  "wasip3",
 ]
 
@@ -531,6 +532,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "change"
+version = "0.27.2"
+source = "git+https://github.com/augentic/specify.git?rev=46e93f1ae58d066430f73fd68bab5f0bd5120620#46e93f1ae58d066430f73fd68bab5f0bd5120620"
+dependencies = [
+ "artifacts",
+ "diagnostics",
+ "error",
+ "jiff",
+ "omnia-guest",
+ "project",
+ "prose 0.27.2",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "slice",
+]
+
+[[package]]
 name = "chrono"
 version = "0.4.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -546,9 +565,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.6.1"
+version = "4.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ddb117e43bbf7dacf0a4190fef4d345b9bad68dfc649cb349e7d17d28428e51"
+checksum = "dd059f9da4f5c36b3787f65d38ccaab1cc315f07b01f89abc8359ee6a8205011"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -556,9 +575,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.6.0"
+version = "4.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "714a53001bf66416adb0e2ef5ac857140e7dc3a0c48fb28b2f10762fc4b5069f"
+checksum = "f09628afdcc538b57f3c6341e9c8e9970f18e4a481690a64974d7023bd33548b"
 dependencies = [
  "anstream",
  "anstyle",
@@ -650,7 +669,7 @@ name = "contracts"
 version = "0.1.0"
 dependencies = [
  "adapter",
- "prose",
+ "prose 0.1.0",
  "semver",
  "serde",
  "serde-saphyr",
@@ -1052,6 +1071,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7cd812cc2bc1d69d4764bd80df88b4317eaef9e773c75226407d9bc0876b211c"
 
 [[package]]
+name = "diagnostics"
+version = "0.27.2"
+source = "git+https://github.com/augentic/specify.git?rev=46e93f1ae58d066430f73fd68bab5f0bd5120620#46e93f1ae58d066430f73fd68bab5f0bd5120620"
+dependencies = [
+ "base16ct",
+ "schemars",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "sha2 0.11.0",
+]
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1088,7 +1120,7 @@ name = "documentation"
 version = "0.1.0"
 dependencies = [
  "adapter",
- "prose",
+ "prose 0.1.0",
  "wasip3",
 ]
 
@@ -1097,6 +1129,12 @@ name = "dunce"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
+
+[[package]]
+name = "dyn-clone"
+version = "1.0.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
 name = "either"
@@ -1162,7 +1200,7 @@ dependencies = [
 [[package]]
 name = "error"
 version = "0.27.2"
-source = "git+https://github.com/augentic/specify.git?rev=2e4ca5b8ed14235984d8dbe6a0336757ff87db62#2e4ca5b8ed14235984d8dbe6a0336757ff87db62"
+source = "git+https://github.com/augentic/specify.git?rev=46e93f1ae58d066430f73fd68bab5f0bd5120620#46e93f1ae58d066430f73fd68bab5f0bd5120620"
 dependencies = [
  "serde-saphyr",
  "thiserror 2.0.18",
@@ -1891,7 +1929,7 @@ name = "intent"
 version = "0.1.0"
 dependencies = [
  "adapter",
- "prose",
+ "prose 0.1.0",
  "wasip3",
 ]
 
@@ -2415,7 +2453,7 @@ name = "omnia"
 version = "0.1.0"
 dependencies = [
  "adapter",
- "prose",
+ "prose 0.1.0",
  "serde",
  "wasip3",
 ]
@@ -2530,9 +2568,7 @@ name = "omnia-testkit"
 version = "0.35.0"
 source = "git+https://github.com/augentic/omnia.git#47eff78b1a4b21947c80b3b2ccb312d018a3952b"
 dependencies = [
- "anyhow",
  "omnia-guest",
- "omnia-wasi-model",
 ]
 
 [[package]]
@@ -3034,6 +3070,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "project"
+version = "0.27.2"
+source = "git+https://github.com/augentic/specify.git?rev=46e93f1ae58d066430f73fd68bab5f0bd5120620#46e93f1ae58d066430f73fd68bab5f0bd5120620"
+dependencies = [
+ "artifacts",
+ "diagnostics",
+ "error",
+ "jiff",
+ "omnia-guest",
+ "petgraph",
+ "schemars",
+ "semver",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "strum",
+ "thiserror 2.0.18",
+ "toml",
+]
+
+[[package]]
 name = "proptest"
 version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3051,6 +3108,11 @@ dependencies = [
 [[package]]
 name = "prose"
 version = "0.1.0"
+
+[[package]]
+name = "prose"
+version = "0.27.2"
+source = "git+https://github.com/augentic/specify.git?rev=46e93f1ae58d066430f73fd68bab5f0bd5120620#46e93f1ae58d066430f73fd68bab5f0bd5120620"
 
 [[package]]
 name = "prost"
@@ -3374,9 +3436,9 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.13.0"
+version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a0e75113e14dc5acb068cd0786884f214f1312650a3d36d269f5c4f3cdee8a2"
+checksum = "f020237b6c8eed93db2e2cb53c00c60a8e1bc73da7d073199a1180401450218d"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -3386,9 +3448,9 @@ dependencies = [
 
 [[package]]
 name = "regex-automata"
-version = "0.4.15"
+version = "0.4.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f388202e4b80542a0921078cc23b6333bcf1409c1e3f86404cae4766a6131db"
+checksum = "8fcfdb36bda0c880c5931cdc7a2bcdc8ba4556847b9d912bca70bc94708711ad"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -3693,20 +3755,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "scenario"
-version = "0.27.2"
-source = "git+https://github.com/augentic/specify.git?rev=2e4ca5b8ed14235984d8dbe6a0336757ff87db62#2e4ca5b8ed14235984d8dbe6a0336757ff87db62"
-dependencies = [
- "error",
- "jiff",
- "schema",
- "serde",
- "serde-saphyr",
- "serde_json",
- "strum",
-]
-
-[[package]]
 name = "schannel"
 version = "0.1.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3716,18 +3764,28 @@ dependencies = [
 ]
 
 [[package]]
-name = "schema"
-version = "0.27.2"
-source = "git+https://github.com/augentic/specify.git?rev=2e4ca5b8ed14235984d8dbe6a0336757ff87db62#2e4ca5b8ed14235984d8dbe6a0336757ff87db62"
+name = "schemars"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2b42f36aa1cd011945615b92222f6bf73c599a102a300334cd7f8dbeec726cc"
 dependencies = [
- "base16ct",
- "error",
- "jsonschema",
+ "dyn-clone",
+ "ref-cast",
+ "schemars_derive",
  "serde",
- "serde-saphyr",
  "serde_json",
- "sha2 0.11.0",
- "thiserror 2.0.18",
+]
+
+[[package]]
+name = "schemars_derive"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d115b50f4aaeea07e79c1912f645c7513d81715d0420f8bc77a18c6260b307f"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "serde_derive_internals",
+ "syn",
 ]
 
 [[package]]
@@ -3741,7 +3799,7 @@ name = "screenshots"
 version = "0.1.0"
 dependencies = [
  "adapter",
- "prose",
+ "prose 0.1.0",
  "wasip3",
 ]
 
@@ -3830,6 +3888,17 @@ name = "serde_derive"
 version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d540f220d3187173da220f885ab66608367b6574e925011a9353e4badda91d79"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "serde_derive_internals"
+version = "0.29.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "18d26a20a969b9e3fdf2fc2d9f21eda6c40e2de84c9408bb5d3b05d499aae711"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3983,6 +4052,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
+name = "slice"
+version = "0.27.2"
+source = "git+https://github.com/augentic/specify.git?rev=46e93f1ae58d066430f73fd68bab5f0bd5120620#46e93f1ae58d066430f73fd68bab5f0bd5120620"
+dependencies = [
+ "artifacts",
+ "diagnostics",
+ "error",
+ "jiff",
+ "omnia-guest",
+ "project",
+ "prose 0.27.2",
+ "regex",
+ "schemars",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "strum",
+]
+
+[[package]]
 name = "smallvec"
 version = "1.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4010,23 +4099,22 @@ dependencies = [
  "artifacts",
  "axum",
  "captures",
+ "change",
  "clap",
  "contracts",
+ "diagnostics",
  "documentation",
  "error",
  "intent",
- "jiff",
  "omnia 0.1.0",
  "omnia 0.35.0",
  "omnia-cursor",
  "omnia-guest",
  "omnia-testkit",
  "omnia-wasi-model",
- "scenario",
- "schema",
+ "project",
  "screenshots",
  "serde",
- "serde-saphyr",
  "serde_json",
  "tempfile",
  "tokio",
@@ -4034,7 +4122,6 @@ dependencies = [
  "transport",
  "typescript",
  "vectis",
- "workflow",
 ]
 
 [[package]]
@@ -4389,9 +4476,9 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "1.1.2+spec-1.1.0"
+version = "1.1.3+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81f3d15e84cbcd896376e6730314d59fb5a87f31e4b038454184435cd57defee"
+checksum = "53c96ecdfa941c8fc4fcaed14f99ada8ebed502eef533015095a07e3301d4c3c"
 dependencies = [
  "indexmap",
  "serde_core",
@@ -4422,9 +4509,9 @@ dependencies = [
 
 [[package]]
 name = "toml_writer"
-version = "1.1.1+spec-1.1.0"
+version = "1.1.2+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "756daf9b1013ebe47a8776667b466417e2d4c5679d441c26230efd9ef78692db"
+checksum = "7d56353a2a665ad0f41a421187180aab746c8c325620617ad883a99a1cbe66d2"
 
 [[package]]
 name = "tonic"
@@ -4604,16 +4691,18 @@ dependencies = [
 [[package]]
 name = "transport"
 version = "0.27.2"
-source = "git+https://github.com/augentic/specify.git?rev=2e4ca5b8ed14235984d8dbe6a0336757ff87db62#2e4ca5b8ed14235984d8dbe6a0336757ff87db62"
+source = "git+https://github.com/augentic/specify.git?rev=46e93f1ae58d066430f73fd68bab5f0bd5120620#46e93f1ae58d066430f73fd68bab5f0bd5120620"
 dependencies = [
  "artifacts",
+ "change",
  "clap",
  "error",
  "omnia-guest",
+ "project",
  "serde",
  "serde_json",
+ "slice",
  "strum",
- "workflow",
 ]
 
 [[package]]
@@ -4649,7 +4738,7 @@ name = "typescript"
 version = "0.1.0"
 dependencies = [
  "adapter",
- "prose",
+ "prose 0.1.0",
  "wasip3",
 ]
 
@@ -4786,7 +4875,7 @@ dependencies = [
  "adapter",
  "image",
  "jsonschema",
- "prose",
+ "prose 0.1.0",
  "resvg",
  "serde",
  "serde-saphyr",
@@ -5700,29 +5789,6 @@ dependencies = [
  "log",
  "thiserror 1.0.69",
  "wast",
-]
-
-[[package]]
-name = "workflow"
-version = "0.27.2"
-source = "git+https://github.com/augentic/specify.git?rev=2e4ca5b8ed14235984d8dbe6a0336757ff87db62#2e4ca5b8ed14235984d8dbe6a0336757ff87db62"
-dependencies = [
- "anyhow",
- "artifacts",
- "error",
- "glob",
- "jiff",
- "omnia-guest",
- "petgraph",
- "regex",
- "schema",
- "semver",
- "serde",
- "serde-saphyr",
- "serde_json",
- "strum",
- "tempfile",
- "thiserror 2.0.18",
 ]
 
 [[package]]

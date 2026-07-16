@@ -45,10 +45,10 @@ harness/                # hosted-deployment and native workflow harnesses
                       # eval-driver host) + guest.rs (the eval-guest cdylib)
                       # over the per-adapter scenario trees (contracts,
                       # vectis)
-  native/             # `specify-dev`: linked-adapter engine runtime and
-                      # scripted/replay full-loop integration suite — a
-                      # standalone workspace excluded from the root, pinned
-                      # to a declared Specify engine revision
+  native/             # `specify-dev`: linked-adapter engine runtime, the
+                      # native seam/CLI integration suite, and the live
+                      # `eval` trial — a standalone workspace excluded from
+                      # the root, pinned to a declared Specify engine revision
 Cargo.toml            # workspace: `crates/*` + `{sources,targets}/*` + `harness`
                       # (excludes `harness/native`)
 ```
@@ -89,7 +89,7 @@ cargo make release
 
 The `harness` package keeps composed WASM/WIT conformance (`harness/composed.rs`) distinct from live prompt-quality evaluation (`harness/live.rs`). Composed tests build guests from source on first use when artifacts are absent under `target/wasm32-wasip2/debug/`.
 
-The `specify-dev` package under `harness/native/` is a **standalone workspace**, deliberately excluded from the root: it links every adapter crate in-process and consumes Specify's engine crates from a revision-pinned git source, so ordinary adapter commands never resolve (or authenticate to) that private dependency. It provides the fast, model-free full-loop and seam suite without coupling the engine repository back to concrete adapters:
+The `specify-dev` package under `harness/native/` is a **standalone workspace**, deliberately excluded from the root: it links every adapter crate in-process and consumes Specify's engine crates from a revision-pinned git source, so ordinary adapter commands never resolve (or authenticate to) that private dependency. It provides the fast, model-free seam suite — and carries the live `cargo make eval` trial (see [TESTING.md](TESTING.md)) — without coupling the engine repository back to concrete adapters:
 
 ```bash
 cargo make native-test     # nextest over harness/native (its own manifest/lock)

@@ -8,19 +8,12 @@ repository.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
-# Flattened like omnia's examples/ package: the lib is the shared host-side
-# harness both test targets link (empty on wasm32 via its crate-level cfg
-# gate), plus the two example targets below. Deliberately outside crates/ —
-# the package is a test affordance for the dev loop, not mainline guest
-# support.
 [lib]
 path = "harness.rs"
 
 [dependencies]
 cfg-if.workspace = true
 
-# Host-only: the runtime never compiles for the guest wasm32 targets, so
-# its dependencies live under the same target gate omnia itself uses.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 anyhow.workspace = true
 omnia.workspace = true
@@ -29,25 +22,17 @@ omnia-wasi-http.workspace = true
 omnia-wasi-model.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 
-# Guest-only: the component body compiles solely for wasm32, so its
-# dependencies live under the same target gate omnia's guests use.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 serde_json.workspace = true
 wasip3.workspace = true
 wit-bindgen.workspace = true
 
-# The test targets' own (host-only) support; kept out of the wasm32 example
-# builds by the same target gate. `prose` is the build-time embed walk the
-# overlay seeding test replays for parity; `omnia-testkit` and `serde_json`
-# back the composed-deployment tests.
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 omnia-testkit = { workspace = true, features = ["runtime"] }
 prose.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 
-# `test = true` runs the driver's unit tests (the model-override decision)
-# under ordinary `cargo test`; examples default to `test = false`.
 [[example]]
 name = "eval-driver"
 path = "runtime.rs"
@@ -58,14 +43,10 @@ name = "eval-guest"
 path = "guest.rs"
 crate-type = ["cdylib"]
 
-# The scenario runner: non-ignored `wiring` smokes for CI plus
-# `#[ignore]`d live quality tests selected directly through Cargo's test filter.
 [[test]]
 name = "live"
 path = "live.rs"
 
-# The model-free composed-deployment tests host built adapter components on
-# the Omnia runtime via omnia-testkit and own WASM/WIT conformance only.
 [[test]]
 name = "composed"
 path = "composed.rs"

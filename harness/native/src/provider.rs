@@ -7,24 +7,25 @@
 //!
 //! The mapping layer between the adapter seam DTOs
 //! ([`adapter::seam`]) and the workflow seam DTOs
-//! ([`workflow::seam`]) lives here in full, shaped exactly like the
-//! guest shim's WIT mapping (`src/provider.rs` at the repo root): the
-//! same claim-JSON projection (`payload` / `backing-path` keys) and the
-//! same [`BuildReport`] widening, so evidence documents and build
-//! reports are byte-compatible across shims.
+//! ([`project::seam`]) lives here in full, shaped exactly like the
+//! guest shim's WIT mapping (`src/provider.rs` at the engine repo
+//! root): the same typed-claim projection (open per-kind fields do
+//! not cross the compact seam record) and the same [`BuildReport`]
+//! widening, so evidence documents and build reports are
+//! byte-compatible across shims.
 
 use std::path::{Path, PathBuf};
 
 use adapter::seam::{self as aseam, Context};
 use artifacts::evidence::AuthorityClass;
+use diagnostics::{Artifact, Diagnostic, DiagnosticKind, DiagnosticSource, Severity};
 use error::Error;
 use omnia_guest::Model;
 use omnia_guest::model::{Reply, Request};
-use schema::diagnostics::{Artifact, Diagnostic, DiagnosticKind, DiagnosticSource, Severity};
-use workflow::adapter::metadata::{Metadata, Request as MetadataRequest};
-use workflow::adapter::{AdapterRef, Axis, Origin, ResolvedSource, ResolvedTarget, Resolver};
-use workflow::seam::{self, Evidence, Input, Lead, Source, Target, WorkingTree};
-use workflow::slice::{BUILD_VERSION, BuildOutput, BuildReport, BuildStatus, UiSurface};
+use project::adapter::metadata::{Metadata, Request as MetadataRequest};
+use project::adapter::{AdapterRef, Axis, Origin, ResolvedSource, ResolvedTarget, Resolver};
+use project::seam::{self, Evidence, Input, Lead, Source, Target, WorkingTree};
+use project::seam::wire::{BUILD_VERSION, BuildOutput, BuildReport, BuildStatus, UiSurface};
 
 use crate::catalog;
 
@@ -32,7 +33,7 @@ use crate::catalog;
 /// need, backed by the linked adapter crates and a native [`Model`].
 ///
 /// Generic over the model backend so the dev binary binds
-/// [`crate::model::DevModel`] and tests bind Omnia's recorded scripted harness.
+/// [`crate::model::DevModel`] and tests bind Omnia's scripted double.
 #[derive(Debug)]
 pub struct Provider<M> {
     /// The configured project root every project-scoped verb anchors at.
@@ -44,6 +45,16 @@ pub struct Provider<M> {
     /// reference shelves (e.g. `http://127.0.0.1:<port>`); `None` runs
     /// judgment legs without reference grants.
     mcp_base: Option<String>,
+}
+
+impl<M: Clone> Clone for Provider<M> {
+    fn clone(&self) -> Self {
+        Self {
+            project_dir: self.project_dir.clone(),
+            model: self.model.clone(),
+            mcp_base: self.mcp_base.clone(),
+        }
+    }
 }
 
 impl<M> Provider<M> {
@@ -78,7 +89,7 @@ impl<M> Provider<M> {
     }
 }
 
-impl<M: Send + Sync + 'static> workflow::handler::Anchor for Provider<M> {
+impl<M: Send + Sync + 'static> project::handler::Anchor for Provider<M> {
     fn project_root(&self) -> &Path {
         &self.project_dir
     }
@@ -90,7 +101,7 @@ impl<M: Send + Sync> Resolver for Provider<M> {
     ) -> Result<ResolvedSource, Error> {
         require_bare(adapter_ref)?;
         let entry = catalog::get(Axis::Source, &adapter_ref.name)?;
-        workflow::adapter::resolver::source(adapter_ref, entry.metadata(), origin(entry))
+        project::adapter::resolver::source(adapter_ref, entry.metadata(), origin(entry))
     }
 
     fn resolve_target(
@@ -98,11 +109,11 @@ impl<M: Send + Sync> Resolver for Provider<M> {
     ) -> Result<ResolvedTarget, Error> {
         require_bare(adapter_ref)?;
         let entry = catalog::get(Axis::Target, &adapter_ref.name)?;
-        workflow::adapter::resolver::target(adapter_ref, entry.metadata(), origin(entry))
+        project::adapter::resolver::target(adapter_ref, entry.metadata(), origin(entry))
     }
 }
 
-impl<M: Send + Sync> workflow::adapter::Hydrator for Provider<M> {
+impl<M: Send + Sync> project::adapter::Hydrator for Provider<M> {
     async fn fetch(&self, url: &str) -> Result<Vec<u8>, Error> {
         Err(Error::Diag {
             code: "adapter-hydrate-unavailable",
@@ -146,7 +157,7 @@ impl<M: Model> Source for Provider<M> {
         let evidence = catalog::extract(&self.model, &ctx, &id, &lead).await.map_err(map_error)?;
         Ok(Evidence {
             authority: map_authority(evidence.authority),
-            claims: evidence.claims.iter().map(claim_json).collect(),
+            claims: evidence.claims.into_iter().map(map_claim).collect(),
         })
     }
 }
@@ -266,51 +277,41 @@ const fn map_authority(authority: aseam::Authority) -> AuthorityClass {
     }
 }
 
-/// Adapter [`aseam::Claim`] → the open claim JSON object the composed
-/// Evidence document carries — the same projection the guest shim
-/// applies to the WIT claim record (`payload` for an inline payload,
-/// `backing-path` for a filesystem pointer).
-fn claim_json(claim: &aseam::Claim) -> serde_json::Value {
-    let mut object = serde_json::Map::new();
-    object.insert("kind".into(), claim_kind_str(claim.kind).into());
-    if let Some(id) = &claim.id {
-        object.insert("id".into(), id.clone().into());
-    }
-    if let Some(path) = &claim.path {
-        object.insert("path".into(), path.clone().into());
-    }
-    if let Some(synopsis) = &claim.synopsis {
-        object.insert("synopsis".into(), synopsis.clone().into());
-    }
-    match &claim.backing {
-        Some(aseam::Backing::Payload(payload)) => {
-            object.insert("payload".into(), payload.clone().into());
-        }
-        Some(aseam::Backing::Path(path)) => {
-            object.insert("backing-path".into(), path.clone().into());
-        }
-        None => {}
-    }
-    serde_json::Value::Object(object)
+/// Map a compact adapter [`aseam::Claim`] onto the typed
+/// [`artifacts::evidence::Claim`] — the same projection the guest shim
+/// applies to the WIT claim record. The backing variant flattens onto
+/// the wire shape's `payload` / `backing-path` keys; open per-kind
+/// fields do not cross the compact record, exactly like the WIT path.
+fn map_claim(claim: aseam::Claim) -> artifacts::evidence::Claim {
+    let mut typed = artifacts::evidence::Claim::new(map_claim_kind(claim.kind));
+    typed.id = claim.id;
+    typed.path = claim.path;
+    typed.synopsis = claim.synopsis;
+    typed.set_backing(claim.backing.map(|backing| match backing {
+        aseam::Backing::Payload(payload) => artifacts::evidence::Backing::Payload(payload),
+        aseam::Backing::Path(path) => artifacts::evidence::Backing::Path(path),
+    }));
+    typed
 }
 
-/// The closed claim-kind enum's schema token.
-const fn claim_kind_str(kind: aseam::ClaimKind) -> &'static str {
+/// The closed claim-kind enum, variant-for-variant.
+const fn map_claim_kind(kind: aseam::ClaimKind) -> artifacts::evidence::ClaimKind {
+    use artifacts::evidence::ClaimKind;
     match kind {
-        aseam::ClaimKind::Intent => "intent",
-        aseam::ClaimKind::Requirement => "requirement",
-        aseam::ClaimKind::Criterion => "criterion",
-        aseam::ClaimKind::Decision => "decision",
-        aseam::ClaimKind::Section => "section",
-        aseam::ClaimKind::Diagram => "diagram",
-        aseam::ClaimKind::Contract => "contract",
-        aseam::ClaimKind::Example => "example",
-        aseam::ClaimKind::Excerpt => "excerpt",
-        aseam::ClaimKind::Type => "type",
-        aseam::ClaimKind::Call => "call",
-        aseam::ClaimKind::Region => "region",
-        aseam::ClaimKind::Container => "container",
-        aseam::ClaimKind::Leaf => "leaf",
+        aseam::ClaimKind::Intent => ClaimKind::Intent,
+        aseam::ClaimKind::Requirement => ClaimKind::Requirement,
+        aseam::ClaimKind::Criterion => ClaimKind::Criterion,
+        aseam::ClaimKind::Decision => ClaimKind::Decision,
+        aseam::ClaimKind::Section => ClaimKind::Section,
+        aseam::ClaimKind::Diagram => ClaimKind::Diagram,
+        aseam::ClaimKind::Contract => ClaimKind::Contract,
+        aseam::ClaimKind::Example => ClaimKind::Example,
+        aseam::ClaimKind::Excerpt => ClaimKind::Excerpt,
+        aseam::ClaimKind::Type => ClaimKind::Type,
+        aseam::ClaimKind::Call => ClaimKind::Call,
+        aseam::ClaimKind::Region => ClaimKind::Region,
+        aseam::ClaimKind::Container => ClaimKind::Container,
+        aseam::ClaimKind::Leaf => ClaimKind::Leaf,
     }
 }
 
@@ -369,7 +370,7 @@ fn widen_finding(finding: aseam::Finding) -> Diagnostic {
         None,
     );
     diagnostic.rule_id = finding.rule_id;
-    diagnostic.fingerprint = schema::diagnostics::fingerprint(&diagnostic);
+    diagnostic.fingerprint = diagnostics::fingerprint(&diagnostic);
     diagnostic
 }
 
@@ -384,8 +385,8 @@ const fn map_severity(severity: aseam::Severity) -> Severity {
 }
 
 /// Adapter [`aseam::Platform`] → the workflow [`Platform`] taxonomy.
-const fn map_platform(platform: aseam::Platform) -> workflow::platform::Platform {
-    use workflow::platform::Platform;
+const fn map_platform(platform: aseam::Platform) -> project::platform::Platform {
+    use project::platform::Platform;
     match platform {
         aseam::Platform::Core => Platform::Core,
         aseam::Platform::Ios => Platform::Ios,

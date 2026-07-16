@@ -10,8 +10,8 @@ use adapter::registry::Doc;
 use adapter::seam::{self as aseam, Context};
 use error::Error;
 use omnia_guest::Model;
-use workflow::adapter::metadata::Metadata;
-use workflow::adapter::{Axis, BuildInputDeclaration, PlatformsCapability};
+use project::adapter::metadata::Metadata;
+use project::adapter::{Axis, BuildInputDeclaration, PlatformsCapability};
 
 /// One Rust adapter crate linked into the native shim.
 #[derive(Clone, Copy, Debug)]
@@ -241,8 +241,8 @@ fn target_metadata(record: adapter::seam::TargetMetadata) -> Metadata {
     }
 }
 
-const fn platform(platform: adapter::seam::Platform) -> workflow::platform::Platform {
-    use workflow::platform::Platform;
+const fn platform(platform: adapter::seam::Platform) -> project::platform::Platform {
+    use project::platform::Platform;
     match platform {
         adapter::seam::Platform::Core => Platform::Core,
         adapter::seam::Platform::Ios => Platform::Ios,

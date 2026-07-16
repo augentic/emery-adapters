@@ -1,7 +1,7 @@
 //! `specify-dev` — the Rust-native shim binary.
 //!
-//! Two modes over the same handler layer the wasm guest serves, each
-//! owned by a symmetric transport module:
+//! Two transport modes over the same handler layer the wasm guest
+//! serves, each owned by a symmetric transport module:
 //!
 //! - **CLI mode** (default, [`command`]): the shared typed command
 //!   router against the native provider, plus an ephemeral MCP shelf.
@@ -11,13 +11,10 @@
 //!   with the `/mcp/<name>` shelves on one `TcpListener`; carries its
 //!   own `--project-dir` flag.
 //!
-//! Two quality modes sit beside them: **`guest-loop`**
-//! ([`specify_dev::guest_loop`]) executes the canonical
-//! `guest-execute-loop` scenario in-process once, emitting captured
-//! step results as JSON; **`quality`** ([`specify_dev::quality`]) is
-//! this repo's native-live runner — repeated in-process trials graded
-//! through the pinned `scenario` crate and persisted as a validated
-//! `scenario::bundle` under `quality/runs/`.
+//! One live mode sits beside them: **`eval`** ([`specify_dev::eval`])
+//! is this repo's live-model trial — the operator rhythm over a
+//! persistent `sandbox/eval/` project with the linked adapters,
+//! graded by deterministic validators only.
 
 mod command;
 mod http;
@@ -35,14 +32,7 @@ async fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
-        Some("guest-loop") => match specify_dev::guest_loop::run(&argv[1..]).await {
-            Ok(code) => code,
-            Err(err) => {
-                eprintln!("specify-dev: {err:#}");
-                ExitCode::FAILURE
-            }
-        },
-        Some("quality") => match specify_dev::quality::run(&argv[1..]).await {
+        Some("eval") => match specify_dev::eval::run(&argv[1..]).await {
             Ok(code) => code,
             Err(err) => {
                 eprintln!("specify-dev: {err:#}");

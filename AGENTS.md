@@ -47,6 +47,7 @@ Testing is integration-first:
 - Do not widen public APIs solely for tests.
 - Use `cargo nextest`, not bare `cargo test`, for native workspace tests; process isolation is required by CWD- and environment-mutating suites.
 - Adapter native tests own operation behavior, the native workflow harness owns cross-phase integration, composed tests own WASM/WIT conformance, and live tests own prompt quality. Do not duplicate the same assertion across rungs.
+- The two live rungs are operator-invoked, never CI: `cargo make eval` (the native live-model trial over `sandbox/eval/`, deterministic grading only) and `cargo make change-run` (the wasm change example composing the published `specify:core` with the built adapter components).
 
 Read [`TESTING.md`](TESTING.md) before adding, deleting, or relocating tests.
 
@@ -60,6 +61,9 @@ cargo make ci             # full gate, including vet and deny
 cargo nextest run -p NAME # focused adapter tests
 cargo make adapter NAME   # fast development component build
 cargo make release        # release-build every component
+cargo make eval [phase]   # live-model trial over sandbox/eval (operator-invoked)
+cargo make core-fetch     # fetch the pinned specify:core component
+cargo make change-run     # the wasm change example (operator-invoked)
 ```
 
 Run `cargo make ci` before committing. If it cannot run, report exactly which narrower checks ran and why the full gate was unavailable.

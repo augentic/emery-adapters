@@ -37,7 +37,7 @@ fn assert_created(project: &Path, elsewhere: &Path, output: &Output) {
 }
 
 const EMIT: &[&str] =
-    &["journal", "emit", "slice.build.started", "--payload", r#"{"slice": "demo"}"#];
+    &["journal", "emit", "slice.build.started", "--payload", r#"{"slice-name": "demo"}"#];
 
 mod project_dir_forms {
     use super::*;
@@ -60,7 +60,7 @@ mod project_dir_forms {
         let elsewhere = TempDir::new().expect("tempdir");
 
         let flag = format!("--project-dir={}", project.root().display());
-        let args: Vec<&str> = [flag.as_str()].iter().chain(EMIT.iter()).copied().collect();
+        let args: Vec<&str> = std::iter::once(flag.as_str()).chain(EMIT.iter().copied()).collect();
         let output = run_from(elsewhere.path(), &args);
         assert_created(project.root(), elsewhere.path(), &output);
     }

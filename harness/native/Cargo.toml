@@ -30,32 +30,28 @@ path = "src/main.rs"
 [workspace]
 
 [dependencies]
-anyhow = "1"
+anyhow = "1.0.103"
 axum = "0.8.9"
-clap = { version = "4.6.1", features = ["derive", "env"] }
-jiff = { version = "0.2.32", default-features = false, features = ["serde", "std"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "sync"] }
+clap = { version = "4.6.2", features = ["derive", "env"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+tokio = { version = "1.52.3", features = ["macros", "net", "rt-multi-thread", "sync"] }
 
 # The engine pin: the Specify revision this harness is verified against.
-artifacts = { git = "https://github.com/augentic/specify.git", rev = "2e4ca5b8ed14235984d8dbe6a0336757ff87db62" }
-error = { git = "https://github.com/augentic/specify.git", rev = "2e4ca5b8ed14235984d8dbe6a0336757ff87db62" }
-scenario = { git = "https://github.com/augentic/specify.git", rev = "2e4ca5b8ed14235984d8dbe6a0336757ff87db62" }
-schema = { git = "https://github.com/augentic/specify.git", rev = "2e4ca5b8ed14235984d8dbe6a0336757ff87db62" }
-transport = { git = "https://github.com/augentic/specify.git", rev = "2e4ca5b8ed14235984d8dbe6a0336757ff87db62" }
-workflow = { git = "https://github.com/augentic/specify.git", rev = "2e4ca5b8ed14235984d8dbe6a0336757ff87db62" }
+# The wasm change example consumes the matching published core component;
+# advance SPECIFY_CORE_VERSION in the root Makefile.toml with this rev.
+artifacts = { git = "https://github.com/augentic/specify.git", rev = "46e93f1ae58d066430f73fd68bab5f0bd5120620" }
+change = { git = "https://github.com/augentic/specify.git", rev = "46e93f1ae58d066430f73fd68bab5f0bd5120620" }
+diagnostics = { git = "https://github.com/augentic/specify.git", rev = "46e93f1ae58d066430f73fd68bab5f0bd5120620" }
+error = { git = "https://github.com/augentic/specify.git", rev = "46e93f1ae58d066430f73fd68bab5f0bd5120620" }
+project = { git = "https://github.com/augentic/specify.git", rev = "46e93f1ae58d066430f73fd68bab5f0bd5120620" }
+transport = { git = "https://github.com/augentic/specify.git", rev = "46e93f1ae58d066430f73fd68bab5f0bd5120620" }
 
 omnia = "0.35.0"
 omnia-cursor = "0.28.0"
 omnia-guest = "0.35.0"
-omnia-testkit = { version = "0.35.0", default-features = false, features = ["model", "replay"] }
 omnia-wasi-model = "0.35.0"
 
-# The local adapter crates, consumed as rlibs (the same crates whose cdylib
-# halves ship as wasm components). They stay members of the adapters root
-# workspace; this workspace only links them. `targets/omnia` is renamed to
-# dodge the host `omnia` crate.
 adapter = { path = "../../crates/adapter" }
 captures = { path = "../../sources/captures" }
 contracts = { path = "../../targets/contracts" }
@@ -67,13 +63,10 @@ typescript = { path = "../../sources/typescript" }
 vectis = { path = "../../targets/vectis" }
 
 [dev-dependencies]
-serde-saphyr = "0.0.29"
+omnia-testkit = { version = "0.35.0", default-features = false, features = ["model"] }
 tempfile = "3"
 tower = "0.5.3"
 
-# Mirrors the adapters root: the omnia crates resolve from git until their
-# next crates.io release, and the standalone workspace must repeat the
-# patches because Cargo only honours the top-level manifest's patch table.
 [patch.crates-io]
 omnia = { git = "https://github.com/augentic/omnia.git" }
 omnia-cursor = { git = "https://github.com/augentic/backends.git" }

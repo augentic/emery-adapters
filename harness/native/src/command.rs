@@ -48,13 +48,7 @@ pub async fn run(mut argv: Vec<String>) -> u8 {
             return 1;
         }
     };
-    let model = match DevModel::from_env(&root) {
-        Ok(model) => model,
-        Err(error) => {
-            eprintln!("error: {error:#}");
-            return 1;
-        }
-    };
+    let model = DevModel::new(&root);
     let mut provider = Provider::new(root, model);
     if let Some(base) = mcp::ephemeral_base().await {
         provider = provider.mcp_base(base);

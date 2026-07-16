@@ -1,8 +1,5 @@
 //! The native [`Model`] backends behind [`crate::provider::Provider`].
 //!
-//! The live cursor backend remains local while the deterministic replay
-//! backend is supplied by `omnia-testkit`:
-//!
 //! - [`CursorModel`] — a thin shim over `omnia_cursor::Client` (the
 //!   host-side `WasiModelCtx` backend): map the guest [`Request`] onto
 //!   the `omnia:model/completion` wire shape — the same mapping the
@@ -10,18 +7,13 @@
 //!   into a `ToolHost` whose `local_path` is the project root, which
 //!   is the only thing cursor-agent reads from it. Live-only: dev loop
 //!   and on-demand tasks, never CI. The shim stays local by design
-//!   (`augentic/specify`'s prompt-eval example carries its own copy);
+//!   (`augentic/specify`'s prompt-eval harness carries its own copy);
 //!   omnia ships no native guest-Model-over-`WasiModelCtx` adapter.
-//! - [`omnia_testkit::model::Replay`] — recorded fixtures served through
-//!   `omnia_wasi_model::ModelDefault`'s canonical request-key replay.
-//!   Upstream omnia has since retired both `Replay` and `Harness` in
-//!   favour of the FIFO `Scripted`; retire the `Replay` variant, the
-//!   `features = ["model", "replay"]` pin, and the tests' `Harness`
-//!   wrappers with the next omnia bump.
+//! - [`DevModel`] — the dev binary's lazily connected wrapper, so
+//!   deterministic verbs never require cursor-agent on `PATH`.
 //!
-//! [`DevModel`] is the closed selection the `specify-dev` binary
-//! constructs from the environment; tests bypass it and bind
-//! `omnia_testkit::model::Harness` around a scripted backend.
+//! Tests bypass both and bind `omnia_testkit::model::Scripted` through
+//! the provider's generic parameter.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -31,79 +23,54 @@ use anyhow::{Result, anyhow};
 use omnia::Backend as _;
 use omnia_guest::Model;
 use omnia_guest::model::{Effort, Error, Format, Reply, Request, Role, Tool, Usage};
-use omnia_testkit::model::Replay;
 use omnia_wasi_model as wire;
 use omnia_wasi_model::WasiModelCtx as _;
 use serde_json::Value;
 
-/// The closed backend selection for the dev binary: `cursor` (default)
-/// or `replay`, from `SPECIFY_DEV_MODEL`.
-pub enum DevModel {
-    /// Live cursor-agent completions, connected on first use so
-    /// deterministic verbs never require cursor-agent on `PATH`.
-    Cursor {
-        /// The project root workspace lends resolve to.
-        root: PathBuf,
-        /// The connection, established by the first judgment leg.
-        cell: tokio::sync::OnceCell<CursorModel>,
-    },
-    /// Recorded fixtures from `MODEL_REPLAY_DIR`.
-    Replay(Replay),
+/// The dev binary's model backend: lazily connected live completions.
+///
+/// The connection happens on first use so deterministic verbs never
+/// require cursor-agent on `PATH`. Clones share the connection cell,
+/// so one trial connects cursor-agent at most once.
+#[derive(Clone)]
+pub struct DevModel {
+    /// The project root workspace lends resolve to.
+    root: PathBuf,
+    /// The shared connection, established by the first judgment leg.
+    cell: Arc<tokio::sync::OnceCell<CursorModel>>,
 }
 
 impl fmt::Debug for DevModel {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            Self::Cursor { .. } => "DevModel::Cursor",
-            Self::Replay(_) => "DevModel::Replay",
-        })
+        f.write_str("DevModel")
     }
 }
 
 impl DevModel {
-    /// Select the backend from the environment:
-    /// `SPECIFY_DEV_MODEL=replay` loads fixtures from
-    /// `MODEL_REPLAY_DIR` (default `fixtures`, matching
-    /// `ModelDefault`); anything else is cursor-agent, connected
-    /// lazily on the first judgment leg.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error when a replay fixture file cannot be read or
-    /// parsed.
-    pub fn from_env(project_dir: &Path) -> Result<Self> {
-        match std::env::var("SPECIFY_DEV_MODEL").as_deref() {
-            Ok("replay") => {
-                let dir = std::env::var_os("MODEL_REPLAY_DIR")
-                    .map_or_else(|| PathBuf::from("fixtures"), PathBuf::from);
-                Ok(Self::Replay(Replay::from_dir(&dir)?))
-            }
-            _ => Ok(Self::Cursor {
-                root: project_dir.to_path_buf(),
-                cell: tokio::sync::OnceCell::new(),
-            }),
+    /// A lazily connected cursor backend rooted at `project_dir`.
+    #[must_use]
+    pub fn new(project_dir: &Path) -> Self {
+        Self {
+            root: project_dir.to_path_buf(),
+            cell: Arc::new(tokio::sync::OnceCell::new()),
         }
     }
 }
 
 impl Model for DevModel {
     async fn create(&self, request: Request) -> Result<Reply, Error> {
-        match self {
-            Self::Cursor { root, cell } => {
-                let model = cell
-                    .get_or_try_init(|| CursorModel::connect(root.clone()))
-                    .await
-                    .map_err(|err| {
-                        Error::Backend(format!(
-                            "cursor-agent backend unavailable: {err:#}; install cursor-agent, \
-                             then `cursor-agent login` or export CURSOR_API_KEY (command-mode \
-                             credentials, not the IDE login `cursor-agent status` reports)"
-                        ))
-                    })?;
-                model.create(request).await
-            }
-            Self::Replay(model) => model.create(request).await,
-        }
+        let model = self
+            .cell
+            .get_or_try_init(|| CursorModel::connect(self.root.clone()))
+            .await
+            .map_err(|err| {
+                Error::Backend(format!(
+                    "cursor-agent backend unavailable: {err:#}; install cursor-agent, \
+                     then `cursor-agent login` or export CURSOR_API_KEY (command-mode \
+                     credentials, not the IDE login `cursor-agent status` reports)"
+                ))
+            })?;
+        model.create(request).await
     }
 }
 
@@ -259,7 +226,6 @@ fn reply(answer: wire::Answer) -> Result<Reply, Error> {
 /// The minimal per-completion tool host the cursor backend reads: only
 /// `local_path` matters (cursor-agent does its own filesystem work);
 /// the bounded-capability methods are never called on this backend.
-/// Shared with the [`crate::quality`] runner's semantic judge.
 pub(crate) struct LocalToolHost {
     pub(crate) workspace: Option<PathBuf>,
 }

@@ -19,13 +19,20 @@ cargo make test               # the whole workspace, matching CI
 
 `nextest` is mandatory, not a preference: it runs each test in its own process, and that isolation is what lets the CWD/env-mutating suites pass. Never use bare `cargo test`.
 
-### 2. Native workflow harness — linked-adapter integration
+### 2. Native workflow harness — linked-adapter integration and the live dev loop
 
-`harness/native/` is the `specify-dev` package — a standalone workspace excluded from the root, with its own manifest and lockfile. It links this repo's adapter crates with Specify's revision-pinned engine crates and runs the full workflow loop, seam projections, replay compatibility, CLI anchoring, and MCP shelves without building WebAssembly or calling a live model. Canonical scenarios come embedded in the pinned `scenario` crate's catalog (`scenario::catalog::load(id)`), so the fixtures always match the engine revision the pin declares — there are no scenario copies in this repo. The dedicated `native-harness` CI job (the only job holding `SPECIFY_READ_TOKEN`) tests and clippies this workspace against its declared pin; `cargo make ci` never touches it.
+`harness/native/` is the `specify-dev` package — a standalone workspace excluded from the root, with its own manifest and lockfile. It links this repo's adapter crates with Specify's revision-pinned engine crates (`project`, `slice`, `change`, `transport`, …) and runs the production verb handlers natively: seam projections, adapter resolution, CLI anchoring, and MCP shelves, all without building WebAssembly. The dedicated `native-harness` CI job (the only job holding `SPECIFY_READ_TOKEN`) tests and clippies this workspace against its declared pin; `cargo make ci` never touches it.
 
 ```bash
 cargo make native-test
 cargo make native-lint
+```
+
+The same shim carries the repo's **live dev loop**: `cargo make eval` (the `specify-dev eval` mode) runs the operator rhythm — `init → plan author → transition approved → plan execute → plan archive` — over a persistent gitignored `sandbox/eval/` project, with `documentation` + `intent` bound as sources and `contracts` as the target. It mirrors the engine's `crates/eval` trial: production verbs through the shared typed command router, the live cursor backend at the model seam, and **deterministic grading only** — every plan entry `done`, provenance on evidenced requirements, and the merged `contracts/` baseline non-empty and clean under the adapter's own compiled-in validators. Per-leg completion-request counts are reported (requests beyond one per leg are repairs), never asserted. A full pass cleans the sandbox; a failing phase retains it for in-place review and per-phase re-runs. Live-only — requires an authenticated [`cursor-agent`](https://cursor.com/docs/cli) on `PATH`; `SPECIFY_EVAL_MODEL=<model-id>` overrides the model.
+
+```bash
+cargo make eval           # the full trial
+cargo make eval init      # one phase: init | plan | execute | finalize | clean
 ```
 
 For sibling co-development against uncommitted engine changes, override the pin locally with hand-supplied `--config` path patches (`cargo nextest run --manifest-path harness/native/Cargo.toml --config 'patch."https://github.com/augentic/specify".project.path="../specify/crates/project"' …`, repeated per engine crate the harness links — `project`, `slice`, `change`, `transport`, …); never commit path patches or the patched lockfile.
@@ -38,9 +45,9 @@ For sibling co-development against uncommitted engine changes, override the pin 
 cargo test -p harness --test composed
 ```
 
-### 4. Live quality tests — the only rung that judges prose effect
+### 4. Single-operation live scenarios — fast prompt iteration
 
-The `live` target remains separate from `composed`: its `#[ignore]`d tests in `harness/live.rs` drive one adapter operation end-to-end against the real cursor backend and own prompt-quality evaluation only. They require [`cursor-agent`](https://cursor.com/docs/cli) on `PATH`; `SPECIFY_EVAL_MODEL=<model-id>` overrides the model. Each run retains a raw log and a structured JSON envelope using the shared scenario/profile/runtime/model/gate/assertion vocabulary under `harness/<adapter>/runs/`; a failing adapter report fails the test.
+The `live` target remains separate from `composed`: its `#[ignore]`d tests in `harness/live.rs` drive one adapter operation (one `build`, one `merge` gate) end-to-end against the real cursor backend through the wasm seam, per-adapter scenario tree. This is the fast prompt-iteration rung — one operation, one scratch tree, minutes not a full change. They require [`cursor-agent`](https://cursor.com/docs/cli) on `PATH`; `SPECIFY_EVAL_MODEL=<model-id>` overrides the model. Each run retains a raw log and a JSON summary under `harness/<adapter>/runs/`; a failing adapter report fails the test.
 
 ```bash
 cargo test -p harness --test live -- --ignored --nocapture contracts::   # every contracts scenario
@@ -51,12 +58,20 @@ cargo test -p harness --test live wiring   # the model-free smokes (not ignored;
 
 Scenario anatomy and seeds are documented beside the scenarios: [`harness/contracts/README.md`](harness/contracts/README.md), [`harness/vectis/README.md`](harness/vectis/README.md).
 
-### 5. Prose overlay — iterate on prompts without rebuilding
-
-`SPECIFY_PROSE_OVERLAY=1` switches a live run into overlay mode: the harness seeds the adapter's `prose/` tree into the scratch `.eval/prose/`, forwards the grant to the guest (whose registry probes the overlay at runtime), and skips the cargo legs entirely once the run artifacts exist. Edit `{targets,sources}/<name>/prose/**` and re-run — one model leg per save, no build. The overlay overrides document bodies only (the doc set stays the embedded table's), and the guest prints an attestation to stderr so an overlaid run can never pass as an embedded run.
+**Prose overlay — iterate on prompts without rebuilding.** `SPECIFY_PROSE_OVERLAY=1` switches a live run into overlay mode: the harness seeds the adapter's `prose/` tree into the scratch `.eval/prose/`, forwards the grant to the guest (whose registry probes the overlay at runtime), and skips the cargo legs entirely once the run artifacts exist. Edit `{targets,sources}/<name>/prose/**` and re-run — one model leg per save, no build. The overlay overrides document bodies only (the doc set stays the embedded table's), and the guest prints an attestation to stderr so an overlaid run can never pass as an embedded run.
 
 ```bash
 SPECIFY_PROSE_OVERLAY=1 cargo test -p harness --test live -- --ignored --nocapture contracts::design
+```
+
+### 5. The change example — the wasm end-to-end run
+
+[`examples/change/`](examples/change/README.md) composes the published `specify:core` guest (fetched by `cargo make core-fetch`, pinned by `SPECIFY_CORE_VERSION` in the root `Makefile.toml`) with this repo's built adapter components in one Omnia deployment and drives the full operator rhythm against the live cursor backend. Operator-invoked demo posture: exit codes plus a final artifact-exists check, not a graded test — the graded trial is `cargo make eval` on rung 2. This is the only rung that exercises the real component seam end-to-end: WIT dispatch-by-id, mounts, and the published core, together.
+
+```bash
+cargo make core-fetch    # once per pin
+cargo make change-run
+cargo make change-clean
 ```
 
 ### 6. Consumer project — code changes through the engine
@@ -76,7 +91,7 @@ Every behavior gets a home in exactly one layer. Decide the layer **before** wri
 | **Kernel unit**       | `#[cfg(test)] mod tests` / sibling `tests.rs` next to the code | The branch is genuinely unreachable through the public API (a defensive guard, an error variant no caller triggers), **or** the behavior is a dense pure parse/projection/render-math matrix whose case-per-cell integration port would inflate the suite | The behavior is reachable through the crate's public surface and an integration test already covers it — or could, without a matrix explosion |
 | **Crate integration** | `<adapter>/tests/` (one auto-discovered binary per area)       | The behavior is reachable through the library API: engine invariants, filesystem-shape corners, render output, judgment-leg prompts against a mock `Model`                                                                                                | The same observable behavior is already asserted elsewhere and needs no coverage backfill                                                     |
 
-## Triage rubric
+## Triage rules
 
 Applied to every existing `#[cfg(test)]` / `tests.rs`:
 
