@@ -1,13 +1,10 @@
-# The adapters mirror of the engine's `crates/eval`, split into two
-# member crates:
-#
-# - `harness/` — the reusable, adapter-agnostic core: the linked-adapter
-#   catalog machinery, the native seam provider, the guest-side model
-#   bridge, telemetry, and trial plumbing. The crate destined to move to
-#   `specify/crates/harness` for the engine's eval wrapper to consume.
-# - `specify-dev/` — the wrapper binary: links the first-party adapter
-#   crates, declares the catalog, and carries the live-model trial,
-#   grading, and single-operation prompt scenarios.
+# The adapters wrapper over the engine-owned `specify/crates/harness`:
+# `specify-dev/` links the first-party adapter crates, declares the
+# harness catalog binding, and carries the repository's trial profile,
+# deterministic grading, and prompt-scenario data. All generic plumbing
+# (catalog machinery, seam provider, model bridge, telemetry, trial and
+# scenario drivers, command/HTTP transports) lives in the shared
+# `harness` crate pinned below.
 #
 # Standalone workspace, deliberately excluded from the adapters root: the
 # engine crates below are a revision-pinned private git dependency, and
@@ -18,8 +15,7 @@
 # `--config` path patches; never commit them.
 [workspace]
 resolver = "3"
-members = ["harness", "specify-dev"]
-default-members = ["specify-dev"]
+members = ["specify-dev"]
 
 [workspace.package]
 version = "0.1.0"
@@ -32,34 +28,21 @@ rust-version = "1.95"
 publish = false
 
 [workspace.dependencies]
-harness = { path = "harness" }
-
 anyhow = "1.0.103"
 axum = "0.8.9"
-clap = { version = "4.6.2", features = ["derive", "env"] }
-serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 tokio = { version = "1.52.3", features = ["macros", "net", "rt-multi-thread", "sync"] }
-toml = "1.1.3"
 
-# The engine pin: the Specify revision this harness is verified against.
-# The wasm change example consumes the matching published core component;
+# The engine pin: the Specify revision this wrapper is verified against
+# (the shared `harness` crate and the engine crates it re-exposes). The
+# wasm change example consumes the matching published core component;
 # advance SPECIFY_CORE_VERSION in the root Makefile.toml with this rev.
 artifacts = { git = "https://github.com/augentic/specify.git", rev = "46e93f1ae58d066430f73fd68bab5f0bd5120620" }
 change = { git = "https://github.com/augentic/specify.git", rev = "46e93f1ae58d066430f73fd68bab5f0bd5120620" }
-diagnostics = { git = "https://github.com/augentic/specify.git", rev = "46e93f1ae58d066430f73fd68bab5f0bd5120620" }
-error = { git = "https://github.com/augentic/specify.git", rev = "46e93f1ae58d066430f73fd68bab5f0bd5120620" }
+harness = { git = "https://github.com/augentic/specify.git", rev = "46e93f1ae58d066430f73fd68bab5f0bd5120620" }
 project = { git = "https://github.com/augentic/specify.git", rev = "46e93f1ae58d066430f73fd68bab5f0bd5120620" }
-transport = { git = "https://github.com/augentic/specify.git", rev = "46e93f1ae58d066430f73fd68bab5f0bd5120620" }
 
-omnia = "0.35.0"
-omnia-cursor = "0.28.0"
 omnia-guest = "0.35.0"
-omnia-wasi-model = "0.35.0"
-
-# The adapter SDK crate — the only sibling path dependency `harness` may
-# carry (its surfaces are SDK-destined per RFC-61).
-adapter = { path = "../crates/adapter" }
 
 # The linked first-party adapter crates — `specify-dev` only.
 captures = { path = "../sources/captures" }

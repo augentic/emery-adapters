@@ -4,16 +4,13 @@ version = 4
 
 [[package]]
 name = "adapter"
-version = "0.1.0"
+version = "0.27.2"
 dependencies = [
  "omnia-guest",
  "omnia-wasi-http",
  "serde",
  "serde_json",
- "tempfile",
- "testkit",
  "thiserror 2.0.18",
- "tokio",
  "wasip3",
  "wit-bindgen 0.59.0",
 ]

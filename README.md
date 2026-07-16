@@ -32,21 +32,24 @@ wit/                  # the contract — wit/specify.wit, the axis worlds
 codex/                # cross-adapter prose: rules/ (UNI-* engineering rules)
                       # and references/runtime/ (the spec-runtime bundle
                       # adapters symlink into their prose/)
-crates/               # shared guest support (adapter, prose) and the repo's
-                      # dev-only test-support crate (testkit — the recording
-                      # model harness over omnia-testkit's scripted double)
+crates/               # shared guest support (prose) and the repo's dev-only
+                      # test-support crate (testkit — the recording model
+                      # harness over omnia-testkit's scripted double); the
+                      # `adapter` SDK is a revision-pinned git dependency on
+                      # specify/crates/adapter
 composed/             # model-free composed-deployment tests hosting the built
                       # adapter guest components on the Omnia runtime
                       # (flattened like omnia's examples/: support.rs + composed.rs)
 examples/
   change/             # the wasm change example: the `change-example` runtime
                       # host + omnia.toml + seed tree (see its README.md)
-eval/                 # the adapters mirror of the engine's crates/eval:
-                      # `specify-dev` (linked-adapter engine runtime, the
-                      # native seam/CLI integration suite), the live `eval`
-                      # trial, and the prompt scenarios under eval/scenarios/
-                      # — a standalone workspace excluded from the root,
-                      # pinned to a declared Specify engine revision
+eval/                 # `specify-dev`: the wrapper binary binding the linked
+                      # first-party adapters to the engine-owned harness
+                      # (specify/crates/harness) — the native seam/CLI
+                      # integration suite, the live `eval` trial, and the
+                      # prompt scenarios under eval/scenarios/ — a standalone
+                      # workspace excluded from the root, pinned to a
+                      # declared Specify engine revision
 Cargo.toml            # workspace: `composed` + `examples/change` + `crates/*`
                       # + `{sources,targets}/*` (excludes `eval`)
 ```
@@ -87,7 +90,7 @@ cargo make release
 
 The `composed` package keeps WASM/WIT conformance (`composed/composed.rs`) model-free and distinct from the live rungs. Composed tests build guests from source on first use when artifacts are absent under `target/wasm32-wasip2/debug/`.
 
-The eval workspace under `eval/` is a **standalone workspace**, deliberately excluded from the root: its `specify-dev` member links every adapter crate in-process over the reusable `harness` core and consumes Specify's engine crates from a revision-pinned git source, so ordinary adapter commands never resolve (or authenticate to) that private dependency. It provides the fast, model-free seam suite through the `specify-dev` binary — and carries the live `cargo make eval` trial plus the single-operation prompt scenarios (see [TESTING.md](TESTING.md)) — without coupling the engine repository back to concrete adapters. The eval rungs run **natively** over the linked crates and prove prompt quality; WASM/WIT conformance stays with `composed/` and the change example. A third-party adapter joining this harness needs both a Cargo dependency in `eval/specify-dev/Cargo.toml` and a builder call in `eval/specify-dev/src/catalog.rs` — a scenario directory alone cannot link a Rust crate. The deterministic entry points:
+The eval workspace under `eval/` is a **standalone workspace**, deliberately excluded from the root: its `specify-dev` member links every adapter crate in-process over the engine-owned `harness` runtime (`specify/crates/harness`) and consumes Specify's engine crates from a revision-pinned git source, so ordinary adapter commands never resolve (or authenticate to) that private dependency. It provides the fast, model-free seam suite through the `specify-dev` binary — and carries the live `cargo make eval` trial plus the single-operation prompt scenarios (see [TESTING.md](TESTING.md)) — without coupling the engine repository back to concrete adapters. The eval rungs run **natively** over the linked crates and prove prompt quality; WASM/WIT conformance stays with `composed/` and the change example. A third-party adapter joining this harness needs both a Cargo dependency in `eval/specify-dev/Cargo.toml` and a builder call in `eval/specify-dev/src/catalog.rs` — a scenario directory alone cannot link a Rust crate. The deterministic entry points:
 
 ```bash
 cargo make eval-test     # nextest over eval/ (its own manifest/lock)

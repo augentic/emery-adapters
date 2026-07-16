@@ -131,11 +131,11 @@ args = [
 # The eval workspace (native dev shim + live-model harness)
 # -------------------------------------
 # `eval/` is a standalone workspace excluded from the root: it consumes
-# Specify's engine crates from a revision-pinned git source, so it stays
-# out of `ci` and runs through these focused tasks instead. Two members:
-# `harness` (the reusable adapter-agnostic core) and `specify-dev` (the
-# wrapper binary linking the first-party adapters; the workspace default
-# member, so `cargo run` below resolves to it).
+# Specify's engine crates — including the shared `harness` runtime —
+# from a revision-pinned git source, so it stays out of `ci` and runs
+# through these focused tasks instead. One member: `specify-dev`, the
+# wrapper binary linking the first-party adapters over the shared
+# harness.
 # Co-development against uncommitted engine changes uses hand-supplied
 # `--config` path overrides for the pinned git source; never commit
 # path patches or the patched lockfile.
@@ -291,7 +291,7 @@ run() {
 }
 
 # The operator rhythm, over the shared trial inputs (the same file the
-# native trial parses — see eval/specify-dev/src/inputs.rs).
+# native trial parses — see `harness::inputs` in specify/crates/harness).
 . examples/change/trial.env
 run init ./contracts.wasm --name "$TRIAL_PROJECT_NAME"
 run plan author "$TRIAL_CHANGE" \

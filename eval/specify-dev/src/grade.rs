@@ -5,28 +5,21 @@ use std::path::Path;
 
 use anyhow::{Context as _, Result, ensure};
 use artifacts::spec::provenance::{Requirement, RequirementStatus, parse_spec_md};
-use change::{Plan, Status};
+use change::Plan;
+use change::plan::handlers::ExecuteBody;
 use contracts::validate::validate_baseline;
 use project::config::Layout;
 
 /// Grade the drained plan against the contracts-bound trial contract.
+/// The generic drained/done invariants are the harness driver's; this
+/// hook owns the contracts-specific baseline checks only.
 ///
 /// # Errors
 ///
 /// Returns one failing assertion at a time, with the evidence inline.
-pub fn run(root: &Path, plan: &Plan) -> Result<()> {
-    lifecycle(plan)?;
+pub fn run(root: &Path, _plan: &Plan, _executed: &ExecuteBody) -> Result<()> {
     requirements(&baseline(root)?)?;
     contracts_baseline(root)?;
-    Ok(())
-}
-
-fn lifecycle(plan: &Plan) -> Result<()> {
-    ensure!(
-        plan.entries.iter().all(|entry| entry.status == Status::Done),
-        "execute must leave every entry done: {:?}",
-        plan.entries
-    );
     Ok(())
 }
 

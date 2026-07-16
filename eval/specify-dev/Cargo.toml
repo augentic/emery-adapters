@@ -1,8 +1,9 @@
 # The `specify-dev` wrapper: links the first-party adapter crates,
-# declares the harness catalog, and carries the live-model trial,
-# deterministic grading, and single-operation prompt scenarios. The
-# binary drives the same verb handlers as the wasm guest against the
-# harness's native provider.
+# declares the shared harness's catalog binding, and carries the
+# repository's trial profile, contracts-specific grading, and prompt-
+# scenario data. All generic plumbing — command/HTTP transports, the
+# trial and scenario drivers, provider and model wiring — is the
+# engine-owned `harness` crate's.
 [package]
 name = "specify-dev"
 description = "Specify adapters' native dev shim and live-model evaluation harness"
@@ -22,17 +23,11 @@ path = "src/main.rs"
 [dependencies]
 anyhow.workspace = true
 artifacts.workspace = true
-axum.workspace = true
 change.workspace = true
-clap.workspace = true
 harness.workspace = true
 omnia-guest.workspace = true
 project.workspace = true
-serde.workspace = true
-serde_json.workspace = true
 tokio.workspace = true
-toml.workspace = true
-transport.workspace = true
 
 captures.workspace = true
 contracts.workspace = true
@@ -44,7 +39,9 @@ typescript.workspace = true
 vectis.workspace = true
 
 [dev-dependencies]
+axum.workspace = true
 omnia-testkit.workspace = true
+serde_json.workspace = true
 tempfile.workspace = true
 tower.workspace = true
 

@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "adapter"
-version = "0.1.0"
+version = "0.27.2"
 dependencies = [
  "omnia-guest",
  "omnia-wasi-http",
@@ -168,7 +168,6 @@ checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
 [[package]]
 name = "artifacts"
 version = "0.27.2"
-source = "git+https://github.com/augentic/specify.git?rev=46e93f1ae58d066430f73fd68bab5f0bd5120620#46e93f1ae58d066430f73fd68bab5f0bd5120620"
 dependencies = [
  "diagnostics",
  "error",
@@ -533,7 +532,6 @@ dependencies = [
 [[package]]
 name = "change"
 version = "0.27.2"
-source = "git+https://github.com/augentic/specify.git?rev=46e93f1ae58d066430f73fd68bab5f0bd5120620#46e93f1ae58d066430f73fd68bab5f0bd5120620"
 dependencies = [
  "artifacts",
  "diagnostics",
@@ -1071,7 +1069,6 @@ checksum = "7cd812cc2bc1d69d4764bd80df88b4317eaef9e773c75226407d9bc0876b211c"
 [[package]]
 name = "diagnostics"
 version = "0.27.2"
-source = "git+https://github.com/augentic/specify.git?rev=46e93f1ae58d066430f73fd68bab5f0bd5120620#46e93f1ae58d066430f73fd68bab5f0bd5120620"
 dependencies = [
  "base16ct",
  "schemars",
@@ -1197,7 +1194,6 @@ dependencies = [
 [[package]]
 name = "error"
 version = "0.27.2"
-source = "git+https://github.com/augentic/specify.git?rev=46e93f1ae58d066430f73fd68bab5f0bd5120620#46e93f1ae58d066430f73fd68bab5f0bd5120620"
 dependencies = [
  "serde-saphyr",
  "thiserror 2.0.18",
@@ -1552,23 +1548,25 @@ dependencies = [
 
 [[package]]
 name = "harness"
-version = "0.1.0"
+version = "0.27.2"
 dependencies = [
  "adapter",
  "anyhow",
  "artifacts",
  "axum",
  "change",
+ "clap",
  "diagnostics",
  "error",
  "omnia 0.35.0",
  "omnia-cursor",
  "omnia-guest",
- "omnia-testkit",
  "omnia-wasi-model",
  "project",
- "tempfile",
+ "serde",
+ "serde_json",
  "tokio",
+ "toml",
  "transport",
 ]
 
@@ -3102,7 +3100,6 @@ dependencies = [
 [[package]]
 name = "project"
 version = "0.27.2"
-source = "git+https://github.com/augentic/specify.git?rev=46e93f1ae58d066430f73fd68bab5f0bd5120620#46e93f1ae58d066430f73fd68bab5f0bd5120620"
 dependencies = [
  "artifacts",
  "diagnostics",
@@ -3142,7 +3139,6 @@ version = "0.1.0"
 [[package]]
 name = "prose"
 version = "0.27.2"
-source = "git+https://github.com/augentic/specify.git?rev=46e93f1ae58d066430f73fd68bab5f0bd5120620#46e93f1ae58d066430f73fd68bab5f0bd5120620"
 
 [[package]]
 name = "prost"
@@ -4083,7 +4079,6 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 [[package]]
 name = "slice"
 version = "0.27.2"
-source = "git+https://github.com/augentic/specify.git?rev=46e93f1ae58d066430f73fd68bab5f0bd5120620#46e93f1ae58d066430f73fd68bab5f0bd5120620"
 dependencies = [
  "artifacts",
  "diagnostics",
@@ -4128,7 +4123,6 @@ dependencies = [
  "axum",
  "captures",
  "change",
- "clap",
  "contracts",
  "documentation",
  "harness",
@@ -4138,13 +4132,10 @@ dependencies = [
  "omnia-testkit",
  "project",
  "screenshots",
- "serde",
  "serde_json",
  "tempfile",
  "tokio",
- "toml",
  "tower",
- "transport",
  "typescript",
  "vectis",
 ]
@@ -4716,7 +4707,6 @@ dependencies = [
 [[package]]
 name = "transport"
 version = "0.27.2"
-source = "git+https://github.com/augentic/specify.git?rev=46e93f1ae58d066430f73fd68bab5f0bd5120620#46e93f1ae58d066430f73fd68bab5f0bd5120620"
 dependencies = [
  "artifacts",
  "change",
