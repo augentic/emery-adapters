@@ -124,7 +124,7 @@ fn live(adapter: &str, scenario: &str, operation: &str, slice: &str) -> Result<(
     if overlay {
         seed_overlay(adapter, &scratch)?;
     }
-    let manifest_path = scratch.join("omnia.toml");
+    let manifest_path = scratch.join("config.toml");
     fs::write(&manifest_path, manifest(&target, adapter, &scratch))?;
 
     let addr = http_addr()?;
