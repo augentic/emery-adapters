@@ -12,6 +12,8 @@ struct Config {
     adapter: String,
     operation: String,
     slice: String,
+    #[serde(default)]
+    expect: Vec<String>,
 }
 
 #[test]
@@ -42,6 +44,10 @@ fn wiring() {
             config.operation
         );
         assert!(!config.slice.trim().is_empty(), "{id}: empty slice name");
+        assert!(
+            config.expect.iter().all(|rel| !rel.trim().is_empty()),
+            "{id}: empty expect entry"
+        );
 
         let inputs: Vec<PathBuf> = fs::read_dir(scenario.join("inputs"))
             .unwrap_or_else(|err| panic!("{id}: reading inputs/: {err}"))

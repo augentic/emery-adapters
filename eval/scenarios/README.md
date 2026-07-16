@@ -13,7 +13,9 @@ rung by dropping one in:
 
 ```text
 scenarios/<adapter>/<name>/
-  scenario.toml    routing: axis-qualified adapter id, operation, slice name
+  scenario.toml    routing: axis-qualified adapter id, operation, slice name,
+                   and the `expect` artifact-exists gate (scratch-relative
+                   paths a passing run must produce)
   inputs/*.md      typed slice inputs by file stem (proposal / design / tasks / spec*)
   seed/**          files copied into the scratch project root (optional)
 ```
@@ -21,8 +23,9 @@ scenarios/<adapter>/<name>/
 The runner ([`../src/scenario.rs`](../src/scenario.rs)) seeds a fresh scratch
 tree under the gitignored `sandbox/scenarios/<adapter>/<name>/run-<stamp>/`,
 dispatches the operation over the linked adapter, writes `report.json` beside
-the scratch delta, and fails on a failing report. The scratch tree is retained
-for review.
+the scratch delta, and fails on a failing report or a missing `expect`
+artifact (a success report that produced nothing is a silent no-op, not a
+pass). The scratch tree is retained for review.
 
 ## Running
 

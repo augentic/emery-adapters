@@ -7,7 +7,7 @@
 //! `eval/scenarios/<adapter>/<name>/`:
 //!
 //! - `scenario.toml` — the routing: the axis-qualified adapter id, the
-//!   operation, and the slice name.
+//!   operation, the slice name, and the `expect` artifact-exists gate.
 //! - `inputs/*.md` — the typed slice inputs, mapped by file stem
 //!   (`proposal` / `design` / `tasks` / `spec*`; anything else rides
 //!   as `other`).
@@ -16,8 +16,9 @@
 //! Every run seeds a fresh scratch tree under the gitignored
 //! `sandbox/scenarios/<adapter>/<name>/run-<stamp>/`, dispatches the
 //! operation, writes `report.json` beside the scratch delta, and fails
-//! on a failing report. Adding a scenario is a directory, not Rust —
-//! third-party adapters get the same rung by dropping one in.
+//! on a failing report or a missing `expect` artifact. Adding a
+//! scenario is a directory, not Rust — third-party adapters get the
+//! same rung by dropping one in.
 //!
 //! `SPECIFY_EVAL_MODEL=<model-id>` overrides the model, exactly as in
 //! the trial. Prompt edits under `prose/` rebuild natively in seconds,
@@ -45,6 +46,13 @@ struct Config {
     operation: Operation,
     /// The slice name the operation runs under.
     slice: String,
+    /// Scratch-relative paths that must exist (a directory satisfies
+    /// its entry when it holds at least one file) after a passing
+    /// report — the deterministic artifact-exists gate over the
+    /// scenario's expected artifacts. A success report that produced
+    /// none of them is a silent no-op, and fails here.
+    #[serde(default)]
+    expect: Vec<String>,
 }
 
 /// The closed operation set a scenario may drive.
@@ -114,7 +122,34 @@ pub async fn run(id: Option<&str>) -> Result<()> {
         report_path.display(),
         scratch.display()
     );
+    enforce_expected(id, &scratch, &config.expect)?;
     Ok(())
+}
+
+/// The artifact-exists gate: every `expect` path is present in the
+/// scratch tree (directories must hold at least one file).
+fn enforce_expected(id: &str, scratch: &Path, expect: &[String]) -> Result<()> {
+    for rel in expect {
+        let path = scratch.join(rel);
+        let satisfied =
+            if path.is_dir() { holds_a_file(&path) } else { path.is_file() };
+        ensure!(
+            satisfied,
+            "scenario `{id}` reported success but produced no `{rel}` under {} — \
+             a silent no-op (every sub-flow self-skipped, or the writes landed \
+             elsewhere)",
+            scratch.display()
+        );
+    }
+    Ok(())
+}
+
+/// Whether `dir` transitively holds at least one file.
+fn holds_a_file(dir: &Path) -> bool {
+    fs::read_dir(dir).into_iter().flatten().flatten().any(|entry| {
+        let path = entry.path();
+        path.is_file() || (path.is_dir() && holds_a_file(&path))
+    })
 }
 
 /// Dispatch the configured operation through the seam provider.

@@ -3,3 +3,7 @@
 adapter = "target:vectis"
 operation = "build"
 slice = "daily-quote"
+
+# Deterministic artifact-exists gate: a success report must leave the
+# slice composition staged.
+expect = [".specify/slices/daily-quote/composition.yaml"]

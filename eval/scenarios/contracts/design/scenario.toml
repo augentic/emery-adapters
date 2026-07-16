@@ -3,3 +3,7 @@
 adapter = "target:contracts"
 operation = "build"
 slice = "returns-api"
+
+# Deterministic artifact-exists gate: a success report must leave the
+# slice contracts delta non-empty.
+expect = [".specify/slices/returns-api/contracts"]

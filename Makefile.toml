@@ -240,8 +240,6 @@ mkdir -p sandbox/change/{workspace,cache,store}
 cp -R examples/change/seed/. sandbox/change/workspace/
 cp target/wasm32-wasip2/release/contracts.wasm sandbox/change/workspace/contracts.wasm
 
-cargo build -p change-example
-
 # The HTTP trigger serves every adapter's /mcp/<name> reference route;
 # the env grants point the adapters' spawned agents at it.
 export HTTP_ADDR="${HTTP_ADDR:-127.0.0.1:7791}"
@@ -254,7 +252,7 @@ export SPECIFY_CONTRACTS_MCP_URL="http://$HTTP_ADDR/mcp/contracts"
 export GUEST_TIMEOUT_MS="${GUEST_TIMEOUT_MS:-3600000}"
 
 run() {
-  ./target/debug/change-example run --config examples/change/omnia.toml -- "$@"
+  cargo run -q -p change-example -- run --config examples/change/omnia.toml -- "$@"
 }
 
 # The operator rhythm
