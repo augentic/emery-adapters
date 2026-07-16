@@ -26,7 +26,7 @@ const REFERENCES_POINTER: &str = "Every prompt, reference, and rule document thi
      adapter-relative paths like `references/hard-rules-core.md` or \
      `prompts/build/ios/write.md`); fetch documents the prompts cite lazily from there.";
 
-/// Crux shared cores plus SwiftUI / Jetpack Compose shells.
+/// Crux shared cores plus `SwiftUI` / Jetpack Compose shells.
 #[derive(Clone, Copy, Debug)]
 pub struct Vectis;
 

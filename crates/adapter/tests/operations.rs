@@ -1,3 +1,5 @@
+//! Operations-trait dispatch and references-server identity.
+
 use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA, evidence_tail, leads_tail};
 use adapter::registry::Doc;
 use adapter::seam::{

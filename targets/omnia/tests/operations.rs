@@ -1,3 +1,5 @@
+//! Omnia build / merge operation behavior.
+
 use std::path::Path;
 
 use adapter::answers::REPORT_ANSWER_SCHEMA;

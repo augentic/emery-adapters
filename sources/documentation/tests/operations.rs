@@ -1,3 +1,5 @@
+//! Documentation survey / extract operation behavior.
+
 use std::path::Path;
 
 use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA};

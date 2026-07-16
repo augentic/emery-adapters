@@ -1,3 +1,5 @@
+//! Vectis build / merge operation behavior.
+
 use std::fs;
 use std::path::Path;
 

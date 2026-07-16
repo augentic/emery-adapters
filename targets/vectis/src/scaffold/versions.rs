@@ -89,7 +89,7 @@ pub struct Tooling {
 
 impl Versions {
     /// Resolve version pins from an optional explicit file or embedded defaults.
-///
+    ///
     /// # Errors
     /// Returns [`ScaffoldError`] when the explicit file is missing or malformed,
     pub fn resolve(version_file: Option<&Path>) -> Result<Self, ScaffoldError> {
@@ -97,7 +97,7 @@ impl Versions {
     }
 
     /// Parse the embedded defaults.
-///
+    ///
     /// # Errors
     /// Returns [`ScaffoldError::Internal`] if the compiled-in TOML is malformed.
     pub fn embedded() -> Result<Self, ScaffoldError> {

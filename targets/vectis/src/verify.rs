@@ -62,7 +62,6 @@ pub fn verify_exit_code(value: &Value) -> u8 {
     u8::from(has_findings)
 }
 
-
 /// Load the declared `platforms:` list from `.specify/project.yaml`.
 ///
 /// # Errors
@@ -94,7 +93,6 @@ pub fn load_platforms(project_root: &Path) -> Result<Vec<String>, VectisError> {
         .collect()
 }
 
-
 fn check_platform(platform: &str, project_root: &Path) -> PlatformStatus {
     PlatformStatus {
         platform: platform.to_string(),
@@ -102,7 +100,6 @@ fn check_platform(platform: &str, project_root: &Path) -> PlatformStatus {
         present: shell_present(project_root, platform),
     }
 }
-
 
 fn is_supported(platform: &str) -> bool {
     SUPPORTED_SHELL_PLATFORMS.contains(&platform)
