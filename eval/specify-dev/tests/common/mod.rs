@@ -3,7 +3,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use eval::env::CacheGuard;
+use harness::env::CacheGuard;
 use tempfile::TempDir;
 
 /// Initialised throw-away project bound to `omnia`.
@@ -18,7 +18,7 @@ impl Project {
     pub fn new() -> Self {
         let tmp = TempDir::new().expect("tempdir");
         let root = tmp.path().canonicalize().expect("canonical tempdir");
-        let cache = eval::env::scoped_cache(&root);
+        let cache = harness::env::scoped_cache(&root);
         for sub in [".specify/slices", ".specify/specs"] {
             fs::create_dir_all(root.join(sub)).expect("mkdir");
         }

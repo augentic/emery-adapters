@@ -3,8 +3,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use eval::scenario;
 use project::seam::wire::{BUILD_VERSION, BuildReport, BuildStatus};
+use specify_dev::scenario;
 use tempfile::TempDir;
 
 fn report(status: BuildStatus) -> BuildReport {
@@ -25,8 +25,7 @@ fn wiring() {
     let mut seen = 0;
     for dir in scenario_dirs(&root) {
         let id = dir.strip_prefix(&root).expect("scenario under the scenarios root");
-        let config =
-            scenario::load(&dir).unwrap_or_else(|err| panic!("{}: {err:#}", id.display()));
+        let config = scenario::load(&dir).unwrap_or_else(|err| panic!("{}: {err:#}", id.display()));
 
         let inputs: Vec<PathBuf> = fs::read_dir(dir.join("inputs"))
             .unwrap_or_else(|err| panic!("{}: reading inputs/: {err}", id.display()))
@@ -143,12 +142,9 @@ mod expected {
     #[test]
     fn missing_artifact_fails() {
         let tmp = TempDir::new().expect("tempdir");
-        let err = scenario::enforce_expected(
-            "demo/one",
-            tmp.path(),
-            &["contracts/api.yaml".to_string()],
-        )
-        .expect_err("a missing artifact fails the gate");
+        let err =
+            scenario::enforce_expected("demo/one", tmp.path(), &["contracts/api.yaml".to_string()])
+                .expect_err("a missing artifact fails the gate");
         assert!(format!("{err:#}").contains("contracts/api.yaml"), "{err:#}");
     }
 
@@ -156,8 +152,7 @@ mod expected {
     fn file_and_populated_dir_pass() {
         let tmp = TempDir::new().expect("tempdir");
         fs::create_dir_all(tmp.path().join("contracts/nested")).expect("mkdir");
-        fs::write(tmp.path().join("contracts/nested/api.yaml"), "openapi: 3.1.0\n")
-            .expect("write");
+        fs::write(tmp.path().join("contracts/nested/api.yaml"), "openapi: 3.1.0\n").expect("write");
         scenario::enforce_expected(
             "demo/one",
             tmp.path(),

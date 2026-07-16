@@ -1,8 +1,13 @@
-# The adapters mirror of the engine's `crates/eval`: the `specify-dev`
-# binary drives the same verb handlers as the wasm guest against a native
-# provider — in-process dispatch to this repo's adapter crates plus a
-# native Model backend — and carries the live-model trial and the
-# single-operation prompt scenarios.
+# The adapters mirror of the engine's `crates/eval`, split into two
+# member crates:
+#
+# - `harness/` — the reusable, adapter-agnostic core: the linked-adapter
+#   catalog machinery, the native seam provider, the guest-side model
+#   bridge, telemetry, and trial plumbing. The crate destined to move to
+#   `specify/crates/harness` for the engine's eval wrapper to consume.
+# - `specify-dev/` — the wrapper binary: links the first-party adapter
+#   crates, declares the catalog, and carries the live-model trial,
+#   grading, and single-operation prompt scenarios.
 #
 # Standalone workspace, deliberately excluded from the adapters root: the
 # engine crates below are a revision-pinned private git dependency, and
@@ -11,9 +16,12 @@
 # compatibility target — it advances deliberately, not with every engine
 # commit. Sibling co-development overrides it with hand-supplied
 # `--config` path patches; never commit them.
-[package]
-name = "eval"
-description = "Specify adapters' native dev shim and live-model evaluation harness"
+[workspace]
+resolver = "3"
+members = ["harness", "specify-dev"]
+default-members = ["specify-dev"]
+
+[workspace.package]
 version = "0.1.0"
 authors = ["Augentic"]
 edition = "2024"
@@ -23,15 +31,9 @@ repository = "https://github.com/augentic/specify-adapters"
 rust-version = "1.95"
 publish = false
 
-[[bin]]
-name = "specify-dev"
-path = "src/main.rs"
+[workspace.dependencies]
+harness = { path = "harness" }
 
-# Marks this manifest as its own workspace root so Cargo stops walking up
-# to the adapters root; the harness resolves and locks independently.
-[workspace]
-
-[dependencies]
 anyhow = "1.0.103"
 axum = "0.8.9"
 clap = { version = "4.6.2", features = ["derive", "env"] }
@@ -55,7 +57,11 @@ omnia-cursor = "0.28.0"
 omnia-guest = "0.35.0"
 omnia-wasi-model = "0.35.0"
 
+# The adapter SDK crate — the only sibling path dependency `harness` may
+# carry (its surfaces are SDK-destined per RFC-61).
 adapter = { path = "../crates/adapter" }
+
+# The linked first-party adapter crates — `specify-dev` only.
 captures = { path = "../sources/captures" }
 contracts = { path = "../targets/contracts" }
 documentation = { path = "../sources/documentation" }
@@ -65,7 +71,6 @@ screenshots = { path = "../sources/screenshots" }
 typescript = { path = "../sources/typescript" }
 vectis = { path = "../targets/vectis" }
 
-[dev-dependencies]
 omnia-testkit = "0.35.0"
 tempfile = "3"
 tower = "0.5.3"
@@ -80,9 +85,6 @@ omnia-wasi-model = { git = "https://github.com/augentic/omnia.git" }
 
 wrpc-transport = { git = "https://github.com/bytecodealliance/wrpc" }
 wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }
-
-[lints]
-workspace = true
 
 # Same lint bar as the adapters root, restated because a standalone
 # workspace cannot inherit another workspace's tables.

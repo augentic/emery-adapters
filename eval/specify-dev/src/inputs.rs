@@ -58,15 +58,11 @@ impl TrialInputs {
                 "`{key}` value contains a character the shell would expand"
             );
             ensure!(!value.trim().is_empty(), "`{key}` value is empty");
-            ensure!(
-                values.insert(key, value.to_owned()).is_none(),
-                "duplicate key `{key}`"
-            );
+            ensure!(values.insert(key, value.to_owned()).is_none(), "duplicate key `{key}`");
         }
 
-        let mut take = |key: &str| {
-            values.remove(key).with_context(|| format!("missing `{key}=\"…\"` line"))
-        };
+        let mut take =
+            |key: &str| values.remove(key).with_context(|| format!("missing `{key}=\"…\"` line"));
         let inputs = Self {
             project_name: take("TRIAL_PROJECT_NAME")?,
             change: take("TRIAL_CHANGE")?,
@@ -95,5 +91,5 @@ pub fn seed_dir() -> PathBuf {
 }
 
 fn examples_change() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../examples/change")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/change")
 }

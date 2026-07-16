@@ -2,9 +2,16 @@
 
 use axum::body::{Body, to_bytes};
 use axum::http::{Method, Request, StatusCode, header};
-use eval::mcp;
+use harness::catalog::Catalog;
+use harness::mcp;
+use omnia_testkit::model::Scripted;
 use serde_json::{Value, json};
+use specify_dev::catalog;
 use tower::ServiceExt as _;
+
+fn linked() -> Catalog<Scripted> {
+    catalog::catalog()
+}
 
 async fn post(path: &str, message: &Value) -> (StatusCode, Value) {
     let request = Request::builder()
@@ -13,7 +20,8 @@ async fn post(path: &str, message: &Value) -> (StatusCode, Value) {
         .header(header::CONTENT_TYPE, "application/json")
         .body(Body::from(message.to_string()))
         .expect("build request");
-    let response = mcp::router().oneshot(request).await.expect("router serves the request");
+    let response =
+        mcp::router(&linked()).oneshot(request).await.expect("router serves the request");
     let status = response.status();
     let bytes = to_bytes(response.into_body(), usize::MAX).await.expect("collect body");
     let value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
@@ -29,9 +37,10 @@ fn call(name: &str, arguments: &Value) -> Value {
 
 #[test]
 fn shelves_match_linked_adapters() {
-    let names: Vec<&str> = mcp::shelves().iter().map(|shelf| shelf.name).collect();
+    let linked = linked();
+    let names: Vec<&str> = mcp::shelves(&linked).iter().map(|shelf| shelf.name).collect();
     let catalog_names: Vec<&str> =
-        eval::catalog::entries().iter().map(|entry| entry.name()).collect();
+        linked.entries().iter().map(harness::catalog::Entry::name).collect();
     assert_eq!(names, catalog_names, "MCP shelves must derive from the native catalog");
     assert_eq!(
         catalog_names,

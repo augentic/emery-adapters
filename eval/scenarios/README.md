@@ -22,10 +22,12 @@ scenarios/<adapter>/<name>/
 
 For an adapter already linked into the shim, adding a scenario is just the
 directory. A **third-party adapter** additionally needs a Cargo dependency in
-[`../Cargo.toml`](../Cargo.toml) and a [`../src/catalog.rs`](../src/catalog.rs)
-entry — configuration alone cannot link a Rust crate.
+[`../specify-dev/Cargo.toml`](../specify-dev/Cargo.toml) and a builder call in
+[`../specify-dev/src/catalog.rs`](../specify-dev/src/catalog.rs) —
+configuration alone cannot link a Rust crate.
 
-The runner ([`../src/scenario.rs`](../src/scenario.rs)) seeds a fresh scratch
+The runner ([`../specify-dev/src/scenario.rs`](../specify-dev/src/scenario.rs))
+seeds a fresh scratch
 tree under the gitignored collision-proof
 `sandbox/scenarios/<adapter>/<name>/run-<stamp>-<pid>/`, pins the project
 cache inside it, dispatches the operation over the linked adapter, writes

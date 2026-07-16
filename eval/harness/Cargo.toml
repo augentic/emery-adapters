@@ -1,0 +1,42 @@
+# The reusable, adapter-agnostic eval harness core: the linked-adapter
+# catalog machinery over the per-axis operations traits, the native seam
+# provider, the guest-side model bridge, telemetry, MCP shelves, and
+# trial plumbing. Carries no dependency on any concrete adapter crate —
+# the invariant that lets this crate move to `specify/crates/harness`
+# unchanged (the engine's eval wrapper instantiates the catalog with the
+# testkit fixture; `specify-dev` instantiates it with the first-party
+# adapters).
+[package]
+name = "harness"
+description = "Reusable native eval harness core: adapter catalog, seam provider, model bridge"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+adapter.workspace = true
+anyhow.workspace = true
+artifacts.workspace = true
+axum.workspace = true
+change.workspace = true
+diagnostics.workspace = true
+error.workspace = true
+omnia.workspace = true
+omnia-cursor.workspace = true
+omnia-guest.workspace = true
+omnia-wasi-model.workspace = true
+project.workspace = true
+tokio.workspace = true
+transport.workspace = true
+
+[dev-dependencies]
+omnia-testkit.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

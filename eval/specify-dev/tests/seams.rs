@@ -3,7 +3,7 @@
 use std::sync::{Arc, Mutex};
 
 use artifacts::evidence::{Claim, ClaimKind};
-use eval::provider::{Provider, metadata};
+use harness::provider::Provider;
 use omnia_guest::Model;
 use omnia_guest::model::{Reply, Request, Tool};
 use omnia_testkit::model::Scripted;
@@ -11,7 +11,12 @@ use project::adapter::metadata::Request as MetadataRequest;
 use project::adapter::{AdapterRef, Axis, Resolver};
 use project::seam::wire::BuildStatus;
 use project::seam::{Error, Input, Lead, Source as _, Target as _, WorkingTree};
+use specify_dev::catalog::catalog;
 use tempfile::TempDir;
+
+fn provider<M: Model>(root: &std::path::Path, model: M) -> Provider<M> {
+    Provider::new(root, model, catalog())
+}
 
 fn lead(id: &str) -> Lead {
     Lead {
@@ -63,7 +68,7 @@ async fn survey_dispatches_intent() {
     let tmp = TempDir::new().expect("tempdir");
     let model =
         model([r#"{"leads":[{"lead":"password-reset","synopsis":"Let users reset passwords."}]}"#]);
-    let provider = Provider::new(tmp.path(), model);
+    let provider = provider(tmp.path(), model);
 
     let leads = provider.survey("source:intent".to_string()).await.expect("survey");
 
@@ -77,7 +82,7 @@ async fn extract_typed_claim_projection() {
     let model = model([
         r#"{"authority":"intent","claims":[{"kind":"intent","id":"password-reset","statement":"Let users reset passwords."}]}"#,
     ]);
-    let provider = Provider::new(tmp.path(), model);
+    let provider = provider(tmp.path(), model);
 
     let evidence = provider
         .extract("source:intent".to_string(), lead("password-reset"))
@@ -96,7 +101,7 @@ async fn extract_typed_claim_projection() {
 async fn mcp_base_reference_grant() {
     let tmp = TempDir::new().expect("tempdir");
     let model = Recording::new(model([r#"{"leads":[]}"#]));
-    let provider = Provider::new(tmp.path(), model).mcp_base("http://127.0.0.1:7737".to_string());
+    let provider = provider(tmp.path(), model).mcp_base("http://127.0.0.1:7737".to_string());
 
     provider.survey("source:intent".to_string()).await.expect("survey");
 
@@ -117,7 +122,7 @@ async fn mcp_base_reference_grant() {
 #[tokio::test]
 async fn guidance_embedded_prompts() {
     let tmp = TempDir::new().expect("tempdir");
-    let provider = Provider::new(tmp.path(), model([]));
+    let provider = provider(tmp.path(), model([]));
 
     let omnia = provider.guidance("target:omnia".to_string()).await.expect("omnia guidance");
     assert!(omnia.starts_with("# Omnia target — guidance prompt"), "{omnia:.60}");
@@ -136,7 +141,7 @@ async fn build_report_widened() {
         r#"{"applicable":false,"summary":"no captures binding"}"#,
         r#"{"status":"success","findings":[]}"#,
     ]);
-    let provider = Provider::new(tmp.path(), model);
+    let provider = provider(tmp.path(), model);
 
     let report = provider
         .build(
@@ -157,7 +162,7 @@ async fn build_report_widened() {
 #[tokio::test]
 async fn unlinked_adapter_refused() {
     let tmp = TempDir::new().expect("tempdir");
-    let provider = Provider::new(tmp.path(), model([]));
+    let provider = provider(tmp.path(), model([]));
 
     let err = provider.survey("source:unknown".to_string()).await.expect_err("unlinked source");
     assert!(matches!(err, Error::InvalidRequest(detail) if detail.contains("source:unknown")));
@@ -168,26 +173,30 @@ async fn unlinked_adapter_refused() {
 
 #[test]
 fn metadata_both_axes() {
-    let source = metadata(&MetadataRequest {
-        axis: Axis::Source,
-        adapter_id: "source:intent",
-    })
-    .expect("intent metadata");
+    let linked = catalog::<Scripted>();
+    let source = linked
+        .metadata(&MetadataRequest {
+            axis: Axis::Source,
+            adapter_id: "source:intent",
+        })
+        .expect("intent metadata");
     assert_eq!(source.specify_floor, None);
     assert!(source.inputs.is_empty());
 
-    let target = metadata(&MetadataRequest {
-        axis: Axis::Target,
-        adapter_id: "target:omnia",
-    })
-    .expect("omnia metadata");
+    let target = linked
+        .metadata(&MetadataRequest {
+            axis: Axis::Target,
+            adapter_id: "target:omnia",
+        })
+        .expect("omnia metadata");
     assert!(target.platforms.is_none());
 
-    let err = metadata(&MetadataRequest {
-        axis: Axis::Source,
-        adapter_id: "source:unknown",
-    })
-    .expect_err("unlinked adapter refuses");
+    let err = linked
+        .metadata(&MetadataRequest {
+            axis: Axis::Source,
+            adapter_id: "source:unknown",
+        })
+        .expect_err("unlinked adapter refuses");
     assert!(err.to_string().contains("source:unknown"), "{err}");
 }
 
@@ -199,7 +208,8 @@ async fn catalog_dispatches_every_entry() {
     // sources (scripted empty answer), `guidance` for targets.
     let tmp = TempDir::new().expect("tempdir");
 
-    for entry in eval::catalog::entries() {
+    let linked = catalog::<Scripted>();
+    for entry in linked.entries() {
         let name = entry.name();
         let id = entry.id();
         assert_eq!(
@@ -211,7 +221,7 @@ async fn catalog_dispatches_every_entry() {
 
         match entry.axis() {
             Axis::Source => {
-                let provider = Provider::new(tmp.path(), model([r#"{"leads":[]}"#]));
+                let provider = provider(tmp.path(), model([r#"{"leads":[]}"#]));
                 let resolved = provider
                     .resolve_source(&AdapterRef::bare(name), tmp.path())
                     .unwrap_or_else(|err| panic!("source `{name}` resolves: {err}"));
@@ -227,7 +237,7 @@ async fn catalog_dispatches_every_entry() {
                 assert!(leads.is_empty(), "the scripted empty survey answer crosses");
             }
             Axis::Target => {
-                let provider = Provider::new(tmp.path(), model([]));
+                let provider = provider(tmp.path(), model([]));
                 let resolved = provider
                     .resolve_target(&AdapterRef::bare(name), tmp.path())
                     .unwrap_or_else(|err| panic!("target `{name}` resolves: {err}"));
@@ -249,7 +259,7 @@ async fn catalog_dispatches_every_entry() {
 #[test]
 fn resolver_linked_catalog() {
     let tmp = tempfile::tempdir().expect("tempdir");
-    let provider = Provider::new(tmp.path(), model([]));
+    let provider = provider(tmp.path(), model([]));
 
     let source = provider
         .resolve_source(&AdapterRef::bare("intent"), tmp.path())

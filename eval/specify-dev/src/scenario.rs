@@ -7,13 +7,14 @@ use std::path::{Component, Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context as _, Result, bail, ensure};
+use harness::model::DevModel;
+use harness::provider::Provider;
+use harness::{env, fs as evalfs, mcp};
 use project::seam::wire::{BuildReport, BuildStatus};
 use project::seam::{Input, MergePhase, Target as _, WorkingTree};
 use serde::Deserialize;
 
-use crate::model::DevModel;
-use crate::provider::Provider;
-use crate::{catalog, env, fs as evalfs, mcp};
+use crate::catalog;
 
 /// One scenario's machine-readable routing, from `scenario.toml`.
 #[derive(Debug, Deserialize)]
@@ -107,7 +108,7 @@ pub fn load(dir: &Path) -> Result<Config> {
 
 fn validate(config: &Config) -> Result<()> {
     ensure!(
-        catalog::entries().iter().any(|entry| entry.id() == config.adapter),
+        catalog::catalog::<DevModel>().entries().iter().any(|entry| entry.id() == config.adapter),
         "adapter `{}` is not linked into the native shim",
         config.adapter
     );
@@ -302,7 +303,7 @@ fn read_dirs(dir: &Path) -> Result<Vec<PathBuf>> {
 }
 
 fn seed(id: &str, dir: &Path) -> Result<PathBuf> {
-    let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sandbox/scenarios").join(id);
+    let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../sandbox/scenarios").join(id);
     let scratch = allocate_run_dir(&base)?;
     let seed = dir.join("seed");
     if seed.is_dir() {
@@ -338,8 +339,10 @@ fn inputs(dir: &Path) -> Result<Vec<Input>> {
 }
 
 async fn provider(scratch: &Path) -> Provider<DevModel> {
-    let mut provider = Provider::new(scratch, DevModel::new(scratch));
-    if let Some(base) = mcp::ephemeral_base().await {
+    let catalog = catalog::catalog();
+    let base = mcp::ephemeral_base(&catalog).await;
+    let mut provider = Provider::new(scratch, DevModel::new(scratch), catalog);
+    if let Some(base) = base {
         provider = provider.mcp_base(base);
     }
     provider
@@ -360,5 +363,5 @@ fn envelope(id: &str, outcome: &str, report: &BuildReport) -> Result<serde_json:
 /// The committed scenarios root (`eval/scenarios/`).
 #[must_use]
 pub fn scenarios_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("scenarios")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../scenarios")
 }

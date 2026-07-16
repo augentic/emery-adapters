@@ -4,7 +4,6 @@
 mod command;
 mod grade;
 mod http;
-mod telemetry;
 mod trial;
 
 use std::process::ExitCode;

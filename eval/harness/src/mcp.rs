@@ -3,7 +3,7 @@
 use adapter::references::References;
 use omnia_guest::axum::Router;
 
-use crate::catalog;
+use crate::catalog::Catalog;
 
 /// One mounted reference shelf.
 #[derive(Clone, Copy, Debug)]
@@ -16,8 +16,9 @@ pub struct Shelf {
 
 /// Every linked adapter's reference shelf.
 #[must_use]
-pub fn shelves() -> Vec<Shelf> {
-    catalog::entries()
+pub fn shelves<M>(catalog: &Catalog<M>) -> Vec<Shelf> {
+    catalog
+        .entries()
         .iter()
         .map(|entry| Shelf {
             name: entry.name(),
@@ -31,8 +32,8 @@ pub fn shelves() -> Vec<Shelf> {
 }
 
 /// Shelf router nested at `/mcp/<name>`, ready to merge onto the verb router.
-pub fn router() -> Router {
-    shelves().into_iter().fold(Router::new(), |router, shelf| {
+pub fn router<M>(catalog: &Catalog<M>) -> Router {
+    shelves(catalog).into_iter().fold(Router::new(), |router, shelf| {
         router.nest(&format!("/mcp/{}", shelf.name), omnia_guest::mcp::router(shelf.references))
     })
 }
@@ -40,11 +41,12 @@ pub fn router() -> Router {
 /// Serve the shelves on an ephemeral background listener.
 ///
 /// Returns the base URL for `Provider::mcp_base`, or `None` when no port can be bound.
-pub async fn ephemeral_base() -> Option<String> {
+pub async fn ephemeral_base<M>(catalog: &Catalog<M>) -> Option<String> {
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0)).await.ok()?;
     let base = format!("http://127.0.0.1:{}", listener.local_addr().ok()?.port());
+    let router = router(catalog);
     tokio::spawn(async move {
-        drop(axum::serve(listener, router()).await);
+        drop(axum::serve(listener, router).await);
     });
     Some(base)
 }

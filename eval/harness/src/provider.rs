@@ -9,18 +9,19 @@ use diagnostics::{Artifact, Diagnostic, DiagnosticKind, DiagnosticSource, Severi
 use error::Error;
 use omnia_guest::Model;
 use omnia_guest::model::{Reply, Request};
-use project::adapter::metadata::{Metadata, Request as MetadataRequest};
 use project::adapter::{AdapterRef, Axis, Origin, ResolvedSource, ResolvedTarget, Resolver};
 use project::seam::wire::{BUILD_VERSION, BuildOutput, BuildReport, BuildStatus, UiSurface};
 use project::seam::{self, Evidence, Input, Lead, Source, Target, WorkingTree};
 
-use crate::catalog;
+use crate::catalog::{Catalog, Entry};
 
-/// Native shim provider over linked adapter crates and a [`Model`] backend.
+/// Native shim provider over a linked-adapter [`Catalog`] and a
+/// [`Model`] backend.
 #[derive(Debug)]
 pub struct Provider<M> {
     project_dir: PathBuf,
     model: M,
+    catalog: Catalog<M>,
     mcp_base: Option<String>,
 }
 
@@ -29,17 +30,20 @@ impl<M: Clone> Clone for Provider<M> {
         Self {
             project_dir: self.project_dir.clone(),
             model: self.model.clone(),
+            catalog: self.catalog.clone(),
             mcp_base: self.mcp_base.clone(),
         }
     }
 }
 
 impl<M> Provider<M> {
-    /// A provider anchored at `project_dir` over the given model backend.
-    pub fn new(project_dir: impl Into<PathBuf>, model: M) -> Self {
+    /// A provider anchored at `project_dir` over the given model backend
+    /// and linked-adapter catalog.
+    pub fn new(project_dir: impl Into<PathBuf>, model: M, catalog: Catalog<M>) -> Self {
         Self {
             project_dir: project_dir.into(),
             model,
+            catalog,
             mcp_base: None,
         }
     }
@@ -54,6 +58,11 @@ impl<M> Provider<M> {
     /// The configured model backend.
     pub const fn model(&self) -> &M {
         &self.model
+    }
+
+    /// The linked-adapter catalog.
+    pub const fn catalog(&self) -> &Catalog<M> {
+        &self.catalog
     }
 
     fn mcp_url(&self, id: &str) -> Option<String> {
@@ -73,16 +82,16 @@ impl<M: Send + Sync> Resolver for Provider<M> {
         &self, adapter_ref: &AdapterRef, _project_dir: &Path,
     ) -> Result<ResolvedSource, Error> {
         require_bare(adapter_ref)?;
-        let entry = catalog::get(Axis::Source, &adapter_ref.name)?;
-        project::adapter::resolver::source(adapter_ref, entry.metadata(), origin(entry))
+        let entry = self.catalog.get(Axis::Source, &adapter_ref.name)?;
+        project::adapter::resolver::source(adapter_ref, entry.metadata(), origin(&entry))
     }
 
     fn resolve_target(
         &self, adapter_ref: &AdapterRef, _project_dir: &Path,
     ) -> Result<ResolvedTarget, Error> {
         require_bare(adapter_ref)?;
-        let entry = catalog::get(Axis::Target, &adapter_ref.name)?;
-        project::adapter::resolver::target(adapter_ref, entry.metadata(), origin(entry))
+        let entry = self.catalog.get(Axis::Target, &adapter_ref.name)?;
+        project::adapter::resolver::target(adapter_ref, entry.metadata(), origin(&entry))
     }
 }
 
@@ -111,7 +120,7 @@ impl<M: Model> Source for Provider<M> {
             project_root: &self.project_dir,
             mcp_url: url.as_deref(),
         };
-        let leads = catalog::survey(&self.model, &ctx, &id).await.map_err(map_error)?;
+        let leads = self.catalog.survey(&self.model, &ctx, &id).await.map_err(map_error)?;
         Ok(leads.into_iter().map(map_lead).collect())
     }
 
@@ -127,7 +136,8 @@ impl<M: Model> Source for Provider<M> {
             synopsis: lead.synopsis,
             topics: lead.topics,
         };
-        let evidence = catalog::extract(&self.model, &ctx, &id, &lead).await.map_err(map_error)?;
+        let evidence =
+            self.catalog.extract(&self.model, &ctx, &id, &lead).await.map_err(map_error)?;
         Ok(Evidence {
             authority: map_authority(evidence.authority),
             claims: evidence.claims.into_iter().map(map_claim).collect(),
@@ -137,7 +147,7 @@ impl<M: Model> Source for Provider<M> {
 
 impl<M: Model> Target for Provider<M> {
     async fn guidance(&self, id: String) -> Result<String, seam::Error> {
-        let prompt = catalog::guidance(&id).map_err(map_error)?;
+        let prompt = self.catalog.guidance(&id).map_err(map_error)?;
         Ok(prompt.to_string())
     }
 
@@ -155,7 +165,9 @@ impl<M: Model> Target for Provider<M> {
             base: tree.base,
             subpath: tree.subpath,
         };
-        let report = catalog::build(&self.model, &ctx, &id, &slice, &inputs, &tree)
+        let report = self
+            .catalog
+            .build(&self.model, &ctx, &id, &slice, &inputs, &tree)
             .await
             .map_err(map_error)?;
         Ok(widen_report(&id, slice, report))
@@ -178,24 +190,13 @@ impl<M: Model> Target for Provider<M> {
             base: tree.base,
             subpath: tree.subpath,
         };
-        let report = catalog::merge(&self.model, &ctx, &id, &slice, phase, &tree)
+        let report = self
+            .catalog
+            .merge(&self.model, &ctx, &id, &slice, phase, &tree)
             .await
             .map_err(map_error)?;
         Ok(widen_report(&id, slice, report))
     }
-}
-
-/// In-process metadata dispatch used by seam-level parity tests.
-///
-/// # Errors
-///
-/// `adapter-metadata-failed` when the request names an adapter this shim does not link.
-pub fn metadata(request: &MetadataRequest<'_>) -> Result<Metadata, Error> {
-    let name = request.adapter_id.split_once(':').map(|(_, name)| name).unwrap_or_default();
-    catalog::get(request.axis, name).map(catalog::Entry::metadata).map_err(|_error| Error::Diag {
-        code: "adapter-metadata-failed",
-        detail: format!("adapter `{}` is not linked into the native shim", request.adapter_id),
-    })
 }
 
 fn require_bare(adapter_ref: &AdapterRef) -> Result<(), Error> {
@@ -212,7 +213,7 @@ fn require_bare(adapter_ref: &AdapterRef) -> Result<(), Error> {
     })
 }
 
-fn origin(entry: catalog::Entry) -> Origin {
+fn origin<M>(entry: &Entry<M>) -> Origin {
     Origin {
         label: "native".to_string(),
         reference: format!("rust:{}", entry.id()),

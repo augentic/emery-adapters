@@ -1,0 +1,52 @@
+# The `specify-dev` wrapper: links the first-party adapter crates,
+# declares the harness catalog, and carries the live-model trial,
+# deterministic grading, and single-operation prompt scenarios. The
+# binary drives the same verb handlers as the wasm guest against the
+# harness's native provider.
+[package]
+name = "specify-dev"
+description = "Specify adapters' native dev shim and live-model evaluation harness"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "specify-dev"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+artifacts.workspace = true
+axum.workspace = true
+change.workspace = true
+clap.workspace = true
+harness.workspace = true
+omnia-guest.workspace = true
+project.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+toml.workspace = true
+transport.workspace = true
+
+captures.workspace = true
+contracts.workspace = true
+documentation.workspace = true
+intent.workspace = true
+omnia-target.workspace = true
+screenshots.workspace = true
+typescript.workspace = true
+vectis.workspace = true
+
+[dev-dependencies]
+omnia-testkit.workspace = true
+tempfile.workspace = true
+tower.workspace = true
+
+[lints]
+workspace = true

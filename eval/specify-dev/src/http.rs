@@ -8,11 +8,12 @@ use axum::extract::Request;
 use axum::middleware::{self, Next};
 use axum::response::Response;
 use clap::Parser;
-use eval::mcp;
-use eval::model::DevModel;
-use eval::provider::Provider;
+use harness::mcp;
+use harness::model::DevModel;
+use harness::provider::Provider;
 use omnia_guest::api::invoke::Invoker;
 use omnia_guest::http::Method;
+use specify_dev::catalog;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 
@@ -41,11 +42,13 @@ pub async fn serve(argv: &[String]) -> Result<ExitCode> {
     println!("specify-dev serving {} at {base}", project_dir.display());
 
     let model = DevModel::new(&project_dir);
-    let provider = Provider::new(project_dir, model).mcp_base(base);
+    let catalog = catalog::catalog();
+    let shelves = mcp::router(&catalog);
+    let provider = Provider::new(project_dir, model, catalog).mcp_base(base);
     let router = transport::http::router(Invoker::new("specify", provider))
         .into_axum()
         .layer(middleware::from_fn(serialize_writes))
-        .merge(mcp::router());
+        .merge(shelves);
 
     axum::serve(listener, router).await.context("serving")?;
     Ok(ExitCode::SUCCESS)

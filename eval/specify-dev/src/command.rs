@@ -2,10 +2,11 @@
 
 use std::path::PathBuf;
 
-use eval::mcp;
-use eval::model::DevModel;
-use eval::provider::Provider;
+use harness::mcp;
+use harness::model::DevModel;
+use harness::provider::Provider;
 use omnia_guest::api::invoke::Invoker;
+use specify_dev::catalog;
 
 // Only the option before the subcommand is the shim's; later `--project-dir` passes through.
 fn take_project_dir(argv: &mut Vec<String>) -> Result<Option<PathBuf>, String> {
@@ -44,8 +45,10 @@ pub async fn run(mut argv: Vec<String>) -> u8 {
         }
     };
     let model = DevModel::new(&root);
-    let mut provider = Provider::new(root, model);
-    if let Some(base) = mcp::ephemeral_base().await {
+    let catalog = catalog::catalog();
+    let base = mcp::ephemeral_base(&catalog).await;
+    let mut provider = Provider::new(root, model, catalog);
+    if let Some(base) = base {
         provider = provider.mcp_base(base);
     }
     let router = match transport::command::router(Invoker::new("specify", provider)) {

@@ -22,7 +22,7 @@ Artifacts outrank source behavior. Preserve missing information as `[unknown]` r
 - Do not commit built `.wasm` artifacts.
 - Adapter names must remain unique across the source and target axes.
 
-The root workspace includes `crates/*`, `sources/*`, `targets/*`, `composed` (the composed-deployment tests), and `examples/change` (the wasm change example's host). `eval/` — the adapters mirror of the engine's `crates/eval`, carrying the `specify-dev` native shim, the live trial, and the prompt scenarios — is a separate workspace pinned to a specific Specify engine revision; never commit local path patches or a lockfile changed only for sibling co-development.
+The root workspace includes `crates/*`, `sources/*`, `targets/*`, `composed` (the composed-deployment tests), and `examples/change` (the wasm change example's host). `eval/` — the adapters mirror of the engine's `crates/eval` — is a separate workspace pinned to a specific Specify engine revision, with two members: `eval/harness/` (the reusable adapter-agnostic core: the catalog machinery over the operations traits, the native seam provider, the model bridge, telemetry, and trial plumbing — destined to move into `augentic/specify`) and `eval/specify-dev/` (the wrapper binary declaring the linked first-party adapter catalog and carrying the live trial, grading, and prompt scenarios). Never commit local path patches or a lockfile changed only for sibling co-development.
 
 ## Prose and rules
 

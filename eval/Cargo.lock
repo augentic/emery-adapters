@@ -1213,41 +1213,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "eval"
-version = "0.1.0"
-dependencies = [
- "adapter",
- "anyhow",
- "artifacts",
- "axum",
- "captures",
- "change",
- "clap",
- "contracts",
- "diagnostics",
- "documentation",
- "error",
- "intent",
- "omnia 0.1.0",
- "omnia 0.35.0",
- "omnia-cursor",
- "omnia-guest",
- "omnia-testkit",
- "omnia-wasi-model",
- "project",
- "screenshots",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "toml",
- "tower",
- "transport",
- "typescript",
- "vectis",
-]
-
-[[package]]
 name = "fallible-iterator"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1583,6 +1548,28 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+]
+
+[[package]]
+name = "harness"
+version = "0.1.0"
+dependencies = [
+ "adapter",
+ "anyhow",
+ "artifacts",
+ "axum",
+ "change",
+ "diagnostics",
+ "error",
+ "omnia 0.35.0",
+ "omnia-cursor",
+ "omnia-guest",
+ "omnia-testkit",
+ "omnia-wasi-model",
+ "project",
+ "tempfile",
+ "tokio",
+ "transport",
 ]
 
 [[package]]
@@ -4130,6 +4117,36 @@ checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "specify-dev"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "artifacts",
+ "axum",
+ "captures",
+ "change",
+ "clap",
+ "contracts",
+ "documentation",
+ "harness",
+ "intent",
+ "omnia 0.1.0",
+ "omnia-guest",
+ "omnia-testkit",
+ "project",
+ "screenshots",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "toml",
+ "tower",
+ "transport",
+ "typescript",
+ "vectis",
 ]
 
 [[package]]

@@ -1,5 +1,8 @@
 //! Guest-side [`Model`] over a host-side [`WasiModelCtx`] backend.
-//! Mirror of the engine eval crate's `native.rs` — keep the two in sync.
+//!
+//! Mirror of the engine eval crate's `native.rs` — keep the two in sync
+//! until this harness crate moves into `augentic/specify` and the engine
+//! consumes it directly.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

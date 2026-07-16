@@ -2,7 +2,7 @@
 
 use std::process::Command;
 
-use eval::inputs::{self, TrialInputs};
+use specify_dev::inputs::{self, TrialInputs};
 
 #[test]
 fn checked_in_definition() {
@@ -59,8 +59,9 @@ mod refusals {
 
     #[test]
     fn unquoted_value() {
-        let err = TrialInputs::parse(&VALID.replace("\"orders\"\nTRIAL_CHANGE", "orders\nTRIAL_CHANGE"))
-            .expect_err("unquoted values refuse");
+        let err =
+            TrialInputs::parse(&VALID.replace("\"orders\"\nTRIAL_CHANGE", "orders\nTRIAL_CHANGE"))
+                .expect_err("unquoted values refuse");
         assert!(format!("{err:#}").contains("double-quoted"), "{err:#}");
     }
 

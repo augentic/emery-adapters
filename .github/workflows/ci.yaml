@@ -29,10 +29,10 @@ jobs:
   #           "https://github.com/augentic/"
 
   #     - name: Test against the declared engine revision
-  #       run: cargo test --locked --manifest-path eval/Cargo.toml
+  #       run: cargo test --locked --manifest-path eval/Cargo.toml --workspace
 
   #     - name: Clippy against the declared engine revision
   #       run: |
   #         rustup component add clippy
   #         cargo clippy --locked --manifest-path eval/Cargo.toml \
-  #           --all-targets -- -D warnings
+  #           --workspace --all-targets -- -D warnings
