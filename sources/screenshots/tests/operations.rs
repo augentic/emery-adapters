@@ -3,8 +3,8 @@
 use std::path::Path;
 
 use adapter::seam::{Authority, ClaimKind, Context, Lead};
-use omnia_testkit::model::Harness;
 use screenshots::operations::extract;
+use testkit::Harness;
 
 #[tokio::test]
 async fn extract_spatial_kinds() {

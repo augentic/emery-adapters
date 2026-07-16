@@ -10,10 +10,11 @@
 //! telemetry initialization.
 //!
 //! The judgment legs themselves are covered natively in each adapter
-//! crate against Omnia's recorded scripted harness, and live against the cursor backend by
-//! the `live` test target beside this one. The model backend here is a
-//! stub that fails every completion: these tests are model-free, so any
-//! completion is a test bug.
+//! crate against Omnia's recorded scripted harness, and live against
+//! the cursor backend by the eval workspace's trial and prompt
+//! scenarios (`eval/`). The model backend here is a stub that fails
+//! every completion: these tests are model-free, so any completion is
+//! a test bug.
 
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -731,11 +732,11 @@ async fn component_runtime(mount: &Path) -> Result<Runtime<Bundle>> {
 /// `/mcp/<name>`, sharing one writable `"."` mount — the shared project
 /// tree every guest opens through its own preopen.
 fn manifest(guests: &[Guest], mount: &Path) -> Result<TempManifest> {
-    let entries: Vec<harness::Guest> = guests
+    let entries: Vec<composed::Guest> = guests
         .iter()
         .map(|(id, file)| {
             let name = id.split_once(':').expect("guest id is `<axis>:<name>`").1;
-            harness::Guest {
+            composed::Guest {
                 id: (*id).to_owned(),
                 wasm: guest_wasm(file),
                 link: Vec::new(),
@@ -743,7 +744,7 @@ fn manifest(guests: &[Guest], mount: &Path) -> Result<TempManifest> {
             }
         })
         .collect();
-    temp_manifest(&harness::manifest(&entries, mount))
+    temp_manifest(&composed::manifest(&entries, mount))
 }
 
 /// Locate a built wasm32-wasip2 guest component, building on first use.
@@ -764,18 +765,18 @@ fn build_guests() {
     GUESTS.get_or_init(|| {
         let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
-            .expect("harness manifest dir is at the workspace root");
+            .expect("composed manifest dir is at the workspace root");
         // `--workspace` rather than a `-p` list: the bare spec `omnia` is
         // ambiguous between the guest crate and the runtime dependency
         // of the same name. The host-only members compile empty on wasm32;
-        // `specify-dev` sits outside the workspace entirely.
+        // the eval workspace sits outside this one entirely.
         let args = ["build", "--workspace", "--target", "wasm32-wasip2"];
-        harness::cargo(&args, workspace_root, &target_dir()).expect("guest build");
+        composed::cargo(&args, workspace_root, &target_dir()).expect("guest build");
     });
 }
 
 fn target_dir() -> PathBuf {
-    harness::target_dir().expect("test exe sits at <target>/<profile>/deps/<exe>")
+    composed::target_dir().expect("test exe sits at <target>/<profile>/deps/<exe>")
 }
 
 async fn assemble(manifest: TempManifest) -> Result<Runtime<Bundle>> {

@@ -29,28 +29,26 @@ wit/                  # the contract — wit/specify.wit, the axis worlds
     Cargo.toml        #   `<name>` — the adapter component; its `version` is the adapter identity semver
     src/              #   wasm-free adapter logic + the wasm32-only `guest` shim module
     tests/            #   native integration suite (one auto-discovered binary per area)
-shared/
-  prose/              # cross-adapter prose, same grammar as adapter prose/
-    references/       #   spec-runtime bundle, replay hook docs, …
-    rules/            #   UNI-* engineering rules
-crates/               # shared guest support (adapter, prose); native tests use
-                      # Omnia's recorded scripted model harness
-harness/                # hosted-deployment and native workflow harnesses
-                      # package flattened like omnia's examples/: harness.rs
-                      # (the package lib — the
-                      # shared host-side harness) + composed.rs (the
-                      # model-free composed-deployment tests hosting the
-                      # built adapter guest components on the Omnia runtime)
-                      # + live.rs (the live eval runner) + runtime.rs (the
-                      # eval-driver host) + guest.rs (the eval-guest cdylib)
-                      # over the per-adapter scenario trees (contracts,
-                      # vectis)
-  native/             # `specify-dev`: linked-adapter engine runtime, the
-                      # native seam/CLI integration suite, and the live
-                      # `eval` trial — a standalone workspace excluded from
-                      # the root, pinned to a declared Specify engine revision
-Cargo.toml            # workspace: `crates/*` + `{sources,targets}/*` + `harness`
-                      # (excludes `harness/native`)
+codex/                # cross-adapter prose: rules/ (UNI-* engineering rules)
+                      # and references/runtime/ (the spec-runtime bundle
+                      # adapters symlink into their prose/)
+crates/               # shared guest support (adapter, prose) and the repo's
+                      # dev-only test-support crate (testkit — the recording
+                      # model harness over omnia-testkit's scripted double)
+composed/             # model-free composed-deployment tests hosting the built
+                      # adapter guest components on the Omnia runtime
+                      # (flattened like omnia's examples/: support.rs + composed.rs)
+examples/
+  change/             # the wasm change example: the `change-example` runtime
+                      # host + omnia.toml + seed tree (see its README.md)
+eval/                 # the adapters mirror of the engine's crates/eval:
+                      # `specify-dev` (linked-adapter engine runtime, the
+                      # native seam/CLI integration suite), the live `eval`
+                      # trial, and the prompt scenarios under eval/scenarios/
+                      # — a standalone workspace excluded from the root,
+                      # pinned to a declared Specify engine revision
+Cargo.toml            # workspace: `composed` + `examples/change` + `crates/*`
+                      # + `{sources,targets}/*` (excludes `eval`)
 ```
 
 Identity lives in the guest crate's `Cargo.toml` `version` and the wasm-pkg
@@ -87,17 +85,17 @@ at `target/wasm32-wasip2/release/<name>.wasm`):
 cargo make release
 ```
 
-The `harness` package keeps composed WASM/WIT conformance (`harness/composed.rs`) distinct from live prompt-quality evaluation (`harness/live.rs`). Composed tests build guests from source on first use when artifacts are absent under `target/wasm32-wasip2/debug/`.
+The `composed` package keeps WASM/WIT conformance (`composed/composed.rs`) model-free and distinct from the live rungs. Composed tests build guests from source on first use when artifacts are absent under `target/wasm32-wasip2/debug/`.
 
-The `specify-dev` package under `harness/native/` is a **standalone workspace**, deliberately excluded from the root: it links every adapter crate in-process and consumes Specify's engine crates from a revision-pinned git source, so ordinary adapter commands never resolve (or authenticate to) that private dependency. It provides the fast, model-free seam suite — and carries the live `cargo make eval` trial (see [TESTING.md](TESTING.md)) — without coupling the engine repository back to concrete adapters:
+The `eval` package under `eval/` is a **standalone workspace**, deliberately excluded from the root: it links every adapter crate in-process and consumes Specify's engine crates from a revision-pinned git source, so ordinary adapter commands never resolve (or authenticate to) that private dependency. It provides the fast, model-free seam suite through the `specify-dev` binary — and carries the live `cargo make eval` trial plus the single-operation prompt scenarios (see [TESTING.md](TESTING.md)) — without coupling the engine repository back to concrete adapters:
 
 ```bash
-cargo make native-test     # nextest over harness/native (its own manifest/lock)
-cargo make native-lint     # clippy -D warnings over harness/native
-cargo make native-run -- --project-dir /path/to/project plan status
+cargo make eval-test     # nextest over eval/ (its own manifest/lock)
+cargo make eval-lint     # clippy -D warnings over eval/
+cargo make dev -- --project-dir /path/to/project plan status
 ```
 
-Two compatibility choices are independent, for first- and third-party adapter authors alike: the **WIT contract version** an adapter targets (`wit/specify.wit`, the publish-time compatibility floor), and — only for this optional native harness — the **engine revision** its manifest pins. The pin is the harness's declared, verified engine revision; it advances deliberately (edit the `rev` values in `harness/native/Cargo.toml`, run `cargo update --manifest-path harness/native/Cargo.toml`, and commit its lockfile), not with every engine commit.
+Two compatibility choices are independent, for first- and third-party adapter authors alike: the **WIT contract version** an adapter targets (`wit/specify.wit`, the publish-time compatibility floor), and — only for this optional eval workspace — the **engine revision** its manifest pins. The pin is the harness's declared, verified engine revision; it advances deliberately (edit the `rev` values in `eval/Cargo.toml`, run `cargo update --manifest-path eval/Cargo.toml`, and commit its lockfile), not with every engine commit.
 
 For sibling co-development against uncommitted engine changes, override the pin locally with hand-supplied `--config` path patches against the sibling working tree. Never commit path patches or hand-edit the pin for local work.
 

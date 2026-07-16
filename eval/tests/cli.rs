@@ -48,8 +48,7 @@ mod project_dir_forms {
         let elsewhere = TempDir::new().expect("tempdir");
 
         let root = project.root().to_string_lossy().into_owned();
-        let args: Vec<&str> =
-            ["--project-dir", &root].iter().chain(EMIT.iter()).copied().collect();
+        let args: Vec<&str> = ["--project-dir", &root].iter().chain(EMIT.iter()).copied().collect();
         let output = run_from(elsewhere.path(), &args);
         assert_created(project.root(), elsewhere.path(), &output);
     }
@@ -75,8 +74,7 @@ fn scaffold_component_free() {
 
     let root = project.path().canonicalize().expect("canonical tempdir");
     let flag = format!("--project-dir={}", root.display());
-    let output =
-        run_from(elsewhere.path(), &[&flag, "init", "omnia", "--name", "demo"]);
+    let output = run_from(elsewhere.path(), &[&flag, "init", "omnia", "--name", "demo"]);
     assert!(
         output.status.success(),
         "component-free init failed: stdout={} stderr={}",

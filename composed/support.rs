@@ -1,16 +1,11 @@
-//! Shared host-side harness for the package's two hosted-deployment test
-//! surfaces: the composed-deployment tests (`composed.rs`) and the live
-//! eval harness (`live.rs`).
-//!
-//! Owns the pieces both suites need — cargo-target-dir discovery, a
-//! subprocess `cargo` runner, deployment-manifest rendering over [`Guest`]
-//! entries, and tree copying. The omnia runtime assembly itself stays with
-//! each consumer: the composed tests deploy in-process via `omnia-testkit`,
-//! the quality tests spawn the prebuilt `eval-driver` example.
+//! Host-side support for the composed-deployment tests (`composed.rs`):
+//! cargo-target-dir discovery, a subprocess `cargo` runner, and
+//! deployment-manifest rendering over [`Guest`] entries. The omnia
+//! runtime assembly itself stays with the test, which deploys
+//! in-process via `omnia-testkit`.
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -20,7 +15,7 @@ use anyhow::{Context as _, Result, ensure};
 /// the peer interfaces it links, and the HTTP route it serves.
 #[derive(Debug, Clone)]
 pub struct Guest {
-    /// Manifest guest id (`<axis>:<name>`, or a bare harness id).
+    /// Manifest guest id (`<axis>:<name>`).
     pub id: String,
     /// Path to the built wasm32-wasip2 component.
     pub wasm: PathBuf,
@@ -93,35 +88,5 @@ pub fn cargo(args: &[&str], root: &Path, target: &Path) -> Result<()> {
         .status()
         .context("spawning cargo")?;
     ensure!(status.success(), "cargo {} failed with {status}", args.join(" "));
-    Ok(())
-}
-
-/// Recursively copy the tree at `from` into `to`, creating `to`.
-///
-/// Symlinks resolve like the build-time prose embed: a linked directory
-/// is copied as a real directory under its link-name path and a linked
-/// file's resolved content is copied, so the destination tree carries no
-/// links.
-///
-/// # Errors
-///
-/// Returns an error when any directory or file cannot be read or
-/// written, including a dangling symlink.
-pub fn copy_tree(from: &Path, to: &Path) -> Result<()> {
-    fs::create_dir_all(to)?;
-    for entry in fs::read_dir(from)? {
-        let entry = entry?;
-        let path = entry.path();
-        let dest = to.join(entry.file_name());
-        // `metadata` follows symlinks; a dangling link errors here rather
-        // than being silently dropped from the copy.
-        let metadata = fs::metadata(&path)
-            .with_context(|| format!("resolve {} (dangling symlink?)", path.display()))?;
-        if metadata.is_dir() {
-            copy_tree(&path, &dest)?;
-        } else {
-            fs::copy(&path, &dest)?;
-        }
-    }
     Ok(())
 }

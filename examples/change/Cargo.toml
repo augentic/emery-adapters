@@ -1,0 +1,32 @@
+# The change example's host binary: the omnia runtime that composes the
+# published `specify:core` component with this repo's built adapter
+# components over `examples/change/omnia.toml`. The adapters counterpart of
+# running `cargo run -p specify` against the engine's `examples/change`.
+[package]
+name = "change-example"
+description = "Omnia runtime host for the wasm change example"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+# Flattened beside the deployment manifest, README, and seed tree.
+[[bin]]
+name = "change-example"
+path = "host.rs"
+
+[dependencies]
+cfg-if.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+anyhow.workspace = true
+omnia.workspace = true
+omnia-cursor.workspace = true
+omnia-wasi-http.workspace = true
+omnia-wasi-model.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+
+[lints]
+workspace = true

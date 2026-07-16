@@ -5,7 +5,7 @@ use std::path::Path;
 
 use adapter::seam::{Authority, ClaimKind, Context, Lead};
 use captures::operations::extract;
-use omnia_testkit::model::Harness;
+use testkit::Harness;
 
 fn ctx() -> Context<'static> {
     Context {

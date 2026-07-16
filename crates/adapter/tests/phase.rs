@@ -10,8 +10,8 @@ use adapter::phase::{
 use adapter::seam::{
     BuildOutput, Context, Finding, Input, Platform, Report, Severity, Status, WorkingTree,
 };
-use omnia_testkit::model::Harness;
 use tempfile::tempdir;
+use testkit::Harness;
 
 const fn context(root: &Path) -> Context<'_> {
     Context {

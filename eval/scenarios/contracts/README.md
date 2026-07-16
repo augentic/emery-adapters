@@ -14,7 +14,7 @@ as context. They do not generate new or changed interface shapes inline.
 ## Relationship To Evals
 
 These are owner-local scenario documents. They live beside the live eval
-harness's `scenarios/<name>/` seed trees because the behavior under test is
+eval rung's `<name>/` seed trees because the behavior under test is
 one adapter's slice loop in isolation. Static checks validate their YAML
 frontmatter and scenario IDs; the scenario bodies remain human-readable
 operator instructions.
@@ -137,7 +137,7 @@ Use this prompt when you want an agent to run every scenario in sequence without
 asking for manual confirmation between steps:
 
 ```text
-Run all contract test scenarios in adapters/harness/contracts/scenarios/ in this order:
+Run all contract test scenarios in eval/scenarios/contracts/ in this order:
 1. metadata.md
 2. design.md
 3. update.md

@@ -12,11 +12,11 @@ use axum::extract::Request;
 use axum::middleware::{self, Next};
 use axum::response::Response;
 use clap::Parser;
+use eval::mcp;
+use eval::model::DevModel;
+use eval::provider::Provider;
 use omnia_guest::api::invoke::Invoker;
 use omnia_guest::http::Method;
-use specify_dev::mcp;
-use specify_dev::model::DevModel;
-use specify_dev::provider::Provider;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 

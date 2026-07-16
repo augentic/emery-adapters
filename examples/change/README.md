@@ -1,8 +1,8 @@
 # Change example
 
-The end-to-end example over the real WIT seam: the published `specify:core` guest composed with this repo's built adapter components — `documentation` and `intent` on the source axis, `contracts` on the target axis — in one Omnia deployment, driven through the operator rhythm with the live cursor backend.
+The end-to-end example over the real WIT seam: the published `specify:core` guest composed with this repo's built adapter components — `documentation` and `intent` on the source axis, `contracts` on the target axis — in one Omnia deployment, driven through the operator rhythm with the live cursor backend. The [`change-example`](host.rs) binary beside this README is the deployment's host runtime: the cursor backend behind `wasi-model` plus the HTTP trigger serving each adapter's MCP reference route.
 
-This is the adapters mirror of the engine's `examples/change`, with real adapters in place of the fixture guest. Operator-invoked demo posture: exit codes plus a final artifact-exists check, not a graded test. The graded native trial is `cargo make eval` (see [TESTING.md](../../TESTING.md)).
+This is the adapters mirror of the engine's `examples/change`, with real adapters in place of the fixture guest and the published core in place of the workspace build. Operator-invoked demo posture: exit codes plus a final artifact-exists check, not a graded test. The graded native trial is `cargo make eval` (see [TESTING.md](../../TESTING.md)).
 
 ## Quick start
 
@@ -35,8 +35,8 @@ After running, inspect the merged baseline at:
 sandbox/change/workspace/contracts/
 ```
 
-`SPECIFY_EVAL_MODEL=<model-id>` overrides the model for a run, exactly as in the single-operation live scenarios.
+`SPECIFY_EVAL_MODEL=<model-id>` overrides the model for a run, exactly as in the eval trial and the prompt scenarios.
 
 ## Pinning
 
-The core component version is `SPECIFY_CORE_VERSION` in the root [Makefile.toml](../../Makefile.toml); it advances together with the engine revision pin in [harness/native/Cargo.toml](../../harness/native/Cargo.toml).
+The core component version is `SPECIFY_CORE_VERSION` in the root [Makefile.toml](../../Makefile.toml); it advances together with the engine revision pin in [eval/Cargo.toml](../../eval/Cargo.toml).

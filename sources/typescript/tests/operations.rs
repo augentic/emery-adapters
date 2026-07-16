@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use adapter::seam::{Authority, ClaimKind, Context, Lead};
-use omnia_testkit::model::Harness;
+use testkit::Harness;
 use typescript::operations::{extract, survey};
 
 fn ctx() -> Context<'static> {

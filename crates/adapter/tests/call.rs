@@ -6,8 +6,8 @@ use std::path::Path;
 
 use adapter::seam::{Context, Error, WorkingTree};
 use adapter::{Error as ModelError, Format, judgment};
-use omnia_testkit::model::{Harness, mcp_grants};
 use serde::Deserialize;
+use testkit::{Harness, mcp_grants};
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 struct Answer {

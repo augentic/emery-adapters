@@ -1,0 +1,5 @@
+# Routing for the `vectis/single-screen` scenario: the adapter under test,
+# the seam operation `specify-dev eval scenario` drives, and the slice name.
+adapter = "target:vectis"
+operation = "build"
+slice = "daily-quote"

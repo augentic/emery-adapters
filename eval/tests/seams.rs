@@ -7,6 +7,7 @@
 use std::sync::{Arc, Mutex};
 
 use artifacts::evidence::{Claim, ClaimKind};
+use eval::provider::{Provider, metadata};
 use omnia_guest::Model;
 use omnia_guest::model::{Reply, Request, Tool};
 use omnia_testkit::model::Scripted;
@@ -14,7 +15,6 @@ use project::adapter::metadata::Request as MetadataRequest;
 use project::adapter::{AdapterRef, Axis, Resolver};
 use project::seam::wire::BuildStatus;
 use project::seam::{Error, Input, Lead, Source as _, Target as _, WorkingTree};
-use specify_dev::provider::{Provider, metadata};
 use tempfile::TempDir;
 
 fn lead(id: &str) -> Lead {
@@ -206,7 +206,7 @@ async fn catalog_dispatches_every_entry() {
     // sources (scripted empty answer), `guidance` for targets.
     let tmp = TempDir::new().expect("tempdir");
 
-    for entry in specify_dev::catalog::entries() {
+    for entry in eval::catalog::entries() {
         let name = entry.name();
         let id = entry.id();
         assert_eq!(

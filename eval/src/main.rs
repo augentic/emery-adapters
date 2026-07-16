@@ -1,7 +1,6 @@
-//! `specify-dev` — the Rust-native shim binary.
+//! `specify-dev` — the Rust-native dev shim and eval harness.
 //!
-//! Two transport modes over the same handler layer the wasm guest
-//! serves, each owned by a symmetric transport module:
+//! Three modes over the same handler layer the wasm guest serves:
 //!
 //! - **CLI mode** (default, [`command`]): the shared typed command
 //!   router against the native provider, plus an ephemeral MCP shelf.
@@ -10,14 +9,19 @@
 //! - **`serve` mode** ([`http`]): the shared typed HTTP router merged
 //!   with the `/mcp/<name>` shelves on one `TcpListener`; carries its
 //!   own `--project-dir` flag.
-//!
-//! One live mode sits beside them: **`eval`** ([`specify_dev::eval`])
-//! is this repo's live-model trial — the operator rhythm over a
-//! persistent `sandbox/eval/` project with the linked adapters,
-//! graded by deterministic validators only.
+//! - **`eval` mode** ([`trial`], [`scenario`]): the live-model rungs,
+//!   mirroring the engine's `crates/eval`. The trial runs the operator
+//!   rhythm over a persistent `sandbox/eval/` project with the linked
+//!   adapters, graded by deterministic validators only; `eval scenario`
+//!   drives one adapter operation over a seeded scratch tree for fast
+//!   prompt iteration.
 
 mod command;
+mod grade;
 mod http;
+mod scenario;
+mod telemetry;
+mod trial;
 
 use std::process::ExitCode;
 
@@ -32,7 +36,7 @@ async fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
-        Some("eval") => match specify_dev::eval::run(&argv[1..]).await {
+        Some("eval") => match trial::run(&argv[1..]).await {
             Ok(code) => code,
             Err(err) => {
                 eprintln!("specify-dev: {err:#}");

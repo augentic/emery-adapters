@@ -38,11 +38,7 @@ fn lifecycle(plan: &Plan) -> Result<()> {
 fn requirements(requirements: &[Requirement]) -> Result<()> {
     ensure!(!requirements.is_empty(), "the baseline carries no requirements");
     for requirement in requirements {
-        ensure!(
-            !requirement.id.is_empty(),
-            "requirement `{}` carries no id",
-            requirement.name
-        );
+        ensure!(!requirement.id.is_empty(), "requirement `{}` carries no id", requirement.name);
         if requirement.status != Some(RequirementStatus::Unknown) {
             ensure!(
                 !requirement.sources.is_empty(),

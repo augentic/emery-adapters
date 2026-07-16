@@ -1,13 +1,14 @@
-//! Omnia `runtime!` host for adapter-guest quality tests.
+//! Omnia `runtime!` host for the wasm change example.
 //!
 //! Binds the live cursor backend behind `wasi-model`: command mode drives
-//! the eval guest's `wasi:cli/run` export once and exits with its status,
-//! while the HTTP trigger serves the adapter guest's MCP reference route in
-//! the background for the spawned `cursor-agent`. Run by `harness/live.rs`, or
-//! by hand:
+//! the deployed `specify:core` component's `wasi:cli/run` export once per
+//! verb and exits with its status, while the HTTP trigger serves each
+//! adapter guest's MCP reference route in the background for the spawned
+//! `cursor-agent`. Run through the root `cargo make change-*` tasks (see
+//! [`README.md`](README.md)), or by hand:
 //!
 //! ```text
-//! cargo run -p harness --example eval-driver -- run --config <manifest> -- build target:contracts <slice> <inputs-dir>
+//! cargo run -p change-example -- run --config examples/change/omnia.toml -- <specify args>
 //! ```
 //!
 //! Requires `cursor-agent` on `PATH`, authenticated via `CURSOR_API_KEY` or a

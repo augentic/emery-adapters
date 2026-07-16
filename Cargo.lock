@@ -7,11 +7,11 @@ name = "adapter"
 version = "0.1.0"
 dependencies = [
  "omnia-guest",
- "omnia-testkit",
  "omnia-wasi-http",
  "serde",
  "serde_json",
  "tempfile",
+ "testkit",
  "thiserror 2.0.18",
  "tokio",
  "wasip3",
@@ -417,8 +417,8 @@ name = "captures"
 version = "0.1.0"
 dependencies = [
  "adapter",
- "omnia-testkit",
  "prose",
+ "testkit",
  "tokio",
  "wasip3",
 ]
@@ -456,6 +456,19 @@ dependencies = [
  "cfg-if",
  "cpufeatures 0.3.0",
  "rand_core 0.10.1",
+]
+
+[[package]]
+name = "change-example"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cfg-if",
+ "omnia 0.35.0",
+ "omnia-cursor",
+ "omnia-wasi-http",
+ "omnia-wasi-model",
+ "tokio",
 ]
 
 [[package]]
@@ -548,6 +561,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "composed"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "omnia 0.35.0",
+ "omnia-testkit",
+ "omnia-wasi-http",
+ "omnia-wasi-model",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "const-hex"
 version = "1.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -571,13 +598,13 @@ version = "0.1.0"
 dependencies = [
  "adapter",
  "jsonschema",
- "omnia-testkit",
  "prose",
  "semver",
  "serde",
  "serde-saphyr",
  "serde_json",
  "tempfile",
+ "testkit",
  "tokio",
  "wasip3",
 ]
@@ -981,8 +1008,8 @@ name = "documentation"
 version = "0.1.0"
 dependencies = [
  "adapter",
- "omnia-testkit",
  "prose",
+ "testkit",
  "tokio",
  "wasip3",
 ]
@@ -1384,25 +1411,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "harness"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "cfg-if",
- "omnia 0.35.0",
- "omnia-cursor",
- "omnia-testkit",
- "omnia-wasi-http",
- "omnia-wasi-model",
- "prose",
- "serde_json",
- "tempfile",
- "tokio",
- "wasip3",
- "wit-bindgen 0.59.0",
-]
-
-[[package]]
 name = "hashbrown"
 version = "0.14.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1769,8 +1777,8 @@ name = "intent"
 version = "0.1.0"
 dependencies = [
  "adapter",
- "omnia-testkit",
  "prose",
+ "testkit",
  "tokio",
  "wasip3",
 ]
@@ -2265,11 +2273,11 @@ version = "0.1.0"
 dependencies = [
  "adapter",
  "jsonschema",
- "omnia-testkit",
  "prose",
  "serde",
  "serde_json",
  "tempfile",
+ "testkit",
  "tokio",
  "wasip3",
 ]
@@ -3553,8 +3561,8 @@ name = "screenshots"
 version = "0.1.0"
 dependencies = [
  "adapter",
- "omnia-testkit",
  "prose",
+ "testkit",
  "tokio",
  "wasip3",
 ]
@@ -3948,6 +3956,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06794f8f6c5c898b3275aebefa6b8a1cb24cd2c6c79397ab15774837a0bc5755"
 dependencies = [
  "winapi-util",
+]
+
+[[package]]
+name = "testkit"
+version = "0.1.0"
+dependencies = [
+ "omnia-guest",
+ "omnia-testkit",
 ]
 
 [[package]]
@@ -4390,8 +4406,8 @@ name = "typescript"
 version = "0.1.0"
 dependencies = [
  "adapter",
- "omnia-testkit",
  "prose",
+ "testkit",
  "tokio",
  "wasip3",
 ]
@@ -4523,7 +4539,6 @@ dependencies = [
  "adapter",
  "image",
  "jsonschema",
- "omnia-testkit",
  "prose",
  "resvg",
  "serde",
@@ -4531,6 +4546,7 @@ dependencies = [
  "serde_json",
  "sha2 0.11.0",
  "tempfile",
+ "testkit",
  "thiserror 2.0.18",
  "tiny-skia",
  "tokio",

@@ -2,10 +2,10 @@
 
 use std::path::PathBuf;
 
+use eval::mcp;
+use eval::model::DevModel;
+use eval::provider::Provider;
 use omnia_guest::api::invoke::Invoker;
-use specify_dev::mcp;
-use specify_dev::model::DevModel;
-use specify_dev::provider::Provider;
 
 /// Split a leading shim-global `--project-dir <path>` /
 /// `--project-dir=<path>` off `argv` — the CLI-mode counterpart of

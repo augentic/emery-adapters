@@ -4,8 +4,8 @@
 
 use axum::body::{Body, to_bytes};
 use axum::http::{Method, Request, StatusCode, header};
+use eval::mcp;
 use serde_json::{Value, json};
-use specify_dev::mcp;
 use tower::ServiceExt as _;
 
 /// Drive one JSON-RPC POST through the shelf router.
@@ -34,7 +34,7 @@ fn call(name: &str, arguments: &Value) -> Value {
 fn shelves_match_linked_adapters() {
     let names: Vec<&str> = mcp::shelves().iter().map(|shelf| shelf.name).collect();
     let catalog_names: Vec<&str> =
-        specify_dev::catalog::entries().iter().map(|entry| entry.name()).collect();
+        eval::catalog::entries().iter().map(|entry| entry.name()).collect();
     assert_eq!(names, catalog_names, "MCP shelves must derive from the native catalog");
     assert_eq!(
         catalog_names,

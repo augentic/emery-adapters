@@ -1,7 +1,7 @@
 # The adapters change example: the published `specify:core` guest
 # (fetched by `cargo make core-fetch`) composed with this repo's built
-# adapter components. Driven by the eval-driver host through
-# `cargo make change-run`.
+# adapter components. Driven by the `change-example` host (host.rs
+# beside this manifest) through `cargo make change-run`.
 
 [[guest]]
 id = "specify"

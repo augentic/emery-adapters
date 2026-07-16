@@ -24,8 +24,8 @@ use omnia_guest::Model;
 use omnia_guest::model::{Reply, Request};
 use project::adapter::metadata::{Metadata, Request as MetadataRequest};
 use project::adapter::{AdapterRef, Axis, Origin, ResolvedSource, ResolvedTarget, Resolver};
-use project::seam::{self, Evidence, Input, Lead, Source, Target, WorkingTree};
 use project::seam::wire::{BUILD_VERSION, BuildOutput, BuildReport, BuildStatus, UiSurface};
+use project::seam::{self, Evidence, Input, Lead, Source, Target, WorkingTree};
 
 use crate::catalog;
 

@@ -22,7 +22,7 @@ Artifacts outrank source behavior. Preserve missing information as `[unknown]` r
 - Do not commit built `.wasm` artifacts.
 - Adapter names must remain unique across the source and target axes.
 
-The root workspace includes `crates/*`, `sources/*`, `targets/*`, and `harness`. `harness/native` is a separate workspace pinned to a specific Specify engine revision; never commit local path patches or a lockfile changed only for sibling co-development.
+The root workspace includes `crates/*`, `sources/*`, `targets/*`, `composed` (the composed-deployment tests), and `examples/change` (the wasm change example's host). `eval/` — the adapters mirror of the engine's `crates/eval`, carrying the `specify-dev` native shim, the live trial, and the prompt scenarios — is a separate workspace pinned to a specific Specify engine revision; never commit local path patches or a lockfile changed only for sibling co-development.
 
 ## Prose and rules
 
@@ -46,8 +46,8 @@ Testing is integration-first:
 - Keep `src` unit tests only for genuinely unreachable defensive branches or dense pure matrices that are materially cheaper in-process.
 - Do not widen public APIs solely for tests.
 - Use `cargo nextest`, not bare `cargo test`, for native workspace tests; process isolation is required by CWD- and environment-mutating suites.
-- Adapter native tests own operation behavior, the native workflow harness owns cross-phase integration, composed tests own WASM/WIT conformance, and live tests own prompt quality. Do not duplicate the same assertion across rungs.
-- The two live rungs are operator-invoked, never CI: `cargo make eval` (the native live-model trial over `sandbox/eval/`, deterministic grading only) and `cargo make change-run` (the wasm change example composing the published `specify:core` with the built adapter components).
+- Adapter native tests own operation behavior, the eval workspace owns cross-phase integration and prompt quality, and composed tests own WASM/WIT conformance. Do not duplicate the same assertion across rungs.
+- The live rungs are operator-invoked, never CI: `cargo make eval` (the native live-model trial over `sandbox/eval/`, deterministic grading only), `cargo make eval scenario <adapter>/<name>` (one adapter operation over a seeded scratch tree — the fast prompt-iteration loop), and `cargo make change-run` (the wasm change example composing the published `specify:core` with the built adapter components).
 
 Read [`TESTING.md`](TESTING.md) before adding, deleting, or relocating tests.
 
@@ -61,7 +61,11 @@ cargo make ci             # full gate, including vet and deny
 cargo nextest run -p NAME # focused adapter tests
 cargo make adapter NAME   # fast development component build
 cargo make release        # release-build every component
+cargo make eval-test      # nextest over the eval workspace (its own lockfile)
+cargo make eval-lint      # clippy -D warnings over the eval workspace
+cargo make dev -- ARGS    # any specify verb through the native specify-dev shim
 cargo make eval [phase]   # live-model trial over sandbox/eval (operator-invoked)
+cargo make eval scenario [id]  # one live prompt scenario; bare lists them (operator-invoked)
 cargo make core-fetch     # fetch the pinned specify:core component
 cargo make change-run     # the wasm change example (operator-invoked)
 ```

@@ -1,7 +1,9 @@
-//! `specify-dev eval` — the live-model trial over the linked adapters.
+//! The live-model trial body: the operator rhythm over the linked
+//! adapters, graded by deterministic validators only.
 //!
-//! The operator rhythm against a persistent `sandbox/eval/` project,
-//! graded by deterministic validators only (never a model):
+//! The adapters mirror of the engine eval crate's `trial.rs` — the
+//! same phases over a persistent `sandbox/eval/` project, with real
+//! adapters in place of the fixture:
 //!
 //! ```text
 //! init        scaffold the contracts-bound project and seed the docs
@@ -18,9 +20,6 @@
 //! every phase in order and removes the sandbox on success; a failing
 //! run keeps it for in-place review or per-phase re-runs.
 
-mod grade;
-mod telemetry;
-
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::{fs, io};
@@ -28,13 +27,14 @@ use std::{fs, io};
 use anyhow::{Context as _, Result, ensure};
 use change::Plan;
 use clap::{Parser, Subcommand};
+use eval::model::DevModel;
+use eval::provider::Provider;
+use eval::{fs as evalfs, mcp};
 use omnia_guest::api::invoke::Invoker;
 use project::config::Layout;
 
-use crate::mcp;
-use crate::model::DevModel;
-use crate::provider::Provider;
-use telemetry::Telemetry;
+use crate::telemetry::Telemetry;
+use crate::{grade, scenario};
 
 /// The change name every trial authors.
 const CHANGE: &str = "orders";
@@ -53,7 +53,7 @@ struct Args {
 }
 
 /// One operation in the persistent manual evaluation workflow.
-#[derive(Clone, Copy, Debug, Subcommand)]
+#[derive(Clone, Debug, Subcommand)]
 enum Phase {
     /// Scaffold the contracts-bound project and seed the docs.
     Init,
@@ -65,6 +65,12 @@ enum Phase {
     Finalize,
     /// Remove the sandbox.
     Clean,
+    /// Run one single-operation prompt scenario over a seeded scratch
+    /// tree (fast prompt iteration); no id lists the scenarios.
+    Scenario {
+        /// `<adapter>/<scenario>` under `eval/scenarios/`.
+        id: Option<String>,
+    },
 }
 
 /// Run the trial from the CLI: one phase, or the full rhythm.
@@ -80,6 +86,7 @@ pub async fn run(argv: &[String]) -> Result<ExitCode> {
         Some(Phase::Execute) => execute().await?,
         Some(Phase::Finalize) => finalize().await?,
         Some(Phase::Clean) => clean()?,
+        Some(Phase::Scenario { id }) => scenario::run(id.as_deref()).await?,
         None => {
             init().await?;
             plan().await?;
@@ -105,11 +112,8 @@ async fn plan() -> Result<()> {
     let provider = provider(&root).await;
 
     let docs = "docs=documentation:docs".to_string();
-    invoke_with(
-        &provider,
-        &["plan", "author", CHANGE, "--intent", INTENT, "--source", &docs],
-    )
-    .await?;
+    invoke_with(&provider, &["plan", "author", CHANGE, "--intent", INTENT, "--source", &docs])
+        .await?;
     let authored = read_plan(&root)?;
     ensure!(!authored.entries.is_empty(), "plan author produced no entries");
 
@@ -181,7 +185,7 @@ async fn provider(root: &Path) -> Provider<Telemetry<DevModel>> {
 }
 
 fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../sandbox/eval")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../sandbox/eval")
 }
 
 fn replace() -> Result<PathBuf> {
@@ -202,26 +206,11 @@ fn require() -> Result<PathBuf> {
     root.canonicalize().context("canonical trial project root")
 }
 
-/// Copy the seed tree (`harness/native/eval/seed/`) into the sandbox:
-/// the docs the `documentation` source binding points at.
+/// Copy the seed tree (`eval/seed/`) into the sandbox: the docs the
+/// `documentation` source binding points at.
 fn seed(root: &Path) -> Result<()> {
-    let seed = Path::new(env!("CARGO_MANIFEST_DIR")).join("eval/seed");
-    copy_tree(&seed, root)
-}
-
-fn copy_tree(from: &Path, to: &Path) -> Result<()> {
-    for entry in fs::read_dir(from).with_context(|| format!("reading {}", from.display()))? {
-        let entry = entry?;
-        let target = to.join(entry.file_name());
-        if entry.file_type()?.is_dir() {
-            fs::create_dir_all(&target)?;
-            copy_tree(&entry.path(), &target)?;
-        } else {
-            fs::copy(entry.path(), &target)
-                .with_context(|| format!("copying {}", entry.path().display()))?;
-        }
-    }
-    Ok(())
+    let seed = Path::new(env!("CARGO_MANIFEST_DIR")).join("seed");
+    evalfs::copy_tree(&seed, root)
 }
 
 fn read_plan(root: &Path) -> Result<Plan> {

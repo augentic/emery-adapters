@@ -1,0 +1,5 @@
+# Routing for the `contracts/import` scenario: the adapter under test, the seam
+# operation `specify-dev eval scenario` drives, and the slice name.
+adapter = "target:contracts"
+operation = "build"
+slice = "import-ticket-api-contract"

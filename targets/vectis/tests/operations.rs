@@ -10,8 +10,8 @@ use std::path::Path;
 use adapter::answers::REPORT_ANSWER_SCHEMA;
 use adapter::seam::{Context, Input, MergePhase, Report, Severity, Status, WorkingTree};
 use adapter::{Format, Request};
-use omnia_testkit::model::{Harness, mcp_grants};
 use tempfile::TempDir;
+use testkit::{Harness, mcp_grants};
 use vectis::operations::{build, merge};
 
 const PHASE_DONE: &str = r#"{"applicable":true,"summary":"phase complete"}"#;
