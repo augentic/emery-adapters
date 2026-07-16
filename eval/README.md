@@ -18,7 +18,11 @@ or set `CURSOR_API_KEY` in `.env` at the repository root.
 cargo make eval
 ```
 
-This runs the entire workflow in `sandbox/eval/` — the operator rhythm over a contracts-bound project with `documentation` + `intent` as sources. A passing run will remove the project, while a failing run will retain it for in-place review, or to re-run individual operations (using the manual workflow below).
+This runs the entire workflow in `sandbox/eval/` — the operator rhythm over a contracts-bound project with `documentation` + `intent` as sources. Expect a full trial to take tens of minutes of live model time; a single phase or prompt scenario takes minutes. A passing run will remove the project, while a failing run will retain it for in-place review, or to re-run individual operations (using the manual workflow below).
+
+Runs are hermetic: every phase and scenario pins `SPECIFY_PROJECT_CACHE` inside its own sandbox, so the operator's normal project cache is never read or written, and a run's result never depends on prior local state.
+
+`SPECIFY_EVAL_MODEL=<model-id>` overrides the model for a run. The override is driver-side only — it fills `Request.model` when the guest left it `None`, so a guest-supplied id always wins. Unset or blank means the cursor backend's default. The trial's operator inputs (project name, change name, intent, source binding) come from the shared [`examples/change/trial.env`](../examples/change/trial.env) — the same definition the wasm change example `source`s — and both rungs seed the same [`examples/change/seed/`](../examples/change/seed/) tree.
 
 ### Manual workflow
 
@@ -46,7 +50,11 @@ cargo make eval scenario                     # list scenarios
 cargo make eval scenario contracts/design    # run one
 ```
 
-Scenario anatomy and the index live in [`scenarios/README.md`](scenarios/README.md).
+Scenario anatomy and the index live in [`scenarios/README.md`](scenarios/README.md). Scenarios run **natively** over the linked adapter crates — they prove prompt quality, not WASM/WIT conformance (that stays with `composed/` and the change example). For a first-party adapter a new scenario is just a data directory; a **third-party adapter** additionally needs a Cargo dependency in [`Cargo.toml`](Cargo.toml) and a [`src/catalog.rs`](src/catalog.rs) entry, because configuration alone cannot link a Rust crate into the shim.
+
+## Extraction seam
+
+This harness and the engine's `crates/eval` deliberately share module shapes so the reusable core can later move into one engine-owned `eval-support` crate. That boundary is: `native.rs` (the guest-side `Model` over a host `WasiModelCtx` backend), the request `telemetry` tally, the lazy `DevModel` connection with the `SPECIFY_EVAL_MODEL` override, the scoped cache/sandbox guards (`env.rs`), and common reporting helpers. Providers, dispatch (linked catalog here, the fixture there), scenario execution, and the deterministic graders stay repository-local — the contracts trial is not generalized to Vectis, and the two eval binaries stay separate.
 
 ## Model judgment
 

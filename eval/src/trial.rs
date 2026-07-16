@@ -33,16 +33,11 @@ use eval::{fs as evalfs, mcp};
 use omnia_guest::api::invoke::Invoker;
 use project::config::Layout;
 
+use eval::inputs::TrialInputs;
+use eval::scenario;
+
+use crate::grade;
 use crate::telemetry::Telemetry;
-use crate::{grade, scenario};
-
-/// The change name every trial authors.
-const CHANGE: &str = "orders";
-
-/// The operator intent bound as the `intent` source.
-const INTENT: &str = "Author the API contracts for the orders service described under \
-                      `docs/`: the JSON Schema vocabulary plus the HTTP (OpenAPI) surface. \
-                      Contracts only — no service implementation.";
 
 /// `specify-dev eval` — the live-model trial's CLI face.
 #[derive(Debug, Parser)]
@@ -99,26 +94,40 @@ pub async fn run(argv: &[String]) -> Result<ExitCode> {
 }
 
 async fn init() -> Result<()> {
+    let inputs = TrialInputs::load()?;
     let root = replace()?;
     println!("live trial project: {}", root.display());
+    let _cache = eval::env::scoped_cache(&root);
     seed(&root)?;
-    invoke(&root, &["init", "contracts", "--name", "eval"]).await?;
+    invoke(&root, &["init", "contracts", "--name", &inputs.project_name]).await?;
     Ok(())
 }
 
 async fn plan() -> Result<()> {
+    let inputs = TrialInputs::load()?;
     let root = require()?;
     println!("live trial project: {}", root.display());
+    let _cache = eval::env::scoped_cache(&root);
     let provider = provider(&root).await;
 
-    let docs = "docs=documentation:docs".to_string();
-    invoke_with(&provider, &["plan", "author", CHANGE, "--intent", INTENT, "--source", &docs])
-        .await?;
+    invoke_with(
+        &provider,
+        &[
+            "plan",
+            "author",
+            &inputs.change,
+            "--intent",
+            &inputs.intent,
+            "--source",
+            &inputs.source,
+        ],
+    )
+    .await?;
     let authored = read_plan(&root)?;
     ensure!(!authored.entries.is_empty(), "plan author produced no entries");
 
     // Gate 1: the operator stamps `approved`.
-    invoke_with(&provider, &["plan", "transition", CHANGE, "approved"]).await?;
+    invoke_with(&provider, &["plan", "transition", &inputs.change, "approved"]).await?;
 
     report(&provider.model().counts(), authored.entries.len());
     Ok(())
@@ -127,6 +136,7 @@ async fn plan() -> Result<()> {
 async fn execute() -> Result<()> {
     let root = require()?;
     println!("live trial project: {}", root.display());
+    let _cache = eval::env::scoped_cache(&root);
     let provider = provider(&root).await;
 
     invoke_with(&provider, &["plan", "execute"]).await?;
@@ -140,6 +150,7 @@ async fn execute() -> Result<()> {
 async fn finalize() -> Result<()> {
     let root = require()?;
     println!("live trial project: {}", root.display());
+    let _cache = eval::env::scoped_cache(&root);
     invoke(&root, &["plan", "archive"]).await?;
     Ok(())
 }
@@ -206,11 +217,11 @@ fn require() -> Result<PathBuf> {
     root.canonicalize().context("canonical trial project root")
 }
 
-/// Copy the seed tree (`eval/seed/`) into the sandbox: the docs the
-/// `documentation` source binding points at.
+/// Copy the shared seed tree (`examples/change/seed/`) into the
+/// sandbox: the docs the `documentation` source binding points at,
+/// the same tree the wasm change example seeds.
 fn seed(root: &Path) -> Result<()> {
-    let seed = Path::new(env!("CARGO_MANIFEST_DIR")).join("seed");
-    evalfs::copy_tree(&seed, root)
+    evalfs::copy_tree(&eval::inputs::seed_dir(), root)
 }
 
 fn read_plan(root: &Path) -> Result<Plan> {

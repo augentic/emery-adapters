@@ -9,7 +9,7 @@
 //! - **`serve` mode** ([`http`]): the shared typed HTTP router merged
 //!   with the `/mcp/<name>` shelves on one `TcpListener`; carries its
 //!   own `--project-dir` flag.
-//! - **`eval` mode** ([`trial`], [`scenario`]): the live-model rungs,
+//! - **`eval` mode** ([`trial`], [`eval::scenario`]): the live-model rungs,
 //!   mirroring the engine's `crates/eval`. The trial runs the operator
 //!   rhythm over a persistent `sandbox/eval/` project with the linked
 //!   adapters, graded by deterministic validators only; `eval scenario`
@@ -19,7 +19,6 @@
 mod command;
 mod grade;
 mod http;
-mod scenario;
 mod telemetry;
 mod trial;
 

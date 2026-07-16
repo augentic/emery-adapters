@@ -216,7 +216,14 @@ set -euo pipefail
 mkdir -p target/core
 wkg get "specify:core@${SPECIFY_CORE_VERSION}" \
   --config wit/config.toml \
-  --output target/core/specify.wasm
+  --output target/core/specify.wasm || {
+  echo "wkg get specify:core@${SPECIFY_CORE_VERSION} failed." >&2
+  echo "If this is an authentication failure: the specify: namespace routes" >&2
+  echo "through augentic.io to a private OCI registry — log in with your OCI" >&2
+  echo "credentials (e.g. \`docker login\`), then re-run \`cargo make core-fetch\`." >&2
+  echo "See wit/README.md." >&2
+  exit 1
+}
 echo "fetched specify:core@${SPECIFY_CORE_VERSION} -> target/core/specify.wasm"
 '''
 
@@ -225,8 +232,25 @@ script = '''
 rm -rf sandbox/change
 '''
 
+# Build only the components the change example composes (the two bound
+# sources plus the contracts target) — the full `adapter` build of
+# every component is not needed here.
+[tasks.change-components]
+command = "rustup"
+args = [
+  "run",
+  "nightly",
+  "cargo",
+  "-Zscript",
+  "scripts/components.rs",
+  "build-fast",
+  "documentation",
+  "intent",
+  "contracts",
+]
+
 [tasks.change-run]
-dependencies = ["change-clean", "adapter"]
+dependencies = ["change-clean", "change-components"]
 env_files = [".env"]
 script = '''
 set -euo pipefail
@@ -240,9 +264,15 @@ mkdir -p sandbox/change/{workspace,cache,store}
 cp -R examples/change/seed/. sandbox/change/workspace/
 cp target/wasm32-wasip2/release/contracts.wasm sandbox/change/workspace/contracts.wasm
 
+# Pre-build the host binaries so the `cargo run -q` calls below never
+# interleave build output with the run.
+cargo build -q -p change-example
+
 # The HTTP trigger serves every adapter's /mcp/<name> reference route;
-# the env grants point the adapters' spawned agents at it.
-export HTTP_ADDR="${HTTP_ADDR:-127.0.0.1:7791}"
+# the env grants point the adapters' spawned agents at it. The port is
+# picked per run so parallel runs never fight over one hard-coded
+# address (override with HTTP_ADDR=host:port).
+export HTTP_ADDR="${HTTP_ADDR:-$(cargo run -q -p change-example --bin change-support -- port)}"
 export SPECIFY_DOCUMENTATION_MCP_URL="http://$HTTP_ADDR/mcp/documentation"
 export SPECIFY_INTENT_MCP_URL="http://$HTTP_ADDR/mcp/intent"
 export SPECIFY_CONTRACTS_MCP_URL="http://$HTTP_ADDR/mcp/contracts"
@@ -255,21 +285,22 @@ run() {
   cargo run -q -p change-example -- run --config examples/change/omnia.toml -- "$@"
 }
 
-# The operator rhythm
-run init ./contracts.wasm --name change
-run plan author change \
-  --intent "Author the API contracts for the orders service described under docs/: the JSON Schema vocabulary plus the HTTP (OpenAPI) surface. Contracts only - no service implementation." \
-  --source docs=documentation:docs
-run plan transition change approved
+# The operator rhythm, over the shared trial inputs (the same file the
+# native trial parses — see eval/src/inputs.rs).
+. examples/change/trial.env
+run init ./contracts.wasm --name "$TRIAL_PROJECT_NAME"
+run plan author "$TRIAL_CHANGE" \
+  --intent "$TRIAL_INTENT" \
+  --source "$TRIAL_SOURCE"
+run plan transition "$TRIAL_CHANGE" approved
 run plan execute
 
-# The final artifact-exists check: the merged contracts baseline.
-found="$(find sandbox/change/workspace/contracts -name '*.yaml' -print -quit 2>/dev/null || true)"
-test -n "$found" || {
-  echo "change example produced no merged contract under sandbox/change/workspace/contracts/" >&2
-  exit 1
-}
-echo "change example: merged contracts baseline at sandbox/change/workspace/contracts/"
+# The completion gate: capture the drained projection, then verify the
+# plan is drained, every entry is done, and the merged contracts
+# baseline is non-empty and clean under the contracts validator.
+run plan status --format json > sandbox/change/status.json
+cargo run -q -p change-example --bin change-support -- \
+  verify sandbox/change/workspace sandbox/change/status.json
 '''
 
 # Fast dev-loop builds of the adapter components: same `--release`

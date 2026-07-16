@@ -17,15 +17,25 @@ publish.workspace = true
 name = "change-example"
 path = "host.rs"
 
+# Deterministic task support: `port` picks the run's loopback address,
+# `verify` is the post-execute completion gate.
+[[bin]]
+name = "change-support"
+path = "change-support.rs"
+
 [dependencies]
 cfg-if.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 anyhow.workspace = true
+contracts = { path = "../../targets/contracts" }
 omnia.workspace = true
 omnia-cursor.workspace = true
 omnia-wasi-http.workspace = true
 omnia-wasi-model.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde-saphyr.workspace = true
+serde_json.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 
 [lints]

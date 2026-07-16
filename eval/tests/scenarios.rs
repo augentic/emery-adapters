@@ -1,61 +1,47 @@
-//! Model-free wiring smoke over the prompt scenarios: every scenario
-//! directory parses, routes to a linked adapter, and carries inputs —
-//! the checks `specify-dev eval scenario` performs before it would
-//! spend a model request.
+//! Model-free coverage of the prompt-scenario runner's deterministic
+//! parts: the committed scenario set parses and validates through the
+//! same `eval::scenario` gate the runner applies before spending a
+//! model request, plus the artifact-exists gate, run-directory
+//! allocation, and outcome persistence.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Config {
-    adapter: String,
-    operation: String,
-    slice: String,
-    #[serde(default)]
-    expect: Vec<String>,
+use eval::scenario;
+use project::seam::wire::{BUILD_VERSION, BuildReport, BuildStatus};
+use tempfile::TempDir;
+
+fn report(status: BuildStatus) -> BuildReport {
+    BuildReport {
+        version: BUILD_VERSION,
+        slice: "demo".to_string(),
+        target: "contracts".to_string(),
+        status,
+        findings: Vec::new(),
+        outputs: Vec::new(),
+        ui_surface: None,
+    }
 }
 
+/// Every committed scenario parses and validates through the shared
+/// gate — the wiring smoke `specify-dev eval scenario` relies on.
 #[test]
 fn wiring() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("scenarios");
-    let linked: Vec<String> = eval::catalog::entries().iter().map(|entry| entry.id()).collect();
-
+    let root = scenario::scenarios_dir();
     let mut seen = 0;
-    for scenario in scenario_dirs(&root) {
-        let id = scenario
-            .strip_prefix(&root)
-            .expect("scenario under the scenarios root")
-            .display()
-            .to_string();
-        let body = fs::read_to_string(scenario.join("scenario.toml"))
-            .unwrap_or_else(|err| panic!("{id}: reading scenario.toml: {err}"));
-        let config: Config = toml::from_str(&body)
-            .unwrap_or_else(|err| panic!("{id}: parsing scenario.toml: {err}"));
+    for dir in scenario_dirs(&root) {
+        let id = dir.strip_prefix(&root).expect("scenario under the scenarios root");
+        let config =
+            scenario::load(&dir).unwrap_or_else(|err| panic!("{}: {err:#}", id.display()));
 
-        assert!(
-            linked.contains(&config.adapter),
-            "{id}: adapter `{}` is not linked into the native shim",
-            config.adapter
-        );
-        assert!(
-            ["build", "merge-preflight", "merge-postflight"].contains(&config.operation.as_str()),
-            "{id}: unknown operation `{}`",
-            config.operation
-        );
-        assert!(!config.slice.trim().is_empty(), "{id}: empty slice name");
-        assert!(
-            config.expect.iter().all(|rel| !rel.trim().is_empty()),
-            "{id}: empty expect entry"
-        );
-
-        let inputs: Vec<PathBuf> = fs::read_dir(scenario.join("inputs"))
-            .unwrap_or_else(|err| panic!("{id}: reading inputs/: {err}"))
+        let inputs: Vec<PathBuf> = fs::read_dir(dir.join("inputs"))
+            .unwrap_or_else(|err| panic!("{}: reading inputs/: {err}", id.display()))
             .filter_map(Result::ok)
             .map(|entry| entry.path())
             .filter(|path| path.extension().is_some_and(|ext| ext == "md"))
             .collect();
-        assert!(!inputs.is_empty(), "{id}: no `inputs/*.md`");
+        assert!(!inputs.is_empty(), "{}: no `inputs/*.md`", id.display());
+        assert!(!config.slice.trim().is_empty(), "{}: empty slice name", id.display());
         seen += 1;
     }
     assert!(seen >= 6, "expected the committed scenario set, found {seen}");
@@ -78,4 +64,212 @@ fn scenario_dirs(root: &Path) -> Vec<PathBuf> {
     }
     dirs.sort();
     dirs
+}
+
+/// The config gate: malformed routing fails before a model request.
+mod config {
+    use super::*;
+
+    fn stage(body: &str) -> (TempDir, PathBuf) {
+        let tmp = TempDir::new().expect("tempdir");
+        let dir = tmp.path().join("scenario");
+        fs::create_dir_all(&dir).expect("mkdir");
+        fs::write(dir.join("scenario.toml"), body).expect("write scenario.toml");
+        (tmp, dir)
+    }
+
+    #[test]
+    fn unlinked_adapter() {
+        let (_tmp, dir) = stage(
+            "adapter = \"target:unknown\"\noperation = \"build\"\nslice = \"demo\"\n\
+             expect = [\"contracts\"]\n",
+        );
+        let err = scenario::load(&dir).expect_err("unlinked adapter refuses");
+        assert!(format!("{err:#}").contains("not linked"), "{err:#}");
+    }
+
+    #[test]
+    fn build_requires_expect() {
+        let (_tmp, dir) =
+            stage("adapter = \"target:contracts\"\noperation = \"build\"\nslice = \"demo\"\n");
+        let err = scenario::load(&dir).expect_err("build without expect refuses");
+        assert!(format!("{err:#}").contains("at least one `expect`"), "{err:#}");
+    }
+
+    #[test]
+    fn merge_gate_allows_empty_expect() {
+        let (_tmp, dir) = stage(
+            "adapter = \"target:contracts\"\noperation = \"merge-preflight\"\nslice = \"demo\"\n",
+        );
+        scenario::load(&dir).expect("merge gates carry no mandatory expect");
+    }
+
+    #[test]
+    fn absolute_expect_refused() {
+        let (_tmp, dir) = stage(
+            "adapter = \"target:contracts\"\noperation = \"build\"\nslice = \"demo\"\n\
+             expect = [\"/etc/passwd\"]\n",
+        );
+        let err = scenario::load(&dir).expect_err("absolute expect refuses");
+        assert!(format!("{err:#}").contains("absolute"), "{err:#}");
+    }
+
+    #[test]
+    fn traversing_expect_refused() {
+        let (_tmp, dir) = stage(
+            "adapter = \"target:contracts\"\noperation = \"build\"\nslice = \"demo\"\n\
+             expect = [\"../outside\"]\n",
+        );
+        let err = scenario::load(&dir).expect_err("parent-traversing expect refuses");
+        assert!(format!("{err:#}").contains("plain names"), "{err:#}");
+    }
+
+    #[test]
+    fn empty_expect_entry_refused() {
+        let (_tmp, dir) = stage(
+            "adapter = \"target:contracts\"\noperation = \"build\"\nslice = \"demo\"\n\
+             expect = [\"  \"]\n",
+        );
+        let err = scenario::load(&dir).expect_err("blank expect entry refuses");
+        assert!(format!("{err:#}").contains("empty expect entry"), "{err:#}");
+    }
+
+    #[test]
+    fn unknown_key_refused() {
+        let (_tmp, dir) = stage(
+            "adapter = \"target:contracts\"\noperation = \"build\"\nslice = \"demo\"\n\
+             expect = [\"contracts\"]\nsurprise = true\n",
+        );
+        let err = scenario::load(&dir).expect_err("unknown keys refuse");
+        assert!(format!("{err:#}").contains("surprise"), "{err:#}");
+    }
+}
+
+/// The artifact-exists gate over the scratch tree.
+mod expected {
+    use super::*;
+
+    #[test]
+    fn missing_artifact_fails() {
+        let tmp = TempDir::new().expect("tempdir");
+        let err = scenario::enforce_expected(
+            "demo/one",
+            tmp.path(),
+            &["contracts/api.yaml".to_string()],
+        )
+        .expect_err("a missing artifact fails the gate");
+        assert!(format!("{err:#}").contains("contracts/api.yaml"), "{err:#}");
+    }
+
+    #[test]
+    fn file_and_populated_dir_pass() {
+        let tmp = TempDir::new().expect("tempdir");
+        fs::create_dir_all(tmp.path().join("contracts/nested")).expect("mkdir");
+        fs::write(tmp.path().join("contracts/nested/api.yaml"), "openapi: 3.1.0\n")
+            .expect("write");
+        scenario::enforce_expected(
+            "demo/one",
+            tmp.path(),
+            &["contracts".to_string(), "contracts/nested/api.yaml".to_string()],
+        )
+        .expect("a populated directory and an existing file both satisfy the gate");
+    }
+
+    #[test]
+    fn empty_dir_fails() {
+        let tmp = TempDir::new().expect("tempdir");
+        fs::create_dir_all(tmp.path().join("contracts")).expect("mkdir");
+        let err = scenario::enforce_expected("demo/one", tmp.path(), &["contracts".to_string()])
+            .expect_err("an empty directory is a silent no-op");
+        assert!(format!("{err:#}").contains("contracts"), "{err:#}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlink_cycle_terminates() {
+        let tmp = TempDir::new().expect("tempdir");
+        let dir = tmp.path().join("contracts/loop");
+        fs::create_dir_all(&dir).expect("mkdir");
+        std::os::unix::fs::symlink(tmp.path().join("contracts"), dir.join("back"))
+            .expect("cycle link");
+        let err = scenario::enforce_expected("demo/one", tmp.path(), &["contracts".to_string()])
+            .expect_err("a cyclic, file-free tree fails rather than hanging");
+        assert!(format!("{err:#}").contains("contracts"), "{err:#}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn escaping_symlink_never_satisfies() {
+        let outer = TempDir::new().expect("outer tempdir");
+        fs::write(outer.path().join("secret.yaml"), "outside\n").expect("write outside");
+        let tmp = TempDir::new().expect("tempdir");
+        std::os::unix::fs::symlink(outer.path().join("secret.yaml"), tmp.path().join("api.yaml"))
+            .expect("escape link");
+        let err = scenario::enforce_expected("demo/one", tmp.path(), &["api.yaml".to_string()])
+            .expect_err("a symlink escaping the scratch root never satisfies the gate");
+        assert!(format!("{err:#}").contains("api.yaml"), "{err:#}");
+    }
+}
+
+/// Run-directory allocation is collision-proof within one second.
+#[test]
+fn run_dirs_unique() {
+    let tmp = TempDir::new().expect("tempdir");
+    let first = scenario::allocate_run_dir(tmp.path()).expect("first run dir");
+    let second = scenario::allocate_run_dir(tmp.path()).expect("second run dir");
+    assert_ne!(first, second, "same-second runs must not share a directory");
+    assert!(first.is_dir() && second.is_dir());
+}
+
+/// Outcome persistence: `pass` is written only when the report and the
+/// artifact gate both pass; a satisfied-report/missing-artifact run
+/// persists `fail` and errors.
+mod outcome {
+    use super::*;
+
+    fn persisted(scratch: &Path) -> serde_json::Value {
+        let body = fs::read_to_string(scratch.join("report.json")).expect("report.json");
+        serde_json::from_str(&body).expect("report.json is JSON")
+    }
+
+    #[test]
+    fn pass_after_both_gates() {
+        let tmp = TempDir::new().expect("tempdir");
+        fs::write(tmp.path().join("api.yaml"), "openapi: 3.1.0\n").expect("write");
+        scenario::conclude(
+            "demo/one",
+            tmp.path(),
+            &report(BuildStatus::Success),
+            &["api.yaml".to_string()],
+        )
+        .expect("both gates pass");
+        assert_eq!(persisted(tmp.path())["outcome"], "pass");
+    }
+
+    #[test]
+    fn missing_artifact_persists_fail() {
+        let tmp = TempDir::new().expect("tempdir");
+        scenario::conclude(
+            "demo/one",
+            tmp.path(),
+            &report(BuildStatus::Success),
+            &["api.yaml".to_string()],
+        )
+        .expect_err("a success report without its artifact fails");
+        assert_eq!(persisted(tmp.path())["outcome"], "fail");
+    }
+
+    #[test]
+    fn failing_report_persists_fail() {
+        let tmp = TempDir::new().expect("tempdir");
+        fs::write(tmp.path().join("api.yaml"), "openapi: 3.1.0\n").expect("write");
+        scenario::conclude(
+            "demo/one",
+            tmp.path(),
+            &report(BuildStatus::Failure),
+            &["api.yaml".to_string()],
+        )
+        .expect_err("a failing report fails regardless of artifacts");
+        assert_eq!(persisted(tmp.path())["outcome"], "fail");
+    }
 }

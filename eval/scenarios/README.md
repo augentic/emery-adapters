@@ -8,24 +8,34 @@ adapter's `prose/`, rebuild natively in seconds, re-run the scenario.
 
 ## Anatomy
 
-A scenario is a data directory, not Rust — third-party adapters get the same
-rung by dropping one in:
+A scenario is a data directory:
 
 ```text
 scenarios/<adapter>/<name>/
   scenario.toml    routing: axis-qualified adapter id, operation, slice name,
                    and the `expect` artifact-exists gate (scratch-relative
-                   paths a passing run must produce)
+                   paths a passing run must produce; mandatory and non-empty
+                   for `build` scenarios)
   inputs/*.md      typed slice inputs by file stem (proposal / design / tasks / spec*)
   seed/**          files copied into the scratch project root (optional)
 ```
 
+For an adapter already linked into the shim, adding a scenario is just the
+directory. A **third-party adapter** additionally needs a Cargo dependency in
+[`../Cargo.toml`](../Cargo.toml) and a [`../src/catalog.rs`](../src/catalog.rs)
+entry — configuration alone cannot link a Rust crate.
+
 The runner ([`../src/scenario.rs`](../src/scenario.rs)) seeds a fresh scratch
-tree under the gitignored `sandbox/scenarios/<adapter>/<name>/run-<stamp>/`,
-dispatches the operation over the linked adapter, writes `report.json` beside
-the scratch delta, and fails on a failing report or a missing `expect`
-artifact (a success report that produced nothing is a silent no-op, not a
-pass). The scratch tree is retained for review.
+tree under the gitignored collision-proof
+`sandbox/scenarios/<adapter>/<name>/run-<stamp>-<pid>/`, pins the project
+cache inside it, dispatches the operation over the linked adapter, writes
+`report.json` beside the scratch delta, and fails on a failing report or a
+missing `expect` artifact (a success report that produced nothing is a silent
+no-op, not a pass). The persisted `outcome` field is `pass` only when the
+adapter report *and* every `expect` artifact pass; any other run persists
+`outcome: fail`. `expect` paths must stay inside the scratch tree — absolute
+entries, `..`, and escaping symlinks never satisfy the gate. The scratch tree
+is retained for review.
 
 ## Running
 

@@ -464,10 +464,14 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "cfg-if",
+ "contracts",
  "omnia 0.35.0",
  "omnia-cursor",
  "omnia-wasi-http",
  "omnia-wasi-model",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
  "tokio",
 ]
 

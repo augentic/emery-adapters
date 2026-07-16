@@ -26,23 +26,12 @@ cfg_if::cfg_if! {
         use std::sync::Arc;
 
         use anyhow::Result;
-        use omnia::futures::FutureExt as _;
         use omnia::{Backend, FromEnv};
         use omnia_cursor::Client as Cursor;
         use omnia_wasi_http::{HttpDefault, WasiHttp};
         use omnia_wasi_model::{
             Answer, FutureResult, Request, ToolHost, WasiModel, WasiModelCtx,
         };
-
-        /// Extra completion attempts after a narration-polluted answer.
-        ///
-        /// cursor-agent's terminal `result` event concatenates every
-        /// assistant message in the turn, so a model that narrates before
-        /// its final JSON fails the backend's answer gate even when the
-        /// closing message is valid. The pollution is per-spawn
-        /// stochastic, so one fresh completion is usually enough; anything
-        /// deeper belongs upstream in omnia-cursor's output parser.
-        const MAX_RETRIES: usize = 2;
 
         /// Driver-side model decorator around the cursor backend: fills
         /// `Request.model` from `SPECIFY_EVAL_MODEL` when the guest left it
@@ -75,11 +64,13 @@ cfg_if::cfg_if! {
             }
         }
 
-        /// Appended as the prompt's closing system message: the spawned
-        /// agent's terminal result concatenates all of its assistant
-        /// messages, so any narration before the final JSON breaks the
-        /// answer gate. The instruction suppresses the narration at the
-        /// source.
+        /// Appended as the prompt's closing system message: keeps the
+        /// spawned agent's turn terse so the terminal result the cursor
+        /// backend isolates is the bare answer, not narration the answer
+        /// gate has to reject. Completions are never replayed here — a
+        /// judgment leg may already have changed the workspace, so an
+        /// invalid answer must surface as a visible failure, with repair
+        /// accounting owned by the guest's judgment kernel.
         const OUTPUT_DISCIPLINE: &str = "Critical output discipline: work silently. Never send \
              progress or explanation messages while you work — use tools without commentary. \
              Your one and only message must be the final answer: a single JSON value with no \
@@ -92,90 +83,7 @@ cfg_if::cfg_if! {
                     role: omnia_wasi_model::Role::System,
                     content: OUTPUT_DISCIPLINE.to_owned(),
                 });
-                let inner = self.inner.clone();
-                async move {
-                    let mut attempt = 0;
-                    loop {
-                        match inner.complete(duplicate(&request), Arc::clone(&tool_host)).await {
-                            Err(error) if attempt < MAX_RETRIES && narration_polluted(&error) => {
-                                attempt += 1;
-                                eprintln!(
-                                    "retrying completion {attempt}/{MAX_RETRIES}: {error:#}"
-                                );
-                            }
-                            outcome => return outcome,
-                        }
-                    }
-                }
-                .boxed()
-            }
-        }
-
-        /// Whether the failure is the answer-gate rejection a fresh
-        /// completion can plausibly clear, as opposed to a connection,
-        /// spawn, or timeout failure a replay would only repeat.
-        fn narration_polluted(error: &anyhow::Error) -> bool {
-            format!("{error:#}").contains("not valid JSON")
-        }
-
-        /// Field-by-field rebuild of a wire [`Request`], which derives no
-        /// `Clone` because `grants.workspace` may carry a filesystem
-        /// resource handle. The host resolves and removes that handle
-        /// before any backend sees the request, so the rebuild carries
-        /// `workspace: None` by construction.
-        fn duplicate(request: &Request) -> Request {
-            use omnia_wasi_model::{
-                Format, Function, Generation, Grants, Mcp, Schema, Tool,
-            };
-
-            Request {
-                model: request.model.clone(),
-                system: request.system.clone(),
-                messages: request
-                    .messages
-                    .iter()
-                    .map(|message| omnia_wasi_model::Message {
-                        role: message.role,
-                        content: message.content.clone(),
-                    })
-                    .collect(),
-                generation: request.generation.as_ref().map(|generation| Generation {
-                    temperature: generation.temperature,
-                    top_p: generation.top_p,
-                    max_tokens: generation.max_tokens,
-                    stop: generation.stop.clone(),
-                    seed: generation.seed,
-                    effort: generation.effort,
-                }),
-                format: match &request.format {
-                    Format::Text => Format::Text,
-                    Format::Json => Format::Json,
-                    Format::Schema(schema) => Format::Schema(Schema {
-                        name: schema.name.clone(),
-                        schema: schema.schema.clone(),
-                    }),
-                },
-                tools: request
-                    .tools
-                    .iter()
-                    .map(|tool| match tool {
-                        Tool::Function(function) => Tool::Function(Function {
-                            name: function.name.clone(),
-                            description: function.description.clone(),
-                            parameters: function.parameters.clone(),
-                        }),
-                        Tool::Mcp(mcp) => Tool::Mcp(Mcp {
-                            name: mcp.name.clone(),
-                            tools: mcp.tools.clone(),
-                            url: mcp.url.clone(),
-                        }),
-                    })
-                    .collect(),
-                grants: Grants {
-                    references: request.grants.references.clone(),
-                    workspace: None,
-                    verify: request.grants.verify.clone(),
-                },
+                self.inner.complete(request, tool_host)
             }
         }
 

@@ -15,6 +15,12 @@
 //!   answer projection the wasm default body and the host boundary
 //!   perform together in a deployment. Mirrors the engine eval crate's
 //!   module of the same name — the seam a shared eval core would own.
+//! - [`env`] — the scoped `SPECIFY_PROJECT_CACHE` guard the trial,
+//!   scenario runner, and test suites hold so runs never touch the
+//!   operator's normal project cache.
+//! - [`inputs`] — the shared change-trial inputs parsed from
+//!   `examples/change/trial.env`, the same file the wasm change
+//!   example's task `source`s.
 //! - [`model`] — [`model::DevModel`]: the binary's lazily connected
 //!   cursor backend behind [`native::Native`], so deterministic verbs
 //!   never require cursor-agent on `PATH`. Tests bypass it and bind
@@ -24,17 +30,22 @@
 //!   `/mcp/<name>` on the serve-mode listener via
 //!   `omnia_guest::mcp::router`.
 //!
-//! The trial (`specify-dev eval`) and the single-operation prompt
-//! scenarios (`specify-dev eval scenario`) live with the binary in
-//! `main.rs`'s modules, mirroring the engine's `crates/eval` layout.
+//! The trial (`specify-dev eval`) lives with the binary in `main.rs`'s
+//! modules, mirroring the engine's `crates/eval` layout. The
+//! single-operation prompt scenarios ([`scenario`]) live here in the
+//! library so the runner and the model-free wiring tests share one
+//! config parser and validator.
 //!
 //! What this shim cannot prove: WIT bindings, Omnia's dispatch-by-id,
 //! and mount/preopen wiring — that surface stays with the composed
 //! tests and the wasm change example (see `TESTING.md`).
 
 pub mod catalog;
+pub mod env;
 pub mod fs;
+pub mod inputs;
 pub mod mcp;
 pub mod model;
 pub mod native;
 pub mod provider;
+pub mod scenario;
