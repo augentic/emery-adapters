@@ -31,6 +31,28 @@ pub fn mcp_url(adapter: &str) -> Option<String> {
     std::env::var(key).ok()
 }
 
+/// The references-server identity for one adapter: `<name>-references`,
+/// projected from the adapter's declared name.
+///
+/// Interned once per name (the projection leaks one string per adapter
+/// per process), so the identity stays `&'static str` for
+/// [`References::server_name`] without any shim restating its own name.
+///
+/// # Panics
+///
+/// If the intern table's lock is poisoned, which no caller can trigger:
+/// the insertion closure does not panic.
+#[must_use]
+pub fn server_name(name: &'static str) -> &'static str {
+    static NAMES: std::sync::Mutex<std::collections::BTreeMap<&'static str, &'static str>> =
+        std::sync::Mutex::new(std::collections::BTreeMap::new());
+    NAMES
+        .lock()
+        .expect("server-name intern table is never poisoned")
+        .entry(name)
+        .or_insert_with(|| Box::leak(format!("{name}-references").into_boxed_str()))
+}
+
 /// An embedded prose registry served over MCP, addressable by
 /// adapter-relative path.
 #[derive(Clone, Copy, Debug)]
@@ -48,11 +70,39 @@ pub struct References {
 impl References {
     /// Serve one `wasi:http/incoming-handler` request over this
     /// server's MCP router.
+    ///
+    /// # Errors
+    ///
+    /// As `omnia_wasi_http::serve` over the router.
     pub async fn serve(
         self, request: wasip3::http::types::Request,
     ) -> Result<wasip3::http::types::Response, wasip3::http::types::ErrorCode> {
         omnia_wasi_http::serve(omnia_guest::mcp::router(self), request).await
     }
+}
+
+/// Serve one `wasi:http` request over an adapter's references identity:
+/// the server name projected from `name` via [`server_name`], the
+/// declaring crate's `version`, and its embedded doc table.
+///
+/// The `source!` / `target!` macro expansions route every reference
+/// request here; only the `CARGO_PKG_VERSION` stamp expands at the leaf.
+///
+/// # Errors
+///
+/// As [`References::serve`].
+#[cfg(target_arch = "wasm32")]
+pub async fn serve(
+    name: &'static str, version: &'static str, docs: &'static [Doc],
+    request: wasip3::http::types::Request,
+) -> Result<wasip3::http::types::Response, wasip3::http::types::ErrorCode> {
+    References {
+        server_name: server_name(name),
+        version,
+        docs,
+    }
+    .serve(request)
+    .await
 }
 
 impl McpServer for References {

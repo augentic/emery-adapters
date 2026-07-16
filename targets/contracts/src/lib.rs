@@ -1,12 +1,16 @@
-//! The contracts target adapter: [`operations`] (format sub-flows,
-//! verify-repair loop, validate-before-visible enforcement),
-//! [`validate`] (baseline-contract validators), and [`registry`]
-//! (embedded prose). The wasm32-only `guest` module owns bindings
-//! and export glue.
+//! The contracts target adapter: [`Contracts`] (the `adapter::Target`
+//! implementor carrying the format sub-flows, verify-repair loop, and
+//! validate-before-visible enforcement), [`validate`]
+//! (baseline-contract validators), and `registry` (embedded prose).
+//! The wasm32-only `guest` module is one `adapter::target!` invocation.
 
-pub mod operations;
-pub mod registry;
+mod operations;
+mod registry;
 pub mod validate;
 
+pub use operations::Contracts;
+
 #[cfg(target_arch = "wasm32")]
-mod guest;
+mod guest {
+    adapter::target!(crate::Contracts);
+}

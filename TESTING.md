@@ -10,7 +10,7 @@ Six rungs, fastest feedback first. Every behavior is asserted on exactly one run
 
 ### 1. Native crate tests — the inner loop
 
-Each adapter crate is `cdylib` + `rlib`, so its wasm-free logic links natively and tests through the standard auto-discovered suite at `{targets,sources}/<name>/tests/<area>.rs`. These tests own operation behavior, including request validation, deterministic projection, and prompt assembly. Judgment legs use `testkit::Harness` (the recording decorator over omnia-testkit's scripted double) to assert "did my prompt edit land in the assembled text"; adapter crates must not duplicate that model/runtime machinery. The wasm32-only guest shims (`src/guest.rs`) are hand-written export glue and carry no native tests.
+Each adapter crate is `cdylib` + `rlib`, so its wasm-free logic links natively and tests through the standard auto-discovered suite at `{targets,sources}/<name>/tests/<area>.rs`. These tests own operation behavior, including request validation, deterministic projection, and prompt assembly. Judgment legs use `testkit::Harness` (the recording decorator over omnia-testkit's scripted double) to assert "did my prompt edit land in the assembled text"; adapter crates must not duplicate that model/runtime machinery. The wasm32-only guest shims (the inline `mod guest` in each `src/lib.rs`) are single `adapter::source!` / `adapter::target!` export-macro invocations and carry no native tests.
 
 ```bash
 cargo nextest run -p vectis   # one adapter

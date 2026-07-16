@@ -7,8 +7,8 @@ use std::path::Path;
 
 use adapter::answers::REPORT_ANSWER_SCHEMA;
 use adapter::seam::{Context, Input, MergePhase, Severity, Status, WorkingTree};
-use adapter::{Format, Request};
-use contracts::operations::{build, merge};
+use adapter::{Format, Request, Target as _};
+use contracts::Contracts;
 use contracts::validate::RULE_VERSION_IS_SEMVER;
 use tempfile::TempDir;
 use testkit::{Harness, mcp_grants};
@@ -58,10 +58,15 @@ async fn build_sub_flows() {
         Input::Design("DESIGN-BODY".to_string()),
     ];
 
-    let report =
-        build(&model, &ctx(tmp.path(), Some("http://references/mcp")), "demo", &inputs, &tree())
-            .await
-            .unwrap();
+    let report = Contracts::build(
+        &model,
+        &ctx(tmp.path(), Some("http://references/mcp")),
+        "demo",
+        &inputs,
+        &tree(),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(report.status, Status::Success);
     assert!(report.findings.is_empty());
@@ -103,7 +108,8 @@ async fn build_repair_bounded() {
         SUCCESS_REPORT,
     ]);
 
-    let report = build(&model, &ctx(tmp.path(), None), "demo", &[], &tree()).await.unwrap();
+    let report =
+        Contracts::build(&model, &ctx(tmp.path(), None), "demo", &[], &tree()).await.unwrap();
 
     assert_eq!(report.status, Status::Failure, "residual validator finding forces failure");
     let finding = &report.findings[0];
@@ -132,17 +138,19 @@ async fn merge_preflight_deterministic() {
     let model = Harness::answering::<&str>([]);
 
     // A clean (absent) staged delta passes without a judgment leg.
-    let report = merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
-        .await
-        .unwrap();
+    let report =
+        Contracts::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
+            .await
+            .unwrap();
     assert_eq!(report.status, Status::Success);
     assert!(model.requests().is_empty(), "preflight is deterministic: no leg");
 
     // A broken staged delta parks the merge before the engine promotes it.
     seed_bad_contract(&tmp.path().join(".specify/slices/demo/contracts"));
-    let report = merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
-        .await
-        .unwrap();
+    let report =
+        Contracts::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
+            .await
+            .unwrap();
     assert_eq!(report.status, Status::Failure);
     assert_eq!(report.findings[0].rule_id.as_deref(), Some(RULE_VERSION_IS_SEMVER));
     assert!(model.requests().is_empty(), "a staged failure still spends no judgment leg");
@@ -159,10 +167,15 @@ async fn merge_postflight_gate() {
         subpath: Some("proj".to_string()),
     };
 
-    let report =
-        merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Postflight, &subpath_tree)
-            .await
-            .unwrap();
+    let report = Contracts::merge(
+        &model,
+        &ctx(tmp.path(), None),
+        "demo",
+        MergePhase::Postflight,
+        &subpath_tree,
+    )
+    .await
+    .unwrap();
 
     assert_eq!(report.status, Status::Failure);
     assert_eq!(report.findings[0].rule_id.as_deref(), Some(RULE_VERSION_IS_SEMVER));
@@ -178,9 +191,10 @@ async fn merge_postflight_clean_baseline() {
     let tmp = TempDir::new().unwrap();
     let model = Harness::answering::<&str>([]);
 
-    let report = merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Postflight, &tree())
-        .await
-        .unwrap();
+    let report =
+        Contracts::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Postflight, &tree())
+            .await
+            .unwrap();
 
     assert_eq!(report.status, Status::Success);
     assert!(model.requests().is_empty(), "a clean baseline spends no judgment leg");

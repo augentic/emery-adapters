@@ -1,15 +1,18 @@
 //! The embedded prose registry: typescript's own prompts and its deep
 //! references ride inside.
 
-use typescript::registry;
+use adapter::Source as _;
+use adapter::registry::{body, find};
+use typescript::Typescript;
 
 #[test]
 fn embeds_prompts() {
     assert!(
-        registry::body("prompts/survey.md").starts_with("# TypeScript / JavaScript source survey")
+        body(Typescript::docs(), "prompts/survey.md")
+            .starts_with("# TypeScript / JavaScript source survey")
     );
     assert!(
-        registry::body("prompts/extract.md")
+        body(Typescript::docs(), "prompts/extract.md")
             .starts_with("# TypeScript / JavaScript source extract")
     );
 }
@@ -24,6 +27,6 @@ fn embeds_references() {
         "references/scope-filters.md",
         "references/spec-runtime/reconciliation.md",
     ] {
-        assert!(registry::doc(path).is_some(), "registry embeds `{path}`");
+        assert!(find(Typescript::docs(), path).is_some(), "registry embeds `{path}`");
     }
 }

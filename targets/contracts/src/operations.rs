@@ -9,11 +9,12 @@
 
 use std::path::Path;
 
+use adapter::registry::Doc;
 use adapter::seam::{
     BuildInput, Context, Error, Finding, Input, MergePhase, Report, Severity, TargetMetadata,
     WorkingTree,
 };
-use adapter::{Model, phase};
+use adapter::{Model, Target, phase};
 
 use crate::registry;
 use crate::validate::{ContractFinding, validate_baseline};
@@ -52,147 +53,160 @@ const SUB_FLOWS: [SubFlow; 3] = [
     },
 ];
 
-/// Resolve-time `metadata`: no compatibility floor; one
-/// optional build input — the slice tree's `contracts/` subtree,
-/// carrying partial deltas written by a prior pass.
-#[must_use]
-pub fn metadata() -> TargetMetadata {
-    TargetMetadata {
-        specify_floor: None,
-        inputs: vec![BuildInput {
-            path: "contracts".to_string(),
-            required: false,
-        }],
-        platforms: None,
+/// The contracts target adapter: API contract authoring, import, and
+/// validation across the `openapi`, `asyncapi`, and `json-schema` formats.
+#[derive(Clone, Copy, Debug)]
+pub struct Contracts;
+
+impl Target for Contracts {
+    const NAME: &'static str = "contracts";
+
+    /// Resolve-time `metadata`: no compatibility floor; one
+    /// optional build input — the slice tree's `contracts/` subtree,
+    /// carrying partial deltas written by a prior pass.
+    fn metadata() -> TargetMetadata {
+        TargetMetadata {
+            specify_floor: None,
+            inputs: vec![BuildInput {
+                path: "contracts".to_string(),
+                required: false,
+            }],
+            platforms: None,
+        }
     }
-}
 
-/// The embedded guidance prompt (no judgment leg).
-#[must_use]
-pub fn guidance() -> &'static str {
-    registry::body("prompts/guidance.md")
-}
+    fn docs() -> &'static [Doc] {
+        registry::docs()
+    }
 
-/// Build a slice's contract deltas under `.specify/slices/<slice>/contracts/`.
-///
-/// One leg per format sub-flow (fixed order), a bounded verify-repair
-/// loop over the compiled-in validators, and one report leg whose answer
-/// the validators then re-gate.
-///
-/// # Errors
-///
-/// As [`adapter::judgment`].
-pub async fn build<P: Model>(
-    model: &P, ctx: &Context<'_>, slice: &str, inputs: &[Input], tree: &WorkingTree,
-) -> Result<Report, Error> {
-    let slice_contracts_rel = format!(".specify/slices/{slice}/contracts");
-    let slice_contracts = ctx.tree_root(tree).join(&slice_contracts_rel);
-    let inputs_block = phase::render_inputs(inputs);
-    let build_prompt = registry::body("prompts/build.md");
+    /// The embedded guidance prompt (no judgment leg).
+    fn guidance() -> &'static str {
+        registry::body("prompts/guidance.md")
+    }
 
-    // Author or import, fixed format order. Each sub-flow judges its
-    // own applicability and self-skips.
-    let mut summaries: Vec<String> = Vec::new();
-    for sub_flow in &SUB_FLOWS {
-        let format = sub_flow.format;
-        let system = format!("{build_prompt}\n\n---\n\n{}", registry::body(sub_flow.prompt));
-        let user = format!(
-            "Run the `{format}` sub-flow of the contracts build for slice `{slice}` \
+    /// Build a slice's contract deltas under `.specify/slices/<slice>/contracts/`.
+    ///
+    /// One leg per format sub-flow (fixed order), a bounded verify-repair
+    /// loop over the compiled-in validators, and one report leg whose answer
+    /// the validators then re-gate.
+    ///
+    /// # Errors
+    ///
+    /// As [`adapter::judgment`].
+    async fn build<P: Model>(
+        model: &P, ctx: &Context<'_>, slice: &str, inputs: &[Input], tree: &WorkingTree,
+    ) -> Result<Report, Error> {
+        let slice_contracts_rel = format!(".specify/slices/{slice}/contracts");
+        let slice_contracts = ctx.tree_root(tree).join(&slice_contracts_rel);
+        let inputs_block = phase::render_inputs(inputs);
+        let build_prompt = registry::body("prompts/build.md");
+
+        // Author or import, fixed format order. Each sub-flow judges its
+        // own applicability and self-skips.
+        let mut summaries: Vec<String> = Vec::new();
+        for sub_flow in &SUB_FLOWS {
+            let format = sub_flow.format;
+            let system = format!("{build_prompt}\n\n---\n\n{}", registry::body(sub_flow.prompt));
+            let user = format!(
+                "Run the `{format}` sub-flow of the contracts build for slice `{slice}` \
              (adapter `{}`).\n\n\
              The project workspace is lent to you. Write only `.yaml` files under \
              `{slice_contracts_rel}/`; the root `contracts/` baseline is read-only \
              context for `$ref` reuse. When the slice has no surface this format owns, \
              write nothing and answer with `applicable: false`.\n\n\
              {inputs_block}",
-            ctx.adapter_id,
-        );
-        let answer = phase::phase(model, ctx, system, user, &format!("{format}-sub-flow")).await?;
-        summaries.push(phase::render_outcome(format, &answer));
-    }
-
-    // Verify-repair over the compiled-in validators. The
-    // session-less shape folds each iteration into one repair call
-    // carrying every finding, with the owning sub-prompts inlined so
-    // repair does not depend on the MCP route.
-    for _ in 0..MAX_REPAIR_ITERATIONS {
-        let findings = validate_baseline(&slice_contracts);
-        if findings.is_empty() {
-            break;
+                ctx.adapter_id,
+            );
+            let answer =
+                phase::phase(model, ctx, system, user, &format!("{format}-sub-flow")).await?;
+            summaries.push(phase::render_outcome(format, &answer));
         }
-        let system = format!("{build_prompt}{}", owning_sub_prompts(&findings, &slice_contracts));
-        let user = format!(
-            "The contract validators found blocking issues in slice `{slice}`'s delta \
+
+        // Verify-repair over the compiled-in validators. The
+        // session-less shape folds each iteration into one repair call
+        // carrying every finding, with the owning sub-prompts inlined so
+        // repair does not depend on the MCP route.
+        for _ in 0..MAX_REPAIR_ITERATIONS {
+            let findings = validate_baseline(&slice_contracts);
+            if findings.is_empty() {
+                break;
+            }
+            let system =
+                format!("{build_prompt}{}", owning_sub_prompts(&findings, &slice_contracts));
+            let user = format!(
+                "The contract validators found blocking issues in slice `{slice}`'s delta \
              under `{slice_contracts_rel}/`. Re-enter the owning format sub-prompt(s) \
              per the build prompt's Phase 4 and repair the files in place.\n\n\
              {}\n\n\
              Answer `applicable: true` with a summary of the repairs.",
-            render_validator_findings(&findings),
-        );
-        phase::phase(model, ctx, system, user, "repair").await?;
-    }
+                render_validator_findings(&findings),
+            );
+            phase::phase(model, ctx, system, user, "repair").await?;
+        }
 
-    // Report answer, gated by the answer schema.
-    let system = build_prompt.to_string();
-    let user = format!(
-        "Write the build report for slice `{slice}`. Verify the delta under \
+        // Report answer, gated by the answer schema.
+        let system = build_prompt.to_string();
+        let user = format!(
+            "Write the build report for slice `{slice}`. Verify the delta under \
          `{slice_contracts_rel}/` per the build prompt's Phase 3, then answer with \
          the report body (`status`, `findings`, `outputs`, `ui-surface`). A \
          `success` report carries only non-blocking findings. Contract artifacts \
          declare no per-platform outputs, so `outputs` is normally empty.\n\n\
          Sub-flow outcomes:\n{}",
-        summaries.join("\n"),
-    );
-    let report = phase::report(model, ctx, system, user).await?;
+            summaries.join("\n"),
+        );
+        let report = phase::report(model, ctx, system, user).await?;
 
-    // Validate-before-visible: residual blocking findings override
-    // the answer.
-    Ok(enforce_validators(report, &validate_baseline(&slice_contracts)))
-}
-
-/// Run one merge gate around the engine's deterministic promotion of
-/// the slice's `contracts/` delta into the baseline tree.
-///
-/// `preflight` is fully deterministic: the contract validators run over
-/// the staged slice delta, and blocking findings park the merge with
-/// the slice still `built` — no judgment leg. `postflight` runs the
-/// validators over the now-merged `contracts/` baseline; findings get
-/// one bounded repair judgment leg (post-merge findings are
-/// collision-shaped — `id-unique` against the baseline — so either one
-/// pass clears them or the slice needs human review), and residual
-/// findings force `status: failure`.
-///
-/// # Errors
-///
-/// As [`adapter::judgment`].
-pub async fn merge<P: Model>(
-    model: &P, ctx: &Context<'_>, slice: &str, phase: MergePhase, tree: &WorkingTree,
-) -> Result<Report, Error> {
-    if phase == MergePhase::Preflight {
-        let staged = ctx.tree_root(tree).join(format!(".specify/slices/{slice}/contracts"));
-        return Ok(enforce_validators(Report::success(), &validate_baseline(&staged)));
+        // Validate-before-visible: residual blocking findings override
+        // the answer.
+        Ok(enforce_validators(report, &validate_baseline(&slice_contracts)))
     }
 
-    let baseline = ctx.tree_root(tree).join("contracts");
-    let merge_prompt = registry::body("prompts/merge.md");
+    /// Run one merge gate around the engine's deterministic promotion of
+    /// the slice's `contracts/` delta into the baseline tree.
+    ///
+    /// `preflight` is fully deterministic: the contract validators run over
+    /// the staged slice delta, and blocking findings park the merge with
+    /// the slice still `built` — no judgment leg. `postflight` runs the
+    /// validators over the now-merged `contracts/` baseline; findings get
+    /// one bounded repair judgment leg (post-merge findings are
+    /// collision-shaped — `id-unique` against the baseline — so either one
+    /// pass clears them or the slice needs human review), and residual
+    /// findings force `status: failure`.
+    ///
+    /// # Errors
+    ///
+    /// As [`adapter::judgment`].
+    async fn merge<P: Model>(
+        model: &P, ctx: &Context<'_>, slice: &str, phase: MergePhase, tree: &WorkingTree,
+    ) -> Result<Report, Error> {
+        if phase == MergePhase::Preflight {
+            let staged = ctx.tree_root(tree).join(format!(".specify/slices/{slice}/contracts"));
+            return Ok(enforce_validators(Report::success(), &validate_baseline(&staged)));
+        }
 
-    // Post-merge validator gate with one bounded repair leg; a clean
-    // baseline answers deterministically without a judgment leg.
-    let mut report = Report::success();
-    let mut findings = validate_baseline(&baseline);
-    if !findings.is_empty() {
-        let user = format!(
-            "The postflight contract validators found blocking issues in the merged \
+        let baseline = ctx.tree_root(tree).join("contracts");
+        let merge_prompt = registry::body("prompts/merge.md");
+
+        // Post-merge validator gate with one bounded repair leg; a clean
+        // baseline answers deterministically without a judgment leg.
+        let mut report = Report::success();
+        let mut findings = validate_baseline(&baseline);
+        if !findings.is_empty() {
+            let user = format!(
+                "The postflight contract validators found blocking issues in the merged \
              `contracts/` baseline (slice `{slice}`, adapter `{}`). The engine has \
              already promoted the slice's delta and archived the slice. Repair the \
              baseline files in place, then answer with the corrected report body.\n\n{}",
-            ctx.adapter_id,
-            render_validator_findings(&findings),
-        );
-        report = phase::report(model, ctx, merge_prompt.to_string(), user).await?;
-        findings = validate_baseline(&baseline);
-    }
+                ctx.adapter_id,
+                render_validator_findings(&findings),
+            );
+            report = phase::report(model, ctx, merge_prompt.to_string(), user).await?;
+            findings = validate_baseline(&baseline);
+        }
 
-    Ok(enforce_validators(report, &findings))
+        Ok(enforce_validators(report, &findings))
+    }
 }
 
 /// Inline the sub-prompts owning the findings' files, routed by the

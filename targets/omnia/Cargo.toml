@@ -18,9 +18,6 @@ workspace = true
 adapter.workspace = true
 serde = { workspace = true, features = ["derive"] }
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-wasip3.workspace = true
-
 [build-dependencies]
 prose.workspace = true
 

@@ -88,10 +88,10 @@ pub fn body(docs: &[Doc], path: &str) -> &'static str {
 /// Generate an adapter's `registry` module body over the `DOCS`
 /// table its `build.rs` emitted (via `prose::emit`).
 ///
-/// Invoke once inside the adapter's `registry` module:
+/// Invoke once inside the adapter's crate-private `registry` module:
 ///
 /// ```ignore
-/// pub mod registry {
+/// mod registry {
 ///     adapter::embed_registry!();
 /// }
 /// ```

@@ -1,17 +1,30 @@
 //! Native-only catalog of adapter crates linked into `specify-dev`.
 //!
-//! `linked!` is the single declarative table: one `<axis> <name> =>
-//! <crate>;` line per adapter generates the catalog [`entries`] (name,
-//! MCP server, metadata projection, embedded docs) *and* the
-//! per-operation dispatch functions the seam provider calls — adding
-//! an adapter is that one line plus its Cargo path dependency.
+//! Each first-party adapter implements its axis operations trait
+//! (`adapter::Source` / `adapter::Target`), so the catalog is a typed
+//! table — one [`Entry::source`] / [`Entry::target`] constructor per
+//! adapter — and the per-operation dispatch functions the seam provider
+//! calls are compile-checked trait calls. Adding an adapter is one
+//! entry, one dispatch leg per operation, and its Cargo path
+//! dependency.
+
+use std::sync::LazyLock;
 
 use adapter::registry::Doc;
 use adapter::seam::{self as aseam, Context};
+use adapter::{Source, Target, references};
+use captures::Captures;
+use contracts::Contracts;
+use documentation::Documentation;
 use error::Error;
+use intent::Intent;
 use omnia_guest::Model;
+use omnia_target::Omnia;
 use project::adapter::metadata::Metadata;
 use project::adapter::{Axis, BuildInputDeclaration, PlatformsCapability};
+use screenshots::Screenshots;
+use typescript::Typescript;
+use vectis::Vectis;
 
 /// One Rust adapter crate linked into the native shim.
 #[derive(Clone, Copy, Debug)]
@@ -24,6 +37,28 @@ pub struct Entry {
 }
 
 impl Entry {
+    /// The catalog entry for one linked source implementor.
+    fn source<A: Source>() -> Self {
+        Self {
+            axis: Axis::Source,
+            name: A::NAME,
+            server_name: references::server_name(A::NAME),
+            metadata: || source_metadata(A::metadata()),
+            docs: A::docs,
+        }
+    }
+
+    /// The catalog entry for one linked target implementor.
+    fn target<A: Target>() -> Self {
+        Self {
+            axis: Axis::Target,
+            name: A::NAME,
+            server_name: references::server_name(A::NAME),
+            metadata: || target_metadata(A::metadata()),
+            docs: A::docs,
+        }
+    }
+
     /// Adapter axis.
     #[must_use]
     pub const fn axis(self) -> Axis {
@@ -61,138 +96,124 @@ impl Entry {
     }
 }
 
-/// The axis token of one table line.
-macro_rules! axis_of {
-    (source) => {
-        Axis::Source
-    };
-    (target) => {
-        Axis::Target
-    };
+/// Every adapter linked into the native shim.
+#[must_use]
+pub fn entries() -> &'static [Entry] {
+    static ENTRIES: LazyLock<Vec<Entry>> = LazyLock::new(|| {
+        vec![
+            Entry::source::<Captures>(),
+            Entry::target::<Contracts>(),
+            Entry::source::<Documentation>(),
+            Entry::source::<Intent>(),
+            Entry::target::<Omnia>(),
+            Entry::source::<Screenshots>(),
+            Entry::source::<Typescript>(),
+            Entry::target::<Vectis>(),
+        ]
+    });
+    &ENTRIES
 }
 
-/// The metadata projection thunk for one table line, by axis.
-macro_rules! metadata_of {
-    (source, $krate:ident) => {
-        || source_metadata($krate::operations::metadata())
-    };
-    (target, $krate:ident) => {
-        || target_metadata($krate::operations::metadata())
-    };
+/// Whether `id` routes to the linked source implementor `A`.
+fn routes_source<A: Source>(id: &str) -> bool {
+    id.strip_prefix("source:") == Some(A::NAME)
 }
 
-/// One source-operation dispatch leg; expands to nothing for targets.
-macro_rules! source_leg {
-    (source, $name:ident, $krate:ident, $op:ident, ($($arg:expr),+), $id:expr) => {
-        if $id == concat!("source:", stringify!($name)) {
-            return $krate::operations::$op($($arg),+).await;
-        }
-    };
-    (target, $name:ident, $krate:ident, $op:ident, ($($arg:expr),+), $id:expr) => {};
+/// Whether `id` routes to the linked target implementor `A`.
+fn routes_target<A: Target>(id: &str) -> bool {
+    id.strip_prefix("target:") == Some(A::NAME)
 }
 
-/// One `guidance` dispatch leg; expands to nothing for sources.
-macro_rules! guidance_leg {
-    (target, $name:ident, $krate:ident, $id:expr) => {
-        if $id == concat!("target:", stringify!($name)) {
-            return Ok($krate::operations::guidance());
-        }
-    };
-    (source, $name:ident, $krate:ident, $id:expr) => {};
+/// Dispatch `survey` to the linked source adapter behind `id`.
+pub(crate) async fn survey<M: Model>(
+    model: &M, ctx: &Context<'_>, id: &str,
+) -> Result<Vec<aseam::Lead>, aseam::Error> {
+    if routes_source::<Captures>(id) {
+        return Captures::survey(model, ctx).await;
+    }
+    if routes_source::<Documentation>(id) {
+        return Documentation::survey(model, ctx).await;
+    }
+    if routes_source::<Intent>(id) {
+        return Intent::survey(model, ctx).await;
+    }
+    if routes_source::<Screenshots>(id) {
+        return Screenshots::survey(model, ctx).await;
+    }
+    if routes_source::<Typescript>(id) {
+        return Typescript::survey(model, ctx).await;
+    }
+    Err(unlinked(id))
 }
 
-/// One `build` dispatch leg; expands to nothing for sources.
-macro_rules! build_leg {
-    (target, $name:ident, $krate:ident, ($($arg:expr),+), $id:expr) => {
-        if $id == concat!("target:", stringify!($name)) {
-            return $krate::operations::build($($arg),+).await;
-        }
-    };
-    (source, $name:ident, $krate:ident, ($($arg:expr),+), $id:expr) => {};
+/// Dispatch `extract` to the linked source adapter behind `id`.
+pub(crate) async fn extract<M: Model>(
+    model: &M, ctx: &Context<'_>, id: &str, lead: &aseam::Lead,
+) -> Result<aseam::Evidence, aseam::Error> {
+    if routes_source::<Captures>(id) {
+        return Captures::extract(model, ctx, lead).await;
+    }
+    if routes_source::<Documentation>(id) {
+        return Documentation::extract(model, ctx, lead).await;
+    }
+    if routes_source::<Intent>(id) {
+        return Intent::extract(model, ctx, lead).await;
+    }
+    if routes_source::<Screenshots>(id) {
+        return Screenshots::extract(model, ctx, lead).await;
+    }
+    if routes_source::<Typescript>(id) {
+        return Typescript::extract(model, ctx, lead).await;
+    }
+    Err(unlinked(id))
 }
 
-/// One `merge` dispatch leg; expands to nothing for sources.
-macro_rules! merge_leg {
-    (target, $name:ident, $krate:ident, ($($arg:expr),+), $id:expr) => {
-        if $id == concat!("target:", stringify!($name)) {
-            return $krate::operations::merge($($arg),+).await;
-        }
-    };
-    (source, $name:ident, $krate:ident, ($($arg:expr),+), $id:expr) => {};
+/// Serve the linked target adapter's embedded guidance prompt.
+pub(crate) fn guidance(id: &str) -> Result<&'static str, aseam::Error> {
+    if routes_target::<Contracts>(id) {
+        return Ok(Contracts::guidance());
+    }
+    if routes_target::<Omnia>(id) {
+        return Ok(Omnia::guidance());
+    }
+    if routes_target::<Vectis>(id) {
+        return Ok(Vectis::guidance());
+    }
+    Err(unlinked(id))
 }
 
-/// The declarative linked-adapter table: generates [`entries`] and the
-/// dispatch functions from one line per adapter.
-macro_rules! linked {
-    ($( $axis:ident $name:ident => $krate:ident; )+) => {
-        /// Every adapter linked into the native shim.
-        #[must_use]
-        pub fn entries() -> &'static [Entry] {
-            static ENTRIES: &[Entry] = &[
-                $(
-                    Entry {
-                        axis: axis_of!($axis),
-                        name: stringify!($name),
-                        server_name: concat!(stringify!($name), "-references"),
-                        metadata: metadata_of!($axis, $krate),
-                        docs: $krate::registry::docs,
-                    },
-                )+
-            ];
-            ENTRIES
-        }
-
-        /// Dispatch `survey` to the linked source adapter behind `id`.
-        pub(crate) async fn survey<M: Model>(
-            model: &M, ctx: &Context<'_>, id: &str,
-        ) -> Result<Vec<aseam::Lead>, aseam::Error> {
-            $( source_leg!($axis, $name, $krate, survey, (model, ctx), id); )+
-            Err(unlinked(id))
-        }
-
-        /// Dispatch `extract` to the linked source adapter behind `id`.
-        pub(crate) async fn extract<M: Model>(
-            model: &M, ctx: &Context<'_>, id: &str, lead: &aseam::Lead,
-        ) -> Result<aseam::Evidence, aseam::Error> {
-            $( source_leg!($axis, $name, $krate, extract, (model, ctx, lead), id); )+
-            Err(unlinked(id))
-        }
-
-        /// Serve the linked target adapter's embedded guidance prompt.
-        pub(crate) fn guidance(id: &str) -> Result<&'static str, aseam::Error> {
-            $( guidance_leg!($axis, $name, $krate, id); )+
-            Err(unlinked(id))
-        }
-
-        /// Dispatch `build` to the linked target adapter behind `id`.
-        pub(crate) async fn build<M: Model>(
-            model: &M, ctx: &Context<'_>, id: &str, slice: &str,
-            inputs: &[aseam::Input], tree: &aseam::WorkingTree,
-        ) -> Result<aseam::Report, aseam::Error> {
-            $( build_leg!($axis, $name, $krate, (model, ctx, slice, inputs, tree), id); )+
-            Err(unlinked(id))
-        }
-
-        /// Dispatch one `merge` gate to the linked target adapter behind `id`.
-        pub(crate) async fn merge<M: Model>(
-            model: &M, ctx: &Context<'_>, id: &str, slice: &str,
-            phase: aseam::MergePhase, tree: &aseam::WorkingTree,
-        ) -> Result<aseam::Report, aseam::Error> {
-            $( merge_leg!($axis, $name, $krate, (model, ctx, slice, phase, tree), id); )+
-            Err(unlinked(id))
-        }
-    };
+/// Dispatch `build` to the linked target adapter behind `id`.
+pub(crate) async fn build<M: Model>(
+    model: &M, ctx: &Context<'_>, id: &str, slice: &str, inputs: &[aseam::Input],
+    tree: &aseam::WorkingTree,
+) -> Result<aseam::Report, aseam::Error> {
+    if routes_target::<Contracts>(id) {
+        return Contracts::build(model, ctx, slice, inputs, tree).await;
+    }
+    if routes_target::<Omnia>(id) {
+        return Omnia::build(model, ctx, slice, inputs, tree).await;
+    }
+    if routes_target::<Vectis>(id) {
+        return Vectis::build(model, ctx, slice, inputs, tree).await;
+    }
+    Err(unlinked(id))
 }
 
-linked! {
-    source captures => captures;
-    target contracts => contracts;
-    source documentation => documentation;
-    source intent => intent;
-    target omnia => omnia_target;
-    source screenshots => screenshots;
-    source typescript => typescript;
-    target vectis => vectis;
+/// Dispatch one `merge` gate to the linked target adapter behind `id`.
+pub(crate) async fn merge<M: Model>(
+    model: &M, ctx: &Context<'_>, id: &str, slice: &str, phase: aseam::MergePhase,
+    tree: &aseam::WorkingTree,
+) -> Result<aseam::Report, aseam::Error> {
+    if routes_target::<Contracts>(id) {
+        return Contracts::merge(model, ctx, slice, phase, tree).await;
+    }
+    if routes_target::<Omnia>(id) {
+        return Omnia::merge(model, ctx, slice, phase, tree).await;
+    }
+    if routes_target::<Vectis>(id) {
+        return Vectis::merge(model, ctx, slice, phase, tree).await;
+    }
+    Err(unlinked(id))
 }
 
 /// A dispatch to an adapter id this shim does not link.
@@ -214,7 +235,7 @@ pub fn get(axis: Axis, name: &str) -> Result<Entry, Error> {
     )
 }
 
-fn source_metadata(record: adapter::seam::SourceMetadata) -> Metadata {
+fn source_metadata(record: aseam::SourceMetadata) -> Metadata {
     Metadata {
         specify_floor: record.specify_floor,
         inputs: Vec::new(),
@@ -222,7 +243,7 @@ fn source_metadata(record: adapter::seam::SourceMetadata) -> Metadata {
     }
 }
 
-fn target_metadata(record: adapter::seam::TargetMetadata) -> Metadata {
+fn target_metadata(record: aseam::TargetMetadata) -> Metadata {
     Metadata {
         specify_floor: record.specify_floor,
         inputs: record
@@ -241,13 +262,13 @@ fn target_metadata(record: adapter::seam::TargetMetadata) -> Metadata {
     }
 }
 
-const fn platform(platform: adapter::seam::Platform) -> project::platform::Platform {
+const fn platform(platform: aseam::Platform) -> project::platform::Platform {
     use project::platform::Platform;
     match platform {
-        adapter::seam::Platform::Core => Platform::Core,
-        adapter::seam::Platform::Ios => Platform::Ios,
-        adapter::seam::Platform::Android => Platform::Android,
-        adapter::seam::Platform::Web => Platform::Web,
-        adapter::seam::Platform::Desktop => Platform::Desktop,
+        aseam::Platform::Core => Platform::Core,
+        aseam::Platform::Ios => Platform::Ios,
+        aseam::Platform::Android => Platform::Android,
+        aseam::Platform::Web => Platform::Web,
+        aseam::Platform::Desktop => Platform::Desktop,
     }
 }

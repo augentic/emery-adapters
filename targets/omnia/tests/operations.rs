@@ -6,8 +6,8 @@ use std::path::Path;
 
 use adapter::answers::REPORT_ANSWER_SCHEMA;
 use adapter::seam::{Context, Input, MergePhase, Severity, Status, WorkingTree};
-use adapter::{Format, Request};
-use omnia::operations::{build, merge};
+use adapter::{Format, Request, Target as _};
+use omnia::Omnia;
 use tempfile::TempDir;
 use testkit::{Harness, mcp_grants};
 
@@ -46,10 +46,15 @@ async fn build_phase_legs() {
         Input::Design("DESIGN-BODY".to_string()),
     ];
 
-    let report =
-        build(&model, &ctx(tmp.path(), Some("http://references/mcp")), "demo", &inputs, &tree())
-            .await
-            .unwrap();
+    let report = Omnia::build(
+        &model,
+        &ctx(tmp.path(), Some("http://references/mcp")),
+        "demo",
+        &inputs,
+        &tree(),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(report.status, Status::Success);
     assert!(report.findings.is_empty());
@@ -95,9 +100,10 @@ async fn merge_preflight_single_leg() {
     let tmp = TempDir::new().unwrap();
     let model = Harness::answering([SUCCESS_REPORT]);
 
-    let report = merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
-        .await
-        .unwrap();
+    let report =
+        Omnia::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
+            .await
+            .unwrap();
 
     assert_eq!(report.status, Status::Success);
     let requests = model.requests();
@@ -113,9 +119,10 @@ async fn merge_postflight_deterministic() {
     let tmp = TempDir::new().unwrap();
     let model = Harness::answering::<&str>([]);
 
-    let report = merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Postflight, &tree())
-        .await
-        .unwrap();
+    let report =
+        Omnia::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Postflight, &tree())
+            .await
+            .unwrap();
 
     assert_eq!(report.status, Status::Success);
     assert!(report.findings.is_empty());
@@ -129,9 +136,10 @@ async fn merge_diagnostics() {
         r#"{"status":"failure","findings":[{"rule-id":"OMNIA-002","title":"Forbidden std API","severity":"critical","impact":"The wasm32 build breaks.","remediation":"Route through the provider trait."}]}"#,
     ]);
 
-    let report = merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
-        .await
-        .unwrap();
+    let report =
+        Omnia::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
+            .await
+            .unwrap();
 
     assert_eq!(report.status, Status::Failure);
     let finding = &report.findings[0];

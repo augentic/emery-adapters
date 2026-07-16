@@ -7,6 +7,9 @@
 //!   (re-exported here with its request/reply vocabulary); cores take
 //!   `P: Model` bounds, `wasm32` binds `WasiModel`, tests bind the
 //!   recorded scripted harness from `omnia-testkit`.
+//! - [`Source`] / [`Target`] — the per-axis operations traits: the one
+//!   Rust statement of what an adapter implements, consumed by the wasm
+//!   export macros and every native harness.
 //! - [`seam`] — the DTO vocabulary mirroring the `specify:adapter` WIT
 //!   records.
 //! - [`answers`] — the vendored judgment-answer schema pins and their
@@ -22,10 +25,13 @@
 //!   generic `McpServer` over an embedded doc table (only the
 //!   `wasi:http` `serve` bridge is `wasm32`-gated).
 //! - `source` / `target` (`wasm32` only) — the `specify:adapter` world
-//!   bindings each adapter-root crate hand-writes its thin shim over.
+//!   bindings plus the `source!` / `target!` export macros that wire a
+//!   trait implementor into a component's exports; an adapter's whole
+//!   wasm shim is one macro invocation.
 
 pub mod answers;
 mod call;
+mod operations;
 pub mod phase;
 pub mod references;
 pub mod registry;
@@ -43,3 +49,8 @@ pub use omnia_guest::model::WasiModel;
 pub use omnia_guest::model::{
     Error, Format, McpGrant, Message, Reply, Request, Role, SchemaFormat, Tool,
 };
+pub use operations::{Source, Target};
+/// Re-exported for the `source!` / `target!` macro expansions, which
+/// wire the references server into the leaf crate's `wasi:http` export.
+#[cfg(target_arch = "wasm32")]
+pub use wasip3;

@@ -1,7 +1,9 @@
 //! The embedded prose registry: coverage across all three trees,
 //! nested build prompts, ordering, and symlink resolution.
 
-use vectis::registry;
+use adapter::Target as _;
+use adapter::registry::{body, find};
+use vectis::Vectis;
 
 #[test]
 fn embeds_all_trees() {
@@ -28,9 +30,9 @@ fn embeds_all_trees() {
         "rules/universal/hardcoded-secrets.md",
         "rules/universal/unvalidated-input.md",
     ] {
-        assert!(registry::doc(path).is_some(), "registry embeds `{path}`");
+        assert!(find(Vectis::docs(), path).is_some(), "registry embeds `{path}`");
     }
-    assert!(registry::body("prompts/build.md").starts_with("# Vectis target — build prompt"));
+    assert!(body(Vectis::docs(), "prompts/build.md").starts_with("# Vectis target — build prompt"));
 }
 
 /// The vectis prose references is the largest in the repo: 68 markdown files
@@ -40,7 +42,7 @@ fn embeds_all_trees() {
 /// prose inventory.
 #[test]
 fn embed_floor() {
-    let docs = registry::docs();
+    let docs = Vectis::docs();
     assert!(docs.len() >= 65, "expected the full prose references, got {} docs", docs.len());
     let total: usize = docs.iter().map(|doc| doc.body.len()).sum();
     assert!(total >= 550 * 1024, "expected >= 550 KiB of embedded prose, got {total} bytes");
@@ -52,8 +54,8 @@ fn embed_floor() {
 /// shared content inlined.
 #[test]
 fn symlinks_resolved_inline() {
-    let doc = registry::doc("references/spec-runtime/phase-outcome-contract.md")
+    let doc = find(Vectis::docs(), "references/spec-runtime/phase-outcome-contract.md")
         .expect("symlinked runtime reference is embedded");
     assert!(!doc.body.is_empty(), "resolved symlink content is inlined");
-    assert!(!registry::body("references/agent-teams.md").is_empty());
+    assert!(!body(Vectis::docs(), "references/agent-teams.md").is_empty());
 }

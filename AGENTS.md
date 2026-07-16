@@ -18,7 +18,7 @@ Artifacts outrank source behavior. Preserve missing information as `[unknown]` r
 
 - Each adapter ships as one component exporting exactly one axis world from `wit/specify.wit`.
 - Identity comes from the guest crate's version and published `specify:<name>@<semver>` package. Resolve-time metadata comes from the component's WIT operation; there is no adapter manifest.
-- Keep reusable adapter logic wasm-free in library modules. Keep the `wasm32` guest module as a thin, hand-written WIT export shim.
+- Keep reusable adapter logic wasm-free in library modules. Each adapter implements its axis operations trait (`adapter::Source` / `adapter::Target`) on a unit type; the `wasm32` guest module is a single `adapter::source!` / `adapter::target!` export-macro invocation over that implementor.
 - Do not commit built `.wasm` artifacts.
 - Adapter names must remain unique across the source and target axes.
 

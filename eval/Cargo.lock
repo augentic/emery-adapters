@@ -493,7 +493,6 @@ version = "0.1.0"
 dependencies = [
  "adapter",
  "prose 0.1.0",
- "wasip3",
 ]
 
 [[package]]
@@ -674,7 +673,6 @@ dependencies = [
  "serde",
  "serde-saphyr",
  "serde_json",
- "wasip3",
 ]
 
 [[package]]
@@ -1121,7 +1119,6 @@ version = "0.1.0"
 dependencies = [
  "adapter",
  "prose 0.1.0",
- "wasip3",
 ]
 
 [[package]]
@@ -1965,7 +1962,6 @@ version = "0.1.0"
 dependencies = [
  "adapter",
  "prose 0.1.0",
- "wasip3",
 ]
 
 [[package]]
@@ -2490,7 +2486,6 @@ dependencies = [
  "adapter",
  "prose 0.1.0",
  "serde",
- "wasip3",
 ]
 
 [[package]]
@@ -3848,7 +3843,6 @@ version = "0.1.0"
 dependencies = [
  "adapter",
  "prose 0.1.0",
- "wasip3",
 ]
 
 [[package]]
@@ -4753,7 +4747,6 @@ version = "0.1.0"
 dependencies = [
  "adapter",
  "prose 0.1.0",
- "wasip3",
 ]
 
 [[package]]
@@ -4899,7 +4892,6 @@ dependencies = [
  "tiny-skia",
  "toml",
  "usvg",
- "wasip3",
 ]
 
 [[package]]

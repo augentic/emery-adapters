@@ -9,10 +9,10 @@ use std::path::Path;
 
 use adapter::answers::REPORT_ANSWER_SCHEMA;
 use adapter::seam::{Context, Input, MergePhase, Report, Severity, Status, WorkingTree};
-use adapter::{Format, Request};
+use adapter::{Format, Request, Target as _};
 use tempfile::TempDir;
 use testkit::{Harness, mcp_grants};
-use vectis::operations::{build, merge};
+use vectis::Vectis;
 
 const PHASE_DONE: &str = r#"{"applicable":true,"summary":"phase complete"}"#;
 const SHELL_SKIPPED: &str = r#"{"applicable":false,"summary":"no shell work in this slice"}"#;
@@ -56,10 +56,15 @@ async fn build_phase_legs() {
         Input::Design("DESIGN-BODY".to_string()),
     ];
 
-    let report =
-        build(&model, &ctx(tmp.path(), Some("http://references/mcp")), "demo", &inputs, &tree())
-            .await
-            .unwrap();
+    let report = Vectis::build(
+        &model,
+        &ctx(tmp.path(), Some("http://references/mcp")),
+        "demo",
+        &inputs,
+        &tree(),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(report.status, Status::Success);
     assert!(report.findings.is_empty());
@@ -136,7 +141,7 @@ async fn core_only_skips_shells() {
         .unwrap();
     let model = Harness::answering([PHASE_DONE, PHASE_DONE, PHASE_DONE, SUCCESS_REPORT]);
 
-    let report = build(&model, &ctx(tmp.path(), None), "demo", &[], &tree()).await.unwrap();
+    let report = Vectis::build(&model, &ctx(tmp.path(), None), "demo", &[], &tree()).await.unwrap();
 
     assert_eq!(report.status, Status::Success);
     let requests = model.requests();
@@ -171,7 +176,7 @@ async fn composition_repair() {
         PHASE_DONE, // composition-repair 2
     ]);
 
-    let report = build(&model, &ctx(tmp.path(), None), "demo", &[], &tree()).await.unwrap();
+    let report = Vectis::build(&model, &ctx(tmp.path(), None), "demo", &[], &tree()).await.unwrap();
 
     assert_eq!(report.status, Status::Failure, "an exhausted gate parks the slice");
     assert_eq!(report.findings[0].severity, Severity::Important);
@@ -204,7 +209,7 @@ async fn build_with_composition(composition: Option<&str>, report_answer: &'stat
         PHASE_DONE,
         report_answer,
     ]);
-    let report = build(&model, &ctx(tmp.path(), None), "demo", &[], &tree()).await.unwrap();
+    let report = Vectis::build(&model, &ctx(tmp.path(), None), "demo", &[], &tree()).await.unwrap();
     assert_eq!(model.requests().len(), 6, "coherence warnings never trigger the repair leg");
     report
 }
@@ -273,9 +278,10 @@ async fn merge_preflight_deterministic() {
     let model = Harness::answering::<&str>([]);
 
     // A clean (absent) staged composition passes without a judgment leg.
-    let report = merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
-        .await
-        .unwrap();
+    let report =
+        Vectis::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
+            .await
+            .unwrap();
     assert_eq!(report.status, Status::Success);
     assert!(model.requests().is_empty(), "preflight is deterministic: no leg");
 
@@ -283,9 +289,10 @@ async fn merge_preflight_deterministic() {
     fs::create_dir_all(tmp.path().join(".specify/slices/demo")).unwrap();
     fs::write(tmp.path().join(".specify/slices/demo/composition.yaml"), "screens: [broken\n")
         .unwrap();
-    let report = merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
-        .await
-        .unwrap();
+    let report =
+        Vectis::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
+            .await
+            .unwrap();
     assert_eq!(report.status, Status::Failure);
     assert!(report.findings[0].detail.contains("[composition]"));
     assert!(model.requests().is_empty(), "a staged failure still spends no judgment leg");
@@ -296,9 +303,10 @@ async fn merge_postflight_single_leg() {
     let tmp = TempDir::new().unwrap();
     let model = Harness::answering([SUCCESS_REPORT]);
 
-    let report = merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Postflight, &tree())
-        .await
-        .unwrap();
+    let report =
+        Vectis::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Postflight, &tree())
+            .await
+            .unwrap();
 
     assert_eq!(report.status, Status::Success);
     let requests = model.requests();
@@ -318,9 +326,10 @@ async fn merge_postflight_gates_composition() {
     fs::write(tmp.path().join(".specify/specs/composition.yaml"), "screens: [broken\n").unwrap();
     let model = Harness::answering([SUCCESS_REPORT, SUCCESS_REPORT]);
 
-    let report = merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Postflight, &tree())
-        .await
-        .unwrap();
+    let report =
+        Vectis::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Postflight, &tree())
+            .await
+            .unwrap();
 
     assert_eq!(report.status, Status::Failure);
     assert!(report.findings[0].detail.contains("[composition]"));

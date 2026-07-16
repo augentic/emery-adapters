@@ -2,11 +2,13 @@
 //! every target adapter shim.
 //!
 //! Follows omnia's `wasi-*` guest convention: one `wit_bindgen::generate!`
-//! in a library crate with `pub_export_macro`, flat re-exports, and a
-//! per-crate [`export!`] invocation in each consumer. A shim implements
-//! [`Guest`] for its own type and wires it in with
-//! `adapter::target::export!(Adapter with_types_in
-//! adapter::target)`.
+//! in a library crate with `pub_export_macro` and flat re-exports. An
+//! adapter implements [`crate::Target`] and wires it into the component
+//! exports with one `adapter::target!` invocation — the macro expands
+//! only the leaf-owned wiring (the world [`export!`], the `wasi:http`
+//! references export, and the crate-version stamp) and delegates every
+//! operation to the typed [`dispatch_metadata`] / [`dispatch_guidance`] /
+//! [`dispatch_build`] / [`dispatch_merge`] functions here.
 //!
 //! The [`From`] impls map the generated records onto the [`crate::seam`]
 //! vocabulary at the export boundary.
@@ -169,4 +171,134 @@ impl From<crate::seam::Error> for Error {
             crate::seam::Error::Internal(detail) => Self::Internal(detail),
         }
     }
+}
+
+/// `metadata` for a [`crate::Target`] implementor, mapped onto the
+/// generated record.
+#[must_use]
+pub fn dispatch_metadata<A: crate::Target>() -> AdapterMetadata {
+    A::metadata().into()
+}
+
+/// `guidance` for a [`crate::Target`] implementor.
+///
+/// # Errors
+///
+/// Infallible today; the WIT operation is fallible, so the dispatch
+/// carries the `Result`.
+pub fn dispatch_guidance<A: crate::Target>() -> Result<String, Error> {
+    Ok(A::guidance().to_string())
+}
+
+/// `build` for a [`crate::Target`] implementor: the guest context
+/// (MCP references URL resolved from `A::NAME`), the `WasiModel`
+/// binding, and the WIT conversions at the export boundary.
+///
+/// # Errors
+///
+/// As the implementor's [`build`](crate::Target::build).
+pub async fn dispatch_build<A: crate::Target>(
+    id: AdapterId, slice: String, inputs: Vec<Input>, tree: WorkingTree,
+) -> Result<Report, Error> {
+    let inputs: Vec<crate::seam::Input> = inputs.into_iter().map(Into::into).collect();
+    let tree = crate::seam::WorkingTree::from(tree);
+    let url = crate::references::mcp_url(A::NAME);
+    let ctx = crate::seam::Context::guest(&id, url.as_deref());
+    A::build(&crate::WasiModel, &ctx, &slice, &inputs, &tree)
+        .await
+        .map(Into::into)
+        .map_err(Into::into)
+}
+
+/// `merge` for a [`crate::Target`] implementor: the guest context
+/// (MCP references URL resolved from `A::NAME`), the `WasiModel`
+/// binding, and the WIT conversions at the export boundary.
+///
+/// # Errors
+///
+/// As the implementor's [`merge`](crate::Target::merge).
+pub async fn dispatch_merge<A: crate::Target>(
+    id: AdapterId, slice: String, phase: MergePhase, tree: WorkingTree,
+) -> Result<Report, Error> {
+    let phase = crate::seam::MergePhase::from(phase);
+    let tree = crate::seam::WorkingTree::from(tree);
+    let url = crate::references::mcp_url(A::NAME);
+    let ctx = crate::seam::Context::guest(&id, url.as_deref());
+    A::merge(&crate::WasiModel, &ctx, &slice, phase, &tree)
+        .await
+        .map(Into::into)
+        .map_err(Into::into)
+}
+
+/// Wire a [`crate::Target`] implementor into the component exports.
+///
+/// Expands to the generated WIT [`Guest`] implementation delegating to
+/// the typed dispatch functions, the `target-adapter` world [`export!`],
+/// and the `wasi:http` references export serving the implementor's docs
+/// with the server identity projected from `A::NAME` and the component
+/// version stamped from the declaring crate's `CARGO_PKG_VERSION`.
+///
+/// The complete wasm shim of a target adapter:
+///
+/// ```ignore
+/// adapter::target!(crate::Vectis);
+/// ```
+#[macro_export]
+macro_rules! target {
+    ($adapter:ty) => {
+        struct Adapter;
+        $crate::target::export!(Adapter with_types_in $crate::target);
+
+        impl $crate::target::Guest for Adapter {
+            fn metadata(
+                _id: $crate::target::AdapterId,
+            ) -> $crate::target::AdapterMetadata {
+                $crate::target::dispatch_metadata::<$adapter>()
+            }
+
+            async fn guidance(
+                _id: $crate::target::AdapterId,
+            ) -> Result<String, $crate::target::Error> {
+                $crate::target::dispatch_guidance::<$adapter>()
+            }
+
+            async fn build(
+                id: $crate::target::AdapterId,
+                slice: String,
+                inputs: Vec<$crate::target::Input>,
+                tree: $crate::target::WorkingTree,
+            ) -> Result<$crate::target::Report, $crate::target::Error> {
+                $crate::target::dispatch_build::<$adapter>(id, slice, inputs, tree).await
+            }
+
+            async fn merge(
+                id: $crate::target::AdapterId,
+                slice: String,
+                phase: $crate::target::MergePhase,
+                tree: $crate::target::WorkingTree,
+            ) -> Result<$crate::target::Report, $crate::target::Error> {
+                $crate::target::dispatch_merge::<$adapter>(id, slice, phase, tree).await
+            }
+        }
+
+        struct HttpGuest;
+        $crate::wasip3::http::service::export!(HttpGuest);
+
+        impl $crate::wasip3::exports::http::handler::Guest for HttpGuest {
+            async fn handle(
+                request: $crate::wasip3::http::types::Request,
+            ) -> Result<
+                $crate::wasip3::http::types::Response,
+                $crate::wasip3::http::types::ErrorCode,
+            > {
+                $crate::references::serve(
+                    <$adapter as $crate::Target>::NAME,
+                    env!("CARGO_PKG_VERSION"),
+                    <$adapter as $crate::Target>::docs(),
+                    request,
+                )
+                .await
+            }
+        }
+    };
 }

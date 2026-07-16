@@ -11,11 +11,12 @@
 
 use std::path::Path;
 
+use adapter::registry::Doc;
 use adapter::seam::{
     BuildInput, Context, Error, Finding, Input, MergePhase, Platform, PlatformsCapability, Report,
     Severity, Status, TargetMetadata, WorkingTree,
 };
-use adapter::{Model, phase};
+use adapter::{Model, Target, phase};
 use serde_json::Value;
 
 use crate::{
@@ -34,107 +35,121 @@ const REFERENCES_POINTER: &str = "Every prompt, reference, and rule document thi
      adapter-relative paths like `references/hard-rules-core.md` or \
      `prompts/build/ios/write.md`); fetch documents the prompts cite lazily from there.";
 
-/// Deterministic metadata for the `metadata` operation: three
-/// optional design-system build inputs and a required platform
-/// declaration defaulting to core + the two supported shells.
-#[must_use]
-pub fn metadata() -> TargetMetadata {
-    let optional = |path: &str| BuildInput {
-        path: path.to_string(),
-        required: false,
-    };
-    TargetMetadata {
-        specify_floor: None,
-        inputs: vec![optional("tokens.yaml"), optional("assets.yaml"), optional("components.yaml")],
-        platforms: Some(PlatformsCapability {
-            required: true,
-            allowed: vec![
-                Platform::Core,
-                Platform::Ios,
-                Platform::Android,
-                Platform::Web,
-                Platform::Desktop,
+/// The vectis target adapter: Crux shared cores plus `SwiftUI` and
+/// Jetpack Compose shells generated from synthesised Specify artifacts.
+#[derive(Clone, Copy, Debug)]
+pub struct Vectis;
+
+impl Target for Vectis {
+    const NAME: &'static str = "vectis";
+
+    /// Deterministic metadata for the `metadata` operation: three
+    /// optional design-system build inputs and a required platform
+    /// declaration defaulting to core + the two supported shells.
+    fn metadata() -> TargetMetadata {
+        let optional = |path: &str| BuildInput {
+            path: path.to_string(),
+            required: false,
+        };
+        TargetMetadata {
+            specify_floor: None,
+            inputs: vec![
+                optional("tokens.yaml"),
+                optional("assets.yaml"),
+                optional("components.yaml"),
             ],
-            default: vec![Platform::Core, Platform::Ios, Platform::Android],
-        }),
-    }
-}
-
-/// The embedded guidance prompt, returned deterministically (no
-/// judgment leg).
-#[must_use]
-pub fn guidance() -> &'static str {
-    registry::body("prompts/guidance.md")
-}
-
-/// Build a slice's Crux core, shell code, and regenerated
-/// `composition.yaml` per the build prompt's phase order:
-///
-/// 1. **Prelude (deterministic)** — [`prepare::materialize_step`] scope
-///    resolution and conditional materialize, then the §L bootstrap
-///    app-icon gate — error findings park the build before any
-///    judgment leg.
-/// 2. **Composition leg** (Step 0.5 + Phase 1), then the in-guest
-///    composition validator gate with a bounded repair loop — an
-///    exhausted budget parks the slice.
-/// 3. **Core leg** (Phases 2–3), one **shell leg** per declared shell
-///    platform (Phases 4–5), then the **review leg** (Phases 6–7).
-/// 4. One report leg (Phases 8–9), with the agent-run shell verify gate
-///    instructed in its prompt.
-/// 5. **Postlude (deterministic)** — the composition cross-checks plus
-///    the report-coherence walk, with one bounded repair leg; residual
-///    findings force `failure`, and the A4 ui-surface coherence
-///    warnings ride the final report as non-blocking suggestions.
-///
-/// # Errors
-///
-/// As [`adapter::judgment`], plus [`Error::Io`] /
-/// [`Error::InvalidRequest`] when the deterministic prelude cannot read
-/// the workspace's design-system inputs.
-#[expect(
-    clippy::too_many_lines,
-    reason = "One linear leg-by-leg walk of the prompt's phase order; splitting hides the order."
-)]
-pub async fn build<P: Model>(
-    model: &P, ctx: &Context<'_>, slice: &str, inputs: &[Input], tree: &WorkingTree,
-) -> Result<Report, Error> {
-    let tree_root = ctx.tree_root(tree);
-    let slice_dir_rel = format!(".specify/slices/{slice}");
-    let slice_dir = tree_root.join(&slice_dir_rel);
-    let slice_composition = slice_dir.join("composition.yaml");
-    let inputs_block = phase::render_inputs(inputs);
-    let build_prompt = registry::body("prompts/build.md");
-
-    // The materialize scope derives from the same declared-platform
-    // read as the shell legs, so a core-only project materializes
-    // nothing for shells it will not build.
-    let shell_platforms: Vec<String> =
-        declared_shell_legs(&tree_root).iter().map(|leg| leg.name.to_string()).collect();
-    let prelude = prepare::materialize_step(&slice_dir, &tree_root, &shell_platforms)
-        .map_err(error_from_vectis)?;
-    let prelude_block = render_prelude(&prelude);
-
-    // Bootstrap gate (§L): the launcher app-icon must be satisfiable for
-    // every declared UI platform before any write leg.
-    let bootstrap = bootstrap_findings(&tree_root);
-    if !bootstrap.is_empty() {
-        return Ok(Report {
-            status: Status::Failure,
-            findings: bootstrap.into_iter().map(Finding::blocking).collect(),
-            outputs: Vec::new(),
-            ui_surface: None,
-        });
+            platforms: Some(PlatformsCapability {
+                required: true,
+                allowed: vec![
+                    Platform::Core,
+                    Platform::Ios,
+                    Platform::Android,
+                    Platform::Web,
+                    Platform::Desktop,
+                ],
+                default: vec![Platform::Core, Platform::Ios, Platform::Android],
+            }),
+        }
     }
 
-    // Component *identity* is deterministic and runs in-guest (the
-    // name-free cluster report); *naming* is the leg's judgment,
-    // recorded as a bindings file the workflow's deterministic bind
-    // bookkeeping projects into the catalog.
-    let infer_block = render_infer_report(&tree_root);
-    let system =
-        assemble(&["prompts/build.md", "prompts/guidance.md", "prompts/build/composition.md"]);
-    let user = format!(
-        "Run component inference (Step 0.5) and composition regeneration (Phase 1) of \
+    fn docs() -> &'static [Doc] {
+        registry::docs()
+    }
+
+    /// The embedded guidance prompt, returned deterministically (no
+    /// judgment leg).
+    fn guidance() -> &'static str {
+        registry::body("prompts/guidance.md")
+    }
+
+    /// Build a slice's Crux core, shell code, and regenerated
+    /// `composition.yaml` per the build prompt's phase order:
+    ///
+    /// 1. **Prelude (deterministic)** — [`prepare::materialize_step`] scope
+    ///    resolution and conditional materialize, then the §L bootstrap
+    ///    app-icon gate — error findings park the build before any
+    ///    judgment leg.
+    /// 2. **Composition leg** (Step 0.5 + Phase 1), then the in-guest
+    ///    composition validator gate with a bounded repair loop — an
+    ///    exhausted budget parks the slice.
+    /// 3. **Core leg** (Phases 2–3), one **shell leg** per declared shell
+    ///    platform (Phases 4–5), then the **review leg** (Phases 6–7).
+    /// 4. One report leg (Phases 8–9), with the agent-run shell verify gate
+    ///    instructed in its prompt.
+    /// 5. **Postlude (deterministic)** — the composition cross-checks plus
+    ///    the report-coherence walk, with one bounded repair leg; residual
+    ///    findings force `failure`, and the A4 ui-surface coherence
+    ///    warnings ride the final report as non-blocking suggestions.
+    ///
+    /// # Errors
+    ///
+    /// As [`adapter::judgment`], plus [`Error::Io`] /
+    /// [`Error::InvalidRequest`] when the deterministic prelude cannot read
+    /// the workspace's design-system inputs.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "One linear leg-by-leg walk of the prompt's phase order; splitting hides the order."
+    )]
+    async fn build<P: Model>(
+        model: &P, ctx: &Context<'_>, slice: &str, inputs: &[Input], tree: &WorkingTree,
+    ) -> Result<Report, Error> {
+        let tree_root = ctx.tree_root(tree);
+        let slice_dir_rel = format!(".specify/slices/{slice}");
+        let slice_dir = tree_root.join(&slice_dir_rel);
+        let slice_composition = slice_dir.join("composition.yaml");
+        let inputs_block = phase::render_inputs(inputs);
+        let build_prompt = registry::body("prompts/build.md");
+
+        // The materialize scope derives from the same declared-platform
+        // read as the shell legs, so a core-only project materializes
+        // nothing for shells it will not build.
+        let shell_platforms: Vec<String> =
+            declared_shell_legs(&tree_root).iter().map(|leg| leg.name.to_string()).collect();
+        let prelude = prepare::materialize_step(&slice_dir, &tree_root, &shell_platforms)
+            .map_err(error_from_vectis)?;
+        let prelude_block = render_prelude(&prelude);
+
+        // Bootstrap gate (§L): the launcher app-icon must be satisfiable for
+        // every declared UI platform before any write leg.
+        let bootstrap = bootstrap_findings(&tree_root);
+        if !bootstrap.is_empty() {
+            return Ok(Report {
+                status: Status::Failure,
+                findings: bootstrap.into_iter().map(Finding::blocking).collect(),
+                outputs: Vec::new(),
+                ui_surface: None,
+            });
+        }
+
+        // Component *identity* is deterministic and runs in-guest (the
+        // name-free cluster report); *naming* is the leg's judgment,
+        // recorded as a bindings file the workflow's deterministic bind
+        // bookkeeping projects into the catalog.
+        let infer_block = render_infer_report(&tree_root);
+        let system =
+            assemble(&["prompts/build.md", "prompts/guidance.md", "prompts/build/composition.md"]);
+        let user = format!(
+            "Run component inference (Step 0.5) and composition regeneration (Phase 1) of \
          the vectis build for slice `{slice}` (adapter `{}`).\n\n\
          The project workspace is lent to you. The adapter already ran the \
          deterministic component-identity clustering in-guest — the name-free cluster \
@@ -149,52 +164,53 @@ pub async fn build<P: Model>(
          composition and answer with `applicable: false`.\n\n\
          {infer_block}\n\n\
          {prelude_block}\n\n{REFERENCES_POINTER}\n\n{inputs_block}",
-        ctx.adapter_id,
-    );
-    let composition = phase::phase(model, ctx, system, user, "composition").await?;
+            ctx.adapter_id,
+        );
+        let composition = phase::phase(model, ctx, system, user, "composition").await?;
 
-    // The per-shell write prompts require the composition gate passed
-    // before any platform phase: an exhausted repair budget parks the
-    // slice with a deterministic failure report.
-    let residual = composition_gate(model, ctx, slice, &slice_dir_rel, &slice_composition).await?;
-    if !residual.is_empty() {
-        return Ok(Report {
-            status: Status::Failure,
-            findings: residual.into_iter().map(Finding::blocking).collect(),
-            outputs: Vec::new(),
-            ui_surface: None,
-        });
-    }
+        // The per-shell write prompts require the composition gate passed
+        // before any platform phase: an exhausted repair budget parks the
+        // slice with a deterministic failure report.
+        let residual =
+            composition_gate(model, ctx, slice, &slice_dir_rel, &slice_composition).await?;
+        if !residual.is_empty() {
+            return Ok(Report {
+                status: Status::Failure,
+                findings: residual.into_iter().map(Finding::blocking).collect(),
+                outputs: Vec::new(),
+                ui_surface: None,
+            });
+        }
 
-    let scaffold_block = scaffold_missing_trees(&tree_root);
+        let scaffold_block = scaffold_missing_trees(&tree_root);
 
-    // The core verify-repair loop crosses the write and test prompts
-    // (a cargo failure re-enters the writer), so one agent leg holds
-    // them together.
-    let system =
-        assemble(&["prompts/build.md", "prompts/build/core/write.md", "prompts/build/test.md"]);
-    let user = format!(
-        "Run the Crux core phases (2-3) of the vectis build for slice `{slice}`: \
+        // The core verify-repair loop crosses the write and test prompts
+        // (a cargo failure re-enters the writer), so one agent leg holds
+        // them together.
+        let system =
+            assemble(&["prompts/build.md", "prompts/build/core/write.md", "prompts/build/test.md"]);
+        let user = format!(
+            "Run the Crux core phases (2-3) of the vectis build for slice `{slice}`: \
          generate or update the shared core per the core write prompt, write the \
          Crux tests, then run the test prompt's core verify-repair loop yourself — \
          the cargo check / clippy / test commands run in the lent workspace; this \
          adapter cannot spawn them. Detect create vs update mode from the tree.\n\n\
          {scaffold_block}\n\n{REFERENCES_POINTER}\n\n{inputs_block}",
-    );
-    let core = phase::phase(model, ctx, system, user, "core").await?;
+        );
+        let core = phase::phase(model, ctx, system, user, "core").await?;
 
-    // The agent-immutable scaffold files are re-rendered
-    // deterministically before each write leg (repairing prior drift
-    // ahead of the leg's verify loop) and again after it.
-    let mut shell_outcomes: Vec<(&'static str, phase::PhaseAnswer)> = Vec::new();
-    let mut sync_notes: Vec<String> = Vec::new();
-    for shell in declared_shell_legs(&tree_root) {
-        if let Some(note) = sync_shell_scaffold(&tree_root, shell.name) {
-            sync_notes.push(note);
-        }
-        let system = assemble(&["prompts/build.md", shell.write_prompt]);
-        let user = format!(
-            "Run the {name} shell phase of the vectis build for slice `{slice}`: \
+        // The agent-immutable scaffold files are re-rendered
+        // deterministically before each write leg (repairing prior drift
+        // ahead of the leg's verify loop) and again after it.
+        let mut shell_outcomes: Vec<(&'static str, phase::PhaseAnswer)> = Vec::new();
+        let mut sync_notes: Vec<String> = Vec::new();
+        for shell in declared_shell_legs(&tree_root) {
+            if let Some(note) = sync_shell_scaffold(&tree_root, shell.name) {
+                sync_notes.push(note);
+            }
+            let system = assemble(&["prompts/build.md", shell.write_prompt]);
+            let user = format!(
+                "Run the {name} shell phase of the vectis build for slice `{slice}`: \
              generate or update the shell per the write prompt (the adapter already \
              scaffolded any absent declared tree deterministically — see below; do not \
              hand-write scaffold boilerplate), then run the write prompt's \
@@ -206,40 +222,41 @@ pub async fn build<P: Model>(
              nothing and answer with `applicable: false`; when a host prerequisite is \
              missing, stop per the prompt's deferred contract and report it in your \
              summary.\n\n{scaffold_block}\n\n{REFERENCES_POINTER}",
-            name = shell.name,
-        );
-        let answer = phase::phase(model, ctx, system, user, shell.name).await?;
-        shell_outcomes.push((shell.name, answer));
-        if let Some(note) = sync_shell_scaffold(&tree_root, shell.name) {
-            sync_notes.push(note);
+                name = shell.name,
+            );
+            let answer = phase::phase(model, ctx, system, user, shell.name).await?;
+            shell_outcomes.push((shell.name, answer));
+            if let Some(note) = sync_shell_scaffold(&tree_root, shell.name) {
+                sync_notes.push(note);
+            }
         }
-    }
 
-    let mut review_prompts = vec!["prompts/build.md", "prompts/build/core/review.md"];
-    review_prompts.extend(declared_shell_legs(&tree_root).iter().map(|shell| shell.review_prompt));
-    let system = assemble(&review_prompts);
-    let user = format!(
-        "Run the review phases (6-7) of the vectis build for slice `{slice}`: spawn \
+        let mut review_prompts = vec!["prompts/build.md", "prompts/build/core/review.md"];
+        review_prompts
+            .extend(declared_shell_legs(&tree_root).iter().map(|shell| shell.review_prompt));
+        let system = assemble(&review_prompts);
+        let user = format!(
+            "Run the review phases (6-7) of the vectis build for slice `{slice}`: spawn \
          the core reviewer team and, for each in-scope shell, its platform reviewer \
          team per the review prompts (reviewers run in parallel), then run the build \
          prompt's `## § Consolidate review findings` and drive any remediation in the \
          lent workspace. {REFERENCES_POINTER}",
-    );
-    let review = phase::phase(model, ctx, system, user, "review").await?;
+        );
+        let review = phase::phase(model, ctx, system, user, "review").await?;
 
-    // The deterministic shell verify gate runs in-guest and feeds the
-    // report leg, gated by the derived answer schema.
-    let verify_block = render_verify_gate(&tree_root);
-    let sync_block = if sync_notes.is_empty() {
-        String::new()
-    } else {
-        format!("\n\nScaffold sync notes:\n{}", sync_notes.join("\n"))
-    };
-    let mut outcomes = vec![("composition", &composition), ("core", &core)];
-    outcomes.extend(shell_outcomes.iter().map(|(name, answer)| (*name, answer)));
-    outcomes.push(("review", &review));
-    let user = format!(
-        "Write the build report for slice `{slice}` per the build prompt's `## Build \
+        // The deterministic shell verify gate runs in-guest and feeds the
+        // report leg, gated by the derived answer schema.
+        let verify_block = render_verify_gate(&tree_root);
+        let sync_block = if sync_notes.is_empty() {
+            String::new()
+        } else {
+            format!("\n\nScaffold sync notes:\n{}", sync_notes.join("\n"))
+        };
+        let mut outcomes = vec![("composition", &composition), ("core", &core)];
+        outcomes.extend(shell_outcomes.iter().map(|(name, answer)| (*name, answer)));
+        outcomes.push(("review", &review));
+        let user = format!(
+            "Write the build report for slice `{slice}` per the build prompt's `## Build \
          report`. The adapter already ran the deterministic shell verify gate in-guest \
          — its findings are below and re-run after your answer; a missing or empty \
          tree for a supported declared platform forces `status: failure`, so repair \
@@ -252,75 +269,75 @@ pub async fn build<P: Model>(
          `ui-surface.screens` from the slice's own screen count.\n\n\
          {verify_block}{sync_block}\n\n\
          Phase outcomes:\n{}",
-        outcomes
-            .iter()
-            .map(|(name, answer)| phase::render_outcome(name, answer))
-            .collect::<Vec<_>>()
-            .join("\n"),
-    );
-    let report = phase::report(model, ctx, build_prompt.to_string(), user).await?;
+            outcomes
+                .iter()
+                .map(|(name, answer)| phase::render_outcome(name, answer))
+                .collect::<Vec<_>>()
+                .join("\n"),
+        );
+        let report = phase::report(model, ctx, build_prompt.to_string(), user).await?;
 
-    let mut report = gate_report(
-        model,
-        ctx,
-        build_prompt,
-        report,
-        &tree_root,
-        &slice_composition,
-        "build",
-        true,
-    )
-    .await?;
+        let mut report = gate_report(
+            model,
+            ctx,
+            build_prompt,
+            report,
+            &tree_root,
+            &slice_composition,
+            "build",
+            true,
+        )
+        .await?;
 
-    // Suggestion findings only — they ride the report but never fail
-    // it or trigger the repair leg.
-    let coherence = ui_surface_coherence(&report, &slice_composition);
-    report.findings.extend(coherence);
-    Ok(report)
-}
-
-/// Run one merge gate per the merge prompt, dispatched once per phase
-/// around the engine's deterministic core merge.
-///
-/// `preflight` is fully deterministic: the composition validator runs
-/// against the staged slice composition, and blocking findings park the
-/// merge with the slice still `built` — no judgment leg. `postflight`
-/// runs one judgment leg over the prompt's host cap-matrix
-/// re-verification (agent-run in the lent workspace, after the engine
-/// folded the slice's deltas — including `composition.yaml` — into the
-/// baseline), then the deterministic postlude re-runs the composition
-/// validator against the merged baseline
-/// (`.specify/specs/composition.yaml`) plus the report-coherence walk,
-/// with one bounded repair leg.
-///
-/// # Errors
-///
-/// As [`adapter::judgment`].
-pub async fn merge<P: Model>(
-    model: &P, ctx: &Context<'_>, slice: &str, phase: MergePhase, tree: &WorkingTree,
-) -> Result<Report, Error> {
-    let tree_root = ctx.tree_root(tree);
-    let merge_prompt = registry::body("prompts/merge.md");
-
-    if phase == MergePhase::Preflight {
-        // Deterministic gate: an invalid staged slice composition blocks
-        // the merge before the engine folds it, per the merge prompt.
-        let staged = tree_root.join(format!(".specify/slices/{slice}/composition.yaml"));
-        let staged_findings = validation_findings(&staged);
-        if staged_findings.is_empty() {
-            return Ok(Report::success());
-        }
-        return Ok(Report {
-            status: Status::Failure,
-            findings: staged_findings.into_iter().map(Finding::blocking).collect(),
-            outputs: Vec::new(),
-            ui_surface: None,
-        });
+        // Suggestion findings only — they ride the report but never fail
+        // it or trigger the repair leg.
+        let coherence = ui_surface_coherence(&report, &slice_composition);
+        report.findings.extend(coherence);
+        Ok(report)
     }
 
-    let baseline_composition = tree_root.join(".specify/specs/composition.yaml");
-    let user = format!(
-        "Run the postflight merge gate for slice `{slice}` (adapter `{}`). The engine \
+    /// Run one merge gate per the merge prompt, dispatched once per phase
+    /// around the engine's deterministic core merge.
+    ///
+    /// `preflight` is fully deterministic: the composition validator runs
+    /// against the staged slice composition, and blocking findings park the
+    /// merge with the slice still `built` — no judgment leg. `postflight`
+    /// runs one judgment leg over the prompt's host cap-matrix
+    /// re-verification (agent-run in the lent workspace, after the engine
+    /// folded the slice's deltas — including `composition.yaml` — into the
+    /// baseline), then the deterministic postlude re-runs the composition
+    /// validator against the merged baseline
+    /// (`.specify/specs/composition.yaml`) plus the report-coherence walk,
+    /// with one bounded repair leg.
+    ///
+    /// # Errors
+    ///
+    /// As [`adapter::judgment`].
+    async fn merge<P: Model>(
+        model: &P, ctx: &Context<'_>, slice: &str, phase: MergePhase, tree: &WorkingTree,
+    ) -> Result<Report, Error> {
+        let tree_root = ctx.tree_root(tree);
+        let merge_prompt = registry::body("prompts/merge.md");
+
+        if phase == MergePhase::Preflight {
+            // Deterministic gate: an invalid staged slice composition blocks
+            // the merge before the engine folds it, per the merge prompt.
+            let staged = tree_root.join(format!(".specify/slices/{slice}/composition.yaml"));
+            let staged_findings = validation_findings(&staged);
+            if staged_findings.is_empty() {
+                return Ok(Report::success());
+            }
+            return Ok(Report {
+                status: Status::Failure,
+                findings: staged_findings.into_iter().map(Finding::blocking).collect(),
+                outputs: Vec::new(),
+                ui_surface: None,
+            });
+        }
+
+        let baseline_composition = tree_root.join(".specify/specs/composition.yaml");
+        let user = format!(
+            "Run the postflight merge gate for slice `{slice}` (adapter `{}`). The engine \
          has already folded the slice's deltas — including its `composition.yaml` and \
          any operator-curated `tokens.yaml` / `assets.yaml` updates — into the \
          baseline and archived the slice. Run the merge prompt's `## Postflight — \
@@ -329,21 +346,22 @@ pub async fn merge<P: Model>(
          composition validator re-runs deterministically in-guest after your answer. \
          Any gate failure means `status: failure`. Answer with the report body. \
          {REFERENCES_POINTER}",
-        ctx.adapter_id,
-    );
-    let report = phase::report(model, ctx, merge_prompt.to_string(), user).await?;
+            ctx.adapter_id,
+        );
+        let report = phase::report(model, ctx, merge_prompt.to_string(), user).await?;
 
-    gate_report(
-        model,
-        ctx,
-        merge_prompt,
-        report,
-        &tree_root,
-        &baseline_composition,
-        "merge-postflight",
-        false,
-    )
-    .await
+        gate_report(
+            model,
+            ctx,
+            merge_prompt,
+            report,
+            &tree_root,
+            &baseline_composition,
+            "merge-postflight",
+            false,
+        )
+        .await
+    }
 }
 
 /// One per-shell write leg the declared platform set enables.

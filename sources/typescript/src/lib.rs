@@ -1,9 +1,14 @@
-//! The typescript source adapter: [`operations`] (survey / extract
-//! judgment legs) and [`registry`] (embedded prose). The wasm32-only
-//! `guest` module owns bindings and export glue.
+//! The typescript source adapter: [`Typescript`] (the `adapter::Source`
+//! implementor carrying the survey / extract judgment legs) and
+//! `registry` (embedded prose). The wasm32-only `guest` module is
+//! one `adapter::source!` invocation.
 
-pub mod operations;
-pub mod registry;
+mod operations;
+mod registry;
 
 #[cfg(target_arch = "wasm32")]
-mod guest;
+mod guest {
+    adapter::source!(crate::Typescript);
+}
+
+pub use operations::Typescript;

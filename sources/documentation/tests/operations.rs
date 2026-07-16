@@ -7,8 +7,8 @@ use std::path::Path;
 
 use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA};
 use adapter::seam::{Authority, ClaimKind, Context, Error, Lead};
-use adapter::{Format, MAX_REPAIRS, Request};
-use documentation::operations::{extract, survey};
+use adapter::{Format, MAX_REPAIRS, Request, Source as _};
+use documentation::Documentation;
 use testkit::{Harness, mcp_grants};
 
 fn ctx(mcp_url: Option<&str>) -> Context<'_> {
@@ -40,7 +40,7 @@ async fn survey_leg() {
         r#"{"leads":[{"lead":"password-reset","synopsis":"Reset flow.","topics":["identity"]}]}"#,
     ]);
 
-    let leads = survey(&model, &ctx(Some("http://references/mcp"))).await.unwrap();
+    let leads = Documentation::survey(&model, &ctx(Some("http://references/mcp"))).await.unwrap();
 
     assert_eq!(leads.len(), 1);
     assert_eq!(leads[0].lead, "password-reset");
@@ -74,7 +74,7 @@ async fn survey_repaired() {
         r#"{"leads":[{"lead":"password-reset","synopsis":"Reset flow."}]}"#,
     ]);
 
-    let leads = survey(&model, &ctx(None)).await.expect("repaired survey succeeds");
+    let leads = Documentation::survey(&model, &ctx(None)).await.expect("repaired survey succeeds");
 
     assert_eq!(leads.len(), 1);
     assert_eq!(leads[0].lead, "password-reset");
@@ -93,7 +93,7 @@ async fn survey_budget_exhausted() {
         [r#"{"leads":[{"lead":"still-bad","synopsis":"   "}]}"#; 1 + MAX_REPAIRS],
     );
 
-    let result = survey(&model, &ctx(None)).await;
+    let result = Documentation::survey(&model, &ctx(None)).await;
 
     match result {
         Err(Error::Internal(detail)) => {
@@ -108,7 +108,7 @@ async fn survey_budget_exhausted() {
 async fn survey_no_mcp_no_grant() {
     let model = Harness::answering([r#"{"leads":[]}"#]);
 
-    survey(&model, &ctx(None)).await.unwrap();
+    Documentation::survey(&model, &ctx(None)).await.unwrap();
 
     assert!(model.requests()[0].tools.is_empty(), "no URL means no reference grant");
 }
@@ -123,7 +123,8 @@ async fn extract_leg() {
             ]
         }"#]);
 
-    let evidence = extract(&model, &ctx(Some("http://references/mcp")), &lead()).await.unwrap();
+    let evidence =
+        Documentation::extract(&model, &ctx(Some("http://references/mcp")), &lead()).await.unwrap();
 
     assert_eq!(evidence.authority, Authority::Documentation);
     assert_eq!(evidence.claims.len(), 2);
@@ -159,7 +160,9 @@ async fn extract_repaired() {
         r#"{"authority":"documentation","claims":[{"kind":"requirement","id":"password-reset.request"}]}"#,
     ]);
 
-    let evidence = extract(&model, &ctx(None), &lead()).await.expect("repaired extract succeeds");
+    let evidence = Documentation::extract(&model, &ctx(None), &lead())
+        .await
+        .expect("repaired extract succeeds");
 
     assert_eq!(evidence.claims[0].id.as_deref(), Some("password-reset.request"));
     let requests = model.requests();
@@ -178,7 +181,7 @@ async fn extract_budget_exhausted() {
             1 + MAX_REPAIRS],
     );
 
-    let result = extract(&model, &ctx(None), &lead()).await;
+    let result = Documentation::extract(&model, &ctx(None), &lead()).await;
 
     match result {
         Err(Error::Internal(detail)) => {

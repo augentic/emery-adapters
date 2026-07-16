@@ -28,9 +28,6 @@ tiny-skia.workspace = true
 toml.workspace = true
 usvg.workspace = true
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-wasip3.workspace = true
-
 [build-dependencies]
 jsonschema.workspace = true
 prose.workspace = true

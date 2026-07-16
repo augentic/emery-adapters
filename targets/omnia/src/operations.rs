@@ -9,10 +9,11 @@
 
 use std::path::Path;
 
+use adapter::registry::Doc;
 use adapter::seam::{
     Context, Error, Finding, Input, MergePhase, Report, TargetMetadata, WorkingTree,
 };
-use adapter::{Model, phase};
+use adapter::{Model, Target, phase};
 
 use crate::registry;
 
@@ -22,52 +23,62 @@ const REFERENCES_POINTER: &str = "Every prompt, reference, and rule document thi
      served by the granted `omnia-references` MCP references (`list_docs` / `read_doc`, adapter-relative \
      paths like `references/guardrails.md`); fetch documents the prompts cite lazily from there.";
 
-/// Resolve-time `metadata`: no compatibility floor, no
-/// declared build inputs (omnia reads the working tree's `Cargo.toml`
-/// directly, not a slice-tree input), no platform capability.
-#[must_use]
-pub const fn metadata() -> TargetMetadata {
-    TargetMetadata {
-        specify_floor: None,
-        inputs: Vec::new(),
-        platforms: None,
+/// The omnia target adapter: Rust crates, tests, and guest scaffolding
+/// generated for Omnia deployments.
+#[derive(Clone, Copy, Debug)]
+pub struct Omnia;
+
+impl Target for Omnia {
+    const NAME: &'static str = "omnia";
+
+    /// Resolve-time `metadata`: no compatibility floor, no
+    /// declared build inputs (omnia reads the working tree's `Cargo.toml`
+    /// directly, not a slice-tree input), no platform capability.
+    fn metadata() -> TargetMetadata {
+        TargetMetadata {
+            specify_floor: None,
+            inputs: Vec::new(),
+            platforms: None,
+        }
     }
-}
 
-/// The embedded guidance prompt (no judgment leg).
-#[must_use]
-pub fn guidance() -> &'static str {
-    registry::body("prompts/guidance.md")
-}
+    fn docs() -> &'static [Doc] {
+        registry::docs()
+    }
 
-/// Build a slice's crate, tests, and guest scaffolding.
-///
-/// A generation leg, a review leg, a replay leg (self-skipping when no
-/// `captures` source is bound), a report leg, then the
-/// report-coherence gate with one bounded repair leg.
-///
-/// # Errors
-///
-/// As [`adapter::judgment`].
-pub async fn build<P: Model>(
-    model: &P, ctx: &Context<'_>, slice: &str, inputs: &[Input], tree: &WorkingTree,
-) -> Result<Report, Error> {
-    let tree_root = ctx.tree_root(tree);
-    let inputs_block = phase::render_inputs(inputs);
-    let build_prompt = registry::body("prompts/build.md");
+    /// The embedded guidance prompt (no judgment leg).
+    fn guidance() -> &'static str {
+        registry::body("prompts/guidance.md")
+    }
 
-    // The writer prompts ride in one system channel because the
-    // verify-repair loop crosses all three: a cargo failure re-enters
-    // the owning writer prompt, so one agent leg must hold them together.
-    let system = assemble(&[
-        "prompts/build.md",
-        "prompts/guidance.md",
-        "prompts/build/crate.md",
-        "prompts/build/test.md",
-        "prompts/build/guest.md",
-    ]);
-    let user = format!(
-        "Run the generation leg of the omnia build for slice `{slice}` \
+    /// Build a slice's crate, tests, and guest scaffolding.
+    ///
+    /// A generation leg, a review leg, a replay leg (self-skipping when no
+    /// `captures` source is bound), a report leg, then the
+    /// report-coherence gate with one bounded repair leg.
+    ///
+    /// # Errors
+    ///
+    /// As [`adapter::judgment`].
+    async fn build<P: Model>(
+        model: &P, ctx: &Context<'_>, slice: &str, inputs: &[Input], tree: &WorkingTree,
+    ) -> Result<Report, Error> {
+        let tree_root = ctx.tree_root(tree);
+        let inputs_block = phase::render_inputs(inputs);
+        let build_prompt = registry::body("prompts/build.md");
+
+        // The writer prompts ride in one system channel because the
+        // verify-repair loop crosses all three: a cargo failure re-enters
+        // the owning writer prompt, so one agent leg must hold them together.
+        let system = assemble(&[
+            "prompts/build.md",
+            "prompts/guidance.md",
+            "prompts/build/crate.md",
+            "prompts/build/test.md",
+            "prompts/build/guest.md",
+        ]);
+        let user = format!(
+            "Run the generation leg of the omnia build for slice `{slice}` \
          (adapter `{}`).\n\n\
          The project workspace is lent to you. Detect create vs update mode per the \
          build prompt's `## Mode detection`, follow the crate-writer, test-writer, and \
@@ -75,36 +86,36 @@ pub async fn build<P: Model>(
          `## § Verify-repair loop` yourself — the cargo / clippy / test commands run \
          in the lent workspace; this adapter cannot spawn them. {REFERENCES_POINTER}\n\n\
          {inputs_block}",
-        ctx.adapter_id,
-    );
-    let generation = phase::phase(model, ctx, system, user, "generation").await?;
+            ctx.adapter_id,
+        );
+        let generation = phase::phase(model, ctx, system, user, "generation").await?;
 
-    // The review remediation cycle may re-enter the writer prompts and
-    // the verify-repair loop with tighter caps.
-    let system = assemble(&["prompts/build.md", "prompts/build/review.md"]);
-    let user = format!(
-        "Run the standards-review leg of the omnia build for slice `{slice}`: \
+        // The review remediation cycle may re-enter the writer prompts and
+        // the verify-repair loop with tighter caps.
+        let system = assemble(&["prompts/build.md", "prompts/build/review.md"]);
+        let user = format!(
+            "Run the standards-review leg of the omnia build for slice `{slice}`: \
          spawn the review team per the review prompt, synthesise `REVIEW.md`, and \
          drive the remediation cycle — re-running the verify-repair loop's cargo \
          commands in the lent workspace where the review prompt calls for it. \
          {REFERENCES_POINTER}",
-    );
-    let review = phase::phase(model, ctx, system, user, "review").await?;
+        );
+        let review = phase::phase(model, ctx, system, user, "review").await?;
 
-    // Only the workspace knows whether a `captures` source is bound,
-    // so the leg judges applicability itself and self-skips.
-    let system = assemble(&["prompts/build.md", "prompts/build/replay.md"]);
-    let user = format!(
-        "Run the capture-replay leg of the omnia build for slice `{slice}`. \
+        // Only the workspace knows whether a `captures` source is bound,
+        // so the leg judges applicability itself and self-skips.
+        let system = assemble(&["prompts/build.md", "prompts/build/replay.md"]);
+        let user = format!(
+            "Run the capture-replay leg of the omnia build for slice `{slice}`. \
          When the slice has no `captures` source binding in `plan.yaml`, write \
          nothing and answer with `applicable: false` — omission when unbound is not \
          an error. {REFERENCES_POINTER}",
-    );
-    let replay = phase::phase(model, ctx, system, user, "replay").await?;
+        );
+        let replay = phase::phase(model, ctx, system, user, "replay").await?;
 
-    // Report answer, gated by the answer schema.
-    let user = format!(
-        "Write the build report for slice `{slice}` per the build prompt's \
+        // Report answer, gated by the answer schema.
+        let user = format!(
+            "Write the build report for slice `{slice}` per the build prompt's \
          `## Build report`. First mark the completed `tasks.md` checkboxes in the \
          slice directory per the build prompt. A `success` report carries only non-blocking \
          findings; an exhausted verify-repair budget or unresolved blocking review \
@@ -112,52 +123,53 @@ pub async fn build<P: Model>(
          guest scaffolding, when this build wrote it) as `platform: core` outputs \
          with paths relative to the project root.\n\n\
          Phase outcomes:\n{}",
-        [("generation", &generation), ("review", &review), ("replay", &replay)]
-            .map(|(name, answer)| phase::render_outcome(name, answer))
-            .join("\n"),
-    );
-    let report = phase::report(model, ctx, build_prompt.to_string(), user).await?;
+            [("generation", &generation), ("review", &review), ("replay", &replay)]
+                .map(|(name, answer)| phase::render_outcome(name, answer))
+                .join("\n"),
+        );
+        let report = phase::report(model, ctx, build_prompt.to_string(), user).await?;
 
-    gate_report(model, ctx, build_prompt, report, &tree_root, "build").await
-}
-
-/// Gate a built slice's landing on the merge prompt's preflight
-/// verification, dispatched once per merge phase around the engine's
-/// deterministic core merge.
-///
-/// `preflight` runs one judgment leg over the merge prompt's § Omnia
-/// pre-merge gate (agent-run cargo / clippy / test / wasm32 in the lent
-/// workspace, where the build already wrote the slice's code in place),
-/// then the report-coherence gate runs in core. Omnia declares no
-/// merged-baseline validator, so `postflight` answers a clean success
-/// report deterministically — no judgment leg.
-///
-/// # Errors
-///
-/// As [`adapter::judgment`].
-pub async fn merge<P: Model>(
-    model: &P, ctx: &Context<'_>, slice: &str, phase: MergePhase, tree: &WorkingTree,
-) -> Result<Report, Error> {
-    if phase == MergePhase::Postflight {
-        return Ok(Report::success());
+        gate_report(model, ctx, build_prompt, report, &tree_root, "build").await
     }
 
-    let tree_root = ctx.tree_root(tree);
-    let merge_prompt = registry::body("prompts/merge.md");
+    /// Gate a built slice's landing on the merge prompt's preflight
+    /// verification, dispatched once per merge phase around the engine's
+    /// deterministic core merge.
+    ///
+    /// `preflight` runs one judgment leg over the merge prompt's § Omnia
+    /// pre-merge gate (agent-run cargo / clippy / test / wasm32 in the lent
+    /// workspace, where the build already wrote the slice's code in place),
+    /// then the report-coherence gate runs in core. Omnia declares no
+    /// merged-baseline validator, so `postflight` answers a clean success
+    /// report deterministically — no judgment leg.
+    ///
+    /// # Errors
+    ///
+    /// As [`adapter::judgment`].
+    async fn merge<P: Model>(
+        model: &P, ctx: &Context<'_>, slice: &str, phase: MergePhase, tree: &WorkingTree,
+    ) -> Result<Report, Error> {
+        if phase == MergePhase::Postflight {
+            return Ok(Report::success());
+        }
 
-    let user = format!(
-        "Run the preflight merge gate for slice `{slice}` (adapter `{}`). The project \
+        let tree_root = ctx.tree_root(tree);
+        let merge_prompt = registry::body("prompts/merge.md");
+
+        let user = format!(
+            "Run the preflight merge gate for slice `{slice}` (adapter `{}`). The project \
          workspace is lent to you; the build already wrote the slice's code in place, \
          and the engine folds the slice's spec deltas only after this gate passes. Run \
          the merge prompt's `## § Omnia pre-merge gate` yourself — the cargo / clippy \
          / test / wasm32-wasip2 commands run in the lent workspace; this adapter \
          cannot spawn them. Any gate failure means `status: failure`. Answer with the \
          report body. {REFERENCES_POINTER}",
-        ctx.adapter_id,
-    );
-    let report = phase::report(model, ctx, merge_prompt.to_string(), user).await?;
+            ctx.adapter_id,
+        );
+        let report = phase::report(model, ctx, merge_prompt.to_string(), user).await?;
 
-    gate_report(model, ctx, merge_prompt, report, &tree_root, "merge-preflight").await
+        gate_report(model, ctx, merge_prompt, report, &tree_root, "merge-preflight").await
+    }
 }
 
 fn assemble(prompts: &[&str]) -> String {

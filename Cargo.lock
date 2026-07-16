@@ -420,7 +420,6 @@ dependencies = [
  "prose",
  "testkit",
  "tokio",
- "wasip3",
 ]
 
 [[package]]
@@ -610,7 +609,6 @@ dependencies = [
  "tempfile",
  "testkit",
  "tokio",
- "wasip3",
 ]
 
 [[package]]
@@ -1015,7 +1013,6 @@ dependencies = [
  "prose",
  "testkit",
  "tokio",
- "wasip3",
 ]
 
 [[package]]
@@ -1784,7 +1781,6 @@ dependencies = [
  "prose",
  "testkit",
  "tokio",
- "wasip3",
 ]
 
 [[package]]
@@ -2283,7 +2279,6 @@ dependencies = [
  "tempfile",
  "testkit",
  "tokio",
- "wasip3",
 ]
 
 [[package]]
@@ -3568,7 +3563,6 @@ dependencies = [
  "prose",
  "testkit",
  "tokio",
- "wasip3",
 ]
 
 [[package]]
@@ -4413,7 +4407,6 @@ dependencies = [
  "prose",
  "testkit",
  "tokio",
- "wasip3",
 ]
 
 [[package]]
@@ -4556,7 +4549,6 @@ dependencies = [
  "tokio",
  "toml",
  "usvg",
- "wasip3",
 ]
 
 [[package]]
