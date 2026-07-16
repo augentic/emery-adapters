@@ -1,14 +1,9 @@
-//! Model-free parity coverage of the shared change-trial inputs: the
-//! checked-in `examples/change/trial.env` means the same thing to the
-//! native trial's Rust parser and to the wasm task's shell `source`,
-//! and both rungs' seed is the one shared tree.
+//! Trial input parity between the Rust parser and shell `source`.
 
 use std::process::Command;
 
 use eval::inputs::{self, TrialInputs};
 
-/// The checked-in definition parses, and the `source` binding points
-/// at a populated directory inside the shared seed tree.
 #[test]
 fn checked_in_definition() {
     let inputs = TrialInputs::load().expect("trial.env parses");
@@ -26,8 +21,6 @@ fn checked_in_definition() {
     assert!(populated, "shared seed {} holds the surveyed docs", seed.display());
 }
 
-/// Shell parity: `source`-ing the file yields exactly the values the
-/// Rust parser reads, so the two rungs cannot drift.
 #[test]
 fn shell_parity() {
     let inputs = TrialInputs::load().expect("trial.env parses");
@@ -53,8 +46,6 @@ fn shell_parity() {
     );
 }
 
-/// The parser refuses anything outside the documented sourceable
-/// subset, so a value the shell would reinterpret never parses.
 mod refusals {
     use super::*;
 

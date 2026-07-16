@@ -26,8 +26,6 @@ impl NormalizeReport {
 
 /// Flatten no-op clips and bake group opacity into path-level alpha.
 ///
-/// Returns `Ok(None)` when the tree is already export-clean.
-///
 /// # Errors
 ///
 /// Returns a human-readable message when the SVG uses unsupported constructs

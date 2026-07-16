@@ -1,8 +1,4 @@
-//! Model-free coverage of the prompt-scenario runner's deterministic
-//! parts: the committed scenario set parses and validates through the
-//! same `eval::scenario` gate the runner applies before spending a
-//! model request, plus the artifact-exists gate, run-directory
-//! allocation, and outcome persistence.
+//! Model-free scenario runner gates: config, artifacts, run dirs, outcomes.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -23,8 +19,6 @@ fn report(status: BuildStatus) -> BuildReport {
     }
 }
 
-/// Every committed scenario parses and validates through the shared
-/// gate — the wiring smoke `specify-dev eval scenario` relies on.
 #[test]
 fn wiring() {
     let root = scenario::scenarios_dir();
@@ -47,7 +41,6 @@ fn wiring() {
     assert!(seen >= 6, "expected the committed scenario set, found {seen}");
 }
 
-/// Every `<adapter>/<name>` directory carrying a `scenario.toml`.
 fn scenario_dirs(root: &Path) -> Vec<PathBuf> {
     let mut dirs = Vec::new();
     for adapter in fs::read_dir(root).expect("scenarios root") {
@@ -66,7 +59,6 @@ fn scenario_dirs(root: &Path) -> Vec<PathBuf> {
     dirs
 }
 
-/// The config gate: malformed routing fails before a model request.
 mod config {
     use super::*;
 
@@ -145,7 +137,6 @@ mod config {
     }
 }
 
-/// The artifact-exists gate over the scratch tree.
 mod expected {
     use super::*;
 
@@ -211,7 +202,6 @@ mod expected {
     }
 }
 
-/// Run-directory allocation is collision-proof within one second.
 #[test]
 fn run_dirs_unique() {
     let tmp = TempDir::new().expect("tempdir");
@@ -221,9 +211,6 @@ fn run_dirs_unique() {
     assert!(first.is_dir() && second.is_dir());
 }
 
-/// Outcome persistence: `pass` is written only when the report and the
-/// artifact gate both pass; a satisfied-report/missing-artifact run
-/// persists `fail` and errors.
 mod outcome {
     use super::*;
 

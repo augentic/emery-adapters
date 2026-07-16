@@ -25,33 +25,6 @@ use super::shared::{composition_validator, parse_yaml_file};
 use crate::validate::ValidateMode;
 use crate::validate::error::VectisError;
 
-/// Validate `composition.yaml` as the lifecycle artifact. Five checks:
-///
-/// 1. **Schema validation** against the embedded composition schema.
-/// 2. **Structural-identity** for `component:` directives across both
-///    `screens` (baseline) and `delta.added` / `delta.modified`
-///    (change-local) shapes.
-/// 3. **Auto-invoke** sibling `tokens.yaml` / `assets.yaml` modes;
-///    their envelopes fold into `results: [{ mode, report }]` (the
-///    `validate all` shape).
-/// 4. **Cross-artifact reference resolution** — token and asset
-///    references resolved against the discovered manifests' id sets
-///    (see [`refs`]); unresolved references are errors.
-/// 5. **Catalog cross-reference** — every `component: <slug>` must
-///    resolve to a `confirmed` catalog entry; unused confirmed
-///    entries warn. Absent catalogs are silently skipped.
-///
-/// Full resolution of `maps_to` / `bind` / `event` / overlay
-/// `trigger` / navigation targets against `design.md` / `specs/` is
-/// deferred to a follow-on rule; the schema shape-checks them.
-///
-/// # Errors
-///
-/// Returns [`VectisError::InvalidProject`] when an explicitly supplied
-/// file is unreadable, and [`VectisError::Internal`] if the embedded
-/// schema fails to compile. With no `[path]` and no discoverable
-/// `composition.yaml` (a core-only project has none by design), the
-/// mode exits cleanly with a `skipped` envelope instead of erroring.
 pub(super) fn validate(path: Option<&Path>) -> Result<Value, VectisError> {
     let target =
         path.map_or_else(|| resolve_default_path(ValidateMode::Composition), Path::to_path_buf);

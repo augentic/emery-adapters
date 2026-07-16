@@ -1,6 +1,4 @@
-//! The native MCP reference shelves: one shelf per linked adapter,
-//! each nested at `/mcp/<name>` and serving the same `list_docs` /
-//! `read_doc` surface the wasm deployment exposes.
+//! Native MCP reference shelves — one per linked adapter.
 
 use axum::body::{Body, to_bytes};
 use axum::http::{Method, Request, StatusCode, header};
@@ -8,7 +6,6 @@ use eval::mcp;
 use serde_json::{Value, json};
 use tower::ServiceExt as _;
 
-/// Drive one JSON-RPC POST through the shelf router.
 async fn post(path: &str, message: &Value) -> (StatusCode, Value) {
     let request = Request::builder()
         .method(Method::POST)

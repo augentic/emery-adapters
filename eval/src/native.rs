@@ -1,19 +1,5 @@
-//! Native guest-side [`Model`] over a host-side [`WasiModelCtx`]
-//! backend — the eval harness's stand-in for the deployment
-//! boundary.
-//!
-//! [`Native`] performs off-`wasm32` what the guest default body and
-//! the host boundary perform together in a deployment: map the guest
-//! [`Request`] onto the `omnia:model/completion` wire shape, run the
-//! host request gate, hand the backend a [`ToolHost`] whose
-//! `local_path` is the project root when the guest asked for the
-//! workspace lend, and project the validated answer back to the guest
-//! [`Reply`]. The mapping mirrors the `wasm32` default body in
-//! `omnia-guest`; when that changes upstream, update this module.
-//!
-//! This file is a verbatim mirror of the engine eval crate's
-//! `native.rs` (`crates/eval/src/native.rs` in `augentic/specify`) —
-//! the first candidate for a shared eval core. Keep the two in sync.
+//! Guest-side [`Model`] over a host-side [`WasiModelCtx`] backend.
+//! Mirror of the engine eval crate's `native.rs` — keep the two in sync.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -23,8 +9,7 @@ use omnia_guest::model::{
 };
 use omnia_wasi_model::{DirEntry, FutureResult, Reference, ToolHost, VerifyReport, WasiModelCtx};
 
-/// A guest-side [`Model`] over a host-side backend, rooted at the
-/// project directory workspace lends resolve to.
+/// Guest-side [`Model`] over a host-side backend.
 #[derive(Clone, Debug)]
 pub struct Native<B> {
     backend: B,
@@ -32,10 +17,7 @@ pub struct Native<B> {
 }
 
 impl<B> Native<B> {
-    /// Wrap `backend` with `workspace` behind the lend: a request
-    /// carrying `lend_workspace: true` resolves it as the tool host's
-    /// `local_path` — the native stand-in for the guest's `"."`
-    /// preopen.
+    /// Wrap `backend` with `workspace` behind the lend.
     pub fn new(backend: B, workspace: impl Into<PathBuf>) -> Self {
         Self {
             backend,
@@ -58,7 +40,6 @@ impl<B: WasiModelCtx> Model for Native<B> {
             .await
             .map_err(|error| Error::Backend(error.to_string()))?;
 
-        // The same answer gate + projection the host boundary applies.
         let reply = answer.project(&format).map_err(wire_error)?;
         Ok(Reply {
             answer: reply.answer,
@@ -71,10 +52,7 @@ impl<B: WasiModelCtx> Model for Native<B> {
     }
 }
 
-// Guest request -> the `omnia:model/completion` wire request, the same
-// mapping the `wasm32` default body performs at the WIT boundary. The
-// lent workspace never crosses as a wire grant (`grants.workspace` is
-// host plumbing); the backend resolves the tree through the tool host.
+// The lent workspace never crosses as a wire grant; the backend resolves it through the tool host.
 fn wire_request(request: Request) -> omnia_wasi_model::Request {
     omnia_wasi_model::Request {
         model: request.model,
@@ -152,9 +130,7 @@ fn wire_error(error: omnia_wasi_model::Error) -> Error {
     }
 }
 
-// Minimal per-completion tool host: cursor-agent only reads
-// `local_path`; the bounded-capability methods refuse, as no capability
-// tables exist off `wasm32`.
+// cursor-agent only reads `local_path`; bounded-capability methods refuse off `wasm32`.
 struct LocalToolHost {
     workspace: Option<PathBuf>,
 }

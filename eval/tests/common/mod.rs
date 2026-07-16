@@ -1,5 +1,4 @@
-//! Shared support for the native harness suites: a throw-away project
-//! tree with a hermetic project cache.
+//! Shared throw-away project tree for native harness suites.
 
 use std::fs;
 use std::path::PathBuf;
@@ -7,8 +6,7 @@ use std::path::PathBuf;
 use eval::env::CacheGuard;
 use tempfile::TempDir;
 
-/// An initialised throw-away project bound to the `omnia` target, with
-/// the adapter cache pinned inside the tempdir.
+/// Initialised throw-away project bound to `omnia`.
 pub struct Project {
     _tmp: TempDir,
     _cache: CacheGuard,
@@ -16,8 +14,7 @@ pub struct Project {
 }
 
 impl Project {
-    /// Scaffold the tree: `.specify/{slices,specs}`, `project.yaml`
-    /// bound to the linked `omnia` adapter.
+    /// Scaffold `.specify/` and `project.yaml`.
     pub fn new() -> Self {
         let tmp = TempDir::new().expect("tempdir");
         let root = tmp.path().canonicalize().expect("canonical tempdir");

@@ -10,16 +10,6 @@ use super::shared::tokens_validator;
 use crate::validate::ValidateMode;
 use crate::validate::error::VectisError;
 
-/// Validate `tokens.yaml` against the embedded tokens schema.
-///
-/// Path resolution: the explicit `[path]` positional, else the
-/// `artifacts.tokens` cascade (see [`super::paths`]).
-///
-/// # Errors
-///
-/// Returns [`VectisError::InvalidProject`] when the resolved file is
-/// unreadable, and [`VectisError::Internal`] if the embedded schema
-/// fails to compile.
 pub(super) fn validate(path: Option<&Path>) -> Result<Value, VectisError> {
     let target = path.map_or_else(|| resolve_default_path(ValidateMode::Tokens), Path::to_path_buf);
 

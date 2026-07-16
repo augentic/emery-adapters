@@ -60,8 +60,6 @@ pub fn collect_auto_pins(materialized: &[Value], assets: &Map<String, Value>) ->
 }
 
 /// Merge auto-written pins into the in-memory `assets.yaml` document.
-///
-/// Existing pins are never overwritten (Resolved §6).
 pub fn apply_auto_pins(instance: &mut Value, pins: &[AutoPin]) {
     let Some(assets) = instance.get_mut("assets").and_then(Value::as_object_mut) else {
         return;
@@ -83,7 +81,6 @@ pub fn apply_auto_pins(instance: &mut Value, pins: &[AutoPin]) {
 /// Serialise `instance` as YAML with a guaranteed trailing newline.
 ///
 /// # Errors
-///
 /// Returns [`VectisError::Internal`] when serialisation fails.
 pub fn serialise_yaml(instance: &Value) -> Result<String, VectisError> {
     let mut content = serde_saphyr::to_string(instance).map_err(|err| VectisError::Internal {
@@ -98,7 +95,6 @@ pub fn serialise_yaml(instance: &Value) -> Result<String, VectisError> {
 /// Atomically persist YAML at `path` (temp file in the same parent, then rename).
 ///
 /// # Errors
-///
 /// Returns [`VectisError::Io`] or [`VectisError::InvalidProject`] on write failure.
 pub fn atomic_yaml_write(path: &Path, content: &str) -> Result<(), VectisError> {
     atomic_bytes_write(path, content.as_bytes())

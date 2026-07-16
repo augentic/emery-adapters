@@ -1,25 +1,7 @@
 //! Omnia `runtime!` host for the wasm change example.
 //!
-//! Binds the live cursor backend behind `wasi-model`: command mode drives
-//! the deployed `specify:core` component's `wasi:cli/run` export once per
-//! verb and exits with its status, while the HTTP trigger serves each
-//! adapter guest's MCP reference route in the background for the spawned
-//! `cursor-agent`. Run through the root `cargo make change-*` tasks (see
-//! [`README.md`](README.md)), or by hand:
-//!
-//! ```text
-//! cargo run -p change-example -- run --config examples/change/omnia.toml -- <specify args>
-//! ```
-//!
-//! Requires `cursor-agent` on `PATH`, authenticated via `CURSOR_API_KEY` or a
-//! prior `cursor-agent login`.
-//!
-//! `SPECIFY_EVAL_MODEL=<model-id>` overrides the model for the run: the
-//! driver fills `Request.model` with the id only when the guest left it
-//! `None`, letting authors iterate on a fast model. The override is wholly
-//! driver-side — it never enters a guest or the WIT contract, and the cursor
-//! backend itself stays free of environment configuration. Unset or blank
-//! means no override: requests pass through untouched.
+//! Command mode drives `specify:core`; HTTP serves adapter MCP routes for
+//! `cursor-agent`. See [`README.md`](README.md) or `cargo make change-*`.
 
 cfg_if::cfg_if! {
     if #[cfg(not(target_arch = "wasm32"))] {
@@ -33,10 +15,6 @@ cfg_if::cfg_if! {
             Answer, FutureResult, Request, ToolHost, WasiModel, WasiModelCtx,
         };
 
-        /// Driver-side model decorator around the cursor backend: fills
-        /// `Request.model` from `SPECIFY_EVAL_MODEL` when the guest left it
-        /// `None`, then delegates. Without an override every request passes
-        /// through untouched.
         #[derive(Clone, Debug)]
         struct EvalModel {
             inner: Cursor,
@@ -51,8 +29,6 @@ cfg_if::cfg_if! {
             }
         }
 
-        /// Connection options for [`EvalModel`]: the optional model-id
-        /// override, read once from `SPECIFY_EVAL_MODEL`.
         #[derive(Clone, Debug)]
         struct EvalModelOptions {
             model: Option<String>,
@@ -64,13 +40,7 @@ cfg_if::cfg_if! {
             }
         }
 
-        /// Appended as the prompt's closing system message: keeps the
-        /// spawned agent's turn terse so the terminal result the cursor
-        /// backend isolates is the bare answer, not narration the answer
-        /// gate has to reject. Completions are never replayed here — a
-        /// judgment leg may already have changed the workspace, so an
-        /// invalid answer must surface as a visible failure, with repair
-        /// accounting owned by the guest's judgment kernel.
+        // Appended so the cursor backend isolates bare JSON, not narration.
         const OUTPUT_DISCIPLINE: &str = "Critical output discipline: work silently. Never send \
              progress or explanation messages while you work — use tools without commentary. \
              Your one and only message must be the final answer: a single JSON value with no \
@@ -87,13 +57,10 @@ cfg_if::cfg_if! {
             }
         }
 
-        /// Normalize the raw override value: unset or blank means none.
         fn parse_override(raw: Option<String>) -> Option<String> {
             raw.filter(|id| !id.trim().is_empty())
         }
 
-        /// Fill the request's model from the driver override only when the
-        /// guest left it `None`; a guest-supplied id always wins.
         fn override_model(model: Option<String>, fallback: Option<&str>) -> Option<String> {
             model.or_else(|| fallback.map(str::to_owned))
         }

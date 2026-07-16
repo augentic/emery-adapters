@@ -21,7 +21,6 @@ const IC_LAUNCHER_ROUND_XML: &str =
 /// Write the adaptive + legacy mipmap tree under an Android app-icon export root.
 ///
 /// # Errors
-///
 /// Returns a human-readable message when directory creation or file writes fail.
 pub fn write_android_export(
     canvas: &RgbaImage, background_hex: &str, export_root: &Path,

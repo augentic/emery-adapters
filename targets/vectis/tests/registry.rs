@@ -1,5 +1,4 @@
-//! The embedded prose registry: coverage across all three trees,
-//! nested build prompts, ordering, and symlink resolution.
+//! Embedded prose registry coverage and symlink resolution.
 
 use adapter::Target as _;
 use adapter::registry::{body, find};
@@ -35,11 +34,6 @@ fn embeds_all_trees() {
     assert!(body(Vectis::docs(), "prompts/build.md").starts_with("# Vectis target — build prompt"));
 }
 
-/// The vectis prose references is the largest in the repo: 68 markdown files
-/// (~600 KB) across `prompts/` (with its nested per-platform build
-/// sub-trees), `references/`, and `rules/` must all embed. The floor
-/// guards against a silently truncated walk without pinning the exact
-/// prose inventory.
 #[test]
 fn embed_floor() {
     let docs = Vectis::docs();
@@ -48,10 +42,6 @@ fn embed_floor() {
     assert!(total >= 550 * 1024, "expected >= 550 KiB of embedded prose, got {total} bytes");
 }
 
-/// The `references/spec-runtime` and `references/agent-teams.md`
-/// symlinks into `codex/references/runtime/` are resolved at build
-/// time: documents appear under their symlink-name paths with the
-/// shared content inlined.
 #[test]
 fn symlinks_resolved_inline() {
     let doc = find(Vectis::docs(), "references/spec-runtime/phase-outcome-contract.md")

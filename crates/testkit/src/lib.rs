@@ -1,12 +1,4 @@
-//! Dev-only test support for the adapter suites — the adapters
-//! counterpart of the engine's `testkit` crate.
-//!
-//! Owns the request-side assertions the adapter operation tests make
-//! against their judgment legs: [`Harness`], the recording [`Model`]
-//! decorator (typically over `omnia_testkit::model::Scripted`), and
-//! [`mcp_grants`], the reference-grant projection. Upstream
-//! `omnia-testkit` owns the generic scripted double; the recording
-//! seam lives here with the suites that assert on it.
+//! Dev-only test support: request-recording [`Harness`] and [`mcp_grants`].
 
 #![cfg(not(target_arch = "wasm32"))]
 

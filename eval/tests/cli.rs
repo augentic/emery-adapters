@@ -1,7 +1,4 @@
-//! CLI-mode project anchoring: the shim-global `--project-dir` flag
-//! (both spellings) anchors every workflow verb at the named project
-//! root — the CLI counterpart of serve mode's flag — so the binary can
-//! run from any working directory.
+//! CLI `--project-dir` anchoring from any working directory.
 
 mod common;
 
@@ -10,7 +7,6 @@ use std::process::{Command, Output};
 
 use tempfile::TempDir;
 
-/// Spawn the built `specify-dev` from `cwd` with `args`.
 fn run_from(cwd: &Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_specify-dev"))
         .current_dir(cwd)

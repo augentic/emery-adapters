@@ -23,20 +23,11 @@ pub fn emit() {
     }
 }
 
-/// Walk `<adapter_root>/prose/` and write the sorted `DOCS` table to
-/// `<out_dir>/registry_docs.rs`, printing `cargo:rerun-if-changed` for
-/// every directory and document walked.
-///
-/// The embed set is discovered from disk, not declared by the caller:
-/// every markdown document under `prose/` is embedded, keyed by its
-/// `prose/`-relative path.
+/// Walk `<adapter_root>/prose/` and write the sorted `DOCS` table to `<out_dir>/registry_docs.rs`.
 ///
 /// # Errors
 ///
-/// Returns a rendered message when the `prose/` tree is missing or holds
-/// no markdown documents, when it cannot be walked (including a dangling
-/// symlink), or when the generated file cannot be written — the caller
-/// (a `build.rs`) should fail the build with it.
+/// Returns a rendered message when the tree is missing, empty, unwalkable, or unwritable.
 pub fn emit_from(adapter_root: &Path, out_dir: &Path) -> Result<(), String> {
     let root = adapter_root.join("prose");
     let mut docs: Vec<(String, PathBuf)> = Vec::new();
@@ -67,8 +58,7 @@ pub fn emit_from(adapter_root: &Path, out_dir: &Path) -> Result<(), String> {
     fs::write(out_dir.join("registry_docs.rs"), out).map_err(|err| err.to_string())
 }
 
-// Collect every `.md` file under `dir` as `(adapter-relative path,
-// resolved absolute path)`, descending through directory symlinks.
+// Collect `.md` files under `dir`, following directory symlinks.
 fn walk(dir: &Path, rel: &str, docs: &mut Vec<(String, PathBuf)>) -> Result<(), String> {
     println!("cargo:rerun-if-changed={}", dir.display());
     let entries = fs::read_dir(dir).map_err(|err| format!("read {}: {err}", dir.display()))?;
@@ -77,8 +67,7 @@ fn walk(dir: &Path, rel: &str, docs: &mut Vec<(String, PathBuf)>) -> Result<(), 
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().into_owned();
         let child_rel = if rel.is_empty() { name } else { format!("{rel}/{name}") };
-        // `metadata` follows symlinks; a dangling link errors here, failing
-        // the build as the registry contract requires.
+        // Dangling symlinks fail the build per the registry contract.
         let metadata = fs::metadata(&path)
             .map_err(|err| format!("resolve {} (dangling symlink?): {err}", path.display()))?;
         if metadata.is_dir() {

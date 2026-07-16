@@ -1,12 +1,4 @@
-//! Native-only catalog of adapter crates linked into `specify-dev`.
-//!
-//! Each first-party adapter implements its axis operations trait
-//! (`adapter::Source` / `adapter::Target`), so the catalog is a typed
-//! table — one [`Entry::source`] / [`Entry::target`] constructor per
-//! adapter — and the per-operation dispatch functions the seam provider
-//! calls are compile-checked trait calls. Adding an adapter is one
-//! entry, one dispatch leg per operation, and its Cargo path
-//! dependency.
+//! Linked first-party adapter crates and compile-checked operation dispatch.
 
 use std::sync::LazyLock;
 
@@ -37,7 +29,6 @@ pub struct Entry {
 }
 
 impl Entry {
-    /// The catalog entry for one linked source implementor.
     fn source<A: Source>() -> Self {
         Self {
             axis: Axis::Source,
@@ -48,7 +39,6 @@ impl Entry {
         }
     }
 
-    /// The catalog entry for one linked target implementor.
     fn target<A: Target>() -> Self {
         Self {
             axis: Axis::Target,
@@ -114,17 +104,14 @@ pub fn entries() -> &'static [Entry] {
     &ENTRIES
 }
 
-/// Whether `id` routes to the linked source implementor `A`.
 fn routes_source<A: Source>(id: &str) -> bool {
     id.strip_prefix("source:") == Some(A::NAME)
 }
 
-/// Whether `id` routes to the linked target implementor `A`.
 fn routes_target<A: Target>(id: &str) -> bool {
     id.strip_prefix("target:") == Some(A::NAME)
 }
 
-/// Dispatch `survey` to the linked source adapter behind `id`.
 pub(crate) async fn survey<M: Model>(
     model: &M, ctx: &Context<'_>, id: &str,
 ) -> Result<Vec<aseam::Lead>, aseam::Error> {
@@ -146,7 +133,6 @@ pub(crate) async fn survey<M: Model>(
     Err(unlinked(id))
 }
 
-/// Dispatch `extract` to the linked source adapter behind `id`.
 pub(crate) async fn extract<M: Model>(
     model: &M, ctx: &Context<'_>, id: &str, lead: &aseam::Lead,
 ) -> Result<aseam::Evidence, aseam::Error> {
@@ -168,7 +154,6 @@ pub(crate) async fn extract<M: Model>(
     Err(unlinked(id))
 }
 
-/// Serve the linked target adapter's embedded guidance prompt.
 pub(crate) fn guidance(id: &str) -> Result<&'static str, aseam::Error> {
     if routes_target::<Contracts>(id) {
         return Ok(Contracts::guidance());
@@ -182,7 +167,6 @@ pub(crate) fn guidance(id: &str) -> Result<&'static str, aseam::Error> {
     Err(unlinked(id))
 }
 
-/// Dispatch `build` to the linked target adapter behind `id`.
 pub(crate) async fn build<M: Model>(
     model: &M, ctx: &Context<'_>, id: &str, slice: &str, inputs: &[aseam::Input],
     tree: &aseam::WorkingTree,
@@ -199,7 +183,6 @@ pub(crate) async fn build<M: Model>(
     Err(unlinked(id))
 }
 
-/// Dispatch one `merge` gate to the linked target adapter behind `id`.
 pub(crate) async fn merge<M: Model>(
     model: &M, ctx: &Context<'_>, id: &str, slice: &str, phase: aseam::MergePhase,
     tree: &aseam::WorkingTree,
@@ -216,7 +199,6 @@ pub(crate) async fn merge<M: Model>(
     Err(unlinked(id))
 }
 
-/// A dispatch to an adapter id this shim does not link.
 fn unlinked(id: &str) -> aseam::Error {
     aseam::Error::InvalidRequest(format!("adapter `{id}` is not linked into the native shim"))
 }

@@ -1,5 +1,4 @@
-//! The prose codegen: tree discovery, ordering, symlink
-//! resolution, and failure modes.
+//! Prose codegen tests: discovery, ordering, symlinks, and failure modes.
 
 use std::fs;
 use std::path::Path;
@@ -47,9 +46,6 @@ fn sorted_doc_table() {
     assert!(generated.contains("pub static DOCS"), "table binds the DOCS static");
 }
 
-// The embed set is discovered from disk: any tree under `prose/` — and
-// any document directly at the `prose/` root — is embedded without being
-// declared anywhere.
 #[test]
 fn discovers_trees() {
     let adapter = TempDir::new().expect("adapter root");

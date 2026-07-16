@@ -1,36 +1,15 @@
-//! Rule-shape validation over every codex rule this repository authors:
-//! the shared `codex/rules/universal/` pack plus each adapter overlay
-//! (`{sources,targets}/<name>/prose/rules/`). Structural checks only —
-//! required frontmatter fields, the severity enum, id grammar, the
-//! `## Rule` body heading, id uniqueness across every tree, and
-//! namespace ownership. This test is the authoring gate in the repo
-//! that owns the rules; the adapters that embed them ship the files
-//! verbatim, so there is no downstream re-validation.
+//! Rule-shape validation for codex rules and adapter overlays.
 
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// The closed rule severity enum.
 const SEVERITIES: &[&str] = &["critical", "important", "suggestion", "optional"];
-
-/// Frontmatter fields every rule must carry.
 const REQUIRED_FIELDS: &[&str] = &["id", "title", "severity", "trigger"];
-
-/// Frontmatter fields the rule shape forbids: rules are prose read by
-/// review agents, not machine-matched lint definitions.
 const FORBIDDEN_FIELDS: &[&str] = &["rule_hints", "lint_mode"];
-
-/// Target-adapter namespace ownership: `targets/<name>/prose/rules/`
-/// may only mint ids under the owner's prefixes. Extend this map when
-/// a new target adapter grows an overlay.
 const TARGET_OWNERS: &[(&str, &[&str])] =
     &[("omnia", &["OMNIA", "RUST", "SEC"]), ("contracts", &["IFACE"]), ("vectis", &["VECTIS"])];
-
-/// Every source-adapter overlay shares the single `SRC` namespace.
 const SOURCE_PREFIXES: &[&str] = &["SRC"];
-
-/// Prefixes the shared universal pack owns.
 const UNIVERSAL_PREFIXES: &[&str] = &["UNI"];
 
 fn repo_root() -> PathBuf {
@@ -41,14 +20,11 @@ fn repo_root() -> PathBuf {
         .to_path_buf()
 }
 
-/// A rule tree to validate: the directory plus the prefixes it owns.
 struct RuleTree {
     dir: PathBuf,
     prefixes: &'static [&'static str],
 }
 
-/// Discover every rule tree in the checkout: the universal pack plus
-/// each `{sources,targets}/<name>/prose/rules/` overlay that exists.
 fn discover_trees(root: &Path, findings: &mut Vec<String>) -> Vec<RuleTree> {
     let mut trees = Vec::new();
     let universal = root.join("codex/rules/universal");
@@ -89,11 +65,7 @@ fn discover_trees(root: &Path, findings: &mut Vec<String>) -> Vec<RuleTree> {
     trees
 }
 
-/// Every markdown rule file in `dir`, recursively. `README.md`
-/// (case-insensitive) is an index page, never a rule. Symlinked
-/// subdirectories are skipped: the `rules/universal` embed links in
-/// each target overlay point back at `codex/rules/universal/`, which
-/// is already validated as its own tree with its own namespace.
+// Skip symlinked subdirs: `rules/universal` embeds point back at codex/universal.
 fn rule_files(dir: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
     let entries = fs::read_dir(dir)
@@ -119,9 +91,6 @@ fn rule_files(dir: &Path) -> Vec<PathBuf> {
     files
 }
 
-/// Split a rule document into its top-level frontmatter map and body.
-/// Only unindented `key:` lines register as fields; nested block content
-/// (lists, sub-maps) rides under the preceding key.
 fn parse_frontmatter(content: &str) -> Option<(BTreeMap<String, String>, &str)> {
     let rest = content.strip_prefix("---\n")?;
     let end = rest.find("\n---")?;
@@ -140,7 +109,6 @@ fn parse_frontmatter(content: &str) -> Option<(BTreeMap<String, String>, &str)> 
     Some((fields, body))
 }
 
-/// `PREFIX-NNN`: an owned prefix, a hyphen, exactly three digits.
 fn id_matches(id: &str, prefixes: &[&str]) -> bool {
     prefixes.iter().any(|prefix| {
         id.strip_prefix(prefix)
@@ -149,8 +117,6 @@ fn id_matches(id: &str, prefixes: &[&str]) -> bool {
     })
 }
 
-/// Validate every rule tree under `root`, returning human-readable
-/// findings (empty means the corpus is clean).
 fn check_rules(root: &Path) -> Vec<String> {
     let mut findings = Vec::new();
     let mut seen_ids: BTreeMap<String, String> = BTreeMap::new();
@@ -209,15 +175,12 @@ fn check_rules(root: &Path) -> Vec<String> {
     findings
 }
 
-/// The whole authored rule corpus is structurally clean.
 #[test]
 fn corpus_is_clean() {
     let findings = check_rules(&repo_root());
     assert!(findings.is_empty(), "rule-shape findings:\n{}", findings.join("\n"));
 }
 
-/// Each check fires on a known-bad fixture, so a silent pass cannot hide
-/// a broken walker or parser.
 #[test]
 fn fires_on_known_bad_fixture() {
     let root = tempfile::TempDir::new().expect("fixture root");

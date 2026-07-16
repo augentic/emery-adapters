@@ -7,12 +7,7 @@ use eval::model::DevModel;
 use eval::provider::Provider;
 use omnia_guest::api::invoke::Invoker;
 
-/// Split a leading shim-global `--project-dir <path>` /
-/// `--project-dir=<path>` off `argv` — the CLI-mode counterpart of
-/// serve mode's flag, so any verb can run against another project
-/// without changing directory. Only the option *before* the subcommand
-/// is the shim's; a per-verb `--project-dir` further right passes
-/// through to the shared router untouched.
+// Only the option before the subcommand is the shim's; later `--project-dir` passes through.
 fn take_project_dir(argv: &mut Vec<String>) -> Result<Option<PathBuf>, String> {
     let Some(first) = argv.get(1).cloned() else {
         return Ok(None);

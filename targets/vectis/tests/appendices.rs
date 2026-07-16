@@ -1,5 +1,4 @@
 //! Appendix C / D / E worked-example pins against the validation engine.
-
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
@@ -21,8 +20,6 @@ fn write_named(content: &str) -> NamedTempFile {
     file
 }
 
-/// Project tree in the canonical Specify layout:
-/// `<root>/design-system/assets.yaml` plus the referenced asset files.
 fn write_assets_project(yaml: &str, files: &[&str]) -> (TempDir, PathBuf) {
     let tmp = tempfile::tempdir().expect("tempdir");
     let design = tmp.path().join("design-system");
@@ -37,21 +34,13 @@ fn write_assets_project(yaml: &str, files: &[&str]) -> (TempDir, PathBuf) {
     (tmp, assets_path)
 }
 
-/// `.specify/specs/composition.yaml` under `project`, for the asset
-/// validator's sibling-discovery walk.
 fn write_specs_composition(project: &Path, yaml: &str) {
     let dir = project.join(".specify").join("specs");
     std::fs::create_dir_all(&dir).expect("mkdir .specify/specs");
     std::fs::write(dir.join("composition.yaml"), yaml).expect("write composition.yaml");
 }
 
-/// Appendix C verbatim. Pinned here as the happy-path schema fixture
-/// so any future drift surfaces in this test first. The example
-/// exercises the unwired subset end-to-end: regions, groups (one with
-/// `component: task-row`), items, token references, asset references,
-/// states with the `stateEntry.when` field (which is the bare `when:`
-/// -- not a `*-when` key -- and explicitly preserved), overlays
-/// without `trigger`, and a `platforms.{ios,android}` block.
+// Appendix C verbatim — pinned happy-path layout fixture.
 const APPENDIX_C_LAYOUT_YAML: &str = r#"version: 1
 
 provenance:
@@ -190,13 +179,7 @@ screens:
           title: Settings
 "#;
 
-/// Appendix D verbatim. Pinned here as an integration test so the
-/// embedded schema stays in lock-step with the worked example -- if a
-/// future drift breaks Appendix D, this is where the breakage surfaces
-/// first.
-//
-// Uses the `r##"..."##` raw-string delimiter so the embedded
-// `"#0066CC"` patterns don't close the literal early.
+// Appendix D verbatim — `r##"..."##` keeps embedded `"#0066CC"` literals intact.
 const APPENDIX_D_TOKENS_YAML: &str = r##"version: 1
 
 provenance:
@@ -294,8 +277,7 @@ opacity:
   scrim: 0.4
 "##;
 
-/// Appendix E verbatim. Pinned here as the happy-path schema fixture
-/// so any future drift surfaces first in this test.
+// Appendix E verbatim — pinned happy-path assets fixture.
 const APPENDIX_E_ASSETS_YAML: &str = r#"version: 1
 
 provenance:
@@ -360,9 +342,6 @@ assets:
     tint: on-primary
 "#;
 
-/// Files referenced by `APPENDIX_E_ASSETS_YAML`: every raster
-/// density, the canonical SVG source, and both vector exports. Pinned
-/// here so the happy-path test stays in lock-step with the fixture.
 const APPENDIX_E_FILES: &[&str] = &[
     "assets/empty-tasks-hero.png",
     "assets/empty-tasks-hero@2x.png",
@@ -376,10 +355,6 @@ const APPENDIX_E_FILES: &[&str] = &[
     "assets/android/brand-logo.xml",
 ];
 
-/// Appendix C validates cleanly in layout mode: the schema's
-/// `screens`-shape branch passes, no forbidden wiring keys are present,
-/// and the single `component: task-row` instance has nothing to compare
-/// against, so structural-identity is a no-op.
 #[test]
 fn appendix_c_validates() {
     let file = write_named(APPENDIX_C_LAYOUT_YAML);
@@ -392,7 +367,6 @@ fn appendix_c_validates() {
     );
 }
 
-/// Appendix D validates cleanly in tokens mode.
 #[test]
 fn appendix_d_validates() {
     let file = write_named(APPENDIX_D_TOKENS_YAML);
@@ -402,9 +376,6 @@ fn appendix_d_validates() {
     assert!(warnings_array(&envelope).is_empty(), "no warnings expected: {envelope}");
 }
 
-/// Appendix E validates errors-clean when paired with a composition
-/// referencing every declared asset id; the android side omits
-/// `xxxhdpi`, which surfaces as a warning, not an error.
 #[test]
 fn appendix_e_validates() {
     let (tmp, assets_path) = write_assets_project(APPENDIX_E_ASSETS_YAML, APPENDIX_E_FILES);

@@ -1,24 +1,4 @@
-//! The live-model trial body: the operator rhythm over the linked
-//! adapters, graded by deterministic validators only.
-//!
-//! The adapters mirror of the engine eval crate's `trial.rs` — the
-//! same phases over a persistent `sandbox/eval/` project, with real
-//! adapters in place of the fixture:
-//!
-//! ```text
-//! init        scaffold the contracts-bound project and seed the docs
-//! plan        plan author (documentation + intent) → Gate 1 approved
-//! execute     drain the loop: refine → build → merge per slice
-//! finalize    plan archive
-//! clean       remove the sandbox
-//! ```
-//!
-//! Every step runs the production verb through the shared typed
-//! command router over the native [`Provider`] — the same dispatch the
-//! `specify-dev` CLI serves — with the live cursor backend at the
-//! model seam. A full trial (`specify-dev eval` with no phase) runs
-//! every phase in order and removes the sandbox on success; a failing
-//! run keeps it for in-place review or per-phase re-runs.
+//! Live-model trial: the operator rhythm over linked adapters, graded deterministically.
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -39,7 +19,6 @@ use eval::scenario;
 use crate::grade;
 use crate::telemetry::Telemetry;
 
-/// `specify-dev eval` — the live-model trial's CLI face.
 #[derive(Debug, Parser)]
 #[command(name = "eval", about = "Run the live-model trial over sandbox/eval")]
 struct Args {
@@ -47,21 +26,13 @@ struct Args {
     phase: Option<Phase>,
 }
 
-/// One operation in the persistent manual evaluation workflow.
 #[derive(Clone, Debug, Subcommand)]
 enum Phase {
-    /// Scaffold the contracts-bound project and seed the docs.
     Init,
-    /// Author the change and stamp Gate 1 (`approved`).
     Plan,
-    /// Drain the plan: refine → build → merge per slice, then grade.
     Execute,
-    /// Archive the drained plan.
     Finalize,
-    /// Remove the sandbox.
     Clean,
-    /// Run one single-operation prompt scenario over a seeded scratch
-    /// tree (fast prompt iteration); no id lists the scenarios.
     Scenario {
         /// `<adapter>/<scenario>` under `eval/scenarios/`.
         id: Option<String>,
@@ -163,14 +134,10 @@ fn clean() -> Result<()> {
     Ok(())
 }
 
-/// Run one verb through the shared typed command router against a
-/// fresh provider anchored at `root`.
 async fn invoke(root: &Path, argv: &[&str]) -> Result<()> {
     invoke_with(&provider(root).await, argv).await
 }
 
-/// Run one verb through the shared typed command router against
-/// `provider`, streaming its output and failing on a non-zero exit.
 async fn invoke_with(provider: &Provider<Telemetry<DevModel>>, argv: &[&str]) -> Result<()> {
     eprintln!("==> specify {}", argv.join(" "));
     let router = transport::command::router(Invoker::new("specify", provider.clone()))
@@ -183,10 +150,6 @@ async fn invoke_with(provider: &Provider<Telemetry<DevModel>>, argv: &[&str]) ->
     Ok(())
 }
 
-/// A fresh live provider anchored at `root`: the lazily connected
-/// cursor backend behind the request tally, the linked-adapter
-/// catalog behind the seams, and the MCP shelves on an ephemeral
-/// listener when a port can be bound.
 async fn provider(root: &Path) -> Provider<Telemetry<DevModel>> {
     let mut provider = Provider::new(root, Telemetry::new(DevModel::new(root)));
     if let Some(base) = mcp::ephemeral_base().await {
@@ -217,9 +180,6 @@ fn require() -> Result<PathBuf> {
     root.canonicalize().context("canonical trial project root")
 }
 
-/// Copy the shared seed tree (`examples/change/seed/`) into the
-/// sandbox: the docs the `documentation` source binding points at,
-/// the same tree the wasm change example seeds.
 fn seed(root: &Path) -> Result<()> {
     evalfs::copy_tree(&eval::inputs::seed_dir(), root)
 }
@@ -228,14 +188,8 @@ fn read_plan(root: &Path) -> Result<Plan> {
     Plan::load(&Layout::new(root).plan_path()).context("loading plan.yaml")
 }
 
-/// Report per-leg request counts.
-///
-/// Requests beyond one per leg invocation are repairs — the early
-/// signal that a prompt or answer-schema change degraded the model's
-/// first answer. The engine legs carry an invocation baseline (one
-/// propose per trial, one synthesis per plan entry); adapter legs
-/// (survey, extract, the contracts sub-flows, reports) are reported
-/// raw — their invocation counts depend on the authored plan.
+// Requests beyond one per leg invocation are repairs — the early signal that a
+// prompt or answer-schema change degraded the model's first answer.
 fn report(counts: &std::collections::BTreeMap<String, usize>, slices: usize) {
     for (leg, requests) in counts {
         match leg.as_str() {

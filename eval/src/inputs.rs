@@ -1,20 +1,5 @@
-//! The shared change-trial inputs: one checked-in definition of the
-//! operator arguments both live rungs replay.
-//!
-//! [`examples/change/trial.env`] carries the project name, change
-//! name, source binding, and intent as shell-sourceable `KEY="value"`
-//! lines: the wasm change example's Cargo Make task `source`s it, and
-//! the native trial parses the same file here — so the two rungs
-//! cannot drift apart on what they ask the workflow to do. The seed
-//! tree is shared the same way: both rungs copy
-//! `examples/change/seed/` into their own sandbox.
-//!
-//! The parser accepts exactly the sourceable subset the file's header
-//! documents — blank lines, `#` comments, and double-quoted values
-//! free of shell expansion — and rejects anything else, so a value
-//! that would mean something different to `source` never parses here.
-//!
-//! [`examples/change/trial.env`]: ../../examples/change/trial.env
+//! Shared change-trial inputs from `examples/change/trial.env`.
+//! The wasm change example and the native trial parse the same file so they cannot drift.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -25,13 +10,13 @@ use anyhow::{Context as _, Result, bail, ensure};
 /// The operator inputs of one change trial.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TrialInputs {
-    /// The project name passed to `specify init --name`.
+    /// Passed to `specify init --name`.
     pub project_name: String,
-    /// The change name `plan author` and `plan transition` operate on.
+    /// Change name for `plan author` and `plan transition`.
     pub change: String,
     /// The `--source` binding (`<key>=<adapter>:<path>`).
     pub source: String,
-    /// The operator intent bound as the `intent` source.
+    /// Operator intent bound as the `intent` source.
     pub intent: String,
 }
 
@@ -52,9 +37,8 @@ impl TrialInputs {
     ///
     /// # Errors
     ///
-    /// Returns lines outside the documented subset, duplicate or
-    /// unknown keys, missing keys, and values a shell `source` would
-    /// interpret differently (expansion characters or inner quotes).
+    /// Returns lines outside the documented subset, duplicate or unknown keys,
+    /// missing keys, and values a shell `source` would interpret differently.
     pub fn parse(body: &str) -> Result<Self> {
         let mut values: BTreeMap<&str, String> = BTreeMap::new();
         for line in body.lines() {
@@ -104,8 +88,7 @@ pub fn path() -> PathBuf {
     examples_change().join("trial.env")
 }
 
-/// The shared seed tree both rungs copy into their sandbox
-/// (`examples/change/seed/`).
+/// The shared seed tree both rungs copy into their sandbox.
 #[must_use]
 pub fn seed_dir() -> PathBuf {
     examples_change().join("seed")

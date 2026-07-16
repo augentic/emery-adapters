@@ -1,20 +1,5 @@
-//! Composed-deployment tests hosting the built adapter guest components
-//! on the Omnia runtime — model-free by design.
-//!
-//! One smoke test deploys every adapter in a shared runtime and exercises
-//! the component-only seams: `metadata` / `guidance` through host-mediated
-//! dispatch, async-lifted judgment legs against the stub model backend
-//! (which must come back as the WIT error variant, not a trap), and each
-//! guest's MCP references over `wasi:http` on its own route. Keeping one
-//! test process avoids repeating the runtime's expensive, process-global
-//! telemetry initialization.
-//!
-//! The judgment legs themselves are covered natively in each adapter
-//! crate against Omnia's recorded scripted harness, and live against
-//! the cursor backend by the eval workspace's trial and prompt
-//! scenarios (`eval/`). The model backend here is a stub that fails
-//! every completion: these tests are model-free, so any completion is
-//! a test bug.
+//! Composed-deployment smoke tests over built adapter WASM guests — model-free.
+//! One shared runtime exercises metadata, guidance, async bridge legs, and MCP routes.
 
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -31,13 +16,9 @@ use omnia_wasi_model::{
     Answer, FutureResult, HasModel, Request, ToolHost, WasiModel, WasiModelCtx,
 };
 
-/// The versioned interface name the target-adapter world exports.
 const TARGET_INTERFACE: &str = "specify:adapter/target@0.1.0";
-
-/// The versioned interface name the source-adapter world exports.
 const SOURCE_INTERFACE: &str = "specify:adapter/source@0.1.0";
 
-/// Exercise the metadata WIT export for every deployed component.
 async fn metadata(runtime: &Runtime<Bundle>, guest: &str) -> Result<()> {
     use omnia::wasmtime::component::Val;
 
@@ -154,10 +135,6 @@ fn assert_target_metadata(
     Ok(())
 }
 
-/// Composed-deployment tests for the contracts adapter guest: the
-/// `guidance` seam through host-mediated dispatch, and the MCP reference
-/// references over `wasi:http` — including the build-time-resolved
-/// `references/spec-runtime` symlink content.
 mod contracts {
     use anyhow::{Context as _, Result};
     use omnia::Runtime;
@@ -193,10 +170,7 @@ mod contracts {
         Ok(())
     }
 
-    // The async-lifted `build` export awaits `omnia:model/completion.create`;
-    // the stub backend pends then fails, so the leg must come back as the WIT
-    // error variant — not a trap — proving a pending host future survives
-    // host-mediated dispatch.
+    // Stub model pends then fails: the leg must return a WIT error, not trap.
     pub async fn build_bridge(runtime: &Runtime<Bundle>) -> Result<()> {
         let results = runtime
             .dispatcher()
@@ -300,11 +274,6 @@ mod contracts {
     }
 }
 
-/// Composed-deployment tests for the omnia adapter guest: the `guidance`
-/// seam through host-mediated dispatch, and the ~700 KB embedded
-/// references served over `wasi:http` on the guest's own `/mcp/omnia`
-/// route — including the build-time-resolved `references/spec-runtime`
-/// symlink content.
 mod omnia_guest {
     use anyhow::{Context as _, Result};
     use omnia::Runtime;
@@ -386,11 +355,6 @@ mod omnia_guest {
     }
 }
 
-/// Composed-deployment tests for the vectis adapter guest: the `metadata`
-/// and `guidance` seams through host-mediated dispatch, and the ~600 KB
-/// embedded references served over `wasi:http` on the guest's own
-/// `/mcp/vectis` route — including the nested per-platform build prompts
-/// and the build-time-resolved `references/agent-teams.md` symlink content.
 mod vectis {
     use anyhow::{Context as _, Result};
     use omnia::Runtime;
@@ -472,10 +436,6 @@ mod vectis {
     }
 }
 
-/// Composed multi-guest deployment tests: the contracts target guest and
-/// the documentation source guest side by side, proving the source axis
-/// rides the same seams — `survey` through host-mediated dispatch, and
-/// the source guest's own MCP references on its own HTTP route.
 mod documentation {
     use anyhow::{Context as _, Result};
     use omnia::Runtime;
@@ -485,10 +445,7 @@ mod documentation {
 
     use super::{Bundle, SOURCE_INTERFACE};
 
-    // The async-lifted `survey` export awaits `omnia:model/completion.create`;
-    // the stub backend pends then fails, so the leg must come back as the WIT
-    // error variant — not a trap — proving the source axis survives
-    // host-mediated dispatch in a multi-guest deployment.
+    // Stub model pends then fails: the leg must return a WIT error, not trap.
     pub async fn survey_bridge(runtime: &Runtime<Bundle>) -> Result<()> {
         let results = runtime
             .dispatcher()
@@ -571,11 +528,6 @@ mod documentation {
     }
 }
 
-/// Composed multi-guest deployment tests for the remaining four source
-/// guests — intent, typescript, screenshots, and captures — side by side
-/// in one deployment, proving each rides the same seams as documentation:
-/// `survey` through host-mediated dispatch, and each guest's own MCP
-/// references on its own HTTP route.
 mod sources {
     use anyhow::{Context as _, Result};
     use omnia::Runtime;
@@ -585,8 +537,6 @@ mod sources {
 
     use super::{Bundle, SOURCE_INTERFACE};
 
-    /// The four source guests this deployment composes: guest id, MCP route,
-    /// references server identity, and the survey prompt's opening heading.
     const GUESTS: [(&str, &str, &str, &str); 4] = [
         ("source:intent", "/mcp/intent", "intent-references", "# intent.survey"),
         (
@@ -604,9 +554,7 @@ mod sources {
         ("source:captures", "/mcp/captures", "captures-references", "# Runtime capture survey"),
     ];
 
-    // Each async-lifted `survey` export awaits `omnia:model/completion.create`;
-    // the stub backend pends then fails, so each leg must come back as the WIT
-    // error variant — not a trap — for all four guests in one deployment.
+    // Stub model pends then fails: each leg must return a WIT error, not trap.
     pub async fn survey_bridges(runtime: &Runtime<Bundle>) -> Result<()> {
         for (guest, _, _, _) in GUESTS {
             let results = runtime
@@ -685,8 +633,6 @@ mod sources {
     }
 }
 
-/// One deployment proves the component-only boundary while native and
-/// crate suites own adapter behavior and prose content.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn component_smoke() -> Result<()> {
     let mount = tempfile::tempdir()?;
@@ -708,10 +654,8 @@ async fn component_smoke() -> Result<()> {
     sources::per_guest_shelves(&runtime).await
 }
 
-/// One deployed guest: its manifest id and built artifact name.
 type Guest = (&'static str, &'static str);
 
-/// Every adapter component in one deployment.
 const COMPONENTS: &[Guest] = &[
     ("target:contracts", "contracts.wasm"),
     ("target:omnia", "omnia.wasm"),
@@ -723,14 +667,10 @@ const COMPONENTS: &[Guest] = &[
     ("source:captures", "captures.wasm"),
 ];
 
-/// Assemble every adapter component into one shared runtime.
 async fn component_runtime(mount: &Path) -> Result<Runtime<Bundle>> {
     assemble(manifest(COMPONENTS, mount)?).await
 }
 
-/// A deployment manifest over `guests`: each guest's MCP references routed at
-/// `/mcp/<name>`, sharing one writable `"."` mount — the shared project
-/// tree every guest opens through its own preopen.
 fn manifest(guests: &[Guest], mount: &Path) -> Result<TempManifest> {
     let entries: Vec<composed::Guest> = guests
         .iter()
@@ -747,7 +687,6 @@ fn manifest(guests: &[Guest], mount: &Path) -> Result<TempManifest> {
     temp_manifest(&composed::manifest(&entries, mount))
 }
 
-/// Locate a built wasm32-wasip2 guest component, building on first use.
 fn guest_wasm(file: &str) -> PathBuf {
     build_guests();
 
@@ -766,10 +705,7 @@ fn build_guests() {
         let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .expect("composed manifest dir is at the workspace root");
-        // `--workspace` rather than a `-p` list: the bare spec `omnia` is
-        // ambiguous between the guest crate and the runtime dependency
-        // of the same name. The host-only members compile empty on wasm32;
-        // the eval workspace sits outside this one entirely.
+        // `--workspace` avoids `-p omnia` ambiguity between guest crate and runtime dep.
         let args = ["build", "--workspace", "--target", "wasm32-wasip2"];
         composed::cargo(&args, workspace_root, &target_dir()).expect("guest build");
     });
@@ -798,11 +734,6 @@ async fn assemble(manifest: TempManifest) -> Result<Runtime<Bundle>> {
     ))
 }
 
-/// The backend bundle a host binary's `runtime!` macro would generate.
-///
-/// Covers `hosts: { WasiHttp: HttpDefault, WasiModel: … }` — with the model
-/// backend stubbed: these composed tests are model-free (judgment legs are
-/// covered natively in each adapter crate), so any completion is a test bug.
 #[derive(Clone)]
 struct Bundle {
     http: HttpDefault,
@@ -836,18 +767,13 @@ impl HasModel for Bundle {
     }
 }
 
-/// A model backend that fails every completion: linked so the guest's
-/// `omnia:model/completion` import resolves, never legitimately reached.
 #[derive(Clone, Debug)]
 struct NoModel;
 
 impl WasiModelCtx for NoModel {
     fn complete(&self, _request: Request, _tool_host: Arc<dyn ToolHost>) -> FutureResult<Answer> {
         async {
-            // Yield through the reactor before failing so the guest's
-            // async-lifted export genuinely parks awaiting the import — the
-            // probe must prove the seam survives a pending host future, not
-            // just an immediately-ready one.
+            // Yield so the guest parks on a pending host future before failing.
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
             anyhow::bail!("model-free composed test: completion must not be called")
         }

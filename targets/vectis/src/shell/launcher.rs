@@ -4,9 +4,6 @@ use std::path::Path;
 
 /// Returns whether the on-disk shell for `platform` already carries a
 /// satisfiable launcher icon (shell-resident escape hatch).
-///
-/// Only `ios` and `android` are probed; other platform strings return
-/// `false`.
 #[must_use]
 pub fn shell_resident_app_icon(project_dir: &Path, platform: &str) -> bool {
     match platform {

@@ -65,10 +65,7 @@ screens:
     );
 }
 
-// The fully missing and materialized iOS imageset branches are covered through
-// `verify::run` in `tests/verify.rs`. The cases kept below exercise the bounded
-// catalog matrix directly: Contents.json-only imagesets, symbol-kind skips,
-// Android vector-icon misses, and Android illustration density-raster misses.
+// iOS imageset branches covered in `verify.rs`; matrix below hits catalog-only cases.
 #[test]
 fn contents_json_only_imageset() {
     let tmp = tempdir().unwrap();

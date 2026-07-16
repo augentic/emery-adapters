@@ -1,7 +1,4 @@
-//! Compile-completion stamp probes for the shell-verify gate.
-//!
-//! `make sim-build` and `make verify` write `.vectis/verify.ok` on success;
-//! this module checks those stamps when the corresponding shell is present.
+//! Compile-completion stamp probes for shell verify.
 
 use std::path::Path;
 

@@ -1,17 +1,11 @@
-//! Per-leg request telemetry: a transparent [`Model`] wrapper counting
-//! how many completion requests each judgment leg issued.
+//! Per-leg request telemetry over a [`Model`] backend.
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use omnia_guest::model::{Error, Format, Model, Reply, Request};
 
-/// A [`Model`] wrapper tallying requests per leg before delegating.
-///
-/// The leg key is the request's schema name (`proposal`, `synthesis`,
-/// the adapter answer schemas); a schema-free request counts under its
-/// format name. Clones share the tally, so the trial reads counts back
-/// through the provider's model accessor after the run.
+/// Counts completion requests per judgment leg before delegating.
 #[derive(Clone, Debug)]
 pub struct Telemetry<M> {
     inner: M,

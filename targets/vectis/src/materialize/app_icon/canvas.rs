@@ -24,9 +24,6 @@ pub struct LauncherCanvas {
 
 /// Decode an app-icon `source:` master into a normalized 1024×1024 RGBA canvas.
 ///
-/// Raster masters must be square with width and height ≥1024 (no upscale).
-/// Masters may carry alpha; platform writers composite at export time.
-///
 /// # Errors
 ///
 /// Returns `assets-app-icon-source-invalid: …` when the master cannot be decoded

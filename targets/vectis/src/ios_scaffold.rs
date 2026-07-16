@@ -94,10 +94,6 @@ pub fn sync_ios_scaffold_files(project_root: &Path) -> Result<IosScaffoldSyncRep
 }
 
 /// Compare agent-immutable iOS scaffold files against the embedded templates.
-///
-/// Returns diagnostic-shaped findings (`severity: error`) for drifted scaffold
-/// files. When app-name resolution or template rendering fails, returns a single
-/// finding scoped to `path: "iOS"`.
 #[must_use]
 pub fn ios_scaffold_drift_findings(project_root: &Path) -> Vec<Value> {
     let ios_root = project_root.join("iOS");
@@ -148,7 +144,6 @@ pub fn ios_scaffold_drift_findings(project_root: &Path) -> Vec<Value> {
 /// Resolve the Xcode app / scheme name for an on-disk iOS shell.
 ///
 /// # Errors
-///
 /// Returns [`VectisError::InvalidProject`] when no authoritative name is found.
 pub fn resolve_ios_app_name(project_root: &Path) -> Result<String, VectisError> {
     let ios_root = project_root.join("iOS");

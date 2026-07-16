@@ -1,8 +1,4 @@
-//! Seam-level coverage of the native [`Provider`]: the in-process dispatch
-//! table reaches the real adapter operations (scripted through
-//! `omnia_testkit::model::Scripted`), the DTO mappings match the guest
-//! shim's WIT projections (typed claims, report widening), and the
-//! metadata runner answers both axes.
+//! Native [`Provider`] seam coverage over linked adapters.
 
 use std::sync::{Arc, Mutex};
 
@@ -36,9 +32,6 @@ fn model(answers: impl IntoIterator<Item = &'static str>) -> Scripted {
     Scripted::answers(answers)
 }
 
-/// A transparent [`Model`] wrapper recording every request, standing
-/// in for the retired testkit harness where a test asserts on the
-/// request the seam dispatch issued.
 #[derive(Clone)]
 struct Recording {
     inner: Scripted,

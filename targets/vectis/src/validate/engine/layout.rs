@@ -12,23 +12,6 @@ use super::shared::{composition_validator, escape_pointer_token};
 use crate::validate::ValidateMode;
 use crate::validate::error::VectisError;
 
-/// Validate `layout.yaml` as the unwired subset of the composition
-/// schema. Three checks:
-///
-/// 1. **Schema validation** against the embedded composition schema.
-/// 2. **Unwired-subset enforcement** — reject `delta:` and any
-///    define-owned wiring key (`maps_to`, `bind`, `event`, `error`,
-///    overlay `trigger`, conditional visual `*-when` keys). Bare
-///    `when:` (`stateEntry.when`) is *not* a `*-when` key and is
-///    preserved.
-/// 3. **Structural-identity** for `component:` directives — see
-///    [`check_structural_identity`].
-///
-/// # Errors
-///
-/// Returns [`VectisError::InvalidProject`] when the resolved file is
-/// unreadable, and [`VectisError::Internal`] if the embedded schema
-/// fails to compile.
 pub(super) fn validate(path: Option<&Path>) -> Result<Value, VectisError> {
     let target = path.map_or_else(|| resolve_default_path(ValidateMode::Layout), Path::to_path_buf);
 
@@ -83,10 +66,6 @@ pub(super) fn validate(path: Option<&Path>) -> Result<Value, VectisError> {
     }))
 }
 
-/// Walk a sub-tree and append an error for every define-owned wiring
-/// key the unwired subset forbids (see [`forbidden_wiring_key`]).
-/// Recurses through nested objects and arrays so deeply buried keys
-/// get a precise JSON Pointer. Matches keys, never property values.
 fn walk_unwired(node: &Value, json_path: &str, errors: &mut Vec<Value>) {
     match node {
         Value::Object(map) => {
@@ -112,9 +91,6 @@ fn walk_unwired(node: &Value, json_path: &str, errors: &mut Vec<Value>) {
     }
 }
 
-/// Reason string when `key` is a forbidden define-owned wiring key;
-/// `None` when allowed. The length guard keeps bare `when`
-/// (`stateEntry.when`, allowed) from matching the `*-when` pattern.
 fn forbidden_wiring_key(key: &str) -> Option<&'static str> {
     match key {
         "maps_to" => Some("`maps_to` is define-owned screen-to-route wiring"),

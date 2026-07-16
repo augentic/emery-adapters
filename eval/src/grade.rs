@@ -1,5 +1,4 @@
-//! Structural checks after execute, before finalize (`plan.yaml` still
-//! live). Deterministic validators only — never a model.
+//! Deterministic structural checks after execute, before finalize.
 
 use std::fs;
 use std::path::Path;
@@ -22,8 +21,6 @@ pub fn run(root: &Path, plan: &Plan) -> Result<()> {
     Ok(())
 }
 
-/// Every plan entry finished the loop: `plan execute` exits drained
-/// only when each slice merged.
 fn lifecycle(plan: &Plan) -> Result<()> {
     ensure!(
         plan.entries.iter().all(|entry| entry.status == Status::Done),
@@ -33,8 +30,6 @@ fn lifecycle(plan: &Plan) -> Result<()> {
     Ok(())
 }
 
-/// Baseline spec requirements carry ids, and evidenced requirements
-/// carry provenance.
 fn requirements(requirements: &[Requirement]) -> Result<()> {
     ensure!(!requirements.is_empty(), "the baseline carries no requirements");
     for requirement in requirements {
@@ -50,8 +45,6 @@ fn requirements(requirements: &[Requirement]) -> Result<()> {
     Ok(())
 }
 
-/// The merged `contracts/` baseline is non-empty and validator-clean —
-/// the adapter's own compiled-in validators are the graders.
 fn contracts_baseline(root: &Path) -> Result<()> {
     let contracts = root.join("contracts");
     ensure!(
@@ -74,8 +67,6 @@ fn contracts_baseline(root: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Count `.yaml` files under `dir`, recursively; a missing directory
-/// counts zero.
 fn yaml_count(dir: &Path) -> usize {
     let Ok(entries) = fs::read_dir(dir) else {
         return 0;
@@ -93,7 +84,6 @@ fn yaml_count(dir: &Path) -> usize {
         .sum()
 }
 
-/// Parse every baseline `specs/<domain>/spec.md` requirement.
 fn baseline(root: &Path) -> Result<Vec<Requirement>> {
     let mut requirements = Vec::new();
     let specs = Layout::new(root).specs_dir();

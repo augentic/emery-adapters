@@ -26,8 +26,6 @@ pub fn setup(project_root: &Path) -> Result<Value, VectisError> {
 }
 
 /// Install the vendored Gradle wrapper under `android_dir` when absent.
-///
-/// Idempotent: never overwrites an existing wrapper tree.
 #[must_use]
 pub fn run_for_shell_dir(android_dir: &Path) -> Value {
     let mut actions: Vec<Value> = Vec::new();

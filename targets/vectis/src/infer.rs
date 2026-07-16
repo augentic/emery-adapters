@@ -11,8 +11,6 @@ use crate::validate::engine::composition::{
     Skeleton, build_group_skeleton, fingerprint, skeleton_to_json,
 };
 
-/// Screen-entry keys whose sub-trees may carry `group` nodes; the
-/// remaining keys are scalar metadata and never walked.
 const SCREEN_REGIONS: &[&str] =
     &["header", "body", "footer", "fab", "states", "overlays", "platforms"];
 
@@ -37,35 +35,20 @@ pub struct InferArgs {
     pub min_occurrences: u32,
 }
 
-/// One observed `group` instance, before clustering. The fingerprint
-/// is computed at cluster time.
 struct GroupOccurrence {
-    /// Composition screen slug for a baseline group; the provenance
-    /// `<screen>` segment for a candidate-cache entry (change-wide
-    /// unique, so it dedups against the same-named baseline screen).
     screen: String,
-    /// Top-level screen region (`header`, `body`, …).
     region: String,
     skeleton: Skeleton,
-    /// `event:` targets wired anywhere inside the group subtree.
     event_targets: BTreeSet<String>,
-    /// Non-authoritative name hint from a candidate-cache entry's
-    /// `candidate_component` label; `None` for baseline groups.
-    /// Surfaced as evidence; never sets `bound-slug`.
     candidate_name: Option<String>,
 }
 
-/// Accumulator for one fingerprint cluster. `region` / `skeleton`
-/// come from the lexicographically-smallest screen so the
-/// representative is stable across runs.
 struct Cluster {
     screens: BTreeSet<String>,
     region: String,
     skeleton: Skeleton,
     representative_screen: String,
-    /// Union of `event:` targets across the cluster.
     event_targets: BTreeSet<String>,
-    /// Union of candidate-cache name hints (non-authoritative evidence).
     candidate_names: BTreeSet<String>,
 }
 
@@ -131,9 +114,6 @@ pub fn run(args: &InferArgs) -> Result<Value, VectisError> {
     }))
 }
 
-/// Collect every `group` occurrence across both composition shapes —
-/// `screens.<slug>` (baseline) and `delta.added` / `delta.modified`.
-/// `delta.removed` carries no screen body, so it is skipped.
 fn collect_baseline_groups(instance: &Value, out: &mut Vec<GroupOccurrence>) {
     if let Some(screens) = instance.get("screens").and_then(Value::as_object) {
         for (slug, entry) in screens {
@@ -151,7 +131,6 @@ fn collect_baseline_groups(instance: &Value, out: &mut Vec<GroupOccurrence>) {
     }
 }
 
-/// Walk one screen entry's region sub-trees collecting every `group`.
 fn collect_screen_groups(screen: &str, entry: &Value, out: &mut Vec<GroupOccurrence>) {
     let Some(map) = entry.as_object() else {
         return;
@@ -163,8 +142,6 @@ fn collect_screen_groups(screen: &str, entry: &Value, out: &mut Vec<GroupOccurre
     }
 }
 
-/// Record every `{ group: … }` node (top-level and nested) as a
-/// [`GroupOccurrence`].
 fn walk_region_for_groups(
     screen: &str, region: &str, node: &Value, out: &mut Vec<GroupOccurrence>,
 ) {
@@ -194,7 +171,6 @@ fn walk_region_for_groups(
     }
 }
 
-/// Collect every `event:` string value reachable inside a group subtree.
 fn collect_event_targets(node: &Value, out: &mut BTreeSet<String>) {
     match node {
         Value::Object(map) => {
@@ -216,12 +192,6 @@ fn collect_event_targets(node: &Value, out: &mut BTreeSet<String>) {
     }
 }
 
-/// Fold every `*.yaml` candidate-cache entry under `dir` into the
-/// occurrence list, normalised through the **single**
-/// [`build_group_skeleton`] path — no agent-written fingerprint is
-/// trusted; identity is recomputed at read time. Malformed or
-/// `group`-less entries are skipped: inference is best-effort, never
-/// an abort.
 fn collect_cached_groups(dir: &Path, out: &mut Vec<GroupOccurrence>) {
     let mut files: Vec<PathBuf> = Vec::new();
     collect_yaml_files(dir, &mut files);
@@ -267,12 +237,6 @@ fn collect_yaml_files(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-/// Derive the candidate-cache screen identity from a file's provenance
-/// path (§B4 layout `<slice>/<screen>/<group-path>.yaml`, so component
-/// index 1 is the screen). Screen slugs are change-wide unique (A2a),
-/// so cached and baseline groups on the same screen dedup by
-/// construction. A shallower path falls back to the file stem so a
-/// malformed layout still yields a stable key.
 fn cache_screen_id(root: &Path, file: &Path) -> String {
     let rel = file.strip_prefix(root).unwrap_or(file);
     let components: Vec<String> =
@@ -282,18 +246,11 @@ fn cache_screen_id(root: &Path, file: &Path) -> String {
     })
 }
 
-/// One operator part registered as a pinned `{ fingerprint → slug }`
-/// binding (step 0). The fingerprint is recomputed at read time, so it
-/// is byte-comparable with discovered fingerprints.
 struct PartPin {
     slug: String,
     fingerprint: String,
 }
 
-/// Fingerprint every part in `parts.yaml` through the **single**
-/// [`build_group_skeleton`] path. A malformed parts file, or a part
-/// without a `group`, yields no pin — the host already schema-gates
-/// the file, so this read is best-effort and never aborts inference.
 fn collect_part_pins(path: &Path) -> Vec<PartPin> {
     let Ok(source) = std::fs::read_to_string(path) else {
         return Vec::new();
@@ -316,13 +273,6 @@ fn collect_part_pins(path: &Path) -> Vec<PartPin> {
         .collect()
 }
 
-/// Cluster occurrences by structural fingerprint and project each
-/// above-threshold cluster into a name-free report entry. Counting is
-/// by **distinct screen** — repeats within one screen count once.
-///
-/// A cluster matching an operator-part pin bypasses `min_occurrences`
-/// (promotion authority) and carries `bound-slug` + `pinned: true`
-/// (naming authority); the tool still invents no name of its own.
 fn cluster(
     occurrences: Vec<GroupOccurrence>, min_occurrences: u32,
     pin_slug_by_fp: &BTreeMap<String, String>,

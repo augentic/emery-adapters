@@ -12,25 +12,14 @@ use sha2::{Digest, Sha256};
 use super::finding::Finding;
 use crate::validate::engine::shared::escape_pointer_token;
 
-/// Recorded `component: <slug>` instance. `path` points at the group
-/// bearing the directive, so a violation can name both halves.
 struct ComponentInstance {
     slug: String,
     skeleton: Skeleton,
     path: String,
-    /// `true` inside a `screens.<name>.platforms.<plat>.*` sub-tree.
-    /// Platform overrides MAY diverge from the base skeleton, so
-    /// base-equality is not enforced against them.
     in_platform_override: bool,
 }
 
 /// Normalised structural skeleton for a group's children.
-///
-/// Keeps just enough to detect material divergence (item kinds,
-/// nesting, `*-when` key presence) while ignoring leaf wiring values:
-/// instances MAY differ in `bind`, `event`, `error`, asset / token
-/// references, and free text. `*-when` *condition values* are wiring;
-/// their *presence* participates in identity.
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Skeleton {
     /// A leaf item identified by its single property key (e.g.
@@ -81,10 +70,6 @@ pub fn check_structural_identity(node: &Value, json_path: &str, errors: &mut Vec
     }
 }
 
-/// Record every `{ "group": { "component": <slug>, ... } }` as a
-/// [`ComponentInstance`], including directives nested inside another
-/// component group. `in_platform` tracks descent through a
-/// `screens.<name>.platforms.<plat>.*` sub-tree.
 fn walk_for_components(
     node: &Value, json_path: &str, in_platform: bool, out: &mut Vec<ComponentInstance>,
 ) {
@@ -116,10 +101,6 @@ fn walk_for_components(
 }
 
 /// Build a [`Skeleton::Group`] from a `groupProps` JSON value.
-///
-/// The `*-when` key set is sorted + deduplicated so any author order
-/// compares equal. Missing `items` (schema-invalid) becomes an empty
-/// children list.
 #[must_use]
 pub fn build_group_skeleton(group_props: &Value) -> Skeleton {
     let mut when_keys: Vec<String> = group_props
@@ -141,10 +122,6 @@ pub fn build_group_skeleton(group_props: &Value) -> Skeleton {
 /// Build a skeleton fragment for a single `contentNode`: a nested
 /// `{ group: ... }` recurses via [`build_group_skeleton`]; an item
 /// keeps only its kind key (itemProps are wiring, ignored).
-///
-/// Schema-invalid shapes (zero or multi-key objects) collapse to a
-/// stable `<unknown>` placeholder so the schema validator's own
-/// findings remain the authoritative diagnostic.
 #[must_use]
 pub fn build_node_skeleton(node: &Value) -> Skeleton {
     let Some(map) = node.as_object() else {
@@ -157,13 +134,6 @@ pub fn build_node_skeleton(node: &Value) -> Skeleton {
 }
 
 /// Content-addressed fingerprint over a normalised [`Skeleton`]:
-/// canonical byte serialisation, SHA-256, lowercase hex.
-///
-/// Identity is **exact** by mandate — two groups share a fingerprint
-/// iff their normalised skeletons are equal. All tolerance is already
-/// discarded by [`build_group_skeleton`], so the fingerprint adds no
-/// strictness over [`check_structural_identity`] (which the inference
-/// verb must never contradict).
 #[must_use]
 pub fn fingerprint(skeleton: &Skeleton) -> String {
     let mut canonical = String::new();
@@ -177,14 +147,6 @@ pub fn fingerprint(skeleton: &Skeleton) -> String {
     hex
 }
 
-/// Append a canonical byte encoding of `skeleton` to `buf`:
-///
-/// - `Item(kind)`  → `I:<kind>;`
-/// - `Group`       → `G[<when_keys joined by ,>](<child encodings…>);`
-///
-/// Unambiguous because item kinds and `*-when` keys are kebab-case,
-/// never containing the `;:[](),` delimiters. Child order is preserved
-/// (item order is structural).
 fn encode_skeleton(skeleton: &Skeleton, buf: &mut String) {
     match skeleton {
         Skeleton::Item(kind) => {

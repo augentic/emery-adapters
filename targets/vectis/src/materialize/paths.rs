@@ -103,9 +103,6 @@ pub fn kebab_to_snake(id: &str) -> String {
 }
 
 /// Compute the conventional export layout for auto-materialize from `source:`.
-///
-/// Returns `None` for roles/kinds that do not auto-convert from a canonical
-/// master (`symbol`, `photo`, raster UI icons without `source:`, etc.).
 #[must_use]
 pub fn export_layout(
     role: &str, kind: &str, platform: Platform, asset_id: &str,

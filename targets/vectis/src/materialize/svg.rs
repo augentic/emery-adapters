@@ -121,8 +121,6 @@ fn tree_has_drawable_paths(group: &usvg::Group) -> bool {
 }
 
 /// Absolute canvas-space path data for a `usvg` path node.
-///
-/// Returns `None` when the transform cannot be applied.
 #[must_use]
 pub fn absolute_path(path: &usvg::Path) -> Option<Path> {
     path.data().clone().transform(path.abs_transform())

@@ -16,8 +16,7 @@ const IOS_RENDER_ONLY_SHA256: &str =
 const ANDROID_RENDER_ONLY_SHA256: &str =
     "bd764b6f12aaa48fb70bfa447eef5d87234de96965e725cbe2aaa872f966333c";
 
-// Template-registry entry counts, pinned by the build.rs manifest gate
-// (`EXPECTED_COUNTS`).
+// Entry counts pinned by the build.rs manifest gate (`EXPECTED_COUNTS`).
 const CORE_ENTRIES: usize = 13;
 const IOS_ENTRIES: usize = 11;
 const ANDROID_ENTRIES: usize = 23;

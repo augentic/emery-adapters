@@ -1,8 +1,4 @@
-//! The native shim's HTTP transport: `specify-dev serve` — the shared
-//! typed HTTP router merged with the `/mcp/<name>` shelves on one
-//! `TcpListener`, the native counterpart of the guest's
-//! `wasi:http/incoming-handler` export. Mutating invocation is
-//! serialized behind a process-wide write lock; GETs stay concurrent.
+//! Native HTTP transport for `specify-dev serve`.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -55,9 +51,7 @@ pub async fn serve(argv: &[String]) -> Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-/// `.specify/` assumes a single writer: atomic writes protect files,
-/// not workflows, so mutating dispatch is serialized process-wide
-/// while GETs stay concurrent.
+// `.specify/` assumes a single writer: serialize mutating dispatch while GETs stay concurrent.
 async fn serialize_writes(request: Request, next: Next) -> Response {
     static WRITES: Mutex<()> = Mutex::const_new(());
     let guard = if request.method() == Method::GET { None } else { Some(WRITES.lock().await) };

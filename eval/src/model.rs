@@ -1,21 +1,5 @@
-//! [`DevModel`] — the binary's live [`Model`] backend.
-//!
-//! A lazily connected cursor backend (`omnia_cursor::Client`, the
-//! host-side `WasiModelCtx` backend) behind the shared [`Native`]
-//! bridge, which performs the guest-request mapping, the host request
-//! gate, the `lend_workspace` → project-root tool host, and the answer
-//! projection. The connection happens on first use so deterministic
-//! verbs never require cursor-agent on `PATH`; clones share the
-//! connection cell, so one trial connects cursor-agent at most once.
-//!
-//! `SPECIFY_EVAL_MODEL=<model-id>` overrides the model for a run: the
-//! id fills `Request.model` only when the caller left it `None`, so a
-//! guest-supplied id always wins. Read once at construction; unset or
-//! blank means no override.
-//!
-//! Live-only: dev loop and on-demand trials, never CI. Tests bypass
-//! this backend and bind `omnia_testkit::model::Scripted` through the
-//! provider's generic parameter.
+//! The dev binary's lazily connected live [`Model`] backend.
+//! `SPECIFY_EVAL_MODEL` overrides the model id when the caller leaves `Request.model` unset.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -27,14 +11,11 @@ use omnia_guest::model::{Error, Reply, Request};
 
 use crate::native::Native;
 
-/// The dev binary's model backend: lazily connected live completions.
+/// Lazily connected cursor backend rooted at the project directory.
 #[derive(Clone)]
 pub struct DevModel {
-    /// The project root workspace lends resolve to.
     root: PathBuf,
-    /// Driver-side model-id override from `SPECIFY_EVAL_MODEL`.
     model: Option<String>,
-    /// The shared connection, established by the first judgment leg.
     cell: Arc<tokio::sync::OnceCell<Native<omnia_cursor::Client>>>,
 }
 
@@ -45,8 +26,7 @@ impl fmt::Debug for DevModel {
 }
 
 impl DevModel {
-    /// A lazily connected cursor backend rooted at `project_dir`,
-    /// reading the optional `SPECIFY_EVAL_MODEL` override once.
+    /// A lazily connected cursor backend rooted at `project_dir`.
     #[must_use]
     pub fn new(project_dir: &Path) -> Self {
         Self {

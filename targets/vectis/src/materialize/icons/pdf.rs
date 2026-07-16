@@ -10,7 +10,6 @@ use crate::materialize::svg::{DrawablePath, collect_paths};
 /// Write a single-page vector PDF for an icon imageset.
 ///
 /// # Errors
-///
 /// Returns I/O errors from the underlying write.
 pub fn write_icon_pdf(tree: &Tree, out_path: &std::path::Path) -> std::io::Result<()> {
     let width = tree.size().width();

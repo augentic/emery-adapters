@@ -15,40 +15,29 @@ pub const EVIDENCE_ANSWER_SCHEMA: &str = include_str!("../schemas/answers/eviden
 /// Answer schema gating `build` / `merge` replies.
 pub const REPORT_ANSWER_SCHEMA: &str = include_str!("../schemas/answers/report.schema.json");
 
-/// The `survey` answer envelope: leads ride under a `leads` key so the
-/// answer stays one JSON object.
+/// `survey` answer envelope (`{ "leads": [...] }`).
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 pub struct LeadsAnswer {
-    /// Every lead the survey surfaced, in source order.
+    /// Leads in source order.
     pub leads: Vec<Lead>,
 }
 
-/// Deserialize a `survey` answer body into its leads.
-///
 /// # Errors
 ///
-/// Returns the underlying JSON error when the answer does not parse into
-/// the `{ "leads": [...] }` envelope.
+/// When the answer does not parse into `{ "leads": [...] }`.
 pub fn parse_leads(answer: &str) -> Result<Vec<Lead>, serde_json::Error> {
     serde_json::from_str::<LeadsAnswer>(answer).map(|envelope| envelope.leads)
 }
 
-/// Deserialize an `extract` answer body into its Evidence.
-///
 /// # Errors
 ///
-/// Returns the underlying JSON error when the answer does not parse into
-/// the Evidence shape.
+/// When the answer does not parse into Evidence.
 pub fn parse_evidence(answer: &str) -> Result<Evidence, serde_json::Error> {
     serde_json::from_str(answer)
 }
 
-/// Lead-id kebab grammar, enforced deterministically (the generated
-/// answer schema leaves lead ids as plain strings).
+// Schemas leave these as plain strings; we enforce the grammars in-guest.
 const KEBAB_PATTERN: &str = "^[a-z0-9]+(-[a-z0-9]+)*$";
-
-/// Claim-id dotted-kebab grammar, enforced deterministically (the
-/// generated answer schema leaves claim ids as plain strings).
 const DOTTED_KEBAB_PATTERN: &str = "^[a-z0-9]+(-[a-z0-9]+)*(\\.[a-z0-9]+(-[a-z0-9]+)*)*$";
 
 fn is_kebab(value: &str) -> bool {
@@ -72,17 +61,11 @@ fn enforce(operation: &str, findings: &[String]) -> Result<(), Error> {
     )))
 }
 
-/// Re-check a `survey` answer after the host gate.
-///
-/// Every lead id and topic slug must match the kebab-case grammar and
-/// every synopsis must carry content — the same set the engine's
-/// `artifacts::discovery::validate_leads` enforces before merging into
-/// `discovery.md`.
+/// Deterministic post-host-gate check: kebab lead/topic ids, non-empty synopsis.
 ///
 /// # Errors
 ///
-/// Returns [`Error::Internal`] carrying one findings-style line per
-/// violation.
+/// [`Error::Internal`] with one findings-style line per violation.
 pub fn validate_leads(leads: &[Lead]) -> Result<(), Error> {
     let mut findings = Vec::new();
     for lead in leads {
@@ -104,13 +87,11 @@ pub fn validate_leads(leads: &[Lead]) -> Result<(), Error> {
     enforce("survey", &findings)
 }
 
-/// The composed `survey` answer tail: typed parse plus deterministic
-/// validation, the shape [`crate::repaired`]'s repair loop retries.
+/// Typed parse + [`validate_leads`] — the [`crate::repaired`] tail.
 ///
 /// # Errors
 ///
-/// Returns [`Error::Internal`] when the answer does not parse into the
-/// `{ "leads": [...] }` envelope or fails [`validate_leads`].
+/// [`Error::Internal`] on parse or validation failure.
 pub fn leads_tail(answer: &str) -> Result<Vec<Lead>, Error> {
     let leads = parse_leads(answer)
         .map_err(|err| Error::Internal(format!("leads answer did not deserialize: {err}")))?;
@@ -118,14 +99,11 @@ pub fn leads_tail(answer: &str) -> Result<Vec<Lead>, Error> {
     Ok(leads)
 }
 
-/// Re-check an `extract` answer after the host gate: claim ids must match
-/// the dotted-kebab grammar, and `requirement` / `criterion` /
-/// `example` claims must carry one.
+/// Deterministic post-host-gate check: dotted-kebab claim ids where required.
 ///
 /// # Errors
 ///
-/// Returns [`Error::Internal`] carrying one findings-style line per
-/// violation.
+/// [`Error::Internal`] with one findings-style line per violation.
 pub fn validate_evidence(evidence: &Evidence) -> Result<(), Error> {
     let mut findings = Vec::new();
     for (index, claim) in evidence.claims.iter().enumerate() {
@@ -148,13 +126,11 @@ pub fn validate_evidence(evidence: &Evidence) -> Result<(), Error> {
     enforce("extract", &findings)
 }
 
-/// The composed `extract` answer tail: typed parse plus deterministic
-/// validation, the shape [`crate::repaired`]'s repair loop retries.
+/// Typed parse + [`validate_evidence`] — the [`crate::repaired`] tail.
 ///
 /// # Errors
 ///
-/// Returns [`Error::Internal`] when the answer does not parse into the
-/// Evidence shape or fails [`validate_evidence`].
+/// [`Error::Internal`] on parse or validation failure.
 pub fn evidence_tail(answer: &str) -> Result<Evidence, Error> {
     let evidence = parse_evidence(answer)
         .map_err(|err| Error::Internal(format!("evidence answer did not deserialize: {err}")))?;
@@ -162,13 +138,11 @@ pub fn evidence_tail(answer: &str) -> Result<Evidence, Error> {
     Ok(evidence)
 }
 
-/// The slice of one full diagnostic the seam projection reads. The rest
-/// of the `diagnostic.schema.json` shape is host-validated and not
-/// modeled here.
+/// Slice of `diagnostic.schema.json` the seam projects into [`Finding`].
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct Diagnostic {
-    /// Durable codex citation, absent for findings that cite no rule.
+    /// Codex citation, if any.
     #[serde(default)]
     pub rule_id: Option<String>,
     /// Short finding title.
@@ -177,13 +151,12 @@ pub struct Diagnostic {
     pub severity: Severity,
     /// Operator-facing risk.
     pub impact: String,
-    /// Concrete action to clear the finding.
+    /// Action to clear the finding.
     pub remediation: String,
 }
 
 impl Diagnostic {
-    /// Fold into the compact seam-facing [`Finding`], collapsing `title` /
-    /// `impact` / `remediation` into `detail`.
+    /// Collapse `title` / `impact` / `remediation` into [`Finding::detail`].
     #[must_use]
     pub fn into_finding(self) -> Finding {
         Finding {
@@ -194,16 +167,16 @@ impl Diagnostic {
     }
 }
 
-/// The `build` / `merge` answer body.
+/// `build` / `merge` answer body.
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct ReportAnswer {
-    /// Operation outcome as judged by the model.
+    /// Operation outcome.
     pub status: Status,
-    /// Full structured diagnostics; default `[]`.
+    /// Structured diagnostics.
     #[serde(default)]
     pub findings: Vec<Diagnostic>,
-    /// Per-platform build outputs; default `[]`.
+    /// Per-platform build outputs.
     #[serde(default)]
     pub outputs: Vec<BuildOutput>,
     /// Optional UI-surface signal.
@@ -212,12 +185,9 @@ pub struct ReportAnswer {
 }
 
 impl ReportAnswer {
-    /// Deserialize an answer body.
-    ///
     /// # Errors
     ///
-    /// Returns the underlying JSON error when the answer does not parse
-    /// into the report shape.
+    /// When the answer does not parse into the report shape.
     pub fn parse(answer: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(answer)
     }

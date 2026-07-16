@@ -184,10 +184,6 @@ async fn composition_repair() {
     assert!(repair.messages[0].content.contains("composition validator found blocking issues"));
 }
 
-/// Run a full build against the scripted mock with an optional staged
-/// slice composition and the given report answer, asserting the six
-/// phase legs ran with no repair leg (coherence warnings never trigger
-/// one).
 async fn build_with_composition(composition: Option<&str>, report_answer: &'static str) -> Report {
     let tmp = TempDir::new().unwrap();
     if let Some(body) = composition {
@@ -208,8 +204,6 @@ async fn build_with_composition(composition: Option<&str>, report_answer: &'stat
     report
 }
 
-/// The A4 ui-surface coherence walk in the deterministic report gate.
-/// Warnings are `suggestion` severity and never fail the report.
 #[tokio::test]
 async fn ui_surface_coherence() {
     const NON_UI: &str = r#"{"status":"success","findings":[],"ui-surface":{"screens":0}}"#;

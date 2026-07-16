@@ -1,15 +1,4 @@
-//! Deterministic support commands for the wasm change example's Cargo
-//! Make task (see [`README.md`](README.md)):
-//!
-//! - `port` — print an available loopback `host:port` for the run's
-//!   HTTP trigger, so parallel runs never fight over one hard-coded
-//!   port.
-//! - `verify <workspace> <status-json>` — the completion gate after
-//!   `plan execute`: the captured `plan status --format json` is
-//!   `drained`, every `plan.yaml` entry is `done`, and the merged
-//!   contracts baseline is non-empty and clean under the contracts
-//!   adapter's own `validate_baseline` — the same deterministic
-//!   grading posture as the native trial, not just "a yaml exists".
+//! Support commands for the wasm change example: `port` and `verify`.
 
 cfg_if::cfg_if! {
     if #[cfg(not(target_arch = "wasm32"))] {
@@ -38,9 +27,6 @@ cfg_if::cfg_if! {
             }
         }
 
-        /// Print a currently free loopback address. The listener drops
-        /// before the runtime binds, so a raced port is possible but
-        /// vanishingly unlikely in the dev loop this serves.
         fn port() -> Result<()> {
             let listener =
                 TcpListener::bind(("127.0.0.1", 0)).context("binding an ephemeral port")?;
@@ -48,8 +34,6 @@ cfg_if::cfg_if! {
             Ok(())
         }
 
-        /// The captured `plan status --format json` body — the fields the
-        /// gate reads from the engine's kebab-case `StatusBody`.
         #[derive(Debug, Deserialize)]
         #[serde(rename_all = "kebab-case")]
         struct Status {
@@ -67,7 +51,6 @@ cfg_if::cfg_if! {
             done: usize,
         }
 
-        /// The `plan.yaml` fields the gate reads (per-entry `status`).
         #[derive(Debug, Deserialize)]
         struct PlanFile {
             slices: Vec<PlanEntry>,

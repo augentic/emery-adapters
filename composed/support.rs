@@ -1,8 +1,5 @@
-//! Host-side support for the composed-deployment tests (`composed.rs`):
-//! cargo-target-dir discovery, a subprocess `cargo` runner, and
-//! deployment-manifest rendering over [`Guest`] entries. The omnia
-//! runtime assembly itself stays with the test, which deploys
-//! in-process via `omnia-testkit`.
+//! Support for composed-deployment tests: cargo target-dir discovery,
+//! subprocess `cargo`, and deployment-manifest rendering.
 
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -11,28 +8,25 @@ use std::process::Command;
 
 use anyhow::{Context as _, Result, ensure};
 
-/// One guest entry in a deployment manifest: its id, built component path,
-/// the peer interfaces it links, and the HTTP route it serves.
+/// One guest entry in a deployment manifest.
 #[derive(Debug, Clone)]
 pub struct Guest {
     /// Manifest guest id (`<axis>:<name>`).
     pub id: String,
     /// Path to the built wasm32-wasip2 component.
     pub wasm: PathBuf,
-    /// Peer interfaces this guest imports (the manifest `link = [...]`).
+    /// Peer interfaces this guest imports.
     pub link: Vec<String>,
-    /// HTTP route prefix served by this guest, when it exposes one.
+    /// HTTP route prefix, when the guest exposes one.
     pub route: Option<String>,
 }
 
-/// Render a deployment manifest over `guests` with one writable `"."`
-/// mount at `mount`, an HTTP route per guest that declares one, and
-/// in-process transport.
+/// Render a deployment manifest over `guests` with one writable `"."` mount.
 #[must_use]
 pub fn manifest(guests: &[Guest], mount: &Path) -> String {
     use std::fmt::Write as _;
 
-    // Writing into a `String` is infallible; the results are discarded.
+    // Writing into a `String` is infallible here.
     let mut doc = String::new();
     for guest in guests {
         let _ = write!(
@@ -60,13 +54,11 @@ pub fn manifest(guests: &[Guest], mount: &Path) -> String {
     doc
 }
 
-/// The cargo target dir the calling test binary was built into (testkit's
-/// convention: the test exe sits at `<target>/<profile>/deps/<exe>`).
+/// Cargo target dir for the calling test binary (`<target>/<profile>/deps/<exe>`).
 ///
 /// # Errors
 ///
-/// Returns an error when the current executable path cannot be read or is
-/// too shallow to hold the expected layout.
+/// Returns an error when the current executable path cannot be read or is too shallow.
 pub fn target_dir() -> Result<PathBuf> {
     let test_exe = std::env::current_exe().context("test executable has a path")?;
     let dir =
@@ -74,8 +66,7 @@ pub fn target_dir() -> Result<PathBuf> {
     Ok(dir.to_path_buf())
 }
 
-/// Run one cargo invocation against the workspace at `root`, building into
-/// `target`.
+/// Run one cargo invocation against the workspace at `root`.
 ///
 /// # Errors
 ///

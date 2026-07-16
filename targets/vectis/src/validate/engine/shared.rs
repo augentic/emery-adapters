@@ -50,9 +50,6 @@ pub fn composition_validator() -> Result<&'static Validator, VectisError> {
     lazy_validator(&COMPOSITION_VALIDATOR, COMPOSITION_SCHEMA_SOURCE, "composition.schema.json")
 }
 
-/// Lazy-compile an embedded schema. The cell stores
-/// `Result<Validator, String>` so a compile failure survives
-/// `OnceLock` initialisation instead of re-running on every call.
 fn lazy_validator(
     cell: &'static OnceLock<Result<Validator, String>>, source: &'static str, name: &'static str,
 ) -> Result<&'static Validator, VectisError> {
@@ -71,10 +68,6 @@ fn lazy_validator(
 }
 
 /// Read `path` and parse it as YAML into a [`serde_json::Value`].
-///
-/// Returns `None` on any read / parse failure: callers auto-invoke
-/// the sibling validator first, so the failure has already surfaced
-/// in the folded sub-report.
 #[must_use]
 pub fn parse_yaml_file(path: &Path) -> Option<Value> {
     let source = std::fs::read_to_string(path).ok()?;

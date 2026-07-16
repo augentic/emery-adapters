@@ -1,11 +1,4 @@
-//! Environment guard pinning the out-of-tree project cache root
-//! inside a sandbox, mirroring the engine testkit's `env` module —
-//! part of the shared eval-core seam.
-//!
-//! The trial and scenario runners hold one guard per run so adapter
-//! cache reads and writes stay inside the run's own tree: the trial
-//! must not read or write the operator's normal cache, and its result
-//! must not depend on prior local state.
+//! Pins `SPECIFY_PROJECT_CACHE` inside a sandbox so eval runs stay hermetic.
 
 use std::path::Path;
 
@@ -31,8 +24,7 @@ impl Drop for CacheGuard {
     }
 }
 
-/// Pin the out-of-tree project cache root inside `dir` so adapter
-/// cache writes are hermetic and cleaned up with the sandbox.
+/// Pin the out-of-tree project cache root inside `dir`.
 #[must_use]
 #[expect(unsafe_code, reason = "pin the cache-root env var into the sandbox")]
 pub fn scoped_cache(dir: &Path) -> CacheGuard {

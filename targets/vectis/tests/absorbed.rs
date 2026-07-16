@@ -47,7 +47,7 @@ fn platform_filter_matrix() {
     assert!(matches!(err, VectisError::InvalidProject { .. }));
 }
 
-// Pins the platform naming conventions (`1x` omits the `@` suffix).
+// `1x` omits the `@` suffix.
 #[test]
 fn scale_and_filename_conventions() {
     assert_eq!(kebab_to_snake("onboarding-hero"), "onboarding_hero");
@@ -167,8 +167,7 @@ fn export_layout_matrix() {
     assert!(android.artifacts.iter().any(|path| path.contains("mipmap-xxxhdpi")));
 }
 
-// Roles/kinds without a canonical master (`photo`, `symbol`, raster UI
-// icons) do not auto-convert.
+// Roles/kinds without a canonical master do not auto-convert.
 #[test]
 fn unsupported_roles() {
     assert!(export_layout("photo", "raster", Platform::Ios, "hero").is_none());
@@ -176,8 +175,7 @@ fn unsupported_roles() {
     assert!(export_layout("icon", "raster", Platform::Android, "badge").is_none());
 }
 
-// The artifact entry wins over the sidecar Contents.json; auto-pins fill
-// only absent platform slots.
+// Artifact entry wins over sidecar Contents.json; auto-pins fill absent slots only.
 #[test]
 fn yaml_pins_matrix() {
     let assets = Map::from_iter([(
@@ -338,7 +336,7 @@ fn launcher_canvas_matrix() {
     assert_eq!(canvas.image.get_pixel(0, 0)[3], 128);
 }
 
-// An ios raster imageset needs a materialized file beyond Contents.json.
+// iOS raster imageset needs a materialized file beyond Contents.json.
 #[test]
 fn conventional_export_matrix() {
     let tmp = tempdir().expect("tempdir");
@@ -371,7 +369,7 @@ fn group(items: Value) -> Value {
     Value::Object(map)
 }
 
-// Bind/event wiring tolerance lives in normalisation, never the hash.
+// Bind/event wiring is ignored by fingerprinting.
 #[test]
 fn fingerprint_and_skeleton_matrix() {
     let skeleton = build_group_skeleton(&group(json!([
