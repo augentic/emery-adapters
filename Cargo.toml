@@ -18,7 +18,6 @@ version = "0.1.0"
 publish = false
 
 [workspace.dependencies]
-adapter = { path = "crates/adapter" }
 anyhow = "1.0.103"
 cfg-if = "1.0.4"
 image = { version = "0.25.10", default-features = false, features = [
@@ -27,7 +26,6 @@ image = { version = "0.25.10", default-features = false, features = [
     "webp",
 ] }
 jsonschema = { version = "0.47.0", default-features = false }
-prose = { path = "crates/prose" }
 resvg = { version = "0.47.0", default-features = false }
 semver = "1"
 serde = { version = "1.0.228", features = ["derive"] }
@@ -46,9 +44,12 @@ wit-bindgen = { version = "0.59.0", features = ["async-spawn"] }
 omnia = "0.35.0"
 omnia-cursor = "0.28.0"
 omnia-guest = "0.35.0"
-omnia-testkit = { version = "0.35.0", default-features = false }
+omnia-testkit = "0.35.0"
 omnia-wasi-http = "0.35.0"
 omnia-wasi-model = "0.35.0"
+
+adapter = { path = "crates/adapter" }
+prose = { path = "crates/prose" }
 
 [patch.crates-io]
 omnia = { git = "https://github.com/augentic/omnia.git" }

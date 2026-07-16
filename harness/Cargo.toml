@@ -28,7 +28,7 @@ wasip3.workspace = true
 wit-bindgen.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-omnia-testkit = { workspace = true, features = ["runtime"] }
+omnia-testkit.workspace = true
 prose.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true

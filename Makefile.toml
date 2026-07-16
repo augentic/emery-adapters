@@ -242,6 +242,10 @@ export SPECIFY_DOCUMENTATION_MCP_URL="http://$HTTP_ADDR/mcp/documentation"
 export SPECIFY_INTENT_MCP_URL="http://$HTTP_ADDR/mcp/intent"
 export SPECIFY_CONTRACTS_MCP_URL="http://$HTTP_ADDR/mcp/contracts"
 
+# Each verb is one `wasi:cli/run` invocation; live judgment legs run for
+# minutes, so lift omnia's 30s default wall-clock cap.
+export GUEST_TIMEOUT_MS="${GUEST_TIMEOUT_MS:-3600000}"
+
 run() {
   ./target/debug/examples/eval-driver run --config examples/change/omnia.toml -- "$@"
 }
