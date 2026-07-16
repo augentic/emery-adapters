@@ -1,7 +1,3 @@
-//! The judgment operation template against Omnia's recorded scripted harness:
-//! prompt assembly, schema-gated formats, the phase-leg decomposition,
-//! and the deterministic report-coherence gate with its bounded repair.
-
 use std::path::Path;
 
 use adapter::answers::REPORT_ANSWER_SCHEMA;

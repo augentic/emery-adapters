@@ -1,8 +1,3 @@
-//! The per-axis operations traits: implementable on one native type
-//! across both axes, dispatchable through compile-checked trait bounds
-//! (the native-catalog pattern), with the references-server identity
-//! projected from `NAME`.
-
 use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA, evidence_tail, leads_tail};
 use adapter::registry::Doc;
 use adapter::seam::{
@@ -17,8 +12,6 @@ const DOCS: &[Doc] = &[Doc {
     body: "SURVEY",
 }];
 
-/// One native type may implement both operations traits — the one-axis
-/// rule constrains component exports, not native impls.
 struct Probe;
 
 impl Source for Probe {
@@ -101,8 +94,6 @@ fn ctx() -> Context<'static> {
     }
 }
 
-/// The native-catalog dispatch shape: a function generic over the trait
-/// resolves `A::survey` statically, no path convention involved.
 async fn survey_of<A: Source, M: Model>(model: &M, ctx: &Context<'_>) -> Result<Vec<Lead>, Error> {
     A::survey(model, ctx).await
 }
@@ -137,8 +128,6 @@ async fn target_dispatch() {
     assert_eq!(Probe::guidance(), "GUIDANCE");
 }
 
-/// The catalog's vtable pattern: associated functions coerce to plain
-/// `fn` pointers, so an entry carries no macro-shaped thunks.
 #[test]
 fn fn_pointer_coercion() {
     let metadata: fn() -> SourceMetadata = <Probe as Source>::metadata;

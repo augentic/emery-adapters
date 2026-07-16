@@ -1,7 +1,3 @@
-//! The judgment operation template against Omnia's recorded scripted harness:
-//! prompt assembly, schema-gated formats, answer projection, the
-//! bounded verify-repair loop, and validate-before-visible enforcement.
-
 use std::fs;
 use std::path::Path;
 

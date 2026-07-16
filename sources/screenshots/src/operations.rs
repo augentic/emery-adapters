@@ -1,11 +1,3 @@
-//! The [`Screenshots`] adapter: `survey` and `extract` — schema-gated
-//! legs through [`adapter::repaired`], with the id-grammar answer
-//! tails repaired inside its bounded loop.
-//!
-//! The judgment detail — the vision prerequisite, the
-//! spatial-inference pipeline, the `region` / `container` / `leaf`
-//! claim kinds — rides in the embedded prompts.
-
 use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA, evidence_tail, leads_tail};
 use adapter::registry::Doc;
 use adapter::seam::{Context, Error, Evidence, Lead, SourceMetadata};
@@ -13,7 +5,6 @@ use adapter::{Model, Source, repaired};
 
 use crate::registry;
 
-/// Session-less state note both prompts carry.
 const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and there is no \
                             session: every input you need lives in the workspace tree and this \
                             prompt. Resolve the bound source material from the plan — read \
@@ -24,15 +15,13 @@ const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and
                             prerequisite applies: read the images themselves, never fall back \
                             to filename or metadata inference.";
 
-/// The screenshots source adapter: screen images surveyed into
-/// per-screen leads and extracted into spatial Evidence.
+/// Screen images → per-screen leads and spatial Evidence.
 #[derive(Clone, Copy, Debug)]
 pub struct Screenshots;
 
 impl Source for Screenshots {
     const NAME: &'static str = "screenshots";
 
-    /// Resolve-time `metadata`: no compatibility floor.
     fn metadata() -> SourceMetadata {
         SourceMetadata { specify_floor: None }
     }
@@ -41,15 +30,6 @@ impl Source for Screenshots {
         registry::docs()
     }
 
-    /// Survey the bound screen-image set into leads, one per screen.
-    ///
-    /// One schema-gated leg over `prompts/survey.md`, with the id-grammar
-    /// tail repaired inside the bounded loop.
-    ///
-    /// # Errors
-    ///
-    /// As [`adapter::repaired`]; a tail failure that survives the
-    /// repair budget is [`Error::Internal`].
     async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>, Error> {
         let system = registry::body("prompts/survey.md").to_string();
         let user = format!(
@@ -68,16 +48,6 @@ impl Source for Screenshots {
         repaired(model, ctx, system, user, "leads", LEADS_ANSWER_SCHEMA, leads_tail).await
     }
 
-    /// Extract one lead's spatial Evidence from the bound screen images.
-    ///
-    /// One schema-gated leg over `prompts/extract.md` (emitting `region` /
-    /// `container` / `leaf` claims), with the claim-id tail repaired
-    /// inside the bounded loop.
-    ///
-    /// # Errors
-    ///
-    /// As [`adapter::repaired`]; a tail failure that survives the
-    /// repair budget is [`Error::Internal`].
     async fn extract<P: Model>(
         model: &P, ctx: &Context<'_>, lead: &Lead,
     ) -> Result<Evidence, Error> {

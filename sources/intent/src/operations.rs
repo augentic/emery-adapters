@@ -1,10 +1,5 @@
-//! The [`Intent`] adapter: `survey` and `extract` — schema-gated
-//! legs through [`adapter::repaired`], with the id-grammar answer
-//! tails repaired inside its bounded loop.
-//!
-//! The intent source is degenerate by construction: the binding
-//! carries the operator's free-form intent string inline, so both legs
-//! echo rather than infer.
+//! Intent bindings carry the operator's free-form brief inline, so both
+//! legs echo rather than infer.
 
 use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA, evidence_tail, leads_tail};
 use adapter::registry::Doc;
@@ -13,9 +8,6 @@ use adapter::{Model, Source, repaired};
 
 use crate::registry;
 
-/// Session-less state note both prompts carry. Intent bindings are
-/// inline: the operator's brief rides in the plan itself, and no
-/// source tree is preopened.
 const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and there is no \
                             session: every input you need lives in the workspace tree and this \
                             prompt. Resolve the bound source material from the plan — read \
@@ -24,15 +16,13 @@ const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and
                             carries the operator's free-form intent string, verbatim (`path` \
                             is absent for intent bindings — no source tree is bound).";
 
-/// The intent source adapter: the operator's inline intent binding
-/// echoed into its single lead and `kind: intent` claim.
+/// Inline intent binding → one lead and one `kind: intent` claim.
 #[derive(Clone, Copy, Debug)]
 pub struct Intent;
 
 impl Source for Intent {
     const NAME: &'static str = "intent";
 
-    /// Resolve-time `metadata`: no compatibility floor.
     fn metadata() -> SourceMetadata {
         SourceMetadata { specify_floor: None }
     }
@@ -41,15 +31,6 @@ impl Source for Intent {
         registry::docs()
     }
 
-    /// Survey the inline intent binding into its single lead.
-    ///
-    /// One schema-gated leg over `prompts/survey.md`, with the id-grammar
-    /// tail repaired inside the bounded loop.
-    ///
-    /// # Errors
-    ///
-    /// As [`adapter::repaired`]; a tail failure that survives the
-    /// repair budget is [`Error::Internal`].
     async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>, Error> {
         let system = registry::body("prompts/survey.md").to_string();
         let user = format!(
@@ -69,16 +50,6 @@ impl Source for Intent {
         repaired(model, ctx, system, user, "leads", LEADS_ANSWER_SCHEMA, leads_tail).await
     }
 
-    /// Extract the lead's Evidence: the single `kind: intent` claim
-    /// echoing the operator's intent string.
-    ///
-    /// One schema-gated leg over `prompts/extract.md`, with the claim-id
-    /// tail repaired inside the bounded loop.
-    ///
-    /// # Errors
-    ///
-    /// As [`adapter::repaired`]; a tail failure that survives the
-    /// repair budget is [`Error::Internal`].
     async fn extract<P: Model>(
         model: &P, ctx: &Context<'_>, lead: &Lead,
     ) -> Result<Evidence, Error> {

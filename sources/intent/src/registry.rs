@@ -4,4 +4,4 @@
 //! Served as `doc://` resources by the guest's MCP references; the
 //! operations read prompt bodies from it.
 
-adapter::embed_registry!();
+adapter::registry!();

@@ -1,12 +1,7 @@
 //! Build-time codegen for adapter guests' embedded prose registries.
 //!
-//! An adapter's `build.rs` calls [`emit`]; every markdown document under
-//! the adapter's `prose/` tree is embedded — if it is in `prose/`, it
-//! ships. Registry keys omit the `prose/` prefix. The walk follows
-//! directory symlinks, inlining resolved content under the symlink-name
-//! path, and writes `<out_dir>/registry_docs.rs`: one `Doc` entry per
-//! markdown file, with the body pulled in by `include_str!`. A dangling
-//! symlink or unreadable tree fails the build.
+//! [`emit`] walks `prose/` (following directory symlinks) and writes a
+//! sorted `DOCS` table to `$OUT_DIR/registry_docs.rs`.
 
 use std::fmt::Write as _;
 use std::fs;

@@ -1,11 +1,7 @@
-//! The judgment operation template: `guidance`, `build`, and `merge`,
-//! over the shared [`phase`] scaffolding.
+//! `guidance` / `build` / `merge` over shared [`phase`] scaffolding.
 //!
-//! `build` runs a generation leg (crate / test / guest writers plus
-//! the agent-run cargo verify-repair loop), a review leg, a replay leg
-//! (self-skipping when no `captures` source is bound), then a report
-//! leg gated by the report-coherence check: declared `outputs` paths
-//! exist and a `success` report carries no blocking findings.
+//! Build: generation → review → replay (self-skips without `captures`) →
+//! report, then a report-coherence gate.
 
 use std::path::Path;
 
@@ -17,23 +13,17 @@ use adapter::{Model, Target, phase};
 
 use crate::registry;
 
-/// Pointer to the adapter's MCP references carried by every leg's user
-/// prompt, so the agent fetches specialist material lazily.
 const REFERENCES_POINTER: &str = "Every prompt, reference, and rule document this adapter ships is \
      served by the granted `omnia-references` MCP references (`list_docs` / `read_doc`, adapter-relative \
      paths like `references/guardrails.md`); fetch documents the prompts cite lazily from there.";
 
-/// The omnia target adapter: Rust crates, tests, and guest scaffolding
-/// generated for Omnia deployments.
+/// Rust crates, tests, and guest scaffolding for Omnia deployments.
 #[derive(Clone, Copy, Debug)]
 pub struct Omnia;
 
 impl Target for Omnia {
     const NAME: &'static str = "omnia";
 
-    /// Resolve-time `metadata`: no compatibility floor, no
-    /// declared build inputs (omnia reads the working tree's `Cargo.toml`
-    /// directly, not a slice-tree input), no platform capability.
     fn metadata() -> TargetMetadata {
         TargetMetadata {
             specify_floor: None,
@@ -46,20 +36,10 @@ impl Target for Omnia {
         registry::docs()
     }
 
-    /// The embedded guidance prompt (no judgment leg).
     fn guidance() -> &'static str {
         registry::body("prompts/guidance.md")
     }
 
-    /// Build a slice's crate, tests, and guest scaffolding.
-    ///
-    /// A generation leg, a review leg, a replay leg (self-skipping when no
-    /// `captures` source is bound), a report leg, then the
-    /// report-coherence gate with one bounded repair leg.
-    ///
-    /// # Errors
-    ///
-    /// As [`adapter::judgment`].
     async fn build<P: Model>(
         model: &P, ctx: &Context<'_>, slice: &str, inputs: &[Input], tree: &WorkingTree,
     ) -> Result<Report, Error> {
@@ -67,9 +47,8 @@ impl Target for Omnia {
         let inputs_block = phase::render_inputs(inputs);
         let build_prompt = registry::body("prompts/build.md");
 
-        // The writer prompts ride in one system channel because the
-        // verify-repair loop crosses all three: a cargo failure re-enters
-        // the owning writer prompt, so one agent leg must hold them together.
+        // Writer prompts share one system channel: verify-repair re-enters
+        // the owning writer, so one leg must hold crate / test / guest together.
         let system = assemble(&[
             "prompts/build.md",
             "prompts/guidance.md",
@@ -90,8 +69,7 @@ impl Target for Omnia {
         );
         let generation = phase::phase(model, ctx, system, user, "generation").await?;
 
-        // The review remediation cycle may re-enter the writer prompts and
-        // the verify-repair loop with tighter caps.
+        // Review remediation may re-enter the writers and verify-repair.
         let system = assemble(&["prompts/build.md", "prompts/build/review.md"]);
         let user = format!(
             "Run the standards-review leg of the omnia build for slice `{slice}`: \
@@ -102,8 +80,7 @@ impl Target for Omnia {
         );
         let review = phase::phase(model, ctx, system, user, "review").await?;
 
-        // Only the workspace knows whether a `captures` source is bound,
-        // so the leg judges applicability itself and self-skips.
+        // Applicability is workspace-local; the leg self-skips when unbound.
         let system = assemble(&["prompts/build.md", "prompts/build/replay.md"]);
         let user = format!(
             "Run the capture-replay leg of the omnia build for slice `{slice}`. \
@@ -113,7 +90,6 @@ impl Target for Omnia {
         );
         let replay = phase::phase(model, ctx, system, user, "replay").await?;
 
-        // Report answer, gated by the answer schema.
         let user = format!(
             "Write the build report for slice `{slice}` per the build prompt's \
          `## Build report`. First mark the completed `tasks.md` checkboxes in the \
@@ -132,23 +108,10 @@ impl Target for Omnia {
         gate_report(model, ctx, build_prompt, report, &tree_root, "build").await
     }
 
-    /// Gate a built slice's landing on the merge prompt's preflight
-    /// verification, dispatched once per merge phase around the engine's
-    /// deterministic core merge.
-    ///
-    /// `preflight` runs one judgment leg over the merge prompt's § Omnia
-    /// pre-merge gate (agent-run cargo / clippy / test / wasm32 in the lent
-    /// workspace, where the build already wrote the slice's code in place),
-    /// then the report-coherence gate runs in core. Omnia declares no
-    /// merged-baseline validator, so `postflight` answers a clean success
-    /// report deterministically — no judgment leg.
-    ///
-    /// # Errors
-    ///
-    /// As [`adapter::judgment`].
     async fn merge<P: Model>(
         model: &P, ctx: &Context<'_>, slice: &str, phase: MergePhase, tree: &WorkingTree,
     ) -> Result<Report, Error> {
+        // No merged-baseline validator — postflight is deterministic success.
         if phase == MergePhase::Postflight {
             return Ok(Report::success());
         }
@@ -177,9 +140,6 @@ fn assemble(prompts: &[&str]) -> String {
     phase::assemble_system(&bodies)
 }
 
-/// Report-coherence gate with one bounded repair leg: when a `success`
-/// report declares outputs the tree does not contain, one repair leg
-/// gets the discrepancies; residual discrepancies force `failure`.
 async fn gate_report<P: Model>(
     model: &P, ctx: &Context<'_>, prompt: &str, mut report: Report, tree_root: &Path,
     operation: &str,

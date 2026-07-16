@@ -1,6 +1,3 @@
-//! Typescript-specific operation behavior: the source-tree binding note,
-//! the framework-grammar survey framing, and the references pointer.
-
 use std::path::Path;
 
 use adapter::Source as _;

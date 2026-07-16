@@ -1,14 +1,7 @@
-//! The vectis target adapter, natively testable against a mock
-//! [`adapter::Model`]; the wasm32-only `guest` module is one
-//! `adapter::target!` invocation.
+//! Vectis target adapter.
 //!
-//! [`Vectis`] (the `adapter::Target` implementor in `operations`)
-//! carries the build prompt's phase legs and validator gate. The
-//! remaining modules are deterministic libraries the guest calls as
-//! prelude / postlude around the judgment legs: validation, asset
-//! materialization, prepare orchestration, shell verification, Crux
-//! scaffolding, scaffold sync, and the Android Gradle-wrapper
-//! bootstrap. `registry` holds the embedded prose.
+//! [`Vectis`] owns the judgment legs; the other modules are deterministic
+//! prelude / postlude helpers (validate, materialize, scaffold, verify).
 
 pub mod android;
 pub mod android_scaffold;

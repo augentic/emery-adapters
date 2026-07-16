@@ -5,4 +5,4 @@
 //! Served as `doc://` MCP resources and read for system-prompt
 //! assembly.
 
-adapter::embed_registry!();
+adapter::registry!();

@@ -1,8 +1,4 @@
-//! The contracts target adapter: [`Contracts`] (the `adapter::Target`
-//! implementor carrying the format sub-flows, verify-repair loop, and
-//! validate-before-visible enforcement), [`validate`]
-//! (baseline-contract validators), and `registry` (embedded prose).
-//! The wasm32-only `guest` module is one `adapter::target!` invocation.
+//! Contracts target adapter.
 
 mod operations;
 mod registry;

@@ -1,5 +1,3 @@
-//! Intent-specific operation behavior: the degenerate inline binding.
-
 use std::path::Path;
 
 use adapter::Source as _;

@@ -1,17 +1,7 @@
-//! The `target-adapter` world bindings, generated once and shared by
-//! every target adapter shim.
+//! `target-adapter` WIT bindings and the `target!` export macro.
 //!
-//! Follows omnia's `wasi-*` guest convention: one `wit_bindgen::generate!`
-//! in a library crate with `pub_export_macro` and flat re-exports. An
-//! adapter implements [`crate::Target`] and wires it into the component
-//! exports with one `adapter::target!` invocation — the macro expands
-//! only the leaf-owned wiring (the world [`export!`], the `wasi:http`
-//! references export, and the crate-version stamp) and delegates every
-//! operation to the typed [`dispatch_metadata`] / [`dispatch_guidance`] /
-//! [`dispatch_build`] / [`dispatch_merge`] functions here.
-//!
-//! The [`From`] impls map the generated records onto the [`crate::seam`]
-//! vocabulary at the export boundary.
+//! One `wit_bindgen::generate!` here; leaf crates wire a [`crate::Target`]
+//! implementor with `adapter::target!(…)`.
 
 mod generated {
     #![allow(
@@ -173,27 +163,21 @@ impl From<crate::seam::Error> for Error {
     }
 }
 
-/// `metadata` for a [`crate::Target`] implementor, mapped onto the
-/// generated record.
+/// Map [`crate::Target::metadata`] onto the WIT record.
 #[must_use]
 pub fn dispatch_metadata<A: crate::Target>() -> AdapterMetadata {
     A::metadata().into()
 }
 
-/// `guidance` for a [`crate::Target`] implementor.
+/// Infallible today; WIT marks the operation fallible, so this returns `Result`.
 ///
 /// # Errors
 ///
-/// Infallible today; the WIT operation is fallible, so the dispatch
-/// carries the `Result`.
+/// Never — always `Ok`.
 pub fn dispatch_guidance<A: crate::Target>() -> Result<String, Error> {
     Ok(A::guidance().to_string())
 }
 
-/// `build` for a [`crate::Target`] implementor: the guest context
-/// (MCP references URL resolved from `A::NAME`), the `WasiModel`
-/// binding, and the WIT conversions at the export boundary.
-///
 /// # Errors
 ///
 /// As the implementor's [`build`](crate::Target::build).
@@ -210,10 +194,6 @@ pub async fn dispatch_build<A: crate::Target>(
         .map_err(Into::into)
 }
 
-/// `merge` for a [`crate::Target`] implementor: the guest context
-/// (MCP references URL resolved from `A::NAME`), the `WasiModel`
-/// binding, and the WIT conversions at the export boundary.
-///
 /// # Errors
 ///
 /// As the implementor's [`merge`](crate::Target::merge).
@@ -231,14 +211,6 @@ pub async fn dispatch_merge<A: crate::Target>(
 }
 
 /// Wire a [`crate::Target`] implementor into the component exports.
-///
-/// Expands to the generated WIT [`Guest`] implementation delegating to
-/// the typed dispatch functions, the `target-adapter` world [`export!`],
-/// and the `wasi:http` references export serving the implementor's docs
-/// with the server identity projected from `A::NAME` and the component
-/// version stamped from the declaring crate's `CARGO_PKG_VERSION`.
-///
-/// The complete wasm shim of a target adapter:
 ///
 /// ```ignore
 /// adapter::target!(crate::Vectis);

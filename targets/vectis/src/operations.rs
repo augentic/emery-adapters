@@ -1,13 +1,8 @@
-//! The judgment operation template: `guidance`, `build`, and `merge`,
-//! over the shared [`phase`] scaffolding.
+//! `guidance` / `build` / `merge` over shared [`phase`] scaffolding.
 //!
-//! Judgment legs are bracketed deterministically: the
-//! [`crate::prepare`] materialize step runs as the *prelude*, and the
-//! [`crate::validate`] composition / tokens / assets cross-checks run
-//! as the *postlude*, feeding a bounded repair loop. `build` decomposes
-//! along the build prompt's phase order (composition → core → per-shell
-//! → review → report); host-command verification (cargo, xcodebuild,
-//! Gradle) is process-spawning and stays agent-side in the prompts.
+//! Judgment legs sit between a deterministic prepare prelude and a
+//! validate / report-coherence postlude. Build order: composition →
+//! core → per-shell → review → report. Host verify stays agent-side.
 
 use std::path::Path;
 
@@ -24,28 +19,20 @@ use crate::{
     shell, validate, verify,
 };
 
-/// Maximum composition validator repair iterations after the
-/// composition leg.
 const MAX_VALIDATE_REPAIR_ITERATIONS: usize = 2;
 
-/// Pointer at the adapter's own MCP references carried by every judgment
-/// leg's user prompt, so the agent fetches specialist material lazily.
 const REFERENCES_POINTER: &str = "Every prompt, reference, and rule document this adapter ships is \
      served by the granted `vectis-references` MCP references (`list_docs` / `read_doc`, \
      adapter-relative paths like `references/hard-rules-core.md` or \
      `prompts/build/ios/write.md`); fetch documents the prompts cite lazily from there.";
 
-/// The vectis target adapter: Crux shared cores plus `SwiftUI` and
-/// Jetpack Compose shells generated from synthesised Specify artifacts.
+/// Crux shared cores plus SwiftUI / Jetpack Compose shells.
 #[derive(Clone, Copy, Debug)]
 pub struct Vectis;
 
 impl Target for Vectis {
     const NAME: &'static str = "vectis";
 
-    /// Deterministic metadata for the `metadata` operation: three
-    /// optional design-system build inputs and a required platform
-    /// declaration defaulting to core + the two supported shells.
     fn metadata() -> TargetMetadata {
         let optional = |path: &str| BuildInput {
             path: path.to_string(),
@@ -76,36 +63,10 @@ impl Target for Vectis {
         registry::docs()
     }
 
-    /// The embedded guidance prompt, returned deterministically (no
-    /// judgment leg).
     fn guidance() -> &'static str {
         registry::body("prompts/guidance.md")
     }
 
-    /// Build a slice's Crux core, shell code, and regenerated
-    /// `composition.yaml` per the build prompt's phase order:
-    ///
-    /// 1. **Prelude (deterministic)** — [`prepare::materialize_step`] scope
-    ///    resolution and conditional materialize, then the §L bootstrap
-    ///    app-icon gate — error findings park the build before any
-    ///    judgment leg.
-    /// 2. **Composition leg** (Step 0.5 + Phase 1), then the in-guest
-    ///    composition validator gate with a bounded repair loop — an
-    ///    exhausted budget parks the slice.
-    /// 3. **Core leg** (Phases 2–3), one **shell leg** per declared shell
-    ///    platform (Phases 4–5), then the **review leg** (Phases 6–7).
-    /// 4. One report leg (Phases 8–9), with the agent-run shell verify gate
-    ///    instructed in its prompt.
-    /// 5. **Postlude (deterministic)** — the composition cross-checks plus
-    ///    the report-coherence walk, with one bounded repair leg; residual
-    ///    findings force `failure`, and the A4 ui-surface coherence
-    ///    warnings ride the final report as non-blocking suggestions.
-    ///
-    /// # Errors
-    ///
-    /// As [`adapter::judgment`], plus [`Error::Io`] /
-    /// [`Error::InvalidRequest`] when the deterministic prelude cannot read
-    /// the workspace's design-system inputs.
     #[expect(
         clippy::too_many_lines,
         reason = "One linear leg-by-leg walk of the prompt's phase order; splitting hides the order."
@@ -296,23 +257,6 @@ impl Target for Vectis {
         Ok(report)
     }
 
-    /// Run one merge gate per the merge prompt, dispatched once per phase
-    /// around the engine's deterministic core merge.
-    ///
-    /// `preflight` is fully deterministic: the composition validator runs
-    /// against the staged slice composition, and blocking findings park the
-    /// merge with the slice still `built` — no judgment leg. `postflight`
-    /// runs one judgment leg over the prompt's host cap-matrix
-    /// re-verification (agent-run in the lent workspace, after the engine
-    /// folded the slice's deltas — including `composition.yaml` — into the
-    /// baseline), then the deterministic postlude re-runs the composition
-    /// validator against the merged baseline
-    /// (`.specify/specs/composition.yaml`) plus the report-coherence walk,
-    /// with one bounded repair leg.
-    ///
-    /// # Errors
-    ///
-    /// As [`adapter::judgment`].
     async fn merge<P: Model>(
         model: &P, ctx: &Context<'_>, slice: &str, phase: MergePhase, tree: &WorkingTree,
     ) -> Result<Report, Error> {
@@ -364,21 +308,12 @@ impl Target for Vectis {
     }
 }
 
-/// One per-shell write leg the declared platform set enables.
 struct ShellLeg {
-    /// Platform token (`ios` / `android`), used in prompts and answer
-    /// schema names.
     name: &'static str,
-    /// Registry path of the platform's write prompt.
     write_prompt: &'static str,
-    /// Registry path of the platform's review prompt.
     review_prompt: &'static str,
 }
 
-/// The shell platforms with build prompts, in the build prompt's
-/// dependency order (core first is implicit; iOS and Android generation
-/// legs are independent but run serially here — their verify halves
-/// share the same cargo workspace lock anyway, per the prompt).
 const SHELL_LEGS: [ShellLeg; 2] = [
     ShellLeg {
         name: "ios",
@@ -392,14 +327,8 @@ const SHELL_LEGS: [ShellLeg; 2] = [
     },
 ];
 
-/// The shell write legs the project's declared platform set enables.
-///
-/// Reads `project.yaml.platforms`: a declared set without `ios` /
-/// `android` is a backend-only build and skips the shell legs wholesale;
-/// an absent or unreadable declaration falls back to the adapter's
-/// default shell set (both), with each leg still free to self-skip via
-/// `applicable: false`. `web` / `desktop` have no prompt and are
-/// silently skipped.
+// Absent / unreadable `project.yaml.platforms` → both shells; `web` /
+// `desktop` have no prompt and never match.
 fn declared_shell_legs(project_root: &Path) -> Vec<&'static ShellLeg> {
     let declared = declared_platforms(project_root);
     SHELL_LEGS
@@ -408,8 +337,6 @@ fn declared_shell_legs(project_root: &Path) -> Vec<&'static ShellLeg> {
         .collect()
 }
 
-/// The `platforms:` list from `.specify/project.yaml`, or `None` when
-/// the file is absent or does not carry a string array.
 fn declared_platforms(project_root: &Path) -> Option<Vec<String>> {
     let source = std::fs::read_to_string(project_root.join(".specify/project.yaml")).ok()?;
     let doc: Value = serde_saphyr::from_str(&source).ok()?;
@@ -417,12 +344,6 @@ fn declared_platforms(project_root: &Path) -> Option<Vec<String>> {
     Some(platforms.iter().filter_map(Value::as_str).map(str::to_string).collect())
 }
 
-/// The in-guest composition validator gate, with its bounded repair loop
-/// — the per-shell write prompts require this gate passed before any
-/// platform phase, so it runs right after the composition leg rather
-/// than with the postlude. Returns the residual findings after the
-/// repair budget: non-empty means the gate did not clear and the build
-/// must park the slice rather than run the platform phases.
 async fn composition_gate<P: Model>(
     model: &P, ctx: &Context<'_>, slice: &str, slice_dir_rel: &str, composition: &Path,
 ) -> Result<Vec<String>, Error> {
@@ -446,19 +367,11 @@ async fn composition_gate<P: Model>(
     Ok(findings)
 }
 
-/// Assemble a system prompt from embedded prompt bodies.
 fn assemble(prompts: &[&str]) -> String {
     let bodies: Vec<&str> = prompts.iter().map(|prompt| registry::body(prompt)).collect();
     phase::assemble_system(&bodies)
 }
 
-/// The deterministic gate after the report answer lands, with one
-/// bounded repair leg: the in-guest composition cross-checks (schema,
-/// structural identity, sibling tokens / assets auto-invoke, reference
-/// resolution) re-run against `composition`, the shell verify gate
-/// re-runs when `shell_verify` is set (the build's Phase 8), and a
-/// `success` report's declared outputs must exist under the tree root.
-/// Residual findings then force `failure` regardless of the answer.
 #[expect(clippy::too_many_arguments, reason = "One internal gate call site per operation.")]
 async fn gate_report<P: Model>(
     model: &P, ctx: &Context<'_>, prompt: &str, mut report: Report, tree_root: &Path,
@@ -487,15 +400,6 @@ async fn gate_report<P: Model>(
     Ok(phase::enforce(report, findings))
 }
 
-/// Error-severity findings from the deterministic shell verify gate
-/// ([`verify::run`] in `verify` mode), one findings-style line each.
-/// Without a declared platform set (`.specify/project.yaml` absent) the
-/// gate has nothing to verify against and stays silent; a present but
-/// unreadable declaration surfaces as a finding so the bounded repair
-/// leg gets a chance to fix the tree.
-/// The deterministic bootstrap app-icon gate's error findings (§L):
-/// one line per declared UI platform whose launcher icon is not
-/// satisfiable. Skipped when no platform set is declared.
 fn bootstrap_findings(tree_root: &Path) -> Vec<String> {
     if !tree_root.join(".specify/project.yaml").exists() {
         return Vec::new();
@@ -542,8 +446,6 @@ fn shell_verify_findings(tree_root: &Path) -> Vec<String> {
     }
 }
 
-/// Render the deterministic shell verify gate's full payload for the
-/// report leg's prompt.
 fn render_verify_gate(tree_root: &Path) -> String {
     let body = if tree_root.join(".specify/project.yaml").exists() {
         match verify::run(verify::VerifyMode::Verify, tree_root) {
@@ -556,12 +458,6 @@ fn render_verify_gate(tree_root: &Path) -> String {
     format!("### shell verify gate (already run in-guest)\n\n{body}")
 }
 
-/// Run the deterministic component-identity clustering (the catalog
-/// infer *report* phase) in-guest and render it for the composition
-/// leg's prompt. Mirrors the workflow verb's input wiring: the merged
-/// baseline, the screenshots candidate cache when present, and the
-/// operator `parts.yaml` when present. An absent baseline is an empty
-/// report (nothing to name).
 fn render_infer_report(tree_root: &Path) -> String {
     let composition = tree_root.join(".specify/specs/composition.yaml");
     let report = if composition.exists() {
@@ -583,12 +479,6 @@ fn render_infer_report(tree_root: &Path) -> String {
     format!("### component-identity cluster report (already run in-guest)\n\n{report}")
 }
 
-/// Deterministic create-mode scaffolding: stand up the core tree and
-/// every declared shell tree that is absent, from the embedded
-/// templates, then render a summary block for the write legs' prompts.
-/// The app name resolves from an existing shell first, then Pascal case
-/// of the `project.yaml` `name:`; when no name resolves (or a scaffold
-/// refuses), the note tells the leg's writer the tree is still absent.
 fn scaffold_missing_trees(tree_root: &Path) -> String {
     let mut notes: Vec<String> = Vec::new();
     let mut targets: Vec<&'static str> = Vec::new();
@@ -645,9 +535,6 @@ fn scaffold_missing_trees(tree_root: &Path) -> String {
     )
 }
 
-/// Resolve the scaffold app name: an existing iOS or Android shell
-/// first (their trees carry the name), then Pascal case of the
-/// `project.yaml` `name:` field.
 fn resolve_scaffold_app_name(tree_root: &Path) -> Option<String> {
     if let Ok(name) = ios_scaffold::resolve_ios_app_name(tree_root) {
         return Some(name);
@@ -673,12 +560,7 @@ fn resolve_scaffold_app_name(tree_root: &Path) -> Option<String> {
     scaffold::validate_app_name(&pascal).ok().map(|()| pascal)
 }
 
-/// Re-render one shell's agent-immutable scaffold files around its
-/// write leg (for Android also the idempotent vendored Gradle-wrapper
-/// install).
-/// Returns a note for the report leg when the sync could not run; a
-/// clean sync is silent (drift would resurface through the
-/// deterministic verify gate anyway).
+// Note only on failure; a clean sync is silent.
 fn sync_shell_scaffold(tree_root: &Path, name: &str) -> Option<String> {
     if !shell::shell_present(tree_root, name) {
         return None;
@@ -700,22 +582,7 @@ fn sync_shell_scaffold(tree_root: &Path, name: &str) -> Option<String> {
     outcome.err().map(|err| format!("- deterministic `{name}` scaffold sync could not run: {err}"))
 }
 
-/// Compare the report's authored `ui-surface` signal against the
-/// produced slice `composition.yaml` and return the non-blocking A4
-/// coherence warnings.
-///
-/// A pure self-consistency check: both the UI-surface judgement and the
-/// composition output come from the agent, so the gate never re-derives
-/// screen identification — it only catches the agent contradicting
-/// itself. The warnings are `suggestion` severity (never blocking); they
-/// ride the report but never fail it.
-///
-/// - `ui-surface.screens: 0` but the composition declares a UI surface ⇒
-///   `composition-unexpected-for-non-ui-slice`.
-/// - `ui-surface.screens > 0` but the composition is empty or absent ⇒
-///   `composition-empty-for-ui-slice`.
-///
-/// A report without `ui-surface` emits nothing.
+// A4 self-consistency only (`suggestion`); never fails the report.
 fn ui_surface_coherence(report: &Report, composition: &Path) -> Vec<Finding> {
     let Some(ui_surface) = report.ui_surface else {
         return Vec::new();
@@ -743,7 +610,6 @@ fn ui_surface_coherence(report: &Report, composition: &Path) -> Vec<Finding> {
     warnings
 }
 
-/// One non-blocking A4 coherence warning.
 fn ui_surface_warning(rule_id: &str, detail: String) -> Finding {
     Finding {
         rule_id: Some(rule_id.to_string()),
@@ -752,14 +618,6 @@ fn ui_surface_warning(rule_id: &str, detail: String) -> Finding {
     }
 }
 
-/// Whether the composition at `path` declares any UI surface (A4's
-/// "non-empty" definition).
-///
-/// Non-empty: a `screens:` map with ≥1 entry, or a `delta:` envelope
-/// with any `added` / `modified` / `removed` entry. Empty: an absent
-/// file, a `screens: {}` map, or an all-empty `delta:`. A malformed or
-/// unreadable file is treated as empty — the coherence check is
-/// advisory and never aborts.
 fn composition_declares_surface(path: &Path) -> bool {
     let Ok(text) = std::fs::read_to_string(path) else {
         return false;
@@ -779,11 +637,7 @@ fn composition_declares_surface(path: &Path) -> bool {
     })
 }
 
-/// The in-guest validator findings for one composition artifact, one
-/// findings-style line each. An absent artifact is clean by design (a
-/// core-only slice or a pre-first-merge baseline carries none); an
-/// unreadable one surfaces as a finding rather than an error so the
-/// bounded repair leg gets a chance to fix the tree.
+// Absent composition is clean (core-only / pre-first-merge).
 fn validation_findings(composition: &Path) -> Vec<String> {
     if !composition.exists() {
         return Vec::new();
@@ -798,8 +652,6 @@ fn validation_findings(composition: &Path) -> Vec<String> {
     }
 }
 
-/// Fold a validation envelope's `errors` (and any auto-invoked
-/// sub-reports under `results`) into findings-style lines.
 fn collect_envelope_errors(envelope: &Value, mode: &str, findings: &mut Vec<String>) {
     let mode = envelope.get("mode").and_then(Value::as_str).unwrap_or(mode);
     if let Some(errors) = envelope.get("errors").and_then(Value::as_array) {
@@ -818,10 +670,6 @@ fn collect_envelope_errors(envelope: &Value, mode: &str, findings: &mut Vec<Stri
     }
 }
 
-/// Map a [`VectisError`] onto the seam error vocabulary: I/O
-/// failures map through, a broken project or design-system input is an
-/// invalid request (the workspace is part of the call's contract), and
-/// internal invariants stay internal.
 fn error_from_vectis(err: VectisError) -> Error {
     match err {
         VectisError::Io(io) => Error::Io(io.to_string()),
@@ -830,8 +678,6 @@ fn error_from_vectis(err: VectisError) -> Error {
     }
 }
 
-/// Render the deterministic prelude's materialize summary for the
-/// composition leg's prompt.
 fn render_prelude(summary: &Value) -> String {
     format!(
         "### prepare prelude (already run in-guest)\n\n\

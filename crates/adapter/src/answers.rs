@@ -1,16 +1,4 @@
-//! Judgment-answer schemas and deserialization.
-//!
-//! Every judgment leg is gated by `format: schema(...)`, so the host
-//! validates the reply against the generated answer schema before the
-//! guest sees it. This module carries the three vendored schema pins
-//! (`schemas/answers/{leads,evidence,report}.schema.json`, generated
-//! upstream from the Rust wire types) and the matching parse functions.
-//! The source-axis answers also get deterministic validation tails
-//! ([`validate_leads`] / [`validate_evidence`]) re-checking the id
-//! grammars alongside what the schemas cannot express (trim-aware
-//! synopses), plus the composed [`leads_tail`] / [`evidence_tail`]
-//! source operations run inside [`crate::repaired`]'s bounded
-//! repair loop.
+//! Judgment-answer schemas, deserializers, and source-axis validation tails.
 
 use serde::Deserialize;
 

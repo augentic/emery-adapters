@@ -1,6 +1,3 @@
-//! Captures-specific operation behavior: `kind: example` claims with the
-//! open `replay-digest` / `input` / `output` body fields.
-
 use std::path::Path;
 
 use adapter::Source as _;

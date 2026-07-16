@@ -1,11 +1,3 @@
-//! The [`Captures`] adapter: `survey` and `extract` — schema-gated
-//! legs through [`adapter::repaired`], with the id-grammar answer
-//! tails repaired inside its bounded loop.
-//!
-//! The judgment detail — the capture-tree layout, the
-//! `kind: example` claim shape with `replay-digest` anchors, the 64 KiB
-//! inline cap — rides in the embedded prompts and references.
-
 use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA, evidence_tail, leads_tail};
 use adapter::registry::Doc;
 use adapter::seam::{Context, Error, Evidence, Lead, SourceMetadata};
@@ -13,7 +5,6 @@ use adapter::{Model, Source, repaired};
 
 use crate::registry;
 
-/// Session-less state note both prompts carry.
 const BINDING_NOTE: &str = "The operator's project workspace is lent to you, \
     and there is no session: every input you need lives in the workspace tree \
     and this prompt. Resolve the bound source material from the plan — read \
@@ -23,15 +14,13 @@ const BINDING_NOTE: &str = "The operator's project workspace is lent to you, \
     calls `$SOURCE_DIR` (the `tests/data/replays/<handler>/` layout \
     `/capture:wiretapper` writes).";
 
-/// The captures source adapter: runtime capture trees surveyed into
-/// per-handler leads and extracted into `kind: example` Evidence.
+/// Runtime capture trees → per-handler leads and `kind: example` Evidence.
 #[derive(Clone, Copy, Debug)]
 pub struct Captures;
 
 impl Source for Captures {
     const NAME: &'static str = "captures";
 
-    /// Resolve-time `metadata`: no compatibility floor.
     fn metadata() -> SourceMetadata {
         SourceMetadata { specify_floor: None }
     }
@@ -40,15 +29,6 @@ impl Source for Captures {
         registry::docs()
     }
 
-    /// Survey the bound capture tree into leads (one per captured handler).
-    ///
-    /// One schema-gated leg over `prompts/survey.md`, with the id-grammar
-    /// tail repaired inside the bounded loop.
-    ///
-    /// # Errors
-    ///
-    /// As [`adapter::repaired`]; a tail failure that survives the
-    /// repair budget is [`Error::Internal`].
     async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>, Error> {
         let system = registry::body("prompts/survey.md").to_string();
         let user = format!(
@@ -67,16 +47,6 @@ impl Source for Captures {
         repaired(model, ctx, system, user, "leads", LEADS_ANSWER_SCHEMA, leads_tail).await
     }
 
-    /// Extract one lead's behavioural Evidence from the bound capture tree.
-    ///
-    /// One leg over `prompts/extract.md` (emitting `kind: example` claims
-    /// with `replay-digest` anchors), with the claim-id tail repaired
-    /// inside the bounded loop.
-    ///
-    /// # Errors
-    ///
-    /// As [`adapter::repaired`]; a tail failure that survives the
-    /// repair budget is [`Error::Internal`].
     async fn extract<P: Model>(
         model: &P, ctx: &Context<'_>, lead: &Lead,
     ) -> Result<Evidence, Error> {

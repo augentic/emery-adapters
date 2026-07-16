@@ -1,12 +1,7 @@
-//! The MCP references server every adapter guest serves over `wasi:http`.
+//! MCP references server every adapter guest serves over `wasi:http`.
 //!
-//! The surface is identical across adapters — `list_docs` / `read_doc`
-//! tools plus `doc://` resources over an embedded prose registry — so one
-//! [`References`] implements `omnia_guest::mcp::McpServer` for all of
-//! them; a shim differs only in its server name and doc table. The
-//! implementation is target-neutral: the wasm shims bridge it through
-//! `References::serve` (wasm-only), and the native harness mounts the
-//! same value via `omnia_guest::mcp::router` on its own listener.
+//! One [`References`] implementation for all adapters; a shim differs
+//! only in server name and doc table.
 
 use omnia_guest::mcp::{
     CallToolResult, Implementation, McpError, McpServer, Resource, ResourceContents, Tool,
@@ -15,15 +10,11 @@ use serde_json::{Value, json};
 
 use crate::registry::{self, Doc};
 
-/// The adapter's own MCP references URL from the environment.
+/// Adapter MCP URL from `SPECIFY_<ADAPTER>_MCP_URL`.
 ///
-/// The deployment convention is `SPECIFY_<ADAPTER>_MCP_URL` (the adapter
-/// name uppercased with `-` mapped to `_`; `contracts` reads
-/// `SPECIFY_CONTRACTS_MCP_URL`). Accepts either the bare adapter name or
-/// the axis-qualified adapter id (`target:contracts`) — the axis prefix
-/// is stripped, matching the grant-name convention on
-/// [`crate::seam::Context::grants`]. Absent means judgment legs run
-/// without a reference grant.
+/// Accepts a bare name or axis-qualified id (`target:contracts`); the
+/// axis prefix is stripped. Absent means judgment legs run without a
+/// reference grant.
 #[must_use]
 pub fn mcp_url(adapter: &str) -> Option<String> {
     let name = adapter.rsplit(':').next().unwrap_or(adapter);
@@ -31,17 +22,11 @@ pub fn mcp_url(adapter: &str) -> Option<String> {
     std::env::var(key).ok()
 }
 
-/// The references-server identity for one adapter: `<name>-references`,
-/// projected from the adapter's declared name.
-///
-/// Interned once per name (the projection leaks one string per adapter
-/// per process), so the identity stays `&'static str` for
-/// [`References::server_name`] without any shim restating its own name.
+/// `<name>-references`, interned once per process so it stays `&'static`.
 ///
 /// # Panics
 ///
-/// If the intern table's lock is poisoned, which no caller can trigger:
-/// the insertion closure does not panic.
+/// If the intern table's lock is poisoned.
 #[must_use]
 pub fn server_name(name: &'static str) -> &'static str {
     static NAMES: std::sync::Mutex<std::collections::BTreeMap<&'static str, &'static str>> =
@@ -53,24 +38,19 @@ pub fn server_name(name: &'static str) -> &'static str {
         .or_insert_with(|| Box::leak(format!("{name}-references").into_boxed_str()))
 }
 
-/// An embedded prose registry served over MCP, addressable by
-/// adapter-relative path.
+/// Embedded prose registry served over MCP.
 #[derive(Clone, Copy, Debug)]
 pub struct References {
-    /// Server identity reported in the `initialize` handshake, e.g.
-    /// `contracts-references`.
+    /// e.g. `contracts-references`.
     pub server_name: &'static str,
-    /// Server version — the shim's own `CARGO_PKG_VERSION`.
+    /// Declaring crate's `CARGO_PKG_VERSION`.
     pub version: &'static str,
-    /// The sorted embedded doc table to serve.
+    /// Sorted embedded doc table.
     pub docs: &'static [Doc],
 }
 
 #[cfg(target_arch = "wasm32")]
 impl References {
-    /// Serve one `wasi:http/incoming-handler` request over this
-    /// server's MCP router.
-    ///
     /// # Errors
     ///
     /// As `omnia_wasi_http::serve` over the router.
@@ -81,12 +61,7 @@ impl References {
     }
 }
 
-/// Serve one `wasi:http` request over an adapter's references identity:
-/// the server name projected from `name` via [`server_name`], the
-/// declaring crate's `version`, and its embedded doc table.
-///
-/// The `source!` / `target!` macro expansions route every reference
-/// request here; only the `CARGO_PKG_VERSION` stamp expands at the leaf.
+/// Serve a `wasi:http` request for an adapter's references identity.
 ///
 /// # Errors
 ///

@@ -1,7 +1,4 @@
-//! The screenshots source adapter: [`Screenshots`] (the `adapter::Source`
-//! implementor carrying the survey / extract judgment legs) and
-//! `registry` (embedded prose). The wasm32-only `guest` module is
-//! one `adapter::source!` invocation.
+//! Screenshots source adapter.
 
 mod operations;
 mod registry;

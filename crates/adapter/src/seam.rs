@@ -1,12 +1,6 @@
-//! Seam vocabulary shared by every adapter core, mirroring the
-//! `specify:adapter` WIT records and variants.
+//! Seam vocabulary mirroring the `specify:adapter` WIT records.
 //!
-//! The `crate::source` / `crate::target` bindings map these onto the
-//! generated types at the export boundary, keeping the cores
-//! bindgen-free and natively testable.
-//!
-//! Only the types an answer deserializes into carry serde derives; the
-//! rest are plain data the shims construct by hand.
+//! Only answer-deserialized types carry serde derives.
 
 use std::path::{Path, PathBuf};
 

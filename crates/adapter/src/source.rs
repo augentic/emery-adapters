@@ -1,17 +1,7 @@
-//! The `source-adapter` world bindings, generated once and shared by
-//! every source adapter shim.
+//! `source-adapter` WIT bindings and the `source!` export macro.
 //!
-//! Follows omnia's `wasi-*` guest convention: one `wit_bindgen::generate!`
-//! in a library crate with `pub_export_macro` and flat re-exports. An
-//! adapter implements [`crate::Source`] and wires it into the component
-//! exports with one `adapter::source!` invocation — the macro expands
-//! only the leaf-owned wiring (the world [`export!`], the `wasi:http`
-//! references export, and the crate-version stamp) and delegates every
-//! operation to the typed [`dispatch_metadata`] / [`dispatch_survey`] /
-//! [`dispatch_extract`] functions here.
-//!
-//! The [`From`] impls map the generated records onto the [`crate::seam`]
-//! vocabulary at the export boundary.
+//! One `wit_bindgen::generate!` here; leaf crates wire a [`crate::Source`]
+//! implementor with `adapter::source!(…)`.
 
 mod generated {
     #![allow(
@@ -133,17 +123,12 @@ impl From<crate::seam::Error> for Error {
     }
 }
 
-/// `metadata` for a [`crate::Source`] implementor, mapped onto the
-/// generated record.
+/// Map [`crate::Source::metadata`] onto the WIT record.
 #[must_use]
 pub fn dispatch_metadata<A: crate::Source>() -> AdapterMetadata {
     A::metadata().into()
 }
 
-/// `survey` for a [`crate::Source`] implementor: the guest context
-/// (MCP references URL resolved from `A::NAME`), the `WasiModel`
-/// binding, and the WIT conversions at the export boundary.
-///
 /// # Errors
 ///
 /// As the implementor's [`survey`](crate::Source::survey).
@@ -156,10 +141,6 @@ pub async fn dispatch_survey<A: crate::Source>(id: AdapterId) -> Result<Vec<Lead
         .map_err(Into::into)
 }
 
-/// `extract` for a [`crate::Source`] implementor: the guest context
-/// (MCP references URL resolved from `A::NAME`), the `WasiModel`
-/// binding, and the WIT conversions at the export boundary.
-///
 /// # Errors
 ///
 /// As the implementor's [`extract`](crate::Source::extract).
@@ -173,14 +154,6 @@ pub async fn dispatch_extract<A: crate::Source>(
 }
 
 /// Wire a [`crate::Source`] implementor into the component exports.
-///
-/// Expands to the generated WIT [`Guest`] implementation delegating to
-/// the typed dispatch functions, the `source-adapter` world [`export!`],
-/// and the `wasi:http` references export serving the implementor's docs
-/// with the server identity projected from `A::NAME` and the component
-/// version stamped from the declaring crate's `CARGO_PKG_VERSION`.
-///
-/// The complete wasm shim of a source adapter:
 ///
 /// ```ignore
 /// adapter::source!(crate::Captures);

@@ -1,5 +1,3 @@
-//! Screenshots-specific operation behavior: the spatial claim kinds.
-
 use std::path::Path;
 
 use adapter::Source as _;

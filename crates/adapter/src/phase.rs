@@ -1,11 +1,7 @@
 //! Shared scaffolding for target-adapter operation templates.
 //!
-//! Every target core decomposes `build` / `merge` into schema-gated
-//! judgment legs and brackets them with deterministic guest code. The
-//! pieces with no per-adapter variance live here: the internal phase-leg
-//! answer shape and its schema, the leg helpers over [`judgment`], the
-//! prompt renderers, and the deterministic report-coherence checks. Leg
-//! sequencing and adapter-specific validator gates stay in each core.
+//! Phase-leg answer shape, helpers over [`judgment`], prompt renderers,
+//! and report-coherence checks. Leg sequencing stays in each target core.
 
 use std::path::Path;
 
@@ -16,11 +12,7 @@ use crate::answers::{REPORT_ANSWER_SCHEMA, ReportAnswer};
 use crate::judgment;
 use crate::seam::{Context, Error, Finding, Input, Report, Status};
 
-/// Answer schema for one internal phase leg.
-///
-/// Internal legs are not part of the `specify:adapter` contract, so
-/// this schema is adapter-internal rather than derived from a canonical
-/// schema.
+/// Answer schema for one internal phase leg (not part of the WIT contract).
 pub const PHASE_ANSWER_SCHEMA: &str = r#"{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
@@ -68,8 +60,7 @@ pub async fn phase<P: Model>(
     judgment(model, ctx, system, user, name, PHASE_ANSWER_SCHEMA).await
 }
 
-/// Issue one report leg gated by the derived answer schema and project
-/// the answer onto the seam-facing report.
+/// Issue one report leg and project onto the seam-facing report.
 ///
 /// # Errors
 ///
@@ -82,13 +73,13 @@ pub async fn report<P: Model>(
         .map(ReportAnswer::into_report)
 }
 
-/// Assemble a system prompt from embedded prompt bodies, shared preamble first.
+/// Join prompt bodies with `---` separators.
 #[must_use]
 pub fn assemble_system(bodies: &[&str]) -> String {
     bodies.join("\n\n---\n\n")
 }
 
-/// Render the typed inputs as labeled prompt sections.
+/// Render typed inputs as labeled prompt sections.
 #[must_use]
 pub fn render_inputs(inputs: &[Input]) -> String {
     if inputs.is_empty() {
@@ -101,7 +92,7 @@ pub fn render_inputs(inputs: &[Input]) -> String {
         .join("\n\n")
 }
 
-/// Render one phase leg's outcome for the report prompt.
+/// Render one phase leg outcome for the report prompt.
 #[must_use]
 pub fn render_outcome(name: &str, answer: &PhaseAnswer) -> String {
     format!(
@@ -110,11 +101,9 @@ pub fn render_outcome(name: &str, answer: &PhaseAnswer) -> String {
     )
 }
 
-/// The declared outputs a `success` report claims that the mounted tree
-/// does not contain, one findings-style line each.
+/// Declared outputs a `success` report claims that are missing from the tree.
 ///
-/// A `failure` report is already parked for human review per the prompts'
-/// stop contract, so its output claims are not re-litigated.
+/// `failure` reports are already parked; their output claims are not re-checked.
 #[must_use]
 pub fn missing_outputs(report: &Report, tree_root: &Path) -> Vec<String> {
     if report.status == Status::Failure {
@@ -130,11 +119,8 @@ pub fn missing_outputs(report: &Report, tree_root: &Path) -> Vec<String> {
         .collect()
 }
 
-/// Deterministic guard after the final answer lands.
-///
-/// Residual findings force `failure` and are appended to the report; a
-/// `success` answer carrying blocking findings is downgraded the same
-/// way.
+/// Append residual findings and force `failure` when any remain (or when
+/// a `success` answer already carries blocking findings).
 #[must_use]
 pub fn enforce(mut report: Report, residual: Vec<Finding>) -> Report {
     if !residual.is_empty() {

@@ -1,8 +1,3 @@
-//! The survey / extract judgment operations against the scripted
-//! Omnia's recorded scripted harness: prompt assembly, schema-gated formats, answer
-//! deserialization, and the deterministic validation tails inside the
-//! bounded repair loop.
-
 use std::path::Path;
 
 use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA};

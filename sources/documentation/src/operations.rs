@@ -1,10 +1,3 @@
-//! The [`Documentation`] adapter: `survey` and `extract` — schema-gated
-//! legs through [`adapter::repaired`], with the id-grammar answer
-//! tails repaired inside its bounded loop.
-//!
-//! The session-less prompts point the spawned agent at the bound
-//! documentation tree (the `plan.yaml` source binding).
-
 use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA, evidence_tail, leads_tail};
 use adapter::registry::Doc;
 use adapter::seam::{Context, Error, Evidence, Lead, SourceMetadata};
@@ -12,7 +5,6 @@ use adapter::{Model, Source, repaired};
 
 use crate::registry;
 
-/// Session-less state note both prompts carry.
 const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and there is no \
                             session: every input you need lives in the workspace tree and this \
                             prompt. Resolve the bound source material from the plan — read \
@@ -21,15 +13,13 @@ const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and
                             (relative to the workspace root) is the read-only documentation \
                             tree the prompt calls `$SOURCE_DIR`.";
 
-/// The documentation source adapter: written specifications and
-/// documentation trees surveyed into leads and extracted into Evidence.
+/// Written specifications / documentation trees → leads and Evidence.
 #[derive(Clone, Copy, Debug)]
 pub struct Documentation;
 
 impl Source for Documentation {
     const NAME: &'static str = "documentation";
 
-    /// Resolve-time `metadata`: no compatibility floor.
     fn metadata() -> SourceMetadata {
         SourceMetadata { specify_floor: None }
     }
@@ -38,15 +28,6 @@ impl Source for Documentation {
         registry::docs()
     }
 
-    /// Survey the bound documentation tree into leads.
-    ///
-    /// One schema-gated leg over `prompts/survey.md`, with the id-grammar
-    /// tail repaired inside the bounded loop.
-    ///
-    /// # Errors
-    ///
-    /// As [`adapter::repaired`]; a tail failure that survives the
-    /// repair budget is [`Error::Internal`].
     async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>, Error> {
         let system = registry::body("prompts/survey.md").to_string();
         let user = format!(
@@ -65,15 +46,6 @@ impl Source for Documentation {
         repaired(model, ctx, system, user, "leads", LEADS_ANSWER_SCHEMA, leads_tail).await
     }
 
-    /// Extract one lead's Evidence from the bound documentation tree.
-    ///
-    /// One schema-gated leg over `prompts/extract.md`, with the claim-id
-    /// tail repaired inside the bounded loop.
-    ///
-    /// # Errors
-    ///
-    /// As [`adapter::repaired`]; a tail failure that survives the
-    /// repair budget is [`Error::Internal`].
     async fn extract<P: Model>(
         model: &P, ctx: &Context<'_>, lead: &Lead,
     ) -> Result<Evidence, Error> {

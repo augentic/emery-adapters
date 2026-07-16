@@ -1,11 +1,7 @@
-//! The judgment operation template: `guidance`, `build`, and `merge`,
-//! over the shared [`phase`] scaffolding.
+//! `guidance` / `build` / `merge` over shared [`phase`] scaffolding.
 //!
-//! `build` runs the three format sub-flows (json-schema, openapi,
-//! asyncapi) as independent legs, a bounded verify-repair loop over
-//! the contract validators, then a report leg. The validators run
-//! again after the report lands (validate-before-visible); residual
-//! blocking findings force `status: failure`.
+//! Build: json-schema → openapi → asyncapi, then verify-repair, then
+//! report; validators re-gate the answer (validate-before-visible).
 
 use std::path::Path;
 
@@ -19,22 +15,16 @@ use adapter::{Model, Target, phase};
 use crate::registry;
 use crate::validate::{ContractFinding, validate_baseline};
 
-/// Maximum verify-repair iterations per the build prompt's Phase 4.
 const MAX_REPAIR_ITERATIONS: usize = 2;
 
-/// One format sub-flow of the build prompt's Phase 2.
 struct SubFlow {
-    /// Format name, used in prompts and answer-schema names.
     format: &'static str,
-    /// Registry path of the format's sub-prompt.
     prompt: &'static str,
-    /// The `contracts/` subdirectory this format owns, used to route
-    /// validator findings back to the owning sub-prompt for repair.
+    // `contracts/` subdirectory this format owns (routes repair findings).
     dir: &'static str,
 }
 
-/// The three format sub-flows in the build prompt's fixed Phase 2 order:
-/// the schema vocabulary stabilises before the bindings reference it.
+// Schema vocabulary stabilises before the bindings reference it.
 const SUB_FLOWS: [SubFlow; 3] = [
     SubFlow {
         format: "json-schema",
@@ -53,17 +43,13 @@ const SUB_FLOWS: [SubFlow; 3] = [
     },
 ];
 
-/// The contracts target adapter: API contract authoring, import, and
-/// validation across the `openapi`, `asyncapi`, and `json-schema` formats.
+/// API contract authoring, import, and validation.
 #[derive(Clone, Copy, Debug)]
 pub struct Contracts;
 
 impl Target for Contracts {
     const NAME: &'static str = "contracts";
 
-    /// Resolve-time `metadata`: no compatibility floor; one
-    /// optional build input — the slice tree's `contracts/` subtree,
-    /// carrying partial deltas written by a prior pass.
     fn metadata() -> TargetMetadata {
         TargetMetadata {
             specify_floor: None,
@@ -79,20 +65,10 @@ impl Target for Contracts {
         registry::docs()
     }
 
-    /// The embedded guidance prompt (no judgment leg).
     fn guidance() -> &'static str {
         registry::body("prompts/guidance.md")
     }
 
-    /// Build a slice's contract deltas under `.specify/slices/<slice>/contracts/`.
-    ///
-    /// One leg per format sub-flow (fixed order), a bounded verify-repair
-    /// loop over the compiled-in validators, and one report leg whose answer
-    /// the validators then re-gate.
-    ///
-    /// # Errors
-    ///
-    /// As [`adapter::judgment`].
     async fn build<P: Model>(
         model: &P, ctx: &Context<'_>, slice: &str, inputs: &[Input], tree: &WorkingTree,
     ) -> Result<Report, Error> {
@@ -101,8 +77,7 @@ impl Target for Contracts {
         let inputs_block = phase::render_inputs(inputs);
         let build_prompt = registry::body("prompts/build.md");
 
-        // Author or import, fixed format order. Each sub-flow judges its
-        // own applicability and self-skips.
+        // Each sub-flow judges applicability and self-skips.
         let mut summaries: Vec<String> = Vec::new();
         for sub_flow in &SUB_FLOWS {
             let format = sub_flow.format;
@@ -122,10 +97,7 @@ impl Target for Contracts {
             summaries.push(phase::render_outcome(format, &answer));
         }
 
-        // Verify-repair over the compiled-in validators. The
-        // session-less shape folds each iteration into one repair call
-        // carrying every finding, with the owning sub-prompts inlined so
-        // repair does not depend on the MCP route.
+        // Session-less repair: every finding in one call, owning sub-prompts inlined.
         for _ in 0..MAX_REPAIR_ITERATIONS {
             let findings = validate_baseline(&slice_contracts);
             if findings.is_empty() {
@@ -144,7 +116,6 @@ impl Target for Contracts {
             phase::phase(model, ctx, system, user, "repair").await?;
         }
 
-        // Report answer, gated by the answer schema.
         let system = build_prompt.to_string();
         let user = format!(
             "Write the build report for slice `{slice}`. Verify the delta under \
@@ -157,26 +128,10 @@ impl Target for Contracts {
         );
         let report = phase::report(model, ctx, system, user).await?;
 
-        // Validate-before-visible: residual blocking findings override
-        // the answer.
+        // Validate-before-visible: residual blocking findings override the answer.
         Ok(enforce_validators(report, &validate_baseline(&slice_contracts)))
     }
 
-    /// Run one merge gate around the engine's deterministic promotion of
-    /// the slice's `contracts/` delta into the baseline tree.
-    ///
-    /// `preflight` is fully deterministic: the contract validators run over
-    /// the staged slice delta, and blocking findings park the merge with
-    /// the slice still `built` — no judgment leg. `postflight` runs the
-    /// validators over the now-merged `contracts/` baseline; findings get
-    /// one bounded repair judgment leg (post-merge findings are
-    /// collision-shaped — `id-unique` against the baseline — so either one
-    /// pass clears them or the slice needs human review), and residual
-    /// findings force `status: failure`.
-    ///
-    /// # Errors
-    ///
-    /// As [`adapter::judgment`].
     async fn merge<P: Model>(
         model: &P, ctx: &Context<'_>, slice: &str, phase: MergePhase, tree: &WorkingTree,
     ) -> Result<Report, Error> {
@@ -188,8 +143,7 @@ impl Target for Contracts {
         let baseline = ctx.tree_root(tree).join("contracts");
         let merge_prompt = registry::body("prompts/merge.md");
 
-        // Post-merge validator gate with one bounded repair leg; a clean
-        // baseline answers deterministically without a judgment leg.
+        // Clean baseline → deterministic success; otherwise one repair leg.
         let mut report = Report::success();
         let mut findings = validate_baseline(&baseline);
         if !findings.is_empty() {
@@ -209,10 +163,7 @@ impl Target for Contracts {
     }
 }
 
-/// Inline the sub-prompts owning the findings' files, routed by the
-/// `contracts/` subdirectory each format owns. Findings that route
-/// nowhere pull in every sub-prompt, so repair never runs without its
-/// specialist material.
+// Findings that route nowhere pull in every sub-prompt.
 fn owning_sub_prompts(findings: &[ContractFinding], contracts_dir: &Path) -> String {
     let unrouted = findings.iter().any(|finding| {
         !SUB_FLOWS.iter().any(|sub_flow| finding.path.starts_with(contracts_dir.join(sub_flow.dir)))
@@ -228,8 +179,6 @@ fn owning_sub_prompts(findings: &[ContractFinding], contracts_dir: &Path) -> Str
     inlined
 }
 
-/// Contract rules gate the build, so validator findings are blocking
-/// (`important`).
 fn validator_finding(finding: &ContractFinding) -> Finding {
     Finding {
         rule_id: Some(finding.rule_id.to_string()),

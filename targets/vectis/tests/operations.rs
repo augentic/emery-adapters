@@ -1,9 +1,3 @@
-//! The judgment operation template against Omnia's recorded scripted harness:
-//! the deterministic prepare prelude, the prompt-driven phase legs, the
-//! in-guest composition validator gate with its bounded repair, the
-//! declared-platform shell-leg filter, and the deterministic report
-//! gate.
-
 use std::fs;
 use std::path::Path;
 
