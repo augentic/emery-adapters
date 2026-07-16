@@ -47,7 +47,7 @@ Testing is integration-first:
 - Do not widen public APIs solely for tests.
 - Use `cargo nextest`, not bare `cargo test`, for native workspace tests; process isolation is required by CWD- and environment-mutating suites.
 - Adapter native tests own operation behavior, the eval workspace owns cross-phase integration and prompt quality, and composed tests own WASM/WIT conformance. Do not duplicate the same assertion across rungs.
-- The live rungs are operator-invoked, never CI: `cargo make eval` (the native live-model trial over `sandbox/eval/`, deterministic grading only), `cargo make eval scenario <adapter>/<name>` (one adapter operation over a seeded scratch tree — the fast prompt-iteration loop), and `cargo make change-run` (the wasm change example composing the published `specify:core` with the built adapter components).
+- The live rungs are operator-invoked, never CI: `cargo make eval` (the native live-model trial over `sandbox/`, deterministic grading only), `cargo make eval scenario <adapter>/<name>` (one adapter operation over a seeded scratch tree — the fast prompt-iteration loop), and `cargo make change-run` (the wasm change example composing the published `specify:core` with the built adapter components).
 
 Read [`TESTING.md`](TESTING.md) before adding, deleting, or relocating tests.
 
@@ -64,7 +64,7 @@ cargo make release        # release-build every component
 cargo make eval-test      # nextest over the eval workspace (its own lockfile)
 cargo make eval-lint      # clippy -D warnings over the eval workspace
 cargo make dev -- ARGS    # any specify verb through the native engine shim
-cargo make eval [phase]   # live-model trial over sandbox/eval (operator-invoked)
+cargo make eval [phase]   # live-model trial over sandbox/ (operator-invoked)
 cargo make eval scenario [id]  # one live prompt scenario; bare lists them (operator-invoked)
 cargo make core-fetch     # fetch the pinned specify:core component
 cargo make change-run     # the wasm change example (operator-invoked)

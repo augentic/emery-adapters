@@ -182,7 +182,7 @@ args = [
 ]
 
 # The native live-model trial (`engine eval`): the operator rhythm
-# over a persistent `sandbox/eval/` project with the linked adapters,
+# over a persistent `sandbox/` project with the linked adapters,
 # graded by deterministic validators only. Live-only — needs an
 # authenticated cursor-agent on PATH; never part of `ci`. A full pass
 # cleans the sandbox; a failing phase retains it for in-place review

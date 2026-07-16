@@ -29,7 +29,7 @@ configuration alone cannot link a Rust crate.
 The runner ([`harness::scenario`](https://github.com/augentic/specify/blob/main/crates/harness/src/scenario.rs))
 seeds a fresh scratch
 tree under the gitignored collision-proof
-`sandbox/scenarios/<adapter>/<name>/run-<stamp>-<pid>/`, pins the project
+`sandbox/<adapter>/<name>/run-<stamp>-<pid>/`, pins the project
 cache inside it, dispatches the operation over the linked adapter, writes
 `report.json` beside the scratch delta, and fails on a failing report or a
 missing `expect` artifact (a success report that produced nothing is a silent
@@ -37,7 +37,7 @@ no-op, not a pass). The persisted `outcome` field is `pass` only when the
 adapter report *and* every `expect` artifact pass; any other run persists
 `outcome: fail`. `expect` paths must stay inside the scratch tree — absolute
 entries, `..`, and escaping symlinks never satisfy the gate. The scratch tree
-is retained for review.
+is retained for review (unlike a passing full trial, which cleans `sandbox/`).
 
 ## Running
 

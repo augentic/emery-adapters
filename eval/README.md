@@ -18,7 +18,7 @@ or set `CURSOR_API_KEY` in `.env` at the repository root.
 cargo make eval
 ```
 
-This runs the entire workflow in `sandbox/eval/` — the operator rhythm over a contracts-bound project with `documentation` + `intent` as sources. Expect a full trial to take tens of minutes of live model time; a single phase or prompt scenario takes minutes. A passing run will remove the project, while a failing run will retain it for in-place review, or to re-run individual operations (using the manual workflow below).
+This runs the entire workflow in `sandbox/` — the operator rhythm over a contracts-bound project with `documentation` + `intent` as sources. Expect a full trial to take tens of minutes of live model time; a single phase or prompt scenario takes minutes. A passing run will remove the project, while a failing run will retain it for in-place review, or to re-run individual operations (using the manual workflow below).
 
 Runs are hermetic: every phase and scenario pins `SPECIFY_PROJECT_CACHE` inside its own sandbox, so the operator's normal project cache is never read or written, and a run's result never depends on prior local state.
 

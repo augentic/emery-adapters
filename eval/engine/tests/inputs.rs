@@ -2,20 +2,21 @@
 //! over the checked-in `examples/change/trial.env` definition.
 //! Generic parser refusals live in the shared harness's own suite.
 
+use std::path::Path;
 use std::process::Command;
 
-use engine::{seed_dir, trial_env};
+use engine::{SEED, TRIAL_ENV};
 use harness::inputs::TrialInputs;
 
 #[test]
 fn checked_in_definition() {
-    let inputs = TrialInputs::load(&trial_env()).expect("trial.env parses");
+    let inputs = TrialInputs::load(Path::new(TRIAL_ENV)).expect("trial.env parses");
 
     let (key, binding) = inputs.source.split_once('=').expect("source is `key=adapter:path`");
     let (adapter, path) = binding.split_once(':').expect("binding is `adapter:path`");
     assert!(!key.is_empty() && adapter == "documentation", "source binds the docs adapter");
 
-    let seed = seed_dir().join(path);
+    let seed = Path::new(SEED).join(path);
     let populated = seed
         .read_dir()
         .unwrap_or_else(|err| panic!("shared seed {} unreadable: {err}", seed.display()))
@@ -26,11 +27,10 @@ fn checked_in_definition() {
 
 #[test]
 fn shell_parity() {
-    let inputs = TrialInputs::load(&trial_env()).expect("trial.env parses");
+    let inputs = TrialInputs::load(Path::new(TRIAL_ENV)).expect("trial.env parses");
     let script = format!(
-        ". '{}' && printf '%s\\n' \"$TRIAL_PROJECT_NAME\" \"$TRIAL_CHANGE\" \
-         \"$TRIAL_SOURCE\" \"$TRIAL_INTENT\"",
-        trial_env().display()
+        ". '{TRIAL_ENV}' && printf '%s\\n' \"$TRIAL_PROJECT_NAME\" \"$TRIAL_CHANGE\" \
+         \"$TRIAL_SOURCE\" \"$TRIAL_INTENT\""
     );
     let output = Command::new("sh").args(["-eu", "-c", &script]).output().expect("sh runs");
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));

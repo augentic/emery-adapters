@@ -11,7 +11,7 @@ use artifacts::spec::provenance::{Requirement, RequirementStatus, parse_spec_md}
 use change::Plan;
 use change::plan::handlers::ExecuteBody;
 use contracts::validate::validate_baseline;
-use engine::{FirstParty, eval_sandbox, scenarios_dir, scenarios_sandbox, seed_dir, trial_env};
+use engine::{FirstParty, SANDBOX, SCENARIOS, SEED, TRIAL_ENV};
 use harness::inputs::TrialInputs;
 use harness::scenario::Scenarios;
 use harness::trial::{self, Profile};
@@ -43,10 +43,10 @@ fn report(outcome: Result<ExitCode>) -> ExitCode {
 // `examples/change/trial.env` inputs and seed tree, graded by the
 // contracts baseline checks.
 fn profile() -> Result<Profile> {
-    let inputs = TrialInputs::load(&trial_env())?;
+    let inputs = TrialInputs::load(Path::new(TRIAL_ENV))?;
     Ok(Profile {
-        sandbox: eval_sandbox(),
-        seed: Some(seed_dir()),
+        sandbox: SANDBOX.into(),
+        seed: Some(SEED.into()),
         init: argv(&["init", "contracts", "--name", &inputs.project_name]),
         author: argv(&[
             "plan",
@@ -61,8 +61,7 @@ fn profile() -> Result<Profile> {
         authored: None,
         grade,
         scenarios: Some(Scenarios {
-            dir: scenarios_dir(),
-            sandbox: scenarios_sandbox(),
+            dir: SCENARIOS.into(),
         }),
     })
 }
