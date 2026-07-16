@@ -6,15 +6,14 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use engine::{FirstParty, scenarios_dir, scenarios_sandbox};
 use harness::scenario::{self, Scenarios};
-use engine::catalog::FirstParty;
-use engine::paths;
 
 #[test]
 fn wiring() {
     let scenarios = Scenarios {
-        dir: paths::scenarios_dir(),
-        sandbox: paths::scenarios_sandbox(),
+        dir: scenarios_dir(),
+        sandbox: scenarios_sandbox(),
     };
     let mut seen = 0;
     for dir in scenario_dirs(&scenarios.dir) {

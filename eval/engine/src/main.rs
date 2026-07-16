@@ -7,8 +7,7 @@ mod grade;
 use std::process::ExitCode;
 
 use anyhow::Result;
-use engine::catalog::FirstParty;
-use engine::paths;
+use engine::{FirstParty, eval_sandbox, scenarios_dir, scenarios_sandbox, seed_dir, trial_env};
 use harness::inputs::TrialInputs;
 use harness::scenario::Scenarios;
 use harness::trial::{self, Profile};
@@ -39,10 +38,10 @@ fn report(outcome: Result<ExitCode>) -> ExitCode {
 // `examples/change/trial.env` inputs and seed tree, graded by the
 // contracts baseline checks.
 fn profile() -> Result<Profile> {
-    let inputs = TrialInputs::load(&paths::trial_env())?;
+    let inputs = TrialInputs::load(&trial_env())?;
     Ok(Profile {
-        sandbox: paths::eval_sandbox(),
-        seed: Some(paths::seed_dir()),
+        sandbox: eval_sandbox(),
+        seed: Some(seed_dir()),
         init: argv(&["init", "contracts", "--name", &inputs.project_name]),
         author: argv(&[
             "plan",
@@ -57,8 +56,8 @@ fn profile() -> Result<Profile> {
         authored: None,
         grade: grade::run,
         scenarios: Some(Scenarios {
-            dir: paths::scenarios_dir(),
-            sandbox: paths::scenarios_sandbox(),
+            dir: scenarios_dir(),
+            sandbox: scenarios_sandbox(),
         }),
     })
 }

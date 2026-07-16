@@ -2,15 +2,15 @@
 
 use axum::body::{Body, to_bytes};
 use axum::http::{Method, Request, StatusCode, header};
+use engine::catalog;
 use harness::catalog::Catalog;
 use harness::mcp;
 use omnia_testkit::model::Scripted;
 use serde_json::{Value, json};
-use engine::catalog;
 use tower::ServiceExt as _;
 
 fn linked() -> Catalog<Scripted> {
-    catalog::catalog()
+    catalog()
 }
 
 async fn post(path: &str, message: &Value) -> (StatusCode, Value) {

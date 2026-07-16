@@ -3,6 +3,7 @@
 use std::sync::{Arc, Mutex};
 
 use artifacts::evidence::{Claim, ClaimKind};
+use engine::catalog;
 use harness::provider::Provider;
 use omnia_guest::Model;
 use omnia_guest::model::{Reply, Request, Tool};
@@ -11,7 +12,6 @@ use project::adapter::metadata::Request as MetadataRequest;
 use project::adapter::{AdapterRef, Axis, Resolver};
 use project::seam::wire::BuildStatus;
 use project::seam::{Error, Input, Lead, Source as _, Target as _, WorkingTree};
-use engine::catalog::catalog;
 use tempfile::TempDir;
 
 fn provider<M: Model>(root: &std::path::Path, model: M) -> Provider<M> {
