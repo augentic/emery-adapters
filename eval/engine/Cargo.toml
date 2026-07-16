@@ -1,11 +1,11 @@
-# The `specify-dev` wrapper: links the first-party adapter crates,
+# The `engine` wrapper: links the first-party adapter crates,
 # declares the shared harness's catalog binding, and carries the
 # repository's trial profile, contracts-specific grading, and prompt-
 # scenario data. All generic plumbing — command/HTTP transports, the
 # trial and scenario drivers, provider and model wiring — is the
-# engine-owned `harness` crate's.
+# Specify-owned `harness` crate's.
 [package]
-name = "specify-dev"
+name = "engine"
 description = "Specify adapters' native dev shim and live-model evaluation harness"
 version.workspace = true
 authors.workspace = true
@@ -17,7 +17,7 @@ rust-version.workspace = true
 publish.workspace = true
 
 [[bin]]
-name = "specify-dev"
+name = "engine"
 path = "src/main.rs"
 
 [dependencies]

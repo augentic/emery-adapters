@@ -1,4 +1,4 @@
-//! `specify-dev` — native dev shim and eval harness: the shared
+//! `engine` — native dev shim and eval harness: the shared
 //! harness entrypoints over the first-party catalog. Three modes:
 //! CLI (default), HTTP (`serve`), and live-model eval (`eval`).
 
@@ -7,12 +7,12 @@ mod grade;
 use std::process::ExitCode;
 
 use anyhow::Result;
+use engine::catalog::FirstParty;
+use engine::paths;
 use harness::inputs::TrialInputs;
 use harness::scenario::Scenarios;
 use harness::trial::{self, Profile};
 use harness::{command, http};
-use specify_dev::catalog::FirstParty;
-use specify_dev::paths;
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -30,7 +30,7 @@ async fn eval(argv: &[String]) -> Result<ExitCode> {
 
 fn report(outcome: Result<ExitCode>) -> ExitCode {
     outcome.unwrap_or_else(|err| {
-        eprintln!("specify-dev: {err:#}");
+        eprintln!("engine: {err:#}");
         ExitCode::FAILURE
     })
 }

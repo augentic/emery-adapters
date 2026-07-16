@@ -8,11 +8,11 @@ use std::process::{Command, Output};
 use tempfile::TempDir;
 
 fn run_from(cwd: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_specify-dev"))
+    Command::new(env!("CARGO_BIN_EXE_engine"))
         .current_dir(cwd)
         .args(args)
         .output()
-        .expect("spawn specify-dev")
+        .expect("spawn engine")
 }
 
 fn assert_created(project: &Path, elsewhere: &Path, output: &Output) {

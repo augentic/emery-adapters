@@ -6,7 +6,7 @@ use harness::catalog::Catalog;
 use harness::mcp;
 use omnia_testkit::model::Scripted;
 use serde_json::{Value, json};
-use specify_dev::catalog;
+use engine::catalog;
 use tower::ServiceExt as _;
 
 fn linked() -> Catalog<Scripted> {

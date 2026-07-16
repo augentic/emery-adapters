@@ -5,7 +5,7 @@
 use std::process::Command;
 
 use harness::inputs::TrialInputs;
-use specify_dev::paths;
+use engine::paths;
 
 #[test]
 fn checked_in_definition() {

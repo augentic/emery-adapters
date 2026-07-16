@@ -2,7 +2,7 @@
 
 Single-operation prompt scenarios for the live eval rung: each drives one
 adapter seam operation (a `build`, or one `merge` gate) end-to-end against the
-real cursor backend, natively through the same seam provider the `specify-dev`
+real cursor backend, natively through the same seam provider the `engine`
 CLI and the trial use. This is the fast prompt-iteration loop — edit an
 adapter's `prose/`, rebuild natively in seconds, re-run the scenario.
 
@@ -22,11 +22,11 @@ scenarios/<adapter>/<name>/
 
 For an adapter already linked into the shim, adding a scenario is just the
 directory. A **third-party adapter** additionally needs a Cargo dependency in
-[`../specify-dev/Cargo.toml`](../specify-dev/Cargo.toml) and a builder call in
-[`../specify-dev/src/catalog.rs`](../specify-dev/src/catalog.rs) —
+[`../engine/Cargo.toml`](../engine/Cargo.toml) and a builder call in
+[`../engine/src/catalog.rs`](../engine/src/catalog.rs) —
 configuration alone cannot link a Rust crate.
 
-The runner ([`../specify-dev/src/scenario.rs`](../specify-dev/src/scenario.rs))
+The runner ([`harness::scenario`](https://github.com/augentic/specify/blob/main/crates/harness/src/scenario.rs))
 seeds a fresh scratch
 tree under the gitignored collision-proof
 `sandbox/scenarios/<adapter>/<name>/run-<stamp>-<pid>/`, pins the project

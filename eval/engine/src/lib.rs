@@ -1,4 +1,4 @@
-//! `specify-dev` — the first-party adapters linked into the shared
+//! `engine` — the first-party adapters linked into the shared
 //! native harness, plus the repository's trial and scenario data
 //! locators.
 

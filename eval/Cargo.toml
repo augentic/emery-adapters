@@ -1,21 +1,6 @@
-# The adapters wrapper over the engine-owned `specify/crates/harness`:
-# `specify-dev/` links the first-party adapter crates, declares the
-# harness catalog binding, and carries the repository's trial profile,
-# deterministic grading, and prompt-scenario data. All generic plumbing
-# (catalog machinery, seam provider, model bridge, telemetry, trial and
-# scenario drivers, command/HTTP transports) lives in the shared
-# `harness` crate pinned below.
-#
-# Standalone workspace, deliberately excluded from the adapters root: the
-# engine crates below are a revision-pinned private git dependency, and
-# keeping them out of the root graph means ordinary adapter commands never
-# resolve or authenticate to Specify. The pin is this harness's declared
-# compatibility target — it advances deliberately, not with every engine
-# commit. Sibling co-development overrides it with hand-supplied
-# `--config` path patches; never commit them.
 [workspace]
 resolver = "3"
-members = ["specify-dev"]
+members = ["engine"]
 
 [workspace.package]
 version = "0.1.0"
@@ -31,20 +16,21 @@ publish = false
 anyhow = "1.0.103"
 axum = "0.8.9"
 serde_json = "1.0.150"
-tokio = { version = "1.52.3", features = ["macros", "net", "rt-multi-thread", "sync"] }
+tempfile = "3"
+tokio = { version = "1.52.4", features = ["macros", "net", "rt-multi-thread", "sync"] }
+tower = "0.5.3"
 
-# The engine pin: the Specify revision this wrapper is verified against
-# (the shared `harness` crate and the engine crates it re-exposes). The
-# wasm change example consumes the matching published core component;
-# advance SPECIFY_CORE_VERSION in the root Makefile.toml with this rev.
-artifacts = { git = "https://github.com/augentic/specify.git", rev = "46e93f1ae58d066430f73fd68bab5f0bd5120620" }
-change = { git = "https://github.com/augentic/specify.git", rev = "46e93f1ae58d066430f73fd68bab5f0bd5120620" }
-harness = { git = "https://github.com/augentic/specify.git", rev = "46e93f1ae58d066430f73fd68bab5f0bd5120620" }
-project = { git = "https://github.com/augentic/specify.git", rev = "46e93f1ae58d066430f73fd68bab5f0bd5120620" }
+artifacts = { git = "https://github.com/augentic/specify.git" }
+change = { git = "https://github.com/augentic/specify.git" }
+harness = { git = "https://github.com/augentic/specify.git" }
+project = { git = "https://github.com/augentic/specify.git" }
 
+omnia-cursor = "0.35.0"
 omnia-guest = "0.35.0"
+omnia-testkit = "0.35.0"
+omnia-wasi-http = "0.35.0"
+omnia-wasi-model = "0.35.0"
 
-# The linked first-party adapter crates — `specify-dev` only.
 captures = { path = "../sources/captures" }
 contracts = { path = "../targets/contracts" }
 documentation = { path = "../sources/documentation" }
@@ -54,10 +40,6 @@ screenshots = { path = "../sources/screenshots" }
 typescript = { path = "../sources/typescript" }
 vectis = { path = "../targets/vectis" }
 
-omnia-testkit = "0.35.0"
-tempfile = "3"
-tower = "0.5.3"
-
 [patch.crates-io]
 omnia = { git = "https://github.com/augentic/omnia.git" }
 omnia-cursor = { git = "https://github.com/augentic/backends.git" }
@@ -66,11 +48,14 @@ omnia-testkit = { git = "https://github.com/augentic/omnia.git" }
 omnia-wasi-http = { git = "https://github.com/augentic/omnia.git" }
 omnia-wasi-model = { git = "https://github.com/augentic/omnia.git" }
 
+artifacts = { path = "../../specify/crates/artifacts" }
+change = { path = "../../specify/crates/change" }
+harness = { path = "../../specify/crates/harness" }
+project = { path = "../../specify/crates/project" }
+
 wrpc-transport = { git = "https://github.com/bytecodealliance/wrpc" }
 wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }
 
-# Same lint bar as the adapters root, restated because a standalone
-# workspace cannot inherit another workspace's tables.
 [workspace.lints.rust]
 elided_lifetimes_in_paths = "warn"
 explicit_outlives_requirements = "warn"

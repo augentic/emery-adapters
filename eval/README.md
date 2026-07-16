@@ -2,7 +2,7 @@
 
 The adapters sibling of the engine's [`crates/eval`](https://github.com/augentic/specify/tree/main/crates/eval): a live-model harness for testing this repo's adapter prompts, with real adapters in place of the engine's fixture. Both are declarative bindings over the shared [`specify/crates/harness`](https://github.com/augentic/specify/tree/main/crates/harness) runtime. Outputs are graded by deterministic validators — not a model.
 
-The same workspace is the **native dev shim**: the `specify-dev` binary runs any specify verb over the linked adapter crates without building WebAssembly (`cargo make dev -- --project-dir <dir> plan status`), serves the per-adapter MCP reference shelves (`specify-dev serve`), and carries the deterministic seam/CLI/MCP test suites (`cargo make eval-test`). This workspace is standalone — its manifest pins the Specify engine revision it is verified against; see the [root README](../README.md#publishing) and [TESTING.md](../TESTING.md).
+The same workspace is the **native dev shim**: the `engine` binary runs any specify verb over the linked adapter crates without building WebAssembly (`cargo make dev -- --project-dir <dir> plan status`), serves the per-adapter MCP reference shelves (`engine serve`), and carries the deterministic seam/CLI/MCP test suites (`cargo make eval-test`). This workspace is standalone — its manifest pins the Specify engine revision it is verified against; see the [root README](../README.md#publishing) and [TESTING.md](../TESTING.md).
 
 ## Quick start
 
@@ -50,11 +50,11 @@ cargo make eval scenario                     # list scenarios
 cargo make eval scenario contracts/design    # run one
 ```
 
-Scenario anatomy and the index live in [`scenarios/README.md`](scenarios/README.md). Scenarios run **natively** over the linked adapter crates — they prove prompt quality, not WASM/WIT conformance (that stays with `composed/` and the change example). For a first-party adapter a new scenario is just a data directory; a **third-party adapter** additionally needs a Cargo dependency in [`specify-dev/Cargo.toml`](specify-dev/Cargo.toml) and a builder call in [`specify-dev/src/catalog.rs`](specify-dev/src/catalog.rs), because configuration alone cannot link a Rust crate into the shim.
+Scenario anatomy and the index live in [`scenarios/README.md`](scenarios/README.md). Scenarios run **natively** over the linked adapter crates — they prove prompt quality, not WASM/WIT conformance (that stays with `composed/` and the change example). For a first-party adapter a new scenario is just a data directory; a **third-party adapter** additionally needs a Cargo dependency in [`engine/Cargo.toml`](engine/Cargo.toml) and a builder call in [`engine/src/catalog.rs`](engine/src/catalog.rs), because configuration alone cannot link a Rust crate into the shim.
 
-## The harness / specify-dev split
+## The harness / `engine` wrapper split
 
-The reusable, adapter-agnostic core lives in the engine as [`specify/crates/harness`](https://github.com/augentic/specify/tree/main/crates/harness): the typed `Catalog` builder over the per-axis operations traits (`adapter::Source` / `adapter::Target`), the native seam `Provider`, the guest-side `Model` bridge, the lazy `DevModel` connection with the `SPECIFY_EVAL_MODEL` override, the request `telemetry` tally, the MCP reference shelves, and the generic trial / scenario / command / HTTP drivers behind one `catalog::Binding` hook. It carries **no dependency on any concrete adapter crate** (enforced by its `tests/boundary.rs`) — the invariant that lets the engine's eval crate instantiate it with the testkit fixture and this repository instantiate it with the real implementors. [`specify-dev/`](specify-dev/) is this repository's wrapper: one builder call per linked first-party adapter in [`src/catalog.rs`](specify-dev/src/catalog.rs), the trial [`Profile`](specify-dev/src/main.rs) over the shared `trial.env` inputs, the contracts-specific deterministic grading in [`src/grade.rs`](specify-dev/src/grade.rs), and the scenario definitions — everything that names an adapter or a repo path stays here.
+The reusable, adapter-agnostic core lives in Specify as [`specify/crates/harness`](https://github.com/augentic/specify/tree/main/crates/harness): the typed `Catalog` builder over the per-axis operations traits (`adapter::Source` / `adapter::Target`), the native seam `Provider`, the guest-side `Model` bridge, the lazy `DevModel` connection with the `SPECIFY_EVAL_MODEL` override, the request `telemetry` tally, the MCP reference shelves, and the generic trial / scenario / command / HTTP drivers behind one `catalog::Binding` hook. It carries **no dependency on any concrete adapter crate** (enforced by its `tests/boundary.rs`) — the invariant that lets Specify's `crates/eval` instantiate it with the testkit fixture and this repository instantiate it with the real implementors. [`engine/`](engine/) is this repository's wrapper: one builder call per linked first-party adapter in [`src/catalog.rs`](engine/src/catalog.rs), the trial [`Profile`](engine/src/main.rs) over the shared `trial.env` inputs, the contracts-specific deterministic grading in [`src/grade.rs`](engine/src/grade.rs), and the scenario definitions — everything that names an adapter or a repo path stays here.
 
 ## Model judgment
 
@@ -82,7 +82,7 @@ Every step runs the production operation through the shared typed command router
 
 ## Grading
 
-Hard assertions only (`specify-dev/src/grade.rs`):
+Hard assertions only (`engine/src/grade.rs`):
 
 | Stage   | Check              | Pass condition                                                        |
 | ------- | ------------------ | ---------------------------------------------------------------------- |

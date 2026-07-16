@@ -15,7 +15,7 @@ use screenshots::Screenshots;
 use typescript::Typescript;
 use vectis::Vectis;
 
-/// Every first-party adapter linked into `specify-dev`.
+/// Every first-party adapter linked into `engine`.
 #[must_use]
 pub fn catalog<M: Model>() -> Catalog<M> {
     Catalog::builder()

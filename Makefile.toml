@@ -133,7 +133,7 @@ args = [
 # `eval/` is a standalone workspace excluded from the root: it consumes
 # Specify's engine crates — including the shared `harness` runtime —
 # from a revision-pinned git source, so it stays out of `ci` and runs
-# through these focused tasks instead. One member: `specify-dev`, the
+# through these focused tasks instead. One member: `engine`, the
 # wrapper binary linking the first-party adapters over the shared
 # harness.
 # Co-development against uncommitted engine changes uses hand-supplied
@@ -168,7 +168,7 @@ args = [
 ]
 install_crate = { rustup_component_name = "clippy" }
 
-# The `specify-dev` CLI passthrough: any specify verb against the native
+# The `engine` CLI passthrough: any specify verb against the native
 # shim (`cargo make dev -- --project-dir <dir> slice list`).
 [tasks.dev]
 command = "cargo"
@@ -181,7 +181,7 @@ args = [
   "${@}",
 ]
 
-# The native live-model trial (`specify-dev eval`): the operator rhythm
+# The native live-model trial (`engine eval`): the operator rhythm
 # over a persistent `sandbox/eval/` project with the linked adapters,
 # graded by deterministic validators only. Live-only — needs an
 # authenticated cursor-agent on PATH; never part of `ci`. A full pass

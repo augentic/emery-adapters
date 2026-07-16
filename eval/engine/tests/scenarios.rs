@@ -7,8 +7,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use harness::scenario::{self, Scenarios};
-use specify_dev::catalog::FirstParty;
-use specify_dev::paths;
+use engine::catalog::FirstParty;
+use engine::paths;
 
 #[test]
 fn wiring() {

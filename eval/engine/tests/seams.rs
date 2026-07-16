@@ -11,7 +11,7 @@ use project::adapter::metadata::Request as MetadataRequest;
 use project::adapter::{AdapterRef, Axis, Resolver};
 use project::seam::wire::BuildStatus;
 use project::seam::{Error, Input, Lead, Source as _, Target as _, WorkingTree};
-use specify_dev::catalog::catalog;
+use engine::catalog::catalog;
 use tempfile::TempDir;
 
 fn provider<M: Model>(root: &std::path::Path, model: M) -> Provider<M> {

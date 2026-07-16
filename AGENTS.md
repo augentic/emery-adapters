@@ -22,7 +22,7 @@ Artifacts outrank source behavior. Preserve missing information as `[unknown]` r
 - Do not commit built `.wasm` artifacts.
 - Adapter names must remain unique across the source and target axes.
 
-The root workspace includes `crates/*`, `sources/*`, `targets/*`, `composed` (the composed-deployment tests), and `examples/change` (the wasm change example's host). The adapter SDK (`adapter`) is a revision-pinned git dependency on `augentic/specify` (`specify/crates/adapter`), not a local crate. `eval/` is a separate workspace pinned to a specific Specify engine revision, with one member: `eval/specify-dev/` — the wrapper binary declaring the linked first-party adapter catalog as a `harness::catalog::Binding` and carrying the repository's trial profile, deterministic grading, and prompt-scenario data. All generic plumbing (catalog machinery, seam provider, model bridge, telemetry, the trial and scenario drivers, command/HTTP transports) is the engine-owned `specify/crates/harness`, consumed at the same pin. Never commit local path patches or a lockfile changed only for sibling co-development.
+The root workspace includes `crates/*`, `sources/*`, `targets/*`, `composed` (the composed-deployment tests), and `examples/change` (the wasm change example's host). The adapter SDK (`adapter`) is a revision-pinned git dependency on `augentic/specify` (`specify/crates/adapter`), not a local crate. `eval/` is a separate workspace pinned to a specific Specify engine revision, with one member: `eval/engine/` — the wrapper binary declaring the linked first-party adapter catalog as a `harness::catalog::Binding` and carrying the repository's trial profile, deterministic grading, and prompt-scenario data. All generic plumbing (catalog machinery, seam provider, model bridge, telemetry, the trial and scenario drivers, command/HTTP transports) is the engine-owned `specify/crates/harness`, consumed at the same pin. Never commit local path patches or a lockfile changed only for sibling co-development.
 
 ## Prose and rules
 
@@ -63,7 +63,7 @@ cargo make adapter NAME   # fast development component build
 cargo make release        # release-build every component
 cargo make eval-test      # nextest over the eval workspace (its own lockfile)
 cargo make eval-lint      # clippy -D warnings over the eval workspace
-cargo make dev -- ARGS    # any specify verb through the native specify-dev shim
+cargo make dev -- ARGS    # any specify verb through the native engine shim
 cargo make eval [phase]   # live-model trial over sandbox/eval (operator-invoked)
 cargo make eval scenario [id]  # one live prompt scenario; bare lists them (operator-invoked)
 cargo make core-fetch     # fetch the pinned specify:core component

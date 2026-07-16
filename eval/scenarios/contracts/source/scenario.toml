@@ -1,5 +1,5 @@
 # Routing for the `contracts/source` scenario: the adapter under test, the seam
-# operation `specify-dev eval scenario` drives, and the slice name.
+# operation `engine eval scenario` drives, and the slice name.
 adapter = "target:contracts"
 operation = "build"
 slice = "orders-api-contract"
