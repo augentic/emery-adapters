@@ -1,4 +1,0 @@
-# Raw per-run logs stay local; only the committed summary ships.
-*
-!.gitignore
-!SUMMARY.md
