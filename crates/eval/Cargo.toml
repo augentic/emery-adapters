@@ -17,7 +17,7 @@ workspace = true
 captures.workspace = true
 contracts.workspace = true
 documentation.workspace = true
-harness = { workspace = true, features = ["runtime"] }
+harness = { workspace = true, features = ["cursor"] }
 intent.workspace = true
 omnia-target.workspace = true
 screenshots.workspace = true

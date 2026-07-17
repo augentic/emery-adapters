@@ -153,30 +153,18 @@ args = [
   "${@}",
 ]
 
-# The native live-model trial (the `eval` binary's `eval` subcommand):
-# the operator rhythm
-# over a persistent `sandbox/` project with the linked adapters,
-# graded by deterministic validators only. Live-only — needs an
-# authenticated cursor-agent on PATH; never part of `ci`. A full pass
-# cleans the sandbox; a failing phase retains it for in-place review
-# and per-phase re-runs (`cargo make eval execute`). Single-operation
-# prompt scenarios ride the same entry (`cargo make eval scenario
-# contracts/design`; bare `scenario` lists them).
+# The native live-model trial (the `eval` binary's `eval` subcommand)
 [tasks.eval]
+env_files = [".env"]
 script = '''
-set -euo pipefail
-. examples/change/trial.env
-cargo run -q -p eval -- eval \
-  --sandbox sandbox \
+cargo run -p eval -- eval \
   --seed examples/change/seed \
-  --target contracts \
-  --name "$TRIAL_PROJECT_NAME" \
-  --change "$TRIAL_CHANGE" \
-  --intent "$TRIAL_INTENT" \
-  --source "$TRIAL_SOURCE" \
+  --change "orders" \
+  --intent "Author the API contracts for the orders service described under docs/: the JSON Schema vocabulary plus the HTTP (OpenAPI) surface. Contracts only - no service implementation." \
+  --source "docs=documentation:docs" \
+  --target "contracts" \
   "$@"
 '''
-env_files = [".env"]
 
 # -------------------------------------
 # The wasm change example

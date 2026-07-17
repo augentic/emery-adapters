@@ -74,9 +74,9 @@ omnia-wasi-model = { git = "https://github.com/augentic/omnia.git" }
 wrpc-transport = { git = "https://github.com/bytecodealliance/wrpc" }
 wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }
 
-# [patch."https://github.com/augentic/specify.git"]
-# adapter = { path = "../specify/crates/adapter" }
-# harness = { path = "../specify/crates/harness" }
+[patch."https://github.com/augentic/specify.git"]
+adapter = { path = "../specify/crates/adapter" }
+harness = { path = "../specify/crates/harness" }
 
 [workspace.lints.rust]
 # https://dirname.github.io/rust-std-doc/rustc/lints/listing/allowed-by-default.html
