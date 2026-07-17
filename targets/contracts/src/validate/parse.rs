@@ -1,22 +1,15 @@
-//! YAML walker and predicates for top-level contract documents. Only
-//! the root key (`openapi:` or `asyncapi:`) qualifies a file as a
-//! top-level contract; filenames and directory layout are not signals.
+//! YAML walker for top-level contract documents (`openapi:` / `asyncapi:` at root).
 
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-/// Parsed top-level contract document — the YAML root plus the
-/// absolute path it came from.
 pub struct TopLevelDoc {
     pub(super) path: PathBuf,
     pub(super) value: Value,
 }
 
-/// Walk `contracts_dir` for `*.yaml` files whose root carries
-/// `openapi:` or `asyncapi:`. Parse errors are swallowed — the format
-/// verifier references own that diagnostic; this module is identity /
-/// version only.
+// Parse errors are swallowed; the format verifier owns malformed YAML.
 pub fn collect_top_level_docs(contracts_dir: &Path) -> Vec<TopLevelDoc> {
     let mut paths = Vec::new();
     collect_yaml_paths(contracts_dir, &mut paths);
@@ -71,9 +64,7 @@ pub fn id_str(info: Option<&Value>) -> Option<&str> {
     info?.get("x-specify-id")?.as_str()
 }
 
-/// Mirror of the kebab-case rule used by `RegistryProject::name`.
-/// Inlined here so the id check stays self-contained and so the
-/// 64-character cap is enforced.
+// Inlined from `RegistryProject::name` so the 64-character cap stays self-contained.
 pub fn is_valid_specify_id(id: &str) -> bool {
     if id.is_empty() || id.len() > 64 {
         return false;

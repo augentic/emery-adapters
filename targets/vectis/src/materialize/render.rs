@@ -6,7 +6,6 @@ use usvg::Tree;
 /// Render a parsed SVG tree to PNG bytes at the given pixel dimensions.
 ///
 /// # Errors
-///
 /// Returns a human-readable message when allocation or PNG encoding fails.
 pub fn render_tree_to_png(tree: &Tree, out_width: u32, out_height: u32) -> Result<Vec<u8>, String> {
     if out_width == 0 || out_height == 0 {

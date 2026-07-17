@@ -1,11 +1,11 @@
-//! Typescript-specific operation behavior: the source-tree binding note,
-//! the framework-grammar survey framing, and the references pointer.
+//! TypeScript survey / extract operation behavior.
 
 use std::path::Path;
 
+use adapter::Source as _;
 use adapter::seam::{Authority, ClaimKind, Context, Lead};
-use omnia_testkit::model::Harness;
-use typescript::operations::{extract, survey};
+use testkit::Harness;
+use typescript::Adapter;
 
 fn ctx() -> Context<'static> {
     Context {
@@ -21,7 +21,7 @@ async fn survey_framework_grammar() {
         r#"{"leads":[{"lead":"task-service","synopsis":"Task CRUD service module."}]}"#,
     ]);
 
-    let leads = survey(&model, &ctx()).await.unwrap();
+    let leads = Adapter::survey(&model, &ctx()).await.unwrap();
 
     assert_eq!(leads[0].lead, "task-service");
     let request = &model.requests()[0];
@@ -51,7 +51,7 @@ async fn extract_references_pointer() {
         topics: Vec::new(),
     };
 
-    let evidence = extract(&model, &ctx(), &lead).await.unwrap();
+    let evidence = Adapter::extract(&model, &ctx(), &lead).await.unwrap();
 
     assert_eq!(evidence.authority, Authority::Behaviour);
     let kinds: Vec<ClaimKind> = evidence.claims.iter().map(|claim| claim.kind).collect();

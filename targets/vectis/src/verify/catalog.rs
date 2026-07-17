@@ -1,7 +1,4 @@
-//! Shell asset-catalog completeness for verify mode `verify`.
-//!
-//! Cross-checks composition-referenced `vector` / `raster` inventory against
-//! on-disk shell resources (`Assets.xcassets` imagesets, Android `res/drawable*`).
+//! Shell asset-catalog completeness for verify mode.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -16,8 +13,7 @@ use crate::validate::engine::{
     parse_yaml_file, resolve_default_path_with_root,
 };
 
-/// Collect diagnostic findings for composition-referenced non-symbol assets
-/// that are absent from a present platform shell tree.
+/// Findings for composition-referenced assets absent from a present platform shell tree.
 #[must_use]
 pub fn catalog_findings(project_root: &Path, declared_platforms: &[String]) -> Vec<Value> {
     let assets_path = resolve_default_path_with_root(ValidateMode::Assets, project_root);

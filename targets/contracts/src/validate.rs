@@ -1,23 +1,19 @@
-//! Baseline-contract validation primitives: walk a `contracts/` tree and
-//! enforce `version-is-semver`, `id-format`, and `id-unique` against each
-//! top-level `OpenAPI` / `AsyncAPI` document.
-//!
-//! Runs as the validate-before-visible gate after each judgment
-//! answer lands.
+//! Baseline-contract validation: SemVer, id format, and id uniqueness
+//! for top-level `OpenAPI` / `AsyncAPI` documents under `contracts/`.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 mod parse;
 
-/// One validation finding produced by [`validate_baseline`].
+/// One validation finding from [`validate_baseline`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContractFinding {
-    /// Absolute path to the contract file the finding refers to.
+    /// Contract file path.
     pub path: PathBuf,
-    /// Stable rule identifier (`contract.<rule>`).
+    /// Stable rule id (`contract.<rule>`).
     pub rule_id: &'static str,
-    /// Human-readable failure detail (file-name-aware).
+    /// Human-readable failure detail.
     pub detail: String,
 }
 
@@ -28,11 +24,9 @@ pub const RULE_ID_FORMAT: &str = "contract.id-format";
 /// Rule id: every `info.x-specify-id` must be unique across the tree.
 pub const RULE_ID_UNIQUE: &str = "contract.id-unique";
 
-/// Run the baseline-contract validation checks across `contracts_dir`.
+/// Run baseline-contract validation across `contracts_dir`.
 ///
-/// Returns an empty vector when the directory does not exist or every
-/// walked file is well-formed. Findings sort by path, then rule id,
-/// then detail.
+/// Returns an empty vector when the directory is missing or every file is well-formed.
 #[must_use]
 pub fn validate_baseline(contracts_dir: &Path) -> Vec<ContractFinding> {
     if std::fs::read_dir(contracts_dir).is_err() {

@@ -214,12 +214,10 @@ fn directory_contains_extension(dir: &Path, ext: &str) -> bool {
     })
 }
 
-/// Lowercase extension without the leading dot, or `None` when absent.
 fn source_extension(path: &str) -> Option<String> {
     Path::new(path).extension().and_then(|ext| ext.to_str()).map(str::to_ascii_lowercase)
 }
 
-/// Read PNG IHDR width, height, and whether the color type carries alpha.
 fn png_ihdr(bytes: &[u8]) -> Option<(u32, u32, bool)> {
     const SIG: &[u8] = b"\x89PNG\r\n\x1a\n";
     if bytes.len() < 26 || !bytes.starts_with(SIG) {

@@ -27,7 +27,6 @@ pub enum VerifyMode {
     BootstrapAppIcon,
 }
 
-/// Per-platform status entry in the verify report.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct PlatformStatus {
     platform: String,
@@ -55,10 +54,6 @@ pub fn run(mode: VerifyMode, project_root: &Path) -> Result<Value, VectisError> 
 }
 
 /// Compute the exit code for a verify payload.
-///
-/// Returns 1 when any `error`-severity finding is present, 0 otherwise.
-/// Both `verify` and `bootstrap-app-icon` modes carry their result in
-/// the same `findings` array.
 #[must_use]
 pub fn verify_exit_code(value: &Value) -> u8 {
     let has_findings = value.get("findings").and_then(Value::as_array).is_some_and(|arr| {
@@ -67,14 +62,10 @@ pub fn verify_exit_code(value: &Value) -> u8 {
     u8::from(has_findings)
 }
 
-// ── project.yaml loading ───────────────────────────────────────────
-
 /// Load the declared `platforms:` list from `.specify/project.yaml`.
 ///
 /// # Errors
-///
 /// Returns [`VectisError::InvalidProject`] when the file is missing,
-/// unparseable, or does not declare a string `platforms` array.
 pub fn load_platforms(project_root: &Path) -> Result<Vec<String>, VectisError> {
     // The host CLI owns the project config at `.specify/project.yaml`;
     // there is no root-level `project.yaml` in a Specify project.
@@ -102,8 +93,6 @@ pub fn load_platforms(project_root: &Path) -> Result<Vec<String>, VectisError> {
         .collect()
 }
 
-// ── per-platform shell detection ───────────────────────────────────
-
 fn check_platform(platform: &str, project_root: &Path) -> PlatformStatus {
     PlatformStatus {
         platform: platform.to_string(),
@@ -111,8 +100,6 @@ fn check_platform(platform: &str, project_root: &Path) -> PlatformStatus {
         present: shell_present(project_root, platform),
     }
 }
-
-// ── output rendering ───────────────────────────────────────────────
 
 fn is_supported(platform: &str) -> bool {
     SUPPORTED_SHELL_PLATFORMS.contains(&platform)

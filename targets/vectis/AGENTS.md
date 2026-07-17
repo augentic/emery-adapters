@@ -48,7 +48,7 @@ When changing platform support, preserve existing platforms and add only the sel
 ## Rust and template changes
 
 - Keep deterministic validation, materialization, inference, and scaffold behavior in wasm-free modules under `src/`.
-- Keep `src/guest.rs` limited to WIT export glue.
+- Keep the wasm32-only `mod guest` in `src/lib.rs` limited to the single `adapter::target!(crate::Adapter)` invocation; boundary behavior belongs in the SDK's dispatch functions, operation behavior in the `adapter::Target` impl.
 - Update `templates/manifest.yaml` whenever adding or removing scaffold files; orphan or missing entries fail build-time generation.
 - Treat generated `src/scaffold/templates/registry.rs` as build output.
 - Keep `versions.toml`, templates, host verification, and troubleshooting guidance aligned when changing toolchain pins.

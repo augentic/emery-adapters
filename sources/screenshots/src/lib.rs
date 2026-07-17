@@ -1,9 +1,13 @@
-//! The screenshots source adapter: [`operations`] (survey / extract
-//! judgment legs) and [`registry`] (embedded prose). The wasm32-only
-//! `guest` module owns bindings and export glue.
-
-pub mod operations;
-pub mod registry;
+//! Screenshots source adapter.
 
 #[cfg(target_arch = "wasm32")]
-mod guest;
+mod guest {
+    adapter::source!(crate::Adapter);
+}
+
+mod operations;
+mod registry {
+    adapter::registry!();
+}
+
+pub use operations::Adapter;

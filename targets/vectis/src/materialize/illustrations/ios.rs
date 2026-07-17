@@ -14,7 +14,6 @@ use crate::materialize::render::{render_tree_to_png, scaled_dimensions};
 /// Write an iOS imageset with `@2x` / `@3x` PNGs and `Contents.json`.
 ///
 /// # Errors
-///
 /// Returns I/O or render errors from the underlying writes.
 pub fn write_imageset(
     tree: &Tree, asset_id: &str, assets_dir: &Path, imageset_dir: &Path, dry_run: bool,

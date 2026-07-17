@@ -1,7 +1,4 @@
-//! Android toolchain + compile-artifact probes for the shell-verify gate.
-//!
-//! Compilation is driven by `make verify` in the Android shell; this module
-//! checks that host-side setup artifacts and the debug APK are present on disk.
+//! Android toolchain and compile-artifact probes for shell verify.
 
 use std::path::Path;
 
@@ -9,8 +6,7 @@ use serde_json::{Value, json};
 
 const APK_REL: &str = "app/build/outputs/apk/debug/app-debug.apk";
 
-/// Emit Android toolchain findings when `android` is declared and the shell
-/// tree is present.
+/// Android toolchain findings when `android` is declared and the shell tree is present.
 #[must_use]
 pub fn android_toolchain_findings(
     project_root: &Path, android_declared: bool, android_present: bool,

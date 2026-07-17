@@ -8,17 +8,6 @@ use super::finding::Finding;
 use crate::validate::engine::assets::collect_asset_references;
 use crate::validate::engine::shared::escape_pointer_token;
 
-/// Append an error for every token reference not present in `tokens`
-/// under the expected category (see [`token_category_for_key`]; also
-/// `padding.<side>` → `spacing`).
-///
-/// Deliberately skipped in v1:
-///
-/// - `style` — a typography ref on `text` items but a presentation
-///   enum on `button`/`list`/etc.; without a per-item-kind classifier,
-///   autoresolving it generates false positives.
-/// - `size.width` / `size.height` — `sizingValue` only permits
-///   `"fill"` / `"hug"`, so these never reference tokens.
 pub(super) fn resolve_token_references(
     composition: &Value, tokens: &Value, errors: &mut Vec<Finding>,
 ) {
@@ -62,8 +51,6 @@ fn walk_token_refs(node: &Value, json_path: &str, tokens: &Value, errors: &mut V
     }
 }
 
-/// `tokens.yaml` category a key's string value resolves against;
-/// `None` when the key carries no token reference in v1.
 const fn token_category_for_key(key: &str) -> Option<&'static str> {
     match key.as_bytes() {
         b"color" | b"background" => Some("colors"),
@@ -89,10 +76,6 @@ fn check_token_ref(
     }
 }
 
-/// Append an error for every static asset reference not declared
-/// under `assets.<id>`. Reuses [`collect_asset_references`] so the
-/// reference shapes stay in lock-step with assets mode's own
-/// composition-discovery path.
 pub(super) fn resolve_asset_references(
     composition: &Value, assets: &Value, errors: &mut Vec<Finding>,
 ) {

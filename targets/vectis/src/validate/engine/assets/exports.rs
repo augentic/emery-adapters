@@ -8,11 +8,6 @@ use crate::materialize::paths::{Platform, export_layout, kebab_to_snake};
 
 /// Whether a composition-referenced asset has a committed export on
 /// disk for `platform` without a `sources.<platform>` pin.
-///
-/// Auto-materializable vector roles are checked against the same
-/// conventional paths `materialize assets` writes; raster entries
-/// without an auto-convert layout fall back to imageset / density
-/// heuristics.
 pub fn conventional_export_exists(
     assets_dir: &Path, id: &str, kind: &str, platform: &str, entry: &Value,
 ) -> bool {
@@ -108,8 +103,6 @@ fn directory_has_extension(dir: &Path, ext: &str) -> bool {
 }
 
 /// Whether an iOS imageset directory carries materialized content.
-///
-/// `Contents.json` alone does not satisfy export presence (RFC §6.3).
 pub fn imageset_has_materialized_content(dir: &Path) -> bool {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return false;

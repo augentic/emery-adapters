@@ -1,44 +1,30 @@
-//! Template engine -- placeholder substitution and capability-conditional sections.
+//! Template placeholder substitution and capability-conditional sections.
 
 pub(super) mod registry;
 
 use super::PlannedFile;
 
-/// One embedded scaffold template entry.
 pub(super) struct TemplateEntry {
-    /// Target path under `PROJECT_DIR`, with optional placeholders.
     pub target: &'static str,
-    /// Embedded template contents.
     pub contents: &'static str,
-    /// How to substitute placeholders in the target path before write.
     pub path_mode: PathMode,
-    /// Whole-file inclusion predicate.
     pub include_when: IncludeWhen,
 }
 
-/// Target-path substitution mode for one assembly.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum PathMode {
-    /// Target path is literal.
     ContentOnly,
-    /// Substitute `__APP_NAME__` / `__APP_NAME_LOWER__` in the target path.
     AppName,
-    /// Substitute app-name and `__ANDROID_PACKAGE_PATH__` in the target path.
     AndroidPackage,
 }
 
-/// Whole-file inclusion predicate.
 #[derive(Debug, Clone, Copy)]
 pub(super) enum IncludeWhen {
-    /// File is rendered regardless of selected capabilities.
     Always,
-    /// File is rendered iff any listed capability is selected.
     AnyOf(&'static [Capability]),
 }
 
 impl IncludeWhen {
-    /// Should this entry be rendered for the given cap selection?
-    #[must_use]
     pub(super) fn should_include(self, caps: &[Capability]) -> bool {
         match self {
             Self::Always => true,
@@ -47,7 +33,6 @@ impl IncludeWhen {
     }
 }
 
-/// Render and plan one assembly's template entries.
 pub(super) fn plan_assembly(
     entries: &[TemplateEntry], params: &Params, caps: &[Capability],
 ) -> Vec<PlannedFile> {
@@ -71,7 +56,7 @@ pub(super) fn plan_assembly(
         .collect()
 }
 
-/// A single capability the user can enable via `--caps`.
+/// Capability enabled via `--caps`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Capability {
     /// HTTP effects.
@@ -82,12 +67,12 @@ pub enum Capability {
     Time,
     /// Platform effects.
     Platform,
-    /// Server-sent-events support.
+    /// Server-sent events support.
     Sse,
 }
 
 impl Capability {
-    /// Marker tag as it appears in templates and on `--caps`.
+    /// Marker tag in templates and on `--caps`.
     #[must_use]
     pub const fn marker_tag(self) -> &'static str {
         match self {
@@ -99,7 +84,7 @@ impl Capability {
         }
     }
 
-    /// Parse a user-facing tag into a capability.
+    /// Parse a user-facing tag.
     #[must_use]
     pub fn from_tag(tag: &str) -> Option<Self> {
         match tag {
@@ -113,62 +98,36 @@ impl Capability {
     }
 }
 
-/// Placeholder values supplied per scaffold invocation.
-#[derive(Debug, Clone)]
 pub(super) struct Params {
-    /// App name in user-facing form.
     pub app_name: String,
-    /// Rust app struct identifier.
     pub app_struct: String,
-    /// Lowercase app name.
     pub app_name_lower: String,
-    /// Android package name.
     pub android_package: String,
-    /// `crux_core` version.
     pub crux_core_version: String,
-    /// `crux_http` version.
     pub crux_http_version: String,
-    /// `crux_kv` version.
     pub crux_kv_version: String,
-    /// `crux_time` version.
     pub crux_time_version: String,
-    /// `crux_platform` version.
     pub crux_platform_version: String,
-    /// `facet` version.
     pub facet_version: String,
-    /// `serde` version.
     pub serde_version: String,
-    /// `uniffi` version.
     pub uniffi_version: String,
-    /// Android Gradle plugin version.
     pub agp_version: String,
-    /// Kotlin version.
     pub kotlin_version: String,
-    /// Compose BOM version.
     pub compose_bom_version: String,
-    /// Ktor version.
     pub ktor_version: String,
-    /// Koin version.
     pub koin_version: String,
-    /// Android NDK version placeholder.
     pub android_ndk_version: String,
 }
 
-/// Render a template string with placeholder substitution and cap-marker handling.
-#[must_use]
 pub(super) fn render(template: &str, params: &Params, caps: &[Capability]) -> String {
     let stripped = process_caps(template, caps);
     substitute_placeholders(&stripped, params)
 }
 
-/// Substitute placeholders that may appear in target paths.
-#[must_use]
 pub(super) fn substitute_path(target: &str, params: &Params) -> String {
     substitute_path_with(target, params, None)
 }
 
-/// Path-segment substitution including `__ANDROID_PACKAGE_PATH__`.
-#[must_use]
 pub(super) fn substitute_path_with(
     target: &str, params: &Params, android_package_path: Option<&str>,
 ) -> String {

@@ -28,9 +28,6 @@ tiny-skia.workspace = true
 toml.workspace = true
 usvg.workspace = true
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-wasip3.workspace = true
-
 [build-dependencies]
 jsonschema.workspace = true
 prose.workspace = true
@@ -39,6 +36,6 @@ serde-saphyr.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
+testkit.workspace = true
 tempfile.workspace = true
-omnia-testkit = { workspace = true, features = ["model"] }
 tokio.workspace = true

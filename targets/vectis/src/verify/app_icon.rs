@@ -7,12 +7,10 @@ use serde_json::{Value, json};
 use crate::shell::shell_resident_app_icon;
 use crate::validate::engine::parse_yaml_file;
 
-/// Stable finding id for the bootstrap `app-icon` gate (RFC §6.2).
 const BOOTSTRAP_APP_ICON_MISSING: &str = "plan-bootstrap-app-icon-missing";
 
 const ASSETS_REL: &str = "design-system/assets.yaml";
 
-/// UI platform tokens that can trigger the §6 launcher-icon gate.
 const UI_PLATFORMS: &[&str] = &["ios", "android"];
 
 /// Emit `plan-bootstrap-app-icon-missing` findings for every declared UI

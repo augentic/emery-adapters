@@ -98,10 +98,6 @@ pub fn sync_android_scaffold_files(
 }
 
 /// Compare agent-immutable Android scaffold files against the embedded templates.
-///
-/// Returns diagnostic-shaped findings (`severity: error`) for drifted scaffold
-/// files. When app-name or package resolution fails, returns a single finding
-/// scoped to `path: "Android"`.
 #[must_use]
 pub fn android_scaffold_drift_findings(project_root: &Path) -> Vec<Value> {
     let android_root = project_root.join("Android");
@@ -160,7 +156,6 @@ pub fn android_scaffold_drift_findings(project_root: &Path) -> Vec<Value> {
 /// Resolve the Android app name for an on-disk shell.
 ///
 /// # Errors
-///
 /// Returns [`VectisError::InvalidProject`] when no authoritative name is found.
 pub fn resolve_android_app_name(project_root: &Path) -> Result<String, VectisError> {
     let android_root = project_root.join("Android");
@@ -184,7 +179,6 @@ pub fn resolve_android_app_name(project_root: &Path) -> Result<String, VectisErr
 /// Resolve the Android application package for an on-disk shell.
 ///
 /// # Errors
-///
 /// Returns [`VectisError::InvalidProject`] when no authoritative package is found.
 pub fn resolve_android_package(project_root: &Path, app_name: &str) -> Result<String, VectisError> {
     let app_build = project_root.join("Android/app/build.gradle.kts");

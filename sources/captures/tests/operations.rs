@@ -1,11 +1,11 @@
-//! Captures-specific operation behavior: `kind: example` claims with the
-//! open `replay-digest` / `input` / `output` body fields.
+//! Captures survey / extract operation behavior.
 
 use std::path::Path;
 
+use adapter::Source as _;
 use adapter::seam::{Authority, ClaimKind, Context, Lead};
-use captures::operations::extract;
-use omnia_testkit::model::Harness;
+use captures::Adapter;
+use testkit::Harness;
 
 fn ctx() -> Context<'static> {
     Context {
@@ -39,7 +39,7 @@ async fn extract_example_claims() {
             }]
         }"#]);
 
-    let evidence = extract(&model, &ctx(), &lead()).await.unwrap();
+    let evidence = Adapter::extract(&model, &ctx(), &lead()).await.unwrap();
 
     assert_eq!(evidence.authority, Authority::Behaviour);
     assert_eq!(evidence.claims.len(), 1);

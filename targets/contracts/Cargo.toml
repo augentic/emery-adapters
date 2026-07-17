@@ -21,14 +21,11 @@ serde = { workspace = true, features = ["derive"] }
 serde-saphyr.workspace = true
 serde_json.workspace = true
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-wasip3.workspace = true
-
 [build-dependencies]
 prose.workspace = true
 
 [dev-dependencies]
 jsonschema.workspace = true
+testkit.workspace = true
 tempfile.workspace = true
-omnia-testkit = { workspace = true, features = ["model"] }
 tokio.workspace = true

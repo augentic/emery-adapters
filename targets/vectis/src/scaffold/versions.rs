@@ -27,9 +27,6 @@ pub struct Versions {
 }
 
 /// Crux + transitive Rust pins.
-///
-/// The Rust field names drop the `crux_` prefix that the TOML keys carry;
-/// `#[serde(rename = ...)]` preserves version-file parity.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Crux {
     /// `crux_core` version.
@@ -94,9 +91,7 @@ impl Versions {
     /// Resolve version pins from an optional explicit file or embedded defaults.
     ///
     /// # Errors
-    ///
     /// Returns [`ScaffoldError`] when the explicit file is missing or malformed,
-    /// or if the embedded defaults ever stop parsing.
     pub fn resolve(version_file: Option<&Path>) -> Result<Self, ScaffoldError> {
         version_file.map_or_else(load_embedded, load_required)
     }
@@ -104,7 +99,6 @@ impl Versions {
     /// Parse the embedded defaults.
     ///
     /// # Errors
-    ///
     /// Returns [`ScaffoldError::Internal`] if the compiled-in TOML is malformed.
     pub fn embedded() -> Result<Self, ScaffoldError> {
         load_embedded()

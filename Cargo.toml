@@ -1,10 +1,5 @@
 [workspace]
-members = ["harness", "crates/*", "sources/*", "targets/*"]
-# The native compatibility harness is a standalone workspace: it consumes
-# Specify's engine crates from a revision-pinned git source, and keeping it
-# excluded means ordinary adapter metadata/test/lint/vet commands never
-# resolve (or authenticate to) that private dependency.
-exclude = ["harness/native"]
+members = ["composed", "examples/change", "crates/*", "sources/*", "targets/*"]
 resolver = "3"
 
 [workspace.package]
@@ -18,37 +13,48 @@ version = "0.1.0"
 publish = false
 
 [workspace.dependencies]
-anyhow = "1"
-cfg-if = "1"
-jsonschema = { version = "0.47.0", default-features = false }
-semver = "1"
-serde = { version = "1", features = ["derive"] }
-serde-saphyr = "0.0.29"
-serde_json = "1"
-sha2 = "0.11"
-adapter = { path = "crates/adapter" }
-prose = { path = "crates/prose" }
-thiserror = "2"
-toml = "1"
-tempfile = "3"
-tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-resvg = { version = "0.47", default-features = false }
-usvg = { version = "0.47", default-features = false }
-tiny-skia = { version = "0.12", default-features = false }
-image = { version = "0.25", default-features = false, features = [
-    "png",
+anyhow = "1.0.103"
+cfg-if = "1.0.4"
+image = { version = "0.25.10", default-features = false, features = [
     "jpeg",
+    "png",
     "webp",
 ] }
-wasip3 = { version = "0.7.0", features = ["http-compat"] }
-wit-bindgen = { version = "0.59.0", features = ["async-spawn"] }
+jsonschema = { version = "0.47.0", default-features = false }
+resvg = { version = "0.47.0", default-features = false }
+semver = "1"
+serde = { version = "1.0.228", features = ["derive"] }
+serde-saphyr = "0.0.29"
+serde_json = "1.0.150"
+sha2 = "0.11"
+tempfile = "3.27.0"
+thiserror = "2"
+tiny-skia = { version = "0.12.0", default-features = false }
+tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread"] }
+toml = "1.1.3"
+usvg = { version = "0.47", default-features = false }
 
 omnia = "0.35.0"
 omnia-cursor = "0.28.0"
 omnia-guest = "0.35.0"
-omnia-testkit = { version = "0.35.0", default-features = false }
+omnia-testkit = "0.35.0"
 omnia-wasi-http = "0.35.0"
 omnia-wasi-model = "0.35.0"
+
+adapter = { git = "https://github.com/augentic/specify.git" }
+harness = { git = "https://github.com/augentic/specify.git" }
+
+prose = { path = "crates/prose" }
+testkit = { path = "crates/testkit" }
+
+captures = { path = "sources/captures" }
+contracts = { path = "targets/contracts" }
+documentation = { path = "sources/documentation" }
+intent = { path = "sources/intent" }
+omnia-target = { package = "omnia", path = "targets/omnia" }
+screenshots = { path = "sources/screenshots" }
+typescript = { path = "sources/typescript" }
+vectis = { path = "targets/vectis" }
 
 [patch.crates-io]
 omnia = { git = "https://github.com/augentic/omnia.git" }
@@ -67,6 +73,10 @@ omnia-wasi-model = { git = "https://github.com/augentic/omnia.git" }
 
 wrpc-transport = { git = "https://github.com/bytecodealliance/wrpc" }
 wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }
+
+# [patch."https://github.com/augentic/specify.git"]
+# adapter = { path = "../specify/crates/adapter" }
+# harness = { path = "../specify/crates/harness" }
 
 [workspace.lints.rust]
 # https://dirname.github.io/rust-std-doc/rustc/lints/listing/allowed-by-default.html

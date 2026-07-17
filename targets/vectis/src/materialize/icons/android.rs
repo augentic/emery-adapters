@@ -9,7 +9,6 @@ use crate::materialize::svg::{collect_paths, path_data_string};
 /// Write a `drawable/<id>.xml` Vector Drawable for an icon.
 ///
 /// # Errors
-///
 /// Returns I/O errors from the underlying write.
 pub fn write_vector_drawable(
     tree: &Tree, _drawable_name: &str, out_path: &std::path::Path,

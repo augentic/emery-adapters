@@ -19,12 +19,6 @@ use crate::{VectisError, android, ios_scaffold};
 
 /// Run the prepare materialize step for one slice build.
 ///
-/// Scope resolution over the effective `assets.yaml`, then a scoped
-/// `materialize assets` run when any in-scope asset lacks exports for a
-/// declared shell platform, or a `skipped: true` summary otherwise.
-/// Returns the summary envelope `prepare build` embeds under
-/// `materialized`.
-///
 /// # Errors
 ///
 /// Returns [`VectisError::InvalidProject`] when the effective inventory
@@ -54,8 +48,6 @@ pub fn materialize_step(
     }
 }
 
-/// The `materialize assets` summary emitted when nothing is in scope —
-/// shape-identical to a real run's envelope plus `skipped: true`.
 fn skipped_materialize_summary(path: &Path, platforms: &[String]) -> Value {
     json!({
         "command": "materialize assets",
@@ -70,10 +62,6 @@ fn skipped_materialize_summary(path: &Path, platforms: &[String]) -> Value {
 }
 
 /// Run the full slice-build prepare for one slice.
-///
-/// The scoped materialize step, the app-icon bootstrap gate, the
-/// Android Gradle-wrapper setup, and the iOS scaffold sync.
-/// `slice_dir` may be absolute or relative to `project_root`.
 ///
 /// # Errors
 ///

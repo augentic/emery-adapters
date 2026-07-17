@@ -1,8 +1,4 @@
-//! Inline lint-suppression scan for the shell-verify gate.
-//!
-//! Rejects agent-authored compiler / linter suppressions in core Rust and
-//! platform shell sources. Crate-level workspace lints and `generated/`
-//! trees are out of scope.
+//! Inline lint-suppression scan for shell verify.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -14,7 +10,7 @@ use crate::shell::shell_present;
 /// Diagnostic id emitted for every suppression hit.
 pub const FINDING_ID: &str = "lint-suppression-forbidden";
 
-/// Collect findings for forbidden inline suppressions under agent-authored trees.
+/// Findings for forbidden inline suppressions under agent-authored trees.
 #[must_use]
 pub fn suppression_scan_findings(project_root: &Path, platforms: &[String]) -> Vec<Value> {
     let mut findings = Vec::new();

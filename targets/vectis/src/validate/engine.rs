@@ -1,21 +1,4 @@
-//! Validation engine behind [`crate::validate::run`].
-//!
-//! [`run`] dispatches a [`ValidateMode`] plus optional artifact path
-//! to the per-mode handler. Every per-mode envelope shares one shape:
-//!
-//! ```json
-//! {
-//!   "mode": "assets",
-//!   "path": "design-system/assets.yaml",
-//!   "errors":   [{ "path": "/assets/foo/sources/ios/1x", "message": "..." }],
-//!   "warnings": [{ "path": "/assets/foo/sources/android", "message": "..." }]
-//! }
-//! ```
-//!
-//! Error / warning entries carry a JSON Pointer-shaped `path` locating
-//! the offending sub-document. The dispatcher exits non-zero only when
-//! a real sub-report carries errors. Rule provenance: repository-root
-//! `DECISIONS.md` (§"Vectis validation and materialization").
+//! Validation engine behind [`crate::validate::run`]. [`run`] dispatches a [`ValidateMode`] plus optional artifact path to the per-mode handler. Every per-mode envelope shares one shape: ```json { "mode": "assets", "path": "design-system/assets.yaml", "errors":   [{ "path": "/assets/foo/sources/ios/1x", "message": "..." }], "warnings": [{ "path": "/assets/foo/sources/android", "message": "..." }] } ``` Error / warning entries carry a JSON Pointer-shaped `path` locating the offending sub-document.
 
 mod all;
 mod assets;

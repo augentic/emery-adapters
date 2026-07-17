@@ -1,0 +1,9 @@
+# Routing for the `contracts/describe` scenario: the adapter under test, the seam
+# operation `cargo make eval scenario` drives, and the slice name.
+adapter = "target:contracts"
+operation = "build"
+slice = "user-adapter-api"
+
+# Deterministic artifact-exists gate: a success report must leave the
+# slice contracts delta non-empty.
+expect = [".specify/slices/user-adapter-api/contracts"]

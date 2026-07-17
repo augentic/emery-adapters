@@ -52,10 +52,7 @@ pub struct AssetsArgs {
 /// Dispatch a [`MaterializeCommand`].
 ///
 /// # Errors
-///
 /// Returns [`VectisError::InvalidProject`] when the resolved `assets.yaml`
-/// is missing or unreadable, or when the platform filter carries an unknown
-/// token.
 pub fn run(command: &MaterializeCommand) -> Result<Value, VectisError> {
     match command {
         MaterializeCommand::Assets(args) => run_assets(args),

@@ -12,7 +12,6 @@ use super::{Capability, PlannedFile, ScaffoldError, ScaffoldPlan, Versions};
 /// Render and plan the core scaffold.
 ///
 /// # Errors
-///
 /// Returns [`ScaffoldError`] when the app name is invalid.
 pub fn plan_core(
     app_name: &str, android_package: &str, caps: &[Capability], versions: &Versions,
@@ -26,7 +25,6 @@ pub fn plan_core(
 /// Render and plan the iOS shell scaffold.
 ///
 /// # Errors
-///
 /// Returns [`ScaffoldError`] when the app name is invalid.
 pub fn plan_ios(
     app_name: &str, android_package: &str, caps: &[Capability], versions: &Versions,
@@ -40,7 +38,6 @@ pub fn plan_ios(
 /// Render and plan the Android shell scaffold.
 ///
 /// # Errors
-///
 /// Returns [`ScaffoldError`] when the app name is invalid.
 pub fn plan_android(
     app_name: &str, android_package: &str, caps: &[Capability], versions: &Versions,
@@ -53,13 +50,7 @@ pub fn plan_android(
 
 /// Write a complete plan under `project_dir` after checking every collision.
 ///
-/// An existing `.gitignore` is the one tolerated collision: `specify
-/// init` writes a root `.gitignore` in every project, so the bootstrap
-/// path (`scaffold core` against an initialised repo) merges the
-/// template's missing lines into it instead of refusing.
-///
 /// # Errors
-///
 /// Returns [`ScaffoldError`] if any other target already exists or a write fails.
 pub fn write_plan(project_dir: &Path, plan: &ScaffoldPlan) -> Result<(), ScaffoldError> {
     match plan.target {
@@ -102,8 +93,6 @@ fn is_gitignore(relative_path: &str) -> bool {
 }
 
 /// Append the template's missing lines to an existing `.gitignore`.
-/// Line-set comparison keeps the merge idempotent across scaffold
-/// re-runs; existing operator content is never rewritten.
 pub(super) fn merge_gitignore(target: &Path, template: &str) -> Result<(), ScaffoldError> {
     let existing = fs::read_to_string(target)?;
     let present: std::collections::BTreeSet<&str> =

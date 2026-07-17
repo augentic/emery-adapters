@@ -25,11 +25,7 @@ fn minimal_png() -> Vec<u8> {
     ]
 }
 
-// Negative `shell_resident_app_icon` branches. This matrix pins the
-// falses: an ios appiconset whose referenced PNG is absent, an ios
-// Contents.json with no images, an android tree with no launcher, and
-// `core` (never shell-resident). The positive branches ride the probe
-// below and the guest build's bootstrap app-icon gate.
+// Negative branches: missing PNG, empty Contents.json, no android launcher, core.
 #[test]
 fn app_icon_matrix() {
     let png_ref = r#"{
@@ -55,9 +51,7 @@ fn app_icon_matrix() {
     assert!(!shell_resident_app_icon(core.path(), "core"));
 }
 
-// Positive ios probe through whitespace-tolerant Contents.json parsing:
-// `"filename" : "AppIcon.png"` (spaced colon) must still resolve the PNG,
-// reaching the parse kernel through the public probe.
+// Spaced-colon Contents.json must still resolve the referenced PNG.
 #[test]
 fn spaced_contents_json() {
     let spaced = r#"{

@@ -11,9 +11,6 @@ pub const SUPPORTED_SHELL_PLATFORMS: &[&str] = &["core", "ios", "android"];
 
 /// Returns whether a declared platform's shell tree is present under
 /// `project_dir`.
-///
-/// `web`, `desktop`, and unknown platform strings are treated as
-/// present (no on-disk interpretation yet).
 #[must_use]
 pub fn shell_present(project_dir: &Path, platform: &str) -> bool {
     match platform {

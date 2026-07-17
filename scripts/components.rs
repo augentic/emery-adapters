@@ -38,7 +38,7 @@ fn main() -> Result<()> {
 
     let mut args = env::args().skip(1);
     match args.next().as_deref() {
-        Some("build-fast") => build_fast(&root, args.next(), args.next()),
+        Some("build-fast") => build_fast(&root, &args.collect::<Vec<_>>()),
         Some("publish") => {
             ensure!(args.next().is_none(), "publish accepts no arguments");
             publish(&root)
@@ -48,19 +48,24 @@ fn main() -> Result<()> {
     }
 }
 
-fn build_fast(root: &Path, requested: Option<String>, extra: Option<String>) -> Result<()> {
-    ensure!(extra.is_none(), "build-fast accepts at most one adapter name");
+/// Fast-build the named adapter components in one cargo invocation;
+/// no names means every adapter.
+fn build_fast(root: &Path, requested: &[String]) -> Result<()> {
     let metadata = metadata(root)?;
     let packages = adapters(root, &metadata);
-    let selected = match requested {
-        Some(name) => {
-            let package = packages
-                .into_iter()
-                .find(|package| package.name == name)
-                .with_context(|| format!("`{name}` is not a source or target adapter"))?;
-            vec![package]
-        }
-        None => packages,
+    let selected: Vec<&Package> = if requested.is_empty() {
+        packages
+    } else {
+        requested
+            .iter()
+            .map(|name| {
+                packages
+                    .iter()
+                    .copied()
+                    .find(|package| package.name == *name)
+                    .with_context(|| format!("`{name}` is not a source or target adapter"))
+            })
+            .collect::<Result<_>>()?
     };
 
     let mut command = Command::new("cargo");

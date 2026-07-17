@@ -9,14 +9,6 @@ use std::path::{Path, PathBuf};
 
 use crate::validate::ValidateMode;
 
-/// Embedded default paths for the four `vectis validate` modes — the
-/// canonical cascade: slice-local files first, then project-level
-/// inputs or the merged composition baseline.
-///
-/// Inner-array order is resolution order; the first existing file
-/// wins. The role label exists for parity with the schema YAML; only
-/// the templates are consumed. `<name>` expands against
-/// `.specify/slices/<dir>/` (alphabetical first match).
 const EMBEDDED_ARTIFACT_PATHS: &[(&str, &[(&str, &str)])] = &[
     (
         "layout",
@@ -48,17 +40,10 @@ const EMBEDDED_ARTIFACT_PATHS: &[(&str, &[(&str, &str)])] = &[
     ),
 ];
 
-/// Resolve the default path for `validate <mode>` when no `[path]`
-/// positional was supplied. Falls through to a fixed canonical path
-/// when nothing exists, so the caller's read error names the most
-/// operator-friendly path.
 pub(super) fn resolve_default_path(mode: ValidateMode) -> PathBuf {
     resolve_default_path_with_root(mode, &default_project_root())
 }
 
-/// Default project root for omitted `[path]` positionals: the host's
-/// `PROJECT_DIR` when set (WASI invocations), else the `.specify/`
-/// root above CWD, else CWD.
 pub(super) fn default_project_root() -> PathBuf {
     if let Some(project_dir) = std::env::var_os("PROJECT_DIR").filter(|value| !value.is_empty()) {
         return PathBuf::from(project_dir);
@@ -69,10 +54,6 @@ pub(super) fn default_project_root() -> PathBuf {
 }
 
 /// Resolve a per-mode default path against an explicit project root.
-///
-/// When no candidate exists, returns the *last* candidate considered;
-/// with an empty candidate list, falls back to the embedded canonical
-/// name under `<root>/`.
 #[must_use]
 pub fn resolve_default_path_with_root(mode: ValidateMode, project_root: &Path) -> PathBuf {
     let key = artifact_key_for_mode(mode).unwrap_or("composition");
@@ -91,11 +72,6 @@ pub fn resolve_default_path_with_root(mode: ValidateMode, project_root: &Path) -
 }
 
 /// Locate a sibling artifact for a caller anchored at `start`.
-/// Returns `Some(path)` only when an existing file is found.
-///
-/// Resolution order: (1) same directory as `start` — the change-local
-/// case, plus standalone usage without a Specify project layout;
-/// (2) the embedded canonical cascade against the project root.
 #[must_use]
 pub fn discover_artifact(start: &Path, mode: ValidateMode) -> Option<PathBuf> {
     let key = artifact_key_for_mode(mode)?;
@@ -121,8 +97,6 @@ pub fn discover_artifact(start: &Path, mode: ValidateMode) -> Option<PathBuf> {
     None
 }
 
-/// Filename half of the canonical-default template; in lock-step with
-/// [`canonical_default_template`].
 fn canonical_filename_for_key(key: &str) -> &'static str {
     match key {
         "layout" => "layout.yaml",
@@ -159,8 +133,6 @@ pub fn discover_catalog(start: &Path) -> Option<PathBuf> {
     path.is_file().then_some(path)
 }
 
-/// Map a [`ValidateMode`] to its `artifacts:` map key.
-/// `ValidateMode::All` has no per-mode key and returns `None`.
 const fn artifact_key_for_mode(mode: ValidateMode) -> Option<&'static str> {
     match mode {
         ValidateMode::Layout => Some("layout"),
@@ -182,9 +154,6 @@ pub fn paths_for_key(key: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// Last-resort fallback template: the project / baseline location,
-/// *not* the change-local one, so error messages stay
-/// operator-friendly.
 fn canonical_default_template(key: &str) -> &'static str {
     match key {
         "layout" => "design-system/layout.yaml",
@@ -195,10 +164,6 @@ fn canonical_default_template(key: &str) -> &'static str {
 }
 
 /// Expand a `paths.<role>` template against `project_root`.
-///
-/// `<name>` is substituted with each directory under
-/// `.specify/slices/` (sorted alphabetically). Templates without
-/// `<name>` resolve to a single absolute path.
 pub fn expand_path_template(template: &str, project_root: &Path) -> Vec<PathBuf> {
     if !template.contains("<name>") {
         return vec![project_root.join(template)];

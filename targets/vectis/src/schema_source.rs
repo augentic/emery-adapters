@@ -7,8 +7,6 @@ pub const TOKENS_SCHEMA_SOURCE: &str = include_str!("../schemas/tokens.schema.js
 pub const ASSETS_SCHEMA_SOURCE: &str = include_str!("../schemas/assets.schema.json");
 
 /// Canonical tool-owned `composition.schema.json` (decision D1).
-/// Shared between `layout` mode (unwired subset) and `composition`
-/// mode (full lifecycle).
 pub const COMPOSITION_SCHEMA_SOURCE: &str = include_str!("../schemas/composition.schema.json");
 
 /// Known schema names, in listing order.

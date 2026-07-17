@@ -9,10 +9,6 @@ use serde_json::Value;
 use super::finding::Finding;
 use crate::validate::engine::shared::escape_pointer_token;
 
-/// Read and parse the component catalog with explicit error
-/// reporting: the catalog has no prior validation step, so a
-/// present-but-invalid file must surface as a composition-mode error
-/// rather than being silently skipped.
 pub(super) fn parse_catalog_file(path: &Path) -> Result<Value, String> {
     let source = std::fs::read_to_string(path)
         .map_err(|err| format!("component catalog at {} is not readable: {err}", path.display()))?;
@@ -21,10 +17,6 @@ pub(super) fn parse_catalog_file(path: &Path) -> Result<Value, String> {
     })
 }
 
-/// Cross-reference every `component: <slug>` against the catalog.
-///
-/// Absent or `status: rejected` slugs → error; a confirmed entry with
-/// zero `component:` references → warning (unused in this artifact).
 pub(super) fn check_catalog_cross_references(
     instance: &Value, catalog: &Value, errors: &mut Vec<Finding>, warnings: &mut Vec<Finding>,
 ) {
@@ -71,8 +63,6 @@ pub(super) fn check_catalog_cross_references(
     }
 }
 
-/// Collect every `component: <slug>` directive as a
-/// `(slug, json_pointer_path)` pair.
 fn collect_component_slugs(node: &Value, json_path: &str, out: &mut Vec<(String, String)>) {
     match node {
         Value::Object(map) => {

@@ -14,15 +14,6 @@ use super::shared::{assets_validator, escape_pointer_token, parse_yaml_file};
 use crate::validate::ValidateMode;
 use crate::validate::error::VectisError;
 
-/// Validate `assets.yaml` against the embedded assets schema and
-/// layer cross-artifact checks for resolved files and composition
-/// references.
-///
-/// # Errors
-///
-/// Returns [`VectisError::InvalidProject`] when the resolved file is
-/// unreadable, and [`VectisError::Internal`] if the embedded schema
-/// fails to compile.
 pub(super) fn validate(path: Option<&Path>) -> Result<Value, VectisError> {
     let target = path.map_or_else(|| resolve_default_path(ValidateMode::Assets), Path::to_path_buf);
 
@@ -375,8 +366,6 @@ pub struct AssetRef {
 }
 
 /// Collect every static asset reference (`image.name`, `icon.name`,
-/// `icon-button.icon`, `fab.icon`) in a composition document, each with
-/// the JSON Pointer of the referencing key.
 #[must_use]
 pub fn collect_asset_references(value: &Value) -> Vec<AssetRef> {
     let mut refs = Vec::new();

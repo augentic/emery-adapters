@@ -151,13 +151,8 @@ impl ScaffoldPlan {
 
 /// Execute a scaffold command against an explicit project directory.
 ///
-/// An `android` scaffold chains the vendored Gradle-wrapper setup
-/// ([`crate::android::run_for_shell_dir`]) after the write.
-///
 /// # Errors
-///
 /// Returns [`ScaffoldError`] for invalid inputs, version-file issues,
-/// or write failures.
 pub fn run_at(
     project_dir: &Path, command: &ScaffoldCommand,
 ) -> Result<serde_json::Value, ScaffoldError> {
@@ -184,7 +179,6 @@ pub fn exit_code(value: &serde_json::Value) -> u8 {
 /// Plan a scaffold command without touching the filesystem.
 ///
 /// # Errors
-///
 /// Returns [`ScaffoldError`] when arguments are invalid.
 pub fn plan_command(
     command: &ScaffoldCommand, versions: &Versions,
@@ -223,7 +217,6 @@ pub fn default_android_package(app_name: &str) -> String {
 /// Parse a comma-separated capability list into the canonical set.
 ///
 /// # Errors
-///
 /// Returns [`ScaffoldError`] when an unknown capability tag is present.
 pub fn parse_caps(raw: Option<&str>) -> Result<Vec<Capability>, ScaffoldError> {
     let mut out: Vec<Capability> = Vec::new();

@@ -1,25 +1,10 @@
-//! The judgment operations: `survey` and `extract` — schema-gated
-//! legs through [`adapter::judgment`] with id-grammar tails.
-//!
-//! The judgment detail — the framework survey grammar, the
-//! `excerpt` / `type` / `call` extraction depth — rides in the
-//! embedded prompts and references.
-
-use adapter::answers::{
-    EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA, LeadsAnswer, validate_evidence, validate_leads,
-};
+use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA, evidence_tail, leads_tail};
+use adapter::registry::Doc;
 use adapter::seam::{Context, Error, Evidence, Lead, SourceMetadata};
-use adapter::{Model, judgment};
+use adapter::{Model, Source, repaired};
 
 use crate::registry;
 
-/// Resolve-time `metadata`: no compatibility floor.
-#[must_use]
-pub const fn metadata() -> SourceMetadata {
-    SourceMetadata { specify_floor: None }
-}
-
-/// Session-less state note both prompts carry.
 const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and there is no \
                             session: every input you need lives in the workspace tree and this \
                             prompt. Resolve the bound source material from the plan — read \
@@ -29,17 +14,25 @@ const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and
                             JavaScript source tree the prompt calls `$SOURCE_DIR`. Treat that \
                             tree as read-only.";
 
-/// Survey the bound source tree into leads — one schema-gated leg
-/// over `prompts/survey.md`, then the id-grammar tail.
-///
-/// # Errors
-///
-/// As [`adapter::judgment`]; a validation-tail failure is
-/// [`Error::Internal`].
-pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>, Error> {
-    let system = registry::body("prompts/survey.md").to_string();
-    let user = format!(
-        "Survey the TypeScript / JavaScript source bound to adapter `{id}` using the \
+/// TypeScript / JavaScript source trees → leads and code Evidence.
+#[derive(Clone, Copy, Debug)]
+pub struct Adapter;
+
+impl Source for Adapter {
+    const NAME: &'static str = "typescript";
+
+    fn metadata() -> SourceMetadata {
+        SourceMetadata { specify_floor: None }
+    }
+
+    fn docs() -> &'static [Doc] {
+        registry::docs()
+    }
+
+    async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>, Error> {
+        let system = registry::body("prompts/survey.md").to_string();
+        let user = format!(
+            "Survey the TypeScript / JavaScript source bound to adapter `{id}` using the \
          prompt's framework grammar.\n\n\
          {BINDING_NOTE}\n\n\
          When `discovery.md` at the workspace root already carries leads for this source \
@@ -50,28 +43,17 @@ pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>,
          the same `lead` / `synopsis` / optional `topics` content as the prompt's lead \
          blocks. The caller persists the leads into `discovery.md`; do not write it \
          yourself.",
-        id = ctx.adapter_id,
-    );
-    let answer: LeadsAnswer =
-        judgment(model, ctx, system, user, "leads", LEADS_ANSWER_SCHEMA).await?;
-    validate_leads(&answer.leads)?;
-    Ok(answer.leads)
-}
+            id = ctx.adapter_id,
+        );
+        repaired(model, ctx, system, user, "leads", LEADS_ANSWER_SCHEMA, leads_tail).await
+    }
 
-/// Extract one lead's behavioural Evidence from the bound source tree
-/// — one schema-gated leg over `prompts/extract.md` (emitting
-/// `excerpt` / `type` / `call` claims), then the claim-id tail.
-///
-/// # Errors
-///
-/// As [`adapter::judgment`]; a validation-tail failure is
-/// [`Error::Internal`].
-pub async fn extract<P: Model>(
-    model: &P, ctx: &Context<'_>, lead: &Lead,
-) -> Result<Evidence, Error> {
-    let system = registry::body("prompts/extract.md").to_string();
-    let user = format!(
-        "Extract Evidence from the TypeScript / JavaScript source bound to adapter \
+    async fn extract<P: Model>(
+        model: &P, ctx: &Context<'_>, lead: &Lead,
+    ) -> Result<Evidence, Error> {
+        let system = registry::body("prompts/extract.md").to_string();
+        let user = format!(
+            "Extract Evidence from the TypeScript / JavaScript source bound to adapter \
          `{id}` for this lead:\n\n{lead}\n\n\
          {BINDING_NOTE}\n\n\
          The prompt's references is served over this call's MCP grant — load the \
@@ -80,11 +62,9 @@ pub async fn extract<P: Model>(
          (`authority`, `claims`) the prompt describes, without the envelope `lead` key — \
          this call names the lead. The caller persists the document under \
          `.specify/slices/<slice>/evidence/`; do not write it yourself.",
-        id = ctx.adapter_id,
-        lead = lead.render(),
-    );
-    let evidence: Evidence =
-        judgment(model, ctx, system, user, "evidence", EVIDENCE_ANSWER_SCHEMA).await?;
-    validate_evidence(&evidence)?;
-    Ok(evidence)
+            id = ctx.adapter_id,
+            lead = lead.render(),
+        );
+        repaired(model, ctx, system, user, "evidence", EVIDENCE_ANSWER_SCHEMA, evidence_tail).await
+    }
 }

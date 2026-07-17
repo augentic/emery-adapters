@@ -10,7 +10,6 @@ use super::pdf::write_icon_pdf;
 /// Write an iOS imageset (`<id>.pdf` + `Contents.json`).
 ///
 /// # Errors
-///
 /// Returns I/O errors from the underlying writes.
 pub fn write_imageset(
     tree: &Tree, asset_id: &str, imageset_dir: &Path, dry_run: bool,

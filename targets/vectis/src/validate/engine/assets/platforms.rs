@@ -4,14 +4,9 @@ use std::path::Path;
 
 use serde_json::Value;
 
-/// Shell platforms that carry per-platform asset exports in `assets.yaml`.
 const ASSET_SHELL_PLATFORMS: &[&str] = &["ios", "android"];
 
 /// Load `ios` / `android` entries declared in `project.yaml.platforms`.
-///
-/// When the config is absent or invalid, falls back to
-/// `["ios", "android"]` so standalone `validate assets` invocations
-/// against a lone `assets.yaml` keep working.
 pub fn load_shell_platforms(project_root: &Path) -> Vec<String> {
     let config_path = project_root.join(".specify").join("project.yaml");
     let Ok(source) = std::fs::read_to_string(&config_path) else {
