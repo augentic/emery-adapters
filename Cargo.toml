@@ -47,6 +47,15 @@ harness = { git = "https://github.com/augentic/specify.git" }
 prose = { path = "crates/prose" }
 testkit = { path = "crates/testkit" }
 
+captures = { path = "sources/captures" }
+contracts = { path = "targets/contracts" }
+documentation = { path = "sources/documentation" }
+intent = { path = "sources/intent" }
+omnia-target = { package = "omnia", path = "targets/omnia" }
+screenshots = { path = "sources/screenshots" }
+typescript = { path = "sources/typescript" }
+vectis = { path = "targets/vectis" }
+
 [patch.crates-io]
 omnia = { git = "https://github.com/augentic/omnia.git" }
 omnia-cursor = { git = "https://github.com/augentic/backends.git" }

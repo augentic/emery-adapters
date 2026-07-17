@@ -693,7 +693,7 @@ fn guest_wasm(file: &str) -> PathBuf {
     let path = target_dir().join("wasm32-wasip2").join("debug").join(file);
     assert!(
         path.exists(),
-        "guest `{file}` not found at {path}; run `cargo build --workspace --target wasm32-wasip2`",
+        "guest `{file}` not found at {path}; run `cargo build --workspace --exclude eval --target wasm32-wasip2`",
         path = path.display()
     );
     path
@@ -705,8 +705,9 @@ fn build_guests() {
         let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .expect("composed manifest dir is at the workspace root");
-        // `--workspace` avoids `-p omnia` ambiguity between guest crate and runtime dep.
-        let args = ["build", "--workspace", "--target", "wasm32-wasip2"];
+        // `--workspace` avoids `-p omnia` ambiguity between guest crate and
+        // runtime dep; `eval` is the native-only harness binding.
+        let args = ["build", "--workspace", "--exclude", "eval", "--target", "wasm32-wasip2"];
         composed::cargo(&args, workspace_root, &target_dir()).expect("guest build");
     });
 }

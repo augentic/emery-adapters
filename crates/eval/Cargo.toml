@@ -16,11 +16,11 @@ workspace = true
 [dependencies]
 harness = { workspace = true, features = ["runtime"] }
 
-captures = { path = "../../sources/captures" }
-contracts = { path = "../../targets/contracts" }
-documentation = { path = "../../sources/documentation" }
-intent = { path = "../../sources/intent" }
-omnia-target = { package = "omnia", path = "../../targets/omnia" }
-screenshots = { path = "../../sources/screenshots" }
-typescript = { path = "../../sources/typescript" }
-vectis = { path = "../../targets/vectis" }
+captures.workspace = true
+contracts.workspace = true
+documentation.workspace = true
+intent.workspace = true
+omnia-target.workspace = true
+screenshots.workspace = true
+typescript.workspace = true
+vectis.workspace = true
