@@ -32,11 +32,11 @@ pub fn catalog<M: Model>() -> Catalog<M> {
         .build()
 }
 
-/// The first-party binding handed to the shared harness entrypoints.
+/// The adapter binding handed to the shared harness entrypoints.
 #[derive(Clone, Copy, Debug)]
-pub struct FirstParty;
+pub struct Adapters;
 
-impl Binding for FirstParty {
+impl Binding for Adapters {
     fn catalog<M: Model>() -> Catalog<M> {
         catalog()
     }

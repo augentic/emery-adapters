@@ -49,13 +49,20 @@ omnia-testkit = { git = "https://github.com/augentic/omnia.git" }
 omnia-wasi-http = { git = "https://github.com/augentic/omnia.git" }
 omnia-wasi-model = { git = "https://github.com/augentic/omnia.git" }
 
-artifacts = { path = "../../specify/crates/artifacts" }
-change = { path = "../../specify/crates/change" }
-harness = { path = "../../specify/crates/harness" }
-project = { path = "../../specify/crates/project" }
-
 wrpc-transport = { git = "https://github.com/bytecodealliance/wrpc" }
 wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }
+
+
+[patch."https://github.com/augentic/specify.git"]
+adapter = { path = "../../specify/crates/adapter" }
+artifacts = { path = "../../specify/crates/artifacts" }
+change = { path = "../../specify/crates/change" }
+diagnostics = { path = "../../specify/crates/diagnostics" }
+error = { path = "../../specify/crates/error" }
+harness = { path = "../../specify/crates/harness" }
+project = { path = "../../specify/crates/project" }
+slice = { path = "../../specify/crates/slice" }
+transport = { path = "../../specify/crates/transport" }
 
 [workspace.lints.rust]
 elided_lifetimes_in_paths = "warn"

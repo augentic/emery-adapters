@@ -10,7 +10,7 @@ use anyhow::{Result, ensure};
 use change::Plan;
 use change::plan::handlers::ExecuteBody;
 use contracts::validate::validate_baseline;
-use engine::{FirstParty, SANDBOX, SCENARIOS, SEED, TRIAL_ENV};
+use engine::{Adapters, SANDBOX, SCENARIOS, SEED, TRIAL_ENV};
 use harness::inputs::TrialInputs;
 use harness::scenario::Scenarios;
 use harness::trial::{self, Profile};
@@ -20,14 +20,14 @@ use harness::{command, http};
 async fn main() -> ExitCode {
     let argv: Vec<String> = std::env::args().collect();
     match argv.get(1).map(String::as_str) {
-        Some("serve") => report(http::serve::<FirstParty>(&argv[1..]).await),
+        Some("serve") => report(http::serve::<Adapters>(&argv[1..]).await),
         Some("eval") => report(eval(&argv[1..]).await),
-        _ => ExitCode::from(command::run::<FirstParty>(argv).await),
+        _ => ExitCode::from(command::run::<Adapters>(argv).await),
     }
 }
 
 async fn eval(argv: &[String]) -> Result<ExitCode> {
-    trial::run::<FirstParty>(&profile()?, argv).await
+    trial::run::<Adapters>(&profile()?, argv).await
 }
 
 fn report(outcome: Result<ExitCode>) -> ExitCode {

@@ -6,7 +6,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use engine::{FirstParty, SCENARIOS};
+use engine::{Adapters, SCENARIOS};
 use harness::scenario::{self, Scenarios};
 
 #[test]
@@ -17,7 +17,7 @@ fn wiring() {
     let mut seen = 0;
     for dir in scenario_dirs(&scenarios.dir) {
         let id = dir.strip_prefix(&scenarios.dir).expect("scenario under the scenarios root");
-        let config = scenario::load::<FirstParty>(&scenarios, &dir)
+        let config = scenario::load::<Adapters>(&scenarios, &dir)
             .unwrap_or_else(|err| panic!("{}: {err:#}", id.display()));
 
         let inputs: Vec<PathBuf> = fs::read_dir(dir.join("inputs"))

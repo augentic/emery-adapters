@@ -1,8 +1,9 @@
-# Dev-only test support for the adapter suites (publish = false), the
-# adapters counterpart of the engine's `crates/testkit`: owns the
-# request-recording model harness and grant inspection that pair with
-# omnia-testkit's `Scripted` double (upstream owns generic mechanics;
-# recording assertions live with their consumers).
+# Dev-only test support for the adapter suites (publish = false):
+# local copies of the request-recording model harness and grant
+# inspection that pair with omnia-testkit's `Scripted` double, pending
+# their move upstream to `omnia_testkit::model` (upstream owns generic
+# mechanics; recording assertions live with their consumers). Delete
+# this crate once the omnia-testkit pin carries `Harness`/`mcp_grants`.
 [package]
 name = "testkit"
 description = "Dev-only test support for Specify adapter suites"
