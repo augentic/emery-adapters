@@ -50,10 +50,6 @@ cargo make eval scenario                     # list scenarios
 cargo make eval scenario contracts/design    # run one
 ```
 
-The model-free smoke — every `scenario.toml` parses, routes to a linked
-adapter, and carries inputs — runs with the eval workspace tests
-(`cargo make eval-test`); no scenario executes a model there.
-
 ## Index
 
 | Scenario                | Slice                        | Shape                                                                       |

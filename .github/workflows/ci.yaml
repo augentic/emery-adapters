@@ -7,32 +7,3 @@ jobs:
   ci:
     uses: augentic/.github/.github/workflows/ci.yaml@main
     secrets: inherit
-
-  # The eval workspace gate: tests and clippies `eval/` against its
-  # declared engine pin. Disabled until the repo carries a
-  # SPECIFY_READ_TOKEN secret for the private engine git dependency;
-  # until then the gate runs locally via `cargo make eval-test` and
-  # `cargo make eval-lint`.
-  # eval:
-  #   runs-on: ubuntu-latest
-  #   env:
-  #     CARGO_NET_GIT_FETCH_WITH_CLI: "true"
-  #   steps:
-  #     - uses: actions/checkout@v4
-
-  #     - name: Authenticate private augentic git dependencies
-  #       env:
-  #         SPECIFY_READ_TOKEN: ${{ secrets.SPECIFY_READ_TOKEN }}
-  #       run: |
-  #         git config --global \
-  #           url."https://x-access-token:${SPECIFY_READ_TOKEN}@github.com/augentic/".insteadOf \
-  #           "https://github.com/augentic/"
-
-  #     - name: Test against the declared engine revision
-  #       run: cargo test --locked --manifest-path eval/Cargo.toml --workspace
-
-  #     - name: Clippy against the declared engine revision
-  #       run: |
-  #         rustup component add clippy
-  #         cargo clippy --locked --manifest-path eval/Cargo.toml \
-  #           --workspace --all-targets -- -D warnings

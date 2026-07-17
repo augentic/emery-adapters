@@ -21,10 +21,9 @@ cargo make test               # the whole workspace, matching CI
 
 ### 2. The eval workspace — linked-adapter integration and the live rungs
 
-`eval/` is a standalone workspace excluded from the root, with its own manifest and lockfile, and one member: `eval/engine/` — the wrapper binary declaring the linked-adapter catalog binding and carrying the repository's trial profile, contracts-specific grading, and scenario data. The generic runtime (the shared wrapper-binary entry `harness::entry`, catalog machinery, seam provider, model bridge, telemetry, the trial and scenario drivers, command/HTTP transports) is the engine-owned `specify/crates/harness`, consumed alongside the other Specify engine crates (`project`, `change`, `artifacts`, …) from the sibling `../specify` checkout via the committed `[patch."https://github.com/augentic/specify.git"]` section in `eval/Cargo.toml`; the harness's own generic suites (catalog dispatch, input-parser refusals, scenario runner gates, adapter-independence boundary) live in `specify/crates/harness/tests`. The `engine` binary runs the production verb handlers natively: seam projections, adapter resolution, CLI anchoring, and MCP shelves, all without building WebAssembly. Its deterministic suites (the seam, CLI, MCP, and scenario-wiring tests) run locally against the sibling checkout; `cargo make ci` never touches this workspace (its CI job is disabled pending a `SPECIFY_READ_TOKEN` secret — see `.github/workflows/ci.yaml`).
+`eval/` is a standalone workspace excluded from the root, with its own manifest and lockfile, and one member: `eval/engine/`. Its Rust code declares only the linked first-party adapters. The engine-owned `specify/crates/harness` supplies the provider, model bridge, telemetry, CLI shim, deterministic grading, and trial/scenario runners; `cargo make eval` passes the trial inputs explicitly. The `engine` binary runs production verb handlers natively without building WebAssembly. Generic catalog, provider, MCP, CLI, and scenario mechanics are tested in `specify/crates/harness/tests`; the eval binding carries no separate deterministic suite. `cargo make ci` never touches this standalone workspace.
 
 ```bash
-cargo make eval-test
 cargo make eval-lint
 cargo make dev -- --project-dir <dir> slice list   # any specify verb, natively
 ```
@@ -46,8 +45,6 @@ Sibling co-development needs no pin dance: the committed `[patch."https://github
 cargo make eval scenario                     # list scenarios
 cargo make eval scenario contracts/design    # one scenario
 ```
-
-The model-free wiring smoke (every scenario parses, routes to a linked adapter, and carries inputs) runs with the eval workspace tests on rung 2.
 
 ### 4. Composed-deployment tests — model-free component checks
 

@@ -22,7 +22,7 @@ Artifacts outrank source behavior. Preserve missing information as `[unknown]` r
 - Do not commit built `.wasm` artifacts.
 - Adapter names must remain unique across the source and target axes.
 
-The root workspace includes `crates/*`, `sources/*`, `targets/*`, `composed` (the composed-deployment tests), and `examples/change` (the wasm change example's host). The adapter SDK (`adapter`) is a revision-pinned git dependency on `augentic/specify` (`specify/crates/adapter`), not a local crate. `eval/` is a separate workspace over the Specify engine crates, with one member: `eval/engine/` — the wrapper binary declaring the linked first-party adapter catalog as a `harness::catalog::Binding` and carrying the repository's trial profile, deterministic grading, and prompt-scenario data. All generic plumbing (the shared wrapper-binary entry `harness::entry`, catalog machinery, seam provider, model bridge, telemetry, the trial and scenario drivers, command/HTTP transports) is the engine-owned `specify/crates/harness`. The eval workspace resolves the engine crates from the sibling `../specify` checkout through the committed `[patch."https://github.com/augentic/specify.git"]` section in `eval/Cargo.toml` — sibling co-development needs no pin bump.
+The root workspace includes `crates/*`, `sources/*`, `targets/*`, `composed` (the composed-deployment tests), and `examples/change` (the wasm change example's host). The adapter SDK (`adapter`) is a revision-pinned git dependency on `augentic/specify` (`specify/crates/adapter`), not a local crate. `eval/` is a separate workspace with one member, `eval/engine/`: a native binary that declares only the linked first-party adapters. The engine-owned `specify/crates/harness` supplies the catalog machinery, provider, model bridge, telemetry, CLI shim, and shared trial/scenario runners; the invoking task passes trial inputs explicitly. The eval workspace resolves the shared harness from the sibling `../specify` checkout through its committed path patch.
 
 ## Prose and rules
 
@@ -61,7 +61,6 @@ cargo make ci             # full gate, including vet and deny
 cargo nextest run -p NAME # focused adapter tests
 cargo make adapter NAME   # fast development component build
 cargo make release        # release-build every component
-cargo make eval-test      # nextest over the eval workspace (its own lockfile)
 cargo make eval-lint      # clippy -D warnings over the eval workspace
 cargo make dev -- ARGS    # any specify verb through the native engine shim
 cargo make eval [phase]   # live-model trial over sandbox/ (operator-invoked)

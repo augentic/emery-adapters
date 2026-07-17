@@ -1,10 +1,5 @@
-# The `engine` wrapper: links the first-party adapter crates,
-# declares the shared harness's catalog binding, and carries the
-# repository's trial profile, contracts-specific grading, and prompt-
-# scenario data. All generic plumbing — the binary body itself
-# (`harness::entry`), command/HTTP transports, the trial and scenario
-# drivers, provider and model wiring — is the Specify-owned `harness`
-# crate's.
+# Native-only adapter binding. Runtime and trial policy live in
+# `harness`; this package declares only its linked adapters.
 [package]
 name = "engine"
 description = "Specify adapters' native dev shim and live-model evaluation harness"
@@ -21,11 +16,12 @@ publish.workspace = true
 name = "engine"
 path = "src/main.rs"
 
+[lib]
+name = "eval_binding"
+path = "src/lib.rs"
+
 [dependencies]
-anyhow.workspace = true
-change.workspace = true
 harness.workspace = true
-omnia-guest.workspace = true
 
 captures.workspace = true
 contracts.workspace = true
@@ -35,17 +31,6 @@ omnia-target.workspace = true
 screenshots.workspace = true
 typescript.workspace = true
 vectis.workspace = true
-
-[dev-dependencies]
-artifacts.workspace = true
-axum.workspace = true
-omnia-testkit.workspace = true
-project.workspace = true
-serde_json.workspace = true
-tempfile.workspace = true
-testkit.workspace = true
-tokio.workspace = true
-tower.workspace = true
 
 [lints]
 workspace = true

@@ -2,7 +2,7 @@
 
 The adapters sibling of the engine's [`crates/eval`](https://github.com/augentic/specify/tree/main/crates/eval): a live-model harness for testing this repo's adapter prompts, with real adapters in place of the engine's fixture. Both are declarative bindings over the shared [`specify/crates/harness`](https://github.com/augentic/specify/tree/main/crates/harness) runtime. Outputs are graded by deterministic validators — not a model.
 
-The same workspace is the **native dev shim**: the `engine` binary runs any specify verb over the linked adapter crates without building WebAssembly (`cargo make dev -- --project-dir <dir> plan status`), serves the per-adapter MCP reference shelves (`engine serve`), and carries the deterministic seam/CLI/MCP test suites (`cargo make eval-test`). This workspace is standalone — its manifest resolves the Specify engine crates from the sibling `../specify` checkout via a committed path patch; see the [root README](../README.md#publishing) and [TESTING.md](../TESTING.md).
+The same workspace is the **native dev shim**: the `engine` binary runs any specify verb over the linked adapter crates without building WebAssembly (`cargo make dev -- --project-dir <dir> plan status`). This workspace is standalone and resolves the shared harness from the sibling `../specify` checkout through a committed path patch.
 
 ## Quick start
 
@@ -52,9 +52,9 @@ cargo make eval scenario contracts/design    # run one
 
 Scenario anatomy and the index live in [`scenarios/README.md`](scenarios/README.md). Scenarios run **natively** over the linked adapter crates — they prove prompt quality, not WASM/WIT conformance (that stays with `composed/` and the change example). For a first-party adapter a new scenario is just a data directory; a **third-party adapter** additionally needs a Cargo dependency in [`engine/Cargo.toml`](engine/Cargo.toml) and a builder call in [`engine/src/lib.rs`](engine/src/lib.rs), because configuration alone cannot link a Rust crate into the shim.
 
-## The harness / `engine` wrapper split
+## The harness / `engine` split
 
-The reusable, adapter-agnostic core lives in Specify as [`specify/crates/harness`](https://github.com/augentic/specify/tree/main/crates/harness): the typed `Catalog` builder over the per-axis operations traits (`adapter::Source` / `adapter::Target`), the native seam `Provider`, the guest-side `Model` bridge, the lazy `DevModel` connection with the `SPECIFY_EVAL_MODEL` override, the request `telemetry` tally, the MCP reference shelves, and the generic trial / scenario / command / HTTP drivers behind one `catalog::Binding` hook. It carries **no dependency on any concrete adapter crate** (enforced by its `tests/boundary.rs`) — the invariant that lets Specify's `crates/eval` instantiate it with the testkit fixture and this repository instantiate it with the real implementors. [`engine/`](engine/) is this repository's wrapper: one builder call per linked first-party adapter in [`src/lib.rs`](engine/src/lib.rs), the trial [`Profile`](engine/src/main.rs) over the shared `trial.env` inputs, the contracts-specific deterministic grading in [`src/main.rs`](engine/src/main.rs), and the scenario definitions — everything that names an adapter or a repo path stays here.
+The reusable, adapter-agnostic core lives in Specify as [`specify/crates/harness`](https://github.com/augentic/specify/tree/main/crates/harness): catalog dispatch, the native seam provider, live model bridge, MCP reference shelves, CLI shim, deterministic grading, and trial/scenario runners. It carries no concrete adapter dependency. [`engine/src/lib.rs`](engine/src/lib.rs) contains only the first-party adapter list; the `cargo make eval` task passes target, sources, seed, and scenario paths explicitly.
 
 ## Model judgment
 
@@ -82,14 +82,13 @@ Every step runs the production operation through the shared typed command router
 
 ## Grading
 
-Hard assertions only (`engine/src/main.rs`):
+The shared runner applies the same hard assertions for every adapter binding:
 
 | Stage   | Check              | Pass condition                                                        |
 | ------- | ------------------ | ---------------------------------------------------------------------- |
 | plan    | Authored entries   | `plan author` produced at least one entry                              |
 | execute | Lifecycle          | Every plan entry is `done`                                             |
 | execute | Provenance         | Every evidenced requirement carries sources; ids are present           |
-| execute | Contracts baseline | The merged `contracts/` baseline is non-empty and validator-clean      |
 
 Per-leg request / repair counts are **reported, not asserted**. After grading, the trial prints one line per judgment leg (keyed by answer-schema name) with its request count; for the engine legs it derives repairs from the invocation baseline (one propose per trial, one synthesis per plan entry). A leg drifting from zero repairs toward the budget is the early signal that a prompt or answer-schema change degraded the model's first answer.
 

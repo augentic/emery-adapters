@@ -13,27 +13,10 @@ rust-version = "1.95"
 publish = false
 
 [workspace.dependencies]
-anyhow = "1.0.103"
-axum = "0.8.9"
-serde_json = "1.0.150"
-tempfile = "3"
-tokio = { version = "1.52.4", features = ["macros", "net", "rt-multi-thread", "sync"] }
-tower = "0.5.3"
-
-artifacts = { git = "https://github.com/augentic/specify.git" }
-change = { git = "https://github.com/augentic/specify.git" }
-harness = { git = "https://github.com/augentic/specify.git", features = ["full"] }
-project = { git = "https://github.com/augentic/specify.git" }
-
-omnia-cursor = "0.35.0"
-omnia-guest = "0.35.0"
-omnia-testkit = "0.35.0"
-omnia-wasi-http = "0.35.0"
-omnia-wasi-model = "0.35.0"
+harness = { git = "https://github.com/augentic/specify.git", features = ["runtime"] }
 
 captures = { path = "../sources/captures" }
 contracts = { path = "../targets/contracts" }
-testkit = { path = "../crates/testkit" }
 documentation = { path = "../sources/documentation" }
 intent = { path = "../sources/intent" }
 omnia-target = { package = "omnia", path = "../targets/omnia" }
@@ -45,7 +28,6 @@ vectis = { path = "../targets/vectis" }
 omnia = { git = "https://github.com/augentic/omnia.git" }
 omnia-cursor = { git = "https://github.com/augentic/backends.git" }
 omnia-guest = { git = "https://github.com/augentic/omnia.git" }
-omnia-testkit = { git = "https://github.com/augentic/omnia.git" }
 omnia-wasi-http = { git = "https://github.com/augentic/omnia.git" }
 omnia-wasi-model = { git = "https://github.com/augentic/omnia.git" }
 
@@ -55,14 +37,7 @@ wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }
 
 [patch."https://github.com/augentic/specify.git"]
 adapter = { path = "../../specify/crates/adapter" }
-artifacts = { path = "../../specify/crates/artifacts" }
-change = { path = "../../specify/crates/change" }
-diagnostics = { path = "../../specify/crates/diagnostics" }
-error = { path = "../../specify/crates/error" }
 harness = { path = "../../specify/crates/harness" }
-project = { path = "../../specify/crates/project" }
-slice = { path = "../../specify/crates/slice" }
-transport = { path = "../../specify/crates/transport" }
 
 [workspace.lints.rust]
 elided_lifetimes_in_paths = "warn"
