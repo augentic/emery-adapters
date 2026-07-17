@@ -63,8 +63,8 @@ impl Target for Vectis {
         registry::docs()
     }
 
-    fn guidance() -> &'static str {
-        registry::body("prompts/guidance.md")
+    async fn guidance<P: Model>(_model: &P, _ctx: &Context<'_>) -> Result<String, Error> {
+        Ok(registry::body("prompts/guidance.md").to_string())
     }
 
     #[expect(

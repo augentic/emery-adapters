@@ -43,6 +43,7 @@ axum.workspace = true
 omnia-testkit.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
+testkit.workspace = true
 tower.workspace = true
 
 [lints]

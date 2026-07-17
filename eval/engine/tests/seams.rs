@@ -1,18 +1,16 @@
 //! Native [`Provider`] seam coverage over linked adapters.
 
-use std::sync::{Arc, Mutex};
-
 use artifacts::evidence::{Claim, ClaimKind};
 use engine::catalog;
 use harness::provider::Provider;
 use omnia_guest::Model;
-use omnia_guest::model::{Reply, Request, Tool};
 use omnia_testkit::model::Scripted;
 use project::adapter::metadata::Request as MetadataRequest;
 use project::adapter::{AdapterRef, Axis, Resolver};
 use project::seam::wire::BuildStatus;
 use project::seam::{Error, Input, Lead, Source as _, Target as _, WorkingTree};
 use tempfile::TempDir;
+use testkit::{Harness, mcp_grants};
 
 fn provider<M: Model>(root: &std::path::Path, model: M) -> Provider<M> {
     Provider::new(root, model, catalog())
@@ -35,32 +33,6 @@ fn tree() -> WorkingTree {
 
 fn model(answers: impl IntoIterator<Item = &'static str>) -> Scripted {
     Scripted::answers(answers)
-}
-
-#[derive(Clone)]
-struct Recording {
-    inner: Scripted,
-    requests: Arc<Mutex<Vec<Request>>>,
-}
-
-impl Recording {
-    fn new(inner: Scripted) -> Self {
-        Self {
-            inner,
-            requests: Arc::new(Mutex::new(Vec::new())),
-        }
-    }
-
-    fn requests(&self) -> Vec<Request> {
-        self.requests.lock().expect("the request log is never poisoned").clone()
-    }
-}
-
-impl Model for Recording {
-    async fn create(&self, request: Request) -> Result<Reply, omnia_guest::model::Error> {
-        self.requests.lock().expect("the request log is never poisoned").push(request.clone());
-        self.inner.create(request).await
-    }
 }
 
 #[tokio::test]
@@ -100,20 +72,13 @@ async fn extract_typed_claim_projection() {
 #[tokio::test]
 async fn mcp_base_reference_grant() {
     let tmp = TempDir::new().expect("tempdir");
-    let model = Recording::new(model([r#"{"leads":[]}"#]));
+    let model = Harness::new(model([r#"{"leads":[]}"#]));
     let provider = provider(tmp.path(), model).mcp_base("http://127.0.0.1:7737".to_string());
 
     provider.survey("source:intent".to_string()).await.expect("survey");
 
     let requests = provider.model().requests();
-    let grants: Vec<_> = requests[0]
-        .tools
-        .iter()
-        .filter_map(|tool| match tool {
-            Tool::Mcp(grant) => Some(grant),
-            Tool::Function(_) => None,
-        })
-        .collect();
+    let grants = mcp_grants(&requests[0]);
     assert_eq!(grants.len(), 1, "one references grant per judgment leg");
     assert_eq!(grants[0].name, "intent-references");
     assert_eq!(grants[0].url, "http://127.0.0.1:7737/mcp/intent");

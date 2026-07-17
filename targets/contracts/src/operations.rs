@@ -65,8 +65,8 @@ impl Target for Contracts {
         registry::docs()
     }
 
-    fn guidance() -> &'static str {
-        registry::body("prompts/guidance.md")
+    async fn guidance<P: Model>(_model: &P, _ctx: &Context<'_>) -> Result<String, Error> {
+        Ok(registry::body("prompts/guidance.md").to_string())
     }
 
     async fn build<P: Model>(

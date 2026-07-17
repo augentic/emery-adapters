@@ -6,8 +6,7 @@ use std::fs;
 use std::path::Path;
 use std::process::ExitCode;
 
-use anyhow::{Context as _, Result, ensure};
-use artifacts::spec::provenance::{Requirement, RequirementStatus, parse_spec_md};
+use anyhow::{Result, ensure};
 use change::Plan;
 use change::plan::handlers::ExecuteBody;
 use contracts::validate::validate_baseline;
@@ -16,7 +15,6 @@ use harness::inputs::TrialInputs;
 use harness::scenario::Scenarios;
 use harness::trial::{self, Profile};
 use harness::{command, http};
-use project::config::Layout;
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -78,23 +76,8 @@ fn argv(parts: &[&str]) -> Vec<String> {
 ///
 /// Returns one failing assertion at a time, with the evidence inline.
 fn grade(root: &Path, _plan: &Plan, _executed: &ExecuteBody) -> Result<()> {
-    requirements(&baseline(root)?)?;
+    harness::grade::provenance(&harness::grade::baseline(root)?)?;
     contracts_baseline(root)?;
-    Ok(())
-}
-
-fn requirements(requirements: &[Requirement]) -> Result<()> {
-    ensure!(!requirements.is_empty(), "the baseline carries no requirements");
-    for requirement in requirements {
-        ensure!(!requirement.id.is_empty(), "requirement `{}` carries no id", requirement.name);
-        if requirement.status != Some(RequirementStatus::Unknown) {
-            ensure!(
-                !requirement.sources.is_empty(),
-                "evidenced requirement `{}` carries no provenance",
-                requirement.name
-            );
-        }
-    }
     Ok(())
 }
 
@@ -135,19 +118,4 @@ fn yaml_count(dir: &Path) -> usize {
             }
         })
         .sum()
-}
-
-fn baseline(root: &Path) -> Result<Vec<Requirement>> {
-    let mut requirements = Vec::new();
-    let specs = Layout::new(root).specs_dir();
-    for domain in fs::read_dir(&specs)
-        .with_context(|| format!("reading the baseline specs dir {}", specs.display()))?
-    {
-        let spec = domain.context("domain dir")?.path().join("spec.md");
-        if spec.is_file() {
-            let body = fs::read_to_string(&spec).context("reading a baseline spec")?;
-            requirements.extend(parse_spec_md(&body).requirements);
-        }
-    }
-    Ok(requirements)
 }

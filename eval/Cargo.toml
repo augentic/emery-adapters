@@ -22,7 +22,7 @@ tower = "0.5.3"
 
 artifacts = { git = "https://github.com/augentic/specify.git" }
 change = { git = "https://github.com/augentic/specify.git" }
-harness = { git = "https://github.com/augentic/specify.git" }
+harness = { git = "https://github.com/augentic/specify.git", features = ["full"] }
 project = { git = "https://github.com/augentic/specify.git" }
 
 omnia-cursor = "0.35.0"
@@ -33,6 +33,7 @@ omnia-wasi-model = "0.35.0"
 
 captures = { path = "../sources/captures" }
 contracts = { path = "../targets/contracts" }
+testkit = { path = "../crates/testkit" }
 documentation = { path = "../sources/documentation" }
 intent = { path = "../sources/intent" }
 omnia-target = { package = "omnia", path = "../targets/omnia" }
