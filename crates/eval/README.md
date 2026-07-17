@@ -2,7 +2,7 @@
 
 The adapters sibling of the engine's [`crates/eval`](https://github.com/augentic/specify/tree/main/crates/eval): a live-model harness for testing this repo's adapter prompts, with real adapters in place of the engine's fixture. Both are declarative bindings over the shared [`specify/crates/harness`](https://github.com/augentic/specify/tree/main/crates/harness) runtime. Outputs are graded by deterministic validators — not a model.
 
-The same workspace is the **native dev shim**: the `engine` binary runs any specify verb over the linked adapter crates without building WebAssembly (`cargo make dev -- --project-dir <dir> plan status`). This workspace is standalone and resolves the shared harness from the sibling `../specify` checkout through a committed path patch.
+The same crate is the **native dev shim**: the `eval` binary runs any specify verb over the linked adapter crates without building WebAssembly (`cargo make dev -- --project-dir <dir> plan status`). The shared harness resolves from the sibling `../specify` checkout through the committed path patch in the workspace root `Cargo.toml`.
 
 ## Quick start
 
@@ -50,11 +50,11 @@ cargo make eval scenario                     # list scenarios
 cargo make eval scenario contracts/design    # run one
 ```
 
-Scenario anatomy and the index live in [`scenarios/README.md`](scenarios/README.md). Scenarios run **natively** over the linked adapter crates — they prove prompt quality, not WASM/WIT conformance (that stays with `composed/` and the change example). For a first-party adapter a new scenario is just the data directory; a **third-party adapter** additionally needs a Cargo dependency in [`engine/Cargo.toml`](engine/Cargo.toml) and an adapter entry in [`engine/src/main.rs`](engine/src/main.rs), because configuration alone cannot link a Rust crate into the shim.
+Scenario anatomy and the index live in [`scenarios/README.md`](scenarios/README.md). Scenarios run **natively** over the linked adapter crates — they prove prompt quality, not WASM/WIT conformance (that stays with `composed/` and the change example). For a first-party adapter a new scenario is just the data directory; a **third-party adapter** additionally needs a Cargo dependency in [`Cargo.toml`](Cargo.toml) and an adapter entry in [`src/main.rs`](src/main.rs), because configuration alone cannot link a Rust crate into the shim.
 
-## The harness / `engine` split
+## The harness / `eval` split
 
-The reusable, adapter-agnostic core lives in Specify as [`specify/crates/harness`](https://github.com/augentic/specify/tree/main/crates/harness): catalog dispatch, the native seam provider, live model bridge, MCP reference shelves, CLI shim, deterministic grading, and trial/scenario runners. It carries no concrete adapter dependency. [`engine/src/main.rs`](engine/src/main.rs) declares the first-party adapter list and its scenario root; the `cargo make eval` task passes the trial inputs.
+The reusable, adapter-agnostic core lives in Specify as [`specify/crates/harness`](https://github.com/augentic/specify/tree/main/crates/harness): catalog dispatch, the native seam provider, live model bridge, MCP reference shelves, CLI shim, deterministic grading, and trial/scenario runners. It carries no concrete adapter dependency. [`src/main.rs`](src/main.rs) declares the first-party adapter list and its scenario root; the `cargo make eval` task passes the trial inputs.
 
 ## Model judgment
 

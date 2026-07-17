@@ -22,7 +22,7 @@ Artifacts outrank source behavior. Preserve missing information as `[unknown]` r
 - Do not commit built `.wasm` artifacts.
 - Adapter names must remain unique across the source and target axes.
 
-The root workspace includes `crates/*`, `sources/*`, `targets/*`, `composed` (the composed-deployment tests), and `examples/change` (the wasm change example's host). The adapter SDK (`adapter`) is a revision-pinned git dependency on `augentic/specify` (`specify/crates/adapter`), not a local crate. `eval/` is a separate workspace with one member, `eval/engine/`: a native binary that declares the linked first-party adapters and prompt-scenario root. The engine-owned `specify/crates/harness` supplies the catalog machinery, provider, model bridge, telemetry, CLI shim, and shared trial/scenario runners; the invoking task passes trial inputs explicitly. The eval workspace resolves the shared harness from the sibling `../specify` checkout through its committed path patch.
+The root workspace includes `crates/*`, `sources/*`, `targets/*`, `composed` (the composed-deployment tests), and `examples/change` (the wasm change example's host). The adapter SDK (`adapter`) and the eval harness runtime (`harness`) are revision-pinned git dependencies on `augentic/specify`, not local crates. `crates/eval/` is the native-only binary that declares the linked first-party adapters and prompt-scenario root; the engine-owned `specify/crates/harness` supplies the catalog machinery, provider, model bridge, telemetry, CLI shim, and shared trial/scenario runners, and the invoking task passes trial inputs explicitly. For sibling co-development the committed path patch in the root `Cargo.toml` resolves the engine crates from the `../specify` checkout.
 
 ## Prose and rules
 
@@ -46,7 +46,7 @@ Testing is integration-first:
 - Keep `src` unit tests only for genuinely unreachable defensive branches or dense pure matrices that are materially cheaper in-process.
 - Do not widen public APIs solely for tests.
 - Use `cargo nextest`, not bare `cargo test`, for native workspace tests; process isolation is required by CWD- and environment-mutating suites.
-- Adapter native tests own operation behavior, the eval workspace owns cross-phase integration and prompt quality, and composed tests own WASM/WIT conformance. Do not duplicate the same assertion across rungs.
+- Adapter native tests own operation behavior, the eval crate owns cross-phase integration and prompt quality, and composed tests own WASM/WIT conformance. Do not duplicate the same assertion across rungs.
 - The live rungs are operator-invoked, never CI: `cargo make eval` (the native live-model trial over `sandbox/`, deterministic grading only), `cargo make eval scenario <adapter>/<name>` (one adapter operation over a seeded scratch tree — the fast prompt-iteration loop), and `cargo make change-run` (the wasm change example composing the published `specify:core` with the built adapter components).
 
 Read [`TESTING.md`](TESTING.md) before adding, deleting, or relocating tests.
@@ -61,8 +61,7 @@ cargo make ci             # full gate, including vet and deny
 cargo nextest run -p NAME # focused adapter tests
 cargo make adapter NAME   # fast development component build
 cargo make release        # release-build every component
-cargo make eval-lint      # clippy -D warnings over the eval workspace
-cargo make dev -- ARGS    # any specify verb through the native engine shim
+cargo make dev -- ARGS    # any specify verb through the native eval shim
 cargo make eval [phase]   # live-model trial over sandbox/ (operator-invoked)
 cargo make eval scenario [id]  # one live prompt scenario; bare lists them (operator-invoked)
 cargo make core-fetch     # fetch the pinned specify:core component

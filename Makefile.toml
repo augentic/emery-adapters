@@ -4,8 +4,8 @@
 [env]
 CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
 # The published `specify:core` component the wasm change example runs.
-# The native eval workspace tracks the sibling `../specify` checkout
-# instead (the committed path patch in eval/Cargo.toml).
+# The native `eval` crate tracks the sibling `../specify` checkout
+# instead (the committed path patch in Cargo.toml).
 SPECIFY_CORE_VERSION = "0.27.2"
 
 [config]
@@ -123,51 +123,38 @@ args = [
   "composed",
   "--exclude",
   "change-example",
+  "--exclude",
+  "eval",
   "--target",
   "wasm32-wasip2",
   "--release",
 ]
 
 # -------------------------------------
-# The eval workspace (native dev shim + live-model harness)
+# The eval crate (native dev shim + live-model harness)
 # -------------------------------------
-# `eval/` is a standalone workspace excluded from the root: it consumes
-# Specify's engine crates — including the shared `harness` runtime and
-# its wrapper-binary entry — from the sibling `../specify` checkout via
-# the committed path patch in eval/Cargo.toml, so it stays out of `ci`
-# and runs through these development tasks instead. One member: `engine`,
-# the wrapper binary linking the first-party adapters over the shared
-# harness.
+# `crates/eval/` is the native wrapper binary linking the first-party
+# adapters over Specify's shared `harness` runtime and its
+# wrapper-binary entry, consumed from the sibling `../specify` checkout
+# via the committed path patch in Cargo.toml. The binary is native-only
+# (`ci` builds and lints it; the wasm32 component tasks exclude it);
+# the live model rungs below stay operator-invoked.
 
-[tasks.eval-lint]
-command = "cargo"
-args = [
-  "clippy",
-  "--manifest-path",
-  "eval/Cargo.toml",
-  "--workspace",
-  "--all-targets",
-  "--all-features",
-  "--",
-  "-D",
-  "warnings",
-]
-install_crate = { rustup_component_name = "clippy" }
-
-# The `engine` CLI passthrough: any specify verb against the native
+# The `eval` CLI passthrough: any specify verb against the native
 # shim (`cargo make dev -- --project-dir <dir> slice list`).
 [tasks.dev]
 command = "cargo"
 args = [
   "run",
   "-q",
-  "--manifest-path",
-  "eval/Cargo.toml",
+  "-p",
+  "eval",
   "--",
   "${@}",
 ]
 
-# The native live-model trial (`engine eval`): the operator rhythm
+# The native live-model trial (the `eval` binary's `eval` subcommand):
+# the operator rhythm
 # over a persistent `sandbox/` project with the linked adapters,
 # graded by deterministic validators only. Live-only — needs an
 # authenticated cursor-agent on PATH; never part of `ci`. A full pass
@@ -179,7 +166,7 @@ args = [
 script = '''
 set -euo pipefail
 . examples/change/trial.env
-cargo run -q --manifest-path eval/Cargo.toml -- eval \
+cargo run -q -p eval -- eval \
   --sandbox sandbox \
   --seed examples/change/seed \
   --target contracts \

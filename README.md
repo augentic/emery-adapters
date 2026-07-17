@@ -32,26 +32,23 @@ wit/                  # the contract — wit/specify.wit, the axis worlds
 codex/                # cross-adapter prose: rules/ (UNI-* engineering rules)
                       # and references/runtime/ (the spec-runtime bundle
                       # adapters symlink into their prose/)
-crates/               # shared guest support (prose) and the repo's dev-only
+crates/               # shared guest support (prose), the repo's dev-only
                       # test-support crate (testkit — the recording model
-                      # harness over omnia-testkit's scripted double); the
-                      # `adapter` SDK is a revision-pinned git dependency on
-                      # specify/crates/adapter
+                      # harness over omnia-testkit's scripted double), and
+                      # eval — the native wrapper binary binding the linked
+                      # first-party adapters to the engine-owned harness
+                      # (specify/crates/harness): the live `eval` trial and
+                      # the prompt scenarios under crates/eval/scenarios/;
+                      # the `adapter` SDK and `harness` are revision-pinned
+                      # git dependencies on augentic/specify
 composed/             # model-free composed-deployment tests hosting the built
                       # adapter guest components on the Omnia runtime
                       # (flattened like omnia's examples/: support.rs + composed.rs)
 examples/
   change/             # the wasm change example: the `change-example` runtime
                       # host + omnia.toml + seed tree (see its README.md)
-eval/                 # `engine`: the wrapper binary binding the linked
-                      # first-party adapters to the engine-owned harness
-                      # (specify/crates/harness) — the native seam/CLI
-                      # integration suite, the live `eval` trial, and the
-                      # prompt scenarios under eval/scenarios/ — a standalone
-                      # workspace excluded from the root, pinned to a
-                      # declared Specify engine revision
 Cargo.toml            # workspace: `composed` + `examples/change` + `crates/*`
-                      # + `{sources,targets}/*` (excludes `eval`)
+                      # + `{sources,targets}/*`
 ```
 
 Identity lives in the guest crate's `Cargo.toml` `version` and the wasm-pkg
@@ -90,16 +87,15 @@ cargo make release
 
 The `composed` package keeps WASM/WIT conformance (`composed/composed.rs`) model-free and distinct from the live rungs. Composed tests build guests from source on first use when artifacts are absent under `target/wasm32-wasip2/debug/`.
 
-The eval workspace under `eval/` is a **standalone workspace**, deliberately excluded from the root: its `engine` member links every adapter crate in-process over the engine-owned `harness` runtime (`specify/crates/harness`) and consumes Specify's engine crates from a revision-pinned git source, so ordinary adapter commands never resolve (or authenticate to) that private dependency. It carries the live `cargo make eval` trial plus the single-operation prompt scenarios (see [TESTING.md](TESTING.md)) without coupling the engine repository back to concrete adapters. The eval rungs run **natively** over the linked crates and prove prompt quality; WASM/WIT conformance stays with `composed/` and the change example. A third-party adapter joining this harness needs both a Cargo dependency in `eval/engine/Cargo.toml` and an adapter entry in `eval/engine/src/main.rs` — a scenario directory alone cannot link a Rust crate. The development entry points:
+The `eval` crate at `crates/eval/` is a native-only workspace member: it links every adapter crate in-process over the engine-owned `harness` runtime (`specify/crates/harness`), consumed from a revision-pinned git source like the `adapter` SDK. It carries the live `cargo make eval` trial plus the single-operation prompt scenarios (see [TESTING.md](TESTING.md)) without coupling the engine repository back to concrete adapters. The eval rungs run **natively** over the linked crates and prove prompt quality; WASM/WIT conformance stays with `composed/` and the change example, and the wasm32 component tasks exclude `eval`. A third-party adapter joining this harness needs both a Cargo dependency in `crates/eval/Cargo.toml` and an adapter entry in `crates/eval/src/main.rs` — a scenario directory alone cannot link a Rust crate. The development entry point:
 
 ```bash
-cargo make eval-lint     # clippy -D warnings over eval/
 cargo make dev -- --project-dir /path/to/project plan status
 ```
 
-Two compatibility choices are independent, for first- and third-party adapter authors alike: the **WIT contract version** an adapter targets (`wit/specify.wit`, the publish-time compatibility floor), and — only for this optional eval workspace — the **engine revision** its manifest pins. The pin is the harness's declared, verified engine revision; it advances deliberately (edit the `rev` values in `eval/Cargo.toml`, run `cargo update --manifest-path eval/Cargo.toml`, and commit its lockfile), not with every engine commit.
+Two compatibility choices are independent, for first- and third-party adapter authors alike: the **WIT contract version** an adapter targets (`wit/specify.wit`, the publish-time compatibility floor), and the **engine revision** the workspace manifest pins for the `adapter` SDK and `harness`. The pin is the declared, verified engine revision; it advances deliberately (edit the `rev` values in the root `Cargo.toml`, run `cargo update`, and commit the lockfile), not with every engine commit.
 
-For sibling co-development against uncommitted engine changes, override the pin locally with hand-supplied `--config` path patches against the sibling working tree. Never commit path patches or hand-edit the pin for local work.
+For sibling co-development against uncommitted engine changes, the committed `[patch."https://github.com/augentic/specify.git"]` section in the root `Cargo.toml` resolves the engine crates from the sibling `../specify` working tree.
 
 ## Publishing
 

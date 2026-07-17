@@ -3,7 +3,7 @@
 fn main() -> std::process::ExitCode {
     harness::entry::main::<Adapters>(Some(std::path::Path::new(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../scenarios"
+        "/scenarios"
     ))))
 }
 

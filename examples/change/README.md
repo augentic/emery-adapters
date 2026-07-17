@@ -43,4 +43,4 @@ sandbox/change/workspace/contracts/
 
 ## Pinning
 
-The core component version is `SPECIFY_CORE_VERSION` in the root [Makefile.toml](../../Makefile.toml); it advances together with the engine revision pin in [eval/Cargo.toml](../../eval/Cargo.toml).
+The core component version is `SPECIFY_CORE_VERSION` in the root [Makefile.toml](../../Makefile.toml); it advances together with the engine revision pin in the root [Cargo.toml](../../Cargo.toml).
