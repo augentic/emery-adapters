@@ -46,12 +46,7 @@ omnia-testkit = "0.35.0"
 omnia-wasi-http = "0.35.0"
 omnia-wasi-model = "0.35.0"
 
-# The canonical adapter SDK, owned by the engine (RFC-61). The pin is
-# this repository's declared, verified engine revision; it advances
-# deliberately with the eval workspace's engine pin. Sibling
-# co-development overrides it with hand-supplied `--config` path
-# patches; never commit them.
-adapter = { git = "https://github.com/augentic/specify.git", rev = "46e93f1ae58d066430f73fd68bab5f0bd5120620" }
+adapter = { git = "https://github.com/augentic/specify.git" }
 prose = { path = "crates/prose" }
 testkit = { path = "crates/testkit" }
 
@@ -69,6 +64,8 @@ omnia-wasi-model = { git = "https://github.com/augentic/omnia.git" }
 # omnia-testkit = { path = "../omnia/crates/testkit" }
 # omnia-wasi-http = { path = "../omnia/crates/wasi-http" }
 # omnia-wasi-model = { path = "../omnia/crates/wasi-model" }
+
+adapter = { path = "../specify/crates/adapter" }
 
 wrpc-transport = { git = "https://github.com/bytecodealliance/wrpc" }
 wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }

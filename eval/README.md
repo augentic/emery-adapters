@@ -2,7 +2,7 @@
 
 The adapters sibling of the engine's [`crates/eval`](https://github.com/augentic/specify/tree/main/crates/eval): a live-model harness for testing this repo's adapter prompts, with real adapters in place of the engine's fixture. Both are declarative bindings over the shared [`specify/crates/harness`](https://github.com/augentic/specify/tree/main/crates/harness) runtime. Outputs are graded by deterministic validators — not a model.
 
-The same workspace is the **native dev shim**: the `engine` binary runs any specify verb over the linked adapter crates without building WebAssembly (`cargo make dev -- --project-dir <dir> plan status`), serves the per-adapter MCP reference shelves (`engine serve`), and carries the deterministic seam/CLI/MCP test suites (`cargo make eval-test`). This workspace is standalone — its manifest pins the Specify engine revision it is verified against; see the [root README](../README.md#publishing) and [TESTING.md](../TESTING.md).
+The same workspace is the **native dev shim**: the `engine` binary runs any specify verb over the linked adapter crates without building WebAssembly (`cargo make dev -- --project-dir <dir> plan status`), serves the per-adapter MCP reference shelves (`engine serve`), and carries the deterministic seam/CLI/MCP test suites (`cargo make eval-test`). This workspace is standalone — its manifest resolves the Specify engine crates from the sibling `../specify` checkout via a committed path patch; see the [root README](../README.md#publishing) and [TESTING.md](../TESTING.md).
 
 ## Quick start
 

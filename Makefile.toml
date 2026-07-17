@@ -4,7 +4,8 @@
 [env]
 CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
 # The published `specify:core` component the wasm change example runs.
-# Advances together with the engine pin in eval/Cargo.toml.
+# The native eval workspace tracks the sibling `../specify` checkout
+# instead (the committed path patch in eval/Cargo.toml).
 SPECIFY_CORE_VERSION = "0.27.2"
 
 [config]
@@ -131,14 +132,12 @@ args = [
 # The eval workspace (native dev shim + live-model harness)
 # -------------------------------------
 # `eval/` is a standalone workspace excluded from the root: it consumes
-# Specify's engine crates — including the shared `harness` runtime —
-# from a revision-pinned git source, so it stays out of `ci` and runs
-# through these focused tasks instead. One member: `engine`, the
-# wrapper binary linking the first-party adapters over the shared
+# Specify's engine crates — including the shared `harness` runtime and
+# its wrapper-binary entry — from the sibling `../specify` checkout via
+# the committed path patch in eval/Cargo.toml, so it stays out of `ci`
+# and runs through these focused tasks instead. One member: `engine`,
+# the wrapper binary linking the first-party adapters over the shared
 # harness.
-# Co-development against uncommitted engine changes uses hand-supplied
-# `--config` path overrides for the pinned git source; never commit
-# path patches or the patched lockfile.
 
 [tasks.eval-test]
 command = "cargo"
