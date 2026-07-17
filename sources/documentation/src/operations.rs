@@ -15,9 +15,9 @@ const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and
 
 /// Written specifications / documentation trees → leads and Evidence.
 #[derive(Clone, Copy, Debug)]
-pub struct Documentation;
+pub struct Adapter;
 
-impl Source for Documentation {
+impl Source for Adapter {
     const NAME: &'static str = "documentation";
 
     fn metadata() -> SourceMetadata {

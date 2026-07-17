@@ -50,11 +50,11 @@ cargo make eval scenario                     # list scenarios
 cargo make eval scenario contracts/design    # run one
 ```
 
-Scenario anatomy and the index live in [`scenarios/README.md`](scenarios/README.md). Scenarios run **natively** over the linked adapter crates — they prove prompt quality, not WASM/WIT conformance (that stays with `composed/` and the change example). For a first-party adapter a new scenario is just a data directory; a **third-party adapter** additionally needs a Cargo dependency in [`engine/Cargo.toml`](engine/Cargo.toml) and a builder call in [`engine/src/lib.rs`](engine/src/lib.rs), because configuration alone cannot link a Rust crate into the shim.
+Scenario anatomy and the index live in [`scenarios/README.md`](scenarios/README.md). Scenarios run **natively** over the linked adapter crates — they prove prompt quality, not WASM/WIT conformance (that stays with `composed/` and the change example). For a first-party adapter a new scenario is just the data directory; a **third-party adapter** additionally needs a Cargo dependency in [`engine/Cargo.toml`](engine/Cargo.toml) and an adapter entry in [`engine/src/main.rs`](engine/src/main.rs), because configuration alone cannot link a Rust crate into the shim.
 
 ## The harness / `engine` split
 
-The reusable, adapter-agnostic core lives in Specify as [`specify/crates/harness`](https://github.com/augentic/specify/tree/main/crates/harness): catalog dispatch, the native seam provider, live model bridge, MCP reference shelves, CLI shim, deterministic grading, and trial/scenario runners. It carries no concrete adapter dependency. [`engine/src/lib.rs`](engine/src/lib.rs) contains only the first-party adapter list; the `cargo make eval` task passes target, sources, seed, and scenario paths explicitly.
+The reusable, adapter-agnostic core lives in Specify as [`specify/crates/harness`](https://github.com/augentic/specify/tree/main/crates/harness): catalog dispatch, the native seam provider, live model bridge, MCP reference shelves, CLI shim, deterministic grading, and trial/scenario runners. It carries no concrete adapter dependency. [`engine/src/main.rs`](engine/src/main.rs) declares the first-party adapter list and its scenario root; the `cargo make eval` task passes the trial inputs.
 
 ## Model judgment
 

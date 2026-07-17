@@ -5,7 +5,7 @@
 
 #[cfg(target_arch = "wasm32")]
 mod guest {
-    adapter::target!(crate::Omnia);
+    adapter::target!(crate::Adapter);
 }
 
 mod operations;
@@ -13,4 +13,4 @@ mod registry {
     adapter::registry!();
 }
 
-pub use operations::Omnia;
+pub use operations::Adapter;

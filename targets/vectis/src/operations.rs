@@ -28,9 +28,9 @@ const REFERENCES_POINTER: &str = "Every prompt, reference, and rule document thi
 
 /// Crux shared cores plus `SwiftUI` / Jetpack Compose shells.
 #[derive(Clone, Copy, Debug)]
-pub struct Vectis;
+pub struct Adapter;
 
-impl Target for Vectis {
+impl Target for Adapter {
     const NAME: &'static str = "vectis";
 
     fn metadata() -> TargetMetadata {

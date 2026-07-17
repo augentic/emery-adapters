@@ -5,7 +5,7 @@ use std::path::Path;
 use adapter::answers::REPORT_ANSWER_SCHEMA;
 use adapter::seam::{Context, Input, MergePhase, Severity, Status, WorkingTree};
 use adapter::{Format, Request, Target as _};
-use omnia::Omnia;
+use omnia::Adapter;
 use tempfile::TempDir;
 use testkit::{Harness, mcp_grants};
 
@@ -44,7 +44,7 @@ async fn build_phase_legs() {
         Input::Design("DESIGN-BODY".to_string()),
     ];
 
-    let report = Omnia::build(
+    let report = Adapter::build(
         &model,
         &ctx(tmp.path(), Some("http://references/mcp")),
         "demo",
@@ -99,7 +99,7 @@ async fn merge_preflight_single_leg() {
     let model = Harness::answering([SUCCESS_REPORT]);
 
     let report =
-        Omnia::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
+        Adapter::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
             .await
             .unwrap();
 
@@ -118,7 +118,7 @@ async fn merge_postflight_deterministic() {
     let model = Harness::answering::<&str>([]);
 
     let report =
-        Omnia::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Postflight, &tree())
+        Adapter::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Postflight, &tree())
             .await
             .unwrap();
 
@@ -135,7 +135,7 @@ async fn merge_diagnostics() {
     ]);
 
     let report =
-        Omnia::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
+        Adapter::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
             .await
             .unwrap();
 

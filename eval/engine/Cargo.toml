@@ -12,25 +12,16 @@ repository.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
-[[bin]]
-name = "engine"
-path = "src/main.rs"
-
-[lib]
-name = "eval_binding"
-path = "src/lib.rs"
+[lints]
+workspace = true
 
 [dependencies]
-harness.workspace = true
-
 captures.workspace = true
 contracts.workspace = true
 documentation.workspace = true
+harness.workspace = true
 intent.workspace = true
 omnia-target.workspace = true
 screenshots.workspace = true
 typescript.workspace = true
 vectis.workspace = true
-
-[lints]
-workspace = true

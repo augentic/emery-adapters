@@ -1,11 +1,11 @@
 //! Vectis target adapter.
 //!
-//! [`Vectis`] owns the judgment legs; the other modules are deterministic
+//! [`Adapter`] owns the judgment legs; the other modules are deterministic
 //! prelude / postlude helpers (validate, materialize, scaffold, verify).
 
 #[cfg(target_arch = "wasm32")]
 mod guest {
-    adapter::target!(crate::Vectis);
+    adapter::target!(crate::Adapter);
 }
 
 mod operations;
@@ -28,4 +28,4 @@ pub mod validate;
 pub mod verify;
 
 pub use error::{EXIT_FAILURE, VectisError};
-pub use operations::Vectis;
+pub use operations::Adapter;

@@ -16,9 +16,9 @@ const BINDING_NOTE: &str = "The operator's project workspace is lent to you, \
 
 /// Runtime capture trees → per-handler leads and `kind: example` Evidence.
 #[derive(Clone, Copy, Debug)]
-pub struct Captures;
+pub struct Adapter;
 
-impl Source for Captures {
+impl Source for Adapter {
     const NAME: &'static str = "captures";
 
     fn metadata() -> SourceMetadata {

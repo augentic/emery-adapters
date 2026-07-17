@@ -22,7 +22,7 @@ Artifacts outrank source behavior. Preserve missing information as `[unknown]` r
 - Do not commit built `.wasm` artifacts.
 - Adapter names must remain unique across the source and target axes.
 
-The root workspace includes `crates/*`, `sources/*`, `targets/*`, `composed` (the composed-deployment tests), and `examples/change` (the wasm change example's host). The adapter SDK (`adapter`) is a revision-pinned git dependency on `augentic/specify` (`specify/crates/adapter`), not a local crate. `eval/` is a separate workspace with one member, `eval/engine/`: a native binary that declares only the linked first-party adapters. The engine-owned `specify/crates/harness` supplies the catalog machinery, provider, model bridge, telemetry, CLI shim, and shared trial/scenario runners; the invoking task passes trial inputs explicitly. The eval workspace resolves the shared harness from the sibling `../specify` checkout through its committed path patch.
+The root workspace includes `crates/*`, `sources/*`, `targets/*`, `composed` (the composed-deployment tests), and `examples/change` (the wasm change example's host). The adapter SDK (`adapter`) is a revision-pinned git dependency on `augentic/specify` (`specify/crates/adapter`), not a local crate. `eval/` is a separate workspace with one member, `eval/engine/`: a native binary that declares the linked first-party adapters and prompt-scenario root. The engine-owned `specify/crates/harness` supplies the catalog machinery, provider, model bridge, telemetry, CLI shim, and shared trial/scenario runners; the invoking task passes trial inputs explicitly. The eval workspace resolves the shared harness from the sibling `../specify` checkout through its committed path patch.
 
 ## Prose and rules
 

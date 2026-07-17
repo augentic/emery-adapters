@@ -3,16 +3,16 @@
 
 use adapter::Source as _;
 use adapter::registry::{body, find};
-use typescript::Typescript;
+use typescript::Adapter;
 
 #[test]
 fn embeds_prompts() {
     assert!(
-        body(Typescript::docs(), "prompts/survey.md")
+        body(Adapter::docs(), "prompts/survey.md")
             .starts_with("# TypeScript / JavaScript source survey")
     );
     assert!(
-        body(Typescript::docs(), "prompts/extract.md")
+        body(Adapter::docs(), "prompts/extract.md")
             .starts_with("# TypeScript / JavaScript source extract")
     );
 }
@@ -27,6 +27,6 @@ fn embeds_references() {
         "references/scope-filters.md",
         "references/spec-runtime/reconciliation.md",
     ] {
-        assert!(find(Typescript::docs(), path).is_some(), "registry embeds `{path}`");
+        assert!(find(Adapter::docs(), path).is_some(), "registry embeds `{path}`");
     }
 }

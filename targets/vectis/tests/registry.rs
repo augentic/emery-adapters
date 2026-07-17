@@ -2,7 +2,7 @@
 
 use adapter::Target as _;
 use adapter::registry::{body, find};
-use vectis::Vectis;
+use vectis::Adapter;
 
 #[test]
 fn embeds_all_trees() {
@@ -29,14 +29,16 @@ fn embeds_all_trees() {
         "rules/universal/hardcoded-secrets.md",
         "rules/universal/unvalidated-input.md",
     ] {
-        assert!(find(Vectis::docs(), path).is_some(), "registry embeds `{path}`");
+        assert!(find(Adapter::docs(), path).is_some(), "registry embeds `{path}`");
     }
-    assert!(body(Vectis::docs(), "prompts/build.md").starts_with("# Vectis target — build prompt"));
+    assert!(
+        body(Adapter::docs(), "prompts/build.md").starts_with("# Vectis target — build prompt")
+    );
 }
 
 #[test]
 fn embed_floor() {
-    let docs = Vectis::docs();
+    let docs = Adapter::docs();
     assert!(docs.len() >= 65, "expected the full prose references, got {} docs", docs.len());
     let total: usize = docs.iter().map(|doc| doc.body.len()).sum();
     assert!(total >= 550 * 1024, "expected >= 550 KiB of embedded prose, got {total} bytes");
@@ -44,8 +46,8 @@ fn embed_floor() {
 
 #[test]
 fn symlinks_resolved_inline() {
-    let doc = find(Vectis::docs(), "references/spec-runtime/phase-outcome-contract.md")
+    let doc = find(Adapter::docs(), "references/spec-runtime/phase-outcome-contract.md")
         .expect("symlinked runtime reference is embedded");
     assert!(!doc.body.is_empty(), "resolved symlink content is inlined");
-    assert!(!body(Vectis::docs(), "references/agent-teams.md").is_empty());
+    assert!(!body(Adapter::docs(), "references/agent-teams.md").is_empty());
 }

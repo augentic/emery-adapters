@@ -4,7 +4,7 @@ use std::path::Path;
 
 use adapter::Source as _;
 use adapter::seam::{Authority, ClaimKind, Context, Lead};
-use screenshots::Screenshots;
+use screenshots::Adapter;
 use testkit::Harness;
 
 #[tokio::test]
@@ -28,7 +28,7 @@ async fn extract_spatial_kinds() {
         topics: Vec::new(),
     };
 
-    let evidence = Screenshots::extract(&model, &ctx, &lead).await.unwrap();
+    let evidence = Adapter::extract(&model, &ctx, &lead).await.unwrap();
 
     assert_eq!(evidence.authority, Authority::Documentation);
     let kinds: Vec<ClaimKind> = evidence.claims.iter().map(|claim| claim.kind).collect();

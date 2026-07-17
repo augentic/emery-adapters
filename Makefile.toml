@@ -187,7 +187,6 @@ cargo run -q --manifest-path eval/Cargo.toml -- eval \
   --change "$TRIAL_CHANGE" \
   --intent "$TRIAL_INTENT" \
   --source "$TRIAL_SOURCE" \
-  --scenarios eval/scenarios \
   "$@"
 '''
 env_files = [".env"]

@@ -45,9 +45,9 @@ const SUB_FLOWS: [SubFlow; 3] = [
 
 /// API contract authoring, import, and validation.
 #[derive(Clone, Copy, Debug)]
-pub struct Contracts;
+pub struct Adapter;
 
-impl Target for Contracts {
+impl Target for Adapter {
     const NAME: &'static str = "contracts";
 
     fn metadata() -> TargetMetadata {

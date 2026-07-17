@@ -16,9 +16,9 @@ const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and
 
 /// TypeScript / JavaScript source trees → leads and code Evidence.
 #[derive(Clone, Copy, Debug)]
-pub struct Typescript;
+pub struct Adapter;
 
-impl Source for Typescript {
+impl Source for Adapter {
     const NAME: &'static str = "typescript";
 
     fn metadata() -> SourceMetadata {

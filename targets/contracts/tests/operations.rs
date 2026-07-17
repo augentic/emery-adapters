@@ -6,7 +6,7 @@ use std::path::Path;
 use adapter::answers::REPORT_ANSWER_SCHEMA;
 use adapter::seam::{Context, Input, MergePhase, Severity, Status, WorkingTree};
 use adapter::{Format, Request, Target as _};
-use contracts::Contracts;
+use contracts::Adapter;
 use contracts::validate::RULE_VERSION_IS_SEMVER;
 use tempfile::TempDir;
 use testkit::{Harness, mcp_grants};
@@ -56,7 +56,7 @@ async fn build_sub_flows() {
         Input::Design("DESIGN-BODY".to_string()),
     ];
 
-    let report = Contracts::build(
+    let report = Adapter::build(
         &model,
         &ctx(tmp.path(), Some("http://references/mcp")),
         "demo",
@@ -107,7 +107,7 @@ async fn build_repair_bounded() {
     ]);
 
     let report =
-        Contracts::build(&model, &ctx(tmp.path(), None), "demo", &[], &tree()).await.unwrap();
+        Adapter::build(&model, &ctx(tmp.path(), None), "demo", &[], &tree()).await.unwrap();
 
     assert_eq!(report.status, Status::Failure, "residual validator finding forces failure");
     let finding = &report.findings[0];
@@ -137,7 +137,7 @@ async fn merge_preflight_deterministic() {
 
     // A clean (absent) staged delta passes without a judgment leg.
     let report =
-        Contracts::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
+        Adapter::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
             .await
             .unwrap();
     assert_eq!(report.status, Status::Success);
@@ -146,7 +146,7 @@ async fn merge_preflight_deterministic() {
     // A broken staged delta parks the merge before the engine promotes it.
     seed_bad_contract(&tmp.path().join(".specify/slices/demo/contracts"));
     let report =
-        Contracts::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
+        Adapter::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
             .await
             .unwrap();
     assert_eq!(report.status, Status::Failure);
@@ -165,7 +165,7 @@ async fn merge_postflight_gate() {
         subpath: Some("proj".to_string()),
     };
 
-    let report = Contracts::merge(
+    let report = Adapter::merge(
         &model,
         &ctx(tmp.path(), None),
         "demo",
@@ -190,7 +190,7 @@ async fn merge_postflight_clean_baseline() {
     let model = Harness::answering::<&str>([]);
 
     let report =
-        Contracts::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Postflight, &tree())
+        Adapter::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Postflight, &tree())
             .await
             .unwrap();
 

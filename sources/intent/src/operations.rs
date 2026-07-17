@@ -18,9 +18,9 @@ const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and
 
 /// Inline intent binding → one lead and one `kind: intent` claim.
 #[derive(Clone, Copy, Debug)]
-pub struct Intent;
+pub struct Adapter;
 
-impl Source for Intent {
+impl Source for Adapter {
     const NAME: &'static str = "intent";
 
     fn metadata() -> SourceMetadata {

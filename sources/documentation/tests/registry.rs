@@ -3,22 +3,18 @@
 
 use adapter::Source as _;
 use adapter::registry::{body, find};
-use documentation::Documentation;
+use documentation::Adapter;
 
 #[test]
 fn embeds_prompts() {
-    assert!(
-        body(Documentation::docs(), "prompts/survey.md").starts_with("# `documentation.survey`")
-    );
-    assert!(
-        body(Documentation::docs(), "prompts/extract.md").starts_with("# `documentation.extract`")
-    );
+    assert!(body(Adapter::docs(), "prompts/survey.md").starts_with("# `documentation.survey`"));
+    assert!(body(Adapter::docs(), "prompts/extract.md").starts_with("# `documentation.extract`"));
 }
 
 /// The `rules/` overlay pack travels inside the component.
 #[test]
 fn embeds_rules() {
-    let doc = find(Documentation::docs(), "rules/documentation-verbatim-preservation.md")
+    let doc = find(Adapter::docs(), "rules/documentation-verbatim-preservation.md")
         .expect("SRC-001 rule overlay is embedded");
     assert!(doc.body.contains("id: SRC-001"), "rule frontmatter carries its id");
 }
@@ -28,7 +24,7 @@ fn embeds_rules() {
 /// paths with the shared content inlined.
 #[test]
 fn symlink_resolved_inline() {
-    let doc = find(Documentation::docs(), "references/spec-runtime/reconciliation.md")
+    let doc = find(Adapter::docs(), "references/spec-runtime/reconciliation.md")
         .expect("symlinked runtime reference is embedded");
     assert!(!doc.body.is_empty(), "resolved symlink content is inlined");
 }

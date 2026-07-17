@@ -4,21 +4,21 @@
 
 use adapter::Source as _;
 use adapter::registry::{body, find};
-use intent::Intent;
+use intent::Adapter;
 
 #[test]
 fn embeds_prompts() {
-    assert!(body(Intent::docs(), "prompts/survey.md").starts_with("# intent.survey"));
-    assert!(body(Intent::docs(), "prompts/extract.md").starts_with("# intent.extract"));
+    assert!(body(Adapter::docs(), "prompts/survey.md").starts_with("# intent.survey"));
+    assert!(body(Adapter::docs(), "prompts/extract.md").starts_with("# intent.extract"));
 }
 
 /// Intent ships no references of its own — its `references/` tree holds
 /// only the `spec-runtime` symlink, which resolves inline at build time.
 #[test]
 fn references_spec_runtime_only() {
-    assert!(find(Intent::docs(), "references/spec-runtime/reconciliation.md").is_some());
+    assert!(find(Adapter::docs(), "references/spec-runtime/reconciliation.md").is_some());
     assert!(
-        Intent::docs()
+        Adapter::docs()
             .iter()
             .filter(|doc| doc.path.starts_with("references/"))
             .all(|doc| doc.path.starts_with("references/spec-runtime/")),

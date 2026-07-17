@@ -17,9 +17,9 @@ const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and
 
 /// Screen images → per-screen leads and spatial Evidence.
 #[derive(Clone, Copy, Debug)]
-pub struct Screenshots;
+pub struct Adapter;
 
-impl Source for Screenshots {
+impl Source for Adapter {
     const NAME: &'static str = "screenshots";
 
     fn metadata() -> SourceMetadata {

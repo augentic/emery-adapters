@@ -1,9 +1,21 @@
 //! Native CLI and live eval over the linked adapters.
 
-use std::process::ExitCode;
+fn main() -> std::process::ExitCode {
+    harness::entry::main::<Adapters>(Some(std::path::Path::new(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../scenarios"
+    ))))
+}
 
-use eval_binding::Adapters;
-
-fn main() -> ExitCode {
-    harness::entry::main::<Adapters>()
+harness::adapters! {
+    Adapters {
+        source captures::Adapter,
+        target contracts::Adapter,
+        source documentation::Adapter,
+        source intent::Adapter,
+        target omnia_target::Adapter,
+        source screenshots::Adapter,
+        source typescript::Adapter,
+        target vectis::Adapter,
+    }
 }

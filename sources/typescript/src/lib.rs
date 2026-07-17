@@ -2,7 +2,7 @@
 
 #[cfg(target_arch = "wasm32")]
 mod guest {
-    adapter::source!(crate::Typescript);
+    adapter::source!(crate::Adapter);
 }
 
 mod operations;
@@ -10,4 +10,4 @@ mod registry {
     adapter::registry!();
 }
 
-pub use operations::Typescript;
+pub use operations::Adapter;

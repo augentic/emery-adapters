@@ -3,7 +3,7 @@
 
 use adapter::Target as _;
 use adapter::registry::{body, find};
-use contracts::Contracts;
+use contracts::Adapter;
 
 #[test]
 fn embeds_all_trees() {
@@ -22,9 +22,9 @@ fn embeds_all_trees() {
         "rules/openapi-consumer-compatibility.md",
         "rules/semver-contract-versioning.md",
     ] {
-        assert!(find(Contracts::docs(), path).is_some(), "registry embeds `{path}`");
+        assert!(find(Adapter::docs(), path).is_some(), "registry embeds `{path}`");
     }
-    assert!(body(Contracts::docs(), "prompts/build.md").starts_with("# contracts.build"));
+    assert!(body(Adapter::docs(), "prompts/build.md").starts_with("# contracts.build"));
 }
 
 /// The `references/spec-runtime` symlink into `codex/references/runtime/`
@@ -32,7 +32,7 @@ fn embeds_all_trees() {
 /// paths with the shared content inlined.
 #[test]
 fn symlinks_resolved_inline() {
-    let doc = find(Contracts::docs(), "references/spec-runtime/phase-outcome-contract.md")
+    let doc = find(Adapter::docs(), "references/spec-runtime/phase-outcome-contract.md")
         .expect("symlinked runtime reference is embedded");
     assert!(!doc.body.is_empty(), "resolved symlink content is inlined");
 }

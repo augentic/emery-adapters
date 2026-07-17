@@ -4,7 +4,7 @@ use std::path::Path;
 
 use adapter::Source as _;
 use adapter::seam::{Authority, ClaimKind, Context, Lead};
-use intent::Intent;
+use intent::Adapter;
 use testkit::Harness;
 
 fn ctx() -> Context<'static> {
@@ -21,7 +21,7 @@ async fn survey_inline_binding() {
         r#"{"leads":[{"lead":"password-reset","synopsis":"Let users reset passwords by email."}]}"#,
     ]);
 
-    let leads = Intent::survey(&model, &ctx()).await.unwrap();
+    let leads = Adapter::survey(&model, &ctx()).await.unwrap();
 
     assert_eq!(leads.len(), 1);
     let request = &model.requests()[0];
@@ -43,7 +43,7 @@ async fn extract_intent_claim() {
         topics: Vec::new(),
     };
 
-    let evidence = Intent::extract(&model, &ctx(), &lead).await.unwrap();
+    let evidence = Adapter::extract(&model, &ctx(), &lead).await.unwrap();
 
     assert_eq!(evidence.authority, Authority::Intent);
     assert_eq!(evidence.claims.len(), 1);

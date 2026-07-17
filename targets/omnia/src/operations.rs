@@ -19,9 +19,9 @@ const REFERENCES_POINTER: &str = "Every prompt, reference, and rule document thi
 
 /// Rust crates, tests, and guest scaffolding for Omnia deployments.
 #[derive(Clone, Copy, Debug)]
-pub struct Omnia;
+pub struct Adapter;
 
-impl Target for Omnia {
+impl Target for Adapter {
     const NAME: &'static str = "omnia";
 
     fn metadata() -> TargetMetadata {

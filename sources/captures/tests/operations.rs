@@ -4,7 +4,7 @@ use std::path::Path;
 
 use adapter::Source as _;
 use adapter::seam::{Authority, ClaimKind, Context, Lead};
-use captures::Captures;
+use captures::Adapter;
 use testkit::Harness;
 
 fn ctx() -> Context<'static> {
@@ -39,7 +39,7 @@ async fn extract_example_claims() {
             }]
         }"#]);
 
-    let evidence = Captures::extract(&model, &ctx(), &lead()).await.unwrap();
+    let evidence = Adapter::extract(&model, &ctx(), &lead()).await.unwrap();
 
     assert_eq!(evidence.authority, Authority::Behaviour);
     assert_eq!(evidence.claims.len(), 1);

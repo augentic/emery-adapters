@@ -3,7 +3,7 @@
 
 use adapter::Target as _;
 use adapter::registry::{body, find};
-use omnia::Omnia;
+use omnia::Adapter;
 
 #[test]
 fn embeds_all_trees() {
@@ -28,9 +28,9 @@ fn embeds_all_trees() {
         "rules/universal/hardcoded-secrets.md",
         "rules/universal/unvalidated-input.md",
     ] {
-        assert!(find(Omnia::docs(), path).is_some(), "registry embeds `{path}`");
+        assert!(find(Adapter::docs(), path).is_some(), "registry embeds `{path}`");
     }
-    assert!(body(Omnia::docs(), "prompts/build.md").starts_with("# Omnia target — build prompt"));
+    assert!(body(Adapter::docs(), "prompts/build.md").starts_with("# Omnia target — build prompt"));
 }
 
 /// The references is the point of this adapter: ~65 markdown files
@@ -39,7 +39,7 @@ fn embeds_all_trees() {
 /// pinning the exact prose inventory.
 #[test]
 fn embed_floor() {
-    let docs = Omnia::docs();
+    let docs = Adapter::docs();
     assert!(docs.len() >= 90, "expected the full prose references, got {} docs", docs.len());
     let total: usize = docs.iter().map(|doc| doc.body.len()).sum();
     assert!(total >= 700 * 1024, "expected >= 700 KiB of embedded prose, got {total} bytes");
@@ -50,7 +50,7 @@ fn embed_floor() {
 /// paths with the shared content inlined.
 #[test]
 fn symlinks_resolved_inline() {
-    let doc = find(Omnia::docs(), "references/spec-runtime/phase-outcome-contract.md")
+    let doc = find(Adapter::docs(), "references/spec-runtime/phase-outcome-contract.md")
         .expect("symlinked runtime reference is embedded");
     assert!(!doc.body.is_empty(), "resolved symlink content is inlined");
 }
