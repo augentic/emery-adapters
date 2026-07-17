@@ -1,13 +1,13 @@
 # Prompt evaluation
 
-A live-model harness for testing this repo's adapter prompts — the adapters sibling of the engine's [`crates/eval`](https://github.com/augentic/specify/tree/main/crates/eval), with real adapters in place of the engine's fixture. Both are declarative bindings over the shared [`specify/crates/harness`](https://github.com/augentic/specify/tree/main/crates/harness) runtime. Outputs are graded by deterministic validators — not a model.
+A live-model harness for testing adapter prompts and references used in judgement steps. Outputs are graded by deterministic validators — not a model.
 
 ## Quick start
 
 Login to the Cursor agent:
 
 ```bash
-cursor-agent login
+[cursor-]agent login
 ```
 
 or set `CURSOR_API_KEY` in `.env` at the repository root.
@@ -18,9 +18,9 @@ cargo make eval
 
 This runs the entire workflow in `sandbox/` — the operator rhythm over a contracts-bound project with `documentation` + `intent` as sources. Expect a full trial to take tens of minutes of live model time; a single phase or prompt scenario takes minutes. A passing run will remove the project, while a failing run will retain it for in-place review, or to re-run individual operations (using the manual workflow below).
 
-Runs are hermetic: every phase and scenario pins `SPECIFY_PROJECT_CACHE` inside its own sandbox, so the operator's normal project cache is never read or written, and a run's result never depends on prior local state. The trial's operator inputs (project name, change name, intent, source binding) come from the shared [`examples/change/trial.env`](../../examples/change/trial.env) — the same definition the wasm change example `source`s — and both rungs seed the same [`examples/change/seed/`](../../examples/change/seed/) tree.
+Runs are hermetic: every phase and scenario pins `SPECIFY_PROJECT_CACHE` inside its own sandbox, so the operator's normal project cache is never read or written, and a run's result never depends on prior local state. The trial's operator inputs (project name, change name, intent, source binding) come from the shared `[examples/change/trial.env](../../examples/change/trial.env)` — the same definition the wasm change example `source`s — and both rungs seed the same `[examples/change/seed/](../../examples/change/seed/)` tree.
 
-`SPECIFY_EVAL_MODEL=<model-id>` overrides the model for a run: the driver fills `Request.model` only when the guest left it `None`, so a guest-supplied id always wins; unset or blank means the cursor backend's default. The cursor connection is lazy — it happens on the first judgment leg, so deterministic phases never require `cursor-agent` on `PATH`. The model stack, provider, telemetry, trial driver, grading, and binary entry all live in the shared harness; this crate contains only the linked first-party adapter binding ([`src/main.rs`](src/main.rs)) and its scenario root, with the `cargo make eval` task passing the trial inputs explicitly.
+`SPECIFY_EVAL_MODEL=<model-id>` overrides the model for a run: the driver fills `Request.model` only when the guest left it `None`, so a guest-supplied id always wins; unset or blank means the cursor backend's default. The cursor connection is lazy — it happens on the first judgment leg, so deterministic phases never require `cursor-agent` on `PATH`. The model stack, provider, telemetry, trial driver, grading, and binary entry all live in the shared harness; this crate contains only the linked first-party adapter binding (`[src/main.rs](src/main.rs)`) and its scenario root, with the `cargo make eval` task passing the trial inputs explicitly.
 
 The binary runs the trial behind the `eval` subcommand and sends any other argv through the CLI dev shim over the linked adapter catalog (`cargo make dev -- --project-dir <dir> slice list`).
 
@@ -41,6 +41,8 @@ While `cargo make eval init` will reinitialize a project, a project can also be 
 cargo make eval clean
 ```
 
+
+
 ### Prompt scenarios
 
 For fast prompt iteration, one adapter operation over a seeded scratch tree — minutes, not a full change:
@@ -50,18 +52,20 @@ cargo make eval scenario                     # list scenarios
 cargo make eval scenario contracts/design    # run one
 ```
 
-Scenario anatomy and the index live in [`scenarios/README.md`](scenarios/README.md). Scenarios run **natively** over the linked adapter crates — they prove prompt quality, not WASM/WIT conformance (that stays with `composed/` and the change example). For a first-party adapter a new scenario is just the data directory; a **third-party adapter** additionally needs a Cargo dependency in [`Cargo.toml`](Cargo.toml) and an adapter entry in [`src/main.rs`](src/main.rs), because configuration alone cannot link a Rust crate into the shim.
+Scenario anatomy and the index live in `[scenarios/README.md](scenarios/README.md)`. Scenarios run **natively** over the linked adapter crates — they prove prompt quality, not WASM/WIT conformance (that stays with `composed/` and the change example). For a first-party adapter a new scenario is just the data directory; a **third-party adapter** additionally needs a Cargo dependency in `[Cargo.toml](Cargo.toml)` and an adapter entry in `[src/main.rs](src/main.rs)`, because configuration alone cannot link a Rust crate into the shim.
 
 ## Model judgment
 
 A trial run exercises both the engine's own judgment legs and this repo's adapter legs, all through the live cursor backend:
 
-| Leg                            | Owner             | Purpose                                                                |
-| ------------------------------ | ----------------- | ---------------------------------------------------------------------- |
-| `proposal`                     | engine (`change`) | Reconcile *surveyed* leads across sources into plan slices             |
-| `synthesis`                    | engine (`slice`)  | Reconcile *extracted* evidence into `proposal.md`, `spec.md`, …        |
-| `leads` / `evidence`           | source adapters   | `documentation` + `intent` survey and extract                          |
-| contracts sub-flows + `report` | target adapter    | The `contracts` build's author / import / verify legs and its report   |
+
+| Leg                            | Owner             | Purpose                                                              |
+| ------------------------------ | ----------------- | -------------------------------------------------------------------- |
+| `proposal`                     | engine (`change`) | Reconcile *surveyed* leads across sources into plan slices           |
+| `synthesis`                    | engine (`slice`)  | Reconcile *extracted* evidence into `proposal.md`, `spec.md`, …      |
+| `leads` / `evidence`           | source adapters   | `documentation` + `intent` survey and extract                        |
+| contracts sub-flows + `report` | target adapter    | The `contracts` build's author / import / verify legs and its report |
+
 
 The execution and repair loop lives in the engine's `project` crate and is infrastructure, not judgment.
 
@@ -82,11 +86,13 @@ Every step runs the production operation — `execute` is the real drained loop,
 
 Hard assertions only — the shared runner applies the same set to every adapter binding:
 
+
 | Stage   | Check      | Pass condition                                               |
 | ------- | ---------- | ------------------------------------------------------------ |
-| plan    | Entries    | `plan author` produces at least one entry                     |
+| plan    | Entries    | `plan author` produces at least one entry                    |
 | execute | Lifecycle  | Every plan entry is `done`                                   |
 | execute | Provenance | Every evidenced requirement carries sources; ids are present |
+
 
 Per-leg request / repair counts are **reported, not asserted**. After grading, the trial prints one line per judgment leg (keyed by answer-schema name) with its request count and derived repairs — requests beyond one per leg invocation (one propose per trial, one synthesis per plan entry), e.g. `leg synthesis: 4 request(s) over 3 slice(s), 1 repair(s)`. A leg drifting from zero repairs toward the budget is the early signal that a prompt or answer-schema change degraded the model's first answer.
 

@@ -14,11 +14,10 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
-harness = { workspace = true, features = ["runtime"] }
-
 captures.workspace = true
 contracts.workspace = true
 documentation.workspace = true
+harness = { workspace = true, features = ["runtime"] }
 intent.workspace = true
 omnia-target.workspace = true
 screenshots.workspace = true
