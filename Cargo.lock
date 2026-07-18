@@ -5,7 +5,6 @@ version = 4
 [[package]]
 name = "adapter"
 version = "0.27.2"
-source = "git+https://github.com/augentic/specify.git#136a46b7c23eb870aca0dadabb0819a5e53784aa"
 dependencies = [
  "omnia-guest",
  "omnia-wasi-http",
@@ -169,7 +168,6 @@ checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
 [[package]]
 name = "artifacts"
 version = "0.27.2"
-source = "git+https://github.com/augentic/specify.git#136a46b7c23eb870aca0dadabb0819a5e53784aa"
 dependencies = [
  "diagnostics",
  "error",
@@ -536,7 +534,6 @@ dependencies = [
 [[package]]
 name = "change"
 version = "0.27.2"
-source = "git+https://github.com/augentic/specify.git#136a46b7c23eb870aca0dadabb0819a5e53784aa"
 dependencies = [
  "artifacts",
  "diagnostics",
@@ -545,6 +542,7 @@ dependencies = [
  "omnia-guest",
  "project",
  "prose 0.27.2",
+ "semver",
  "serde",
  "serde-saphyr",
  "serde_json",
@@ -1109,7 +1107,6 @@ checksum = "7cd812cc2bc1d69d4764bd80df88b4317eaef9e773c75226407d9bc0876b211c"
 [[package]]
 name = "diagnostics"
 version = "0.27.2"
-source = "git+https://github.com/augentic/specify.git#136a46b7c23eb870aca0dadabb0819a5e53784aa"
 dependencies = [
  "base16ct",
  "schemars",
@@ -1237,7 +1234,6 @@ dependencies = [
 [[package]]
 name = "error"
 version = "0.27.2"
-source = "git+https://github.com/augentic/specify.git#136a46b7c23eb870aca0dadabb0819a5e53784aa"
 dependencies = [
  "serde-saphyr",
  "thiserror 2.0.18",
@@ -1254,17 +1250,17 @@ dependencies = [
 
 [[package]]
 name = "eval"
-version = "0.1.0"
+version = "0.27.2"
 dependencies = [
- "captures",
- "contracts",
- "documentation",
- "harness",
- "intent",
- "omnia 0.1.0",
- "screenshots",
- "typescript",
- "vectis",
+ "anyhow",
+ "artifacts",
+ "clap",
+ "linked",
+ "omnia-guest",
+ "project",
+ "serde",
+ "serde_json",
+ "toml",
 ]
 
 [[package]]
@@ -1603,31 +1599,6 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
-]
-
-[[package]]
-name = "harness"
-version = "0.27.2"
-source = "git+https://github.com/augentic/specify.git#136a46b7c23eb870aca0dadabb0819a5e53784aa"
-dependencies = [
- "adapter",
- "anyhow",
- "artifacts",
- "axum",
- "change",
- "clap",
- "diagnostics",
- "error",
- "omnia 0.35.0",
- "omnia-cursor",
- "omnia-guest",
- "omnia-wasi-model",
- "project",
- "serde",
- "serde_json",
- "tokio",
- "toml",
- "transport",
 ]
 
 [[package]]
@@ -2198,6 +2169,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "lab"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "captures",
+ "contracts",
+ "documentation",
+ "eval",
+ "intent",
+ "linked",
+ "omnia 0.1.0",
+ "omnia 0.35.0",
+ "omnia-cursor",
+ "omnia-guest",
+ "omnia-wasi-model",
+ "screenshots",
+ "semver",
+ "tokio",
+ "typescript",
+ "vectis",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2247,6 +2241,23 @@ dependencies = [
  "cc",
  "pkg-config",
  "vcpkg",
+]
+
+[[package]]
+name = "linked"
+version = "0.27.2"
+dependencies = [
+ "adapter",
+ "artifacts",
+ "axum",
+ "diagnostics",
+ "error",
+ "omnia-guest",
+ "project",
+ "semver",
+ "thiserror 2.0.18",
+ "tokio",
+ "transport",
 ]
 
 [[package]]
@@ -3167,7 +3178,6 @@ dependencies = [
 [[package]]
 name = "project"
 version = "0.27.2"
-source = "git+https://github.com/augentic/specify.git#136a46b7c23eb870aca0dadabb0819a5e53784aa"
 dependencies = [
  "artifacts",
  "diagnostics",
@@ -3210,7 +3220,6 @@ dependencies = [
 [[package]]
 name = "prose"
 version = "0.27.2"
-source = "git+https://github.com/augentic/specify.git#136a46b7c23eb870aca0dadabb0819a5e53784aa"
 
 [[package]]
 name = "prost"
@@ -4153,7 +4162,6 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 [[package]]
 name = "slice"
 version = "0.27.2"
-source = "git+https://github.com/augentic/specify.git#136a46b7c23eb870aca0dadabb0819a5e53784aa"
 dependencies = [
  "artifacts",
  "diagnostics",
@@ -4764,7 +4772,6 @@ dependencies = [
 [[package]]
 name = "transport"
 version = "0.27.2"
-source = "git+https://github.com/augentic/specify.git#136a46b7c23eb870aca0dadabb0819a5e53784aa"
 dependencies = [
  "artifacts",
  "change",

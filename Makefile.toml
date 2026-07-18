@@ -4,7 +4,7 @@
 [env]
 CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
 # The published `specify:core` component the wasm change example runs.
-# The native `eval` crate tracks the sibling `../specify` checkout
+# The native `lab` crate tracks the sibling `../specify` checkout
 # instead (the committed path patch in Cargo.toml).
 SPECIFY_CORE_VERSION = "0.27.2"
 
@@ -124,73 +124,48 @@ args = [
   "--exclude",
   "change-example",
   "--exclude",
-  "eval",
+  "lab",
   "--target",
   "wasm32-wasip2",
   "--release",
 ]
 
 # -------------------------------------
-# The eval crate (native dev shim + live-model harness)
+# The lab crate (native dev shim + live-model eval)
 # -------------------------------------
-# `crates/eval/` is the native wrapper binary linking the first-party
-# adapters over Specify's shared `harness` runtime and its
-# wrapper-binary entry, consumed from the sibling `../specify` checkout
-# via the committed path patch in Cargo.toml. The binary is native-only
-# (`ci` builds and lints it; the wasm32 component tasks exclude it);
-# the live model rungs below stay operator-invoked.
+# `crates/lab/` is the unpublished composition binary linking the
+# first-party adapters over Specify's `linked` host and lab-only `eval`
+# library, consumed from the sibling `../specify` checkout via the
+# committed path patch in Cargo.toml. The binary is native-only (`ci`
+# builds and lints it; the wasm32 component tasks exclude it); the
+# live model rungs below stay operator-invoked.
 
-# The `eval` CLI passthrough: any specify verb against the native
-# shim (`cargo make dev -- --project-dir <dir> slice list`).
-[tasks.dev]
+# The lab CLI passthrough: any specify verb against the native
+# shim (`cargo make specify -- --project-dir <dir> slice list`).
+[tasks.specify]
 command = "cargo"
-args = [
-  "run",
-  "-q",
-  "-p",
-  "eval",
-  "--",
-  "${@}",
-]
+args = ["run", "-q", "-p", "lab", "--", "${@}"]
 
-# The native live-model trial (the `eval` binary's `eval` subcommand):
-# the operator rhythm
-# over a persistent `sandbox/` project with the linked adapters,
-# graded by deterministic validators only. Live-only — needs an
-# authenticated cursor-agent on PATH; never part of `ci`. A full pass
-# cleans the sandbox; a failing phase retains it for in-place review
-# and per-phase re-runs (`cargo make eval execute`). Single-operation
-# prompt scenarios ride the same entry (`cargo make eval scenario
-# contracts/design`; bare `scenario` lists them).
-[tasks.eval]
-script = '''
-set -euo pipefail
-. examples/change/trial.env
-cargo run -q -p eval -- eval \
-  --sandbox sandbox \
-  --seed examples/change/seed \
-  --target contracts \
-  --name "$TRIAL_PROJECT_NAME" \
-  --change "$TRIAL_CHANGE" \
-  --intent "$TRIAL_INTENT" \
-  --source "$TRIAL_SOURCE" \
-  "$@"
-'''
-env_files = [".env"]
+# The native live-model trial (the lab binary's `eval` subcommand)
+  [tasks.eval]
+  env_files = [".env"]
+  script = '''
+  cargo run -p lab -- eval \
+    --fixture examples/change/fixture \
+    --change "orders" \
+    --intent "Author the API contracts for the orders service described under docs/: the JSON Schema vocabulary plus the HTTP (OpenAPI) surface. Contracts only - no service implementation." \
+    --source "docs=documentation:docs" \
+    --target "contracts" \
+    "$@"
+  '''
 
 # -------------------------------------
-# The wasm change example
+# Wasm change example + component packaging
 # -------------------------------------
-# The end-to-end example over the real WIT seam: the published
-# `specify:core` guest composed with this repo's built adapter
-# components in one Omnia deployment, driven through the operator
-# rhythm by the `change-example` host binary. Operator-invoked demo
-# posture — exit codes plus a final artifact-exists check, not a
-# graded test.
+# Operator-invoked WIT E2E (not the graded native trial). See
+# examples/change/README.md. `adapter` / `publish` share scripts/components.rs.
 
-# Fetch the pinned core component into the gitignored cache. Uses the
-# same wkg vendoring pattern as wit/ (see wit/README.md); the registry
-# requires authenticated wkg credentials.
+# Fetch pinned specify:core (wkg; see wit/README.md for registry auth).
 [tasks.core-fetch]
 script = '''
 set -euo pipefail
@@ -199,9 +174,7 @@ wkg get "specify:core@${SPECIFY_CORE_VERSION}" \
   --config wit/config.toml \
   --output target/core/specify.wasm || {
   echo "wkg get specify:core@${SPECIFY_CORE_VERSION} failed." >&2
-  echo "If this is an authentication failure: the specify: namespace routes" >&2
-  echo "through augentic.io to a private OCI registry — log in with your OCI" >&2
-  echo "credentials (e.g. \`docker login\`), then re-run \`cargo make core-fetch\`." >&2
+  echo "Auth: docker login (specify: → private OCI via augentic.io), then retry." >&2
   echo "See wit/README.md." >&2
   exit 1
 }
@@ -209,29 +182,10 @@ echo "fetched specify:core@${SPECIFY_CORE_VERSION} -> target/core/specify.wasm"
 '''
 
 [tasks.change-clean]
-script = '''
-rm -rf sandbox/change
-'''
-
-# Build only the components the change example composes (the two bound
-# sources plus the contracts target) — the full `adapter` build of
-# every component is not needed here.
-[tasks.change-components]
-command = "rustup"
-args = [
-  "run",
-  "nightly",
-  "cargo",
-  "-Zscript",
-  "scripts/components.rs",
-  "build-fast",
-  "documentation",
-  "intent",
-  "contracts",
-]
+script = "rm -rf sandbox/change"
 
 [tasks.change-run]
-dependencies = ["change-clean", "change-components"]
+dependencies = ["change-clean"]
 env_files = [".env"]
 script = '''
 set -euo pipefail
@@ -241,33 +195,27 @@ test -f target/core/specify.wasm || {
   exit 1
 }
 
-mkdir -p sandbox/change/{workspace,cache,store}
-cp -R examples/change/seed/. sandbox/change/workspace/
-cp target/wasm32-wasip2/release/contracts.wasm sandbox/change/workspace/contracts.wasm
+# The three guests this deployment composes (not a full workspace build).
+rustup run nightly cargo -Zscript scripts/components.rs \
+  build-fast documentation intent contracts
 
-# Pre-build the host binaries so the `cargo run -q` calls below never
-# interleave build output with the run.
+mkdir -p sandbox/change/{workspace,cache,store}
+cp -R examples/change/fixture/. sandbox/change/workspace/
+cp target/wasm32-wasip2/release/contracts.wasm sandbox/change/workspace/contracts.wasm
 cargo build -q -p change-example
 
-# The HTTP trigger serves every adapter's /mcp/<name> reference route;
-# the env grants point the adapters' spawned agents at it. The port is
-# picked per run so parallel runs never fight over one hard-coded
-# address (override with HTTP_ADDR=host:port).
+# Per-run loopback for adapter MCP routes (override: HTTP_ADDR=host:port).
 export HTTP_ADDR="${HTTP_ADDR:-$(cargo run -q -p change-example --bin change-support -- port)}"
 export SPECIFY_DOCUMENTATION_MCP_URL="http://$HTTP_ADDR/mcp/documentation"
 export SPECIFY_INTENT_MCP_URL="http://$HTTP_ADDR/mcp/intent"
 export SPECIFY_CONTRACTS_MCP_URL="http://$HTTP_ADDR/mcp/contracts"
-
-# Each verb is one `wasi:cli/run` invocation; live judgment legs run for
-# minutes, so lift omnia's 30s default wall-clock cap.
+# Live judgment legs run for minutes; omnia's default is 30s.
 export GUEST_TIMEOUT_MS="${GUEST_TIMEOUT_MS:-3600000}"
 
 run() {
   cargo run -q -p change-example -- run --config examples/change/omnia.toml -- "$@"
 }
 
-# The operator rhythm over the same variables passed explicitly to
-# the native eval runner.
 . examples/change/trial.env
 run init ./contracts.wasm --name "$TRIAL_PROJECT_NAME"
 run plan author "$TRIAL_CHANGE" \
@@ -276,22 +224,13 @@ run plan author "$TRIAL_CHANGE" \
 run plan transition "$TRIAL_CHANGE" approved
 run plan execute
 
-# The completion gate: capture the drained projection, then verify the
-# plan is drained, every entry is done, and the merged contracts
-# baseline is non-empty and clean under the contracts validator.
 run plan status --format json > sandbox/change/status.json
 cargo run -q -p change-example --bin change-support -- \
   verify sandbox/change/workspace sandbox/change/status.json
 '''
 
-# Fast dev-loop builds of the adapter components: same `--release`
-# artifact path the engine's bare-name resolution probes
-# (`target/wasm32-wasip2/release/<name>.wasm`), but with LTO off and a
-# low opt level so the edit-resolve loop pays seconds, not a full
-# release build. Optional package arg scopes the build
-# (`cargo make adapter contracts`); default is every adapter.
-# Accepted trade: switching between `adapter` and `release` changes
-# the profile fingerprint and forces a rebuild — publishing is rare.
+# Fast component build → target/wasm32-wasip2/release/<name>.wasm
+# (`cargo make adapter contracts`; bare = every adapter). See TESTING.md.
 [tasks.adapter]
 command = "rustup"
 args = [
@@ -304,7 +243,6 @@ args = [
   "${@}",
 ]
 
-# Publish every release-built adapter component under its package version.
 [tasks.publish]
 command = "rustup"
 args = [

@@ -11,7 +11,7 @@ use adapter::seam::{
     BuildInput, Context, Error, Finding, Input, MergePhase, Platform, PlatformsCapability, Report,
     Severity, Status, TargetMetadata, WorkingTree,
 };
-use adapter::{Model, Target, phase};
+use adapter::{AdapterIdentity, Model, Target, phase};
 use serde_json::Value;
 
 use crate::{
@@ -31,7 +31,10 @@ const REFERENCES_POINTER: &str = "Every prompt, reference, and rule document thi
 pub struct Adapter;
 
 impl Target for Adapter {
-    const NAME: &'static str = "vectis";
+    const IDENTITY: AdapterIdentity = AdapterIdentity {
+        name: "vectis",
+        version: env!("CARGO_PKG_VERSION"),
+    };
 
     fn metadata() -> TargetMetadata {
         let optional = |path: &str| BuildInput {

@@ -22,7 +22,7 @@ Artifacts outrank source behavior. Preserve missing information as `[unknown]` r
 - Do not commit built `.wasm` artifacts.
 - Adapter names must remain unique across the source and target axes.
 
-The root workspace includes `crates/*`, `sources/*`, `targets/*`, `composed` (the composed-deployment tests), and `examples/change` (the wasm change example's host). The adapter SDK (`adapter`) and the eval harness runtime (`harness`) are revision-pinned git dependencies on `augentic/specify`, not local crates. `crates/eval/` is the native-only binary that declares the linked first-party adapters and prompt-scenario root; the engine-owned `specify/crates/harness` supplies the catalog machinery, provider, model bridge, telemetry, CLI shim, and shared trial/scenario runners, and the invoking task passes trial inputs explicitly. For sibling co-development the committed path patch in the root `Cargo.toml` resolves the engine crates from the `../specify` checkout.
+The root workspace includes `crates/*`, `sources/*`, `targets/*`, `composed` (the composed-deployment tests), and `examples/change` (the wasm change example's host). The adapter SDK (`adapter`), the linked host (`linked`), and the lab-only evaluation library (`eval`) are git dependencies on `augentic/specify`, not local crates — resolved from the sibling `../specify` checkout by the committed path patch until the exposing engine revision is published and pinned by `rev`. `crates/lab/` is the native-only, unpublished composition binary: it owns the first-party `catalog()` declaration, the Tokio runtime, the Cursor backend construction, and the prompt-scenario root, dispatching between linked command mode and `eval::run`; the engine-owned `linked` supplies the catalog machinery, provider, reference hosting, and command execution, `eval` supplies the trial/scenario runners, telemetry, and deterministic grading, and the invoking task passes trial inputs explicitly. For sibling co-development the committed path patch in the root `Cargo.toml` resolves the engine crates from the `../specify` checkout.
 
 ## Prose and rules
 
@@ -47,7 +47,7 @@ Testing is integration-first:
 - Do not widen public APIs solely for tests.
 - Use `cargo nextest`, not bare `cargo test`, for native workspace tests; process isolation is required by CWD- and environment-mutating suites.
 - Adapter native tests own operation behavior, the eval crate owns cross-phase integration and prompt quality, and composed tests own WASM/WIT conformance. Do not duplicate the same assertion across rungs.
-- The live rungs are operator-invoked, never CI: `cargo make eval` (the native live-model trial over `sandbox/`, deterministic grading only), `cargo make eval scenario <adapter>/<name>` (one adapter operation over a seeded scratch tree — the fast prompt-iteration loop), and `cargo make change-run` (the wasm change example composing the published `specify:core` with the built adapter components).
+- The live rungs are operator-invoked, never CI: `cargo make eval` (the native live-model trial over `sandbox/`, deterministic grading only), `cargo make eval scenario <adapter>/<name>` (one adapter operation over a fixture scratch tree — the fast prompt-iteration loop), and `cargo make change-run` (the wasm change example composing the published `specify:core` with the built adapter components).
 
 Read [`TESTING.md`](TESTING.md) before adding, deleting, or relocating tests.
 
@@ -61,7 +61,7 @@ cargo make ci             # full gate, including vet and deny
 cargo nextest run -p NAME # focused adapter tests
 cargo make adapter NAME   # fast development component build
 cargo make release        # release-build every component
-cargo make dev -- ARGS    # any specify verb through the native eval shim
+cargo make specify -- ARGS # any specify verb through the native lab shim
 cargo make eval [phase]   # live-model trial over sandbox/ (operator-invoked)
 cargo make eval scenario [id]  # one live prompt scenario; bare lists them (operator-invoked)
 cargo make core-fetch     # fetch the pinned specify:core component
