@@ -39,8 +39,9 @@ crates/               # shared guest support (prose), the repo's dev-only
                       # first-party catalog over the engine's linked host:
                       # the live `eval` trial and the prompt scenarios under
                       # crates/lab/scenarios/; the `adapter` SDK, `linked`
-                      # host, and `eval` library are revision-pinned git
-                      # dependencies on augentic/specify
+                      # host, and `eval` library are git dependencies on
+                      # augentic/specify, resolved from the sibling
+                      # checkout by the committed path patch
 composed/             # model-free composed-deployment tests hosting the built
                       # adapter guest components on the Omnia runtime
                       # (flattened like omnia's examples/: support.rs + composed.rs)
@@ -93,7 +94,7 @@ The `lab` crate at `crates/lab/` is a native-only, unpublished workspace member:
 cargo make dev -- --project-dir /path/to/project plan status
 ```
 
-Two compatibility choices are independent, for first- and third-party adapter authors alike: the **WIT contract version** an adapter targets (`wit/specify.wit`, the publish-time compatibility floor), and the **engine revision** the workspace manifest pins for the `adapter` SDK, `linked` host, and `eval` library. The pin is the declared, verified engine revision; it advances deliberately (edit the `rev` values in the root `Cargo.toml`, run `cargo update`, and commit the lockfile), not with every engine commit.
+Two compatibility choices are independent, for first- and third-party adapter authors alike: the **WIT contract version** an adapter targets (`wit/specify.wit`, the publish-time compatibility floor), and the **engine revision** the workspace resolves for the `adapter` SDK, `linked` host, and `eval` library. The engine crates are declared as git dependencies on `augentic/specify`; today the committed path patch resolves them from the sibling `../specify` checkout, and once the exposing engine revision is published the manifest pins it explicitly (add `rev` values in the root `Cargo.toml`, run `cargo update`, and commit the lockfile). The pin advances deliberately, not with every engine commit.
 
 For sibling co-development against uncommitted engine changes, the committed `[patch."https://github.com/augentic/specify.git"]` section in the root `Cargo.toml` resolves the engine crates from the sibling `../specify` working tree.
 

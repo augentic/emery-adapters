@@ -22,7 +22,7 @@ Artifacts outrank source behavior. Preserve missing information as `[unknown]` r
 - Do not commit built `.wasm` artifacts.
 - Adapter names must remain unique across the source and target axes.
 
-The root workspace includes `crates/*`, `sources/*`, `targets/*`, `composed` (the composed-deployment tests), and `examples/change` (the wasm change example's host). The adapter SDK (`adapter`), the linked host (`linked`), and the lab-only evaluation library (`eval`) are revision-pinned git dependencies on `augentic/specify`, not local crates. `crates/lab/` is the native-only, unpublished composition binary: it owns the first-party `catalog()` declaration, the Tokio runtime, the Cursor backend construction, and the prompt-scenario root, dispatching between linked command mode and `eval::run`; the engine-owned `linked` supplies the catalog machinery, provider, reference hosting, and command execution, `eval` supplies the trial/scenario runners, telemetry, and deterministic grading, and the invoking task passes trial inputs explicitly. For sibling co-development the committed path patch in the root `Cargo.toml` resolves the engine crates from the `../specify` checkout.
+The root workspace includes `crates/*`, `sources/*`, `targets/*`, `composed` (the composed-deployment tests), and `examples/change` (the wasm change example's host). The adapter SDK (`adapter`), the linked host (`linked`), and the lab-only evaluation library (`eval`) are git dependencies on `augentic/specify`, not local crates — resolved from the sibling `../specify` checkout by the committed path patch until the exposing engine revision is published and pinned by `rev`. `crates/lab/` is the native-only, unpublished composition binary: it owns the first-party `catalog()` declaration, the Tokio runtime, the Cursor backend construction, and the prompt-scenario root, dispatching between linked command mode and `eval::run`; the engine-owned `linked` supplies the catalog machinery, provider, reference hosting, and command execution, `eval` supplies the trial/scenario runners, telemetry, and deterministic grading, and the invoking task passes trial inputs explicitly. For sibling co-development the committed path patch in the root `Cargo.toml` resolves the engine crates from the `../specify` checkout.
 
 ## Prose and rules
 
@@ -61,7 +61,7 @@ cargo make ci             # full gate, including vet and deny
 cargo nextest run -p NAME # focused adapter tests
 cargo make adapter NAME   # fast development component build
 cargo make release        # release-build every component
-cargo make dev -- ARGS    # any specify verb through the native eval shim
+cargo make dev -- ARGS    # any specify verb through the native lab shim
 cargo make eval [phase]   # live-model trial over sandbox/ (operator-invoked)
 cargo make eval scenario [id]  # one live prompt scenario; bare lists them (operator-invoked)
 cargo make core-fetch     # fetch the pinned specify:core component

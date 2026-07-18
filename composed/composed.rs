@@ -693,7 +693,7 @@ fn guest_wasm(file: &str) -> PathBuf {
     let path = target_dir().join("wasm32-wasip2").join("debug").join(file);
     assert!(
         path.exists(),
-        "guest `{file}` not found at {path}; run `cargo build --workspace --exclude eval --target wasm32-wasip2`",
+        "guest `{file}` not found at {path}; run `cargo build --workspace --exclude lab --target wasm32-wasip2`",
         path = path.display()
     );
     path
