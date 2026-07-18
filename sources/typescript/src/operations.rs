@@ -1,7 +1,7 @@
 use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA, evidence_tail, leads_tail};
 use adapter::registry::Doc;
 use adapter::seam::{Context, Error, Evidence, Lead, SourceMetadata};
-use adapter::{Model, Source, repaired};
+use adapter::{AdapterIdentity, Model, Source, repaired};
 
 use crate::registry;
 
@@ -19,7 +19,10 @@ const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and
 pub struct Adapter;
 
 impl Source for Adapter {
-    const NAME: &'static str = "typescript";
+    const IDENTITY: AdapterIdentity = AdapterIdentity {
+        name: "typescript",
+        version: env!("CARGO_PKG_VERSION"),
+    };
 
     fn metadata() -> SourceMetadata {
         SourceMetadata { specify_floor: None }

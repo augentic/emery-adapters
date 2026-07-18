@@ -4,7 +4,7 @@
 [env]
 CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
 # The published `specify:core` component the wasm change example runs.
-# The native `eval` crate tracks the sibling `../specify` checkout
+# The native `lab` crate tracks the sibling `../specify` checkout
 # instead (the committed path patch in Cargo.toml).
 SPECIFY_CORE_VERSION = "0.27.2"
 
@@ -124,23 +124,23 @@ args = [
   "--exclude",
   "change-example",
   "--exclude",
-  "eval",
+  "lab",
   "--target",
   "wasm32-wasip2",
   "--release",
 ]
 
 # -------------------------------------
-# The eval crate (native dev shim + live-model harness)
+# The lab crate (native dev shim + live-model eval)
 # -------------------------------------
-# `crates/eval/` is the native wrapper binary linking the first-party
-# adapters over Specify's shared `harness` runtime and its
-# wrapper-binary entry, consumed from the sibling `../specify` checkout
-# via the committed path patch in Cargo.toml. The binary is native-only
-# (`ci` builds and lints it; the wasm32 component tasks exclude it);
-# the live model rungs below stay operator-invoked.
+# `crates/lab/` is the unpublished composition binary linking the
+# first-party adapters over Specify's `linked` host and lab-only `eval`
+# library, consumed from the sibling `../specify` checkout via the
+# committed path patch in Cargo.toml. The binary is native-only (`ci`
+# builds and lints it; the wasm32 component tasks exclude it); the
+# live model rungs below stay operator-invoked.
 
-# The `eval` CLI passthrough: any specify verb against the native
+# The lab CLI passthrough: any specify verb against the native
 # shim (`cargo make dev -- --project-dir <dir> slice list`).
 [tasks.dev]
 command = "cargo"
@@ -148,16 +148,16 @@ args = [
   "run",
   "-q",
   "-p",
-  "eval",
+  "lab",
   "--",
   "${@}",
 ]
 
-# The native live-model trial (the `eval` binary's `eval` subcommand)
+# The native live-model trial (the lab binary's `eval` subcommand)
 [tasks.eval]
 env_files = [".env"]
 script = '''
-cargo run -p eval -- eval \
+cargo run -p lab -- eval \
   --seed examples/change/seed \
   --change "orders" \
   --intent "Author the API contracts for the orders service described under docs/: the JSON Schema vocabulary plus the HTTP (OpenAPI) surface. Contracts only - no service implementation." \

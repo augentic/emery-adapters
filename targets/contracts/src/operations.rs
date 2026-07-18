@@ -10,7 +10,7 @@ use adapter::seam::{
     BuildInput, Context, Error, Finding, Input, MergePhase, Report, Severity, TargetMetadata,
     WorkingTree,
 };
-use adapter::{Model, Target, phase};
+use adapter::{AdapterIdentity, Model, Target, phase};
 
 use crate::registry;
 use crate::validate::{ContractFinding, validate_baseline};
@@ -48,7 +48,10 @@ const SUB_FLOWS: [SubFlow; 3] = [
 pub struct Adapter;
 
 impl Target for Adapter {
-    const NAME: &'static str = "contracts";
+    const IDENTITY: AdapterIdentity = AdapterIdentity {
+        name: "contracts",
+        version: env!("CARGO_PKG_VERSION"),
+    };
 
     fn metadata() -> TargetMetadata {
         TargetMetadata {

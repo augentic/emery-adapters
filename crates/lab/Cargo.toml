@@ -1,0 +1,40 @@
+# The unpublished first-party composition binary: linked command
+# passthrough and live eval over the first-party adapter catalog,
+# consuming Specify's `linked` and `eval` crates from the sibling
+# `../specify` checkout via the committed path patch in the root
+# Cargo.toml. Never an install or release artifact.
+[package]
+name = "lab"
+description = "Specify adapters' unpublished composition binary: linked command passthrough and live eval over the first-party catalog"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+captures.workspace = true
+contracts.workspace = true
+documentation.workspace = true
+eval.workspace = true
+intent.workspace = true
+linked = { workspace = true, features = ["cli"] }
+omnia.workspace = true
+omnia-cursor.workspace = true
+omnia-guest.workspace = true
+omnia-target.workspace = true
+omnia-wasi-model.workspace = true
+screenshots.workspace = true
+tokio.workspace = true
+typescript.workspace = true
+vectis.workspace = true
+
+[dev-dependencies]
+semver.workspace = true

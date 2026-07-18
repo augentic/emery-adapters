@@ -9,7 +9,7 @@ use adapter::registry::Doc;
 use adapter::seam::{
     Context, Error, Finding, Input, MergePhase, Report, TargetMetadata, WorkingTree,
 };
-use adapter::{Model, Target, phase};
+use adapter::{AdapterIdentity, Model, Target, phase};
 
 use crate::registry;
 
@@ -22,7 +22,10 @@ const REFERENCES_POINTER: &str = "Every prompt, reference, and rule document thi
 pub struct Adapter;
 
 impl Target for Adapter {
-    const NAME: &'static str = "omnia";
+    const IDENTITY: AdapterIdentity = AdapterIdentity {
+        name: "omnia",
+        version: env!("CARGO_PKG_VERSION"),
+    };
 
     fn metadata() -> TargetMetadata {
         TargetMetadata {

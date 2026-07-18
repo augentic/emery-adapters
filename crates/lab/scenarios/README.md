@@ -22,11 +22,11 @@ scenarios/<adapter>/<name>/
 
 For an adapter already linked into the shim, adding a scenario is just the
 directory. A **third-party adapter** additionally needs a Cargo dependency in
-[`../Cargo.toml`](../Cargo.toml) and an adapter entry in
-[`../src/main.rs`](../src/main.rs) —
+[`../Cargo.toml`](../Cargo.toml) and a catalog entry in
+[`../src/lib.rs`](../src/lib.rs) —
 configuration alone cannot link a Rust crate.
 
-The runner ([`harness::scenario`](https://github.com/augentic/specify/blob/main/crates/harness/src/scenario.rs))
+The runner ([`eval::scenario`](https://github.com/augentic/specify/blob/main/crates/eval/src/scenario.rs))
 seeds a fresh scratch
 tree under the gitignored collision-proof
 `sandbox/<adapter>/<name>/run-<stamp>-<pid>/`, pins the project

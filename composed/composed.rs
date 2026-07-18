@@ -706,8 +706,8 @@ fn build_guests() {
             .parent()
             .expect("composed manifest dir is at the workspace root");
         // `--workspace` avoids `-p omnia` ambiguity between guest crate and
-        // runtime dep; `eval` is the native-only harness binding.
-        let args = ["build", "--workspace", "--exclude", "eval", "--target", "wasm32-wasip2"];
+        // runtime dep; `lab` is the native-only composition binary.
+        let args = ["build", "--workspace", "--exclude", "lab", "--target", "wasm32-wasip2"];
         composed::cargo(&args, workspace_root, &target_dir()).expect("guest build");
     });
 }
