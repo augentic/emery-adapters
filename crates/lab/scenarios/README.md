@@ -17,7 +17,7 @@ scenarios/<adapter>/<name>/
                    paths a passing run must produce; mandatory and non-empty
                    for `build` scenarios)
   inputs/*.md      typed slice inputs by file stem (proposal / design / tasks / spec*)
-  seed/**          files copied into the scratch project root (optional)
+  fixture/**      files copied into the scratch project root (optional)
 ```
 
 For an adapter already linked into the shim, adding a scenario is just the

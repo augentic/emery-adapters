@@ -47,7 +47,7 @@ composed/             # model-free composed-deployment tests hosting the built
                       # (flattened like omnia's examples/: support.rs + composed.rs)
 examples/
   change/             # the wasm change example: the `change-example` runtime
-                      # host + omnia.toml + seed tree (see its README.md)
+                      # host + omnia.toml + fixture tree (see its README.md)
 Cargo.toml            # workspace: `composed` + `examples/change` + `crates/*`
                       # + `{sources,targets}/*`
 ```
@@ -91,7 +91,7 @@ The `composed` package keeps WASM/WIT conformance (`composed/composed.rs`) model
 The `lab` crate at `crates/lab/` is a native-only, unpublished workspace member: it links every adapter crate in-process, owns the first-party catalog declaration (`crates/lab/src/lib.rs`) over the engine-owned `linked` host, and drives the lab-only `eval` library — both consumed from revision-pinned git sources like the `adapter` SDK. It carries the live `cargo make eval` trial plus the single-operation prompt scenarios (see [TESTING.md](TESTING.md)) without coupling the engine repository back to concrete adapters. The eval rungs run **natively** over the linked crates and prove prompt quality; WASM/WIT conformance stays with `composed/` and the change example, and the wasm32 component tasks exclude `lab`. A third-party adapter joining this shim needs both a Cargo dependency in `crates/lab/Cargo.toml` and a catalog entry in `crates/lab/src/lib.rs` — a scenario directory alone cannot link a Rust crate. The development entry point:
 
 ```bash
-cargo make dev -- --project-dir /path/to/project plan status
+cargo make specify -- --project-dir /path/to/project plan status
 ```
 
 Two compatibility choices are independent, for first- and third-party adapter authors alike: the **WIT contract version** an adapter targets (`wit/specify.wit`, the publish-time compatibility floor), and the **engine revision** the workspace resolves for the `adapter` SDK, `linked` host, and `eval` library. The engine crates are declared as git dependencies on `augentic/specify`; today the committed path patch resolves them from the sibling `../specify` checkout, and once the exposing engine revision is published the manifest pins it explicitly (add `rev` values in the root `Cargo.toml`, run `cargo update`, and commit the lockfile). The pin advances deliberately, not with every engine commit.

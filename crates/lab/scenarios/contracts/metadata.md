@@ -58,7 +58,7 @@ greenfield contract change with no pre-existing source document.
 
 ## Inputs
 
-This scenario has no source files to seed. The prose requirements live inside
+This scenario has no source files to materialize as a fixture. The prose requirements live inside
 the `/spec:refine` prompt itself; see **Invocation** below.
 
 ## Invocation

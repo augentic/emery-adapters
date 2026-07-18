@@ -14,7 +14,7 @@ as context. They do not generate new or changed interface shapes inline.
 ## Relationship To Evals
 
 These are owner-local scenario documents. They live beside the live eval
-eval rung's `<name>/` seed trees because the behavior under test is
+eval rung's `<name>/` fixture trees because the behavior under test is
 one adapter's slice loop in isolation. Static checks validate their YAML
 frontmatter and scenario IDs; the scenario bodies remain human-readable
 operator instructions.
