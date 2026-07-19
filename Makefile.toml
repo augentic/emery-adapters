@@ -3,10 +3,6 @@
 
 [env]
 CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
-# The published `specify:core` component the wasm change example runs.
-# The native `lab` crate tracks the sibling `../specify` checkout
-# instead (the committed path patch in Cargo.toml).
-SPECIFY_CORE_VERSION = "0.27.2"
 
 [config]
 default_to_workspace = true
@@ -122,7 +118,7 @@ args = [
   "--exclude",
   "composed",
   "--exclude",
-  "change-example",
+  "change",
   "--exclude",
   "lab",
   "--target",
@@ -163,102 +159,39 @@ script = '''
 # Wasm change example + component packaging
 # -------------------------------------
 # Operator-invoked WIT E2E (not the graded native trial). See
-# examples/change/README.md. `adapter` / `publish` share scripts/components.rs.
-
-# Fetch pinned specify:core (wkg; see wit/README.md for registry auth).
-[tasks.core-fetch]
-script = '''
-set -euo pipefail
-mkdir -p target/core
-wkg get "specify:core@${SPECIFY_CORE_VERSION}" \
-  --config wit/config.toml \
-  --output target/core/specify.wasm || {
-  echo "wkg get specify:core@${SPECIFY_CORE_VERSION} failed." >&2
-  echo "Auth: docker login (specify: → private OCI via augentic.io), then retry." >&2
-  echo "See wit/README.md." >&2
-  exit 1
-}
-echo "fetched specify:core@${SPECIFY_CORE_VERSION} -> target/core/specify.wasm"
-'''
+# examples/change/README.md.
 
 [tasks.change-clean]
 script = "rm -rf sandbox/change"
 
-# Prep for the wasm change example: core present, the three composed
-# guests, sandbox fixture, and the change-example host.
+# Package is `change@0.1.0` — the engine's `change` crate (0.27.x) is also
+# on the graph via the guest's git deps, so bare `-p change` is ambiguous.
 [tasks.change-build]
 script = '''
-# set -euo pipefail
-
-# test -f target/core/specify.wasm || {
-#   echo "missing target/core/specify.wasm; run \`cargo make core-fetch\` first" >&2
-#   exit 1
-# }
-
-# The three guests this deployment composes (not a full workspace build).
-# cargo make adapter documentation intent contracts
-
-mkdir -p sandbox/change/{workspace,cache,store}
-# cp -R examples/change/fixture/. sandbox/change/workspace/
-# cp target/wasm32-wasip2/release/contracts.wasm sandbox/change/workspace/contracts.wasm
-
-cargo build -p contracts --target wasm32-wasip2
+cargo build -p change@0.1.0 --lib --target wasm32-wasip2
 cargo build -p documentation --target wasm32-wasip2
 cargo build -p intent --target wasm32-wasip2
-
-cargo build -p change@0.1.0 --lib --target wasm32-wasip2 
-# cargo build -p change@0.1.0 --bin change
+cargo build -p contracts --target wasm32-wasip2
 '''
 
 [tasks.change-run]
 dependencies = ["change-clean", "change-build"]
 env_files = [".env"]
 script = '''
-set -euo pipefail
+export RUST_LOG="info,opentelemetry_sdk=off,omnia_wasi_http=debug"
 
-# Per-run loopback for adapter MCP routes (override: HTTP_ADDR=host:port).
-export HTTP_ADDR="${HTTP_ADDR:-$(cargo run -q -p change-example --bin change-support -- port)}"
-export SPECIFY_DOCUMENTATION_MCP_URL="http://$HTTP_ADDR/mcp/documentation"
-export SPECIFY_INTENT_MCP_URL="http://$HTTP_ADDR/mcp/intent"
-export SPECIFY_CONTRACTS_MCP_URL="http://$HTTP_ADDR/mcp/contracts"
-# Live judgment legs run for minutes; omnia's default is 30s.
-export GUEST_TIMEOUT_MS="${GUEST_TIMEOUT_MS:-3600000}"
+mkdir -p sandbox/change/{workspace,cache,store}
+cp -R examples/change/fixture/. sandbox/change/workspace/
+cp target/wasm32-wasip2/debug/contracts.wasm sandbox/change/workspace/contracts.wasm
 
 run() {
   cargo run -p change@0.1.0 -- run --config examples/change/omnia.toml -- "$@"
 }
-
-cp target/wasm32-wasip2/release/contracts.wasm sandbox/change/workspace/contracts.wasm
 
 . examples/change/trial.env
 run init ./contracts.wasm --name "$TRIAL_PROJECT_NAME"
 run plan author "$TRIAL_CHANGE" --intent "$TRIAL_INTENT" --source "$TRIAL_SOURCE"
 run plan transition "$TRIAL_CHANGE" approved
 run plan execute
-run plan status --format json > sandbox/change/status.json
 '''
 
-# # Fast component build → target/wasm32-wasip2/release/<name>.wasm
-# # (`cargo make adapter contracts`; bare = every adapter). See TESTING.md.
-# [tasks.adapter]
-# command = "rustup"
-# args = [
-#   "run",
-#   "nightly",
-#   "cargo",
-#   "-Zscript",
-#   "scripts/components.rs",
-#   "build-fast",
-#   "${@}",
-# ]
-
-[tasks.publish]
-command = "rustup"
-args = [
-  "run",
-  "nightly",
-  "cargo",
-  "-Zscript",
-  "scripts/components.rs",
-  "publish",
-]

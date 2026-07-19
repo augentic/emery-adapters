@@ -1,24 +1,22 @@
-# The adapters change example: the published `specify:core` guest
-# (fetched by `cargo make core-fetch`) composed with this repo's built
-# adapter components. Driven by the `change-example` host (host.rs
-# beside this manifest) through `cargo make change-run`.
+# The adapters change example: this package's specify guest composed with
+# documentation / intent / contracts. Driven by `cargo make change-run`.
 
 [[guest]]
 id = "specify"
-source.path = "../../target/core/specify.wasm"
+source.path = "../../target/wasm32-wasip2/debug/specify.wasm"
 link = ["specify:adapter/source@0.1.0", "specify:adapter/target@0.1.0"]
 
 [[guest]]
 id = "source:documentation"
-source.path = "../../target/wasm32-wasip2/release/documentation.wasm"
+source.path = "../../target/wasm32-wasip2/debug/documentation.wasm"
 
 [[guest]]
 id = "source:intent"
-source.path = "../../target/wasm32-wasip2/release/intent.wasm"
+source.path = "../../target/wasm32-wasip2/debug/intent.wasm"
 
 [[guest]]
 id = "target:contracts"
-source.path = "../../target/wasm32-wasip2/release/contracts.wasm"
+source.path = "../../target/wasm32-wasip2/debug/contracts.wasm"
 
 [[route.http]]
 prefix = "/mcp/documentation"

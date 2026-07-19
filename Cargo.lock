@@ -552,11 +552,9 @@ dependencies = [
 name = "change"
 version = "0.1.0"
 dependencies = [
- "adapter",
  "anyhow",
  "artifacts 0.27.2 (git+https://github.com/augentic/specify.git)",
  "cfg-if",
- "contracts",
  "diagnostics 0.27.2 (git+https://github.com/augentic/specify.git)",
  "error 0.27.2 (git+https://github.com/augentic/specify.git)",
  "jiff",
@@ -567,8 +565,6 @@ dependencies = [
  "omnia-wasi-model",
  "omnia-wasi-otel",
  "project 0.27.2 (git+https://github.com/augentic/specify.git)",
- "serde",
- "serde-saphyr",
  "serde_json",
  "slice 0.27.2 (git+https://github.com/augentic/specify.git)",
  "tokio",

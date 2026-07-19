@@ -1,3 +1,5 @@
+
+
 [workspace]
 members = ["composed", "examples/*", "crates/*", "sources/*", "targets/*"]
 resolver = "3"
@@ -43,15 +45,8 @@ omnia-wasi-model = "0.35.0"
 omnia-wasi-otel = "0.35.0"
 
 adapter = { git = "https://github.com/augentic/specify.git" }
-artifacts = { git = "https://github.com/augentic/specify.git" }
-diagnostics = { git = "https://github.com/augentic/specify.git" }
-error = { git = "https://github.com/augentic/specify.git" }
 eval = { git = "https://github.com/augentic/specify.git" }
 linked = { git = "https://github.com/augentic/specify.git" }
-project = { git = "https://github.com/augentic/specify.git" }
-slice = { git = "https://github.com/augentic/specify.git" }
-specify = { git = "https://github.com/augentic/specify.git" }
-transport = { git = "https://github.com/augentic/specify.git" }
 
 captures = { path = "sources/captures" }
 contracts = { path = "targets/contracts" }

@@ -55,10 +55,9 @@ cargo nextest run -p composed
 
 ### 5. The change example — the wasm end-to-end run
 
-[`examples/change/`](examples/change/README.md) composes the published `specify:core` guest (fetched by `cargo make core-fetch`, pinned by `SPECIFY_CORE_VERSION` in the root `Makefile.toml`) with this repo's built adapter components in one Omnia deployment and drives the full operator rhythm against the live cursor backend, hosted by the `change-example` runtime binary beside the manifest. The task builds only the three components the deployment composes (`documentation`, `intent`, `contracts`), picks a free loopback port per run, and replays the same operator inputs and fixture as the native trial (`examples/change/trial.env` + `examples/change/fixture/`). It ends with a deterministic completion gate (the `change-support` binary): the captured `plan status --format json` is drained, every `plan.yaml` entry is `done`, and the merged contracts baseline is non-empty and clean under the contracts validator. Still operator-invoked and per-leg ungraded — the graded trial is `cargo make eval` on rung 2. Expect a run to take tens of minutes; `GUEST_TIMEOUT_MS` (default one hour) caps each `wasi:cli/run` invocation's wall clock, and `SPECIFY_EVAL_MODEL=<model-id>` overrides the model. This is the only rung that exercises the real component seam end-to-end: WIT dispatch-by-id, mounts, and the published core, together.
+[`examples/change/`](examples/change/README.md) builds a specify workflow guest in-tree, composes it with this repo's `documentation`, `intent`, and `contracts` components in one Omnia deployment, and drives the full operator rhythm against the live cursor backend. It replays the same operator inputs and fixture as the native trial (`examples/change/trial.env` + `examples/change/fixture/`). Still operator-invoked and per-leg ungraded — the graded trial is `cargo make eval` on rung 2. Expect a run to take tens of minutes; `GUEST_TIMEOUT_MS` (default one hour) caps each `wasi:cli/run` invocation's wall clock, and `SPECIFY_EVAL_MODEL=<model-id>` overrides the model. This is the only rung that exercises the real component seam end-to-end: WIT dispatch-by-id, mounts, and the workflow guest together.
 
 ```bash
-cargo make core-fetch    # once per pin
 cargo make change-run
 cargo make change-clean
 ```

@@ -1,10 +1,9 @@
-# The change example's host binary: the omnia runtime that composes the
-# published `specify:core` component with this repo's built adapter
-# components over `examples/change/omnia.toml`. The adapters counterpart of
-# running `cargo run -p specify` against the engine's `examples/change`.
+# Omnia host + specify workflow guest for the wasm change example.
+# Counterpart of running `cargo run -p specify` against the engine's
+# `examples/change`, composing this repo's adapter components.
 [package]
 name = "change"
-description = "Omnia runtime host for the wasm change example"
+description = "Omnia host and specify guest for the wasm change example"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -24,32 +23,29 @@ path = "src/runtime.rs"
 [dependencies]
 cfg-if.workspace = true
 
+# The specify package is cdylib-only, so the workflow guest is compiled
+# here (src/specify.rs + src/provider.rs) against the engine crates.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+artifacts = { git = "https://github.com/augentic/specify.git" }
+diagnostics = { git = "https://github.com/augentic/specify.git" }
+error = { git = "https://github.com/augentic/specify.git" }
 jiff = { version = "0.2.32", default-features = false, features = ["serde", "std"] }
+omnia-guest.workspace = true
+project = { git = "https://github.com/augentic/specify.git" }
+serde_json.workspace = true
+slice = { git = "https://github.com/augentic/specify.git" }
+transport = { git = "https://github.com/augentic/specify.git" }
 wasip3 = { version = "0.7.0", features = ["http-compat"] }
 wit-bindgen = { version = "0.59.0", features = ["async-spawn"] }
-artifacts.workspace = true
-diagnostics.workspace = true
-error.workspace = true
-omnia-guest.workspace = true
-project.workspace = true
-serde_json.workspace = true
-slice.workspace = true
-transport.workspace = true
-adapter.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 anyhow.workspace = true
-contracts.workspace = true
 omnia.workspace = true
 omnia-cursor.workspace = true
 omnia-wasi-http.workspace = true
 omnia-wasi-model.workspace = true
 omnia-wasi-otel.workspace = true
-serde = { workspace = true, features = ["derive"] }
-serde-saphyr.workspace = true
-serde_json.workspace = true
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [lints]
 workspace = true

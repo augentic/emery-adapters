@@ -46,8 +46,8 @@ composed/             # model-free composed-deployment tests hosting the built
                       # adapter guest components on the Omnia runtime
                       # (flattened like omnia's examples/: support.rs + composed.rs)
 examples/
-  change/             # the wasm change example: the `change-example` runtime
-                      # host + omnia.toml + fixture tree (see its README.md)
+  change/             # the wasm change example: Omnia host + specify guest
+                      # + omnia.toml + fixture tree (see its README.md)
 Cargo.toml            # workspace: `composed` + `examples/change` + `crates/*`
                       # + `{sources,targets}/*`
 ```
