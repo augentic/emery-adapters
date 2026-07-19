@@ -3,7 +3,7 @@
 # components over `examples/change/omnia.toml`. The adapters counterpart of
 # running `cargo run -p specify` against the engine's `examples/change`.
 [package]
-name = "change-example"
+name = "change"
 description = "Omnia runtime host for the wasm change example"
 version.workspace = true
 edition.workspace = true
@@ -14,7 +14,7 @@ publish.workspace = true
 
 # Flattened beside the deployment manifest, README, and fixture tree.
 [[bin]]
-name = "change-example"
+name = "change"
 path = "host.rs"
 
 # Deterministic task support: `port` picks the run's loopback address,

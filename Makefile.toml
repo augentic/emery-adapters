@@ -147,9 +147,9 @@ command = "cargo"
 args = ["run", "-q", "-p", "lab", "--", "${@}"]
 
 # The native live-model trial (the lab binary's `eval` subcommand)
-  [tasks.eval]
-  env_files = [".env"]
-  script = '''
+[tasks.eval]
+env_files = [".env"]
+script = '''
   cargo run -p lab -- eval \
     --fixture examples/change/fixture \
     --change "orders" \
@@ -184,25 +184,37 @@ echo "fetched specify:core@${SPECIFY_CORE_VERSION} -> target/core/specify.wasm"
 [tasks.change-clean]
 script = "rm -rf sandbox/change"
 
+# Prep for the wasm change example: core present, the three composed
+# guests, sandbox fixture, and the change-example host.
+[tasks.change-build]
+script = '''
+# set -euo pipefail
+
+# test -f target/core/specify.wasm || {
+#   echo "missing target/core/specify.wasm; run \`cargo make core-fetch\` first" >&2
+#   exit 1
+# }
+
+# The three guests this deployment composes (not a full workspace build).
+# cargo make adapter documentation intent contracts
+
+mkdir -p sandbox/change/{workspace,cache,store}
+# cp -R examples/change/fixture/. sandbox/change/workspace/
+# cp target/wasm32-wasip2/release/contracts.wasm sandbox/change/workspace/contracts.wasm
+
+
+cargo build -p contracts --target wasm32-wasip2
+cargo build -p documentation --target wasm32-wasip2
+cargo build -p intent --target wasm32-wasip2
+
+cargo build -p change-example
+'''
+
 [tasks.change-run]
-dependencies = ["change-clean"]
+dependencies = ["change-clean", "change-build"]
 env_files = [".env"]
 script = '''
 set -euo pipefail
-
-test -f target/core/specify.wasm || {
-  echo "missing target/core/specify.wasm; run \`cargo make core-fetch\` first" >&2
-  exit 1
-}
-
-# The three guests this deployment composes (not a full workspace build).
-rustup run nightly cargo -Zscript scripts/components.rs \
-  build-fast documentation intent contracts
-
-mkdir -p sandbox/change/{workspace,cache,store}
-cp -R examples/change/fixture/. sandbox/change/workspace/
-cp target/wasm32-wasip2/release/contracts.wasm sandbox/change/workspace/contracts.wasm
-cargo build -q -p change-example
 
 # Per-run loopback for adapter MCP routes (override: HTTP_ADDR=host:port).
 export HTTP_ADDR="${HTTP_ADDR:-$(cargo run -q -p change-example --bin change-support -- port)}"
@@ -216,32 +228,32 @@ run() {
   cargo run -q -p change-example -- run --config examples/change/omnia.toml -- "$@"
 }
 
+cp target/wasm32-wasip2/release/contracts.wasm sandbox/change/workspace/contracts.wasm
+
 . examples/change/trial.env
 run init ./contracts.wasm --name "$TRIAL_PROJECT_NAME"
-run plan author "$TRIAL_CHANGE" \
-  --intent "$TRIAL_INTENT" \
-  --source "$TRIAL_SOURCE"
+run plan author "$TRIAL_CHANGE" --intent "$TRIAL_INTENT" --source "$TRIAL_SOURCE"
 run plan transition "$TRIAL_CHANGE" approved
 run plan execute
-
 run plan status --format json > sandbox/change/status.json
+
 cargo run -q -p change-example --bin change-support -- \
   verify sandbox/change/workspace sandbox/change/status.json
 '''
 
-# Fast component build → target/wasm32-wasip2/release/<name>.wasm
-# (`cargo make adapter contracts`; bare = every adapter). See TESTING.md.
-[tasks.adapter]
-command = "rustup"
-args = [
-  "run",
-  "nightly",
-  "cargo",
-  "-Zscript",
-  "scripts/components.rs",
-  "build-fast",
-  "${@}",
-]
+# # Fast component build → target/wasm32-wasip2/release/<name>.wasm
+# # (`cargo make adapter contracts`; bare = every adapter). See TESTING.md.
+# [tasks.adapter]
+# command = "rustup"
+# args = [
+#   "run",
+#   "nightly",
+#   "cargo",
+#   "-Zscript",
+#   "scripts/components.rs",
+#   "build-fast",
+#   "${@}",
+# ]
 
 [tasks.publish]
 command = "rustup"
