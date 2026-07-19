@@ -17,14 +17,23 @@ crate-type = ["cdylib"]
 name = "change"
 path = "examples/change/omnia.rs"
 
+[[example]]
+name = "native"
+path = "examples/native/main.rs"
+
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 guest = { git = "https://github.com/augentic/specify.git" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 anyhow.workspace = true
 cfg-if.workspace = true
+contracts.workspace = true
+documentation.workspace = true
+intent.workspace = true
+linked = { workspace = true, features = ["cli"] }
 omnia.workspace = true
 omnia-cursor.workspace = true
+omnia-guest.workspace = true
 omnia-wasi-http.workspace = true
 omnia-wasi-model.workspace = true
 omnia-wasi-otel.workspace = true
