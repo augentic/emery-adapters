@@ -1,12 +1,12 @@
 # Testing
 
-Integration-first test posture for `specify-adapters`: integration owns every publicly reachable behavior, and the unit layer is deliberately thin. Design tests against the public surfaces — the WIT contract, each adapter crate's `tests/` suite, and the operator-invoked change example — never against private kernels. Read this before adding or deleting a test.
+Integration-first test posture for `specify-adapters`: integration owns every publicly reachable behavior, and the unit layer is deliberately thin. Design tests against the public surfaces — the WIT contract, each adapter crate's `tests/` suite, and the operator-invoked wasm example — never against private kernels. Read this before adding or deleting a test.
 
 ## The development loop
 
 Every rung runs from this repository with its own `cargo make` tasks; the engine repository tests itself independently (see [its developer loop guide](https://github.com/augentic/specify/blob/main/docs/contributing/dev-loop.md)). There is no cross-repo command surface — the rungs below are this repo's own test strata.
 
-Five rungs, fastest feedback first. Every behavior is asserted on exactly one rung — duplicating an assertion across rungs is a defect, not extra safety. Omnia-testkit owns reusable model and runtime test mechanics (the scripted double, runtime assembly); the repo's own `crates/testkit` owns the request-recording harness the adapter suites assert prompts and grants with. Adapter native tests own operation behavior, the lab crate owns cross-phase integration and prompt quality, and the change example owns WASM/WIT conformance.
+Five rungs, fastest feedback first. Every behavior is asserted on exactly one rung — duplicating an assertion across rungs is a defect, not extra safety. Omnia-testkit owns reusable model and runtime test mechanics (the scripted double, runtime assembly); the repo's own `crates/testkit` owns the request-recording harness the adapter suites assert prompts and grants with. Adapter native tests own operation behavior, the lab crate owns cross-phase integration and prompt quality, and the wasm example owns WASM/WIT conformance.
 
 ### 1. Native crate tests — the inner loop
 
@@ -19,15 +19,15 @@ cargo make test               # the whole workspace, matching CI
 
 `nextest` is mandatory, not a preference: it runs each test in its own process, and that isolation is what lets the CWD/env-mutating suites pass. Never use bare `cargo test`.
 
-### 2. The lab crate — linked-adapter integration and the live rungs
+### 2. The lab crate — native-adapter integration and the live rungs
 
-`crates/lab/` is a native-only, unpublished workspace member declaring the first-party catalog (`src/lib.rs`) over the engine-owned `linked` host. The engine's `linked` crate supplies the catalog machinery, provider, reference hosting, and command execution, and its `eval` library supplies telemetry, deterministic grading, and the trial/scenario runners; `cargo make eval` passes the trial inputs explicitly. The `lab` binary owns the Tokio runtime and the Cursor backend, and runs production verb handlers natively without building WebAssembly. Generic catalog, provider, reference, and command mechanics are tested in `specify/crates/linked/tests` (scenario/sandbox mechanics in `specify/crates/eval/tests`); the lab binding carries only the catalog inventory check in `crates/lab/tests/`. `cargo make ci` builds and lints the crate like any other member; the live rungs below stay operator-invoked.
+`crates/lab/` is a native-only, unpublished workspace member declaring the first-party catalog (`src/lib.rs`) over the engine-owned `native` host. The engine's `native` crate supplies the catalog machinery, provider, reference hosting, and command execution, and its `eval` library supplies telemetry, deterministic grading, and the trial/scenario runners; `cargo make eval` passes the trial inputs explicitly. The `lab` binary owns the Tokio runtime and the Cursor backend, and runs production verb handlers natively without building WebAssembly. Generic catalog, provider, reference, and command mechanics are tested in `specify/crates/native/tests` (scenario/sandbox mechanics in `specify/crates/eval/tests`); the lab binding carries only the catalog inventory check in `crates/lab/tests/`. `cargo make ci` builds and lints the crate like any other member; the live rungs below stay operator-invoked.
 
 ```bash
 cargo make specify -- --project-dir <dir> slice list   # any specify verb, natively
 ```
 
-The same crate carries the repo's **live trial**: `cargo make eval` (the `lab` binary's `eval` mode) runs the operator rhythm — `init → plan author → transition approved → plan execute → plan archive` — over a persistent gitignored `sandbox/` project, with `documentation` + `intent` bound as sources and `contracts` as the target. It mirrors the engine's `crates/lab` trial: production verbs through the shared typed command router, the live cursor backend at the model seam, and **deterministic grading only** — every plan entry `done` and the provenance gate over the non-empty baseline specs (the merged-baseline validator gate stays with the change example's completion check on rung 5). Per-leg completion-request counts are reported (requests beyond one per leg are repairs), never asserted. Every phase isolates its execution paths, landing the project cache inside the sandbox, so runs are hermetic with respect to the operator's normal cache; the operator inputs are inlined in the `eval` / `change-run` tasks and the fixture comes from the shared `examples/change/fixture/`. A full trial takes tens of minutes of live model time. A full pass cleans the sandbox; a failing phase retains it for in-place review and per-phase re-runs. Live-only — requires an authenticated [`cursor-agent`](https://cursor.com/docs/cli) on `PATH`; `SPECIFY_EVAL_MODEL=<model-id>` overrides the model.
+The same crate carries the repo's **live trial**: `cargo make eval` (the `lab` binary's `eval` mode) runs the operator rhythm — `init → plan author → transition approved → plan execute → plan archive` — over a persistent gitignored `sandbox/` project, with `documentation` + `intent` bound as sources and `contracts` as the target. It mirrors the engine's `crates/lab` trial: production verbs through the shared typed command router, the live cursor backend at the model seam, and **deterministic grading only** — every plan entry `done` and the provenance gate over the non-empty baseline specs (the merged-baseline validator gate stays with the wasm example's completion check on rung 5). Per-leg completion-request counts are reported (requests beyond one per leg are repairs), never asserted. Every phase isolates its execution paths, landing the project cache inside the sandbox, so runs are hermetic with respect to the operator's normal cache; the operator inputs are inlined in the `eval` / `wasm-run` tasks and the fixture comes from the shared `examples/wasm/fixture/`. A full trial takes tens of minutes of live model time. A full pass cleans the sandbox; a failing phase retains it for in-place review and per-phase re-runs. Live-only — requires an authenticated [`cursor-agent`](https://cursor.com/docs/cli) on `PATH`; `SPECIFY_EVAL_MODEL=<model-id>` overrides the model.
 
 ```bash
 cargo make eval           # the full trial
@@ -45,13 +45,13 @@ cargo make eval scenario                     # list scenarios
 cargo make eval scenario contracts/design    # one scenario
 ```
 
-### 4. The change example — the wasm end-to-end run
+### 4. The wasm example — end-to-end component seam
 
-[`examples/change/`](examples/change/README.md) builds a specify workflow guest in-tree, composes it with this repo's `documentation`, `intent`, and `contracts` components in one Omnia deployment, and drives the full operator rhythm against the live cursor backend. It replays the same operator inputs (inlined in `change-run`) and fixture (`examples/change/fixture/`) as the native trial. Still operator-invoked and per-leg ungraded — the graded trial is `cargo make eval` on rung 2. Expect a run to take tens of minutes; `GUEST_TIMEOUT_MS` (default one hour) caps each `wasi:cli/run` invocation's wall clock, and `SPECIFY_EVAL_MODEL=<model-id>` overrides the model. This is the only rung that exercises the real component seam end-to-end: WIT dispatch-by-id, mounts, and the workflow guest together.
+[`examples/wasm/`](examples/wasm/README.md) builds a specify workflow guest in-tree, composes it with this repo's `documentation`, `intent`, and `contracts` components in one Omnia deployment, and drives the full operator rhythm against the live cursor backend. It replays the same operator inputs (inlined in `wasm-run`) and fixture (`examples/wasm/fixture/`) as the native trial. Still operator-invoked and per-leg ungraded — the graded trial is `cargo make eval` on rung 2. Expect a run to take tens of minutes; `GUEST_TIMEOUT_MS` (default one hour) caps each `wasi:cli/run` invocation's wall clock, and `SPECIFY_EVAL_MODEL=<model-id>` overrides the model. This is the only rung that exercises the real component seam end-to-end: WIT dispatch-by-id, mounts, and the workflow guest together.
 
 ```bash
-cargo make change-run
-cargo make change-clean
+cargo make wasm-run
+cargo make wasm-clean
 ```
 
 ### 5. Consumer project — code changes through the engine

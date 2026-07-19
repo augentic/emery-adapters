@@ -1,5 +1,5 @@
-# The adapters change example: this package's specify guest composed with
-# documentation / intent / contracts. Driven by `cargo make change-run`.
+# The adapters wasm example: this package's specify guest composed with
+# documentation / intent / contracts. Driven by `cargo make wasm-run`.
 
 [[guest]]
 id = "specify"
@@ -32,15 +32,15 @@ guest = "target:contracts"
 
 [[mount]]
 name = "."
-path = "../../sandbox/change/workspace"
+path = "../../sandbox/wasm/workspace"
 writable = true
 
 [[mount]]
 name = "/specify-cache"
-path = "../../sandbox/change/cache"
+path = "../../sandbox/wasm/cache"
 writable = true
 
 [[mount]]
 name = "/specify-store"
-path = "../../sandbox/change/store"
+path = "../../sandbox/wasm/store"
 writable = true

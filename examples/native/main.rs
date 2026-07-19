@@ -7,7 +7,7 @@ mod model;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use linked::{Catalog, DynModel, ExecutionPaths};
+use native::{Catalog, DynModel, ExecutionPaths};
 
 use crate::model::DevModel;
 
@@ -32,5 +32,5 @@ async fn run() -> anyhow::Result<ExitCode> {
     let paths = ExecutionPaths::operator(root.clone());
     let model = DynModel::new(DevModel::new(&root));
 
-    Ok(linked::command::run(paths, model, catalog, std::env::args().collect()).await)
+    Ok(native::command::run(paths, model, catalog, std::env::args().collect()).await)
 }

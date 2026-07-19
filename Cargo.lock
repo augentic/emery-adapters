@@ -25,7 +25,7 @@ dependencies = [
  "documentation",
  "guest",
  "intent",
- "linked",
+ "native",
  "omnia 0.35.0",
  "omnia-cursor",
  "omnia-guest",
@@ -1244,7 +1244,7 @@ dependencies = [
  "anyhow",
  "artifacts",
  "clap",
- "linked",
+ "native",
  "omnia-guest",
  "project",
  "serde",
@@ -2183,7 +2183,7 @@ dependencies = [
  "documentation",
  "eval",
  "intent",
- "linked",
+ "native",
  "omnia 0.1.0",
  "omnia 0.35.0",
  "omnia-cursor",
@@ -2246,23 +2246,6 @@ dependencies = [
  "cc",
  "pkg-config",
  "vcpkg",
-]
-
-[[package]]
-name = "linked"
-version = "0.27.2"
-dependencies = [
- "adapter",
- "artifacts",
- "axum",
- "diagnostics",
- "error",
- "omnia-guest",
- "project",
- "semver",
- "thiserror 2.0.18",
- "tokio",
- "transport",
 ]
 
 [[package]]
@@ -2409,6 +2392,23 @@ checksum = "bb85c154ba489f01b25c0d36ae69a87e4a1c73a72631fc6c0eb6dde34a73e44b"
 dependencies = [
  "num-traits",
  "pxfm",
+]
+
+[[package]]
+name = "native"
+version = "0.27.2"
+dependencies = [
+ "adapter",
+ "artifacts",
+ "axum",
+ "diagnostics",
+ "error",
+ "omnia-guest",
+ "project",
+ "semver",
+ "thiserror 2.0.18",
+ "tokio",
+ "transport",
 ]
 
 [[package]]

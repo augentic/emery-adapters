@@ -1,9 +1,9 @@
 //! The first-party adapter catalog declaration.
 //!
-//! The lab owns this composition until a linked operator distribution
+//! The lab owns this composition until a native operator distribution
 //! needs a shared catalog library: every first-party source and target
 //! adapter, linked once on its axis, validated by
-//! [`linked::Catalog::builder`]. The inventory check in `tests/`
+//! [`native::Catalog::builder`]. The inventory check in `tests/`
 //! pins the expected entries and the global published-name uniqueness
 //! across axes.
 
@@ -11,10 +11,10 @@
 ///
 /// # Errors
 ///
-/// Returns [`linked::Error::Catalog`] when an adapter identity is
+/// Returns [`native::Error::Catalog`] when an adapter identity is
 /// malformed or registered twice on one axis.
-pub fn catalog() -> Result<linked::Catalog, linked::Error> {
-    linked::Catalog::builder()
+pub fn catalog() -> Result<native::Catalog, native::Error> {
+    native::Catalog::builder()
         .source::<captures::Adapter>()
         .source::<documentation::Adapter>()
         .source::<intent::Adapter>()

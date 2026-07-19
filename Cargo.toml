@@ -1,6 +1,6 @@
 [package]
 name = "adapters"
-description = "Omnia host and specify guest for the wasm change example"
+description = "Omnia host and specify guest for the wasm example"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -10,12 +10,12 @@ publish.workspace = true
 
 [[example]]
 name = "specify"
-path = "examples/change/specify.rs"
+path = "examples/wasm/specify.rs"
 crate-type = ["cdylib"]
 
 [[example]]
-name = "change"
-path = "examples/change/omnia.rs"
+name = "wasm"
+path = "examples/wasm/omnia.rs"
 
 [[example]]
 name = "native"
@@ -30,7 +30,7 @@ cfg-if.workspace = true
 contracts.workspace = true
 documentation.workspace = true
 intent.workspace = true
-linked = { workspace = true, features = ["cli"] }
+native = { workspace = true, features = ["cli"] }
 omnia.workspace = true
 omnia-cursor.workspace = true
 omnia-guest.workspace = true
@@ -88,7 +88,7 @@ omnia-wasi-otel = "0.35.0"
 
 adapter = { git = "https://github.com/augentic/specify.git" }
 eval = { git = "https://github.com/augentic/specify.git" }
-linked = { git = "https://github.com/augentic/specify.git" }
+native = { git = "https://github.com/augentic/specify.git" }
 
 captures = { path = "sources/captures" }
 contracts = { path = "targets/contracts" }
@@ -124,7 +124,7 @@ wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }
 adapter = { path = "../specify/crates/adapter" }
 eval = { path = "../specify/crates/eval" }
 guest = { path = "../specify/crates/guest" }
-linked = { path = "../specify/crates/linked" }
+native = { path = "../specify/crates/native" }
 
 [workspace.lints.rust]
 # https://dirname.github.io/rust-std-doc/rustc/lints/listing/allowed-by-default.html

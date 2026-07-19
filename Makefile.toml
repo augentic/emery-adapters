@@ -118,8 +118,6 @@ args = [
   "build",
   "--workspace",
   "--exclude",
-  "change",
-  "--exclude",
   "lab",
   "--target",
   "wasm32-wasip2",
@@ -141,7 +139,7 @@ args = ["run", "-q", "-p", "lab", "--", "${@}"]
 env_files = [".env"]
 script = '''
   cargo run -p lab -- eval \
-    --fixture examples/change/fixture \
+    --fixture examples/wasm/fixture \
     --change "orders" \
     --intent "Author the API contracts for the orders service described under docs/: the JSON Schema vocabulary plus the HTTP (OpenAPI) surface. Contracts only - no service implementation." \
     --source "docs=documentation:docs" \

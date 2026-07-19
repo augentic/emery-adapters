@@ -63,7 +63,7 @@ cargo clippy -p vectis --all-targets --all-features -- -D warnings
 cargo make check
 ```
 
-For component-boundary changes, also run `cargo make change-run`. Live tests are reserved for prompt-quality evaluation.
+For component-boundary changes, also run `cargo make wasm-run`. Live tests are reserved for prompt-quality evaluation.
 
 ## Troubleshooting signals
 
