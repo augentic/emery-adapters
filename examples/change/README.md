@@ -24,7 +24,7 @@ Declared on the workspace root package (`adapters`) as Cargo examples:
 | `specify.rs` + `provider.rs` | `--example specify` workflow guest (`cdylib`) |
 | `omnia.rs` | `--example change` Omnia host |
 | [omnia.toml](omnia.toml) | deployment: guest + adapters + mounts |
-| [trial.env](trial.env) + [fixture/](fixture/) | operator inputs shared with the native trial |
+| [fixture/](fixture/) | seed inputs shared with the native trial |
 
 The engine's root `specify` package is `cdylib`-only, so the guest sources live here and depend on the engine crates from git.
 

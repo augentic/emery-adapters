@@ -22,7 +22,7 @@ Artifacts outrank source behavior. Preserve missing information as `[unknown]` r
 - Do not commit built `.wasm` artifacts.
 - Adapter names must remain unique across the source and target axes.
 
-The root workspace includes `crates/*`, `sources/*`, `targets/*`, `composed` (the composed-deployment tests), and `examples/change` (the wasm change example's host). The adapter SDK (`adapter`), the linked host (`linked`), and the lab-only evaluation library (`eval`) are git dependencies on `augentic/specify`, not local crates — resolved from the sibling `../specify` checkout by the committed path patch until the exposing engine revision is published and pinned by `rev`. `crates/lab/` is the native-only, unpublished composition binary: it owns the first-party `catalog()` declaration, the Tokio runtime, the Cursor backend construction, and the prompt-scenario root, dispatching between linked command mode and `eval::run`; the engine-owned `linked` supplies the catalog machinery, provider, reference hosting, and command execution, `eval` supplies the trial/scenario runners, telemetry, and deterministic grading, and the invoking task passes trial inputs explicitly. For sibling co-development the committed path patch in the root `Cargo.toml` resolves the engine crates from the `../specify` checkout.
+The root workspace includes `crates/*`, `sources/*`, `targets/*`, and `examples/change` (the wasm change example's host). The adapter SDK (`adapter`), the linked host (`linked`), and the lab-only evaluation library (`eval`) are git dependencies on `augentic/specify`, not local crates — resolved from the sibling `../specify` checkout by the committed path patch until the exposing engine revision is published and pinned by `rev`. `crates/lab/` is the native-only, unpublished composition binary: it owns the first-party `catalog()` declaration, the Tokio runtime, the Cursor backend construction, and the prompt-scenario root, dispatching between linked command mode and `eval::run`; the engine-owned `linked` supplies the catalog machinery, provider, reference hosting, and command execution, `eval` supplies the trial/scenario runners, telemetry, and deterministic grading, and the invoking task passes trial inputs explicitly. For sibling co-development the committed path patch in the root `Cargo.toml` resolves the engine crates from the `../specify` checkout.
 
 ## Prose and rules
 
@@ -46,7 +46,7 @@ Testing is integration-first:
 - Keep `src` unit tests only for genuinely unreachable defensive branches or dense pure matrices that are materially cheaper in-process.
 - Do not widen public APIs solely for tests.
 - Use `cargo nextest`, not bare `cargo test`, for native workspace tests; process isolation is required by CWD- and environment-mutating suites.
-- Adapter native tests own operation behavior, the eval crate owns cross-phase integration and prompt quality, and composed tests own WASM/WIT conformance. Do not duplicate the same assertion across rungs.
+- Adapter native tests own operation behavior; the eval crate owns cross-phase integration and prompt quality; the operator-invoked change example owns WASM/WIT conformance. Do not duplicate the same assertion across rungs.
 - The live rungs are operator-invoked, never CI: `cargo make eval` (the native live-model trial over `sandbox/`, deterministic grading only), `cargo make eval scenario <adapter>/<name>` (one adapter operation over a fixture scratch tree — the fast prompt-iteration loop), and `cargo make change-run` (the wasm change example composing this package's specify guest with the built adapter components).
 
 Read [`TESTING.md`](TESTING.md) before adding, deleting, or relocating tests.
@@ -73,4 +73,4 @@ Run `cargo make ci` before committing. If it cannot run, report exactly which na
 
 - Vectis: [`targets/vectis/AGENTS.md`](targets/vectis/AGENTS.md)
 - Rule catalog and namespace model: [`codex/rules/README.md`](codex/rules/README.md)
-- Test ownership and live/composed harnesses: [`TESTING.md`](TESTING.md)
+- Test ownership and live harnesses: [`TESTING.md`](TESTING.md)

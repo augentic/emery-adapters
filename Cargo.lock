@@ -707,20 +707,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "composed"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "omnia 0.35.0",
- "omnia-testkit",
- "omnia-wasi-http",
- "omnia-wasi-model",
- "serde_json",
- "tempfile",
- "tokio",
-]
-
-[[package]]
 name = "const-hex"
 version = "1.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -2,7 +2,7 @@
 
 A live-model harness for testing adapter prompts and references used in judgement steps. Outputs are graded by deterministic validators — not a model.
 
-Ownership, hermeticism, and how this lab sits among the six test rungs: [TESTING.md](../../TESTING.md). Catalog declaration: `[src/lib.rs](src/lib.rs)`. Shared trial inputs/fixture with the wasm change example: `[examples/change/trial.env](../../examples/change/trial.env)` and `[examples/change/fixture/](../../examples/change/fixture/)`.
+Ownership, hermeticism, and how this lab sits among the six test rungs: [TESTING.md](../../TESTING.md). Catalog declaration: `[src/lib.rs](src/lib.rs)`. Shared fixture with the wasm change example: `[examples/change/fixture/](../../examples/change/fixture/)`.
 
 ## Quick start
 
