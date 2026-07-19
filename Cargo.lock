@@ -169,8 +169,25 @@ checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
 name = "artifacts"
 version = "0.27.2"
 dependencies = [
- "diagnostics",
- "error",
+ "diagnostics 0.27.2",
+ "error 0.27.2",
+ "glob",
+ "regex",
+ "schemars",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "strum",
+ "tempfile",
+]
+
+[[package]]
+name = "artifacts"
+version = "0.27.2"
+source = "git+https://github.com/augentic/specify.git#dc237fd7052ca2f355643a5261d3d6778afe22a3"
+dependencies = [
+ "diagnostics 0.27.2 (git+https://github.com/augentic/specify.git)",
+ "error 0.27.2 (git+https://github.com/augentic/specify.git)",
  "glob",
  "regex",
  "schemars",
@@ -535,35 +552,66 @@ dependencies = [
 name = "change"
 version = "0.1.0"
 dependencies = [
+ "adapter",
  "anyhow",
+ "artifacts 0.27.2 (git+https://github.com/augentic/specify.git)",
  "cfg-if",
  "contracts",
+ "diagnostics 0.27.2 (git+https://github.com/augentic/specify.git)",
+ "error 0.27.2 (git+https://github.com/augentic/specify.git)",
+ "jiff",
  "omnia 0.35.0",
  "omnia-cursor",
+ "omnia-guest",
  "omnia-wasi-http",
  "omnia-wasi-model",
+ "omnia-wasi-otel",
+ "project 0.27.2 (git+https://github.com/augentic/specify.git)",
  "serde",
  "serde-saphyr",
  "serde_json",
+ "slice 0.27.2 (git+https://github.com/augentic/specify.git)",
  "tokio",
+ "transport 0.27.2 (git+https://github.com/augentic/specify.git)",
+ "wasip3",
+ "wit-bindgen 0.59.0",
 ]
 
 [[package]]
 name = "change"
 version = "0.27.2"
 dependencies = [
- "artifacts",
- "diagnostics",
- "error",
+ "artifacts 0.27.2",
+ "diagnostics 0.27.2",
+ "error 0.27.2",
  "jiff",
  "omnia-guest",
- "project",
+ "project 0.27.2",
  "prose 0.27.2",
  "semver",
  "serde",
  "serde-saphyr",
  "serde_json",
- "slice",
+ "slice 0.27.2",
+]
+
+[[package]]
+name = "change"
+version = "0.27.2"
+source = "git+https://github.com/augentic/specify.git#dc237fd7052ca2f355643a5261d3d6778afe22a3"
+dependencies = [
+ "artifacts 0.27.2 (git+https://github.com/augentic/specify.git)",
+ "diagnostics 0.27.2 (git+https://github.com/augentic/specify.git)",
+ "error 0.27.2 (git+https://github.com/augentic/specify.git)",
+ "jiff",
+ "omnia-guest",
+ "project 0.27.2 (git+https://github.com/augentic/specify.git)",
+ "prose 0.27.2 (git+https://github.com/augentic/specify.git)",
+ "semver",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "slice 0.27.2 (git+https://github.com/augentic/specify.git)",
 ]
 
 [[package]]
@@ -1117,6 +1165,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "diagnostics"
+version = "0.27.2"
+source = "git+https://github.com/augentic/specify.git#dc237fd7052ca2f355643a5261d3d6778afe22a3"
+dependencies = [
+ "base16ct",
+ "schemars",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "sha2 0.11.0",
+]
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1240,6 +1301,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "error"
+version = "0.27.2"
+source = "git+https://github.com/augentic/specify.git#dc237fd7052ca2f355643a5261d3d6778afe22a3"
+dependencies = [
+ "serde-saphyr",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "euclid"
 version = "0.22.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1253,11 +1323,11 @@ name = "eval"
 version = "0.27.2"
 dependencies = [
  "anyhow",
- "artifacts",
+ "artifacts 0.27.2",
  "clap",
  "linked",
  "omnia-guest",
- "project",
+ "project 0.27.2",
  "serde",
  "serde_json",
  "toml",
@@ -2248,16 +2318,16 @@ name = "linked"
 version = "0.27.2"
 dependencies = [
  "adapter",
- "artifacts",
+ "artifacts 0.27.2",
  "axum",
- "diagnostics",
- "error",
+ "diagnostics 0.27.2",
+ "error 0.27.2",
  "omnia-guest",
- "project",
+ "project 0.27.2",
  "semver",
  "thiserror 2.0.18",
  "tokio",
- "transport",
+ "transport 0.27.2",
 ]
 
 [[package]]
@@ -3179,9 +3249,30 @@ dependencies = [
 name = "project"
 version = "0.27.2"
 dependencies = [
- "artifacts",
- "diagnostics",
- "error",
+ "artifacts 0.27.2",
+ "diagnostics 0.27.2",
+ "error 0.27.2",
+ "jiff",
+ "omnia-guest",
+ "petgraph",
+ "schemars",
+ "semver",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "strum",
+ "thiserror 2.0.18",
+ "toml",
+]
+
+[[package]]
+name = "project"
+version = "0.27.2"
+source = "git+https://github.com/augentic/specify.git#dc237fd7052ca2f355643a5261d3d6778afe22a3"
+dependencies = [
+ "artifacts 0.27.2 (git+https://github.com/augentic/specify.git)",
+ "diagnostics 0.27.2 (git+https://github.com/augentic/specify.git)",
+ "error 0.27.2 (git+https://github.com/augentic/specify.git)",
  "jiff",
  "omnia-guest",
  "petgraph",
@@ -3220,6 +3311,11 @@ dependencies = [
 [[package]]
 name = "prose"
 version = "0.27.2"
+
+[[package]]
+name = "prose"
+version = "0.27.2"
+source = "git+https://github.com/augentic/specify.git#dc237fd7052ca2f355643a5261d3d6778afe22a3"
 
 [[package]]
 name = "prost"
@@ -4163,13 +4259,33 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 name = "slice"
 version = "0.27.2"
 dependencies = [
- "artifacts",
- "diagnostics",
- "error",
+ "artifacts 0.27.2",
+ "diagnostics 0.27.2",
+ "error 0.27.2",
  "jiff",
  "omnia-guest",
- "project",
+ "project 0.27.2",
  "prose 0.27.2",
+ "regex",
+ "schemars",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "strum",
+]
+
+[[package]]
+name = "slice"
+version = "0.27.2"
+source = "git+https://github.com/augentic/specify.git#dc237fd7052ca2f355643a5261d3d6778afe22a3"
+dependencies = [
+ "artifacts 0.27.2 (git+https://github.com/augentic/specify.git)",
+ "diagnostics 0.27.2 (git+https://github.com/augentic/specify.git)",
+ "error 0.27.2 (git+https://github.com/augentic/specify.git)",
+ "jiff",
+ "omnia-guest",
+ "project 0.27.2 (git+https://github.com/augentic/specify.git)",
+ "prose 0.27.2 (git+https://github.com/augentic/specify.git)",
  "regex",
  "schemars",
  "serde",
@@ -4773,15 +4889,32 @@ dependencies = [
 name = "transport"
 version = "0.27.2"
 dependencies = [
- "artifacts",
+ "artifacts 0.27.2",
  "change 0.27.2",
  "clap",
- "error",
+ "error 0.27.2",
  "omnia-guest",
- "project",
+ "project 0.27.2",
  "serde",
  "serde_json",
- "slice",
+ "slice 0.27.2",
+ "strum",
+]
+
+[[package]]
+name = "transport"
+version = "0.27.2"
+source = "git+https://github.com/augentic/specify.git#dc237fd7052ca2f355643a5261d3d6778afe22a3"
+dependencies = [
+ "artifacts 0.27.2 (git+https://github.com/augentic/specify.git)",
+ "change 0.27.2 (git+https://github.com/augentic/specify.git)",
+ "clap",
+ "error 0.27.2 (git+https://github.com/augentic/specify.git)",
+ "omnia-guest",
+ "project 0.27.2 (git+https://github.com/augentic/specify.git)",
+ "serde",
+ "serde_json",
+ "slice 0.27.2 (git+https://github.com/augentic/specify.git)",
  "strum",
 ]
 

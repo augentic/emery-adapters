@@ -12,19 +12,31 @@ repository.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
-# Flattened beside the deployment manifest, README, and fixture tree.
+[lib]
+name = "specify"
+path = "src/specify.rs"
+crate-type = ["cdylib"]
+
 [[bin]]
 name = "change"
-path = "host.rs"
-
-# Deterministic task support: `port` picks the run's loopback address,
-# `verify` is the post-execute completion gate.
-[[bin]]
-name = "change-support"
-path = "change-support.rs"
+path = "src/runtime.rs"
 
 [dependencies]
 cfg-if.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+jiff = { version = "0.2.32", default-features = false, features = ["serde", "std"] }
+wasip3 = { version = "0.7.0", features = ["http-compat"] }
+wit-bindgen = { version = "0.59.0", features = ["async-spawn"] }
+artifacts.workspace = true
+diagnostics.workspace = true
+error.workspace = true
+omnia-guest.workspace = true
+project.workspace = true
+serde_json.workspace = true
+slice.workspace = true
+transport.workspace = true
+adapter.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 anyhow.workspace = true
@@ -33,6 +45,7 @@ omnia.workspace = true
 omnia-cursor.workspace = true
 omnia-wasi-http.workspace = true
 omnia-wasi-model.workspace = true
+omnia-wasi-otel.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde-saphyr.workspace = true
 serde_json.workspace = true

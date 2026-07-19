@@ -1,5 +1,5 @@
 [workspace]
-members = ["composed", "examples/change", "crates/*", "sources/*", "targets/*"]
+members = ["composed", "examples/*", "crates/*", "sources/*", "targets/*"]
 resolver = "3"
 
 [workspace.package]
@@ -40,20 +40,27 @@ omnia-guest = "0.35.0"
 omnia-testkit = "0.35.0"
 omnia-wasi-http = "0.35.0"
 omnia-wasi-model = "0.35.0"
+omnia-wasi-otel = "0.35.0"
 
 adapter = { git = "https://github.com/augentic/specify.git" }
+artifacts = { git = "https://github.com/augentic/specify.git" }
+diagnostics = { git = "https://github.com/augentic/specify.git" }
+error = { git = "https://github.com/augentic/specify.git" }
 eval = { git = "https://github.com/augentic/specify.git" }
 linked = { git = "https://github.com/augentic/specify.git" }
-
-prose = { path = "crates/prose" }
-testkit = { path = "crates/testkit" }
+project = { git = "https://github.com/augentic/specify.git" }
+slice = { git = "https://github.com/augentic/specify.git" }
+specify = { git = "https://github.com/augentic/specify.git" }
+transport = { git = "https://github.com/augentic/specify.git" }
 
 captures = { path = "sources/captures" }
 contracts = { path = "targets/contracts" }
 documentation = { path = "sources/documentation" }
 intent = { path = "sources/intent" }
 omnia-target = { package = "omnia", path = "targets/omnia" }
+prose = { path = "crates/prose" }
 screenshots = { path = "sources/screenshots" }
+testkit = { path = "crates/testkit" }
 typescript = { path = "sources/typescript" }
 vectis = { path = "targets/vectis" }
 
@@ -64,6 +71,7 @@ omnia-guest = { git = "https://github.com/augentic/omnia.git" }
 omnia-testkit = { git = "https://github.com/augentic/omnia.git" }
 omnia-wasi-http = { git = "https://github.com/augentic/omnia.git" }
 omnia-wasi-model = { git = "https://github.com/augentic/omnia.git" }
+omnia-wasi-otel = { git = "https://github.com/augentic/omnia.git" }
 
 # omnia = { path = "../omnia/crates/omnia" }
 # omnia-cursor = { path = "../backends/crates/cursor" }

@@ -20,9 +20,6 @@ source.path = "../../target/wasm32-wasip2/release/intent.wasm"
 id = "target:contracts"
 source.path = "../../target/wasm32-wasip2/release/contracts.wasm"
 
-# One reference route per adapter component: the spawned cursor-agent
-# fetches each adapter's embedded prose through its own /mcp/<name>
-# shelf on the HTTP trigger.
 [[route.http]]
 prefix = "/mcp/documentation"
 guest = "source:documentation"

@@ -202,12 +202,12 @@ mkdir -p sandbox/change/{workspace,cache,store}
 # cp -R examples/change/fixture/. sandbox/change/workspace/
 # cp target/wasm32-wasip2/release/contracts.wasm sandbox/change/workspace/contracts.wasm
 
-
 cargo build -p contracts --target wasm32-wasip2
 cargo build -p documentation --target wasm32-wasip2
 cargo build -p intent --target wasm32-wasip2
 
-cargo build -p change-example
+cargo build -p change@0.1.0 --lib --target wasm32-wasip2 
+# cargo build -p change@0.1.0 --bin change
 '''
 
 [tasks.change-run]
@@ -225,7 +225,7 @@ export SPECIFY_CONTRACTS_MCP_URL="http://$HTTP_ADDR/mcp/contracts"
 export GUEST_TIMEOUT_MS="${GUEST_TIMEOUT_MS:-3600000}"
 
 run() {
-  cargo run -q -p change-example -- run --config examples/change/omnia.toml -- "$@"
+  cargo run -p change@0.1.0 -- run --config examples/change/omnia.toml -- "$@"
 }
 
 cp target/wasm32-wasip2/release/contracts.wasm sandbox/change/workspace/contracts.wasm
@@ -236,9 +236,6 @@ run plan author "$TRIAL_CHANGE" --intent "$TRIAL_INTENT" --source "$TRIAL_SOURCE
 run plan transition "$TRIAL_CHANGE" approved
 run plan execute
 run plan status --format json > sandbox/change/status.json
-
-cargo run -q -p change-example --bin change-support -- \
-  verify sandbox/change/workspace sandbox/change/status.json
 '''
 
 # # Fast component build → target/wasm32-wasip2/release/<name>.wasm
