@@ -1,4 +1,4 @@
-//! The specify workflow guest: identical to the engine's root cdylib.
+//! The specify engine guest: identical to the engine's root cdylib.
 //!
 //! The `guest` crate (in `augentic/specify`) owns the `workflow`-world
 //! WIT bindings, the WIT-backed provider, and the transport wiring;

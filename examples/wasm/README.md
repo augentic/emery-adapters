@@ -1,6 +1,6 @@
 # Wasm example
 
-End-to-end run over this repo's `documentation`, `intent`, and `contracts` adapters, composed with a specify workflow guest built from this package.
+End-to-end run over this repo's `documentation`, `intent`, and `contracts` adapters, composed with a specify engine guest built from this package.
 
 See `cargo make eval` for the graded native trial (more detail in [TESTING.md](../../TESTING.md)).
 
@@ -21,12 +21,12 @@ Declared on the workspace root package (`adapters`) as Cargo examples:
 
 | Path | Role |
 | --- | --- |
-| `specify.rs` | `--example specify` workflow guest (`cdylib`) — one `guest::export!()` over the engine's `guest` crate |
+| `specify.rs` | `--example specify` engine guest (`cdylib`) — one `guest::export!()` over the engine's `guest` crate |
 | `omnia.rs` | `--example wasm` Omnia host |
 | [omnia.toml](omnia.toml) | deployment: guest + adapters + mounts |
 | [fixture/](fixture/) | seed inputs shared with the graded `eval` trial |
 
-The workflow guest is byte-for-byte the engine's: the `guest` crate (a git dependency on `augentic/specify`) owns the WIT bindings, provider, and transport wiring, and both this example and the engine's root cdylib are the same single macro invocation.
+The engine guest is byte-for-byte the engine's: the `guest` crate (a git dependency on `augentic/specify`) owns the WIT bindings, provider, and transport wiring, and both this example and the engine's root cdylib are the same single macro invocation.
 
 ## What it demonstrates
 

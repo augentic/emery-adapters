@@ -47,7 +47,7 @@ cargo make eval scenario contracts/design    # one scenario
 
 ### 4. The wasm example — end-to-end component seam
 
-[`examples/wasm/`](examples/wasm/README.md) builds a specify workflow guest in-tree, composes it with this repo's `documentation`, `intent`, and `contracts` components in one Omnia deployment, and drives the full operator rhythm against the live cursor backend. It replays the same operator inputs (inlined in `wasm-run`) and fixture (`examples/wasm/fixture/`) as the native trial. Still operator-invoked and per-leg ungraded — the graded trial is `cargo make eval` on rung 2. Expect a run to take tens of minutes; `GUEST_TIMEOUT_MS` (default one hour) caps each `wasi:cli/run` invocation's wall clock, and `SPECIFY_EVAL_MODEL=<model-id>` overrides the model. This is the only rung that exercises the real component seam end-to-end: WIT dispatch-by-id, mounts, and the workflow guest together.
+[`examples/wasm/`](examples/wasm/README.md) builds a specify engine guest in-tree, composes it with this repo's `documentation`, `intent`, and `contracts` components in one Omnia deployment, and drives the full operator rhythm against the live cursor backend. It replays the same operator inputs (inlined in `wasm-run`) and fixture (`examples/wasm/fixture/`) as the native trial. Still operator-invoked and per-leg ungraded — the graded trial is `cargo make eval` on rung 2. Expect a run to take tens of minutes; `GUEST_TIMEOUT_MS` (default one hour) caps each `wasi:cli/run` invocation's wall clock, and `SPECIFY_EVAL_MODEL=<model-id>` overrides the model. This is the only rung that exercises the real component seam end-to-end: WIT dispatch-by-id, mounts, and the engine guest together.
 
 ```bash
 cargo make wasm-run
