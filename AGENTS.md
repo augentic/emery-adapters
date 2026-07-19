@@ -16,13 +16,13 @@ Artifacts outrank source behavior. Preserve missing information as `[unknown]` r
 
 ## Component contract
 
-- Each adapter ships as one component exporting exactly one axis world from `wit/specify.wit`.
+- Each adapter ships as one component exporting exactly one axis world from the `specify:adapter` WIT package (owned and published by `augentic/specify`; the `adapter` SDK embeds it).
 - Identity comes from the guest crate's version and published `specify:<name>@<semver>` package. Resolve-time metadata comes from the component's WIT operation; there is no adapter manifest.
 - Keep reusable adapter logic wasm-free in library modules. Each adapter implements its axis operations trait (`adapter::Source` / `adapter::Target`) on a unit type; the `wasm32` guest module is a single `adapter::source!` / `adapter::target!` export-macro invocation over that implementor.
 - Do not commit built `.wasm` artifacts.
 - Adapter names must remain unique across the source and target axes.
 
-The root workspace includes `crates/*`, `sources/*`, `targets/*`, and `examples/change` (the wasm change example's host). The adapter SDK (`adapter`), the linked host (`linked`), and the lab-only evaluation library (`eval`) are git dependencies on `augentic/specify`, not local crates — resolved from the sibling `../specify` checkout by the committed path patch until the exposing engine revision is published and pinned by `rev`. `crates/lab/` is the native-only, unpublished composition binary: it owns the first-party `catalog()` declaration, the Tokio runtime, the Cursor backend construction, and the prompt-scenario root, dispatching between linked command mode and `eval::run`; the engine-owned `linked` supplies the catalog machinery, provider, reference hosting, and command execution, `eval` supplies the trial/scenario runners, telemetry, and deterministic grading, and the invoking task passes trial inputs explicitly. For sibling co-development the committed path patch in the root `Cargo.toml` resolves the engine crates from the `../specify` checkout.
+The root workspace includes `crates/*`, `sources/*`, `targets/*`, and `examples/change` (the wasm change example's host). The adapter SDK (`adapter`), the workflow guest (`guest`), the linked host (`linked`), and the lab-only evaluation library (`eval`) are git dependencies on `augentic/specify`, not local crates — resolved from the sibling `../specify` checkout by the committed path patch until the exposing engine revision is published and pinned by `rev`. `crates/lab/` is the native-only, unpublished composition binary: it owns the first-party `catalog()` declaration, the Tokio runtime, the Cursor backend construction, and the prompt-scenario root, dispatching between linked command mode and `eval::run`; the engine-owned `linked` supplies the catalog machinery, provider, reference hosting, and command execution, `eval` supplies the trial/scenario runners, telemetry, and deterministic grading, and the invoking task passes trial inputs explicitly. For sibling co-development the committed path patch in the root `Cargo.toml` resolves the engine crates from the `../specify` checkout.
 
 ## Prose and rules
 

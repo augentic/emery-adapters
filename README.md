@@ -19,7 +19,6 @@ Repository-wide contributor guidance lives in [`AGENTS.md`](AGENTS.md); adapter-
 Every adapter — the three targets and the five sources — shares the same guest anatomy:
 
 ```text
-wit/                  # the contract — wit/specify.wit, the axis worlds
 {targets,sources}/
   <name>/             # e.g. targets/{contracts,omnia,vectis}, sources/{intent,documentation,typescript,screenshots,captures}
     prose/            #   agent-facing markdown (embedded into the component)
@@ -89,7 +88,7 @@ The `lab` crate at `crates/lab/` is a native-only, unpublished workspace member:
 cargo make specify -- --project-dir /path/to/project plan status
 ```
 
-Two compatibility choices are independent, for first- and third-party adapter authors alike: the **WIT contract version** an adapter targets (`wit/specify.wit`, the publish-time compatibility floor), and the **engine revision** the workspace resolves for the `adapter` SDK, `linked` host, and `eval` library. The engine crates are declared as git dependencies on `augentic/specify`; today the committed path patch resolves them from the sibling `../specify` checkout, and once the exposing engine revision is published the manifest pins it explicitly (add `rev` values in the root `Cargo.toml`, run `cargo update`, and commit the lockfile). The pin advances deliberately, not with every engine commit.
+Two compatibility choices are independent, for first- and third-party adapter authors alike: the **WIT contract version** an adapter targets (the `specify:adapter` WIT package, embedded in the `adapter` SDK and published from `augentic/specify`'s `wit/specify.wit`), and the **engine revision** the workspace resolves for the `adapter` SDK, `guest` crate, `linked` host, and `eval` library. The engine crates are declared as git dependencies on `augentic/specify`; today the committed path patch resolves them from the sibling `../specify` checkout, and once the exposing engine revision is published the manifest pins it explicitly (add `rev` values in the root `Cargo.toml`, run `cargo update`, and commit the lockfile). The pin advances deliberately, not with every engine commit.
 
 For sibling co-development against uncommitted engine changes, the committed `[patch."https://github.com/augentic/specify.git"]` section in the root `Cargo.toml` resolves the engine crates from the sibling `../specify` working tree.
 

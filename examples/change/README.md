@@ -21,12 +21,12 @@ Declared on the workspace root package (`adapters`) as Cargo examples:
 
 | Path | Role |
 | --- | --- |
-| `specify.rs` + `provider.rs` | `--example specify` workflow guest (`cdylib`) |
+| `specify.rs` | `--example specify` workflow guest (`cdylib`) — one `guest::export!()` over the engine's `guest` crate |
 | `omnia.rs` | `--example change` Omnia host |
 | [omnia.toml](omnia.toml) | deployment: guest + adapters + mounts |
 | [fixture/](fixture/) | seed inputs shared with the native trial |
 
-The engine's root `specify` package is `cdylib`-only, so the guest sources live here and depend on the engine crates from git.
+The workflow guest is byte-for-byte the engine's: the `guest` crate (a git dependency on `augentic/specify`) owns the WIT bindings, provider, and transport wiring, and both this example and the engine's root cdylib are the same single macro invocation.
 
 ## What it demonstrates
 

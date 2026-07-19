@@ -18,16 +18,7 @@ name = "change"
 path = "examples/change/omnia.rs"
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-artifacts = { git = "https://github.com/augentic/specify.git" }
-diagnostics = { git = "https://github.com/augentic/specify.git" }
-error = { git = "https://github.com/augentic/specify.git" }
-jiff = { version = "0.2.32", default-features = false, features = ["serde", "std"] }
-omnia-guest.workspace = true
-project = { git = "https://github.com/augentic/specify.git" }
-slice = { git = "https://github.com/augentic/specify.git" }
-transport = { git = "https://github.com/augentic/specify.git" }
-wasip3 = { version = "0.7.0", features = ["http-compat"] }
-wit-bindgen = { version = "0.59.0", features = ["async-spawn"] }
+guest = { git = "https://github.com/augentic/specify.git" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 anyhow.workspace = true
@@ -123,6 +114,7 @@ wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }
 [patch."https://github.com/augentic/specify.git"]
 adapter = { path = "../specify/crates/adapter" }
 eval = { path = "../specify/crates/eval" }
+guest = { path = "../specify/crates/guest" }
 linked = { path = "../specify/crates/linked" }
 
 [workspace.lints.rust]
