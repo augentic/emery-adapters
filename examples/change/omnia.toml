@@ -3,7 +3,7 @@
 
 [[guest]]
 id = "specify"
-source.path = "../../target/wasm32-wasip2/debug/specify.wasm"
+source.path = "../../target/wasm32-wasip2/debug/examples/specify.wasm"
 link = ["specify:adapter/source@0.1.0", "specify:adapter/target@0.1.0"]
 
 [[guest]]

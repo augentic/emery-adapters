@@ -16,7 +16,7 @@ mod bindings {
 
     wit_bindgen::generate!({
         world: "workflow",
-        path: "../../wit",
+        path: "wit",
         generate_all,
     });
 }

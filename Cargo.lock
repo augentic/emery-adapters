@@ -16,6 +16,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "adapters"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "artifacts 0.27.2 (git+https://github.com/augentic/specify.git)",
+ "cfg-if",
+ "diagnostics 0.27.2 (git+https://github.com/augentic/specify.git)",
+ "error 0.27.2 (git+https://github.com/augentic/specify.git)",
+ "jiff",
+ "omnia 0.35.0",
+ "omnia-cursor",
+ "omnia-guest",
+ "omnia-wasi-http",
+ "omnia-wasi-model",
+ "omnia-wasi-otel",
+ "project 0.27.2 (git+https://github.com/augentic/specify.git)",
+ "slice 0.27.2 (git+https://github.com/augentic/specify.git)",
+ "tokio",
+ "transport 0.27.2 (git+https://github.com/augentic/specify.git)",
+ "wasip3",
+ "wit-bindgen 0.59.0",
+]
+
+[[package]]
 name = "addr2line"
 version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -546,31 +570,6 @@ dependencies = [
  "cfg-if",
  "cpufeatures 0.3.0",
  "rand_core 0.10.1",
-]
-
-[[package]]
-name = "change"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "artifacts 0.27.2 (git+https://github.com/augentic/specify.git)",
- "cfg-if",
- "diagnostics 0.27.2 (git+https://github.com/augentic/specify.git)",
- "error 0.27.2 (git+https://github.com/augentic/specify.git)",
- "jiff",
- "omnia 0.35.0",
- "omnia-cursor",
- "omnia-guest",
- "omnia-wasi-http",
- "omnia-wasi-model",
- "omnia-wasi-otel",
- "project 0.27.2 (git+https://github.com/augentic/specify.git)",
- "serde_json",
- "slice 0.27.2 (git+https://github.com/augentic/specify.git)",
- "tokio",
- "transport 0.27.2 (git+https://github.com/augentic/specify.git)",
- "wasip3",
- "wit-bindgen 0.59.0",
 ]
 
 [[package]]

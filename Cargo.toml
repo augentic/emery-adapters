@@ -1,7 +1,52 @@
+[package]
+name = "adapters"
+description = "Omnia host and specify guest for the wasm change example"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
 
+[[example]]
+name = "specify"
+path = "examples/change/specify.rs"
+crate-type = ["cdylib"]
+
+[[example]]
+name = "change"
+path = "examples/change/omnia.rs"
+
+# Example-only: the specify guest (`--example specify`) and Omnia host
+# (`--example change`). Engine crates come from git; the root `specify`
+# package is cdylib-only so the guest sources live under examples/change/.
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+artifacts = { git = "https://github.com/augentic/specify.git" }
+diagnostics = { git = "https://github.com/augentic/specify.git" }
+error = { git = "https://github.com/augentic/specify.git" }
+jiff = { version = "0.2.32", default-features = false, features = ["serde", "std"] }
+omnia-guest.workspace = true
+project = { git = "https://github.com/augentic/specify.git" }
+slice = { git = "https://github.com/augentic/specify.git" }
+transport = { git = "https://github.com/augentic/specify.git" }
+wasip3 = { version = "0.7.0", features = ["http-compat"] }
+wit-bindgen = { version = "0.59.0", features = ["async-spawn"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+anyhow.workspace = true
+cfg-if.workspace = true
+omnia.workspace = true
+omnia-cursor.workspace = true
+omnia-wasi-http.workspace = true
+omnia-wasi-model.workspace = true
+omnia-wasi-otel.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[lints]
+workspace = true
 
 [workspace]
-members = ["composed", "examples/*", "crates/*", "sources/*", "targets/*"]
+members = ["composed", "crates/*", "sources/*", "targets/*"]
 resolver = "3"
 
 [workspace.package]

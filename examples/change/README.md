@@ -17,14 +17,16 @@ cargo make change-clean
 
 ## Layout
 
+Declared on the workspace root package (`adapters`) as Cargo examples:
+
 | Path | Role |
 | --- | --- |
-| `src/specify.rs` + `src/provider.rs` | specify workflow guest (`cdylib` → `specify.wasm`) |
-| `src/runtime.rs` | Omnia host binary (`change`) |
+| `specify.rs` + `provider.rs` | `--example specify` workflow guest (`cdylib`) |
+| `omnia.rs` | `--example change` Omnia host |
 | [omnia.toml](omnia.toml) | deployment: guest + adapters + mounts |
 | [trial.env](trial.env) + [fixture/](fixture/) | operator inputs shared with the native trial |
 
-The engine's root `specify` package is `cdylib`-only, so the guest sources live here and depend on the engine crates from git. The package is selected as `change@0.1.0` because the engine also publishes a `change` crate.
+The engine's root `specify` package is `cdylib`-only, so the guest sources live here and depend on the engine crates from git.
 
 ## What it demonstrates
 

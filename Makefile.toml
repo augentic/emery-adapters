@@ -156,19 +156,14 @@ script = '''
   '''
 
 # -------------------------------------
-# Wasm change example + component packaging
+# Change example
 # -------------------------------------
-# Operator-invoked WIT E2E (not the graded native trial). See
-# examples/change/README.md.
-
 [tasks.change-clean]
 script = "rm -rf sandbox/change"
 
-# Package is `change@0.1.0` — the engine's `change` crate (0.27.x) is also
-# on the graph via the guest's git deps, so bare `-p change` is ambiguous.
 [tasks.change-build]
 script = '''
-cargo build -p change@0.1.0 --lib --target wasm32-wasip2
+cargo build --example specify --target wasm32-wasip2
 cargo build -p documentation --target wasm32-wasip2
 cargo build -p intent --target wasm32-wasip2
 cargo build -p contracts --target wasm32-wasip2
@@ -185,7 +180,7 @@ cp -R examples/change/fixture/. sandbox/change/workspace/
 cp target/wasm32-wasip2/debug/contracts.wasm sandbox/change/workspace/contracts.wasm
 
 run() {
-  cargo run -p change@0.1.0 -- run --config examples/change/omnia.toml -- "$@"
+  cargo run --example change -- run --config examples/change/omnia.toml -- "$@"
 }
 
 . examples/change/trial.env
