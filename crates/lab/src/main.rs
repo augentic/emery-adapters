@@ -1,8 +1,8 @@
-//! The adapters repository's unpublished composition binary: linked
+//! The adapters repository's unpublished composition binary: native
 //! command passthrough over the first-party catalog by default, the
 //! live eval client under `eval`.
 //!
-//! The composition root owns what `linked` and `eval` refuse to: the
+//! The composition root owns what `native` and `eval` refuse to: the
 //! Tokio runtime, `std::env::args`, the lab-only `--project-dir`
 //! convenience, Cursor backend construction, and the first-party
 //! catalog declaration. It is a development tool, never an install or
@@ -15,8 +15,8 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
 
+use ::native::{DynModel, ExecutionPaths};
 use eval::{ModelFactory, ModelInstance};
-use linked::{DynModel, ExecutionPaths};
 
 use crate::model::DevModel;
 
@@ -50,7 +50,7 @@ async fn entry() -> anyhow::Result<ExitCode> {
 
     let paths = ExecutionPaths::operator(root.clone());
     let model = DynModel::new(DevModel::new(&root));
-    Ok(linked::command::run(paths, model, catalog, argv).await)
+    Ok(::native::command::run(paths, model, catalog, argv).await)
 }
 
 /// A lazily connected cursor-agent backend per phase root, carrying

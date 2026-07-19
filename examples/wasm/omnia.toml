@@ -1,0 +1,46 @@
+# The adapters wasm example: this package's specify guest composed with
+# documentation / intent / contracts. Driven by `cargo make wasm-run`.
+
+[[guest]]
+id = "specify"
+source.path = "../../target/wasm32-wasip2/debug/examples/specify.wasm"
+link = ["specify:adapter/source@0.1.0", "specify:adapter/target@0.1.0"]
+
+[[guest]]
+id = "source:documentation"
+source.path = "../../target/wasm32-wasip2/debug/documentation.wasm"
+
+[[guest]]
+id = "source:intent"
+source.path = "../../target/wasm32-wasip2/debug/intent.wasm"
+
+[[guest]]
+id = "target:contracts"
+source.path = "../../target/wasm32-wasip2/debug/contracts.wasm"
+
+[[route.http]]
+prefix = "/mcp/documentation"
+guest = "source:documentation"
+
+[[route.http]]
+prefix = "/mcp/intent"
+guest = "source:intent"
+
+[[route.http]]
+prefix = "/mcp/contracts"
+guest = "target:contracts"
+
+[[mount]]
+name = "."
+path = "../../sandbox/wasm/workspace"
+writable = true
+
+[[mount]]
+name = "/specify-cache"
+path = "../../sandbox/wasm/cache"
+writable = true
+
+[[mount]]
+name = "/specify-store"
+path = "../../sandbox/wasm/store"
+writable = true

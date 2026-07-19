@@ -16,6 +16,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "adapters"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cfg-if",
+ "contracts",
+ "documentation",
+ "guest",
+ "intent",
+ "native",
+ "omnia 0.35.0",
+ "omnia-cursor",
+ "omnia-guest",
+ "omnia-wasi-http",
+ "omnia-wasi-model",
+ "omnia-wasi-otel",
+ "tokio",
+]
+
+[[package]]
 name = "addr2line"
 version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -550,23 +570,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "change-example"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "cfg-if",
- "contracts",
- "omnia 0.35.0",
- "omnia-cursor",
- "omnia-wasi-http",
- "omnia-wasi-model",
- "serde",
- "serde-saphyr",
- "serde_json",
- "tokio",
-]
-
-[[package]]
 name = "chrono"
 version = "0.4.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -661,20 +664,6 @@ checksum = "ba5a308b75df32fe02788e748662718f03fde005016435c444eea572398219fd"
 dependencies = [
  "bytes",
  "memchr",
-]
-
-[[package]]
-name = "composed"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "omnia 0.35.0",
- "omnia-testkit",
- "omnia-wasi-http",
- "omnia-wasi-model",
- "serde_json",
- "tempfile",
- "tokio",
 ]
 
 [[package]]
@@ -1255,7 +1244,7 @@ dependencies = [
  "anyhow",
  "artifacts",
  "clap",
- "linked",
+ "native",
  "omnia-guest",
  "project",
  "serde",
@@ -1580,6 +1569,22 @@ checksum = "d03f81ad4732830d85cfd417a9f62cde6dadda4354d37d078a6084a19560aa2d"
 dependencies = [
  "arraydeque",
  "smallvec",
+]
+
+[[package]]
+name = "guest"
+version = "0.27.2"
+dependencies = [
+ "artifacts",
+ "diagnostics",
+ "error",
+ "jiff",
+ "omnia-guest",
+ "project",
+ "slice",
+ "transport",
+ "wasip3",
+ "wit-bindgen 0.59.0",
 ]
 
 [[package]]
@@ -2178,7 +2183,7 @@ dependencies = [
  "documentation",
  "eval",
  "intent",
- "linked",
+ "native",
  "omnia 0.1.0",
  "omnia 0.35.0",
  "omnia-cursor",
@@ -2241,23 +2246,6 @@ dependencies = [
  "cc",
  "pkg-config",
  "vcpkg",
-]
-
-[[package]]
-name = "linked"
-version = "0.27.2"
-dependencies = [
- "adapter",
- "artifacts",
- "axum",
- "diagnostics",
- "error",
- "omnia-guest",
- "project",
- "semver",
- "thiserror 2.0.18",
- "tokio",
- "transport",
 ]
 
 [[package]]
@@ -2404,6 +2392,23 @@ checksum = "bb85c154ba489f01b25c0d36ae69a87e4a1c73a72631fc6c0eb6dde34a73e44b"
 dependencies = [
  "num-traits",
  "pxfm",
+]
+
+[[package]]
+name = "native"
+version = "0.27.2"
+dependencies = [
+ "adapter",
+ "artifacts",
+ "axum",
+ "diagnostics",
+ "error",
+ "omnia-guest",
+ "project",
+ "semver",
+ "thiserror 2.0.18",
+ "tokio",
+ "transport",
 ]
 
 [[package]]

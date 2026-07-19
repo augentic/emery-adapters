@@ -12,7 +12,7 @@ const TARGETS: &[&str] = &["contracts", "omnia", "vectis"];
 fn inventory() {
     let catalog = lab::catalog().expect("the first-party catalog validates");
 
-    let mut ids: Vec<String> = catalog.entries().iter().map(linked::Entry::id).collect();
+    let mut ids: Vec<String> = catalog.entries().iter().map(native::Entry::id).collect();
     ids.sort_unstable();
     let mut expected: Vec<String> = SOURCES
         .iter()
@@ -25,7 +25,7 @@ fn inventory() {
     // Published names stay globally unique across axes: the component
     // store carries no axis segment, so a dual-axis name would make a
     // binding ambiguous there.
-    let names: BTreeSet<&str> = catalog.entries().iter().map(linked::Entry::name).collect();
+    let names: BTreeSet<&str> = catalog.entries().iter().map(native::Entry::name).collect();
     assert_eq!(names.len(), catalog.entries().len(), "no name appears on both axes");
 }
 

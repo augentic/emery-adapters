@@ -1,5 +1,49 @@
+[package]
+name = "adapters"
+description = "Omnia host and specify guest for the wasm example"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[example]]
+name = "specify"
+path = "examples/wasm/specify.rs"
+crate-type = ["cdylib"]
+
+[[example]]
+name = "wasm"
+path = "examples/wasm/omnia.rs"
+
+[[example]]
+name = "native"
+path = "examples/native/main.rs"
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+guest = { git = "https://github.com/augentic/specify.git" }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+anyhow.workspace = true
+cfg-if.workspace = true
+contracts.workspace = true
+documentation.workspace = true
+intent.workspace = true
+native = { workspace = true, features = ["cli"] }
+omnia.workspace = true
+omnia-cursor.workspace = true
+omnia-guest.workspace = true
+omnia-wasi-http.workspace = true
+omnia-wasi-model.workspace = true
+omnia-wasi-otel.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[lints]
+workspace = true
+
 [workspace]
-members = ["composed", "examples/change", "crates/*", "sources/*", "targets/*"]
+members = ["crates/*", "sources/*", "targets/*"]
 resolver = "3"
 
 [workspace.package]
@@ -40,20 +84,20 @@ omnia-guest = "0.35.0"
 omnia-testkit = "0.35.0"
 omnia-wasi-http = "0.35.0"
 omnia-wasi-model = "0.35.0"
+omnia-wasi-otel = "0.35.0"
 
 adapter = { git = "https://github.com/augentic/specify.git" }
 eval = { git = "https://github.com/augentic/specify.git" }
-linked = { git = "https://github.com/augentic/specify.git" }
-
-prose = { path = "crates/prose" }
-testkit = { path = "crates/testkit" }
+native = { git = "https://github.com/augentic/specify.git" }
 
 captures = { path = "sources/captures" }
 contracts = { path = "targets/contracts" }
 documentation = { path = "sources/documentation" }
 intent = { path = "sources/intent" }
 omnia-target = { package = "omnia", path = "targets/omnia" }
+prose = { path = "crates/prose" }
 screenshots = { path = "sources/screenshots" }
+testkit = { path = "crates/testkit" }
 typescript = { path = "sources/typescript" }
 vectis = { path = "targets/vectis" }
 
@@ -64,6 +108,7 @@ omnia-guest = { git = "https://github.com/augentic/omnia.git" }
 omnia-testkit = { git = "https://github.com/augentic/omnia.git" }
 omnia-wasi-http = { git = "https://github.com/augentic/omnia.git" }
 omnia-wasi-model = { git = "https://github.com/augentic/omnia.git" }
+omnia-wasi-otel = { git = "https://github.com/augentic/omnia.git" }
 
 # omnia = { path = "../omnia/crates/omnia" }
 # omnia-cursor = { path = "../backends/crates/cursor" }
@@ -78,7 +123,8 @@ wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }
 [patch."https://github.com/augentic/specify.git"]
 adapter = { path = "../specify/crates/adapter" }
 eval = { path = "../specify/crates/eval" }
-linked = { path = "../specify/crates/linked" }
+guest = { path = "../specify/crates/guest" }
+native = { path = "../specify/crates/native" }
 
 [workspace.lints.rust]
 # https://dirname.github.io/rust-std-doc/rustc/lints/listing/allowed-by-default.html

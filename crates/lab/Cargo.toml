@@ -1,11 +1,11 @@
-# The unpublished first-party composition binary: linked command
+# The unpublished first-party composition binary: native command
 # passthrough and live eval over the first-party adapter catalog,
-# consuming Specify's `linked` and `eval` crates from the sibling
+# consuming Specify's `native` and `eval` crates from the sibling
 # `../specify` checkout via the committed path patch in the root
 # Cargo.toml. Never an install or release artifact.
 [package]
 name = "lab"
-description = "Specify adapters' unpublished composition binary: linked command passthrough and live eval over the first-party catalog"
+description = "Specify adapters' unpublished composition binary: native command passthrough and live eval over the first-party catalog"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -25,7 +25,7 @@ contracts.workspace = true
 documentation.workspace = true
 eval.workspace = true
 intent.workspace = true
-linked = { workspace = true, features = ["cli"] }
+native = { workspace = true, features = ["cli"] }
 omnia.workspace = true
 omnia-cursor.workspace = true
 omnia-guest.workspace = true

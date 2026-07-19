@@ -1,0 +1,34 @@
+
+[tasks.wasm-clean]
+script = "rm -rf sandbox/wasm"
+
+[tasks.wasm-build]
+script = '''
+cargo build --example specify --target wasm32-wasip2
+cargo build -p documentation -p intent -p contracts --target wasm32-wasip2
+'''
+
+[tasks.wasm-run]
+dependencies = ["wasm-clean", "wasm-build"]
+env_files = [".env"]
+script = '''
+export RUST_LOG="info,opentelemetry_sdk=off,omnia_wasi_http=debug"
+
+mkdir -p sandbox/wasm/{workspace,cache,store}
+cp -R examples/wasm/fixture/. sandbox/wasm/workspace/
+cp target/wasm32-wasip2/debug/contracts.wasm sandbox/wasm/workspace/contracts.wasm
+
+run() {
+  cargo run --example wasm -- run --config examples/wasm/omnia.toml -- "$@"
+}
+
+# Initialize workspace
+run init ./contracts.wasm --name "orders"
+
+# Author, transition, and execute a plan
+run plan author "orders" \
+  --intent "Author the API contracts for the orders service described under docs/: the JSON Schema vocabulary plus the HTTP (OpenAPI) surface. Contracts only - no service implementation." \
+  --source "docs=documentation:docs"
+run plan transition "orders" approved
+run plan execute
+'''
