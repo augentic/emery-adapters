@@ -3187,7 +3187,6 @@ dependencies = [
  "artifacts",
  "diagnostics",
  "error",
- "fromenv",
  "jiff",
  "omnia-guest",
  "petgraph",
