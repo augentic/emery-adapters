@@ -53,7 +53,7 @@ homepage = "https://augentic.io"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/augentic/specify-adapters"
 rust-version = "1.95"
-version = "0.1.0"
+version = "0.5.0"
 publish = false
 
 [workspace.dependencies]

@@ -79,7 +79,7 @@ bindings:
 
 **Shell verify gate (Phase 8).** The adapter runs the deterministic shell verify in-guest at the report leg (its findings ride in the prompt) and re-runs it in the deterministic report gate after the answer lands. A missing or empty tree for any supported declared platform (`core`, `ios`, `android`) forces `status: failure`. For `android`, the gate also checks the Gradle wrapper, `local.properties`, and the debug APK at `Android/app/build/outputs/apk/debug/app-debug.apk` — compile assurance requires the android write verify sub-agent to have run `make verify` first; this gate is necessary but not sufficient on its own. `web` and `desktop` are valid tokens but have no on-disk interpretation yet — the gate emits a `platform-not-yet-supported` info finding and treats them as present.
 
-**Report answer (Phase 9).** Mark `tasks.md` checkboxes complete as each phase lands, then answer the build's report leg with the build report (§ Build report). This prompt never transitions the slice — the deterministic in-guest report gate checks the answer and the workflow guest owns the `Refined → Built` transition.
+**Report answer (Phase 9).** Mark `tasks.md` checkboxes complete as each phase lands, then answer the build's report leg with the build report (§ Build report). This prompt never transitions the slice — the deterministic in-guest report gate checks the answer and the engine guest owns the `Refined → Built` transition.
 
 ## § Sub-agent delegation contract
 
@@ -126,13 +126,13 @@ The adapter's scaffold renderer is render-only and ships with embedded version p
 
 The `build` phase concludes with exactly one of `success` / `failure` / `deferred`:
 
-- **success** — every in-scope verify-repair loop returned `success` within its iteration budget, the shell verify gate (step 8) passed, the orchestrator has both regenerated `composition.yaml` (or skipped it for a core-only slice) and the implementation code under `${PROJECT_DIR}`, and `outputs[]` is populated with each supported platform's artifact path (debug APK for `android`). Write a `status: success` build report (§ Build report); the workflow guest owns the lifecycle transition.
+- **success** — every in-scope verify-repair loop returned `success` within its iteration budget, the shell verify gate (step 8) passed, the orchestrator has both regenerated `composition.yaml` (or skipped it for a core-only slice) and the implementation code under `${PROJECT_DIR}`, and `outputs[]` is populated with each supported platform's artifact path (debug APK for `android`). Write a `status: success` build report (§ Build report); the engine guest owns the lifecycle transition.
 - **failure** — any verify-repair loop exhausted its iterations, or the composition validation gate ([build/composition.md](build/composition.md)) failed and could not be repaired. Surface the load-bearing error line as `--summary` and the full output through `--context`, and write a `status: failure` build report with the blocking findings mapped where possible; the merge prompt refuses to run while the slice is in this state.
 - **deferred** — a host prerequisite is missing (Java 21, Android SDK, Rust Android targets, `cargo-swift`, Gradle wrapper, Xcode CLT) or a template / pin drift issue surfaced and operator judgement is required. Surface the unresolved prerequisite or drift signal as `--summary` and write a `status: failure` build report (the report carries only `success` / `failure`; `deferred` is the operator-facing stop signal, not a built slice).
 
 ## Build report
 
-When the algorithm resolves, return a schema-valid build report as the answer to the build's report leg (the schema-gated report answer — no report file is written). This is the build's final deliverable. This prompt never transitions the slice lifecycle — the deterministic in-guest report gate checks the answer's coherence against the working tree and the workflow guest owns the `Refined → Built` transition.
+When the algorithm resolves, return a schema-valid build report as the answer to the build's report leg (the schema-gated report answer — no report file is written). This is the build's final deliverable. This prompt never transitions the slice lifecycle — the deterministic in-guest report gate checks the answer's coherence against the working tree and the engine guest owns the `Refined → Built` transition.
 
 ```yaml
 version: 1

@@ -38,7 +38,7 @@ Check whether `$CRATE_PATH/Cargo.toml` exists:
 
 ## Leg map
 
-The adapter core drives four legs in a fixed order — generation (crate writer, test writer, guest writer in create mode, then the § verify-repair loop), standards review ([`build/review.md`](build/review.md)), capture replay ([`build/replay.md`](build/replay.md), self-skipping when no `captures` source is bound), then the report leg (see `## Build report`). Within the generation leg, write the crate before the tests, mark `tasks.md` checkboxes complete as each task lands, and never transition the slice lifecycle — the deterministic in-guest report gate checks the report answer and the workflow guest owns the `Refined → Built` transition.
+The adapter core drives four legs in a fixed order — generation (crate writer, test writer, guest writer in create mode, then the § verify-repair loop), standards review ([`build/review.md`](build/review.md)), capture replay ([`build/replay.md`](build/replay.md), self-skipping when no `captures` source is bound), then the report leg (see `## Build report`). Within the generation leg, write the crate before the tests, mark `tasks.md` checkboxes complete as each task lands, and never transition the slice lifecycle — the deterministic in-guest report gate checks the report answer and the engine guest owns the `Refined → Built` transition.
 
 ## § Verify-repair loop (max 3 iterations)
 
@@ -82,7 +82,7 @@ A build failure surfaces a stop hint as the body's final output — a single str
 - `log-path` — absolute path to the captured stdout/stderr.
 - `next-action` — typically `re-run /spec:build $SLICE after fix`.
 
-Render the hint as the final visible output of the run, alongside the `status: failure` build report (see `## Build report`). Never write the lifecycle yourself — the deterministic in-guest report gate checks the answer and the workflow guest owns the lifecycle, so the slice stays `refined` and the loop (or a re-invocation) re-enters cleanly.
+Render the hint as the final visible output of the run, alongside the `status: failure` build report (see `## Build report`). Never write the lifecycle yourself — the deterministic in-guest report gate checks the answer and the engine guest owns the lifecycle, so the slice stays `refined` and the loop (or a re-invocation) re-enters cleanly.
 
 ## § Standards review surface
 
@@ -92,7 +92,7 @@ Per [Standards layer](../references/spec-runtime/standards-layer-snippet.md), st
 
 ## Build report
 
-When the algorithm resolves, return a schema-valid build report as the answer to the build's report leg (the schema-gated report answer — no report file is written). This is the build's final deliverable. Never transition the slice lifecycle — the deterministic in-guest report gate checks the answer's coherence against the working tree and the workflow guest owns the `Refined → Built` transition.
+When the algorithm resolves, return a schema-valid build report as the answer to the build's report leg (the schema-gated report answer — no report file is written). This is the build's final deliverable. Never transition the slice lifecycle — the deterministic in-guest report gate checks the answer's coherence against the working tree and the engine guest owns the `Refined → Built` transition.
 
 ```yaml
 version: 1

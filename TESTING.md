@@ -47,7 +47,7 @@ cargo make eval scenario contracts/design    # one scenario
 
 ### 4. The wasm example — end-to-end component seam
 
-[`examples/wasm/`](examples/wasm/README.md) builds a specify workflow guest in-tree, composes it with this repo's `documentation`, `intent`, and `contracts` components in one Omnia deployment, and drives the full operator rhythm against the live cursor backend. It replays the same operator inputs (inlined in `wasm-run`) and fixture (`examples/wasm/fixture/`) as the native trial. Still operator-invoked and per-leg ungraded — the graded trial is `cargo make eval` on rung 2. Expect a run to take tens of minutes; `GUEST_TIMEOUT_MS` (default one hour) caps each `wasi:cli/run` invocation's wall clock, and `SPECIFY_EVAL_MODEL=<model-id>` overrides the model. This is the only rung that exercises the real component seam end-to-end: WIT dispatch-by-id, mounts, and the workflow guest together.
+[`examples/wasm/`](examples/wasm/README.md) builds a specify engine guest in-tree, composes it with this repo's `documentation`, `intent`, and `contracts` components in one Omnia deployment, and drives the full operator rhythm against the live cursor backend. It replays the same operator inputs (inlined in `wasm-run`) and fixture (`examples/wasm/fixture/`) as the native trial. Still operator-invoked and per-leg ungraded — the graded trial is `cargo make eval` on rung 2. Expect a run to take tens of minutes; `GUEST_TIMEOUT_MS` (default one hour) caps each `wasi:cli/run` invocation's wall clock, and `SPECIFY_EVAL_MODEL=<model-id>` overrides the model. This is the only rung that exercises the real component seam end-to-end: WIT dispatch-by-id, mounts, and the engine guest together.
 
 ```bash
 cargo make wasm-run
@@ -56,7 +56,7 @@ cargo make wasm-clean
 
 ### 5. Consumer project — code changes through the engine
 
-For code (not prose) iteration against a real consumer project, `cargo make adapter [adapter]` builds components with fast profile settings (LTO off, opt-level 1) into `target/wasm32-wasip2/release/<name>.wasm` in seconds instead of a full `cargo make release`. The engine's bare-name resolution is project-contained (no sibling-checkout probe), so supply the built component to the consumer project explicitly — `specify init /path/to/specify-adapters/target/wasm32-wasip2/release/<name>.wasm` mirrors it into that project's component cache. Caveat: switching between the `adapter` and `release` flavors changes the profile fingerprint and forces a rebuild; publishing is rare, so the trade is accepted.
+For code (not prose) iteration against a real consumer project, `cargo make adapter [adapter]` builds components with fast profile settings (LTO off, opt-level 1) into `target/wasm32-wasip2/release/<name>.wasm` in seconds instead of a full `cargo make release`. The engine's bare-name resolution reads only the consumer project's seeded component cache (no sibling-checkout or build-tree probe), so seed the built component explicitly — `specify adapter add /path/to/specify-adapters/target/wasm32-wasip2/release/<name>.wasm` mirrors it into that project's component cache (re-run after each rebuild to replace the entry; a local component path at `specify init` seeds the same cache). Caveat: switching between the `adapter` and `release` flavors changes the profile fingerprint and forces a rebuild; publishing is rare, so the trade is accepted.
 
 ```bash
 cargo make adapter contracts   # one adapter; no argument builds every adapter
