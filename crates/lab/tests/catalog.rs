@@ -12,15 +12,16 @@ const TARGETS: &[&str] = &["contracts", "omnia", "vectis"];
 fn inventory() {
     let catalog = lab::catalog().expect("the first-party catalog validates");
 
+    let version = env!("CARGO_PKG_VERSION");
     let mut ids: Vec<String> = catalog.entries().iter().map(native::Entry::id).collect();
     ids.sort_unstable();
     let mut expected: Vec<String> = SOURCES
         .iter()
-        .map(|name| format!("source:{name}"))
-        .chain(TARGETS.iter().map(|name| format!("target:{name}")))
+        .map(|name| format!("source:{name}@{version}"))
+        .chain(TARGETS.iter().map(|name| format!("target:{name}@{version}")))
         .collect();
     expected.sort_unstable();
-    assert_eq!(ids, expected, "every first-party adapter exactly once on its axis");
+    assert_eq!(ids, expected, "every first-party adapter exactly once on its axis, exact-routed");
 
     // Published names stay globally unique across axes: the component
     // store carries no axis segment, so a dual-axis name would make a

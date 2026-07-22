@@ -87,7 +87,7 @@ omnia-wasi-model = "0.35.0"
 omnia-wasi-otel = "0.35.0"
 
 adapter = { git = "https://github.com/augentic/specify.git" }
-eval = { git = "https://github.com/augentic/specify.git" }
+eval = { git = "https://github.com/augentic/specify.git", default-features = false }
 native = { git = "https://github.com/augentic/specify.git" }
 
 captures = { path = "sources/captures" }
