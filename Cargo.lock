@@ -1247,6 +1247,7 @@ dependencies = [
  "native",
  "omnia-guest",
  "project",
+ "semver",
  "serde",
  "serde_json",
  "toml",
