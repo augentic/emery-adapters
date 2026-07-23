@@ -24,10 +24,21 @@ jobs:
         with:
           path: specify-adapters
       - name: Private Git access
-        uses: ./specify-adapters/.github/actions/checkout-with-specify
+        id: app-token
+        uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.APP_ID }}
+          client-id: ${{ vars.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: augentic
+          repositories: specify
+          permission-contents: read
+      - name: Checkout specify
+        uses: actions/checkout@v6
+        with:
+          repository: augentic/specify
+          token: ${{ steps.app-token.outputs.token }}
+          path: specify
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -60,10 +71,21 @@ jobs:
         with:
           path: specify-adapters
       - name: Private Git access
-        uses: ./specify-adapters/.github/actions/checkout-with-specify
+        id: app-token
+        uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.APP_ID }}
+          client-id: ${{ vars.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: augentic
+          repositories: specify
+          permission-contents: read
+      - name: Checkout specify
+        uses: actions/checkout@v6
+        with:
+          repository: augentic/specify
+          token: ${{ steps.app-token.outputs.token }}
+          path: specify
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -83,10 +105,21 @@ jobs:
         with:
           path: specify-adapters
       - name: Private Git access
-        uses: ./specify-adapters/.github/actions/checkout-with-specify
+        id: app-token
+        uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.APP_ID }}
+          client-id: ${{ vars.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: augentic
+          repositories: specify
+          permission-contents: read
+      - name: Checkout specify
+        uses: actions/checkout@v6
+        with:
+          repository: augentic/specify
+          token: ${{ steps.app-token.outputs.token }}
+          path: specify
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -114,10 +147,21 @@ jobs:
         with:
           path: specify-adapters
       - name: Private Git access
-        uses: ./specify-adapters/.github/actions/checkout-with-specify
+        id: app-token
+        uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.APP_ID }}
+          client-id: ${{ vars.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: augentic
+          repositories: specify
+          permission-contents: read
+      - name: Checkout specify
+        uses: actions/checkout@v6
+        with:
+          repository: augentic/specify
+          token: ${{ steps.app-token.outputs.token }}
+          path: specify
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -134,10 +178,21 @@ jobs:
         with:
           path: specify-adapters
       - name: Private Git access
-        uses: ./specify-adapters/.github/actions/checkout-with-specify
+        id: app-token
+        uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.APP_ID }}
+          client-id: ${{ vars.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: augentic
+          repositories: specify
+          permission-contents: read
+      - name: Checkout specify
+        uses: actions/checkout@v6
+        with:
+          repository: augentic/specify
+          token: ${{ steps.app-token.outputs.token }}
+          path: specify
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -157,10 +212,21 @@ jobs:
         with:
           path: specify-adapters
       - name: Private Git access
-        uses: ./specify-adapters/.github/actions/checkout-with-specify
+        id: app-token
+        uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.APP_ID }}
+          client-id: ${{ vars.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: augentic
+          repositories: specify
+          permission-contents: read
+      - name: Checkout specify
+        uses: actions/checkout@v6
+        with:
+          repository: augentic/specify
+          token: ${{ steps.app-token.outputs.token }}
+          path: specify
+          persist-credentials: false
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           manifest-path: specify-adapters/Cargo.toml
