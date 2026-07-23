@@ -1,6 +1,6 @@
 [package]
 name = "adapters"
-description = "Omnia host and specify guest for the wasm example"
+description = "Omnia host, specify guest, and native first-party catalog for the composition examples"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -18,32 +18,45 @@ name = "wasm"
 path = "examples/wasm/omnia.rs"
 
 [[example]]
-name = "native"
-path = "examples/native/main.rs"
+name = "eval"
+path = "examples/eval/main.rs"
+
+# Native-only: the first-party catalog declaration (`adapters::catalog`).
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+captures.workspace = true
+contracts.workspace = true
+documentation.workspace = true
+intent.workspace = true
+native.workspace = true
+omnia-target.workspace = true
+screenshots.workspace = true
+typescript.workspace = true
+vectis.workspace = true
+
+[dev-dependencies]
+cfg-if.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 guest = { git = "https://github.com/augentic/specify.git" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 anyhow.workspace = true
-cfg-if.workspace = true
-contracts.workspace = true
-documentation.workspace = true
-intent.workspace = true
 native = { workspace = true, features = ["cli"] }
 omnia.workspace = true
 omnia-cursor.workspace = true
-omnia-guest.workspace = true
 omnia-wasi-http.workspace = true
 omnia-wasi-model.workspace = true
 omnia-wasi-otel.workspace = true
+probe = { workspace = true, features = ["client"] }
+semver.workspace = true
+tempfile.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [lints]
 workspace = true
 
 [workspace]
-members = ["crates/*", "sources/*", "targets/*"]
+members = ["sources/*", "targets/*"]
 resolver = "3"
 
 [workspace.package]
@@ -57,29 +70,29 @@ version = "0.5.0"
 publish = false
 
 [workspace.dependencies]
-anyhow = "1.0.103"
+anyhow = "1.0.104"
 cfg-if = "1.0.4"
 image = { version = "0.25.10", default-features = false, features = [
     "jpeg",
     "png",
     "webp",
 ] }
-jsonschema = { version = "0.47.0", default-features = false }
+jsonschema = { version = "0.48.5", default-features = false }
 resvg = { version = "0.47.0", default-features = false }
 semver = "1"
-serde = { version = "1.0.228", features = ["derive"] }
+serde = { version = "1.0.229", features = ["derive"] }
 serde-saphyr = "0.0.29"
-serde_json = "1.0.150"
+serde_json = "1.0.151"
 sha2 = "0.11"
 tempfile = "3.27.0"
 thiserror = "2"
 tiny-skia = { version = "0.12.0", default-features = false }
-tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
 toml = "1.1.3"
 usvg = { version = "0.47", default-features = false }
 
 omnia = "0.35.0"
-omnia-cursor = "0.28.0"
+omnia-cursor = "0.29.0"
 omnia-guest = "0.35.0"
 omnia-testkit = "0.35.0"
 omnia-wasi-http = "0.35.0"
@@ -87,17 +100,16 @@ omnia-wasi-model = "0.35.0"
 omnia-wasi-otel = "0.35.0"
 
 adapter = { git = "https://github.com/augentic/specify.git" }
-eval = { git = "https://github.com/augentic/specify.git", default-features = false }
+probe = { git = "https://github.com/augentic/specify.git" }
 native = { git = "https://github.com/augentic/specify.git" }
+prose = { git = "https://github.com/augentic/specify.git" }
 
 captures = { path = "sources/captures" }
 contracts = { path = "targets/contracts" }
 documentation = { path = "sources/documentation" }
 intent = { path = "sources/intent" }
 omnia-target = { package = "omnia", path = "targets/omnia" }
-prose = { path = "crates/prose" }
 screenshots = { path = "sources/screenshots" }
-testkit = { path = "crates/testkit" }
 typescript = { path = "sources/typescript" }
 vectis = { path = "targets/vectis" }
 
@@ -122,9 +134,10 @@ wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }
 
 [patch."https://github.com/augentic/specify.git"]
 adapter = { path = "../specify/crates/adapter" }
-eval = { path = "../specify/crates/eval" }
+probe = { path = "../specify/crates/probe" }
 guest = { path = "../specify/crates/guest" }
 native = { path = "../specify/crates/native" }
+prose = { path = "../specify/crates/prose" }
 
 [workspace.lints.rust]
 # https://dirname.github.io/rust-std-doc/rustc/lints/listing/allowed-by-default.html

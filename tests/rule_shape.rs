@@ -13,11 +13,7 @@ const SOURCE_PREFIXES: &[&str] = &["SRC"];
 const UNIVERSAL_PREFIXES: &[&str] = &["UNI"];
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(2)
-        .expect("crates/prose sits two levels below the repo root")
-        .to_path_buf()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
 struct RuleTree {
@@ -57,7 +53,7 @@ fn discover_trees(root: &Path, findings: &mut Vec<String>) -> Vec<RuleTree> {
                 }),
                 None => findings.push(format!(
                     "{axis}/{name}/prose/rules/ exists but owns no namespace: add the adapter \
-                     to TARGET_OWNERS in crates/prose/tests/rule_shape.rs"
+                     to TARGET_OWNERS in tests/rule_shape.rs"
                 )),
             }
         }

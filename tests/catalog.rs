@@ -3,6 +3,8 @@
 //! unique across axes (the Wasm store carries no axis segment), and
 //! each compiled identity carries the exact workspace package version.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::collections::BTreeSet;
 
 const SOURCES: &[&str] = &["captures", "documentation", "intent", "screenshots", "typescript"];
@@ -10,7 +12,7 @@ const TARGETS: &[&str] = &["contracts", "omnia", "vectis"];
 
 #[test]
 fn inventory() {
-    let catalog = lab::catalog().expect("the first-party catalog validates");
+    let catalog = adapters::catalog().expect("the first-party catalog validates");
 
     let version = env!("CARGO_PKG_VERSION");
     let mut ids: Vec<String> = catalog.entries().iter().map(native::Entry::id).collect();
@@ -32,7 +34,7 @@ fn inventory() {
 
 #[test]
 fn published_versions() {
-    let catalog = lab::catalog().expect("the first-party catalog validates");
+    let catalog = adapters::catalog().expect("the first-party catalog validates");
     let workspace = env!("CARGO_PKG_VERSION");
     let placeholder = semver::Version::new(0, 0, 0);
 

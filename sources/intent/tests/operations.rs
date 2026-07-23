@@ -5,7 +5,7 @@ use std::path::Path;
 use adapter::Source as _;
 use adapter::seam::{Authority, ClaimKind, Context, Lead};
 use intent::Adapter;
-use testkit::Harness;
+use omnia_testkit::model::Harness;
 
 fn ctx() -> Context<'static> {
     Context {

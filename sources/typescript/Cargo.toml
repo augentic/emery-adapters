@@ -22,5 +22,5 @@ adapter.workspace = true
 prose.workspace = true
 
 [dev-dependencies]
-testkit.workspace = true
+omnia-testkit.workspace = true
 tokio.workspace = true

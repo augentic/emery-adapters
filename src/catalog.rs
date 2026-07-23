@@ -1,11 +1,10 @@
 //! The first-party adapter catalog declaration.
 //!
-//! The lab owns this composition until a native operator distribution
-//! needs a shared catalog library: every first-party source and target
-//! adapter, linked once on its axis, validated by
-//! [`native::Catalog::builder`]. The inventory check in `tests/`
-//! pins the expected entries and the global published-name uniqueness
-//! across axes.
+//! Every first-party source and target adapter, linked once on its
+//! axis, validated by [`native::Catalog::builder`]. Consumed by the
+//! `eval` composition example at `examples/eval/`. The inventory check
+//! in `tests/catalog.rs` pins the expected entries and the global
+//! published-name uniqueness across axes.
 
 /// The validated first-party catalog.
 ///

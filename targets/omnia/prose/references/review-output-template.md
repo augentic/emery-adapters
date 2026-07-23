@@ -46,7 +46,7 @@ Severity values use the closed `Diagnostic` severity enum: `critical`, `importan
 
 ### SEC-1: WASM Constraint Violation
 
-**File**: [src/config.rs:23](src/config.rs#L23)
+**File**: `src/config.rs:23`
 **rule_id**: OMNIA-002
 **Category**: WASM Compliance
 **Reviewer**: Security Reviewer
@@ -69,7 +69,7 @@ let api_url = ctx.config.get("API_URL")?;
 
 ### COR-1: Missing Error Handling (Potential Panic)
 
-**File**: [src/handlers.rs:67](src/handlers.rs#L67)
+**File**: `src/handlers.rs:67`
 **rule_id**: RUST-001
 **Category**: Error Handling
 **Reviewer**: Correctness Reviewer

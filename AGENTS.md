@@ -22,7 +22,7 @@ Artifacts outrank source behavior. Preserve missing information as `[unknown]` r
 - Do not commit built `.wasm` artifacts.
 - Adapter names must remain unique across the source and target axes.
 
-The root workspace includes `crates/*`, `sources/*`, `targets/*`, and `examples/{wasm,static}` (Omnia-hosted wasm deployment and in-process native host). The adapter SDK (`adapter`), the engine guest (`guest`), the native host (`native`), and the lab-only evaluation library (`eval`, default-features off — library only) are git dependencies on `augentic/specify`, not local crates — resolved from the sibling `../specify` checkout by the committed path patch until the exposing engine revision is published and pinned by `rev`. `crates/lab/` stays this repo's composition binary (it cannot merge into engine `eval`: the first-party catalog and `scenarios/` live here): it owns `catalog()`, the Tokio runtime, the Cursor backend, and the prompt-scenario root, dispatching between native command mode and `eval::run`; engine `native` supplies catalog machinery and command execution, engine `eval` supplies trial/scenario runners, telemetry, and grading. For sibling co-development the committed path patch in the root `Cargo.toml` resolves the engine crates from the `../specify` checkout.
+The root workspace includes `sources/*`, `targets/*`, and `examples/{wasm,eval}` (Omnia-hosted wasm deployment and the live composition example). The adapter SDK (`adapter`), the engine guest (`guest`), the native host (`native`), and the lab-only probe library (`probe`, `client` feature — no mock, no binary) are git dependencies on `augentic/specify`, not local crates — resolved from the sibling `../specify` checkout by the committed path patch until the exposing engine revision is published and pinned by `rev`. The root `adapters` package owns the first-party catalog declaration (`adapters::catalog()`), and the root `eval` example at `examples/eval/` composes it with its prompt-scenario root, delegating dispatch and the Cursor backend to the shared `probe::client` (the engine `probe` crate's `client` feature); engine `native` supplies catalog machinery and command execution, engine `probe` supplies trial/scenario runners, telemetry, and grading. Neither can merge into engine `probe`: the first-party catalog and `scenarios/` live here. For sibling co-development the committed path patch in the root `Cargo.toml` resolves the engine crates from the `../specify` checkout.
 
 ## Prose and rules
 
@@ -30,7 +30,7 @@ Adapter `prose/` trees are compiled into their components:
 
 - Parent prompts orchestrate an operation and load phase prompts by relative link. Keep them below roughly 150 non-blank lines.
 - Phase prompts carry one operational phase. Prefer splitting or moving depth into references before approaching the 800-line hard cap.
-- References are linked, not inlined. The embed-time walker includes Markdown documents and follows symlinks; keep relative links resolvable.
+- References are linked, not inlined. The embed-time walker (engine `prose` crate) includes Markdown documents, follows symlinks, and fails the build on a dangling relative link; keep links resolvable.
 - Engineering standards are Markdown rules under `codex/rules/` and adapter-local `prose/rules/` overlays. Preserve stable rule IDs and namespace ownership.
 - Contributor guidance belongs in `AGENTS.md`, not in the embedded engineering-rule corpus.
 
@@ -46,7 +46,7 @@ Testing is integration-first:
 - Keep `src` unit tests only for genuinely unreachable defensive branches or dense pure matrices that are materially cheaper in-process.
 - Do not widen public APIs solely for tests.
 - Use `cargo nextest`, not bare `cargo test`, for native workspace tests; process isolation is required by CWD- and environment-mutating suites.
-- Adapter native tests own operation behavior; the eval crate owns cross-phase integration and prompt quality; the operator-invoked wasm example owns WASM/WIT conformance. Do not duplicate the same assertion across rungs.
+- Adapter native tests own operation behavior; the eval composition example (over engine `probe`) owns cross-phase integration and prompt quality; the operator-invoked wasm example owns WASM/WIT conformance. Do not duplicate the same assertion across rungs.
 - The live rungs are operator-invoked, never CI: `cargo make eval` (the native live-model trial over `sandbox/`, deterministic grading only), `cargo make eval scenario <adapter>/<name>` (one adapter operation over a fixture scratch tree — the fast prompt-iteration loop), and `cargo make wasm-run` (the wasm example composing this package's specify guest with the built adapter components).
 
 Read [`TESTING.md`](TESTING.md) before adding, deleting, or relocating tests.
