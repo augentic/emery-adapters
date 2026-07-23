@@ -8,17 +8,13 @@ edition = "2024"
 homepage = "https://augentic.io"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/augentic/specify-adapters"
-rust-version = "1.95"
+rust-version = "1.97"
 version = "0.5.0"
 publish = false
 
 [workspace.dependencies]
 anyhow = "1.0.104"
-image = { version = "0.25.10", default-features = false, features = [
-    "jpeg",
-    "png",
-    "webp",
-] }
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
 jsonschema = { version = "0.48.5", default-features = false }
 resvg = { version = "0.47.0", default-features = false }
 semver = "1"
@@ -37,8 +33,8 @@ omnia-guest = "0.35.0"
 omnia-testkit = "0.35.0"
 
 adapter = { git = "https://github.com/augentic/specify.git" }
-probe = { git = "https://github.com/augentic/specify.git" }
 native = { git = "https://github.com/augentic/specify.git" }
+probe = { git = "https://github.com/augentic/specify.git" }
 prose = { git = "https://github.com/augentic/specify.git" }
 
 captures = { path = "sources/captures" }
