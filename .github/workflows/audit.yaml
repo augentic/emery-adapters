@@ -32,6 +32,14 @@ jobs:
           repositories: specify
           permission-contents: read
 
+      - name: Authenticate Cargo git deps
+        env:
+          TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          git config --global \
+            url."https://x-access-token:${TOKEN}@github.com/augentic/specify".insteadOf \
+            "https://github.com/augentic/specify"
+
       - name: Checkout specify
         uses: actions/checkout@v6
         with:
@@ -49,4 +57,6 @@ jobs:
 
       - name: Audit dependencies
         working-directory: specify-adapters
+        env:
+          CARGO_NET_GIT_FETCH_WITH_CLI: true
         run: cargo audit
