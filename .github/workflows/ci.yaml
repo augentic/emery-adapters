@@ -231,3 +231,5 @@ jobs:
         with:
           manifest-path: specify-adapters/Cargo.toml
           arguments: --workspace --locked
+
+          
