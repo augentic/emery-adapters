@@ -18,7 +18,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+        with:
+          path: specify-adapters
+
+      - name: Private Git access
+        uses: ./specify-adapters/.github/actions/checkout-with-specify
+        with:
+          client-id: ${{ secrets.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -28,4 +36,5 @@ jobs:
           tool: cargo-audit
 
       - name: Audit dependencies
+        working-directory: specify-adapters
         run: cargo audit

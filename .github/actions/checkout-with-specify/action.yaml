@@ -1,0 +1,33 @@
+name: Checkout specify sibling
+description: >
+  Authenticate to the private augentic/specify repository and check it out
+  next to specify-adapters so the committed ../specify path patch resolves.
+
+inputs:
+  client-id:
+    description: GitHub App client ID
+    required: true
+  private-key:
+    description: GitHub App private key
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Private Git access
+      id: app-token
+      uses: actions/create-github-app-token@v3
+      with:
+        client-id: ${{ inputs.client-id }}
+        private-key: ${{ inputs.private-key }}
+        owner: augentic
+        repositories: specify
+        permission-contents: read
+
+    - name: Checkout specify
+      uses: actions/checkout@v6
+      with:
+        repository: augentic/specify
+        token: ${{ steps.app-token.outputs.token }}
+        path: specify
+        persist-credentials: false

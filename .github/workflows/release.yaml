@@ -28,8 +28,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - name: Checkout adapters
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+        with:
+          path: specify-adapters
+
+      - name: Private Git access
+        uses: ./specify-adapters/.github/actions/checkout-with-specify
+        with:
+          client-id: ${{ secrets.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
       - name: Install nightly rustfmt
         uses: dtolnay/rust-toolchain@nightly
@@ -42,6 +49,8 @@ jobs:
           components: clippy, rust-src, rustfmt
           targets: wasm32-wasip2
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: specify-adapters
 
       - name: Install cargo tooling
         uses: taiki-e/install-action@v2
@@ -49,13 +58,17 @@ jobs:
           tool: cargo-make,cargo-nextest
 
       - name: Install wkg
+        working-directory: specify-adapters
         run: cargo install wkg@0.15.0 --locked
 
       - name: Pre-publish workspace check
+        working-directory: specify-adapters
         run: cargo make check
 
       - name: Release-build adapter components
+        working-directory: specify-adapters
         run: cargo make release
 
       - name: Publish each adapter component
+        working-directory: specify-adapters
         run: cargo make publish
