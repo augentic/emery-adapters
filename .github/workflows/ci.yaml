@@ -3,7 +3,231 @@ name: CI
 on:
   push:
 
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  RUSTFLAGS: -Dwarnings
+  CARGO_TERM_COLOR: always
+
 jobs:
-  ci:
-    uses: augentic/.github/.github/workflows/ci.yaml@main
-    secrets: inherit
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: specify-adapters
+      - name: Private Git access
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: augentic
+          repositories: specify
+          permission-contents: read
+      - name: Checkout specify
+        uses: actions/checkout@v6
+        with:
+          repository: augentic/specify
+          token: ${{ steps.app-token.outputs.token }}
+          path: specify
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: specify-adapters
+      - run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+        working-directory: specify-adapters
+
+  fmt:
+    name: Format
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - run: cargo +nightly fmt --all --check
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      CARGO_PROFILE_TEST_DEBUG: 0
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: specify-adapters
+      - name: Private Git access
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: augentic
+          repositories: specify
+          permission-contents: read
+      - name: Checkout specify
+        uses: actions/checkout@v6
+        with:
+          repository: augentic/specify
+          token: ${{ steps.app-token.outputs.token }}
+          path: specify
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: specify-adapters
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
+      - run: cargo nextest run --locked --tests --all-features --no-tests=pass
+        working-directory: specify-adapters
+
+  test-doc:
+    name: Test docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: specify-adapters
+      - name: Private Git access
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: augentic
+          repositories: specify
+          permission-contents: read
+      - name: Checkout specify
+        uses: actions/checkout@v6
+        with:
+          repository: augentic/specify
+          token: ${{ steps.app-token.outputs.token }}
+          path: specify
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: specify-adapters
+      - id: lib
+        working-directory: specify-adapters
+        run: |
+          has_lib=$(cargo metadata --format-version 1 --no-deps \
+            | jq '[.packages[].targets[].kind[]
+                   | select(IN("lib","rlib","cdylib","dylib","staticlib","proc-macro"))]
+                   | length > 0')
+          echo "exists=$has_lib" >> "$GITHUB_OUTPUT"
+      - if: steps.lib.outputs.exists == 'true'
+        working-directory: specify-adapters
+        run: cargo test --doc --locked --all-features --workspace
+
+  doc:
+    name: Docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RUSTDOCFLAGS: -Dwarnings
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: specify-adapters
+      - name: Private Git access
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: augentic
+          repositories: specify
+          permission-contents: read
+      - name: Checkout specify
+        uses: actions/checkout@v6
+        with:
+          repository: augentic/specify
+          token: ${{ steps.app-token.outputs.token }}
+          path: specify
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: specify-adapters
+      - run: cargo doc --no-deps --workspace --all-features --locked
+        working-directory: specify-adapters
+
+  vet:
+    name: Vet
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: specify-adapters
+      - name: Private Git access
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: augentic
+          repositories: specify
+          permission-contents: read
+      - name: Checkout specify
+        uses: actions/checkout@v6
+        with:
+          repository: augentic/specify
+          token: ${{ steps.app-token.outputs.token }}
+          path: specify
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: specify-adapters
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-vet@0.10.2
+      - run: cargo vet --locked
+        working-directory: specify-adapters
+
+  deny:
+    name: Deny
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: specify-adapters
+      - name: Private Git access
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: augentic
+          repositories: specify
+          permission-contents: read
+      - name: Checkout specify
+        uses: actions/checkout@v6
+        with:
+          repository: augentic/specify
+          token: ${{ steps.app-token.outputs.token }}
+          path: specify
+          persist-credentials: false
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: specify-adapters/Cargo.toml
+          arguments: --workspace --locked

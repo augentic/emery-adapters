@@ -16,33 +16,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "adapters"
-version = "0.5.0"
-dependencies = [
- "anyhow",
- "captures",
- "cfg-if",
- "contracts",
- "documentation",
- "guest",
- "intent",
- "native",
- "omnia 0.35.0",
- "omnia 0.5.0",
- "omnia-cursor",
- "omnia-wasi-http",
- "omnia-wasi-model",
- "omnia-wasi-otel",
- "probe",
- "screenshots",
- "semver",
- "tempfile",
- "tokio",
- "typescript",
- "vectis",
-]
-
-[[package]]
 name = "addr2line"
 version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1219,6 +1192,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "eval"
+version = "0.5.0"
+dependencies = [
+ "anyhow",
+ "captures",
+ "contracts",
+ "documentation",
+ "intent",
+ "native",
+ "omnia 0.5.0",
+ "probe",
+ "screenshots",
+ "tokio",
+ "typescript",
+ "vectis",
+]
+
+[[package]]
 name = "fallible-iterator"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1535,22 +1526,6 @@ checksum = "d03f81ad4732830d85cfd417a9f62cde6dadda4354d37d078a6084a19560aa2d"
 dependencies = [
  "arraydeque",
  "smallvec",
-]
-
-[[package]]
-name = "guest"
-version = "0.28.0"
-dependencies = [
- "artifacts",
- "diagnostics",
- "error",
- "jiff",
- "omnia-guest",
- "project",
- "slice",
- "transport",
- "wasip3",
- "wit-bindgen 0.60.0",
 ]
 
 [[package]]

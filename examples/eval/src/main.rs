@@ -18,7 +18,7 @@ use std::process::ExitCode;
 
 /// Prompt-scenario definitions, per adapter, beside this example.
 #[cfg(not(target_arch = "wasm32"))]
-const SCENARIOS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/examples/eval/scenarios");
+const SCENARIOS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/scenarios");
 
 #[cfg(not(target_arch = "wasm32"))]
 #[tokio::main]
@@ -34,6 +34,21 @@ async fn main() -> ExitCode {
 
 #[cfg(not(target_arch = "wasm32"))]
 async fn entry() -> anyhow::Result<ExitCode> {
-    let catalog = adapters::catalog()?;
-    probe::client::run(std::env::args().collect(), catalog, Some(Path::new(SCENARIOS))).await
+    probe::client::run(std::env::args().collect(), catalog()?, Some(Path::new(SCENARIOS))).await
+}
+
+/// Every first-party source and target adapter, linked once on its
+/// axis and validated by [`native::Catalog::builder`].
+#[cfg(not(target_arch = "wasm32"))]
+fn catalog() -> Result<native::Catalog, native::Error> {
+    native::Catalog::builder()
+        .source::<captures::Adapter>()
+        .source::<documentation::Adapter>()
+        .source::<intent::Adapter>()
+        .source::<screenshots::Adapter>()
+        .source::<typescript::Adapter>()
+        .target::<contracts::Adapter>()
+        .target::<omnia_target::Adapter>()
+        .target::<vectis::Adapter>()
+        .build()
 }

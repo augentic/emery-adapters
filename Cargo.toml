@@ -1,62 +1,5 @@
-[package]
-name = "adapters"
-description = "Omnia host, specify guest, and native first-party catalog for the composition examples"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-repository.workspace = true
-rust-version.workspace = true
-publish.workspace = true
-
-[[example]]
-name = "specify"
-path = "examples/wasm/specify.rs"
-crate-type = ["cdylib"]
-
-[[example]]
-name = "wasm"
-path = "examples/wasm/omnia.rs"
-
-[[example]]
-name = "eval"
-path = "examples/eval/main.rs"
-
-# Native-only: the first-party catalog declaration (`adapters::catalog`).
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-captures.workspace = true
-contracts.workspace = true
-documentation.workspace = true
-intent.workspace = true
-native.workspace = true
-omnia-target.workspace = true
-screenshots.workspace = true
-typescript.workspace = true
-vectis.workspace = true
-
-[dev-dependencies]
-cfg-if.workspace = true
-
-[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-guest = { git = "https://github.com/augentic/specify.git" }
-
-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-anyhow.workspace = true
-native = { workspace = true, features = ["cli"] }
-omnia.workspace = true
-omnia-cursor.workspace = true
-omnia-wasi-http.workspace = true
-omnia-wasi-model.workspace = true
-omnia-wasi-otel.workspace = true
-probe = { workspace = true, features = ["client"] }
-semver.workspace = true
-tempfile.workspace = true
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
-
-[lints]
-workspace = true
-
 [workspace]
-members = ["sources/*", "targets/*"]
+members = ["sources/*", "targets/*", "examples/eval"]
 resolver = "3"
 
 [workspace.package]
@@ -71,7 +14,6 @@ publish = false
 
 [workspace.dependencies]
 anyhow = "1.0.104"
-cfg-if = "1.0.4"
 image = { version = "0.25.10", default-features = false, features = [
     "jpeg",
     "png",
@@ -91,13 +33,8 @@ tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
 toml = "1.1.3"
 usvg = { version = "0.47", default-features = false }
 
-omnia = "0.35.0"
-omnia-cursor = "0.29.0"
 omnia-guest = "0.35.0"
 omnia-testkit = "0.35.0"
-omnia-wasi-http = "0.35.0"
-omnia-wasi-model = "0.35.0"
-omnia-wasi-otel = "0.35.0"
 
 adapter = { git = "https://github.com/augentic/specify.git" }
 probe = { git = "https://github.com/augentic/specify.git" }
@@ -114,6 +51,7 @@ typescript = { path = "sources/typescript" }
 vectis = { path = "targets/vectis" }
 
 [patch.crates-io]
+# Transitive Omnia deps of engine crates (`adapter`, `probe` client feature).
 omnia = { git = "https://github.com/augentic/omnia.git" }
 omnia-cursor = { git = "https://github.com/augentic/backends.git" }
 omnia-guest = { git = "https://github.com/augentic/omnia.git" }
@@ -135,7 +73,6 @@ wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }
 [patch."https://github.com/augentic/specify.git"]
 adapter = { path = "../specify/crates/adapter" }
 probe = { path = "../specify/crates/probe" }
-guest = { path = "../specify/crates/guest" }
 native = { path = "../specify/crates/native" }
 prose = { path = "../specify/crates/prose" }
 
