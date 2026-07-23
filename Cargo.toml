@@ -37,12 +37,14 @@ screenshots.workspace = true
 typescript.workspace = true
 vectis.workspace = true
 
+[dev-dependencies]
+cfg-if.workspace = true
+
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 guest = { git = "https://github.com/augentic/specify.git" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 anyhow.workspace = true
-cfg-if.workspace = true
 native = { workspace = true, features = ["cli"] }
 omnia.workspace = true
 omnia-cursor.workspace = true
