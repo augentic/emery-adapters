@@ -20,7 +20,7 @@ make eval
 
 This runs the full operator rhythm in `sandbox/` over a `contracts`-bound project with `documentation` + `intent` as sources. Expect tens of minutes of live model time. A passing run removes the project; a failing run retains it for in-place review or per-phase re-runs (below).
 
-`SPECIFY_EVAL_MODEL=<model-id>` overrides the model; unset means the cursor backend's default.
+`EVAL_MODEL=<model-id>` overrides the model; unset means the cursor backend's default.
 
 Any other specify verb goes through the native first-party catalog:
 

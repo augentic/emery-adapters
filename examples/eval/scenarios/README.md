@@ -43,7 +43,7 @@ is retained for review (unlike a passing full trial, which cleans `sandbox/`).
 
 Requires [`cursor-agent`](https://cursor.com/docs/cli) on `PATH`, authenticated
 via `CURSOR_API_KEY` or a prior `cursor-agent login`. Set
-`SPECIFY_EVAL_MODEL=<model-id>` to override the model driver-side for a run.
+`EVAL_MODEL=<model-id>` to override the model driver-side for a run.
 
 ```bash
 cargo make eval scenario                     # list scenarios
@@ -52,11 +52,11 @@ cargo make eval scenario contracts/design    # run one
 
 ## Index
 
-| Scenario                | Slice                        | Shape                                                                       |
-| ----------------------- | ---------------------------- | --------------------------------------------------------------------------- |
-| `contracts/describe`    | `user-adapter-api`           | Generate schema + HTTP contracts from prose inputs                          |
-| `contracts/design`      | `returns-api`                | Generate contracts from a design document                                   |
-| `contracts/import`      | `import-ticket-api-contract` | Import a vendored OpenAPI document into the contract tree                   |
-| `contracts/source`      | `orders-api-contract`        | Extract contracts from a vendored TypeScript service                        |
-| `contracts/update`      | `loyalty-api-contract`       | Update an existing contract baseline                                        |
-| `vectis/single-screen`  | `daily-quote`                | A tiny single-screen feature on `core + ios` — composition, core, shell     |
+| Scenario               | Slice                        | Shape                                                                   |
+| ---------------------- | ---------------------------- | ----------------------------------------------------------------------- |
+| `contracts/describe`   | `user-adapter-api`           | Generate schema + HTTP contracts from prose inputs                      |
+| `contracts/design`     | `returns-api`                | Generate contracts from a design document                               |
+| `contracts/import`     | `import-ticket-api-contract` | Import a vendored OpenAPI document into the contract tree               |
+| `contracts/source`     | `orders-api-contract`        | Extract contracts from a vendored TypeScript service                    |
+| `contracts/update`     | `loyalty-api-contract`       | Update an existing contract baseline                                    |
+| `vectis/single-screen` | `daily-quote`                | A tiny single-screen feature on `core + ios` — composition, core, shell |
