@@ -1,34 +1,49 @@
+# -------------------------------------
+# Wasm example
+# -------------------------------------
 
 [tasks.wasm-clean]
 script = "rm -rf sandbox/wasm"
 
 [tasks.wasm-build]
 script = '''
-cargo build -p wasm --example specify --target wasm32-wasip2
+# Shipped specify binary (embedded engine guest) from the sibling checkout.
+cargo build -p specify --lib --target wasm32-wasip2 --manifest-path ../specify/Cargo.toml
+cargo build -p specify --bin specify --manifest-path ../specify/Cargo.toml
+# First-party adapter components exercised by this example.
 cargo build -p documentation -p intent -p contracts --target wasm32-wasip2
 '''
 
 [tasks.wasm-run]
-dependencies = ["wasm-clean", "wasm-build"]
+dependencies = ["wasm-build"]
 env_files = [".env"]
+script_runner = "bash"
 script = '''
-export RUST_LOG="info,opentelemetry_sdk=off,omnia_wasi_http=debug"
+set -eo pipefail
 
-mkdir -p sandbox/wasm/{workspace,cache,store}
-cp -R examples/wasm/fixture/. sandbox/wasm/workspace/
-cp target/wasm32-wasip2/debug/contracts.wasm sandbox/wasm/workspace/contracts.wasm
+export SPECIFY_HOME="$PWD/sandbox/wasm"
+# Omnia's default guest timeout (30s) is too short for a live model.
+export GUEST_TIMEOUT_MS="${GUEST_TIMEOUT_MS:-3600000}"
+# export RUST_LOG="info,opentelemetry_sdk=off,omnia_wasi_http=debug"
 
-run() {
-  cargo run -p wasm --example wasm -- run --config examples/wasm/omnia.toml -- "$@"
-}
+# Fresh sandbox each run; cargo artifacts under target/ stay incremental.
+rm -rf "$SPECIFY_HOME"
+mkdir -p "$SPECIFY_HOME/project"
+cp -R examples/wasm/fixture/. "$SPECIFY_HOME/project/"
 
-# Initialize workspace
-run init ./contracts.wasm --name "orders"
+SPECIFY="$PWD/../specify/target/debug/specify"
+TARGET="$PWD/target"
+# Execute commands in the project directory, not the repository root.
+run() { (cd "$SPECIFY_HOME/project" && "$SPECIFY" "$@"); }
 
-# Author, transition, and execute a plan
-run plan author "orders" \
+run adapter add "$TARGET/wasm32-wasip2/debug/documentation.wasm"
+run adapter add "$TARGET/wasm32-wasip2/debug/intent.wasm"
+run adapter add "$TARGET/wasm32-wasip2/debug/contracts.wasm"
+run init contracts --name orders
+
+run plan author orders \
   --intent "Author the API contracts for the orders service described under docs/: the JSON Schema vocabulary plus the HTTP (OpenAPI) surface. Contracts only - no service implementation." \
   --source "docs=documentation:docs"
-run plan transition "orders" approved
+run plan transition orders approved
 run plan execute
 '''

@@ -32,11 +32,11 @@ codex/                # cross-adapter prose: rules/ (UNI-* engineering rules)
                       # and references/runtime/ (the spec-runtime bundle
                       # adapters symlink into their prose/)
 examples/
-  wasm/               # Omnia-hosted wasm deployment package: host + specify
-                      # guest + omnia.toml + fixture tree (see its README.md)
+  wasm/               # wasm seam example: fixture tree + `cargo make wasm-run`
+                      # (sibling specify binary + adapter components; see README.md)
   eval/               # native composition package: first-party catalog,
                       # `eval` trial, and prompt scenarios
-Cargo.toml            # virtual workspace: `examples/{wasm,eval}` + `{sources,targets}/*`
+Cargo.toml            # virtual workspace: `examples/eval` + `{sources,targets}/*`
 ```
 
 Identity lives in the guest crate's `Cargo.toml` `version` and the wasm-pkg
