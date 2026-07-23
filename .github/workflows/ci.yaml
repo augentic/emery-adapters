@@ -269,4 +269,5 @@ jobs:
           manifest-path: specify-adapters/Cargo.toml
           arguments: --workspace --locked
           use-git-cli: true
-          credentials: x-access-token:${{ steps.app-token.outputs.token }}
+          # Full URL form required by cargo-deny-action's credential.helper store.
+          credentials: https://x-access-token:${{ steps.app-token.outputs.token }}@github.com
