@@ -137,7 +137,7 @@ Use this prompt when you want an agent to run every scenario in sequence without
 asking for manual confirmation between steps:
 
 ```text
-Run all contract test scenarios in crates/lab/scenarios/contracts/ in this order:
+Run all contract test scenarios in examples/eval/scenarios/contracts/ in this order:
 1. metadata.md
 2. design.md
 3. update.md

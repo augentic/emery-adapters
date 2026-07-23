@@ -2,7 +2,7 @@
 
 A live-model harness for testing adapter prompts and references used in judgement steps. Outputs are graded by deterministic validators — not a model.
 
-Ownership, hermeticism, and how this lab sits among the six test rungs: [TESTING.md](../../TESTING.md). Catalog declaration: `[src/lib.rs](src/lib.rs)`. Shared fixture with the wasm example: `[examples/wasm/fixture/](../../examples/wasm/fixture/)`.
+Ownership, hermeticism, and how this example sits among the six test rungs: [TESTING.md](../../TESTING.md). Catalog declaration: [`src/catalog.rs`](../../src/catalog.rs). Shared fixture with the wasm example: [`examples/wasm/fixture/`](../wasm/fixture/).
 
 ## Quick start
 
@@ -55,7 +55,7 @@ Anatomy, indexing, and third-party joining: `[scenarios/README.md](scenarios/REA
 
 ## Model judgment
 
-A trial exercises engine legs (`proposal`, `synthesis`) and this repo's adapter legs (`leads` / `evidence` on sources; contracts build sub-flows + `report` on the target). Rung details and grading posture: [TESTING.md](../../TESTING.md) (§ lab crate).
+A trial exercises engine legs (`proposal`, `synthesis`) and this repo's adapter legs (`leads` / `evidence` on sources; contracts build sub-flows + `report` on the target). Rung details and grading posture: [TESTING.md](../../TESTING.md) (§ eval composition example).
 
 ## Workflow
 
@@ -70,7 +70,7 @@ Every step runs the production operation — `execute` is the real drained loop.
 
 ## Grading
 
-Hard assertions only (shared `eval` runner):
+Hard assertions only (shared `probe` runner):
 
 
 | Stage   | Check      | Pass condition                                               |
