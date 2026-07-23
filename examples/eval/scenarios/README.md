@@ -22,8 +22,8 @@ scenarios/<adapter>/<name>/
 
 For an adapter already linked into the shim, adding a scenario is just the
 directory. A **third-party adapter** additionally needs a Cargo dependency on
-the root `adapters` package and a catalog entry in
-[`src/catalog.rs`](../../../src/catalog.rs) — configuration alone cannot link
+the `eval` package and a catalog entry in
+[`src/main.rs`](../src/main.rs) — configuration alone cannot link
 a Rust crate.
 
 The runner ([`probe::scenario`](https://github.com/augentic/specify/blob/main/crates/probe/src/scenario.rs))

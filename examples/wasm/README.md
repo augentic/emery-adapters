@@ -17,7 +17,7 @@ cargo make wasm-clean
 
 ## Layout
 
-Declared on the workspace root package (`adapters`) as Cargo examples:
+Declared on the `wasm` package (`examples/wasm/`) as Cargo examples:
 
 | Path                     | Role                                                                                                 |
 | ------------------------ | ---------------------------------------------------------------------------------------------------- |

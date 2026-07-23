@@ -2,7 +2,7 @@
 
 A live-model harness for testing adapter prompts and references used in judgement steps. Outputs are graded by deterministic validators — not a model.
 
-Ownership, hermeticism, and how this example sits among the five test rungs: [TESTING.md](../../TESTING.md). Catalog declaration: [`src/catalog.rs`](../../src/catalog.rs). Shared fixture with the wasm example: [`examples/wasm/fixture/`](../wasm/fixture/).
+Ownership, hermeticism, and how this example sits among the five test rungs: [TESTING.md](../../TESTING.md). Catalog declaration: [`src/main.rs`](src/main.rs). Shared fixture with the wasm example: [`examples/wasm/fixture/`](../wasm/fixture/).
 
 ## Quick start
 

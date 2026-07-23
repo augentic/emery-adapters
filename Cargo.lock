@@ -16,33 +16,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "adapters"
-version = "0.5.0"
-dependencies = [
- "anyhow",
- "captures",
- "cfg-if",
- "contracts",
- "documentation",
- "guest",
- "intent",
- "native",
- "omnia 0.35.0",
- "omnia 0.5.0",
- "omnia-cursor",
- "omnia-wasi-http",
- "omnia-wasi-model",
- "omnia-wasi-otel",
- "probe",
- "screenshots",
- "semver",
- "tempfile",
- "tokio",
- "typescript",
- "vectis",
-]
-
-[[package]]
 name = "addr2line"
 version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1216,6 +1189,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1a05365e3b1c6d1650318537c7460c6923f1abdd272ad6842baa2b509957a06"
 dependencies = [
  "num-traits",
+]
+
+[[package]]
+name = "eval"
+version = "0.5.0"
+dependencies = [
+ "anyhow",
+ "captures",
+ "contracts",
+ "documentation",
+ "intent",
+ "native",
+ "omnia 0.5.0",
+ "probe",
+ "screenshots",
+ "tokio",
+ "typescript",
+ "vectis",
 ]
 
 [[package]]
@@ -5035,6 +5026,20 @@ dependencies = [
  "http-body",
  "thiserror 2.0.19",
  "wit-bindgen 0.57.1",
+]
+
+[[package]]
+name = "wasm"
+version = "0.5.0"
+dependencies = [
+ "anyhow",
+ "cfg-if",
+ "guest",
+ "omnia 0.35.0",
+ "omnia-cursor",
+ "omnia-wasi-http",
+ "omnia-wasi-model",
+ "omnia-wasi-otel",
 ]
 
 [[package]]

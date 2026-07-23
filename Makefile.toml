@@ -130,7 +130,7 @@ args = [
 # shim (`cargo make specify -- --project-dir <dir> slice list`).
 [tasks.specify]
 command = "cargo"
-args = ["run", "-q", "-p", "adapters", "--example", "eval", "--", "${@}"]
+args = ["run", "-q", "-p", "eval", "--", "${@}"]
 
 # The native live-model trial (the eval example's `eval` subcommand)
 [tasks.eval]
@@ -139,7 +139,7 @@ script = '''
   # Mid-tier models often need more than the cursor backend's 120s default.
   # `.env` / the ambient environment win when already set.
   export EVAL_TIMEOUT_SECS="${EVAL_TIMEOUT_SECS:-300}"
-  cargo run -p adapters --example eval -- eval \
+  cargo run -p eval -- eval \
     --fixture examples/wasm/fixture \
     --change "orders" \
     --intent "Author the API contracts for the orders service described under docs/: the JSON Schema vocabulary plus the HTTP (OpenAPI) surface. Contracts only - no service implementation." \

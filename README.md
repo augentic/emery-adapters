@@ -31,16 +31,12 @@ Every adapter — the three targets and the five sources — shares the same gue
 codex/                # cross-adapter prose: rules/ (UNI-* engineering rules)
                       # and references/runtime/ (the spec-runtime bundle
                       # adapters symlink into their prose/)
-src/                  # root adapters package: native-only first-party
-                      # catalog declaration (`adapters::catalog`)
-                      # (`adapter`, `native`, `probe`, `prose` are git deps
-                      # on augentic/specify, path-patched to the sibling)
 examples/
-  wasm/               # Omnia-hosted wasm deployment: host + specify guest
-                      # + omnia.toml + fixture tree (see its README.md)
-  eval/               # the live composition example: the `eval` trial and
-                      # the prompt scenarios under examples/eval/scenarios/
-Cargo.toml            # workspace: `examples/{wasm,eval}` + `{sources,targets}/*`
+  wasm/               # Omnia-hosted wasm deployment package: host + specify
+                      # guest + omnia.toml + fixture tree (see its README.md)
+  eval/               # native composition package: first-party catalog,
+                      # `eval` trial, and prompt scenarios
+Cargo.toml            # virtual workspace: `examples/{wasm,eval}` + `{sources,targets}/*`
 ```
 
 Identity lives in the guest crate's `Cargo.toml` `version` and the wasm-pkg
@@ -77,7 +73,7 @@ at `target/wasm32-wasip2/release/<name>.wasm`):
 cargo make release
 ```
 
-The root `adapters` package links every adapter crate in-process and owns the first-party catalog declaration (`adapters::catalog` in `src/catalog.rs`) over the engine-owned `native` host. The root `eval` example at `examples/eval/` composes it with Specify's `probe` library through its `client` feature (the shared cursor composition; the engine composes the same client in its own `examples/eval/`) — both consumed from revision-pinned git sources like the `adapter` SDK. The example carries the live `cargo make eval` trial plus the single-operation prompt scenarios (see [TESTING.md](TESTING.md)) without coupling the engine repository back to concrete adapters. The eval rungs run **natively** over the linked crates and prove prompt quality; WASM/WIT conformance stays with the wasm example (`cargo make wasm-run`). A third-party adapter joining this shim needs both a Cargo dependency on the root package and a catalog entry in `src/catalog.rs` — a scenario directory alone cannot link a Rust crate. The development entry point:
+The `eval` package at `examples/eval/` links every adapter crate in-process and owns the first-party catalog declaration (in `examples/eval/src/main.rs`) over the engine-owned `native` host, composing it with Specify's `probe` library through its `client` feature (the shared cursor composition; the engine composes the same client in its own `examples/eval/`) — both consumed from revision-pinned git sources like the `adapter` SDK. The package carries the live `cargo make eval` trial plus the single-operation prompt scenarios (see [TESTING.md](TESTING.md)) without coupling the engine repository back to concrete adapters. The eval rungs run **natively** over the linked crates and prove prompt quality; WASM/WIT conformance stays with the wasm example (`cargo make wasm-run`). A third-party adapter joining this shim needs both a Cargo dependency on the `eval` package and a catalog entry in `examples/eval/src/main.rs` — a scenario directory alone cannot link a Rust crate. The development entry point:
 
 ```bash
 cargo make specify -- --project-dir /path/to/project plan status
