@@ -25,7 +25,7 @@ jobs:
       - name: Private Git access
         uses: ./specify-adapters/.github/actions/checkout-with-specify
         with:
-          client-id: ${{ secrets.APP_CLIENT_ID }}
+          app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
       - uses: dtolnay/rust-toolchain@stable
