@@ -31,20 +31,16 @@ Every adapter — the three targets and the five sources — shares the same gue
 codex/                # cross-adapter prose: rules/ (UNI-* engineering rules)
                       # and references/runtime/ (the spec-runtime bundle
                       # adapters symlink into their prose/)
-crates/               # shared guest support (prose); the `adapter`
-                      # SDK, `native` host, and `probe` library are git
-                      # dependencies on augentic/specify, resolved from
-                      # the sibling checkout by the committed path patch
 src/                  # root adapters package: native-only first-party
                       # catalog declaration (`adapters::catalog`)
+                      # (`adapter`, `native`, `probe`, `prose` are git deps
+                      # on augentic/specify, path-patched to the sibling)
 examples/
   wasm/               # Omnia-hosted wasm deployment: host + specify guest
                       # + omnia.toml + fixture tree (see its README.md)
-  native/             # in-process native host over first-party adapters
   eval/               # the live composition example: the `eval` trial and
                       # the prompt scenarios under examples/eval/scenarios/
-Cargo.toml            # workspace: `examples/{wasm,native,eval}` + `crates/*`
-                      # + `{sources,targets}/*`
+Cargo.toml            # workspace: `examples/{wasm,eval}` + `{sources,targets}/*`
 ```
 
 Identity lives in the guest crate's `Cargo.toml` `version` and the wasm-pkg

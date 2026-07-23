@@ -3,5 +3,5 @@
 //! at build time.
 
 fn main() {
-    prose::emit();
+    prose::emit("prose");
 }

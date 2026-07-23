@@ -60,7 +60,3 @@ cargo make eval scenario contracts/design    # run one
 | `contracts/source`      | `orders-api-contract`        | Extract contracts from a vendored TypeScript service                        |
 | `contracts/update`      | `loyalty-api-contract`       | Update an existing contract baseline                                        |
 | `vectis/single-screen`  | `daily-quote`                | A tiny single-screen feature on `core + ios` — composition, core, shell     |
-
-The contracts scenarios mirror the operator-driven scenario packs beside them
-(see [`contracts/README.md`](contracts/README.md)), reduced to the build leg
-this rung exercises.

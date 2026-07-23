@@ -18,10 +18,6 @@ name = "wasm"
 path = "examples/wasm/omnia.rs"
 
 [[example]]
-name = "native"
-path = "examples/native/main.rs"
-
-[[example]]
 name = "eval"
 path = "examples/eval/main.rs"
 
@@ -48,19 +44,19 @@ anyhow.workspace = true
 native = { workspace = true, features = ["cli"] }
 omnia.workspace = true
 omnia-cursor.workspace = true
-omnia-guest.workspace = true
 omnia-wasi-http.workspace = true
 omnia-wasi-model.workspace = true
 omnia-wasi-otel.workspace = true
 probe = { workspace = true, features = ["client"] }
 semver.workspace = true
+tempfile.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [lints]
 workspace = true
 
 [workspace]
-members = ["crates/*", "sources/*", "targets/*"]
+members = ["sources/*", "targets/*"]
 resolver = "3"
 
 [workspace.package]
@@ -104,15 +100,15 @@ omnia-wasi-model = "0.35.0"
 omnia-wasi-otel = "0.35.0"
 
 adapter = { git = "https://github.com/augentic/specify.git" }
-probe = { git = "https://github.com/augentic/specify.git", default-features = false }
+probe = { git = "https://github.com/augentic/specify.git" }
 native = { git = "https://github.com/augentic/specify.git" }
+prose = { git = "https://github.com/augentic/specify.git" }
 
 captures = { path = "sources/captures" }
 contracts = { path = "targets/contracts" }
 documentation = { path = "sources/documentation" }
 intent = { path = "sources/intent" }
 omnia-target = { package = "omnia", path = "targets/omnia" }
-prose = { path = "crates/prose" }
 screenshots = { path = "sources/screenshots" }
 typescript = { path = "sources/typescript" }
 vectis = { path = "targets/vectis" }
@@ -141,6 +137,7 @@ adapter = { path = "../specify/crates/adapter" }
 probe = { path = "../specify/crates/probe" }
 guest = { path = "../specify/crates/guest" }
 native = { path = "../specify/crates/native" }
+prose = { path = "../specify/crates/prose" }
 
 [workspace.lints.rust]
 # https://dirname.github.io/rust-std-doc/rustc/lints/listing/allowed-by-default.html

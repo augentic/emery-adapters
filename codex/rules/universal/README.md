@@ -4,7 +4,7 @@ Shared **engineering standards** catalog — target-agnostic rules under `codex/
 
 See [docs/explanation/standards-layer.md](https://github.com/augentic/specify/blob/main/docs/explanation/standards-layer.md) for how engineering standards relate to workflow, artifacts, and `docs/standards/` (authoring house style).
 
-This directory owns the `UNI-*` namespace. Target-specific rules live in per-adapter overlays under `targets/<name>/prose/rules/` (omnia: `OMNIA-*` / `RUST-*` / `SEC-*`; contracts: `IFACE-*`; vectis: `VECTIS-*`). Source-adapter overlays under `sources/<name>/prose/rules/` share a single namespace, `SRC-*`, so any new source adapter that grows an overlay opts into `SRC-*` without coordinating a per-adapter namespace. Namespace ownership is enforced by this repo's rule-shape cargo test (`crates/prose/tests/rule_shape.rs`).
+This directory owns the `UNI-*` namespace. Target-specific rules live in per-adapter overlays under `targets/<name>/prose/rules/` (omnia: `OMNIA-*` / `RUST-*` / `SEC-*`; contracts: `IFACE-*`; vectis: `VECTIS-*`). Source-adapter overlays under `sources/<name>/prose/rules/` share a single namespace, `SRC-*`, so any new source adapter that grows an overlay opts into `SRC-*` without coordinating a per-adapter namespace. Namespace ownership is enforced by this repo's rule-shape cargo test (`tests/rule_shape.rs`).
 
 Sibling shared hook directory: [`codex/references/replay/`](../../references/replay/) — shared build-time replay hook contract for targets that opt in.
 
@@ -52,7 +52,7 @@ Rules are grouped by severity (highest first). `UNI-*` ids are stable citation k
 
 ## File shape
 
-Each rule is a small markdown file with YAML frontmatter followed by a required `## Rule` heading. This repo's rule-shape cargo test (`crates/prose/tests/rule_shape.rs`) is the authoring gate enforcing the shape at CI time. The minimum form:
+Each rule is a small markdown file with YAML frontmatter followed by a required `## Rule` heading. This repo's rule-shape cargo test (`tests/rule_shape.rs`) is the authoring gate enforcing the shape at CI time. The minimum form:
 
 ```markdown
 ---
@@ -93,6 +93,6 @@ Adapter overlays are preferred over the shared rule when both match — e.g. a h
 1. Pick the next free `UNI-NNN`. Do not reuse retired ids; mark old rules with a `deprecated:` block in the frontmatter and keep the file so historical citations still resolve.
 2. Create the file with the frontmatter and `## Rule` heading shown above.
 3. Wire the new id into any target review references that should apply it (Omnia [`review-categories.md`](../../../targets/omnia/prose/references/review-categories.md), Vectis [`universal-checks.md`](../../../targets/vectis/prose/references/review/universal-checks.md), etc.) — no check verifies that every consumer cites every rule, so coverage is a manual concern.
-4. Run `cargo make ci` (or `cargo test -p prose --test rule_shape` for the fast path) from this repository checkout. The rule-shape test enforces frontmatter validity, the `## Rule` body heading, namespace ownership, and id uniqueness across the shared tree and every per-adapter overlay.
+4. Run `cargo make ci` (or `cargo nextest run -p adapters --test rule_shape` for the fast path) from this repository checkout. The rule-shape test enforces frontmatter validity, the `## Rule` body heading, namespace ownership, and id uniqueness across the shared tree and every per-adapter overlay.
 
 `README.md` files (case-insensitive) under any codex directory are skipped by the discovery walk and are reserved for index pages like this one — they are never validated as rules.

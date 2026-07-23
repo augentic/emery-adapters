@@ -118,7 +118,7 @@ The adapter's scaffold renderer is render-only and ships with embedded version p
 
 **Agents:** detect → record the failing combo (caps + shells), the failing host step, and the load-bearing error line → mark the build outcome as `deferred` with a template / pin drift signal → **exit** (no upstream edits). See [Consumer tooling boundary](../references/spec-runtime/guardrails.md#consumer-tooling-boundary).
 
-**Operators (separate maintainer session):** edit [`core/versions.toml`](../../core/versions.toml) and/or [`core/templates/`](../../core/templates/core/), rebuild the guest component, publish / bump the adapter version; the consumer project's scaffolds re-sync deterministically on the next build.
+**Operators (separate maintainer session):** edit [`versions.toml`](../../versions.toml) and/or [`templates/`](../../templates/core/), rebuild the guest component, publish / bump the adapter version; the consumer project's scaffolds re-sync deterministically on the next build.
 
 ## § Phase outcome contract
 

@@ -21,7 +21,7 @@ const ASSEMBLY_ORDER: &[&str] = &["core", "ios", "android"];
 const MANIFEST_IGNORED: &str = "MANIFEST.md";
 
 fn main() {
-    prose::emit();
+    prose::emit("prose");
     if let Err(err) = generate_template_registry() {
         panic!("vectis template manifest codegen failed: {err}");
     }

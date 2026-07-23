@@ -252,7 +252,7 @@ When `composition.yaml` or `assets.yaml` is absent, skip this check — there is
 
 **Codex**: `rule_id: VECTIS-007`
 
-Per the iOS scaffold immutability contract ([`hard-rules-ios.md`](../hard-rules-ios.md), [`core/templates/ios/MANIFEST.md`](../../../core/templates/ios/MANIFEST.md)), `iOS/Makefile`, `iOS/project.yml`, `iOS/.vectis/sim-build.sh`, and `iOS/.vectis/sim-dev.sh` are adapter-owned. Agents must not edit them. The simulator destination for verify must be `generic/platform=iOS Simulator` in `sim-build.sh` only — never a named device (`name=iPhone …`) and never inlined in the Makefile.
+Per the iOS scaffold immutability contract ([`hard-rules-ios.md`](../hard-rules-ios.md), [`templates/ios/MANIFEST.md`](../../../templates/ios/MANIFEST.md)), `iOS/Makefile`, `iOS/project.yml`, `iOS/.vectis/sim-build.sh`, and `iOS/.vectis/sim-dev.sh` are adapter-owned. Agents must not edit them. The simulator destination for verify must be `generic/platform=iOS Simulator` in `sim-build.sh` only — never a named device (`name=iPhone …`) and never inlined in the Makefile.
 
 **Detection**:
 
