@@ -5,6 +5,7 @@ version = 4
 [[package]]
 name = "adapter"
 version = "0.28.0"
+source = "git+https://github.com/augentic/specify.git#d865f795d11b1bdf288cd652ff0ddd7b1cf451be"
 dependencies = [
  "omnia-guest",
  "omnia-wasi-http",
@@ -168,6 +169,7 @@ checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
 [[package]]
 name = "artifacts"
 version = "0.28.0"
+source = "git+https://github.com/augentic/specify.git#d865f795d11b1bdf288cd652ff0ddd7b1cf451be"
 dependencies = [
  "diagnostics",
  "error",
@@ -508,6 +510,7 @@ dependencies = [
 [[package]]
 name = "change"
 version = "0.28.0"
+source = "git+https://github.com/augentic/specify.git#d865f795d11b1bdf288cd652ff0ddd7b1cf451be"
 dependencies = [
  "artifacts",
  "diagnostics",
@@ -1050,6 +1053,7 @@ checksum = "7cd812cc2bc1d69d4764bd80df88b4317eaef9e773c75226407d9bc0876b211c"
 [[package]]
 name = "diagnostics"
 version = "0.28.0"
+source = "git+https://github.com/augentic/specify.git#d865f795d11b1bdf288cd652ff0ddd7b1cf451be"
 dependencies = [
  "base16ct",
  "schemars",
@@ -1177,6 +1181,7 @@ dependencies = [
 [[package]]
 name = "error"
 version = "0.28.0"
+source = "git+https://github.com/augentic/specify.git#d865f795d11b1bdf288cd652ff0ddd7b1cf451be"
 dependencies = [
  "serde-saphyr",
  "thiserror 2.0.19",
@@ -2348,6 +2353,7 @@ dependencies = [
 [[package]]
 name = "native"
 version = "0.28.0"
+source = "git+https://github.com/augentic/specify.git#d865f795d11b1bdf288cd652ff0ddd7b1cf451be"
 dependencies = [
  "adapter",
  "artifacts",
@@ -3125,6 +3131,7 @@ dependencies = [
 [[package]]
 name = "probe"
 version = "0.28.0"
+source = "git+https://github.com/augentic/specify.git#d865f795d11b1bdf288cd652ff0ddd7b1cf451be"
 dependencies = [
  "anyhow",
  "artifacts",
@@ -3154,6 +3161,7 @@ dependencies = [
 [[package]]
 name = "project"
 version = "0.28.0"
+source = "git+https://github.com/augentic/specify.git#d865f795d11b1bdf288cd652ff0ddd7b1cf451be"
 dependencies = [
  "artifacts",
  "diagnostics",
@@ -3189,6 +3197,7 @@ dependencies = [
 [[package]]
 name = "prose"
 version = "0.28.0"
+source = "git+https://github.com/augentic/specify.git#d865f795d11b1bdf288cd652ff0ddd7b1cf451be"
 
 [[package]]
 name = "prost"
@@ -3762,9 +3771,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-pki-types"
-version = "1.15.0"
+version = "1.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "764899a24af3980067ee14bc143654f297b22eaebfe3c7b6b211920a5a59b046"
+checksum = "2f4925028c7eb5d1fcdaf196971378ed9d2c1c4efc7dc5d011256f76c99c0a96"
 dependencies = [
  "web-time",
  "zeroize",
@@ -4131,6 +4140,7 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 [[package]]
 name = "slice"
 version = "0.28.0"
+source = "git+https://github.com/augentic/specify.git#d865f795d11b1bdf288cd652ff0ddd7b1cf451be"
 dependencies = [
  "artifacts",
  "diagnostics",
@@ -4745,6 +4755,7 @@ dependencies = [
 [[package]]
 name = "transport"
 version = "0.28.0"
+source = "git+https://github.com/augentic/specify.git#d865f795d11b1bdf288cd652ff0ddd7b1cf451be"
 dependencies = [
  "artifacts",
  "change",
@@ -5933,7 +5944,7 @@ checksum = "1ffae5123b2d3fc086436f8834ae3ab053a283cfac8fe0a0b8eaae044768a4c4"
 [[package]]
 name = "wrpc-introspect"
 version = "0.7.0"
-source = "git+https://github.com/bytecodealliance/wrpc#f4e36b24517ffcb513a580b4a6a39d631003891e"
+source = "git+https://github.com/bytecodealliance/wrpc#52e5d7f13d5a1d9073bde734e01b27cd77202473"
 dependencies = [
  "wit-parser 0.251.0",
 ]
@@ -5941,7 +5952,7 @@ dependencies = [
 [[package]]
 name = "wrpc-transport"
 version = "0.29.0"
-source = "git+https://github.com/bytecodealliance/wrpc#f4e36b24517ffcb513a580b4a6a39d631003891e"
+source = "git+https://github.com/bytecodealliance/wrpc#52e5d7f13d5a1d9073bde734e01b27cd77202473"
 dependencies = [
  "anyhow",
  "bytes",
@@ -5958,7 +5969,7 @@ dependencies = [
 [[package]]
 name = "wrpc-wasmtime"
 version = "0.1.0"
-source = "git+https://github.com/bytecodealliance/wrpc#f4e36b24517ffcb513a580b4a6a39d631003891e"
+source = "git+https://github.com/bytecodealliance/wrpc#52e5d7f13d5a1d9073bde734e01b27cd77202473"
 dependencies = [
  "anyhow",
  "bytes",

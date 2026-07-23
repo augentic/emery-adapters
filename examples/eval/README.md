@@ -1,83 +1,54 @@
 # Prompt evaluation
 
-A live-model harness for testing adapter prompts and references used in judgement steps. Outputs are graded by deterministic validators — not a model.
+Live-model harness for first-party adapters. The composition binary (`examples/eval/`) links every source and target into the native catalog and drives production verbs through the shared cursor backend. Outputs are graded by **deterministic** checks — not a model.
 
-Ownership, hermeticism, and how this example sits among the five test rungs: [TESTING.md](../../TESTING.md). Catalog declaration: [`src/main.rs`](src/main.rs). Shared fixture with the wasm example: [`examples/wasm/fixture/`](../wasm/fixture/).
+## Prerequisites
 
-## Quick start
+From the `specify-adapters` repo root:
 
-Login to the Cursor agent:
+1. Authenticated [`cursor-agent`](https://cursor.com/docs/cli) on `PATH`:
+  - `cursor-agent login`, or
+  - `CURSOR_API_KEY` in a repo-root `.env` (the `eval` task loads it).
+2. Optional: `EVAL_MODEL=<model-id>`, `EVAL_TIMEOUT_SECS=<secs>` (the `eval` task defaults timeout to `300`).
 
-```bash
-[cursor-]agent login
-```
-
-or set `CURSOR_API_KEY` in `.env` at the repository root.
-
-```bash
-make eval
-```
-
-This runs the full operator rhythm in `sandbox/` over a `contracts`-bound project with `documentation` + `intent` as sources. Expect tens of minutes of live model time. A passing run removes the project; a failing run retains it for in-place review or per-phase re-runs (below).
-
-`EVAL_MODEL=<model-id>` overrides the model; unset means the cursor backend's default.
-
-Any other specify verb goes through the native first-party catalog:
+Any specify verb through the native catalog[^1]:
 
 ```bash
-cargo make specify -- --project-dir <dir> slice list
+make specify -- --project-dir <dir> slice list
 ```
 
 
 
-### Manual workflow
-
-```bash
-make eval init
-make eval plan
-make eval execute
-make eval finalize
-make eval clean     # or re-run init to reinitialize
-```
+## Choose a loop
 
 
+| Loop           | Use when                                                                                                | Command                                               | Doc                          |
+| -------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | ---------------------------- |
+| **Scenario**   | Fast prompt iteration on one adapter operation (`build` / merge gate). Synthetic slice inputs; minutes. | `make eval scenario …`                                | [scenarios.md](scenarios.md) |
+| **Full trial** | End-to-end operator rhythm with real sources → real working-tree outputs. Tens of minutes.              | `make eval` or a custom `cargo run -p eval -- eval …` | [trial.md](trial.md)         |
 
-### Prompt scenarios
-
-One adapter operation over a fixture scratch tree — minutes, not a full change:
-
-```bash
-make eval scenario                     # list
-make eval scenario contracts/design    # one
-```
-
-Anatomy, indexing, and third-party joining: `[scenarios/README.md](scenarios/README.md)`.
-
-## Model judgment
-
-A trial exercises engine legs (`proposal`, `synthesis`) and this repo's adapter legs (`leads` / `evidence` on sources; contracts build sub-flows + `report` on the target). Rung details and grading posture: [TESTING.md](../../TESTING.md) (§ eval composition example).
-
-## Workflow
 
 ```text
-init        specify init contracts + fixture docs/
-plan        specify plan author (documentation + intent) → Gate 1 approved
-execute     specify plan execute  (refine → build → merge per slice, until drained)
-finalize    specify plan archive
+scenario   one seam op over inputs/*.md (+ optional fixture)
+               → sandbox/<adapter>/<name>/run-…/ + report.json
+
+trial      init → plan author → approved → plan execute → archive
+               → sandbox/ project (cleaned on full pass)
 ```
 
-Every step runs the production operation — `execute` is the real drained loop. Completed phases are echoed as the loop runs.
+### Start here by target
 
-## Grading
+Stock `make eval` is the **contracts** trial only. Other targets use a scenario and/or a [custom trial](trial.md#custom-trials).
 
-Hard assertions only (shared `probe` runner):
+| Target | Scenario smoke | Full trial |
+| ------ | -------------- | ---------- |
+| **contracts** | `make eval scenario contracts/design` ([index](scenarios.md#index)) | `make eval` ([trial.md](trial.md)) |
+| **omnia** | `make eval scenario omnia/health` | Custom trial — e.g. TypeScript → Omnia migration ([r9k / test-spec](trial.md#example-omnia-legacy-migration-test-spec--r9k-shape)) |
+| **vectis** | `make eval scenario vectis/single-screen` | Custom trial (`--target vectis`, fixture + platforms as needed) |
 
+## Related
 
-| Stage   | Check      | Pass condition                                               |
-| ------- | ---------- | ------------------------------------------------------------ |
-| plan    | Entries    | `plan author` produces at least one entry                    |
-| execute | Lifecycle  | Every plan entry is `done`                                   |
-| execute | Provenance | Every evidenced requirement carries sources; ids are present |
+- [TESTING.md](../../TESTING.md) — where this example sits among the five rungs
+- [examples/wasm/](../wasm/README.md) — same operator rhythm over the real WASM component seam (not the native catalog)
 
-
-Per-leg request / repair counts are **reported, not asserted**. A leg drifting from zero repairs toward the budget is the early signal that a prompt or answer-schema change degraded the model's first answer. In manual mode, counts cover only that operation's requests.
+[^1]: `--project-dir` is a lab convenience on this binary (before the subcommand). It is not a global flag on the shipped `specify` CLI.

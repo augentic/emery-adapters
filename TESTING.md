@@ -2,61 +2,57 @@
 
 Integration-first test posture for `specify-adapters`: integration owns every publicly reachable behavior, and the unit layer is deliberately thin. Design tests against the public surfaces — the WIT contract, each adapter crate's `tests/` suite, and the operator-invoked wasm example — never against private kernels. Read this before adding or deleting a test.
 
-## The development loop
+## The five rungs
 
-Every rung runs from this repository with its own `cargo make` tasks; the engine repository tests itself independently (see [its developer loop guide](https://github.com/augentic/specify/blob/main/docs/contributing/dev-loop.md)). There is no cross-repo command surface — the rungs below are this repo's own test strata.
+Every rung runs from this repository with its own `cargo make` tasks; the engine repository tests itself independently (see [its developer loop guide](https://github.com/augentic/specify/blob/main/docs/contributing/dev-loop.md)). There is no cross-repo command surface.
 
-Five rungs, fastest feedback first. Every behavior is asserted on exactly one rung — duplicating an assertion across rungs is a defect, not extra safety. Omnia-testkit owns reusable model and runtime test mechanics (the scripted double, request-recording `Harness`, runtime assembly). Adapter native tests own operation behavior, the eval composition example owns cross-phase integration and prompt quality, and the wasm example owns WASM/WIT conformance.
+Fastest feedback first. **Every behavior is asserted on exactly one rung** — duplicating an assertion across rungs is a defect, not extra safety.
+
+| # | Rung | Owns | Entry |
+| - | ---- | ---- | ----- |
+| 1 | Native crate tests | Operation behavior, prompt assembly (scripted `Harness`) | `cargo nextest run -p <adapter>` / `cargo make test` |
+| 2 | Full trial | Cross-phase integration, real sources → working-tree outputs | [`examples/eval/trial.md`](examples/eval/trial.md) |
+| 3 | Prompt scenarios | One seam op (`build` / merge gate), prompt quality | [`examples/eval/scenarios.md`](examples/eval/scenarios.md) |
+| 4 | Wasm example | WASM/WIT conformance over the real component seam | [`examples/wasm/`](examples/wasm/README.md) |
+| 5 | Consumer project | Code (not prose) iteration via seeded `.wasm` | `cargo make adapter [name]` + `specify adapter add` |
+
+Ownership boundaries: omnia-testkit owns reusable model/runtime test mechanics; adapter `tests/` own operation behavior; the [eval composition example](examples/eval/README.md) owns live prompt/trial loops; the wasm example owns component-seam conformance. Generic catalog/provider/command mechanics stay in `specify/crates/native/tests` (scenario/sandbox mechanics in `specify/crates/probe/tests`).
+
+Sibling co-development: the committed `[patch."https://github.com/augentic/specify.git"]` in the root `Cargo.toml` resolves engine crates from `../specify`.
 
 ### 1. Native crate tests — the inner loop
 
-Each adapter crate is `cdylib` + `rlib`, so its wasm-free logic links natively and tests through the standard auto-discovered suite at `{targets,sources}/<name>/tests/<area>.rs`. These tests own operation behavior, including request validation, deterministic projection, and prompt assembly. Judgment legs use `omnia_testkit::model::Harness` to assert "did my prompt edit land in the assembled text"; adapter crates must not duplicate that model/runtime machinery. The wasm32-only guest shims (the inline `mod guest` in each `src/lib.rs`) are single `adapter::source!` / `adapter::target!` export-macro invocations and carry no native tests.
+Each adapter crate is `cdylib` + `rlib`, so its wasm-free logic links natively and tests through `{targets,sources}/<name>/tests/<area>.rs`. Judgment legs use `omnia_testkit::model::Harness` to assert "did my prompt edit land in the assembled text"; adapter crates must not duplicate that model/runtime machinery. The wasm32-only guest shims (inline `mod guest` in each `src/lib.rs`) are single `adapter::source!` / `adapter::target!` invocations and carry no native tests.
 
 ```bash
 cargo nextest run -p vectis   # one adapter
 cargo make test               # the whole workspace, matching CI
 ```
 
-`nextest` is mandatory, not a preference: it runs each test in its own process, and that isolation is what lets the CWD/env-mutating suites pass. Never use bare `cargo test`.
+`nextest` is mandatory: each test runs in its own process, which is what lets CWD/env-mutating suites pass. Never use bare `cargo test`.
 
-### 2. The eval composition example — native-adapter integration and the live rungs
+### 2–3. Eval — live trial and scenarios
 
-The `eval` package (`examples/eval/`) declares the first-party catalog in `src/main.rs` over the engine-owned `native` host and owns the composition binary. The engine's `native` crate supplies the catalog machinery, provider, reference hosting, and command execution, and its `probe` library (consumed with the `client` feature) supplies telemetry, deterministic grading, the trial/scenario runners, and the shared cursor composition (`probe::client`); `cargo make eval` passes the trial inputs explicitly. The package owns the Tokio runtime, the catalog binding, and the scenario root, and runs production verb handlers natively without building WebAssembly. Generic catalog, provider, reference, and command mechanics are tested in `specify/crates/native/tests` (scenario/sandbox mechanics in `specify/crates/probe/tests`). `cargo make ci` builds and lints the package like any other member; the live rungs below stay operator-invoked.
-
-```bash
-cargo make specify -- --project-dir <dir> slice list   # any specify verb, natively
-```
-
-The same example carries the repo's **live trial**: `cargo make eval` (the `eval` example's `eval` mode) runs the operator rhythm — `init → plan author → transition approved → plan execute → plan archive` — over a persistent gitignored `sandbox/` project, with `documentation` + `intent` bound as sources and `contracts` as the target. It mirrors the engine's own eval-example trial: production verbs through the shared typed command router, the live cursor backend at the model seam, and **deterministic grading only** — every plan entry `done` and the provenance gate over the non-empty baseline specs (the merged-baseline validator gate stays with the wasm example's completion check on rung 5). Per-leg completion-request counts are reported (requests beyond one per leg are repairs), never asserted. Every phase isolates its execution paths, landing the project cache inside the sandbox, so runs are hermetic with respect to the operator's normal cache; the operator inputs are inlined in the `eval` / `wasm-run` tasks and the fixture comes from the shared `examples/wasm/fixture/`. A full trial takes tens of minutes of live model time. A full pass cleans the sandbox; a failing phase retains it for in-place review and per-phase re-runs. Live-only — requires an authenticated [`cursor-agent`](https://cursor.com/docs/cli) on `PATH`; `EVAL_MODEL=<model-id>` overrides the model.
+Native catalog, live cursor backend, operator-invoked (never CI). How to run, customize, and choose a loop: **[`examples/eval/`](examples/eval/README.md)**.
 
 ```bash
-cargo make eval           # the full trial
-cargo make eval init      # one phase: init | plan | execute | finalize | clean
+cargo make eval                              # stock contracts trial
+cargo make eval scenario omnia/health        # one scenario
+cargo make specify -- --project-dir <dir> slice list
 ```
 
-Sibling co-development needs no pin dance: the committed `[patch."https://github.com/augentic/specify.git"]` section in the root `Cargo.toml` resolves every engine crate from the sibling `../specify` checkout, so uncommitted engine changes are picked up directly.
+### 4. Wasm example — component seam
 
-### 3. Single-operation prompt scenarios — fast prompt iteration
-
-`cargo make eval scenario <adapter>/<name>` drives one adapter operation (one `build`, or one `merge` gate) end-to-end against the real cursor backend, natively through the same seam provider the trial uses. This is the fast prompt-iteration rung — one operation, one scratch tree, minutes not a full change; prompt edits under `{targets,sources}/<name>/prose/**` rebuild natively in seconds, so there is no overlay mode. Scenarios prove prompt quality over the linked crates, not WASM/WIT conformance — that stays with rung 4. Each scenario is a data directory under [`examples/eval/scenarios/`](examples/eval/scenarios/README.md) — `scenario.toml` routing plus `inputs/*.md` and an optional `fixture/**`. For an adapter already linked into the shim that directory is all it takes; a third-party adapter additionally needs a Cargo dependency on the `eval` package and a catalog entry in `examples/eval/src/main.rs`, because configuration alone cannot link a Rust crate. Each run retains its isolated scratch tree (with the project cache pinned inside it) and a `report.json` under the gitignored `sandbox/<adapter>/<name>/run-…/`; a failing adapter report or a missing `expect` artifact fails the run and persists `outcome: fail`. Requires [`cursor-agent`](https://cursor.com/docs/cli) on `PATH`; `EVAL_MODEL=<model-id>` overrides the model.
-
-```bash
-cargo make eval scenario                     # list scenarios
-cargo make eval scenario contracts/design    # one scenario
-```
-
-### 4. The wasm example — end-to-end component seam
-
-[`examples/wasm/`](examples/wasm/README.md) builds the sibling `augentic/specify` shipped binary (embedded engine guest) plus this repo's `documentation`, `intent`, and `contracts` components, seeds them via `specify adapter add`, and drives the full operator rhythm against the live cursor backend. There is no `omnia.toml`: the example invokes the binary directly under `SPECIFY_HOME`. It replays the same operator inputs (inlined in `wasm-run`) and fixture (`examples/wasm/fixture/`) as the native trial. Still operator-invoked and per-leg ungraded — the graded trial is `cargo make eval` on rung 2. Expect a run to take tens of minutes; `GUEST_TIMEOUT_MS` (default one hour) caps each `wasi:cli/run` invocation's wall clock, and `EVAL_MODEL=<model-id>` overrides the model. This is the only rung that exercises the real component seam end-to-end: WIT dispatch-by-id, mounts, and the engine guest together.
+[`examples/wasm/`](examples/wasm/README.md) — shipped `specify` binary + built adapter components over the real WIT seam. Operator-invoked; per-leg ungraded (the graded native trial is rung 2).
 
 ```bash
 cargo make wasm-run
 cargo make wasm-clean
 ```
 
-### 5. Consumer project — code changes through the engine
+### 5. Consumer project — seeded components
 
-For code (not prose) iteration against a real consumer project, `cargo make adapter [adapter]` builds components with fast profile settings (LTO off, opt-level 1) into `target/wasm32-wasip2/release/<name>.wasm` in seconds instead of a full `cargo make release`. The engine's bare-name resolution reads only the consumer project's seeded component cache (no sibling-checkout or build-tree probe), so seed the built component explicitly — `specify adapter add /path/to/specify-adapters/target/wasm32-wasip2/release/<name>.wasm` mirrors it into that project's component cache (re-run after each rebuild to replace the entry; a local component path at `specify init` seeds the same cache). Caveat: switching between the `adapter` and `release` flavors changes the profile fingerprint and forces a rebuild; publishing is rare, so the trade is accepted.
+`cargo make adapter [adapter]` builds with fast profile settings (LTO off, opt-level 1) into `target/wasm32-wasip2/release/<name>.wasm`. Seed into a consumer project with `specify adapter add <path.wasm>` (re-run after each rebuild). Switching between `adapter` and `release` flavors changes the profile fingerprint and forces a rebuild.
 
 ```bash
 cargo make adapter contracts   # one adapter; no argument builds every adapter

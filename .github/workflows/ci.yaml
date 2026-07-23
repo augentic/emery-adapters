@@ -13,6 +13,8 @@ permissions:
 env:
   RUSTFLAGS: -Dwarnings
   CARGO_TERM_COLOR: always
+  # Cargo's libgit2 fetcher does not see the app-token checkout credentials.
+  CARGO_NET_GIT_FETCH_WITH_CLI: true
 
 jobs:
   clippy:
@@ -32,6 +34,13 @@ jobs:
           owner: augentic
           repositories: specify
           permission-contents: read
+      - name: Authenticate Cargo git deps
+        env:
+          TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          git config --global \
+            url."https://x-access-token:${TOKEN}@github.com/augentic/specify".insteadOf \
+            "https://github.com/augentic/specify"
       - name: Checkout specify
         uses: actions/checkout@v6
         with:
@@ -79,6 +88,13 @@ jobs:
           owner: augentic
           repositories: specify
           permission-contents: read
+      - name: Authenticate Cargo git deps
+        env:
+          TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          git config --global \
+            url."https://x-access-token:${TOKEN}@github.com/augentic/specify".insteadOf \
+            "https://github.com/augentic/specify"
       - name: Checkout specify
         uses: actions/checkout@v6
         with:
@@ -113,6 +129,13 @@ jobs:
           owner: augentic
           repositories: specify
           permission-contents: read
+      - name: Authenticate Cargo git deps
+        env:
+          TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          git config --global \
+            url."https://x-access-token:${TOKEN}@github.com/augentic/specify".insteadOf \
+            "https://github.com/augentic/specify"
       - name: Checkout specify
         uses: actions/checkout@v6
         with:
@@ -155,6 +178,13 @@ jobs:
           owner: augentic
           repositories: specify
           permission-contents: read
+      - name: Authenticate Cargo git deps
+        env:
+          TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          git config --global \
+            url."https://x-access-token:${TOKEN}@github.com/augentic/specify".insteadOf \
+            "https://github.com/augentic/specify"
       - name: Checkout specify
         uses: actions/checkout@v6
         with:
@@ -186,6 +216,13 @@ jobs:
           owner: augentic
           repositories: specify
           permission-contents: read
+      - name: Authenticate Cargo git deps
+        env:
+          TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          git config --global \
+            url."https://x-access-token:${TOKEN}@github.com/augentic/specify".insteadOf \
+            "https://github.com/augentic/specify"
       - name: Checkout specify
         uses: actions/checkout@v6
         with:
@@ -231,3 +268,6 @@ jobs:
         with:
           manifest-path: specify-adapters/Cargo.toml
           arguments: --workspace --locked
+          use-git-cli: true
+          # Full URL form required by cargo-deny-action's credential.helper store.
+          credentials: https://x-access-token:${{ steps.app-token.outputs.token }}@github.com

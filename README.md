@@ -1,7 +1,7 @@
 # specify-adapters
 
-First-party Specify **adapters** — independently versioned wasm-pkg registry
-artifacts consumed by the platform `specify` binary.
+First-party Specify **adapters** — Wasm OCI artifacts published to GHCR under
+one lockstep workspace SemVer and consumed by the platform `specify` binary.
 
 Each adapter is a **guest component**: one crate (`<name>`) whose wasm-free
 library modules carry the adapter logic — natively tested through the crate's
@@ -39,8 +39,9 @@ examples/
 Cargo.toml            # virtual workspace: `examples/eval` + `{sources,targets}/*`
 ```
 
-Identity lives in the guest crate's `Cargo.toml` `version` and the wasm-pkg
-reference it publishes under (`specify:<name>@<semver>`). Axis is the exported
+Identity lives in the guest crate's `Cargo.toml` `version` (the shared
+`[workspace.package]` SemVer) and the package reference it publishes under
+(`specify:<name>@<semver>`). Axis is the exported
 world (`source` xor `target`). The compatibility floor and — for targets — the
 declared build `inputs[]` and platforms capability are compiled into the
 `describe` operation's manifest record.
@@ -64,7 +65,7 @@ cargo make check   # fmt + clippy + nextest + doctests + doc
 cargo make ci      # the full gate — adds cargo-vet + cargo-deny
 ```
 
-The `fmt` arm uses nightly `rustfmt`, while component development and publishing use nightly Cargo Script. Install a nightly toolchain plus the `cargo-make`, `cargo-nextest`, `cargo-deny`, and `cargo-vet` tools; the tasks are defined in `Makefile.toml`.
+The `fmt` arm uses nightly `rustfmt`. Install a nightly toolchain plus the `cargo-make`, `cargo-nextest`, `cargo-deny`, and `cargo-vet` tools (publishing also uses `wkg`); the tasks are defined in `Makefile.toml`.
 
 Release-build every adapter for wasm32-wasip2 (components land
 at `target/wasm32-wasip2/release/<name>.wasm`):
@@ -73,7 +74,11 @@ at `target/wasm32-wasip2/release/<name>.wasm`):
 cargo make release
 ```
 
-The `eval` package at `examples/eval/` links every adapter crate in-process and owns the first-party catalog declaration (in `examples/eval/src/main.rs`) over the engine-owned `native` host, composing it with Specify's `probe` library through its `client` feature (the shared cursor composition; the engine composes the same client in its own `examples/eval/`) — both consumed from revision-pinned git sources like the `adapter` SDK. The package carries the live `cargo make eval` trial plus the single-operation prompt scenarios (see [TESTING.md](TESTING.md)) without coupling the engine repository back to concrete adapters. The eval rungs run **natively** over the linked crates and prove prompt quality; WASM/WIT conformance stays with the wasm example (`cargo make wasm-run`). A third-party adapter joining this shim needs both a Cargo dependency on the `eval` package and a catalog entry in `examples/eval/src/main.rs` — a scenario directory alone cannot link a Rust crate. The development entry point:
+For fast development iteration, `cargo make adapter <name>` builds one
+component with fast profile settings into the same path (see
+[TESTING.md](TESTING.md)).
+
+The `eval` package at [`examples/eval/`](examples/eval/README.md) links every adapter crate in-process and owns the first-party catalog declaration (in `examples/eval/src/main.rs`) over the engine-owned `native` host, composing it with Specify's `probe` library through its `client` feature — both consumed from revision-pinned git sources like the `adapter` SDK. It carries the live trial and prompt-scenario loops without coupling the engine repository back to concrete adapters. Eval runs **natively** and proves prompt quality; WASM/WIT conformance stays with the wasm example (`cargo make wasm-run`). See [TESTING.md](TESTING.md) for the five-rung map. The development entry point:
 
 ```bash
 cargo make specify -- --project-dir /path/to/project plan status
@@ -85,15 +90,38 @@ For sibling co-development against uncommitted engine changes, the committed `[p
 
 ## Publishing
 
-Release-build, then push components to the registry as wasm-pkg packages:
+Publication is manual and local in this cut (GitHub Actions automation is a
+later cut; `.github/workflows/release.yaml` stays dormant until then). Each
+adapter publishes as a standard Wasm OCI artifact to public GHCR under
+`ghcr.io/augentic/specify-adapters/<name>:<version>`, where `<version>` is the
+shared `[workspace.package]` SemVer.
+
+One-time setup: authenticate to GHCR with a token carrying `write:packages`
+(the `wkg oci push` leg reads the Docker credential config):
+
+```bash
+gh auth token | docker login ghcr.io -u <github-user> --password-stdin
+```
+
+Release-build, then push one component to its exact version tag:
 
 ```bash
 cargo make release
-cargo make publish
+cargo make publish <name>
 ```
 
-Each identity's `<semver>` is the guest crate's `Cargo.toml` `version`.
-Publishing is idempotent: each identity is probed first and skipped when already
-present. CI (`.github/workflows/release.yaml`) runs the same tasks on a `v*`
-tag, authenticated by `GITHUB_TOKEN`; local emergency publishing uses the
-developer's own token in their `wkg` config.
+The helper derives `<version>` from the workspace manifest and refuses to
+replace an existing version tag — released bytes are immutable by policy
+(GHCR has no registry-native tag immutability, so the helper probe is the
+compensating control). A brand-new package is created **private**: flip it to
+public in the GHCR package settings
+(`https://github.com/orgs/augentic/packages/container/specify-adapters%2F<name>/settings`)
+so anonymous consumers can pull, then confirm the round-trip:
+
+```bash
+wkg oci pull ghcr.io/augentic/specify-adapters/<name>:<version> --output /tmp/<name>.wasm
+```
+
+The `specify` runtime installs the same artifacts automatically on a cold
+package-pin miss (`specify:<name>@<version>`); local development keeps the
+no-registry loop (`cargo make adapter <name>` + `specify adapter add`).

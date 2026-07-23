@@ -1,0 +1,10 @@
+# Routing for the `omnia/health` scenario: the adapter under test,
+# the seam operation `cargo make eval scenario` drives, and the slice name.
+adapter = "target:omnia"
+operation = "build"
+slice = "health"
+
+# Deterministic artifact-exists gate: a success report must leave the
+# create-mode crate under the working tree (kebab slice → snake crate path
+# per the omnia build prompt).
+expect = ["crates/health/Cargo.toml", "crates/health/src/lib.rs"]
