@@ -6,7 +6,7 @@ use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA};
 use adapter::seam::{Authority, ClaimKind, Context, Error, Lead};
 use adapter::{Format, MAX_REPAIRS, Request, Source as _};
 use documentation::Adapter;
-use testkit::{Harness, mcp_grants};
+use omnia_testkit::model::{Harness, mcp_grants};
 
 fn ctx(mcp_url: Option<&str>) -> Context<'_> {
     Context {

@@ -6,8 +6,8 @@ use adapter::answers::REPORT_ANSWER_SCHEMA;
 use adapter::seam::{Context, Input, MergePhase, Severity, Status, WorkingTree};
 use adapter::{Format, Request, Target as _};
 use omnia::Adapter;
+use omnia_testkit::model::{Harness, mcp_grants};
 use tempfile::TempDir;
-use testkit::{Harness, mcp_grants};
 
 const PHASE_DONE: &str = r#"{"applicable":true,"summary":"phase complete"}"#;
 const REPLAY_SKIPPED: &str = r#"{"applicable":false,"summary":"no captures binding"}"#;

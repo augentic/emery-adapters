@@ -8,8 +8,8 @@ use adapter::seam::{Context, Input, MergePhase, Severity, Status, WorkingTree};
 use adapter::{Format, Request, Target as _};
 use contracts::Adapter;
 use contracts::validate::RULE_VERSION_IS_SEMVER;
+use omnia_testkit::model::{Harness, mcp_grants};
 use tempfile::TempDir;
-use testkit::{Harness, mcp_grants};
 
 const NOT_APPLICABLE: &str = r#"{"applicable":false,"summary":"no surface this format owns"}"#;
 const SUCCESS_REPORT: &str = r#"{"status":"success","findings":[]}"#;

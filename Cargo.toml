@@ -114,7 +114,6 @@ intent = { path = "sources/intent" }
 omnia-target = { package = "omnia", path = "targets/omnia" }
 prose = { path = "crates/prose" }
 screenshots = { path = "sources/screenshots" }
-testkit = { path = "crates/testkit" }
 typescript = { path = "sources/typescript" }
 vectis = { path = "targets/vectis" }
 

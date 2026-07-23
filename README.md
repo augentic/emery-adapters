@@ -31,13 +31,10 @@ Every adapter — the three targets and the five sources — shares the same gue
 codex/                # cross-adapter prose: rules/ (UNI-* engineering rules)
                       # and references/runtime/ (the spec-runtime bundle
                       # adapters symlink into their prose/)
-crates/               # shared guest support (prose) and the repo's
-                      # dev-only test-support crate (testkit — the
-                      # recording model harness over omnia-testkit's
-                      # scripted double); the `adapter` SDK, `native`
-                      # host, and `probe` library are git dependencies
-                      # on augentic/specify, resolved from the sibling
-                      # checkout by the committed path patch
+crates/               # shared guest support (prose); the `adapter`
+                      # SDK, `native` host, and `probe` library are git
+                      # dependencies on augentic/specify, resolved from
+                      # the sibling checkout by the committed path patch
 src/                  # root adapters package: native-only first-party
                       # catalog declaration (`adapters::catalog`)
 examples/
