@@ -1,0 +1,38 @@
+name: Publish Release
+
+# Publish a durable release-X.Y.Z line of the first-party adapter train:
+# dispatch from the release branch. Gates on the repo CI workflow, then the
+# shared publish workflow dates RELEASES.md, tags vX.Y.Z, and creates the
+# GitHub Release.
+#
+# GHCR publication of the adapter components stays manual in this cut
+# (RFC-77 Phase A / RFC-76 Phase E): after the release exists, a maintainer
+# runs `cargo make release` + `cargo make publish <name>` per adapter — see
+# CONTRIBUTING.md § Publishing for the gates that must hold first.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: publish
+
+jobs:
+  skip:
+    name: Skipped
+    if: ${{ !startsWith(github.ref_name, 'release-') }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "This workflow only runs on the 'release-*' branches"
+          exit 1
+
+  ci:
+    name: CI
+    if: ${{ startsWith(github.ref_name, 'release-') }}
+    uses: ./.github/workflows/ci.yaml
+    secrets: inherit
+
+  publish:
+    name: Publish
+    needs: ci
+    uses: augentic/.github/.github/workflows/publish.yaml@main

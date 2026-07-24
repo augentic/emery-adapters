@@ -5,7 +5,7 @@ version = 4
 [[package]]
 name = "adapter"
 version = "0.28.0"
-source = "git+https://github.com/augentic/specify.git#d865f795d11b1bdf288cd652ff0ddd7b1cf451be"
+source = "git+https://github.com/augentic/specify.git?tag=v0.28.0#37acaffa260b7aab011b3437a95f675da6dc1cb9"
 dependencies = [
  "omnia-guest",
  "omnia-wasi-http",
@@ -169,7 +169,7 @@ checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
 [[package]]
 name = "artifacts"
 version = "0.28.0"
-source = "git+https://github.com/augentic/specify.git#d865f795d11b1bdf288cd652ff0ddd7b1cf451be"
+source = "git+https://github.com/augentic/specify.git?tag=v0.28.0#37acaffa260b7aab011b3437a95f675da6dc1cb9"
 dependencies = [
  "diagnostics",
  "error",
@@ -510,7 +510,7 @@ dependencies = [
 [[package]]
 name = "change"
 version = "0.28.0"
-source = "git+https://github.com/augentic/specify.git#d865f795d11b1bdf288cd652ff0ddd7b1cf451be"
+source = "git+https://github.com/augentic/specify.git?tag=v0.28.0#37acaffa260b7aab011b3437a95f675da6dc1cb9"
 dependencies = [
  "artifacts",
  "diagnostics",
@@ -1053,7 +1053,7 @@ checksum = "7cd812cc2bc1d69d4764bd80df88b4317eaef9e773c75226407d9bc0876b211c"
 [[package]]
 name = "diagnostics"
 version = "0.28.0"
-source = "git+https://github.com/augentic/specify.git#d865f795d11b1bdf288cd652ff0ddd7b1cf451be"
+source = "git+https://github.com/augentic/specify.git?tag=v0.28.0#37acaffa260b7aab011b3437a95f675da6dc1cb9"
 dependencies = [
  "base16ct",
  "schemars",
@@ -1181,7 +1181,7 @@ dependencies = [
 [[package]]
 name = "error"
 version = "0.28.0"
-source = "git+https://github.com/augentic/specify.git#d865f795d11b1bdf288cd652ff0ddd7b1cf451be"
+source = "git+https://github.com/augentic/specify.git?tag=v0.28.0#37acaffa260b7aab011b3437a95f675da6dc1cb9"
 dependencies = [
  "serde-saphyr",
  "thiserror 2.0.19",
@@ -2353,7 +2353,7 @@ dependencies = [
 [[package]]
 name = "native"
 version = "0.28.0"
-source = "git+https://github.com/augentic/specify.git#d865f795d11b1bdf288cd652ff0ddd7b1cf451be"
+source = "git+https://github.com/augentic/specify.git?tag=v0.28.0#37acaffa260b7aab011b3437a95f675da6dc1cb9"
 dependencies = [
  "adapter",
  "artifacts",
@@ -3131,7 +3131,7 @@ dependencies = [
 [[package]]
 name = "probe"
 version = "0.28.0"
-source = "git+https://github.com/augentic/specify.git#d865f795d11b1bdf288cd652ff0ddd7b1cf451be"
+source = "git+https://github.com/augentic/specify.git?tag=v0.28.0#37acaffa260b7aab011b3437a95f675da6dc1cb9"
 dependencies = [
  "anyhow",
  "artifacts",
@@ -3161,7 +3161,7 @@ dependencies = [
 [[package]]
 name = "project"
 version = "0.28.0"
-source = "git+https://github.com/augentic/specify.git#d865f795d11b1bdf288cd652ff0ddd7b1cf451be"
+source = "git+https://github.com/augentic/specify.git?tag=v0.28.0#37acaffa260b7aab011b3437a95f675da6dc1cb9"
 dependencies = [
  "artifacts",
  "diagnostics",
@@ -3197,7 +3197,7 @@ dependencies = [
 [[package]]
 name = "prose"
 version = "0.28.0"
-source = "git+https://github.com/augentic/specify.git#d865f795d11b1bdf288cd652ff0ddd7b1cf451be"
+source = "git+https://github.com/augentic/specify.git?tag=v0.28.0#37acaffa260b7aab011b3437a95f675da6dc1cb9"
 
 [[package]]
 name = "prost"
@@ -4140,7 +4140,7 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 [[package]]
 name = "slice"
 version = "0.28.0"
-source = "git+https://github.com/augentic/specify.git#d865f795d11b1bdf288cd652ff0ddd7b1cf451be"
+source = "git+https://github.com/augentic/specify.git?tag=v0.28.0#37acaffa260b7aab011b3437a95f675da6dc1cb9"
 dependencies = [
  "artifacts",
  "diagnostics",
@@ -4755,7 +4755,7 @@ dependencies = [
 [[package]]
 name = "transport"
 version = "0.28.0"
-source = "git+https://github.com/augentic/specify.git#d865f795d11b1bdf288cd652ff0ddd7b1cf451be"
+source = "git+https://github.com/augentic/specify.git?tag=v0.28.0#37acaffa260b7aab011b3437a95f675da6dc1cb9"
 dependencies = [
  "artifacts",
  "change",

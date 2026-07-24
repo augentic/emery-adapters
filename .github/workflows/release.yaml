@@ -1,40 +1,85 @@
-name: Release adapters
+name: Create Release
 
-# Publish each adapter as a standard wasm-pkg package. Tagging `v<x.y.z>`
-# cuts a release; each adapter's identity semver lives in its guest crate's
-# `Cargo.toml` `version`, and the release-built component
-# `target/wasm32-wasip2/release/<name>.wasm` is pushed as
-# `specify:<name>@<semver>`.
+# Cut a durable release-X.Y.Z line for the first-party adapter train: push
+# release-<version> at the current main tip, then open a PR that bumps main
+# to the next unreleased train version and resets RELEASES.md.
 #
-# Publishing is idempotent: each identity is probed before pushing and
-# skipped when already present. Auth is GITHUB_TOKEN alone.
+# Same shape as the shared augentic/.github release.yaml, composed locally
+# from its actions because the version bump runs `cargo generate-lockfile`,
+# which must resolve the private augentic/specify git dependencies — that
+# needs the App-token git prelude the shared reusable workflow does not
+# perform. GHCR publication stays manual (`cargo make publish <name>` after
+# Publish Release; see CONTRIBUTING.md).
+
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
+    inputs:
+      # N.B Cargo version rules allow "minor" for breaking changes while on 0.x.y
+      increment:
+        description: The type of version bump to perform
+        default: minor
+        type: string
+
+concurrency:
+  group: release
 
 permissions:
-  contents: read
-  packages: write
-
-env:
-  REGISTRY: ${{ vars.SPECIFY_REGISTRY || 'augentic.io' }}
-  REGISTRY_NAMESPACE: specify
-  CARGO_NET_GIT_FETCH_WITH_CLI: true
+  contents: write
+  pull-requests: write
 
 jobs:
-  publish:
-    name: Publish adapter components
+  skip:
+    name: Skipped
+    if: github.ref_name != 'main'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    steps:
+      - run: |
+          echo "This workflow only runs on the 'main' branch"
+          exit 1
+
+  # Create a new release branch from main (cut a release)
+  create:
+    name: Create release
+    if: github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
     steps:
       - uses: actions/checkout@v6
-        with:
-          path: specify-adapters
 
+      - name: Git identity
+        uses: augentic/.github/.github/actions/git-identity@main
+
+      - name: Release version
+        id: release
+        uses: augentic/.github/.github/actions/cargo-version@main
+
+      - name: Update branch release notes
+        uses: augentic/.github/.github/actions/release-notes@main
+        with:
+          release-type: major
+          version: ${{ steps.release.outputs.version }}
+
+      - name: Push to release branch
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: git push origin "HEAD:release-$VERSION"
+
+  # Bump the version and create a PR to merge it back into 'main'
+  next:
+    name: Next release
+    runs-on: ubuntu-latest
+    needs: create
+    env:
+      # Cargo's libgit2 fetcher does not see the app-token git credentials.
+      CARGO_NET_GIT_FETCH_WITH_CLI: true
+    steps:
+      - uses: actions/checkout@v6
+
+      # The version bump regenerates the lockfile, which resolves the
+      # private augentic/specify git dependencies.
       - name: Private Git access
-        id: app-token
+        id: git-token
         uses: actions/create-github-app-token@v3
         with:
           client-id: ${{ vars.APP_CLIENT_ID }}
@@ -45,51 +90,59 @@ jobs:
 
       - name: Authenticate Cargo git deps
         env:
-          TOKEN: ${{ steps.app-token.outputs.token }}
+          TOKEN: ${{ steps.git-token.outputs.token }}
         run: |
           git config --global \
             url."https://x-access-token:${TOKEN}@github.com/augentic/specify".insteadOf \
             "https://github.com/augentic/specify"
 
-      - name: Checkout specify
-        uses: actions/checkout@v6
+      - name: Git identity
+        uses: augentic/.github/.github/actions/git-identity@main
+
+      - name: Bump version
+        id: next
+        uses: augentic/.github/.github/actions/cargo-version@main
         with:
-          repository: augentic/specify
+          increment: ${{ inputs.increment }}
+
+      - name: Update release notes for next version
+        uses: augentic/.github/.github/actions/release-notes@main
+        with:
+          release-type: next
+          version: ${{ steps.next.outputs.version }}
+
+      - name: Branch to update 'main'
+        env:
+          VERSION: ${{ steps.next.outputs.version }}
+        run: git push origin "HEAD:ci/next-$VERSION"
+
+      # The PR is opened with a GitHub App token so branch protection /
+      # required status checks fire on it (PRs opened by GITHUB_TOKEN do
+      # not trigger other workflows).
+      - name: GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: PR to update 'main'
+        uses: peter-evans/create-pull-request@v7
+        with:
           token: ${{ steps.app-token.outputs.token }}
-          path: specify
-          persist-credentials: false
+          branch: ci/next-${{ steps.next.outputs.version }}
+          title: Bump to ${{ steps.next.outputs.version }}
+          body: |
+            This pull request has been triggered by the creation of a new [release branch][branch].
 
-      - name: Install nightly rustfmt
-        uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: rustfmt
+            Specifically, it merges the new version number (bumped from ${{ needs.create.outputs.version }} to
+            ${{ steps.next.outputs.version }}) back into the `main` branch.
 
-      - name: Install stable toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rust-src, rustfmt
-          targets: wasm32-wasip2
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: specify-adapters
+            Maintainers should review the [release notes][RELEASES.md] for ${{ needs.create.outputs.version }}
+            and make updates directly to the [release branch][branch].
 
-      - name: Install cargo tooling
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-make,cargo-nextest
+            If any issues arise on the `main` branch before the release is made then the issue should be fixed
+            on `main` and backported to the `release-${{ needs.create.outputs.version }}` branch.
 
-      - name: Install wkg
-        working-directory: specify-adapters
-        run: cargo install wkg@0.15.0 --locked
-
-      - name: Pre-publish workspace check
-        working-directory: specify-adapters
-        run: cargo make check
-
-      - name: Release-build adapter components
-        working-directory: specify-adapters
-        run: cargo make release
-
-      - name: Publish each adapter component
-        working-directory: specify-adapters
-        run: cargo make publish
+            [RELEASES.md]: https://github.com/${{ github.repository }}/blob/release-${{ needs.create.outputs.version }}/RELEASES.md
+            [branch]: https://github.com/${{ github.repository }}/tree/release-${{ needs.create.outputs.version }}

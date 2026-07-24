@@ -154,7 +154,9 @@ impl Source for Adapter {
     };
 
     fn metadata() -> SourceMetadata {
-        SourceMetadata { specify_floor: None }
+        // Declare the minimum host that can run this adapter once it depends
+        // on host behavior; first-party adapters set it on every train release.
+        SourceMetadata { specify_floor: Some("0.28.0".to_string()) }
     }
 
     fn docs() -> &'static [Doc] {

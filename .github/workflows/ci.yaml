@@ -2,6 +2,9 @@ name: CI
 
 on:
   push:
+  # Reused as the gate in publish.yaml (Publish Release dispatches on a
+  # release-* branch and needs the full per-push suite green first).
+  workflow_call:
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}

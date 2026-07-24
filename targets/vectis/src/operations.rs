@@ -42,7 +42,7 @@ impl Target for Adapter {
             required: false,
         };
         TargetMetadata {
-            specify_floor: None,
+            specify_floor: Some("0.28.0".to_string()),
             inputs: vec![
                 optional("tokens.yaml"),
                 optional("assets.yaml"),

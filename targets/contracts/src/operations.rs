@@ -55,7 +55,7 @@ impl Target for Adapter {
 
     fn metadata() -> TargetMetadata {
         TargetMetadata {
-            specify_floor: None,
+            specify_floor: Some("0.28.0".to_string()),
             inputs: vec![BuildInput {
                 path: "contracts".to_string(),
                 required: false,

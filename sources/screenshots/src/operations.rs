@@ -26,7 +26,9 @@ impl Source for Adapter {
     };
 
     fn metadata() -> SourceMetadata {
-        SourceMetadata { specify_floor: None }
+        SourceMetadata {
+            specify_floor: Some("0.28.0".to_string()),
+        }
     }
 
     fn docs() -> &'static [Doc] {
