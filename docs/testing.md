@@ -8,17 +8,19 @@ Every rung runs from this repository with its own `cargo make` tasks; the engine
 
 Fastest feedback first. **Every behavior is asserted on exactly one rung** — duplicating an assertion across rungs is a defect, not extra safety.
 
-| # | Rung | Owns | Entry |
-| - | ---- | ---- | ----- |
-| 1 | Native crate tests | Operation behavior, prompt assembly (scripted `Harness`) | `cargo nextest run -p <adapter>` / `cargo make test` |
-| 2 | Full trial | Cross-phase integration, real sources → working-tree outputs | [`examples/eval/trial.md`](examples/eval/trial.md) |
-| 3 | Prompt scenarios | One seam op (`build` / merge gate), prompt quality | [`examples/eval/scenarios.md`](examples/eval/scenarios.md) |
-| 4 | Wasm example | WASM/WIT conformance over the real component seam | [`examples/wasm/`](examples/wasm/README.md) |
-| 5 | Consumer project | Code (not prose) iteration via seeded `.wasm` | `cargo make adapter [name]` + `specify adapter add` |
+| #   | Rung               | Owns                                                         | Entry                                                         |
+| --- | ------------------ | ------------------------------------------------------------ | ------------------------------------------------------------- |
+| 1   | Native crate tests | Operation behavior, prompt assembly (scripted `Harness`)     | `cargo nextest run -p <adapter>` / `cargo make test`          |
+| 2   | Full trial         | Cross-phase integration, real sources → working-tree outputs | [`examples/eval/trial.md`](../examples/eval/trial.md)         |
+| 3   | Prompt scenarios   | One seam op (`build` / merge gate), prompt quality           | [`examples/eval/scenarios.md`](../examples/eval/scenarios.md) |
+| 4   | Wasm example       | WASM/WIT conformance over the real component seam            | [`examples/wasm/`](../examples/wasm/README.md)                |
+| 5   | Consumer project   | Code (not prose) iteration via seeded `.wasm`                | `cargo make adapter [name]` + `specify adapter add`           |
 
-Ownership boundaries: omnia-testkit owns reusable model/runtime test mechanics; adapter `tests/` own operation behavior; the eval composition example owns live prompt/trial loops ([repo README](README.md) for the day-to-day loop; [`examples/eval/`](examples/eval/) for scenario/trial depth); the wasm example owns component-seam conformance. Generic catalog/provider/command mechanics stay in `specify/crates/native/tests` (scenario/sandbox mechanics in `specify/crates/probe/tests`).
+Ownership boundaries: omnia-testkit owns reusable model/runtime test mechanics; adapter `tests/` own operation behavior; the eval composition example owns live prompt/trial loops ([repo README](../README.md) for the day-to-day loop; [`examples/eval/`](../examples/eval/) for scenario/trial depth); the wasm example owns component-seam conformance. Generic catalog/provider/command mechanics stay in `specify/crates/native/tests` (scenario/sandbox mechanics in `specify/crates/probe/tests`).
 
-Sibling co-development: the committed `[patch."https://github.com/augentic/specify.git"]` in the root `Cargo.toml` resolves engine crates from `../specify`.
+Sibling co-development: uncomment the `[patch."https://github.com/augentic/specify.git"]` block in the root `Cargo.toml` to resolve engine crates from `../specify` instead of the lockfile-pinned git dependencies.
+
+Testing a brand-new adapter, including its first scenario and catalog wiring: [authoring.md](authoring.md).
 
 ### 1. Native crate tests — the inner loop
 
@@ -33,7 +35,7 @@ cargo make test               # the whole workspace, matching CI
 
 ### 2–3. Eval — live trial and scenarios
 
-Native catalog, live cursor backend, operator-invoked (never CI). How to run, debug, and iterate: **[README.md](README.md)**; scenario/trial depth under [`examples/eval/`](examples/eval/).
+Native catalog, live cursor backend, operator-invoked (never CI). How to run, debug, and iterate: **[README.md](../README.md)**; scenario/trial depth under [`examples/eval/`](../examples/eval/).
 
 ```bash
 cargo make eval                              # stock contracts trial
@@ -43,7 +45,7 @@ cargo make specify -- --project-dir <dir> slice list
 
 ### 4. Wasm example — component seam
 
-[`examples/wasm/`](examples/wasm/README.md) — shipped `specify` binary + built adapter components over the real WIT seam. Operator-invoked; per-leg ungraded (the graded native trial is rung 2).
+[`examples/wasm/`](../examples/wasm/README.md) — shipped `specify` binary + built adapter components over the real WIT seam. Operator-invoked; per-leg ungraded (the graded native trial is rung 2).
 
 ```bash
 cargo make wasm-run
@@ -78,7 +80,7 @@ Applied to every existing `#[cfg(test)]` / `tests.rs`:
 
 ## Coverage is the brake on deletion
 
-`cargo llvm-cov` line/region coverage on still-live code is the safety net. The [`Makefile.toml`](Makefile.toml) has no coverage task, so run it directly, per crate, before and after a reduction:
+`cargo llvm-cov` line/region coverage on still-live code is the safety net. The [`Makefile.toml`](../Makefile.toml) has no coverage task, so run it directly, per crate, before and after a reduction:
 
 ```bash
 cargo llvm-cov nextest -p vectis --summary-only

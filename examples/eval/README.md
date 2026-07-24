@@ -11,5 +11,5 @@ Live-model harness for first-party adapters (`examples/eval/`). The composition 
 
 ## Related
 
-- [TESTING.md](../../TESTING.md) — where this example sits among the five rungs
+- [docs/testing.md](../../docs/testing.md) — where this example sits among the five rungs
 - [examples/wasm/](../wasm/README.md) — same operator rhythm over the real WASM component seam (not the native catalog)

@@ -180,5 +180,5 @@ This is the same native seam as the trial; you own lifecycle and grading.
 
 - [repo README](../../README.md) — run → debug → repair loop
 - [scenarios.md](scenarios.md) — single-operation prompt scenarios
-- [TESTING.md](../../TESTING.md) — five-rung map and test-layer policy
+- [docs/testing.md](../../docs/testing.md) — five-rung map and test-layer policy
 - Engine tutorial [Legacy migration at scale](https://github.com/augentic/specify/blob/main/docs/tutorials/legacy-migration-at-scale.md) — operator-facing migration orientation

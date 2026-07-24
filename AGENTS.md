@@ -22,7 +22,7 @@ Artifacts outrank source behavior. Preserve missing information as `[unknown]` r
 - Do not commit built `.wasm` artifacts.
 - Adapter names must remain unique across the source and target axes.
 
-The root is a virtual workspace of `sources/*`, `targets/*`, and `examples/eval` (the live composition package). The wasm example under `examples/wasm/` is fixture + operator scripts only — it drives the sibling `augentic/specify` shipped binary against built adapter components (no in-tree Omnia host). The adapter SDK (`adapter`), the native host (`native`), and the lab-only probe library (`probe`, `client` feature — no mock, no binary) are git dependencies on `augentic/specify`, not local crates — resolved from the sibling `../specify` checkout by the committed path patch until the exposing engine revision is published and pinned by `rev`. The `eval` package at `examples/eval/` owns the first-party catalog declaration (in `src/main.rs`), its prompt-scenario root, and the composition binary, delegating dispatch and the Cursor backend to the shared `probe::client` (the engine `probe` crate's `client` feature); engine `native` supplies catalog machinery and command execution, engine `probe` supplies trial/scenario runners, telemetry, and grading. Neither can merge into engine `probe`: the first-party catalog and `scenarios/` live here. For sibling co-development the committed path patch in the root `Cargo.toml` resolves the engine crates from the `../specify` checkout.
+The root is a virtual workspace of `sources/*`, `targets/*`, and `examples/eval` (the live composition package). The wasm example under `examples/wasm/` is fixture + operator scripts only — it drives the sibling `augentic/specify` shipped binary against built adapter components (no in-tree Omnia host). The adapter SDK (`adapter`), the native host (`native`), and the lab-only probe library (`probe`, `client` feature — no mock, no binary) are git dependencies on `augentic/specify`, not local crates — pinned by the committed `Cargo.lock`; for sibling co-development, uncomment the `[patch."https://github.com/augentic/specify.git"]` block in the root `Cargo.toml` to resolve them from the `../specify` checkout. The `eval` package at `examples/eval/` owns the first-party catalog declaration (in `src/main.rs`), its prompt-scenario root, and the composition binary, delegating dispatch and the Cursor backend to the shared `probe::client` (the engine `probe` crate's `client` feature); engine `native` supplies catalog machinery and command execution, engine `probe` supplies trial/scenario runners, telemetry, and grading. Neither can merge into engine `probe`: the first-party catalog and `scenarios/` live here. For sibling co-development the committed path patch in the root `Cargo.toml` resolves the engine crates from the `../specify` checkout.
 
 ## Prose and rules
 
@@ -49,7 +49,7 @@ Testing is integration-first:
 - Adapter native tests own operation behavior; the eval composition example (over engine `probe`) owns cross-phase integration and prompt quality; the operator-invoked wasm example owns WASM/WIT conformance. Do not duplicate the same assertion across rungs.
 - The live rungs are operator-invoked, never CI: `cargo make eval` (native full trial over `sandbox/`; stock target is contracts), `cargo make eval scenario <adapter>/<name>` (one adapter operation — fast prompt iteration), and `cargo make wasm-run` (sibling `specify` binary plus built adapter components over the real component seam). Day-to-day eval loop: [`README.md`](README.md); custom trials and scenario anatomy: [`examples/eval/`](examples/eval/).
 
-Read [`TESTING.md`](TESTING.md) before adding, deleting, or relocating tests.
+Read [`docs/testing.md`](docs/testing.md) before adding, deleting, or relocating tests.
 
 ## Commands
 
@@ -73,6 +73,7 @@ Run `cargo make ci` before committing. If it cannot run, report exactly which na
 ## Area-specific guidance
 
 - Human contributor setup (toolchain, layout, prompts, pin, publishing): [`CONTRIBUTING.md`](CONTRIBUTING.md)
+- Creating an adapter (anatomy, walkthrough, harness wiring): [`docs/authoring.md`](docs/authoring.md)
 - Vectis: [`targets/vectis/AGENTS.md`](targets/vectis/AGENTS.md)
 - Rule catalog and namespace model: [`codex/rules/README.md`](codex/rules/README.md)
-- Test ownership and five-rung map: [`TESTING.md`](TESTING.md); live eval how-to: [`README.md`](README.md)
+- Test ownership and five-rung map: [`docs/testing.md`](docs/testing.md); live eval how-to: [`README.md`](README.md)

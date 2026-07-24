@@ -1,14 +1,23 @@
 # Contributing to specify-adapters
 
-Human-facing contributor guide (toolchain, layout, prompts, pin, publishing). Agent and contract rules live in [`AGENTS.md`](AGENTS.md); test ownership in [`TESTING.md`](TESTING.md). The live eval repair loop is in the [README](README.md).
+Human-facing contributor guide (toolchain, layout, prompts, pin, publishing). Creating an adapter end-to-end is [`docs/authoring.md`](docs/authoring.md); agent and contract rules live in [`AGENTS.md`](AGENTS.md); test ownership in [`docs/testing.md`](docs/testing.md). The live eval repair loop is in the [README](README.md).
 
 ## Getting started
 
-1. Clone [`augentic/specify`](https://github.com/augentic/specify) beside this repo as `../specify`. The committed `[patch."https://github.com/augentic/specify.git"]` in the root `Cargo.toml` resolves the `adapter`, `native`, `probe`, and `prose` crates from that checkout.
-2. Install a nightly Rust toolchain plus `cargo-make`, `cargo-nextest`, `cargo-deny`, and `cargo-vet`. Publishing also uses `wkg`.
+1. Clone this repository. The engine crates (`adapter`, `native`, `probe`, `prose`) resolve as git dependencies on [`augentic/specify`](https://github.com/augentic/specify), pinned by `Cargo.lock` — no sibling checkout is needed to build or test. A sibling checkout at `../specify` is required only for [co-development against uncommitted engine changes](#engine-pin-and-sibling-co-development) and for `cargo make wasm-run`.
+2. `rustup` picks up the pinned **stable** toolchain from `rust-toolchain.toml` (including the `wasm32-wasip2` target); a nightly toolchain is additionally needed for the `fmt` arm (`cargo +nightly fmt`). Install `cargo-make`, `cargo-nextest`, `cargo-deny`, and `cargo-vet`. Publishing also uses `wkg`.
 3. Run `cargo make check` from the repo root. Before opening a PR, run `cargo make ci`.
 
+For the adapter SDK's type-level contract (the `Source` / `Target` traits, seam DTOs, answer schemas), generate the docs locally: `cargo doc -p adapter --open`.
+
 Unless you are fixing a known bug, discuss larger changes in a GitHub issue first. Legal / DCO expectations match the engine repo — see [specify CONTRIBUTING](https://github.com/augentic/specify/blob/main/CONTRIBUTING.md).
+
+### Troubleshooting first runs
+
+- **`cargo make fmt` fails** — the fmt arm shells out to `cargo +nightly fmt`; install any nightly toolchain (`rustup toolchain install nightly --component rustfmt`).
+- **Eval / scenario commands hang or fail authenticating** — they need [`cursor-agent`](https://cursor.com/docs/cli) on `PATH`, authenticated via `cursor-agent login` or `CURSOR_API_KEY` in a repo-root `.env`.
+- **`cargo make wasm-run` fails immediately** — it requires the sibling [`augentic/specify`](https://github.com/augentic/specify) checkout at `../specify` (it drives that repo's built `specify` binary).
+- **Patch-resolution errors after editing the root `Cargo.toml`** — the `[patch."https://github.com/augentic/specify.git"]` block only resolves when `../specify` exists; re-comment it if you are not co-developing.
 
 ## Layout
 
@@ -48,9 +57,9 @@ Adapter prompts are markdown documents compiled into the guest and driven by the
 Two compatibility choices are independent, for first- and third-party adapter authors alike:
 
 1. **WIT contract version** — the `specify:adapter` WIT package, embedded in the `adapter` SDK and published from `augentic/specify`'s `wit/specify.wit`.
-2. **Engine revision** — the workspace resolves `adapter`, `guest`, `native`, and `probe` from `augentic/specify`. Today the committed path patch uses the sibling `../specify` checkout; once the exposing engine revision is published, the manifest pins it explicitly (add `rev` values in the root `Cargo.toml`, run `cargo update`, and commit the lockfile). The pin advances deliberately, not with every engine commit.
+2. **Engine revision** — the workspace resolves `adapter`, `native`, `probe`, and `prose` as git dependencies on `augentic/specify`, pinned by the committed `Cargo.lock`. Advancing the pin is a deliberate `cargo update -p adapter -p native -p probe -p prose` plus a committed lockfile, not something that happens with every engine commit.
 
-For sibling co-development against uncommitted engine changes, keep the path patch and work in both trees.
+For sibling co-development against uncommitted engine changes, uncomment the `[patch."https://github.com/augentic/specify.git"]` block at the bottom of the root `Cargo.toml` (it points at `../specify`) and work in both trees; re-comment it before committing.
 
 ## Local development loops
 
@@ -62,7 +71,7 @@ cargo make release               # release-build every adapter
 cargo make specify -- ARGS       # any specify verb through the native lab shim
 ```
 
-The `fmt` arm uses nightly `rustfmt`. Eval runs **natively** and proves prompt quality; WASM/WIT conformance stays with the wasm example (`cargo make wasm-run`). See [TESTING.md](TESTING.md) for the five-rung map and the [repo README](README.md) for the live eval repair loop.
+The `fmt` arm uses nightly `rustfmt`. Eval runs **natively** and proves prompt quality; WASM/WIT conformance stays with the wasm example (`cargo make wasm-run`). See [docs/testing.md](docs/testing.md) for the five-rung map and the [repo README](README.md) for the live eval repair loop.
 
 Local no-registry loop: `cargo make adapter <name>` then `specify adapter add <path.wasm>`. The `specify` runtime installs published artifacts automatically on a cold package-pin miss (`specify:<name>@<version>`).
 
@@ -93,14 +102,15 @@ wkg oci pull ghcr.io/augentic/specify-adapters/<name>:<version> --output /tmp/<n
 
 1. Branch off `main`.
 2. Run `cargo make ci` (or say exactly which narrower checks ran and why the full gate was unavailable).
-3. Prefer integration tests in each adapter's `tests/` suite; read [TESTING.md](TESTING.md) before adding or relocating tests.
+3. Prefer integration tests in each adapter's `tests/` suite; read [docs/testing.md](docs/testing.md) before adding or relocating tests.
 4. Keep adapter names unique across the source and target axes.
 5. Do not commit built `.wasm` artifacts.
 
 ## See also
 
+- [docs/authoring.md](docs/authoring.md) — creating an adapter, from empty directory to published component
 - [AGENTS.md](AGENTS.md) — vocabulary, component contract, agent commands
-- [TESTING.md](TESTING.md) — five-rung map
+- [docs/testing.md](docs/testing.md) — five-rung map
 - [README.md](README.md) — live eval: run → debug → edit prose → re-run
 - [examples/eval/](examples/eval/) — scenario index and trial depth
 - [examples/wasm/README.md](examples/wasm/README.md) — component-seam example

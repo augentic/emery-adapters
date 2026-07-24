@@ -1,12 +1,25 @@
-# specify-adapters
+# Specify Adapters
 
-First-party Specify **source** and **target** adapters — Wasm components consumed by the [`specify`](https://github.com/augentic/specify) CLI.
+Specify **source** and **target**  WebAssembly adapters — plugins for use by the [Specify](https://github.com/augentic/specify) framework.
 
-This README is the day-to-day loop for adapter authors: run a live eval, inspect what failed, edit prose, re-run. Operators use the Specify CLI; toolchain, publishing, and layout live in [CONTRIBUTING.md](CONTRIBUTING.md).
+This repository is primarily for adapter authors and, aside from the code/prose, supports running live evals for debugging purposes. The dev-loop allows authors to rapidly inspect failures, repair and re-run. 
+
+## Start here
+
+
+| I want to…                                            | Go to                                                              |
+| ----------------------------------------------------- | ------------------------------------------------------------------ |
+| Fix or tune adapter prompts / references              | The repair loop below                                              |
+| Fix Rust adapter logic                                | [docs/testing.md](docs/testing.md)`cargo nextest run -p <adapter>` |
+| Create a new adapter (source or target)               | [docs/authoring.md](docs/authoring.md)                             |
+| Set up the toolchain, publish, or bump the engine pin | [CONTRIBUTING.md](CONTRIBUTING.md)                                 |
+
+
+The root `Makefile` forwards every goal to [cargo-make](Makefile.toml), so `make eval …` and `cargo make eval …` are interchangeable; this README uses the shorter form.
 
 ## Prerequisites
 
-1. Authenticated [`cursor-agent`](https://cursor.com/docs/cli) on `PATH` — `cursor-agent login`, or `CURSOR_API_KEY` in a repo-root `.env` (the `eval` task loads it).
+1. Authenticated `[cursor-agent](https://cursor.com/docs/cli)` on `PATH` — `cursor-agent login`, or `CURSOR_API_KEY` in a repo-root `.env` (the `eval` task loads it).
 2. Optional: `EVAL_MODEL=<model-id>`, `EVAL_TIMEOUT_SECS=<secs>` (defaults to `300`).
 
 The eval binary links every first-party adapter into a native catalog and drives production verbs through the shared cursor backend. Grading is **deterministic** — not a model.
@@ -30,8 +43,8 @@ Use `make eval scenario` to list the other scenarios. Continue below for debuggi
 Two loops. Prefer a **scenario** when iterating on prompts; use a **full trial** when you need the whole `plan → execute → finalize` rhythm.
 
 
-| Loop           | Use when                                              | Command                      | Depth                                      |
-| -------------- | ----------------------------------------------------- | ---------------------------- | ------------------------------------------ |
+| Loop           | Use when                                              | Command                | Depth                                      |
+| -------------- | ----------------------------------------------------- | ---------------------- | ------------------------------------------ |
 | **Scenario**   | One adapter operation (`build` / merge gate); minutes | `make eval scenario …` | [scenarios.md](examples/eval/scenarios.md) |
 | **Full trial** | Real sources → working-tree outputs; tens of minutes  | `make eval`            | [trial.md](examples/eval/trial.md)         |
 
@@ -44,14 +57,16 @@ trial      init → plan author → approved → plan execute → archive
                → sandbox/ project (cleaned on full pass)
 ```
 
+
+
 ### Start here by target
 
 Stock `make eval` is the **contracts** trial only.
 
 
-| Target        | Scenario smoke                                  | Full trial                                                          |
-| ------------- | ----------------------------------------------- | ------------------------------------------------------------------- |
-| **contracts** | `make eval scenario contracts/design`     | `make eval`                                                   |
+| Target        | Scenario smoke                            | Full trial                                                          |
+| ------------- | ----------------------------------------- | ------------------------------------------------------------------- |
+| **contracts** | `make eval scenario contracts/design`     | `make eval`                                                         |
 | **omnia**     | `make eval scenario omnia/health`         | Custom trial — see [trial.md](examples/eval/trial.md#custom-trials) |
 | **vectis**    | `make eval scenario vectis/single-screen` | Custom trial (`--target vectis`, fixture + platforms as needed)     |
 
@@ -68,7 +83,11 @@ Any specify verb through the same native catalog (lab flag — not on the shippe
 make specify -- --project-dir <dir> slice list
 ```
 
+
+
 ## 2. Debug after a run
+
+
 
 ### Scenario
 
@@ -123,18 +142,19 @@ make eval scenario vectis/single-screen
 
 Reach for a [full trial](examples/eval/trial.md) only when the change needs survey → extract → synthesis → build → merge, or real source trees. Do not burn a full trial for a prompt typo — use a scenario (or [add one](examples/eval/scenarios.md#anatomy)).
 
-Native crate tests (`cargo nextest run -p <adapter>`) stay the inner loop for Rust / scripted harness checks; live eval is for prompt quality. See [TESTING.md](TESTING.md).
+Native crate tests (`cargo nextest run -p <adapter>`) stay the inner loop for Rust / scripted harness checks; live eval is for prompt quality. See [docs/testing.md](docs/testing.md).
 
 ## Further reading
 
 
 | Topic                         | Doc                                                      |
 | ----------------------------- | -------------------------------------------------------- |
+| Creating an adapter           | [docs/authoring.md](docs/authoring.md)                   |
 | Scenario index and anatomy    | [examples/eval/scenarios.md](examples/eval/scenarios.md) |
 | Stock / custom trials         | [examples/eval/trial.md](examples/eval/trial.md)         |
 | Eval package notes            | [examples/eval/README.md](examples/eval/README.md)       |
 | Toolchain, layout, publishing | [CONTRIBUTING.md](CONTRIBUTING.md)                       |
-| Test rungs                    | [TESTING.md](TESTING.md)                                 |
+| Test rungs                    | [docs/testing.md](docs/testing.md)                       |
 | Wasm / WIT seam               | [examples/wasm/README.md](examples/wasm/README.md)       |
 | Agent / contract rules        | [AGENTS.md](AGENTS.md)                                   |
 
