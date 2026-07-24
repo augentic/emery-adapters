@@ -4,7 +4,7 @@ Human-facing contributor guide (toolchain, layout, prompts, pin, publishing). Cr
 
 ## Getting started
 
-1. Clone this repository. The engine crates (`adapter`, `native`, `probe`, `prose`) resolve as git dependencies on [`augentic/specify`](https://github.com/augentic/specify), pinned by `Cargo.lock` — no sibling checkout is needed to build or test. A sibling checkout at `../specify` is required only for [co-development against uncommitted engine changes](#engine-pin-and-sibling-co-development) and for `cargo make wasm-run`.
+1. Clone this repository. The engine crates (`adapter`, `native`, `probe`, `prose`) resolve as git dependencies on [`augentic/specify`](https://github.com/augentic/specify), pinned by release tag (`tag = "vX.Y.Z"`) and the committed `Cargo.lock` — no sibling checkout is needed to build or test. A sibling checkout at `../specify` is required only for [co-development against uncommitted engine changes](#engine-pin-and-sibling-co-development) and for `cargo make wasm-run`.
 2. `rustup` picks up the pinned **stable** toolchain from `rust-toolchain.toml` (including the `wasm32-wasip2` target); a nightly toolchain is additionally needed for the `fmt` arm (`cargo +nightly fmt`). Install `cargo-make`, `cargo-nextest`, `cargo-deny`, and `cargo-vet`. Publishing also uses `wkg`.
 3. Run `cargo make check` from the repo root. Before opening a PR, run `cargo make ci`.
 
@@ -57,9 +57,9 @@ Adapter prompts are markdown documents compiled into the guest and driven by the
 Two compatibility choices are independent, for first- and third-party adapter authors alike:
 
 1. **WIT contract version** — the `specify:adapter` WIT package, embedded in the `adapter` SDK and published from `augentic/specify`'s `wit/specify.wit`.
-2. **Engine revision** — the workspace resolves `adapter`, `native`, `probe`, and `prose` as git dependencies on `augentic/specify`, pinned by the committed `Cargo.lock`. Advancing the pin is a deliberate `cargo update -p adapter -p native -p probe -p prose` plus a committed lockfile, not something that happens with every engine commit.
+2. **Engine revision** — the workspace resolves `adapter`, `native`, `probe`, and `prose` as git dependencies on `augentic/specify`, pinned by **release tag** (`tag = "vX.Y.Z"` in the root `Cargo.toml`; RFC-77 D13) plus the committed `Cargo.lock`. Advancing the pin is deliberate: bump the tag on all four dependencies to a released engine line, run `cargo update -p adapter -p native -p probe -p prose`, and commit both files — never resolve a floating branch.
 
-For sibling co-development against uncommitted engine changes, uncomment the `[patch."https://github.com/augentic/specify.git"]` block at the bottom of the root `Cargo.toml` (it points at `../specify`) and work in both trees; re-comment it before committing.
+For sibling co-development against uncommitted engine changes, uncomment the `[patch."https://github.com/augentic/specify.git"]` block at the bottom of the root `Cargo.toml` (it points at `../specify`) and work in both trees; re-comment it before committing. The patch block must never be active at publish time.
 
 ## Local development loops
 
@@ -77,7 +77,16 @@ Local no-registry loop: `cargo make adapter <name>` then `specify adapter add <p
 
 ## Publishing
 
-Publication is manual and local in this cut (GitHub Actions automation is a later cut; `.github/workflows/release.yaml` stays dormant until then). Each adapter publishes as a Wasm OCI artifact to public GHCR under `ghcr.io/augentic/specify-adapters/<name>:<version>`, where `<version>` is the shared `[workspace.package]` SemVer.
+The first-party adapter train releases from durable `release-X.Y.Z` branches with the same verbs as the engine repo (RFC-77): dispatch **Create Release** on `main` to cut `release-X.Y.Z` (it also opens the bump-`main` PR), stabilize and backport on the branch, dispatch **Publish Release** on the branch to tag `vX.Y.Z` and create the GitHub Release, and dispatch **Create Patch** on the same branch for `X.Y.Z → X.Y.Z+1`. The train version is the shared `[workspace.package]` SemVer; `RELEASES.md` carries the line's notes, including a compatibility row (`engine X.Y.x ↔ adapters A.B.x (WIT specify:adapter@…, floor ≥ …)`).
+
+Before a train publishes, these gates must hold:
+
+1. The tree builds against a **published** `specify:adapter` WIT pin.
+2. CI is green against a **released (or RC)** engine revision — the engine git dependencies are tag-pinned (`tag = "vX.Y.Z"`), with no active sibling `[patch]` block.
+3. Every adapter's `specify-floor` names the minimum host that can run this train.
+4. The GHCR version tag does not already exist (the publish helper probes and refuses to replace it).
+
+GHCR publication of the components stays manual and local in this cut (Actions automation is RFC-77 Phase B / RFC-76 Phase E). Each adapter publishes as a Wasm OCI artifact to public GHCR under `ghcr.io/augentic/specify-adapters/<name>:<version>`.
 
 One-time setup — authenticate to GHCR with a token carrying `write:packages` (the `wkg oci push` leg reads the Docker credential config):
 
@@ -85,7 +94,7 @@ One-time setup — authenticate to GHCR with a token carrying `write:packages` (
 gh auth token | docker login ghcr.io -u <github-user> --password-stdin
 ```
 
-Release-build, then push one component to its exact version tag:
+After the GitHub Release exists, release-build, then push each component to its exact version tag:
 
 ```bash
 cargo make release
