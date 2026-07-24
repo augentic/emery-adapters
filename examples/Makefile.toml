@@ -42,7 +42,7 @@ cargo build -p documentation -p intent -p contracts --target wasm32-wasip2
 '''
 
 [tasks.wasm-run]
-dependencies = ["wasm-clean"]
+dependencies = ["wasm-build"]
 env_files = [".env"]
 script_runner = "bash"
 script = '''
