@@ -69,6 +69,6 @@ run init contracts --name orders
 run plan author orders \
   --intent "Author the API contracts for the orders service described under docs/: the JSON Schema vocabulary plus the HTTP (OpenAPI) surface. Contracts only - no service implementation." \
   --source "docs=documentation:docs"
-run plan transition orders approved
+run plan approve
 run plan execute
 '''

@@ -170,7 +170,7 @@ cargo make specify -- --project-dir /path/to/project init omnia --name <name>
 cargo make specify -- --project-dir /path/to/project plan author <change> \
   --intent "…" \
   --source "legacy=typescript:legacy/at_r9k_position_adapter"
-cargo make specify -- --project-dir /path/to/project plan transition <change> approved
+cargo make specify -- --project-dir /path/to/project plan approve
 cargo make specify -- --project-dir /path/to/project plan execute
 ```
 
