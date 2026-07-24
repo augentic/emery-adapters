@@ -2,7 +2,7 @@
 
 Single-operation live eval: one adapter seam operation (`build`, or one `merge` gate) against the real cursor backend, natively through the same catalog the trial uses.
 
-This is the **fast prompt-iteration** loop — edit `{targets,sources}/<name>/prose/**`, rebuild natively in seconds, re-run. For the full operator rhythm with real sources and working-tree outputs, see [trial.md](trial.md). Hub: [README.md](README.md).
+This is the **fast prompt-iteration** loop — edit `{targets,sources}/<name>/prose/**`, rebuild natively in seconds, re-run. For the full operator rhythm with real sources and working-tree outputs, see [trial.md](trial.md). Day-to-day hub: [repo README](../../README.md).
 
 ## When to use
 
@@ -55,4 +55,4 @@ cargo make eval scenario vectis/single-screen
 
 ## Beyond scenarios
 
-Full end-to-end runs (real sources, plan execute, merged outputs) are **[custom trials](trial.md#custom-trials)**, not scenarios. Per-target entry points: [README § Start here by target](README.md#start-here-by-target).
+Full end-to-end runs (real sources, plan execute, merged outputs) are **[custom trials](trial.md#custom-trials)**, not scenarios. Per-target entry points: [repo README § Start here by target](../../README.md#start-here-by-target).
