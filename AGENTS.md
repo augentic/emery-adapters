@@ -47,7 +47,7 @@ Testing is integration-first:
 - Do not widen public APIs solely for tests.
 - Use `cargo nextest`, not bare `cargo test`, for native workspace tests; process isolation is required by CWD- and environment-mutating suites.
 - Adapter native tests own operation behavior; the eval composition example (over engine `probe`) owns cross-phase integration and prompt quality; the operator-invoked wasm example owns WASM/WIT conformance. Do not duplicate the same assertion across rungs.
-- The live rungs are operator-invoked, never CI: `cargo make eval` (native full trial over `sandbox/`; stock target is contracts — custom trials and the scenario loop are documented under [`examples/eval/`](examples/eval/README.md)), `cargo make eval scenario <adapter>/<name>` (one adapter operation — fast prompt iteration), and `cargo make wasm-run` (sibling `specify` binary plus built adapter components over the real component seam).
+- The live rungs are operator-invoked, never CI: `cargo make eval` (native full trial over `sandbox/`; stock target is contracts), `cargo make eval scenario <adapter>/<name>` (one adapter operation — fast prompt iteration), and `cargo make wasm-run` (sibling `specify` binary plus built adapter components over the real component seam). Day-to-day eval loop: [`README.md`](README.md); custom trials and scenario anatomy: [`examples/eval/`](examples/eval/).
 
 Read [`TESTING.md`](TESTING.md) before adding, deleting, or relocating tests.
 
@@ -72,6 +72,7 @@ Run `cargo make ci` before committing. If it cannot run, report exactly which na
 
 ## Area-specific guidance
 
+- Human contributor setup (toolchain, layout, prompts, pin, publishing): [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - Vectis: [`targets/vectis/AGENTS.md`](targets/vectis/AGENTS.md)
 - Rule catalog and namespace model: [`codex/rules/README.md`](codex/rules/README.md)
-- Test ownership and five-rung map: [`TESTING.md`](TESTING.md); live eval how-to: [`examples/eval/`](examples/eval/README.md)
+- Test ownership and five-rung map: [`TESTING.md`](TESTING.md); live eval how-to: [`README.md`](README.md)

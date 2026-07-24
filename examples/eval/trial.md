@@ -2,7 +2,7 @@
 
 End-to-end live eval: the operator rhythm over a persistent gitignored `sandbox/` project, with real source bindings and a real target. Production verbs run through the native catalog; the cursor backend sits at the model seam. Deterministic grading only.
 
-Hub: [README.md](README.md). Scenario loop (one operation): [scenarios.md](scenarios.md).
+Day-to-day hub: [repo README](../../README.md). Scenario loop (one operation): [scenarios.md](scenarios.md).
 
 ## Stock trial (contracts)
 
@@ -178,7 +178,7 @@ This is the same native seam as the trial; you own lifecycle and grading.
 
 ## See also
 
-- [README.md](README.md) — which loop to pick
+- [repo README](../../README.md) — run → debug → repair loop
 - [scenarios.md](scenarios.md) — single-operation prompt scenarios
 - [TESTING.md](../../TESTING.md) — five-rung map and test-layer policy
 - Engine tutorial [Legacy migration at scale](https://github.com/augentic/specify/blob/main/docs/tutorials/legacy-migration-at-scale.md) — operator-facing migration orientation

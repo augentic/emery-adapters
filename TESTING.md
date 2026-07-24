@@ -16,7 +16,7 @@ Fastest feedback first. **Every behavior is asserted on exactly one rung** — d
 | 4 | Wasm example | WASM/WIT conformance over the real component seam | [`examples/wasm/`](examples/wasm/README.md) |
 | 5 | Consumer project | Code (not prose) iteration via seeded `.wasm` | `cargo make adapter [name]` + `specify adapter add` |
 
-Ownership boundaries: omnia-testkit owns reusable model/runtime test mechanics; adapter `tests/` own operation behavior; the [eval composition example](examples/eval/README.md) owns live prompt/trial loops; the wasm example owns component-seam conformance. Generic catalog/provider/command mechanics stay in `specify/crates/native/tests` (scenario/sandbox mechanics in `specify/crates/probe/tests`).
+Ownership boundaries: omnia-testkit owns reusable model/runtime test mechanics; adapter `tests/` own operation behavior; the eval composition example owns live prompt/trial loops ([repo README](README.md) for the day-to-day loop; [`examples/eval/`](examples/eval/) for scenario/trial depth); the wasm example owns component-seam conformance. Generic catalog/provider/command mechanics stay in `specify/crates/native/tests` (scenario/sandbox mechanics in `specify/crates/probe/tests`).
 
 Sibling co-development: the committed `[patch."https://github.com/augentic/specify.git"]` in the root `Cargo.toml` resolves engine crates from `../specify`.
 
@@ -33,7 +33,7 @@ cargo make test               # the whole workspace, matching CI
 
 ### 2–3. Eval — live trial and scenarios
 
-Native catalog, live cursor backend, operator-invoked (never CI). How to run, customize, and choose a loop: **[`examples/eval/`](examples/eval/README.md)**.
+Native catalog, live cursor backend, operator-invoked (never CI). How to run, debug, and iterate: **[README.md](README.md)**; scenario/trial depth under [`examples/eval/`](examples/eval/).
 
 ```bash
 cargo make eval                              # stock contracts trial

@@ -4,7 +4,7 @@ End-to-end run of the Specify change workflow over the real WASM component seam:
 
 There is no `omnia.toml`: the example invokes the built binary directly. The run script sandboxes the layout with `SPECIFY_HOME`, seeds the adapters via `specify adapter add`, and initializes the project by bare target name. Fixture inputs live under [fixture/](fixture/) (shared with the graded `eval` trial).
 
-See [`examples/eval/`](../eval/README.md) for the graded native trial and prompt scenarios; [TESTING.md](../../TESTING.md) for the five-rung map.
+See the [repo README](../../README.md) for the graded native trial / scenario repair loop; [TESTING.md](../../TESTING.md) for the five-rung map.
 
 ## Quick start
 
