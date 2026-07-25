@@ -77,7 +77,7 @@ Local no-registry loop: `cargo make adapter <name>` then `specify adapter add <p
 
 ## Publishing
 
-The first-party adapter train releases from durable `release-X.Y.Z` branches with the same verbs as the engine repo (RFC-77): dispatch **Create Release** on `main` to cut `release-X.Y.Z` (it also opens the bump-`main` PR), stabilize and backport on the branch, dispatch **Publish Release** on the branch to tag `vX.Y.Z` and create the GitHub Release, and dispatch **Create Patch** on the same branch for `X.Y.Z → X.Y.Z+1`. The train version is the shared `[workspace.package]` SemVer; `RELEASES.md` carries the line's notes, including a compatibility row (`engine X.Y.x ↔ adapters A.B.x (WIT specify:adapter@…, floor ≥ …)`).
+The first-party adapter train releases from durable `release-X.Y.Z` branches with the same verbs as the engine repo (RFC-77): dispatch **Create Release** on `main` to cut `release-X.Y.Z` (it also opens the bump-`main` PR), stabilize and backport on the branch, dispatch **Publish Release** on the branch (tag, GitHub Release, GHCR packages), and dispatch **Create Patch** on the same branch for `X.Y.Z → X.Y.Z+1`. The train version is the shared `[workspace.package]` SemVer; `RELEASES.md` carries the line's notes, including a compatibility row (`engine X.Y.x ↔ adapters A.B.x (WIT specify:adapter@…, floor ≥ …)`).
 
 Before a train publishes, these gates must hold:
 
@@ -86,25 +86,20 @@ Before a train publishes, these gates must hold:
 3. Every adapter's `specify-floor` names the minimum host that can run this train.
 4. The GHCR version tag does not already exist (the publish helper probes and refuses to replace it).
 
-GHCR publication of the components stays manual and local in this cut (Actions automation is RFC-77 Phase B / RFC-76 Phase E). Each adapter publishes as a Wasm OCI artifact to public GHCR under `ghcr.io/augentic/specify-adapters/<name>:<version>`.
+**Publish Release** runs CI, tags and creates the GitHub Release, then release-builds every adapter and pushes each as a Wasm OCI artifact to `ghcr.io/augentic/specify-adapters/<name>:<version>` via the same `cargo make release` / `cargo make publish <name>` path used locally. The helper derives `<version>` from the workspace manifest and refuses to replace an existing version tag — released bytes are immutable by policy (GHCR has no registry-native tag immutability, so the helper probe is the compensating control).
 
-One-time setup — authenticate to GHCR with a token carrying `write:packages` (the `wkg oci push` leg reads the Docker credential config):
-
-```bash
-gh auth token | docker login ghcr.io -u <github-user> --password-stdin
-```
-
-After the GitHub Release exists, release-build, then push each component to its exact version tag:
-
-```bash
-cargo make release
-cargo make publish <name>
-```
-
-The helper derives `<version>` from the workspace manifest and refuses to replace an existing version tag — released bytes are immutable by policy (GHCR has no registry-native tag immutability, so the helper probe is the compensating control). A brand-new package is created **private**: flip it to public in the GHCR package settings (`https://github.com/orgs/augentic/packages/container/specify-adapters%2F<name>/settings`) so anonymous consumers can pull, then confirm the round-trip:
+A brand-new package is created **private**: flip it to public in the GHCR package settings (`https://github.com/orgs/augentic/packages/container/specify-adapters%2F<name>/settings`) so anonymous consumers can pull, then confirm the round-trip:
 
 ```bash
 wkg oci pull ghcr.io/augentic/specify-adapters/<name>:<version> --output /tmp/<name>.wasm
+```
+
+Local breakout (retry a single adapter after GHCR login):
+
+```bash
+gh auth token | docker login ghcr.io -u <github-user> --password-stdin
+cargo make release
+cargo make publish <name>
 ```
 
 ## Before you open a PR

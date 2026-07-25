@@ -61,7 +61,7 @@ cargo make ci             # full gate, including vet and deny
 cargo nextest run -p NAME # focused adapter tests
 cargo make adapter NAME   # fast development component build
 cargo make release        # release-build every component
-cargo make publish NAME   # push one built component to its exact GHCR tag (operator-invoked, after GHCR login)
+cargo make publish NAME   # push one built component to its exact GHCR tag (Publish Release / local breakout)
 cargo make specify -- ARGS # any specify verb through the native lab shim
 cargo make eval [phase]   # live-model trial over sandbox/ (operator-invoked)
 cargo make eval scenario [id]  # one live prompt scenario; bare lists them (operator-invoked)

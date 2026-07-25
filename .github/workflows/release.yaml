@@ -8,8 +8,7 @@ name: Create Release
 # from its actions because the version bump runs `cargo generate-lockfile`,
 # which must resolve the private augentic/specify git dependencies — that
 # needs the App-token git prelude the shared reusable workflow does not
-# perform. GHCR publication stays manual (`cargo make publish <name>` after
-# Publish Release; see CONTRIBUTING.md).
+# perform. GHCR publication runs in Publish Release (see CONTRIBUTING.md).
 
 on:
   workflow_dispatch:
