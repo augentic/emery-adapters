@@ -2,8 +2,8 @@ name: Create Patch
 
 # Bump the patch version on a durable release-X.Y.Z line and prep
 # RELEASES.md. Dispatch from the release-* branch carrying the backported
-# fix; Publish Release (dispatched from the same branch) tags and releases
-# it, then GHCR publication stays manual (`cargo make publish <name>`).
+# fix; Publish Release (dispatched from the same branch) tags, creates the
+# GitHub Release, and publishes each component to GHCR.
 #
 # Same shape as the shared augentic/.github patch.yaml, composed locally
 # from its actions because the version bump runs `cargo generate-lockfile`,

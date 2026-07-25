@@ -146,11 +146,11 @@ fi
 '''
 
 # Publish — push one built component to its exact GHCR SemVer tag as a
-# standard Wasm OCI artifact. Local operator use only: log in first
-# (`gh auth token | docker login ghcr.io -u <github-user> --password-stdin`).
-# Refuses to replace an existing version tag — GHCR has no
-# registry-native tag immutability, so this probe is the compensating
-# control until CI enforces no-repush in the automate-releases cut.
+# standard Wasm OCI artifact. Used by Publish Release (adapters.yaml) and
+# as a local breakout: log in first (`gh auth token | docker login ghcr.io
+# -u <github-user> --password-stdin`). Refuses to replace an existing
+# version tag — GHCR has no registry-native tag immutability, so this
+# probe is the compensating control.
 [tasks.publish]
 script_runner = "bash"
 install_crate = { crate_name = "wkg", binary = "wkg", test_arg = "--version" }
