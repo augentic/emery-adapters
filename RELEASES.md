@@ -2,6 +2,12 @@
 
 Unreleased
 
+### Compatibility
+
+```text
+engine 0.28.x  ↔  adapters 0.5.x  (WIT specify:adapter@0.1.0, floor ≥ 0.28.0)
+```
+
 ### Added
 
 ### Changed
