@@ -533,7 +533,7 @@ version = "1.0.18"
 criteria = "safe-to-deploy"
 
 [[exemptions.jiff]]
-version = "0.2.34"
+version = "0.2.35"
 criteria = "safe-to-deploy"
 
 [[exemptions.jiff-core]]
@@ -541,7 +541,7 @@ version = "0.1.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.jiff-static]]
-version = "0.2.34"
+version = "0.2.35"
 criteria = "safe-to-deploy"
 
 [[exemptions.jni]]
