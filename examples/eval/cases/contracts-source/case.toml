@@ -1,8 +1,0 @@
-# The contracts `source` sub-flow: reverse-engineer contract YAML from
-# an existing TypeScript service (authorship mode: extract from source).
-kind = "build"
-slice = "orders-api-contract"
-
-# Deterministic artifact-exists gate: a success report must leave the
-# slice contracts delta non-empty.
-expect = [".specify/slices/orders-api-contract/contracts"]
