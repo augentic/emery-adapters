@@ -9,10 +9,10 @@ Needs [`cursor-agent`](https://cursor.com/docs/cli) on `PATH` (`cursor-agent log
 From the repository root:
 
 ```bash
-make eval                                # list the cases
-make eval contracts-design --restart     # one build case (~2–5 minutes)
-make eval omnia-health --restart         # omnia smoke
-make eval orders-contracts --restart     # full workflow (tens of minutes)
+cargo make eval                                # list the cases
+cargo make eval contracts-design --restart     # one build case (~2–5 minutes)
+cargo make eval omnia-health --restart         # omnia smoke
+cargo make eval orders-contracts --restart     # full workflow (tens of minutes)
 ```
 
 A build case prints its retained sandbox and the authoritative report path (`.specify/slices/<slice>/build/report.yaml`) on success. Edit `{targets,sources}/<name>/prose/`, re-run the same command with `--restart`; native runs pick up prose changes with no Wasm rebuild.
@@ -95,7 +95,7 @@ The `omnia-r9k` workflow case migrates Propellerhead's [`at_r9k_position_adapter
 The upstream tree is `UNLICENSED`, so the case's `clone` shallow-clones it into the case's gitignored `fixture/` cache on first run — it never enters the repository (the case directory carries the `.gitignore`). The first run needs network access to Bitbucket; later restarts reuse the cache offline. Refresh the snapshot with `rm -rf examples/eval/cases/omnia-r9k/fixture`:
 
 ```bash
-make eval omnia-r9k --restart          # tens of minutes of live model time
+cargo make eval omnia-r9k --restart          # tens of minutes of live model time
 ```
 
 Pass/fail from grading is lifecycle + provenance; for migration quality, treat the generated crate, guest, tests, and `REVIEW.md` in the retained sandbox as the real signal. If you are editing omnia `prose/` and only need to know whether **build** still produces a crate, use `omnia-health` instead — do not burn a full r9k run for prompt typos.

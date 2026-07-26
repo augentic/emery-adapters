@@ -21,7 +21,7 @@ The pin you pass to `specify` (`contracts@0.5.0`) is this workspace’s shared S
 | Set up the toolchain, publish, or bump the engine pin | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Use Specify as an operator | [Specify README](https://github.com/augentic/specify#readme) — leave this repo |
 
-The root `Makefile` forwards every goal to [cargo-make](Makefile.toml), so `make eval …` and `cargo make eval …` are interchangeable; this README uses the shorter form.
+The root `Makefile` forwards goals to [cargo-make](Makefile.toml); docs use `cargo make …` so flags like `--restart` are not eaten by GNU Make.
 
 ## What an adapter is
 
@@ -47,7 +47,7 @@ Use this path for Rust logic, validators, and deterministic behavior. Live eval 
 
 ## Prerequisites (live eval)
 
-Needed only for `make eval …`:
+Needed only for `cargo make eval …`:
 
 1. Authenticated [`cursor-agent`](https://cursor.com/docs/cli) on `PATH` — `cursor-agent login`, or `CURSOR_API_KEY` in a repo-root `.env` (the `eval` task loads it).
 2. Optional: `EVAL_MODEL=<model-id>`, `EVAL_TIMEOUT_SECS=<secs>` (defaults to `900`).
@@ -59,7 +59,7 @@ If eval hangs or fails authenticating, check `cursor-agent` login / `.env` — s
 From the repository root, run one build case (~2–5 minutes; needs cursor auth):
 
 ```bash
-make eval contracts-design --restart
+cargo make eval contracts-design --restart
 ```
 
 A passing run prints the retained sandbox and the authoritative report path — `.specify/slices/returns-api/contracts/` in that sandbox carries the generated contract delta. A success report that wrote nothing still fails the case's `expect` gate.
@@ -67,14 +67,14 @@ A passing run prints the retained sandbox and the authoritative report path — 
 To start developing, edit the contracts adapter’s prompts or references under `targets/contracts/prose/`, then run the same command again and compare the sandbox with the previous run (`--restart` replaces it). Native runs pick up prose changes automatically — no Wasm build is required.
 
 ```bash
-make eval    # list the cases
+cargo make eval    # list the cases
 ```
 
 | Target | Smoke case |
 | --- | --- |
-| contracts | `make eval contracts-design --restart` |
-| omnia | `make eval omnia-health --restart` |
-| vectis | `make eval vectis-single-screen --restart` |
+| contracts | `cargo make eval contracts-design --restart` |
+| omnia | `cargo make eval omnia-health --restart` |
+| vectis | `cargo make eval vectis-single-screen --restart` |
 
 ## Build vs workflow cases
 
@@ -82,14 +82,14 @@ Prefer a **build case** when iterating on one target adapter's build (minutes). 
 
 | | Build case | Workflow case |
 | --- | --- | --- |
-| Command | `make eval <id> --restart` | `make eval <id> --restart [--until plan]` |
+| Command | `cargo make eval <id> --restart` | `cargo make eval <id> --restart [--until plan]` |
 | Fixture | committed refined slice | source trees + intent, plan authored live |
 | Gates | `built` metadata, `build/report.yaml`, `expect` paths | pending plan at Gate 1, drained plan, provenance |
 
 Omnia has a stock migration workflow case; the `UNLICENSED` Propellerhead upstream is shallow-cloned into the case's gitignored `fixture/` cache on first run and reused offline after that:
 
 ```bash
-make eval omnia-r9k --restart      # typescript at_r9k_position_adapter → omnia
+cargo make eval omnia-r9k --restart      # typescript at_r9k_position_adapter → omnia
 ```
 
 Depth: [eval README § Omnia legacy migration](examples/eval/README.md#omnia-legacy-migration-r9k).
@@ -111,13 +111,13 @@ Grading checks lifecycle, the report, `expect` paths, and (workflow) provenance;
 An existing sandbox refuses to rerun without `--restart`. Continue or debug it explicitly through the native verbs instead:
 
 ```bash
-make specify -- --project-dir sandbox/orders-contracts plan approve
+cargo make specify -- --project-dir sandbox/orders-contracts plan approve
 ```
 
 ## Repair loop
 
 1. Edit `{targets,sources}/<name>/prose/**` (prompts, references, rules). Cases load prose from the linked crates — no Wasm rebuild.
-2. Re-run the same case (e.g. `make eval contracts-design --restart`).
+2. Re-run the same case (e.g. `cargo make eval contracts-design --restart`).
 3. Compare the sandbox tree and report to the previous run.
 4. Repeat until the case passes and the artifacts look right.
 
@@ -132,7 +132,7 @@ Do not burn a workflow case for a prompt typo — use a build case, or [add one]
 | `cargo make wasm-run` fails immediately | Needs sibling [`augentic/specify`](https://github.com/augentic/specify) at `../specify` |
 | Patch-resolution errors after editing root `Cargo.toml` | `[patch."https://github.com/augentic/specify.git"]` needs `../specify`; re-comment if not co-developing |
 | Case fails with a green-looking report | Check `expect` paths in `case.toml` — missing files fail the gate |
-| `sandbox … already exists` | Rerun with `--restart`, or continue it via `make specify -- --project-dir <sandbox> …` |
+| `sandbox … already exists` | Rerun with `--restart`, or continue it via `cargo make specify -- --project-dir <sandbox> …` |
 
 More first-run tips: [CONTRIBUTING.md](CONTRIBUTING.md#troubleshooting-first-runs). Bugs and questions: [GitHub Issues](https://github.com/augentic/specify-adapters/issues).
 
@@ -147,7 +147,7 @@ More first-run tips: [CONTRIBUTING.md](CONTRIBUTING.md#troubleshooting-first-run
 | Wasm / WIT seam | [examples/wasm/README.md](examples/wasm/README.md) |
 | Agent / contract rules | [AGENTS.md](AGENTS.md) |
 | Operator docs (engine) | [Specify README](https://github.com/augentic/specify#readme) · [hosted guide](https://specify.augentic.io/) |
-| Lab CLI (native catalog; not the shipped CLI) | `make specify -- --project-dir <dir> slice list` |
+| Lab CLI (native catalog; not the shipped CLI) | `cargo make specify -- --project-dir <dir> slice list` |
 
 ## License
 
