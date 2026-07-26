@@ -4,7 +4,7 @@
 //!
 //! The composition root owns what the shared client (`probe::client`)
 //! refuses to: the Tokio runtime, `std::env::args` collection, and
-//! the first-party catalog and prompt-scenario declarations. It is a
+//! the first-party catalog and case declarations. It is a
 //! development tool, never an install or release artifact. Driven by
 //! `cargo make specify` and `cargo make eval`.
 
@@ -16,9 +16,10 @@ use std::path::Path;
 #[cfg(not(target_arch = "wasm32"))]
 use std::process::ExitCode;
 
-/// Prompt-scenario definitions, per adapter, beside this example.
+/// Eval case data directories beside this example; the retained
+/// per-case sandboxes live in the sibling `sandbox/` tree.
 #[cfg(not(target_arch = "wasm32"))]
-const SCENARIOS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/scenarios");
+const CASES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/cases");
 
 #[cfg(not(target_arch = "wasm32"))]
 #[tokio::main]
@@ -34,7 +35,7 @@ async fn main() -> ExitCode {
 
 #[cfg(not(target_arch = "wasm32"))]
 async fn entry() -> anyhow::Result<ExitCode> {
-    probe::client::run(std::env::args().collect(), catalog()?, Some(Path::new(SCENARIOS))).await
+    probe::client::run(std::env::args().collect(), catalog()?, Some(Path::new(CASES))).await
 }
 
 /// Every first-party source and target adapter, linked once on its

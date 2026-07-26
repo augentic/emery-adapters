@@ -8,21 +8,26 @@
 command = "cargo"
 args = ["run", "-q", "-p", "eval", "--", "${@}"]
 
-# The native live-model trial (the eval example's `eval` subcommand)
+# One live eval case (`cargo make eval orders-contracts --restart
+# [--until plan]`); bare `cargo make eval` lists the cases. Case data
+# lives in `eval/cases/<id>/case.toml`; the retained sandbox in
+# `eval/sandbox/<id>/`. The omnia-r9k case needs its gitignored fixture
+# staged first: `cargo make eval-omnia-r9k-prepare`.
 [tasks.eval]
 env_files = [".env"]
 script = '''
-  # Mid-tier models often need more than the cursor backend's 120s default.
-  # `.env` / the ambient environment win when already set.
-  export EVAL_TIMEOUT_SECS="${EVAL_TIMEOUT_SECS:-300}"
-  cargo run -p eval -- eval \
-    --fixture examples/wasm/fixture \
-    --change "orders" \
-    --intent "Author the API contracts for the orders service described under docs/: the JSON Schema vocabulary plus the HTTP (OpenAPI) surface. Contracts only - no service implementation." \
-    --source "docs=documentation:docs" \
-    --target "contracts" \
-    "$@"
+  export EVAL_TIMEOUT_SECS="${EVAL_TIMEOUT_SECS:-900}"
+  export RUST_LOG="${RUST_LOG:-info,opentelemetry_sdk=off}"
+  cargo run -p eval -- eval "$@"
   '''
+
+# Stage the Propellerhead at_r9k_position_adapter tree into the gitignored
+# omnia-r9k fixture (clone, OMNIA_R9K_SOURCE, or sibling test-spec).
+# Explicit and separate from case execution: it mutates a gitignored
+# fixture and may access the network.
+[tasks.eval-omnia-r9k-prepare]
+script_runner = "bash"
+script = "examples/eval/fixtures/omnia-r9k/prepare.sh"
 
 # -------------------------------------
 # Wasm example
@@ -49,9 +54,8 @@ script = '''
 set -eo pipefail
 
 export SPECIFY_HOME="$PWD/sandbox/wasm"
-# Omnia's default timeout (30s) is too short for a live model.
 export GUEST_TIMEOUT_MS="${GUEST_TIMEOUT_MS:-3600000}"
-# export RUST_LOG="info,opentelemetry_sdk=off,omnia_wasi_http=debug"
+export RUST_LOG="info,opentelemetry_sdk=off,omnia_wasi_http=debug"
 
 mkdir -p "$SPECIFY_HOME/project"
 cp -R examples/wasm/fixture/. "$SPECIFY_HOME/project/"

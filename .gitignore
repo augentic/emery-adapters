@@ -3,6 +3,10 @@ target/
 sandbox/
 sandbox.lock
 
+# Propellerhead at_r9k_position_adapter tree (UNLICENSED); staged by
+# `cargo make eval-omnia-r9k-prepare`, never committed.
+examples/eval/fixtures/omnia-r9k/project/legacy/
+
 **/*.rs.bk
 rustc-ice-*
 .DS_Store

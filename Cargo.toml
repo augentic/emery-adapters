@@ -51,29 +51,35 @@ vectis = { path = "targets/vectis" }
 
 [patch.crates-io]
 # Transitive Omnia deps of engine crates (`adapter`, `probe` client feature).
-omnia = { git = "https://github.com/augentic/omnia.git" }
+# Sibling co-development against ../omnia (idempotent Telemetry::build +
+# telemetry::flush): flip these back to the git patches below before merge,
+# once the upstream Omnia PR lands.
+omnia = { path = "../omnia/crates/omnia" }
 omnia-cursor = { git = "https://github.com/augentic/backends.git" }
-omnia-guest = { git = "https://github.com/augentic/omnia.git" }
-omnia-testkit = { git = "https://github.com/augentic/omnia.git" }
-omnia-wasi-http = { git = "https://github.com/augentic/omnia.git" }
-omnia-wasi-model = { git = "https://github.com/augentic/omnia.git" }
-omnia-wasi-otel = { git = "https://github.com/augentic/omnia.git" }
+omnia-guest = { path = "../omnia/crates/omnia-guest" }
+omnia-testkit = { path = "../omnia/crates/testkit" }
+omnia-wasi-http = { path = "../omnia/crates/wasi-http" }
+omnia-wasi-model = { path = "../omnia/crates/wasi-model" }
+omnia-wasi-otel = { path = "../omnia/crates/wasi-otel" }
 
-# omnia = { path = "../omnia/crates/omnia" }
-# omnia-cursor = { path = "../backends/crates/cursor" }
-# omnia-guest = { path = "../omnia/crates/omnia-guest" }
-# omnia-testkit = { path = "../omnia/crates/testkit" }
-# omnia-wasi-http = { path = "../omnia/crates/wasi-http" }
-# omnia-wasi-model = { path = "../omnia/crates/wasi-model" }
+# omnia = { git = "https://github.com/augentic/omnia.git" }
+# omnia-guest = { git = "https://github.com/augentic/omnia.git" }
+# omnia-testkit = { git = "https://github.com/augentic/omnia.git" }
+# omnia-wasi-http = { git = "https://github.com/augentic/omnia.git" }
+# omnia-wasi-model = { git = "https://github.com/augentic/omnia.git" }
+# omnia-wasi-otel = { git = "https://github.com/augentic/omnia.git" }
 
 wrpc-transport = { git = "https://github.com/bytecodealliance/wrpc" }
 wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }
 
-# [patch."https://github.com/augentic/specify.git"]
-# adapter = { path = "../specify/crates/adapter" }
-# probe = { path = "../specify/crates/probe" }
-# native = { path = "../specify/crates/native" }
-# prose = { path = "../specify/crates/prose" }
+# Sibling co-development against ../specify (the probe case runner):
+# comment this block back out and bump the four engine tags above to the
+# next engine release (RFC-77 D13) before merge.
+[patch."https://github.com/augentic/specify.git"]
+adapter = { path = "../specify/crates/adapter" }
+probe = { path = "../specify/crates/probe" }
+native = { path = "../specify/crates/native" }
+prose = { path = "../specify/crates/prose" }
 
 [workspace.lints.rust]
 # https://dirname.github.io/rust-std-doc/rustc/lints/listing/allowed-by-default.html

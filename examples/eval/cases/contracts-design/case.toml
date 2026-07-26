@@ -1,0 +1,8 @@
+# The contracts `design` sub-flow: generate contract YAML from a design
+# document (authorship mode: generate from prose, source-document path).
+kind = "build"
+slice = "returns-api"
+
+# Deterministic artifact-exists gate: a success report must leave the
+# slice contracts delta non-empty.
+expect = [".specify/slices/returns-api/contracts"]

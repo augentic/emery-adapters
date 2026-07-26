@@ -1,0 +1,11 @@
+# The stock source-to-target workflow: survey the orders docs through
+# the documentation source, then author, approve, and execute the plan
+# against the contracts target. Reuses the wasm example's fixture tree.
+kind = "workflow"
+target = "contracts"
+change = "orders"
+intent = "Author the API contracts for the orders service described under docs/: the JSON Schema vocabulary plus the HTTP (OpenAPI) surface. Contracts only - no service implementation."
+fixture = "../../../wasm/fixture"
+
+[sources]
+docs = "documentation:docs"

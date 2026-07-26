@@ -2,9 +2,9 @@
 
 End-to-end run of the Specify change workflow over the real WASM component seam: the shipped `specify` binary from the sibling `augentic/specify` checkout (embedded engine guest) plus this repo's `documentation`, `intent`, and `contracts` adapter components.
 
-There is no `omnia.toml`: the example invokes the built binary directly. The run script sandboxes the layout with `SPECIFY_HOME`, seeds the adapters via `specify adapter add`, and initializes the project by bare target name. Fixture inputs live under [fixture/](fixture/) (shared with the graded `eval` trial).
+There is no `omnia.toml`: the example invokes the built binary directly. The run script sandboxes the layout with `SPECIFY_HOME`, seeds the adapters via `specify adapter add`, and initializes the project by bare target name. Fixture inputs live under [fixture/](fixture/) (shared with the graded `orders-contracts` eval case).
 
-See the [repo README](../../README.md) for the graded native trial / scenario repair loop; [docs/testing.md](../../docs/testing.md) for the five-rung map.
+See the [repo README](../../README.md) for the graded native eval-case repair loop; [docs/testing.md](../../docs/testing.md) for the five-rung map.
 
 ## Quick start
 
