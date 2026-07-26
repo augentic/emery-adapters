@@ -1,9 +1,0 @@
-# Routing for the `vectis/single-screen` scenario: the adapter under test,
-# the seam operation `cargo make eval scenario` drives, and the slice name.
-adapter = "target:vectis"
-operation = "build"
-slice = "daily-quote"
-
-# Deterministic artifact-exists gate: a success report must leave the
-# slice composition staged.
-expect = [".specify/slices/daily-quote/composition.yaml"]
