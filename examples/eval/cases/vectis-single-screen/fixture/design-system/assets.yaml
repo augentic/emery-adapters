@@ -9,6 +9,8 @@ provenance:
     - kind: manual
       captured_at: "2026-07-01T00:00:00Z"
 
+app-icon: launcher
+
 assets:
   refresh:
     kind: symbol
@@ -16,3 +18,8 @@ assets:
     symbols:
       ios: arrow.clockwise
       android: refresh
+  launcher:
+    kind: vector
+    role: app-icon
+    alt: "Daily Quote"
+    source: assets/app-icon.svg
