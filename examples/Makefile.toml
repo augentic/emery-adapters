@@ -2,12 +2,6 @@
 # The eval example (native dev shim + live-model eval)
 # -------------------------------------
 
-# The CLI passthrough: any specify verb against the native
-# shim (`cargo make specify -- --project-dir <dir> slice list`).
-[tasks.specify]
-command = "cargo"
-args = ["run", "-q", "-p", "eval", "--", "${@}"]
-
 # One live eval case (`cargo make eval orders-contracts --restart
 # [--until plan]`); bare `cargo make eval` lists the cases. Case data
 # lives in `eval/cases/<id>/case.toml`; the retained sandbox in
@@ -19,6 +13,13 @@ script = '''
   export RUST_LOG="${RUST_LOG:-info,opentelemetry_sdk=off}"
   cargo run -p eval -- eval "$@"
 '''
+
+# The CLI passthrough: any specify verb against the native
+# shim (`cargo make specify -- --project-dir <dir> slice list`).
+[tasks.specify]
+env_files = [".env"]
+command = "cargo"
+args = ["run", "-q", "-p", "eval", "--", "${@}"]
 
 # -------------------------------------
 # Wasm example

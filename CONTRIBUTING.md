@@ -84,9 +84,9 @@ Before a train publishes, these gates must hold:
 1. The tree builds against a **published** `specify:adapter` WIT pin.
 2. CI is green against a **released (or RC)** engine revision — the engine git dependencies are tag-pinned (`tag = "vX.Y.Z"`), with no active sibling `[patch]` block.
 3. Every adapter's `specify-floor` names the minimum host that can run this train.
-4. The GHCR version tag does not already exist (the publish helper probes and refuses to replace it).
+4. Releasing a new SemVer: the GHCR version tag must not already exist for a first-time push of that train (the publish helper probes and never replaces an existing tag; a re-run skips it and continues).
 
-**Publish Release** runs CI, tags and creates the GitHub Release, then release-builds every adapter and pushes each as a Wasm OCI artifact to `ghcr.io/augentic/specify-adapters/<name>:<version>` via the same `cargo make release` / `cargo make publish <name>` path used locally. The helper derives `<version>` from the workspace manifest and refuses to replace an existing version tag — released bytes are immutable by policy (GHCR has no registry-native tag immutability, so the helper probe is the compensating control).
+**Publish Release** runs CI, tags and creates the GitHub Release, then release-builds every adapter and pushes each as a Wasm OCI artifact to `ghcr.io/augentic/specify-adapters/<name>:<version>` via the same `cargo make release` / `cargo make publish <name>` path used locally. The helper derives `<version>` from the workspace manifest and never replaces an existing version tag — released bytes are immutable by policy (GHCR has no registry-native tag immutability, so the helper probe is the compensating control). An already-published tag is a successful skip, so a partial Publish Release (or local `cargo make publish`) can be re-run safely.
 
 A brand-new package is created **private**: flip it to public in the GHCR package settings (`https://github.com/orgs/augentic/packages/container/specify-adapters%2F<name>/settings`) so anonymous consumers can pull, then confirm the round-trip:
 

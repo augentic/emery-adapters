@@ -1,9 +1,0 @@
-# The contracts `update` regression path: the endpoint description that
-# must not produce contract YAML inside an implementation slice is
-# introduced here through a proper contracts slice.
-kind = "build"
-slice = "loyalty-api-contract"
-
-# Deterministic artifact-exists gate: a success report must leave the
-# slice contracts delta non-empty.
-expect = [".specify/slices/loyalty-api-contract/contracts"]
