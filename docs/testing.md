@@ -11,16 +11,16 @@ Fastest feedback first. **Every behavior is asserted on exactly one rung** — d
 | #   | Rung               | Owns                                                         | Entry                                                         |
 | --- | ------------------ | ------------------------------------------------------------ | ------------------------------------------------------------- |
 | 1   | Native crate tests | Operation behavior, prompt assembly (scripted `Harness`)     | `cargo nextest run -p <adapter>` / `cargo make test`          |
-| 2   | Full trial         | Cross-phase integration, real sources → working-tree outputs | [`examples/eval/trial.md`](../examples/eval/trial.md)         |
-| 3   | Prompt scenarios   | One seam op (`build` / merge gate), prompt quality           | [`examples/eval/scenarios.md`](../examples/eval/scenarios.md) |
+| 2   | Workflow eval cases | Cross-phase integration, real sources → working-tree outputs | [`examples/eval/`](../examples/eval/README.md)                |
+| 3   | Build eval cases   | One target build over a refined fixture, prompt quality      | [`examples/eval/`](../examples/eval/README.md)                |
 | 4   | Wasm example       | WASM/WIT conformance over the real component seam            | [`examples/wasm/`](../examples/wasm/README.md)                |
 | 5   | Consumer project   | Code (not prose) iteration via seeded `.wasm`                | `cargo make adapter [name]` + `specify adapter add`           |
 
-Ownership boundaries: omnia-testkit owns reusable model/runtime test mechanics; adapter `tests/` own operation behavior; the eval composition example owns live prompt/trial loops ([repo README](../README.md) for the day-to-day loop; [`examples/eval/`](../examples/eval/) for scenario/trial depth); the wasm example owns component-seam conformance. Generic catalog/provider/command mechanics stay in `specify/crates/native/tests` (scenario/sandbox mechanics in `specify/crates/probe/tests`).
+Ownership boundaries: omnia-testkit owns reusable model/runtime test mechanics; adapter `tests/` own operation behavior; the eval composition example owns the live case loop ([repo README](../README.md) for the day-to-day loop; [`examples/eval/`](../examples/eval/) for the case catalog); the wasm example owns component-seam conformance. Generic catalog/provider/command mechanics stay in `specify/crates/native/tests` (case/sandbox mechanics in `specify/crates/probe/tests`).
 
 Sibling co-development: uncomment the `[patch."https://github.com/augentic/specify.git"]` block in the root `Cargo.toml` to resolve engine crates from `../specify` instead of the lockfile-pinned git dependencies.
 
-Testing a brand-new adapter, including its first scenario and catalog wiring: [authoring.md](authoring.md).
+Testing a brand-new adapter, including its first eval case and catalog wiring: [authoring.md](authoring.md).
 
 ### 1. Native crate tests — the inner loop
 
@@ -33,19 +33,20 @@ cargo make test               # the whole workspace, matching CI
 
 `nextest` is mandatory: each test runs in its own process, which is what lets CWD/env-mutating suites pass. Never use bare `cargo test`.
 
-### 2–3. Eval — live trial and scenarios
+### 2–3. Eval — live workflow and build cases
 
-Native catalog, live cursor backend, operator-invoked (never CI). How to run, debug, and iterate: **[README.md](../README.md)**; scenario/trial depth under [`examples/eval/`](../examples/eval/).
+Native catalog, live cursor backend, operator-invoked (never CI). How to run, debug, and iterate: **[README.md](../README.md)**; eval case catalog under [`examples/eval/`](../examples/eval/README.md).
 
 ```bash
-cargo make eval                              # stock contracts trial
-cargo make eval scenario omnia/health        # one scenario
+cargo make eval                              # list the cases
+cargo make eval orders-contracts --restart   # a workflow case (rung 2)
+cargo make eval omnia-health --restart       # a build case (rung 3)
 cargo make specify -- --project-dir <dir> slice list
 ```
 
 ### 4. Wasm example — component seam
 
-[`examples/wasm/`](../examples/wasm/README.md) — shipped `specify` binary + built adapter components over the real WIT seam. Operator-invoked; per-leg ungraded (the graded native trial is rung 2).
+[`examples/wasm/`](../examples/wasm/README.md) — shipped `specify` binary + built adapter components over the real WIT seam. Operator-invoked; per-leg ungraded (the graded native workflow case is rung 2).
 
 ```bash
 cargo make wasm-run

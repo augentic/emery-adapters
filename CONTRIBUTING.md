@@ -15,7 +15,7 @@ Unless you are fixing a known bug, discuss larger changes in a GitHub issue firs
 ### Troubleshooting first runs
 
 - **`cargo make fmt` fails** — the fmt arm shells out to `cargo +nightly fmt`; install any nightly toolchain (`rustup toolchain install nightly --component rustfmt`).
-- **Eval / scenario commands hang or fail authenticating** — they need [`cursor-agent`](https://cursor.com/docs/cli) on `PATH`, authenticated via `cursor-agent login` or `CURSOR_API_KEY` in a repo-root `.env`.
+- **Eval case commands hang or fail authenticating** — they need [`cursor-agent`](https://cursor.com/docs/cli) on `PATH`, authenticated via `cursor-agent login` or `CURSOR_API_KEY` in a repo-root `.env`.
 - **`cargo make wasm-run` fails immediately** — it requires the sibling [`augentic/specify`](https://github.com/augentic/specify) checkout at `../specify` (it drives that repo's built `specify` binary).
 - **Patch-resolution errors after editing the root `Cargo.toml`** — the `[patch."https://github.com/augentic/specify.git"]` block only resolves when `../specify` exists; re-comment it if you are not co-developing.
 
@@ -36,7 +36,7 @@ Every adapter — the three targets and the five sources — shares the same gue
 codex/                # cross-adapter rules/ and references/runtime/
 examples/
   wasm/               # component-seam example (`cargo make wasm-run`)
-  eval/               # native catalog, trial, and prompt scenarios
+  eval/               # native catalog and live eval cases
 Cargo.toml            # virtual workspace: `examples/eval` + `{sources,targets}/*`
 ```
 
@@ -84,9 +84,9 @@ Before a train publishes, these gates must hold:
 1. The tree builds against a **published** `specify:adapter` WIT pin.
 2. CI is green against a **released (or RC)** engine revision — the engine git dependencies are tag-pinned (`tag = "vX.Y.Z"`), with no active sibling `[patch]` block.
 3. Every adapter's `specify-floor` names the minimum host that can run this train.
-4. The GHCR version tag does not already exist (the publish helper probes and refuses to replace it).
+4. Releasing a new SemVer: the GHCR version tag must not already exist for a first-time push of that train (the publish helper probes and never replaces an existing tag; a re-run skips it and continues).
 
-**Publish Release** runs CI, tags and creates the GitHub Release, then release-builds every adapter and pushes each as a Wasm OCI artifact to `ghcr.io/augentic/specify-adapters/<name>:<version>` via the same `cargo make release` / `cargo make publish <name>` path used locally. The helper derives `<version>` from the workspace manifest and refuses to replace an existing version tag — released bytes are immutable by policy (GHCR has no registry-native tag immutability, so the helper probe is the compensating control).
+**Publish Release** runs CI, tags and creates the GitHub Release, then release-builds every adapter and pushes each as a Wasm OCI artifact to `ghcr.io/augentic/specify-adapters/<name>:<version>` via the same `cargo make release` / `cargo make publish <name>` path used locally. The helper derives `<version>` from the workspace manifest and never replaces an existing version tag — released bytes are immutable by policy (GHCR has no registry-native tag immutability, so the helper probe is the compensating control). An already-published tag is a successful skip, so a partial Publish Release (or local `cargo make publish`) can be re-run safely.
 
 A brand-new package is created **private**: flip it to public in the GHCR package settings (`https://github.com/orgs/augentic/packages/container/specify-adapters%2F<name>/settings`) so anonymous consumers can pull, then confirm the round-trip:
 
@@ -116,7 +116,7 @@ cargo make publish <name>
 - [AGENTS.md](AGENTS.md) — vocabulary, component contract, agent commands
 - [docs/testing.md](docs/testing.md) — five-rung map
 - [README.md](README.md) — live eval: run → debug → edit prose → re-run
-- [examples/eval/](examples/eval/) — scenario index and trial depth
+- [examples/eval/](examples/eval/) — eval case catalog and depth
 - [examples/wasm/README.md](examples/wasm/README.md) — component-seam example
 - [codex/rules/README.md](codex/rules/README.md) — engineering-rule catalog
 - [specify CONTRIBUTING](https://github.com/augentic/specify/blob/main/CONTRIBUTING.md) — DCO and org contribution norms

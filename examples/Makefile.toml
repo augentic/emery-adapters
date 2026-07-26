@@ -2,27 +2,26 @@
 # The eval example (native dev shim + live-model eval)
 # -------------------------------------
 
+[env]
+EVAL_TIMEOUT_SECS = "900"
+RUST_LOG = "info,opentelemetry_sdk=off"
+
+# One live eval case (`cargo make eval orders-contracts --restart
+# [--until plan]`); bare `cargo make eval` lists the cases. Case data
+# lives in `eval/cases/<id>/case.toml`; the retained sandbox in
+# `eval/sandbox/<id>/`.
+[tasks.eval]
+env_files = [".env"]
+# env = { EVAL_TIMEOUT_SECS = "900", RUST_LOG = "info,opentelemetry_sdk=off" }
+command = "cargo"
+args = ["run", "-q", "-p", "eval", "--", "eval", "${@}"]
+
 # The CLI passthrough: any specify verb against the native
 # shim (`cargo make specify -- --project-dir <dir> slice list`).
 [tasks.specify]
+env_files = [".env"]
 command = "cargo"
 args = ["run", "-q", "-p", "eval", "--", "${@}"]
-
-# The native live-model trial (the eval example's `eval` subcommand)
-[tasks.eval]
-env_files = [".env"]
-script = '''
-  # Mid-tier models often need more than the cursor backend's 120s default.
-  # `.env` / the ambient environment win when already set.
-  export EVAL_TIMEOUT_SECS="${EVAL_TIMEOUT_SECS:-300}"
-  cargo run -p eval -- eval \
-    --fixture examples/wasm/fixture \
-    --change "orders" \
-    --intent "Author the API contracts for the orders service described under docs/: the JSON Schema vocabulary plus the HTTP (OpenAPI) surface. Contracts only - no service implementation." \
-    --source "docs=documentation:docs" \
-    --target "contracts" \
-    "$@"
-  '''
 
 # -------------------------------------
 # Wasm example
@@ -34,11 +33,10 @@ script = "rm -rf sandbox/wasm"
 [tasks.wasm-build]
 dependencies = ["wasm-clean"]
 script = '''
-# Shipped specify binary (embedded engine guest) from the sibling checkout.
-cargo build -p specify --lib --target wasm32-wasip2 --manifest-path ../specify/Cargo.toml
-cargo build -p specify --bin specify --manifest-path ../specify/Cargo.toml
-
-cargo build -p documentation -p intent -p contracts --target wasm32-wasip2
+  # Shipped specify binary (embedded engine guest) from the sibling checkout.
+  cargo build -p specify --lib --target wasm32-wasip2 --manifest-path ../specify/Cargo.toml
+  cargo build -p specify --bin specify --manifest-path ../specify/Cargo.toml
+  cargo build -p documentation -p intent -p contracts --target wasm32-wasip2
 '''
 
 [tasks.wasm-run]
@@ -46,29 +44,28 @@ dependencies = ["wasm-build"]
 env_files = [".env"]
 script_runner = "bash"
 script = '''
-set -eo pipefail
+  set -eo pipefail
 
-export SPECIFY_HOME="$PWD/sandbox/wasm"
-# Omnia's default timeout (30s) is too short for a live model.
-export GUEST_TIMEOUT_MS="${GUEST_TIMEOUT_MS:-3600000}"
-# export RUST_LOG="info,opentelemetry_sdk=off,omnia_wasi_http=debug"
+  export SPECIFY_HOME="$PWD/sandbox/wasm"
+  export GUEST_TIMEOUT_MS="${GUEST_TIMEOUT_MS:-3600000}"
+  export RUST_LOG="${RUST_LOG:-info,opentelemetry_sdk=off}"
 
-mkdir -p "$SPECIFY_HOME/project"
-cp -R examples/wasm/fixture/. "$SPECIFY_HOME/project/"
+  mkdir -p "$SPECIFY_HOME/project"
+  cp -R examples/wasm/fixture/. "$SPECIFY_HOME/project/"
 
-SPECIFY="$PWD/../specify/target/debug/specify"
-TARGET="$PWD/target"
-# Execute commands in the project directory, not the repository root.
-run() { (cd "$SPECIFY_HOME/project" && "$SPECIFY" "$@"); }
+  SPECIFY="$PWD/../specify/target/debug/specify"
+  TARGET="$PWD/target"
+  # Execute commands in the project directory, not the repository root.
+  run() { (cd "$SPECIFY_HOME/project" && "$SPECIFY" "$@"); }
 
-run adapter add "$TARGET/wasm32-wasip2/debug/documentation.wasm"
-run adapter add "$TARGET/wasm32-wasip2/debug/intent.wasm"
-run adapter add "$TARGET/wasm32-wasip2/debug/contracts.wasm"
-run init contracts --name orders
+  run adapter add "$TARGET/wasm32-wasip2/debug/documentation.wasm"
+  run adapter add "$TARGET/wasm32-wasip2/debug/intent.wasm"
+  run adapter add "$TARGET/wasm32-wasip2/debug/contracts.wasm"
+  run init contracts --name orders
 
-run plan author orders \
-  --intent "Author the API contracts for the orders service described under docs/: the JSON Schema vocabulary plus the HTTP (OpenAPI) surface. Contracts only - no service implementation." \
-  --source "docs=documentation:docs"
-run plan approve
-run plan execute
+  run plan author orders \
+    --intent "Author the API contracts for the orders service described under docs/: the JSON Schema vocabulary plus the HTTP (OpenAPI) surface. Contracts only - no service implementation." \
+    --source "docs=documentation:docs"
+  run plan approve
+  run plan execute
 '''

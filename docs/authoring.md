@@ -262,8 +262,8 @@ The eval composition ([`examples/eval/`](../examples/eval/)) links adapters stat
 
 How to exercise it live depends on the axis:
 
-- **Target adapter** — add a scenario: a data directory under `examples/eval/scenarios/<name>/<case>/` with a `scenario.toml` (adapter id, `build` or merge-gate operation, slice name, `expect` artifacts), `inputs/*.md`, and an optional `fixture/`. Anatomy and the `expect` gate semantics: [examples/eval/scenarios.md](../examples/eval/scenarios.md). Run it with `cargo make eval scenario <name>/<case>`.
-- **Source adapter** — scenarios drive only target operations (`build` / merge gates) today, so exercise `survey` / `extract` live through a [custom trial](../examples/eval/trial.md#custom-trials) that binds your source, e.g. `--source "notes=changelog:notes"` over a fixture tree.
+- **Target adapter** — add a build case: a data directory under `examples/eval/cases/<id>/` with a `case.toml` (`kind = "build"`, slice name, `expect` artifacts) and a `fixture/` carrying the exact refined state `slice build` consumes (`.specify/project.yaml`, the slice's `metadata.yaml`, proposal / design / tasks / specs, plus any source material). Anatomy and the `expect` gate: [examples/eval/README.md](../examples/eval/README.md#case-shapes). Run it with `cargo make eval <id> --restart`.
+- **Source adapter** — build cases drive only the target build today, so exercise `survey` / `extract` live through a workflow case (`kind = "workflow"`) that binds your source, e.g. `notes = "changelog:notes"` under `[sources]` over a fixture tree.
 
 Either way needs an authenticated `cursor-agent`. From here you are in the standard repair loop — edit `prose/**`, re-run, compare scratch trees — documented in the [repo README](../README.md).
 
@@ -287,6 +287,6 @@ The project then resolves the adapter by bare name (`changelog`) from its compon
 - [ ] `src/lib.rs` carries no logic beyond the export macro, `registry!`, and re-exports; reusable logic is wasm-free library code.
 - [ ] Every prompt path loaded by `operations.rs` exists under `prose/` (pinned by a `tests/registry.rs`), and prompt-shape caps are respected.
 - [ ] Native `tests/` cover each operation with a scripted `Harness`; `cargo nextest run -p <name>` is green.
-- [ ] Catalog entry in `examples/eval/src/main.rs`, exercised live at least once (target: a scenario; source: a custom trial).
+- [ ] Catalog entry in `examples/eval/src/main.rs`, exercised live at least once (target: a build case; source: a workflow case).
 - [ ] `cargo make adapter <name>` builds the component; no `.wasm` artifacts committed.
 - [ ] `cargo make ci` is green.

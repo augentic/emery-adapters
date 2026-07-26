@@ -148,9 +148,10 @@ fi
 # Publish — push one built component to its exact GHCR SemVer tag as a
 # standard Wasm OCI artifact. Used by Publish Release (adapters.yaml) and
 # as a local breakout: log in first (`gh auth token | docker login ghcr.io
-# -u <github-user> --password-stdin`). Refuses to replace an existing
-# version tag — GHCR has no registry-native tag immutability, so this
-# probe is the compensating control.
+# -u <github-user> --password-stdin`). Skips (exit 0) when the version
+# tag already exists — never replaces it. GHCR has no registry-native
+# tag immutability, so this probe is the compensating control; exit 0
+# keeps Publish Release and local retries idempotent after a partial run.
 [tasks.publish]
 script_runner = "bash"
 install_crate = { crate_name = "wkg", binary = "wkg", test_arg = "--version" }
@@ -173,11 +174,11 @@ fi
 repository="augentic/specify-adapters/$name"
 reference="ghcr.io/$repository:$version"
 
-# Manifest probe: 200 means the tag is already released and must not
-# be replaced; 401/403/404 mean no such tag is visible (first
-# publish). The probe authenticates with the operator's gh token when
-# available so a still-private package (fresh push awaiting its GHCR
-# visibility flip) is also protected; otherwise it is anonymous.
+# Manifest probe: 200 means the tag is already released — skip (do not
+# replace); 401/403/404 mean no such tag is visible (first publish).
+# The probe authenticates with the operator's gh token when available
+# so a still-private package (fresh push awaiting its GHCR visibility
+# flip) is also protected; otherwise it is anonymous.
 credentials=""
 if command -v gh > /dev/null 2>&1; then
   credentials="$(gh auth token 2> /dev/null || true)"
@@ -190,7 +191,7 @@ status="$(curl -s -o /dev/null -w '%{http_code}' \
   -H "Accept: application/vnd.oci.image.manifest.v1+json" \
   "https://ghcr.io/v2/$repository/manifests/$version")"
 case "$status" in
-  200) echo "refusing to replace the existing tag $reference" >&2; exit 1 ;;
+  200) echo "already published $reference"; exit 0 ;;
   401 | 403 | 404) ;;
   *) echo "unexpected registry response HTTP $status probing $reference" >&2; exit 1 ;;
 esac
