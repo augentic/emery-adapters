@@ -4,7 +4,7 @@
 //!
 //! The composition root owns what the shared client (`probe::client`)
 //! refuses to: the Tokio runtime, `std::env::args` collection, and
-//! the first-party catalog and case declarations. It is a
+//! the first-party catalog, cases, and sandbox declarations. It is a
 //! development tool, never an install or release artifact. Driven by
 //! `cargo make specify` and `cargo make eval`.
 
@@ -16,10 +16,14 @@ use std::path::Path;
 #[cfg(not(target_arch = "wasm32"))]
 use std::process::ExitCode;
 
-/// Eval case data directories beside this example; the retained
-/// per-case sandboxes live in the sibling `sandbox/` tree.
+/// Eval case data directories beside this example.
 #[cfg(not(target_arch = "wasm32"))]
 const CASES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/cases");
+
+/// Retained per-case sandboxes at the repository root, beside the
+/// wasm example's `sandbox/wasm/` tree.
+#[cfg(not(target_arch = "wasm32"))]
+const SANDBOX: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../sandbox");
 
 #[cfg(not(target_arch = "wasm32"))]
 #[tokio::main]
@@ -35,7 +39,13 @@ async fn main() -> ExitCode {
 
 #[cfg(not(target_arch = "wasm32"))]
 async fn entry() -> anyhow::Result<ExitCode> {
-    probe::client::run(std::env::args().collect(), catalog()?, Some(Path::new(CASES))).await
+    probe::client::run(
+        std::env::args().collect(),
+        catalog()?,
+        Some(Path::new(CASES)),
+        Some(Path::new(SANDBOX)),
+    )
+    .await
 }
 
 /// Every first-party source and target adapter, linked once on its

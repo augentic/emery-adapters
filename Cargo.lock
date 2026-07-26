@@ -4,8 +4,8 @@ version = 4
 
 [[package]]
 name = "adapter"
-version = "0.28.0"
-source = "git+https://github.com/augentic/specify.git?tag=v0.28.0#37acaffa260b7aab011b3437a95f675da6dc1cb9"
+version = "0.29.0"
+source = "git+https://github.com/augentic/specify.git#a67adb45e421f18702dbfa8db69e3867cbcc9f59"
 dependencies = [
  "omnia-guest",
  "omnia-wasi-http",
@@ -168,8 +168,8 @@ checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
 
 [[package]]
 name = "artifacts"
-version = "0.28.0"
-source = "git+https://github.com/augentic/specify.git?tag=v0.28.0#37acaffa260b7aab011b3437a95f675da6dc1cb9"
+version = "0.29.0"
+source = "git+https://github.com/augentic/specify.git#a67adb45e421f18702dbfa8db69e3867cbcc9f59"
 dependencies = [
  "diagnostics",
  "error",
@@ -509,8 +509,8 @@ dependencies = [
 
 [[package]]
 name = "change"
-version = "0.28.0"
-source = "git+https://github.com/augentic/specify.git?tag=v0.28.0#37acaffa260b7aab011b3437a95f675da6dc1cb9"
+version = "0.29.0"
+source = "git+https://github.com/augentic/specify.git#a67adb45e421f18702dbfa8db69e3867cbcc9f59"
 dependencies = [
  "artifacts",
  "diagnostics",
@@ -524,6 +524,7 @@ dependencies = [
  "serde-saphyr",
  "serde_json",
  "slice",
+ "tracing",
 ]
 
 [[package]]
@@ -646,7 +647,7 @@ name = "contracts"
 version = "0.6.0"
 dependencies = [
  "adapter",
- "jsonschema 0.48.5",
+ "jsonschema",
  "omnia-testkit",
  "prose",
  "semver",
@@ -1052,8 +1053,8 @@ checksum = "7cd812cc2bc1d69d4764bd80df88b4317eaef9e773c75226407d9bc0876b211c"
 
 [[package]]
 name = "diagnostics"
-version = "0.28.0"
-source = "git+https://github.com/augentic/specify.git?tag=v0.28.0#37acaffa260b7aab011b3437a95f675da6dc1cb9"
+version = "0.29.0"
+source = "git+https://github.com/augentic/specify.git#a67adb45e421f18702dbfa8db69e3867cbcc9f59"
 dependencies = [
  "base16ct",
  "schemars",
@@ -1180,8 +1181,8 @@ dependencies = [
 
 [[package]]
 name = "error"
-version = "0.28.0"
-source = "git+https://github.com/augentic/specify.git?tag=v0.28.0#37acaffa260b7aab011b3437a95f675da6dc1cb9"
+version = "0.29.0"
+source = "git+https://github.com/augentic/specify.git#a67adb45e421f18702dbfa8db69e3867cbcc9f59"
 dependencies = [
  "serde-saphyr",
  "thiserror 2.0.19",
@@ -2090,35 +2091,6 @@ dependencies = [
 
 [[package]]
 name = "jsonschema"
-version = "0.48.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f05a6cff806294a7699d48761d4ae2bdebab7fa2eef05e4a0b83320f0ff46901"
-dependencies = [
- "ahash",
- "bytecount",
- "data-encoding",
- "email_address",
- "fancy-regex",
- "fraction",
- "getrandom 0.3.4",
- "idna",
- "itoa",
- "jsonschema-regex 0.48.5",
- "jsonschema-value 0.48.5",
- "num-cmp",
- "num-traits",
- "percent-encoding",
- "referencing 0.48.5",
- "regex",
- "serde",
- "serde_json",
- "strum",
- "unicode-general-category",
- "uuid-simd",
-]
-
-[[package]]
-name = "jsonschema"
 version = "0.49.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9cc9116a0f75b7336e55eb2a2a0ddef86c37cadf02924a571751aa123d5a0290"
@@ -2132,12 +2104,12 @@ dependencies = [
  "getrandom 0.3.4",
  "idna",
  "itoa",
- "jsonschema-regex 0.49.1",
- "jsonschema-value 0.49.1",
+ "jsonschema-regex",
+ "jsonschema-value",
  "num-cmp",
  "num-traits",
  "percent-encoding",
- "referencing 0.49.1",
+ "referencing",
  "regex",
  "serde",
  "serde_json",
@@ -2148,34 +2120,11 @@ dependencies = [
 
 [[package]]
 name = "jsonschema-regex"
-version = "0.48.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84708dd3f6c5327478a96f37378adb27deed6a626cf84d19de780d9e8ae84b17"
-dependencies = [
- "regex-syntax",
-]
-
-[[package]]
-name = "jsonschema-regex"
 version = "0.49.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "628a1f02bda4651d9a6088ee6386a92f0ee96255b0c99e9dfe1be91bf83bd838"
 dependencies = [
  "regex-syntax",
-]
-
-[[package]]
-name = "jsonschema-value"
-version = "0.48.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd8c04ab4ce60e42c4e302d3bd9d184652bb56f212495d2eea23573bcbf72556"
-dependencies = [
- "ahash",
- "bytecount",
- "fraction",
- "num-cmp",
- "num-traits",
- "serde_json",
 ]
 
 [[package]]
@@ -2404,8 +2353,8 @@ dependencies = [
 
 [[package]]
 name = "native"
-version = "0.28.0"
-source = "git+https://github.com/augentic/specify.git?tag=v0.28.0#37acaffa260b7aab011b3437a95f675da6dc1cb9"
+version = "0.29.0"
+source = "git+https://github.com/augentic/specify.git#a67adb45e421f18702dbfa8db69e3867cbcc9f59"
 dependencies = [
  "adapter",
  "artifacts",
@@ -2556,7 +2505,7 @@ name = "omnia"
 version = "0.6.0"
 dependencies = [
  "adapter",
- "jsonschema 0.48.5",
+ "jsonschema",
  "omnia-testkit",
  "prose",
  "serde",
@@ -2829,7 +2778,7 @@ dependencies = [
  "cap-primitives",
  "cap-std",
  "futures",
- "jsonschema 0.49.1",
+ "jsonschema",
  "omnia 0.35.0",
  "serde",
  "serde_json",
@@ -3182,8 +3131,8 @@ dependencies = [
 
 [[package]]
 name = "probe"
-version = "0.28.0"
-source = "git+https://github.com/augentic/specify.git?tag=v0.28.0#37acaffa260b7aab011b3437a95f675da6dc1cb9"
+version = "0.29.0"
+source = "git+https://github.com/augentic/specify.git#a67adb45e421f18702dbfa8db69e3867cbcc9f59"
 dependencies = [
  "anyhow",
  "artifacts",
@@ -3194,11 +3143,10 @@ dependencies = [
  "omnia-guest",
  "omnia-wasi-model",
  "project",
- "semver",
  "serde",
- "serde_json",
  "tokio",
  "toml",
+ "tracing",
 ]
 
 [[package]]
@@ -3212,8 +3160,8 @@ dependencies = [
 
 [[package]]
 name = "project"
-version = "0.28.0"
-source = "git+https://github.com/augentic/specify.git?tag=v0.28.0#37acaffa260b7aab011b3437a95f675da6dc1cb9"
+version = "0.29.0"
+source = "git+https://github.com/augentic/specify.git#a67adb45e421f18702dbfa8db69e3867cbcc9f59"
 dependencies = [
  "artifacts",
  "diagnostics",
@@ -3229,6 +3177,7 @@ dependencies = [
  "strum",
  "thiserror 2.0.19",
  "toml",
+ "tracing",
 ]
 
 [[package]]
@@ -3248,8 +3197,8 @@ dependencies = [
 
 [[package]]
 name = "prose"
-version = "0.28.0"
-source = "git+https://github.com/augentic/specify.git?tag=v0.28.0#37acaffa260b7aab011b3437a95f675da6dc1cb9"
+version = "0.29.0"
+source = "git+https://github.com/augentic/specify.git#a67adb45e421f18702dbfa8db69e3867cbcc9f59"
 
 [[package]]
 name = "prost"
@@ -3537,23 +3486,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.3",
-]
-
-[[package]]
-name = "referencing"
-version = "0.48.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "980e77f5cfffc592c0e7dfb6d20770a0b96a6ab94d403de7454ed9799505e4ba"
-dependencies = [
- "ahash",
- "fluent-uri",
- "getrandom 0.3.4",
- "hashbrown 0.17.1",
- "itoa",
- "micromap",
- "parking_lot",
- "percent-encoding",
- "serde_json",
 ]
 
 [[package]]
@@ -4208,8 +4140,8 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
 name = "slice"
-version = "0.28.0"
-source = "git+https://github.com/augentic/specify.git?tag=v0.28.0#37acaffa260b7aab011b3437a95f675da6dc1cb9"
+version = "0.29.0"
+source = "git+https://github.com/augentic/specify.git#a67adb45e421f18702dbfa8db69e3867cbcc9f59"
 dependencies = [
  "artifacts",
  "diagnostics",
@@ -4224,6 +4156,7 @@ dependencies = [
  "serde-saphyr",
  "serde_json",
  "strum",
+ "tracing",
 ]
 
 [[package]]
@@ -4823,8 +4756,8 @@ dependencies = [
 
 [[package]]
 name = "transport"
-version = "0.28.0"
-source = "git+https://github.com/augentic/specify.git?tag=v0.28.0#37acaffa260b7aab011b3437a95f675da6dc1cb9"
+version = "0.29.0"
+source = "git+https://github.com/augentic/specify.git#a67adb45e421f18702dbfa8db69e3867cbcc9f59"
 dependencies = [
  "artifacts",
  "change",
@@ -4836,6 +4769,7 @@ dependencies = [
  "serde_json",
  "slice",
  "strum",
+ "tracing",
 ]
 
 [[package]]
@@ -5008,7 +4942,7 @@ version = "0.6.0"
 dependencies = [
  "adapter",
  "image",
- "jsonschema 0.48.5",
+ "jsonschema",
  "omnia-testkit",
  "prose",
  "resvg",

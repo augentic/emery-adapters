@@ -1,8 +1,0 @@
-# The contracts `describe` sub-flow: generate contract YAML from prose
-# requirements (proposal + spec) with no source material.
-kind = "build"
-slice = "user-adapter-api"
-
-# Deterministic artifact-exists gate: a success report must leave the
-# slice contracts delta non-empty.
-expect = [".specify/slices/user-adapter-api/contracts"]
