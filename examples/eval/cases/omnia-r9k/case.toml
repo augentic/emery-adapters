@@ -1,14 +1,14 @@
-# The stock Omnia migration workflow: survey the Propellerhead
-# at_r9k_position_adapter TypeScript tree, then plan, execute, and merge
-# the migration against the omnia target. The fixture is gitignored
-# (UNLICENSED upstream) — stage it first with
-# `cargo make eval-omnia-r9k-prepare`; this case fails with a focused
-# error when the prepared tree is absent.
+# The stock Omnia migration workflow: shallow-clone the Propellerhead
+# at_r9k_position_adapter TypeScript tree into this case's gitignored
+# fixture/ cache on first run, then plan, execute, and merge the
+# migration against the omnia target. The upstream is UNLICENSED, so
+# fixture/ is never committed (see the sibling .gitignore); refresh
+# the snapshot by deleting fixture/.
 kind = "workflow"
 target = "omnia"
 change = "at-r9k-position-adapter"
 intent = "Migrate the legacy TypeScript at_r9k_position_adapter (https://bitbucket.org/Propellerhead/at_r9k_position_adapter) under legacy/ into a new Omnia WASM crate with provider-based dependency injection. Survey and extract behaviour from the TypeScript tree; build the guest, crate, and tests; merge specs into the baseline."
-fixture = "../../fixtures/omnia-r9k/project"
+clone = { url = "https://bitbucket.org/Propellerhead/at_r9k_position_adapter.git", dest = "legacy/at_r9k_position_adapter" }
 
 [sources]
 legacy = "typescript:legacy/at_r9k_position_adapter"

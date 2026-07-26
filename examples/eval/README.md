@@ -29,7 +29,7 @@ A build case prints its retained sandbox and the authoritative report path (`.sp
 | `omnia-health` | build | Tiny create-mode crate (`GET /health`) |
 | `vectis-single-screen` | build | Single-screen feature on `core + ios` |
 | `orders-contracts` | workflow | docs → contracts ([`examples/wasm/fixture`](../wasm/fixture/)) |
-| `omnia-r9k` | workflow | `at_r9k_position_adapter` → omnia ([prepare](fixtures/omnia-r9k/)) |
+| `omnia-r9k` | workflow | `at_r9k_position_adapter` → omnia (cloned on first run) |
 
 | Reach for a build case when… | Prefer a workflow case when… |
 | --- | --- |
@@ -46,8 +46,17 @@ cases/<id>/
   case.toml      kind = "workflow" | "build" plus the shape's fields
   fixture/       optional; copied into the fresh sandbox (case.toml may
                  instead point `fixture` at another tree, e.g. the wasm
-                 example fixture or the prepared omnia-r9k project)
+                 example fixture)
 ```
+
+A workflow case may instead declare `clone = { url = "…", dest = "…" }`
+(mutually exclusive with `fixture`): on first run the runner
+shallow-clones the upstream tree into the case's own `fixture/<dest>`
+(stripping `.git`) and reuses that cache on every later run — for
+source trees that cannot ship as committed fixtures, e.g. the
+`UNLICENSED` omnia-r9k upstream, kept out of the repository by a
+`.gitignore` in the case directory. Refresh the snapshot by deleting
+the cached tree.
 
 - **`build`** — `slice` + `expect`: the fixture carries the exact refined state `specify slice build` consumes (`.specify/project.yaml`, the slice's `metadata.yaml` at `status: refined`, proposal / design / tasks / specs, and any source material such as `vendor/`). The runner invokes `slice build <slice>` once and gates on `built` metadata, the authoritative `build/report.yaml`, and every confined `expect` path.
 - **`workflow`** — `target` + `change` + `intent` / `[sources]`: init, `plan author`, then (past `--until plan`) `plan approve` and the genuine drained `plan execute`; `--until finalize` adds `plan archive`. Gates: a non-empty pending plan at Gate 1, every entry `done` after execute, then provenance grading.
@@ -84,14 +93,13 @@ Grading does **not** assert target-specific quality (contract YAML shape, genera
 
 The `omnia-r9k` workflow case migrates Propellerhead's [`at_r9k_position_adapter`](https://bitbucket.org/Propellerhead/at_r9k_position_adapter) TypeScript service into an Omnia WASM crate (`typescript` source → `omnia` target).
 
-The upstream tree is `UNLICENSED`, so it is gitignored under [`fixtures/omnia-r9k/project/legacy/`](fixtures/omnia-r9k/). Preparation is explicit — it mutates a gitignored fixture and may access the network — and the case fails with a focused error when the prepared tree is absent:
+The upstream tree is `UNLICENSED`, so the case's `clone` shallow-clones it into the case's gitignored `fixture/` cache on first run — it never enters the repository (the case directory carries the `.gitignore`). The first run needs network access to Bitbucket; later restarts reuse the cache offline. Refresh the snapshot with `rm -rf examples/eval/cases/omnia-r9k/fixture`:
 
 ```bash
-cargo make eval-omnia-r9k-prepare      # once; fixture README covers offline staging
 make eval omnia-r9k --restart          # tens of minutes of live model time
 ```
 
-Details: [`fixtures/omnia-r9k/README.md`](fixtures/omnia-r9k/README.md). Pass/fail from grading is lifecycle + provenance; for migration quality, treat the generated crate, guest, tests, and `REVIEW.md` in the retained sandbox as the real signal. If you are editing omnia `prose/` and only need to know whether **build** still produces a crate, use `omnia-health` instead — do not burn a full r9k run for prompt typos.
+Pass/fail from grading is lifecycle + provenance; for migration quality, treat the generated crate, guest, tests, and `REVIEW.md` in the retained sandbox as the real signal. If you are editing omnia `prose/` and only need to know whether **build** still produces a crate, use `omnia-health` instead — do not burn a full r9k run for prompt typos.
 
 ## Manual native verbs
 

@@ -86,10 +86,9 @@ Prefer a **build case** when iterating on one target adapter's build (minutes). 
 | Fixture | committed refined slice | source trees + intent, plan authored live |
 | Gates | `built` metadata, `build/report.yaml`, `expect` paths | pending plan at Gate 1, drained plan, provenance |
 
-Omnia has a stock migration workflow case; its Propellerhead fixture is gitignored and staged explicitly first:
+Omnia has a stock migration workflow case; the `UNLICENSED` Propellerhead upstream is shallow-cloned into the case's gitignored `fixture/` cache on first run and reused offline after that:
 
 ```bash
-make eval-omnia-r9k-prepare        # clone (fixture README covers offline staging)
 make eval omnia-r9k --restart      # typescript at_r9k_position_adapter → omnia
 ```
 
