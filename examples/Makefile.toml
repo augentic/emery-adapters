@@ -4,24 +4,17 @@
 
 [env]
 EVAL_TIMEOUT_SECS = "900"
-RUST_LOG = "info,opentelemetry_sdk=off"
+RUST_LOG = "info,opentelemetry_sdk=off,omnia_cursor=debug"
 
-# One live eval case (`cargo make eval orders-contracts --restart
-# [--until plan]`); bare `cargo make eval` lists the cases. Case data
-# lives in `eval/cases/<id>/case.toml`; the retained sandbox in
-# `eval/sandbox/<id>/`.
 [tasks.eval]
 env_files = [".env"]
-# env = { EVAL_TIMEOUT_SECS = "900", RUST_LOG = "info,opentelemetry_sdk=off" }
 command = "cargo"
-args = ["run", "-q", "-p", "eval", "--", "eval", "${@}"]
+args = ["run", "-p", "eval", "--", "eval", "${@}"]
 
-# The CLI passthrough: any specify verb against the native
-# shim (`cargo make specify -- --project-dir <dir> slice list`).
 [tasks.specify]
 env_files = [".env"]
 command = "cargo"
-args = ["run", "-q", "-p", "eval", "--", "${@}"]
+args = ["run", "-p", "eval", "--", "${@}"]
 
 # -------------------------------------
 # Wasm example
@@ -33,7 +26,6 @@ script = "rm -rf sandbox/wasm"
 [tasks.wasm-build]
 dependencies = ["wasm-clean"]
 script = '''
-  # Shipped specify binary (embedded engine guest) from the sibling checkout.
   cargo build -p specify --lib --target wasm32-wasip2 --manifest-path ../specify/Cargo.toml
   cargo build -p specify --bin specify --manifest-path ../specify/Cargo.toml
   cargo build -p documentation -p intent -p contracts --target wasm32-wasip2

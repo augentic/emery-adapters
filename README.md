@@ -96,10 +96,10 @@ Depth: [eval README § Omnia legacy migration](examples/eval/README.md#omnia-leg
 
 ## After a run
 
-Every case keeps one stable sandbox at `examples/eval/sandbox/<id>/`, on success and failure alike:
+Every case keeps one stable sandbox at `sandbox/<id>/` (beside the wasm example's `sandbox/wasm/`), on success and failure alike:
 
 ```text
-examples/eval/sandbox/<id>/
+sandbox/<id>/
   plan.yaml / change.md / discovery.md   # workflow cases
   .specify/slices/<slice>/               # proposal, specs, design, tasks, evidence
   .specify/slices/<slice>/build/report.yaml   # the authoritative build report
@@ -111,7 +111,7 @@ Grading checks lifecycle, the report, `expect` paths, and (workflow) provenance;
 An existing sandbox refuses to rerun without `--restart`. Continue or debug it explicitly through the native verbs instead:
 
 ```bash
-make specify -- --project-dir examples/eval/sandbox/orders-contracts plan approve
+make specify -- --project-dir sandbox/orders-contracts plan approve
 ```
 
 ## Repair loop

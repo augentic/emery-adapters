@@ -32,13 +32,10 @@ usvg = { version = "0.47", default-features = false }
 omnia-guest = "0.35.0"
 omnia-testkit = "0.35.0"
 
-# Engine crates pin a released engine line by tag (RFC-77 D13) — never a
-# floating branch. Advance deliberately: bump the tag on all four, then
-# `cargo update -p adapter -p native -p probe -p prose` and commit the lock.
-adapter = { git = "https://github.com/augentic/specify.git", tag = "v0.28.0" }
-native = { git = "https://github.com/augentic/specify.git", tag = "v0.28.0" }
-probe = { git = "https://github.com/augentic/specify.git", tag = "v0.28.0" }
-prose = { git = "https://github.com/augentic/specify.git", tag = "v0.28.0" }
+adapter = { git = "https://github.com/augentic/specify.git" }
+native = { git = "https://github.com/augentic/specify.git" }
+probe = { git = "https://github.com/augentic/specify.git" }
+prose = { git = "https://github.com/augentic/specify.git" }
 
 captures = { path = "sources/captures" }
 contracts = { path = "targets/contracts" }
@@ -61,11 +58,11 @@ omnia-wasi-otel = { git = "https://github.com/augentic/omnia.git" }
 wrpc-transport = { git = "https://github.com/bytecodealliance/wrpc" }
 wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }
 
-# [patch."https://github.com/augentic/specify.git"]
-# adapter = { path = "../specify/crates/adapter" }
-# probe = { path = "../specify/crates/probe" }
-# native = { path = "../specify/crates/native" }
-# prose = { path = "../specify/crates/prose" }
+[patch."https://github.com/augentic/specify.git"]
+adapter = { path = "../specify/crates/adapter" }
+probe = { path = "../specify/crates/probe" }
+native = { path = "../specify/crates/native" }
+prose = { path = "../specify/crates/prose" }
 
 [workspace.lints.rust]
 # https://dirname.github.io/rust-std-doc/rustc/lints/listing/allowed-by-default.html

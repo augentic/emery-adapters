@@ -64,11 +64,11 @@ Linked adapters need only the directory. A third-party adapter also needs a Carg
 
 ## Sandboxes and continuation
 
-Each case owns one stable retained sandbox at `sandbox/<id>/` (a sibling of `cases/`), kept on success and failure alike. `--restart` is the only runner-owned reset; an existing sandbox without it refuses before mutation. The runner never infers workflow progress — continue or debug a retained sandbox explicitly through the native verbs:
+Each case owns one stable retained sandbox at the repository-root `sandbox/<id>/` (composition-owned; beside the wasm example's `sandbox/wasm/`), kept on success and failure alike. `--restart` is the only runner-owned reset; an existing sandbox without it refuses before mutation. The runner never infers workflow progress — continue or debug a retained sandbox explicitly through the native verbs:
 
 ```bash
-cargo make specify -- --project-dir examples/eval/sandbox/orders-contracts plan approve
-cargo make specify -- --project-dir examples/eval/sandbox/orders-contracts plan execute
+cargo make specify -- --project-dir sandbox/orders-contracts plan approve
+cargo make specify -- --project-dir sandbox/orders-contracts plan execute
 ```
 
 ## Grading
