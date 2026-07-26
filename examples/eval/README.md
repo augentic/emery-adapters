@@ -21,10 +21,8 @@ A build case prints its retained sandbox and the authoritative report path (`.sp
 
 | Id | Kind | Shape |
 | --- | --- | --- |
-| `contracts-describe` | build | Schema + HTTP contracts from prose |
 | `contracts-design` | build | Contracts from a design document |
 | `contracts-import` | build | Import vendored OpenAPI |
-| `contracts-source` | build | Extract from vendored TypeScript |
 | `omnia-health` | build | Tiny create-mode crate (`GET /health`) |
 | `vectis-single-screen` | build | Single-screen feature on `core + ios` |
 | `orders-contracts` | workflow | docs → contracts ([`examples/wasm/fixture`](../wasm/fixture/)) |
