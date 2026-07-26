@@ -2,17 +2,19 @@
 # The eval example (native dev shim + live-model eval)
 # -------------------------------------
 
+[env]
+EVAL_TIMEOUT_SECS = "900"
+RUST_LOG = "info,opentelemetry_sdk=off"
+
 # One live eval case (`cargo make eval orders-contracts --restart
 # [--until plan]`); bare `cargo make eval` lists the cases. Case data
 # lives in `eval/cases/<id>/case.toml`; the retained sandbox in
 # `eval/sandbox/<id>/`.
 [tasks.eval]
 env_files = [".env"]
-script = '''
-  export EVAL_TIMEOUT_SECS="${EVAL_TIMEOUT_SECS:-900}"
-  export RUST_LOG="${RUST_LOG:-info,opentelemetry_sdk=off}"
-  cargo run -p eval -- eval "$@"
-'''
+# env = { EVAL_TIMEOUT_SECS = "900", RUST_LOG = "info,opentelemetry_sdk=off" }
+command = "cargo"
+args = ["run", "-q", "-p", "eval", "--", "eval", "${@}"]
 
 # The CLI passthrough: any specify verb against the native
 # shim (`cargo make specify -- --project-dir <dir> slice list`).
@@ -34,7 +36,6 @@ script = '''
   # Shipped specify binary (embedded engine guest) from the sibling checkout.
   cargo build -p specify --lib --target wasm32-wasip2 --manifest-path ../specify/Cargo.toml
   cargo build -p specify --bin specify --manifest-path ../specify/Cargo.toml
-
   cargo build -p documentation -p intent -p contracts --target wasm32-wasip2
 '''
 
