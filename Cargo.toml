@@ -51,23 +51,13 @@ vectis = { path = "targets/vectis" }
 
 [patch.crates-io]
 # Transitive Omnia deps of engine crates (`adapter`, `probe` client feature).
-# Sibling co-development against ../omnia (idempotent Telemetry::build +
-# telemetry::flush): flip these back to the git patches below before merge,
-# once the upstream Omnia PR lands.
-omnia = { path = "../omnia/crates/omnia" }
+omnia = { git = "https://github.com/augentic/omnia.git" }
 omnia-cursor = { git = "https://github.com/augentic/backends.git" }
-omnia-guest = { path = "../omnia/crates/omnia-guest" }
-omnia-testkit = { path = "../omnia/crates/testkit" }
-omnia-wasi-http = { path = "../omnia/crates/wasi-http" }
-omnia-wasi-model = { path = "../omnia/crates/wasi-model" }
-omnia-wasi-otel = { path = "../omnia/crates/wasi-otel" }
-
-# omnia = { git = "https://github.com/augentic/omnia.git" }
-# omnia-guest = { git = "https://github.com/augentic/omnia.git" }
-# omnia-testkit = { git = "https://github.com/augentic/omnia.git" }
-# omnia-wasi-http = { git = "https://github.com/augentic/omnia.git" }
-# omnia-wasi-model = { git = "https://github.com/augentic/omnia.git" }
-# omnia-wasi-otel = { git = "https://github.com/augentic/omnia.git" }
+omnia-guest = { git = "https://github.com/augentic/omnia.git" }
+omnia-testkit = { git = "https://github.com/augentic/omnia.git" }
+omnia-wasi-http = { git = "https://github.com/augentic/omnia.git" }
+omnia-wasi-model = { git = "https://github.com/augentic/omnia.git" }
+omnia-wasi-otel = { git = "https://github.com/augentic/omnia.git" }
 
 wrpc-transport = { git = "https://github.com/bytecodealliance/wrpc" }
 wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }

@@ -267,7 +267,7 @@ Use semantic results to:
 
 ### Full Integration (Phase 2)
 
-1. **Build index** during the source-clone phase (the inlined `git clone` snippet at `../../../../plugins/capture/skills/wiretapper/SKILL.md` §*Step 0: Bootstrap the legacy tree (if remote)*)
+1. **Build index** when the legacy tree is first staged, before analysis begins
 2. **Query semantically** before AST parsing
 3. **Combine results** in artifact generation
 4. **Validate completeness** against semantic findings
@@ -343,7 +343,7 @@ Use semantic results to:
 - [ ] Collect feedback from initial uses
 
 ### Phase 4: Optimization
-- [ ] Build persistent index during the source-clone phase (the inlined `git clone` snippet at `../../../../plugins/capture/skills/wiretapper/SKILL.md` §*Step 0: Bootstrap the legacy tree (if remote)*)
+- [ ] Build persistent index when the legacy tree is first staged
 - [ ] Cache embeddings for repeated analysis
 - [ ] Fine-tune queries based on common patterns
 - [ ] Automate query generation from artifact requirements

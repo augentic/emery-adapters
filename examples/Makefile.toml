@@ -21,13 +21,22 @@ script = '''
   cargo run -p eval -- eval "$@"
   '''
 
-# Stage the Propellerhead at_r9k_position_adapter tree into the gitignored
-# omnia-r9k fixture (clone, OMNIA_R9K_SOURCE, or sibling test-spec).
-# Explicit and separate from case execution: it mutates a gitignored
-# fixture and may access the network.
+# Stage the Propellerhead at_r9k_position_adapter tree into the
+# gitignored omnia-r9k fixture. Explicit and separate from case
+# execution: it mutates a gitignored fixture and accesses the network.
+# Manual / offline staging: examples/eval/fixtures/omnia-r9k/README.md.
 [tasks.eval-omnia-r9k-prepare]
 script_runner = "bash"
-script = "examples/eval/fixtures/omnia-r9k/prepare.sh"
+script = '''
+set -euo pipefail
+DEST=examples/eval/fixtures/omnia-r9k/project/legacy/at_r9k_position_adapter
+[ -d "$DEST/src" ] && { echo "omnia-r9k fixture ready: $DEST"; exit 0; }
+rm -rf "$DEST"
+git clone --depth 1 "${OMNIA_R9K_GIT_URL:-https://bitbucket.org/Propellerhead/at_r9k_position_adapter.git}" "$DEST" \
+  || { echo "error: clone failed; stage manually per examples/eval/fixtures/omnia-r9k/README.md" >&2; exit 1; }
+rm -rf "$DEST/.git" "$DEST/node_modules" "$DEST"/.github/env.*
+echo "omnia-r9k fixture ready: $DEST"
+'''
 
 # -------------------------------------
 # Wasm example
@@ -55,7 +64,7 @@ set -eo pipefail
 
 export SPECIFY_HOME="$PWD/sandbox/wasm"
 export GUEST_TIMEOUT_MS="${GUEST_TIMEOUT_MS:-3600000}"
-export RUST_LOG="info,opentelemetry_sdk=off,omnia_wasi_http=debug"
+export RUST_LOG="${RUST_LOG:-info,opentelemetry_sdk=off}"
 
 mkdir -p "$SPECIFY_HOME/project"
 cp -R examples/wasm/fixture/. "$SPECIFY_HOME/project/"

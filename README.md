@@ -89,7 +89,7 @@ Prefer a **build case** when iterating on one target adapter's build (minutes). 
 Omnia has a stock migration workflow case; its Propellerhead fixture is gitignored and staged explicitly first:
 
 ```bash
-make eval-omnia-r9k-prepare        # clone or OMNIA_R9K_SOURCE
+make eval-omnia-r9k-prepare        # clone (fixture README covers offline staging)
 make eval omnia-r9k --restart      # typescript at_r9k_position_adapter → omnia
 ```
 

@@ -521,6 +521,7 @@ dependencies = [
  "serde-saphyr",
  "serde_json",
  "slice",
+ "tracing",
 ]
 
 [[package]]
@@ -2562,6 +2563,7 @@ dependencies = [
 [[package]]
 name = "omnia"
 version = "0.35.0"
+source = "git+https://github.com/augentic/omnia.git#1c8950bed2000ccd8b1b196a399a9180e37ffb75"
 dependencies = [
  "anyhow",
  "bytes",
@@ -2609,6 +2611,7 @@ dependencies = [
 [[package]]
 name = "omnia-guest"
 version = "0.35.0"
+source = "git+https://github.com/augentic/omnia.git#1c8950bed2000ccd8b1b196a399a9180e37ffb75"
 dependencies = [
  "anyhow",
  "axum",
@@ -2645,6 +2648,7 @@ dependencies = [
 [[package]]
 name = "omnia-guest-macros"
 version = "0.35.0"
+source = "git+https://github.com/augentic/omnia.git#1c8950bed2000ccd8b1b196a399a9180e37ffb75"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2654,6 +2658,7 @@ dependencies = [
 [[package]]
 name = "omnia-host-macros"
 version = "0.35.0"
+source = "git+https://github.com/augentic/omnia.git#1c8950bed2000ccd8b1b196a399a9180e37ffb75"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2663,6 +2668,7 @@ dependencies = [
 [[package]]
 name = "omnia-testkit"
 version = "0.35.0"
+source = "git+https://github.com/augentic/omnia.git#1c8950bed2000ccd8b1b196a399a9180e37ffb75"
 dependencies = [
  "anyhow",
  "bytes",
@@ -2683,6 +2689,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-blobstore"
 version = "0.35.0"
+source = "git+https://github.com/augentic/omnia.git#1c8950bed2000ccd8b1b196a399a9180e37ffb75"
 dependencies = [
  "anyhow",
  "bytes",
@@ -2698,6 +2705,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-config"
 version = "0.35.0"
+source = "git+https://github.com/augentic/omnia.git#1c8950bed2000ccd8b1b196a399a9180e37ffb75"
 dependencies = [
  "anyhow",
  "omnia 0.35.0",
@@ -2710,6 +2718,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-docstore"
 version = "0.35.0"
+source = "git+https://github.com/augentic/omnia.git#1c8950bed2000ccd8b1b196a399a9180e37ffb75"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2725,6 +2734,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-http"
 version = "0.35.0"
+source = "git+https://github.com/augentic/omnia.git#1c8950bed2000ccd8b1b196a399a9180e37ffb75"
 dependencies = [
  "anyhow",
  "axum",
@@ -2754,6 +2764,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-identity"
 version = "0.35.0"
+source = "git+https://github.com/augentic/omnia.git#1c8950bed2000ccd8b1b196a399a9180e37ffb75"
 dependencies = [
  "anyhow",
  "fromenv",
@@ -2770,6 +2781,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-keyvalue"
 version = "0.35.0"
+source = "git+https://github.com/augentic/omnia.git#1c8950bed2000ccd8b1b196a399a9180e37ffb75"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2787,6 +2799,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-messaging"
 version = "0.35.0"
+source = "git+https://github.com/augentic/omnia.git#1c8950bed2000ccd8b1b196a399a9180e37ffb75"
 dependencies = [
  "anyhow",
  "futures",
@@ -2805,6 +2818,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-model"
 version = "0.35.0"
+source = "git+https://github.com/augentic/omnia.git#1c8950bed2000ccd8b1b196a399a9180e37ffb75"
 dependencies = [
  "anyhow",
  "cap-primitives",
@@ -2825,6 +2839,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-otel"
 version = "0.35.0"
+source = "git+https://github.com/augentic/omnia.git#1c8950bed2000ccd8b1b196a399a9180e37ffb75"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -2848,6 +2863,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-sql"
 version = "0.35.0"
+source = "git+https://github.com/augentic/omnia.git#1c8950bed2000ccd8b1b196a399a9180e37ffb75"
 dependencies = [
  "anyhow",
  "base64ct",
@@ -2869,6 +2885,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-websocket"
 version = "0.35.0"
+source = "git+https://github.com/augentic/omnia.git#1c8950bed2000ccd8b1b196a399a9180e37ffb75"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -3204,6 +3221,7 @@ dependencies = [
  "strum",
  "thiserror 2.0.19",
  "toml",
+ "tracing",
 ]
 
 [[package]]
@@ -4197,6 +4215,7 @@ dependencies = [
  "serde-saphyr",
  "serde_json",
  "strum",
+ "tracing",
 ]
 
 [[package]]
@@ -4808,6 +4827,7 @@ dependencies = [
  "serde_json",
  "slice",
  "strum",
+ "tracing",
 ]
 
 [[package]]

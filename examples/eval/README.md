@@ -87,7 +87,7 @@ The `omnia-r9k` workflow case migrates Propellerhead's [`at_r9k_position_adapter
 The upstream tree is `UNLICENSED`, so it is gitignored under [`fixtures/omnia-r9k/project/legacy/`](fixtures/omnia-r9k/). Preparation is explicit — it mutates a gitignored fixture and may access the network — and the case fails with a focused error when the prepared tree is absent:
 
 ```bash
-cargo make eval-omnia-r9k-prepare      # once; or OMNIA_R9K_SOURCE=/path/to/checkout …
+cargo make eval-omnia-r9k-prepare      # once; fixture README covers offline staging
 make eval omnia-r9k --restart          # tens of minutes of live model time
 ```
 
