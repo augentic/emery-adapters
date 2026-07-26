@@ -4,7 +4,7 @@
 
 [env]
 EVAL_MODEL = "opus"
-EVAL_TIMEOUT_SECS = "900"
+EVAL_TIMEOUT_SECS = "1800"
 RUST_LOG = "info,opentelemetry_sdk=off,omnia_cursor=debug"
 
 [tasks.eval]
