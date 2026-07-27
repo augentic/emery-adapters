@@ -10,7 +10,12 @@ Live-model eval cases for first-party adapters, over real `emery` verbs and dete
 
 ## Quick start
 
-Needs `[cursor-agent](https://cursor.com/docs/cli)` on `PATH` (`cursor-agent login` or `CURSOR_API_KEY` in a repo-root `.env`). Optional: `EVAL_MODEL=<model-id>`. Tracing: `RUST_LOG` (default via the make task) filters the console output, and `probe::client` mirrors it, ANSI-free, into `sandbox/logs/<case>/eval-<stamp>.log` (announced at startup; `EVAL_LOG` overrides the path). The lab exports no OTLP telemetry.
+### Prerequisites
+
+- [cursor-agent](https://cursor.com/docs/cli) installed 
+- `cursor-agent login` or `CURSOR_API_KEY` in root `/.env` file
+
+See [Makefile.toml](Makefile.toml) for environment variable overrides for model, logging, and timeout.
 
 From the repository root:
 

@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.emery.dev/omnia/template-manifest.schema.json",
+  "title": "Omnia template manifest",
+  "description": "Validates `templates/manifest.yaml`: the single source of truth for the Omnia base-repo scaffold source-to-target mappings consumed by the omnia adapter's `build.rs`.",
+  "type": "object",
+  "required": ["schema-version", "assemblies"],
+  "additionalProperties": false,
+  "properties": {
+    "schema-version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Manifest schema version. Bump on breaking wire changes."
+    },
+    "assemblies": {
+      "type": "object",
+      "required": ["core"],
+      "additionalProperties": false,
+      "properties": {
+        "core": { "$ref": "#/$defs/assembly" }
+      }
+    }
+  },
+  "$defs": {
+    "assembly": {
+      "type": "object",
+      "required": ["path-mode", "files"],
+      "additionalProperties": false,
+      "properties": {
+        "path-mode": {
+          "type": "string",
+          "enum": ["content-only"],
+          "description": "Omnia templates are static: target paths are written verbatim."
+        },
+        "files": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/file-entry" }
+        }
+      }
+    },
+    "file-entry": {
+      "type": "object",
+      "required": ["source", "target"],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Basename under `templates/<assembly>/`."
+        },
+        "target": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Relative path under the project root."
+        }
+      }
+    }
+  }
+}

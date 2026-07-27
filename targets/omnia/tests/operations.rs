@@ -72,6 +72,13 @@ async fn build_phase_legs() {
     assert!(user.contains("slice `demo`"), "slice named");
     assert!(user.contains("Verify-repair loop"), "agent-run cargo verification instructed");
     assert!(user.contains("omnia-references"), "user prompt points at the MCP references");
+    assert!(user.contains("### scaffold prelude"), "scaffold prelude outcome in user prompt");
+    assert!(user.contains("- `Makefile.toml`"), "written tooling files listed");
+    for path in
+        ["Makefile.toml", "deny.toml", "supply-chain/config.toml", ".github/workflows/ci.yaml"]
+    {
+        assert!(tmp.path().join(path).is_file(), "prelude wrote {path}");
+    }
     let (name, schema) = schema_format(first);
     assert_eq!(name, "generation");
     let compiled = serde_json::from_str::<serde_json::Value>(schema).unwrap();

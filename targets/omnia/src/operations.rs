@@ -50,6 +50,10 @@ impl Target for Adapter {
         let inputs_block = phase::render_inputs(inputs);
         let build_prompt = registry::body("prompts/build.md");
 
+        // Deterministic base-repo prelude: fill any missing standard
+        // tooling file from the embedded templates before the model runs.
+        let scaffold_block = scaffold_prelude(&tree_root);
+
         // Writer prompts share one system channel: verify-repair re-enters
         // the owning writer, so one leg must hold crate / test / guest together.
         let system = assemble(&[
@@ -66,8 +70,8 @@ impl Target for Adapter {
          build prompt's `## Mode detection`, follow the crate-writer, test-writer, and \
          (create mode only) guest-writer prompts, then run the build prompt's \
          `## § Verify-repair loop` yourself — the cargo / clippy / test commands run \
-         in the lent workspace; this adapter cannot spawn them. {REFERENCES_POINTER}\n\n\
-         {inputs_block}",
+         in the lent workspace; this adapter cannot spawn them. \
+         {REFERENCES_POINTER}\n\n{scaffold_block}\n\n{inputs_block}",
             ctx.adapter_id,
         );
         let generation = phase::phase(model, ctx, system, user, "generation").await?;
@@ -141,6 +145,55 @@ impl Target for Adapter {
 fn assemble(prompts: &[&str]) -> String {
     let bodies: Vec<&str> = prompts.iter().map(|prompt| registry::body(prompt)).collect();
     phase::assemble_system(&bodies)
+}
+
+fn scaffold_prelude(tree_root: &Path) -> String {
+    use std::fmt::Write as _;
+
+    match crate::scaffold::ensure_missing(tree_root) {
+        Ok(report) if report.written.is_empty() => {
+            "### scaffold prelude (already run in-guest)\n\nEvery standard tooling file \
+             was already present; nothing was written. Do not re-author them."
+                .to_string()
+        }
+        Ok(report) => {
+            let mut block = format!(
+                "### scaffold prelude (already run in-guest)\n\nThe adapter wrote the missing \
+                 standard tooling files from its embedded templates:\n{}\n\nDo not re-author or \
+                 overwrite them.",
+                report
+                    .written
+                    .iter()
+                    .map(|path| format!("- `{path}`"))
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            );
+            if report.written.contains(&crate::scaffold::PUBLISH_WORKFLOW) {
+                let tokens = crate::scaffold::publish_placeholders()
+                    .iter()
+                    .map(|token| format!("`{token}`"))
+                    .collect::<Vec<_>>()
+                    .join(" / ");
+                let _ = write!(
+                    block,
+                    " Fill the {tokens} placeholders in `{}`.",
+                    crate::scaffold::PUBLISH_WORKFLOW,
+                );
+            }
+            if report.written.contains(&crate::scaffold::VET_CONFIG) {
+                block.push_str(
+                    " Run `cargo vet regenerate {imports,exemptions,unpublished}` once \
+                     `Cargo.lock` exists.",
+                );
+            }
+            block
+        }
+        Err(err) => format!(
+            "### scaffold prelude (could not run)\n\nThe adapter's deterministic scaffold \
+             failed ({err}); author the standard tooling files per the \
+             `references/configuration.md` templates before the verify-repair loop."
+        ),
+    }
 }
 
 async fn gate_report<P: Model>(
