@@ -4,6 +4,6 @@ Index of the OpenAPI format sub-flow run by the contracts build prompt. Read exa
 
 | File | Read when |
 | --- | --- |
-| [author.md](author.md) | Authoring or extending the OpenAPI document from a Specify change. |
-| [importer.md](importer.md) | Normalising an operator-supplied external OpenAPI (or Swagger 2.0) document onto Specify conventions. |
+| [author.md](author.md) | Authoring or extending the OpenAPI document from a Emery change. |
+| [importer.md](importer.md) | Normalising an operator-supplied external OpenAPI (or Swagger 2.0) document onto Emery conventions. |
 | [verifier.md](verifier.md) | Verifying an existing OpenAPI artefact (read-only; renders a validation report). |

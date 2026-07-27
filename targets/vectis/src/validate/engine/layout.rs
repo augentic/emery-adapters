@@ -75,7 +75,7 @@ fn walk_unwired(node: &Value, json_path: &str, errors: &mut Vec<Value>) {
                     errors.push(json!({
                         "path": child_path,
                         "message": format!(
-                            "{reason} -- remove this key from layout.yaml (unwired-subset rule); wiring is added by /spec:define when it produces composition.yaml"
+                            "{reason} -- remove this key from layout.yaml (unwired-subset rule); wiring is added by /emery:define when it produces composition.yaml"
                         ),
                     }));
                 }

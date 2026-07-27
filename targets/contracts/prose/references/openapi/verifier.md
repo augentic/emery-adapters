@@ -10,7 +10,7 @@ The verifier accepts a `--mode {single, cross-project}` flag. The mode determine
 
 | Mode               | Caller                                         | Trigger                                           | Scope                                                             | Output                                                |
 | ------------------ | ---------------------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------- |
-| `single` (default) | contracts adapter build prompt in `/spec:build` | Post-author or post-import                        | One slice's `contracts/http/` inside one project                  | Markdown report for the verify-repair loop            |
+| `single` (default) | contracts adapter build prompt in `/emery:build` | Post-author or post-import                        | One slice's `contracts/http/` inside one project                  | Markdown report for the verify-repair loop            |
 | `cross-project`    | contracts adapter merge prompt                  | Producer-side merge of an OpenAPI contract change | Walk the merged `contracts/` baseline; enforce contract identity/version validation | Deterministic findings from the adapter's in-guest contract validator |
 
 `single` mode feeds the build's verify-repair loop. `cross-project` mode describes the adapter's deterministic in-guest contract validator — the merge gate runs it itself and surfaces its findings; the verifier does not implement its own cross-baseline check. Both modes share the read-only contract.
@@ -24,7 +24,7 @@ The verifier accepts a `--mode {single, cross-project}` flag. The mode determine
 Inferred from the active slice context — no positional arguments required:
 
 ```text
-$SLICE_DIR          = .specify/slices/<slice-name>
+$SLICE_DIR          = .emery/slices/<slice-name>
 $CHANGE_CONTRACTS    = $SLICE_DIR/contracts/
 $BASELINE_CONTRACTS  = contracts/
 $CHANGE_SPECS        = $SLICE_DIR/specs/
@@ -35,7 +35,7 @@ $CHANGE_SPECS        = $SLICE_DIR/specs/
 Caller passes the merged baseline directory:
 
 ```text
-$BASELINE_CONTRACTS = $PROJECT_ROOT/contracts   # the merged baseline, post-`specify slice merge`
+$BASELINE_CONTRACTS = $PROJECT_ROOT/contracts   # the merged baseline, post-`emery slice merge`
 ```
 
 The adapter's in-guest contract validator walks every top-level OpenAPI 3.1 / AsyncAPI 3.0 document under `$BASELINE_CONTRACTS` and enforces the contract identity/version validation rules. No producer / consumer arguments are accepted — the tool's scope is the baseline as a whole.
@@ -45,7 +45,7 @@ The adapter's in-guest contract validator walks every top-level OpenAPI 3.1 / As
 ### `single` mode
 
 - The author or importer sibling has completed and produced artefacts under `$CHANGE_CONTRACTS/http/`.
-- `.specify/project.yaml` exists (Specify is initialised).
+- `.emery/project.yaml` exists (Emery is initialised).
 
 If `$CHANGE_CONTRACTS/http/` does not exist or contains no files, report all checks as passed — there is nothing to verify.
 
@@ -86,7 +86,7 @@ Every JSON Schema file in `$CHANGE_CONTRACTS/schemas/` referenced by an OpenAPI 
 
 | Field         | Rule                                                                                                                                                                       |
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `$id`         | Present and a valid URI (URN format: `urn:specify:schemas/<name>`).                                                                                                        |
+| `$id`         | Present and a valid URI (URN format: `urn:emery:schemas/<name>`).                                                                                                        |
 | `title`       | Present and non-empty, matching the type name.                                                                                                                             |
 | `description` | Present and non-empty. The placeholder `"[imported — description pending review]"` counts as present but **emits a `WARN`** to surface the gap for the verify-repair loop. |
 
@@ -142,8 +142,8 @@ When the slice has **no specs**, skip Check 3 — there are no scenarios to cros
 For every top-level OpenAPI document under `$CHANGE_CONTRACTS/http/` (root key `openapi:`), enforce the contract identity/version validation rules:
 
 1. **`info.version` MUST parse as SemVer.** Per [semver.org](https://semver.org), including optional prerelease labels (`1.0.0-draft.1`). Missing, non-string, or non-SemVer values are `FAIL`.
-2. **`info.x-specify-id` (when present) MUST match `^[a-z][a-z0-9-]*$` and be ≤ 64 characters.** Format violations are `FAIL`.
-3. **Within the slice directory, `info.x-specify-id` values MUST be unique.** When two top-level OpenAPI documents in `$CHANGE_CONTRACTS/http/` declare the same id, both are `FAIL`.
+2. **`info.x-emery-id` (when present) MUST match `^[a-z][a-z0-9-]*$` and be ≤ 64 characters.** Format violations are `FAIL`.
+3. **Within the slice directory, `info.x-emery-id` values MUST be unique.** When two top-level OpenAPI documents in `$CHANGE_CONTRACTS/http/` declare the same id, both are `FAIL`.
 
 The cross-repo uniqueness check (the same id declared by a top-level contract somewhere else under root `contracts/`) is **not** part of single mode — it is the merge-phase gate's job, run by the adapter's in-guest contract validator against the merged baseline (the contracts adapter merge contract). The single-mode skill only flags duplicates inside the slice to keep the verifier deterministic and self-contained.
 
@@ -151,8 +151,8 @@ Report format (one entry per failure):
 
 ```
 FAIL: contracts/http/user-api.yaml — info.version `2024-01-15` is not valid SemVer
-FAIL: contracts/http/billing-api.yaml — info.x-specify-id `Billing-API` must match `^[a-z][a-z0-9-]*$` and be ≤ 64 characters
-FAIL: contracts/http/admin-api.yaml — info.x-specify-id `shared` is also declared by contracts/http/legacy-api.yaml in this slice
+FAIL: contracts/http/billing-api.yaml — info.x-emery-id `Billing-API` must match `^[a-z][a-z0-9-]*$` and be ≤ 64 characters
+FAIL: contracts/http/admin-api.yaml — info.x-emery-id `shared` is also declared by contracts/http/legacy-api.yaml in this slice
 ```
 
 ## Single-mode algorithm
@@ -203,13 +203,13 @@ All checks passed (12 $ref pointers, 6 schemas, 4 operations verified).
 
 ## Cross-project mode
 
-`cross-project` mode runs **after** a producer's contract change merges. The contracts adapter merge prompt invokes it as the post-merge baseline gate (the contracts adapter merge contract); `specify plan execute` re-uses the same gate per project after a producer-side merge (the workspace execution contract).
+`cross-project` mode runs **after** a producer's contract change merges. The contracts adapter merge prompt invokes it as the post-merge baseline gate (the contracts adapter merge contract); `emery plan execute` re-uses the same gate per project after a producer-side merge (the workspace execution contract).
 
 The mode describes the adapter's deterministic in-guest contract validator. The verifier sibling does not implement an independent cross-project algorithm — the merge gate runs the embedded validator and consumes its findings directly. The deterministic checks the validator enforces are the contract identity/version validation rules:
 
 - `contract.version-is-semver` — every top-level OpenAPI 3.1 / AsyncAPI 3.0 document's `info.version` parses as SemVer (per [semver.org](https://semver.org), prerelease labels included).
-- `contract.id-format` — when `info.x-specify-id` is present, the value matches `^[a-z][a-z0-9-]*$` and is ≤ 64 characters.
-- `contract.id-unique` — every present `info.x-specify-id` is unique across all top-level contracts under `$BASELINE_CONTRACTS`.
+- `contract.id-format` — when `info.x-emery-id` is present, the value matches `^[a-z][a-z0-9-]*$` and is ≤ 64 characters.
+- `contract.id-unique` — every present `info.x-emery-id` is unique across all top-level contracts under `$BASELINE_CONTRACTS`.
 
 ### Outcomes
 
@@ -228,7 +228,7 @@ The validator findings project into a JSON envelope (the shape captured in logs 
   "ok": false,
   "findings": [
     { "path": "contracts/http/user-api.yaml", "rule-id": "contract.version-is-semver", "detail": "info.version `2024-01-15` is not valid SemVer (must parse per semver.org, including optional prerelease labels)" },
-    { "path": "contracts/http/billing-api.yaml", "rule-id": "contract.id-unique", "detail": "info.x-specify-id `shared` also appears in contracts/messages/legacy-events.yaml" }
+    { "path": "contracts/http/billing-api.yaml", "rule-id": "contract.id-unique", "detail": "info.x-emery-id `shared` also appears in contracts/messages/legacy-events.yaml" }
   ],
   "exit-code": 1
 }
@@ -246,7 +246,7 @@ Field semantics:
 
 Callers that surface post-merge validator failures (the merge prompt on a blocking finding) parse `findings[]` and include `{ rule-id, path, detail }` triples in the stop hint's `paths` field. The load-bearing finding is typically `findings[0].rule-id` plus a one-line restatement of `findings[0].detail`; the full envelope is captured at the log path referenced in the stop hint.
 
-When a caller re-surfaces an envelope finding as a `Diagnostic` (see `schemas/diagnostics/diagnostic.schema.json` embedded in the `specify` binary from [`augentic/specify`](https://github.com/augentic/specify)), the mapping is: `findings[].rule-id` → `rule-id`, `findings[].path` → `location.path`, `target-adapter: contracts`. The contract-domain payload (`findings[].rule-id`, `path`, `detail`, plus any compatibility classification such as `additive` / `breaking` / `ambiguous` / `unverifiable`) lives inside `evidence.kind: structured` with the contract data under `evidence.data`. The closed `Diagnostic` severity enum (`critical` / `important` / `suggestion` / `optional`) is separate from any compatibility classification — classifiers remain contract-domain evidence fields, not severity.
+When a caller re-surfaces an envelope finding as a `Diagnostic` (see `schemas/diagnostics/diagnostic.schema.json` embedded in the `emery` binary from [`augentic/emery`](https://github.com/augentic/emery)), the mapping is: `findings[].rule-id` → `rule-id`, `findings[].path` → `location.path`, `target-adapter: contracts`. The contract-domain payload (`findings[].rule-id`, `path`, `detail`, plus any compatibility classification such as `additive` / `breaking` / `ambiguous` / `unverifiable`) lives inside `evidence.kind: structured` with the contract data under `evidence.data`. The closed `Diagnostic` severity enum (`critical` / `important` / `suggestion` / `optional`) is separate from any compatibility classification — classifiers remain contract-domain evidence fields, not severity.
 
 ### Outcome semantics
 
@@ -286,8 +286,8 @@ The deterministic baseline check is the canonical post-merge gate.
 | `$BASELINE_CONTRACTS` is absent                            | The validator treats an absent directory as clean (no top-level documents to walk). |
 | `$BASELINE_CONTRACTS` is empty (no top-level contracts)    | The validator reports no findings. Treated as clean.                                                                                                       |
 | Top-level contract has non-SemVer `info.version`           | Finding `contract.version-is-semver`; the gate records `failure`.                                                                                   |
-| Top-level contract has malformed `info.x-specify-id`       | Finding `contract.id-format` (blocking finding).                                                                                                                     |
-| Two top-level contracts share the same `info.x-specify-id` | Finding `contract.id-unique` against each colliding path (blocking finding).                                                                                         |
+| Top-level contract has malformed `info.x-emery-id`       | Finding `contract.id-format` (blocking finding).                                                                                                                     |
+| Two top-level contracts share the same `info.x-emery-id` | Finding `contract.id-unique` against each colliding path (blocking finding).                                                                                         |
 | YAML file under `$BASELINE_CONTRACTS` is malformed         | Skipped by the validator (the format-verifier owns YAML diagnostics in `single` mode); does not surface as a cross-project finding.                         |
 
 ## Guardrails
@@ -309,7 +309,7 @@ Before completing the run:
 - [ ] All `.yaml` files in `$CHANGE_CONTRACTS/schemas/` referenced by HTTP operations checked for `$id`, `title`, `description`.
 - [ ] Spec scenarios cross-referenced against OpenAPI bindings (when specs exist).
 - [ ] Shared vocabulary exemption applied correctly.
-- [ ] Identity & version (Check 4) enforced on every top-level OpenAPI document in `$CHANGE_CONTRACTS/http/`: SemVer `info.version`, kebab-case + ≤64-char `info.x-specify-id` when present, in-change uniqueness on declared ids.
+- [ ] Identity & version (Check 4) enforced on every top-level OpenAPI document in `$CHANGE_CONTRACTS/http/`: SemVer `info.version`, kebab-case + ≤64-char `info.x-emery-id` when present, in-change uniqueness on declared ids.
 - [ ] Validation report produced with per-check results and summary.
 - [ ] No files created or modified.
 

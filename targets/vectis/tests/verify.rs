@@ -19,7 +19,7 @@ fn project(root: &Path, platforms: &[&str]) {
     let platforms =
         platforms.iter().map(|platform| format!("  - {platform}")).collect::<Vec<_>>().join("\n");
     write(
-        &root.join(".specify/project.yaml"),
+        &root.join(".emery/project.yaml"),
         &format!("name: test-app\nplatforms:\n{platforms}\n"),
     );
 }
@@ -84,15 +84,15 @@ fn project_contract() {
     run(VerifyMode::Verify, missing.path()).unwrap_err();
 
     let malformed = tempdir().unwrap();
-    write(&malformed.path().join(".specify/project.yaml"), "platforms: [");
+    write(&malformed.path().join(".emery/project.yaml"), "platforms: [");
     run(VerifyMode::Verify, malformed.path()).unwrap_err();
 
     let absent = tempdir().unwrap();
-    write(&absent.path().join(".specify/project.yaml"), "name: test\n");
+    write(&absent.path().join(".emery/project.yaml"), "name: test\n");
     run(VerifyMode::Verify, absent.path()).unwrap_err();
 
     let non_string = tempdir().unwrap();
-    write(&non_string.path().join(".specify/project.yaml"), "platforms:\n  - 7\n");
+    write(&non_string.path().join(".emery/project.yaml"), "platforms:\n  - 7\n");
     run(VerifyMode::Verify, non_string.path()).unwrap_err();
 }
 
@@ -152,7 +152,7 @@ fn catalog_project(root: &Path) {
         "version: 1\nassets:\n  empty-state:\n    kind: vector\n    role: illustration\n    source: assets/empty-state.svg\n  app-logo:\n    kind: vector\n    role: app-icon\n    source: assets/app-logo.svg\n",
     );
     write(
-        &root.join(".specify/specs/composition.yaml"),
+        &root.join(".emery/specs/composition.yaml"),
         "version: 1\nscreens:\n  empty:\n    body:\n      - image:\n          name: empty-state\n      - image:\n          name: empty-state\n      - image:\n          name: app-logo\n      - image:\n          name: unknown-asset\n",
     );
 }

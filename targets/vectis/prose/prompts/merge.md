@@ -4,7 +4,7 @@ The adapter core inlines this document into the system prompt of the merge leg w
 
 Two things make the Vectis `merge` gates different from the bare slice merge:
 
-1. **`composition.yaml` is a build output that lands at merge time.** It is not a Specify artifact authored under `.specify/specs/`; the `build` prompt regenerates it from `spec.md` + `design.md`, and the engine's deterministic merge promotes it into the baseline alongside the spec deltas. The preflight and postflight composition validators are the gate.
+1. **`composition.yaml` is a build output that lands at merge time.** It is not a Emery artifact authored under `.emery/specs/`; the `build` prompt regenerates it from `spec.md` + `design.md`, and the engine's deterministic merge promotes it into the baseline alongside the spec deltas. The preflight and postflight composition validators are the gate.
 2. **The cap matrix is re-verified against the merged baseline.** A green slice build is necessary but not sufficient — the postflight leg re-runs `cargo` / `make build` / `gradlew` against the merged tree because cross-slice regressions (UniFFI bridging drift, Java 21 / Gradle wrapper changes, cargo-swift drift, cap-marker expansion) only surface after deltas land.
 
 ## Preflight — staged composition validation
@@ -15,7 +15,7 @@ The preflight dispatch is fully deterministic: the adapter runs its in-guest com
 
 The merge surface is broader than spec / design / task deltas. In addition to the markdown deltas, the engine's deterministic merge promotes:
 
-- `composition.yaml` from the slice — lands as the baseline UI input set for downstream shell generations (`.specify/specs/composition.yaml`).
+- `composition.yaml` from the slice — lands as the baseline UI input set for downstream shell generations (`.emery/specs/composition.yaml`).
 - `tokens.yaml`, `assets.yaml`, and any referenced asset files under `design-system/assets/**` (or slice-local `assets/`) when the slice carried operator-curated updates to those manifests.
 
 Neither merge gate performs this promotion, resolves baseline conflicts, transitions the lifecycle, or moves the slice into the archive — the engine owns all of it.
@@ -50,7 +50,7 @@ Host prerequisite failures (missing `cargo`, `gradle`, `xcodebuild`, Java 21, An
 
 When the slice modified neither the core nor a shell (e.g. a docs-only or UI-input-only slice that touched no Crux code), still run the applicable host checks against the merged tree — the cap matrix as a whole must remain green.
 
-After the leg answers, the adapter re-runs its deterministic composition validator in-guest against the merged baseline (`.specify/specs/composition.yaml`, with auto-invoked `tokens` / `assets` modes), with one bounded repair leg. It runs even when the current slice generated no platform code, because later shell work will consume the merged baseline input set. Residual validation findings force `status: failure`; warnings flow into the operator-facing summary; clean runs are silent.
+After the leg answers, the adapter re-runs its deterministic composition validator in-guest against the merged baseline (`.emery/specs/composition.yaml`, with auto-invoked `tokens` / `assets` modes), with one bounded repair leg. It runs even when the current slice generated no platform code, because later shell work will consume the merged baseline input set. Residual validation findings force `status: failure`; warnings flow into the operator-facing summary; clean runs are silent.
 
 ### Why postflight, not preflight
 
@@ -60,4 +60,4 @@ The postflight gate intentionally validates the merged baseline, not the staged 
 
 A blocking preflight finding aborts the merge before anything folds: the slice stays `built`, the plan entry stays `in-progress`, and the operator resolves and re-runs the merge. A blocking postflight finding is a terminal diagnostic, not a park: the engine has already committed and archived the merge, so the report surfaces the regression for a follow-up repair slice — never attempt to roll back the merge or edit the baseline's lifecycle state from this prompt.
 
-For cap-matrix failures that look like version-pin drift (AGP / Gradle / uniffi mismatch surfaced after pins changed in this slice), record the failure in the report findings and surface it — **agents exit** without editing specify-adapters (see [Consumer tooling boundary](../references/spec-runtime/guardrails.md#consumer-tooling-boundary)). The operator decides whether the next step is a pin fix in specify-adapters ([build.md](build.md) § Template / version-pin drift handling), a pin rollback, or a follow-up slice.
+For cap-matrix failures that look like version-pin drift (AGP / Gradle / uniffi mismatch surfaced after pins changed in this slice), record the failure in the report findings and surface it — **agents exit** without editing emery-adapters (see [Consumer tooling boundary](../references/emery-runtime/guardrails.md#consumer-tooling-boundary)). The operator decides whether the next step is a pin fix in emery-adapters ([build.md](build.md) § Template / version-pin drift handling), a pin rollback, or a follow-up slice.

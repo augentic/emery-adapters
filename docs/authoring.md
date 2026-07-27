@@ -1,6 +1,6 @@
 # Authoring an adapter
 
-How to create a Specify adapter, from an empty directory to a published component. Written for Rust developers comfortable with async and Cargo workspaces; no prior WebAssembly-component experience is assumed.
+How to create a Emery adapter, from an empty directory to a published component. Written for Rust developers comfortable with async and Cargo workspaces; no prior WebAssembly-component experience is assumed.
 
 Before starting, skim two existing adapters — they are the reference implementations this guide condenses:
 
@@ -11,7 +11,7 @@ Toolchain setup, layout conventions, and publishing mechanics live in [CONTRIBUT
 
 ## How an adapter executes
 
-An adapter is one Rust crate that ships as one Wasm component exporting exactly one axis world from the `specify:adapter` WIT package (owned by [`augentic/specify`](https://github.com/augentic/specify)). There is no manifest file: identity is the crate's `name` + `version`, and resolve-time metadata comes from the component's own `metadata` export.
+An adapter is one Rust crate that ships as one Wasm component exporting exactly one axis world from the `emery:adapter` WIT package (owned by [`augentic/emery`](https://github.com/augentic/emery)). There is no manifest file: identity is the crate's `name` + `version`, and resolve-time metadata comes from the component's own `metadata` export.
 
 You never touch WIT directly. The `adapter` SDK hides the bindings behind two per-axis traits — `adapter::Source` and `adapter::Target` — that you implement on a unit struct. A one-line macro (`adapter::source!` / `adapter::target!`) wires that implementor into the component exports.
 
@@ -20,7 +20,7 @@ The same trait implementation runs on two hosts:
 | Host | How it links | Used by |
 | ---- | ------------ | ------- |
 | **Native** | The crate is `rlib`; the engine's `native` catalog links it directly | `cargo nextest`, `cargo make eval`, `cargo make lab` |
-| **Wasm** | The crate is `cdylib`; the `wasm32-wasip2` build exports the WIT world | The shipped `specify` CLI, `cargo make wasm-run` |
+| **Wasm** | The crate is `cdylib`; the `wasm32-wasip2` build exports the WIT world | The shipped `emery` CLI, `cargo make wasm-run` |
 
 This split is why the day-to-day loop is fast: prose and Rust changes are picked up by native tests and live eval with no component build.
 
@@ -30,7 +30,7 @@ What the engine calls, per axis:
 | ---- | --------- | ------------- | ---------- | --------------------- |
 | source | `metadata` | — | `SourceMetadata` | resolve-time record |
 | source | `survey` | `Context` | `Vec<Lead>` | `## Lead inventory` blocks in `discovery.md` |
-| source | `extract` | `Context`, one `Lead` | `Evidence` | `.specify/slices/<slice>/evidence/<source>.yaml` |
+| source | `extract` | `Context`, one `Lead` | `Evidence` | `.emery/slices/<slice>/evidence/<source>.yaml` |
 | target | `metadata` | — | `TargetMetadata` (floor, build `inputs[]`, platforms) | resolve-time record |
 | target | `guidance` | `Context` | prompt `String` | read by core synthesis |
 | target | `build` | `Context`, slice name, typed `inputs`, `WorkingTree` | `Report` | build report; gates the `built` transition |
@@ -42,7 +42,7 @@ Three ideas carry every operation:
 - **Prose is embedded at build time.** `build.rs` calls `prose::emit("prose")`, which walks the adapter's `prose/` tree into a sorted `DOCS` table; `adapter::registry!()` exposes it as `registry::docs()` / `registry::body("prompts/survey.md")`. A dangling relative link in any prose document fails the build. The export macros also serve `prose/references/**` over MCP, so prompts cite references by relative link instead of inlining them.
 - **Answers are schema-gated and repaired.** `adapter::repaired(model, ctx, system, user, kind, SCHEMA, tail)` sends the prompt, parses the reply against a generated JSON schema, and re-prompts with the parse error up to `adapter::MAX_REPAIRS` times before failing. Targets use the `adapter::phase` helpers (`phase::phase`, `phase::report`, `phase::enforce`) built on the same kernel.
 
-For the type-level contract — `Context`, `Lead`, `Evidence`, `Report`, the answer schemas — generate the SDK docs locally with `cargo doc -p adapter --open`. The engine-side view of the same seam is [`specify` docs/explanation/adapter-anatomy.md](https://github.com/augentic/specify/blob/main/docs/explanation/adapter-anatomy.md).
+For the type-level contract — `Context`, `Lead`, `Evidence`, `Report`, the answer schemas — generate the SDK docs locally with `cargo doc -p adapter --open`. The engine-side view of the same seam is [`emery` docs/explanation/adapter-anatomy.md](https://github.com/augentic/emery/blob/main/docs/explanation/adapter-anatomy.md).
 
 ## Walkthrough: a source adapter
 
@@ -62,7 +62,7 @@ sources/changelog/
       survey.md
       extract.md
     references/
-      spec-runtime -> ../../../../codex/references/runtime
+      emery-runtime -> ../../../../codex/references/runtime
   tests/
     operations.rs
 ```
@@ -156,7 +156,7 @@ impl Source for Adapter {
     fn metadata() -> SourceMetadata {
         // Declare the minimum host that can run this adapter once it depends
         // on host behavior; first-party adapters set it on every train release.
-        SourceMetadata { specify_floor: Some("0.28.0".to_string()) }
+        SourceMetadata { emery_floor: Some("0.28.0".to_string()) }
     }
 
     fn docs() -> &'static [Doc] {
@@ -201,7 +201,7 @@ Sources need two prompts: `prose/prompts/survey.md` and `prose/prompts/extract.m
 Add the shared runtime references symlink so your prompts can cite the cross-adapter corpus:
 
 ```bash
-ln -s ../../../../codex/references/runtime sources/changelog/prose/references/spec-runtime
+ln -s ../../../../codex/references/runtime sources/changelog/prose/references/emery-runtime
 ```
 
 The embed walker follows symlinks and fails the build on any dangling relative link, so broken prose is caught at `cargo build`, not at run time.
@@ -262,7 +262,7 @@ The eval composition ([`examples/eval/`](../examples/eval/)) links adapters stat
 
 How to exercise it live depends on the axis:
 
-- **Target adapter** — add a build case: a data directory under `examples/eval/cases/<id>/` with a `case.toml` (`kind = "build"`, slice name, `expect` artifacts) and a `fixture/` carrying the exact refined state `slice build` consumes (`.specify/project.yaml`, the slice's `metadata.yaml`, proposal / design / tasks / specs, plus any source material). Anatomy and the `expect` gate: [examples/eval/README.md](../examples/eval/README.md#case-shapes). Run it with `cargo make eval <id> --restart`.
+- **Target adapter** — add a build case: a data directory under `examples/eval/cases/<id>/` with a `case.toml` (`kind = "build"`, slice name, `expect` artifacts) and a `fixture/` carrying the exact refined state `slice build` consumes (`.emery/project.yaml`, the slice's `metadata.yaml`, proposal / design / tasks / specs, plus any source material). Anatomy and the `expect` gate: [examples/eval/README.md](../examples/eval/README.md#case-shapes). Run it with `cargo make eval <id> --restart`.
 - **Source adapter** — build cases drive only the target build today, so exercise `survey` / `extract` live through a workflow case (`kind = "workflow"`) that binds your source, e.g. `notes = "changelog:notes"` under `[sources]` over a fixture tree.
 
 Either way needs an authenticated `cursor-agent`. From here you are in the standard repair loop — edit `prose/**`, re-run, compare scratch trees — documented in the [repo README](../README.md).
@@ -273,13 +273,13 @@ Either way needs an authenticated `cursor-agent`. From here you are in the stand
 cargo make adapter changelog     # fast dev build → target/wasm32-wasip2/release/changelog.wasm
 ```
 
-Seed it into any Specify project (re-run after each rebuild):
+Seed it into any Emery project (re-run after each rebuild):
 
 ```bash
-specify adapter add target/wasm32-wasip2/release/changelog.wasm
+emery adapter add target/wasm32-wasip2/release/changelog.wasm
 ```
 
-The project then resolves the adapter by bare name (`changelog`) from its component cache. `cargo make wasm-run` exercises the real component seam end-to-end for the adapters it scripts. Publishing a pinned version to GHCR (`specify:changelog@<version>`) is the operator flow in [CONTRIBUTING.md § Publishing](../CONTRIBUTING.md#publishing).
+The project then resolves the adapter by bare name (`changelog`) from its component cache. `cargo make wasm-run` exercises the real component seam end-to-end for the adapters it scripts. Publishing a pinned version to GHCR (`emery:changelog@<version>`) is the operator flow in [CONTRIBUTING.md § Publishing](../CONTRIBUTING.md#publishing).
 
 ## Definition of done
 

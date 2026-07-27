@@ -76,4 +76,4 @@ claims:
     name: plus
 ```
 
-A full input / output fixture for this example lives at [`quality/fixtures/reference/sources/screenshots/task-list-two-screen/`](https://github.com/augentic/specify/tree/main/quality/fixtures/reference/sources/screenshots/task-list-two-screen/) in the repo. When `screenshots.extract` runs against a *second* lead later in the same plan (e.g. an `archive` screen sharing the same row skeleton), the prompt promotes the candidate-component note to `component: task-row` per the pipeline's stage-6 ≥2-screens rule.
+A full input / output fixture for this example lives at [`quality/fixtures/reference/sources/screenshots/task-list-two-screen/`](https://github.com/augentic/emery/tree/main/quality/fixtures/reference/sources/screenshots/task-list-two-screen/) in the repo. When `screenshots.extract` runs against a *second* lead later in the same plan (e.g. an `archive` screen sharing the same row skeleton), the prompt promotes the candidate-component note to `component: task-row` per the pipeline's stage-6 ≥2-screens rule.

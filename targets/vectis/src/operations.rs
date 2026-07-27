@@ -42,7 +42,7 @@ impl Target for Adapter {
             required: false,
         };
         TargetMetadata {
-            specify_floor: Some("0.28.0".to_string()),
+            emery_floor: Some("0.28.0".to_string()),
             inputs: vec![
                 optional("tokens.yaml"),
                 optional("assets.yaml"),
@@ -78,7 +78,7 @@ impl Target for Adapter {
         model: &P, ctx: &Context<'_>, slice: &str, inputs: &[Input], tree: &WorkingTree,
     ) -> Result<Report, Error> {
         let tree_root = ctx.tree_root(tree);
-        let slice_dir_rel = format!(".specify/slices/{slice}");
+        let slice_dir_rel = format!(".emery/slices/{slice}");
         let slice_dir = tree_root.join(&slice_dir_rel);
         let slice_composition = slice_dir.join("composition.yaml");
         let inputs_block = phase::render_inputs(inputs);
@@ -269,7 +269,7 @@ impl Target for Adapter {
         if phase == MergePhase::Preflight {
             // Deterministic gate: an invalid staged slice composition blocks
             // the merge before the engine folds it, per the merge prompt.
-            let staged = tree_root.join(format!(".specify/slices/{slice}/composition.yaml"));
+            let staged = tree_root.join(format!(".emery/slices/{slice}/composition.yaml"));
             let staged_findings = validation_findings(&staged);
             if staged_findings.is_empty() {
                 return Ok(Report::success());
@@ -282,7 +282,7 @@ impl Target for Adapter {
             });
         }
 
-        let baseline_composition = tree_root.join(".specify/specs/composition.yaml");
+        let baseline_composition = tree_root.join(".emery/specs/composition.yaml");
         let user = format!(
             "Run the postflight merge gate for slice `{slice}` (adapter `{}`). The engine \
          has already folded the slice's deltas — including its `composition.yaml` and \
@@ -341,7 +341,7 @@ fn declared_shell_legs(project_root: &Path) -> Vec<&'static ShellLeg> {
 }
 
 fn declared_platforms(project_root: &Path) -> Option<Vec<String>> {
-    let source = std::fs::read_to_string(project_root.join(".specify/project.yaml")).ok()?;
+    let source = std::fs::read_to_string(project_root.join(".emery/project.yaml")).ok()?;
     let doc: Value = serde_saphyr::from_str(&source).ok()?;
     let platforms = doc.get("platforms")?.as_array()?;
     Some(platforms.iter().filter_map(Value::as_str).map(str::to_string).collect())
@@ -404,7 +404,7 @@ async fn gate_report<P: Model>(
 }
 
 fn bootstrap_findings(tree_root: &Path) -> Vec<String> {
-    if !tree_root.join(".specify/project.yaml").exists() {
+    if !tree_root.join(".emery/project.yaml").exists() {
         return Vec::new();
     }
     match verify::run(verify::VerifyMode::BootstrapAppIcon, tree_root) {
@@ -427,7 +427,7 @@ fn bootstrap_findings(tree_root: &Path) -> Vec<String> {
 }
 
 fn shell_verify_findings(tree_root: &Path) -> Vec<String> {
-    if !tree_root.join(".specify/project.yaml").exists() {
+    if !tree_root.join(".emery/project.yaml").exists() {
         return Vec::new();
     }
     match verify::run(verify::VerifyMode::Verify, tree_root) {
@@ -450,25 +450,25 @@ fn shell_verify_findings(tree_root: &Path) -> Vec<String> {
 }
 
 fn render_verify_gate(tree_root: &Path) -> String {
-    let body = if tree_root.join(".specify/project.yaml").exists() {
+    let body = if tree_root.join(".emery/project.yaml").exists() {
         match verify::run(verify::VerifyMode::Verify, tree_root) {
             Ok(payload) => serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string()),
             Err(err) => format!("verify gate could not run: {err}"),
         }
     } else {
-        "no declared platform set (`.specify/project.yaml` absent) — gate skipped".to_string()
+        "no declared platform set (`.emery/project.yaml` absent) — gate skipped".to_string()
     };
     format!("### shell verify gate (already run in-guest)\n\n{body}")
 }
 
 fn render_infer_report(tree_root: &Path) -> String {
-    let composition = tree_root.join(".specify/specs/composition.yaml");
+    let composition = tree_root.join(".emery/specs/composition.yaml");
     let report = if composition.exists() {
         let args = infer::InferArgs {
             composition,
-            candidate_cache: Some(tree_root.join(".specify/.cache/component-candidates"))
+            candidate_cache: Some(tree_root.join(".emery/.cache/component-candidates"))
                 .filter(|p| p.is_dir()),
-            parts: Some(tree_root.join(".specify/design-system/parts.yaml"))
+            parts: Some(tree_root.join(".emery/design-system/parts.yaml"))
                 .filter(|p| p.is_file()),
             min_occurrences: infer::DEFAULT_MIN_OCCURRENCES,
         };
@@ -545,7 +545,7 @@ fn resolve_scaffold_app_name(tree_root: &Path) -> Option<String> {
     if let Ok(name) = android_scaffold::resolve_android_app_name(tree_root) {
         return Some(name);
     }
-    let source = std::fs::read_to_string(tree_root.join(".specify/project.yaml")).ok()?;
+    let source = std::fs::read_to_string(tree_root.join(".emery/project.yaml")).ok()?;
     let doc: Value = serde_saphyr::from_str(&source).ok()?;
     let raw = doc.get("name")?.as_str()?;
     let pascal: String = raw

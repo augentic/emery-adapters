@@ -1,6 +1,6 @@
 # Spec-to-Test Mapping (shared discipline)
 
-Target-neutral rules for mapping Specify spec scenarios to test functions. Both the Omnia and Vectis targets layer their concrete setup/assertion vocabularies on top of this base; see each target's own mapping reference for the target-specific deltas (test location, test attribute, WHEN/THEN translation tables, and worked examples).
+Target-neutral rules for mapping Emery spec scenarios to test functions. Both the Omnia and Vectis targets layer their concrete setup/assertion vocabularies on top of this base; see each target's own mapping reference for the target-specific deltas (test location, test attribute, WHEN/THEN translation tables, and worked examples).
 
 The mapping is **deterministic** — the same spec always produces the same test structure.
 

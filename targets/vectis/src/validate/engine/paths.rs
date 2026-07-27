@@ -1,7 +1,7 @@
 //! Default-path resolver ([`resolve_default_path`]) and cross-artifact
 //! discovery ([`discover_artifact`]).
 //!
-//! Both walk up from a starting path looking for `.specify/` and
+//! Both walk up from a starting path looking for `.emery/` and
 //! resolve against the embedded defaults at
 //! [`EMBEDDED_ARTIFACT_PATHS`].
 
@@ -13,29 +13,29 @@ const EMBEDDED_ARTIFACT_PATHS: &[(&str, &[(&str, &str)])] = &[
     (
         "layout",
         &[
-            ("change_local", ".specify/slices/<name>/layout.yaml"),
+            ("change_local", ".emery/slices/<name>/layout.yaml"),
             ("project", "design-system/layout.yaml"),
         ],
     ),
     (
         "tokens",
         &[
-            ("change_local", ".specify/slices/<name>/tokens.yaml"),
+            ("change_local", ".emery/slices/<name>/tokens.yaml"),
             ("project", "design-system/tokens.yaml"),
         ],
     ),
     (
         "assets",
         &[
-            ("change_local", ".specify/slices/<name>/assets.yaml"),
+            ("change_local", ".emery/slices/<name>/assets.yaml"),
             ("project", "design-system/assets.yaml"),
         ],
     ),
     (
         "composition",
         &[
-            ("change_local", ".specify/slices/<name>/composition.yaml"),
-            ("baseline", ".specify/specs/composition.yaml"),
+            ("change_local", ".emery/slices/<name>/composition.yaml"),
+            ("baseline", ".emery/specs/composition.yaml"),
         ],
     ),
 ];
@@ -107,14 +107,14 @@ fn canonical_filename_for_key(key: &str) -> &'static str {
 }
 
 /// Walk up from `start` (or its parent when `start` is a file) to the
-/// directory containing `.specify/` — the project root, *not*
-/// `.specify/` itself.
+/// directory containing `.emery/` — the project root, *not*
+/// `.emery/` itself.
 #[must_use]
 pub fn find_project_root(start: &Path) -> Option<PathBuf> {
     let mut cursor =
         if start.is_dir() { start.to_path_buf() } else { start.parent()?.to_path_buf() };
     loop {
-        if cursor.join(".specify").is_dir() {
+        if cursor.join(".emery").is_dir() {
             return Some(cursor);
         }
         if !cursor.pop() {
@@ -124,12 +124,12 @@ pub fn find_project_root(start: &Path) -> Option<PathBuf> {
 }
 
 /// Locate the operator-curated component catalog at
-/// `.specify/design-system/components.yaml` under the project root.
+/// `.emery/design-system/components.yaml` under the project root.
 /// `None` when absent (the catalog is opt-in).
 #[must_use]
 pub fn discover_catalog(start: &Path) -> Option<PathBuf> {
     let project_root = find_project_root(start)?;
-    let path = project_root.join(".specify/design-system/components.yaml");
+    let path = project_root.join(".emery/design-system/components.yaml");
     path.is_file().then_some(path)
 }
 
@@ -159,7 +159,7 @@ fn canonical_default_template(key: &str) -> &'static str {
         "layout" => "design-system/layout.yaml",
         "tokens" => "design-system/tokens.yaml",
         "assets" => "design-system/assets.yaml",
-        _ => ".specify/specs/composition.yaml",
+        _ => ".emery/specs/composition.yaml",
     }
 }
 
@@ -168,7 +168,7 @@ pub fn expand_path_template(template: &str, project_root: &Path) -> Vec<PathBuf>
     if !template.contains("<name>") {
         return vec![project_root.join(template)];
     }
-    let slices_dir = project_root.join(".specify/slices");
+    let slices_dir = project_root.join(".emery/slices");
     let Ok(entries) = std::fs::read_dir(&slices_dir) else {
         return Vec::new();
     };

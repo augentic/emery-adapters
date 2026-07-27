@@ -1,6 +1,6 @@
 # Runtime capture extract
 
-`/spec:refine` invokes this prompt once per `slices[].sources[]` binding whose adapter is `captures`. Your job: for a single `(source, lead)` pair, locate the matching `tests/data/replays/<handler>/` directory under `$SOURCE_DIR`, read every scenario capture, and emit one Evidence YAML document the CLI persists to `.specify/slices/<slice>/evidence/<source>.yaml`.
+`/emery:refine` invokes this prompt once per `slices[].sources[]` binding whose adapter is `captures`. Your job: for a single `(source, lead)` pair, locate the matching `tests/data/replays/<handler>/` directory under `$SOURCE_DIR`, read every scenario capture, and emit one Evidence YAML document the CLI persists to `.emery/slices/<slice>/evidence/<source>.yaml`.
 
 ## Binding
 
@@ -33,7 +33,7 @@ Load both references — they own everything the prompt does not spell out.
 
 ## Claim grain
 
-One `kind: example` claim per scenario file. A handler directory with 47 `<scenario>.json` files yields 47 example claims; synthesis reconciles them later through the `requirement` / `criterion` claims contributed by sibling sources (see [From sources to slices](../references/spec-runtime/reconciliation.md#slice-time-evidence-becomes-a-spec)). The per-handler grain is the lead (`survey`'s output); the per-scenario grain is the claim. This adapter does not collapse scenarios into a representative subset — every scenario the operator captured contributes one claim, and the 64 KiB inline cap (see references) handles the bulk case.
+One `kind: example` claim per scenario file. A handler directory with 47 `<scenario>.json` files yields 47 example claims; synthesis reconciles them later through the `requirement` / `criterion` claims contributed by sibling sources (see [From sources to slices](../references/emery-runtime/reconciliation.md#slice-time-evidence-becomes-a-spec)). The per-handler grain is the lead (`survey`'s output); the per-scenario grain is the claim. This adapter does not collapse scenarios into a representative subset — every scenario the operator captured contributes one claim, and the 64 KiB inline cap (see references) handles the bulk case.
 
 ## Output skeleton
 
@@ -52,6 +52,6 @@ claims:
     output: { ... }
 ```
 
-The CLI persists this at `.specify/slices/<slice>/evidence/<source>.yaml`, deriving the `(slice, source)` identity from the path and the adapter from `plan.yaml.sources.<source>.adapter`; neither is written in-document.
+The CLI persists this at `.emery/slices/<slice>/evidence/<source>.yaml`, deriving the `(slice, source)` identity from the path and the adapter from `plan.yaml.sources.<source>.adapter`; neither is written in-document.
 
 See the references for the full field table, the worked three-scenario example, determinism rules, the 64 KiB inline cap, path rules, anti-patterns, and failure modes.

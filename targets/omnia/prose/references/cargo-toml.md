@@ -2,7 +2,7 @@
 
 ## Base Template
 
-Every generated crate starts from this template. All dependencies use `workspace = true` -- never specify versions directly.
+Every generated crate starts from this template. All dependencies use `workspace = true` -- never emery versions directly.
 
 ```toml
 [package]
@@ -216,7 +216,7 @@ tokio.workspace = true
 
 ## Rules
 
-1. **Never specify versions** for workspace dependencies -- use `workspace = true`
+1. **Never emery versions** for workspace dependencies -- use `workspace = true`
 2. **Never add `uuid`** -- ID generation is the caller's responsibility
 3. **Never add `tokio` to `[dependencies]`** -- only in `[dev-dependencies]` for tests
 4. **Always include `[lints] workspace = true`** -- inherits project-wide lint configuration

@@ -1,4 +1,4 @@
-# Specify Artifact Capability to Omnia Provider Trait Mapping
+# Emery Artifact Capability to Omnia Provider Trait Mapping
 
 This document defines how to translate the platform-agnostic **Source Capabilities Summary** (from design.md), **External Services** (from design.md), and concrete cues in **Business Logic** into Omnia SDK provider trait bounds for generated crates.
 
@@ -32,7 +32,7 @@ This document defines how to translate the platform-agnostic **Source Capabiliti
 
 7. **Blob storage maps to `Blobstore`, never `HttpRequest`.** When design.md External Services lists a service with type `blob store` (Azure Blob Storage, AWS S3, file storage), the Omnia trait is `Blobstore`. The Omnia runtime provides native adapters for blob storage behind this trait.
 
-## Deriving Traits from Specify Artifacts
+## Deriving Traits from Emery Artifacts
 
 ### Step 1: Read Source Capabilities Summary
 

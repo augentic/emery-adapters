@@ -6,7 +6,7 @@ name: Create Release
 #
 # Same shape as the shared augentic/.github release.yaml, composed locally
 # from its actions because the version bump runs `cargo generate-lockfile`,
-# which must resolve the private augentic/specify git dependencies — that
+# which must resolve the private augentic/emery git dependencies — that
 # needs the App-token git prelude the shared reusable workflow does not
 # perform. GHCR publication runs in Publish Release (see CONTRIBUTING.md).
 
@@ -76,7 +76,7 @@ jobs:
       - uses: actions/checkout@v6
 
       # The version bump regenerates the lockfile, which resolves the
-      # private augentic/specify git dependencies.
+      # private augentic/emery git dependencies.
       - name: Private Git access
         id: git-token
         uses: actions/create-github-app-token@v3
@@ -84,7 +84,7 @@ jobs:
           client-id: ${{ vars.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: augentic
-          repositories: specify
+          repositories: emery
           permission-contents: read
 
       - name: Authenticate Cargo git deps
@@ -92,8 +92,8 @@ jobs:
           TOKEN: ${{ steps.git-token.outputs.token }}
         run: |
           git config --global \
-            url."https://x-access-token:${TOKEN}@github.com/augentic/specify".insteadOf \
-            "https://github.com/augentic/specify"
+            url."https://x-access-token:${TOKEN}@github.com/augentic/emery".insteadOf \
+            "https://github.com/augentic/emery"
 
       - name: Git identity
         uses: augentic/.github/.github/actions/git-identity@main

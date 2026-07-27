@@ -26,7 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          path: specify-adapters
+          path: emery-adapters
 
       - name: Private Git access
         id: app-token
@@ -35,7 +35,7 @@ jobs:
           client-id: ${{ vars.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: augentic
-          repositories: specify
+          repositories: emery
           permission-contents: read
 
       - name: Authenticate Cargo git deps
@@ -43,15 +43,15 @@ jobs:
           TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           git config --global \
-            url."https://x-access-token:${TOKEN}@github.com/augentic/specify".insteadOf \
-            "https://github.com/augentic/specify"
+            url."https://x-access-token:${TOKEN}@github.com/augentic/emery".insteadOf \
+            "https://github.com/augentic/emery"
 
-      - name: Checkout specify
+      - name: Checkout emery
         uses: actions/checkout@v6
         with:
-          repository: augentic/specify
+          repository: augentic/emery
           token: ${{ steps.app-token.outputs.token }}
-          path: specify
+          path: emery
           persist-credentials: false
 
       - uses: dtolnay/rust-toolchain@stable
@@ -60,7 +60,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: specify-adapters
+          workspaces: emery-adapters
           key: release-wasm32-wasip2
 
       - uses: taiki-e/install-action@v2
@@ -75,11 +75,11 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build components
-        working-directory: specify-adapters
+        working-directory: emery-adapters
         run: cargo make release
 
       - name: Publish components
-        working-directory: specify-adapters
+        working-directory: emery-adapters
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

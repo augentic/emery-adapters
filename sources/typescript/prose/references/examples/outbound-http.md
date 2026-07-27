@@ -11,7 +11,7 @@ extract ./src/handler.ts $SLICE_DIR
 ```
 
 - **TypeScript Source**: `./src/handler.ts`
-- **Specify Output**: `$SLICE_DIR` (specs/ + design.md)
+- **Emery Output**: `$SLICE_DIR` (specs/ + design.md)
 
 ## TypeScript Source Code
 
@@ -42,7 +42,7 @@ export async function processMessage(message: Message): Promise<Output> {
 }
 ```
 
-## Generated Specify Artifacts
+## Generated Emery Artifacts
 
 ```markdown
 ### Component

@@ -1,11 +1,11 @@
 # JSON Schema — Author
 
-> **When to read this.** Read this when authoring or extending standalone JSON Schema documents under `contracts/schemas/` for a Specify change — i.e. when the contracts adapter build prompt during `/spec:build` selects the author intent for shared payload vocabulary, or when an operator extends the baseline for new payload types referenced (or about to be referenced) by the `openapi` or `asyncapi` sub-flows. Skip this file when importing external schema files (use [`importer.md`](./importer.md)) or when verifying existing artefacts (use [`verifier.md`](./verifier.md)).
+> **When to read this.** Read this when authoring or extending standalone JSON Schema documents under `contracts/schemas/` for a Emery change — i.e. when the contracts adapter build prompt during `/emery:build` selects the author intent for shared payload vocabulary, or when an operator extends the baseline for new payload types referenced (or about to be referenced) by the `openapi` or `asyncapi` sub-flows. Skip this file when importing external schema files (use [`importer.md`](./importer.md)) or when verifying existing artefacts (use [`verifier.md`](./verifier.md)).
 
 ## Inputs
 
 ```text
-$SLICE_DIR     = .specify/slices/<slice-name>
+$SLICE_DIR     = .emery/slices/<slice-name>
 $SPECS_DIR      = $SLICE_DIR/specs
 $CONTRACTS_DIR  = $SLICE_DIR/contracts
 $SCHEMAS_DIR    = $CONTRACTS_DIR/schemas
@@ -17,7 +17,7 @@ $BASELINE_DIR   = contracts
 When sources conflict, follow this strict precedence:
 
 1. **This file** — author rules and hard constraints for JSON Schema documents.
-2. **Specify artefacts** (specs) — behavioural requirements drive the field shape.
+2. **Emery artefacts** (specs) — behavioural requirements drive the field shape.
 3. **Format conventions** — [`../../references/json-schema-conventions.md`](../../references/json-schema-conventions.md).
 4. **Baseline schemas** (`contracts/schemas/`) — existing platform vocabulary; never overwrite silently.
 5. **LLM inference** — prohibited for unknowns; mark with `[unknown]` and surface in the alignment report.
@@ -105,7 +105,7 @@ The spec describes a type absent from the baseline, or asserts new fields on an 
 
 #### Normalisation
 
-The baseline file lacks Specify-required metadata (`$id`, `$schema`, `title`, `description`). Propose a normalisation delta that adds the metadata without changing the schema's shape (no property additions, no required-set changes). Surface as a separate section in the alignment report.
+The baseline file lacks Emery-required metadata (`$id`, `$schema`, `title`, `description`). Propose a normalisation delta that adds the metadata without changing the schema's shape (no property additions, no required-set changes). Surface as a separate section in the alignment report.
 
 ### Step 4 — Generate or update schema files
 
@@ -115,7 +115,7 @@ Required structure:
 
 ```yaml
 $schema: "https://json-schema.org/draft/2020-12/schema"
-$id: "urn:specify:schemas/<filename-without-extension>"
+$id: "urn:emery:schemas/<filename-without-extension>"
 title: <PascalCaseTypeName>
 description: <one-sentence behavioural description from the spec>
 type: object
@@ -135,13 +135,13 @@ Then verify each generated file against the rules below.
 Every schema file declares a `$id` field. The format is non-negotiable:
 
 ```yaml
-$id: "urn:specify:schemas/<filename-without-extension>"
+$id: "urn:emery:schemas/<filename-without-extension>"
 ```
 
 Rules:
 
-- **Prefix.** Always `urn:specify:`. Never `https://` or `file://`. The URN format is RFC 8141-compliant and works with `ajv`, `typify`, and `json-schema-ref-parser` without requiring a base URL.
-- **Path segment.** Always `schemas/<kebab-name>` — the file's path under `contracts/` minus the `.yaml` extension. A schema at `contracts/schemas/user-registration.yaml` gets `$id: "urn:specify:schemas/user-registration"`.
+- **Prefix.** Always `urn:emery:`. Never `https://` or `file://`. The URN format is RFC 8141-compliant and works with `ajv`, `typify`, and `json-schema-ref-parser` without requiring a base URL.
+- **Path segment.** Always `schemas/<kebab-name>` — the file's path under `contracts/` minus the `.yaml` extension. A schema at `contracts/schemas/user-registration.yaml` gets `$id: "urn:emery:schemas/user-registration"`.
 - **Stability.** Once a schema is in the baseline, its `$id` is frozen. Renaming the conceptual type requires a new file with a new `$id`; never rewrite the existing `$id` in place. Surface a deprecation note on the old schema if needed.
 - **Uniqueness.** Each `$id` is unique across the contract tree. The file-path derivation guarantees this when the one-type-per-file rule is honoured. The verifier flags duplicates.
 - **No URLs.** Even though JSON Schema permits HTTP `$id` values, do not use them. URN form is the platform standard, ensures resolver-portability, and prevents accidental coupling to a domain.
@@ -167,11 +167,11 @@ Filenames are kebab-case and mirror the PascalCase type name in `title`:
 
 | Type name (PascalCase) | Filename (kebab-case) | `$id` URN segment |
 |---|---|---|
-| `UserRegistration` | `user-registration.yaml` | `urn:specify:schemas/user-registration` |
-| `OAuthToken` | `oauth-token.yaml` | `urn:specify:schemas/oauth-token` |
-| `OrderPlaced` | `order-placed.yaml` | `urn:specify:schemas/order-placed` |
-| `ErrorResponse` | `error-response.yaml` | `urn:specify:schemas/error-response` |
-| `IPAddress` | `ip-address.yaml` | `urn:specify:schemas/ip-address` |
+| `UserRegistration` | `user-registration.yaml` | `urn:emery:schemas/user-registration` |
+| `OAuthToken` | `oauth-token.yaml` | `urn:emery:schemas/oauth-token` |
+| `OrderPlaced` | `order-placed.yaml` | `urn:emery:schemas/order-placed` |
+| `ErrorResponse` | `error-response.yaml` | `urn:emery:schemas/error-response` |
+| `IPAddress` | `ip-address.yaml` | `urn:emery:schemas/ip-address` |
 
 Acronym handling: collapse runs of capital letters into a single kebab segment (`OAuthToken` → `oauth-token`, `IPAddress` → `ip-address`). The `title` keeps the canonical PascalCase form (`OAuthToken`, `IPAddress`).
 
@@ -222,7 +222,7 @@ Map spec-scenario data to JSON Schema types using the table from [`../../referen
 | Decimal / money | `type: number` or string-encoded depending on precision needs | Spec dictates |
 | Boolean | `type: boolean` | — |
 | Closed value set | `type: string`, `enum: [...]` | Status codes, categories, roles |
-| Ordered collection | `type: array`, `items: { ... }` | Specify `minItems` / `maxItems` if the spec constrains cardinality |
+| Ordered collection | `type: array`, `items: { ... }` | Emery `minItems` / `maxItems` if the spec constrains cardinality |
 | Nested object (reused) | `$ref: "<other-file>.yaml"` | Extract per the decomposition rules above |
 | Nested object (file-local) | `type: object` inline, or `$defs` entry | — |
 | Optional field | omit from `required` array | Do not use `type: ["string", "null"]` unless the spec distinguishes "absent" from "null" |

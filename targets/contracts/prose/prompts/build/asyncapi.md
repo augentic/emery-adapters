@@ -21,7 +21,7 @@ contracts/
 └── messages/
     └── <event-domain>-events.yaml       # Baseline: merged contracts only
 
-.specify/slices/<slice-name>/
+.emery/slices/<slice-name>/
 └── contracts/
     ├── messages/
     │   └── <event-domain>-events.yaml   # Slice-local delta or normalised import
@@ -40,7 +40,7 @@ Conventions enforced for every AsyncAPI file in either location:
 
 | Intent | Trigger | Sibling |
 |---|---|---|
-| Author or extend the AsyncAPI document from a spec | build prompt during `/spec:build`; operator extending the baseline for new evented interactions | [`../../references/asyncapi/author.md`](../../references/asyncapi/author.md) |
+| Author or extend the AsyncAPI document from a spec | build prompt during `/emery:build`; operator extending the baseline for new evented interactions | [`../../references/asyncapi/author.md`](../../references/asyncapi/author.md) |
 | Import or normalise an external AsyncAPI document | operator drops an AsyncAPI file into a slice's `contracts/messages/` directory | [`../../references/asyncapi/importer.md`](../../references/asyncapi/importer.md) |
 | Verify internal consistency or run merge-time baseline validation | build verification; post-merge contract baseline gate; operator invoking validation against an existing AsyncAPI artefact | [`../../references/asyncapi/verifier.md`](../../references/asyncapi/verifier.md) |
 

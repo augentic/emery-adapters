@@ -55,7 +55,7 @@ Return one block per lead, in alphabetical `lead` order. The CLI appends them un
 - topics: [tasks, list-view]
 ```
 
-Field order is fixed (`lead`, `synopsis`, then optional `topics`). Do not emit `source`; the CLI stamps it from the survey binding. Cross-source merging is `/spec:plan`'s `propose` sub-step, not this prompt's job — see [From sources to slices](../references/spec-runtime/reconciliation.md#plan-time-leads-become-slices) for how leads reconcile into slices.
+Field order is fixed (`lead`, `synopsis`, then optional `topics`). Do not emit `source`; the CLI stamps it from the survey binding. Cross-source merging is `/emery:plan`'s `propose` sub-step, not this prompt's job — see [From sources to slices](../references/emery-runtime/reconciliation.md#plan-time-leads-become-slices) for how leads reconcile into slices.
 
 ## Worked example
 
@@ -81,7 +81,7 @@ Expected output (alphabetically by `lead`; `task-list-populated.png` and `task-l
 - synopsis: Task list: today's open tasks for the signed-in user.
 ```
 
-A full input / output fixture for this example lives at [`quality/fixtures/reference/sources/screenshots/task-list-two-screen/`](https://github.com/augentic/specify/tree/main/quality/fixtures/reference/sources/screenshots/task-list-two-screen/) in the repo.
+A full input / output fixture for this example lives at [`quality/fixtures/reference/sources/screenshots/task-list-two-screen/`](https://github.com/augentic/emery/tree/main/quality/fixtures/reference/sources/screenshots/task-list-two-screen/) in the repo.
 
 ## Determinism
 

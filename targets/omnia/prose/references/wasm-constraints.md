@@ -1,10 +1,10 @@
 # Runtime Constraint Translations for WASM
 
-This document defines how to translate `[runtime]` constraints from Specify artifacts into Omnia SDK patterns for WASM guest components. The artifacts describe source behaviors factually; this document prescribes the WASM/Omnia translation.
+This document defines how to translate `[runtime]` constraints from Emery artifacts into Omnia SDK patterns for WASM guest components. The artifacts describe source behaviors factually; this document prescribes the WASM/Omnia translation.
 
 ## Constraint Translation Table
 
-| Specify `[runtime]` Constraint | Omnia Translation | Required Traits | Pattern Reference |
+| Emery `[runtime]` Constraint | Omnia Translation | Required Traits | Pattern Reference |
 | --- | --- | --- | --- |
 | Source uses in-memory cache with startup loading | On-demand **cache-aside**: `StateStore` for caching + original data source trait for fetching. Data loaded on first request (or cache miss), not at startup. | `StateStore` + data source trait (`DocumentStore`, `TableStore`, or `HttpRequest`) | [statestore.md](examples/crates/capabilities/statestore.md) |
 | Source uses `setTimeout`/`setInterval` for periodic refresh | **TTL-based cache expiry** via `StateStore`. Set TTL when writing; stale entries auto-evicted and re-fetched on next request. | `StateStore` | [statestore.md](examples/crates/capabilities/statestore.md) |

@@ -1,11 +1,11 @@
 # AsyncAPI — Author
 
-> **When to read this.** Read this when authoring or extending the AsyncAPI document for a Specify change — i.e. when the contracts adapter build prompt during `/spec:build` selects the author intent, or an operator wants to add new evented interactions to the platform's messaging baseline. Skip this file when importing an external document (use [`importer.md`](./importer.md)) or when verifying an existing artefact (use [`verifier.md`](./verifier.md)).
+> **When to read this.** Read this when authoring or extending the AsyncAPI document for a Emery change — i.e. when the contracts adapter build prompt during `/emery:build` selects the author intent, or an operator wants to add new evented interactions to the platform's messaging baseline. Skip this file when importing an external document (use [`importer.md`](./importer.md)) or when verifying an existing artefact (use [`verifier.md`](./verifier.md)).
 
 ## Inputs
 
 ```text
-$SLICE_DIR     = .specify/slices/<slice-name>
+$SLICE_DIR     = .emery/slices/<slice-name>
 $SPECS_DIR      = $SLICE_DIR/specs
 $CONTRACTS_DIR  = $SLICE_DIR/contracts
 $BASELINE_DIR   = contracts
@@ -16,7 +16,7 @@ $BASELINE_DIR   = contracts
 When sources conflict, follow this strict precedence:
 
 1. **This file** — author rules and hard constraints for AsyncAPI documents.
-2. **Specify artefacts** (specs) — behavioural requirements drive the channels and operations.
+2. **Emery artefacts** (specs) — behavioural requirements drive the channels and operations.
 3. **Format conventions** — [`../../references/asyncapi-conventions.md`](../../references/asyncapi-conventions.md), [`../../references/json-schema-conventions.md`](../../references/json-schema-conventions.md).
 4. **Baseline contracts** (`contracts/messages/`) — existing platform vocabulary; never overwrite silently.
 5. **LLM inference** — prohibited for unknowns; mark with `[unknown]` and surface in the alignment report.
@@ -104,7 +104,7 @@ When extending an existing event domain (e.g. adding `user.deleted` to `user-eve
 
 #### Normalisation
 
-The baseline file lacks Specify-required metadata (`info.title`, `info.version`, `info.description`) or violates a convention (e.g. an inline payload that should have been decomposed). Propose a normalisation delta that adds the metadata or decomposes the payload without changing channel addresses or operation semantics. Surface as a separate section in the alignment report.
+The baseline file lacks Emery-required metadata (`info.title`, `info.version`, `info.description`) or violates a convention (e.g. an inline payload that should have been decomposed). Propose a normalisation delta that adds the metadata or decomposes the payload without changing channel addresses or operation semantics. Surface as a separate section in the alignment report.
 
 ### Step 4 — Generate or update AsyncAPI files
 
@@ -186,7 +186,7 @@ Computation rules applied at file scope:
 
 1. **One file per event domain.** Always read the matching baseline file first. The delta file replaces it wholesale at merge time, so it must contain every existing channel, operation, and message alongside the new ones.
 2. **`info.version` MUST parse as SemVer (contract identity/version validation).** New top-level AsyncAPI documents MUST set `info.version` to a value that parses per [semver.org](https://semver.org), including optional prerelease labels (`1.0.0-draft.1`). Do not bump the baseline's `info.version` automatically — version policy is a platform decision, not an authoring decision. If the slice requires a version bump, the contracts adapter build prompt flags it for human review. The verifier sibling enforces SemVer in single mode (Check 4), and the adapter's in-guest contract validator enforces it again at merge time on the baseline (the contracts adapter merge contract); a non-SemVer value is a hard validation failure at both gates.
-3. **`info.x-specify-id` rename-stable identifier (contract identity/version validation).** SHOULD set `info.x-specify-id` on every new top-level AsyncAPI document to a kebab-case slug (typically the file stem; `^[a-z][a-z0-9-]*$`, ≤ 64 characters). The id is a hint that survives file moves and version bumps. MUST preserve any pre-existing `info.x-specify-id` when extending the baseline; MUST NOT change it across `info.version` bumps. Path-based references in `registry.yaml` remain canonical — the id is a rename-stable hint, not a substitute.
+3. **`info.x-emery-id` rename-stable identifier (contract identity/version validation).** SHOULD set `info.x-emery-id` on every new top-level AsyncAPI document to a kebab-case slug (typically the file stem; `^[a-z][a-z0-9-]*$`, ≤ 64 characters). The id is a hint that survives file moves and version bumps. MUST preserve any pre-existing `info.x-emery-id` when extending the baseline; MUST NOT change it across `info.version` bumps. Path-based references in `registry.yaml` remain canonical — the id is a rename-stable hint, not a substitute.
 4. **Preserve channel addresses and operation keys verbatim.** When extending a baseline file, every existing `address` and `operationId` stays exactly as it is. Renaming an address breaks consumers; renaming an operation breaks tooling.
 5. **Diff at the entry level.** When modifying an existing channel or message, change only the keys the spec asserts. Do not reformat or reorder unrelated keys — opaque file replacement means a re-ordered file looks like a wholesale rewrite to reviewers.
 

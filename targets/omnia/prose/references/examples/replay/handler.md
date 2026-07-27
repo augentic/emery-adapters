@@ -1,6 +1,6 @@
 # Operation Example: r9k-adapter
 
-This is an example of an operation in the expected format after Specify-driven generation. The corresponding [tests](tests.md) and [fixtures](fixtures.md) examples correspond to this operation.
+This is an example of an operation in the expected format after Emery-driven generation. The corresponding [tests](tests.md) and [fixtures](fixtures.md) examples correspond to this operation.
 
 ## Crate entry point (lib.rs)
 

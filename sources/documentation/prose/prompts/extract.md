@@ -1,6 +1,6 @@
 # `documentation.extract`
 
-For one `Lead`, walk `$SOURCE_DIR` (read-only) and return a single `Evidence` document of structured claims. The CLI persists the result at `.specify/slices/<slice>/evidence/<source>.yaml`; this prompt returns the YAML body only. Core synthesis later reconciles this Evidence with every other bound source's into the slice's `spec.md` — see [From sources to slices](../references/spec-runtime/reconciliation.md#slice-time-evidence-becomes-a-spec).
+For one `Lead`, walk `$SOURCE_DIR` (read-only) and return a single `Evidence` document of structured claims. The CLI persists the result at `.emery/slices/<slice>/evidence/<source>.yaml`; this prompt returns the YAML body only. Core synthesis later reconciles this Evidence with every other bound source's into the slice's `spec.md` — see [From sources to slices](../references/emery-runtime/reconciliation.md#slice-time-evidence-becomes-a-spec).
 
 ## Inputs
 
@@ -63,7 +63,7 @@ claims:
     decision: "..."
 ```
 
-`authority` is always the literal `documentation` (operator-provided written product/technical intent; the authority precedence `intent > documentation > behaviour` is defined in [`authority.md`](../references/spec-runtime/synthesis/authority.md)). `lead` is the supplied `<lead>`. The document's `(slice, source)` identity is path-borne (the CLI persists it at `.specify/slices/<slice>/evidence/<source>.yaml`) and the adapter resolves from `plan.yaml.sources.<source>.adapter`, so neither is written in-document.
+`authority` is always the literal `documentation` (operator-provided written product/technical intent; the authority precedence `intent > documentation > behaviour` is defined in [`authority.md`](../references/emery-runtime/synthesis/authority.md)). `lead` is the supplied `<lead>`. The document's `(slice, source)` identity is path-borne (the CLI persists it at `.emery/slices/<slice>/evidence/<source>.yaml`) and the adapter resolves from `plan.yaml.sources.<source>.adapter`, so neither is written in-document.
 
 ## Worked example
 
@@ -104,7 +104,7 @@ claims:
     decision: "Use the existing transactional email provider rather than introducing a new notification service."
 ```
 
-A full input/output fixture for this example lives at [`quality/fixtures/reference/sources/documentation/`](https://github.com/augentic/specify/tree/main/quality/fixtures/reference/sources/documentation/) in the repo.
+A full input/output fixture for this example lives at [`quality/fixtures/reference/sources/documentation/`](https://github.com/augentic/emery/tree/main/quality/fixtures/reference/sources/documentation/) in the repo.
 
 ## Determinism
 
@@ -115,7 +115,7 @@ A full input/output fixture for this example lives at [`quality/fixtures/referen
 ## Guardrails
 
 - `$SOURCE_DIR` is read-only. Reads outside it surface as `source-extract-path-denied`; never attempt to widen the preopen.
-- Never write Evidence to disk yourself — return the YAML body to the CLI, which persists it under `.specify/slices/<slice>/evidence/<source>.yaml`.
+- Never write Evidence to disk yourself — return the YAML body to the CLI, which persists it under `.emery/slices/<slice>/evidence/<source>.yaml`.
 - Never emit closed-enum kinds outside `{requirement, criterion, decision, section}` from this adapter. Spatial kinds (`region`/`container`/`leaf`) belong to `screenshots`; behaviour kinds (`excerpt`/`type`/`call`) belong to code source adapters.
 - Never omit `id` on `requirement` or `criterion`. The CLI validates Evidence against `schemas/evidence.schema.json` before synthesis; a missing `id` fails the slice in `refining`.
 - Empty `claims: []` is valid output when a lead cannot be resolved to any doc content. Do not pad with speculative claims.

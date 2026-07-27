@@ -23,4 +23,4 @@ Effect handlers must not crash, leak, silently drop requests, or leave the core 
 
 ## Spec Guidance
 
-If the core needs to recover from a platform failure, model that failure as an Effect response and specify the resulting state transition. Do not rely on shell-only logs, crashes, or swallowed exceptions as the recovery behavior.
+If the core needs to recover from a platform failure, model that failure as an Effect response and emery the resulting state transition. Do not rely on shell-only logs, crashes, or swallowed exceptions as the recovery behavior.

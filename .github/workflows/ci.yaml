@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          path: specify-adapters
+          path: emery-adapters
       - name: Private Git access
         id: app-token
         uses: actions/create-github-app-token@v3
@@ -35,30 +35,30 @@ jobs:
           client-id: ${{ vars.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: augentic
-          repositories: specify
+          repositories: emery
           permission-contents: read
       - name: Authenticate Cargo git deps
         env:
           TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           git config --global \
-            url."https://x-access-token:${TOKEN}@github.com/augentic/specify".insteadOf \
-            "https://github.com/augentic/specify"
-      - name: Checkout specify
+            url."https://x-access-token:${TOKEN}@github.com/augentic/emery".insteadOf \
+            "https://github.com/augentic/emery"
+      - name: Checkout emery
         uses: actions/checkout@v6
         with:
-          repository: augentic/specify
+          repository: augentic/emery
           token: ${{ steps.app-token.outputs.token }}
-          path: specify
+          path: emery
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: specify-adapters
+          workspaces: emery-adapters
       - run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
-        working-directory: specify-adapters
+        working-directory: emery-adapters
 
   fmt:
     name: Format
@@ -81,7 +81,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          path: specify-adapters
+          path: emery-adapters
       - name: Private Git access
         id: app-token
         uses: actions/create-github-app-token@v3
@@ -89,31 +89,31 @@ jobs:
           client-id: ${{ vars.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: augentic
-          repositories: specify
+          repositories: emery
           permission-contents: read
       - name: Authenticate Cargo git deps
         env:
           TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           git config --global \
-            url."https://x-access-token:${TOKEN}@github.com/augentic/specify".insteadOf \
-            "https://github.com/augentic/specify"
-      - name: Checkout specify
+            url."https://x-access-token:${TOKEN}@github.com/augentic/emery".insteadOf \
+            "https://github.com/augentic/emery"
+      - name: Checkout emery
         uses: actions/checkout@v6
         with:
-          repository: augentic/specify
+          repository: augentic/emery
           token: ${{ steps.app-token.outputs.token }}
-          path: specify
+          path: emery
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: specify-adapters
+          workspaces: emery-adapters
       - uses: taiki-e/install-action@v2
         with:
           tool: nextest
       - run: cargo nextest run --locked --tests --all-features --no-tests=pass
-        working-directory: specify-adapters
+        working-directory: emery-adapters
 
   test-doc:
     name: Test docs
@@ -122,7 +122,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          path: specify-adapters
+          path: emery-adapters
       - name: Private Git access
         id: app-token
         uses: actions/create-github-app-token@v3
@@ -130,28 +130,28 @@ jobs:
           client-id: ${{ vars.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: augentic
-          repositories: specify
+          repositories: emery
           permission-contents: read
       - name: Authenticate Cargo git deps
         env:
           TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           git config --global \
-            url."https://x-access-token:${TOKEN}@github.com/augentic/specify".insteadOf \
-            "https://github.com/augentic/specify"
-      - name: Checkout specify
+            url."https://x-access-token:${TOKEN}@github.com/augentic/emery".insteadOf \
+            "https://github.com/augentic/emery"
+      - name: Checkout emery
         uses: actions/checkout@v6
         with:
-          repository: augentic/specify
+          repository: augentic/emery
           token: ${{ steps.app-token.outputs.token }}
-          path: specify
+          path: emery
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: specify-adapters
+          workspaces: emery-adapters
       - id: lib
-        working-directory: specify-adapters
+        working-directory: emery-adapters
         run: |
           has_lib=$(cargo metadata --format-version 1 --no-deps \
             | jq '[.packages[].targets[].kind[]
@@ -159,7 +159,7 @@ jobs:
                    | length > 0')
           echo "exists=$has_lib" >> "$GITHUB_OUTPUT"
       - if: steps.lib.outputs.exists == 'true'
-        working-directory: specify-adapters
+        working-directory: emery-adapters
         run: cargo test --doc --locked --all-features --workspace
 
   doc:
@@ -171,7 +171,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          path: specify-adapters
+          path: emery-adapters
       - name: Private Git access
         id: app-token
         uses: actions/create-github-app-token@v3
@@ -179,28 +179,28 @@ jobs:
           client-id: ${{ vars.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: augentic
-          repositories: specify
+          repositories: emery
           permission-contents: read
       - name: Authenticate Cargo git deps
         env:
           TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           git config --global \
-            url."https://x-access-token:${TOKEN}@github.com/augentic/specify".insteadOf \
-            "https://github.com/augentic/specify"
-      - name: Checkout specify
+            url."https://x-access-token:${TOKEN}@github.com/augentic/emery".insteadOf \
+            "https://github.com/augentic/emery"
+      - name: Checkout emery
         uses: actions/checkout@v6
         with:
-          repository: augentic/specify
+          repository: augentic/emery
           token: ${{ steps.app-token.outputs.token }}
-          path: specify
+          path: emery
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: specify-adapters
+          workspaces: emery-adapters
       - run: cargo doc --no-deps --workspace --all-features --locked
-        working-directory: specify-adapters
+        working-directory: emery-adapters
 
   vet:
     name: Vet
@@ -209,7 +209,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          path: specify-adapters
+          path: emery-adapters
       - name: Private Git access
         id: app-token
         uses: actions/create-github-app-token@v3
@@ -217,31 +217,31 @@ jobs:
           client-id: ${{ vars.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: augentic
-          repositories: specify
+          repositories: emery
           permission-contents: read
       - name: Authenticate Cargo git deps
         env:
           TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           git config --global \
-            url."https://x-access-token:${TOKEN}@github.com/augentic/specify".insteadOf \
-            "https://github.com/augentic/specify"
-      - name: Checkout specify
+            url."https://x-access-token:${TOKEN}@github.com/augentic/emery".insteadOf \
+            "https://github.com/augentic/emery"
+      - name: Checkout emery
         uses: actions/checkout@v6
         with:
-          repository: augentic/specify
+          repository: augentic/emery
           token: ${{ steps.app-token.outputs.token }}
-          path: specify
+          path: emery
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: specify-adapters
+          workspaces: emery-adapters
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-vet@0.10.2
       - run: cargo vet --locked
-        working-directory: specify-adapters
+        working-directory: emery-adapters
 
   deny:
     name: Deny
@@ -250,7 +250,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          path: specify-adapters
+          path: emery-adapters
       - name: Private Git access
         id: app-token
         uses: actions/create-github-app-token@v3
@@ -258,18 +258,18 @@ jobs:
           client-id: ${{ vars.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: augentic
-          repositories: specify
+          repositories: emery
           permission-contents: read
-      - name: Checkout specify
+      - name: Checkout emery
         uses: actions/checkout@v6
         with:
-          repository: augentic/specify
+          repository: augentic/emery
           token: ${{ steps.app-token.outputs.token }}
-          path: specify
+          path: emery
           persist-credentials: false
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
-          manifest-path: specify-adapters/Cargo.toml
+          manifest-path: emery-adapters/Cargo.toml
           arguments: --workspace --locked
           use-git-cli: true
           # Full URL form required by cargo-deny-action's credential.helper store.

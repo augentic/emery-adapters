@@ -4,7 +4,7 @@ Merge prompt for slices that target the `contracts` adapter — the contracts ad
 
 ## Preflight — staged delta validation
 
-The preflight dispatch is fully deterministic: the adapter runs its compiled-in contract validator against the slice's staged delta (`.specify/slices/<slice>/contracts/`) and answers without a judgment leg. Blocking findings mean `status: failure`, and the engine aborts the merge with the slice still at `built` — the same delta the build phase already validated, re-checked so drift between build and merge cannot land.
+The preflight dispatch is fully deterministic: the adapter runs its compiled-in contract validator against the slice's staged delta (`.emery/slices/<slice>/contracts/`) and answers without a judgment leg. Blocking findings mean `status: failure`, and the engine aborts the merge with the slice still at `built` — the same delta the build phase already validated, re-checked so drift between build and merge cannot land.
 
 ## Postflight — merged-baseline validation
 
@@ -13,8 +13,8 @@ After the engine has promoted the slice's `contracts/` delta into root `contract
 The validator enforces the contract validation rules across every top-level OpenAPI 3.1 / AsyncAPI 3.0 document under `$PROJECT_ROOT/contracts`:
 
 - `contract.version-is-semver` — `info.version` parses as SemVer per [semver.org](https://semver.org).
-- `contract.id-format` — when `info.x-specify-id` is present, the value matches `^[a-z][a-z0-9-]*$` and is ≤ 64 characters.
-- `contract.id-unique` — every present `info.x-specify-id` is unique across the baseline.
+- `contract.id-format` — when `info.x-emery-id` is present, the value matches `^[a-z][a-z0-9-]*$` and is ≤ 64 characters.
+- `contract.id-unique` — every present `info.x-emery-id` is unique across the baseline.
 
 The JSON envelope is the canonical shape callers parse. Field reference (matches the verifier siblings' [`cross-project` mode](../references/openapi/verifier.md#cross-project-mode)):
 
@@ -38,7 +38,7 @@ The postflight gate intentionally validates the merged baseline, not the staged 
 
 ## Postflight repair leg
 
-When the postflight validator reports blocking findings, one bounded repair leg receives this prompt plus the findings: repair the merged `contracts/` baseline files in place (the collision-shaped fixes — usually an `x-specify-id` rename or a version correction), then answer with the corrected report body. The validator re-runs deterministically after the answer; residual findings force `status: failure`.
+When the postflight validator reports blocking findings, one bounded repair leg receives this prompt plus the findings: repair the merged `contracts/` baseline files in place (the collision-shaped fixes — usually an `x-emery-id` rename or a version correction), then answer with the corrected report body. The validator re-runs deterministically after the answer; residual findings force `status: failure`.
 
 ## Failure semantics
 
@@ -48,7 +48,7 @@ A blocking preflight finding aborts the merge before anything is promoted: the s
 
 When the slice's contributions need to flow into downstream consumer projects (per the registry's workspace clones), publish the prepared workspace branches **after** the postflight gate clears:
 
-1. `specify workspace push` — push the workspace clones' branches that already received the merged contract deltas.
+1. `emery workspace push` — push the workspace clones' branches that already received the merged contract deltas.
 2. Operator PR merge — review and merge those PRs through the forge UI, `gh pr merge`, or the team's normal merge queue.
 
-Pin updates that surface drift the merge cannot auto-resolve (e.g. a consumer's workspace clone has uncommitted local edits, a consumer project is offline, or `workspace push` reports `no-branch` because the clone is not on the prepared `specify/<change-name>` branch) require operator reconciliation and stay operator-owned.
+Pin updates that surface drift the merge cannot auto-resolve (e.g. a consumer's workspace clone has uncommitted local edits, a consumer project is offline, or `workspace push` reports `no-branch` because the clone is not on the prepared `emery/<change-name>` branch) require operator reconciliation and stay operator-owned.

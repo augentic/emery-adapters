@@ -171,7 +171,7 @@ if [ ! -f "$component" ]; then
   exit 1
 fi
 
-repository="augentic/specify-adapters/$name"
+repository="augentic/emery-adapters/$name"
 reference="ghcr.io/$repository:$version"
 
 # Manifest probe: 200 means the tag is already released — skip (do not

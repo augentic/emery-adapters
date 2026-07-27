@@ -41,7 +41,7 @@ The owner value is determined by the organization or tenant that owns the Omnia 
 
 ### Available Traits
 
-See the [Capability Selection Summary](../capabilities.md#capability-selection-summary) for the full list of traits and their Specify triggers. For trait definitions and method signatures, see [capabilities.md](../capabilities.md).
+See the [Capability Selection Summary](../capabilities.md#capability-selection-summary) for the full list of traits and their Emery triggers. For trait definitions and method signatures, see [capabilities.md](../capabilities.md).
 
 ### Marker Provider (Simple)
 

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.specify.dev/vectis/template-manifest.schema.json",
+  "$id": "https://schemas.emery.dev/vectis/template-manifest.schema.json",
   "title": "Vectis template manifest",
   "description": "Validates `templates/manifest.yaml`: the single source of truth for Vectis scaffold source-to-target mappings consumed by the vectis extension's `build.rs`.",
   "type": "object",

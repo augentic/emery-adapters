@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.specify.dev/vectis/tokens.schema.json",
-  "title": "Specify Tokens Artifact",
+  "$id": "https://schemas.emery.dev/vectis/tokens.schema.json",
+  "title": "Emery Tokens Artifact",
   "description": "Schema for tokens.yaml — design tokens consumed by shell writers.",
   "type": "object",
   "required": ["version"],

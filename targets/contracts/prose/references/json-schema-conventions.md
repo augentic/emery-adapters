@@ -13,13 +13,13 @@ Rules for JSON Schema files under `contracts/schemas/`. These schemas define the
 Every JSON Schema file **must** have a `$id` field. Use a URN-shaped identifier derived from the file path:
 
 ```yaml
-$id: "urn:specify:schemas/user-registration"
+$id: "urn:emery:schemas/user-registration"
 ```
 
 Rules:
 
-- **Prefix**: always `urn:specify:`.
-- **Path segment**: matches the file's path under `contracts/` without the `.yaml` extension. A schema at `contracts/schemas/user-registration.yaml` gets `$id: "urn:specify:schemas/user-registration"`.
+- **Prefix**: always `urn:emery:`.
+- **Path segment**: matches the file's path under `contracts/` without the `.yaml` extension. A schema at `contracts/schemas/user-registration.yaml` gets `$id: "urn:emery:schemas/user-registration"`.
 - **Stability**: `$id` values must not change once a schema is merged into the baseline. Renaming a schema requires a new `$id` and deprecation of the old one.
 - **Uniqueness**: each `$id` must be unique within the contract tree. The file-path derivation guarantees this when the one-type-per-file rule is followed.
 - **Tooling compatibility**: the URN format is a valid URI per RFC 8141 and works with standard JSON Schema tooling (`ajv`, `typify`, `json-schema-ref-parser`).
@@ -30,7 +30,7 @@ Every JSON Schema file **must** include these top-level fields:
 
 | Field | Rule | Example |
 |-------|------|---------|
-| `$id` | URN derived from file path (see above) | `"urn:specify:schemas/user-registration"` |
+| `$id` | URN derived from file path (see above) | `"urn:emery:schemas/user-registration"` |
 | `$schema` | Always `"https://json-schema.org/draft/2020-12/schema"` | — |
 | `title` | PascalCase type name matching the domain concept | `"UserRegistration"` |
 | `description` | From the spec's behavioral description of this type. Must describe what the type represents, not how it is used. | `"Payload for creating a new user account."` |
@@ -39,7 +39,7 @@ Every JSON Schema file **must** include these top-level fields:
 Example:
 
 ```yaml
-$id: "urn:specify:schemas/user-registration"
+$id: "urn:emery:schemas/user-registration"
 $schema: "https://json-schema.org/draft/2020-12/schema"
 title: UserRegistration
 description: Payload for creating a new user account.
@@ -89,7 +89,7 @@ Map spec scenario data to JSON Schema types using the following guidance:
 | Decimal numbers / money | `type: number` | Add `minimum`, `maximum` where appropriate |
 | Booleans | `type: boolean` | — |
 | Known value sets | `type: string`, `enum: [...]` | For status codes, categories, roles, etc. |
-| Ordered collections | `type: array`, `items: { ... }` | Specify `minItems`, `maxItems` where the spec constrains cardinality |
+| Ordered collections | `type: array`, `items: { ... }` | Emery `minItems`, `maxItems` where the spec constrains cardinality |
 | Nested structures | `type: object`, `properties: { ... }` | Extract to a separate schema file via `$ref` when reused |
 | Optional fields | Omit from `required` array | Do not use `type: ["string", "null"]` unless the spec explicitly distinguishes "absent" from "null" |
 | Binary / file content | `type: string`, `format: binary` | For base64-encoded payloads in JSON; prefer Blobstore for large files |
@@ -122,7 +122,7 @@ This draft is natively supported by OpenAPI 3.1 and is compatible with `ajv`, `t
 Error response schemas follow a standard structure:
 
 ```yaml
-$id: "urn:specify:schemas/error-response"
+$id: "urn:emery:schemas/error-response"
 $schema: "https://json-schema.org/draft/2020-12/schema"
 title: ErrorResponse
 description: Standard error response returned by all API endpoints on failure.

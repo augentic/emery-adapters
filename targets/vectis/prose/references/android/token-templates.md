@@ -133,7 +133,7 @@ Map each YAML color token to Material 3 `ColorScheme` parameters via
 
 ### Semantic name → `ColorScheme` parameter mapping
 
-YAML token IDs are kebab-case (per [`tokens.schema.json`](https://schemas.specify.dev/vectis/tokens.schema.json)). Kebab-case YAML
+YAML token IDs are kebab-case (per [`tokens.schema.json`](https://schemas.emery.dev/vectis/tokens.schema.json)). Kebab-case YAML
 keys whose camelCased form matches an M3 `ColorScheme` parameter map
 directly: `primary` → `primary`, `on-primary` → `onPrimary`,
 `primary-container` → `primaryContainer`,

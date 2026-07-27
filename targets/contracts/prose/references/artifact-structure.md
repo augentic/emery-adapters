@@ -4,7 +4,7 @@ Directory layout, naming conventions, and change-level delta rules for API contr
 
 ## Baseline Directory Layout
 
-Contract artifacts live at root `contracts/` — a platform-level directory outside `.specify/` so interface definitions are visible as ordinary repository artifacts:
+Contract artifacts live at root `contracts/` — a platform-level directory outside `.emery/` so interface definitions are visible as ordinary repository artifacts:
 
 ```text
 contracts/
@@ -44,7 +44,7 @@ Three platform concerns, three top-level locations:
 
 ## Naming Conventions
 
-All contract files use **kebab-case** names with `.yaml` extensions, consistent with Specify's naming conventions for spec files, change directories, and plan entries.
+All contract files use **kebab-case** names with `.yaml` extensions, consistent with Emery's naming conventions for spec files, change directories, and plan entries.
 
 | File Type | Named After | Examples |
 |-----------|------------|----------|
@@ -59,7 +59,7 @@ One type per schema file. A single binding file may contain multiple related end
 During a slice's define phase, proposed contract modifications live in the slice directory:
 
 ```text
-.specify/slices/add-oauth/
+.emery/slices/add-oauth/
 ├── contracts/
 │   ├── schemas/
 │   │   └── oauth-token.yaml        # New type
@@ -82,7 +82,7 @@ During a slice's define phase, proposed contract modifications live in the slice
 
 ### Merge Semantics
 
-When `specify slice merge run` processes a slice:
+When `emery slice merge run` processes a slice:
 
 - Files in the slice's `contracts/` are copied into root `contracts/`, replacing files at the same path.
 - Files absent from the slice's `contracts/` are left untouched in the baseline.
@@ -90,13 +90,13 @@ When `specify slice merge run` processes a slice:
 
 ### Conflict Detection
 
-Two concurrent changes that both modify the same contract file (e.g. both add paths to `http/user-api.yaml`) will conflict. `specify slice merge conflict-check` detects this: if the baseline file was modified after the slice's `defined-at` timestamp, the merge is blocked. Resolution: re-run the slice's define phase against the updated baseline.
+Two concurrent changes that both modify the same contract file (e.g. both add paths to `http/user-api.yaml`) will conflict. `emery slice merge conflict-check` detects this: if the baseline file was modified after the slice's `defined-at` timestamp, the merge is blocked. Resolution: re-run the slice's define phase against the updated baseline.
 
 ## Baseline vs Change-Level
 
 | Aspect | Baseline | Change-Level |
 |--------|----------|-------------|
-| Location | `contracts/` | `.specify/slices/<name>/contracts/` |
+| Location | `contracts/` | `.emery/slices/<name>/contracts/` |
 | Scope | Full platform contract surface | Only files this slice adds or replaces |
 | Lifetime | Persists across changes | Exists during the slice lifecycle, merged or dropped |
 | Authority | Source of truth for the current contract state | Proposed modification, pending review and merge |
@@ -105,7 +105,7 @@ The baseline is what the writer validates specs against. The slice-level delta i
 
 ## Multi-Repo Distribution
 
-In multi-repo initiatives, contracts live in the initiating repo's root `contracts/` directory. Distribution to project clones uses the workspace infrastructure: `specify workspace sync` materialises root `contracts/` into each project clone automatically as part of the multi-repo plan-time sync.
+In multi-repo initiatives, contracts live in the initiating repo's root `contracts/` directory. Distribution to project clones uses the workspace infrastructure: `emery workspace sync` materialises root `contracts/` into each project clone automatically as part of the multi-repo plan-time sync.
 
 Phase skills always read from root `contracts/` relative to their working directory — they do not need to know whether contracts were authored locally or materialised from a central source.
 
@@ -114,7 +114,7 @@ Phase skills always read from root `contracts/` relative to their working direct
 Self-review before the deterministic validator gate runs:
 
 - Every JSON Schema file has `$id`, `title`, and `description`
-- `$id` values use the `urn:specify:schemas/<name>` format
+- `$id` values use the `urn:emery:schemas/<name>` format
 - One type per schema file
 - All `$ref` pointers in OpenAPI and AsyncAPI files resolve to existing schema files
 - Request/response schemas in OpenAPI bindings use `$ref` to `../schemas/`, not inline definitions

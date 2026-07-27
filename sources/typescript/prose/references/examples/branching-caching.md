@@ -11,7 +11,7 @@ extract ./src/data-service.ts $SLICE_DIR
 ```
 
 - **TypeScript Source**: `./src/data-service.ts`
-- **Specify Output**: `$SLICE_DIR` (specs/ + design.md)
+- **Emery Output**: `$SLICE_DIR` (specs/ + design.md)
 
 ## TypeScript Source Code
 
@@ -67,7 +67,7 @@ export async function validateAndProcess(data: InputData): Promise<Result> {
 }
 ```
 
-## Generated Specify Artifacts
+## Generated Emery Artifacts
 
 ```markdown
 ### Component

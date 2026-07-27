@@ -2,13 +2,13 @@
 
 These instructions extend the repository root [`AGENTS.md`](../../AGENTS.md) for all work under `targets/vectis/`.
 
-Vectis is a Specify **target adapter**. Its `guidance`, `build`, and `merge` operations generate Crux shared cores, SwiftUI iOS shells, and Kotlin/Jetpack Compose Android shells from synthesised Specify artifacts plus operator-curated design-system inputs.
+Vectis is a Emery **target adapter**. Its `guidance`, `build`, and `merge` operations generate Crux shared cores, SwiftUI iOS shells, and Kotlin/Jetpack Compose Android shells from synthesised Emery artifacts plus operator-curated design-system inputs.
 
 ## Ownership boundaries
 
 - `spec.md` stays behavioral and platform-neutral. `design.md` carries the Crux type system and platform design.
 - `tokens.yaml` and `assets.yaml` are operator-curated build inputs; Vectis consumes them but never synthesises them.
-- `composition.yaml` is a target build output. Regenerate it from `spec.md` and `design.md`; do not treat it as a Specify synthesis artifact.
+- `composition.yaml` is a target build output. Regenerate it from `spec.md` and `design.md`; do not treat it as a Emery synthesis artifact.
 - The `screenshots` source adapter owns image-to-layout Evidence. Vectis consumes spatial claims only after synthesis folds them into the canonical artifacts.
 - Scaffold templates, schemas, materializers, validators, and version pins are adapter tooling. Consumer build prompts must stop and report tooling drift rather than patch this repository in-band.
 
@@ -78,4 +78,4 @@ For component-boundary changes, also run `cargo make wasm-run`. Live tests are r
 - [`prose/prompts/build.md`](prose/prompts/build.md)
 - [`prose/prompts/merge.md`](prose/prompts/merge.md)
 - [`prose/references/README.md`](prose/references/README.md)
-- [Specify artifact responsibilities](https://github.com/augentic/specify/blob/main/docs/explanation/artifacts.md)
+- [Emery artifact responsibilities](https://github.com/augentic/emery/blob/main/docs/explanation/artifacts.md)

@@ -7,7 +7,7 @@ name: Create Patch
 #
 # Same shape as the shared augentic/.github patch.yaml, composed locally
 # from its actions because the version bump runs `cargo generate-lockfile`,
-# which must resolve the private augentic/specify git dependencies.
+# which must resolve the private augentic/emery git dependencies.
 
 on:
   workflow_dispatch:
@@ -41,7 +41,7 @@ jobs:
       - uses: actions/checkout@v6
 
       # The version bump regenerates the lockfile, which resolves the
-      # private augentic/specify git dependencies.
+      # private augentic/emery git dependencies.
       - name: Private Git access
         id: git-token
         uses: actions/create-github-app-token@v3
@@ -49,7 +49,7 @@ jobs:
           client-id: ${{ vars.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: augentic
-          repositories: specify
+          repositories: emery
           permission-contents: read
 
       - name: Authenticate Cargo git deps
@@ -57,8 +57,8 @@ jobs:
           TOKEN: ${{ steps.git-token.outputs.token }}
         run: |
           git config --global \
-            url."https://x-access-token:${TOKEN}@github.com/augentic/specify".insteadOf \
-            "https://github.com/augentic/specify"
+            url."https://x-access-token:${TOKEN}@github.com/augentic/emery".insteadOf \
+            "https://github.com/augentic/emery"
 
       - name: Set git identity
         uses: augentic/.github/.github/actions/git-identity@main

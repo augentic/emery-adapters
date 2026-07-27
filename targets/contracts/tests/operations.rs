@@ -78,7 +78,7 @@ async fn build_sub_flows() {
     assert!(system.contains("json-schema sub-flow"), "sub-prompt in system");
     let user = &first.messages[0].content;
     assert!(user.contains("PROPOSAL-BODY") && user.contains("DESIGN-BODY"), "typed inputs");
-    assert!(user.contains(".specify/slices/demo/contracts"), "slice delta dir named");
+    assert!(user.contains(".emery/slices/demo/contracts"), "slice delta dir named");
     let (name, schema) = schema_format(first);
     assert_eq!(name, "json-schema-sub-flow");
     let compiled = serde_json::from_str::<serde_json::Value>(schema).unwrap();
@@ -96,7 +96,7 @@ async fn build_sub_flows() {
 #[tokio::test]
 async fn build_repair_bounded() {
     let tmp = TempDir::new().unwrap();
-    seed_bad_contract(&tmp.path().join(".specify/slices/demo/contracts"));
+    seed_bad_contract(&tmp.path().join(".emery/slices/demo/contracts"));
     let model = Harness::answering([
         NOT_APPLICABLE,
         NOT_APPLICABLE,
@@ -144,7 +144,7 @@ async fn merge_preflight_deterministic() {
     assert!(model.requests().is_empty(), "preflight is deterministic: no leg");
 
     // A broken staged delta parks the merge before the engine promotes it.
-    seed_bad_contract(&tmp.path().join(".specify/slices/demo/contracts"));
+    seed_bad_contract(&tmp.path().join(".emery/slices/demo/contracts"));
     let report =
         Adapter::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
             .await

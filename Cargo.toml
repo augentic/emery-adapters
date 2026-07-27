@@ -7,7 +7,7 @@ authors = ["Augentic"]
 edition = "2024"
 homepage = "https://augentic.io"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/augentic/specify-adapters"
+repository = "https://github.com/augentic/emery-adapters"
 rust-version = "1.97"
 version = "0.6.0"
 publish = false
@@ -32,10 +32,10 @@ usvg = { version = "0.47", default-features = false }
 omnia-guest = "0.35.0"
 omnia-testkit = "0.35.0"
 
-adapter = { git = "https://github.com/augentic/specify.git" }
-native = { git = "https://github.com/augentic/specify.git" }
-probe = { git = "https://github.com/augentic/specify.git" }
-prose = { git = "https://github.com/augentic/specify.git" }
+adapter = { git = "https://github.com/augentic/emery.git" }
+native = { git = "https://github.com/augentic/emery.git" }
+probe = { git = "https://github.com/augentic/emery.git" }
+prose = { git = "https://github.com/augentic/emery.git" }
 
 captures = { path = "sources/captures" }
 contracts = { path = "targets/contracts" }
@@ -58,11 +58,11 @@ omnia-wasi-otel = { git = "https://github.com/augentic/omnia.git" }
 wrpc-transport = { git = "https://github.com/bytecodealliance/wrpc" }
 wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }
 
-# [patch."https://github.com/augentic/specify.git"]
-# adapter = { path = "../specify/crates/adapter" }
-# probe = { path = "../specify/crates/probe" }
-# native = { path = "../specify/crates/native" }
-# prose = { path = "../specify/crates/prose" }
+# [patch."https://github.com/augentic/emery.git"]
+# adapter = { path = "../emery/crates/adapter" }
+# probe = { path = "../emery/crates/probe" }
+# native = { path = "../emery/crates/native" }
+# prose = { path = "../emery/crates/prose" }
 
 [workspace.lints.rust]
 # https://dirname.github.io/rust-std-doc/rustc/lints/listing/allowed-by-default.html

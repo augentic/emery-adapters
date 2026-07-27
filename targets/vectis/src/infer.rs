@@ -20,7 +20,7 @@ pub const DEFAULT_MIN_OCCURRENCES: u32 = 2;
 /// Inputs for one inference run.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InferArgs {
-    /// Composition baseline to cluster (`.specify/specs/composition.yaml`).
+    /// Composition baseline to cluster (`.emery/specs/composition.yaml`).
     pub composition: PathBuf,
 
     /// Candidate-cache directory: screenshot stage-6 candidate

@@ -1,4 +1,4 @@
-//! Resolve targeted shell platforms from `.specify/project.yaml`.
+//! Resolve targeted shell platforms from `.emery/project.yaml`.
 
 use std::path::Path;
 
@@ -8,7 +8,7 @@ const ASSET_SHELL_PLATFORMS: &[&str] = &["ios", "android"];
 
 /// Load `ios` / `android` entries declared in `project.yaml.platforms`.
 pub fn load_shell_platforms(project_root: &Path) -> Vec<String> {
-    let config_path = project_root.join(".specify").join("project.yaml");
+    let config_path = project_root.join(".emery").join("project.yaml");
     let Ok(source) = std::fs::read_to_string(&config_path) else {
         return fallback_platforms();
     };

@@ -1,6 +1,6 @@
 # Spec-to-Test Mapping (Vectis / Crux)
 
-Vectis-specific deltas on top of the shared [spec-to-test mapping discipline](spec-runtime/spec-to-test-mapping.md). The shared base owns the target-neutral rules: scenario → one test function, the `test_<unit_snake>_<scenario_snake>` naming convention, REQ-ID traceability comments, requirement coverage (N scenarios → N tests), and drift-detection mechanics. This file carries only what is specific to a Crux shared crate.
+Vectis-specific deltas on top of the shared [spec-to-test mapping discipline](emery-runtime/spec-to-test-mapping.md). The shared base owns the target-neutral rules: scenario → one test function, the `test_<unit_snake>_<scenario_snake>` naming convention, REQ-ID traceability comments, requirement coverage (N scenarios → N tests), and drift-detection mechanics. This file carries only what is specific to a Crux shared crate.
 
 ## Test location and attribute
 
@@ -166,4 +166,4 @@ fn test_<unit_snake>_retry_from_error_page() {
 
 ## Drift detection (Vectis specifics)
 
-The drift-detection mechanics live in the [shared base](spec-runtime/spec-to-test-mapping.md#drift-detection-mechanics). For Vectis, the test side of the comparison parses `#[test]` functions with `/// Spec:` comments from `app.rs`; assertion-drift comparison focuses on page states, view fields, and effect types.
+The drift-detection mechanics live in the [shared base](emery-runtime/spec-to-test-mapping.md#drift-detection-mechanics). For Vectis, the test side of the comparison parses `#[test]` functions with `/// Spec:` comments from `app.rs`; assertion-drift comparison focuses on page states, view fields, and effect types.

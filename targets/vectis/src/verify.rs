@@ -62,14 +62,14 @@ pub fn verify_exit_code(value: &Value) -> u8 {
     u8::from(has_findings)
 }
 
-/// Load the declared `platforms:` list from `.specify/project.yaml`.
+/// Load the declared `platforms:` list from `.emery/project.yaml`.
 ///
 /// # Errors
 /// Returns [`VectisError::InvalidProject`] when the file is missing,
 pub fn load_platforms(project_root: &Path) -> Result<Vec<String>, VectisError> {
-    // The host CLI owns the project config at `.specify/project.yaml`;
-    // there is no root-level `project.yaml` in a Specify project.
-    let config_path = project_root.join(".specify").join("project.yaml");
+    // The host CLI owns the project config at `.emery/project.yaml`;
+    // there is no root-level `project.yaml` in a Emery project.
+    let config_path = project_root.join(".emery").join("project.yaml");
     let source =
         std::fs::read_to_string(&config_path).map_err(|err| VectisError::InvalidProject {
             message: format!("project.yaml not readable at {}: {err}", config_path.display()),

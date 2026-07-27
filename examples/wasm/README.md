@@ -1,8 +1,8 @@
 # Wasm Example
 
-End-to-end run of the Specify change workflow over the real WASM component seam: the shipped `specify` binary from the sibling `augentic/specify` checkout (embedded engine guest) plus this repo's `documentation`, `intent`, and `contracts` adapter components.
+End-to-end run of the Emery change workflow over the real WASM component seam: the shipped `emery` binary from the sibling `augentic/emery` checkout (embedded engine guest) plus this repo's `documentation`, `intent`, and `contracts` adapter components.
 
-There is no `omnia.toml`: the example invokes the built binary directly. The run script sandboxes the layout with `SPECIFY_HOME`, seeds the adapters via `specify adapter add`, and initializes the project by bare target name. Fixture inputs live under [fixture/](fixture/) (shared with the graded `orders-contracts` eval case).
+There is no `omnia.toml`: the example invokes the built binary directly. The run script sandboxes the layout with `EMERY_HOME`, seeds the adapters via `emery adapter add`, and initializes the project by bare target name. Fixture inputs live under [fixture/](fixture/) (shared with the graded `orders-contracts` eval case).
 
 See the [repo README](../../README.md) for the graded native eval-case repair loop; [docs/testing.md](../../docs/testing.md) for the five-rung map.
 
@@ -16,7 +16,7 @@ agent login
 
 or set `CURSOR_API_KEY` in `.env`.
 
-Requires the sibling [`augentic/specify`](https://github.com/augentic/specify) checkout at `../specify` (the example builds and drives that repo's shipped `specify` binary).
+Requires the sibling [`augentic/emery`](https://github.com/augentic/emery) checkout at `../emery` (the example builds and drives that repo's shipped `emery` binary).
 
 Run the example:
 
@@ -38,7 +38,7 @@ Artifacts land under the gitignored `sandbox/wasm/` — the project tree at `san
 
 1. Every command runs in the embedded engine guest; bound adapters fault in by routed id through the fail-closed resolver (`source:documentation`, `target:contracts`).
 2. The documentation source surveys the fixture under `docs/` and extracts requirements.
-3. Specify reconciles them and drives refine → build → merge.
+3. Emery reconciles them and drives refine → build → merge.
 4. The contracts target builds and merges the API contract surface.
 
 After running, inspect the generated result at:

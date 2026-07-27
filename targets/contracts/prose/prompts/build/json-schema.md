@@ -21,7 +21,7 @@ contracts/
 └── schemas/
     └── <type>.yaml                 # Baseline: merged schemas only
 
-.specify/slices/<slice-name>/
+.emery/slices/<slice-name>/
 └── contracts/
     └── schemas/
         └── <type>.yaml             # Slice-local delta or normalised import
@@ -32,14 +32,14 @@ Conventions enforced for every schema file in either location:
 - **JSON Schema Draft 2020-12** — never older drafts. The importer upgrades draft-04, draft-06, draft-07, and draft 2019-09 inputs. See [`../../references/json-schema-conventions.md`](../../references/json-schema-conventions.md).
 - **One type per file** — each `.yaml` defines exactly one top-level named type. Shared sub-types extracted to their own files; file-local sub-types may live under `$defs`.
 - **Kebab-case `.yaml` filename** — the filename is the kebab-case form of the PascalCase type name (`UserRegistration` → `user-registration.yaml`). The filename is canonical: `$id` and `title` derive from it.
-- **URN `$id`** — every schema declares `$id: "urn:specify:schemas/<filename-without-extension>"`. `$id` is stable for the schema's lifetime; renaming requires a new file with a new `$id` and explicit deprecation of the old one.
+- **URN `$id`** — every schema declares `$id: "urn:emery:schemas/<filename-without-extension>"`. `$id` is stable for the schema's lifetime; renaming requires a new file with a new `$id` and explicit deprecation of the old one.
 - **Opaque file replacement** — the slice-level `contracts/schemas/<type>.yaml` replaces the baseline file wholesale at merge time. Schema deltas are by file, not by property.
 
 ## Intent dispatch
 
 | Intent | Trigger | Sibling |
 |---|---|---|
-| Author or extend reusable schemas from a spec | build prompt during `/spec:build`; operator extending the baseline for new payload types | [`../../references/json-schema/author.md`](../../references/json-schema/author.md) |
+| Author or extend reusable schemas from a spec | build prompt during `/emery:build`; operator extending the baseline for new payload types | [`../../references/json-schema/author.md`](../../references/json-schema/author.md) |
 | Import or normalise external schema files | operator drops schema files into a slice's `contracts/schemas/` directory | [`../../references/json-schema/importer.md`](../../references/json-schema/importer.md) |
 | Verify `$ref` consistency, metadata, cross-format consumer compatibility, or merge-time baseline validation | build verification; post-merge contract baseline gate | [`../../references/json-schema/verifier.md`](../../references/json-schema/verifier.md) |
 

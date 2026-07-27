@@ -1,6 +1,6 @@
 [package]
 name = "eval"
-description = "Native first-party catalog composition: specify passthrough and live eval"
+description = "Native first-party catalog composition: emery passthrough and live eval"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

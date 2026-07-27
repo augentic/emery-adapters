@@ -38,14 +38,14 @@ struct Case {
     detail_contains: Vec<&'static str>,
 }
 
-/// `OpenAPI` doc carrying `version` and no `x-specify-id`.
+/// `OpenAPI` doc carrying `version` and no `x-emery-id`.
 fn body_version(version: &str) -> String {
     format!("openapi: '3.1.0'\ninfo:\n  title: User API\n  version: {version}\n")
 }
 
 /// `OpenAPI` doc carrying a valid SemVer `version` and the given id.
 fn body_id(id: &str) -> String {
-    format!("openapi: '3.1.0'\ninfo:\n  title: User API\n  version: 1.0.0\n  x-specify-id: {id}\n")
+    format!("openapi: '3.1.0'\ninfo:\n  title: User API\n  version: 1.0.0\n  x-emery-id: {id}\n")
 }
 
 fn check(case: &Case) {
@@ -188,7 +188,7 @@ fn skip_and_directory_matrix() {
             create_dir: true,
             files: vec![(
                 "schemas/user.yaml",
-                "$id: urn:specify:schemas/user\ntitle: User\ndescription: A user.\ntype: object\n"
+                "$id: urn:emery:schemas/user\ntitle: User\ndescription: A user.\ntype: object\n"
                     .to_string(),
             )],
             expect: vec![],
@@ -226,12 +226,12 @@ fn duplicate_ids_fail_both() {
     write_contract(
         &tmp,
         "http/user-api.yaml",
-        "openapi: '3.1.0'\ninfo:\n  title: User API\n  version: 1.0.0\n  x-specify-id: shared\n",
+        "openapi: '3.1.0'\ninfo:\n  title: User API\n  version: 1.0.0\n  x-emery-id: shared\n",
     );
     write_contract(
         &tmp,
         "http/billing-api.yaml",
-        "openapi: '3.1.0'\ninfo:\n  title: Billing API\n  version: 1.0.0\n  x-specify-id: shared\n",
+        "openapi: '3.1.0'\ninfo:\n  title: Billing API\n  version: 1.0.0\n  x-emery-id: shared\n",
     );
     let findings = validate_baseline(&contracts_dir(&tmp));
     assert_eq!(findings.len(), 2);

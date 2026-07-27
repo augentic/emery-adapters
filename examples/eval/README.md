@@ -1,16 +1,12 @@
 # Prompt evaluation
 
-Live-model eval cases for first-party adapters, over real `specify` verbs and deterministic grading (not a model). Day-to-day repair loop: [repo README](../../README.md).
-
+Live-model eval cases for first-party adapters, over real `emery` verbs and deterministic grading (not a model). Day-to-day repair loop: [repo README](../../README.md).
 
 | Reach for a build case when…                           | Prefer a workflow case when…                          |
 | ------------------------------------------------------ | ----------------------------------------------------- |
 | You changed adapter prose                              | You need survey → extract → synthesis → build → merge |
 | You have a committed refined slice fixture             | Sources are real trees (docs, TypeScript, …)          |
 | You care about one build's report + `expect` artifacts | You care about plan lifecycle and the merged baseline |
-
-
-
 
 ## Quick start
 
@@ -23,13 +19,11 @@ cargo make eval omnia-r9k --restart
 cargo make eval contracts-design --restart
 ```
 
-
-
 ### Eval sandbox
 
 Each case owns its own sandbox at `sandbox/<case>/` which allows for review and continued runs without having to re-run the entire workflow.
 
- Build reports (`.specify/slices/<slice>/build/report.yaml`) are available for review on build success. To correct input or output, edit the adapter prose and re-run the case using `--restart`.
+ Build reports (`.emery/slices/<slice>/build/report.yaml`) are available for review on build success. To correct input or output, edit the adapter prose and re-run the case using `--restart`.
 
 Continue or debug a run explicitly using the CLI:
 
@@ -37,8 +31,6 @@ Continue or debug a run explicitly using the CLI:
 cargo make lab -- --project-dir sandbox/orders-contracts plan approve
 cargo make lab -- --project-dir sandbox/orders-contracts plan execute
 ```
-
-
 
 ## Catalog
 
@@ -52,9 +44,6 @@ cargo make lab -- --project-dir sandbox/orders-contracts plan execute
 | `orders-contracts`     | workflow | docs → contracts (`[examples/wasm/fixture](../wasm/fixture/)`) |
 | `omnia-r9k`            | workflow | `at_r9k_position_adapter` → omnia (cloned on first run)        |
 
-
-
-
 ## Continuing a run
 
 Each case owns one stable retained sandbox at the repository-root `sandbox/<id>/` (composition-owned; beside the wasm example's `sandbox/wasm/`), kept on success and failure alike. `--restart` is the only runner-owned reset; an existing sandbox without it refuses before mutation. The runner never infers workflow progress — continue or debug a retained sandbox explicitly through the native verbs:
@@ -63,8 +52,6 @@ Each case owns one stable retained sandbox at the repository-root `sandbox/<id>/
 cargo make lab -- --project-dir sandbox/orders-contracts plan approve
 cargo make lab -- --project-dir sandbox/orders-contracts plan execute
 ```
-
-
 
 ## Manual native verbs
 
@@ -92,7 +79,7 @@ Hard assertions only (the shared `probe` case runner):
 | workflow (execute) | Lifecycle  | Every plan entry is `done`                                     |
 | workflow (execute) | Provenance | Every evidenced requirement carries sources; ids are present   |
 | build              | Lifecycle  | Slice metadata is `built`                                      |
-| build              | Report     | `.specify/slices/<slice>/build/report.yaml` exists             |
+| build              | Report     | `.emery/slices/<slice>/build/report.yaml` exists             |
 | build              | Artifacts  | Every `expect` path holds a file inside the sandbox            |
 
 
@@ -121,7 +108,7 @@ source trees that cannot ship as committed fixtures, e.g. the
 `.gitignore` in the case directory. Refresh the snapshot by deleting
 the cached tree.
 
-- `build` — `slice` + `expect`: the fixture carries the exact refined state `specify slice build` consumes (`.specify/project.yaml`, the slice's `metadata.yaml` at `status: refined`, proposal / design / tasks / specs, and any source material such as `vendor/`). The runner invokes `slice build <slice>` once and gates on `built` metadata, the authoritative `build/report.yaml`, and every confined `expect` path.
+- `build` — `slice` + `expect`: the fixture carries the exact refined state `emery slice build` consumes (`.emery/project.yaml`, the slice's `metadata.yaml` at `status: refined`, proposal / design / tasks / specs, and any source material such as `vendor/`). The runner invokes `slice build <slice>` once and gates on `built` metadata, the authoritative `build/report.yaml`, and every confined `expect` path.
 - `workflow` — `target` + `change` + `intent` / `[sources]`: init, `plan author`, then (past `--until plan`) `plan approve` and the genuine drained `plan execute`; `--until finalize` adds `plan archive`. Gates: a non-empty pending plan at Gate 1, every entry `done` after execute, then provenance grading.
 
 Linked adapters need only the directory. A third-party adapter also needs a Cargo dep on `eval` and a catalog line in `[src/main.rs](src/main.rs)`.
@@ -142,5 +129,5 @@ Pass/fail from grading is lifecycle + provenance; for migration quality, treat t
 
 - [docs/testing.md](../../docs/testing.md) — five-rung map
 - [examples/wasm/](../wasm/README.md) — same rhythm over the real WASM component seam
-- Engine case-runner mechanics: `[crates/probe/README.md](https://github.com/augentic/specify/blob/main/crates/probe/README.md)`
+- Engine case-runner mechanics: `[crates/probe/README.md](https://github.com/augentic/emery/blob/main/crates/probe/README.md)`
 

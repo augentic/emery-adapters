@@ -45,12 +45,12 @@ fn embed_floor() {
     assert!(total >= 700 * 1024, "expected >= 700 KiB of embedded prose, got {total} bytes");
 }
 
-/// The `references/spec-runtime` symlink into `codex/references/runtime/`
+/// The `references/emery-runtime` symlink into `codex/references/runtime/`
 /// is resolved at build time: documents appear under their symlink-name
 /// paths with the shared content inlined.
 #[test]
 fn symlinks_resolved_inline() {
-    let doc = find(Adapter::docs(), "references/spec-runtime/phase-outcome-contract.md")
+    let doc = find(Adapter::docs(), "references/emery-runtime/phase-outcome-contract.md")
         .expect("symlinked runtime reference is embedded");
     assert!(!doc.body.is_empty(), "resolved symlink content is inlined");
 }

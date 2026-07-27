@@ -10,7 +10,7 @@ The verifier accepts a `--mode {single, cross-project}` flag. The mode determine
 
 | Mode               | Caller                                         | Trigger                                                   | Scope                                                                                                           | Output                                                |
 | ------------------ | ---------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `single` (default) | contracts adapter build prompt in `/spec:build` | Post-author or post-import                                | One slice's `contracts/schemas/` inside one project, plus the slice's and baseline's HTTP / messaging consumers | Markdown report for the verify-repair loop            |
+| `single` (default) | contracts adapter build prompt in `/emery:build` | Post-author or post-import                                | One slice's `contracts/schemas/` inside one project, plus the slice's and baseline's HTTP / messaging consumers | Markdown report for the verify-repair loop            |
 | `cross-project`    | contracts adapter merge prompt                 | Producer-side merge of a contract change touching schemas | Walk the merged `contracts/` baseline; enforce contract identity/version validation                                               | Deterministic findings from the adapter's in-guest contract validator |
 
 `single` mode feeds the build's verify-repair loop and is the natural exit point for both author and importer runs. `cross-project` mode describes the adapter's deterministic in-guest contract validator — the merge gate runs it itself and surfaces its findings; the verifier does not implement its own cross-baseline check. Both modes share the read-only contract.
@@ -26,7 +26,7 @@ Note: the in-guest contract validator walks **top-level OpenAPI 3.1 / AsyncAPI 3
 Inferred from the active slice context — no positional arguments required:
 
 ```text
-$SLICE_DIR          = .specify/slices/<slice-name>
+$SLICE_DIR          = .emery/slices/<slice-name>
 $CHANGE_CONTRACTS    = $SLICE_DIR/contracts/
 $CHANGE_SCHEMAS      = $CHANGE_CONTRACTS/schemas/
 $BASELINE_CONTRACTS  = contracts/
@@ -39,7 +39,7 @@ $CHANGE_SPECS        = $SLICE_DIR/specs/
 Caller passes the merged baseline directory:
 
 ```text
-$BASELINE_CONTRACTS = $PROJECT_ROOT/contracts   # the merged baseline, post-`specify slice merge`
+$BASELINE_CONTRACTS = $PROJECT_ROOT/contracts   # the merged baseline, post-`emery slice merge`
 ```
 
 The adapter's in-guest contract validator walks every top-level OpenAPI 3.1 / AsyncAPI 3.0 document under `$BASELINE_CONTRACTS` and enforces the contract identity/version validation rules. Standalone schemas under `$BASELINE_CONTRACTS/schemas/` are not validated by the tool — they are payload vocabulary, not top-level contracts (the top-level contract filter + §Non-goals). Schema-side issues are caught earlier, in `single` mode, during the build verify-repair loop.
@@ -49,7 +49,7 @@ The adapter's in-guest contract validator walks every top-level OpenAPI 3.1 / As
 ### `single` mode
 
 - The author or importer sibling has completed and produced artefacts under `$CHANGE_SCHEMAS`.
-- `.specify/project.yaml` exists (Specify is initialised).
+- `.emery/project.yaml` exists (Emery is initialised).
 
 If `$CHANGE_SCHEMAS` does not exist or contains no files, report all checks as passed — there is nothing to verify.
 
@@ -92,7 +92,7 @@ Every JSON Schema file in `$CHANGE_SCHEMAS` must have the required metadata fiel
 | Field         | Rule                                                                                                                                                                                 |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `$schema`     | Present and equal to `"https://json-schema.org/draft/2020-12/schema"`. Older drafts emit `WARN` (importer should have upgraded).                                                     |
-| `$id`         | Present, well-formed URN of the shape `urn:specify:schemas/<segment>` where `<segment>` matches the kebab-case filename.                                                             |
+| `$id`         | Present, well-formed URN of the shape `urn:emery:schemas/<segment>` where `<segment>` matches the kebab-case filename.                                                             |
 | `title`       | Present, non-empty, PascalCase, and corresponds to the filename (kebab-case → PascalCase round-trips).                                                                               |
 | `description` | Present, non-empty. The placeholder `"[imported — description pending review]"` counts as present but **emits a `WARN`** to surface the gap for the verify-repair loop before merge. |
 | `type`        | Present (almost always `object`; primitives are rare).                                                                                                                               |
@@ -102,7 +102,7 @@ Report format (one entry per failure):
 ```
 FAIL: contracts/schemas/user-registration.yaml — missing required field "$id"
 FAIL: contracts/schemas/error-response.yaml — "description" is empty
-FAIL: contracts/schemas/user.yaml — "$id" is "urn:example:user"; expected "urn:specify:schemas/user"
+FAIL: contracts/schemas/user.yaml — "$id" is "urn:example:user"; expected "urn:emery:schemas/user"
 FAIL: contracts/schemas/order.yaml — "title" is "order"; expected PascalCase ("Order")
 WARN: contracts/schemas/payment.yaml — "$schema" is Draft 7; expected Draft 2020-12 (importer normalisation needed)
 WARN: contracts/schemas/oauth-token.yaml — "description" is "[imported — description pending review]"; replace before merge
@@ -127,9 +127,9 @@ Algorithm:
 Report format:
 
 ```
-FAIL: contracts/schemas/user-billing.yaml and contracts/schemas/user-platform.yaml share $id "urn:specify:schemas/user-billing"
-FAIL: contracts/schemas/oauth-token.yaml shares $id "urn:specify:schemas/auth-token" with contracts/schemas/auth-token.yaml (filenames differ; $id reassignment is forbidden)
-INFO: contracts/schemas/user.yaml replaces contracts/schemas/user.yaml at merge ($id "urn:specify:schemas/user"); shape diff documented in alignment report
+FAIL: contracts/schemas/user-billing.yaml and contracts/schemas/user-platform.yaml share $id "urn:emery:schemas/user-billing"
+FAIL: contracts/schemas/oauth-token.yaml shares $id "urn:emery:schemas/auth-token" with contracts/schemas/auth-token.yaml (filenames differ; $id reassignment is forbidden)
+INFO: contracts/schemas/user.yaml replaces contracts/schemas/user.yaml at merge ($id "urn:emery:schemas/user"); shape diff documented in alignment report
 ```
 
 ### Check 4 — Cross-format consumer compatibility
@@ -223,13 +223,13 @@ All checks passed (19 $ref pointers, 7 schemas, 0 $id collisions, 0 backwards-in
 
 ## Cross-project mode
 
-`cross-project` mode runs **after** a producer's contract change merges. The contracts adapter merge prompt invokes it as the post-merge baseline gate (the contracts adapter merge contract); `specify plan execute` re-uses the same gate per project after a producer-side merge (the workspace execution contract).
+`cross-project` mode runs **after** a producer's contract change merges. The contracts adapter merge prompt invokes it as the post-merge baseline gate (the contracts adapter merge contract); `emery plan execute` re-uses the same gate per project after a producer-side merge (the workspace execution contract).
 
 The mode describes the adapter's deterministic in-guest contract validator. The verifier sibling does not implement an independent cross-project algorithm — the merge gate runs the embedded validator and consumes its findings directly. The deterministic checks the validator enforces are the contract identity/version validation rules over the merged baseline's top-level OpenAPI / AsyncAPI documents:
 
 - `contract.version-is-semver` — every top-level document's `info.version` parses as SemVer (per [semver.org](https://semver.org), prerelease labels included).
-- `contract.id-format` — when `info.x-specify-id` is present, the value matches `^[a-z][a-z0-9-]*$` and is ≤ 64 characters.
-- `contract.id-unique` — every present `info.x-specify-id` is unique across all top-level contracts under `$BASELINE_CONTRACTS`.
+- `contract.id-format` — when `info.x-emery-id` is present, the value matches `^[a-z][a-z0-9-]*$` and is ≤ 64 characters.
+- `contract.id-unique` — every present `info.x-emery-id` is unique across all top-level contracts under `$BASELINE_CONTRACTS`.
 
 Standalone JSON Schemas under `$BASELINE_CONTRACTS/schemas/` are payload vocabulary and are skipped by the binary's `openapi:` / `asyncapi:` filter. The schema-side cross-format consumer compatibility check (single-mode Check 4) catches breakage before the merge phase; the binary's role at merge time is the deterministic top-level-contract gate.
 
@@ -250,7 +250,7 @@ The validator findings project into a JSON envelope (the shape captured in logs 
   "ok": false,
   "findings": [
     { "path": "contracts/http/user-api.yaml", "rule-id": "contract.version-is-semver", "detail": "info.version `2024-01-15` is not valid SemVer (must parse per semver.org, including optional prerelease labels)" },
-    { "path": "contracts/messages/billing-events.yaml", "rule-id": "contract.id-unique", "detail": "info.x-specify-id `shared` also appears in contracts/http/legacy-api.yaml" }
+    { "path": "contracts/messages/billing-events.yaml", "rule-id": "contract.id-unique", "detail": "info.x-emery-id `shared` also appears in contracts/http/legacy-api.yaml" }
   ],
   "exit-code": 1
 }
@@ -268,7 +268,7 @@ Field semantics:
 
 Callers that surface post-merge validator failures (the merge prompt on a blocking finding) parse `findings[]` and include `{ rule-id, path, detail }` triples in the stop hint's `paths` field. The load-bearing finding is typically `findings[0].rule-id` plus a one-line restatement of `findings[0].detail`; the full envelope is captured at the log path referenced in the stop hint.
 
-When a caller re-surfaces an envelope finding as a `Diagnostic` (see `schemas/diagnostics/diagnostic.schema.json` embedded in the `specify` binary from [`augentic/specify`](https://github.com/augentic/specify)), the mapping is: `findings[].rule-id` → `rule-id`, `findings[].path` → `location.path`, `target-adapter: contracts`. Schema-side contract metadata (schema pointer, `$id`, plus any single-mode Check 4 `change-kind` such as `removed-field` / `required-field-added` / `type-narrowed` / `enum-value-removed` / `additional-properties-tightened`) lives inside `evidence.kind: structured` with the contract data under `evidence.data`. The closed `Diagnostic` severity enum (`critical` / `important` / `suggestion` / `optional`) is separate from any compatibility classification — classifiers remain contract-domain evidence fields, not severity.
+When a caller re-surfaces an envelope finding as a `Diagnostic` (see `schemas/diagnostics/diagnostic.schema.json` embedded in the `emery` binary from [`augentic/emery`](https://github.com/augentic/emery)), the mapping is: `findings[].rule-id` → `rule-id`, `findings[].path` → `location.path`, `target-adapter: contracts`. Schema-side contract metadata (schema pointer, `$id`, plus any single-mode Check 4 `change-kind` such as `removed-field` / `required-field-added` / `type-narrowed` / `enum-value-removed` / `additional-properties-tightened`) lives inside `evidence.kind: structured` with the contract data under `evidence.data`. The closed `Diagnostic` severity enum (`critical` / `important` / `suggestion` / `optional`) is separate from any compatibility classification — classifiers remain contract-domain evidence fields, not severity.
 
 ### Outcome semantics
 
@@ -308,8 +308,8 @@ Schema-side breakage is caught earlier, in `single`-mode Check 4 (cross-format c
 | `$BASELINE_CONTRACTS` is absent                                                  | The validator treats an absent directory as clean (no top-level documents to walk).                     |
 | `$BASELINE_CONTRACTS` is empty (no top-level contracts)                          | The validator reports no findings. Treated as clean.                                                                                                                           |
 | Top-level contract has non-SemVer `info.version`                                 | Finding `contract.version-is-semver`; the gate records `failure`.                                                                                                       |
-| Top-level contract has malformed `info.x-specify-id`                             | Finding `contract.id-format` (blocking finding).                                                                                                                                         |
-| Two top-level contracts share the same `info.x-specify-id`                       | Finding `contract.id-unique` against each colliding path (blocking finding).                                                                                                             |
+| Top-level contract has malformed `info.x-emery-id`                             | Finding `contract.id-format` (blocking finding).                                                                                                                                         |
+| Two top-level contracts share the same `info.x-emery-id`                       | Finding `contract.id-unique` against each colliding path (blocking finding).                                                                                                             |
 | Standalone JSON Schema under `$BASELINE_CONTRACTS/schemas/` has missing metadata | **Not** a `cross-project` concern — schema-only files are skipped by the binary's `openapi:` / `asyncapi:` filter. Schema-side issues are caught in `single` mode (Checks 1–4). |
 | YAML file under `$BASELINE_CONTRACTS` is malformed                               | Skipped by the validator (the format-verifier owns YAML diagnostics in `single` mode); does not surface as a cross-project finding.                                             |
 

@@ -1,11 +1,11 @@
 # JSON Schema — Importer
 
-> **When to read this.** Read this when an operator supplies external JSON Schema files and the contracts adapter build prompt needs them normalised onto Specify conventions under a slice's `contracts/schemas/` directory. Skip this file when authoring from a spec (use [`author.md`](./author.md)) or when verifying an existing artefact (use [`verifier.md`](./verifier.md)). When the supplied file is an OpenAPI or AsyncAPI bundle (with inline schemas), this importer routes the file out — only standalone schema documents stay here.
+> **When to read this.** Read this when an operator supplies external JSON Schema files and the contracts adapter build prompt needs them normalised onto Emery conventions under a slice's `contracts/schemas/` directory. Skip this file when authoring from a spec (use [`author.md`](./author.md)) or when verifying an existing artefact (use [`verifier.md`](./verifier.md)). When the supplied file is an OpenAPI or AsyncAPI bundle (with inline schemas), this importer routes the file out — only standalone schema documents stay here.
 
 ## Inputs
 
 ```text
-$SLICE_DIR     = .specify/slices/<slice-name>
+$SLICE_DIR     = .emery/slices/<slice-name>
 $CONTRACTS_DIR  = $SLICE_DIR/contracts
 $SCHEMAS_DIR    = $CONTRACTS_DIR/schemas
 $BASELINE_DIR   = contracts
@@ -13,7 +13,7 @@ $BASELINE_DIR   = contracts
 
 **Input** — external schema files placed by the operator anywhere under `$CONTRACTS_DIR/`. Files may be `.yaml`, `.yml`, or `.json`. Inputs may carry any JSON Schema draft (4, 6, 7, 2019-09, 2020-12) and may use `definitions` or `$defs` for sub-types.
 
-**Output** — normalised JSON Schema Draft 2020-12 files in `$SCHEMAS_DIR/`, with one type per file, kebab-case filenames, URN `$id` values, and Specify metadata injected. Input files are replaced in-place with their normalised equivalents; multi-type bundles are decomposed into multiple files.
+**Output** — normalised JSON Schema Draft 2020-12 files in `$SCHEMAS_DIR/`, with one type per file, kebab-case filenames, URN `$id` values, and Emery metadata injected. Input files are replaced in-place with their normalised equivalents; multi-type bundles are decomposed into multiple files.
 
 ## Authority hierarchy
 
@@ -48,7 +48,7 @@ JSON files (`.json`) are converted to YAML in this step: read the JSON, re-seria
 
 ### Step 2 — Decompose multi-type bundles
 
-A standalone schema file may carry multiple sibling types in a `definitions` or `$defs` block, plus a top-level type. Specify's one-type-per-file rule requires decomposition.
+A standalone schema file may carry multiple sibling types in a `definitions` or `$defs` block, plus a top-level type. Emery's one-type-per-file rule requires decomposition.
 
 #### What counts as a bundle
 
@@ -133,14 +133,14 @@ properties:
 
 Remove `nullable` after conversion.
 
-### Step 4 — Inject Specify metadata
+### Step 4 — Inject Emery metadata
 
-For every schema file in `$SCHEMAS_DIR/`, inject Specify-required metadata where missing. Never overwrite values the source already provided unless they are demonstrably malformed (and even then, only with the operator's review).
+For every schema file in `$SCHEMAS_DIR/`, inject Emery-required metadata where missing. Never overwrite values the source already provided unless they are demonstrably malformed (and even then, only with the operator's review).
 
 | Field | Rule | Generation |
 |---|---|---|
 | `$schema` | `"https://json-schema.org/draft/2020-12/schema"` | Add if absent or upgrade per Step 3. |
-| `$id` | `"urn:specify:schemas/<filename-without-extension>"` | If the source `$id` is already a URN of the form `urn:specify:schemas/<segment>` and the segment matches the filename, keep it. Otherwise rewrite to the canonical URN; surface the rewrite in the report as a normalisation entry. **Never reassign an `$id` that matches an existing baseline schema.** |
+| `$id` | `"urn:emery:schemas/<filename-without-extension>"` | If the source `$id` is already a URN of the form `urn:emery:schemas/<segment>` and the segment matches the filename, keep it. Otherwise rewrite to the canonical URN; surface the rewrite in the report as a normalisation entry. **Never reassign an `$id` that matches an existing baseline schema.** |
 | `title` | PascalCase type name | Derive from filename: `user-registration.yaml` → `UserRegistration`. Do not overwrite existing `title`. |
 | `description` | Non-empty string | If absent, set to `"[imported — description pending review]"` and surface in the import report. |
 | `type` | the JSON Schema type | Required for non-trivial schemas. If the source is missing `type` but has `properties`, infer `type: object`. Surface inferred values in the report. |
@@ -150,9 +150,9 @@ For every schema file in `$SCHEMAS_DIR/`, inject Specify-required metadata where
 
 | Source `$id` shape | Action |
 |---|---|
-| `urn:specify:schemas/<matches-filename>` | Keep verbatim |
-| `urn:specify:schemas/<does-not-match-filename>` | Rewrite to match filename; surface as a `Metadata Injected` finding |
-| Some other URN form (e.g. `urn:example:user`) | Rewrite to `urn:specify:` form; preserve the original in the report for traceability |
+| `urn:emery:schemas/<matches-filename>` | Keep verbatim |
+| `urn:emery:schemas/<does-not-match-filename>` | Rewrite to match filename; surface as a `Metadata Injected` finding |
+| Some other URN form (e.g. `urn:example:user`) | Rewrite to `urn:emery:` form; preserve the original in the report for traceability |
 | HTTPS URL (e.g. `https://example.com/schemas/user`) | Rewrite to URN form; preserve the original in the report |
 | Absent | Generate from the filename |
 | Matches a baseline `$id` exactly **and** the schemas are structurally equivalent | Drop the imported file; rewrite incoming `$ref` to the baseline file |
@@ -195,7 +195,7 @@ Produce a markdown import report:
 - `contracts/schemas/error-response.yaml` — placeholder `description: "[imported — description pending review]"` (replace before merge)
 
 ### `$id` Rewrites
-- `user.yaml` — was `https://example.com/schemas/user`; now `urn:specify:schemas/user`
+- `user.yaml` — was `https://example.com/schemas/user`; now `urn:emery:schemas/user`
 
 ### Validation Result
 All checks passed (N $ref pointers, N schemas verified).
@@ -248,7 +248,7 @@ Before completing the import:
 - [ ] All multi-type bundles decomposed; one type per output file.
 - [ ] All `$ref` pointers updated to point at standalone files (or `#/$defs/` for file-local sub-types).
 - [ ] All schema files have `$schema`, `$id`, `title`, `description`, `type`.
-- [ ] All `$id` values are URN form rooted at `urn:specify:schemas/`.
+- [ ] All `$id` values are URN form rooted at `urn:emery:schemas/`.
 - [ ] No `$id` reassignment touches a baseline schema.
 - [ ] Files placed in `$SCHEMAS_DIR/`; original locations cleaned up.
 - [ ] [`verifier.md`](./verifier.md) (single mode) ran clean.

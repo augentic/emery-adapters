@@ -1,18 +1,18 @@
 # AsyncAPI — Importer
 
-> **When to read this.** Read this when an operator supplies an external AsyncAPI document and the contracts adapter build prompt needs the file normalised onto Specify conventions under a slice's `contracts/messages/` directory. Skip this file when authoring from a spec (use [`author.md`](./author.md)) or when verifying an existing artefact (use [`verifier.md`](./verifier.md)).
+> **When to read this.** Read this when an operator supplies an external AsyncAPI document and the contracts adapter build prompt needs the file normalised onto Emery conventions under a slice's `contracts/messages/` directory. Skip this file when authoring from a spec (use [`author.md`](./author.md)) or when verifying an existing artefact (use [`verifier.md`](./verifier.md)).
 
 ## Inputs
 
 ```text
-$SLICE_DIR     = .specify/slices/<slice-name>
+$SLICE_DIR     = .emery/slices/<slice-name>
 $CONTRACTS_DIR  = $SLICE_DIR/contracts
 $BASELINE_DIR   = contracts
 ```
 
 **Input** — external AsyncAPI files placed by the operator anywhere under `$CONTRACTS_DIR/`. Files may be `.yaml`, `.yml`, or `.json`.
 
-**Output** — normalised AsyncAPI 3.0.0 files in `$CONTRACTS_DIR/messages/`, with inline payloads decomposed into `$CONTRACTS_DIR/schemas/` and Specify metadata injected. The input files are replaced in-place with their normalised equivalents; decomposed schemas are added as new files.
+**Output** — normalised AsyncAPI 3.0.0 files in `$CONTRACTS_DIR/messages/`, with inline payloads decomposed into `$CONTRACTS_DIR/schemas/` and Emery metadata injected. The input files are replaced in-place with their normalised equivalents; decomposed schemas are added as new files.
 
 ## Authority hierarchy
 
@@ -265,14 +265,14 @@ When an extracted payload itself contains inline sub-schemas (nested objects):
 - **Used only inside this parent** — keep it inline, optionally inside `$defs`.
 - **Used elsewhere too** — extract to its own file and `$ref` from both locations.
 
-### Step 4 — Inject Specify metadata
+### Step 4 — Inject Emery metadata
 
-For every schema file in `$CONTRACTS_DIR/schemas/` (newly decomposed and pre-existing), inject Specify-required metadata where missing. Never overwrite values that the source already provided.
+For every schema file in `$CONTRACTS_DIR/schemas/` (newly decomposed and pre-existing), inject Emery-required metadata where missing. Never overwrite values that the source already provided.
 
 | Field | Rule | Generation |
 |---|---|---|
 | `$schema` | `"https://json-schema.org/draft/2020-12/schema"` | Add if absent. Update older draft URIs to 2020-12 (see [`../../references/json-schema-conventions.md`](../../references/json-schema-conventions.md)). |
-| `$id` | `"urn:specify:schemas/<filename-without-extension>"` | Generate from the file path. Never reassign an existing `$id` that matches a baseline schema. |
+| `$id` | `"urn:emery:schemas/<filename-without-extension>"` | Generate from the file path. Never reassign an existing `$id` that matches a baseline schema. |
 | `title` | PascalCase type name | Derive from filename: `order-placed.yaml` → `OrderPlaced`. Do not overwrite existing `title`. |
 | `description` | Non-empty string | If absent, set to `"[imported — description pending review]"` and surface in the import report. |
 
@@ -281,7 +281,7 @@ For the AsyncAPI document itself, verify that `info.title`, `info.version`, and 
 **Contract normalisation rules for top-level AsyncAPI documents:**
 
 - **`info.version` MUST be SemVer.** When the imported value does not parse as SemVer (e.g. `2024-01-15`, `v2`, `"1"`), do **not** auto-rewrite. Surface a `[manual review required]` entry in the import report naming the file and the offending value, and let the operator decide on the canonical SemVer string. The single-mode verifier (Check 4) and the merge-time in-guest validator gate (the contracts adapter merge contract) will block on the unaltered value until the operator resolves it.
-- **Preserve `info.x-specify-id` verbatim.** When the source carries `info.x-specify-id`, copy it through unchanged — even when the value violates the kebab-case format (the verifier flags the format issue with the file path, which is enough for the operator to fix). Never invent or auto-derive an id during import; new ids are an authoring decision.
+- **Preserve `info.x-emery-id` verbatim.** When the source carries `info.x-emery-id`, copy it through unchanged — even when the value violates the kebab-case format (the verifier flags the format issue with the file path, which is enough for the operator to fix). Never invent or auto-derive an id during import; new ids are an authoring decision.
 
 For each message in `components/messages`, verify `name` and `contentType`. If `contentType` is absent, default to `application/json` and surface in the import report.
 

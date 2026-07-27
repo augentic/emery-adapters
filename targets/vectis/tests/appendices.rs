@@ -35,8 +35,8 @@ fn write_assets_project(yaml: &str, files: &[&str]) -> (TempDir, PathBuf) {
 }
 
 fn write_specs_composition(project: &Path, yaml: &str) {
-    let dir = project.join(".specify").join("specs");
-    std::fs::create_dir_all(&dir).expect("mkdir .specify/specs");
+    let dir = project.join(".emery").join("specs");
+    std::fs::create_dir_all(&dir).expect("mkdir .emery/specs");
     std::fs::write(dir.join("composition.yaml"), yaml).expect("write composition.yaml");
 }
 

@@ -1,6 +1,6 @@
 # Import / Upgrade Policy
 
-Cross-format framework for normalising externally-supplied contracts onto Specify conventions. Each contracts build format sub-flow (`openapi`, `asyncapi`, `json-schema`) implements its own importer; this reference captures the rules they share — format detection, upgrade targets, lossless-vs-lossy decisions, and when to refuse and ask the operator.
+Cross-format framework for normalising externally-supplied contracts onto Emery conventions. Each contracts build format sub-flow (`openapi`, `asyncapi`, `json-schema`) implements its own importer; this reference captures the rules they share — format detection, upgrade targets, lossless-vs-lossy decisions, and when to refuse and ask the operator.
 
 ## The four legs of every importer
 
@@ -10,10 +10,10 @@ Every format-specific importer runs through four conceptual phases. The format s
 |---|---|---|
 | **1. Detect** | What format is this file? Is it in scope for this skill? | First step of every importer; routes out-of-scope files to the right format skill. |
 | **2. Upgrade** | Does the file use an older version that the skill must convert? | Format-specific (Swagger 2.0 → OpenAPI 3.1, AsyncAPI 2.x → 3.0, JSON Schema draft-04/6/7/2019-09 → 2020-12). |
-| **3. Decompose** | Does the file inline content that Specify keeps as separate files? | OpenAPI / AsyncAPI extract inline schemas into `contracts/schemas/`; JSON Schema extracts multi-type bundles. |
-| **4. Inject** | Does the file lack Specify-required metadata? | Final step before validation; adds `$id`, `$schema`, `title`, `description`, `info.*` defaults. |
+| **3. Decompose** | Does the file inline content that Emery keeps as separate files? | OpenAPI / AsyncAPI extract inline schemas into `contracts/schemas/`; JSON Schema extracts multi-type bundles. |
+| **4. Inject** | Does the file lack Emery-required metadata? | Final step before validation; adds `$id`, `$schema`, `title`, `description`, `info.*` defaults. |
 
-The output of every importer is a set of files in the canonical Specify layout (see [`artifact-structure`](artifact-structure.md)) that pass the format-skill verifier.
+The output of every importer is a set of files in the canonical Emery layout (see [`artifact-structure`](artifact-structure.md)) that pass the format-skill verifier.
 
 ## Format detection
 
@@ -34,12 +34,12 @@ Detection rules for every importer:
 
 - **Detection is case-sensitive.** Do not normalise key casing before classification.
 - **Protocol keys win over schema signals.** A file with both `openapi:` and `$schema:` is an OpenAPI bundle, not a standalone schema. The schema-skill importer routes such files out to the protocol importer.
-- **Both YAML and JSON inputs are accepted.** JSON files are converted to YAML during normalisation (Specify uses `.yaml` exclusively in the baseline).
+- **Both YAML and JSON inputs are accepted.** JSON files are converted to YAML during normalisation (Emery uses `.yaml` exclusively in the baseline).
 - **Unrecognised inputs are skipped, never guessed.** The importer flags them in the report and the operator decides.
 
 ## Upgrade targets
 
-Specify pins each format to a single canonical version. Importers convert older inputs to the canonical version; never accept older versions in the output.
+Emery pins each format to a single canonical version. Importers convert older inputs to the canonical version; never accept older versions in the output.
 
 | Format | Older versions accepted as input | Canonical output version |
 |---|---|---|
@@ -73,27 +73,27 @@ Some inputs cannot be normalised by any importer running in isolation. The impor
 | Trigger | Example | Importer action |
 |---|---|---|
 | External `$ref` to a URL or absolute path outside the slice directory | `$ref: "https://example.com/schemas/user"` | Cannot auto-resolve. Flag in report. The operator must inline-import the external schema as a separate file or accept the dangling reference. |
-| `$id` collision with a baseline schema where shapes differ | Imported `user.yaml` has `$id: "urn:specify:schemas/user"` matching the baseline `user.yaml`, but the property sets diverge | Stop and emit `[import — $id collision; resolve manually]`. The `$id` stability rule forbids automatic reassignment. |
+| `$id` collision with a baseline schema where shapes differ | Imported `user.yaml` has `$id: "urn:emery:schemas/user"` matching the baseline `user.yaml`, but the property sets diverge | Stop and emit `[import — $id collision; resolve manually]`. The `$id` stability rule forbids automatic reassignment. |
 | File with multiple YAML documents (`---` separators) | A single `.yaml` carrying two unrelated OpenAPI specs | Process the first document; flag the rest in the report. Do not silently merge. |
 | File whose top-level format cannot be classified | Custom IDL, malformed YAML, BOM corruption | Skip; flag for manual review. Do not attempt to guess the format. |
 | Multi-file bundle distributed across nested directories | An OpenAPI document with `$ref` chains spanning a vendor bundle | Process the entry-point file; chase `$ref`s only to siblings the operator placed in the slice directory. Flag every unresolved external `$ref`. |
 | Construct that implies behaviour beyond wire shape (e.g. `x-rate-limit` extensions, custom auth flows) | Vendor extensions that look semantically meaningful | Preserve verbatim; flag as "preserved but not validated" in the report. The operator decides whether to lift the construct into `design.md`. |
-| Conflict between source-declared `$id` / `title` and the filename Specify would assign | Source `title: "User Adapter"`, source filename `acct.yaml` | Prefer `title` (and rewrite the filename); flag as a normalisation entry. When neither resolves cleanly, request operator input. |
+| Conflict between source-declared `$id` / `title` and the filename Emery would assign | Source `title: "User Adapter"`, source filename `acct.yaml` | Prefer `title` (and rewrite the filename); flag as a normalisation entry. When neither resolves cleanly, request operator input. |
 
 The importer never **silently** decides any of the above. The report's "Manual Review Required" section is the canonical surface for these decisions; the verifier confirms the importer did not paper over them.
 
-## Specify metadata injection
+## Emery metadata injection
 
-Every output file must carry the Specify-required metadata fields, regardless of whether the source provided them. The format skills enumerate the per-format field set; the policy below is shared:
+Every output file must carry the Emery-required metadata fields, regardless of whether the source provided them. The format skills enumerate the per-format field set; the policy below is shared:
 
 | Field | Rule | Source-vs-derived behaviour |
 |---|---|---|
 | `$schema` (schemas) | Pin to `https://json-schema.org/draft/2020-12/schema`. | Inject if absent; upgrade if older draft. |
-| `$id` (schemas) | URN form `urn:specify:schemas/<filename-without-extension>`. | Generate from filename. **Never reassign** an `$id` that matches an existing baseline schema (see [`baseline-vs-delta`](baseline-vs-delta.md) — the `$id` stability rule). |
+| `$id` (schemas) | URN form `urn:emery:schemas/<filename-without-extension>`. | Generate from filename. **Never reassign** an `$id` that matches an existing baseline schema (see [`baseline-vs-delta`](baseline-vs-delta.md) — the `$id` stability rule). |
 | `title` (schemas) | PascalCase type name from filename. | Derive from filename. Do not overwrite existing `title` values. |
 | `description` (schemas, `info.description` on OpenAPI / AsyncAPI) | Non-empty string. | If absent, set to `"[imported — description pending review]"` and surface in the import report so the operator replaces it before merge. |
 | `info.title` / `info.version` (OpenAPI / AsyncAPI) | Required by the format spec. `info.version` MUST parse as SemVer per [semver.org](https://semver.org) (contract identity/version validation). | Preserve from source verbatim; surface in the report if absent. **Do not auto-rewrite a non-SemVer `info.version`** (e.g. `2024-01-15`) — emit a `[manual review required]` entry naming the file and the offending value. The single-mode verifier (Check 4) and the merge-time in-guest validator gate will block on the unaltered value until the operator resolves it. |
-| `info.x-specify-id` (OpenAPI / AsyncAPI) | Optional rename-stable id (contract identity/version validation). When present, kebab-case (`^[a-z][a-z0-9-]*$`), ≤ 64 characters, unique across every top-level contract under root `contracts/`. | Preserve from source verbatim — even when malformed (the verifier flags the format issue with the file path, which is enough for the operator to fix). **Never invent or auto-derive an id during import** — new ids are an authoring decision. |
+| `info.x-emery-id` (OpenAPI / AsyncAPI) | Optional rename-stable id (contract identity/version validation). When present, kebab-case (`^[a-z][a-z0-9-]*$`), ≤ 64 characters, unique across every top-level contract under root `contracts/`. | Preserve from source verbatim — even when malformed (the verifier flags the format issue with the file path, which is enough for the operator to fix). **Never invent or auto-derive an id during import** — new ids are an authoring decision. |
 
 The `[imported — description pending review]` placeholder is reserved for the importer path. It appears in the verifier's output as a `WARN` to ensure the gap reaches a human before the slice merges.
 
