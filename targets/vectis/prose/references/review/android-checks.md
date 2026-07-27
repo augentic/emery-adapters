@@ -232,7 +232,7 @@ The `app` module and `shared` module MUST have different `namespace` values in t
 
 **Detection**: Compare the `namespace` values in `app/build.gradle.kts` and `shared/build.gradle.kts`. Flag if they are identical.
 
-**Fix**: Use `com.vectis.{appname}` for `app` and `com.vectis.{appname}.shared` for `shared`.
+**Fix**: Use `ANDROID_PACKAGE` for `app` and `ANDROID_PACKAGE.shared` for `shared` (template default `io.augentic.vectisapp` / `io.augentic.vectisapp.shared`).
 
 ## AND-022: Time Effect Clear Handler Missing Job Cancellation
 

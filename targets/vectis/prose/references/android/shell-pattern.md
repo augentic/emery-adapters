@@ -49,7 +49,7 @@ The `Core` class is the bridge between Compose and the Rust core. Two patterns a
 For apps with only the `Render` effect. `Core` extends `androidx.lifecycle.ViewModel` and uses Compose `mutableStateOf`.
 
 ```kotlin
-package com.vectis.counter.core
+package io.augentic.vectisapp.core
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -94,7 +94,7 @@ For apps with HTTP, SSE, KV, Time, or Platform effects. Uses coroutines and `Sta
 **CRITICAL**: All `scope.launch` blocks for async effects (SSE, Time) MUST wrap their body in `try/catch` to prevent unhandled exceptions from crashing the app. Always rethrow `CancellationException`. Catch blocks MUST call `resolveAndHandleEffects` with a fallback response (e.g., `SseResponse.Done` for SSE, `TimeResponse.DurationElapsed` / `TimeResponse.InstantArrived` for timers) so the core request ID is never left unresolved.
 
 ```kotlin
-package com.vectis.myapp.core
+package io.augentic.vectisapp.core
 
 import android.util.Log
 import io.augentic.vectisapp.*
@@ -324,7 +324,7 @@ is Effect.KeyValue -> {
 Full HTTP client implementation using Ktor + OkHttp:
 
 ```kotlin
-package com.vectis.myapp.core
+package io.augentic.vectisapp.core
 
 import io.augentic.vectisapp.HttpError
 import io.augentic.vectisapp.HttpHeader
@@ -409,7 +409,7 @@ class HttpClient {
 SSE streaming client using Ktor. Note the `@OptIn(ExperimentalUnsignedTypes::class)` annotation -- required because `toUByteArray()` is experimental.
 
 ```kotlin
-package com.vectis.myapp.core
+package io.augentic.vectisapp.core
 
 import io.augentic.vectisapp.SseRequest
 import io.augentic.vectisapp.SseResponse
@@ -461,7 +461,7 @@ Key-Value storage using SharedPreferences.
 - `KeyValueError` is a sealed interface -- use `KeyValueError.Other(msg)`, NOT `KeyValueError(msg)`
 
 ```kotlin
-package com.vectis.myapp.core
+package io.augentic.vectisapp.core
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -591,7 +591,7 @@ This is a last-resort safety net, not a substitute for fixing the underlying bug
 ### Application Class with Crash Recovery (minimal)
 
 ```kotlin
-package com.vectis.myapp
+package io.augentic.vectisapp
 
 import android.app.AlarmManager
 import android.app.Application
@@ -652,14 +652,14 @@ class MyAppApplication : Application() {
 ### Application Class with Crash Recovery (Koin)
 
 ```kotlin
-package com.vectis.myapp
+package io.augentic.vectisapp
 
 import android.app.AlarmManager
 import android.app.Application
 import android.app.PendingIntent
 import android.content.Intent
 import android.util.Log
-import com.vectis.myapp.di.appModule
+import io.augentic.vectisapp.di.appModule
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 
@@ -764,11 +764,11 @@ When using the full Core pattern, set up Koin for DI:
 ### AppModule.kt
 
 ```kotlin
-package com.vectis.myapp.di
+package io.augentic.vectisapp.di
 
-import com.vectis.myapp.core.Core
-import com.vectis.myapp.core.HttpClient
-import com.vectis.myapp.core.SseClient
+import io.augentic.vectisapp.core.Core
+import io.augentic.vectisapp.core.HttpClient
+import io.augentic.vectisapp.core.SseClient
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.module
 

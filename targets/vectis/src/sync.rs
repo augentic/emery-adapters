@@ -144,19 +144,17 @@ fn resolve_identity(project_root: &Path) -> Result<Identity, VectisError> {
 }
 
 fn app_name_from_project_yaml(project_root: &Path) -> Result<String, VectisError> {
-    let source =
-        std::fs::read_to_string(project_root.join(".emery/project.yaml")).map_err(|err| {
-            VectisError::InvalidProject {
-                message: format!("read project.yaml: {err}"),
-            }
-        })?;
+    let path = project_root.join(".emery/project.yaml");
+    let source = std::fs::read_to_string(&path).map_err(|err| VectisError::InvalidProject {
+        message: format!("read {}: {err}", path.display()),
+    })?;
     let doc: Value =
         serde_saphyr::from_str(&source).map_err(|err| VectisError::InvalidProject {
-            message: format!("parse project.yaml: {err}"),
+            message: format!("parse {}: {err}", path.display()),
         })?;
     let raw =
         doc.get("name").and_then(Value::as_str).ok_or_else(|| VectisError::InvalidProject {
-            message: "project.yaml missing name:".into(),
+            message: format!("{} missing name", path.display()),
         })?;
     let pascal: String = raw
         .split(|c: char| !c.is_ascii_alphanumeric())

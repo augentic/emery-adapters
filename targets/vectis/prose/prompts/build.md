@@ -42,7 +42,7 @@ All phase prompts assume these symbols are resolved by the leg's orchestrating a
 | `IOS_SHELL_DIR` | `${PROJECT_DIR}/iOS` (only when `ios` is in scope). |
 | `ANDROID_SHELL_DIR` | `${PROJECT_DIR}/Android` (only when `android` is in scope). |
 | `APP_NAME` | The Xcode target / Swift source folder name (derived from `design.md`'s `App` struct name). |
-| `ANDROID_PACKAGE` | Android application id. Prefer the package declared in `design.md` (or the existing `Android/app/build.gradle.kts` applicationId). Fallback only: `com.vectis.<lowercase APP_NAME>` — do not keep the template's `io.augentic.vectisapp` unless that is the product id. |
+| `ANDROID_PACKAGE` | Android application id. Prefer the package declared in `design.md` (or the existing `Android/app/build.gradle.kts` applicationId). Fallback only: `com.vectis.<lowercase APP_NAME>` — do not keep the template's `io.augentic.vectisapp` unless that is the product id. Writers, reviewers, and imports MUST use this resolved value (dot form + slash form under `app/src/main/java/`) — never hardcode `com.vectis.*` or the template default when `ANDROID_PACKAGE` differs. |
 | `CATALOG_PATH` | `${PROJECT_DIR}/.emery/design-system/components.yaml` when present. Optional — absent means no component factoring. |
 
 ## Platform scope
