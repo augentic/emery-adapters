@@ -197,8 +197,8 @@ dependencies {
 package com.vectis.counter.core
 
 import android.util.Log
-import com.example.app.*
-import uniffi.shared.CoreFfi
+import io.augentic.vectisapp.*
+import io.augentic.vectisapp.shared.CoreFfi
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -274,11 +274,11 @@ class Core(
 ```kotlin
 package com.vectis.counter.core
 
-import com.example.app.HttpError
-import com.example.app.HttpHeader
-import com.example.app.HttpRequest
-import com.example.app.HttpResponse
-import com.example.app.HttpResult
+import io.augentic.vectisapp.HttpError
+import io.augentic.vectisapp.HttpHeader
+import io.augentic.vectisapp.HttpRequest
+import io.augentic.vectisapp.HttpResponse
+import io.augentic.vectisapp.HttpResult
 import com.novi.serde.Bytes
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
@@ -357,8 +357,8 @@ class HttpClient {
 ```kotlin
 package com.vectis.counter.core
 
-import com.example.app.SseRequest
-import com.example.app.SseResponse
+import io.augentic.vectisapp.SseRequest
+import io.augentic.vectisapp.SseResponse
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.prepareGet
@@ -431,8 +431,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import com.example.app.Event
-import com.example.app.ViewModel
+import io.augentic.vectisapp.Event
+import io.augentic.vectisapp.ViewModel
 import com.vectis.counter.core.Core
 import com.vectis.counter.ui.screens.CounterScreen
 import com.vectis.counter.ui.screens.LoadingScreen
@@ -490,8 +490,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.app.CounterView
-import com.example.app.Event
+import io.augentic.vectisapp.CounterView
+import io.augentic.vectisapp.Event
 import com.vectis.counter.ui.theme.CounterTheme
 
 @Composable

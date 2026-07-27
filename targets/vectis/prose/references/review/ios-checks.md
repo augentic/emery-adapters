@@ -154,7 +154,7 @@ Async effect handlers in `Core.swift` must use `Task { @MainActor in ... }`, not
 
 **Severity**: critical
 
-`CoreFFI` methods (`view()`, `update()`, `resolve()`) return `Result<Vec<u8>, CoreError>` in Rust, which UniFFI maps to Swift `throws`. Calling these without `try` is a compile error. Unlike bincode serialization (IOS-013), CoreFFI calls throw `CoreError` which contains a meaningful `Bridge` message from the Rust core. Using `try?` discards this message. All CoreFFI calls must use `do/catch` with `\(error)` interpolated into `assertionFailure` so the underlying reason (deserialization failure, invalid effect ID, etc.) is visible in debug builds.
+`$TEMPLATE_DIR` packs the shared core with BoltFFI (`boltffi pack apple`). Shell `Core` calls that can fail must use `do/catch` with `\(error)` interpolated into `assertionFailure` so the underlying reason (deserialization failure, invalid effect ID, etc.) is visible in debug builds. Using `try?` discards the message. Prefer the error-handling shape in `$TEMPLATE_DIR` iOS `Core` over inventing UniFFI-era `CoreError` wrappers.
 
 **Detection**: Search `Core.swift` for `core.view()`, `core.update(`, and `core.resolve(` that are not preceded by `try`. Also flag any CoreFFI calls that use `try?` instead of `do/catch` -- the error message is lost.
 

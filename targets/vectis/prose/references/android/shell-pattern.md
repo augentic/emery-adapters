@@ -2,7 +2,7 @@
 
 The Android shell is a thin Kotlin/Jetpack Compose layer that renders the `ViewModel` from the Crux core and sends user-initiated `Event` values back. All business logic lives in the shared Rust crate; the shell only handles platform I/O (HTTP, KV, SSE, Time, Platform) and UI rendering.
 
-**FFI / pin authority:** use BoltFFI via `$TEMPLATE_DIR` (`CoreFfi` package from `shared/boltffi.toml` after materialize). Kotlin snippets below may still show retired `uniffi.shared.*` / `com.example.app.*` import paths — treat those as pedagogical only; do not invent UniFFI library overrides.
+**FFI / pin authority:** use BoltFFI via `$TEMPLATE_DIR` (`CoreFfi` package from `shared/boltffi.toml` after materialize). Snippets use the template default `io.augentic.vectisapp` / `io.augentic.vectisapp.shared`; after materialize those become `ANDROID_PACKAGE` / `ANDROID_PACKAGE.shared`. Do not invent UniFFI library overrides or retired `uniffi.*` / `com.example.app` paths.
 
 ## Architecture
 
@@ -54,12 +54,12 @@ package com.vectis.counter.core
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.example.app.Effect
-import com.example.app.Event
-import com.example.app.Request
-import com.example.app.Requests
-import com.example.app.ViewModel
-import uniffi.shared.CoreFfi
+import io.augentic.vectisapp.Effect
+import io.augentic.vectisapp.Event
+import io.augentic.vectisapp.Request
+import io.augentic.vectisapp.Requests
+import io.augentic.vectisapp.ViewModel
+import io.augentic.vectisapp.shared.CoreFfi
 
 open class Core : androidx.lifecycle.ViewModel() {
     private var coreFfi: CoreFfi = CoreFfi()
@@ -97,8 +97,8 @@ For apps with HTTP, SSE, KV, Time, or Platform effects. Uses coroutines and `Sta
 package com.vectis.myapp.core
 
 import android.util.Log
-import com.example.app.*
-import uniffi.shared.CoreFfi
+import io.augentic.vectisapp.*
+import io.augentic.vectisapp.shared.CoreFfi
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -207,10 +207,10 @@ The Time capability has multiple request types. Handle each variant:
 **CRITICAL**: `NotifyAfter` and `NotifyAt` must store their coroutine `Job` in `timerJobs` keyed by `TimerId`. `Clear` must cancel and remove the stored job before responding. Without this, cleared timers continue to fire and deliver stale `DurationElapsed` or `InstantArrived` events to the core. The map is safe to access without synchronization because all coroutines run on `Dispatchers.Main.immediate`.
 
 ```kotlin
-import com.example.app.Instant
-import com.example.app.TimerId
-import com.example.app.TimeRequest
-import com.example.app.TimeResponse
+import io.augentic.vectisapp.Instant
+import io.augentic.vectisapp.TimerId
+import io.augentic.vectisapp.TimeRequest
+import io.augentic.vectisapp.TimeResponse
 import java.time.ZoneOffset
 import java.time.ZonedDateTime
 
@@ -326,11 +326,11 @@ Full HTTP client implementation using Ktor + OkHttp:
 ```kotlin
 package com.vectis.myapp.core
 
-import com.example.app.HttpError
-import com.example.app.HttpHeader
-import com.example.app.HttpRequest
-import com.example.app.HttpResponse
-import com.example.app.HttpResult
+import io.augentic.vectisapp.HttpError
+import io.augentic.vectisapp.HttpHeader
+import io.augentic.vectisapp.HttpRequest
+import io.augentic.vectisapp.HttpResponse
+import io.augentic.vectisapp.HttpResult
 import com.novi.serde.Bytes
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
@@ -411,8 +411,8 @@ SSE streaming client using Ktor. Note the `@OptIn(ExperimentalUnsignedTypes::cla
 ```kotlin
 package com.vectis.myapp.core
 
-import com.example.app.SseRequest
-import com.example.app.SseResponse
+import io.augentic.vectisapp.SseRequest
+import io.augentic.vectisapp.SseResponse
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.prepareGet
@@ -465,11 +465,11 @@ package com.vectis.myapp.core
 
 import android.content.Context
 import android.content.SharedPreferences
-import com.example.app.KeyValueError
-import com.example.app.KeyValueOperation
-import com.example.app.KeyValueResponse
-import com.example.app.KeyValueResult
-import com.example.app.Value
+import io.augentic.vectisapp.KeyValueError
+import io.augentic.vectisapp.KeyValueOperation
+import io.augentic.vectisapp.KeyValueResponse
+import io.augentic.vectisapp.KeyValueResult
+import io.augentic.vectisapp.Value
 
 @OptIn(ExperimentalUnsignedTypes::class)
 class KeyValueClient(context: Context) {
@@ -844,10 +844,10 @@ when (event) {
 
 ### Generated type packages
 
-All generated types live in `com.example.app.*`, NOT in the app's package. All hand-written Kotlin files MUST import them explicitly:
+Bincode types live in `ANDROID_PACKAGE` (template default `io.augentic.vectisapp`); `CoreFfi` lives in `ANDROID_PACKAGE.shared`. Neither is the hand-written shell package (e.g. `{ANDROID_PACKAGE}.core`). Import them explicitly:
 
 ```kotlin
-import com.example.app.Event
-import com.example.app.ViewModel
-import uniffi.shared.CoreFfi
+import io.augentic.vectisapp.Event
+import io.augentic.vectisapp.ViewModel
+import io.augentic.vectisapp.shared.CoreFfi
 ```

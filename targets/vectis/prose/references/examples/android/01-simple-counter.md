@@ -79,7 +79,8 @@ typegen: lib
 
 lib:
 	@echo "Building Rust shared library..."
-	@cd $(WORKSPACE) && cargo build --features uniffi
+	@cd $(WORKSPACE) && cargo build
+	@# Prefer `$TEMPLATE_DIR/Android/Makefile` (`make build` → `boltffi pack android`). Do not add a `uniffi` cargo feature.
 
 clean:
 	@rm -rf generated/
@@ -244,9 +245,7 @@ extensions.configure<CargoExtension>("cargo") {
     libname = "shared"
     profile = "debug"
     targets = listOf("arm", "arm64", "x86", "x86_64")
-    features {
-        defaultAnd(arrayOf("uniffi"))
-    }
+    // Prefer `$TEMPLATE_DIR` Android Gradle + `boltffi pack android` — do not require a `uniffi` cargo feature.
     cargoCommand = System.getProperty("user.home") + "/.cargo/bin/cargo"
     rustcCommand = System.getProperty("user.home") + "/.cargo/bin/rustc"
     pythonCommand = "python3"
@@ -294,12 +293,12 @@ package com.vectis.counter.core
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.example.app.Effect
-import com.example.app.Event
-import com.example.app.Request
-import com.example.app.Requests
-import com.example.app.ViewModel
-import uniffi.shared.CoreFfi
+import io.augentic.vectisapp.Effect
+import io.augentic.vectisapp.Event
+import io.augentic.vectisapp.Request
+import io.augentic.vectisapp.Requests
+import io.augentic.vectisapp.ViewModel
+import io.augentic.vectisapp.shared.CoreFfi
 
 open class Core : androidx.lifecycle.ViewModel() {
     private var coreFfi: CoreFfi = CoreFfi()
@@ -340,7 +339,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.app.ViewModel
+import io.augentic.vectisapp.ViewModel
 import com.vectis.counter.core.Core
 import com.vectis.counter.ui.screens.CounterScreen
 import com.vectis.counter.ui.theme.CounterTheme
@@ -386,8 +385,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.app.CounterView
-import com.example.app.Event
+import io.augentic.vectisapp.CounterView
+import io.augentic.vectisapp.Event
 import com.vectis.counter.ui.theme.CounterTheme
 
 @Composable

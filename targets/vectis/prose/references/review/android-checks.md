@@ -139,7 +139,7 @@ The `Core` class must expose the ViewModel via either `mutableStateOf` (simple p
 
 All hand-written `.kt` files that reference generated types (`Event`, `ViewModel`, `Effect`, `Request`, `CoreFfi`, etc.) MUST have explicit imports from the package identity in `shared/boltffi.toml` after materialize substitution. The generated types live in a different package than the hand-written code.
 
-**Detection**: Search hand-written `.kt` files for references to generated types without corresponding imports. Prefer the import shape in `$TEMPLATE_DIR` `core/Core.kt` over retired `uniffi.shared.*` / `com.example.app.*` examples.
+**Detection**: Search hand-written `.kt` files for references to generated types without corresponding imports. Prefer the import shape in `$TEMPLATE_DIR` `core/Core.kt` (`io.augentic.vectisapp.*` / `io.augentic.vectisapp.shared.CoreFfi` before identity substitution). Flag inventing retired `uniffi.*` / `com.example.app` paths.
 
 **Fix**: Add the missing import statements. Never assume generated types are in the same package as hand-written code.
 
@@ -250,21 +250,21 @@ Also verify that `NotifyAfter` and `NotifyAt` coroutines clean up their map entr
 
 **Fix**: Add a `timerJobs` map to the `Core` class. In `NotifyAfter` and `NotifyAt`, launch a child coroutine via `scope.launch`, store the `Job` in the map, and remove the entry in a `finally`-equivalent path (after the delay completes or when cancelled). In `Clear`, call `timerJobs.remove(timeRequest.value)?.cancel()` before resolving. See `references/crux-android-shell-pattern.md` for the full implementation.
 
-## AND-023: CoreFFI Errors Not Surfaced
+## AND-023: CoreFfi Errors Not Surfaced
 
 **Severity**: critical
 
-`CoreFfi` methods (`view()`, `update()`, `resolve()`) return `Result<Vec<u8>, CoreError>` in Rust, which UniFFI maps to Kotlin functions that throw `CoreException`. The exception contains a meaningful `Bridge` error message from the Rust core (deserialization failure, invalid effect ID, etc.). Calling these without `try/catch` lets the exception propagate unhandled and crash the app. Using a generic catch that discards `e.message` loses the diagnostic information needed to debug type mismatches after core regeneration.
+`$TEMPLATE_DIR` `shared/src/ffi.rs` exports `CoreFfi` via BoltFFI. Bridge failures can still surface as runtime failures on the Kotlin side (deserialization mismatch, invalid effect id). Calling `view()` / `update()` / `resolve()` without `try/catch` lets those failures crash the app. Using a generic catch that discards `e.message` loses the diagnostic needed after core regeneration.
 
-Unlike bincode serialization (AND-014), CoreFFI calls throw structured errors with context from the Rust side. All CoreFFI calls must use `try/catch` with `Log.e(TAG, "context: ${e.message}", e)` so the underlying reason is visible in logcat during development.
+All `CoreFfi` calls must use `try/catch` with `Log.e(TAG, "context: ${e.message}", e)` so the underlying reason is visible in logcat during development. Prefer the error-handling shape in `$TEMPLATE_DIR` `core/Core.kt` over inventing UniFFI `CoreException` types.
 
-**Detection**: Search `Core.kt` for `coreFfi.view()`, `coreFfi.update(`, and `coreFfi.resolve(` calls. Verify each is wrapped in a `try/catch` block that logs `e.message`. Flag any CoreFFI calls that:
+**Detection**: Search `Core.kt` for `coreFfi.view()`, `coreFfi.update(`, and `coreFfi.resolve(` calls. Verify each is wrapped in a `try/catch` block that logs `e.message`. Flag any `CoreFfi` calls that:
 
 1. Have no `try/catch` at all (exception propagates to the caller)
 2. Use a catch block that discards the message (e.g., catches `Exception` but only logs a static string without `${e.message}`)
 3. Use a catch block that rethrows without logging (diagnostic is lost unless the caller also logs)
 
-**Fix**: Wrap each CoreFFI call in a `try/catch` block:
+**Fix**: Wrap each `CoreFfi` call in a `try/catch` block:
 
 ```kotlin
 val effects = try {
@@ -385,4 +385,4 @@ Per the Android write prompt repair discipline and hard-rules-android, agent-aut
 2. Skip `generated/` subtrees and CLI-owned Gradle files.
 3. When the in-guest shell-verify gate findings riding the report-leg prompt include `lint-suppression-forbidden`, treat it as a confirmed defect and cite `rule_id: VECTIS-009`.
 
-**Fix**: Remove the suppression and apply a structural fix (`_` prefixes, minimal handlers, narrow types) so Gradle `allWarningsAsErrors` passes without `@Suppress`.
+**Fix**: Remove the suppression and apply a structural fix (`_` prefixes, minimal handlers, narrow types) so the shell compiles cleanly under the template's Kotlin / Gradle warning policy without `@Suppress`. Do not invent `allWarningsAsErrors` if `$TEMPLATE_DIR` does not set it.

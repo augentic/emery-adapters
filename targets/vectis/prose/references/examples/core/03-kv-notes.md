@@ -2,6 +2,8 @@
 
 A Crux app that persists notes locally using the Key-Value capability. Demonstrates CRUD operations, serialization to bytes, and KV effect testing.
 
+**Pin / FFI authority:** pins and `shared/src/ffi.rs` come from `$TEMPLATE_DIR` (BoltFFI `CoreFfi`). Do not reintroduce a `uniffi` cargo feature or `uniffi::setup_scaffolding!()`.
+
 ## Capabilities Used
 
 - **Render** (built-in)
@@ -44,48 +46,39 @@ name = "codegen"
 required-features = ["codegen"]
 
 [features]
-uniffi = ["dep:uniffi"]
-wasm_bindgen = ["dep:wasm-bindgen", "getrandom/wasm_js"]
+shell_ios = []
+shell_android = []
+facet_typegen = ["crux_core/facet_typegen", "crux_kv/facet_typegen"]
 codegen = [
-    "crux_core/cli",
-    "crux_kv/facet_typegen",
+    "dep:anyhow",
     "dep:clap",
     "dep:log",
     "dep:pretty_env_logger",
-    "uniffi",
+    "facet_typegen",
 ]
-facet_typegen = ["crux_core/facet_typegen", "crux_kv/facet_typegen"]
 
 [dependencies]
 crux_core.workspace = true
 crux_kv.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
-facet.workspace = true
-
+facet = "{version from $TEMPLATE_DIR/shared/Cargo.toml}"
+boltffi = "{version from $TEMPLATE_DIR/shared/Cargo.toml}"
+anyhow = { workspace = true, optional = true }
 clap = { version = "4", optional = true, features = ["derive"] }
-getrandom = { version = "0.3", optional = true, default-features = false }
 log = { version = "0.4", optional = true }
 pretty_env_logger = { version = "0.5", optional = true }
-boltffi = "{version from $TEMPLATE_DIR/shared/Cargo.toml}"
-wasm-bindgen = { version = "0.2", optional = true }
 ```
 
 ## `shared/src/lib.rs`
 
 ```rust
 mod app;
-#[cfg(any(feature = "wasm_bindgen", feature = "uniffi"))]
 mod ffi;
 
 pub use app::*;
 pub use crux_core::Core;
-
-#[cfg(any(feature = "wasm_bindgen", feature = "uniffi"))]
-pub use ffi::CoreFFI;
-
-#[cfg(feature = "uniffi")]
-uniffi::setup_scaffolding!();
+pub use ffi::CoreFfi;
 ```
 
 ## `shared/src/app.rs`
@@ -591,50 +584,28 @@ mod tests {
 
 ## `shared/src/ffi.rs`
 
+Prefer the live `$TEMPLATE_DIR/shared/src/ffi.rs` (BoltFFI `#[boltffi::export]` on `CoreFfi`). Pedagogical shape:
+
 ```rust
 use crux_core::{
     Core,
-    bridge::{Bridge, BridgeError, EffectId, FfiFormat},
+    bridge::{Bridge, EffectId},
 };
 
 use crate::Notes;
 
-#[derive(Debug, thiserror::Error)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Error))]
-#[cfg_attr(feature = "uniffi", uniffi(flat_error))]
-pub enum CoreError {
-    #[error("{msg}")]
-    Bridge { msg: String },
-}
-
-impl<F: FfiFormat> From<BridgeError<F>> for CoreError {
-    fn from(e: BridgeError<F>) -> Self {
-        Self::Bridge {
-            msg: e.to_string(),
-        }
-    }
-}
-
-#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
-#[cfg_attr(feature = "wasm_bindgen", wasm_bindgen::prelude::wasm_bindgen)]
-pub struct CoreFFI {
+pub struct CoreFfi {
     core: Bridge<Notes>,
 }
 
-impl Default for CoreFFI {
+impl Default for CoreFfi {
     fn default() -> Self {
         Self::new()
     }
 }
 
-#[cfg_attr(feature = "uniffi", uniffi::export)]
-#[cfg_attr(feature = "wasm_bindgen", wasm_bindgen::prelude::wasm_bindgen)]
-impl CoreFFI {
-    #[cfg_attr(feature = "uniffi", uniffi::constructor)]
-    #[cfg_attr(
-        feature = "wasm_bindgen",
-        wasm_bindgen::prelude::wasm_bindgen(constructor)
-    )]
+#[boltffi::export]
+impl CoreFfi {
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -642,22 +613,31 @@ impl CoreFFI {
         }
     }
 
-    pub fn update(&self, data: &[u8]) -> Result<Vec<u8>, CoreError> {
+    #[must_use]
+    pub fn update(&self, data: &[u8]) -> Vec<u8> {
         let mut effects = Vec::new();
-        self.core.update(data, &mut effects)?;
-        Ok(effects)
+        match self.core.update(data, &mut effects) {
+            Ok(()) => effects,
+            Err(e) => panic!("{e}"),
+        }
     }
 
-    pub fn resolve(&self, id: u32, data: &[u8]) -> Result<Vec<u8>, CoreError> {
+    #[must_use]
+    pub fn resolve(&self, id: u32, data: &[u8]) -> Vec<u8> {
         let mut effects = Vec::new();
-        self.core.resolve(EffectId(id), data, &mut effects)?;
-        Ok(effects)
+        match self.core.resolve(EffectId(id), data, &mut effects) {
+            Ok(()) => effects,
+            Err(e) => panic!("{e}"),
+        }
     }
 
-    pub fn view(&self) -> Result<Vec<u8>, CoreError> {
+    #[must_use]
+    pub fn view(&self) -> Vec<u8> {
         let mut view_model = Vec::new();
-        self.core.view(&mut view_model)?;
-        Ok(view_model)
+        match self.core.view(&mut view_model) {
+            Ok(()) => view_model,
+            Err(e) => panic!("{e}"),
+        }
     }
 }
 ```

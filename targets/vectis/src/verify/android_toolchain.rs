@@ -22,7 +22,7 @@ pub fn android_toolchain_findings(
     if !gradlew.is_file() {
         findings.push(error_finding(
             "android-gradlew-missing",
-            "Android shell is missing `gradlew`; run `make setup` or `vectis android setup`",
+            "Android shell is missing `gradlew`; re-materialize the Gradle wrapper from `$TEMPLATE_DIR`",
         ));
     } else if !is_executable(&gradlew) {
         findings.push(error_finding(
@@ -51,20 +51,14 @@ pub fn android_toolchain_findings(
     if !local_properties.is_file() {
         findings.push(error_finding(
             "android-local-properties-missing",
-            "Android shell is missing `local.properties`; run `make setup-host` with `ANDROID_HOME` set",
+            "Android shell is missing `local.properties`; create it with `sdk.dir=<Android SDK path>` \
+             (host-owned; not copied by materialize), then run `make -C Android doctor`",
         ));
     } else if !file_contains(&local_properties, "sdk.dir") {
         findings.push(error_finding(
             "android-local-properties-missing",
-            "`local.properties` exists but has no `sdk.dir` entry; run `make setup-host`",
-        ));
-    }
-
-    let gradle_properties = android_dir.join("gradle.properties");
-    if gradle_properties.is_file() && !file_contains(&gradle_properties, "org.gradle.java.home") {
-        findings.push(info_finding(
-            "android-java-home-unpinned",
-            "`gradle.properties` has no `org.gradle.java.home`; pin Java 21 via `make setup-host`",
+            "`local.properties` exists but has no `sdk.dir` entry; set `sdk.dir` to the Android SDK \
+             path, then run `make -C Android doctor`",
         ));
     }
 
@@ -72,7 +66,8 @@ pub fn android_toolchain_findings(
     if shared_build.is_file() && file_contains(&shared_build, "__ANDROID_NDK_VERSION__") {
         findings.push(info_finding(
             "android-ndk-unsubstituted",
-            "`shared/build.gradle.kts` still contains `__ANDROID_NDK_VERSION__`; run `make setup-host`",
+            "`shared/build.gradle.kts` still contains `__ANDROID_NDK_VERSION__`; re-copy Android \
+             Gradle DX from `$TEMPLATE_DIR` (live template has no NDK placeholder)",
         ));
     }
 
@@ -81,7 +76,8 @@ pub fn android_toolchain_findings(
         findings.push(error_finding(
             "android-apk-missing",
             format!(
-                "debug APK not found at `Android/{APK_REL}`; run `make verify` in the Android shell"
+                "debug APK not found at `Android/{APK_REL}`; run `make -C Android build` then stamp \
+                 `Android/.vectis/verify.ok`"
             ),
         ));
     }
