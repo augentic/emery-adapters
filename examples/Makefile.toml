@@ -12,7 +12,7 @@ env_files = [".env"]
 command = "cargo"
 args = ["run", "-p", "eval", "--", "eval", "${@}"]
 
-[tasks.specify]
+[tasks.lab]
 env_files = [".env"]
 command = "cargo"
 args = ["run", "-p", "eval", "--", "${@}"]

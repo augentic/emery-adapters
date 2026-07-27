@@ -111,7 +111,7 @@ Grading checks lifecycle, the report, `expect` paths, and (workflow) provenance;
 An existing sandbox refuses to rerun without `--restart`. Continue or debug it explicitly through the native verbs instead:
 
 ```bash
-cargo make specify -- --project-dir sandbox/orders-contracts plan approve
+cargo make lab -- --project-dir sandbox/orders-contracts plan approve
 ```
 
 ## Repair loop
@@ -132,7 +132,7 @@ Do not burn a workflow case for a prompt typo — use a build case, or [add one]
 | `cargo make wasm-run` fails immediately | Needs sibling [`augentic/specify`](https://github.com/augentic/specify) at `../specify` |
 | Patch-resolution errors after editing root `Cargo.toml` | `[patch."https://github.com/augentic/specify.git"]` needs `../specify`; re-comment if not co-developing |
 | Case fails with a green-looking report | Check `expect` paths in `case.toml` — missing files fail the gate |
-| `sandbox … already exists` | Rerun with `--restart`, or continue it via `cargo make specify -- --project-dir <sandbox> …` |
+| `sandbox … already exists` | Rerun with `--restart`, or continue it via `cargo make lab -- --project-dir <sandbox> …` |
 
 More first-run tips: [CONTRIBUTING.md](CONTRIBUTING.md#troubleshooting-first-runs). Bugs and questions: [GitHub Issues](https://github.com/augentic/specify-adapters/issues).
 
@@ -147,7 +147,7 @@ More first-run tips: [CONTRIBUTING.md](CONTRIBUTING.md#troubleshooting-first-run
 | Wasm / WIT seam | [examples/wasm/README.md](examples/wasm/README.md) |
 | Agent / contract rules | [AGENTS.md](AGENTS.md) |
 | Operator docs (engine) | [Specify README](https://github.com/augentic/specify#readme) · [hosted guide](https://specify.augentic.io/) |
-| Lab CLI (native catalog; not the shipped CLI) | `cargo make specify -- --project-dir <dir> slice list` |
+| Lab CLI (native catalog; not the shipped CLI) | `cargo make lab -- --project-dir <dir> slice list` |
 
 ## License
 

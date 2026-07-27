@@ -41,7 +41,7 @@ Native catalog, live cursor backend, operator-invoked (never CI). How to run, de
 cargo make eval                              # list the cases
 cargo make eval orders-contracts --restart   # a workflow case (rung 2)
 cargo make eval omnia-health --restart       # a build case (rung 3)
-cargo make specify -- --project-dir <dir> slice list
+cargo make lab -- --project-dir <dir> slice list
 ```
 
 ### 4. Wasm example — component seam

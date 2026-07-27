@@ -62,7 +62,7 @@ cargo nextest run -p NAME # focused adapter tests
 cargo make adapter NAME   # fast development component build
 cargo make release        # release-build every component
 cargo make publish NAME   # push one built component to its exact GHCR tag (Publish Release / local breakout)
-cargo make specify -- ARGS # any specify verb through the native lab shim
+cargo make lab -- ARGS # any specify verb through the native lab shim
 cargo make eval [id] [--restart] [--until RUNG]  # one live eval case; bare lists them (operator-invoked)
 cargo make wasm-run     # the wasm example (operator-invoked)
 ```

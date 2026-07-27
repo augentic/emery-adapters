@@ -58,11 +58,11 @@ omnia-wasi-otel = { git = "https://github.com/augentic/omnia.git" }
 wrpc-transport = { git = "https://github.com/bytecodealliance/wrpc" }
 wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }
 
-# [patch."https://github.com/augentic/specify.git"]
-# adapter = { path = "../specify/crates/adapter" }
-# probe = { path = "../specify/crates/probe" }
-# native = { path = "../specify/crates/native" }
-# prose = { path = "../specify/crates/prose" }
+[patch."https://github.com/augentic/specify.git"]
+adapter = { path = "../specify/crates/adapter" }
+probe = { path = "../specify/crates/probe" }
+native = { path = "../specify/crates/native" }
+prose = { path = "../specify/crates/prose" }
 
 [workspace.lints.rust]
 # https://dirname.github.io/rust-std-doc/rustc/lints/listing/allowed-by-default.html
