@@ -3,20 +3,6 @@
 version = 4
 
 [[package]]
-name = "adapter"
-version = "0.29.0"
-source = "git+https://github.com/augentic/specify.git#fe6306535fd85a59dae47bd3a1a11a58758e658e"
-dependencies = [
- "omnia-guest",
- "omnia-wasi-http",
- "serde",
- "serde_json",
- "thiserror 2.0.19",
- "wasip3",
- "wit-bindgen 0.60.0",
-]
-
-[[package]]
 name = "addr2line"
 version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -165,23 +151,6 @@ name = "arrayvec"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
-
-[[package]]
-name = "artifacts"
-version = "0.29.0"
-source = "git+https://github.com/augentic/specify.git#fe6306535fd85a59dae47bd3a1a11a58758e658e"
-dependencies = [
- "diagnostics",
- "error",
- "glob",
- "regex",
- "schemars",
- "serde",
- "serde-saphyr",
- "serde_json",
- "strum",
- "tempfile",
-]
 
 [[package]]
 name = "async-trait"
@@ -466,9 +435,9 @@ dependencies = [
 name = "captures"
 version = "0.6.0"
 dependencies = [
- "adapter",
+ "emery-adapter",
+ "emery-prose",
  "omnia-testkit",
- "prose",
  "tokio",
 ]
 
@@ -505,26 +474,6 @@ dependencies = [
  "cfg-if",
  "cpufeatures 0.3.0",
  "rand_core 0.10.1",
-]
-
-[[package]]
-name = "change"
-version = "0.29.0"
-source = "git+https://github.com/augentic/specify.git#fe6306535fd85a59dae47bd3a1a11a58758e658e"
-dependencies = [
- "artifacts",
- "diagnostics",
- "error",
- "jiff",
- "omnia-guest",
- "project",
- "prose",
- "semver",
- "serde",
- "serde-saphyr",
- "serde_json",
- "slice",
- "tracing",
 ]
 
 [[package]]
@@ -646,10 +595,10 @@ checksum = "a6ef517f0926dd24a1582492c791b6a4818a4d94e789a334894aa15b0d12f55c"
 name = "contracts"
 version = "0.6.0"
 dependencies = [
- "adapter",
+ "emery-adapter",
+ "emery-prose",
  "jsonschema",
  "omnia-testkit",
- "prose",
  "semver",
  "serde",
  "serde-saphyr",
@@ -1052,19 +1001,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7cd812cc2bc1d69d4764bd80df88b4317eaef9e773c75226407d9bc0876b211c"
 
 [[package]]
-name = "diagnostics"
-version = "0.29.0"
-source = "git+https://github.com/augentic/specify.git#fe6306535fd85a59dae47bd3a1a11a58758e658e"
-dependencies = [
- "base16ct",
- "schemars",
- "serde",
- "serde-saphyr",
- "serde_json",
- "sha2 0.11.0",
-]
-
-[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1100,9 +1036,9 @@ dependencies = [
 name = "documentation"
 version = "0.6.0"
 dependencies = [
- "adapter",
+ "emery-adapter",
+ "emery-prose",
  "omnia-testkit",
- "prose",
  "tokio",
 ]
 
@@ -1146,6 +1082,185 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
+name = "emery-adapter"
+version = "0.29.0"
+source = "git+https://github.com/augentic/emery.git#658e504109beb946e2bc231692ca593118a374b1"
+dependencies = [
+ "omnia-guest",
+ "omnia-wasi-http",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+ "wasip3",
+ "wit-bindgen 0.60.0",
+]
+
+[[package]]
+name = "emery-artifacts"
+version = "0.29.0"
+source = "git+https://github.com/augentic/emery.git#658e504109beb946e2bc231692ca593118a374b1"
+dependencies = [
+ "emery-diagnostics",
+ "emery-error",
+ "glob",
+ "regex",
+ "schemars",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "strum",
+ "tempfile",
+]
+
+[[package]]
+name = "emery-change"
+version = "0.29.0"
+source = "git+https://github.com/augentic/emery.git#658e504109beb946e2bc231692ca593118a374b1"
+dependencies = [
+ "emery-artifacts",
+ "emery-diagnostics",
+ "emery-error",
+ "emery-project",
+ "emery-prose",
+ "emery-slice",
+ "jiff",
+ "omnia-guest",
+ "semver",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
+name = "emery-diagnostics"
+version = "0.29.0"
+source = "git+https://github.com/augentic/emery.git#658e504109beb946e2bc231692ca593118a374b1"
+dependencies = [
+ "base16ct",
+ "schemars",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "sha2 0.11.0",
+]
+
+[[package]]
+name = "emery-error"
+version = "0.29.0"
+source = "git+https://github.com/augentic/emery.git#658e504109beb946e2bc231692ca593118a374b1"
+dependencies = [
+ "serde-saphyr",
+ "thiserror 2.0.19",
+]
+
+[[package]]
+name = "emery-native"
+version = "0.29.0"
+source = "git+https://github.com/augentic/emery.git#658e504109beb946e2bc231692ca593118a374b1"
+dependencies = [
+ "axum",
+ "emery-adapter",
+ "emery-artifacts",
+ "emery-diagnostics",
+ "emery-error",
+ "emery-project",
+ "emery-transport",
+ "omnia-guest",
+ "semver",
+ "thiserror 2.0.19",
+ "tokio",
+]
+
+[[package]]
+name = "emery-probe"
+version = "0.29.0"
+source = "git+https://github.com/augentic/emery.git#658e504109beb946e2bc231692ca593118a374b1"
+dependencies = [
+ "anyhow",
+ "clap",
+ "emery-artifacts",
+ "emery-native",
+ "emery-project",
+ "jiff",
+ "omnia 0.35.0",
+ "omnia-cursor",
+ "omnia-guest",
+ "omnia-wasi-model",
+ "serde",
+ "tokio",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "emery-project"
+version = "0.29.0"
+source = "git+https://github.com/augentic/emery.git#658e504109beb946e2bc231692ca593118a374b1"
+dependencies = [
+ "emery-artifacts",
+ "emery-diagnostics",
+ "emery-error",
+ "jiff",
+ "omnia-guest",
+ "petgraph",
+ "schemars",
+ "semver",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "strum",
+ "thiserror 2.0.19",
+ "toml",
+ "tracing",
+]
+
+[[package]]
+name = "emery-prose"
+version = "0.29.0"
+source = "git+https://github.com/augentic/emery.git#658e504109beb946e2bc231692ca593118a374b1"
+
+[[package]]
+name = "emery-slice"
+version = "0.29.0"
+source = "git+https://github.com/augentic/emery.git#658e504109beb946e2bc231692ca593118a374b1"
+dependencies = [
+ "emery-artifacts",
+ "emery-diagnostics",
+ "emery-error",
+ "emery-project",
+ "emery-prose",
+ "jiff",
+ "omnia-guest",
+ "regex",
+ "schemars",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "strum",
+ "tracing",
+]
+
+[[package]]
+name = "emery-transport"
+version = "0.29.0"
+source = "git+https://github.com/augentic/emery.git#658e504109beb946e2bc231692ca593118a374b1"
+dependencies = [
+ "clap",
+ "emery-artifacts",
+ "emery-change",
+ "emery-error",
+ "emery-project",
+ "emery-slice",
+ "omnia-guest",
+ "serde",
+ "serde_json",
+ "strum",
+ "tracing",
+]
+
+[[package]]
 name = "encoding_rs"
 version = "0.8.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1180,15 +1295,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "error"
-version = "0.29.0"
-source = "git+https://github.com/augentic/specify.git#fe6306535fd85a59dae47bd3a1a11a58758e658e"
-dependencies = [
- "serde-saphyr",
- "thiserror 2.0.19",
-]
-
-[[package]]
 name = "euclid"
 version = "0.22.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1205,10 +1311,10 @@ dependencies = [
  "captures",
  "contracts",
  "documentation",
+ "emery-native",
+ "emery-probe",
  "intent",
- "native",
  "omnia 0.6.0",
- "probe",
  "screenshots",
  "tokio",
  "typescript",
@@ -1928,9 +2034,9 @@ dependencies = [
 name = "intent"
 version = "0.6.0"
 dependencies = [
- "adapter",
+ "emery-adapter",
+ "emery-prose",
  "omnia-testkit",
- "prose",
  "tokio",
 ]
 
@@ -2352,24 +2458,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "native"
-version = "0.29.0"
-source = "git+https://github.com/augentic/specify.git#fe6306535fd85a59dae47bd3a1a11a58758e658e"
-dependencies = [
- "adapter",
- "artifacts",
- "axum",
- "diagnostics",
- "error",
- "omnia-guest",
- "project",
- "semver",
- "thiserror 2.0.19",
- "tokio",
- "transport",
-]
-
-[[package]]
 name = "nohash-hasher"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2504,10 +2592,10 @@ dependencies = [
 name = "omnia"
 version = "0.6.0"
 dependencies = [
- "adapter",
+ "emery-adapter",
+ "emery-prose",
  "jsonschema",
  "omnia-testkit",
- "prose",
  "serde",
  "serde_json",
  "tempfile",
@@ -3130,56 +3218,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "probe"
-version = "0.29.0"
-source = "git+https://github.com/augentic/specify.git#fe6306535fd85a59dae47bd3a1a11a58758e658e"
-dependencies = [
- "anyhow",
- "artifacts",
- "clap",
- "jiff",
- "native",
- "omnia 0.35.0",
- "omnia-cursor",
- "omnia-guest",
- "omnia-wasi-model",
- "project",
- "serde",
- "tokio",
- "toml",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "proc-macro2"
 version = "1.0.107"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9"
 dependencies = [
  "unicode-ident",
-]
-
-[[package]]
-name = "project"
-version = "0.29.0"
-source = "git+https://github.com/augentic/specify.git#fe6306535fd85a59dae47bd3a1a11a58758e658e"
-dependencies = [
- "artifacts",
- "diagnostics",
- "error",
- "jiff",
- "omnia-guest",
- "petgraph",
- "schemars",
- "semver",
- "serde",
- "serde-saphyr",
- "serde_json",
- "strum",
- "thiserror 2.0.19",
- "toml",
- "tracing",
 ]
 
 [[package]]
@@ -3196,11 +3240,6 @@ dependencies = [
  "regex-syntax",
  "unarray",
 ]
-
-[[package]]
-name = "prose"
-version = "0.29.0"
-source = "git+https://github.com/augentic/specify.git#fe6306535fd85a59dae47bd3a1a11a58758e658e"
 
 [[package]]
 name = "prost"
@@ -3886,9 +3925,9 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 name = "screenshots"
 version = "0.6.0"
 dependencies = [
- "adapter",
+ "emery-adapter",
+ "emery-prose",
  "omnia-testkit",
- "prose",
  "tokio",
 ]
 
@@ -4139,27 +4178,6 @@ name = "slab"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
-
-[[package]]
-name = "slice"
-version = "0.29.0"
-source = "git+https://github.com/augentic/specify.git#fe6306535fd85a59dae47bd3a1a11a58758e658e"
-dependencies = [
- "artifacts",
- "diagnostics",
- "error",
- "jiff",
- "omnia-guest",
- "project",
- "prose",
- "regex",
- "schemars",
- "serde",
- "serde-saphyr",
- "serde_json",
- "strum",
- "tracing",
-]
 
 [[package]]
 name = "smallvec"
@@ -4757,24 +4775,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "transport"
-version = "0.29.0"
-source = "git+https://github.com/augentic/specify.git#fe6306535fd85a59dae47bd3a1a11a58758e658e"
-dependencies = [
- "artifacts",
- "change",
- "clap",
- "error",
- "omnia-guest",
- "project",
- "serde",
- "serde_json",
- "slice",
- "strum",
- "tracing",
-]
-
-[[package]]
 name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4806,9 +4806,9 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 name = "typescript"
 version = "0.6.0"
 dependencies = [
- "adapter",
+ "emery-adapter",
+ "emery-prose",
  "omnia-testkit",
- "prose",
  "tokio",
 ]
 
@@ -4942,11 +4942,11 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 name = "vectis"
 version = "0.6.0"
 dependencies = [
- "adapter",
+ "emery-adapter",
+ "emery-prose",
  "image",
  "jsonschema",
  "omnia-testkit",
- "prose",
  "resvg",
  "serde",
  "serde-saphyr",

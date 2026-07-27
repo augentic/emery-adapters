@@ -7,7 +7,7 @@ Read this when authoring or updating a generated crate. The Hard Rules and Autho
 When conflicts arise, follow this strict precedence:
 
 1. **SKILL.md** (highest) -- generation/update rules and hard constraints
-2. **Specify artifacts (specs + design.md)** -- behavior specification (artifacts always win for changed behavior)
+2. **Emery artifacts (specs + design.md)** -- behavior specification (artifacts always win for changed behavior)
 3. **references/** -- authoritative patterns and SDK API
 4. **examples/** -- canonical production code patterns
 5. **Existing crate code** (UPDATE MODE ONLY) -- authoritative for unchanged behavior; trust existing code for anything the updated artifacts do not contradict
@@ -39,7 +39,7 @@ Violations of any rule below fail generation or update.
 10. **No regressions** -- the build orchestration layer captures a test baseline before changes and runs a verify-repair loop after both crate-writer and test-writer complete; crate-writer must not introduce changes that break previously-passing tests
 11. **Artifacts win for changed behavior** -- when the updated artifacts contradict existing code, trust the artifacts; the old behavior is intentionally being replaced
 12. **Preserve unchanged code** -- do not reformat, restructure, or modify code regions that the slice set does not touch
-13. **No silent removals** -- every subtractive change must be documented in CHANGELOG.md with the reason (artifacts no longer specify this behavior)
+13. **No silent removals** -- every subtractive change must be documented in CHANGELOG.md with the reason (artifacts no longer emery this behavior)
 14. **Testable exports** -- every modified or added operation must be exported so test-writer can generate tests; subtractive changes must be reflected in the public API so test-writer can remove stale tests
 15. **Atomic categories** -- complete all changes within a category before moving to the next; do not interleave
 16. **Structural changes require re-inventory** -- after applying structural changes, re-scan the crate before proceeding to subsequent categories

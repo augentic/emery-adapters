@@ -43,7 +43,7 @@ When the slice has a `captures` source binding, copy or symlink the bound captur
 
 - **StateStore-backed operations**: load JSON with `include_bytes!("data/replays/samples/fleet-data.json")` and inject via `MockProvider::with_state("key", data)` or `MockProvider::seed_cache("key", data)`.
 - **HttpRequest-backed operations**: `include_bytes!("data/replays/<handler>/<endpoint>.json")`; dispatch in the mock by `request.uri().path()`.
-- **TableStore-backed operations**: bulk entity data from `samples/` passed to MockProvider constructor; captures specify query parameters and expected results.
+- **TableStore-backed operations**: bulk entity data from `samples/` passed to MockProvider constructor; captures emery query parameters and expected results.
 - **TestDef-style captures**: JSON has `setup`, `input`, `params`, `http_requests`, `output`; tests deserialize and run one scenario per file.
 - **Setup block**: configure MockProvider per [`replay-fixtures.md`](replay-fixtures.md).
 

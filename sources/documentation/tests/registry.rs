@@ -19,12 +19,12 @@ fn embeds_rules() {
     assert!(doc.body.contains("id: SRC-001"), "rule frontmatter carries its id");
 }
 
-/// The `references/spec-runtime` symlink into `codex/references/runtime/`
+/// The `references/emery-runtime` symlink into `codex/references/runtime/`
 /// is resolved at build time: documents appear under their symlink-name
 /// paths with the shared content inlined.
 #[test]
 fn symlink_resolved_inline() {
-    let doc = find(Adapter::docs(), "references/spec-runtime/reconciliation.md")
+    let doc = find(Adapter::docs(), "references/emery-runtime/reconciliation.md")
         .expect("symlinked runtime reference is embedded");
     assert!(!doc.body.is_empty(), "resolved symlink content is inlined");
 }

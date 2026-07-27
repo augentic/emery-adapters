@@ -1,15 +1,15 @@
-# Specify Adapters
+# Emery Adapters
 
-[![CI](https://github.com/augentic/specify-adapters/actions/workflows/ci.yaml/badge.svg)](https://github.com/augentic/specify-adapters/actions/workflows/ci.yaml)
+[![CI](https://github.com/augentic/emery-adapters/actions/workflows/ci.yaml/badge.svg)](https://github.com/augentic/emery-adapters/actions/workflows/ci.yaml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
-First-party **source** and **target** Wasm components for [Specify](https://github.com/augentic/specify).
+First-party **source** and **target** Wasm components for [Emery](https://github.com/augentic/emery).
 
-**Using Specify in a project?** You do not need this repository. Install adapters with a pin from the engine CLI — for example `specify init contracts@0.5.0` — and follow the [Specify README](https://github.com/augentic/specify#readme).
+**Using Emery in a project?** You do not need this repository. Install adapters with a pin from the engine CLI — for example `emery init contracts@0.5.0` — and follow the [Emery README](https://github.com/augentic/emery#readme).
 
 **Authoring or debugging an adapter?** This repo is your home. Edit prose or Rust, then re-run a live eval case until it passes.
 
-The pin you pass to `specify` (`contracts@0.5.0`) is this workspace’s shared SemVer (`[workspace.package].version`). Operators consume published GHCR artifacts; authors iterate here natively without a Wasm rebuild for prose changes.
+The pin you pass to `emery` (`contracts@0.5.0`) is this workspace’s shared SemVer (`[workspace.package].version`). Operators consume published GHCR artifacts; authors iterate here natively without a Wasm rebuild for prose changes.
 
 ## Choose your path
 
@@ -19,7 +19,7 @@ The pin you pass to `specify` (`contracts@0.5.0`) is this workspace’s shared S
 | Fix Rust adapter logic | [Rust-only loop](#rust-only-loop) · [docs/testing.md](docs/testing.md) |
 | Create a new adapter (source or target) | [docs/authoring.md](docs/authoring.md) |
 | Set up the toolchain, publish, or bump the engine pin | [CONTRIBUTING.md](CONTRIBUTING.md) |
-| Use Specify as an operator | [Specify README](https://github.com/augentic/specify#readme) — leave this repo |
+| Use Emery as an operator | [Emery README](https://github.com/augentic/emery#readme) — leave this repo |
 
 The root `Makefile` forwards goals to [cargo-make](Makefile.toml); docs use `cargo make …` so flags like `--restart` are not eaten by GNU Make.
 
@@ -32,7 +32,7 @@ An adapter is one Rust crate that ships as one Wasm component. The engine calls 
 | **Source** | `survey`, `extract` | intent, documentation, typescript, screenshots, captures |
 | **Target** | `guidance`, `build`, `merge` | contracts, omnia, vectis |
 
-How adapters show up for operators: pinned package (`contracts@0.5.0` / `specify:contracts@0.5.0`) pulls from GHCR on first use; bare names resolve only a project component cache seeded by `specify adapter add` or a local `.wasm` at init. Details: [Specify adapter install notes](https://github.com/augentic/specify/blob/main/docs/reference/cli/init.md) and [CONTRIBUTING.md § Publishing](CONTRIBUTING.md#publishing).
+How adapters show up for operators: pinned package (`contracts@0.5.0` / `emery:contracts@0.5.0`) pulls from GHCR on first use; bare names resolve only a project component cache seeded by `emery adapter add` or a local `.wasm` at init. Details: [Emery adapter install notes](https://github.com/augentic/emery/blob/main/docs/reference/cli/init.md) and [CONTRIBUTING.md § Publishing](CONTRIBUTING.md#publishing).
 
 ## Rust-only loop
 
@@ -62,7 +62,7 @@ From the repository root, run one build case (~2–5 minutes; needs cursor auth)
 cargo make eval contracts-design --restart
 ```
 
-A passing run prints the retained sandbox and the authoritative report path — `.specify/slices/returns-api/contracts/` in that sandbox carries the generated contract delta. A success report that wrote nothing still fails the case's `expect` gate.
+A passing run prints the retained sandbox and the authoritative report path — `.emery/slices/returns-api/contracts/` in that sandbox carries the generated contract delta. A success report that wrote nothing still fails the case's `expect` gate.
 
 To start developing, edit the contracts adapter’s prompts or references under `targets/contracts/prose/`, then run the same command again and compare the sandbox with the previous run (`--restart` replaces it). Native runs pick up prose changes automatically — no Wasm build is required.
 
@@ -101,8 +101,8 @@ Every case keeps one stable sandbox at `sandbox/<id>/` (beside the wasm example'
 ```text
 sandbox/<id>/
   plan.yaml / change.md / discovery.md   # workflow cases
-  .specify/slices/<slice>/               # proposal, specs, design, tasks, evidence
-  .specify/slices/<slice>/build/report.yaml   # the authoritative build report
+  .emery/slices/<slice>/               # proposal, specs, design, tasks, evidence
+  .emery/slices/<slice>/build/report.yaml   # the authoritative build report
   …target outputs (contracts, crates/, shells, …)
 ```
 
@@ -129,12 +129,12 @@ Do not burn a workflow case for a prompt typo — use a build case, or [add one]
 | --- | --- |
 | Eval hangs / auth errors | `cursor-agent login` or `CURSOR_API_KEY` in repo-root `.env` |
 | `cargo make fmt` fails | Install nightly rustfmt: `rustup toolchain install nightly --component rustfmt` |
-| `cargo make wasm-run` fails immediately | Needs sibling [`augentic/specify`](https://github.com/augentic/specify) at `../specify` |
-| Patch-resolution errors after editing root `Cargo.toml` | `[patch."https://github.com/augentic/specify.git"]` needs `../specify`; re-comment if not co-developing |
+| `cargo make wasm-run` fails immediately | Needs sibling [`augentic/emery`](https://github.com/augentic/emery) at `../emery` |
+| Patch-resolution errors after editing root `Cargo.toml` | `[patch."https://github.com/augentic/emery.git"]` needs `../emery`; re-comment if not co-developing |
 | Case fails with a green-looking report | Check `expect` paths in `case.toml` — missing files fail the gate |
 | `sandbox … already exists` | Rerun with `--restart`, or continue it via `cargo make lab -- --project-dir <sandbox> …` |
 
-More first-run tips: [CONTRIBUTING.md](CONTRIBUTING.md#troubleshooting-first-runs). Bugs and questions: [GitHub Issues](https://github.com/augentic/specify-adapters/issues).
+More first-run tips: [CONTRIBUTING.md](CONTRIBUTING.md#troubleshooting-first-runs). Bugs and questions: [GitHub Issues](https://github.com/augentic/emery-adapters/issues).
 
 ## Further reading
 
@@ -146,9 +146,9 @@ More first-run tips: [CONTRIBUTING.md](CONTRIBUTING.md#troubleshooting-first-run
 | Test rungs | [docs/testing.md](docs/testing.md) |
 | Wasm / WIT seam | [examples/wasm/README.md](examples/wasm/README.md) |
 | Agent / contract rules | [AGENTS.md](AGENTS.md) |
-| Operator docs (engine) | [Specify README](https://github.com/augentic/specify#readme) · [hosted guide](https://specify.augentic.io/) |
+| Operator docs (engine) | [Emery README](https://github.com/augentic/emery#readme) · [hosted guide](https://emery.augentic.io/) |
 | Lab CLI (native catalog; not the shipped CLI) | `cargo make lab -- --project-dir <dir> slice list` |
 
 ## License
 
-Dual-licensed under [MIT](LICENSE-MIT) or [Apache 2.0](LICENSE-APACHE), at your option. Contribution norms (including DCO) match the engine repo — see [specify CONTRIBUTING](https://github.com/augentic/specify/blob/main/CONTRIBUTING.md). [Code of Conduct](CODE-OF-CONDUCT.md).
+Dual-licensed under [MIT](LICENSE-MIT) or [Apache 2.0](LICENSE-APACHE), at your option. Contribution norms (including DCO) match the engine repo — see [emery CONTRIBUTING](https://github.com/augentic/emery/blob/main/CONTRIBUTING.md). [Code of Conduct](CODE-OF-CONDUCT.md).

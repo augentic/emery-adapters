@@ -11,7 +11,7 @@ extract ./services/event-processor $SLICE_DIR
 ```
 
 - **TypeScript Source**: `./services/event-processor`
-- **Specify Output**: `$SLICE_DIR` (specs/ + design.md)
+- **Emery Output**: `$SLICE_DIR` (specs/ + design.md)
 
 ## TypeScript Source Code
 
@@ -80,7 +80,7 @@ export class EventProcessor {
 }
 ```
 
-## Generated Specify Artifacts (Excerpt)
+## Generated Emery Artifacts (Excerpt)
 
 ```markdown
 ### Component

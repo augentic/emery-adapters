@@ -1,6 +1,6 @@
 # Artifact-to-Code Mapping
 
-Each Specify artifact section maps to a specific code construct. The core-writer reads this table during the diff analysis step (Update Mode U4) to systematically identify what changed and where to apply the edit.
+Each Emery artifact section maps to a specific code construct. The core-writer reads this table during the diff analysis step (Update Mode U4) to systematically identify what changed and where to apply the edit.
 
 | Artifact Section | Code Construct | File(s) | Diff Indicators |
 |---|---|---|---|

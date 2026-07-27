@@ -9,7 +9,7 @@ The rules apply uniformly to OpenAPI HTTP bindings, AsyncAPI message bindings, a
 | Concept | Path | Lifetime |
 |---|---|---|
 | **Baseline** | `contracts/{schemas,http,messages}/` | Persists across changes; merged contracts only. |
-| **Change-local delta** | `.specify/slices/<slice-name>/contracts/{schemas,http,messages}/` | Exists during the slice lifecycle; merged into the baseline at `specify slice merge run` or discarded at `specify slice drop`. |
+| **Change-local delta** | `.emery/slices/<slice-name>/contracts/{schemas,http,messages}/` | Exists during the slice lifecycle; merged into the baseline at `emery slice merge run` or discarded at `emery slice drop`. |
 
 The baseline is the source of truth for the platform's current contract surface. The slice-local delta is a **proposed modification**, pending review and merge. The delta directory contains **only the files this slice adds or replaces** — never a full copy of the baseline.
 
@@ -48,7 +48,7 @@ The spec describes interactions absent from the baseline, or asserts new claims 
 
 ### 3. Normalisation
 
-The baseline file lacks Specify-required metadata (e.g. `$id` on a schema, `info.description` on an OpenAPI document). Propose a normalisation delta that adds the metadata **without changing the interface shape**. Surface the normalisation entries as a separate section of the alignment report; they are not behavioural changes.
+The baseline file lacks Emery-required metadata (e.g. `$id` on a schema, `info.description` on an OpenAPI document). Propose a normalisation delta that adds the metadata **without changing the interface shape**. Surface the normalisation entries as a separate section of the alignment report; they are not behavioural changes.
 
 ## The "do not modify the baseline directly" rule
 
@@ -57,13 +57,13 @@ All output goes into `$SLICE_DIR/contracts/`. Never edit a file under root `cont
 Two reasons:
 
 1. **Reviewability.** A reviewer needs to see exactly what a slice contributes to the contract surface. Mixing edits across the baseline and the slice directory makes the diff ambiguous.
-2. **Mergeability.** `specify slice merge conflict-check` compares the slice's `defined-at` timestamp against the baseline files it intends to replace. Edits to the baseline outside this audit trail will be flagged as conflicts at merge time and may be silently lost.
+2. **Mergeability.** `emery slice merge conflict-check` compares the slice's `defined-at` timestamp against the baseline files it intends to replace. Edits to the baseline outside this audit trail will be flagged as conflicts at merge time and may be silently lost.
 
 The verifier flags every modification to a baseline file made by an author / importer run as a hard failure.
 
 ## Opaque file replacement
 
-Contract files use **whole-file replacement semantics** at merge. Specify does not parse contract YAML to compute property-level deltas the way it does for spec files (which use the ADDED/MODIFIED/REMOVED format). Instead:
+Contract files use **whole-file replacement semantics** at merge. Emery does not parse contract YAML to compute property-level deltas the way it does for spec files (which use the ADDED/MODIFIED/REMOVED format). Instead:
 
 - The slice's `contracts/<subdir>/<file>.yaml` replaces the baseline's `contracts/<subdir>/<file>.yaml` byte-for-byte at merge time.
 - Files **absent** from the slice's `contracts/` are left untouched in the baseline.
@@ -77,12 +77,12 @@ Two consequences for authors:
 
 ## Conflict detection
 
-Two concurrent changes that both modify the same contract file conflict. `specify slice merge conflict-check` detects this by comparing the slice's `defined-at` timestamp against the baseline file's last-merged timestamp:
+Two concurrent changes that both modify the same contract file conflict. `emery slice merge conflict-check` detects this by comparing the slice's `defined-at` timestamp against the baseline file's last-merged timestamp:
 
 - **No conflict.** Baseline file unchanged since the slice was defined → merge proceeds.
-- **Conflict.** Baseline file modified after the slice's `defined-at` → merge is blocked. Resolution: re-run the slice's define phase against the updated baseline (typically via `/spec:refine` resume), recompute the delta, and re-merge.
+- **Conflict.** Baseline file modified after the slice's `defined-at` → merge is blocked. Resolution: re-run the slice's define phase against the updated baseline (typically via `/emery:refine` resume), recompute the delta, and re-merge.
 
-Conflicts are detected at file granularity, not at the property / path / channel level. Two changes that add disjoint paths to the same `user-api.yaml` will still conflict — Specify defers to the operator to merge them manually (the format authors run again with the second change rebased onto the post-first-merge baseline).
+Conflicts are detected at file granularity, not at the property / path / channel level. Two changes that add disjoint paths to the same `user-api.yaml` will still conflict — Emery defers to the operator to merge them manually (the format authors run again with the second change rebased onto the post-first-merge baseline).
 
 ## See also
 

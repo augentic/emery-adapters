@@ -10,19 +10,19 @@ Every layout inferer accepts the following arguments. Source-specific arguments 
 
 | Argument | How it is used | Default | Precedence |
 |---|---|---|---|
-| `--output <path>` | Names the exact file the inferer should write. | Active slice directory's `layout.yaml` (`.specify/slices/<name>/layout.yaml`); falls back to `design-system/layout.yaml` when no slice is active. | Explicit `--output` wins over every project-side default. |
-| `--baseline <path>` | Existing `layout.yaml` (or wired `composition.yaml`) the inferer should refine rather than overwrite. | Existing output-path content; then `design-system/layout.yaml`; then `.specify/specs/composition.yaml`. | Explicit `--baseline` wins over discovered local or baseline files. |
+| `--output <path>` | Names the exact file the inferer should write. | Active slice directory's `layout.yaml` (`.emery/slices/<name>/layout.yaml`); falls back to `design-system/layout.yaml` when no slice is active. | Explicit `--output` wins over every project-side default. |
+| `--baseline <path>` | Existing `layout.yaml` (or wired `composition.yaml`) the inferer should refine rather than overwrite. | Existing output-path content; then `design-system/layout.yaml`; then `.emery/specs/composition.yaml`. | Explicit `--baseline` wins over discovered local or baseline files. |
 | `--screen <slug>=<hint>` | Repeatable screen-boundary hint. The hint is source-specific (frame ID, screenshot group name, source-code view entrypoint). | None — inferers derive screen candidates from their source material. | Hints constrain or name inferred candidates; they MUST NOT force schema-invalid output. |
 
 Argument placeholders:
 
-- `<path>` — local file or directory path, relative or absolute (e.g. `screenshots/login.png`, `.specify/slices/onboarding/layout.yaml`).
+- `<path>` — local file or directory path, relative or absolute (e.g. `screenshots/login.png`, `.emery/slices/onboarding/layout.yaml`).
 - `<slug>` — stable kebab-case identifier for a logical screen (e.g. `login`, `task-list`, `settings-detail`).
 - `<hint>` — source-specific evidence that helps name or bound a screen.
 
 Arguments deliberately excluded from the common surface:
 
-- `--slice-dir <path>` — redundant with default active-slice discovery plus `--output` for explicit routing. When active-slice detection is ambiguous, operators pass `--output .specify/slices/<name>/layout.yaml`.
+- `--slice-dir <path>` — redundant with default active-slice discovery plus `--output` for explicit routing. When active-slice detection is ambiguous, operators pass `--output .emery/slices/<name>/layout.yaml`.
 - `--tokens <path>` / `--assets <path>` — inferers SHOULD auto-discover `design-system/tokens.yaml` and `design-system/assets.yaml` for reference checks. Non-standard locations wait for demonstrated demand or live in source-specific arguments on individual skills.
 
 ## Operator ergonomics
@@ -34,7 +34,7 @@ Arguments deliberately excluded from the common surface:
 
 ## Output rules
 
-- Inferers MUST emit `layout.yaml` documents using the **unwired subset** of [`composition.schema.json`](https://schemas.specify.dev/vectis/composition.schema.json). Allowed structure is a full `screens` document with screen names, regions, groups, the item vocabulary, token references, asset references, the optional `component: <slug>` directive on groups (see [Component directive emission](#component-directive-emission)), states, overlays without `trigger`, and `platforms.*` overrides.
+- Inferers MUST emit `layout.yaml` documents using the **unwired subset** of [`composition.schema.json`](https://schemas.emery.dev/vectis/composition.schema.json). Allowed structure is a full `screens` document with screen names, regions, groups, the item vocabulary, token references, asset references, the optional `component: <slug>` directive on groups (see [Component directive emission](#component-directive-emission)), states, overlays without `trigger`, and `platforms.*` overrides.
 - A layout document MUST NOT use the change-local `delta` shape. `delta` is reserved for the wired `composition.yaml` lifecycle artifact.
 - The unwired subset forbids define-owned wiring. Inferers MUST NOT emit any of:
   - `maps_to`
@@ -46,7 +46,7 @@ Arguments deliberately excluded from the common surface:
   - conditional visual keys that end with `-when` (e.g. `strikethrough-when`, `disabled-when`)
 - Inferers MAY use **token references** when the source supplies a named token, variable, or style that confidently maps to an entry in `tokens.yaml`. Otherwise they SHOULD prefer raw layout values that the composition schema permits and add `# TODO` comments where tokenisation is expected later. Inferers MUST NOT invent token names.
 - Inferers MAY reference **asset IDs** only when those IDs resolve through `assets.yaml`, or when the reference is paired with a `# TODO` comment asking the operator to add the missing inventory entry. Inferers MUST NOT crop or extract production assets from source material.
-- Inferers MAY emit the `component: <slug>` directive only under the rules in [Component directive emission](#component-directive-emission). The directive belongs to the unwired subset and `/spec:refine` MUST preserve it; inferers stay conservative so refine-time review remains the operator's call.
+- Inferers MAY emit the `component: <slug>` directive only under the rules in [Component directive emission](#component-directive-emission). The directive belongs to the unwired subset and `/emery:refine` MUST preserve it; inferers stay conservative so refine-time review remains the operator's call.
 - Inferers MUST append to `provenance.sources[]` rather than replacing it. The composition schema's provenance vocabulary is `figma`, `legacy`, `manual`, `screenshots`, and `code` (Appendix F.1). `screenshots` and `code` are the new entries reserved for the image and future code paths; `legacy` remains valid for broad source-code migration runs.
 - Multi-source output is a single `layout.yaml`. Per-screen provenance is represented through comments adjacent to screen entries in v1, not a schema change. A future schema bump MAY promote per-screen provenance into structured metadata.
 
@@ -117,8 +117,8 @@ The full per-mode validator surface the adapter embeds:
 |---|---|
 | `layout` | `layout.yaml` against the unwired subset (composition schema + structural identity + no define-owned wiring keys + no `delta`). |
 | `composition` | Wired or unwired composition; auto-invokes `tokens` and `assets` when siblings exist. |
-| `tokens` | `tokens.yaml` against the published [`tokens.schema.json`](https://schemas.specify.dev/vectis/tokens.schema.json). |
-| `assets` | `assets.yaml` against the published [`assets.schema.json`](https://schemas.specify.dev/vectis/assets.schema.json), plus referenced-file existence under `design-system/assets/**`. |
+| `tokens` | `tokens.yaml` against the published [`tokens.schema.json`](https://schemas.emery.dev/vectis/tokens.schema.json). |
+| `assets` | `assets.yaml` against the published [`assets.schema.json`](https://schemas.emery.dev/vectis/assets.schema.json), plus referenced-file existence under `design-system/assets/**`. |
 | `all` | Runs all four against the active slice and baseline. Convenience mode. |
 
 Outcome semantics for every mode:
@@ -146,5 +146,5 @@ Source-specific skills MAY add additional sections (e.g. the image inferer repor
 ## See also
 
 - [Component Catalog](./components.md) — operator workflow and validation surfaces for `components.yaml`.
-- [`composition.schema.json`](https://schemas.specify.dev/vectis/composition.schema.json) — the schema both `layout.yaml` (unwired) and `composition.yaml` (wired) validate against; tool-owned at `targets/vectis/schemas/` and embedded in the adapter guest.
-- [`tokens.schema.json`](https://schemas.specify.dev/vectis/tokens.schema.json) and [`assets.schema.json`](https://schemas.specify.dev/vectis/assets.schema.json) — the sibling input schemas the cross-artifact reference checks consume.
+- [`composition.schema.json`](https://schemas.emery.dev/vectis/composition.schema.json) — the schema both `layout.yaml` (unwired) and `composition.yaml` (wired) validate against; tool-owned at `targets/vectis/schemas/` and embedded in the adapter guest.
+- [`tokens.schema.json`](https://schemas.emery.dev/vectis/tokens.schema.json) and [`assets.schema.json`](https://schemas.emery.dev/vectis/assets.schema.json) — the sibling input schemas the cross-artifact reference checks consume.

@@ -1,10 +1,10 @@
 # Testing
 
-Integration-first test posture for `specify-adapters`: integration owns every publicly reachable behavior, and the unit layer is deliberately thin. Design tests against the public surfaces — the WIT contract, each adapter crate's `tests/` suite, and the operator-invoked wasm example — never against private kernels. Read this before adding or deleting a test.
+Integration-first test posture for `emery-adapters`: integration owns every publicly reachable behavior, and the unit layer is deliberately thin. Design tests against the public surfaces — the WIT contract, each adapter crate's `tests/` suite, and the operator-invoked wasm example — never against private kernels. Read this before adding or deleting a test.
 
 ## The five rungs
 
-Every rung runs from this repository with its own `cargo make` tasks; the engine repository tests itself independently (see [its developer loop guide](https://github.com/augentic/specify/blob/main/docs/contributing/dev-loop.md)). There is no cross-repo command surface.
+Every rung runs from this repository with its own `cargo make` tasks; the engine repository tests itself independently (see [its developer loop guide](https://github.com/augentic/emery/blob/main/docs/contributing/dev-loop.md)). There is no cross-repo command surface.
 
 Fastest feedback first. **Every behavior is asserted on exactly one rung** — duplicating an assertion across rungs is a defect, not extra safety.
 
@@ -14,11 +14,11 @@ Fastest feedback first. **Every behavior is asserted on exactly one rung** — d
 | 2   | Workflow eval cases | Cross-phase integration, real sources → working-tree outputs | [`examples/eval/`](../examples/eval/README.md)                |
 | 3   | Build eval cases   | One target build over a refined fixture, prompt quality      | [`examples/eval/`](../examples/eval/README.md)                |
 | 4   | Wasm example       | WASM/WIT conformance over the real component seam            | [`examples/wasm/`](../examples/wasm/README.md)                |
-| 5   | Consumer project   | Code (not prose) iteration via seeded `.wasm`                | `cargo make adapter [name]` + `specify adapter add`           |
+| 5   | Consumer project   | Code (not prose) iteration via seeded `.wasm`                | `cargo make adapter [name]` + `emery adapter add`           |
 
-Ownership boundaries: omnia-testkit owns reusable model/runtime test mechanics; adapter `tests/` own operation behavior; the eval composition example owns the live case loop ([repo README](../README.md) for the day-to-day loop; [`examples/eval/`](../examples/eval/) for the case catalog); the wasm example owns component-seam conformance. Generic catalog/provider/command mechanics stay in `specify/crates/native/tests` (case/sandbox mechanics in `specify/crates/probe/tests`).
+Ownership boundaries: omnia-testkit owns reusable model/runtime test mechanics; adapter `tests/` own operation behavior; the eval composition example owns the live case loop ([repo README](../README.md) for the day-to-day loop; [`examples/eval/`](../examples/eval/) for the case catalog); the wasm example owns component-seam conformance. Generic catalog/provider/command mechanics stay in `emery/crates/native/tests` (case/sandbox mechanics in `emery/crates/probe/tests`).
 
-Sibling co-development: uncomment the `[patch."https://github.com/augentic/specify.git"]` block in the root `Cargo.toml` to resolve engine crates from `../specify` instead of the lockfile-pinned git dependencies.
+Sibling co-development: uncomment the `[patch."https://github.com/augentic/emery.git"]` block in the root `Cargo.toml` to resolve engine crates from `../emery` instead of the lockfile-pinned git dependencies.
 
 Testing a brand-new adapter, including its first eval case and catalog wiring: [authoring.md](authoring.md).
 
@@ -46,7 +46,7 @@ cargo make lab -- --project-dir <dir> slice list
 
 ### 4. Wasm example — component seam
 
-[`examples/wasm/`](../examples/wasm/README.md) — shipped `specify` binary + built adapter components over the real WIT seam. Operator-invoked; per-leg ungraded (the graded native workflow case is rung 2).
+[`examples/wasm/`](../examples/wasm/README.md) — shipped `emery` binary + built adapter components over the real WIT seam. Operator-invoked; per-leg ungraded (the graded native workflow case is rung 2).
 
 ```bash
 cargo make wasm-run
@@ -55,7 +55,7 @@ cargo make wasm-clean
 
 ### 5. Consumer project — seeded components
 
-`cargo make adapter [adapter]` builds with fast profile settings (LTO off, opt-level 1) into `target/wasm32-wasip2/release/<name>.wasm`. Seed into a consumer project with `specify adapter add <path.wasm>` (re-run after each rebuild). Switching between `adapter` and `release` flavors changes the profile fingerprint and forces a rebuild.
+`cargo make adapter [adapter]` builds with fast profile settings (LTO off, opt-level 1) into `target/wasm32-wasip2/release/<name>.wasm`. Seed into a consumer project with `emery adapter add <path.wasm>` (re-run after each rebuild). Switching between `adapter` and `release` flavors changes the profile fingerprint and forces a rebuild.
 
 ```bash
 cargo make adapter contracts   # one adapter; no argument builds every adapter

@@ -1,6 +1,6 @@
 # Spec-to-Test Mapping (Omnia)
 
-Omnia-specific deltas on top of the shared [spec-to-test mapping discipline](spec-runtime/spec-to-test-mapping.md). The shared base owns the target-neutral rules: scenario → one test function, the `test_<unit_snake>_<scenario_snake>` naming convention, REQ-ID traceability comments, requirement coverage (N scenarios → N tests), and drift-detection mechanics. This file carries only what is specific to Omnia services.
+Omnia-specific deltas on top of the shared [spec-to-test mapping discipline](emery-runtime/spec-to-test-mapping.md). The shared base owns the target-neutral rules: scenario → one test function, the `test_<unit_snake>_<scenario_snake>` naming convention, REQ-ID traceability comments, requirement coverage (N scenarios → N tests), and drift-detection mechanics. This file carries only what is specific to Omnia services.
 
 ## Test location and attribute
 
@@ -71,4 +71,4 @@ async fn test_fleet_api_missing_worksite_code() {
 
 ## Drift detection (Omnia specifics)
 
-The drift-detection mechanics live in the [shared base](spec-runtime/spec-to-test-mapping.md#drift-detection-mechanics). For Omnia, the test side of the comparison parses `#[tokio::test]` functions (and their `/// Spec:` comments) from `tests/*.rs`; assertion-drift comparison focuses on HTTP status codes, error codes, published-event topics, and cache TTLs.
+The drift-detection mechanics live in the [shared base](emery-runtime/spec-to-test-mapping.md#drift-detection-mechanics). For Omnia, the test side of the comparison parses `#[tokio::test]` functions (and their `/// Spec:` comments) from `tests/*.rs`; assertion-drift comparison focuses on HTTP status codes, error codes, published-event topics, and cache TTLs.

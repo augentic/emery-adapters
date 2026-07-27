@@ -1,6 +1,6 @@
 [package]
 name = "eval"
-description = "Native first-party catalog composition: specify passthrough and live eval"
+description = "Native first-party catalog composition: emery passthrough and live eval"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -16,10 +16,10 @@ anyhow.workspace = true
 captures.workspace = true
 contracts.workspace = true
 documentation.workspace = true
+emery-native = { workspace = true, features = ["cli"] }
+emery-probe = { workspace = true, features = ["client"] }
 intent.workspace = true
-native = { workspace = true, features = ["cli"] }
 omnia-target.workspace = true
-probe = { workspace = true, features = ["client"] }
 screenshots.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 typescript.workspace = true

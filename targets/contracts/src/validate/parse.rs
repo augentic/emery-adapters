@@ -61,11 +61,11 @@ pub fn version_str(info: Option<&Value>) -> Option<&str> {
 }
 
 pub fn id_str(info: Option<&Value>) -> Option<&str> {
-    info?.get("x-specify-id")?.as_str()
+    info?.get("x-emery-id")?.as_str()
 }
 
 // Inlined from `RegistryProject::name` so the 64-character cap stays self-contained.
-pub fn is_valid_specify_id(id: &str) -> bool {
+pub fn is_valid_emery_id(id: &str) -> bool {
     if id.is_empty() || id.len() > 64 {
         return false;
     }

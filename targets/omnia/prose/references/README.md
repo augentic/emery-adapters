@@ -1,6 +1,6 @@
 # Omnia reference material
 
-Reference documentation for the Omnia target adapter at [`adapters/targets/omnia/`](..). In Specify, Omnia is a **target adapter** — `guidance`, `build`, `merge` — not a slash-command plugin.
+Reference documentation for the Omnia target adapter at [`adapters/targets/omnia/`](..). In Emery, Omnia is a **target adapter** — `guidance`, `build`, `merge` — not a slash-command plugin.
 
 The Omnia crate / test / guest / review instructions live in [`../prompts/build.md`](../prompts/build.md) and the per-leg prompts under [`../prompts/build/`](../prompts/build/); the adapter core (`../../src/operations.rs`) owns leg sequencing. The depth (templates, hard rules, mapping tables, mock-provider patterns, specialist prompts, rules) and worked examples live in this folder.
 
@@ -28,7 +28,7 @@ The Omnia crate / test / guest / review instructions live in [`../prompts/build.
 ### Capabilities and providers
 
 - [`capabilities.md`](capabilities.md) — provider trait signatures and adapter triggers (all nine providers).
-- [`capability-mapping.md`](capability-mapping.md) — mapping from Specify artifact adapters to Omnia provider traits.
+- [`capability-mapping.md`](capability-mapping.md) — mapping from Emery artifact adapters to Omnia provider traits.
 - [`providers/`](providers/) — per-trait deep dives (blobstore, broadcast, config, document-store, http-request, identity, publish, state-store).
 
 ### Crate writer depth

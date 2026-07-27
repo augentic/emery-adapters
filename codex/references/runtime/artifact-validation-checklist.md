@@ -1,6 +1,6 @@
-# Specify artifact validation checklist
+# Emery artifact validation checklist
 
-Runtime checklist for source adapters and synthesis self-review. Full artifact reference: [Artifact format](https://specify.augentic.io/reference/artifact-format.html).
+Runtime checklist for source adapters and synthesis self-review. Full artifact reference: [Artifact format](https://emery.augentic.io/reference/artifact-format.html).
 
 ## Behavioral specs
 
@@ -17,7 +17,7 @@ Runtime checklist for source adapters and synthesis self-review. Full artifact r
 
 ## Tasks
 
-- `tasks.md` exists when `/spec:build` depends on it
+- `tasks.md` exists when `/emery:build` depends on it
 - Tasks are implementation steps and checkpoints only
 - Every task uses numbered checkbox format (`- [ ] X.Y …`) grouped under `## N.` headings
 

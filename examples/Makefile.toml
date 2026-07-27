@@ -27,8 +27,8 @@ script = "rm -rf sandbox/wasm"
 [tasks.wasm-build]
 dependencies = ["wasm-clean"]
 script = '''
-  cargo build -p specify --lib --target wasm32-wasip2 --manifest-path ../specify/Cargo.toml
-  cargo build -p specify --bin specify --manifest-path ../specify/Cargo.toml
+  cargo build -p emery --lib --target wasm32-wasip2 --manifest-path ../emery/Cargo.toml
+  cargo build -p emery --bin emery --manifest-path ../emery/Cargo.toml
   cargo build -p documentation -p intent -p contracts --target wasm32-wasip2
 '''
 
@@ -39,17 +39,17 @@ script_runner = "bash"
 script = '''
   set -eo pipefail
 
-  export SPECIFY_HOME="$PWD/sandbox/wasm"
+  export EMERY_HOME="$PWD/sandbox/wasm"
   export GUEST_TIMEOUT_MS="${GUEST_TIMEOUT_MS:-3600000}"
   export RUST_LOG="${RUST_LOG:-info,opentelemetry_sdk=off}"
 
-  mkdir -p "$SPECIFY_HOME/project"
-  cp -R examples/wasm/fixture/. "$SPECIFY_HOME/project/"
+  mkdir -p "$EMERY_HOME/project"
+  cp -R examples/wasm/fixture/. "$EMERY_HOME/project/"
 
-  SPECIFY="$PWD/../specify/target/debug/specify"
+  EMERY="$PWD/../emery/target/debug/emery"
   TARGET="$PWD/target"
   # Execute commands in the project directory, not the repository root.
-  run() { (cd "$SPECIFY_HOME/project" && "$SPECIFY" "$@"); }
+  run() { (cd "$EMERY_HOME/project" && "$EMERY" "$@"); }
 
   run adapter add "$TARGET/wasm32-wasip2/debug/documentation.wasm"
   run adapter add "$TARGET/wasm32-wasip2/debug/intent.wasm"

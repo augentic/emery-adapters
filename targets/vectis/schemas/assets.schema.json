@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.specify.dev/vectis/assets.schema.json",
-  "title": "Specify Assets Artifact",
+  "$id": "https://schemas.emery.dev/vectis/assets.schema.json",
+  "title": "Emery Assets Artifact",
   "description": "Schema for assets.yaml — image and icon inventory consumed by shell writers.",
   "type": "object",
   "required": ["version", "assets"],

@@ -84,7 +84,7 @@ async fn build_phase_legs() {
         "in-guest infer report feeds the leg"
     );
     assert!(user.contains("component-bindings.yaml"), "bindings file instructed");
-    assert!(!user.contains("specify catalog infer"), "no dead CLI verb in the prompt");
+    assert!(!user.contains("emery catalog infer"), "no dead CLI verb in the prompt");
     assert!(user.contains("vectis-references"), "user prompt points at the MCP references");
     let (name, schema) = schema_format(first);
     assert_eq!(name, "composition");
@@ -126,14 +126,14 @@ async fn build_phase_legs() {
     let report_user = &requests[5].messages[0].content;
     assert!(report_user.contains("no shell work"), "phase outcomes feed the report leg");
     assert!(report_user.contains("shell verify gate"), "in-guest verify gate feeds the report");
-    assert!(!report_user.contains("specify extension run"), "no dead CLI verb in the prompt");
+    assert!(!report_user.contains("emery extension run"), "no dead CLI verb in the prompt");
 }
 
 #[tokio::test]
 async fn core_only_skips_shells() {
     let tmp = TempDir::new().unwrap();
-    fs::create_dir_all(tmp.path().join(".specify")).unwrap();
-    fs::write(tmp.path().join(".specify/project.yaml"), "name: demo-app\nplatforms:\n  - core\n")
+    fs::create_dir_all(tmp.path().join(".emery")).unwrap();
+    fs::write(tmp.path().join(".emery/project.yaml"), "name: demo-app\nplatforms:\n  - core\n")
         .unwrap();
     let model = Harness::answering([PHASE_DONE, PHASE_DONE, PHASE_DONE, SUCCESS_REPORT]);
 
@@ -164,7 +164,7 @@ async fn composition_repair() {
     // The mock never fixes the unparseable composition, so both bounded
     // repair iterations fire and no downstream leg is spent against the
     // knowingly-broken composition.
-    let slice_dir = tmp.path().join(".specify/slices/demo");
+    let slice_dir = tmp.path().join(".emery/slices/demo");
     fs::create_dir_all(&slice_dir).unwrap();
     fs::write(slice_dir.join("composition.yaml"), "screens: [broken\n").unwrap();
     let model = Harness::answering([
@@ -191,7 +191,7 @@ async fn composition_repair() {
 async fn build_with_composition(composition: Option<&str>, report_answer: &'static str) -> Report {
     let tmp = TempDir::new().unwrap();
     if let Some(body) = composition {
-        let slice_dir = tmp.path().join(".specify/slices/demo");
+        let slice_dir = tmp.path().join(".emery/slices/demo");
         fs::create_dir_all(&slice_dir).unwrap();
         fs::write(slice_dir.join("composition.yaml"), body).unwrap();
     }
@@ -279,8 +279,8 @@ async fn merge_preflight_deterministic() {
     assert!(model.requests().is_empty(), "preflight is deterministic: no leg");
 
     // A broken staged slice composition parks the merge before the fold.
-    fs::create_dir_all(tmp.path().join(".specify/slices/demo")).unwrap();
-    fs::write(tmp.path().join(".specify/slices/demo/composition.yaml"), "screens: [broken\n")
+    fs::create_dir_all(tmp.path().join(".emery/slices/demo")).unwrap();
+    fs::write(tmp.path().join(".emery/slices/demo/composition.yaml"), "screens: [broken\n")
         .unwrap();
     let report =
         Adapter::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
@@ -315,8 +315,8 @@ async fn merge_postflight_gates_composition() {
     let tmp = TempDir::new().unwrap();
     // A broken merged baseline composition is caught by the postlude's
     // in-guest validator; residual findings force failure.
-    fs::create_dir_all(tmp.path().join(".specify/specs")).unwrap();
-    fs::write(tmp.path().join(".specify/specs/composition.yaml"), "screens: [broken\n").unwrap();
+    fs::create_dir_all(tmp.path().join(".emery/specs")).unwrap();
+    fs::write(tmp.path().join(".emery/specs/composition.yaml"), "screens: [broken\n").unwrap();
     let model = Harness::answering([SUCCESS_REPORT, SUCCESS_REPORT]);
 
     let report =

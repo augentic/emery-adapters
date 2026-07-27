@@ -37,9 +37,9 @@ include:
 ```
 
 - Paths are **literal file paths**, resolved relative to `$SOURCE_PATH`. No globs inside a manifest — globbing lives in `$INCLUDE` / `$EXCLUDE`.
-- v1 is exactly `version` + `include` — no other top-level keys (`deny_unknown_fields`); `specify plan validate` rejects unknown keys, wrong `version`, empty `include`, `..` segments, and absolute paths in `include` (see `specify-change` `Plan::validate` / `manifest-invalid`, `manifest-empty`, `manifest-path-escape`).
+- v1 is exactly `version` + `include` — no other top-level keys (`deny_unknown_fields`); `emery plan validate` rejects unknown keys, wrong `version`, empty `include`, `..` segments, and absolute paths in `include` (see `emery-change` `Plan::validate` / `manifest-invalid`, `manifest-empty`, `manifest-path-escape`).
 - v1 ships `include` only. Line-range subsets per file, `exclude`, and per-file symbol filters are out of scope for v1 and are the natural v2 extensions.
 - A `$MANIFEST` that is missing, malformed, or references a file that does not exist under `$SOURCE_PATH` is a hard error — fail early with a clear message.
-- Manifests are authored at plan time (by `/spec:plan`, the thin wrapper over `specify plan author`) and referenced from the plan's `slices[].sources[]` binding. Extract consumes manifests; it does not author them. On disk they live under `.specify/slices/<slice-name>/`.
+- Manifests are authored at plan time (by `/emery:plan`, the thin wrapper over `emery plan author`) and referenced from the plan's `slices[].sources[]` binding. Extract consumes manifests; it does not author them. On disk they live under `.emery/slices/<slice-name>/`.
 
 For a walk-through, see `fixtures/scoped-monolith/`.

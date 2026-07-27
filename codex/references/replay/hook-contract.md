@@ -30,7 +30,7 @@ This matches the current synthesis posture on `[conflict]` and `[divergence]` ta
 
 ### No core recorder
 
-Specify core does **not** record replay pass/fail/skipped counts. Do **not** emit a journal event for replay, and do **not** hand-edit `metadata.yaml`.
+Emery core does **not** record replay pass/fail/skipped counts. Do **not** emit a journal event for replay, and do **not** hand-edit `metadata.yaml`.
 
 Classify results in the build transcript (passed / failed / skipped) so the operator can review them. That is the full v1 recording surface.
 
@@ -42,7 +42,7 @@ A future CLI surface may persist a `replay:` block to `$SLICE_DIR/metadata.yaml`
 
 ## Merge posture
 
-When a `replay:` block is present on `metadata.yaml` (operator tooling or a future CLI surface), `/spec:merge` surfaces a one-line summary in its closing message:
+When a `replay:` block is present on `metadata.yaml` (operator tooling or a future CLI surface), `/emery:merge` surfaces a one-line summary in its closing message:
 
 ```text
 replay: <passed> passed, <failed> failed, <skipped> skipped
@@ -53,7 +53,7 @@ Rules:
 - **Missing block** → omit the line; absence is not an error (the normal v1 case).
 - **`failed > 0`** → `merge` does **not** auto-refuse; the operator decides whether to land.
 
-Capture the block before archival if present — `specify slice merge` moves the slice directory.
+Capture the block before archival if present — `emery slice merge` moves the slice directory.
 
 ## See also
 

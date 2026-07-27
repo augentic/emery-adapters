@@ -19,9 +19,9 @@ pub struct ContractFinding {
 
 /// Rule id: `info.version` must parse as SemVer.
 pub const RULE_VERSION_IS_SEMVER: &str = "contract.version-is-semver";
-/// Rule id: `info.x-specify-id` must be kebab-case and ≤ 64 characters.
+/// Rule id: `info.x-emery-id` must be kebab-case and ≤ 64 characters.
 pub const RULE_ID_FORMAT: &str = "contract.id-format";
-/// Rule id: every `info.x-specify-id` must be unique across the tree.
+/// Rule id: every `info.x-emery-id` must be unique across the tree.
 pub const RULE_ID_UNIQUE: &str = "contract.id-unique";
 
 /// Run baseline-contract validation across `contracts_dir`.
@@ -62,14 +62,14 @@ pub fn validate_baseline(contracts_dir: &Path) -> Vec<ContractFinding> {
         }
 
         if let Some(id) = parse::id_str(info) {
-            if parse::is_valid_specify_id(id) {
+            if parse::is_valid_emery_id(id) {
                 id_to_paths.entry(id.to_string()).or_default().push(doc.path.clone());
             } else {
                 findings.push(ContractFinding {
                     path: doc.path.clone(),
                     rule_id: RULE_ID_FORMAT,
                     detail: format!(
-                        "info.x-specify-id `{id}` must match `^[a-z][a-z0-9-]*$` \
+                        "info.x-emery-id `{id}` must match `^[a-z][a-z0-9-]*$` \
                          and be ≤ 64 characters"
                     ),
                 });
@@ -87,7 +87,7 @@ pub fn validate_baseline(contracts_dir: &Path) -> Vec<ContractFinding> {
                 path: path.clone(),
                 rule_id: RULE_ID_UNIQUE,
                 detail: format!(
-                    "info.x-specify-id `{id}` is declared by multiple top-level contracts: {}",
+                    "info.x-emery-id `{id}` is declared by multiple top-level contracts: {}",
                     listed.join(", ")
                 ),
             });

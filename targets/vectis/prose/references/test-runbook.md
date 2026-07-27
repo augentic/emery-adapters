@@ -8,7 +8,7 @@ Operational detail for `vectis-test-writer`. The SKILL.md keeps only the orienta
 $DOMAIN_NAME    = $ARGUMENTS[0]
 
 # Path derivation
-$SLICE_DIR      = .specify/slices/<active-change>
+$SLICE_DIR      = .emery/slices/<active-change>
 $SPECS_DIR      = $SLICE_DIR/specs
 $SPEC_PATH      = $SPECS_DIR/$DOMAIN_NAME/spec.md
 $DESIGN_PATH    = $SLICE_DIR/design.md
@@ -28,7 +28,7 @@ Before generating tests, read these documents:
 When conflicts arise, follow this strict precedence:
 
 1. **The SKILL.md** — test generation rules and structure
-2. **Specify artifacts (specs + design.md)** — behavioral requirements that tests must verify
+2. **Emery artifacts (specs + design.md)** — behavioral requirements that tests must verify
 3. **`references/`** — mapping rules and testing patterns
 4. **Existing crate code** — Event/Model/ViewModel types, `update()` logic, Command/effect patterns
 5. **Existing tests** — style and conventions to preserve
@@ -234,7 +234,7 @@ See [`spec-to-test-mapping.md`](test-spec-mapping.md) for the full mapping rules
 
 ## Drift Detection
 
-When invoked against a crate with existing tests and baseline specs at `.specify/specs/<domain>/spec.md`:
+When invoked against a crate with existing tests and baseline specs at `.emery/specs/<domain>/spec.md`:
 
 1. **Regenerate** the expected test structure from the baseline spec
 2. **Compare** against existing tests in the `#[cfg(test)]` module

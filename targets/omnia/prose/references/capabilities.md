@@ -36,7 +36,7 @@ let url = Config::get(provider, "BLOCK_MGT_URL").await?;
 
 **Include when**: operation needs environment variables, API URLs, feature flags.
 
-**Specify triggers**: any environment variable or configuration value referenced in the artifacts. Always include `Config` in operation bounds as a baseline.
+**Emery triggers**: any environment variable or configuration value referenced in the artifacts. Always include `Config` in operation bounds as a baseline.
 
 **Cargo.toml**: no extra dependencies needed.
 
@@ -97,7 +97,7 @@ let response = HttpRequest::fetch(provider, request)
 
 **Include when**: operation calls external HTTP APIs (third-party REST services, partner integrations, external microservices).
 
-**Specify triggers**: external HTTP calls, REST API integrations; any `fetch`, `axios`, `got`, or HTTP client usage in code-analysis artifacts; any API endpoint calls in requirements artifacts.
+**Emery triggers**: external HTTP calls, REST API integrations; any `fetch`, `axios`, `got`, or HTTP client usage in code-analysis artifacts; any API endpoint calls in requirements artifacts.
 
 **Exclusion — managed data stores**: Do NOT use `HttpRequest` when the artifacts or source code describe access to a managed storage service that has a dedicated Omnia trait. Even if the source code constructs raw REST API calls (e.g., `https://{account}.table.core.windows.net`), use the corresponding storage trait instead:
 
@@ -197,7 +197,7 @@ let topic = format!("{env}-{OUTPUT_TOPIC}");
 
 **Include when**: operation publishes messages to topics.
 
-**Specify triggers**: event publishing, message sending, queue operations; any `producer.send`, `producer.sendBatch` in code-analysis artifacts; any messaging/event publishing in requirements artifacts.
+**Emery triggers**: event publishing, message sending, queue operations; any `producer.send`, `producer.sendBatch` in code-analysis artifacts; any messaging/event publishing in requirements artifacts.
 
 **Cargo.toml**: no extra dependencies beyond `serde_json`.
 
@@ -246,7 +246,7 @@ StateStore::delete(provider, "cache-key").await?;
 
 **Include when**: operation needs caching or state persistence across invocations. Common methods using global singletons for managing state must be avoided (see [guardrails.md](guardrails.md)); use `StateStore` instead.
 
-**Specify triggers**: state storage, caching, Redis operations; any `redis.get`, `redis.set`, `redis.del` in code-analysis artifacts; any state/cache requirements in requirements artifacts.
+**Emery triggers**: state storage, caching, Redis operations; any `redis.get`, `redis.set`, `redis.del` in code-analysis artifacts; any state/cache requirements in requirements artifacts.
 
 **Cargo.toml**: no extra dependencies.
 
@@ -283,7 +283,7 @@ let response = HttpRequest::fetch(provider, request).await?;
 
 **Include when**: any HTTP call requires authentication tokens. Always pair with `Config` (for the identity name) and `HttpRequest`.
 
-**Specify triggers**: Azure AD token acquisition, OAuth flows; any authenticated HTTP calls; any `Identity` or token-based auth in requirements artifacts.
+**Emery triggers**: Azure AD token acquisition, OAuth flows; any authenticated HTTP calls; any `Identity` or token-based auth in requirements artifacts.
 
 **Cargo.toml**: no extra dependencies.
 
@@ -359,7 +359,7 @@ let users = SelectBuilder::<User>::new()
 
 **Include when**: operation needs SQL database access — PostgreSQL, MySQL, SQL Server, Cosmos DB SQL API, or any relational/SQL data store.
 
-**Specify triggers**: SQL database operations, CRUD patterns; any database queries or table references in requirements artifacts; any SQL/ORM operations in code-analysis artifacts; any "Table/database access" capability in the Source Capabilities Summary; any external service with type "database" (SQL). Azure Table Storage is **not** a trigger for `TableStore` — use `DocumentStore` instead.
+**Emery triggers**: SQL database operations, CRUD patterns; any database queries or table references in requirements artifacts; any SQL/ORM operations in code-analysis artifacts; any "Table/database access" capability in the Source Capabilities Summary; any external service with type "database" (SQL). Azure Table Storage is **not** a trigger for `TableStore` — use `DocumentStore` instead.
 
 **Cargo.toml**: no extra dependencies (types come from `omnia-guest` re-exports). ORM requires `omnia-orm`.
 
@@ -407,7 +407,7 @@ Broadcast::send(provider, "channel", &data, Some(vec![socket_id])).await?;
 
 **Include when**: operation sends replies over WebSocket connections. This is the Omnia equivalent of `ws.send()`. When migrating a WebSocket client that both receives and sends messages, use a WebSocket handler (for receiving) combined with `Broadcast` (for sending replies). Do NOT mark WebSocket send/reply as a missing capability.
 
-**Specify triggers**:
+**Emery triggers**:
 
 - Real-time push notifications, live updates to connected clients
 - WebSocket event publishing
@@ -484,7 +484,7 @@ let keys = BlobStore::list(provider, "reports").await?;
 
 **Include when**: an operation stores or retrieves binary blobs, files, or large unstructured payloads. Use for file uploads/downloads, report storage, image/media assets, or any binary content addressed by key.
 
-**Specify triggers**: blob storage, file uploads/downloads, Azure Blob Storage, AWS S3, object storage; any `BlobServiceClient`, `ContainerClient`, `uploadBlob`, `downloadBlob`, `S3Client`, `putObject`, `getObject` in code-analysis artifacts; any binary storage requirements in requirements artifacts.
+**Emery triggers**: blob storage, file uploads/downloads, Azure Blob Storage, AWS S3, object storage; any `BlobServiceClient`, `ContainerClient`, `uploadBlob`, `downloadBlob`, `S3Client`, `putObject`, `getObject` in code-analysis artifacts; any binary storage requirements in requirements artifacts.
 
 **Exclusion — do NOT use for structured data**: Use `TableStore` for tabular/row data, `DocumentStore` for JSON documents, and `StateStore` for small key-value cache entries. `BlobStore` is for opaque binary payloads.
 
@@ -592,7 +592,7 @@ for doc in &result.documents {
 
 **CRITICAL — Azure Table Storage is DocumentStore, NOT TableStore or HttpRequest**: When the source code or artifacts describe access to Azure Table Storage (via `@azure/data-tables` SDK, REST API calls to `*.table.core.windows.net`, SharedKey/SAS authentication, or `TableClient.listEntities`), use `DocumentStore` — never `TableStore` or `HttpRequest`. The Omnia runtime provides a native Azure Table Storage adapter behind the `DocumentStore` trait.
 
-**Specify triggers**: document database access, JSON document storage, Cosmos DB document operations, MongoDB operations; **Azure Table Storage access** (including `@azure/data-tables`, `TableClient`, `listEntities`, `table.core.windows.net`, SharedKey auth); any `CosmosClient`, `MongoClient`, `find`, `insertOne`, `updateOne`, `deleteOne`, `findOne` in code-analysis artifacts; any document storage requirements in requirements artifacts; any external service with type "managed table store".
+**Emery triggers**: document database access, JSON document storage, Cosmos DB document operations, MongoDB operations; **Azure Table Storage access** (including `@azure/data-tables`, `TableClient`, `listEntities`, `table.core.windows.net`, SharedKey auth); any `CosmosClient`, `MongoClient`, `find`, `insertOne`, `updateOne`, `deleteOne`, `findOne` in code-analysis artifacts; any document storage requirements in requirements artifacts; any external service with type "managed table store".
 
 **Exclusion — choosing between storage traits**:
 
@@ -638,7 +638,7 @@ use omnia_guest::api::http::Projector;
 
 ## Capability Selection Summary
 
-| Specify Pattern                      | Trait         | Operation bound                   |
+| Emery Pattern                      | Trait         | Operation bound                   |
 | ------------------------------- | ------------- | --------------------------------- |
 | Environment variables, URLs     | `Config`      | `P: Config`                       |
 | Outbound HTTP calls             | `HttpRequest` | `P: HttpRequest`                  |

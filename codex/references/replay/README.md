@@ -1,6 +1,6 @@
 # Shared replay hook contract
 
-Cross-target, build-time `replay` rules under `codex/` — read by any target adapter that opts into the capture-backed replay workflow hook during `/spec:build`. This directory is shared support material, not part of any adapter's artifact; it is not a target adapter and does not add a fourth operation.
+Cross-target, build-time `replay` rules under `codex/` — read by any target adapter that opts into the capture-backed replay workflow hook during `/emery:build`. This directory is shared support material, not part of any adapter's artifact; it is not a target adapter and does not add a fourth operation.
 
 ## Relationship to `captures`
 
@@ -31,4 +31,4 @@ Targets that skip the hook produce no `replay` field; omission is not an error. 
 ## See also
 
 - [`../../rules/universal/`](../../rules/universal/) — sibling shared review rules (`UNI-*`)
-- [Target adapters reference](https://github.com/augentic/specify/blob/main/docs/reference/targets/index.md)
+- [Target adapters reference](https://github.com/augentic/emery/blob/main/docs/reference/targets/index.md)

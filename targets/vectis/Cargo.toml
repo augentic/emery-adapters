@@ -15,7 +15,7 @@ crate-type = ["cdylib", "rlib"]
 workspace = true
 
 [dependencies]
-adapter.workspace = true
+emery-adapter.workspace = true
 image.workspace = true
 jsonschema.workspace = true
 resvg.workspace = true
@@ -29,8 +29,8 @@ toml.workspace = true
 usvg.workspace = true
 
 [build-dependencies]
+emery-prose.workspace = true
 jsonschema.workspace = true
-prose.workspace = true
 serde.workspace = true
 serde-saphyr.workspace = true
 serde_json.workspace = true

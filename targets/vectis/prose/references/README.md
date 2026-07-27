@@ -1,6 +1,6 @@
 # Vectis reference material
 
-Reference documentation for the Vectis target adapter at [`adapters/targets/vectis/`](..). In Specify, Vectis is a **target adapter** — `guidance`, `build`, `merge` — not a slash-command plugin.
+Reference documentation for the Vectis target adapter at [`adapters/targets/vectis/`](..). In Emery, Vectis is a **target adapter** — `guidance`, `build`, `merge` — not a slash-command plugin.
 
 The Vectis core / test / iOS / Android writer and reviewer orchestration lives in [`../prompts/build.md`](../prompts/build.md) and eight phase prompts under [`../prompts/build/`](../prompts/build/). The depth (Crux idioms, SwiftUI patterns, Compose patterns, hard rules, review check libraries, token templates, design-system integration) and worked examples live in this folder.
 

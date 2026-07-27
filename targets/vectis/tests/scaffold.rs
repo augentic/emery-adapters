@@ -178,15 +178,15 @@ fn refuses_existing_roots() {
 
 #[test]
 fn merges_gitignore() {
-    // `specify init` writes a root `.gitignore` in every project, so the
+    // `emery init` writes a root `.gitignore` in every project, so the
     // bootstrap path always scaffolds into an initialised repo.
     let dir = tempdir().unwrap();
-    fs::write(dir.path().join(".gitignore"), ".specify/cache/\n/target\n").unwrap();
+    fs::write(dir.path().join(".gitignore"), ".emery/cache/\n/target\n").unwrap();
     let plan = plan_core("Counter", "com.vectis.counter", &[], &versions()).unwrap();
     write_plan(dir.path(), &plan).expect("gitignore collision merges");
 
     let merged = fs::read_to_string(dir.path().join(".gitignore")).unwrap();
-    assert!(merged.starts_with(".specify/cache/\n/target\n"), "operator content survives");
+    assert!(merged.starts_with(".emery/cache/\n/target\n"), "operator content survives");
     assert!(merged.contains("# Vectis scaffold"));
     assert!(merged.contains(".DS_Store"), "template lines appended");
     assert_eq!(merged.matches("/target").count(), 1, "duplicate lines are not re-appended");

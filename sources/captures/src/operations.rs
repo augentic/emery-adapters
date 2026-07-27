@@ -26,7 +26,7 @@ impl Source for Adapter {
 
     fn metadata() -> SourceMetadata {
         SourceMetadata {
-            specify_floor: Some("0.28.0".to_string()),
+            emery_floor: Some("0.28.0".to_string()),
         }
     }
 
@@ -66,7 +66,7 @@ impl Source for Adapter {
              (`authority: \"behaviour\"`, `kind: \"example\"` claims carrying the \
              `replay-digest` / `input` / `output` body fields the prompt describes), without \
              the envelope `lead` key — this call names the lead. The caller persists the \
-             document under `.specify/slices/<slice>/evidence/`; do not write it yourself.",
+             document under `.emery/slices/<slice>/evidence/`; do not write it yourself.",
             id = ctx.adapter_id,
             lead = lead.render(),
         );

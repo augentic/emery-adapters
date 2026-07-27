@@ -6,7 +6,7 @@ Build authors and validates machine-readable contract artifacts under the slice-
 
 ## Scope
 
-Build writes only change-local contract deltas under `.specify/slices/<slice>/contracts/`:
+Build writes only change-local contract deltas under `.emery/slices/<slice>/contracts/`:
 
 - `contracts/schemas/*.yaml` — reusable JSON Schema payload vocabulary (one named type per file).
 - `contracts/http/*.yaml` — OpenAPI 3.1 HTTP / resource-style documents.
@@ -16,7 +16,7 @@ Build MUST NOT edit the root `contracts/` baseline directly. Baseline updates ha
 
 ## Inputs
 
-The build runs against the build request the CLI prepared at `.specify/slices/<slice>/build/request.yaml`; the adapter core renders its `inputs` manifest into each leg's user prompt as `### input:` sections. Every artifact path resolves against `inputs.root` (the slice tree).
+The build runs against the build request the CLI prepared at `.emery/slices/<slice>/build/request.yaml`; the adapter core renders its `inputs` manifest into each leg's user prompt as `### input:` sections. Every artifact path resolves against `inputs.root` (the slice tree).
 
 - `inputs.artifacts.proposal` (`proposal.md`) — authorship mode (author vs import), source material, interface scope, producer/consumer roles.
 - `inputs.artifacts.specs[]` (`specs/<domain>/spec.md`) — behavioural requirements: endpoints / channels / payloads / errors (one file per `proposal.md ## Domains` entry). Provenance lines tell the build whether the slice is author-driven (`Sources: [intent | <doc-key>]`) or import-driven (`Sources: [<code-or-contract-source>]`).
@@ -25,7 +25,7 @@ The build runs against the build request the CLI prepared at `.specify/slices/<s
 - `inputs.artifacts.additional[]` — the optional `contracts/` subtree the adapter's `metadata` record declares: partial deltas written by a prior pass, present only when the slice already carries them.
 - The root `contracts/` baseline — read-only context for `$ref` reuse and extension authoring; outside the request manifest, not a slice delta.
 
-Build consumes the synthesised Specify artifacts as its primary source. Do not treat raw design documentation as the contract source unless the proposal names it as Source Material and the synthesised `specs/<domain>/spec.md` files have captured the required behaviour.
+Build consumes the synthesised Emery artifacts as its primary source. Do not treat raw design documentation as the contract source unless the proposal names it as Source Material and the synthesised `specs/<domain>/spec.md` files have captured the required behaviour.
 
 ## Algorithm
 
@@ -43,13 +43,13 @@ The adapter core runs the format sub-flows in this fixed order — the schema vo
 
 Import paths must produce an import report covering lossless changes, lossy changes, unsupported constructs, and manual-review warnings. See [`references/import-upgrade-policy.md`](../references/import-upgrade-policy.md).
 
-**Identity & version.** Every top-level OpenAPI / AsyncAPI document emitted into `$SLICE_DIR/contracts/` (root key `openapi:` or `asyncapi:`) MUST set an `info.version` value that parses as SemVer per [semver.org](https://semver.org). New top-level contracts SHOULD set `info.x-specify-id` to a kebab-case slug (typically the file stem; `^[a-z][a-z0-9-]*$`, ≤ 64 characters). The author sub-flows enforce both rules; the import sub-flows preserve any source `info.x-specify-id` verbatim and surface non-SemVer `info.version` values as `[manual review required]` rather than auto-rewriting.
+**Identity & version.** Every top-level OpenAPI / AsyncAPI document emitted into `$SLICE_DIR/contracts/` (root key `openapi:` or `asyncapi:`) MUST set an `info.version` value that parses as SemVer per [semver.org](https://semver.org). New top-level contracts SHOULD set `info.x-emery-id` to a kebab-case slug (typically the file stem; `^[a-z][a-z0-9-]*$`, ≤ 64 characters). The author sub-flows enforce both rules; the import sub-flows preserve any source `info.x-emery-id` verbatim and surface non-SemVer `info.version` values as `[manual review required]` rather than auto-rewriting.
 
 ### Phase 3 — Verify
 
 Verification runs the verifier intent of each format sub-prompt that owns artifacts in the slice. Run only the formats that produced artifacts; skip the rest. The verifier siblings live under [`references/<format>/verifier.md`](../references/).
 
-For mixed-format slices, the final verifier pass must check cross-format `$ref` consistency and report duplicate schema identities before build can complete. The format verifiers enforce the identity & version rules inline (SemVer `info.version`; kebab-case + ≤64-char `info.x-specify-id` when present; in-slice uniqueness on declared ids). The **cross-repo** uniqueness check is **not** part of build-time verification; it is the merge gate's job (see [`merge.md`](merge.md)).
+For mixed-format slices, the final verifier pass must check cross-format `$ref` consistency and report duplicate schema identities before build can complete. The format verifiers enforce the identity & version rules inline (SemVer `info.version`; kebab-case + ≤64-char `info.x-emery-id` when present; in-slice uniqueness on declared ids). The **cross-repo** uniqueness check is **not** part of build-time verification; it is the merge gate's job (see [`merge.md`](merge.md)).
 
 Run each format's verifier in `mode: single` against the slice directory. The verifier reads slice-local artefacts plus the baseline for binding-coverage cross-references and emits a markdown alignment report. The verifier siblings are read-only — they MUST NOT create, modify, or delete any files.
 

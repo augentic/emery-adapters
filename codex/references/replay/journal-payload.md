@@ -4,7 +4,7 @@ Closed shapes for the build-time `replay` hook. Recording rules and merge postur
 
 ## No journal event
 
-Specify core does **not** define a `slice.replay.completed` journal event. Replay results are advisory in the build transcript only — classify `passed` / `failed` / `skipped` there and stop. Do not call `specify journal emit` for replay.
+Emery core does **not** define a `slice.replay.completed` journal event. Replay results are advisory in the build transcript only — classify `passed` / `failed` / `skipped` there and stop. Do not call `emery journal emit` for replay.
 
 ## Aspirational `metadata.yaml` block (future CLI)
 
@@ -21,10 +21,10 @@ replay:
 
 Worked examples:
 
-- With block: [`quality/fixtures/reference/targets/omnia/with-replay/`](https://github.com/augentic/specify/tree/main/quality/fixtures/reference/targets/omnia/with-replay)
-- Without block (omission-is-not-an-error): [`quality/fixtures/reference/targets/omnia/without-replay/`](https://github.com/augentic/specify/tree/main/quality/fixtures/reference/targets/omnia/without-replay)
+- With block: [`quality/fixtures/reference/targets/omnia/with-replay/`](https://github.com/augentic/emery/tree/main/quality/fixtures/reference/targets/omnia/with-replay)
+- Without block (omission-is-not-an-error): [`quality/fixtures/reference/targets/omnia/without-replay/`](https://github.com/augentic/emery/tree/main/quality/fixtures/reference/targets/omnia/without-replay)
 
-The block is additive; it must not reshape other `metadata.yaml` fields. `/spec:merge` reads it when present for the one-line closing summary described in [`hook-contract.md`](hook-contract.md).
+The block is additive; it must not reshape other `metadata.yaml` fields. `/emery:merge` reads it when present for the one-line closing summary described in [`hook-contract.md`](hook-contract.md).
 
 ## See also
 

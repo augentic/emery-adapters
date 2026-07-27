@@ -13,11 +13,11 @@ fn write_yaml(path: &Path, content: &str) {
 }
 
 fn scaffold_project(root: &Path) {
-    let specify = root.join(".specify");
-    std::fs::create_dir_all(specify.join("specs")).expect("mkdir specs");
+    let emery = root.join(".emery");
+    std::fs::create_dir_all(emery.join("specs")).expect("mkdir specs");
     write_yaml(
-        &specify.join("project.yaml"),
-        "name: test-app\nadapter: vectis\nspecify_version: '2.0'\nplatforms:\n  - core\n  - ios\n  - android\n",
+        &emery.join("project.yaml"),
+        "name: test-app\nadapter: vectis\nemery_version: '2.0'\nplatforms:\n  - core\n  - ios\n  - android\n",
     );
     let shared = root.join("shared/src");
     std::fs::create_dir_all(&shared).expect("mkdir shared");
@@ -53,7 +53,7 @@ assets:
 ",
     );
     write_yaml(
-        &root.join(".specify/specs/composition.yaml"),
+        &root.join(".emery/specs/composition.yaml"),
         r"
 version: 1
 screens:
@@ -100,7 +100,7 @@ assets:
 ",
     );
     write_yaml(
-        &tmp.path().join(".specify/specs/composition.yaml"),
+        &tmp.path().join(".emery/specs/composition.yaml"),
         r"
 version: 1
 screens:
@@ -131,7 +131,7 @@ assets:
 ",
     );
     write_yaml(
-        &tmp.path().join(".specify/specs/composition.yaml"),
+        &tmp.path().join(".emery/specs/composition.yaml"),
         r"
 version: 1
 screens:

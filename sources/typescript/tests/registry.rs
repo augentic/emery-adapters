@@ -18,14 +18,14 @@ fn embeds_prompts() {
 }
 
 /// The extraction references the extract prompt loads on demand is
-/// embedded alongside the resolved `spec-runtime` symlink content.
+/// embedded alongside the resolved `emery-runtime` symlink content.
 #[test]
 fn embeds_references() {
     for path in [
         "references/business-logic.md",
         "references/language-mapping.md",
         "references/scope-filters.md",
-        "references/spec-runtime/reconciliation.md",
+        "references/emery-runtime/reconciliation.md",
     ] {
         assert!(find(Adapter::docs(), path).is_some(), "registry embeds `{path}`");
     }

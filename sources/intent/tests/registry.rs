@@ -1,5 +1,5 @@
 //! The embedded prose registry: intent's own prompts ride inside, and the
-//! adapter's bare `references/` tree (only the `spec-runtime` symlink)
+//! adapter's bare `references/` tree (only the `emery-runtime` symlink)
 //! still resolves.
 
 use adapter::Source as _;
@@ -13,15 +13,15 @@ fn embeds_prompts() {
 }
 
 /// Intent ships no references of its own — its `references/` tree holds
-/// only the `spec-runtime` symlink, which resolves inline at build time.
+/// only the `emery-runtime` symlink, which resolves inline at build time.
 #[test]
-fn references_spec_runtime_only() {
-    assert!(find(Adapter::docs(), "references/spec-runtime/reconciliation.md").is_some());
+fn references_emery_runtime_only() {
+    assert!(find(Adapter::docs(), "references/emery-runtime/reconciliation.md").is_some());
     assert!(
         Adapter::docs()
             .iter()
             .filter(|doc| doc.path.starts_with("references/"))
-            .all(|doc| doc.path.starts_with("references/spec-runtime/")),
+            .all(|doc| doc.path.starts_with("references/emery-runtime/")),
         "every embedded reference is the resolved shared runtime tree"
     );
 }

@@ -1,6 +1,6 @@
 # TypeScript / JavaScript source survey
 
-`/spec:plan` invokes this prompt once per binding under `plan.yaml.sources.<key>` whose adapter is `typescript`. Your job: walk the read-only source tree at `$SOURCE_DIR`, identify slice-sized units of work using the framework grammar below, and return one lead block per unit. The CLI appends your blocks under `## Lead inventory` in `discovery.md`; you never write `discovery.md` directly.
+`/emery:plan` invokes this prompt once per binding under `plan.yaml.sources.<key>` whose adapter is `typescript`. Your job: walk the read-only source tree at `$SOURCE_DIR`, identify slice-sized units of work using the framework grammar below, and return one lead block per unit. The CLI appends your blocks under `## Lead inventory` in `discovery.md`; you never write `discovery.md` directly.
 
 JavaScript sources (`.js`, `.mjs`, `.cjs`, `.jsx`) fold into this prompt: the framework idioms are the same. Detect the file extension purely to widen the import-graph walk; the prompt content does not branch on it.
 
@@ -58,7 +58,7 @@ Out of scope for v1: tRPC, GraphQL resolvers, gRPC services, AWS Lambda handlers
 4. **Minimal same-source clustering.** Merge surface leads only when ALL of these hold:
     - One signal fires: shared `touches` overlap ≥ 50% (computed as `|intersection| / |smaller set|`), **or** shared `handler` / call site, **or** an explicit grouping the operator already wrote in `discovery.md`'s `## Lead inventory`.
     - The merged LOC stays `< 1000`. If merging pushes the lead over, do not merge.
-5. **`too-large` after clustering.** A lead whose LOC stays `≥ 1000` is still emitted; flag the staged JSON entry with an internal `unresolved: true` marker so `/spec:plan`'s `propose` sub-step can call it out. Survey exits 0 either way — `propose` is the gate, not `survey`.
+5. **`too-large` after clustering.** A lead whose LOC stays `≥ 1000` is still emitted; flag the staged JSON entry with an internal `unresolved: true` marker so `/emery:plan`'s `propose` sub-step can call it out. Survey exits 0 either way — `propose` is the gate, not `survey`.
 
 Production LOC counts non-blank, non-comment-only lines in source files, excluding `*.d.ts`, generated code (`*.gen.*`, `*.generated.*`, `*.pb.*`, `*_pb.*`), tests, and the skip-root directories above.
 
@@ -113,7 +113,7 @@ When a larger source decomposes into multiple leads, emit one block per surface 
 - **Hallucinated framework signatures.** If `package.json` does not depend on `bullmq`, do not emit BullMQ surfaces. Framework absence is dispositive.
 - **Test files.** Skip `*.test.*`, `*.spec.*`, and anything under `tests/` or `__tests__/`. Tests validate production surfaces, they are not production surfaces.
 - **Type-only `.d.ts` files in `touches`.** They contribute zero production LOC and inflate lead sizing.
-- **Cross-source coalescing.** This prompt only sees one source's tree. Cross-source merges happen later in `/spec:plan`'s `propose` sub-step — see [From sources to slices](../references/spec-runtime/reconciliation.md#plan-time-leads-become-slices) for how leads reconcile into slices.
+- **Cross-source coalescing.** This prompt only sees one source's tree. Cross-source merges happen later in `/emery:plan`'s `propose` sub-step — see [From sources to slices](../references/emery-runtime/reconciliation.md#plan-time-leads-become-slices) for how leads reconcile into slices.
 - **Writing `discovery.md` or `plan.yaml`.** Only lead blocks. The CLI owns every lifecycle file.
 
 ## Failure modes

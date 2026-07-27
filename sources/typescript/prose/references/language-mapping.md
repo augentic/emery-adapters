@@ -1,6 +1,6 @@
-# Language-to-Specify Mapping Guide
+# Language-to-Emery Mapping Guide
 
-This guide explains how to map common programming language constructs to the language-agnostic Specify artifact format. Examples are provided primarily in TypeScript, but the principles apply to **any source language** (Go, Python, Rust, Java, C#, etc.).
+This guide explains how to map common programming language constructs to the language-agnostic Emery artifact format. Examples are provided primarily in TypeScript, but the principles apply to **any source language** (Go, Python, Rust, Java, C#, etc.).
 
 > **Scope**: This document focuses on *how to recognize and translate* source-code patterns into artifacts. For guidance on *what commonly gets missed* and why, see the [Context Gaps Reference](context-gaps.md).
 
@@ -32,7 +32,7 @@ export class EventProcessor {
 }
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 - **TS class** → One business logic block per public method
 - **Constructor** → Document as preconditions or initialization logic
 - **Instance properties** → Document only if relevant to method behavior
@@ -62,7 +62,7 @@ interface Message {
 type Result<T> = { success: true; data: T } | { success: false; error: string };
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 - **TS interface** → Full type definition under "Structures" section
 - **Preserve field names, types, and nesting exactly as in source**
 - **Generic types** → Preserve with `<T>` notation and document constraints
@@ -112,7 +112,7 @@ class TrainUpdate {
 }
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 ```markdown
 - Types:
   - `TrainUpdate`:
@@ -137,7 +137,7 @@ class User {
 }
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 ```markdown
 - Types:
   - `User`:
@@ -162,7 +162,7 @@ public class Event {
 }
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 ```markdown
 - Types:
   - `Event`:
@@ -184,7 +184,7 @@ type Message struct {
 }
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 ```markdown
 - Types:
   - `Message` (wire formats: JSON and XML):
@@ -207,7 +207,7 @@ class TrainUpdate(BaseModel):
     has_arrived: bool = Field(alias="haEntrado")
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 ```markdown
 - Types:
   - `TrainUpdate`:
@@ -230,7 +230,7 @@ public class Event
 }
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 ```markdown
 - Types:
   - `Event`:
@@ -274,7 +274,7 @@ const xmlOptions = { arrayAccessFormPaths: ["CCO.ActualizarDatosTren.pasoTren"] 
 
 When a decorator or annotation references a custom converter class, trace into the converter to document what it does:
 
-| Converter | Behavior | Specify annotation |
+| Converter | Behavior | Emery annotation |
 |-----------|----------|---------------|
 | `BooleanConverter` | Converts string `"true"`/`"false"` to boolean | `converter: string "true"/"false" to boolean` |
 | `NumberConverter` | Converts string to number via `parseFloat` | `converter: string to number` |
@@ -296,7 +296,7 @@ async function sequential() {
 }
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 - **Execution mode**: asynchronous (sequential operations)
 - **Algorithm**: Step 1, then step 2, then step 3
 
@@ -325,7 +325,7 @@ async function parallel() {
 }
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 - **Execution mode**: asynchronous-parallel
 - **Algorithm**: Document parallel steps explicitly
 
@@ -356,7 +356,7 @@ async function raceCondition() {
 }
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 - Document as first-to-complete with explicit race semantics
 
 **Example:**
@@ -383,7 +383,7 @@ function validate(data: Data): Result {
 }
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 - Use hierarchical algorithm structure with branches
 - Document early returns
 
@@ -411,7 +411,7 @@ function handleStatus(status: string): string {
 }
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 - Document all cases including default
 
 **Example:**
@@ -429,7 +429,7 @@ function handleStatus(status: string): string {
 const value = condition ? trueValue : falseValue;
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 - Document as inline conditional
 
 **Example:**
@@ -451,7 +451,7 @@ for (const item of items) {
 }
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 - Document as iteration with runtime-dependent count if not deterministic
 
 **Example:**
@@ -472,7 +472,7 @@ while (hasMore) {
 }
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 - Document termination condition
 
 **Example:**
@@ -499,7 +499,7 @@ async function process() {
 }
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 - Document in Error Handling section
 
 **Example:**
@@ -522,7 +522,7 @@ async function processWithFallback() {
 }
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 - Document recovery action
 
 **Example:**
@@ -555,7 +555,7 @@ async function fetchWithRetry(url: string, maxRetries = 3) {
 }
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 - Document retry count and backoff strategy
 
 **Example:**
@@ -580,7 +580,7 @@ setTimeout(() => {
 }, 5000);
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 - Tag as `[infrastructure]` for timing operations
 
 **Example:**
@@ -600,7 +600,7 @@ setInterval(() => {
 }, 30000);
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 - Document as recurring operation
 
 **Example:**
@@ -618,7 +618,7 @@ setInterval(() => {
 await delay(1000);
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 - Tag as `[mechanical]` for deterministic delays
 
 **Example:**
@@ -638,7 +638,7 @@ await delay(1000);
 const results = items.map(item => transform(item));
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 - Document as single transformation step with collection semantics
 
 **Example:**
@@ -657,7 +657,7 @@ const results = items.map(item => transform(item));
 const active = users.filter(u => u.status === 'active');
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 - Document filtering condition
 
 **Example:**
@@ -676,7 +676,7 @@ const active = users.filter(u => u.status === 'active');
 const total = orders.reduce((sum, order) => sum + order.amount, 0);
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 - Document accumulation logic
 
 **Example:**
@@ -699,7 +699,7 @@ const apiUrl = process.env.API_URL;
 const timeout = parseInt(process.env.TIMEOUT_MS || '5000');
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 - Document in Constants & Configuration section
 
 **Example:**
@@ -718,7 +718,7 @@ const MAX_RETRIES = 3;
 const DEFAULT_PAGE_SIZE = 100;
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 - Document with literal values
 
 **Example:**
@@ -741,7 +741,7 @@ app.use((req, res, next) => {
 });
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 - Document as preconditions for request handlers
 
 **Example:**
@@ -762,7 +762,7 @@ class UserService {
 }
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 - Document in External Service Dependencies
 
 **Example:**
@@ -788,7 +788,7 @@ class UserService {
 const result = magicFunction(data); // Imported from external package
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 - Use unknown token
 
 **Example:**
@@ -807,7 +807,7 @@ const result = magicFunction(data); // Imported from external package
 const value = obj[dynamicKey];
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 - Document runtime-dependent access
 
 **Example:**
@@ -825,7 +825,7 @@ const value = obj[dynamicKey];
 const user = response.data as User;
 ```
 
-**Specify Mapping:**
+**Emery Mapping:**
 - Document expected type, note assertion
 
 **Example:**

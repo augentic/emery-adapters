@@ -28,7 +28,7 @@ impl Source for Adapter {
 
     fn metadata() -> SourceMetadata {
         SourceMetadata {
-            specify_floor: Some("0.28.0".to_string()),
+            emery_floor: Some("0.28.0".to_string()),
         }
     }
 
@@ -67,7 +67,7 @@ impl Source for Adapter {
          (`authority: \"intent\"`, one `kind: \"intent\"` claim whose `id` equals the \
          lead id and whose `statement` carries the operator's intent string verbatim, \
          per the prompt), without the envelope `lead` key — this call names the lead. \
-         The caller persists the document under `.specify/slices/<slice>/evidence/`; do \
+         The caller persists the document under `.emery/slices/<slice>/evidence/`; do \
          not write it yourself.",
             id = ctx.adapter_id,
             lead = lead.render(),

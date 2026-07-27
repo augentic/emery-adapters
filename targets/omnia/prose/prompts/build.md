@@ -4,7 +4,7 @@
 
 ## Inputs and bindings
 
-The build runs against the build request the CLI prepared at `.specify/slices/<slice>/build/request.yaml`; consume its `inputs` manifest rather than relying on convention. Every artifact path resolves against `inputs.root` (the slice tree).
+The build runs against the build request the CLI prepared at `.emery/slices/<slice>/build/request.yaml`; consume its `inputs` manifest rather than relying on convention. Every artifact path resolves against `inputs.root` (the slice tree).
 
 - `inputs.artifacts.proposal` (`proposal.md`) — domain inventory and slice scope.
 - `inputs.artifacts.specs[]` (`specs/<domain>/spec.md`) — behavioural requirements, one file per `proposal.md ## Domains` entry.
@@ -15,8 +15,8 @@ The build runs against the build request the CLI prepared at `.specify/slices/<s
 These working names, bound from the request and the resolved crate, are used throughout:
 
 ```text
-$SLICE_NAME    = active in-progress plan entry's slice name (from `specify plan next`)
-$SLICE_DIR     = .specify/slices/$SLICE_NAME
+$SLICE_NAME    = active in-progress plan entry's slice name (from `emery plan next`)
+$SLICE_DIR     = .emery/slices/$SLICE_NAME
 $DOMAIN_NAME   = domain slug from proposal.md ## Domains (typically equals crate name for single-crate slices)
 $SPEC_PATH     = $SLICE_DIR/specs/$DOMAIN_NAME/spec.md
 $DESIGN_PATH   = $SLICE_DIR/design.md
@@ -76,11 +76,11 @@ Repeat until all four checks pass or 3 iterations exhausted. If still failing af
 
 A build failure surfaces a stop hint as the body's final output — a single structured message the parent skill or the parent loop can act on without re-deriving context:
 
-- `slice` — slice name from `specify plan next`.
+- `slice` — slice name from `emery plan next`.
 - `phase` — `build`.
 - `failing-task` — the `tasks.md` checkbox (or sub-step) that exited non-zero.
 - `log-path` — absolute path to the captured stdout/stderr.
-- `next-action` — typically `re-run /spec:build $SLICE after fix`.
+- `next-action` — typically `re-run /emery:build $SLICE after fix`.
 
 Render the hint as the final visible output of the run, alongside the `status: failure` build report (see `## Build report`). Never write the lifecycle yourself — the deterministic in-guest report gate checks the answer and the engine guest owns the lifecycle, so the slice stays `refined` and the loop (or a re-invocation) re-enters cleanly.
 
@@ -88,7 +88,7 @@ Render the hint as the final visible output of the run, alongside the `status: f
 
 Phase 6 writes `$REVIEW_OUTPUT` (`REVIEW.md`) — the model-assisted surface: specialist + antagonist judgment per [`team-protocol-crate.md`](../references/team-protocol-crate.md) and [`build/review.md`](build/review.md), applying the engineering-standards rules shipped under [`../rules/`](../rules/) (the Omnia overlay plus the shared `UNI-*` pack at `rules/universal/`).
 
-Per [Standards layer](../references/spec-runtime/standards-layer-snippet.md), standards findings may block CI but never transition plan entries, slices, or changes. CI wiring is consumer-project policy, not adapter policy; this prompt acknowledges the surface and links out for the contract.
+Per [Standards layer](../references/emery-runtime/standards-layer-snippet.md), standards findings may block CI but never transition plan entries, slices, or changes. CI wiring is consumer-project policy, not adapter policy; this prompt acknowledges the surface and links out for the contract.
 
 ## Build report
 

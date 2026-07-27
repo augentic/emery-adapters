@@ -46,7 +46,7 @@ fn embed_floor() {
 
 #[test]
 fn symlinks_resolved_inline() {
-    let doc = find(Adapter::docs(), "references/spec-runtime/phase-outcome-contract.md")
+    let doc = find(Adapter::docs(), "references/emery-runtime/phase-outcome-contract.md")
         .expect("symlinked runtime reference is embedded");
     assert!(!doc.body.is_empty(), "resolved symlink content is inlined");
     assert!(!body(Adapter::docs(), "references/agent-teams.md").is_empty());

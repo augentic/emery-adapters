@@ -1,7 +1,7 @@
 name: Publish Release
 
 # Publish a durable release-X.Y.Z line of the first-party adapter train:
-# dispatch from the release branch. Gates on the repo CI workflow, then the
+# dispatch from the release branch. Gates on the shared CI workflow, then the
 # shared publish workflow dates RELEASES.md, tags vX.Y.Z, and creates the
 # GitHub Release; adapters.yaml then release-builds and pushes each
 # component to GHCR (same `cargo make` path as a local maintainer).
@@ -30,7 +30,7 @@ jobs:
     if: ${{ startsWith(github.ref_name, 'release-') }}
     permissions:
       contents: read
-    uses: ./.github/workflows/ci.yaml
+    uses: augentic/.github/.github/workflows/ci.yaml@main
     secrets: inherit
 
   publish:

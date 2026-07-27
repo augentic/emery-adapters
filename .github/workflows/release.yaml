@@ -1,14 +1,9 @@
 name: Create Release
 
-# Cut a durable release-X.Y.Z line for the first-party adapter train: push
-# release-<version> at the current main tip, then open a PR that bumps main
-# to the next unreleased train version and resets RELEASES.md.
-#
-# Same shape as the shared augentic/.github release.yaml, composed locally
-# from its actions because the version bump runs `cargo generate-lockfile`,
-# which must resolve the private augentic/specify git dependencies — that
-# needs the App-token git prelude the shared reusable workflow does not
-# perform. GHCR publication runs in Publish Release (see CONTRIBUTING.md).
+# Cut a durable release-X.Y.Z line for the first-party adapter train via the
+# shared Omnia-shaped workflow: push release-<version> at the current main
+# tip, then open a PR that bumps main to the next unreleased train version
+# and resets RELEASES.md. GHCR publication runs in Publish Release.
 
 on:
   workflow_dispatch:
@@ -27,121 +22,8 @@ permissions:
   pull-requests: write
 
 jobs:
-  skip:
-    name: Skipped
-    if: github.ref_name != 'main'
-    runs-on: ubuntu-latest
-    steps:
-      - run: |
-          echo "This workflow only runs on the 'main' branch"
-          exit 1
-
-  # Create a new release branch from main (cut a release)
-  create:
-    name: Create release
-    if: github.ref_name == 'main'
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.release.outputs.version }}
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Git identity
-        uses: augentic/.github/.github/actions/git-identity@main
-
-      - name: Release version
-        id: release
-        uses: augentic/.github/.github/actions/cargo-version@main
-
-      - name: Update branch release notes
-        uses: augentic/.github/.github/actions/release-notes@main
-        with:
-          release-type: major
-          version: ${{ steps.release.outputs.version }}
-
-      - name: Push to release branch
-        env:
-          VERSION: ${{ steps.release.outputs.version }}
-        run: git push origin "HEAD:release-$VERSION"
-
-  # Bump the version and create a PR to merge it back into 'main'
-  next:
-    name: Next release
-    runs-on: ubuntu-latest
-    needs: create
-    env:
-      # Cargo's libgit2 fetcher does not see the app-token git credentials.
-      CARGO_NET_GIT_FETCH_WITH_CLI: true
-    steps:
-      - uses: actions/checkout@v6
-
-      # The version bump regenerates the lockfile, which resolves the
-      # private augentic/specify git dependencies.
-      - name: Private Git access
-        id: git-token
-        uses: actions/create-github-app-token@v3
-        with:
-          client-id: ${{ vars.APP_CLIENT_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-          owner: augentic
-          repositories: specify
-          permission-contents: read
-
-      - name: Authenticate Cargo git deps
-        env:
-          TOKEN: ${{ steps.git-token.outputs.token }}
-        run: |
-          git config --global \
-            url."https://x-access-token:${TOKEN}@github.com/augentic/specify".insteadOf \
-            "https://github.com/augentic/specify"
-
-      - name: Git identity
-        uses: augentic/.github/.github/actions/git-identity@main
-
-      - name: Bump version
-        id: next
-        uses: augentic/.github/.github/actions/cargo-version@main
-        with:
-          increment: ${{ inputs.increment }}
-
-      - name: Update release notes for next version
-        uses: augentic/.github/.github/actions/release-notes@main
-        with:
-          release-type: next
-          version: ${{ steps.next.outputs.version }}
-
-      - name: Branch to update 'main'
-        env:
-          VERSION: ${{ steps.next.outputs.version }}
-        run: git push origin "HEAD:ci/next-$VERSION"
-
-      # The PR is opened with a GitHub App token so branch protection /
-      # required status checks fire on it (PRs opened by GITHUB_TOKEN do
-      # not trigger other workflows).
-      - name: GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@v3
-        with:
-          client-id: ${{ vars.APP_CLIENT_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-
-      - name: PR to update 'main'
-        uses: peter-evans/create-pull-request@v7
-        with:
-          token: ${{ steps.app-token.outputs.token }}
-          branch: ci/next-${{ steps.next.outputs.version }}
-          title: Bump to ${{ steps.next.outputs.version }}
-          body: |
-            This pull request has been triggered by the creation of a new [release branch][branch].
-
-            Specifically, it merges the new version number (bumped from ${{ needs.create.outputs.version }} to
-            ${{ steps.next.outputs.version }}) back into the `main` branch.
-
-            Maintainers should review the [release notes][RELEASES.md] for ${{ needs.create.outputs.version }}
-            and make updates directly to the [release branch][branch].
-
-            If any issues arise on the `main` branch before the release is made then the issue should be fixed
-            on `main` and backported to the `release-${{ needs.create.outputs.version }}` branch.
-
-            [RELEASES.md]: https://github.com/${{ github.repository }}/blob/release-${{ needs.create.outputs.version }}/RELEASES.md
-            [branch]: https://github.com/${{ github.repository }}/tree/release-${{ needs.create.outputs.version }}
+  release:
+    uses: augentic/.github/.github/workflows/release.yaml@main
+    with:
+      increment: ${{ inputs.increment }}
+    secrets: inherit

@@ -8,7 +8,7 @@
 2. **Never hand-author scaffold files.** `iOS/Makefile`, `iOS/project.yml`, `iOS/.vectis/sim-build.sh`, `iOS/.vectis/sim-dev.sh`, and the starter files emitted by scaffold (`<APP_NAME>App.swift`, starter `Core.swift`, `ContentView.swift`, starter `Views/`) must come from the scaffold renderer — not from worked examples or memory.
 3. **Never edit adapter-owned scaffold files.** `iOS/Makefile`, `iOS/project.yml`, `iOS/.vectis/sim-build.sh`, and `iOS/.vectis/sim-dev.sh` are adapter-owned. The adapter re-renders them deterministically at build prepare and around each write leg — agents must not patch them during verify-repair or feature work.
 4. **Never set a named simulator destination in verify scripts.** The destination lives only in `iOS/.vectis/sim-build.sh` as `generic/platform=iOS Simulator`. Do not substitute `name=iPhone …`, inline `-destination` in the Makefile, or run `xcodebuild` with a device-specific destination.
-5. **Orchestrator runs verify; repair sub-agents are Swift-only.** The `/spec:build` orchestrator executes sync, `swiftformat`, `make build`, and `make sim-build`. `ios-verify-repair` sub-agents must not run `make`, `xcodebuild`, or edit scaffold paths — they return Swift edits only.
+5. **Orchestrator runs verify; repair sub-agents are Swift-only.** The `/emery:build` orchestrator executes sync, `swiftformat`, `make build`, and `make sim-build`. `ios-verify-repair` sub-agents must not run `make`, `xcodebuild`, or edit scaffold paths — they return Swift edits only.
 
 ## Running iOS locally
 

@@ -6,7 +6,7 @@ Loaded by [../build.md](../build.md) phase 2. Reads `specs/<domain>/spec.md` + `
 
 The full Hard Rules + Authority Hierarchy live in [`../../references/hard-rules.md`](../../references/hard-rules.md). The summary below is a load-bearing extract; the full reference governs ties.
 
-1. **Specify artifacts are ground truth.** `specs/<domain>/spec.md` and `design.md` outrank inferred behaviour. If artifacts conflict with source, trust the artifacts.
+1. **Emery artifacts are ground truth.** `specs/<domain>/spec.md` and `design.md` outrank inferred behaviour. If artifacts conflict with source, trust the artifacts.
 2. **Apply update categories in fixed order**: structural → subtractive → modifying → additive. Type renames propagate first, dead code is removed before any new code is added, additive code depends on the already-updated type system.
 3. **Idempotency is non-negotiable.** If a section of an existing crate already matches the artifacts, do nothing.
 4. **No `unwrap()` / `expect()` in production code.** Tests may unwrap.

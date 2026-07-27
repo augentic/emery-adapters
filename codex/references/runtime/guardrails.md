@@ -8,24 +8,24 @@ Per-skill guardrails — rules that only make sense for one skill ("never auto-p
 
 The CLI is the **only** writer for change and slice lifecycle state. Skills route every write through a CLI verb; they never edit the underlying files by hand.
 
-- **Never hand-edit `plan.yaml`.** Append entries through `specify plan add`; stamp Gate 1 through `specify plan approve`; transition entries through `specify plan transition`; close out the plan through `specify plan archive`. The single-writer contract lives in the [`plan` skill](https://specify.augentic.io/reference/change-skills/plan.html).
-- **Never hand-edit `.specify/slices/<name>/metadata.yaml`.** Status transitions and timestamp writes are owned by the guest orchestrations (`specify slice refine` / `build` / `merge` / `drop`). The CLI enforces the legal lifecycle edges — skills do not need to track them.
-- **Never hand-edit `.specify/archive/`.** Archive moves are atomic operations performed by `specify slice merge`, `specify slice drop`, and `specify plan archive`.
-- **Never hand-roll `AGENTS.md` during init.** `specify init` generates it when absent, preserves an existing root `AGENTS.md`, and writes `.specify/context.lock` as the generation fingerprint.
+- **Never hand-edit `plan.yaml`.** Append entries through `emery plan add`; stamp Gate 1 through `emery plan approve`; transition entries through `emery plan transition`; close out the plan through `emery plan archive`. The single-writer contract lives in the [`plan` skill](https://emery.augentic.io/reference/change-skills/plan.html).
+- **Never hand-edit `.emery/slices/<name>/metadata.yaml`.** Status transitions and timestamp writes are owned by the guest orchestrations (`emery slice refine` / `build` / `merge` / `drop`). The CLI enforces the legal lifecycle edges — skills do not need to track them.
+- **Never hand-edit `.emery/archive/`.** Archive moves are atomic operations performed by `emery slice merge`, `emery slice drop`, and `emery plan archive`.
+- **Never hand-roll `AGENTS.md` during init.** `emery init` generates it when absent, preserves an existing root `AGENTS.md`, and writes `.emery/context.lock` as the generation fingerprint.
 
 ## Baseline immutability for contract authoring
 
 Contract authoring skills (OpenAPI, AsyncAPI, JSON Schema) write only inside the active slice directory. The shared baseline is read-only to authoring; merge into the baseline is a separate, explicit step.
 
 - **Do not modify any file outside `$SLICE_DIR/contracts/`** (or `$SLICE_DIR/contracts/schemas/` for the JSON Schema skill).
-- **Never modify baseline files in root `contracts/`.** All authored output lands in the slice-local `contracts/` directory; merging into the baseline is `specify slice merge run`'s job.
+- **Never modify baseline files in root `contracts/`.** All authored output lands in the slice-local `contracts/` directory; merging into the baseline is `emery slice merge run`'s job.
 - **Never silently delete or narrow a baseline schema's fields.** If the spec requires it, surface the slice as a warning and let a human operator decide whether to bump the schema's `$id`.
 
 ## Consumer tooling boundary
 
-During slice **execute / build / merge**, agents are **consumers** of Specify and adapters — not maintainers.
+During slice **execute / build / merge**, agents are **consumers** of Emery and adapters — not maintainers.
 
-- **Do not** edit `specify`, `specify-adapters`, adapter templates, `guest.wasm`, or `~/.cache/specify/**` to unblock a failing build.
-- **Do not** run `specify adapter build`, `sync *-scaffold`, or rebuild/copy WASM to work around verify drift during consumer execute (sync/scaffold remain orchestrator-owned per the Vectis build prompt; this rule blocks *agent-initiated* upstream patching).
-- On scaffold, verify, finalize, or toolchain failure: **stop**, print CLI `stop:` / `hint:` / `resume:` output, and exit. Tooling fixes belong in specify / specify-adapters in a separate maintainer session.
-- Canonical "stop, don't patch" example: Vectis [Template / version-pin drift handling](https://github.com/augentic/specify-adapters/blob/main/targets/vectis/prose/prompts/build.md#template--version-pin-drift-handling) (`targets/vectis/prose/prompts/build.md` in specify-adapters).
+- **Do not** edit `emery`, `emery-adapters`, adapter templates, `guest.wasm`, or `~/.cache/emery/**` to unblock a failing build.
+- **Do not** run `emery adapter build`, `sync *-scaffold`, or rebuild/copy WASM to work around verify drift during consumer execute (sync/scaffold remain orchestrator-owned per the Vectis build prompt; this rule blocks *agent-initiated* upstream patching).
+- On scaffold, verify, finalize, or toolchain failure: **stop**, print CLI `stop:` / `hint:` / `resume:` output, and exit. Tooling fixes belong in emery / emery-adapters in a separate maintainer session.
+- Canonical "stop, don't patch" example: Vectis [Template / version-pin drift handling](https://github.com/augentic/emery-adapters/blob/main/targets/vectis/prose/prompts/build.md#template--version-pin-drift-handling) (`targets/vectis/prose/prompts/build.md` in emery-adapters).

@@ -55,7 +55,7 @@ impl Target for Adapter {
 
     fn metadata() -> TargetMetadata {
         TargetMetadata {
-            specify_floor: Some("0.28.0".to_string()),
+            emery_floor: Some("0.28.0".to_string()),
             inputs: vec![BuildInput {
                 path: "contracts".to_string(),
                 required: false,
@@ -75,7 +75,7 @@ impl Target for Adapter {
     async fn build<P: Model>(
         model: &P, ctx: &Context<'_>, slice: &str, inputs: &[Input], tree: &WorkingTree,
     ) -> Result<Report, Error> {
-        let slice_contracts_rel = format!(".specify/slices/{slice}/contracts");
+        let slice_contracts_rel = format!(".emery/slices/{slice}/contracts");
         let slice_contracts = ctx.tree_root(tree).join(&slice_contracts_rel);
         let inputs_block = phase::render_inputs(inputs);
         let build_prompt = registry::body("prompts/build.md");
@@ -139,7 +139,7 @@ impl Target for Adapter {
         model: &P, ctx: &Context<'_>, slice: &str, phase: MergePhase, tree: &WorkingTree,
     ) -> Result<Report, Error> {
         if phase == MergePhase::Preflight {
-            let staged = ctx.tree_root(tree).join(format!(".specify/slices/{slice}/contracts"));
+            let staged = ctx.tree_root(tree).join(format!(".emery/slices/{slice}/contracts"));
             return Ok(enforce_validators(Report::success(), &validate_baseline(&staged)));
         }
 

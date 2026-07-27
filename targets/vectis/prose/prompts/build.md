@@ -4,13 +4,13 @@ The adapter core inlines this document into the system prompt of every build leg
 
 1. **`composition.yaml` regeneration.** Synthesis does not write `composition.yaml`. The build regenerates it from `spec.md` + `design.md` (which already carry every upstream spatial / structural claim synthesis folded in from source adapters) at the start of each build, alongside the code it accompanies. `merge` lands the regenerated file together with the implementation code.
 2. **Phase prompts.** Each leg's in-leg instruction lives in a phase prompt under [`build/`](build/); the adapter core assembles each leg's system prompt from this document plus the leg's phase prompt.
-3. **Design-system inputs.** `tokens.yaml` and `assets.yaml` are operator-curated and consumed as read-only build inputs; this prompt never invents or restates their contents. The component catalog (`.specify/design-system/components.yaml`) is the third design-system input, joining `tokens.yaml` and `assets.yaml`, but it is **agent-inferred and operator-reviewable**, not operator-curated: the workflow's deterministic bind bookkeeping writes it from the Step 0.5 bindings file (recording the names the build's Step 0.5 or operator parts supply), and the build reads the confirmed entries back during composition regeneration to factor shared component code per in-scope shell tree. Operators review and may `reject` or rename entries. When absent, no component factoring occurs.
+3. **Design-system inputs.** `tokens.yaml` and `assets.yaml` are operator-curated and consumed as read-only build inputs; this prompt never invents or restates their contents. The component catalog (`.emery/design-system/components.yaml`) is the third design-system input, joining `tokens.yaml` and `assets.yaml`, but it is **agent-inferred and operator-reviewable**, not operator-curated: the workflow's deterministic bind bookkeeping writes it from the Step 0.5 bindings file (recording the names the build's Step 0.5 or operator parts supply), and the build reads the confirmed entries back during composition regeneration to factor shared component code per in-scope shell tree. Operators review and may `reject` or rename entries. When absent, no component factoring occurs.
 
 The Vectis target stays three-capability (`guidance` / `build` / `merge`) — there is **no** fourth `refine` slot. Composition regeneration is part of `build`.
 
 ## Inputs
 
-The build runs against the build request the CLI prepared at `.specify/slices/<slice>/build/request.yaml`; consume its `inputs` manifest rather than relying on convention. Every artifact path resolves against `inputs.root` (the slice tree).
+The build runs against the build request the CLI prepared at `.emery/slices/<slice>/build/request.yaml`; consume its `inputs` manifest rather than relying on convention. Every artifact path resolves against `inputs.root` (the slice tree).
 
 - `inputs.artifacts.proposal` (`proposal.md`) — `## Platforms` scope (`core` / `ios` / `android`) and screen / interaction intent.
 - `inputs.artifacts.specs[]` (`specs/<domain>/spec.md`) — behavioural requirements per domain: screen titles, scenarios, platform-specific behaviour, validation rules.
@@ -24,9 +24,9 @@ The build runs against the build request the CLI prepared at `.specify/slices/<s
 ## Consumer posture
 
 - Agents executing this prompt in a consumer project are **consumers**, not adapter maintainers.
-- On scaffold / verify / finalize / toolchain failure: **stop** with `deferred` or a failure report — see [Consumer tooling boundary](../references/spec-runtime/guardrails.md#consumer-tooling-boundary).
-- **Never** edit `specify-adapters`, `core/templates/`, or the built guest component in-band — even when `adapters/` is a sibling symlink.
-- Tooling fixes happen in a **separate maintainer session** on specify-adapters; consumer scaffolds re-sync deterministically on the next build (the adapter re-renders the agent-immutable scaffold files from its embedded templates).
+- On scaffold / verify / finalize / toolchain failure: **stop** with `deferred` or a failure report — see [Consumer tooling boundary](../references/emery-runtime/guardrails.md#consumer-tooling-boundary).
+- **Never** edit `emery-adapters`, `core/templates/`, or the built guest component in-band — even when `adapters/` is a sibling symlink.
+- Tooling fixes happen in a **separate maintainer session** on emery-adapters; consumer scaffolds re-sync deterministically on the next build (the adapter re-renders the agent-immutable scaffold files from its embedded templates).
 
 ## Standard arguments
 
@@ -34,14 +34,14 @@ All phase prompts assume these symbols are resolved by the leg's orchestrating a
 
 | Symbol | Meaning |
 | --- | --- |
-| `SLICE_ID` | The active slice name (`specify plan next` output, or `specify slice` argument). |
-| `SLICE_DIR` | `.specify/slices/<SLICE_ID>/`. |
+| `SLICE_ID` | The active slice name (`emery plan next` output, or `emery slice` argument). |
+| `SLICE_DIR` | `.emery/slices/<SLICE_ID>/`. |
 | `DOMAIN_NAME` | The single domain spec folder under `SLICE_DIR/specs/`. When the slice carries multiple domains, iterate the per-domain phase prompts in declaration order. |
 | `PROJECT_DIR` | The target project root (single-repo mode) or the resolved workspace slot (workspace mode). |
 | `IOS_SHELL_DIR` | `${PROJECT_DIR}/iOS` (only when `ios` is in scope). |
 | `ANDROID_SHELL_DIR` | `${PROJECT_DIR}/Android` (only when `android` is in scope). |
 | `APP_NAME` | The Xcode target / Swift source folder name (derived from `design.md`'s `App` struct name). |
-| `CATALOG_PATH` | `${PROJECT_DIR}/.specify/design-system/components.yaml` when present. Optional — absent means no component factoring. |
+| `CATALOG_PATH` | `${PROJECT_DIR}/.emery/design-system/components.yaml` when present. Optional — absent means no component factoring. |
 
 ## Platform scope
 
@@ -61,7 +61,7 @@ Leg order is owned by the adapter core, not by this document: the core runs its 
 
 **Step 0.5 — component inference (runs in the composition leg, ahead of composition regeneration).** Component *identity* is deterministic and owned by the adapter's in-guest clustering engine (a structural fingerprint over each `group`'s normalized skeleton); component *identification and naming* are model judgement and owned by this prompt. The engine carries **no** component vocabulary — it reports identity + evidence, and the workflow's deterministic bind bookkeeping records the names it is handed; this prompt decides what each clustered structure *is* and what to call it. Inference runs before composition regeneration so the regeneration at [`build/composition.md`](build/composition.md) step 6 reads an up-to-date component set. **Timing.** The report clusters against the **merged** baseline plus the candidate cache and `parts.yaml` — not the current slice's composition, which has not merged yet. With one screen per slice and the default occurrence threshold of 2, a baseline-only path surfaces a repeated structure at the **third** slice's build (once two prior screens have merged); the screenshots candidate cache (RFC §B4) can supply the second occurrence **during** the second slice's build when stage-6 sidecars exist. B7 retroactive factoring runs on whichever build first binds the component.
 
-1. **Report.** The adapter runs the deterministic, **name-free** clustering in-guest against the current merged baseline (`${PROJECT_DIR}/.specify/specs/composition.yaml`) and injects the cluster report into the composition leg's prompt — do not attempt to re-run it. The clustering folds the screenshots candidate cache and, when present, the operator-authored `parts.yaml` (`${PROJECT_DIR}/.specify/design-system/parts.yaml`) into the same pass automatically. A `parts.yaml` part is a third authoritative input that carries two authorities the clustering honours silently: **naming** (its operator slug wins, so the matching cluster arrives with `bound-slug` already populated — leave it untouched in step 2) and **promotion** (a part matching at least one baseline group is surfaced as a cluster even below the occurrence threshold). Parts that match no baseline group surface in the report's non-blocking `unmatched-parts` list (informational); it never gates the build and is only authoritative over the complete baseline at change completion. An absent baseline yields an empty report (nothing to name). Each reported cluster carries a `fingerprint` (the opaque identity), an `occurrences` count, the `screens` provenance list, the representative normalized `skeleton`, an `evidence` block (`region`, `item-kinds`, `event-targets`, and an optional `candidate-names` list of stage-6 suggestions), and a `bound-slug` (the name already bound to that fingerprint, or `null`).
+1. **Report.** The adapter runs the deterministic, **name-free** clustering in-guest against the current merged baseline (`${PROJECT_DIR}/.emery/specs/composition.yaml`) and injects the cluster report into the composition leg's prompt — do not attempt to re-run it. The clustering folds the screenshots candidate cache and, when present, the operator-authored `parts.yaml` (`${PROJECT_DIR}/.emery/design-system/parts.yaml`) into the same pass automatically. A `parts.yaml` part is a third authoritative input that carries two authorities the clustering honours silently: **naming** (its operator slug wins, so the matching cluster arrives with `bound-slug` already populated — leave it untouched in step 2) and **promotion** (a part matching at least one baseline group is surfaced as a cluster even below the occurrence threshold). Parts that match no baseline group surface in the report's non-blocking `unmatched-parts` list (informational); it never gates the build and is only authoritative over the complete baseline at change completion. An absent baseline yields an empty report (nothing to name). Each reported cluster carries a `fingerprint` (the opaque identity), an `occurrences` count, the `screens` provenance list, the representative normalized `skeleton`, an `evidence` block (`region`, `item-kinds`, `event-targets`, and an optional `candidate-names` list of stage-6 suggestions), and a `bound-slug` (the name already bound to that fingerprint, or `null`).
 2. **Identify and name by judgement.** For each reported cluster whose `bound-slug` is `null`, decide *what the component is* and *what to call it*: read its `evidence` and representative `skeleton`, and choose a kebab-case slug. There is **no fixed component vocabulary** — a repeated footer of navigation icons might be a `tab-bar`, a `rail`, or a novel navigation form this app invents; name it on its merits rather than forcing it into a known label. The `evidence.candidate-names` suggestions (when present) are non-authoritative stage-6 hints you MAY adopt or override — never an identity. A cluster whose `bound-slug` is **already populated** is already named — from a prior run's catalog binding, or from an operator `parts.yaml` pin whose name wins — so leave it untouched.
 3. **Bind.** Write your `{ fingerprint → slug }` decisions to the bindings file at `${SLICE_DIR}/build/component-bindings.yaml`; the workflow's deterministic bind bookkeeping records them into the catalog. The bindings file is a `bindings:` map keyed by each cluster's `fingerprint`, valued by the bare slug (or `{ slug, description }`):
 
@@ -100,7 +100,7 @@ When all in-scope reviews complete:
 1. **Merge findings.** Combine `design_findings` from each reviewer into a single list. Deduplicate universal findings (UNI-prefixed) that both reviewers flagged with identical check IDs and matching evidence — keep the higher-severity instance. Platform-specific findings (CRX-, LOG-, GEN-, IOS-, SWF-, AND-, KTL-, INT-prefixed) are always distinct.
 2. **Empty list.** Skip the rest of this section.
 3. **Validate classifications.** Each finding already carries `code-fix` or `spec-change`. Treat that as the source of truth. Resolve disagreements between platforms by applying: spec is clear but code is wrong → `code-fix`; spec is silent, ambiguous, or problematic → `spec-change`.
-4. **Surface findings.** Findings flow to the operator alongside the build outcome. Cross-platform follow-up work is queued as a new slice via the operator's normal `/spec:plan` flow rather than letting reviewers spawn slices directly.
+4. **Surface findings.** Findings flow to the operator alongside the build outcome. Cross-platform follow-up work is queued as a new slice via the operator's normal `/emery:plan` flow rather than letting reviewers spawn slices directly.
 
 ## § Standards review surface
 
@@ -108,21 +108,21 @@ The per-platform reviewers above ([`build/core/review.md`](build/core/review.md)
 
 Vectis render-by-`kind` drift ([`VECTIS-006`](../rules/VECTIS-006-asset-render-by-kind.md)) is review-scoped in v1: iOS and Android Integration specialists run **IOS-020** / **AND-028** on the first full-scope iteration (see per-platform review prompts and team protocols).
 
-Framework acceptance fixtures under `quality/fixtures/reference/targets/vectis/` version-control `design-system/assets/exports/` (see [`task-list/design-system/`](https://github.com/augentic/specify/tree/main/quality/fixtures/reference/targets/vectis/task-list/design-system)) so build prompt examples and eval pins demonstrate the materialize-then-copy hand-off without requiring image-processing deps in every CI job.
+Framework acceptance fixtures under `quality/fixtures/reference/targets/vectis/` version-control `design-system/assets/exports/` (see [`task-list/design-system/`](https://github.com/augentic/emery/tree/main/quality/fixtures/reference/targets/vectis/task-list/design-system)) so build prompt examples and eval pins demonstrate the materialize-then-copy hand-off without requiring image-processing deps in every CI job.
 
-Per [Standards layer](../references/spec-runtime/standards-layer-snippet.md), standards findings may block CI but never transition plan entries, slices, or changes. CI wiring is consumer-project policy, not adapter policy; this prompt acknowledges the surface and links out for the contract.
+Per [Standards layer](../references/emery-runtime/standards-layer-snippet.md), standards findings may block CI but never transition plan entries, slices, or changes. CI wiring is consumer-project policy, not adapter policy; this prompt acknowledges the surface and links out for the contract.
 
 ## § Template / version-pin drift handling
 
 The adapter's scaffold renderer is render-only and ships with embedded version pins. Upstream bumps (Crux core, uniffi, AGP / Gradle, cargo-swift, Xcode) can break a freshly rendered scaffold even when the rest of the slice is correct. Detect this when a verify-repair loop fails repeatedly with cargo / Gradle / Xcode errors that look like API renames, missing imports, or toolchain mismatches rather than feature-level bugs.
 
-**Agents:** detect → record the failing combo (caps + shells), the failing host step, and the load-bearing error line → mark the build outcome as `deferred` with a template / pin drift signal → **exit** (no upstream edits). See [Consumer tooling boundary](../references/spec-runtime/guardrails.md#consumer-tooling-boundary).
+**Agents:** detect → record the failing combo (caps + shells), the failing host step, and the load-bearing error line → mark the build outcome as `deferred` with a template / pin drift signal → **exit** (no upstream edits). See [Consumer tooling boundary](../references/emery-runtime/guardrails.md#consumer-tooling-boundary).
 
 **Operators (separate maintainer session):** edit [`versions.toml`](../../versions.toml) and/or [`templates/`](../../templates/core/), rebuild the guest component, publish / bump the adapter version; the consumer project's scaffolds re-sync deterministically on the next build.
 
 ## § Phase outcome contract
 
-> See [Phase outcome contract](../references/spec-runtime/phase-outcome-contract.md).
+> See [Phase outcome contract](../references/emery-runtime/phase-outcome-contract.md).
 
 The `build` phase concludes with exactly one of `success` / `failure` / `deferred`:
 
@@ -165,5 +165,5 @@ Each `findings[]` item validates against `schemas/diagnostics/diagnostic.schema.
 ## Notes for downstream phases
 
 - **`composition.yaml` is a build output.** It lives at `${SLICE_DIR}/composition.yaml` after the build succeeds; the merge prompt lands it into the baseline alongside the code. Operator-curated `tokens.yaml` / `assets.yaml` are also read by `merge`; the merge phase re-runs the adapter's deterministic composition validator against the merged baseline so cross-artifact regressions are caught even when the current slice only touched code.
-- **Do not write `composition.yaml` into `.specify/specs/`.** That is `specify slice merge`'s job, atomically, alongside the spec / design deltas.
+- **Do not write `composition.yaml` into `.emery/specs/`.** That is `emery slice merge`'s job, atomically, alongside the spec / design deltas.
 - **Operator-curated inputs.** `tokens.yaml` and `assets.yaml` updates accompany the slice when the operator edits them; the merge prompt promotes those edits into `design-system/tokens.yaml` / `design-system/assets.yaml` (or slice-local equivalents) using the same delta merge path as the spec deltas. The component catalog (`CATALOG_PATH`) is project-level and not slice-local; it is read as-is at build time and does not participate in the merge delta path.

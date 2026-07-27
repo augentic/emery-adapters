@@ -10,7 +10,7 @@ A Vectis slice produces a buildable cross-platform application:
 
 - One Crux **shared core** (Rust crate under `shared/`) carrying every requirement that is platform-neutral.
 - Zero or more **platform shells** (`ios`, `android`, future `web`) that render the core's `ViewModel`, dispatch `Event` values from user interactions, and translate the core's `Effect`s into host I/O.
-- A **`composition.yaml` manifest** regenerated each build from `spec.md` + `design.md` (see `build.md`). `composition.yaml` is not a Specify artifact — synthesis never writes it. The synthesiser must still describe screen-level structure precisely enough for `build` to reconstruct the composition deterministically.
+- A **`composition.yaml` manifest** regenerated each build from `spec.md` + `design.md` (see `build.md`). `composition.yaml` is not a Emery artifact — synthesis never writes it. The synthesiser must still describe screen-level structure precisely enough for `build` to reconstruct the composition deterministically.
 
 `core` is always in scope. Platforms are an **app-level fact** declared once in `project.yaml.platforms` and carried verbatim to every slice's `proposal.md ## Platforms` (see below) — they are not per-slice opt-in.
 
@@ -32,7 +32,7 @@ A Vectis slice produces a buildable cross-platform application:
 - **Spatial Evidence folding.** When upstream `screenshots`-source Evidence claims contribute `kind: region` / `kind: container` / `kind: leaf`, fold them into requirements that **describe what the user sees and when**, not raw geometry. Name each distinct view explicitly in its requirement title (`Requirement: Todo List View`, `Requirement: Add Todo Form`) — `build` derives screen slugs from these titles when it regenerates `composition.yaml`. Field-level claims (the leaves) inform the per-page view-struct fields described in `design.md`; group-level claims (containers) inform the screen state shape; region-level claims inform header / body / footer / fab placement. Surface the claim id (e.g. `Sources: [legacy-monolith#todos.list.header]`) on the requirement that consumed it.
 - Adapters (HTTP, KV, SSE, Time, Platform), data-model field types, and per-screen wiring details belong in `design.md`, not `spec.md`. Specs describe *what* the system does.
 - Token and asset references are allowed only as observable product behaviour (`the unread badge SHALL use the alert colour`, `the empty state SHALL render the empty-tasks-hero image`) — never as catalogue restatements. The catalogue is `tokens.yaml` / `assets.yaml`, validated at build time.
-- On **modified** domains (baseline `specs/<domain>/spec.md` already exists), `specify slice synthesize` emits merge-ready delta sections (`## ADDED Requirements`, `## MODIFIED Requirements`, …) with baseline-aware IDs. In the synthesis **response** `model`, set `baseline_id` on a requirement that refines an existing baseline REQ; omit it for net-new behaviour. Do **not** author `ID:` / `Sources:` / `Status:` lines or delta section headers in `artifacts.specs` — the kernel renders those.
+- On **modified** domains (baseline `specs/<domain>/spec.md` already exists), `emery slice synthesize` emits merge-ready delta sections (`## ADDED Requirements`, `## MODIFIED Requirements`, …) with baseline-aware IDs. In the synthesis **response** `model`, set `baseline_id` on a requirement that refines an existing baseline REQ; omit it for net-new behaviour. Do **not** author `ID:` / `Sources:` / `Status:` lines or delta section headers in `artifacts.specs` — the kernel renders those.
 
 ### `design.md` — implementation shape
 
@@ -106,4 +106,4 @@ A `target: vectis` slice typically draws on one or more of:
 - **`screenshots`** — vision-assisted spatial inference producing `region` / `container` / `leaf` claims (`authority: documentation`). The spatial claims are how upstream UI evidence reaches the synthesiser; treat them as the structural backbone for screen-bearing requirements and view-struct fields.
 - **`typescript`** (or any future code source) — behavioural evidence from a legacy implementation (`authority: behaviour`). Useful when migrating an existing TypeScript surface to Crux.
 
-When sources disagree, follow the authority precedence (`intent > documentation > behaviour`) and resolution order defined in [`authority.md`](../references/spec-runtime/synthesis/authority.md) — Vectis does not override the global authority order.
+When sources disagree, follow the authority precedence (`intent > documentation > behaviour`) and resolution order defined in [`authority.md`](../references/emery-runtime/synthesis/authority.md) — Vectis does not override the global authority order.
