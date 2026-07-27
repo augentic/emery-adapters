@@ -112,6 +112,10 @@ fn validate_schema(schema_text: &str, value: &serde_json::Value) -> Result<(), S
 }
 
 fn detect_orphans(assembly: &str, assembly_dir: &Path, spec: &AssemblySpec) -> Result<(), String> {
+    // The directory itself: a newly dropped-in orphan file must retrigger
+    // this check, not wait for the next unrelated rebuild.
+    println!("cargo:rerun-if-changed={}", assembly_dir.display());
+
     let listed: BTreeSet<String> = spec.files.iter().map(|entry| entry.source.clone()).collect();
 
     for entry in fs::read_dir(assembly_dir)

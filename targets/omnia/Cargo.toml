@@ -27,6 +27,7 @@ serde_json.workspace = true
 
 [dev-dependencies]
 jsonschema.workspace = true
+serde-saphyr.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 omnia-testkit.workspace = true

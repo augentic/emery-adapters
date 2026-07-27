@@ -244,8 +244,6 @@ workspace = true
 
 Standard project configuration files, identical across all WASM guest projects. The adapter's deterministic scaffold prelude writes each of them from its embedded templates (`templates/core/` in the adapter crate) at the start of every build when the file is absent — existing files are never overwritten. The bodies below are reference copies of those templates: do not re-author these files; consult them to understand what is already on disk (or to repair the tree if the prelude itself reports a failure).
 
-The prelude also writes a `Makefile` shim (every target delegates to `cargo make`), `taplo.toml` (TOML formatting), and `.gitignore` alongside the files shown below.
-
 ### rustfmt.toml
 
 ```toml
@@ -288,7 +286,6 @@ targets = [
 {
   "rust-analyzer.linkedProjects": ["Cargo.toml"],
   "rust-analyzer.check.command": "clippy",
-  "rust-analyzer.cargo.cfgs": ["!miri"],
   "rust-analyzer.cargo.target": "wasm32-wasip2"
 }
 ```
@@ -352,6 +349,48 @@ allowed-duplicate-crates = [
 
 - `doc-valid-idents` -- add domain-specific identifiers that appear in doc comments (prevents `doc_markdown` lint)
 - `allowed-duplicate-crates` -- suppress false-positive duplicate crate warnings from transitive dependencies. Run `cargo clippy` after adding dependencies and update this list as needed.
+
+### taplo.toml
+
+Formatting rules for [`taplo`](https://taplo.tamasfe.dev/) -- TOML files keep manual key order, except dependency tables, which sort.
+
+```toml
+[formatting]
+allowed_blank_lines = 1
+array_auto_collapse = false
+array_auto_expand = false
+column_width = 100
+reorder_arrays = false
+reorder_keys = false
+
+[[rule]]
+keys = ["*.dependencies", "*-dependencies", "dependencies"]
+
+[rule.formatting]
+reorder_keys = true
+reorder_arrays = true
+```
+
+### .gitignore
+
+```
+target
+.env
+.envrc
+rustc-ice-*
+.DS_Store
+```
+
+### Makefile
+
+Shim so bare `make <task>` delegates to `cargo make <task>` (the recipe line is tab-indented, as `make` requires).
+
+```make
+# dynamically target Makefile.toml
+.PHONY: %
+%:
+	@cargo make $@
+```
 
 ### Makefile.toml
 
@@ -536,7 +575,6 @@ more information.
 The `[imports]` section references trusted external audit sources used across the WASM/Wasmtime ecosystem. These are standard for all Omnia guests.
 
 ```toml
-
 # cargo-vet config file
 
 [cargo-vet]
@@ -584,7 +622,6 @@ url = "https://raw.githubusercontent.com/zcash/rust-ecosystem/main/supply-chain/
 Minimal scaffold. Trusted publisher entries are populated by `cargo vet` commands.
 
 ```toml
-
 # cargo-vet audits file
 
 [audits]

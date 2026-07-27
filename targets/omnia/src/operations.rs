@@ -148,21 +148,46 @@ fn assemble(prompts: &[&str]) -> String {
 }
 
 fn scaffold_prelude(tree_root: &Path) -> String {
+    use std::fmt::Write as _;
+
     match crate::scaffold::ensure_missing(tree_root) {
         Ok(report) if report.written.is_empty() => {
             "### scaffold prelude (already run in-guest)\n\nEvery standard tooling file \
              was already present; nothing was written. Do not re-author them."
                 .to_string()
         }
-        Ok(report) => format!(
-            "### scaffold prelude (already run in-guest)\n\nThe adapter wrote the missing \
-             standard tooling files from its embedded templates:\n{}\n\nDo not re-author or \
-             overwrite them — the guest writer only fills the `<PACKAGE_NAME>` / \
-             `<STORAGE_ACCOUNT>` / `<RESOURCE_GROUP>` placeholders in \
-             `.github/workflows/publish.yaml` and runs `cargo vet regenerate \
-             {{imports,exemptions,unpublished}}` once `Cargo.lock` exists.",
-            report.written.iter().map(|path| format!("- `{path}`")).collect::<Vec<_>>().join("\n"),
-        ),
+        Ok(report) => {
+            let mut block = format!(
+                "### scaffold prelude (already run in-guest)\n\nThe adapter wrote the missing \
+                 standard tooling files from its embedded templates:\n{}\n\nDo not re-author or \
+                 overwrite them.",
+                report
+                    .written
+                    .iter()
+                    .map(|path| format!("- `{path}`"))
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            );
+            if report.written.contains(&crate::scaffold::PUBLISH_WORKFLOW) {
+                let tokens = crate::scaffold::publish_placeholders()
+                    .iter()
+                    .map(|token| format!("`{token}`"))
+                    .collect::<Vec<_>>()
+                    .join(" / ");
+                let _ = write!(
+                    block,
+                    " Fill the {tokens} placeholders in `{}`.",
+                    crate::scaffold::PUBLISH_WORKFLOW,
+                );
+            }
+            if report.written.contains(&crate::scaffold::VET_CONFIG) {
+                block.push_str(
+                    " Run `cargo vet regenerate {imports,exemptions,unpublished}` once \
+                     `Cargo.lock` exists.",
+                );
+            }
+            block
+        }
         Err(err) => format!(
             "### scaffold prelude (could not run)\n\nThe adapter's deterministic scaffold \
              failed ({err}); author the standard tooling files per the \
