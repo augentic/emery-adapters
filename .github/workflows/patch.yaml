@@ -1,13 +1,11 @@
 name: Create Patch
 
-# Bump the patch version on a durable release-X.Y.Z line and prep
-# RELEASES.md. Dispatch from the release-* branch carrying the backported
-# fix; Publish Release (dispatched from the same branch) tags, creates the
-# GitHub Release, and publishes each component to GHCR.
+# Bump the patch version on a durable release-X.Y.Z line via the shared
+# workflow (Cargo version + RELEASES.md).
 #
-# Same shape as the shared augentic/.github patch.yaml, composed locally
-# from its actions because the version bump runs `cargo generate-lockfile`,
-# which must resolve the private augentic/emery git dependencies.
+# Dispatch from the release-* branch carrying the backported fix;
+# Publish Release (dispatched from the same branch) tags, creates the
+# GitHub Release, and publishes each component to GHCR.
 
 on:
   workflow_dispatch:
@@ -19,63 +17,6 @@ permissions:
   contents: write
 
 jobs:
-  skip:
-    name: Skipped
-    if: startsWith(github.ref_name, 'release-') == false
-    runs-on: ubuntu-latest
-    steps:
-      - run: |
-          echo "This workflow only runs on the 'release-*' branches"
-          exit 1
-
-  # Increment patch version and update RELEASES.md
-  # Push back to the release-<version> branch for review and publishing
   patch:
-    name: Patch release
-    if: startsWith(github.ref_name, 'release-')
-    runs-on: ubuntu-latest
-    env:
-      # Cargo's libgit2 fetcher does not see the app-token git credentials.
-      CARGO_NET_GIT_FETCH_WITH_CLI: true
-    steps:
-      - uses: actions/checkout@v6
-
-      # The version bump regenerates the lockfile, which resolves the
-      # private augentic/emery git dependencies.
-      - name: Private Git access
-        id: git-token
-        uses: actions/create-github-app-token@v3
-        with:
-          client-id: ${{ vars.APP_CLIENT_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-          owner: augentic
-          repositories: emery
-          permission-contents: read
-
-      - name: Authenticate Cargo git deps
-        env:
-          TOKEN: ${{ steps.git-token.outputs.token }}
-        run: |
-          git config --global \
-            url."https://x-access-token:${TOKEN}@github.com/augentic/emery".insteadOf \
-            "https://github.com/augentic/emery"
-
-      - name: Set git identity
-        uses: augentic/.github/.github/actions/git-identity@main
-
-      - name: Bump version
-        id: patch
-        uses: augentic/.github/.github/actions/cargo-version@main
-        with:
-          increment: patch
-
-      - name: Update release notes
-        uses: augentic/.github/.github/actions/release-notes@main
-        with:
-          release-type: patch
-          version: ${{ steps.patch.outputs.version }}
-
-      - name: Push changes
-        env:
-          REF_NAME: ${{ github.ref_name }}
-        run: git push origin "HEAD:$REF_NAME"
+    uses: augentic/.github/.github/workflows/patch.yaml@main
+    secrets: inherit

@@ -42,7 +42,7 @@ Three ideas carry every operation:
 - **Prose is embedded at build time.** `build.rs` calls `prose::emit("prose")`, which walks the adapter's `prose/` tree into a sorted `DOCS` table; `adapter::registry!()` exposes it as `registry::docs()` / `registry::body("prompts/survey.md")`. A dangling relative link in any prose document fails the build. The export macros also serve `prose/references/**` over MCP, so prompts cite references by relative link instead of inlining them.
 - **Answers are schema-gated and repaired.** `adapter::repaired(model, ctx, system, user, kind, SCHEMA, tail)` sends the prompt, parses the reply against a generated JSON schema, and re-prompts with the parse error up to `adapter::MAX_REPAIRS` times before failing. Targets use the `adapter::phase` helpers (`phase::phase`, `phase::report`, `phase::enforce`) built on the same kernel.
 
-For the type-level contract — `Context`, `Lead`, `Evidence`, `Report`, the answer schemas — generate the SDK docs locally with `cargo doc -p adapter --open`. The engine-side view of the same seam is [`emery` docs/explanation/adapter-anatomy.md](https://github.com/augentic/emery/blob/main/docs/explanation/adapter-anatomy.md).
+For the type-level contract — `Context`, `Lead`, `Evidence`, `Report`, the answer schemas — generate the SDK docs locally with `cargo doc -p emery-adapter --open`. The engine-side view of the same seam is [`emery` docs/explanation/adapter-anatomy.md](https://github.com/augentic/emery/blob/main/docs/explanation/adapter-anatomy.md).
 
 ## Walkthrough: a source adapter
 
@@ -87,10 +87,10 @@ crate-type = ["cdylib", "rlib"]
 workspace = true
 
 [dependencies]
-adapter.workspace = true
+emery-adapter.workspace = true
 
 [build-dependencies]
-prose.workspace = true
+emery-prose.workspace = true
 
 [dev-dependencies]
 omnia-testkit.workspace = true

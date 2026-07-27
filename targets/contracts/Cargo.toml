@@ -15,14 +15,14 @@ crate-type = ["cdylib", "rlib"]
 workspace = true
 
 [dependencies]
-adapter.workspace = true
+emery-adapter.workspace = true
 semver.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde-saphyr.workspace = true
 serde_json.workspace = true
 
 [build-dependencies]
-prose.workspace = true
+emery-prose.workspace = true
 
 [dev-dependencies]
 jsonschema.workspace = true

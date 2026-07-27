@@ -4,11 +4,11 @@ Human-facing contributor guide (toolchain, layout, prompts, pin, publishing). Cr
 
 ## Getting started
 
-1. Clone this repository. The engine crates (`adapter`, `native`, `probe`, `prose`) resolve as git dependencies on [`augentic/emery`](https://github.com/augentic/emery), pinned by release tag (`tag = "vX.Y.Z"`) and the committed `Cargo.lock` — no sibling checkout is needed to build or test. A sibling checkout at `../emery` is required only for [co-development against uncommitted engine changes](#engine-pin-and-sibling-co-development) and for `cargo make wasm-run`.
+1. Clone this repository. The engine crates (`emery-adapter`, `emery-native`, `emery-probe`, `emery-prose`) resolve as git dependencies on [`augentic/emery`](https://github.com/augentic/emery), pinned by release tag (`tag = "vX.Y.Z"`) and the committed `Cargo.lock` — no sibling checkout is needed to build or test. A sibling checkout at `../emery` is required only for [co-development against uncommitted engine changes](#engine-pin-and-sibling-co-development) and for `cargo make wasm-run`.
 2. `rustup` picks up the pinned **stable** toolchain from `rust-toolchain.toml` (including the `wasm32-wasip2` target); a nightly toolchain is additionally needed for the `fmt` arm (`cargo +nightly fmt`). Install `cargo-make`, `cargo-nextest`, `cargo-deny`, and `cargo-vet`. Publishing also uses `wkg`.
 3. Run `cargo make check` from the repo root. Before opening a PR, run `cargo make ci`.
 
-For the adapter SDK's type-level contract (the `Source` / `Target` traits, seam DTOs, answer schemas), generate the docs locally: `cargo doc -p adapter --open`.
+For the adapter SDK's type-level contract (the `Source` / `Target` traits, seam DTOs, answer schemas), generate the docs locally: `cargo doc -p emery-adapter --open`.
 
 Unless you are fixing a known bug, discuss larger changes in a GitHub issue first. Legal / DCO expectations match the engine repo — see [emery CONTRIBUTING](https://github.com/augentic/emery/blob/main/CONTRIBUTING.md).
 
@@ -57,7 +57,7 @@ Adapter prompts are markdown documents compiled into the guest and driven by the
 Two compatibility choices are independent, for first- and third-party adapter authors alike:
 
 1. **WIT contract version** — the `emery:adapter` WIT package, embedded in the `adapter` SDK and published from `augentic/emery`'s `wit/emery.wit`.
-2. **Engine revision** — the workspace resolves `adapter`, `native`, `probe`, and `prose` as git dependencies on `augentic/emery`, pinned by **release tag** (`tag = "vX.Y.Z"` in the root `Cargo.toml`; RFC-77 D13) plus the committed `Cargo.lock`. Advancing the pin is deliberate: bump the tag on all four dependencies to a released engine line, run `cargo update -p adapter -p native -p probe -p prose`, and commit both files — never resolve a floating branch.
+2. **Engine revision** — the workspace resolves `emery-adapter`, `emery-native`, `emery-probe`, and `emery-prose` as git dependencies on `augentic/emery`, pinned by **release tag** (`tag = "vX.Y.Z"` in the root `Cargo.toml`; RFC-77 D13) plus the committed `Cargo.lock`. Advancing the pin is deliberate: bump the tag on all four dependencies to a released engine line, run `cargo update -p emery-adapter -p emery-native -p emery-probe -p emery-prose`, and commit both files — never resolve a floating branch.
 
 For sibling co-development against uncommitted engine changes, uncomment the `[patch."https://github.com/augentic/emery.git"]` block at the bottom of the root `Cargo.toml` (it points at `../emery`) and work in both trees; re-comment it before committing. The patch block must never be active at publish time.
 

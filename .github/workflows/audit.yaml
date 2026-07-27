@@ -11,52 +11,9 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   audit:
-    name: cargo audit
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          path: emery-adapters
-
-      - name: Private Git access
-        id: app-token
-        uses: actions/create-github-app-token@v3
-        with:
-          client-id: ${{ vars.APP_CLIENT_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-          owner: augentic
-          repositories: emery
-          permission-contents: read
-
-      - name: Authenticate Cargo git deps
-        env:
-          TOKEN: ${{ steps.app-token.outputs.token }}
-        run: |
-          git config --global \
-            url."https://x-access-token:${TOKEN}@github.com/augentic/emery".insteadOf \
-            "https://github.com/augentic/emery"
-
-      - name: Checkout emery
-        uses: actions/checkout@v6
-        with:
-          repository: augentic/emery
-          token: ${{ steps.app-token.outputs.token }}
-          path: emery
-          persist-credentials: false
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Install cargo-audit
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-audit
-
-      - name: Audit dependencies
-        working-directory: emery-adapters
-        env:
-          CARGO_NET_GIT_FETCH_WITH_CLI: true
-        run: cargo audit
+    uses: augentic/.github/.github/workflows/audit.yaml@main
+    secrets: inherit
