@@ -53,7 +53,7 @@ The Omnia crate / test / guest / review instructions live in [`../prompts/build.
 
 ### Guest writer depth
 
-- [`configuration.md`](configuration.md) — guest workspace `Cargo.toml`, `.cargo/config.toml`, `deny.toml`, the five GitHub workflows, `.env.example` shape (templates).
+- [`configuration.md`](configuration.md) — guest workspace `Cargo.toml`, `.env.example` shape, plus reference bodies for the tooling files the scaffold prelude writes (`.cargo/config.toml`, `deny.toml`, cargo-vet scaffold, the five GitHub workflows).
 - [`handlers.md`](handlers.md) — typed operation routing, message subscriptions, WebSocket events, and explicit guest exports.
 - [`guest-patterns.md`](guest-patterns.md) — HTTP / Messaging / WebSocket guest export patterns.
 - [`guest-wiring.md`](guest-wiring.md) — crate → guest injection contract.

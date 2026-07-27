@@ -1,0 +1,50 @@
+# https://doc.rust-lang.org/stable/clippy/index.html
+
+doc-valid-idents = [
+    # Add project-specific identifiers here (e.g., "TomTom", "OpenLR")
+]
+
+allowed-duplicate-crates = [
+    # Populated by running `cargo clippy` and adding false positives.
+    # Common entries for Omnia guests:
+    "core-foundation",
+    "embedded-io",
+    "foldhash",
+    "getrandom",
+    "hashbrown",
+    "linux-raw-sys",
+    "rand",
+    "rand_chacha",
+    "rand_core",
+    "reqwest",
+    "rustix",
+    "rustls",
+    "rustls-webpki",
+    "thiserror",
+    "thiserror-impl",
+    "tokio-rustls",
+    "wasm-encoder",
+    "wasm-metadata",
+    "wasmparser",
+    "wasi",
+    "webpki-roots",
+    "windows-link",
+    "windows-result",
+    "windows-strings",
+    "windows-sys",
+    "windows-targets",
+    "windows_aarch64_gnullvm",
+    "windows_aarch64_msvc",
+    "windows_i686_gnu",
+    "windows_i686_gnullvm",
+    "windows_i686_msvc",
+    "windows_x86_64_gnu",
+    "windows_x86_64_gnullvm",
+    "windows_x86_64_msvc",
+    "wit-bindgen",
+    "wit-bindgen-core",
+    "wit-bindgen-rust",
+    "wit-bindgen-rust-macro",
+    "wit-component",
+    "wit-parser",
+]

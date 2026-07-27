@@ -38,6 +38,8 @@ Check whether `$CRATE_PATH/Cargo.toml` exists:
 
 ## Leg map
 
+Before the first leg, the adapter runs its deterministic scaffold prelude in-guest: any missing standard tooling file (cargo-make, deny, cargo-vet scaffold, GitHub workflows, toolchain/editor config) is written from the adapter's embedded templates — existing files are never overwritten. The generation user prompt carries the outcome as a `### scaffold prelude` block; never re-author the files it lists ([`configuration.md`](../references/configuration.md) describes them).
+
 The adapter core drives four legs in a fixed order — generation (crate writer, test writer, guest writer in create mode, then the § verify-repair loop), standards review ([`build/review.md`](build/review.md)), capture replay ([`build/replay.md`](build/replay.md), self-skipping when no `captures` source is bound), then the report leg (see `## Build report`). Within the generation leg, write the crate before the tests, mark `tasks.md` checkboxes complete as each task lands, and never transition the slice lifecycle — the deterministic in-guest report gate checks the report answer and the engine guest owns the `Refined → Built` transition.
 
 ## § Verify-repair loop (max 3 iterations)

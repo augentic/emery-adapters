@@ -1,0 +1,10 @@
+name: CI
+
+on:
+  push:
+
+jobs:
+  ci:
+    uses: augentic/.github/.github/workflows/ci.yaml@main
+    secrets:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
