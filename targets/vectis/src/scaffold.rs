@@ -1,4 +1,9 @@
 //! Render-only Crux project scaffolding.
+//!
+//! [`materialize`] is the allowlisted local-`vectis-template` copy contract
+//! (additive alongside the embedded template renderer until cutover).
+
+pub mod materialize;
 
 mod runtime;
 mod templates;
