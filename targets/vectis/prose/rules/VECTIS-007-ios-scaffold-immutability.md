@@ -14,7 +14,7 @@ references:
 
 ## Rule
 
-`iOS/Makefile` and `iOS/project.yml` are template-owned DX. They land from `$TEMPLATE_DIR` (`../vectis-template` or `VECTIS_TEMPLATE_DIR`) via `vectis::scaffold::materialize` with identity substitution. Agents must never author, copy from worked examples, or edit these files in create or update mode.
+`iOS/Makefile` and `iOS/project.yml` are template-owned DX. They land from `$TEMPLATE_DIR` (`../vectis-template` or `VECTIS_TEMPLATE_DIR`) via `vectis::scaffold::materialize` with identity substitution. Agents must never author, invent, or edit these files in create or update mode — `$TEMPLATE_DIR` is the sole shell example and DX authority.
 
 The live template's verify destination is Makefile-owned:
 
@@ -42,4 +42,4 @@ On drift, re-copy the DX paths from `$TEMPLATE_DIR` with the same identity subst
 
 ## Spec Guidance
 
-When DX files drift, re-copy from `$TEMPLATE_DIR` — do not hand-edit the Makefile to pick a simulator, and never hand-scaffold over an existing tree. Worked examples demonstrate Swift patterns only; they are not authoritative for Makefile or `project.yml` content. Pins live only as bytes in the template checkout — never invent versions.
+When DX files drift, re-copy from `$TEMPLATE_DIR` — do not hand-edit the Makefile to pick a simulator, and never hand-scaffold over an existing tree. `$TEMPLATE_DIR` is the shell example and the only authority for Makefile / `project.yml` content. Pins live only as bytes in the template checkout — never invent versions.

@@ -68,7 +68,6 @@ On failure the orchestrator captures stderr and spawns a **repair-only** sub-age
 
 If still failing after 3 iterations: **stop**, report the remaining failures with full error output, and escalate. When the host's default Java breaks AGP/Kotlin, pin a compatible JDK via `org.gradle.java.home` in `gradle.properties` (host-local).
 
-## Worked examples
+## Worked example
 
-- [`examples/android/01-simple-counter.md`](../../../references/examples/android/01-simple-counter.md) — minimal Core.kt + Application.kt + root composable.
-- [`examples/android/02-http-counter.md`](../../../references/examples/android/02-http-counter.md) — Ktor HTTP capability, coroutine scope, suspending effect handlers.
+The live `$TEMPLATE_DIR` checkout is the worked example. Read `$TEMPLATE_DIR/Android/app/src/main/java/io/augentic/vectisapp/core/` (`Core.kt`, `HttpClient.kt`, `KeyValueStore.kt`, `TimeHandler.kt`, `SseClient.kt`) and Compose UI under `.../ui/` — rewrite the package path after materialize. Capability strip / late adoption follows `$TEMPLATE_DIR/AGENTS.md`. DX authority stays `$TEMPLATE_DIR` (Android Makefile + Gradle) — never invent pins or BoltFFI recipes. Pattern depth: [`android/shell-pattern.md`](../../../references/android/shell-pattern.md), [`android/view-patterns.md`](../../../references/android/view-patterns.md). Sample Emery inputs: [`examples/README.md`](../../../references/examples/README.md).

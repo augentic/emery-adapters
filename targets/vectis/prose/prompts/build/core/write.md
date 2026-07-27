@@ -33,8 +33,6 @@ Full set at [`hard-rules-core.md`](../../../references/hard-rules-core.md). High
 - The `Effect` enum carries `#[effect(facet_typegen)]`; never emit a `Capabilities` struct.
 - Zero-warning policy: fix structure, never suppress — no inline `#[allow]` / `#[expect]` in `shared/src/**/*.rs` (see rule 10 in [`hard-rules-core.md`](../../../references/hard-rules-core.md)).
 
-## Worked examples
+## Worked example
 
-- [`examples/core/01-simple-counter.md`](../../../references/examples/core/01-simple-counter.md) — minimal `Model` + `Event` + `update()`.
-- [`examples/core/02-http-counter.md`](../../../references/examples/core/02-http-counter.md) — HTTP capability + custom adapter.
-- [`examples/core/03-kv-notes.md`](../../../references/examples/core/03-kv-notes.md) — KV capability + multi-screen ViewModel.
+The live `$TEMPLATE_DIR` checkout ([`vectis-template`](https://github.com/augentic/vectis-template)) is the worked example. Read `$TEMPLATE_DIR/shared/src/` (`app.rs`, `model/`, `view/`, `effects.rs`, optional `effects/`) and the strip matrix in `$TEMPLATE_DIR/AGENTS.md` (render-only after strip; `cap=http|kv|time|sse` units for late adoption). Pattern depth: [`crux/app-pattern.md`](../../../references/crux/app-pattern.md), [`crux/capabilities.md`](../../../references/crux/capabilities.md), [`crux/custom-capabilities.md`](../../../references/crux/custom-capabilities.md), [`template-capabilities.md`](../../../references/template-capabilities.md). Sample Emery inputs: [`examples/README.md`](../../../references/examples/README.md).

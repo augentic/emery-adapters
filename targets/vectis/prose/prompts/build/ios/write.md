@@ -71,7 +71,6 @@ If still failing after 3 iterations: **stop**, report the remaining failures wit
 
 If `make build` fails with FFI / BoltFFI contract errors that look like pin drift rather than feature bugs, re-copy pins from `$TEMPLATE_DIR` (see [../../build.md](../../build.md) § Template / version-pin drift handling); do not guess versions.
 
-## Worked examples
+## Worked example
 
-- [`examples/ios/01-simple-counter.md`](../../../references/examples/ios/01-simple-counter.md) — minimal Core.swift + ContentView.swift.
-- [`examples/ios/02-http-counter.md`](../../../references/examples/ios/02-http-counter.md) — HTTP capability bridging, async / await effect handling.
+The live `$TEMPLATE_DIR` checkout is the worked example. After materialize identity substitution, read `$TEMPLATE_DIR/iOS/` — `core.swift`, `ContentView.swift`, views, and `cap=` handlers (`http.swift`, `keyvalue.swift`, `time.swift`, `sse.swift`) per `$TEMPLATE_DIR/AGENTS.md`. DX authority stays `$TEMPLATE_DIR` (`iOS/Makefile`, `iOS/project.yml`) — never invent pins or destinations. Pattern depth: [`ios/shell-pattern.md`](../../../references/ios/shell-pattern.md), [`ios/view-patterns.md`](../../../references/ios/view-patterns.md). Sample Emery inputs: [`examples/README.md`](../../../references/examples/README.md).

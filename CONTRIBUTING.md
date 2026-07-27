@@ -51,7 +51,7 @@ Adapter prompts are markdown documents compiled into the guest and driven by the
 
 - **Parent prompts** (`prose/prompts/{guidance,build,merge}.md` for targets, `prose/prompts/{survey,extract}.md` for sources) orchestrate — bindings, mode dispatch, phase order, the stop-hint contract — and load phase sub-prompts by relative-link instruction. Cap ~150 non-blank lines; orchestration that needs more means a sub-prompt is missing.
 - **Phase sub-prompts** (`prose/prompts/build/<phase>.md`, or `build/<platform>/<phase>.md` for per-platform targets) carry one phase's operational body. Soft cap ~500 non-blank lines, hard cap 800 — above that, split into sub-phase prompts or move material to `prose/references/`.
-- **References are cited via relative markdown links, never inlined** — the `prose` crate's build-time embed includes Markdown documents and follows symlinks, so keep every relative reference resolvable. Worked examples live under `prose/references/examples/<flavour>/` (exempt from prompt caps).
+- **References are cited via relative markdown links, never inlined** — the `prose` crate's build-time embed includes Markdown documents and follows symlinks, so keep every relative reference resolvable. Vectis keeps sample Emery artifacts (`tokens.yaml`, `assets.yaml`) under `targets/vectis/prose/references/examples/`; the live `$TEMPLATE_DIR` ([`vectis-template`](https://github.com/augentic/vectis-template)) checkout is the worked example for core + shells + DX (see that folder's README). Other adapters may still ship markdown walkthroughs under `prose/references/examples/<flavour>/` (exempt from prompt caps).
 
 ## Engine pin and sibling co-development
 
