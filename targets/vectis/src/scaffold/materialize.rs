@@ -84,6 +84,23 @@ const SKIP_DIR_NAMES: &[&str] = &[
 
 const SKIP_FILE_NAMES: &[&str] = &[".DS_Store", "local.properties", ".env.local", "AGENTS.md"];
 
+/// DX paths agents must keep aligned with `$TEMPLATE_DIR` (iOS).
+///
+/// Only paths that exist under a current `vectis-template` checkout are
+/// refreshed by [`crate::sync`]; absent template counterparts are reported
+/// rather than invented. Embedded `.vectis/` scripts are not in the template
+/// today — Phase 4 redefines immutability against `BoltFFI` DX.
+pub const IOS_DX_RELATIVE_PATHS: &[&str] = &["iOS/Makefile", "iOS/project.yml"];
+
+/// DX paths agents must keep aligned with `$TEMPLATE_DIR` (Android).
+pub const ANDROID_DX_RELATIVE_PATHS: &[&str] = &[
+    "Android/Makefile",
+    "Android/settings.gradle.kts",
+    "Android/build.gradle.kts",
+    "Android/app/build.gradle.kts",
+    "Android/shared/build.gradle.kts",
+];
+
 /// Consumer identity to substitute for the template's fixed names.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Identity {

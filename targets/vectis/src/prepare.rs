@@ -15,7 +15,7 @@ use crate::materialize::{
 };
 use crate::validate::engine::load_shell_platforms;
 use crate::verify::{VerifyMode, run as run_verify, verify_exit_code};
-use crate::{VectisError, android, ios_scaffold};
+use crate::{VectisError, android};
 
 /// Run the prepare materialize step for one slice build.
 ///
@@ -80,10 +80,8 @@ pub fn run_build(project_root: &Path, slice_dir: &Path) -> Result<Value, VectisE
         && project_root.join("Android").is_dir())
     .then(|| android::run_for_shell_dir(&project_root.join("Android")));
 
-    let scaffold_sync = (platforms.iter().any(|p| p == "ios") && project_root.join("iOS").is_dir())
-        .then(|| ios_scaffold::sync_ios_scaffold_files(project_root))
-        .transpose()?
-        .map(|report| ios_scaffold::scaffold_sync_ios_json(&report));
+    // DX refresh is host/agent-owned from `$TEMPLATE_DIR` (see `crate::sync`);
+    // the guest does not re-render embedded scaffold files.
 
     Ok(json!({
         "command": "prepare build",
@@ -93,7 +91,6 @@ pub fn run_build(project_root: &Path, slice_dir: &Path) -> Result<Value, VectisE
         "materialized": materialized,
         "bootstrap_app_icon": bootstrap,
         "android_setup": android_setup,
-        "scaffold_sync": scaffold_sync,
     }))
 }
 

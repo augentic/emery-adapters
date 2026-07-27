@@ -1,7 +1,9 @@
-//! Render-only Crux project scaffolding.
+//! Crux project scaffolding.
 //!
 //! [`materialize`] is the allowlisted local-`vectis-template` copy contract
-//! (additive alongside the embedded template renderer until cutover).
+//! used by build agents for greenfield trees. The embedded template renderer
+//! (`run_at` / `plan_*`) remains for Phase 3 deletion and for legacy drift
+//! helpers still consulted by verify.
 
 pub mod materialize;
 

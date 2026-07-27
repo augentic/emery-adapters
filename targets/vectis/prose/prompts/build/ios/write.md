@@ -8,7 +8,7 @@ The SwiftUI patterns, Crux iOS shell anatomy, token templates, and design-system
 
 Inspect `${IOS_SHELL_DIR}` for any `.swift` files:
 
-- No Swift files → **create mode**: the adapter scaffolds the iOS shell deterministically from its embedded templates before this leg (see the scaffold prelude in the leg's prompt), then enter update mode. Do not create Swift files before the scaffold exists — the rendered scaffold must be the first write to `iOS/`.
+- No Swift files → **create mode**: materialize from `$TEMPLATE_DIR` per [../../build.md](../../build.md) § Template materialize (see the template-materialize prelude), strip unused `VECTIS-OPTIONAL` caps, then `make -C iOS generate-project` / `xcodegen` before writing feature Swift. Fail closed if `$TEMPLATE_DIR` is missing — do not invent an iOS scaffold.
 - Swift files present → **update mode**: diff core types against existing Swift code and apply targeted edits.
 
 Spawn the writer sub-agent with `mode: create|update` and `skip_verification: true`; the orchestrator runs the verify loop (§ Verify) after the writer returns.
@@ -36,39 +36,39 @@ Repair sub-agent (`task: ios-verify-repair`, invoked by the verify loop below) a
 
 Full set at [`hard-rules-ios.md`](../../../references/hard-rules-ios.md). Highlights:
 
-- Create mode relies on the adapter's deterministic scaffold landing before any Swift files exist under `iOS/`.
-- Never edit `iOS/Makefile`, `iOS/project.yml`, `iOS/.vectis/sim-build.sh`, or `iOS/.vectis/sim-dev.sh` — the adapter auto-syncs them from the embedded template around each write leg.
-- Never substitute a named simulator destination (`name=iPhone …`); `sim-build` uses `generic/platform=iOS Simulator` via the CLI-owned script only.
-- Zero-warning policy: fix structure, never suppress — no `swiftlint:disable`, `swift-format-ignore`, or similar in shell Swift (`iOS/<APP_NAME>/**/*.swift` excluding `generated/`). Generated `Shared` / `SharedTypes` SPM packages relax warnings via `relax-generated-spm-packages.sh`.
+- Create mode materializes from `$TEMPLATE_DIR` before feature Swift exists under `iOS/`.
+- Keep `iOS/Makefile` and `iOS/project.yml` consistent with `$TEMPLATE_DIR` after identity substitution; refresh by re-copying those paths — never invent pins or destinations. Prefer regenerating the Xcode project from `project.yml` over hand-editing it.
+- Never substitute a named simulator destination (`name=iPhone …`); use the template's generic/`simctl` DX.
+- Zero-warning policy: fix structure, never suppress — no `swiftlint:disable`, `swift-format-ignore`, or similar in shell Swift (`iOS/<APP_NAME>/**/*.swift` excluding `generated/`).
 
 ## Verify (max 3 iterations)
 
 The shell leg's **orchestrating agent** runs the verify loop — not a sub-agent with shell access. The orchestrator is the **sole source of truth** for iOS shell checkboxes in `tasks.md`; never mark an iOS task complete or report success unless all three commands below have actually run and passed in the same iteration.
 
-After the writer sub-agent returns (the adapter has already re-rendered the agent-immutable scaffold files deterministically), the orchestrator executes this loop (max 3 iterations):
+After the writer sub-agent returns, the orchestrator executes this loop (max 3 iterations):
 
 ```bash
 swiftformat "${IOS_SHELL_DIR}/${APP_NAME}/"                    # 1. Format.
 cd "$IOS_SHELL_DIR" && make build                              # 2. Build (typegen + package + xcodegen).
-cd "$IOS_SHELL_DIR" && make sim-build                          # 3. Simulator build (delegates to .vectis/sim-build.sh).
+cd "$IOS_SHELL_DIR" && make sim-build                          # 3. Simulator build (template DX).
 ```
 
 On failure the orchestrator captures stderr and spawns a **repair-only** sub-agent (`task: ios-verify-repair`) with:
 
-- `forbidden_paths: [iOS/Makefile, iOS/project.yml, iOS/.vectis/sim-build.sh, iOS/.vectis/sim-dev.sh]`
+- `forbidden_paths: [iOS/Makefile, iOS/project.yml]` (and any template-owned `.vectis/` scripts if present)
 - `allowed_paths: iOS/<APP_NAME>/**/*.swift, Theme/, Components/, Resources/`
 - `error_output:` the captured stderr from the failing step
 - **No shell** — the sub-agent returns edited Swift files or a patch plan only; the orchestrator applies edits and re-runs the loop from step 1.
 
 **Structural fix only for warnings** — refactor (underscore-prefixed unused parameters, real handler wiring, visibility adjustments) until `make build` / `make sim-build` pass; never silence a warning with `swiftlint:disable`, `swift-format-ignore`, or similar comments.
 
-**Destination / simulator-not-found errors:** the scaffold files are adapter-synced — retry the same commands. Never edit Makefile, `project.yml`, `sim-build.sh`, or `sim-dev.sh`. Never run `xcodebuild` with a named device destination. If generic destination still fails after a retry, escalate — do not substitute `name=iPhone …`.
+**Destination / DX drift errors:** re-copy drifted files from `$TEMPLATE_DIR` with identity substitution, then retry. Never invent Makefile / `project.yml` content. Never run `xcodebuild` with a named device destination. If generic destination still fails after a retry, escalate — do not substitute `name=iPhone …`.
 
 Operators may use `make run` / `make sim-run` for local desk checks; the orchestrator verify loop still uses only `make build` + `make sim-build`.
 
 If still failing after 3 iterations: **stop**, report the remaining failures with full error output, and escalate.
 
-If `make build` fails on `shared.swift` with `cannot find type 'RustBuffer'` or `ffi_shared_uniffi_contract_version`, the operator likely has cargo-swift 0.9 without a synced iOS scaffold — re-run the slice build so the adapter re-syncs the scaffold, then `make clean` and rebuild. This is a compile-time scaffold drift symptom, distinct from a runtime `UniFFI contract version mismatch` (which indicates an incompatible cargo-swift pin; see [../../build.md](../../build.md) § Template / version-pin drift handling).
+If `make build` fails with FFI / BoltFFI contract errors that look like pin drift rather than feature bugs, re-copy pins from `$TEMPLATE_DIR` (see [../../build.md](../../build.md) § Template / version-pin drift handling); do not guess versions.
 
 ## Worked examples
 

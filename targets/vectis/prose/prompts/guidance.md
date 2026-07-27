@@ -46,7 +46,7 @@ Required sections in order:
 - **`## API Contracts`** — when `contracts/http/` exists, reference the OpenAPI specs there rather than restating endpoint shapes; otherwise describe endpoints (method, URL, request/response, errors). Include only when the HTTP adapter is used.
 - **`## iOS Shell Details`** (when `ios` in Platforms) — navigation style (single / stack / tabs), per-screen customisations that go beyond what `composition.yaml` will express, platform features (haptics, share sheet), HIG fallback policy when `tokens.yaml` is absent.
 - **`## Android Shell Details`** (when `android` in Platforms) — navigation patterns (single activity, bottom nav, drawer), Material 3 customisations per ViewModel variant, platform features (edge-to-edge, system bars), Koin DI requirements when multiple non-Render effects are used, adapter-client details (Ktor for HTTP / SSE, SharedPreferences for KV), Material 3 fallback policy when `tokens.yaml` is absent.
-- **`## Implementation Constraints`** — Swift 6 / iOS 17+ deployment target; Kotlin 2.x / Jetpack Compose / Material 3 / minSdk 34; Java 21 LTS (not Java 25+ — Gradle compatibility). When the slice supplies an explicit scaffold version file, reference its path and summarise the Crux / facet / uniffi pins it declares; otherwise note that the scaffolder's embedded defaults come from the adapter's [`versions.toml`](../../versions.toml) until the operator overrides via a slice-local version file.
+- **`## Implementation Constraints`** — Swift 6 / iOS 17+ deployment target; Kotlin 2.x / Jetpack Compose / Material 3 / minSdk 34; Java 21 LTS (not Java 25+ — Gradle compatibility). Note that Crux / BoltFFI / AGP pins come from the operator's local `$TEMPLATE_DIR` (`../vectis-template` or `VECTIS_TEMPLATE_DIR`) — never invent version numbers in `design.md`.
 - **`## Dependencies`** — external packages or services this slice depends on.
 - **`## Risks / Open Questions`** — known risks, trade-offs, unresolved decisions.
 
@@ -56,7 +56,7 @@ Required sections in order:
 - **Per-page view struct fields.** Every `bind` value `build` writes into `composition.yaml` must correspond to a field on the matching per-page view struct described here. Surface field names in `snake_case` (`due_date`, `title_error`).
 - **Event variants.** Every interactive item `build` writes into `composition.yaml` triggers an `Event` variant described here. Use `PascalCase` and document any payload (`ToggleTodo(id)`, `SaveTodo`).
 - **Route variants.** Every navigation target the spec describes ("WHEN user taps add THEN the app navigates to the add todo form") is a `Route` variant. `Navigate(Route)` is the shell-facing entry point.
-- **Capability matrix.** The `## Adapters` table tells `build` which capabilities to scaffold and which CAP-markers to expand.
+- **Capability matrix (required for strip).** The `## Adapters` table is the early signal `build` uses to strip `VECTIS-OPTIONAL` units from `$TEMPLATE_DIR` (`http` / `kv` / `time` / `sse`; `demo` always stripped for product apps). State each adapter Yes/No explicitly — missing or vague rows force `[unknown]` rather than inventory invention.
 
 When upstream `screenshots` Evidence contributed `region` / `container` / `leaf` claims, `design.md` summarises the resulting screen inventory and view-struct fields in prose — it never reproduces the raw layout tree (that is `composition.yaml`'s job at build time). Treat `design.md` as the **handshake between synthesis and build**: anything `build` needs to know to write code or `composition.yaml` must appear here (or in `spec.md`).
 
@@ -86,16 +86,17 @@ The synthesiser also never writes `composition.yaml`. The build prompt regenerat
 
 ## Capability gating cues for the synthesiser
 
-When folding Evidence into `design.md`'s `## Adapters` table, the following cues map directly onto Vectis capabilities so `build` can scaffold the right CAP-markers without guesswork:
+When folding Evidence into `design.md`'s `## Adapters` table, the following cues map directly onto Vectis capabilities so `build` can strip the right `VECTIS-OPTIONAL` units (per `$TEMPLATE_DIR/AGENTS.md`) without guesswork:
 
-- HTTP requests, REST clients, GraphQL — `HTTP` adapter (`crux_http`).
-- Local persistence, cached state across app launches — `Key-Value` adapter (`crux_kv`).
-- Server-sent events, streaming notifications — `SSE` custom adapter (inline; not a published crate).
-- Timers, scheduling, time-of-day display — `Time` adapter (`crux_time`).
+- HTTP requests, REST clients, GraphQL — `HTTP` adapter (`crux_http`) → keep `cap=http`.
+- Local persistence, cached state across app launches — `Key-Value` adapter (`crux_kv`) → keep `cap=kv`.
+- Server-sent events, streaming notifications — `SSE` custom adapter (inline; not a published crate) → keep `cap=sse`.
+- Timers, scheduling, time-of-day display — `Time` adapter (`crux_time`) → keep `cap=time`.
 - Platform detection (iOS vs Android vs Web) — `Platform` adapter (`crux_platform`).
 - Rendering (always) — `Render` adapter.
+- Counter / sample UI from the template — never a product requirement; `build` always strips `cap=demo`.
 
-State the capability set explicitly in `design.md`; the `build` prompt feeds this directly into the core writer's capability wiring and into the per-shell `Effect` switch generation.
+State the capability set explicitly in `design.md` **before** build; vague Evidence that does not imply a capability stays `[unknown]` rather than a guessed Yes. The `build` prompt feeds this matrix into template strip + core / shell wiring.
 
 ## Source-adapter contract (what the synthesiser may encounter)
 

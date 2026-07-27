@@ -13,6 +13,7 @@ use vectis::Adapter;
 const PHASE_DONE: &str = r#"{"applicable":true,"summary":"phase complete"}"#;
 const SHELL_SKIPPED: &str = r#"{"applicable":false,"summary":"no shell work in this slice"}"#;
 const SUCCESS_REPORT: &str = r#"{"status":"success","findings":[]}"#;
+const FAILURE_REPORT: &str = r#"{"status":"failure","findings":[]}"#;
 const fn ctx<'a>(root: &'a Path, mcp_url: Option<&'a str>) -> Context<'a> {
     Context {
         adapter_id: "target:vectis",
@@ -135,6 +136,10 @@ async fn core_only_skips_shells() {
     fs::create_dir_all(tmp.path().join(".emery")).unwrap();
     fs::write(tmp.path().join(".emery/project.yaml"), "name: demo-app\nplatforms:\n  - core\n")
         .unwrap();
+    // Core tree already present so the shell-verify gate stays clean; this
+    // case owns platform-leg skipping, not greenfield materialize.
+    fs::create_dir_all(tmp.path().join("shared/src")).unwrap();
+    fs::write(tmp.path().join("shared/src/app.rs"), "pub struct App;\n").unwrap();
     let model = Harness::answering([PHASE_DONE, PHASE_DONE, PHASE_DONE, SUCCESS_REPORT]);
 
     let report =
@@ -147,15 +152,46 @@ async fn core_only_skips_shells() {
     assert_eq!(schema_format(&requests[2]).0, "review");
     let core_user = &requests[1].messages[0].content;
     assert!(
-        core_user.contains("scaffolded `core` for app `DemoApp`"),
-        "deterministic scaffold prelude stood the core tree up"
+        core_user.contains("template-materialize prelude"),
+        "prelude names the host-side template materialize contract"
     );
     assert!(
-        tmp.path().join("shared/src/app.rs").is_file(),
-        "core scaffold rendered from the embedded templates"
+        core_user.contains("already present"),
+        "present core tree skips greenfield materialize"
     );
     let review_system = requests[2].system.as_deref().unwrap();
     assert!(!review_system.contains("iOS review"), "no iOS review prompt for a core-only project");
+}
+
+#[tokio::test]
+async fn guest_does_not_embed_scaffold() {
+    let tmp = TempDir::new().unwrap();
+    fs::create_dir_all(tmp.path().join(".emery")).unwrap();
+    fs::write(tmp.path().join(".emery/project.yaml"), "name: demo-app\nplatforms:\n  - core\n")
+        .unwrap();
+    // Absent `shared/` → prelude asks the host agent to materialize; the
+    // guest must not write from embedded templates. Report-gate repair
+    // fires because the shell verify gate sees a missing core tree.
+    let model = Harness::answering([
+        PHASE_DONE,     // composition
+        PHASE_DONE,     // core
+        PHASE_DONE,     // review
+        SUCCESS_REPORT, // report (optimistic — gate rejects)
+        FAILURE_REPORT, // report-repair
+    ]);
+
+    let report =
+        Adapter::build(&model, &ctx(tmp.path(), None), "demo", &[], &tree()).await.unwrap();
+
+    assert_eq!(report.status, Status::Failure, "missing core tree fails the shell verify gate");
+    let core_user = &model.requests()[1].messages[0].content;
+    assert!(core_user.contains("Absent declared trees: `core`"));
+    assert!(core_user.contains("$TEMPLATE_DIR"));
+    assert!(core_user.contains("vectis::scaffold::materialize"));
+    assert!(
+        !tmp.path().join("shared/src/app.rs").is_file(),
+        "guest must not write trees from embedded templates"
+    );
 }
 
 #[tokio::test]

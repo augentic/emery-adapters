@@ -31,7 +31,7 @@ cd "$PROJECT_DIR" && RUSTFLAGS="-D warnings" cargo check
 cd "$PROJECT_DIR" && cargo clippy --all-targets -- -D warnings
 cd "$PROJECT_DIR" && RUSTFLAGS="-D warnings" cargo test
 
-# iOS, when ${PROJECT_DIR}/iOS exists (scaffold files are adapter-synced at build time)
+# iOS, when ${PROJECT_DIR}/iOS exists (DX files stay aligned with $TEMPLATE_DIR)
 cd "$PROJECT_DIR/iOS" && make build
 cd "$PROJECT_DIR/iOS" && make sim-build
 

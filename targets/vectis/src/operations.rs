@@ -15,8 +15,8 @@ use adapter::{AdapterIdentity, Model, Target, phase};
 use serde_json::Value;
 
 use crate::{
-    VectisError, android, android_scaffold, infer, ios_scaffold, prepare, registry, scaffold,
-    shell, validate, verify,
+    VectisError, android_scaffold, infer, ios_scaffold, prepare, registry, scaffold, shell,
+    validate, verify,
 };
 
 const MAX_VALIDATE_REPAIR_ITERATIONS: usize = 2;
@@ -25,6 +25,20 @@ const REFERENCES_POINTER: &str = "Every prompt, reference, and rule document thi
      served by the granted `vectis-references` MCP references (`list_docs` / `read_doc`, \
      adapter-relative paths like `references/hard-rules-core.md` or \
      `prompts/build/ios/write.md`); fetch documents the prompts cite lazily from there.";
+
+/// Host-FS bootstrap contract for greenfield trees (typescript-style).
+///
+/// The target guest only mounts the project root, so a sibling
+/// `../vectis-template` is invisible in-guest. The build agent performs
+/// allowlisted copy via [`scaffold::materialize`] on the host filesystem.
+const BINDING_NOTE: &str = "Resolve `$TEMPLATE_DIR` before any greenfield write: default \
+                            `../vectis-template` relative to the consumer project root, or the \
+                            absolute path in `VECTIS_TEMPLATE_DIR`. Clone \
+                            https://github.com/augentic/vectis-template.git if missing — fail \
+                            closed; do not invent a scaffold or version pins. This is **template \
+                            materialize** (`vectis::scaffold::materialize`), not asset \
+                            materialize (`vectis::materialize`). Late-cap / strip guidance lives \
+                            only in `$TEMPLATE_DIR/AGENTS.md` (not copied into the consumer).";
 
 /// Crux shared cores plus `SwiftUI` / Jetpack Compose shells.
 #[derive(Clone, Copy, Debug)]
@@ -158,41 +172,38 @@ impl Target for Adapter {
          generate or update the shared core per the core write prompt, write the \
          Crux tests, then run the test prompt's core verify-repair loop yourself — \
          the cargo check / clippy / test commands run in the lent workspace; this \
-         adapter cannot spawn them. Detect create vs update mode from the tree.\n\n\
-         {scaffold_block}\n\n{REFERENCES_POINTER}\n\n{inputs_block}",
+         adapter cannot spawn them. Detect create vs update mode from the tree. When \
+         the template-materialize prelude below lists absent trees, materialize from \
+         `$TEMPLATE_DIR` first (host FS) before writing feature code.\n\n\
+         {BINDING_NOTE}\n\n{scaffold_block}\n\n{REFERENCES_POINTER}\n\n{inputs_block}",
         );
         let core = phase::phase(model, ctx, system, user, "core").await?;
 
-        // The agent-immutable scaffold files are re-rendered
-        // deterministically before each write leg (repairing prior drift
-        // ahead of the leg's verify loop) and again after it.
+        // DX files stay consistent with `$TEMPLATE_DIR` after identity
+        // substitution; the guest does not re-render them from embedded
+        // templates (sibling checkout is outside the project mount).
         let mut shell_outcomes: Vec<(&'static str, phase::PhaseAnswer)> = Vec::new();
-        let mut sync_notes: Vec<String> = Vec::new();
         for shell in declared_shell_legs(&tree_root) {
-            if let Some(note) = sync_shell_scaffold(&tree_root, shell.name) {
-                sync_notes.push(note);
-            }
             let system = assemble(&["prompts/build.md", shell.write_prompt]);
             let user = format!(
                 "Run the {name} shell phase of the vectis build for slice `{slice}`: \
-             generate or update the shell per the write prompt (the adapter already \
-             scaffolded any absent declared tree deterministically — see below; do not \
-             hand-write scaffold boilerplate), then run the write prompt's \
+             generate or update the shell per the write prompt. When the \
+             template-materialize prelude below lists absent trees, materialize from \
+             `$TEMPLATE_DIR` on the host FS first — do not hand-invent scaffold \
+             boilerplate or version pins. Then run the write prompt's \
              orchestrator-owned verify loop yourself in the lent workspace — this \
-             adapter cannot spawn host commands. The agent-immutable scaffold files \
-             (Makefiles, `project.yml`, assembly Gradle files, `.vectis/` scripts) are \
-             re-rendered deterministically by the adapter before and after this leg; \
-             never edit them. When the slice introduces no work for this shell, write \
-             nothing and answer with `applicable: false`; when a host prerequisite is \
+             adapter cannot spawn host commands. Keep DX files (Makefiles, \
+             `project.yml`, assembly Gradle files, BoltFFI / `.vectis` scripts when \
+             present) consistent with `$TEMPLATE_DIR` after identity substitution; \
+             refresh by re-copying those paths from the template, never by guessing \
+             pins. When the slice introduces no work for this shell, write nothing \
+             and answer with `applicable: false`; when a host prerequisite is \
              missing, stop per the prompt's deferred contract and report it in your \
-             summary.\n\n{scaffold_block}\n\n{REFERENCES_POINTER}",
+             summary.\n\n{BINDING_NOTE}\n\n{scaffold_block}\n\n{REFERENCES_POINTER}",
                 name = shell.name,
             );
             let answer = phase::phase(model, ctx, system, user, shell.name).await?;
             shell_outcomes.push((shell.name, answer));
-            if let Some(note) = sync_shell_scaffold(&tree_root, shell.name) {
-                sync_notes.push(note);
-            }
         }
 
         let mut review_prompts = vec!["prompts/build.md", "prompts/build/core/review.md"];
@@ -211,11 +222,6 @@ impl Target for Adapter {
         // The deterministic shell verify gate runs in-guest and feeds the
         // report leg, gated by the derived answer schema.
         let verify_block = render_verify_gate(&tree_root);
-        let sync_block = if sync_notes.is_empty() {
-            String::new()
-        } else {
-            format!("\n\nScaffold sync notes:\n{}", sync_notes.join("\n"))
-        };
         let mut outcomes = vec![("composition", &composition), ("core", &core)];
         outcomes.extend(shell_outcomes.iter().map(|(name, answer)| (*name, answer)));
         outcomes.push(("review", &review));
@@ -231,7 +237,7 @@ impl Target for Adapter {
          review findings mean `status: failure`. Declare `outputs[]` per supported \
          platform with paths relative to the project root, and set \
          `ui-surface.screens` from the slice's own screen count.\n\n\
-         {verify_block}{sync_block}\n\n\
+         {verify_block}\n\n\
          Phase outcomes:\n{}",
             outcomes
                 .iter()
@@ -482,7 +488,6 @@ fn render_infer_report(tree_root: &Path) -> String {
 }
 
 fn scaffold_missing_trees(tree_root: &Path) -> String {
-    let mut notes: Vec<String> = Vec::new();
     let mut targets: Vec<&'static str> = Vec::new();
     if !shell::shell_present(tree_root, "core") {
         targets.push("core");
@@ -493,47 +498,41 @@ fn scaffold_missing_trees(tree_root: &Path) -> String {
         }
     }
     if targets.is_empty() {
-        return "### scaffold prelude (already run in-guest)\n\nAll declared trees were \
-                already present; nothing was scaffolded."
+        return "### template-materialize prelude\n\nAll declared trees were already present; \
+                skip greenfield materialize. For DX pin drift, re-copy the drifted paths from \
+                `$TEMPLATE_DIR` with identity substitution — never invent versions."
             .to_string();
     }
-    match resolve_scaffold_app_name(tree_root) {
-        Some(app_name) => {
-            for target in targets {
-                let common = scaffold::CommonArgs::for_app(app_name.clone());
-                let command = match target {
-                    "ios" => scaffold::ScaffoldCommand::Ios(scaffold::IosArgs { common }),
-                    "android" => scaffold::ScaffoldCommand::Android(scaffold::AndroidArgs {
-                        common,
-                        android_package: None,
-                    }),
-                    _ => scaffold::ScaffoldCommand::Core(scaffold::CoreArgs {
-                        common,
-                        android_package: None,
-                    }),
-                };
-                match scaffold::run_at(tree_root, &command) {
-                    Ok(_) => notes.push(format!(
-                        "- scaffolded `{target}` for app `{app_name}` from the embedded templates"
-                    )),
-                    Err(err) => notes.push(format!(
-                        "- could not scaffold `{target}` ({err}); stand the tree up per the \
-                         write prompt"
-                    )),
-                }
-            }
-        }
-        None => notes.push(
-            "- absent trees could not be scaffolded (no app name resolves from the \
-             existing shells or `project.yaml` `name:`); stand them up per the write \
-             prompts"
-                .to_string(),
-        ),
-    }
+    let identity = resolve_scaffold_app_name(tree_root).map_or_else(
+        || {
+            "- Resolve `app_name` (PascalCase from `design.md` `App` / `project.yaml` \
+             `name:`) and `android_package` before materialize; refuse to invent them."
+                .to_string()
+        },
+        |app_name| {
+            let package = scaffold::default_android_package(&app_name);
+            format!(
+                "- Suggested identity: app_name=`{app_name}`, android_package=`{package}` \
+                 (override the package from `design.md` when it declares one)."
+            )
+        },
+    );
+    let absent = targets.iter().map(|t| format!("`{t}`")).collect::<Vec<_>>().join(", ");
     format!(
-        "### scaffold prelude (already run in-guest)\n\nThe adapter scaffolded absent \
-         declared trees deterministically before this leg:\n{}",
-        notes.join("\n"),
+        "### template-materialize prelude\n\nAbsent declared trees: {absent}. The guest did \
+         **not** write them — target guests cannot see a sibling `$TEMPLATE_DIR`.\n\n\
+         Before any write leg for those trees:\n\
+         1. Resolve `$TEMPLATE_DIR` (`VECTIS_TEMPLATE_DIR` or `../vectis-template`); fail \
+         closed if missing.\n\
+         2. Run the allowlisted copy in `vectis::scaffold::materialize` (root DX + \
+         `shared/` + `iOS/` + `Android/` + `supply-chain/` + `.maestro/`; never `web/`, \
+         `.git/`, `.github/`, or `AGENTS.md`). One materialize covers the workspace — do \
+         not invent per-shell scaffolds or pins.\n\
+         3. Strip `VECTIS-OPTIONAL` per `$TEMPLATE_DIR/AGENTS.md` against the \
+         `design.md` capability matrix (`http` / `kv` / `time` / `sse` / `demo`).\n\
+         4. iOS: regenerate the Xcode project (`make -C iOS generate-project` / \
+         `xcodegen`) — `.xcodeproj` is denylisted on purpose.\n\
+         {identity}"
     )
 }
 
@@ -560,28 +559,6 @@ fn resolve_scaffold_app_name(tree_root: &Path) -> Option<String> {
         })
         .collect();
     scaffold::validate_app_name(&pascal).ok().map(|()| pascal)
-}
-
-// Note only on failure; a clean sync is silent.
-fn sync_shell_scaffold(tree_root: &Path, name: &str) -> Option<String> {
-    if !shell::shell_present(tree_root, name) {
-        return None;
-    }
-    let outcome = match name {
-        "ios" => ios_scaffold::sync_ios_scaffold_files(tree_root).map(|_| ()),
-        "android" => android_scaffold::sync_android_scaffold_files(tree_root).and_then(|_| {
-            let setup = android::run_for_shell_dir(&tree_root.join("Android"));
-            if android::setup_exit_code(&setup) == 0 {
-                Ok(())
-            } else {
-                Err(VectisError::InvalidProject {
-                    message: format!("gradle wrapper install failed: {setup}"),
-                })
-            }
-        }),
-        _ => Ok(()),
-    };
-    outcome.err().map(|err| format!("- deterministic `{name}` scaffold sync could not run: {err}"))
 }
 
 // A4 self-consistency only (`suggestion`); never fails the report.

@@ -4,11 +4,11 @@
 
 ## Scaffold immutability (create and update mode)
 
-1. **Create mode must scaffold first.** The adapter renders the iOS scaffold deterministically from its embedded templates before the write leg. Do not create Swift files before the scaffold exists; the rendered scaffold must be the first write to `iOS/`.
-2. **Never hand-author scaffold files.** `iOS/Makefile`, `iOS/project.yml`, `iOS/.vectis/sim-build.sh`, `iOS/.vectis/sim-dev.sh`, and the starter files emitted by scaffold (`<APP_NAME>App.swift`, starter `Core.swift`, `ContentView.swift`, starter `Views/`) must come from the scaffold renderer — not from worked examples or memory.
-3. **Never edit adapter-owned scaffold files.** `iOS/Makefile`, `iOS/project.yml`, `iOS/.vectis/sim-build.sh`, and `iOS/.vectis/sim-dev.sh` are adapter-owned. The adapter re-renders them deterministically at build prepare and around each write leg — agents must not patch them during verify-repair or feature work.
-4. **Never set a named simulator destination in verify scripts.** The destination lives only in `iOS/.vectis/sim-build.sh` as `generic/platform=iOS Simulator`. Do not substitute `name=iPhone …`, inline `-destination` in the Makefile, or run `xcodebuild` with a device-specific destination.
-5. **Orchestrator runs verify; repair sub-agents are Swift-only.** The `/emery:build` orchestrator executes sync, `swiftformat`, `make build`, and `make sim-build`. `ios-verify-repair` sub-agents must not run `make`, `xcodebuild`, or edit scaffold paths — they return Swift edits only.
+1. **Create mode must materialize first.** Copy from `$TEMPLATE_DIR` (`../vectis-template` or `VECTIS_TEMPLATE_DIR`) per `build.md` § Template materialize, then regenerate the Xcode project. Do not invent Swift or DX files when the template is missing.
+2. **Never hand-author DX / pin files.** `iOS/Makefile`, `iOS/project.yml`, and other template-owned DX must come from `$TEMPLATE_DIR` after identity substitution — not from worked examples or memory.
+3. **Keep DX aligned with `$TEMPLATE_DIR`.** On drift, re-copy those paths from the template; agents must not patch pins or destinations during verify-repair or feature work.
+4. **Never set a named simulator destination in verify scripts.** Use the template's generic/`simctl` DX only. Do not substitute `name=iPhone …`, inline `-destination` in the Makefile, or run `xcodebuild` with a device-specific destination.
+5. **Orchestrator runs verify; repair sub-agents are Swift-only.** The `/emery:build` orchestrator executes `swiftformat`, `make build`, and `make sim-build`. `ios-verify-repair` sub-agents must not run `make`, `xcodebuild`, or edit DX paths — they return Swift edits only.
 
 ## Running iOS locally
 
@@ -32,8 +32,8 @@ Environment variables (`SIM_UDID`, `SIM_DEVICE`, `SIM_OS`) are read by `iOS/.vec
 
 ## Important notes
 
-- **Core must exist first**: the iOS shell writer runs against an existing Crux core. Generate the `shared` crate before scaffolding the iOS tree.
+- **Core must exist first**: the iOS shell writer runs against an existing Crux core. Materialize (or update) the `shared` crate before the iOS write leg.
 - **Shell is thin**: all business logic lives in the Rust core. The shell only renders SwiftUI and performs platform I/O.
-- **Worked examples show Swift patterns only**: [`examples/ios/`](examples/ios/) demonstrate `Core.swift` and view wiring — not authoritative Makefile, `project.yml`, or `sim-build.sh` content. The embedded scaffold template is the sole authority for those files.
-- **UniFFI / cargo-swift drift**: if the app panics with `UniFFI contract version mismatch`, surface a template / pin drift signal to the operator — do not patch scaffold files to work around it.
+- **Worked examples show Swift patterns only**: [`examples/ios/`](examples/ios/) demonstrate `Core.swift` and view wiring — not authoritative Makefile or `project.yml` content. `$TEMPLATE_DIR` is the sole authority for those files.
+- **BoltFFI / pin drift**: if the app fails with FFI contract or toolchain mismatches that look like pin drift, re-copy from `$TEMPLATE_DIR` — do not invent versions.
 - **XcodeGen picks up nested dirs**: new theme, component, and asset directories under `iOS/<APP_NAME>/` require no `project.yml` edits.

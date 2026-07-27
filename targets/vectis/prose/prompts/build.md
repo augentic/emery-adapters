@@ -24,9 +24,9 @@ The build runs against the build request the CLI prepared at `.emery/slices/<sli
 ## Consumer posture
 
 - Agents executing this prompt in a consumer project are **consumers**, not adapter maintainers.
-- On scaffold / verify / finalize / toolchain failure: **stop** with `deferred` or a failure report — see [Consumer tooling boundary](../references/emery-runtime/guardrails.md#consumer-tooling-boundary).
-- **Never** edit `emery-adapters`, `core/templates/`, or the built guest component in-band — even when `adapters/` is a sibling symlink.
-- Tooling fixes happen in a **separate maintainer session** on emery-adapters; consumer scaffolds re-sync deterministically on the next build (the adapter re-renders the agent-immutable scaffold files from its embedded templates).
+- On template / verify / finalize / toolchain failure: **stop** with `deferred` or a failure report — see [Consumer tooling boundary](../references/emery-runtime/guardrails.md#consumer-tooling-boundary).
+- **Never** edit `emery-adapters`, `vectis-template`, or the built guest component in-band — even when those repos are sibling checkouts.
+- Pin and DX drift is fixed by re-copying from `$TEMPLATE_DIR` (or fixing the template repo in a maintainer session) — never by inventing versions in the consumer tree.
 
 ## Standard arguments
 
@@ -38,20 +38,32 @@ All phase prompts assume these symbols are resolved by the leg's orchestrating a
 | `SLICE_DIR` | `.emery/slices/<SLICE_ID>/`. |
 | `DOMAIN_NAME` | The single domain spec folder under `SLICE_DIR/specs/`. When the slice carries multiple domains, iterate the per-domain phase prompts in declaration order. |
 | `PROJECT_DIR` | The target project root (single-repo mode) or the resolved workspace slot (workspace mode). |
+| `TEMPLATE_DIR` | Local [`vectis-template`](https://github.com/augentic/vectis-template) checkout. Default `${PROJECT_DIR}/../vectis-template`; override with `VECTIS_TEMPLATE_DIR`. Required for greenfield materialize and pin refresh. |
 | `IOS_SHELL_DIR` | `${PROJECT_DIR}/iOS` (only when `ios` is in scope). |
 | `ANDROID_SHELL_DIR` | `${PROJECT_DIR}/Android` (only when `android` is in scope). |
 | `APP_NAME` | The Xcode target / Swift source folder name (derived from `design.md`'s `App` struct name). |
+| `ANDROID_PACKAGE` | Android application id (from `design.md` / existing `Android/app/build.gradle.kts`; default `com.vectis.<lowercase APP_NAME>`). |
 | `CATALOG_PATH` | `${PROJECT_DIR}/.emery/design-system/components.yaml` when present. Optional — absent means no component factoring. |
 
 ## Platform scope
 
 Every slice carries the full app platform set from `project.yaml.platforms` (stamped verbatim into `proposal.md ## Platforms` by synthesis). Each slice signifies core + all declared shell work; build determines the **actual per-platform work**:
 
-- **create** — the shell tree is absent on disk → the adapter stands up the minimum shell deterministically from its embedded scaffold templates before the write legs run (the scaffold prelude in each leg's prompt reports what was rendered); generate into the scaffolded tree. Standing up an absent shell is this adapter's own build-time responsibility — there is no separate plan-time bootstrap slice; `project.yaml.platforms` already declares the intent. Only `core`, `ios`, and `android` have scaffold support today; when the prelude reports it could not scaffold (no resolvable app name), stand the tree up per the write prompt.
+- **create** — a declared tree is absent on disk → the agent materializes from `$TEMPLATE_DIR` on the **host** filesystem before write legs (the guest cannot see a sibling checkout). Follow § Template materialize below; the template-materialize prelude in each leg names which trees are absent. There is no separate plan-time bootstrap slice; `project.yaml.platforms` already declares the intent. Only `core`, `ios`, and `android` are materialized today (`web/` in the template is out of scope). Fail closed when `$TEMPLATE_DIR` is missing — do not invent a scaffold.
 - **update** — the shell tree exists → diff core types against existing code and apply targeted edits (the normal feature-slice path).
 - **no-op** — the platform is in scope but the slice introduces no changes for that shell (answer the leg with `applicable: false`).
 
 Valid Vectis platform tokens are `core`, `ios`, `android`, `web`, and `desktop`. Only `core`, `ios`, and `android` have build prompts today; the adapter core silently skips `web` and `desktop` in the platform set (no shell leg to run). Token / asset / layout work is **input context**, never a platform.
+
+## § Template materialize (greenfield)
+
+This is **template materialize** (`vectis::scaffold::materialize`) — not asset materialize (`vectis::materialize` / the prepare prelude that exports design-system assets).
+
+1. **Resolve `$TEMPLATE_DIR`.** Default `${PROJECT_DIR}/../vectis-template`, else `VECTIS_TEMPLATE_DIR`. If the directory is missing or is not a `vectis-template` checkout, **stop** (`deferred`) — clone https://github.com/augentic/vectis-template.git; never invent scaffold files or pins.
+2. **Mechanical allowlisted copy** into `${PROJECT_DIR}` with identity substitution (`APP_NAME`, `ANDROID_PACKAGE`). Copy root DX (`Makefile`, `Makefile.toml`, `Cargo.toml`, `Cargo.lock` when present, `rust-toolchain.toml`, `deny.toml`, `README.md`, `.gitignore`), plus `shared/`, `iOS/`, `Android/` (including the Gradle wrapper), `supply-chain/`, and `.maestro/`. **Never** copy `.git/`, `.github/`, `web/`, or `AGENTS.md`. Skip machine junk (`target/`, `.gradle/`, `*.xcodeproj/`, `local.properties`, …) per the `scaffold::materialize` denylist. One materialize stands up the whole workspace — do not invent per-shell scaffolds.
+3. **Strip `VECTIS-OPTIONAL`.** Follow **`$TEMPLATE_DIR/AGENTS.md`** (not a consumer copy) against the `design.md` `## Adapters` capability matrix: remove unused `cap=http|kv|time|sse` units and always strip `cap=demo` for product apps. Do not invent FFI shapes or dependency versions while stripping.
+4. **iOS project generation.** After materialize, run `make -C iOS generate-project` (or `xcodegen`) — committed `.xcodeproj` trees are denylisted on purpose.
+5. **Then** run the existing generate/update logic in the core / shell write prompts.
 
 The adapter core processes platforms in dependency order: `core` first (the shells depend on it), then the declared `ios` / `android` shell legs — independent of each other, but run serially because their verify halves share the same Cargo workspace lock. When the platform set contains `core` only, the core skips the shell legs wholesale; this is a backend-only build.
 
@@ -114,11 +126,11 @@ Per [Standards layer](../references/emery-runtime/standards-layer-snippet.md), s
 
 ## § Template / version-pin drift handling
 
-The adapter's scaffold renderer is render-only and ships with embedded version pins. Upstream bumps (Crux core, uniffi, AGP / Gradle, cargo-swift, Xcode) can break a freshly rendered scaffold even when the rest of the slice is correct. Detect this when a verify-repair loop fails repeatedly with cargo / Gradle / Xcode errors that look like API renames, missing imports, or toolchain mismatches rather than feature-level bugs.
+Dependency pins live only as bytes in `$TEMPLATE_DIR`. Detect drift when a verify-repair loop fails repeatedly with cargo / Gradle / Xcode errors that look like API renames, missing imports, or toolchain mismatches rather than feature-level bugs — or when consumer pin files diverge from the template counterparts after identity substitution.
 
-**Agents:** detect → record the failing combo (caps + shells), the failing host step, and the load-bearing error line → mark the build outcome as `deferred` with a template / pin drift signal → **exit** (no upstream edits). See [Consumer tooling boundary](../references/emery-runtime/guardrails.md#consumer-tooling-boundary).
+**Agents:** detect → re-copy the drifted paths from `$TEMPLATE_DIR` with the same identity substitution as materialize → if the failure persists, mark the build `deferred` with a template / pin drift signal → **exit** (never invent versions). See [Consumer tooling boundary](../references/emery-runtime/guardrails.md#consumer-tooling-boundary).
 
-**Operators (separate maintainer session):** edit [`versions.toml`](../../versions.toml) and/or [`templates/`](../../templates/core/), rebuild the guest component, publish / bump the adapter version; the consumer project's scaffolds re-sync deterministically on the next build.
+**Operators (separate maintainer session):** fix pins in [`augentic/vectis-template`](https://github.com/augentic/vectis-template); consumers re-copy from the refreshed checkout. Do not patch adapter-embedded version tables.
 
 ## § Phase outcome contract
 

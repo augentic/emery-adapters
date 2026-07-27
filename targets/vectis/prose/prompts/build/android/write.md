@@ -6,9 +6,9 @@ Compose patterns, Crux Android shell anatomy, Kotlin token templates, and design
 
 ## Mode detection
 
-Inspect `${ANDROID_SHELL_DIR}/app/src/main/java/<package>/Core.kt`:
+Inspect `${ANDROID_SHELL_DIR}/app/src/main/java/<package>/Core.kt` (or the package path materialize produced under `ANDROID_PACKAGE`):
 
-- Missing → **create mode**: the adapter scaffolds the Android shell deterministically from its embedded templates before this leg (see the scaffold prelude in the leg's prompt, which also installs the vendored Gradle wrapper); enter pre-flight (see § Verify below), then update mode.
+- Missing → **create mode**: materialize from `$TEMPLATE_DIR` per [../../build.md](../../build.md) § Template materialize (see the template-materialize prelude; the template ships the Gradle wrapper), strip unused `VECTIS-OPTIONAL` caps, enter pre-flight (see § Verify below), then update mode. Fail closed if `$TEMPLATE_DIR` is missing — do not invent an Android scaffold.
 - Present → **update mode**: diff core types against existing Kotlin code and apply targeted edits.
 
 Spawn the writer sub-agent with `mode: create|update` and `skip_verification: true`; the orchestrator runs the verify loop (§ Verify) after the writer returns.
@@ -50,11 +50,11 @@ The shell leg's **orchestrating agent** runs the verify loop — not a sub-agent
 
 Before entering the loop, probe host prerequisites yourself (`ANDROID_HOME` set, Rust Android targets installed via `rustup target list --installed`, Java 21 available). If host prerequisites are missing, report **deferred** and stop — do not build into a broken host.
 
-`local.properties`, `org.gradle.java.home`, and NDK substitution are handled by `make verify` via `make setup` (`make setup-host`); the vendored Gradle wrapper is installed deterministically by the adapter at scaffold and build-prepare time. Do not bootstrap the wrapper manually with `gradle wrapper`.
+`local.properties`, `org.gradle.java.home`, and NDK substitution are handled by `make verify` via `make setup` (`make setup-host`). The Gradle wrapper comes from `$TEMPLATE_DIR` at materialize time — do not bootstrap it with `gradle wrapper` or invent a wrapper pin.
 
 ### Build loop
 
-After the writer sub-agent returns (the adapter has already re-rendered the agent-immutable scaffold files deterministically), the orchestrator executes this loop (max 3 iterations):
+After the writer sub-agent returns, the orchestrator executes this loop (max 3 iterations):
 
 ```bash
 cd "${ANDROID_SHELL_DIR}" && make verify                # 1. Setup, typegen, cargoBuild, assembleDebug.
@@ -62,7 +62,7 @@ cd "${ANDROID_SHELL_DIR}" && make verify                # 1. Setup, typegen, car
 
 On failure the orchestrator captures stderr and spawns a **repair-only** sub-agent (`task: android-verify-repair`) with Kotlin-only edit scope — **no shell**. The sub-agent returns edited Kotlin files or a patch plan; the orchestrator applies edits and re-runs the loop from step 1. **Structural fix only for warnings** — refactor (underscore-prefixed unused parameters, real handler wiring) until `make verify` passes; never silence a warning with `@Suppress`.
 
-**Gradle / Makefile drift errors:** the scaffold files are adapter-synced — retry the same command. Never edit `Android/Makefile`, `Android/settings.gradle.kts`, `Android/build.gradle.kts`, `Android/app/build.gradle.kts`, or `Android/shared/build.gradle.kts`. If strict-flag drift persists after a retry, escalate — do not patch adapter-owned scaffold files by hand.
+**Gradle / Makefile drift errors:** re-copy drifted DX files from `$TEMPLATE_DIR` with identity substitution, then retry. Never invent content for `Android/Makefile`, `Android/settings.gradle.kts`, `Android/build.gradle.kts`, `Android/app/build.gradle.kts`, or `Android/shared/build.gradle.kts`. If strict-flag drift persists after a refresh, escalate.
 
 If still failing after 3 iterations: **stop**, report the remaining failures with full error output, and escalate. Java 25+ environments hit `IllegalArgumentException`; the fix is pinning `org.gradle.java.home` to Java 21 in `gradle.properties` via `make setup-host`.
 
