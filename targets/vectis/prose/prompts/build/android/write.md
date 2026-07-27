@@ -9,7 +9,7 @@ Compose patterns, Crux Android shell anatomy, Kotlin token templates, and design
 Inspect `${ANDROID_SHELL_DIR}/app/src/main/java/<package>/Core.kt` (or the package path materialize produced under `ANDROID_PACKAGE`):
 
 - Missing → **create mode**: materialize from `$TEMPLATE_DIR` per [../../build.md](../../build.md) § Template materialize (see the template-materialize prelude; the template ships the Gradle wrapper), strip unused `VECTIS-OPTIONAL` caps, enter pre-flight (see § Verify below), then update mode. Fail closed if `$TEMPLATE_DIR` is missing — do not invent an Android scaffold.
-- Present → **update mode**: diff core types against existing Kotlin code and apply targeted edits.
+- Present → **update mode**: diff core types against existing Kotlin code and apply targeted edits. When a newly enabled adapter requires a shell handler that was stripped, copy that `cap=` FILE/block from `$TEMPLATE_DIR` ([`template-capabilities.md`](../../../references/template-capabilities.md)) — do not invent handler shapes.
 
 Spawn the writer sub-agent with `mode: create|update` and `skip_verification: true`; the orchestrator runs the verify loop (§ Verify) after the writer returns.
 
@@ -37,7 +37,7 @@ Repair sub-agent (`task: android-verify-repair`, invoked by the verify loop belo
 
 Full set at [`hard-rules-android.md`](../../../references/hard-rules-android.md). Highlights:
 
-- Java 21 only — Java 25+ environments hit `IllegalArgumentException` in AGP; pin `org.gradle.java.home` in `gradle.properties`.
+- Compatible JDK — follow the template's `compileOptions` / Kotlin JVM target; when the host's default Java breaks AGP/Kotlin, pin `org.gradle.java.home` in `gradle.properties` (host-local).
 - Always include `@Preview` blocks for new composables.
 - Coroutine cancellation MUST rethrow `CancellationException`.
 - Zero-warning policy: fix structure, never suppress — no `@Suppress` / `@file:Suppress` in shell Kotlin (`Android/app/src/**` only; `:shared` compiles BoltFFI-generated sources).

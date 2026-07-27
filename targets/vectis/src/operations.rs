@@ -37,8 +37,9 @@ const BINDING_NOTE: &str = "Resolve `$TEMPLATE_DIR` before any greenfield write:
                             https://github.com/augentic/vectis-template.git if missing — fail \
                             closed; do not invent a scaffold or version pins. This is **template \
                             materialize** (`vectis::scaffold::materialize`), not asset \
-                            materialize (`vectis::materialize`). Late-cap / strip guidance lives \
-                            only in `$TEMPLATE_DIR/AGENTS.md` (not copied into the consumer).";
+                            materialize (`vectis::materialize`). Strip grammar: \
+                            `$TEMPLATE_DIR/AGENTS.md` (not copied). Late-cap adoption: \
+                            `references/template-capabilities.md` plus that AGENTS.md.";
 
 /// Crux shared cores plus `SwiftUI` / Jetpack Compose shells.
 #[derive(Clone, Copy, Debug)]

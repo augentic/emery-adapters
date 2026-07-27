@@ -9,7 +9,7 @@ The SwiftUI patterns, Crux iOS shell anatomy, token templates, and design-system
 Inspect `${IOS_SHELL_DIR}` for any `.swift` files:
 
 - No Swift files → **create mode**: materialize from `$TEMPLATE_DIR` per [../../build.md](../../build.md) § Template materialize (see the template-materialize prelude), strip unused `VECTIS-OPTIONAL` caps, then `make -C iOS generate-project` / `xcodegen` before writing feature Swift. Fail closed if `$TEMPLATE_DIR` is missing — do not invent an iOS scaffold.
-- Swift files present → **update mode**: diff core types against existing Swift code and apply targeted edits.
+- Swift files present → **update mode**: diff core types against existing Swift code and apply targeted edits. When a newly enabled adapter requires a shell handler that was stripped, copy that `cap=` FILE/block from `$TEMPLATE_DIR` ([`template-capabilities.md`](../../../references/template-capabilities.md)) — do not invent handler shapes.
 
 Spawn the writer sub-agent with `mode: create|update` and `skip_verification: true`; the orchestrator runs the verify loop (§ Verify) after the writer returns.
 

@@ -22,6 +22,10 @@ The Vectis core / test / iOS / Android writer and reviewer orchestration lives i
 
 ## References
 
+### Template bootstrap
+
+- [`template-capabilities.md`](template-capabilities.md) — DX completeness after materialize; late-capability re-adoption from `$TEMPLATE_DIR` (strip grammar stays in `$TEMPLATE_DIR/AGENTS.md`).
+
 ### Runtime schemas
 
 - [`schemas.md`](schemas.md) — tool-owned JSON Schemas (`tokens`, `assets`, `composition`) and how to retrieve their bodies.

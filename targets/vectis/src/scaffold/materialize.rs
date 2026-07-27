@@ -17,9 +17,15 @@
 //! **Root files:** `Makefile`, `Makefile.toml`, `Cargo.toml`, `Cargo.lock`,
 //! `rust-toolchain.toml`, `deny.toml`, `README.md`, `.gitignore`.
 //!
-//! **Root directories:** `shared/`, `iOS/`, `Android/` (including the Gradle
-//! wrapper), `supply-chain/`, `.maestro/` (infra plus demo journeys; the
-//! agent strips `cap=demo` after copy).
+//! **Root directories:** `shared/` (includes `boltffi.toml` and
+//! `shared/src/bin/codegen/`), `iOS/`, `Android/` (including the Gradle
+//! wrapper and per-shell `Makefile`), `supply-chain/`, `.maestro/` (infra
+//! plus demo journeys; the agent strips `cap=demo` after copy).
+//!
+//! After strip, Maestro **infra** must remain: `config.yaml`,
+//! `test-ids.yaml` (file kept; demo keys stripped), and
+//! `scripts/load-test-ids.sh`. Late-cap re-adoption copies strip-units from
+//! `$TEMPLATE_DIR` — see `prose/references/template-capabilities.md`.
 //!
 //! # Denylist (never copied)
 //!

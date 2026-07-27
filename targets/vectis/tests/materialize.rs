@@ -107,7 +107,12 @@ fn allowlist_and_denylist() {
             .any(|p| { p == "Android/app/src/main/java/com/example/counter/MainActivity.kt" })
     );
     assert!(report.files.iter().any(|p| p == ".maestro/config.yaml"));
+    assert!(report.files.iter().any(|p| p == ".maestro/test-ids.yaml"));
     assert!(report.files.iter().any(|p| p == ".maestro/scripts/load-test-ids.sh"));
+    assert!(report.files.iter().any(|p| p == "shared/src/bin/codegen/main.rs"));
+    assert!(report.files.iter().any(|p| p == "iOS/Makefile"));
+    assert!(report.files.iter().any(|p| p == "Android/Makefile"));
+    assert!(report.files.iter().any(|p| p == "README.md"));
     assert!(report.files.iter().any(|p| p == "supply-chain/config.toml"));
 
     let ios_app = fs::read_to_string(dest.path().join("iOS/Counter/Counter.swift")).unwrap();

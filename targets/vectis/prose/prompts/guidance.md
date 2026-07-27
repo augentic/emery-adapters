@@ -46,7 +46,7 @@ Required sections in order:
 - **`## API Contracts`** — when `contracts/http/` exists, reference the OpenAPI specs there rather than restating endpoint shapes; otherwise describe endpoints (method, URL, request/response, errors). Include only when the HTTP adapter is used.
 - **`## iOS Shell Details`** (when `ios` in Platforms) — navigation style (single / stack / tabs), per-screen customisations that go beyond what `composition.yaml` will express, platform features (haptics, share sheet), HIG fallback policy when `tokens.yaml` is absent.
 - **`## Android Shell Details`** (when `android` in Platforms) — navigation patterns (single activity, bottom nav, drawer), Material 3 customisations per ViewModel variant, platform features (edge-to-edge, system bars), Koin DI requirements when multiple non-Render effects are used, adapter-client details (Ktor for HTTP / SSE, SharedPreferences for KV), Material 3 fallback policy when `tokens.yaml` is absent.
-- **`## Implementation Constraints`** — Swift 6 / iOS 17+ deployment target; Kotlin 2.x / Jetpack Compose / Material 3 / minSdk 34; Java 21 LTS (not Java 25+ — Gradle compatibility). Note that Crux / BoltFFI / AGP pins come from the operator's local `$TEMPLATE_DIR` (`../vectis-template` or `VECTIS_TEMPLATE_DIR`) — never invent version numbers in `design.md`.
+- **`## Implementation Constraints`** — Swift 6 / iOS 17+ deployment target; Kotlin 2.x / Jetpack Compose / Material 3 / minSdk 34; JDK compatible with the template's Android `compileOptions` (today: Java 17 for `:app`, JVM 11 for `:shared` — not a hard "Java 21 only" pin). Note that Crux / BoltFFI / AGP pins come from the operator's local `$TEMPLATE_DIR` (`../vectis-template` or `VECTIS_TEMPLATE_DIR`) — never invent version numbers in `design.md`. Author `ANDROID_PACKAGE` (application id) explicitly when the product id is not `com.vectis.<app>`.
 - **`## Dependencies`** — external packages or services this slice depends on.
 - **`## Risks / Open Questions`** — known risks, trade-offs, unresolved decisions.
 
@@ -96,7 +96,7 @@ When folding Evidence into `design.md`'s `## Adapters` table, the following cues
 - Rendering (always) — `Render` adapter.
 - Counter / sample UI from the template — never a product requirement; `build` always strips `cap=demo`.
 
-State the capability set explicitly in `design.md` **before** build; vague Evidence that does not imply a capability stays `[unknown]` rather than a guessed Yes. The `build` prompt feeds this matrix into template strip + core / shell wiring.
+State the capability set explicitly in `design.md` **before** build; vague Evidence that does not imply a capability stays `[unknown]` rather than a guessed Yes. The `build` prompt feeds this matrix into template strip + core / shell wiring. When a later slice turns a previously No capability to Yes, build re-adopts that `cap=` strip-unit from `$TEMPLATE_DIR` ([`template-capabilities.md`](../references/template-capabilities.md)) — synthesis must flip the `## Adapters` row so build has an explicit signal.
 
 ## Source-adapter contract (what the synthesiser may encounter)
 

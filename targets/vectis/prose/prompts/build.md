@@ -42,7 +42,7 @@ All phase prompts assume these symbols are resolved by the leg's orchestrating a
 | `IOS_SHELL_DIR` | `${PROJECT_DIR}/iOS` (only when `ios` is in scope). |
 | `ANDROID_SHELL_DIR` | `${PROJECT_DIR}/Android` (only when `android` is in scope). |
 | `APP_NAME` | The Xcode target / Swift source folder name (derived from `design.md`'s `App` struct name). |
-| `ANDROID_PACKAGE` | Android application id (from `design.md` / existing `Android/app/build.gradle.kts`; default `com.vectis.<lowercase APP_NAME>`). |
+| `ANDROID_PACKAGE` | Android application id. Prefer the package declared in `design.md` (or the existing `Android/app/build.gradle.kts` applicationId). Fallback only: `com.vectis.<lowercase APP_NAME>` — do not keep the template's `io.augentic.vectisapp` unless that is the product id. |
 | `CATALOG_PATH` | `${PROJECT_DIR}/.emery/design-system/components.yaml` when present. Optional — absent means no component factoring. |
 
 ## Platform scope
@@ -61,9 +61,11 @@ This is **template materialize** (`vectis::scaffold::materialize`) — not asset
 
 1. **Resolve `$TEMPLATE_DIR`.** Default `${PROJECT_DIR}/../vectis-template`, else `VECTIS_TEMPLATE_DIR`. If the directory is missing or is not a `vectis-template` checkout, **stop** (`deferred`) — clone https://github.com/augentic/vectis-template.git; never invent scaffold files or pins.
 2. **Mechanical allowlisted copy** into `${PROJECT_DIR}` with identity substitution (`APP_NAME`, `ANDROID_PACKAGE`). Copy root DX (`Makefile`, `Makefile.toml`, `Cargo.toml`, `Cargo.lock` when present, `rust-toolchain.toml`, `deny.toml`, `README.md`, `.gitignore`), plus `shared/`, `iOS/`, `Android/` (including the Gradle wrapper), `supply-chain/`, and `.maestro/`. **Never** copy `.git/`, `.github/`, `web/`, or `AGENTS.md`. Skip machine junk (`target/`, `.gradle/`, `*.xcodeproj/`, `local.properties`, …) per the `scaffold::materialize` denylist. One materialize stands up the whole workspace — do not invent per-shell scaffolds.
-3. **Strip `VECTIS-OPTIONAL`.** Follow **`$TEMPLATE_DIR/AGENTS.md`** (not a consumer copy) against the `design.md` `## Adapters` capability matrix: remove unused `cap=http|kv|time|sse` units and always strip `cap=demo` for product apps. Do not invent FFI shapes or dependency versions while stripping.
+3. **Strip `VECTIS-OPTIONAL`.** Follow **`$TEMPLATE_DIR/AGENTS.md`** (not a consumer copy) against the `design.md` `## Adapters` capability matrix: remove unused `cap=http|kv|time|sse` units and always strip `cap=demo` for product apps. Do not invent FFI shapes or dependency versions while stripping. Keep Maestro infra (`.maestro/config.yaml`, `.maestro/test-ids.yaml`, `.maestro/scripts/load-test-ids.sh`) and root / shell DX after strip — see [`template-capabilities.md`](../references/template-capabilities.md).
 4. **iOS project generation.** After materialize, run `make -C iOS generate-project` (or `xcodegen`) — committed `.xcodeproj` trees are denylisted on purpose.
 5. **Then** run the existing generate/update logic in the core / shell write prompts.
+
+**Late capability adoption (update mode).** When a later slice's `## Adapters` turns a previously stripped cap on, copy that `cap=` strip-unit from `$TEMPLATE_DIR` per [`template-capabilities.md`](../references/template-capabilities.md) — do not invent versions or handler shapes. Strip grammar remains `$TEMPLATE_DIR/AGENTS.md`.
 
 The adapter core processes platforms in dependency order: `core` first (the shells depend on it), then the declared `ios` / `android` shell legs — independent of each other, but run serially because their verify halves share the same Cargo workspace lock. When the platform set contains `core` only, the core skips the shell legs wholesale; this is a backend-only build.
 
