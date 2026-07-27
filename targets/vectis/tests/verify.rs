@@ -174,7 +174,10 @@ fn boltffi_dx_patterns_required() {
         "DESTINATION ?= generic/platform=iOS Simulator\n# intentionally omit boltffi apple pack\n",
     );
     write(&tmp.path().join("iOS/project.yml"), "name: TestApp\npath: ./generated/Shared\n");
-    write(&tmp.path().join("Android/Makefile"), ".PHONY: build\n# intentionally omit boltffi android pack\n");
+    write(
+        &tmp.path().join("Android/Makefile"),
+        ".PHONY: build\n# intentionally omit boltffi android pack\n",
+    );
     write(&tmp.path().join("Android/settings.gradle.kts"), "rootProject.name = \"TestApp\"\n");
     write(&tmp.path().join("Android/build.gradle.kts"), "// root\n");
     write(

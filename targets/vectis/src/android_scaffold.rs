@@ -1,8 +1,8 @@
-//! Android DX path presence and BoltFFI pattern drift detection.
+//! Android DX path presence and `BoltFFI` pattern drift detection.
 //!
 //! Immutable DX paths match [`crate::scaffold::materialize::ANDROID_DX_RELATIVE_PATHS`].
 //! Required substrings are derived from the live `vectis-template` Android Makefile
-//! (BoltFFI pack). Byte-compare against an embedded template is retired — refresh
+//! (`BoltFFI` pack). Byte-compare against an embedded template is retired — refresh
 //! is host/agent-owned via [`crate::sync`] from `$TEMPLATE_DIR`. Pin faithfulness
 //! for `Android/gradle/libs.versions.toml` is prompt-mandated against `$TEMPLATE_DIR`.
 
@@ -26,13 +26,13 @@ pub const IMMUTABLE_RELATIVE_PATHS: [&str; 5] = [
 /// Diagnostic id for scaffold drift findings.
 pub const DRIFT_FINDING_ID: &str = "android-scaffold-file-drift";
 
-/// Required Android Makefile substrings from live `vectis-template` BoltFFI DX.
+/// Required Android Makefile substrings from live `vectis-template` `BoltFFI` DX.
 pub const REQUIRED_MAKEFILE_PATTERNS: [&str; 1] = ["boltffi pack android"];
 
-/// Required `:shared` Gradle substrings from live `vectis-template` (BoltFFI output layout).
+/// Required `:shared` Gradle substrings from live `vectis-template` (`BoltFFI` output layout).
 pub const REQUIRED_SHARED_GRADLE_PATTERNS: [&str; 1] = ["generated/jniLibs"];
 
-/// Compare agent-immutable Android DX files for presence and BoltFFI patterns.
+/// Compare agent-immutable Android DX files for presence and `BoltFFI` patterns.
 #[must_use]
 pub fn android_scaffold_drift_findings(project_root: &Path) -> Vec<Value> {
     let android_root = project_root.join("Android");
