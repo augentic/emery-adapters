@@ -13,7 +13,7 @@ Inspect `${ANDROID_SHELL_DIR}/app/src/main/java/<package>/Core.kt` (or the packa
 
 Spawn the writer sub-agent with `mode: create|update` and `skip_verification: true`; the orchestrator runs the verify loop (§ Verify) after the writer returns.
 
-Repair sub-agent (`task: android-verify-repair`, invoked by the verify loop below) applies the minimum **structural** change to fix reported Kotlin / Gradle errors — never add or preserve `@Suppress` / `@file:Suppress`; refactor so `allWarningsAsErrors` and `JavaCompile -Werror` pass cleanly.
+Repair sub-agent (`task: android-verify-repair`, invoked by the verify loop below) applies the minimum **structural** change to fix reported Kotlin / Gradle errors — never add or preserve `@Suppress` / `@file:Suppress`; refactor until `make build` is clean.
 
 ## Writer steps
 
@@ -31,7 +31,7 @@ Repair sub-agent (`task: android-verify-repair`, invoked by the verify loop belo
      - `kind: raster` (operator-pinned per-density masters) — copy pinned bucket files into matching `res/drawable-<density>/` paths per `sources.android`.
    - **Render by `kind`.** `vector` / `raster` ids emit `painterResource(R.drawable.<id_snake>)` from copied drawables; never substitute Material Icons for non-`symbol` entries.
 6. **Update build configuration** (`libs.versions.toml`, `build.gradle.kts`, manifest permissions, `network_security_config.xml`) to match the changed capability set. Remove any `:vectis-design` Gradle module references — there is no shared Compose module; the writer emits shell-local theme + drawable code exclusively. Replace any `import com.vectis.design.*` with `import com.vectis.<app>.ui.theme.*`.
-7. **UniFFI bridging contract.** The `Application` class MUST set `System.setProperty("uniffi.component.shared.libraryOverride", "shared")` before any UniFFI class is loaded — without this the app fails with `UnsatisfiedLinkError` on launch. Imports for generated FFI types follow `import com.vectis.<app>.*` (not `com.vectis.design.*`). Rethrow `CancellationException` from coroutines — never swallow it.
+7. **BoltFFI bridging contract.** Keep the template's `Core` → `CoreFfi` construction and Makefile `boltffi pack android` flow. Imports for generated FFI types follow the package identity from `shared/boltffi.toml` after materialize substitution (not `com.vectis.design.*`). Do not invent a UniFFI library-override `Application` class — the live template does not use UniFFI. Rethrow `CancellationException` from coroutines — never swallow it.
 
 ## Hard rules
 
@@ -40,31 +40,33 @@ Full set at [`hard-rules-android.md`](../../../references/hard-rules-android.md)
 - Java 21 only — Java 25+ environments hit `IllegalArgumentException` in AGP; pin `org.gradle.java.home` in `gradle.properties`.
 - Always include `@Preview` blocks for new composables.
 - Coroutine cancellation MUST rethrow `CancellationException`.
-- Zero-warning policy: fix structure, never suppress — no `@Suppress` / `@file:Suppress` in shell Kotlin (`Android/app/src/**` only; `:shared` compiles generated UniFFI and omits `allWarningsAsErrors`).
+- Zero-warning policy: fix structure, never suppress — no `@Suppress` / `@file:Suppress` in shell Kotlin (`Android/app/src/**` only; `:shared` compiles BoltFFI-generated sources).
 
 ## Verify (max 3 iterations)
 
-The shell leg's **orchestrating agent** runs the verify loop — not a sub-agent with shell access. The orchestrator is the **sole source of truth** for Android shell checkboxes in `tasks.md`; never mark an Android task complete or report success unless `make verify` has actually run and passed in the same iteration (`make verify` runs `setup`, typegen, `:shared:cargoBuild`, and `:app:assembleDebug`).
+The shell leg's **orchestrating agent** runs the verify loop — not a sub-agent with shell access. The orchestrator is the **sole source of truth** for Android shell checkboxes in `tasks.md`; never mark an Android task complete or report success unless `make build` has actually run and passed in the same iteration (`make build` runs typegen, `boltffi pack android`, and `:app:assembleDebug`).
 
 ### Pre-flight (fail fast on misconfiguration)
 
-Before entering the loop, probe host prerequisites yourself (`ANDROID_HOME` set, Rust Android targets installed via `rustup target list --installed`, Java 21 available). If host prerequisites are missing, report **deferred** and stop — do not build into a broken host.
+Before entering the loop, probe host prerequisites yourself (`ANDROID_HOME` / `ANDROID_SDK_ROOT` set, Rust Android targets installed via `rustup target list --installed`, compatible JDK, `boltffi` on `PATH`). Prefer `make doctor` in the Android shell when available. If host prerequisites are missing, report **deferred** and stop — do not build into a broken host.
 
-`local.properties`, `org.gradle.java.home`, and NDK substitution are handled by `make verify` via `make setup` (`make setup-host`). The Gradle wrapper comes from `$TEMPLATE_DIR` at materialize time — do not bootstrap it with `gradle wrapper` or invent a wrapper pin.
+The Gradle wrapper comes from `$TEMPLATE_DIR` at materialize time — do not bootstrap it with `gradle wrapper` or invent a wrapper pin. `local.properties` is host-owned (denylisted from materialize).
 
 ### Build loop
 
 After the writer sub-agent returns, the orchestrator executes this loop (max 3 iterations):
 
 ```bash
-cd "${ANDROID_SHELL_DIR}" && make verify                # 1. Setup, typegen, cargoBuild, assembleDebug.
+cd "${ANDROID_SHELL_DIR}" && make build                 # 1. typegen + boltffi pack android + assembleDebug.
+# On success, write the adapter verify stamp (not template DX):
+mkdir -p "${ANDROID_SHELL_DIR}/.vectis" && echo ok > "${ANDROID_SHELL_DIR}/.vectis/verify.ok"
 ```
 
-On failure the orchestrator captures stderr and spawns a **repair-only** sub-agent (`task: android-verify-repair`) with Kotlin-only edit scope — **no shell**. The sub-agent returns edited Kotlin files or a patch plan; the orchestrator applies edits and re-runs the loop from step 1. **Structural fix only for warnings** — refactor (underscore-prefixed unused parameters, real handler wiring) until `make verify` passes; never silence a warning with `@Suppress`.
+On failure the orchestrator captures stderr and spawns a **repair-only** sub-agent (`task: android-verify-repair`) with Kotlin-only edit scope — **no shell**. The sub-agent returns edited Kotlin files or a patch plan; the orchestrator applies edits and re-runs the loop from step 1. **Structural fix only for warnings** — refactor (underscore-prefixed unused parameters, real handler wiring) until `make build` passes; never silence a warning with `@Suppress`.
 
-**Gradle / Makefile drift errors:** re-copy drifted DX files from `$TEMPLATE_DIR` with identity substitution, then retry. Never invent content for `Android/Makefile`, `Android/settings.gradle.kts`, `Android/build.gradle.kts`, `Android/app/build.gradle.kts`, or `Android/shared/build.gradle.kts`. If strict-flag drift persists after a refresh, escalate.
+**Gradle / Makefile drift errors:** re-copy drifted DX files from `$TEMPLATE_DIR` with identity substitution, then retry. Never invent content for `Android/Makefile`, `Android/settings.gradle.kts`, `Android/build.gradle.kts`, `Android/app/build.gradle.kts`, or `Android/shared/build.gradle.kts`. If BoltFFI / pin drift persists after a refresh, escalate per [../../build.md](../../build.md) § Template / version-pin drift handling.
 
-If still failing after 3 iterations: **stop**, report the remaining failures with full error output, and escalate. Java 25+ environments hit `IllegalArgumentException`; the fix is pinning `org.gradle.java.home` to Java 21 in `gradle.properties` via `make setup-host`.
+If still failing after 3 iterations: **stop**, report the remaining failures with full error output, and escalate. When the host's default Java breaks AGP/Kotlin, pin a compatible JDK via `org.gradle.java.home` in `gradle.properties` (host-local).
 
 ## Worked examples
 

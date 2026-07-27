@@ -274,7 +274,7 @@ Per the iOS write prompt repair discipline and hard-rules-ios, agent-authored Sw
 **Detection**:
 
 1. Search agent-authored Swift sources for `swiftlint:disable` and `swift-format-ignore`.
-2. Skip `generated/` subtrees and CLI-owned scaffold files (`iOS/Makefile`, `iOS/project.yml`, `iOS/.vectis/sim-build.sh`, `iOS/.vectis/sim-dev.sh`).
+2. Skip `generated/` subtrees and template-owned DX files (`iOS/Makefile`, `iOS/project.yml`).
 3. When the in-guest shell-verify gate findings riding the report-leg prompt include `lint-suppression-forbidden`, treat it as a confirmed defect and cite `rule_id: VECTIS-009`.
 
-**Fix**: Remove the disable comment and apply a structural fix so `SWIFT_TREAT_WARNINGS_AS_ERRORS` and SwiftLint pass without suppression comments.
+**Fix**: Remove the disable comment and apply a structural fix so `make build` and SwiftLint pass without suppression comments.

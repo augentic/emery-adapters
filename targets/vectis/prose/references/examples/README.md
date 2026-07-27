@@ -2,6 +2,8 @@
 
 Index of the worked-example corpus for Vectis generation. Examples are numbered in increasing capability order and paired across trees: read the `core/` example first, then the matching shell example for each declared platform.
 
+**Pin / DX authority:** dependency versions, Makefiles, Gradle files, and BoltFFI config come from `$TEMPLATE_DIR` (`../vectis-template` or `VECTIS_TEMPLATE_DIR`). Example `Cargo.toml` / Makefile / Gradle blocks are pedagogical — never invent pins from memory or from retired UniFFI / `cargo-swift` snippets.
+
 ## core/ — shared Crux core
 
 | File | Read when generating |

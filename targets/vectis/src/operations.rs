@@ -193,10 +193,10 @@ impl Target for Adapter {
              boilerplate or version pins. Then run the write prompt's \
              orchestrator-owned verify loop yourself in the lent workspace — this \
              adapter cannot spawn host commands. Keep DX files (Makefiles, \
-             `project.yml`, assembly Gradle files, BoltFFI / `.vectis` scripts when \
-             present) consistent with `$TEMPLATE_DIR` after identity substitution; \
-             refresh by re-copying those paths from the template, never by guessing \
-             pins. When the slice introduces no work for this shell, write nothing \
+             `project.yml`, assembly Gradle files, BoltFFI pack recipes) consistent \
+             with `$TEMPLATE_DIR` after identity substitution; refresh by re-copying \
+             those paths from the template, never by guessing pins. When the slice \
+             introduces no work for this shell, write nothing \
              and answer with `applicable: false`; when a host prerequisite is \
              missing, stop per the prompt's deferred contract and report it in your \
              summary.\n\n{BINDING_NOTE}\n\n{scaffold_block}\n\n{REFERENCES_POINTER}",

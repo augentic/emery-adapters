@@ -1,9 +1,12 @@
-//! iOS DX path presence and light pattern drift detection.
+//! iOS DX path presence and BoltFFI pattern drift detection.
 //!
 //! Immutable DX paths match [`crate::scaffold::materialize::IOS_DX_RELATIVE_PATHS`].
-//! Byte-compare against an embedded template is retired — refresh is
-//! host/agent-owned via [`crate::sync`] from `$TEMPLATE_DIR`. Phase 4
-//! retargets required patterns to `BoltFFI` DX.
+//! Required substrings are derived from the live `vectis-template` iOS Makefile /
+//! `project.yml` (BoltFFI pack + generic simulator destination). Byte-compare
+//! against an embedded template is retired — refresh is host/agent-owned via
+//! [`crate::sync`] from `$TEMPLATE_DIR`. Pin faithfulness for workspace
+//! `Cargo.toml` / `shared/boltffi.toml` is prompt-mandated against `$TEMPLATE_DIR`
+//! (the guest cannot see a sibling checkout).
 
 use std::fs;
 use std::path::Path;
@@ -19,10 +22,16 @@ pub const IMMUTABLE_RELATIVE_PATHS: [&str; 2] = ["iOS/Makefile", "iOS/project.ym
 /// Diagnostic id for scaffold drift findings.
 pub const DRIFT_FINDING_ID: &str = "ios-scaffold-file-drift";
 
-/// Required Xcode build setting in CLI-owned `project.yml` (`settings.base`) when present.
-pub const REQUIRED_SWIFT_TREAT_WARNINGS_AS_ERRORS: &str = "SWIFT_TREAT_WARNINGS_AS_ERRORS: YES";
+/// Required iOS Makefile substrings from live `vectis-template` BoltFFI DX.
+pub const REQUIRED_MAKEFILE_PATTERNS: [&str; 2] = [
+    "DESTINATION ?= generic/platform=iOS Simulator",
+    "boltffi pack apple",
+];
 
-/// Compare agent-immutable iOS DX files for presence and forbidden patterns.
+/// Required `project.yml` substring from live `vectis-template` (BoltFFI SPM layout).
+pub const REQUIRED_PROJECT_YML_PATTERNS: [&str; 1] = ["path: ./generated/Shared"];
+
+/// Compare agent-immutable iOS DX files for presence and BoltFFI patterns.
 #[must_use]
 pub fn ios_scaffold_drift_findings(project_root: &Path) -> Vec<Value> {
     let ios_root = project_root.join("iOS");
@@ -51,7 +60,7 @@ pub fn ios_scaffold_drift_findings(project_root: &Path) -> Vec<Value> {
                 ));
             }
             match fs::read_to_string(&target) {
-                Ok(on_disk) => forbidden_pattern_finding(relative_path, &on_disk),
+                Ok(on_disk) => pattern_finding(relative_path, &on_disk),
                 Err(err) => Some(drift_finding(
                     relative_path,
                     &format!("{relative_path} could not be read ({err})"),
@@ -84,29 +93,50 @@ pub fn resolve_ios_app_name(project_root: &Path) -> Result<String, VectisError> 
     })
 }
 
-fn forbidden_pattern_finding(relative_path: &str, on_disk: &str) -> Option<Value> {
-    if relative_path.ends_with("Makefile")
-        && (on_disk.contains("name=iPhone") || on_disk.contains("platform=iOS Simulator,name="))
-    {
-        return Some(drift_finding(
-            relative_path,
-            &format!(
-                "{relative_path} uses a forbidden named simulator destination; \
-                 use generic/platform=iOS Simulator"
-            ),
-        ));
+fn pattern_finding(relative_path: &str, on_disk: &str) -> Option<Value> {
+    if relative_path.ends_with("Makefile") {
+        if on_disk.contains("name=iPhone") || on_disk.contains("platform=iOS Simulator,name=") {
+            return Some(drift_finding(
+                relative_path,
+                &format!(
+                    "{relative_path} uses a forbidden named simulator destination; \
+                     use `DESTINATION ?= generic/platform=iOS Simulator` from $TEMPLATE_DIR"
+                ),
+            ));
+        }
+        for pattern in REQUIRED_MAKEFILE_PATTERNS {
+            if !on_disk.contains(pattern) {
+                return Some(drift_finding(
+                    relative_path,
+                    &format!(
+                        "{relative_path} is missing required BoltFFI DX pattern `{pattern}`; \
+                         re-copy from $TEMPLATE_DIR — do not invent Makefile content"
+                    ),
+                ));
+            }
+        }
     }
-    if relative_path.ends_with("project.yml")
-        && on_disk.contains("OTHER_LDFLAGS")
-        && on_disk.contains("-w")
-    {
-        return Some(drift_finding(
-            relative_path,
-            &format!(
-                "{relative_path} forbids linker warning suppression via OTHER_LDFLAGS -w; \
-                 remove OTHER_LDFLAGS (prefer {REQUIRED_SWIFT_TREAT_WARNINGS_AS_ERRORS} under settings.base when adding warning policy)"
-            ),
-        ));
+    if relative_path.ends_with("project.yml") {
+        if on_disk.contains("OTHER_LDFLAGS") && on_disk.contains("-w") {
+            return Some(drift_finding(
+                relative_path,
+                &format!(
+                    "{relative_path} forbids linker warning suppression via OTHER_LDFLAGS -w; \
+                     remove OTHER_LDFLAGS and re-copy from $TEMPLATE_DIR if DX drifted"
+                ),
+            ));
+        }
+        for pattern in REQUIRED_PROJECT_YML_PATTERNS {
+            if !on_disk.contains(pattern) {
+                return Some(drift_finding(
+                    relative_path,
+                    &format!(
+                        "{relative_path} is missing required BoltFFI package path `{pattern}`; \
+                         re-copy from $TEMPLATE_DIR — do not invent project.yml content"
+                    ),
+                ));
+            }
+        }
     }
     None
 }

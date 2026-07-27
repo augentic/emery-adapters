@@ -5,7 +5,7 @@ The adapter core inlines this document into the system prompt of the merge leg w
 Two things make the Vectis `merge` gates different from the bare slice merge:
 
 1. **`composition.yaml` is a build output that lands at merge time.** It is not a Emery artifact authored under `.emery/specs/`; the `build` prompt regenerates it from `spec.md` + `design.md`, and the engine's deterministic merge promotes it into the baseline alongside the spec deltas. The preflight and postflight composition validators are the gate.
-2. **The cap matrix is re-verified against the merged baseline.** A green slice build is necessary but not sufficient — the postflight leg re-runs `cargo` / `make build` / `gradlew` against the merged tree because cross-slice regressions (UniFFI bridging drift, Java 21 / Gradle wrapper changes, cargo-swift drift, cap-marker expansion) only surface after deltas land.
+2. **The cap matrix is re-verified against the merged baseline.** A green slice build is necessary but not sufficient — the postflight leg re-runs `cargo` / `make build` against the merged tree because cross-slice regressions (BoltFFI bridging drift, Gradle wrapper changes, pin drift, cap-marker expansion) only surface after deltas land.
 
 ## Preflight — staged composition validation
 
@@ -33,20 +33,19 @@ cd "$PROJECT_DIR" && RUSTFLAGS="-D warnings" cargo test
 
 # iOS, when ${PROJECT_DIR}/iOS exists (DX files stay aligned with $TEMPLATE_DIR)
 cd "$PROJECT_DIR/iOS" && make build
-cd "$PROJECT_DIR/iOS" && make sim-build
 
 # Android, when ${PROJECT_DIR}/Android exists
 rustup target list --installed | grep android
-cd "$PROJECT_DIR/Android" && make verify
+cd "$PROJECT_DIR/Android" && make build
 ```
 
 Record every host step in a structured list with these fields:
 
-- `name` — stable step id (`core.cargo-check`, `ios.make-build`, `android.gradlew-assembleDebug`, `android.preflight-java21`).
+- `name` — stable step id (`core.cargo-check`, `ios.make-build`, `android.make-build`, `android.preflight-jdk`).
 - `passed` — boolean.
 - `failure_snippet` — empty when passed; otherwise the first useful stderr / stdout lines.
 
-Host prerequisite failures (missing `cargo`, `gradle`, `xcodebuild`, Java 21, Android SDK / NDK, `cargo-swift`, Rust Android targets, an unusable Gradle wrapper) are host verification failures, not WASI tool failures. Name them as prerequisite steps (`android.preflight-java21`) so the report makes the boundary clear.
+Host prerequisite failures (missing `cargo`, `gradle` / wrapper, `xcodebuild`, `xcodegen`, compatible JDK, Android SDK / NDK, `boltffi`, Rust Android targets) are host verification failures, not WASI tool failures. Name them as prerequisite steps (`android.preflight-jdk`) so the report makes the boundary clear.
 
 When the slice modified neither the core nor a shell (e.g. a docs-only or UI-input-only slice that touched no Crux code), still run the applicable host checks against the merged tree — the cap matrix as a whole must remain green.
 
@@ -54,10 +53,10 @@ After the leg answers, the adapter re-runs its deterministic composition validat
 
 ### Why postflight, not preflight
 
-The postflight gate intentionally validates the merged baseline, not the staged delta. Shell verification (UniFFI bridging, Java 21 / Gradle wrapper, cargo-swift, cap-marker expansion) is only meaningful once the spec-level deltas are promoted and the writers have a stable baseline to build against. The build already verified the slice in isolation; this gate catches cross-slice regressions.
+The postflight gate intentionally validates the merged baseline, not the staged delta. Shell verification (BoltFFI bridging, Gradle wrapper, pin faithfulness vs `$TEMPLATE_DIR`, cap-marker expansion) is only meaningful once the spec-level deltas are promoted and the writers have a stable baseline to build against. The build already verified the slice in isolation; this gate catches cross-slice regressions.
 
 ## Failure semantics
 
 A blocking preflight finding aborts the merge before anything folds: the slice stays `built`, the plan entry stays `in-progress`, and the operator resolves and re-runs the merge. A blocking postflight finding is a terminal diagnostic, not a park: the engine has already committed and archived the merge, so the report surfaces the regression for a follow-up repair slice — never attempt to roll back the merge or edit the baseline's lifecycle state from this prompt.
 
-For cap-matrix failures that look like version-pin drift (AGP / Gradle / uniffi mismatch surfaced after pins changed in this slice), record the failure in the report findings and surface it — **agents exit** without editing emery-adapters (see [Consumer tooling boundary](../references/emery-runtime/guardrails.md#consumer-tooling-boundary)). The operator decides whether the next step is a pin fix in emery-adapters ([build.md](build.md) § Template / version-pin drift handling), a pin rollback, or a follow-up slice.
+For cap-matrix failures that look like version-pin drift (AGP / Gradle / BoltFFI mismatch surfaced after pins changed in this slice), record the failure in the report findings and surface it — **agents exit** without editing emery-adapters or inventing pins (see [Consumer tooling boundary](../references/emery-runtime/guardrails.md#consumer-tooling-boundary)). The operator decides whether the next step is a pin fix in [`vectis-template`](https://github.com/augentic/vectis-template) ([build.md](build.md) § Template / version-pin drift handling), a pin rollback, or a follow-up slice.

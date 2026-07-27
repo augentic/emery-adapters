@@ -1,9 +1,10 @@
-//! Android DX path presence drift detection.
+//! Android DX path presence and BoltFFI pattern drift detection.
 //!
 //! Immutable DX paths match [`crate::scaffold::materialize::ANDROID_DX_RELATIVE_PATHS`].
-//! Byte-compare against an embedded template is retired — refresh is
-//! host/agent-owned via [`crate::sync`] from `$TEMPLATE_DIR`. Phase 4
-//! retargets required patterns to `BoltFFI` / template DX.
+//! Required substrings are derived from the live `vectis-template` Android Makefile
+//! (BoltFFI pack). Byte-compare against an embedded template is retired — refresh
+//! is host/agent-owned via [`crate::sync`] from `$TEMPLATE_DIR`. Pin faithfulness
+//! for `Android/gradle/libs.versions.toml` is prompt-mandated against `$TEMPLATE_DIR`.
 
 use std::fs;
 use std::path::Path;
@@ -25,7 +26,13 @@ pub const IMMUTABLE_RELATIVE_PATHS: [&str; 5] = [
 /// Diagnostic id for scaffold drift findings.
 pub const DRIFT_FINDING_ID: &str = "android-scaffold-file-drift";
 
-/// Compare agent-immutable Android DX files for presence.
+/// Required Android Makefile substrings from live `vectis-template` BoltFFI DX.
+pub const REQUIRED_MAKEFILE_PATTERNS: [&str; 1] = ["boltffi pack android"];
+
+/// Required `:shared` Gradle substrings from live `vectis-template` (BoltFFI output layout).
+pub const REQUIRED_SHARED_GRADLE_PATTERNS: [&str; 1] = ["generated/jniLibs"];
+
+/// Compare agent-immutable Android DX files for presence and BoltFFI patterns.
 #[must_use]
 pub fn android_scaffold_drift_findings(project_root: &Path) -> Vec<Value> {
     let android_root = project_root.join("Android");
@@ -44,16 +51,22 @@ pub fn android_scaffold_drift_findings(project_root: &Path) -> Vec<Value> {
         .iter()
         .filter_map(|relative_path| {
             let target = project_root.join(relative_path);
-            if target.is_file() {
-                return None;
+            if !target.is_file() {
+                return Some(drift_finding(
+                    relative_path,
+                    &format!(
+                        "{relative_path} is missing; re-copy from $TEMPLATE_DIR \
+                         (vectis::scaffold::materialize / sync android-scaffold) — do not invent DX"
+                    ),
+                ));
             }
-            Some(drift_finding(
-                relative_path,
-                &format!(
-                    "{relative_path} is missing; re-copy from $TEMPLATE_DIR \
-                     (vectis::scaffold::materialize / sync android-scaffold) — do not invent DX"
-                ),
-            ))
+            match fs::read_to_string(&target) {
+                Ok(on_disk) => pattern_finding(relative_path, &on_disk),
+                Err(err) => Some(drift_finding(
+                    relative_path,
+                    &format!("{relative_path} could not be read ({err})"),
+                )),
+            }
         })
         .collect()
 }
@@ -94,6 +107,36 @@ pub fn resolve_android_package(project_root: &Path, app_name: &str) -> Result<St
         return Ok(package);
     }
     Ok(default_android_package(app_name))
+}
+
+fn pattern_finding(relative_path: &str, on_disk: &str) -> Option<Value> {
+    if relative_path == "Android/Makefile" {
+        for pattern in REQUIRED_MAKEFILE_PATTERNS {
+            if !on_disk.contains(pattern) {
+                return Some(drift_finding(
+                    relative_path,
+                    &format!(
+                        "{relative_path} is missing required BoltFFI DX pattern `{pattern}`; \
+                         re-copy from $TEMPLATE_DIR — do not invent Makefile content"
+                    ),
+                ));
+            }
+        }
+    }
+    if relative_path == "Android/shared/build.gradle.kts" {
+        for pattern in REQUIRED_SHARED_GRADLE_PATTERNS {
+            if !on_disk.contains(pattern) {
+                return Some(drift_finding(
+                    relative_path,
+                    &format!(
+                        "{relative_path} is missing required BoltFFI output path `{pattern}`; \
+                         re-copy from $TEMPLATE_DIR — do not invent Gradle content"
+                    ),
+                ));
+            }
+        }
+    }
+    None
 }
 
 fn read_settings_gradle_name(settings_gradle: &Path) -> Result<Option<String>, VectisError> {

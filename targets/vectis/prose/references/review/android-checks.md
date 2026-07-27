@@ -111,15 +111,15 @@ If the Rust core defines a `Route` enum, the Android shell should implement navi
 
 **Fix**: Add navigation elements for missing Route variants.
 
-## AND-011: Missing UniFFI Library Override
+## AND-011: BoltFFI Core Bridge Present
 
 **Severity**: critical
 
-An `Application` class is required in **all** Android shells -- not just those using Koin. Its `onCreate()` must set the JNA library override property BEFORE any UniFFI class is loaded. Without this, JNA tries to load `libuniffi_shared.so` but Cargo produces `libshared.so`, causing an `UnsatisfiedLinkError` crash on launch.
+Every Android shell must construct the BoltFFI-generated `CoreFfi` bridge (see `$TEMPLATE_DIR` `core/Core.kt`). There is **no** UniFFI library-override `Application` requirement — flag inventing `System.setProperty("uniffi.component.shared.libraryOverride", …)` as a defect (stale UniFFI DX).
 
-**Detection**: Verify that an Application class exists and that `AndroidManifest.xml` includes the `android:name` attribute pointing to it. Search the Application class for `System.setProperty("uniffi.component.shared.libraryOverride", "shared")`. Verify it appears before `startKoin` or any other code that triggers UniFFI class loading. If no Application class exists at all, flag it as critical.
+**Detection**: Verify `Core.kt` (or equivalent) constructs `CoreFfi` and that `Android/Makefile` retains `boltffi pack android`. Search for leftover UniFFI override properties and flag them. Do **not** require an `Application` class solely for FFI loading.
 
-**Fix**: Create an Application class with `System.setProperty("uniffi.component.shared.libraryOverride", "shared")` as the first statement after `super.onCreate()`, and add `android:name` to the manifest's `<application>` element.
+**Fix**: Align the bridge with `$TEMPLATE_DIR` BoltFFI layout; re-copy Makefile / Gradle DX from the template on drift. Remove any UniFFI library-override property.
 
 ## AND-012: Core Missing StateFlow / mutableStateOf
 
@@ -137,9 +137,9 @@ The `Core` class must expose the ViewModel via either `mutableStateOf` (simple p
 
 **Severity**: critical
 
-All hand-written `.kt` files that reference generated types (`Event`, `ViewModel`, `Effect`, `Request`, etc.) MUST have explicit imports from `com.example.app.*`. The generated types live in a different package than the hand-written code.
+All hand-written `.kt` files that reference generated types (`Event`, `ViewModel`, `Effect`, `Request`, `CoreFfi`, etc.) MUST have explicit imports from the package identity in `shared/boltffi.toml` after materialize substitution. The generated types live in a different package than the hand-written code.
 
-**Detection**: Search hand-written `.kt` files for references to generated types without corresponding `import com.example.app.` statements. Also check `Core.kt` for `import uniffi.shared.CoreFfi`.
+**Detection**: Search hand-written `.kt` files for references to generated types without corresponding imports. Prefer the import shape in `$TEMPLATE_DIR` `core/Core.kt` over retired `uniffi.shared.*` / `com.example.app.*` examples.
 
 **Fix**: Add the missing import statements. Never assume generated types are in the same package as hand-written code.
 

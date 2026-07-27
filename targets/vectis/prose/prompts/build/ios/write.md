@@ -13,7 +13,7 @@ Inspect `${IOS_SHELL_DIR}` for any `.swift` files:
 
 Spawn the writer sub-agent with `mode: create|update` and `skip_verification: true`; the orchestrator runs the verify loop (§ Verify) after the writer returns.
 
-Repair sub-agent (`task: ios-verify-repair`, invoked by the verify loop below) applies the minimum **structural** change to fix reported Swift / Xcode errors — never add or preserve `swiftlint:disable`, `swift-format-ignore`, or other lint/format suppression comments; refactor so `SWIFT_TREAT_WARNINGS_AS_ERRORS` passes cleanly.
+Repair sub-agent (`task: ios-verify-repair`, invoked by the verify loop below) applies the minimum **structural** change to fix reported Swift / Xcode errors — never add or preserve `swiftlint:disable`, `swift-format-ignore`, or other lint/format suppression comments; refactor until `make build` is clean.
 
 ## Writer steps
 
@@ -49,22 +49,23 @@ After the writer sub-agent returns, the orchestrator executes this loop (max 3 i
 
 ```bash
 swiftformat "${IOS_SHELL_DIR}/${APP_NAME}/"                    # 1. Format.
-cd "$IOS_SHELL_DIR" && make build                              # 2. Build (typegen + package + xcodegen).
-cd "$IOS_SHELL_DIR" && make sim-build                          # 3. Simulator build (template DX).
+cd "$IOS_SHELL_DIR" && make build                              # 2. typegen + boltffi pack apple + xcodegen + simulator build.
+# On success, write the adapter verify stamp (not template DX):
+mkdir -p "${IOS_SHELL_DIR}/.vectis" && echo ok > "${IOS_SHELL_DIR}/.vectis/verify.ok"
 ```
 
 On failure the orchestrator captures stderr and spawns a **repair-only** sub-agent (`task: ios-verify-repair`) with:
 
-- `forbidden_paths: [iOS/Makefile, iOS/project.yml]` (and any template-owned `.vectis/` scripts if present)
+- `forbidden_paths: [iOS/Makefile, iOS/project.yml]`
 - `allowed_paths: iOS/<APP_NAME>/**/*.swift, Theme/, Components/, Resources/`
 - `error_output:` the captured stderr from the failing step
 - **No shell** — the sub-agent returns edited Swift files or a patch plan only; the orchestrator applies edits and re-runs the loop from step 1.
 
-**Structural fix only for warnings** — refactor (underscore-prefixed unused parameters, real handler wiring, visibility adjustments) until `make build` / `make sim-build` pass; never silence a warning with `swiftlint:disable`, `swift-format-ignore`, or similar comments.
+**Structural fix only for warnings** — refactor (underscore-prefixed unused parameters, real handler wiring, visibility adjustments) until `make build` passes; never silence a warning with `swiftlint:disable`, `swift-format-ignore`, or similar comments.
 
 **Destination / DX drift errors:** re-copy drifted files from `$TEMPLATE_DIR` with identity substitution, then retry. Never invent Makefile / `project.yml` content. Never run `xcodebuild` with a named device destination. If generic destination still fails after a retry, escalate — do not substitute `name=iPhone …`.
 
-Operators may use `make run` / `make sim-run` for local desk checks; the orchestrator verify loop still uses only `make build` + `make sim-build`.
+Operators may use `make run-sim` for local desk checks; the orchestrator verify loop uses only `make build` (the live template has no `sim-build` target).
 
 If still failing after 3 iterations: **stop**, report the remaining failures with full error output, and escalate.
 

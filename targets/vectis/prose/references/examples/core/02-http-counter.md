@@ -18,12 +18,12 @@ resolver = "3"
 edition = "2024"
 rust-version = "1.88"
 
-# Versions from crux-versions.md
+# Pin versions from $TEMPLATE_DIR/Cargo.toml — never invent.
 [workspace.dependencies]
-crux_core = "{version from crux-versions.md}"
-crux_http = "{version from crux-versions.md}"
-serde = "{version from crux-versions.md}"
-facet = "{version from crux-versions.md}"
+crux_core = "{version from $TEMPLATE_DIR/Cargo.toml}"
+crux_http = "{version from $TEMPLATE_DIR/Cargo.toml}"
+serde = "{version from $TEMPLATE_DIR/Cargo.toml}"
+facet = "{version from $TEMPLATE_DIR/shared/Cargo.toml}"
 ```
 
 ## `shared/Cargo.toml`
@@ -66,7 +66,7 @@ clap = { version = "4", optional = true, features = ["derive"] }
 getrandom = { version = "0.3", optional = true, default-features = false }
 log = { version = "0.4", optional = true }
 pretty_env_logger = { version = "0.5", optional = true }
-uniffi = { version = "{version from Vectis embedded defaults or --version-file}", optional = true }
+boltffi = "{version from $TEMPLATE_DIR/shared/Cargo.toml}"
 wasm-bindgen = { version = "0.2", optional = true }
 ```
 

@@ -1,6 +1,6 @@
 # Example: Simple Counter Android Shell (Render Only)
 
-A minimal Android shell for a Crux counter app with local state and no external side-effects. Demonstrates Core.kt, MainActivity.kt, screen composables, Gradle configuration, and Makefile.
+A minimal Android shell for a Crux counter app with local state and no external side-effects. Demonstrates Core.kt, MainActivity.kt, and screen composables. Makefile / Gradle pin authority is `$TEMPLATE_DIR` (BoltFFI) — do not treat legacy UniFFI snippets below as DX authority.
 
 This shell pairs with the core-writer example `01-simple-counter.md`. The shared crate defines:
 
@@ -280,22 +280,13 @@ tasks.matching { it.name.matches(Regex("merge.*JniLibFolders")) }.configureEach 
 }
 ```
 
-## `Android/app/src/main/java/com/vectis/counter/CounterApplication.kt`
+## Application class
 
-```kotlin
-package com.vectis.counter
-
-import android.app.Application
-
-class CounterApplication : Application() {
-    override fun onCreate() {
-        super.onCreate()
-        System.setProperty("uniffi.component.shared.libraryOverride", "shared")
-    }
-}
-```
+The live `$TEMPLATE_DIR` Android shell does **not** ship a UniFFI library-override `Application` class. Follow the template's `MainActivity` + `core/Core.kt` (`CoreFfi` from the BoltFFI-generated package). Do not invent `System.setProperty("uniffi.component.shared.libraryOverride", …)`.
 
 ## `Android/app/src/main/java/com/vectis/counter/core/Core.kt`
+
+> Package names and `CoreFfi` imports in the Kotlin blocks below may lag the template's BoltFFI layout. Prefer `$TEMPLATE_DIR/Android/app/src/main/java/.../core/Core.kt` for the authoritative bridge shape.
 
 ```kotlin
 package com.vectis.counter.core
@@ -495,7 +486,7 @@ fun CounterScreenPreview() {
 1. **Simple Core pattern** -- `Core` extends `ViewModel`, uses `mutableStateOf`.
 2. **Enum ViewModel with `when` branching** -- even a single-variant enum uses `when` in the root composable to destructure the per-page view struct.
 3. **Per-page view struct as screen parameter** -- `CounterScreen` accepts `CounterView`, not `ViewModel`. The `when` branch extracts `state.value`.
-4. **Application class** -- `CounterApplication` sets the UniFFI library override before any UniFFI class loads. Required even without Koin.
+4. **BoltFFI Core** -- `Core` constructs `CoreFfi` from the BoltFFI-generated package; there is no UniFFI library-override `Application` class in the live template.
 5. **Event callback pattern** -- screens receive `(Event) -> Unit`, not the `Core`.
 6. **Material 3 theming** -- colors from `MaterialTheme.colorScheme`.
 7. **Preview support** -- every screen has a `@Preview` with sample data.

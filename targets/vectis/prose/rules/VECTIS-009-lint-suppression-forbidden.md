@@ -21,9 +21,9 @@ Agent-authored trees must compile and lint cleanly without inline suppressions. 
 | Tree | Forbidden | Allowed (out of scope) |
 | --- | --- | --- |
 | `shared/src/**/*.rs` | `#[allow(...)]`, `#[expect(...)]` | Crate-level `[workspace.lints.clippy]` allows in scaffold-owned `Cargo.toml` |
-| `iOS/**/*.swift` (excl. `generated/`) | `swiftlint:disable`, `swift-format-ignore` | CLI-owned `iOS/project.yml` strict flags |
-| `Android/app/src/**/*.kt` (excl. `generated/`) | `@Suppress(...)`, `@file:Suppress(...)` | Gradle `allWarningsAsErrors` on `:app` in CLI-owned `app/build.gradle.kts` |
-| `Android/shared` generated UniFFI under `../generated/` | *(out of scope — bindgen output)* | `:shared` omits `allWarningsAsErrors` by design |
+| `iOS/**/*.swift` (excl. `generated/`) | `swiftlint:disable`, `swift-format-ignore` | Template-owned `iOS/project.yml` / Makefile DX from `$TEMPLATE_DIR` |
+| `Android/app/src/**/*.kt` (excl. `generated/`) | `@Suppress(...)`, `@file:Suppress(...)` | Template-owned Gradle DX from `$TEMPLATE_DIR` |
+| `Android/generated/**` BoltFFI / typegen output | *(out of scope — generated)* | `:shared` compiles generated sources as emitted |
 
 ## Look For
 

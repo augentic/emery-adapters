@@ -1,6 +1,6 @@
 # Example: HTTP Counter Android Shell
 
-An Android shell for a Crux counter app that persists count to a server via HTTP and streams updates via SSE. Demonstrates async HTTP effect handling, SSE streaming, Koin dependency injection, and Ktor HTTP client.
+An Android shell for a Crux counter app that persists count to a server via HTTP and streams updates via SSE. Demonstrates async HTTP effect handling, SSE streaming, Koin dependency injection, and Ktor HTTP client. Makefile / Gradle / FFI authority is `$TEMPLATE_DIR` (BoltFFI) — do not treat legacy UniFFI snippets below as DX authority.
 
 This shell pairs with the core-writer example `02-http-counter.md`. The shared crate defines:
 
@@ -414,27 +414,9 @@ val appModule = module {
 }
 ```
 
-## `Android/app/src/main/java/com/vectis/counter/CounterApplication.kt`
+## Application / DI bootstrap
 
-```kotlin
-package com.vectis.counter
-
-import android.app.Application
-import com.vectis.counter.di.appModule
-import org.koin.android.ext.koin.androidContext
-import org.koin.core.context.startKoin
-
-class CounterApplication : Application() {
-    override fun onCreate() {
-        super.onCreate()
-        System.setProperty("uniffi.component.shared.libraryOverride", "shared")
-        startKoin {
-            androidContext(this@CounterApplication)
-            modules(appModule)
-        }
-    }
-}
-```
+The live `$TEMPLATE_DIR` Android shell does **not** use a UniFFI library-override `Application` class. Prefer the template's `MainActivity` + `core/Core.kt` BoltFFI bridge. When Koin is warranted, bootstrap DI without inventing `System.setProperty("uniffi.component.shared.libraryOverride", …)`.
 
 ## `Android/app/src/main/java/com/vectis/counter/MainActivity.kt`
 
@@ -665,9 +647,9 @@ fun LoadingScreenPreview() {
 4. **HTTP effect handling** -- `HttpClient` uses Ktor + OkHttp engine with proper timeout configuration and error mapping.
 5. **SSE streaming** -- `SseClient` reads a Ktor channel line-by-line and invokes a callback for each chunk. Uses `@OptIn(ExperimentalUnsignedTypes::class)`.
 6. **Defensive error handling** -- SSE effect is wrapped in `scope.launch` with `try/catch` to prevent crashes. `CancellationException` is rethrown.
-7. **Koin DI** -- `Core`, `HttpClient`, and `SseClient` are singletons injected via Koin. The `CounterApplication` bootstraps Koin.
-8. **UniFFI library override** -- `System.setProperty("uniffi.component.shared.libraryOverride", "shared")` set in `CounterApplication.onCreate()` before Koin initialization.
-9. **Generated type imports** -- all `.kt` files explicitly import types from `com.example.app.*` and `uniffi.shared.CoreFfi`.
+7. **Koin DI** -- `Core`, `HttpClient`, and `SseClient` are singletons injected via Koin when the capability set warrants it.
+8. **BoltFFI Core** -- construct `CoreFfi` from the BoltFFI-generated package (see `$TEMPLATE_DIR` Android `core/Core.kt`); do not invent a UniFFI library-override `Application` class.
+9. **Generated type imports** -- hand-written Kotlin imports BoltFFI / facet-generated types from the package identity in `shared/boltffi.toml` after materialize substitution.
 10. **Network security config** -- cleartext HTTP allowed for localhost/`10.0.2.2` to support development servers.
 11. **themes.xml** -- Android theme resource required by `AndroidManifest.xml`.
 12. **StateFlow observation** -- `core.viewModel.collectAsState()` in Compose triggers recomposition on ViewModel changes.

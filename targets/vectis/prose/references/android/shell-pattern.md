@@ -2,6 +2,8 @@
 
 The Android shell is a thin Kotlin/Jetpack Compose layer that renders the `ViewModel` from the Crux core and sends user-initiated `Event` values back. All business logic lives in the shared Rust crate; the shell only handles platform I/O (HTTP, KV, SSE, Time, Platform) and UI rendering.
 
+**FFI / pin authority:** use BoltFFI via `$TEMPLATE_DIR` (`CoreFfi` package from `shared/boltffi.toml` after materialize). Kotlin snippets below may still show retired `uniffi.shared.*` / `com.example.app.*` import paths — treat those as pedagogical only; do not invent UniFFI library overrides.
+
 ## Architecture
 
 ```
@@ -25,7 +27,7 @@ The Android shell is a thin Kotlin/Jetpack Compose layer that renders the `ViewM
 │          └──────────────┬─────────────────────┘  │
 │                         │                        │
 │                         ▼                        │
-│               CoreFfi (UniFFI bridge)            │
+│               CoreFfi (BoltFFI bridge)           │
 │               .update(data) → effects            │
 │               .resolve(id, data) → effects       │
 │               .view() → viewModel                │
@@ -574,48 +576,11 @@ Note: `Event` is typically a sealed interface (mixed enum) so unit variants use 
 - `CoreFfi` is thread-safe internally (Rust `Bridge` uses interior mutability).
 - Async effect handlers run in coroutines scoped to `SupervisorJob`, so one failure doesn't cancel other in-flight effects.
 
-## Application Class (Required)
+## BoltFFI bridge (no UniFFI Application override)
 
-Every Android shell MUST have an Application class that sets the UniFFI library override in `onCreate()`, BEFORE any UniFFI class is loaded. Without it, JNA tries to load `libuniffi_shared.so` which doesn't exist -- Cargo produces `libshared.so` -- causing an `UnsatisfiedLinkError` crash on launch.
+The live `$TEMPLATE_DIR` Android shell packs native code with `boltffi pack android` and constructs `CoreFfi` from the BoltFFI-generated package. There is **no** UniFFI library-override `Application` class and agents must not invent `System.setProperty("uniffi.component.shared.libraryOverride", …)`.
 
-### Minimal Application class (no Koin)
-
-```kotlin
-package com.vectis.myapp
-
-import android.app.Application
-
-class MyAppApplication : Application() {
-    override fun onCreate() {
-        super.onCreate()
-        System.setProperty("uniffi.component.shared.libraryOverride", "shared")
-    }
-}
-```
-
-### Application class with Koin
-
-When using the full Core pattern with DI, add `startKoin` after the library override:
-
-```kotlin
-package com.vectis.myapp
-
-import android.app.Application
-import com.vectis.myapp.di.appModule
-import org.koin.android.ext.koin.androidContext
-import org.koin.core.context.startKoin
-
-class MyAppApplication : Application() {
-    override fun onCreate() {
-        super.onCreate()
-        System.setProperty("uniffi.component.shared.libraryOverride", "shared")
-        startKoin {
-            androidContext(this@MyAppApplication)
-            modules(appModule)
-        }
-    }
-}
-```
+Follow `$TEMPLATE_DIR/Android/app/src/main/java/.../core/Core.kt` for the authoritative bridge. When Koin is warranted for multi-effect apps, bootstrap DI from `MainActivity` or a thin `Application` without UniFFI override properties — pins and DX still come from `$TEMPLATE_DIR`.
 
 ## Crash Recovery Handler
 
@@ -639,7 +604,7 @@ private const val CRASH_LOOP_WINDOW_MS = 10_000L
 class MyAppApplication : Application() {
     override fun onCreate() {
         super.onCreate()
-        System.setProperty("uniffi.component.shared.libraryOverride", "shared")
+        // No UniFFI library override — BoltFFI loads via CoreFfi from $TEMPLATE_DIR.
         installCrashRecoveryHandler()
     }
 
@@ -703,7 +668,7 @@ private const val CRASH_LOOP_WINDOW_MS = 10_000L
 class MyAppApplication : Application() {
     override fun onCreate() {
         super.onCreate()
-        System.setProperty("uniffi.component.shared.libraryOverride", "shared")
+        // No UniFFI library override — BoltFFI loads via CoreFfi from $TEMPLATE_DIR.
         installCrashRecoveryHandler()
         startKoin {
             androidContext(this@MyAppApplication)

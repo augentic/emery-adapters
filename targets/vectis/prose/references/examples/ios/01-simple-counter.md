@@ -1,6 +1,6 @@
 # Example: Simple Counter iOS Shell (Render Only)
 
-A minimal iOS shell for a Crux counter app with local state and no external side-effects. Demonstrates Core.swift, ContentView, screen views, project.yml, and Makefile.
+A minimal iOS shell for a Crux counter app with local state and no external side-effects. Demonstrates Core.swift, ContentView, and screen views. Makefile / `project.yml` authority is `$TEMPLATE_DIR` — not this example.
 
 This shell pairs with the core-writer example `01-simple-counter.md`. The shared crate defines:
 
@@ -36,119 +36,17 @@ examples/counter/
                 Theme.swift
 ```
 
-## `iOS/project.yml`
+## `iOS/Makefile` and `iOS/project.yml`
 
-```yaml
-name: Counter
-packages:
-  SharedTypes:
-    path: ./generated/SharedTypes
-  Shared:
-    path: ./generated/Shared
-  Inject:
-    url: https://github.com/krzysztofzablocki/Inject.git
-    from: "1.5.2"
-options:
-  bundleIdPrefix: com.vectis.counter
-  deploymentTarget:
-    iOS: "17.0"
-attributes:
-  BuildIndependentTargetsInParallel: true
-targets:
-  Counter:
-    type: application
-    platform: iOS
-    sources:
-      - Counter
-    dependencies:
-      - package: SharedTypes
-      - package: Shared
-      - package: Inject
-    info:
-      path: Counter/Info.plist
-      properties:
-        UILaunchScreen: {}
-        UISupportedInterfaceOrientations:
-          - UIInterfaceOrientationPortrait
-    settings:
-      base:
-        SWIFT_VERSION: "6.0"
-        SWIFT_STRICT_CONCURRENCY: complete
-        ENABLE_USER_SCRIPT_SANDBOXING: "NO"
-      configs:
-        Debug:
-          PRODUCT_BUNDLE_IDENTIFIER: com.vectis.counter.debug
-          OTHER_LDFLAGS: ["-w", "-Xlinker", "-interposable"]
-          EMIT_FRONTEND_COMMAND_LINES: "YES"
-        Release:
-          PRODUCT_BUNDLE_IDENTIFIER: com.vectis.counter
-          OTHER_LDFLAGS: ["-w"]
-```
-
-## `iOS/Makefile`
-
-Scaffold files (`Makefile`, `project.yml`, `iOS/.vectis/sim-build.sh`, `iOS/.vectis/sim-dev.sh`) are authoritative from the adapter's deterministic iOS scaffold render — do not hand-copy from this example. The blocks below match the embedded template for reference only; Swift sections demonstrate shell patterns.
-
-```makefile
-.PHONY: all build clean typegen package xcode sim-build sim-install sim-launch sim-run run sim-app-path
-
-SHARED_DIR := ../shared
-
-all: build
-
-build: typegen package xcode
-
-typegen:
-	@echo "Generating SharedTypes..."
-	@RUST_LOG=info cargo run --manifest-path $(SHARED_DIR)/Cargo.toml \
-		--bin codegen --features codegen,facet_typegen -- \
-		--language swift --output-dir generated
-
-package:
-	@echo "Building Shared Swift package..."
-	@cd $(SHARED_DIR) && \
-		cargo swift package --name Shared --platforms ios \
-			--lib-type static --features uniffi \
-			--xcframework-name sharedFFI && \
-		rm -rf ../iOS/generated/Shared && \
-		mkdir -p ../iOS/generated/Shared && \
-		cp -r Shared/* ../iOS/generated/Shared/ && \
-		rm -rf Shared
-
-xcode:
-	@echo "Generating Xcode project..."
-	@xcodegen
-
-sim-build:
-	@bash "$(dir $(lastword $(MAKEFILE_LIST)))/.vectis/sim-build.sh"
-
-sim-install:
-	@bash "$(dir $(lastword $(MAKEFILE_LIST)))/.vectis/sim-dev.sh" install
-
-sim-launch:
-	@bash "$(dir $(lastword $(MAKEFILE_LIST)))/.vectis/sim-dev.sh" launch
-
-sim-run:
-	@bash "$(dir $(lastword $(MAKEFILE_LIST)))/.vectis/sim-dev.sh" run
-
-run: sim-run
-
-sim-app-path:
-	@bash "$(dir $(lastword $(MAKEFILE_LIST)))/.vectis/sim-dev.sh" app-path
-
-clean:
-	@rm -rf generated/ DerivedData/ *.xcodeproj
-```
-
-`iOS/.vectis/sim-build.sh` holds the fixed `generic/platform=iOS Simulator` destination and writes build output to `iOS/DerivedData/`. `iOS/.vectis/sim-dev.sh` handles local install/launch via `simctl`. See the embedded templates under `core/templates/ios/.vectis/`.
+Do **not** hand-copy DX from this example. Materialize (or re-copy) `iOS/Makefile` and `iOS/project.yml` from `$TEMPLATE_DIR` with identity substitution. The live template owns BoltFFI pack (`boltffi pack apple`), `DESTINATION ?= generic/platform=iOS Simulator`, and the `./generated/Shared` package path. There are no `iOS/.vectis/sim-*.sh` scripts and no `cargo-swift` / `sharedFFI` recipes.
 
 ## Local run
 
 ```bash
-cd iOS && make build && make sim-run
+cd iOS && make build && make run-sim
 ```
 
-Built artifact: `iOS/DerivedData/Build/Products/Debug-iphonesimulator/Counter.app`. Override simulator with `SIM_UDID`, or `SIM_DEVICE` + `SIM_OS`.
+Built artifact: `iOS/DerivedData/Build/Products/Debug-iphonesimulator/Counter-iOS.app`. Override simulator with `SIMULATOR_UDID` or `iOS/.env.local`.
 
 ## `iOS/Counter/CounterApp.swift`
 
