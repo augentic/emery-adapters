@@ -18,10 +18,7 @@ fn write(path: &Path, content: &str) {
 fn project(root: &Path, platforms: &[&str]) {
     let platforms =
         platforms.iter().map(|platform| format!("  - {platform}")).collect::<Vec<_>>().join("\n");
-    write(
-        &root.join(".emery/project.yaml"),
-        &format!("name: test-app\nplatforms:\n{platforms}\n"),
-    );
+    write(&root.join(".emery/project.yaml"), &format!("name: test-app\nplatforms:\n{platforms}\n"));
 }
 
 fn finding_ids(value: &serde_json::Value) -> Vec<&str> {

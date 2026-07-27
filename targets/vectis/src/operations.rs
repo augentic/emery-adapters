@@ -468,8 +468,7 @@ fn render_infer_report(tree_root: &Path) -> String {
             composition,
             candidate_cache: Some(tree_root.join(".emery/.cache/component-candidates"))
                 .filter(|p| p.is_dir()),
-            parts: Some(tree_root.join(".emery/design-system/parts.yaml"))
-                .filter(|p| p.is_file()),
+            parts: Some(tree_root.join(".emery/design-system/parts.yaml")).filter(|p| p.is_file()),
             min_occurrences: infer::DEFAULT_MIN_OCCURRENCES,
         };
         match infer::run(&args) {
