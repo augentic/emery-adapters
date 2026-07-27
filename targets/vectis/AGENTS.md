@@ -10,7 +10,7 @@ Vectis is a Emery **target adapter**. Its `guidance`, `build`, and `merge` opera
 - `tokens.yaml` and `assets.yaml` are operator-curated build inputs; Vectis consumes them but never synthesises them.
 - `composition.yaml` is a target build output. Regenerate it from `spec.md` and `design.md`; do not treat it as a Emery synthesis artifact.
 - The `screenshots` source adapter owns image-to-layout Evidence. Vectis consumes spatial claims only after synthesis folds them into the canonical artifacts.
-- Scaffold templates, schemas, materializers, validators, and version pins are adapter tooling. Consumer build prompts must stop and report tooling drift rather than patch this repository in-band.
+- Schemas, materializers, validators, and the `scaffold::materialize` allowlist are adapter tooling. Structure and pins come from a local `$TEMPLATE_DIR` checkout (`../vectis-template` or `VECTIS_TEMPLATE_DIR`). Consumer build prompts must stop and report tooling drift rather than invent versions in-band.
 
 ## Layout
 
@@ -22,11 +22,10 @@ targets/vectis/
 │   └── rules/         # VECTIS-* engineering standards
 ├── src/               # wasm-free engines plus the wasm32 guest shim
 ├── tests/             # native integration tests
-├── templates/         # manifest-driven Crux and shell scaffolds
-├── schemas/           # composition, tokens, and assets JSON Schemas
-├── assets/            # binary/static scaffold inputs
-└── versions.toml      # Crux and host-toolchain pins
+└── schemas/           # composition, tokens, and assets JSON Schemas
 ```
+
+Greenfield trees materialize from a sibling [`vectis-template`](https://github.com/augentic/vectis-template) checkout (`$TEMPLATE_DIR`); see `src/scaffold/materialize.rs`.
 
 The component identity is the crate version plus the target world exported through WIT. Resolve-time facts come from the WIT metadata operation; there is no `adapter.yaml`.
 
@@ -43,15 +42,14 @@ The build order is:
 
 Keep writer and reviewer contracts in the phase prompts under [`prose/prompts/build/`](prose/prompts/build/). Put reusable Crux, SwiftUI, Compose, design-system, and review depth under [`prose/references/`](prose/references/). Engineering constraints that should produce stable review findings belong in [`prose/rules/`](prose/rules/) with `VECTIS-*` IDs.
 
-When changing platform support, preserve existing platforms and add only the selected platform's writer, validator, templates, and capability coverage. Token or asset changes must flow through both shell design-system integrations without substituting platform glyphs for declared vector or raster assets.
+When changing platform support, preserve existing platforms and add only the selected platform's writer, validator, and capability coverage. Token or asset changes must flow through both shell design-system integrations without substituting platform glyphs for declared vector or raster assets.
 
 ## Rust and template changes
 
 - Keep deterministic validation, materialization, inference, and scaffold behavior in wasm-free modules under `src/`.
 - Keep the wasm32-only `mod guest` in `src/lib.rs` limited to the single `adapter::target!(crate::Adapter)` invocation; boundary behavior belongs in the SDK's dispatch functions, operation behavior in the `adapter::Target` impl.
-- Update `templates/manifest.yaml` whenever adding or removing scaffold files; orphan or missing entries fail build-time generation.
-- Treat generated `src/scaffold/templates/registry.rs` as build output.
-- Keep `versions.toml`, templates, host verification, and troubleshooting guidance aligned when changing toolchain pins.
+- Greenfield allowlist / denylist / identity substitution live in `src/scaffold/materialize.rs` and are tested against a local `vectis-template` checkout — pins are never re-authored in this crate.
+- Fix pin or DX drift upstream in `vectis-template`, then re-materialize; do not reintroduce an adapter-side version registry.
 
 ## Tests and verification
 
@@ -68,7 +66,7 @@ For component-boundary changes, also run `cargo make wasm-run`. Live tests are r
 ## Troubleshooting signals
 
 - Incomplete core generation: verify requirements, scenarios, the full Crux `Model` / `Event` / `ViewModel` / `Effect` design, and declared capabilities.
-- iOS scaffold drift around UniFFI or cargo-swift: check the active version pins, `--xcframework-name sharedFFI`, and the explicit `make typegen`, `make package`, and `make xcode` gates.
+- iOS DX drift: re-copy from `$TEMPLATE_DIR` (`iOS/Makefile`, `iOS/project.yml`); regenerate the Xcode project via `make -C iOS generate-project` / `xcodegen`.
 - Android failures: check generated bindings, Java 21 configuration, native library override initialization, and installed Rust Android targets.
 - Test mismatch: check whether artifact requirements changed after generation before changing adapter behavior.
 

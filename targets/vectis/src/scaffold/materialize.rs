@@ -88,8 +88,7 @@ const SKIP_FILE_NAMES: &[&str] = &[".DS_Store", "local.properties", ".env.local"
 ///
 /// Only paths that exist under a current `vectis-template` checkout are
 /// refreshed by [`crate::sync`]; absent template counterparts are reported
-/// rather than invented. Embedded `.vectis/` scripts are not in the template
-/// today — Phase 4 redefines immutability against `BoltFFI` DX.
+/// rather than invented. Pattern-level pin/DX checks are Phase 4 work.
 pub const IOS_DX_RELATIVE_PATHS: &[&str] = &["iOS/Makefile", "iOS/project.yml"];
 
 /// DX paths agents must keep aligned with `$TEMPLATE_DIR` (Android).

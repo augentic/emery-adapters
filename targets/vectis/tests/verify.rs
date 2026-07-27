@@ -4,8 +4,6 @@
 use std::path::Path;
 
 use tempfile::tempdir;
-use vectis::android_scaffold::sync_android_scaffold_files;
-use vectis::ios_scaffold::sync_ios_scaffold_files;
 use vectis::verify::{VerifyMode, run, verify_exit_code};
 
 fn write(path: &Path, content: &str) {
@@ -46,22 +44,23 @@ fn fully_present_project(root: &Path) {
     project(root, &["core", "ios", "android"]);
     write(&root.join("shared/src/app.rs"), "pub struct App;");
     write(&root.join("iOS/TestApp/ContentView.swift"), "struct ContentView {}");
+    write(&root.join("iOS/Makefile"), "DESTINATION ?= generic/platform=iOS Simulator\n");
+    write(&root.join("iOS/project.yml"), "name: TestApp\n");
+    write(&root.join("Android/Makefile"), ".PHONY: build\n");
     write(&root.join("Android/settings.gradle.kts"), "rootProject.name = \"TestApp\"\n");
+    write(&root.join("Android/build.gradle.kts"), "// root\n");
     write(
         &root.join("Android/app/build.gradle.kts"),
         "android {\n    namespace = \"com.augentic.testapp\"\n}\n",
     );
     write(
+        &root.join("Android/shared/build.gradle.kts"),
+        "android {\n    ndkVersion = \"27.0.12077973\"\n}\n",
+    );
+    write(
         &root.join("Android/app/src/main/kotlin/com/augentic/testapp/MainActivity.kt"),
         "class MainActivity\n",
     );
-    sync_ios_scaffold_files(root).unwrap();
-    sync_android_scaffold_files(root).unwrap();
-    let shared_build = root.join("Android/shared/build.gradle.kts");
-    let configured = std::fs::read_to_string(&shared_build)
-        .unwrap()
-        .replace("__ANDROID_NDK_VERSION__", "27.0.12077973");
-    write(&shared_build, &configured);
 
     make_executable(&root.join("Android/gradlew"));
     write(&root.join("Android/gradle/wrapper/gradle-wrapper.jar"), "wrapper");

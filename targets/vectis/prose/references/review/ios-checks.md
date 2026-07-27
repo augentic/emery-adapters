@@ -252,16 +252,16 @@ When `composition.yaml` or `assets.yaml` is absent, skip this check — there is
 
 **Codex**: `rule_id: VECTIS-007`
 
-Per the iOS scaffold immutability contract ([`hard-rules-ios.md`](../hard-rules-ios.md), [`templates/ios/MANIFEST.md`](../../../templates/ios/MANIFEST.md)), `iOS/Makefile`, `iOS/project.yml`, `iOS/.vectis/sim-build.sh`, and `iOS/.vectis/sim-dev.sh` are adapter-owned. Agents must not edit them. The simulator destination for verify must be `generic/platform=iOS Simulator` in `sim-build.sh` only — never a named device (`name=iPhone …`) and never inlined in the Makefile.
+Per the iOS scaffold immutability contract ([`hard-rules-ios.md`](../hard-rules-ios.md)), `iOS/Makefile` and `iOS/project.yml` must stay aligned with `$TEMPLATE_DIR` (local `vectis-template` checkout). Agents must not invent DX or pin values. Prefer `generic/platform=iOS Simulator` — never a named device (`name=iPhone …`).
 
 **Detection**:
 
 1. Read `iOS/Makefile` and `iOS/project.yml` when the iOS shell is in scope.
-2. Flag any Makefile `sim-build` destination that names a simulator device instead of `generic/platform=iOS Simulator`.
-3. Flag evidence that Makefile or `project.yml` was hand-authored or patched during agent work (for example, content that matches a worked example but diverges from the embedded template, or operator reports of agent Makefile edits).
+2. Flag any Makefile destination that names a simulator device instead of `generic/platform=iOS Simulator`.
+3. Flag evidence that Makefile or `project.yml` was hand-authored or patched during agent work rather than re-copied from `$TEMPLATE_DIR`.
 4. When the in-guest shell-verify gate findings riding the report-leg prompt include `ios-scaffold-file-drift`, treat it as a confirmed defect and cite `rule_id: VECTIS-007`.
 
-**Fix**: Do not patch scaffold files by hand. The adapter restores `iOS/Makefile`, `iOS/project.yml`, `iOS/.vectis/sim-build.sh`, and `iOS/.vectis/sim-dev.sh` from the embedded template deterministically around each write leg. Limit verify-repair to Swift under `iOS/<APP_NAME>/`, plus `Theme/`, `Components/`, and `Resources/`.
+**Fix**: Do not patch DX files by hand. Re-copy from `$TEMPLATE_DIR` (`vectis::scaffold::materialize` / sync ios-scaffold) and regenerate the Xcode project (`make -C iOS generate-project` / `xcodegen`). Limit verify-repair to Swift under `iOS/<APP_NAME>/`, plus `Theme/`, `Components/`, and `Resources/`.
 
 ## IOS-022: No inline lint suppressions
 

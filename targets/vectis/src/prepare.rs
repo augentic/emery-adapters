@@ -10,12 +10,12 @@ pub use scope::{
 };
 use serde_json::{Value, json};
 
+use crate::VectisError;
 use crate::materialize::{
     AssetsArgs, MaterializeCommand, materialize_exit_code, run as run_materialize,
 };
 use crate::validate::engine::load_shell_platforms;
 use crate::verify::{VerifyMode, run as run_verify, verify_exit_code};
-use crate::{VectisError, android};
 
 /// Run the prepare materialize step for one slice build.
 ///
@@ -76,12 +76,8 @@ pub fn run_build(project_root: &Path, slice_dir: &Path) -> Result<Value, VectisE
 
     let bootstrap = run_verify(VerifyMode::BootstrapAppIcon, project_root)?;
 
-    let android_setup = (platforms.iter().any(|p| p == "android")
-        && project_root.join("Android").is_dir())
-    .then(|| android::run_for_shell_dir(&project_root.join("Android")));
-
-    // DX refresh is host/agent-owned from `$TEMPLATE_DIR` (see `crate::sync`);
-    // the guest does not re-render embedded scaffold files.
+    // Gradle wrapper lands via `scaffold::materialize` from `$TEMPLATE_DIR`.
+    // DX refresh is host/agent-owned (see `crate::sync`).
 
     Ok(json!({
         "command": "prepare build",
@@ -90,13 +86,11 @@ pub fn run_build(project_root: &Path, slice_dir: &Path) -> Result<Value, VectisE
         "platforms": platforms,
         "materialized": materialized,
         "bootstrap_app_icon": bootstrap,
-        "android_setup": android_setup,
     }))
 }
 
 /// Compute the exit code for a [`run_build`] payload: `1` when the
-/// materialize step, the bootstrap gate, or the Android setup surfaced
-/// errors, `0` otherwise.
+/// materialize step or the bootstrap gate surfaced errors, `0` otherwise.
 #[must_use]
 pub fn exit_code(value: &Value) -> u8 {
     if let Some(materialized) = value.get("materialized")
@@ -106,11 +100,6 @@ pub fn exit_code(value: &Value) -> u8 {
     }
     if let Some(bootstrap) = value.get("bootstrap_app_icon")
         && verify_exit_code(bootstrap) != 0
-    {
-        return 1;
-    }
-    if let Some(setup) = value.get("android_setup")
-        && android::setup_exit_code(setup) != 0
     {
         return 1;
     }

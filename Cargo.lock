@@ -4956,7 +4956,6 @@ dependencies = [
  "thiserror 2.0.19",
  "tiny-skia",
  "tokio",
- "toml",
  "usvg",
 ]
 

@@ -25,15 +25,10 @@ serde_json.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
 tiny-skia.workspace = true
-toml.workspace = true
 usvg.workspace = true
 
 [build-dependencies]
 emery-prose.workspace = true
-jsonschema.workspace = true
-serde.workspace = true
-serde-saphyr.workspace = true
-serde_json.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
