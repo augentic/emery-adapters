@@ -49,14 +49,14 @@ typescript = { path = "sources/typescript" }
 vectis = { path = "targets/vectis" }
 
 [patch.crates-io]
-emery-adapter = { path = "../emery/crates/adapter" }
-emery-probe = { path = "../emery/crates/probe" }
-emery-native = { path = "../emery/crates/native" }
-emery-prose = { path = "../emery/crates/prose" }
-# emery-adapter = { git = "https://github.com/augentic/emery.git" }
-# emery-probe = { git = "https://github.com/augentic/emery.git" }
-# emery-native = { git = "https://github.com/augentic/emery.git" }
-# emery-prose = { git = "https://github.com/augentic/emery.git" }
+emery-adapter = { git = "https://github.com/augentic/emery.git" }
+emery-probe = { git = "https://github.com/augentic/emery.git" }
+emery-native = { git = "https://github.com/augentic/emery.git" }
+emery-prose = { git = "https://github.com/augentic/emery.git" }
+# emery-adapter = { path = "../emery/crates/adapter" }
+# emery-probe = { path = "../emery/crates/probe" }
+# emery-native = { path = "../emery/crates/native" }
+# emery-prose = { path = "../emery/crates/prose" }
 
 omnia = { git = "https://github.com/augentic/omnia.git" }
 omnia-cursor = { git = "https://github.com/augentic/backends.git" }

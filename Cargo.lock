@@ -1084,6 +1084,7 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 [[package]]
 name = "emery-adapter"
 version = "0.29.0"
+source = "git+https://github.com/augentic/emery.git#10d237bbad85949d5dab2bfdc771f67ca56f3be4"
 dependencies = [
  "omnia-guest",
  "omnia-wasi-http",
@@ -1097,6 +1098,7 @@ dependencies = [
 [[package]]
 name = "emery-artifacts"
 version = "0.29.0"
+source = "git+https://github.com/augentic/emery.git#10d237bbad85949d5dab2bfdc771f67ca56f3be4"
 dependencies = [
  "emery-diagnostics",
  "emery-error",
@@ -1113,6 +1115,7 @@ dependencies = [
 [[package]]
 name = "emery-change"
 version = "0.29.0"
+source = "git+https://github.com/augentic/emery.git#10d237bbad85949d5dab2bfdc771f67ca56f3be4"
 dependencies = [
  "emery-artifacts",
  "emery-diagnostics",
@@ -1132,6 +1135,7 @@ dependencies = [
 [[package]]
 name = "emery-diagnostics"
 version = "0.29.0"
+source = "git+https://github.com/augentic/emery.git#10d237bbad85949d5dab2bfdc771f67ca56f3be4"
 dependencies = [
  "base16ct",
  "schemars",
@@ -1144,6 +1148,7 @@ dependencies = [
 [[package]]
 name = "emery-error"
 version = "0.29.0"
+source = "git+https://github.com/augentic/emery.git#10d237bbad85949d5dab2bfdc771f67ca56f3be4"
 dependencies = [
  "serde-saphyr",
  "thiserror 2.0.19",
@@ -1152,6 +1157,7 @@ dependencies = [
 [[package]]
 name = "emery-native"
 version = "0.29.0"
+source = "git+https://github.com/augentic/emery.git#10d237bbad85949d5dab2bfdc771f67ca56f3be4"
 dependencies = [
  "axum",
  "emery-adapter",
@@ -1169,6 +1175,7 @@ dependencies = [
 [[package]]
 name = "emery-probe"
 version = "0.29.0"
+source = "git+https://github.com/augentic/emery.git#10d237bbad85949d5dab2bfdc771f67ca56f3be4"
 dependencies = [
  "anyhow",
  "clap",
@@ -1190,6 +1197,7 @@ dependencies = [
 [[package]]
 name = "emery-project"
 version = "0.29.0"
+source = "git+https://github.com/augentic/emery.git#10d237bbad85949d5dab2bfdc771f67ca56f3be4"
 dependencies = [
  "emery-artifacts",
  "emery-diagnostics",
@@ -1211,10 +1219,12 @@ dependencies = [
 [[package]]
 name = "emery-prose"
 version = "0.29.0"
+source = "git+https://github.com/augentic/emery.git#10d237bbad85949d5dab2bfdc771f67ca56f3be4"
 
 [[package]]
 name = "emery-slice"
 version = "0.29.0"
+source = "git+https://github.com/augentic/emery.git#10d237bbad85949d5dab2bfdc771f67ca56f3be4"
 dependencies = [
  "emery-artifacts",
  "emery-diagnostics",
@@ -1235,6 +1245,7 @@ dependencies = [
 [[package]]
 name = "emery-transport"
 version = "0.29.0"
+source = "git+https://github.com/augentic/emery.git#10d237bbad85949d5dab2bfdc771f67ca56f3be4"
 dependencies = [
  "clap",
  "emery-artifacts",
