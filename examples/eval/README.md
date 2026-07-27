@@ -10,6 +10,8 @@ Live-model eval cases for first-party adapters, over real `specify` verbs and de
 | You care about one build's report + `expect` artifacts | You care about plan lifecycle and the merged baseline |
 
 
+
+
 ## Quick start
 
 Needs `[cursor-agent](https://cursor.com/docs/cli)` on `PATH` (`cursor-agent login` or `CURSOR_API_KEY` in a repo-root `.env`). Optional: `EVAL_MODEL=<model-id>`. Tracing: `RUST_LOG` (default via the make task) filters the console output, and `probe::client` mirrors it, ANSI-free, into `sandbox/logs/<case>/eval-<stamp>.log` (announced at startup; `EVAL_LOG` overrides the path). The lab exports no OTLP telemetry.
@@ -21,7 +23,9 @@ cargo make eval omnia-r9k --restart
 cargo make eval contracts-design --restart
 ```
 
-### Case sandbox
+
+
+### Eval sandbox
 
 Each case owns its own sandbox at `sandbox/<case>/` which allows for review and continued runs without having to re-run the entire workflow.
 
