@@ -242,7 +242,9 @@ workspace = true
 
 ## Config Templates
 
-Copy-paste templates for standard project configuration files. These files are identical across all WASM guest projects.
+Standard project configuration files, identical across all WASM guest projects. The adapter's deterministic scaffold prelude writes each of them from its embedded templates (`templates/core/` in the adapter crate) at the start of every build when the file is absent — existing files are never overwritten. The bodies below are reference copies of those templates: do not re-author these files; consult them to understand what is already on disk (or to repair the tree if the prelude itself reports a failure).
+
+The prelude also writes a `Makefile` shim (every target delegates to `cargo make`), `taplo.toml` (TOML formatting), and `.gitignore` alongside the files shown below.
 
 ### rustfmt.toml
 
@@ -373,75 +375,60 @@ skip_rust_env_info = true
 # CI Checks
 # -------------------------------------
 [tasks.check]
-dependencies = ["audit", "fmt", "lint", "outdated", "deps"]
+dependencies = ["fmt", "lint", "test", "test-docs", "doc"]
 
 [tasks.ci]
-dependencies = ["lint", "test", "test-doc", "vet", "outdated", "deny", "fmt"]
+dependencies = ["check", "vet", "deny"]
 
 # -------------------------------------
-# Individual Actions
+# Actions
 # -------------------------------------
 
-# Audit
-[tasks.audit]
-command = "cargo"
-args = ["audit"]
-
-# Clean
 [tasks.clean]
 command = "cargo"
 args = ["clean"]
 
-# Deny
+[tasks.audit]
+command = "cargo"
+args = ["audit"]
+
 [tasks.deny]
 command = "cargo"
-args = ["deny", "--workspace", "check"]
+args = ["deny", "check"]
 install_crate = "cargo-deny"
 
-# Deps
 [tasks.deps]
-script = '''
-cargo +nightly udeps --all-targets
-'''
+command = "rustup"
+args = ["run", "nightly", "cargo", "udeps", "--workspace", "--all-targets"]
 install_crate = "cargo-udeps"
 
-# Fmt
 [tasks.fmt]
 script = "cargo +nightly fmt --all"
 
-# Lint
 [tasks.lint]
 command = "cargo"
-args = ["clippy", "--all-features"]
+args = ["clippy", "--workspace", "--all-targets", "--all-features", "--", "-D", "warnings"]
 install_crate = { rustup_component_name = "clippy" }
 
-# Miri
-[tasks.miri]
-script = '''
-cargo +nightly miri setup
-cargo +nightly miri nextest run --no-tests=pass
-'''
-
-# Outdated
 [tasks.outdated]
-script = '''
-cargo outdated --workspace --exit-code 1 --depth 1
-'''
+command = "cargo"
+args = ["outdated", "--depth", "1"]
 install_crate = "cargo-outdated"
 
-# Test
 [tasks.test]
 command = "cargo"
-args = ["nextest", "run", "--all", "--all-features", "--no-tests=pass"]
-dependencies = ["clean"]
+args = ["nextest", "run", "--workspace", "--all-features", "--no-tests=pass"]
 env = { RUSTFLAGS = "-Dwarnings" }
 
-# Test Doc
-[tasks.test-doc]
+[tasks.test-docs]
 command = "cargo"
-args = ["test", "--doc", "--all-features", "--workspace"]
+args = ["test", "--doc", "--workspace", "--all-features"]
 
-# Vet
+[tasks.doc]
+command = "cargo"
+args = ["doc", "--no-deps", "--workspace", "--all-features", "--locked"]
+env = { RUSTDOCFLAGS = "-Dwarnings" }
+
 [tasks.vet]
 script = '''
 cargo vet regenerate imports
@@ -450,11 +437,9 @@ cargo vet regenerate unpublished
 cargo vet --locked
 '''
 install_crate = "cargo-vet"
-
-[tasks.publish]
-command = "cargo"
-args = ["publish", "--allow-dirty", "--dry-run"]
 ```
+
+`cargo make check` is the pre-commit subset; `cargo make ci` adds the supply-chain gates (`vet`, `deny`). Lint runs with `-D warnings` — the same posture CI enforces.
 
 ### deny.toml
 
@@ -525,7 +510,7 @@ unused = "warn"
 
 ### supply-chain/
 
-Directory for [`cargo-vet`](https://mozilla.github.io/cargo-vet/) supply-chain security files. The skill generates scaffold files with static content (imports, README), then `cargo vet` commands populate the workspace-specific data (exemptions, policies, audits, imports.lock).
+Directory for [`cargo-vet`](https://mozilla.github.io/cargo-vet/) supply-chain security files. The scaffold prelude writes the static scaffold files (README, imports-only config, empty audits ledger), then `cargo vet` commands populate the workspace-specific data (exemptions, policies, audits, imports.lock).
 
 #### supply-chain/README.md
 
@@ -625,24 +610,30 @@ These commands will:
 
 ### Config File Reference
 
-| File                        | Purpose                                | Template                       |
+Every file below except `supply-chain/imports.lock` is written by the scaffold prelude when absent.
+
+| File                        | Purpose                                | Written by                     |
 | --------------------------- | -------------------------------------- | ------------------------------ |
-| `rustfmt.toml`              | Nightly formatting config              | Standard (above)               |
-| `rust-toolchain.toml`       | Nightly channel + wasm32 target        | Standard (above)               |
-| `.vscode/settings.json`     | rust-analyzer wasm32 config            | Standard (above)               |
-| `clippy.toml`               | Lint exceptions                        | Customize per project          |
-| `Makefile.toml`             | CI/dev task runner                     | Standard (above)               |
-| `deny.toml`                 | Dependency license/advisory/ban checks | Standard (above)               |
-| `supply-chain/README.md`    | Cargo Vet update instructions          | Standard (above)               |
-| `supply-chain/config.toml`  | Cargo Vet imports + scaffold           | Standard (above) + `cargo vet` |
-| `supply-chain/audits.toml`  | Cargo Vet trusted publishers           | Scaffold (above) + `cargo vet` |
+| `Makefile`                  | Shim delegating to `cargo make`        | Prelude                        |
+| `Makefile.toml`             | CI/dev task runner                     | Prelude                        |
+| `deny.toml`                 | Dependency license/advisory/ban checks | Prelude                        |
+| `rust-toolchain.toml`       | Nightly channel + wasm32 target        | Prelude                        |
+| `rustfmt.toml`              | Nightly formatting config              | Prelude                        |
+| `clippy.toml`               | Lint exceptions                        | Prelude; customize per project |
+| `taplo.toml`                | TOML formatting                        | Prelude                        |
+| `.gitignore`                | Repo hygiene                           | Prelude                        |
+| `.cargo/config.toml`        | `git-fetch-with-cli`                   | Prelude                        |
+| `.vscode/settings.json`     | rust-analyzer wasm32 config            | Prelude                        |
+| `supply-chain/README.md`    | Cargo Vet update instructions          | Prelude                        |
+| `supply-chain/config.toml`  | Cargo Vet imports + scaffold           | Prelude + `cargo vet`          |
+| `supply-chain/audits.toml`  | Cargo Vet trusted publishers           | Prelude + `cargo vet`          |
 | `supply-chain/imports.lock` | Imported audit data                    | Auto-generated by `cargo vet`  |
 
 ---
 
 ## GitHub Workflows
 
-Standard GitHub Actions workflow files for WASM guest projects. All workflows delegate to reusable workflows in the `augentic/.github` repository.
+Standard GitHub Actions workflow files for WASM guest projects. All workflows delegate to reusable workflows in the `augentic/.github` repository. The scaffold prelude writes all five when absent; the guest writer's only follow-up is filling the placeholders in `publish.yaml`'s `with:` block.
 
 Every guest project includes 5 workflow files in `.github/workflows/`:
 

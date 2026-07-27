@@ -12,5 +12,6 @@ mod operations;
 mod registry {
     adapter::registry!();
 }
+pub mod scaffold;
 
 pub use operations::Adapter;
