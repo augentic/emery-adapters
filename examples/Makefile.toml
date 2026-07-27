@@ -7,15 +7,36 @@ EVAL_MODEL = "opus"
 EVAL_TIMEOUT_SECS = "1800"
 RUST_LOG = "info,opentelemetry_sdk=off,omnia_cursor=debug"
 
+# Resolve the workspace-sibling vectis-template to an absolute path.
+# From sandbox/<case>/ the default `../vectis-template` would otherwise
+# land on sandbox/vectis-template; export before the eval binary runs.
 [tasks.eval]
 env_files = [".env"]
-command = "cargo"
-args = ["run", "-p", "eval", "--", "eval", "${@}"]
+script_runner = "bash"
+script = '''
+set -euo pipefail
+if [ -z "${VECTIS_TEMPLATE_DIR:-}" ]; then
+  sibling="${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY:-.}/../vectis-template"
+  if [ -d "$sibling" ]; then
+    export VECTIS_TEMPLATE_DIR="$(cd "$sibling" && pwd)"
+  fi
+fi
+cargo run -p eval -- eval "$@"
+'''
 
 [tasks.lab]
 env_files = [".env"]
-command = "cargo"
-args = ["run", "-p", "eval", "--", "${@}"]
+script_runner = "bash"
+script = '''
+set -euo pipefail
+if [ -z "${VECTIS_TEMPLATE_DIR:-}" ]; then
+  sibling="${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY:-.}/../vectis-template"
+  if [ -d "$sibling" ]; then
+    export VECTIS_TEMPLATE_DIR="$(cd "$sibling" && pwd)"
+  fi
+fi
+cargo run -p eval -- "$@"
+'''
 
 # -------------------------------------
 # Wasm example

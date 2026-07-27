@@ -111,15 +111,15 @@ If the Rust core defines a `Route` enum, the Android shell should implement navi
 
 **Fix**: Add navigation elements for missing Route variants.
 
-## AND-011: Missing UniFFI Library Override
+## AND-011: BoltFFI Core Bridge Present
 
 **Severity**: critical
 
-An `Application` class is required in **all** Android shells -- not just those using Koin. Its `onCreate()` must set the JNA library override property BEFORE any UniFFI class is loaded. Without this, JNA tries to load `libuniffi_shared.so` but Cargo produces `libshared.so`, causing an `UnsatisfiedLinkError` crash on launch.
+Every Android shell must construct the BoltFFI-generated `CoreFfi` bridge (see `$TEMPLATE_DIR` `core/Core.kt`). There is **no** UniFFI library-override `Application` requirement — flag inventing `System.setProperty("uniffi.component.shared.libraryOverride", …)` as a defect (stale UniFFI DX).
 
-**Detection**: Verify that an Application class exists and that `AndroidManifest.xml` includes the `android:name` attribute pointing to it. Search the Application class for `System.setProperty("uniffi.component.shared.libraryOverride", "shared")`. Verify it appears before `startKoin` or any other code that triggers UniFFI class loading. If no Application class exists at all, flag it as critical.
+**Detection**: Verify `Core.kt` (or equivalent) constructs `CoreFfi` and that `Android/Makefile` retains `boltffi pack android`. Search for leftover UniFFI override properties and flag them. Do **not** require an `Application` class solely for FFI loading.
 
-**Fix**: Create an Application class with `System.setProperty("uniffi.component.shared.libraryOverride", "shared")` as the first statement after `super.onCreate()`, and add `android:name` to the manifest's `<application>` element.
+**Fix**: Align the bridge with `$TEMPLATE_DIR` BoltFFI layout; re-copy Makefile / Gradle DX from the template on drift. Remove any UniFFI library-override property.
 
 ## AND-012: Core Missing StateFlow / mutableStateOf
 
@@ -137,9 +137,9 @@ The `Core` class must expose the ViewModel via either `mutableStateOf` (simple p
 
 **Severity**: critical
 
-All hand-written `.kt` files that reference generated types (`Event`, `ViewModel`, `Effect`, `Request`, etc.) MUST have explicit imports from `com.example.app.*`. The generated types live in a different package than the hand-written code.
+All hand-written `.kt` files that reference generated types (`Event`, `ViewModel`, `Effect`, `Request`, `CoreFfi`, etc.) MUST have explicit imports from the package identity in `shared/boltffi.toml` after materialize substitution. The generated types live in a different package than the hand-written code.
 
-**Detection**: Search hand-written `.kt` files for references to generated types without corresponding `import com.example.app.` statements. Also check `Core.kt` for `import uniffi.shared.CoreFfi`.
+**Detection**: Search hand-written `.kt` files for references to generated types without corresponding imports. Prefer the import shape in `$TEMPLATE_DIR` `core/Core.kt` (`io.augentic.vectisapp.*` / `io.augentic.vectisapp.shared.CoreFfi` before identity substitution). Flag inventing retired `uniffi.*` / `com.example.app` paths.
 
 **Fix**: Add the missing import statements. Never assume generated types are in the same package as hand-written code.
 
@@ -232,7 +232,7 @@ The `app` module and `shared` module MUST have different `namespace` values in t
 
 **Detection**: Compare the `namespace` values in `app/build.gradle.kts` and `shared/build.gradle.kts`. Flag if they are identical.
 
-**Fix**: Use `com.vectis.{appname}` for `app` and `com.vectis.{appname}.shared` for `shared`.
+**Fix**: Use `ANDROID_PACKAGE` for `app` and `ANDROID_PACKAGE.shared` for `shared` (template default `io.augentic.vectisapp` / `io.augentic.vectisapp.shared`).
 
 ## AND-022: Time Effect Clear Handler Missing Job Cancellation
 
@@ -250,21 +250,21 @@ Also verify that `NotifyAfter` and `NotifyAt` coroutines clean up their map entr
 
 **Fix**: Add a `timerJobs` map to the `Core` class. In `NotifyAfter` and `NotifyAt`, launch a child coroutine via `scope.launch`, store the `Job` in the map, and remove the entry in a `finally`-equivalent path (after the delay completes or when cancelled). In `Clear`, call `timerJobs.remove(timeRequest.value)?.cancel()` before resolving. See `references/crux-android-shell-pattern.md` for the full implementation.
 
-## AND-023: CoreFFI Errors Not Surfaced
+## AND-023: CoreFfi Errors Not Surfaced
 
 **Severity**: critical
 
-`CoreFfi` methods (`view()`, `update()`, `resolve()`) return `Result<Vec<u8>, CoreError>` in Rust, which UniFFI maps to Kotlin functions that throw `CoreException`. The exception contains a meaningful `Bridge` error message from the Rust core (deserialization failure, invalid effect ID, etc.). Calling these without `try/catch` lets the exception propagate unhandled and crash the app. Using a generic catch that discards `e.message` loses the diagnostic information needed to debug type mismatches after core regeneration.
+`$TEMPLATE_DIR` `shared/src/ffi.rs` exports `CoreFfi` via BoltFFI. Bridge failures can still surface as runtime failures on the Kotlin side (deserialization mismatch, invalid effect id). Calling `view()` / `update()` / `resolve()` without `try/catch` lets those failures crash the app. Using a generic catch that discards `e.message` loses the diagnostic needed after core regeneration.
 
-Unlike bincode serialization (AND-014), CoreFFI calls throw structured errors with context from the Rust side. All CoreFFI calls must use `try/catch` with `Log.e(TAG, "context: ${e.message}", e)` so the underlying reason is visible in logcat during development.
+All `CoreFfi` calls must use `try/catch` with `Log.e(TAG, "context: ${e.message}", e)` so the underlying reason is visible in logcat during development. Prefer the error-handling shape in `$TEMPLATE_DIR` `core/Core.kt` over inventing UniFFI `CoreException` types.
 
-**Detection**: Search `Core.kt` for `coreFfi.view()`, `coreFfi.update(`, and `coreFfi.resolve(` calls. Verify each is wrapped in a `try/catch` block that logs `e.message`. Flag any CoreFFI calls that:
+**Detection**: Search `Core.kt` for `coreFfi.view()`, `coreFfi.update(`, and `coreFfi.resolve(` calls. Verify each is wrapped in a `try/catch` block that logs `e.message`. Flag any `CoreFfi` calls that:
 
 1. Have no `try/catch` at all (exception propagates to the caller)
 2. Use a catch block that discards the message (e.g., catches `Exception` but only logs a static string without `${e.message}`)
 3. Use a catch block that rethrows without logging (diagnostic is lost unless the caller also logs)
 
-**Fix**: Wrap each CoreFFI call in a `try/catch` block:
+**Fix**: Wrap each `CoreFfi` call in a `try/catch` block:
 
 ```kotlin
 val effects = try {
@@ -385,4 +385,4 @@ Per the Android write prompt repair discipline and hard-rules-android, agent-aut
 2. Skip `generated/` subtrees and CLI-owned Gradle files.
 3. When the in-guest shell-verify gate findings riding the report-leg prompt include `lint-suppression-forbidden`, treat it as a confirmed defect and cite `rule_id: VECTIS-009`.
 
-**Fix**: Remove the suppression and apply a structural fix (`_` prefixes, minimal handlers, narrow types) so Gradle `allWarningsAsErrors` passes without `@Suppress`.
+**Fix**: Remove the suppression and apply a structural fix (`_` prefixes, minimal handlers, narrow types) so the shell compiles cleanly under the template's Kotlin / Gradle warning policy without `@Suppress`. Do not invent `allWarningsAsErrors` if `$TEMPLATE_DIR` does not set it.

@@ -45,7 +45,7 @@ cargo make lab -- --project-dir sandbox/orders-contracts plan execute
 | `contracts-design`     | build    | Contracts from a design document                               |
 | `contracts-import`     | build    | Import vendored OpenAPI                                        |
 | `omnia-health`         | build    | Tiny create-mode crate (`GET /health`)                         |
-| `vectis-single-screen` | build    | Single-screen feature on `core + ios`                          |
+| `vectis-single-screen` | build    | Single-screen feature on `core + ios` (needs `$TEMPLATE_DIR`)  |
 | `orders-contracts`     | workflow | docs → contracts (`[examples/wasm/fixture](../wasm/fixture/)`) |
 | `omnia-r9k`            | workflow | `at_r9k_position_adapter` → omnia (cloned on first run)        |
 
@@ -117,6 +117,14 @@ the cached tree.
 - `workflow` — `target` + `change` + `intent` / `[sources]`: init, `plan author`, then (past `--until plan`) `plan approve` and the genuine drained `plan execute`; `--until finalize` adds `plan archive`. Gates: a non-empty pending plan at Gate 1, every entry `done` after execute, then provenance grading.
 
 Linked adapters need only the directory. A third-party adapter also needs a Cargo dep on `eval` and a catalog line in `[src/main.rs](src/main.rs)`.
+
+## Vectis greenfield prerequisite
+
+`vectis-single-screen` (and any live Vectis build that materializes shells) needs a local [`vectis-template`](https://github.com/augentic/vectis-template) checkout.
+
+`cargo make eval` / `cargo make lab` auto-set `VECTIS_TEMPLATE_DIR` to the absolute path of a workspace-sibling `../vectis-template` when the env var is unset. That matters because the eval sandbox is `sandbox/<case>/`: without the export, the build prelude's default `../vectis-template` would resolve to `sandbox/vectis-template`. For non-sibling layouts, export `VECTIS_TEMPLATE_DIR` yourself to an absolute path before invoking make.
+
+After materialize the agent strips `VECTIS-OPTIONAL` / `cap=demo` per `$TEMPLATE_DIR/AGENTS.md`, regenerates the iOS Xcode project (`make -C iOS generate-project`), runs `make build`, and stamps `iOS/.vectis/verify.ok` / `Android/.vectis/verify.ok` (adapter-owned; not in the template).
 
 ## Omnia legacy migration (r9k)
 

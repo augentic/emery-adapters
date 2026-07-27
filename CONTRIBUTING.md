@@ -5,8 +5,9 @@ Human-facing contributor guide (toolchain, layout, prompts, pin, publishing). Cr
 ## Getting started
 
 1. Clone this repository. The engine crates (`emery-adapter`, `emery-native`, `emery-probe`, `emery-prose`) resolve as git dependencies on [`augentic/emery`](https://github.com/augentic/emery), pinned by release tag (`tag = "vX.Y.Z"`) and the committed `Cargo.lock` — no sibling checkout is needed to build or test. A sibling checkout at `../emery` is required only for [co-development against uncommitted engine changes](#engine-pin-and-sibling-co-development) and for `cargo make wasm-run`.
-2. `rustup` picks up the pinned **stable** toolchain from `rust-toolchain.toml` (including the `wasm32-wasip2` target); a nightly toolchain is additionally needed for the `fmt` arm (`cargo +nightly fmt`). Install `cargo-make`, `cargo-nextest`, `cargo-deny`, and `cargo-vet`. Publishing also uses `wkg`.
-3. Run `cargo make check` from the repo root. Before opening a PR, run `cargo make ci`.
+2. Optional for Vectis materialize FS tests: clone [`augentic/vectis-template`](https://github.com/augentic/vectis-template) at `../vectis-template` (or set `VECTIS_TEMPLATE_DIR`). CI does **not** network-clone it; without the checkout those tests skip clearly. Live Vectis eval builds need the same prerequisite relative to the eval sandbox (see [`examples/eval/README.md`](examples/eval/README.md)).
+3. `rustup` picks up the pinned **stable** toolchain from `rust-toolchain.toml` (including the `wasm32-wasip2` target); a nightly toolchain is additionally needed for the `fmt` arm (`cargo +nightly fmt`). Install `cargo-make`, `cargo-nextest`, `cargo-deny`, and `cargo-vet`. Publishing also uses `wkg`.
+4. Run `cargo make check` from the repo root. Before opening a PR, run `cargo make ci`.
 
 For the adapter SDK's type-level contract (the `Source` / `Target` traits, seam DTOs, answer schemas), generate the docs locally: `cargo doc -p emery-adapter --open`.
 
@@ -50,7 +51,7 @@ Adapter prompts are markdown documents compiled into the guest and driven by the
 
 - **Parent prompts** (`prose/prompts/{guidance,build,merge}.md` for targets, `prose/prompts/{survey,extract}.md` for sources) orchestrate — bindings, mode dispatch, phase order, the stop-hint contract — and load phase sub-prompts by relative-link instruction. Cap ~150 non-blank lines; orchestration that needs more means a sub-prompt is missing.
 - **Phase sub-prompts** (`prose/prompts/build/<phase>.md`, or `build/<platform>/<phase>.md` for per-platform targets) carry one phase's operational body. Soft cap ~500 non-blank lines, hard cap 800 — above that, split into sub-phase prompts or move material to `prose/references/`.
-- **References are cited via relative markdown links, never inlined** — the `prose` crate's build-time embed includes Markdown documents and follows symlinks, so keep every relative reference resolvable. Worked examples live under `prose/references/examples/<flavour>/` (exempt from prompt caps).
+- **References are cited via relative markdown links, never inlined** — the `prose` crate's build-time embed includes Markdown documents and follows symlinks, so keep every relative reference resolvable. Vectis keeps sample Emery artifacts (`tokens.yaml`, `assets.yaml`) under `targets/vectis/prose/references/examples/`; the live `$TEMPLATE_DIR` ([`vectis-template`](https://github.com/augentic/vectis-template)) checkout is the worked example for core + shells + DX (see that folder's README). Other adapters may still ship markdown walkthroughs under `prose/references/examples/<flavour>/` (exempt from prompt caps).
 
 ## Engine pin and sibling co-development
 

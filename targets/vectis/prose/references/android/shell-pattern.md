@@ -2,6 +2,8 @@
 
 The Android shell is a thin Kotlin/Jetpack Compose layer that renders the `ViewModel` from the Crux core and sends user-initiated `Event` values back. All business logic lives in the shared Rust crate; the shell only handles platform I/O (HTTP, KV, SSE, Time, Platform) and UI rendering.
 
+**FFI / pin authority:** use BoltFFI via `$TEMPLATE_DIR` (`CoreFfi` package from `shared/boltffi.toml` after materialize). Snippets use the template default `io.augentic.vectisapp` / `io.augentic.vectisapp.shared`; after materialize those become `ANDROID_PACKAGE` / `ANDROID_PACKAGE.shared`. Do not invent UniFFI library overrides or retired `uniffi.*` / `com.example.app` paths.
+
 ## Architecture
 
 ```
@@ -25,7 +27,7 @@ The Android shell is a thin Kotlin/Jetpack Compose layer that renders the `ViewM
 │          └──────────────┬─────────────────────┘  │
 │                         │                        │
 │                         ▼                        │
-│               CoreFfi (UniFFI bridge)            │
+│               CoreFfi (BoltFFI bridge)           │
 │               .update(data) → effects            │
 │               .resolve(id, data) → effects       │
 │               .view() → viewModel                │
@@ -47,17 +49,17 @@ The `Core` class is the bridge between Compose and the Rust core. Two patterns a
 For apps with only the `Render` effect. `Core` extends `androidx.lifecycle.ViewModel` and uses Compose `mutableStateOf`.
 
 ```kotlin
-package com.vectis.counter.core
+package io.augentic.vectisapp.core
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.example.app.Effect
-import com.example.app.Event
-import com.example.app.Request
-import com.example.app.Requests
-import com.example.app.ViewModel
-import uniffi.shared.CoreFfi
+import io.augentic.vectisapp.Effect
+import io.augentic.vectisapp.Event
+import io.augentic.vectisapp.Request
+import io.augentic.vectisapp.Requests
+import io.augentic.vectisapp.ViewModel
+import io.augentic.vectisapp.shared.CoreFfi
 
 open class Core : androidx.lifecycle.ViewModel() {
     private var coreFfi: CoreFfi = CoreFfi()
@@ -92,11 +94,11 @@ For apps with HTTP, SSE, KV, Time, or Platform effects. Uses coroutines and `Sta
 **CRITICAL**: All `scope.launch` blocks for async effects (SSE, Time) MUST wrap their body in `try/catch` to prevent unhandled exceptions from crashing the app. Always rethrow `CancellationException`. Catch blocks MUST call `resolveAndHandleEffects` with a fallback response (e.g., `SseResponse.Done` for SSE, `TimeResponse.DurationElapsed` / `TimeResponse.InstantArrived` for timers) so the core request ID is never left unresolved.
 
 ```kotlin
-package com.vectis.myapp.core
+package io.augentic.vectisapp.core
 
 import android.util.Log
-import com.example.app.*
-import uniffi.shared.CoreFfi
+import io.augentic.vectisapp.*
+import io.augentic.vectisapp.shared.CoreFfi
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -205,10 +207,10 @@ The Time capability has multiple request types. Handle each variant:
 **CRITICAL**: `NotifyAfter` and `NotifyAt` must store their coroutine `Job` in `timerJobs` keyed by `TimerId`. `Clear` must cancel and remove the stored job before responding. Without this, cleared timers continue to fire and deliver stale `DurationElapsed` or `InstantArrived` events to the core. The map is safe to access without synchronization because all coroutines run on `Dispatchers.Main.immediate`.
 
 ```kotlin
-import com.example.app.Instant
-import com.example.app.TimerId
-import com.example.app.TimeRequest
-import com.example.app.TimeResponse
+import io.augentic.vectisapp.Instant
+import io.augentic.vectisapp.TimerId
+import io.augentic.vectisapp.TimeRequest
+import io.augentic.vectisapp.TimeResponse
 import java.time.ZoneOffset
 import java.time.ZonedDateTime
 
@@ -322,13 +324,13 @@ is Effect.KeyValue -> {
 Full HTTP client implementation using Ktor + OkHttp:
 
 ```kotlin
-package com.vectis.myapp.core
+package io.augentic.vectisapp.core
 
-import com.example.app.HttpError
-import com.example.app.HttpHeader
-import com.example.app.HttpRequest
-import com.example.app.HttpResponse
-import com.example.app.HttpResult
+import io.augentic.vectisapp.HttpError
+import io.augentic.vectisapp.HttpHeader
+import io.augentic.vectisapp.HttpRequest
+import io.augentic.vectisapp.HttpResponse
+import io.augentic.vectisapp.HttpResult
 import com.novi.serde.Bytes
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
@@ -407,10 +409,10 @@ class HttpClient {
 SSE streaming client using Ktor. Note the `@OptIn(ExperimentalUnsignedTypes::class)` annotation -- required because `toUByteArray()` is experimental.
 
 ```kotlin
-package com.vectis.myapp.core
+package io.augentic.vectisapp.core
 
-import com.example.app.SseRequest
-import com.example.app.SseResponse
+import io.augentic.vectisapp.SseRequest
+import io.augentic.vectisapp.SseResponse
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.prepareGet
@@ -459,15 +461,15 @@ Key-Value storage using SharedPreferences.
 - `KeyValueError` is a sealed interface -- use `KeyValueError.Other(msg)`, NOT `KeyValueError(msg)`
 
 ```kotlin
-package com.vectis.myapp.core
+package io.augentic.vectisapp.core
 
 import android.content.Context
 import android.content.SharedPreferences
-import com.example.app.KeyValueError
-import com.example.app.KeyValueOperation
-import com.example.app.KeyValueResponse
-import com.example.app.KeyValueResult
-import com.example.app.Value
+import io.augentic.vectisapp.KeyValueError
+import io.augentic.vectisapp.KeyValueOperation
+import io.augentic.vectisapp.KeyValueResponse
+import io.augentic.vectisapp.KeyValueResult
+import io.augentic.vectisapp.Value
 
 @OptIn(ExperimentalUnsignedTypes::class)
 class KeyValueClient(context: Context) {
@@ -574,48 +576,11 @@ Note: `Event` is typically a sealed interface (mixed enum) so unit variants use 
 - `CoreFfi` is thread-safe internally (Rust `Bridge` uses interior mutability).
 - Async effect handlers run in coroutines scoped to `SupervisorJob`, so one failure doesn't cancel other in-flight effects.
 
-## Application Class (Required)
+## BoltFFI bridge (no UniFFI Application override)
 
-Every Android shell MUST have an Application class that sets the UniFFI library override in `onCreate()`, BEFORE any UniFFI class is loaded. Without it, JNA tries to load `libuniffi_shared.so` which doesn't exist -- Cargo produces `libshared.so` -- causing an `UnsatisfiedLinkError` crash on launch.
+The live `$TEMPLATE_DIR` Android shell packs native code with `boltffi pack android` and constructs `CoreFfi` from the BoltFFI-generated package. There is **no** UniFFI library-override `Application` class and agents must not invent `System.setProperty("uniffi.component.shared.libraryOverride", …)`.
 
-### Minimal Application class (no Koin)
-
-```kotlin
-package com.vectis.myapp
-
-import android.app.Application
-
-class MyAppApplication : Application() {
-    override fun onCreate() {
-        super.onCreate()
-        System.setProperty("uniffi.component.shared.libraryOverride", "shared")
-    }
-}
-```
-
-### Application class with Koin
-
-When using the full Core pattern with DI, add `startKoin` after the library override:
-
-```kotlin
-package com.vectis.myapp
-
-import android.app.Application
-import com.vectis.myapp.di.appModule
-import org.koin.android.ext.koin.androidContext
-import org.koin.core.context.startKoin
-
-class MyAppApplication : Application() {
-    override fun onCreate() {
-        super.onCreate()
-        System.setProperty("uniffi.component.shared.libraryOverride", "shared")
-        startKoin {
-            androidContext(this@MyAppApplication)
-            modules(appModule)
-        }
-    }
-}
-```
+Follow `$TEMPLATE_DIR/Android/app/src/main/java/.../core/Core.kt` for the authoritative bridge. When Koin is warranted for multi-effect apps, bootstrap DI from `MainActivity` or a thin `Application` without UniFFI override properties — pins and DX still come from `$TEMPLATE_DIR`.
 
 ## Crash Recovery Handler
 
@@ -626,7 +591,7 @@ This is a last-resort safety net, not a substitute for fixing the underlying bug
 ### Application Class with Crash Recovery (minimal)
 
 ```kotlin
-package com.vectis.myapp
+package io.augentic.vectisapp
 
 import android.app.AlarmManager
 import android.app.Application
@@ -639,7 +604,7 @@ private const val CRASH_LOOP_WINDOW_MS = 10_000L
 class MyAppApplication : Application() {
     override fun onCreate() {
         super.onCreate()
-        System.setProperty("uniffi.component.shared.libraryOverride", "shared")
+        // No UniFFI library override — BoltFFI loads via CoreFfi from $TEMPLATE_DIR.
         installCrashRecoveryHandler()
     }
 
@@ -687,14 +652,14 @@ class MyAppApplication : Application() {
 ### Application Class with Crash Recovery (Koin)
 
 ```kotlin
-package com.vectis.myapp
+package io.augentic.vectisapp
 
 import android.app.AlarmManager
 import android.app.Application
 import android.app.PendingIntent
 import android.content.Intent
 import android.util.Log
-import com.vectis.myapp.di.appModule
+import io.augentic.vectisapp.di.appModule
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 
@@ -703,7 +668,7 @@ private const val CRASH_LOOP_WINDOW_MS = 10_000L
 class MyAppApplication : Application() {
     override fun onCreate() {
         super.onCreate()
-        System.setProperty("uniffi.component.shared.libraryOverride", "shared")
+        // No UniFFI library override — BoltFFI loads via CoreFfi from $TEMPLATE_DIR.
         installCrashRecoveryHandler()
         startKoin {
             androidContext(this@MyAppApplication)
@@ -799,11 +764,11 @@ When using the full Core pattern, set up Koin for DI:
 ### AppModule.kt
 
 ```kotlin
-package com.vectis.myapp.di
+package io.augentic.vectisapp.di
 
-import com.vectis.myapp.core.Core
-import com.vectis.myapp.core.HttpClient
-import com.vectis.myapp.core.SseClient
+import io.augentic.vectisapp.core.Core
+import io.augentic.vectisapp.core.HttpClient
+import io.augentic.vectisapp.core.SseClient
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.module
 
@@ -879,10 +844,10 @@ when (event) {
 
 ### Generated type packages
 
-All generated types live in `com.example.app.*`, NOT in the app's package. All hand-written Kotlin files MUST import them explicitly:
+Bincode types live in `ANDROID_PACKAGE` (template default `io.augentic.vectisapp`); `CoreFfi` lives in `ANDROID_PACKAGE.shared`. Neither is the hand-written shell package (e.g. `{ANDROID_PACKAGE}.core`). Import them explicitly:
 
 ```kotlin
-import com.example.app.Event
-import com.example.app.ViewModel
-import uniffi.shared.CoreFfi
+import io.augentic.vectisapp.Event
+import io.augentic.vectisapp.ViewModel
+import io.augentic.vectisapp.shared.CoreFfi
 ```

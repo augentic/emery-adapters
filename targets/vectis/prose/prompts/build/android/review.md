@@ -8,14 +8,14 @@ The Android-specific team-spawn protocol lives in [`review/team-protocol-android
 
 1. **Verify prerequisites** — Android verify succeeded; ktlint / detekt are available.
 2. **Spawn specialists concurrently** with the verbatim prompts in [`review/team-protocol-android.md`](../../../references/review/team-protocol-android.md):
-   - **Structural** — AND-001..027: screen / ViewModel correspondence, effect handlers, token usage, UniFFI library override, generated-type imports, coroutine safety, recurring-group component candidates. Full library: [`review/android-checks.md`](../../../references/review/android-checks.md).
+   - **Structural** — AND-001..027: screen / ViewModel correspondence, effect handlers, token usage, BoltFFI `CoreFfi` bridge, generated-type imports, coroutine safety, recurring-group component candidates. Full library: [`review/android-checks.md`](../../../references/review/android-checks.md).
    - **Quality** — KTL-001..010: force-unwraps, debug output, coroutine cancellation, Compose state, previews, a11y `contentDescription`, no inline lint suppressions (**AND-029**, codex `VECTIS-009`). Full library: [`review/kotlin-quality-checks.md`](../../../references/review/kotlin-quality-checks.md).
    - **Integration** — only on the first full-scope iteration. Token / asset / composition cross-artifact checks per [`review/team-protocol-android.md`](../../../references/review/team-protocol-android.md) § Integration, including **AND-028** (render-by-`kind`, codex `VECTIS-006`) in [`review/android-checks.md`](../../../references/review/android-checks.md).
 3. **Universal checks (lead).** Apply every `UNI-*` rule from the shared universal codex pack ([`../../../rules/universal/`](../../../rules/universal/), embedded in this adapter) with Kotlin / Android heuristics. Full library: [`review/universal-checks.md`](../../../references/review/universal-checks.md).
 4. **Adversarial challenge.** Forward all findings to the antagonist per [`agent-teams.md`](../../../references/agent-teams.md).
 5. **Synthesis.** Lead authors the iteration report per [`review/iteration-report.md`](../../../references/review/iteration-report.md).
    - Return classified `design_findings` per [../../build.md](../../build.md) § Consolidate review findings.
-6. **Mechanical auto-fixes (when safe).** `contentDescription`, design-token swaps, missing `@Preview`, generated-FFI-type imports (`import com.vectis.<app>.*`), `CancellationException` rethrow, replacing stale `import com.vectis.design.*` with `import com.vectis.<app>.ui.theme.*`. Revert the batch if the Gradle build regresses.
+6. **Mechanical auto-fixes (when safe).** `contentDescription`, design-token swaps, missing `@Preview`, generated-FFI-type imports (`import <ANDROID_PACKAGE>.*` / `import <ANDROID_PACKAGE>.shared.CoreFfi`), `CancellationException` rethrow, replacing stale `import com.vectis.design.*` with `import <ANDROID_PACKAGE>.ui.theme.*`. Never rewrite imports or paths to a hardcoded `com.vectis.*` fallback when `ANDROID_PACKAGE` differs. Revert the batch if the Gradle build regresses.
 
 ## Finding-ID conventions
 

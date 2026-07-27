@@ -13,7 +13,6 @@ mod registry {
     adapter::registry!();
 }
 
-pub mod android;
 pub mod android_scaffold;
 mod error;
 pub mod infer;

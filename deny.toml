@@ -53,3 +53,11 @@ wildcards = "allow"
 duplicates = "deny"
 include-path-dependencies = true
 unused = "warn"
+
+[sources]
+allow-git = [
+  "https://github.com/augentic/backends.git",
+  "https://github.com/augentic/emery.git",
+  "https://github.com/augentic/omnia.git",
+  "https://github.com/bytecodealliance/wrpc"
+]

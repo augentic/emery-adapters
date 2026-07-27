@@ -1,4 +1,9 @@
 //! Compile-completion stamp probes for shell verify.
+//!
+//! Stamps are adapter-owned proof that the host verify loop ran successfully.
+//! They are not part of `vectis-template` DX. Agents write them after a clean
+//! `make build` (template target names — there is no `sim-build` / `verify`
+//! alias in the live template).
 
 use std::path::Path;
 
@@ -21,7 +26,9 @@ pub fn compile_stamp_findings(
         findings.push(error_finding(
             "ios-verify-stamp-missing",
             format!(
-                "`{IOS_VERIFY_STAMP}` not found; run `make build` and `make sim-build` in the iOS shell"
+                "`{IOS_VERIFY_STAMP}` not found; run `make build` in the iOS shell \
+                 (typegen + `boltffi pack apple` + xcodegen + simulator build), \
+                 then write this stamp"
             ),
         ));
     }
@@ -32,7 +39,10 @@ pub fn compile_stamp_findings(
     {
         findings.push(error_finding(
             "android-verify-stamp-missing",
-            format!("`{ANDROID_VERIFY_STAMP}` not found; run `make verify` in the Android shell"),
+            format!(
+                "`{ANDROID_VERIFY_STAMP}` not found; run `make build` in the Android shell \
+                 (typegen + `boltffi pack android` + `:app:assembleDebug`), then write this stamp"
+            ),
         ));
     }
 

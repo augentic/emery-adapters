@@ -11,7 +11,7 @@ No `!!` non-null assertions outside of test files and preview composables. A `!!
 `Core.kt` has two categories of throwing calls, each with a different error-handling pattern:
 
 - **Bincode calls** (`bincodeSerialize()`, `bincodeDeserialize()`) use `try/catch` with `Log.w(TAG, "context", e)` and a safe fallback. These throw generic errors without structured messages.
-- **CoreFFI calls** (`coreFfi.update()`, `coreFfi.view()`, `coreFfi.resolve()`) use `try/catch` with `Log.e(TAG, "context: ${e.message}", e)`. These throw `CoreException` containing a meaningful `Bridge` message from the Rust core -- using a generic catch without `e.message` would discard this diagnostic information.
+- **CoreFfi calls** (`coreFfi.update()`, `coreFfi.view()`, `coreFfi.resolve()`) use `try/catch` with `Log.e(TAG, "context: ${e.message}", e)`. Bridge failures must keep `e.message` visible in logcat — do not invent UniFFI `CoreException` types; follow `$TEMPLATE_DIR` `core/Core.kt`.
 
 In `initialView()`, view deserialization falls back to `ViewModel.Loading` (no prior state exists). In the `Effect.Render` handler, the existing view must be preserved by returning without assignment -- never fall back to `ViewModel.Loading`, which would overwrite the user's current screen. Event serialization failures use a no-op return (event is dropped). This ensures Debug builds surface type mismatches via logcat while Release builds degrade gracefully.
 

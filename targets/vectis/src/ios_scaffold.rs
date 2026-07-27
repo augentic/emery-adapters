@@ -1,99 +1,35 @@
-//! iOS agent-immutable scaffold file sync and drift detection.
+//! iOS DX path presence and `BoltFFI` pattern drift detection.
 //!
-//! The [`IMMUTABLE_RELATIVE_PATHS`] files are rendered exclusively from
-//! the embedded scaffold templates. Prepare overwrites drift before
-//! agent work; verify emits blocking findings when on-disk bytes
-//! diverge.
+//! Immutable DX paths match [`crate::scaffold::materialize::IOS_DX_RELATIVE_PATHS`].
+//! Required substrings are derived from the live `vectis-template` iOS Makefile /
+//! `project.yml` (`BoltFFI` pack + generic simulator destination). Byte-compare
+//! against an embedded template is retired — refresh is host/agent-owned via
+//! [`crate::sync`] from `$TEMPLATE_DIR`. Pin faithfulness for workspace
+//! `Cargo.toml` / `shared/boltffi.toml` is prompt-mandated against `$TEMPLATE_DIR`
+//! (the guest cannot see a sibling checkout).
 
-use std::fmt::Write;
 use std::fs;
 use std::path::Path;
 
 use serde_json::{Value, json};
 
 use crate::VectisError;
-use crate::scaffold::{Versions, default_android_package, plan_ios, validate_app_name};
+use crate::scaffold::validate_app_name;
 
-/// Relative paths under the project root that agents must never edit.
-pub const IMMUTABLE_RELATIVE_PATHS: [&str; 5] = [
-    "iOS/Makefile",
-    "iOS/project.yml",
-    "iOS/.vectis/sim-build.sh",
-    "iOS/.vectis/sim-dev.sh",
-    "iOS/.vectis/relax-generated-spm-packages.sh",
-];
+/// Relative paths under the project root that agents must keep aligned with `$TEMPLATE_DIR`.
+pub const IMMUTABLE_RELATIVE_PATHS: [&str; 2] = ["iOS/Makefile", "iOS/project.yml"];
 
 /// Diagnostic id for scaffold drift findings.
 pub const DRIFT_FINDING_ID: &str = "ios-scaffold-file-drift";
 
-/// Required `sim-build` destination literal in the CLI-owned sim-build script.
-pub const REQUIRED_SIM_DESTINATION: &str = "generic/platform=iOS Simulator";
+/// Required iOS Makefile substrings from live `vectis-template` `BoltFFI` DX.
+pub const REQUIRED_MAKEFILE_PATTERNS: [&str; 2] =
+    ["DESTINATION ?= generic/platform=iOS Simulator", "boltffi pack apple"];
 
-/// Required Xcode build setting in CLI-owned `project.yml` (`settings.base`).
-pub const REQUIRED_SWIFT_TREAT_WARNINGS_AS_ERRORS: &str = "SWIFT_TREAT_WARNINGS_AS_ERRORS: YES";
+/// Required `project.yml` substring from live `vectis-template` (`BoltFFI` SPM layout).
+pub const REQUIRED_PROJECT_YML_PATTERNS: [&str; 1] = ["path: ./generated/Shared"];
 
-/// Required `cargo swift package` flag in CLI-owned `iOS/Makefile` (`package` target).
-pub const REQUIRED_CARGO_SWIFT_XCFRAMEWORK_NAME: &str = "--xcframework-name sharedFFI";
-
-/// JSON fragment for `scaffold_sync.ios` in prepare and sync command output.
-#[must_use]
-pub fn scaffold_sync_ios_json(report: &IosScaffoldSyncReport) -> Value {
-    json!({
-        "ios": {
-            "synced": &report.synced,
-            "unchanged": &report.unchanged,
-        }
-    })
-}
-
-/// Outcome of a prepare-time scaffold sync pass.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IosScaffoldSyncReport {
-    /// Paths rewritten because on-disk content differed from the template.
-    pub synced: Vec<String>,
-    /// Paths already matching the template (no write performed).
-    pub unchanged: Vec<String>,
-}
-
-/// Re-render and overwrite agent-immutable iOS scaffold files when `iOS/` exists.
-///
-/// # Errors
-///
-/// Returns [`VectisError::InvalidProject`] when the app name cannot be
-/// resolved or a file write fails.
-pub fn sync_ios_scaffold_files(project_root: &Path) -> Result<IosScaffoldSyncReport, VectisError> {
-    let ios_root = project_root.join("iOS");
-    if !ios_root.is_dir() {
-        return Ok(IosScaffoldSyncReport {
-            synced: Vec::new(),
-            unchanged: Vec::new(),
-        });
-    }
-
-    let app_name = resolve_ios_app_name(project_root)?;
-    let expected = expected_immutable_files(&app_name)?;
-    let mut synced = Vec::new();
-    let mut unchanged = Vec::new();
-
-    for file in expected {
-        let target = project_root.join(&file.relative_path);
-        let matches_template = target.is_file()
-            && on_disk_bytes(&target).is_ok_and(|on_disk| on_disk == file.contents.as_bytes());
-        if matches_template {
-            unchanged.push(file.relative_path);
-            continue;
-        }
-        if let Some(parent) = target.parent() {
-            fs::create_dir_all(parent).map_err(|err| map_io(&err))?;
-        }
-        fs::write(&target, &file.contents).map_err(|err| map_io(&err))?;
-        synced.push(file.relative_path);
-    }
-
-    Ok(IosScaffoldSyncReport { synced, unchanged })
-}
-
-/// Compare agent-immutable iOS scaffold files against the embedded templates.
+/// Compare agent-immutable iOS DX files for presence and `BoltFFI` patterns.
 #[must_use]
 pub fn ios_scaffold_drift_findings(project_root: &Path) -> Vec<Value> {
     let ios_root = project_root.join("iOS");
@@ -101,40 +37,31 @@ pub fn ios_scaffold_drift_findings(project_root: &Path) -> Vec<Value> {
         return Vec::new();
     }
 
-    let Ok(app_name) = resolve_ios_app_name(project_root) else {
+    if resolve_ios_app_name(project_root).is_err() {
         return vec![drift_finding(
             "iOS",
             "cannot resolve iOS app name from project.yml or Swift source layout",
         )];
-    };
+    }
 
-    let Ok(expected) = expected_immutable_files(&app_name) else {
-        return vec![drift_finding("iOS", "failed to render expected iOS scaffold files")];
-    };
-
-    expected
-        .into_iter()
-        .filter_map(|file| {
-            let target = project_root.join(&file.relative_path);
-            let relative_path = file.relative_path;
+    IMMUTABLE_RELATIVE_PATHS
+        .iter()
+        .filter_map(|relative_path| {
+            let target = project_root.join(relative_path);
             if !target.is_file() {
                 return Some(drift_finding(
-                    &relative_path,
-                    &missing_scaffold_message(&relative_path),
+                    relative_path,
+                    &format!(
+                        "{relative_path} is missing; re-copy from $TEMPLATE_DIR \
+                         (vectis::scaffold::materialize / sync ios-scaffold) — do not invent DX"
+                    ),
                 ));
             }
-            match on_disk_bytes(&target) {
-                Ok(on_disk) if on_disk == file.contents.as_bytes() => None,
-                Ok(on_disk) => {
-                    let on_disk_text = String::from_utf8_lossy(&on_disk);
-                    Some(drift_finding(
-                        &relative_path,
-                        &drift_message(&relative_path, &on_disk_text),
-                    ))
-                }
+            match fs::read_to_string(&target) {
+                Ok(on_disk) => pattern_finding(relative_path, &on_disk),
                 Err(err) => Some(drift_finding(
-                    &relative_path,
-                    &unreadable_scaffold_message(&relative_path, &err),
+                    relative_path,
+                    &format!("{relative_path} could not be read ({err})"),
                 )),
             }
         })
@@ -164,17 +91,52 @@ pub fn resolve_ios_app_name(project_root: &Path) -> Result<String, VectisError> 
     })
 }
 
-fn expected_immutable_files(
-    app_name: &str,
-) -> Result<Vec<crate::scaffold::PlannedFile>, VectisError> {
-    let versions = Versions::embedded()?;
-    let android_package = default_android_package(app_name);
-    let plan = plan_ios(app_name, &android_package, &[], &versions)?;
-    Ok(plan
-        .files
-        .into_iter()
-        .filter(|file| IMMUTABLE_RELATIVE_PATHS.contains(&file.relative_path.as_str()))
-        .collect())
+fn pattern_finding(relative_path: &str, on_disk: &str) -> Option<Value> {
+    if relative_path.ends_with("Makefile") {
+        if on_disk.contains("name=iPhone") || on_disk.contains("platform=iOS Simulator,name=") {
+            return Some(drift_finding(
+                relative_path,
+                &format!(
+                    "{relative_path} uses a forbidden named simulator destination; \
+                     use `DESTINATION ?= generic/platform=iOS Simulator` from $TEMPLATE_DIR"
+                ),
+            ));
+        }
+        for pattern in REQUIRED_MAKEFILE_PATTERNS {
+            if !on_disk.contains(pattern) {
+                return Some(drift_finding(
+                    relative_path,
+                    &format!(
+                        "{relative_path} is missing required BoltFFI DX pattern `{pattern}`; \
+                         re-copy from $TEMPLATE_DIR — do not invent Makefile content"
+                    ),
+                ));
+            }
+        }
+    }
+    if relative_path.ends_with("project.yml") {
+        if on_disk.contains("OTHER_LDFLAGS") && on_disk.contains("-w") {
+            return Some(drift_finding(
+                relative_path,
+                &format!(
+                    "{relative_path} forbids linker warning suppression via OTHER_LDFLAGS -w; \
+                     remove OTHER_LDFLAGS and re-copy from $TEMPLATE_DIR if DX drifted"
+                ),
+            ));
+        }
+        for pattern in REQUIRED_PROJECT_YML_PATTERNS {
+            if !on_disk.contains(pattern) {
+                return Some(drift_finding(
+                    relative_path,
+                    &format!(
+                        "{relative_path} is missing required BoltFFI package path `{pattern}`; \
+                         re-copy from $TEMPLATE_DIR — do not invent project.yml content"
+                    ),
+                ));
+            }
+        }
+    }
+    None
 }
 
 fn read_project_yml_name(project_yml: &Path) -> Result<Option<String>, VectisError> {
@@ -231,65 +193,6 @@ fn dir_contains_swift(dir: &Path) -> bool {
         }
     }
     false
-}
-
-fn drift_message(relative_path: &str, on_disk: &str) -> String {
-    let mut message = format!(
-        "{relative_path} diverges from the embedded iOS scaffold template; agents must not edit this file — the adapter re-renders it from the embedded template during build"
-    );
-    if relative_path.ends_with("Makefile") || relative_path.ends_with("/sim-build.sh") {
-        if on_disk.contains("name=iPhone") || on_disk.contains("platform=iOS Simulator,name=") {
-            let _ = write!(
-                message,
-                " (forbidden named simulator destination; required: '{REQUIRED_SIM_DESTINATION}')"
-            );
-        } else if relative_path.ends_with("/sim-build.sh")
-            && !on_disk.contains(REQUIRED_SIM_DESTINATION)
-        {
-            let _ = write!(message, " (sim-build.sh must set DEST='{REQUIRED_SIM_DESTINATION}')");
-        } else if relative_path.ends_with("Makefile") && on_disk.contains("-destination") {
-            let _ = write!(
-                message,
-                " (Makefile must delegate sim-build to iOS/.vectis/sim-build.sh — do not inline xcodebuild -destination)"
-            );
-        } else if relative_path.ends_with("Makefile")
-            && !on_disk.contains(REQUIRED_CARGO_SWIFT_XCFRAMEWORK_NAME)
-        {
-            let _ = write!(
-                message,
-                " (Makefile cargo swift package must pass {REQUIRED_CARGO_SWIFT_XCFRAMEWORK_NAME})"
-            );
-        }
-    } else if relative_path.ends_with("project.yml") {
-        if on_disk.contains("OTHER_LDFLAGS") && on_disk.contains("-w") {
-            let _ = write!(
-                message,
-                " (forbidden linker warning suppression via OTHER_LDFLAGS -w; remove OTHER_LDFLAGS and set {REQUIRED_SWIFT_TREAT_WARNINGS_AS_ERRORS} under settings.base)"
-            );
-        } else if !on_disk.contains(REQUIRED_SWIFT_TREAT_WARNINGS_AS_ERRORS) {
-            let _ = write!(
-                message,
-                " (project.yml must set {REQUIRED_SWIFT_TREAT_WARNINGS_AS_ERRORS} under settings.base)"
-            );
-        }
-    }
-    message
-}
-
-fn missing_scaffold_message(relative_path: &str) -> String {
-    format!(
-        "{relative_path} is missing; CLI-owned scaffold files must be present — the adapter re-renders it from the embedded template during build"
-    )
-}
-
-fn unreadable_scaffold_message(relative_path: &str, err: &std::io::Error) -> String {
-    format!(
-        "{relative_path} could not be read ({err}); CLI-owned scaffold files must match the embedded template — the adapter re-renders it from the embedded template during build"
-    )
-}
-
-fn on_disk_bytes(path: &Path) -> Result<Vec<u8>, std::io::Error> {
-    fs::read(path)
 }
 
 fn drift_finding(path: &str, message: &str) -> Value {

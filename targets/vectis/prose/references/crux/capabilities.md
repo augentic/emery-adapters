@@ -41,9 +41,9 @@ Render is a notification (fire-and-forget) -- it never sends an event back. Call
 ### Dependencies
 
 ```toml
-# workspace Cargo.toml -- version from crux-versions.md
+# workspace Cargo.toml -- pin from $TEMPLATE_DIR/Cargo.toml
 [workspace.dependencies]
-crux_http = "{version from crux-versions.md}"
+crux_http = "{version from $TEMPLATE_DIR/Cargo.toml}"
 ```
 
 ### Effect variant
@@ -184,9 +184,9 @@ Key points:
 ### Dependencies
 
 ```toml
-# workspace Cargo.toml -- version from crux-versions.md
+# workspace Cargo.toml -- pin from $TEMPLATE_DIR/Cargo.toml
 [workspace.dependencies]
-crux_kv = "{version from crux-versions.md}"
+crux_kv = "{version from $TEMPLATE_DIR/Cargo.toml}"
 ```
 
 ### Effect variant

@@ -4,8 +4,6 @@
 use std::path::Path;
 
 use tempfile::tempdir;
-use vectis::android_scaffold::sync_android_scaffold_files;
-use vectis::ios_scaffold::sync_ios_scaffold_files;
 use vectis::verify::{VerifyMode, run, verify_exit_code};
 
 fn write(path: &Path, content: &str) {
@@ -46,22 +44,33 @@ fn fully_present_project(root: &Path) {
     project(root, &["core", "ios", "android"]);
     write(&root.join("shared/src/app.rs"), "pub struct App;");
     write(&root.join("iOS/TestApp/ContentView.swift"), "struct ContentView {}");
+    write(
+        &root.join("iOS/Makefile"),
+        "DESTINATION ?= generic/platform=iOS Simulator\n\
+         package:\n\tcd ../shared && boltffi pack apple\n",
+    );
+    write(
+        &root.join("iOS/project.yml"),
+        "name: TestApp\npackages:\n  Shared:\n    path: ./generated/Shared\n",
+    );
+    write(
+        &root.join("Android/Makefile"),
+        ".PHONY: build\npackage:\n\tcd ../shared && boltffi pack android\n",
+    );
     write(&root.join("Android/settings.gradle.kts"), "rootProject.name = \"TestApp\"\n");
+    write(&root.join("Android/build.gradle.kts"), "// root\n");
     write(
         &root.join("Android/app/build.gradle.kts"),
         "android {\n    namespace = \"com.augentic.testapp\"\n}\n",
     );
     write(
+        &root.join("Android/shared/build.gradle.kts"),
+        "android {\n    jniLibs.directories += \"${rootProject.projectDir}/generated/jniLibs\"\n}\n",
+    );
+    write(
         &root.join("Android/app/src/main/kotlin/com/augentic/testapp/MainActivity.kt"),
         "class MainActivity\n",
     );
-    sync_ios_scaffold_files(root).unwrap();
-    sync_android_scaffold_files(root).unwrap();
-    let shared_build = root.join("Android/shared/build.gradle.kts");
-    let configured = std::fs::read_to_string(&shared_build)
-        .unwrap()
-        .replace("__ANDROID_NDK_VERSION__", "27.0.12077973");
-    write(&shared_build, &configured);
 
     make_executable(&root.join("Android/gradlew"));
     write(&root.join("Android/gradle/wrapper/gradle-wrapper.jar"), "wrapper");
@@ -151,6 +160,55 @@ fn catalog_project(root: &Path) {
     write(
         &root.join(".emery/specs/composition.yaml"),
         "version: 1\nscreens:\n  empty:\n    body:\n      - image:\n          name: empty-state\n      - image:\n          name: empty-state\n      - image:\n          name: app-logo\n      - image:\n          name: unknown-asset\n",
+    );
+}
+
+#[test]
+fn boltffi_dx_patterns_required() {
+    let tmp = tempdir().unwrap();
+    project(tmp.path(), &["core", "ios", "android"]);
+    write(&tmp.path().join("shared/src/app.rs"), "pub struct App;");
+    write(&tmp.path().join("iOS/TestApp/ContentView.swift"), "struct ContentView {}");
+    write(
+        &tmp.path().join("iOS/Makefile"),
+        "DESTINATION ?= generic/platform=iOS Simulator\n# intentionally omit boltffi apple pack\n",
+    );
+    write(&tmp.path().join("iOS/project.yml"), "name: TestApp\npath: ./generated/Shared\n");
+    write(
+        &tmp.path().join("Android/Makefile"),
+        ".PHONY: build\n# intentionally omit boltffi android pack\n",
+    );
+    write(&tmp.path().join("Android/settings.gradle.kts"), "rootProject.name = \"TestApp\"\n");
+    write(&tmp.path().join("Android/build.gradle.kts"), "// root\n");
+    write(
+        &tmp.path().join("Android/app/build.gradle.kts"),
+        "android {\n    namespace = \"com.augentic.testapp\"\n}\n",
+    );
+    write(&tmp.path().join("Android/shared/build.gradle.kts"), "android {}\n");
+    write(
+        &tmp.path().join("Android/app/src/main/kotlin/com/augentic/testapp/MainActivity.kt"),
+        "class MainActivity\n",
+    );
+    make_executable(&tmp.path().join("Android/gradlew"));
+    write(&tmp.path().join("Android/gradle/wrapper/gradle-wrapper.jar"), "wrapper");
+    write(
+        &tmp.path().join("Android/gradle/wrapper/gradle-wrapper.properties"),
+        "distributionUrl=https://example.invalid/gradle.zip\n",
+    );
+    write(&tmp.path().join("Android/local.properties"), "sdk.dir=/tmp/android-sdk\n");
+    write(&tmp.path().join("Android/app/build/outputs/apk/debug/app-debug.apk"), "debug apk");
+    write(&tmp.path().join("iOS/.vectis/verify.ok"), "ok\n");
+    write(&tmp.path().join("Android/.vectis/verify.ok"), "ok\n");
+
+    let result = run(VerifyMode::Verify, tmp.path()).unwrap();
+    let ids = finding_ids(&result);
+    assert!(
+        ids.contains(&"ios-scaffold-file-drift"),
+        "missing boltffi pack apple must drift: {result}"
+    );
+    assert!(
+        ids.contains(&"android-scaffold-file-drift"),
+        "missing boltffi pack android must drift: {result}"
     );
 }
 

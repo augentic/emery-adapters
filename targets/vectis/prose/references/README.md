@@ -2,7 +2,7 @@
 
 Reference documentation for the Vectis target adapter at [`adapters/targets/vectis/`](..). In Emery, Vectis is a **target adapter** — `guidance`, `build`, `merge` — not a slash-command plugin.
 
-The Vectis core / test / iOS / Android writer and reviewer orchestration lives in [`../prompts/build.md`](../prompts/build.md) and eight phase prompts under [`../prompts/build/`](../prompts/build/). The depth (Crux idioms, SwiftUI patterns, Compose patterns, hard rules, review check libraries, token templates, design-system integration) and worked examples live in this folder.
+The Vectis core / test / iOS / Android writer and reviewer orchestration lives in [`../prompts/build.md`](../prompts/build.md) and eight phase prompts under [`../prompts/build/`](../prompts/build/). The depth (Crux idioms, SwiftUI patterns, Compose patterns, hard rules, review check libraries, token templates, design-system integration) lives in this folder. The live `$TEMPLATE_DIR` ([`vectis-template`](https://github.com/augentic/vectis-template)) checkout is the worked example for core + shells + DX; sample Emery artifacts sit under [`examples/`](examples/README.md).
 
 ## Prompts
 
@@ -21,6 +21,10 @@ The Vectis core / test / iOS / Android writer and reviewer orchestration lives i
 | [`merge.md`](../prompts/merge.md) | Merge-leg gates around the delta fold. |
 
 ## References
+
+### Template bootstrap
+
+- [`template-capabilities.md`](template-capabilities.md) — DX completeness after materialize; late-capability re-adoption from `$TEMPLATE_DIR` (strip grammar stays in `$TEMPLATE_DIR/AGENTS.md`).
 
 ### Runtime schemas
 
@@ -77,8 +81,6 @@ Canonical SVG → per-platform exports (the adapter's materialize step), render-
 
 - [`layout-inferer-contract.md`](layout-inferer-contract.md) — the inferer contract consumed by the [`sources/screenshots/`](../../../../sources/screenshots/) adapter.
 
-### Worked examples
+### Sample artifacts + template pointer
 
-- [`examples/core/`](examples/core/) — simple counter, HTTP counter, KV notes.
-- [`examples/ios/`](examples/ios/) — simple counter (iOS), HTTP counter (iOS).
-- [`examples/android/`](examples/android/) — simple counter (Android), HTTP counter (Android).
+- [`examples/`](examples/README.md) — sample `tokens.yaml` / `assets.yaml` plus the `$TEMPLATE_DIR` capability→path map (live [`vectis-template`](https://github.com/augentic/vectis-template) is the worked example for core, shells, DX, and strip units).

@@ -1,26 +1,26 @@
 # Generated type conventions
 
-The codegen binary produces two sets of Kotlin files:
+After `cargo make generate` / shell `make typegen`, the Android tree has two generated Kotlin sets. Package identity comes from materialize substitution of the template defaults in `$TEMPLATE_DIR` (`shared/boltffi.toml` + codegen output) — never invent `com.example.app` or `uniffi.shared` paths.
 
-1. **Bincode types** in `generated/com/example/app/` -- `Event`, `ViewModel`, `Effect`, `Request`, `Requests`, and all view structs, enums, and capability types (`HttpRequest`, `HttpResponse`, `SseRequest`, `SseResponse`, `KeyValueOperation`, `TimeRequest`, `TimeResponse`, `Filter`, etc.)
-2. **UniFFI bindings** in `generated/uniffi/shared/` -- the `CoreFfi` class that bridges to the Rust native library.
+1. **Bincode / Facet types** under `Android/generated/` — `Event`, `ViewModel`, `Effect`, `Request`, `Requests`, and capability types (`HttpRequest`, `HttpResponse`, `SseRequest`, `SseResponse`, `KeyValueOperation`, `TimeRequest`, `TimeResponse`, `Filter`, etc.). Template default package: `io.augentic.vectisapp` (becomes `ANDROID_PACKAGE` after materialize).
+2. **BoltFFI bridge** under `Android/generated/kotlin/` — `CoreFfi` in `{ANDROID_PACKAGE}.shared` (template default `io.augentic.vectisapp.shared`, from `shared/boltffi.toml` `[targets.android.kotlin] package`).
 
 ## Import rules for all hand-written Kotlin files
 
-Every `.kt` file that references generated types MUST have explicit imports:
+Every `.kt` file that references generated types MUST have explicit imports. Prefer the import shape in `$TEMPLATE_DIR/Android/app/src/main/java/.../core/Core.kt`:
 
 ```kotlin
-// For bincode types (Event, ViewModel, Effect, etc.)
-import com.example.app.Event
-import com.example.app.ViewModel
-import com.example.app.Effect
+// Bincode / Facet types (Event, ViewModel, Effect, …) — package = ANDROID_PACKAGE
+import io.augentic.vectisapp.Event
+import io.augentic.vectisapp.ViewModel
+import io.augentic.vectisapp.Effect
 // ... import each type individually
 
-// For the CoreFfi bridge (only in Core.kt)
-import uniffi.shared.CoreFfi
+// CoreFfi bridge (only in Core.kt) — package = ANDROID_PACKAGE.shared
+import io.augentic.vectisapp.shared.CoreFfi
 ```
 
-**NEVER** assume these types are in the same package as the hand-written code. The hand-written code lives in `com.vectis.{appname}` but the generated types are in `com.example.app` and `uniffi.shared`.
+**NEVER** assume these types are in the same package as the hand-written shell code (e.g. `{ANDROID_PACKAGE}.core`). **NEVER** invent retired UniFFI paths (`com.example.app.*`, `uniffi.shared.*`).
 
 ## Enum class naming conventions
 

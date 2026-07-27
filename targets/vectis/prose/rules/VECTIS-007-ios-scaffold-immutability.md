@@ -1,44 +1,45 @@
 ---
 id: VECTIS-007
-title: iOS Scaffold File Immutability
+title: iOS DX File Immutability
 severity: important
-trigger: An agent-authored or drifted iOS shell edits CLI-owned scaffold files or substitutes a named simulator destination in the iOS Makefile or sim-build script.
+trigger: An agent-authored or drifted iOS shell edits template-owned DX files or substitutes a named simulator destination in the iOS Makefile.
 applicability:
   adapters: [vectis]
 references:
   - label: iOS hard rules
     path: adapters/targets/vectis/prose/references/hard-rules-ios.md
-  - label: iOS template manifest
-    path: adapters/targets/vectis/core/templates/ios/MANIFEST.md
+  - label: iOS build write prompt
+    path: adapters/targets/vectis/prose/prompts/build/ios/write.md
 ---
 
 ## Rule
 
-`iOS/Makefile`, `iOS/project.yml`, `iOS/.vectis/sim-build.sh`, and `iOS/.vectis/sim-dev.sh` are rendered exclusively from the embedded scaffold templates. Agents must never author, copy from worked examples, or edit these files in create or update mode.
+`iOS/Makefile` and `iOS/project.yml` are template-owned DX. They land from `$TEMPLATE_DIR` (`../vectis-template` or `VECTIS_TEMPLATE_DIR`) via `vectis::scaffold::materialize` with identity substitution. Agents must never author, invent, or edit these files in create or update mode — `$TEMPLATE_DIR` is the sole shell example and DX authority.
 
-The simulator destination for **verify** lives only in `iOS/.vectis/sim-build.sh`:
+The live template's verify destination is Makefile-owned:
 
-```bash
-DEST='generic/platform=iOS Simulator'
+```make
+DESTINATION ?= generic/platform=iOS Simulator
 ```
 
-The Makefile `sim-build` target delegates to that script — it must not inline `xcodebuild -destination`. Local-dev targets (`sim-install`, `sim-launch`, `sim-run`, `run`) delegate to `iOS/.vectis/sim-dev.sh`, which uses `simctl` for install/launch and does not run `xcodebuild` with a named destination.
+`make build` (alias of `build-sim`) runs typegen, `boltffi pack apple`, `xcodegen`, then `xcodebuild` with that destination. There are no `iOS/.vectis/sim-build.sh` / `sim-dev.sh` scripts and no `cargo-swift` / `sharedFFI` recipes — BoltFFI owns the package step.
 
 **Forbidden:**
 
-- Hand-authoring `iOS/Makefile`, `iOS/project.yml`, `iOS/.vectis/sim-build.sh`, or `iOS/.vectis/sim-dev.sh` instead of running `vectis scaffold ios`.
+- Hand-authoring `iOS/Makefile` or `iOS/project.yml` instead of materializing / re-copying from `$TEMPLATE_DIR`.
 - Editing those files during verify-repair or feature work.
-- Named simulator destinations in the **verify** path (`name=iPhone …`, `platform=iOS Simulator,name=…` in Makefile or `sim-build.sh`).
+- Named simulator destinations in the verify path (`name=iPhone …`, `platform=iOS Simulator,name=…`).
 - Direct `xcodebuild -destination` with a named device from agent-driven verify repair.
+- Inventing UniFFI / `cargo-swift` / `--xcframework-name sharedFFI` DX when the template uses BoltFFI.
 
-Prepare auto-syncs immutable scaffold files before agent work; the orchestrator runs `vectis sync ios-scaffold` in-loop during iOS verify; verify blocks drift at build finalize. Reviewers flag agent-side violations that survive those gates.
+On drift, re-copy the DX paths from `$TEMPLATE_DIR` with the same identity substitution as materialize. The in-guest verify gate blocks missing DX and missing BoltFFI patterns; reviewers flag agent-side violations that survive those gates.
 
 ## Look For
 
-- `iOS/Makefile`, `iOS/project.yml`, `iOS/.vectis/sim-build.sh`, or `iOS/.vectis/sim-dev.sh` content that diverges from the embedded template for the resolved app name.
-- A `sim-build` destination using a named device instead of `generic/platform=iOS Simulator`.
-- Evidence that an agent patched scaffold files after a simulator build failure rather than running `vectis sync ios-scaffold` or fixing Swift sources.
+- `iOS/Makefile` or `iOS/project.yml` content that diverges from `$TEMPLATE_DIR` after identity substitution (missing `boltffi pack apple`, missing `DESTINATION ?= generic/platform=iOS Simulator`, missing `path: ./generated/Shared`).
+- A build destination using a named device instead of `generic/platform=iOS Simulator`.
+- Evidence that an agent patched DX files after a simulator build failure rather than re-copying from `$TEMPLATE_DIR` or fixing Swift sources.
 
 ## Spec Guidance
 
-When scaffold files drift, let the adapter repair them: it re-renders the agent-immutable files deterministically around each shell write leg and at build prepare. Do not hand-edit the Makefile or script to pick a simulator, and never hand-scaffold over an existing tree. Worked examples demonstrate Swift patterns only; they are not authoritative for Makefile, `project.yml`, or `sim-build.sh` content.
+When DX files drift, re-copy from `$TEMPLATE_DIR` — do not hand-edit the Makefile to pick a simulator, and never hand-scaffold over an existing tree. `$TEMPLATE_DIR` is the shell example and the only authority for Makefile / `project.yml` content. Pins live only as bytes in the template checkout — never invent versions.
