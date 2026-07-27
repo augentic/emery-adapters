@@ -10,10 +10,9 @@ use std::path::Path;
 
 use serde_json::{Value, json};
 
-use crate::VectisError;
-use crate::android_scaffold;
-use crate::ios_scaffold;
-use crate::scaffold::{self, materialize, materialize::Identity};
+use crate::scaffold::materialize::Identity;
+use crate::scaffold::{self, materialize};
+use crate::{VectisError, android_scaffold, ios_scaffold};
 
 /// Refresh agent-immutable iOS DX files from `$TEMPLATE_DIR`.
 ///
@@ -68,16 +67,15 @@ struct RefreshReport {
 fn refresh_from_template(
     project_root: &Path, relative_paths: &[&str],
 ) -> Result<RefreshReport, VectisError> {
-    let template_dir = materialize::resolve_dir(project_root).ok_or_else(|| {
-        VectisError::InvalidProject {
+    let template_dir =
+        materialize::resolve_dir(project_root).ok_or_else(|| VectisError::InvalidProject {
             message: format!(
                 "cannot refresh DX files: $TEMPLATE_DIR not found (clone \
                  https://github.com/augentic/vectis-template.git as {} or set {})",
                 materialize::DEFAULT_RELATIVE_DIR,
                 materialize::TEMPLATE_DIR_ENV
             ),
-        }
-    })?;
+        })?;
     let identity = resolve_identity(project_root)?;
     let mut synced = Vec::new();
     let mut unchanged = Vec::new();
@@ -146,19 +144,20 @@ fn resolve_identity(project_root: &Path) -> Result<Identity, VectisError> {
 }
 
 fn app_name_from_project_yaml(project_root: &Path) -> Result<String, VectisError> {
-    let source = std::fs::read_to_string(project_root.join(".emery/project.yaml")).map_err(|err| {
-        VectisError::InvalidProject {
-            message: format!("read project.yaml: {err}"),
-        }
-    })?;
-    let doc: Value = serde_saphyr::from_str(&source).map_err(|err| VectisError::InvalidProject {
-        message: format!("parse project.yaml: {err}"),
-    })?;
-    let raw = doc.get("name").and_then(Value::as_str).ok_or_else(|| {
-        VectisError::InvalidProject {
+    let source =
+        std::fs::read_to_string(project_root.join(".emery/project.yaml")).map_err(|err| {
+            VectisError::InvalidProject {
+                message: format!("read project.yaml: {err}"),
+            }
+        })?;
+    let doc: Value =
+        serde_saphyr::from_str(&source).map_err(|err| VectisError::InvalidProject {
+            message: format!("parse project.yaml: {err}"),
+        })?;
+    let raw =
+        doc.get("name").and_then(Value::as_str).ok_or_else(|| VectisError::InvalidProject {
             message: "project.yaml missing name:".into(),
-        }
-    })?;
+        })?;
     let pascal: String = raw
         .split(|c: char| !c.is_ascii_alphanumeric())
         .filter(|part| !part.is_empty())
