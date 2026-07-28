@@ -116,57 +116,16 @@ install_crate = "cargo-vet"
 command = "cargo"
 args = ["build", "--workspace", "--target", "wasm32-wasip2", "--release"]
 
-# # Publish — push one built component to its exact GHCR SemVer tag as a
-# # standard Wasm OCI artifact. Used by Publish Release (adapters.yaml) and
-# # as a local breakout: log in first (`gh auth token | docker login ghcr.io
-# # -u <github-user> --password-stdin`). Skips (exit 0) when the version
-# # tag already exists — never replaces it. GHCR has no registry-native
-# # tag immutability, so this probe is the compensating control; exit 0
-# # keeps Publish Release and local retries idempotent after a partial run.
-# [tasks.publish]
-# script_runner = "bash"
-# install_crate = { crate_name = "wkg", binary = "wkg", test_arg = "--version" }
-# script = '''
-# set -euo pipefail
+# Publish — push one built component to its exact GHCR SemVer tag as a
+# standard Wasm OCI artifact. Used by Publish Release (adapters.yaml) and
+# as a local breakout: log in first (`gh auth token | docker login ghcr.io
+# -u <github-user> --password-stdin`).
+[tasks.publish]
+script_runner = "bash"
+install_crate = { crate_name = "wkg", binary = "wkg", test_arg = "--version" }
+script = '''
+name="${1:?usage: cargo make publish <name>}"
+version="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version *= *"\(.*\)"/\1/p' Cargo.toml)"
 
-# name="${1:-}"
-# if [ -z "$name" ]; then
-#   echo "usage: cargo make publish <adapter>" >&2
-#   exit 1
-# fi
-
-# version="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version *= *"\(.*\)"/\1/p' Cargo.toml)"
-# component="target/wasm32-wasip2/release/$name.wasm"
-# if [ ! -f "$component" ]; then
-#   echo "missing $component — build it first: cargo make release (or cargo make adapter $name for a dev build)" >&2
-#   exit 1
-# fi
-
-# repository="augentic/emery-adapters/$name"
-# reference="ghcr.io/$repository:$version"
-
-# # Manifest probe: 200 means the tag is already released — skip (do not
-# # replace); 401/403/404 mean no such tag is visible (first publish).
-# # The probe authenticates with the operator's gh token when available
-# # so a still-private package (fresh push awaiting its GHCR visibility
-# # flip) is also protected; otherwise it is anonymous.
-# credentials=""
-# if command -v gh > /dev/null 2>&1; then
-#   credentials="$(gh auth token 2> /dev/null || true)"
-# fi
-# token="$(curl -fsSL ${credentials:+-u "token:$credentials"} \
-#   "https://ghcr.io/token?scope=repository:$repository:pull" \
-#   | sed -n 's/.*"token" *: *"\([^"]*\)".*/\1/p' || true)"
-# status="$(curl -s -o /dev/null -w '%{http_code}' \
-#   -H "Authorization: Bearer $token" \
-#   -H "Accept: application/vnd.oci.image.manifest.v1+json" \
-#   "https://ghcr.io/v2/$repository/manifests/$version")"
-# case "$status" in
-#   200) echo "already published $reference"; exit 0 ;;
-#   401 | 403 | 404) ;;
-#   *) echo "unexpected registry response HTTP $status probing $reference" >&2; exit 1 ;;
-# esac
-
-# wkg oci push "$reference" "$component"
-# echo "published $reference"
-# '''
+wkg oci push "ghcr.io/augentic/emery-adapters/$name:$version" "target/wasm32-wasip2/release/$name.wasm"
+'''
