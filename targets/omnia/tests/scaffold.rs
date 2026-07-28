@@ -88,6 +88,72 @@ fn tokens_from_manifest() {
     let report = ensure_missing(tmp.path()).unwrap();
 
     assert_eq!(report.tokens, ["<PACKAGE_NAME>", "<STORAGE_ACCOUNT>"]);
+    assert_eq!(
+        report.unfilled_tokens,
+        ["<PACKAGE_NAME>", "<STORAGE_ACCOUNT>"],
+        "publish seed still carries both tokens"
+    );
+    assert!(report.pin_mismatch.is_none(), "no consumer Cargo.toml → no pin warning");
+}
+
+#[test]
+fn unfilled_tokens_survive_existing_publish() {
+    let tmp = project();
+    ensure_missing(tmp.path()).unwrap();
+    // Consumer left one token filled and one unfilled.
+    fs::write(
+        tmp.path().join(".github/workflows/publish.yaml"),
+        "name: Publish\nenv:\n  package: my-guest\n  account: <STORAGE_ACCOUNT>\n",
+    )
+    .unwrap();
+
+    let report = ensure_missing(tmp.path()).unwrap();
+
+    assert_eq!(report.unfilled_tokens, ["<STORAGE_ACCOUNT>"]);
+}
+
+#[test]
+fn pin_mismatch_soft_warn() {
+    let tmp = project();
+    fs::write(
+        tmp.path().join("Cargo.toml"),
+        r#"
+[workspace.dependencies]
+omnia = "0.1.0"
+
+[patch.crates-io]
+omnia = { git = "https://example.invalid/omnia", rev = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+"#,
+    )
+    .unwrap();
+
+    let report = ensure_missing(tmp.path()).unwrap();
+
+    let mismatch = report.pin_mismatch.expect("consumer pin differs from synthetic exemplar");
+    assert_eq!(mismatch.exemplar_version, "0.0.1");
+    assert_eq!(mismatch.exemplar_rev, "0123456789abcdef0123456789abcdef01234567");
+    assert_eq!(mismatch.consumer_version.as_deref(), Some("0.1.0"));
+    assert_eq!(mismatch.consumer_rev.as_deref(), Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+}
+
+#[test]
+fn matching_pin_is_silent() {
+    let tmp = project();
+    fs::write(
+        tmp.path().join("Cargo.toml"),
+        r#"
+[workspace.dependencies]
+omnia = "0.0.1"
+
+[patch.crates-io]
+omnia = { git = "https://example.invalid/omnia", rev = "0123456789abcdef0123456789abcdef01234567" }
+"#,
+    )
+    .unwrap();
+
+    let report = ensure_missing(tmp.path()).unwrap();
+
+    assert!(report.pin_mismatch.is_none());
 }
 
 mod rejects {

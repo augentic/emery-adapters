@@ -26,3 +26,4 @@ fi
 - **Read-only.** Never edit the checkout, never add it to the workspace members, and never copy files wholesale into the consumer workspace.
 - Write nothing else in this leg: no consumer code, no scaffold files — the adapter's deterministic prelude writes the tooling scaffold from the checkout after this leg completes.
 - The compatibility contract (`exemplar.yaml`) and the navigation map live in [`exemplar.md`](../../references/exemplar.md); this prompt owns only the checkout.
+- **Network / credentials.** The clone and refresh are agent-side `git` against GitHub. There is no host-side or baked-in exemplar copy: if the lent workspace cannot reach `https://github.com/augentic/omnia-exemplar`, the build fails closed at the scaffold prelude. Restore access (or keep a prior checkout under `target/omnia-exemplar/` for the stale-refresh path) before retrying.

@@ -1,16 +1,18 @@
-# Operation Routers and Guest Exports
+# Guest HTTP / messaging wiring
 
-Domain crates define typed, stateless `Operation<P>` implementations. The guest owns provider construction, transport routers, projection policy, and explicit WIT exports.
+Domain crates define typed, stateless `Operation<P>` implementations. The guest owns provider construction, transport wiring, projection policy, and explicit WIT exports.
 
-Compiling reference: the exemplar checkout's `guests/typed/src/lib.rs` shows every pattern below — HTTP and messaging guest structs, `#[omnia_wasi_otel::instrument]` on the handle functions, router assembly over one shared `Invoker`, and the per-transport export macros. Navigation: [`exemplar.md`](exemplar.md). API semantics: [`sdk-api.md`](sdk-api.md). Wiring a new crate in: [`guest-wiring.md`](guest-wiring.md).
+**Preferred compiling reference:** the exemplar checkout's `src/lib.rs` — hand-written Axum routes via `omnia_wasi_http::serve`, exact-topic messaging via `omnia_wasi_messaging::export!`, `#[omnia_wasi_otel::instrument]` on entry handlers, and a shared `Invoker` for each operation call. Navigation: [`exemplar.md`](exemplar.md). API semantics: [`sdk-api.md`](sdk-api.md). Wiring a new crate in: [`guest-wiring.md`](guest-wiring.md).
 
-## HTTP
+## HTTP (preferred — Axum)
 
-Use Axum 0.8 `{param}` path syntax. GET path/query names and POST JSON/path names must match the typed input's serde field names. The default JSON projector returns status 200; define one `http::Projector<O, P>` at the transport boundary for custom status, headers, bytes, or error envelopes.
+Use Axum 0.8 `{param}` path syntax. Build an `axum::Router`, register handlers that decode the transport payload and call `invoker().invoke::<Op>(Invocation::new(…)).await`, then serve with `omnia_wasi_http::serve`. Export HTTP with `wasip3::http::service::export!`.
 
-## Messaging
+JSON handlers typically take `Json<T>` / return `HttpResult<Json<U>>`. Non-JSON ingress (bytes / XML) decodes in the handler before invoking the operation — match the exemplar's Pulse XML route.
 
-Register exact topics (no substring matching). Use a custom decoder for XML/binary payloads and a custom messaging projector for retry/rejection policy. Never silently acknowledge missing, malformed, unhandled, or failed deliveries.
+## Messaging (preferred — exact topic)
+
+Export messaging with `omnia_wasi_messaging::export!`. Match on the **exact** env-qualified topic (no substring matching). Decode the payload in the handler, invoke through the shared `Invoker`, and map failures to the messaging error type. Never silently acknowledge missing, malformed, unhandled, or failed deliveries.
 
 ## WebSocket
 
@@ -20,12 +22,23 @@ WebSocket WIT exports remain explicit (`omnia_wasi_websocket::export!`). Adapt t
 
 For a WASI command surface, assemble an `omnia_guest::api::command::RouterBuilder` over a `clap::Command` root and the same `Invoker`, register typed `run::<Args, Operation>()` routes, provide an output/error projector, and `build()` into the executable `command::Router`; export `wasip3::cli::command::export!(CliGuest)`.
 
+## Fallback — typed routers
+
+Use only when `design.md` explicitly requires the typed `omnia_guest::api` HTTP / messaging routers (or when updating a consumer that already uses them). The exemplar does **not** ship a compiling typed guest; do not invent a `guests/typed/` package to chase this style.
+
+When falling back:
+
+- `omnia_guest::api::http::Router` with `get::<Op, P>()` / `post::<Op, P>()`
+- `omnia_guest::api::messaging::Router` with `consume::<Op>()`, plus `decode_with` for non-JSON payloads
+- Custom HTTP status/body/error policy in `http::Projector<O, P>` at the transport boundary
+- Non-JSON HTTP ingress may drop to `router.into_axum()` for a single hand-written route
+
 ## Checklist
 
 1. One zero-sized operation type per use case; typed input and plain output.
 2. Exact provider bounds remain on each `Operation<P>` implementation.
 3. Structural validation starts `call`; contextual validation follows context loading.
-4. HTTP and messaging routing use the typed Omnia routers.
-5. Serialization, status, acknowledgement, and retry policy live in projectors.
+4. HTTP and messaging wiring match the preferred Axum + exact-topic shape (or the typed-router fallback when design requires it).
+5. Serialization, status, acknowledgement, and retry policy live at the guest boundary.
 6. Every WIT transport has an explicit export and a thin delegation implementation.
-7. Router inventory tests prove each route/topic points at the intended operation.
+7. Router / topic inventory stays aligned with a shared route catalog when the workspace has one.

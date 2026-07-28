@@ -23,8 +23,8 @@ $DESIGN_PATH   = $SLICE_DIR/design.md
 $TASKS_PATH    = $SLICE_DIR/tasks.md
 $CRATE_NAME    = $SLICE_NAME with kebab → snake (or the slice's plan-level `crate:` override)
 $CRATE_PATH    = crates/$CRATE_NAME
-$GUEST_NAME    = deployable guest package name (kebab-case; often equals the workspace / service name)
-$GUEST_PATH    = guests/$GUEST_NAME (typed-router guest; `src/lib.rs` exports HTTP / Messaging / WebSocket)
+$GUEST_NAME    = deployable guest package name (kebab-case; the root `[package].name` in `Cargo.toml`)
+$GUEST_PATH    = . (workspace root — the guest is the root package; `src/lib.rs` exports HTTP / Messaging / WebSocket)
 $REVIEW_OUTPUT = $CRATE_PATH/REVIEW.md
 ```
 
@@ -34,8 +34,8 @@ $REVIEW_OUTPUT = $CRATE_PATH/REVIEW.md
 
 Check whether `$CRATE_PATH/Cargo.toml` exists:
 
-- **Missing** → **create mode**: generate the crate, tests, and (if `$GUEST_PATH/src/lib.rs` is absent) guest scaffolding under `guests/`.
-- **Present** → **update mode**: incremental change against the existing crate; guest wiring updates are folded into the crate-writer step (skip the guest phase).
+- **Missing** → **create mode**: generate the crate, tests, and (if workspace-root `src/lib.rs` is absent) the root-package guest scaffolding.
+- **Present** → **update mode**: incremental change against the existing crate; guest wiring updates are folded into the crate-writer step (skip the guest phase). Preserve any legacy non-root guest layout the consumer already has.
 
 ## § Exemplar checkout
 

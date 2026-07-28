@@ -22,9 +22,9 @@ This document uses `<latest>` as a placeholder for dependency versions. **Do not
 
 ### Workspace Configuration
 
-Model the workspace `Cargo.toml` on the exemplar's root `Cargo.toml`: resolver `"3"`, `members = ["crates/*", ...]` (the exemplar adds `guests/*`), a `[workspace.package]` table inherited by every crate, `[workspace.lints.rust]` / `[workspace.lints.clippy]` tables (all/pedantic/nursery/cargo groups plus the cherry-picked restriction lints), `[workspace.dependencies]` with every shared version declared once, and the size-optimized `[profile.release]` (`lto`, `opt-level = "s"`, `strip`).
+Model the workspace `Cargo.toml` on the exemplar's root `Cargo.toml`: a root `[package]` for the guest (cdylib), resolver `"3"`, `members = ["crates/*", …]` (never `guests/*` — the guest is the root package), a `[workspace.package]` table inherited by every crate, `[workspace.lints.rust]` / `[workspace.lints.clippy]` tables (all/pedantic/nursery/cargo groups plus the cherry-picked restriction lints), `[workspace.dependencies]` with every shared version declared once, and the size-optimized `[profile.release]` (`lto`, `opt-level = "s"`, `strip`).
 
-Skip the exemplar's project-specific entries when adapting it: its `acme-*`/`gtfs`/`pulse`/`tally` internal crates, the `augentic-test` git dependency, and the `wrpc-*` patch entries. Keep the omnia stanza, the shared runtime dependencies your slice actually needs, and the lint tables.
+Skip the exemplar's project-specific entries when adapting it: its `acme-*`/`gtfs`/`pulse`/`tally` internal crates, the `templates/check` member, the `augentic-test` git dependency, and the `wrpc-*` patch entries. Keep the omnia stanza, the shared runtime dependencies your slice actually needs, and the lint tables.
 
 Each crate then inherits:
 
@@ -42,16 +42,18 @@ version.workspace = true
 
 ### Guest Package Configuration
 
+The guest is the root package. Match the exemplar's root `Cargo.toml` guest stanza:
+
 ```toml
 [lib]
 crate-type = ["cdylib"]
 
 [[example]]
-name = "<guest-name>"
-path = "examples/<guest-name>.rs"
+name = "runtime"
+path = "examples/runtime.rs"
 ```
 
-Guest dependencies are wasm32-compatible only; native-only crates (`omnia`, `wasmtime`, `wasmtime-wasi`) go under `[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]` so `cargo build --target wasm32-wasip2` never pulls them. `cfg-if` supports the runtime example's conditional compilation. The exemplar's `guests/typed/Cargo.toml` is the default worked shape (`guests/axum/Cargo.toml` only when design requires the Axum escape hatch).
+Guest dependencies are wasm32-compatible only; native-only crates (`omnia`, `wasmtime`, `wasmtime-wasi`) go under `[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]` so `cargo build --target wasm32-wasip2` never pulls them. `cfg-if` supports the runtime example's conditional compilation. The exemplar's root package is the default worked shape (hand-written Axum). Typed-router guest packaging is a fallback only — see [`guest-patterns.md`](guest-patterns.md).
 
 ### Core Dependencies
 
@@ -61,7 +63,7 @@ Guest dependencies are wasm32-compatible only; native-only crates (`omnia`, `was
 | `axum`                 | HTTP routing (enable `json`, `macros`, `query` features) |
 | `bytes`                | Efficient byte buffer for HTTP body extraction           |
 | `http-body-util`       | HTTP body utilities (`Empty<Bytes>` for GET requests)    |
-| `omnia-guest`          | Guest API: typed routers, capability traits, providers   |
+| `omnia-guest`          | Guest API: capability traits, providers, Invoker, typed-router fallback |
 | `omnia-wasi-http`      | HTTP server/client support                               |
 | `omnia-wasi-messaging` | Message pub/sub                                          |
 | `omnia-wasi-otel`      | OpenTelemetry instrumentation                            |
@@ -75,7 +77,7 @@ Guest dependencies are wasm32-compatible only; native-only crates (`omnia`, `was
 
 The standard tooling files are **not authored by the model at all**. The adapter's deterministic scaffold prelude writes every missing one at the start of each build, fill-only — existing files are never overwritten, and a prelude I/O failure fails the build before generation, so there is no situation where these files should be recreated from prose.
 
-The template bodies live only in the exemplar repository (`templates/guest/`); this adapter fetches that subtree at adapter-build time and bakes it into the component — there is no committed second copy. The exemplar's `templates/guest/manifest.yaml` is the single source-to-target map. To inspect a template body, read the file at its target path in the exemplar checkout — the exemplar root **is** the rendered template set, proven by its `template-check` gate.
+The template bodies live only in the exemplar repository (`templates/guest/`). Nothing is vendored or baked into this adapter component: adapter compilation is network-free (`build.rs` embeds prose only), and the scaffold prelude reads the checkout the preparation leg placed at `target/omnia-exemplar/`. The exemplar's `templates/guest/manifest.yaml` is the single source-to-target map. To inspect a template body, read the file at its target path in the exemplar checkout — the exemplar root **is** the rendered template set, proven by its `template-check` gate.
 
 | File                        | Purpose                                | Written by                     |
 | --------------------------- | -------------------------------------- | ------------------------------ |

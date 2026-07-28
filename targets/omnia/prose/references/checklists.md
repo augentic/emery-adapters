@@ -64,7 +64,7 @@ Before completing, verify ALL items.
 - [ ] `Operation::call(input, CallContext)` is stateless
 - [ ] Provider bounds include exactly all traits required by the operation and its helpers
 - [ ] Structural validation starts `call`; temporal/contextual validation follows context loading
-- [ ] HTTP routes use the typed router and any custom status/body/error policy lives in `http::Projector<O, P>`
+- [ ] HTTP routes are registered on the root guest's Axum router (typed `omnia_guest::api` routers only when design requires the fallback)
 - [ ] Messaging routes use exact topics and explicit decoder/acknowledgement policy
 - [ ] All errors return `omnia_guest::Error`
 - [ ] Domain errors implement `From<DomainError> for omnia_guest::Error`
@@ -96,14 +96,15 @@ Before completing, verify ALL items.
 
 ### Guest wiring (when applicable)
 
-- [ ] All HTTP endpoints registered as typed operation routes
-- [ ] All messaging topics registered as exact typed operation routes
+- [ ] All HTTP endpoints registered on the root guest Axum router (`src/lib.rs`)
+- [ ] All messaging topics registered as exact topic matches
 - [ ] All WebSocket and command adapters invoke typed operations
 - [ ] Every exposed transport has an explicit WIT export
 - [ ] Operation types imported from the generated crate
-- [ ] Guest `Cargo.toml` includes the new crate
+- [ ] Root guest `Cargo.toml` includes the new crate as a path dependency
 - [ ] Provider trait implementations cover required adapters
 - [ ] No duplicate routes, topics, WebSocket adapters, or imports
+- [ ] No `guests/` directory invented in create mode
 
 ### Update Mode Only
 

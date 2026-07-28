@@ -277,9 +277,16 @@ impl<P: omnia_guest::api::Provider + Config> Operation<P> for ProcessRequest {
 
 ## Pattern 5: Boundary Conversion
 
-At the HTTP boundary, register the operation with the typed router. Its projector preserves classification:
+At the HTTP boundary, invoke through the shared `Invoker` and let `HttpError` / `HttpResult` map classification to status (preferred Axum guest — see the exemplar `src/lib.rs`). Typed-router projectors preserve the same classification when using the fallback:
 
 ```rust
+// Preferred: Axum handler
+async fn process(Json(request): Json<ProcessRequest>) -> HttpResult<Json<ProcessReply>> {
+    let reply = invoker().invoke::<ProcessRequest>(Invocation::new(request)).await?;
+    Ok(Json(reply))
+}
+
+// Fallback: typed router
 use omnia_guest::api::http::{Router, post};
 use omnia_guest::api::invoke::Invoker;
 

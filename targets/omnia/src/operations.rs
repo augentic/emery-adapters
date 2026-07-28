@@ -185,31 +185,48 @@ fn scaffold_prelude(tree_root: &Path) -> Result<String, Error> {
     let report = crate::scaffold::ensure_missing(tree_root)
         .map_err(|err| Error::Io(format!("base-repo scaffold prelude failed: {err}")))?;
 
-    if report.written.is_empty() {
-        return Ok("### scaffold prelude (already run in-guest)\n\nEvery standard tooling file \
-             was already present; nothing was written. Do not re-author them."
-            .to_string());
-    }
-
-    let mut block = format!(
-        "### scaffold prelude (already run in-guest)\n\nThe adapter wrote the missing \
-         standard tooling files from the exemplar checkout's template contract:\n{}\n\n\
-         Do not re-author or overwrite them.",
-        report.written.iter().map(|path| format!("- `{path}`")).collect::<Vec<_>>().join("\n"),
-    );
-    if report.written.iter().any(|path| path == crate::scaffold::PUBLISH_WORKFLOW) {
-        let tokens =
-            report.tokens.iter().map(|token| format!("`{token}`")).collect::<Vec<_>>().join(" / ");
+    let mut block = if report.written.is_empty() {
+        "### scaffold prelude (already run in-guest)\n\nEvery standard tooling file \
+         was already present; nothing was written. Do not re-author them."
+            .to_string()
+    } else {
+        format!(
+            "### scaffold prelude (already run in-guest)\n\nThe adapter wrote the missing \
+             standard tooling files from the exemplar checkout's template contract:\n{}\n\n\
+             Do not re-author or overwrite them.",
+            report.written.iter().map(|path| format!("- `{path}`")).collect::<Vec<_>>().join("\n"),
+        )
+    };
+    if !report.unfilled_tokens.is_empty() {
+        let tokens = report
+            .unfilled_tokens
+            .iter()
+            .map(|token| format!("`{token}`"))
+            .collect::<Vec<_>>()
+            .join(" / ");
         let _ = write!(
             block,
-            " Fill the {tokens} placeholders in `{}`.",
+            "\n\nUnfilled placeholders still present in `{}`: {tokens}. Fill them before \
+             considering the guest scaffolding complete.",
             crate::scaffold::PUBLISH_WORKFLOW,
         );
     }
     if report.written.iter().any(|path| path == crate::scaffold::VET_CONFIG) {
         block.push_str(
-            " Run `cargo vet regenerate {imports,exemptions,unpublished}` once \
+            "\n\nRun `cargo vet regenerate {imports,exemptions,unpublished}` once \
              `Cargo.lock` exists.",
+        );
+    }
+    if let Some(mismatch) = &report.pin_mismatch {
+        let consumer_version = mismatch.consumer_version.as_deref().unwrap_or("(unparsed)");
+        let consumer_rev = mismatch.consumer_rev.as_deref().unwrap_or("(unparsed)");
+        let _ = write!(
+            block,
+            "\n\nSoft warning — Omnia pin mismatch (update mode): consumer \
+             `omnia` version `{consumer_version}` / rev `{consumer_rev}` vs exemplar \
+             `{}` / `{}`. Preserve the consumer pin; prefer consumer-evidenced idioms \
+             over exemplar idioms wherever they conflict.",
+            mismatch.exemplar_version, mismatch.exemplar_rev,
         );
     }
     Ok(block)
