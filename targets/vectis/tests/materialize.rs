@@ -195,11 +195,7 @@ fn replaces_emery_init_gitignore_stub() {
     };
     let dest = tempdir().unwrap();
     // Shape of `.gitignore` after `emery init` — framework lines only.
-    fs::write(
-        dest.path().join(".gitignore"),
-        ".emery/scratch/\nworkspace/\n",
-    )
-    .unwrap();
+    fs::write(dest.path().join(".gitignore"), ".emery/scratch/\nworkspace/\n").unwrap();
     let identity = Identity::new("Counter", "com.example.counter").unwrap();
     let report = run(&template, dest.path(), &identity).unwrap();
 
