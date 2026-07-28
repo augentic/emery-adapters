@@ -1,6 +1,6 @@
 # Template capabilities — strip and late adoption
 
-Greenfield trees come from a local [`vectis-template`](https://github.com/augentic/vectis-template) checkout (`$TEMPLATE_DIR`: default `../vectis-template`, override `VECTIS_TEMPLATE_DIR`). Pins, BoltFFI DX, and optional-capability shapes live only in that checkout — never invent versions or FFI layouts in the consumer.
+Greenfield trees come from a local [`vectis-exemplar`](https://github.com/augentic/vectis-exemplar) checkout (`$TEMPLATE_DIR`: default `../vectis-exemplar`, override `VECTIS_EXEMPLAR_DIR`). Pins, BoltFFI DX, and optional-capability shapes live only in that checkout — never invent versions or FFI layouts in the consumer.
 
 **Strip grammar and marker discovery** stay in **`$TEMPLATE_DIR/AGENTS.md`** (not copied into the consumer). This reference covers DX completeness after materialize, and how a later slice **re-adopts** a capability that was stripped at greenfield.
 

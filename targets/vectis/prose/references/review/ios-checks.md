@@ -252,7 +252,7 @@ When `composition.yaml` or `assets.yaml` is absent, skip this check — there is
 
 **Codex**: `rule_id: VECTIS-007`
 
-Per the iOS scaffold immutability contract ([`hard-rules-ios.md`](../hard-rules-ios.md)), `iOS/Makefile` and `iOS/project.yml` must stay aligned with `$TEMPLATE_DIR` (local `vectis-template` checkout). Agents must not invent DX or pin values. Prefer `generic/platform=iOS Simulator` — never a named device (`name=iPhone …`).
+Per the iOS scaffold immutability contract ([`hard-rules-ios.md`](../hard-rules-ios.md)), `iOS/Makefile` and `iOS/project.yml` must stay aligned with `$TEMPLATE_DIR` (local `vectis-exemplar` checkout). Agents must not invent DX or pin values. Prefer `generic/platform=iOS Simulator` — never a named device (`name=iPhone …`).
 
 **Detection**:
 

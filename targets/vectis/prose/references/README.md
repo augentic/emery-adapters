@@ -2,7 +2,7 @@
 
 Reference documentation for the Vectis target adapter at [`adapters/targets/vectis/`](..). In Emery, Vectis is a **target adapter** — `guidance`, `build`, `merge` — not a slash-command plugin.
 
-The Vectis core / test / iOS / Android writer and reviewer orchestration lives in [`../prompts/build.md`](../prompts/build.md) and eight phase prompts under [`../prompts/build/`](../prompts/build/). The depth (Crux idioms, SwiftUI patterns, Compose patterns, hard rules, review check libraries, token templates, design-system integration) lives in this folder. The live `$TEMPLATE_DIR` ([`vectis-template`](https://github.com/augentic/vectis-template)) checkout is the worked example for core + shells + DX; sample Emery artifacts sit under [`examples/`](examples/README.md).
+The Vectis core / test / iOS / Android writer and reviewer orchestration lives in [`../prompts/build.md`](../prompts/build.md) and eight phase prompts under [`../prompts/build/`](../prompts/build/). The depth (Crux idioms, SwiftUI patterns, Compose patterns, hard rules, review check libraries, token templates, design-system integration) lives in this folder. The live `$TEMPLATE_DIR` ([`vectis-exemplar`](https://github.com/augentic/vectis-exemplar)) checkout is the worked example for core + shells + DX; sample Emery artifacts sit under [`examples/`](examples/README.md).
 
 ## Prompts
 
@@ -83,4 +83,4 @@ Canonical SVG → per-platform exports (the adapter's materialize step), render-
 
 ### Sample artifacts + template pointer
 
-- [`examples/`](examples/README.md) — sample `tokens.yaml` / `assets.yaml` plus the `$TEMPLATE_DIR` capability→path map (live [`vectis-template`](https://github.com/augentic/vectis-template) is the worked example for core, shells, DX, and strip units).
+- [`examples/`](examples/README.md) — sample `tokens.yaml` / `assets.yaml` plus the `$TEMPLATE_DIR` capability→path map (live [`vectis-exemplar`](https://github.com/augentic/vectis-exemplar) is the worked example for core, shells, DX, and strip units).

@@ -1,6 +1,6 @@
-//! Local `vectis-template` materialize contract.
+//! Local `vectis-exemplar` materialize contract.
 //!
-//! Requires a checkout at `VECTIS_TEMPLATE_DIR` or `../vectis-template` relative
+//! Requires a checkout at `VECTIS_EXEMPLAR_DIR` or `../vectis-exemplar` relative
 //! to the emery-adapters workspace root (sibling of this repo). Skips clearly
 //! when absent so CI without the template still passes.
 
@@ -23,7 +23,7 @@ fn template_dir() -> Option<PathBuf> {
         return None;
     }
 
-    // targets/vectis → emery-adapters → sibling vectis-template
+    // targets/vectis → emery-adapters → sibling vectis-exemplar
     let from_crate =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..").join(DEFAULT_RELATIVE_DIR);
     if from_crate.is_dir() {
@@ -37,7 +37,7 @@ fn template_dir() -> Option<PathBuf> {
     }
 
     eprintln!(
-        "skipping: no local vectis-template (set {TEMPLATE_DIR_ENV} or clone {DEFAULT_RELATIVE_DIR} next to emery-adapters)"
+        "skipping: no local vectis-exemplar (set {TEMPLATE_DIR_ENV} or clone {DEFAULT_RELATIVE_DIR} next to emery-adapters)"
     );
     None
 }
@@ -46,7 +46,7 @@ fn require_template() -> Option<PathBuf> {
     let dir = template_dir()?;
     // Cheap shape gate so a random directory does not produce opaque failures.
     if !dir.join("Cargo.toml").is_file() || !dir.join("shared").is_dir() {
-        eprintln!("skipping: {} does not look like vectis-template", dir.display());
+        eprintln!("skipping: {} does not look like vectis-exemplar", dir.display());
         return None;
     }
     Some(dir)
@@ -174,7 +174,7 @@ fn pin_files_byte_equal() {
 
 #[test]
 fn refuses_overwrite_and_missing_template() {
-    let missing = Path::new("/no/such/vectis-template-dir-for-test");
+    let missing = Path::new("/no/such/vectis-exemplar-dir-for-test");
     let dest = tempdir().unwrap();
     let identity = Identity::new("Counter", "com.example.counter").unwrap();
     let err = run(missing, dest.path(), &identity).unwrap_err();

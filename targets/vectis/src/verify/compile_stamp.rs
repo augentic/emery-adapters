@@ -1,7 +1,7 @@
 //! Compile-completion stamp probes for shell verify.
 //!
 //! Stamps are adapter-owned proof that the host verify loop ran successfully.
-//! They are not part of `vectis-template` DX. Agents write them after a clean
+//! They are not part of `vectis-exemplar` DX. Agents write them after a clean
 //! `make build` (template target names — there is no `sim-build` / `verify`
 //! alias in the live template).
 

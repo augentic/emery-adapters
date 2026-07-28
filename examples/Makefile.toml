@@ -7,18 +7,18 @@ EVAL_MODEL = "opus"
 EVAL_TIMEOUT_SECS = "1800"
 RUST_LOG = "info,opentelemetry_sdk=off,omnia_cursor=debug"
 
-# Resolve the workspace-sibling vectis-template to an absolute path.
-# From sandbox/<case>/ the default `../vectis-template` would otherwise
-# land on sandbox/vectis-template; export before the eval binary runs.
+# Resolve the workspace-sibling vectis-exemplar to an absolute path.
+# From sandbox/<case>/ the default `../vectis-exemplar` would otherwise
+# land on sandbox/vectis-exemplar; export before the eval binary runs.
 [tasks.eval]
 env_files = [".env"]
 script_runner = "bash"
 script = '''
 set -euo pipefail
-if [ -z "${VECTIS_TEMPLATE_DIR:-}" ]; then
-  sibling="${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY:-.}/../vectis-template"
+if [ -z "${VECTIS_EXEMPLAR_DIR:-}" ]; then
+  sibling="${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY:-.}/../vectis-exemplar"
   if [ -d "$sibling" ]; then
-    export VECTIS_TEMPLATE_DIR="$(cd "$sibling" && pwd)"
+    export VECTIS_EXEMPLAR_DIR="$(cd "$sibling" && pwd)"
   fi
 fi
 cargo run -p eval -- eval "$@"
@@ -29,10 +29,10 @@ env_files = [".env"]
 script_runner = "bash"
 script = '''
 set -euo pipefail
-if [ -z "${VECTIS_TEMPLATE_DIR:-}" ]; then
-  sibling="${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY:-.}/../vectis-template"
+if [ -z "${VECTIS_EXEMPLAR_DIR:-}" ]; then
+  sibling="${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY:-.}/../vectis-exemplar"
   if [ -d "$sibling" ]; then
-    export VECTIS_TEMPLATE_DIR="$(cd "$sibling" && pwd)"
+    export VECTIS_EXEMPLAR_DIR="$(cd "$sibling" && pwd)"
   fi
 fi
 cargo run -p eval -- "$@"

@@ -29,12 +29,12 @@ const REFERENCES_POINTER: &str = "Every prompt, reference, and rule document thi
 /// Host-FS bootstrap contract for greenfield trees (typescript-style).
 ///
 /// The target guest only mounts the project root, so a sibling
-/// `../vectis-template` is invisible in-guest. The build agent performs
+/// `../vectis-exemplar` is invisible in-guest. The build agent performs
 /// allowlisted copy via [`scaffold::materialize`] on the host filesystem.
 const BINDING_NOTE: &str = "Resolve `$TEMPLATE_DIR` before any greenfield write: default \
-                            `../vectis-template` relative to the consumer project root, or the \
-                            absolute path in `VECTIS_TEMPLATE_DIR`. Clone \
-                            https://github.com/augentic/vectis-template.git if missing — fail \
+                            `../vectis-exemplar` relative to the consumer project root, or the \
+                            absolute path in `VECTIS_EXEMPLAR_DIR`. Clone \
+                            https://github.com/augentic/vectis-exemplar.git if missing — fail \
                             closed; do not invent a scaffold or version pins. This is **template \
                             materialize** (`vectis::scaffold::materialize`), not asset \
                             materialize (`vectis::materialize`). Strip grammar: \
@@ -523,7 +523,7 @@ fn scaffold_missing_trees(tree_root: &Path) -> String {
         "### template-materialize prelude\n\nAbsent declared trees: {absent}. The guest did \
          **not** write them — target guests cannot see a sibling `$TEMPLATE_DIR`.\n\n\
          Before any write leg for those trees:\n\
-         1. Resolve `$TEMPLATE_DIR` (`VECTIS_TEMPLATE_DIR` or `../vectis-template`); fail \
+         1. Resolve `$TEMPLATE_DIR` (`VECTIS_EXEMPLAR_DIR` or `../vectis-exemplar`); fail \
          closed if missing.\n\
          2. Run the allowlisted copy in `vectis::scaffold::materialize` (root DX + \
          `shared/` + `iOS/` + `Android/` + `supply-chain/` + `.maestro/`; never `web/`, \

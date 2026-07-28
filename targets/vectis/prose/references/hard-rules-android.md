@@ -4,7 +4,7 @@
 
 ## Scaffold immutability (create and update mode)
 
-1. **Keep DX aligned with `$TEMPLATE_DIR`.** `Android/Makefile`, `Android/settings.gradle.kts`, `Android/build.gradle.kts`, `Android/app/build.gradle.kts`, and `Android/shared/build.gradle.kts` come from the local `vectis-template` checkout after identity substitution. On drift, re-copy from `$TEMPLATE_DIR` — agents must not invent pins during verify-repair or feature work.
+1. **Keep DX aligned with `$TEMPLATE_DIR`.** `Android/Makefile`, `Android/settings.gradle.kts`, `Android/build.gradle.kts`, `Android/app/build.gradle.kts`, and `Android/shared/build.gradle.kts` come from the local `vectis-exemplar` checkout after identity substitution. On drift, re-copy from `$TEMPLATE_DIR` — agents must not invent pins during verify-repair or feature work.
 2. **Gradle wrapper lands from the template.** Materialize copies `gradlew` and `gradle/wrapper/` — do not invent a wrapper pin. Host SDK paths stay in `local.properties` (denylisted from materialize; operator/host owned).
 
 ## Preservation Rules (Update Mode)

@@ -1,6 +1,6 @@
 # Vectis sample artifacts + template pointer
 
-The live [`vectis-template`](https://github.com/augentic/vectis-template) checkout is the worked example for the shared Crux core, iOS/Android shells, DX / pins, BoltFFI, and `VECTIS-OPTIONAL` strip units. Resolve it as `$TEMPLATE_DIR` (`../vectis-template` relative to the consumer project root, or `VECTIS_TEMPLATE_DIR`).
+The live [`vectis-exemplar`](https://github.com/augentic/vectis-exemplar) checkout is the worked example for the shared Crux core, iOS/Android shells, DX / pins, BoltFFI, and `VECTIS-OPTIONAL` strip units. Resolve it as `$TEMPLATE_DIR` (`../vectis-exemplar` relative to the consumer project root, or `VECTIS_EXEMPLAR_DIR`).
 
 There are no in-adapter markdown walkthroughs under `examples/core|ios|android` — read the template tree, then the adapter pattern refs for anatomy that is not a file copy.
 

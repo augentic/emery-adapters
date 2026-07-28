@@ -14,16 +14,16 @@ Vectis is a Emery **target adapter**. Its `guidance`, `build`, and `merge` opera
 
 ## `$TEMPLATE_DIR` (operator prerequisite)
 
-Greenfield and pin refresh require a local clone of [`augentic/vectis-template`](https://github.com/augentic/vectis-template):
+Greenfield and pin refresh require a local clone of [`augentic/vectis-exemplar`](https://github.com/augentic/vectis-exemplar):
 
 | Resolve | Path |
 | ------- | ---- |
-| Default | `../vectis-template` relative to the **consumer** project root |
-| Override | Absolute path in `VECTIS_TEMPLATE_DIR` |
+| Default | `../vectis-exemplar` relative to the **consumer** project root |
+| Override | Absolute path in `VECTIS_EXEMPLAR_DIR` |
 
 The target guest cannot see a sibling checkout; the build agent materializes on the host via `vectis::scaffold::materialize`. Strip grammar lives only in **`$TEMPLATE_DIR/AGENTS.md`** (never copied into the consumer). Late-capability re-adoption: [`prose/references/template-capabilities.md`](prose/references/template-capabilities.md). Greenfield materialize may replace a pre-existing `.gitignore` (the `emery init` stub) with the template file; other existing root DX files still block the copy.
 
-There is **no** adapter-side version registry. Fix pins upstream in `vectis-template`, then re-materialize / re-copy.
+There is **no** adapter-side version registry. Fix pins upstream in `vectis-exemplar`, then re-materialize / re-copy.
 
 ## Layout
 
@@ -60,8 +60,8 @@ When changing platform support, preserve existing platforms and add only the sel
 
 - Keep deterministic validation, materialization, inference, and scaffold behavior in wasm-free modules under `src/`.
 - Keep the wasm32-only `mod guest` in `src/lib.rs` limited to the single `adapter::target!(crate::Adapter)` invocation; boundary behavior belongs in the SDK's dispatch functions, operation behavior in the `adapter::Target` impl.
-- Greenfield allowlist / denylist / identity substitution live in `src/scaffold/materialize.rs` and are tested against a local `vectis-template` checkout — pins are never re-authored in this crate.
-- Fix pin or DX drift upstream in `vectis-template`, then re-materialize; do not reintroduce an adapter-side version registry.
+- Greenfield allowlist / denylist / identity substitution live in `src/scaffold/materialize.rs` and are tested against a local `vectis-exemplar` checkout — pins are never re-authored in this crate.
+- Fix pin or DX drift upstream in `vectis-exemplar`, then re-materialize; do not reintroduce an adapter-side version registry.
 
 ## Tests and verification
 
@@ -73,7 +73,7 @@ cargo clippy -p vectis --all-targets --all-features -- -D warnings
 cargo make check
 ```
 
-Materialize FS tests resolve `VECTIS_TEMPLATE_DIR` or `../vectis-template` from the emery-adapters workspace and skip clearly when absent. For component-boundary changes, also run `cargo make wasm-run`. Live tests are reserved for prompt-quality evaluation.
+Materialize FS tests resolve `VECTIS_EXEMPLAR_DIR` or `../vectis-exemplar` from the emery-adapters workspace and skip clearly when absent. For component-boundary changes, also run `cargo make wasm-run`. Live tests are reserved for prompt-quality evaluation.
 
 ## Troubleshooting signals
 
