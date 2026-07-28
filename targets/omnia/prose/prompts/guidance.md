@@ -91,7 +91,7 @@ Sequence:
 
 1. Author / update crate per `design.md`.
 2. Author / update tests per `specs/<domain>/spec.md` (scenarios) + `design.md` (side-effect assertions).
-3. Author / update typed routers, projectors, explicit WIT exports, and provider impls.
+3. Author / update guest HTTP / messaging wiring, explicit WIT exports, and provider impls (Axum + exact topics; typed routers only when design requires the fallback).
 4. Run code review.
 
 The build prompt carries the detailed writer instructions; tasks.md should follow that ordering so the build walks the slice the same way every time.

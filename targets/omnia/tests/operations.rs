@@ -89,6 +89,10 @@ async fn build_phase_legs() {
     assert!(user.contains("omnia-references"), "user prompt points at the MCP references");
     assert!(user.contains("### scaffold prelude"), "scaffold prelude outcome in user prompt");
     assert!(user.contains("- `Makefile.toml`"), "written tooling files listed");
+    assert!(
+        user.contains("Unfilled placeholders still present"),
+        "unfilled publish tokens always surfaced: {user}"
+    );
     // Generation only starts after the deterministic scaffold has run.
     for path in
         ["Makefile.toml", "deny.toml", "supply-chain/config.toml", ".github/workflows/ci.yaml"]

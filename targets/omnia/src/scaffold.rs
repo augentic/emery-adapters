@@ -48,6 +48,19 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
+/// Soft warning when the consumer's Omnia pin differs from the exemplar's.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PinMismatch {
+    /// Exemplar `omnia.version`.
+    pub exemplar_version: String,
+    /// Exemplar `omnia.rev`.
+    pub exemplar_rev: String,
+    /// Consumer workspace `omnia` version, when parseable.
+    pub consumer_version: Option<String>,
+    /// Consumer `[patch.crates-io]` omnia `rev`, when parseable.
+    pub consumer_rev: Option<String>,
+}
+
 /// Outcome of one [`ensure_missing`] pass.
 #[derive(Debug, Default)]
 pub struct EnsureReport {
@@ -58,6 +71,10 @@ pub struct EnsureReport {
     /// `<UPPER_SNAKE>` placeholder tokens the manifest declares (sorted);
     /// seed templates carry them verbatim for the guest writer to fill.
     pub tokens: Vec<String>,
+    /// Declared tokens still present as literals in [`PUBLISH_WORKFLOW`].
+    pub unfilled_tokens: Vec<String>,
+    /// Soft warning when the consumer pin differs from the exemplar contract.
+    pub pin_mismatch: Option<PinMismatch>,
 }
 
 /// Write every base-repo tooling file absent from `project_root`, sourced
@@ -70,7 +87,7 @@ pub struct EnsureReport {
 /// before a failure stay in place.
 pub fn ensure_missing(project_root: &Path) -> Result<EnsureReport, Error> {
     let checkout = project_root.join(CHECKOUT_DIR);
-    let manifest = load_contract(&checkout)?;
+    let (exemplar, manifest) = load_contract(&checkout)?;
 
     let mut report = EnsureReport {
         tokens: manifest.tokens.keys().map(|token| format!("<{token}>")).collect(),
@@ -92,11 +109,13 @@ pub fn ensure_missing(project_root: &Path) -> Result<EnsureReport, Error> {
         write_atomic(&target, &contents).map_err(Error::Io)?;
         report.written.push(entry.target.clone());
     }
+    report.unfilled_tokens = unfilled_publish_tokens(project_root, &report.tokens);
+    report.pin_mismatch = pin_mismatch(project_root, &exemplar);
     Ok(report)
 }
 
 /// Strictly parse and validate the checkout's template contract.
-fn load_contract(checkout: &Path) -> Result<Manifest, Error> {
+fn load_contract(checkout: &Path) -> Result<(Exemplar, Manifest), Error> {
     if !checkout.is_dir() {
         return Err(Error::Checkout(format!(
             "no checkout at `{CHECKOUT_DIR}` — the preparation leg must run first"
@@ -113,7 +132,7 @@ fn load_contract(checkout: &Path) -> Result<Manifest, Error> {
     if exemplar.omnia.rev.is_empty() {
         return Err(Error::Checkout("exemplar.yaml declares no omnia rev".to_string()));
     }
-    let manifest_rel = exemplar.templates.manifest;
+    let manifest_rel = exemplar.templates.manifest.clone();
     let manifest_str = manifest_rel.to_string_lossy();
     if is_unsafe(&manifest_str) {
         return Err(Error::Checkout(format!("unsafe manifest path `{manifest_str}`")));
@@ -145,7 +164,7 @@ fn load_contract(checkout: &Path) -> Result<Manifest, Error> {
             )));
         }
     }
-    Ok(manifest)
+    Ok((exemplar, manifest))
 }
 
 fn parse_yaml<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T, Error> {
@@ -172,6 +191,56 @@ fn write_atomic(target: &Path, contents: &str) -> io::Result<()> {
     })
 }
 
+fn unfilled_publish_tokens(project_root: &Path, tokens: &[String]) -> Vec<String> {
+    let path = project_root.join(PUBLISH_WORKFLOW);
+    let Ok(body) = fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    tokens.iter().filter(|token| body.contains(token.as_str())).cloned().collect()
+}
+
+fn pin_mismatch(project_root: &Path, exemplar: &Exemplar) -> Option<PinMismatch> {
+    let cargo = project_root.join("Cargo.toml");
+    let Ok(text) = fs::read_to_string(cargo) else {
+        return None;
+    };
+    let consumer_version = workspace_dep_version(&text, "omnia");
+    let consumer_rev = patch_rev(&text, "omnia");
+    let version_differs =
+        consumer_version.as_ref().is_some_and(|version| version != &exemplar.omnia.version);
+    let rev_differs = consumer_rev.as_ref().is_some_and(|rev| rev != &exemplar.omnia.rev);
+    if !version_differs && !rev_differs {
+        return None;
+    }
+    Some(PinMismatch {
+        exemplar_version: exemplar.omnia.version.clone(),
+        exemplar_rev: exemplar.omnia.rev.clone(),
+        consumer_version,
+        consumer_rev,
+    })
+}
+
+/// Best-effort `omnia = "…"` under `[workspace.dependencies]` (or a bare dep table).
+fn workspace_dep_version(cargo_toml: &str, name: &str) -> Option<String> {
+    let needle = format!("{name} = \"");
+    cargo_toml.lines().find_map(|line| {
+        let trimmed = line.trim();
+        trimmed.strip_prefix(&needle).and_then(|rest| rest.split('"').next().map(str::to_string))
+    })
+}
+
+/// Best-effort `rev = "…"` on a `[patch.crates-io]` `omnia = { … }` line.
+fn patch_rev(cargo_toml: &str, name: &str) -> Option<String> {
+    let prefix = format!("{name} = {{");
+    cargo_toml.lines().find_map(|line| {
+        let trimmed = line.trim();
+        if !trimmed.starts_with(&prefix) {
+            return None;
+        }
+        trimmed.split("rev = \"").nth(1).and_then(|rest| rest.split('"').next().map(str::to_string))
+    })
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 struct Exemplar {
@@ -183,7 +252,6 @@ struct Exemplar {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct OmniaPin {
-    #[expect(dead_code, reason = "compatibility contract consumed by the build prompts")]
     version: String,
     #[expect(dead_code, reason = "compatibility contract consumed by the build prompts")]
     repository: String,

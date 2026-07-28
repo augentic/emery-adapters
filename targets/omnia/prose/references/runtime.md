@@ -1,8 +1,8 @@
 # Runtime Setup
 
-Local development runtime configuration via the `omnia::runtime!` macro in `examples/runner.rs` (or `examples/<guest-name>.rs`).
+Local development runtime configuration via the `omnia::runtime!` macro in `examples/runtime.rs`.
 
-Compiling reference: the exemplar checkout's `guests/typed/examples/runner.rs` — a `cfg_if` split (`wasm32` gets an empty `main`; native gets the `omnia::runtime!({ hosts: { … } })` block) enumerating every WASI host the guest consumes. Navigation: [`exemplar.md`](exemplar.md). Provider configuration and trait composition: [providers/README.md](providers/README.md).
+Compiling reference: the exemplar checkout's `examples/runtime.rs` — a `cfg_if` split (`wasm32` gets an empty `main`; native gets the `omnia::runtime!({ hosts: { … } })` block) enumerating every WASI host the guest consumes. Navigation: [`exemplar.md`](exemplar.md). Provider configuration and trait composition: [providers/README.md](providers/README.md).
 
 ## WASI host options
 

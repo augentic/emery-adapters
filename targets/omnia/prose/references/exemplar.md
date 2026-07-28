@@ -1,6 +1,6 @@
 # Exemplar checkout
 
-The worked-code reference for Omnia builds is [`augentic/omnia-exemplar`](https://github.com/augentic/omnia-exemplar): a compiling, CI-green Omnia workspace (a fictional transit operator) that demonstrates current SDK idioms as running code — connectors, adapters, both guest styles, tests, and fixtures. The build agent reads it in place of static code listings; upstream CI, not the consumer build, compiles it.
+The worked-code reference for Omnia builds is [`augentic/omnia-exemplar`](https://github.com/augentic/omnia-exemplar): a compiling, CI-green Omnia workspace (a fictional transit operator) that demonstrates current SDK idioms as running code — connectors, adapters, a root-package Axum guest, tests, and fixtures. The build agent reads it in place of static code listings; upstream CI, not the consumer build, compiles it.
 
 ## Checkout contract
 
@@ -22,7 +22,11 @@ omnia:
 ```
 
 - **Create mode** — adopt that contract when authoring dependencies: use the declared `version` for the `omnia`/`omnia-*` workspace dependencies and mirror the exemplar's `[patch.crates-io]` block at the declared `rev`. Do not resolve a different omnia version.
-- **Update mode** — preserve the consumer's existing pin; never upgrade as a side effect. When the consumer's pin differs from the exemplar's, note the mismatch as a soft warning **and prefer idioms evidenced in the consumer's existing crates over exemplar idioms wherever the two conflict** — the exemplar's `main` moves ahead of consumers by default, and copying newer-SDK patterns into an older-SDK workspace burns the verify-repair budget. Stop (per `## § Stop hint contract`) only on a concrete API incompatibility that prevents the requested build.
+- **Update mode** — preserve the consumer's existing pin; never upgrade as a side effect. When the consumer's pin differs from the exemplar's, the scaffold prelude records a soft warning in the generation user prompt **and prefer idioms evidenced in the consumer's existing crates over exemplar idioms wherever the two conflict** — the exemplar's `main` moves ahead of consumers by default, and copying newer-SDK patterns into an older-SDK workspace burns the verify-repair budget. Stop (per `## § Stop hint contract`) only on a concrete API incompatibility that prevents the requested build.
+
+### Schema-version coupling
+
+The adapter's scaffold prelude pins exact `schema-version` values for `exemplar.yaml` and `templates/guest/manifest.yaml`. Bumping either version in the exemplar is a coordinated release: land the exemplar contract change and the matching adapter bump together, or consumer builds fail closed at the prelude.
 
 ## Navigation map
 
@@ -33,13 +37,13 @@ omnia:
 | Compact adapter (transform + enrich + publish) | `crates/pulse-adapter/` |
 | Full-size adapter (state, upstream APIs, feature gate) | `crates/gtfs-adapter/` |
 | Config key catalog, route/topic tables, shared API clients | `crates/common/` |
-| Typed-router guest (style A — prefer this) | `guests/typed/` |
-| Hand-written Axum guest (style B) | `guests/axum/` |
+| Extra capability ops + mocks (`BlobStore`, `Broadcast`, `DocumentStore`, `TableStore`) | `crates/capability-examples/` |
+| Root-package Axum guest (preferred compiling shape) | `src/lib.rs` |
+| Guest runtime example (`omnia::runtime!`) | `examples/runtime.rs` |
 | Mock-provider tests and fixtures | `crates/tally-connector/tests`, `pulse-connector/tests`, `gtfs-adapter/tests`, each crate's `data/` |
 | Replay tests over live captures | `crates/pulse-adapter/tests/` + `data/replay/` |
-| Workspace shape: members, lints, dependencies, profiles | root `Cargo.toml` |
+| Workspace shape: root guest package, members, lints, dependencies, profiles | root `Cargo.toml` |
 | Omnia compatibility contract | `exemplar.yaml` |
-| Guest runtime examples (`omnia::runtime!`) | `guests/*/examples/` |
 
 The repository README carries the architecture, the route/topic tables, and a "Copy this, not that" list separating general patterns from Acme domain quirks — read it before the crates.
 

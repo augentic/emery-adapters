@@ -19,11 +19,11 @@ When conflicts arise, follow this strict precedence:
 
 ## Hard Rules
 
-Violations of any rule below fail generation or update. Positive shape — the operation kernel, typed routers, explicit exports, strong domain typing, async operations — is *demonstrated*, not restated: match the exemplar checkout's compiling idioms (rule 1). The rules below are the negative constraints and mappings that compiling code cannot prove.
+Violations of any rule below fail generation or update. Positive shape — the operation kernel, root-package Axum guest wiring, explicit exports, strong domain typing, async operations — is *demonstrated*, not restated: match the exemplar checkout's compiling idioms (rule 1). The rules below are the negative constraints and mappings that compiling code cannot prove.
 
 ### Core Rules (both modes)
 
-1. **Exemplar shape** -- new code matches the exemplar checkout's compiling idioms: zero-sized `Operation<P>` implementors with typed inputs, plain outputs, and exact provider bounds; typed HTTP/messaging/command routers; explicit per-transport export declarations; newtypes and enums for domain concepts. Deviations are review findings.
+1. **Exemplar shape** -- new code matches the exemplar checkout's compiling idioms: zero-sized `Operation<P>` implementors with typed inputs, plain outputs, and exact provider bounds; a root-package guest (`src/lib.rs`) with hand-written Axum HTTP routes and exact-topic messaging over a shared `Invoker`; explicit per-transport export declarations; newtypes and enums for domain concepts. Typed `omnia_guest::api` routers are a documented fallback only ([`guest-patterns.md`](guest-patterns.md)), not the default. Deviations are review findings.
 2. **Omnia SDK only** -- all errors return `omnia_guest::Error`; no custom error types in public API
 3. **Provider-only I/O** -- all external I/O through provider traits; no direct network/file/env access
 4. **No forbidden crates** -- see [guardrails.md](guardrails.md)

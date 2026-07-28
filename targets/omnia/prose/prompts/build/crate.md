@@ -27,7 +27,7 @@ The full Hard Rules + Authority Hierarchy live in [`../../references/hard-rules.
 ## Create mode
 
 1. Author the workspace `Cargo.toml` and the crate `Cargo.toml` per [`cargo-toml.md`](../../references/cargo-toml.md). Workspace dependencies pin `omnia-guest` plus the `omnia-wasi-*` adapters for the provider traits the design declares, at the Omnia version the exemplar checkout's `exemplar.yaml` declares — mirror its `[patch.crates-io]` block per [`exemplar.md`](../../references/exemplar.md).
-2. Generate `$CRATE_PATH/src/lib.rs` (domain library — not the guest) with one module per operation. Module layout follows the exemplar convention (see `crates/tally-connector`, `crates/pulse-adapter`): handler/operation modules, types, errors as needed. Guest wiring is a separate package under `guests/` (create-mode guest writer).
+2. Generate `$CRATE_PATH/src/lib.rs` (domain library — not the guest) with one module per operation. Module layout follows the exemplar convention (see `crates/tally-connector`, `crates/pulse-adapter`): handler/operation modules, types, errors as needed. Guest wiring is the workspace root package (`src/lib.rs`; create-mode guest writer).
 3. For each use case, emit:
    - A zero-sized operation type implementing `Operation<P>` with a typed request DTO as `Input`, a plain domain value as `Output`, and the exact provider capability bounds from the design. The transport router, not the operation, deserializes bytes/path/query fields.
    - `Operation::call(input, CallContext)` with structural validation as its first step, followed by context loading and temporal/contextual validation, then delegation to a standalone business function where that improves readability.
@@ -45,9 +45,9 @@ Worked code: the exemplar checkout is the primary reference for compiling curren
 Walk the four categories in fixed order; re-scan after structural before proceeding. The strategy library per category lives at [`update-patterns.md`](../../references/update-patterns.md); diff classification rules live at [`change-classification.md`](../../references/change-classification.md).
 
 1. **Structural** — type renames, file moves, module reshuffles. Apply via small, semantics-preserving rewrites. Re-run `cargo check` before moving on. Worked example: [`examples/crates/updates/structural.md`](../../references/examples/crates/updates/structural.md).
-2. **Subtractive** — delete operations / fields / types the new artifacts no longer name and remove their typed HTTP route or exact messaging-topic registration. Worked example: [`examples/crates/updates/subtractive.md`](../../references/examples/crates/updates/subtractive.md).
-3. **Modifying** — change an operation's behaviour, output shape, validation rules, provider dependencies, or projector in place. Update the matching `Cargo.toml` adapter dependency if a new provider trait is consumed. Worked example: [`examples/crates/updates/modifying.md`](../../references/examples/crates/updates/modifying.md).
-4. **Additive** — add new operations, typed routes, types, and variants. Additive code MUST compile against the already-updated structural layer. Worked example: [`examples/crates/updates/additive.md`](../../references/examples/crates/updates/additive.md).
+2. **Subtractive** — delete operations / fields / types the new artifacts no longer name and remove their HTTP route or exact messaging-topic registration from the guest. Worked example: [`examples/crates/updates/subtractive.md`](../../references/examples/crates/updates/subtractive.md).
+3. **Modifying** — change an operation's behaviour, output shape, validation rules, provider dependencies, or guest boundary mapping in place. Update the matching `Cargo.toml` adapter dependency if a new provider trait is consumed. Worked example: [`examples/crates/updates/modifying.md`](../../references/examples/crates/updates/modifying.md).
+4. **Additive** — add new operations, guest routes/topics, types, and variants. Additive code MUST compile against the already-updated structural layer. Worked example: [`examples/crates/updates/additive.md`](../../references/examples/crates/updates/additive.md).
 
 When a `cargo` failure surfaces during this pass, apply minimum-change repair via [`repair-patterns.md`](../../references/repair-patterns.md) before re-entering the parent verify-repair loop.
 
@@ -56,7 +56,7 @@ When a `cargo` failure surfaces during this pass, apply minimum-change repair vi
 The full checklist lives at [`checklists.md`](../../references/checklists.md). Highlights:
 
 - Every operation in `design.md` has a matching zero-sized `Operation<P>` implementation in `$CRATE_PATH`.
-- Every external surface is registered in an explicit typed router and exported through its WIT interface.
+- Every external surface is registered in the root guest (`src/lib.rs` — Axum routes and/or exact messaging topics) and exported through its WIT interface.
 - Every provider trait bound on an operation appears in the `AppProvider` composition.
 - Every `Config::get` key in `design.md` has a matching read in the operation (or in `Provider::new`).
 - Every `omnia_guest::Error` mapping in `design.md` has a matching arm in `impl From<DomainError>`.
