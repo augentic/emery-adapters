@@ -188,6 +188,54 @@ fn refuses_overwrite_and_missing_template() {
     assert!(err.to_string().contains("refusing to overwrite"));
 }
 
+#[test]
+fn replaces_emery_init_gitignore_stub() {
+    let Some(template) = require_template() else {
+        return;
+    };
+    let dest = tempdir().unwrap();
+    // Shape of `.gitignore` after `emery init` — framework lines only.
+    fs::write(
+        dest.path().join(".gitignore"),
+        ".emery/scratch/\nworkspace/\n",
+    )
+    .unwrap();
+    let identity = Identity::new("Counter", "com.example.counter").unwrap();
+    let report = run(&template, dest.path(), &identity).unwrap();
+
+    assert!(report.files.iter().any(|p| p == ".gitignore"));
+    let gitignore = fs::read_to_string(dest.path().join(".gitignore")).unwrap();
+    assert!(
+        gitignore.lines().any(|line| line.trim() == "target/"),
+        "template platform ignores must land"
+    );
+    assert!(
+        gitignore.lines().any(|line| line.trim() == "Android/.gradle/"),
+        "template Android ignores must land"
+    );
+    assert!(
+        gitignore.lines().any(|line| line.trim() == ".emery/scratch/"),
+        "Emery scratch entry must survive"
+    );
+    assert!(
+        gitignore.lines().any(|line| line.trim() == "workspace/"),
+        "Emery workspace entry must survive"
+    );
+}
+
+#[test]
+fn refuses_non_gitignore_root_overwrite() {
+    let Some(template) = require_template() else {
+        return;
+    };
+    let dest = tempdir().unwrap();
+    fs::write(dest.path().join("Makefile"), "# pre-existing\n").unwrap();
+    let identity = Identity::new("Counter", "com.example.counter").unwrap();
+    let err = run(&template, dest.path(), &identity).unwrap_err();
+    assert!(err.to_string().contains("refusing to overwrite"));
+    assert!(err.to_string().contains("Makefile"));
+}
+
 fn assert_byte_equal(template: &Path, dest: &Path, rel: &str) {
     let left = fs::read(template.join(rel)).unwrap_or_else(|err| {
         panic!("read template {rel}: {err}");

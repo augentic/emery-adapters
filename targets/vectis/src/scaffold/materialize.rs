@@ -27,6 +27,14 @@
 //! `scripts/load-test-ids.sh`. Late-cap re-adoption copies strip-units from
 //! `$TEMPLATE_DIR` — see `prose/references/template-capabilities.md`.
 //!
+//! # `.gitignore` overwrite
+//!
+//! Every other planned destination must be absent (greenfield empty tree).
+//! `.gitignore` is the sole exception: `emery init` may have already written
+//! a stub with framework lines (`.emery/scratch/`, `workspace/`). Materialize
+//! replaces that file with the template bytes, then re-asserts the Emery
+//! entries so an older template cannot drop them.
+//!
 //! # Denylist (never copied)
 //!
 //! - Entire roots: `.git/`, `.github/`, `web/` (out of scope), `AGENTS.md`,
@@ -89,6 +97,12 @@ const SKIP_DIR_NAMES: &[&str] = &[
 ];
 
 const SKIP_FILE_NAMES: &[&str] = &[".DS_Store", "local.properties", ".env.local", "AGENTS.md"];
+
+/// Framework lines `emery init` requires in the project `.gitignore`.
+///
+/// Kept in lockstep with `emery` `registry::gitignore::EMERY_GITIGNORE_ENTRIES`
+/// so materialize can replace an init stub without losing them.
+const EMERY_GITIGNORE_ENTRIES: &[&str] = &[".emery/scratch/", "workspace/"];
 
 /// DX paths agents must keep aligned with `$TEMPLATE_DIR` (iOS).
 ///
@@ -177,7 +191,7 @@ pub fn resolve_dir(anchor: &Path) -> Option<PathBuf> {
 ///
 /// # Errors
 /// Returns [`ScaffoldError`] when the template is missing required roots, a
-/// destination path already exists, or I/O fails.
+/// destination path already exists (other than `.gitignore`), or I/O fails.
 pub fn run(
     template_dir: &Path, dest_dir: &Path, identity: &Identity,
 ) -> Result<Report, ScaffoldError> {
@@ -219,7 +233,7 @@ pub fn run(
     }
 
     for (_, dest) in &planned {
-        if dest.exists() {
+        if dest.exists() && !is_gitignore(dest) {
             return Err(ScaffoldError::InvalidProject {
                 message: format!(
                     "refusing to overwrite existing file at {} (materialize into an empty project tree)",
@@ -239,11 +253,47 @@ pub fn run(
         files.push(rel);
     }
 
+    ensure_emery_gitignore_entries(dest_dir)?;
+
     Ok(Report {
         template_dir: template_dir.to_path_buf(),
         dest_dir: dest_dir.to_path_buf(),
         files,
     })
+}
+
+fn is_gitignore(path: &Path) -> bool {
+    path.file_name().is_some_and(|name| name == ".gitignore")
+}
+
+/// Idempotent: append each [`EMERY_GITIGNORE_ENTRIES`] line missing from the
+/// destination `.gitignore` after the template copy.
+fn ensure_emery_gitignore_entries(dest_dir: &Path) -> Result<(), ScaffoldError> {
+    let path = dest_dir.join(".gitignore");
+    let existing = match fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(err) => return Err(ScaffoldError::Io(err)),
+    };
+
+    let mut updated = existing;
+    let mut changed = false;
+    for entry in EMERY_GITIGNORE_ENTRIES {
+        if updated.lines().any(|line| line.trim() == *entry) {
+            continue;
+        }
+        if !updated.is_empty() && !updated.ends_with('\n') {
+            updated.push('\n');
+        }
+        updated.push_str(entry);
+        updated.push('\n');
+        changed = true;
+    }
+
+    if changed {
+        fs::write(&path, updated)?;
+    }
+    Ok(())
 }
 
 fn ensure_template_shape(template_dir: &Path) -> Result<(), ScaffoldError> {

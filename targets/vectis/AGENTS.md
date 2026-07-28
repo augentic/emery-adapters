@@ -21,7 +21,7 @@ Greenfield and pin refresh require a local clone of [`augentic/vectis-template`]
 | Default | `../vectis-template` relative to the **consumer** project root |
 | Override | Absolute path in `VECTIS_TEMPLATE_DIR` |
 
-The target guest cannot see a sibling checkout; the build agent materializes on the host via `vectis::scaffold::materialize`. Strip grammar lives only in **`$TEMPLATE_DIR/AGENTS.md`** (never copied into the consumer). Late-capability re-adoption: [`prose/references/template-capabilities.md`](prose/references/template-capabilities.md).
+The target guest cannot see a sibling checkout; the build agent materializes on the host via `vectis::scaffold::materialize`. Strip grammar lives only in **`$TEMPLATE_DIR/AGENTS.md`** (never copied into the consumer). Late-capability re-adoption: [`prose/references/template-capabilities.md`](prose/references/template-capabilities.md). Greenfield materialize may replace a pre-existing `.gitignore` (the `emery init` stub) with the template file; other existing root DX files still block the copy.
 
 There is **no** adapter-side version registry. Fix pins upstream in `vectis-template`, then re-materialize / re-copy.
 
