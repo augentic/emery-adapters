@@ -62,6 +62,12 @@ Two compatibility choices are independent, for first- and third-party adapter au
 
 For sibling co-development against uncommitted engine changes, uncomment the `[patch."https://github.com/augentic/emery.git"]` block at the bottom of the root `Cargo.toml` (it points at `../emery`) and work in both trees; re-comment it before committing. The patch block must never be active at publish time.
 
+## Omnia exemplar templates
+
+The omnia target adapter neither commits nor embeds scaffold templates. [`augentic/omnia-exemplar`](https://github.com/augentic/omnia-exemplar) owns the guest template contract (`exemplar.yaml` → `templates/guest/manifest.yaml`: token set, proof modes, repository-relative sources); its CI (`template-check`) proves the contract. The adapter reads that contract at **consumer-build time**: the build's preparation leg clones/refreshes exemplar `main` into the consumer workspace's `target/omnia-exemplar/`, and the adapter's deterministic scaffold prelude strictly parses the checkout and writes any missing tooling file, fill-only. Adapter compilation is network-free (`build.rs` embeds prose only), and the scaffold tests run against a synthetic contract in a temp directory — no checkout or network is required to build or test this repository. The adapter tracks exemplar `main` **unpinned** (early-development posture; immutable pinning is a documented hardening step).
+
+Never add a `targets/omnia/templates/` tree — change tooling upstream in the exemplar; consumer builds pick it up on their next preparation leg.
+
 ## Local development loops
 
 ```bash

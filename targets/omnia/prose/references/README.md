@@ -22,6 +22,7 @@ The Omnia crate / test / guest / review instructions live in [`../prompts/build.
 ### Authority and hard constraints
 
 - [`hard-rules.md`](hard-rules.md) — full hard-rules set and authority hierarchy.
+- [`exemplar.md`](exemplar.md) — the exemplar checkout: worked-code reference contract, Omnia compatibility behavior, navigation map.
 - [`guardrails.md`](guardrails.md) — forbidden crates, std APIs, WASM constraints, serde / timestamp / DST idioms.
 - [`wasm-constraints.md`](wasm-constraints.md) — translating `[runtime]` constraints to Omnia/WASM patterns.
 
@@ -29,7 +30,7 @@ The Omnia crate / test / guest / review instructions live in [`../prompts/build.
 
 - [`capabilities.md`](capabilities.md) — provider trait signatures and adapter triggers (all nine providers).
 - [`capability-mapping.md`](capability-mapping.md) — mapping from Emery artifact adapters to Omnia provider traits.
-- [`providers/`](providers/) — per-trait deep dives (blobstore, broadcast, config, document-store, http-request, identity, publish, state-store).
+- [`providers/README.md`](providers/README.md) — per-trait selection notes, composition semantics, and exemplar demonstration map.
 
 ### Crate writer depth
 
@@ -53,9 +54,8 @@ The Omnia crate / test / guest / review instructions live in [`../prompts/build.
 
 ### Guest writer depth
 
-- [`configuration.md`](configuration.md) — guest workspace `Cargo.toml`, `.env.example` shape, plus reference bodies for the tooling files the scaffold prelude writes (`.cargo/config.toml`, `deny.toml`, cargo-vet scaffold, the five GitHub workflows).
-- [`handlers.md`](handlers.md) — typed operation routing, message subscriptions, WebSocket events, and explicit guest exports.
-- [`guest-patterns.md`](guest-patterns.md) — HTTP / Messaging / WebSocket guest export patterns.
+- [`configuration.md`](configuration.md) — guest workspace `Cargo.toml` policy, version resolution against the exemplar's Omnia pin, the scaffolded-tooling table, and `publish.yaml` placeholders (template bodies live only in the exemplar checkout, read at consumer-build time by the scaffold prelude).
+- [`guest-patterns.md`](guest-patterns.md) — HTTP / Messaging / WebSocket / command guest export patterns and explicit exports.
 - [`guest-wiring.md`](guest-wiring.md) — crate → guest injection contract.
 - [`runtime.md`](runtime.md) — `omnia::runtime!` macro, WASI host options, `.env.example` shape.
 - [`project-layout.md`](project-layout.md) — directory layout for the guest project.
@@ -72,6 +72,5 @@ The Omnia crate / test / guest / review instructions live in [`../prompts/build.
 
 ### Worked examples
 
-- [`examples/crates/`](examples/crates/) — single-operation, multi-operation, anti-patterns; per-capability walkthroughs under `capabilities/`; per-update-category walkthroughs under `updates/`.
-- [`examples/tests/`](examples/tests/) — per-provider testing patterns (HTTP, StateStore, Publish, BlobStore, DocumentStore).
-- [`examples/replay/`](examples/replay/) — runtime capture replay (worked operation, test, and capture examples for migration).
+- The exemplar checkout ([`exemplar.md`](exemplar.md)) — the primary worked-code reference: compiling connectors, adapters, both guest styles, and test suites, cloned fresh each build.
+- [`examples/`](examples/) — retained explanatory walkthroughs for subjects the exemplar does not demonstrate: anti-patterns, short update-category checklists under `crates/updates/`, and capture-replay notes under `replay/`.

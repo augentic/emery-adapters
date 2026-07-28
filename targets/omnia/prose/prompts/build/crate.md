@@ -26,8 +26,8 @@ The full Hard Rules + Authority Hierarchy live in [`../../references/hard-rules.
 
 ## Create mode
 
-1. Author the workspace `Cargo.toml` and the crate `Cargo.toml` per [`cargo-toml.md`](../../references/cargo-toml.md). Workspace dependencies pin `omnia-guest` plus the `omnia-wasi-*` adapters for the provider traits the design declares. No private registries — every `omnia-*` crate lives on crates.io.
-2. Generate `src/lib.rs` (or `src/main.rs` for non-library crates) with one module per operation. Module layout follows the convention: `operations/<surface>.rs`, `types.rs`, `error.rs`, `provider.rs`.
+1. Author the workspace `Cargo.toml` and the crate `Cargo.toml` per [`cargo-toml.md`](../../references/cargo-toml.md). Workspace dependencies pin `omnia-guest` plus the `omnia-wasi-*` adapters for the provider traits the design declares, at the Omnia version the exemplar checkout's `exemplar.yaml` declares — mirror its `[patch.crates-io]` block per [`exemplar.md`](../../references/exemplar.md).
+2. Generate `$CRATE_PATH/src/lib.rs` (domain library — not the guest) with one module per operation. Module layout follows the exemplar convention (see `crates/tally-connector`, `crates/pulse-adapter`): handler/operation modules, types, errors as needed. Guest wiring is a separate package under `guests/` (create-mode guest writer).
 3. For each use case, emit:
    - A zero-sized operation type implementing `Operation<P>` with a typed request DTO as `Input`, a plain domain value as `Output`, and the exact provider capability bounds from the design. The transport router, not the operation, deserializes bytes/path/query fields.
    - `Operation::call(input, CallContext)` with structural validation as its first step, followed by context loading and temporal/contextual validation, then delegation to a standalone business function where that improves readability.
@@ -38,7 +38,7 @@ The full Hard Rules + Authority Hierarchy live in [`../../references/hard-rules.
 7. Honour TODO markers, adapter overrides, and cache-aside patterns per [`todo-markers.md`](../../references/todo-markers.md).
 8. Emit accompanying output documents (`Migration.md`, `Architecture.md`, `CHANGELOG.md`, `.env.example`) per [`output-documents.md`](../../references/output-documents.md).
 
-Worked examples: [`examples/crates/single-handler.md`](../../references/examples/crates/single-handler.md), [`examples/crates/multi-handler.md`](../../references/examples/crates/multi-handler.md), per-capability walkthroughs under [`examples/crates/capabilities/`](../../references/examples/crates/capabilities/), and [`examples/crates/anti-patterns.md`](../../references/examples/crates/anti-patterns.md) for shapes to avoid.
+Worked code: the exemplar checkout is the primary reference for compiling current-SDK crate shapes — `crates/tally-connector` (minimal), `crates/pulse-adapter` (compact adapter), `crates/gtfs-adapter` (full-size, stateful); navigation map in [`exemplar.md`](../../references/exemplar.md); capability operations and mocks in `crates/capability-examples/`. Retained explanatory walkthrough: [`examples/crates/anti-patterns.md`](../../references/examples/crates/anti-patterns.md) for shapes to avoid.
 
 ## Update mode
 

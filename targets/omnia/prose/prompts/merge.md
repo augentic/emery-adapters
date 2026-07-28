@@ -8,7 +8,7 @@
 $SLICE_NAME     = slice name from the leg's user prompt
 $CRATE_NAME     = $SLICE_NAME with kebab → snake (or the slice's plan-level `crate:` override)
 $CRATE_PATH     = crates/$CRATE_NAME
-$WORKSPACE_ROOT = repo root (carries the Cargo workspace `Cargo.toml` and the guest `src/lib.rs`)
+$WORKSPACE_ROOT = repo root (Cargo workspace `Cargo.toml`; guests live under `guests/*/`)
 ```
 
 The slice's built code is already present in the lent workspace — the build phase wrote it in place. There is no delta to apply; the gate verifies the workspace as it stands.

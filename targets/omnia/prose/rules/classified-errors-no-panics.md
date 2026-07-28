@@ -7,7 +7,7 @@ trigger: Production Rust handler code can panic, discard a fallible result, or r
 
 ## Rule
 
-Production Omnia handler paths must handle fallible operations by returning `omnia_sdk::Result` with an appropriate `omnia_sdk::Error` classification, stable code, description, and useful context. Do not use panic-based control flow outside tests.
+Production Omnia handler paths must handle fallible operations by returning `omnia_guest::Result` with an appropriate `omnia_guest::Error` classification, stable code, description, and useful context. Do not use panic-based control flow outside tests.
 
 Use `bad_request!` for invalid caller input, `bad_gateway!` for upstream provider or dependency failures, `server_error!` for internal invariant failures, and domain error conversions when stable error codes matter. Add context at parse, serialization, provider, and conversion boundaries before mapping errors into the SDK model.
 
@@ -15,7 +15,7 @@ Use `bad_request!` for invalid caller input, `bad_gateway!` for upstream provide
 
 - `unwrap()`, `expect()`, `panic!`, `todo!`, `unimplemented!`, unchecked indexing, or `unreachable!` in non-test handler paths.
 - `let _ = fallible_call(...)`, ignored `Result`s, swallowed provider errors, or fallback values that hide failed work.
-- Public handler or domain functions returning `anyhow::Error`, string errors, or custom errors that do not convert to `omnia_sdk::Error`.
+- Public handler or domain functions returning `anyhow::Error`, string errors, or custom errors that do not convert to `omnia_guest::Error`.
 - Method-style constructors such as `Error::bad_request(...)` or `Error::not_found(...)`, which are not the Omnia SDK error API.
 - Provider failures mapped to generic internal errors when they should be dependency failures.
 - Error codes built from variable data instead of stable snake_case identifiers.

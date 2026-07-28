@@ -1,5 +1,7 @@
 //! Omnia build / merge operation behavior.
 
+mod common;
+
 use std::path::Path;
 
 use adapter::answers::REPORT_ANSWER_SCHEMA;
@@ -37,7 +39,11 @@ fn schema_format(request: &Request) -> (&str, &str) {
 #[tokio::test]
 async fn build_phase_legs() {
     let tmp = TempDir::new().unwrap();
-    let model = Harness::answering([PHASE_DONE, PHASE_DONE, REPLAY_SKIPPED, SUCCESS_REPORT]);
+    // The scripted preparation leg writes nothing, so the checkout the
+    // real agent would produce is synthesized up front.
+    common::write_checkout(tmp.path());
+    let model =
+        Harness::answering([PHASE_DONE, PHASE_DONE, PHASE_DONE, REPLAY_SKIPPED, SUCCESS_REPORT]);
     let inputs = vec![
         Input::Proposal("PROPOSAL-BODY".to_string()),
         Input::Spec("SPEC-BODY".to_string()),
@@ -58,46 +64,69 @@ async fn build_phase_legs() {
     assert!(report.findings.is_empty());
 
     let requests = model.requests();
-    assert_eq!(requests.len(), 4, "generation, review, replay, then one report call");
+    assert_eq!(requests.len(), 5, "preparation, generation, review, replay, then one report call");
 
-    let first = &requests[0];
-    let system = first.system.as_deref().unwrap();
+    let preparation = &requests[0];
+    assert_eq!(schema_format(preparation).0, "preparation");
+    let system = preparation.system.as_deref().unwrap();
+    assert!(system.contains("# Omnia target — build prompt"), "build prompt in system");
+    assert!(system.contains("# Omnia build — preparation"), "preparation prompt in system");
+    let user = &preparation.messages[0].content;
+    assert!(user.contains("target/omnia-exemplar"), "checkout location named");
+    assert!(user.contains("Stop hint contract"), "stop path instructed");
+
+    let generation = &requests[1];
+    let system = generation.system.as_deref().unwrap();
     assert!(system.contains("# Omnia target — build prompt"), "build prompt in system");
     assert!(system.contains("# Omnia target — guidance prompt"), "guidance refresher in system");
     assert!(system.contains("# Omnia build — crate writer"), "crate writer prompt in system");
     assert!(system.contains("# Omnia build — test writer"), "test writer prompt in system");
     assert!(system.contains("# Omnia build — guest writer"), "guest writer prompt in system");
-    let user = &first.messages[0].content;
+    let user = &generation.messages[0].content;
     assert!(user.contains("PROPOSAL-BODY") && user.contains("DESIGN-BODY"), "typed inputs");
     assert!(user.contains("slice `demo`"), "slice named");
     assert!(user.contains("Verify-repair loop"), "agent-run cargo verification instructed");
     assert!(user.contains("omnia-references"), "user prompt points at the MCP references");
     assert!(user.contains("### scaffold prelude"), "scaffold prelude outcome in user prompt");
     assert!(user.contains("- `Makefile.toml`"), "written tooling files listed");
+    // Generation only starts after the deterministic scaffold has run.
     for path in
         ["Makefile.toml", "deny.toml", "supply-chain/config.toml", ".github/workflows/ci.yaml"]
     {
         assert!(tmp.path().join(path).is_file(), "prelude wrote {path}");
     }
-    let (name, schema) = schema_format(first);
+    let (name, schema) = schema_format(generation);
     assert_eq!(name, "generation");
     let compiled = serde_json::from_str::<serde_json::Value>(schema).unwrap();
     assert!(jsonschema::validator_for(&compiled).is_ok(), "internal schema compiles");
-    assert!(first.lend_workspace);
-    assert_eq!(mcp_grants(first)[0].url, "http://references/mcp");
+    assert!(generation.lend_workspace);
+    assert_eq!(mcp_grants(generation)[0].url, "http://references/mcp");
 
-    let review = &requests[1];
+    let review = &requests[2];
     assert_eq!(schema_format(review).0, "review");
     assert!(review.system.as_deref().unwrap().contains("# Omnia build — standards review"));
-    let replay = &requests[2];
+    let replay = &requests[3];
     assert_eq!(schema_format(replay).0, "replay");
     assert!(replay.system.as_deref().unwrap().contains("# Omnia build — capture replay"));
     assert!(replay.messages[0].content.contains("applicable: false"), "replay may self-skip");
-    let (name, schema) = schema_format(&requests[3]);
+    let (name, schema) = schema_format(&requests[4]);
     assert_eq!(name, "report");
     assert_eq!(schema, REPORT_ANSWER_SCHEMA);
-    let report_user = &requests[3].messages[0].content;
+    let report_user = &requests[4].messages[0].content;
     assert!(report_user.contains("no captures binding"), "phase outcomes feed the report leg");
+    assert!(report_user.contains("- preparation:"), "preparation outcome feeds the report leg");
+}
+
+#[tokio::test]
+async fn build_fails_closed_without_checkout() {
+    let tmp = TempDir::new().unwrap();
+    let model = Harness::answering([PHASE_DONE]);
+
+    let error =
+        Adapter::build(&model, &ctx(tmp.path(), None), "demo", &[], &tree()).await.unwrap_err();
+
+    assert!(error.to_string().contains("preparation leg"), "names the missing step: {error}");
+    assert_eq!(model.requests().len(), 1, "aborted after the preparation leg, before generation");
 }
 
 #[tokio::test]

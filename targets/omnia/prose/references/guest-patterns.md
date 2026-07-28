@@ -2,66 +2,19 @@
 
 Domain crates define typed, stateless `Operation<P>` implementations. The guest owns provider construction, transport routers, projection policy, and explicit WIT exports.
 
+Compiling reference: the exemplar checkout's `guests/typed/src/lib.rs` shows every pattern below — HTTP and messaging guest structs, `#[omnia_wasi_otel::instrument]` on the handle functions, router assembly over one shared `Invoker`, and the per-transport export macros. Navigation: [`exemplar.md`](exemplar.md). API semantics: [`sdk-api.md`](sdk-api.md). Wiring a new crate in: [`guest-wiring.md`](guest-wiring.md).
+
 ## HTTP
-
-```rust
-#![cfg(target_arch = "wasm32")]
-
-use domain::{CreateUser, GetUser};
-use omnia_guest::api::http::{self, Router, get, post};
-use omnia_guest::api::invoke::Invoker;
-use omnia_guest::wasip3;
-
-struct HttpGuest;
-wasip3::http::service::export!(HttpGuest);
-
-impl wasip3::exports::http::handler::Guest for HttpGuest {
-    #[omnia_wasi_otel::instrument(name = "http_guest_handle")]
-    async fn handle(
-        request: wasip3::http::types::Request,
-    ) -> Result<wasip3::http::types::Response, wasip3::http::types::ErrorCode> {
-        let router = Router::new(Invoker::new("owner", Provider::new()))
-            .route("/users/{user_id}", get::<GetUser, Provider>())
-            .route("/users", post::<CreateUser, Provider>());
-        http::serve(router, request).await
-    }
-}
-```
 
 Use Axum 0.8 `{param}` path syntax. GET path/query names and POST JSON/path names must match the typed input's serde field names. The default JSON projector returns status 200; define one `http::Projector<O, P>` at the transport boundary for custom status, headers, bytes, or error envelopes.
 
 ## Messaging
 
-```rust
-use domain::ProcessOrder;
-use omnia_guest::api::invoke::Invoker;
-use omnia_guest::api::messaging::{self, Router, consume};
-use omnia_wasi_messaging::incoming_handler::Guest;
-use omnia_wasi_messaging::types::{Error, Message};
-
-struct MessagingGuest;
-omnia_wasi_messaging::export!(MessagingGuest with_types_in omnia_wasi_messaging);
-
-impl Guest for MessagingGuest {
-    #[omnia_wasi_otel::instrument(name = "messaging_guest_handle")]
-    async fn handle(message: Message) -> Result<(), Error> {
-        let router = Router::new(Invoker::new("owner", Provider::new()))
-            .route("orders.created.v1", consume::<ProcessOrder>());
-        messaging::handle(&router, message).await
-    }
-}
-```
-
-Register exact topics. Use a custom decoder for XML/binary payloads and a custom messaging projector for retry/rejection policy. Never silently acknowledge missing, malformed, unhandled, or failed deliveries.
+Register exact topics (no substring matching). Use a custom decoder for XML/binary payloads and a custom messaging projector for retry/rejection policy. Never silently acknowledge missing, malformed, unhandled, or failed deliveries.
 
 ## WebSocket
 
-WebSocket WIT exports remain explicit. Adapt the event into a typed `Invocation`, call the shared `Invoker`, and map the plain output or typed error to the WebSocket result. Keep event decoding and response projection at this boundary.
-
-```rust
-struct WebSocketGuest;
-omnia_wasi_websocket::export!(WebSocketGuest);
-```
+WebSocket WIT exports remain explicit (`omnia_wasi_websocket::export!`). Adapt the event into a typed `Invocation`, call the shared `Invoker`, and map the plain output or typed error to the WebSocket result. Keep event decoding and response projection at this boundary.
 
 ## Command
 

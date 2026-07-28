@@ -1,5 +1,0 @@
-target
-.env
-.envrc
-rustc-ice-*
-.DS_Store

@@ -135,7 +135,7 @@ use bytes::Bytes;
 use chrono::{Timelike, Utc};
 use chrono_tz::Pacific::Auckland;
 use http::{Request, Response};
-use omnia_sdk::{Config, HttpRequest, Identity, Message, Publish};
+use omnia_guest::{Config, HttpRequest, Identity, Message, Publish};
 use r9k_adapter::{R9kMessage, SmarTrakEvent};
 use serde::Deserialize;
 
@@ -152,7 +152,7 @@ pub struct Replay {
 #[serde(untagged)]
 pub enum ReplayOutput {
     Events(Vec<SmarTrakEvent>),
-    Error(omnia_sdk::Error),
+    Error(omnia_guest::Error),
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -161,7 +161,7 @@ pub struct ReplayTransform {
 }
 
 impl Fixture for Replay {
-    type Error = omnia_sdk::Error;
+    type Error = omnia_guest::Error;
     type Input = R9kMessage;
     type Output = Vec<SmarTrakEvent>;
     type TransformParams = ReplayTransform;
@@ -300,15 +300,9 @@ pub fn shift_time(input: &R9kMessage, params: Option<&ReplayTransform>) -> R9kMe
 
 ## Trait Implementation Reference
 
-For complete MockProvider implementations of each trait (basic and advanced patterns), see the canonical provider references:
+Complete compiling MockProvider implementations for every trait live in the exemplar checkout's test suites ([exemplar.md](exemplar.md)):
 
-- [Config](providers/config.md#mockprovider-implementation) -- match on key, error on unknown
-- [HttpRequest](providers/http-request.md#mockprovider-implementation) -- URI pattern matching, embedded test data
-- [Publish](providers/publish.md#mockprovider-implementation) -- event capture with Arc<Mutex<Vec<Message>>>
-- [Identity](providers/identity.md#mockprovider-implementation) -- mock token return, request tracking
-- [StateStore](providers/state-store.md#mockprovider-implementation) -- OnceCell + Mutex, TTL tracking, cache verification helpers
-- [Broadcast](providers/broadcast.md#mockprovider-implementation) -- capture sends with channel and target info
-- [TableStore](examples/crates/capabilities/tablestore.md) -- return fixture rows from `query`, affected count from `exec`
-- [Blobstore](providers/blobstore.md#mockprovider-implementation) -- in-memory nested HashMap (container -> name -> bytes)
-- [DocumentStore](providers/document-store.md#mockprovider-implementation) -- in-memory nested HashMap (store -> id -> Document)
-- [Multi-trait MockProvider](providers/README.md#multi-trait-mockprovider) -- combining all traits in a single provider
+- `Config`, `HttpRequest`, `Identity`, `Publish`, `StateStore` -- `crates/{tally-connector,pulse-adapter,gtfs-adapter}/tests/provider.rs` (key matching, URI-dispatched fixture data, mock tokens, captured messages, in-memory cache)
+- `Broadcast`, `BlobStore`, `DocumentStore`, `TableStore` -- `crates/capability-examples/tests/provider.rs` (captured sends, nested in-memory HashMaps, fixture rows)
+
+Selection semantics and constraints (minimal bounds, explicit state via `Arc<Mutex<…>>`, never `static` cells): [providers/README.md](providers/README.md).

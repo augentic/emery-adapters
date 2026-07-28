@@ -384,7 +384,7 @@ use thiserror::Error;
 | --- | --- | --- |
 | Baseline `cargo test` fails to compile | Existing crate has compilation errors | Record errors; do not introduce additional failures; fix if the update touches affected code |
 | Change classification ambiguous | Artifact difference could be modifying or structural | Prefer the simpler classification (modifying over structural); see [change-classification.md](change-classification.md) |
-| Structural change breaks compilation | Rename or restructure missed a reference | Re-scan crate after structural changes (Hard Rule 16); fix remaining references |
+| Structural change breaks compilation | Rename or restructure missed a reference | Re-scan crate after structural changes (Hard Rule 14); fix remaining references |
 | Regression detected | Previously-passing test now fails | Compare operation implementation against updated artifacts; repair using the strategies above |
 | Artifacts remove behavior that other crates depend on | Cross-crate dependency on removed operation/type | Document in CHANGELOG.md; mark removal with `// BREAKING:` comment; warn in Migration.md |
 | MockProvider missing new trait | Operation gained a new provider bound | Add trait impl to `tests/provider.rs` with appropriate test fixtures |

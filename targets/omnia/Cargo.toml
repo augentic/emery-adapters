@@ -17,17 +17,13 @@ workspace = true
 [dependencies]
 emery-adapter.workspace = true
 serde = { workspace = true, features = ["derive"] }
+serde-saphyr.workspace = true
 
 [build-dependencies]
 emery-prose.workspace = true
-jsonschema.workspace = true
-serde.workspace = true
-serde-saphyr.workspace = true
-serde_json.workspace = true
 
 [dev-dependencies]
 jsonschema.workspace = true
-serde-saphyr.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 omnia-testkit.workspace = true

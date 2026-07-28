@@ -1,61 +1,37 @@
 # Configuration
 
-Dependencies, workspace setup, standard config templates, and CI/CD workflows for WASM guests.
+Dependencies, workspace setup, scaffolded tooling policy, and CI/CD workflows for WASM guests.
+
+The worked reference for everything here is the exemplar checkout — see [`exemplar.md`](exemplar.md) for the checkout contract. Its root `Cargo.toml`, tooling files, and workflows are a compiling, CI-green instance of this document's policy.
 
 ---
 
 ## Version Resolution
 
-This document uses `<latest>` as a placeholder for dependency versions. **Do not use `<latest>` literally in generated files.** At generation time, resolve each placeholder to the actual latest version:
+This document uses `<latest>` as a placeholder for dependency versions. **Do not use `<latest>` literally in generated files.** At generation time, resolve each placeholder to the actual version:
 
-- **`rust-version`**: Use the latest stable Rust version. Run `rustc --version` to determine the current stable release and use that version number.
-- **`omnia-*` crates**: All `omnia-*` crates are published on crates.io. Run `cargo search omnia-sdk` to find the latest version. All `omnia-*` crates share the same version — look up one and use that version for all of them.
-- **crates.io dependencies**: Run `cargo search <crate-name>` to find the latest version for each dependency.
-- **`wasmtime` / `wasmtime-wasi`**: These must match the version used by the `omnia` crate. After resolving the `omnia` version, check its `Cargo.toml` for the wasmtime version it depends on, and use that same version.
+- **`omnia` / `omnia-*` crates (create mode)**: adopt the exact `{ version, repository, rev }` contract from the exemplar checkout's `exemplar.yaml`, and mirror its `[patch.crates-io]` block — the omnia crates are currently resolved from the GitHub repository at that pinned rev, pending publication. Do not `cargo search` a different omnia version: the exemplar is only proven green against its declared rev.
+- **`omnia` / `omnia-*` crates (update mode)**: preserve the consumer's existing pin (see the build prompt's compatibility rules); never upgrade as a side effect.
+- **`rust-version`**: use the latest stable Rust version (`rustc --version`).
+- **Other crates.io dependencies**: prefer the version the exemplar's root `Cargo.toml` uses when the exemplar uses the same crate; otherwise run `cargo search <crate-name>` for the latest.
+- **`wasmtime` / `wasmtime-wasi`**: must match the version the pinned `omnia` crate depends on — check omnia's `Cargo.toml` at the adopted rev.
 
 ---
 
 ## Cargo Setup
 
-### .cargo/config.toml
-
-```toml
-[net]
-git-fetch-with-cli = true
-```
-
-All `omnia-*` crates are on crates.io — no private registry configuration is needed.
-
 ### Workspace Configuration
 
-Use resolver version 3 in the workspace `Cargo.toml`:
+Model the workspace `Cargo.toml` on the exemplar's root `Cargo.toml`: resolver `"3"`, `members = ["crates/*", ...]` (the exemplar adds `guests/*`), a `[workspace.package]` table inherited by every crate, `[workspace.lints.rust]` / `[workspace.lints.clippy]` tables (all/pedantic/nursery/cargo groups plus the cherry-picked restriction lints), `[workspace.dependencies]` with every shared version declared once, and the size-optimized `[profile.release]` (`lto`, `opt-level = "s"`, `strip`).
+
+Skip the exemplar's project-specific entries when adapting it: its `acme-*`/`gtfs`/`pulse`/`tally` internal crates, the `augentic-test` git dependency, and the `wrpc-*` patch entries. Keep the omnia stanza, the shared runtime dependencies your slice actually needs, and the lint tables.
+
+Each crate then inherits:
 
 ```toml
-[workspace]
-resolver = "3"
-members = ["crates/*"]
-```
+[lints]
+workspace = true
 
-Define shared package metadata inherited by the root package and domain crates:
-
-```toml
-[workspace.package]
-authors = ["<org>"]
-categories = ["realtime"]
-edition = "2024"
-exclude = [".*"]
-homepage = "<homepage>"
-keywords = ["realtime", "<domain>"]
-license = "MIT OR Apache-2.0"
-readme = "README.md"
-repository = "<repo-url>"
-rust-version = "<latest>"
-version = "0.1.0"
-```
-
-Then inherit in the root `[package]` and each crate's `Cargo.toml`:
-
-```toml
 [package]
 authors.workspace = true
 edition.workspace = true
@@ -64,50 +40,9 @@ version.workspace = true
 # ... etc
 ```
 
-### Workspace Dependencies
+### Guest Package Configuration
 
 ```toml
-[workspace.dependencies]
-# Runtime crates (from crates.io)
-# All omnia-* crates share the same version — resolve via `cargo search omnia-sdk`
-omnia = "<latest>"
-omnia-sdk = "<latest>"
-omnia-wasi-blobstore = "<latest>"
-omnia-wasi-config = "<latest>"
-omnia-wasi-http = "<latest>"
-omnia-wasi-identity = "<latest>"
-omnia-wasi-jsondb = "<latest>"
-omnia-wasi-keyvalue = "<latest>"
-omnia-wasi-messaging = "<latest>"
-omnia-wasi-otel = "<latest>"
-omnia-wasi-sql = "<latest>"
-omnia-wasi-websocket = "<latest>"
-
-# Core dependencies — resolve each version from crates.io via `cargo search`
-anyhow = "<latest>"
-axum = { version = "<latest>", default-features = false }
-bytes = "<latest>"
-http-body-util = "<latest>"
-serde = { version = "<latest>", features = ["derive"] }
-serde_json = "<latest>"
-tracing = "<latest>"
-wasip3 = { version = "<latest>", features = ["http-compat"] }
-wit-bindgen = { version = "<latest>", features = ["async-spawn"] }
-
-# Native-only (runtime + test harness)
-# wasmtime version must match the version used by omnia — check omnia's Cargo.toml
-wasmtime = { version = "<latest>", default-features = false, features = ["component-model-async", "parallel-compilation"] }
-wasmtime-wasi = { version = "<latest>", features = ["p3"] }
-```
-
-### Package Configuration
-
-```toml
-[package]
-name = "<guest-name>"
-description = "WASM guest for <service description>"
-# ... use workspace inheritance for common fields
-
 [lib]
 crate-type = ["cdylib"]
 
@@ -116,111 +51,7 @@ name = "<guest-name>"
 path = "examples/<guest-name>.rs"
 ```
 
-### Release Adapter
-
-Optimize for WASM size and performance:
-
-```toml
-[adapter.release]
-lto = "thin"
-opt-level = "s"
-strip = "symbols"
-```
-
-### Guest Package Dependencies
-
-The guest package adds wasm32-compatible dependencies. Note that `axum` must enable features for JSON, macros, and query extraction:
-
-```toml
-[dependencies]
-anyhow.workspace = true
-axum = { workspace = true, features = ["json", "macros", "query"] }
-bytes.workspace = true
-tracing.workspace = true
-omnia-sdk.workspace = true
-omnia-wasi-http.workspace = true
-omnia-wasi-otel.workspace = true
-wasip3.workspace = true
-# Domain crates
-<domain-crate> = { path = "crates/<domain-crate>" }
-# Add only if needed:
-# http-body-util.workspace = true          # If guest builds http::Request bodies directly
-# omnia-wasi-messaging.workspace = true    # If messaging used
-# omnia-wasi-keyvalue.workspace = true     # If StateStore used
-# omnia-wasi-websocket.workspace = true    # If WebSocket used
-# omnia-wasi-blobstore.workspace = true    # If Blobstore used
-# omnia-wasi-jsondb.workspace = true       # If DocumentStore used
-
-[dev-dependencies]
-# Dependencies that work on all targets
-cfg-if = "<latest>"
-serde_json.workspace = true
-
-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-# Native-only dependencies for local runtime / integration tests
-omnia.workspace = true
-omnia-wasi-blobstore.workspace = true
-omnia-wasi-config.workspace = true
-omnia-wasi-http.workspace = true
-omnia-wasi-identity.workspace = true
-omnia-wasi-jsondb.workspace = true
-omnia-wasi-keyvalue.workspace = true
-omnia-wasi-messaging.workspace = true
-omnia-wasi-otel.workspace = true
-omnia-wasi-sql.workspace = true
-omnia-wasi-websocket.workspace = true
-wasmtime.workspace = true
-wasmtime-wasi.workspace = true
-```
-
-The `cfg-if` crate is needed for the runtime example's conditional compilation. This split ensures `cargo build` (targeting `wasm32-wasip2`) does not pull in native-only crates.
-
-### Workspace Lints
-
-Configure workspace-level lints for consistency:
-
-```toml
-[workspace.lints.rust]
-trivial_numeric_casts = "warn"
-unused_extern_crates = "warn"
-unsafe_op_in_unsafe_fn = "warn"
-
-[workspace.lints.clippy]
-# Lint groups
-all = "warn"      # correctness, suspicious, style, complexity, perf
-nursery = "warn"
-pedantic = "warn"
-cargo = "warn"
-
-# Cherry-picked restriction lints
-# See https://microsoft.github.io/rust-guidelines/guidelines/universal/index.html
-as_pointer_underscore = "warn"
-assertions_on_result_states = "warn"
-clone_on_ref_ptr = "warn"
-deref_by_slicing = "warn"
-disallowed_script_idents = "warn"
-empty_drop = "warn"
-empty_enum_variants_with_brackets = "warn"
-empty_structs_with_brackets = "warn"
-fn_to_numeric_cast_any = "warn"
-if_then_some_else_none = "warn"
-map_err_ignore = "warn"
-redundant_type_annotations = "warn"
-renamed_function_params = "warn"
-semicolon_outside_block = "warn"
-undocumented_unsafe_blocks = "warn"
-unnecessary_safety_comment = "warn"
-unnecessary_safety_doc = "warn"
-unneeded_field_pattern = "warn"
-unused_result_ok = "warn"
-```
-
-Then reference in the package:
-
-```toml
-[lints]
-workspace = true
-```
+Guest dependencies are wasm32-compatible only; native-only crates (`omnia`, `wasmtime`, `wasmtime-wasi`) go under `[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]` so `cargo build --target wasm32-wasip2` never pulls them. `cfg-if` supports the runtime example's conditional compilation. The exemplar's `guests/typed/Cargo.toml` is the default worked shape (`guests/axum/Cargo.toml` only when design requires the Axum escape hatch).
 
 ### Core Dependencies
 
@@ -230,7 +61,7 @@ workspace = true
 | `axum`                 | HTTP routing (enable `json`, `macros`, `query` features) |
 | `bytes`                | Efficient byte buffer for HTTP body extraction           |
 | `http-body-util`       | HTTP body utilities (`Empty<Bytes>` for GET requests)    |
-| `omnia-sdk`            | SDK types, traits, and macros                            |
+| `omnia-guest`          | Guest API: typed routers, capability traits, providers   |
 | `omnia-wasi-http`      | HTTP server/client support                               |
 | `omnia-wasi-messaging` | Message pub/sub                                          |
 | `omnia-wasi-otel`      | OpenTelemetry instrumentation                            |
@@ -240,439 +71,55 @@ workspace = true
 
 ---
 
-## Config Templates
+## Scaffolded Tooling Files
 
-Standard project configuration files, identical across all WASM guest projects. The adapter's deterministic scaffold prelude writes each of them from its embedded templates (`templates/core/` in the adapter crate) at the start of every build when the file is absent — existing files are never overwritten. The bodies below are reference copies of those templates: do not re-author these files; consult them to understand what is already on disk (or to repair the tree if the prelude itself reports a failure).
+The standard tooling files are **not authored by the model at all**. The adapter's deterministic scaffold prelude writes every missing one at the start of each build, fill-only — existing files are never overwritten, and a prelude I/O failure fails the build before generation, so there is no situation where these files should be recreated from prose.
 
-### rustfmt.toml
-
-```toml
-# https://github.com/rust-lang/rustfmt/blob/master/Configurations.md
-# https://rust-lang.github.io/rustfmt
-
-max_width = 100
-use_small_heuristics = "Max"
-
-fn_params_layout = "Compressed"
-format_code_in_doc_comments = true
-format_macro_matchers = true
-group_imports = "StdExternalCrate"
-imports_granularity = "Module"
-reorder_impl_items = true
-unstable_features = true
-use_field_init_shorthand = true
-```
-
-Requires `channel = "nightly"` in `rust-toolchain.toml` for the unstable formatting options.
-
-### rust-toolchain.toml
-
-```toml
-[toolchain]
-channel = "nightly"
-components = ["clippy", "rust-src", "rustfmt"]
-targets = [
-  "wasm32-wasip2",
-]
-```
-
-- `nightly` is required for unstable rustfmt options and `edition = "2024"`
-- `rust-src` is needed for rust-analyzer to resolve WASI standard library types
-- `wasm32-wasip2` is the WASM Component Model target
-
-### .vscode/settings.json
-
-```json
-{
-  "rust-analyzer.linkedProjects": ["Cargo.toml"],
-  "rust-analyzer.check.command": "clippy",
-  "rust-analyzer.cargo.target": "wasm32-wasip2"
-}
-```
-
-Configures rust-analyzer to target `wasm32-wasip2` so IDE diagnostics match the build target.
-
-### clippy.toml
-
-```toml
-# https://doc.rust-lang.org/stable/clippy/index.html
-
-doc-valid-idents = [
-    # Add project-specific identifiers here (e.g., "TomTom", "OpenLR")
-]
-
-allowed-duplicate-crates = [
-    # Populated by running `cargo clippy` and adding false positives.
-    # Common entries for Omnia guests:
-    "core-foundation",
-    "embedded-io",
-    "foldhash",
-    "getrandom",
-    "hashbrown",
-    "linux-raw-sys",
-    "rand",
-    "rand_chacha",
-    "rand_core",
-    "reqwest",
-    "rustix",
-    "rustls",
-    "rustls-webpki",
-    "thiserror",
-    "thiserror-impl",
-    "tokio-rustls",
-    "wasm-encoder",
-    "wasm-metadata",
-    "wasmparser",
-    "wasi",
-    "webpki-roots",
-    "windows-link",
-    "windows-result",
-    "windows-strings",
-    "windows-sys",
-    "windows-targets",
-    "windows_aarch64_gnullvm",
-    "windows_aarch64_msvc",
-    "windows_i686_gnu",
-    "windows_i686_gnullvm",
-    "windows_i686_msvc",
-    "windows_x86_64_gnu",
-    "windows_x86_64_gnullvm",
-    "windows_x86_64_msvc",
-    "wit-bindgen",
-    "wit-bindgen-core",
-    "wit-bindgen-rust",
-    "wit-bindgen-rust-macro",
-    "wit-component",
-    "wit-parser",
-]
-```
-
-- `doc-valid-idents` -- add domain-specific identifiers that appear in doc comments (prevents `doc_markdown` lint)
-- `allowed-duplicate-crates` -- suppress false-positive duplicate crate warnings from transitive dependencies. Run `cargo clippy` after adding dependencies and update this list as needed.
-
-### taplo.toml
-
-Formatting rules for [`taplo`](https://taplo.tamasfe.dev/) -- TOML files keep manual key order, except dependency tables, which sort.
-
-```toml
-[formatting]
-allowed_blank_lines = 1
-array_auto_collapse = false
-array_auto_expand = false
-column_width = 100
-reorder_arrays = false
-reorder_keys = false
-
-[[rule]]
-keys = ["*.dependencies", "*-dependencies", "dependencies"]
-
-[rule.formatting]
-reorder_keys = true
-reorder_arrays = true
-```
-
-### .gitignore
-
-```
-target
-.env
-.envrc
-rustc-ice-*
-.DS_Store
-```
-
-### Makefile
-
-Shim so bare `make <task>` delegates to `cargo make <task>` (the recipe line is tab-indented, as `make` requires).
-
-```make
-# dynamically target Makefile.toml
-.PHONY: %
-%:
-	@cargo make $@
-```
-
-### Makefile.toml
-
-Standard `cargo-make` task runner. Install with `cargo install cargo-make`.
-
-```toml
-# Install: `cargo install cargo-make`
-# Help: https://sagiegurari.github.io/cargo-make/
-
-[env]
-CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
-
-[config]
-default_to_workspace = true
-skip_core_tasks = true
-skip_crate_env_info = true
-skip_git_env_info = true
-skip_rust_env_info = true
-
-# -------------------------------------
-# CI Checks
-# -------------------------------------
-[tasks.check]
-dependencies = ["fmt", "lint", "test", "test-docs", "doc"]
-
-[tasks.ci]
-dependencies = ["check", "vet", "deny"]
-
-# -------------------------------------
-# Actions
-# -------------------------------------
-
-[tasks.clean]
-command = "cargo"
-args = ["clean"]
-
-[tasks.audit]
-command = "cargo"
-args = ["audit"]
-
-[tasks.deny]
-command = "cargo"
-args = ["deny", "check"]
-install_crate = "cargo-deny"
-
-[tasks.deps]
-command = "rustup"
-args = ["run", "nightly", "cargo", "udeps", "--workspace", "--all-targets"]
-install_crate = "cargo-udeps"
-
-[tasks.fmt]
-script = "cargo +nightly fmt --all"
-
-[tasks.lint]
-command = "cargo"
-args = ["clippy", "--workspace", "--all-targets", "--all-features", "--", "-D", "warnings"]
-install_crate = { rustup_component_name = "clippy" }
-
-[tasks.outdated]
-command = "cargo"
-args = ["outdated", "--depth", "1"]
-install_crate = "cargo-outdated"
-
-[tasks.test]
-command = "cargo"
-args = ["nextest", "run", "--workspace", "--all-features", "--no-tests=pass"]
-env = { RUSTFLAGS = "-Dwarnings" }
-
-[tasks.test-docs]
-command = "cargo"
-args = ["test", "--doc", "--workspace", "--all-features"]
-
-[tasks.doc]
-command = "cargo"
-args = ["doc", "--no-deps", "--workspace", "--all-features", "--locked"]
-env = { RUSTDOCFLAGS = "-Dwarnings" }
-
-[tasks.vet]
-script = '''
-cargo vet regenerate imports
-cargo vet regenerate exemptions
-cargo vet regenerate unpublished
-cargo vet --locked
-'''
-install_crate = "cargo-vet"
-```
-
-`cargo make check` is the pre-commit subset; `cargo make ci` adds the supply-chain gates (`vet`, `deny`). Lint runs with `-D warnings` — the same posture CI enforces.
-
-### deny.toml
-
-Configuration for [`cargo-deny`](https://embarkstudios.github.io/cargo-deny/). This template is standard across Omnia guests.
-
-```toml
-# https://embarkstudios.github.io/cargo-deny/checks/licenses/cfg.html
-
-[graph]
-targets = [
-  "aarch64-apple-darwin",
-  "wasm32-wasip2",
-]
-all-features = true
-
-[output]
-feature-depth = 1
-
-[advisories]
-unmaintained = "transitive"
-
-[licenses]
-allow = [
-  "Apache-2.0",
-  "Apache-2.0 WITH LLVM-exception",
-  "BSD-2-Clause",
-  "BSD-3-Clause",
-  "CDLA-Permissive-2.0",
-  "ISC",
-  "MIT",
-  "OpenSSL",
-  "Unicode-3.0",
-  "Zlib",
-]
-
-[licenses.private]
-ignore = true
-
-[[licenses.clarify]]
-name = "ring"
-expression = "MIT AND ISC AND OpenSSL"
-license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
-
-[bans]
-multiple-versions = "allow"
-wildcards = "allow"
-deny = [
-  { name = "tokio", deny-multiple-versions = true },
-]
-skip-tree = [
-  { crate = "wasip2", depth = 5, reason = "contains out of date versions" },
-]
-
-[bans.workspace-dependencies]
-duplicates = "deny"
-include-path-dependencies = true
-unused = "warn"
-
-[sources]
-```
-
-**Customization notes**:
-
-- `[graph].targets` -- the two standard targets for Omnia guests. Add additional targets if needed.
-- `[licenses].allow` -- standard permissive license allowlist. Extend if your dependencies require additional licenses.
-- `[bans].skip-tree` -- `wasip2` skip is needed due to outdated transitive versions in the WASI ecosystem.
-- `[sources]` -- add private registry URLs here if the project uses any private registries.
-
-### supply-chain/
-
-Directory for [`cargo-vet`](https://mozilla.github.io/cargo-vet/) supply-chain security files. The scaffold prelude writes the static scaffold files (README, imports-only config, empty audits ledger), then `cargo vet` commands populate the workspace-specific data (exemptions, policies, audits, imports.lock).
-
-#### supply-chain/README.md
-
-````markdown
-# Cargo Vet
-
-Following a Cargo dependency update, run:
-
-```bash
-cargo vet regenerate imports
-cargo vet regenerate exemptions
-cargo vet regenerate unpublished
-```
-
-to update the vetted dependencies based on trusted authors.
-
-See the [Cargo Vet book](https://mozilla.github.io/cargo-vet/commands.html) for
-more information.
-````
-
-#### supply-chain/config.toml
-
-The `[imports]` section references trusted external audit sources used across the WASM/Wasmtime ecosystem. These are standard for all Omnia guests.
-
-```toml
-# cargo-vet config file
-
-[cargo-vet]
-version = "0.10"
-
-[imports.bytecode-alliance]
-url = "https://raw.githubusercontent.com/bytecodealliance/wasmtime/main/supply-chain/audits.toml"
-
-[imports.embark-studios]
-url = "https://raw.githubusercontent.com/EmbarkStudios/rust-ecosystem/main/audits.toml"
-
-[imports.google]
-url = "https://raw.githubusercontent.com/google/supply-chain/main/audits.toml"
-
-[imports.isrg]
-url = "https://raw.githubusercontent.com/divviup/libprio-rs/main/supply-chain/audits.toml"
-
-[imports.mozilla]
-url = "https://raw.githubusercontent.com/mozilla/supply-chain/main/audits.toml"
-
-[imports.zcash]
-url = "https://raw.githubusercontent.com/zcash/rust-ecosystem/main/supply-chain/audits.toml"
-
-# [policy.<crate-name>] and [[exemptions.<crate-name>]] entries are
-# workspace-specific. They are populated by running:
-#
-#   cargo vet regenerate exemptions
-#
-# after workspace dependencies are finalized.
-```
-
-**Import sources**:
-
-| Import              | Source                   | Covers                               |
-| ------------------- | ------------------------ | ------------------------------------ |
-| `bytecode-alliance` | Wasmtime supply chain    | Wasmtime, Cranelift, WASI crates     |
-| `embark-studios`    | Embark Studios ecosystem | General Rust ecosystem crates        |
-| `google`            | Google supply chain      | General Rust ecosystem crates        |
-| `isrg`              | ISRG / libprio-rs        | Cryptography-adjacent crates         |
-| `mozilla`           | Mozilla supply chain     | Firefox/Servo Rust ecosystem crates  |
-| `zcash`             | Zcash ecosystem          | Cryptography and general Rust crates |
-
-#### supply-chain/audits.toml
-
-Minimal scaffold. Trusted publisher entries are populated by `cargo vet` commands.
-
-```toml
-# cargo-vet audits file
-
-[audits]
-```
-
-#### Post-Generation: Populate Workspace-Specific Data
-
-After all project files are generated and workspace dependencies are finalized (i.e., `Cargo.toml` and `Cargo.lock` exist), run the following commands to populate exemptions, policies, trusted publishers, and import data:
-
-```bash
-cargo vet regenerate imports
-cargo vet regenerate exemptions
-cargo vet regenerate unpublished
-```
-
-These commands will:
-
-- **`regenerate imports`** -- fetch audit data from the 6 import sources and write `supply-chain/imports.lock`
-- **`regenerate exemptions`** -- add `[[exemptions.<crate>]]` entries to `supply-chain/config.toml` for any dependency not covered by imports or audits
-- **`regenerate unpublished`** -- add `[policy.<crate>]` entries for workspace crates with `audit-as-crates-io = true`
-
-**Note**: `supply-chain/imports.lock` is auto-generated by `cargo vet regenerate imports` and should NOT be hand-written or templated.
-
-### Config File Reference
-
-Every file below except `supply-chain/imports.lock` is written by the scaffold prelude when absent.
+The template bodies live only in the exemplar repository (`templates/guest/`); this adapter fetches that subtree at adapter-build time and bakes it into the component — there is no committed second copy. The exemplar's `templates/guest/manifest.yaml` is the single source-to-target map. To inspect a template body, read the file at its target path in the exemplar checkout — the exemplar root **is** the rendered template set, proven by its `template-check` gate.
 
 | File                        | Purpose                                | Written by                     |
 | --------------------------- | -------------------------------------- | ------------------------------ |
 | `Makefile`                  | Shim delegating to `cargo make`        | Prelude                        |
 | `Makefile.toml`             | CI/dev task runner                     | Prelude                        |
-| `deny.toml`                 | Dependency license/advisory/ban checks | Prelude                        |
-| `rust-toolchain.toml`       | Nightly channel + wasm32 target        | Prelude                        |
-| `rustfmt.toml`              | Nightly formatting config              | Prelude                        |
+| `deny.toml`                 | Dependency license/advisory/ban checks | Prelude; customize per project |
+| `rust-toolchain.toml`       | Stable channel + wasm32 target         | Prelude                        |
+| `rustfmt.toml`              | Formatting config (nightly `fmt`)      | Prelude                        |
 | `clippy.toml`               | Lint exceptions                        | Prelude; customize per project |
 | `taplo.toml`                | TOML formatting                        | Prelude                        |
 | `.gitignore`                | Repo hygiene                           | Prelude                        |
-| `.cargo/config.toml`        | `git-fetch-with-cli`                   | Prelude                        |
 | `.vscode/settings.json`     | rust-analyzer wasm32 config            | Prelude                        |
 | `supply-chain/README.md`    | Cargo Vet update instructions          | Prelude                        |
 | `supply-chain/config.toml`  | Cargo Vet imports + scaffold           | Prelude + `cargo vet`          |
 | `supply-chain/audits.toml`  | Cargo Vet trusted publishers           | Prelude + `cargo vet`          |
 | `supply-chain/imports.lock` | Imported audit data                    | Auto-generated by `cargo vet`  |
 
+Notes on the scaffolded set:
+
+- The toolchain channel is **stable**; formatting runs through `cargo +nightly fmt` (the `fmt` task), so a nightly toolchain must be installed alongside stable for the unstable rustfmt options.
+- `clippy.toml` and the `supply-chain/` files are **seeds**: the prelude writes a working baseline and the project evolves it (`doc-valid-idents`, `allowed-duplicate-crates`, vet exemptions). Update them in the consumer project as `cargo clippy` / `cargo vet` demand; that divergence is expected.
+- `deny.toml` seeds the standard license allowlist, the tokio multiple-versions ban, and the Augentic git/registry sources. Extend per project as dependencies require.
+
+### Post-Generation: Populate Workspace-Specific Data
+
+After all project files are generated and workspace dependencies are finalized (i.e., `Cargo.toml` and `Cargo.lock` exist), populate exemptions, policies, trusted publishers, and import data:
+
+```bash
+cargo vet regenerate imports
+cargo vet regenerate exemptions
+cargo vet regenerate unpublished
+```
+
+- **`regenerate imports`** — fetch audit data from the configured import sources and write `supply-chain/imports.lock`
+- **`regenerate exemptions`** — add `[[exemptions.<crate>]]` entries to `supply-chain/config.toml` for any dependency not covered by imports or audits
+- **`regenerate unpublished`** — add `[policy.<crate>]` entries for workspace crates with `audit-as-crates-io = true`
+
+**Note**: `supply-chain/imports.lock` is auto-generated and is never hand-written, templated, or scaffolded.
+
 ---
 
 ## GitHub Workflows
 
-Standard GitHub Actions workflow files for WASM guest projects. All workflows delegate to reusable workflows in the `augentic/.github` repository. The scaffold prelude writes all five when absent; the guest writer's only follow-up is filling the placeholders in `publish.yaml`'s `with:` block.
-
-Every guest project includes 5 workflow files in `.github/workflows/`:
+Every guest project includes five workflow files in `.github/workflows/`, all thin wrappers over the reusable workflows in `augentic/.github`. The scaffold prelude writes all five when absent; the guest writer's only follow-up is filling the placeholders in `publish.yaml`'s deploy job.
 
 | File           | Trigger                 | Purpose                                    |
 | -------------- | ----------------------- | ------------------------------------------ |
@@ -680,120 +127,16 @@ Every guest project includes 5 workflow files in `.github/workflows/`:
 | `ci.yaml`      | Push to any branch      | Continuous integration (build, lint, test) |
 | `patch.yaml`   | Manual                  | Create a patch release                     |
 | `release.yaml` | Manual                  | Create a new release                       |
-| `publish.yaml` | Manual                  | Full pipeline: CI -> Publish -> Deploy     |
+| `publish.yaml` | Manual                  | Release pipeline: CI → Publish → Deploy    |
 
-### Required Secrets
+### publish.yaml placeholders
 
-Configure these secrets in the GitHub repository settings:
+`publish.yaml` is scaffolded with a deploy job whose `with:` block carries three `<UPPER_SNAKE>` placeholders. Replace them with concrete values:
 
-| Secret                   | Used by | Purpose                                     |
-| ------------------------ | ------- | ------------------------------------------- |
-| `AZURE_CLIENT_ID`        | publish | Azure service principal for WASM deployment |
-| `AZURE_TENANT_ID`        | publish | Azure tenant for WASM deployment            |
-| `AZURE_SUBSCRIPTION_ID`  | publish | Azure subscription for WASM deployment      |
+| Placeholder         | Description                                                       |
+| ------------------- | ----------------------------------------------------------------- |
+| `<PACKAGE_NAME>`    | Crate name of the guest (the package name from `Cargo.toml`)      |
+| `<STORAGE_ACCOUNT>` | Azure Storage account for WASM deployment                         |
+| `<RESOURCE_GROUP>`  | Azure resource group for WASM deployment                          |
 
-### audit.yaml
-
-Runs a daily security audit of dependencies. Can also be triggered manually.
-
-```yaml
-name: Audit
-
-on:
-  schedule:
-    - cron: "0 0 * * *"
-  workflow_dispatch:
-
-jobs:
-  audit:
-    uses: augentic/.github/.github/workflows/audit.yaml@main
-```
-
-### ci.yaml
-
-Runs on every push. Delegates to the shared CI workflow which builds, lints, and tests the project.
-
-```yaml
-name: CI
-
-on:
-  push:
-
-jobs:
-  ci:
-    uses: augentic/.github/.github/workflows/ci.yaml@main
-    secrets:
-      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-```
-
-### patch.yaml
-
-Manually triggered to create a patch release.
-
-```yaml
-name: Create Patch
-
-on:
-  workflow_dispatch:
-
-jobs:
-  patch:
-    uses: augentic/.github/.github/workflows/patch.yaml@main
-```
-
-### release.yaml
-
-Manually triggered to create a new release.
-
-```yaml
-name: Create Release
-
-on:
-  workflow_dispatch:
-
-jobs:
-  release:
-    uses: augentic/.github/.github/workflows/release.yaml@main
-```
-
-### publish.yaml
-
-Manually triggered three-stage pipeline: CI, Publish, then Deploy. The deploy stage pushes the compiled WASM component to Azure.
-
-Replace the placeholder values in the `with:` block:
-
-| Parameter         | Description                                                       |
-| ----------------- | ----------------------------------------------------------------- |
-| `package`         | Crate name of the guest (e.g. the package name from `Cargo.toml`) |
-| `storage-account` | Azure Storage account for WASM deployment                         |
-| `resource-group`  | Azure resource group for WASM deployment                          |
-
-```yaml
-name: Publish Release
-
-on:
-  workflow_dispatch:
-
-jobs:
-  ci:
-    name: CI
-    uses: augentic/.github/.github/workflows/ci.yaml@main
-
-  publish:
-    name: Publish
-    needs: ci
-    uses: augentic/.github/.github/workflows/publish.yaml@main
-
-  deploy:
-    name: Deploy
-    needs: publish
-    uses: augentic/.github/.github/workflows/wasm.yaml@main
-    secrets:
-      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-    with:
-      package: <PACKAGE_NAME>
-      storage-account: <STORAGE_ACCOUNT>
-      resource-group: <RESOURCE_GROUP>
-```
+The deploy job inherits repository secrets (`secrets: inherit`); configure the Azure service-principal secrets (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`) in the repository settings.
