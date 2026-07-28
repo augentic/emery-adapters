@@ -1,4 +1,4 @@
-//! Allowlisted copy of a local `vectis-template` checkout into a consumer project.
+//! Allowlisted copy of a local `vectis-exemplar` checkout into a consumer project.
 //!
 //! This module is the tested contract for greenfield tree bootstrap from
 //! `$TEMPLATE_DIR`. It does **not** invent Crux/BoltFFI/AGP pins — those
@@ -7,8 +7,8 @@
 //!
 //! # Template resolution
 //!
-//! Default path is [`DEFAULT_RELATIVE_DIR`] (`../vectis-template`) relative to
-//! the consumer project root. Override with `VECTIS_TEMPLATE_DIR`. Late-cap
+//! Default path is [`DEFAULT_RELATIVE_DIR`] (`../vectis-exemplar`) relative to
+//! the consumer project root. Override with `VECTIS_EXEMPLAR_DIR`. Late-cap
 //! and strip guidance stay in `$TEMPLATE_DIR/AGENTS.md` — that file is
 //! **not** copied into the consumer.
 //!
@@ -56,12 +56,12 @@ use std::path::{Path, PathBuf};
 use super::{ScaffoldError, validate_app_name};
 
 /// Default `$TEMPLATE_DIR` relative to the consumer project root.
-pub const DEFAULT_RELATIVE_DIR: &str = "../vectis-template";
+pub const DEFAULT_RELATIVE_DIR: &str = "../vectis-exemplar";
 
-/// Environment override for the local template checkout.
-pub const TEMPLATE_DIR_ENV: &str = "VECTIS_TEMPLATE_DIR";
+/// Environment override for the local exemplar checkout.
+pub const TEMPLATE_DIR_ENV: &str = "VECTIS_EXEMPLAR_DIR";
 
-/// Fixed identity strings embedded in [`augentic/vectis-template`](https://github.com/augentic/vectis-template).
+/// Fixed identity strings embedded in [`augentic/vectis-exemplar`](https://github.com/augentic/vectis-exemplar).
 pub const TEMPLATE_APP_NAME: &str = "VectisApp";
 /// Android / bundle application id in the template.
 pub const TEMPLATE_ANDROID_PACKAGE: &str = "io.augentic.vectisapp";
@@ -106,7 +106,7 @@ const EMERY_GITIGNORE_ENTRIES: &[&str] = &[".emery/scratch/", "workspace/"];
 
 /// DX paths agents must keep aligned with `$TEMPLATE_DIR` (iOS).
 ///
-/// Only paths that exist under a current `vectis-template` checkout are
+/// Only paths that exist under a current `vectis-exemplar` checkout are
 /// refreshed by [`crate::sync`]; absent template counterparts are reported
 /// rather than invented. Pattern checks live in [`crate::ios_scaffold`].
 pub const IOS_DX_RELATIVE_PATHS: &[&str] = &["iOS/Makefile", "iOS/project.yml"];
@@ -175,7 +175,7 @@ pub struct Report {
     pub files: Vec<String>,
 }
 
-/// Resolve `$TEMPLATE_DIR` from `VECTIS_TEMPLATE_DIR` or [`DEFAULT_RELATIVE_DIR`]
+/// Resolve `$TEMPLATE_DIR` from `VECTIS_EXEMPLAR_DIR` or [`DEFAULT_RELATIVE_DIR`]
 /// under `anchor` (typically the consumer project root).
 #[must_use]
 pub fn resolve_dir(anchor: &Path) -> Option<PathBuf> {
@@ -198,7 +198,7 @@ pub fn run(
     if !template_dir.is_dir() {
         return Err(ScaffoldError::InvalidProject {
             message: format!(
-                "template directory not found at {} (clone https://github.com/augentic/vectis-template.git or set {TEMPLATE_DIR_ENV})",
+                "template directory not found at {} (clone https://github.com/augentic/vectis-exemplar.git or set {TEMPLATE_DIR_ENV})",
                 template_dir.display()
             ),
         });
@@ -304,7 +304,7 @@ fn ensure_template_shape(template_dir: &Path) -> Result<(), ScaffoldError> {
         if !path.exists() {
             return Err(ScaffoldError::InvalidProject {
                 message: format!(
-                    "template at {} is missing {name} (not a vectis-template checkout?)",
+                    "template at {} is missing {name} (not a vectis-exemplar checkout?)",
                     template_dir.display()
                 ),
             });

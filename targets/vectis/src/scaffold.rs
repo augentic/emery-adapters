@@ -1,6 +1,6 @@
 //! Crux project scaffolding helpers.
 //!
-//! [`materialize`] is the allowlisted local-`vectis-template` copy contract
+//! [`materialize`] is the allowlisted local-`vectis-exemplar` copy contract
 //! used by build agents for greenfield trees. Pins and structure live only
 //! in `$TEMPLATE_DIR` — this crate no longer embeds a template corpus or
 //! version registry.

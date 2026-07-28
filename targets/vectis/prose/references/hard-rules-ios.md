@@ -4,7 +4,7 @@
 
 ## Scaffold immutability (create and update mode)
 
-1. **Create mode must materialize first.** Copy from `$TEMPLATE_DIR` (`../vectis-template` or `VECTIS_TEMPLATE_DIR`) per `build.md` § Template materialize, then regenerate the Xcode project (`make -C iOS generate-project` / `xcodegen`). Do not invent Swift or DX files when the template is missing.
+1. **Create mode must materialize first.** Copy from `$TEMPLATE_DIR` (`../vectis-exemplar` or `VECTIS_EXEMPLAR_DIR`) per `build.md` § Template materialize, then regenerate the Xcode project (`make -C iOS generate-project` / `xcodegen`). Do not invent Swift or DX files when the template is missing.
 2. **Never hand-author DX / pin files.** `iOS/Makefile` and `iOS/project.yml` must come from `$TEMPLATE_DIR` after identity substitution — not from memory.
 3. **Keep DX aligned with `$TEMPLATE_DIR`.** On drift, re-copy those paths from the template; agents must not patch pins or destinations during verify-repair or feature work.
 4. **Never set a named simulator destination in verify DX.** The template Makefile owns `DESTINATION ?= generic/platform=iOS Simulator`. Do not substitute `name=iPhone …` or run `xcodebuild` with a device-specific destination.

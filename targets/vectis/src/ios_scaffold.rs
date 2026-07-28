@@ -1,7 +1,7 @@
 //! iOS DX path presence and `BoltFFI` pattern drift detection.
 //!
 //! Immutable DX paths match [`crate::scaffold::materialize::IOS_DX_RELATIVE_PATHS`].
-//! Required substrings are derived from the live `vectis-template` iOS Makefile /
+//! Required substrings are derived from the live `vectis-exemplar` iOS Makefile /
 //! `project.yml` (`BoltFFI` pack + generic simulator destination). Byte-compare
 //! against an embedded template is retired — refresh is host/agent-owned via
 //! [`crate::sync`] from `$TEMPLATE_DIR`. Pin faithfulness for workspace
@@ -22,11 +22,11 @@ pub const IMMUTABLE_RELATIVE_PATHS: [&str; 2] = ["iOS/Makefile", "iOS/project.ym
 /// Diagnostic id for scaffold drift findings.
 pub const DRIFT_FINDING_ID: &str = "ios-scaffold-file-drift";
 
-/// Required iOS Makefile substrings from live `vectis-template` `BoltFFI` DX.
+/// Required iOS Makefile substrings from live `vectis-exemplar` `BoltFFI` DX.
 pub const REQUIRED_MAKEFILE_PATTERNS: [&str; 2] =
     ["DESTINATION ?= generic/platform=iOS Simulator", "boltffi pack apple"];
 
-/// Required `project.yml` substring from live `vectis-template` (`BoltFFI` SPM layout).
+/// Required `project.yml` substring from live `vectis-exemplar` (`BoltFFI` SPM layout).
 pub const REQUIRED_PROJECT_YML_PATTERNS: [&str; 1] = ["path: ./generated/Shared"];
 
 /// Compare agent-immutable iOS DX files for presence and `BoltFFI` patterns.

@@ -25,7 +25,7 @@ The build runs against the build request the CLI prepared at `.emery/slices/<sli
 
 - Agents executing this prompt in a consumer project are **consumers**, not adapter maintainers.
 - On template / verify / finalize / toolchain failure: **stop** with `deferred` or a failure report — see [Consumer tooling boundary](../references/emery-runtime/guardrails.md#consumer-tooling-boundary).
-- **Never** edit `emery-adapters`, `vectis-template`, or the built guest component in-band — even when those repos are sibling checkouts.
+- **Never** edit `emery-adapters`, `vectis-exemplar`, or the built guest component in-band — even when those repos are sibling checkouts.
 - Pin and DX drift is fixed by re-copying from `$TEMPLATE_DIR` (or fixing the template repo in a maintainer session) — never by inventing versions in the consumer tree.
 
 ## Standard arguments
@@ -38,7 +38,7 @@ All phase prompts assume these symbols are resolved by the leg's orchestrating a
 | `SLICE_DIR` | `.emery/slices/<SLICE_ID>/`. |
 | `DOMAIN_NAME` | The single domain spec folder under `SLICE_DIR/specs/`. When the slice carries multiple domains, iterate the per-domain phase prompts in declaration order. |
 | `PROJECT_DIR` | The target project root (single-repo mode) or the resolved workspace slot (workspace mode). |
-| `TEMPLATE_DIR` | Local [`vectis-template`](https://github.com/augentic/vectis-template) checkout. Default `${PROJECT_DIR}/../vectis-template`; override with `VECTIS_TEMPLATE_DIR`. Required for greenfield materialize and pin refresh. |
+| `TEMPLATE_DIR` | Local [`vectis-exemplar`](https://github.com/augentic/vectis-exemplar) checkout. Default `${PROJECT_DIR}/../vectis-exemplar`; override with `VECTIS_EXEMPLAR_DIR`. Required for greenfield materialize and pin refresh. |
 | `IOS_SHELL_DIR` | `${PROJECT_DIR}/iOS` (only when `ios` is in scope). |
 | `ANDROID_SHELL_DIR` | `${PROJECT_DIR}/Android` (only when `android` is in scope). |
 | `APP_NAME` | The Xcode target / Swift source folder name (derived from `design.md`'s `App` struct name). |
@@ -59,7 +59,7 @@ Valid Vectis platform tokens are `core`, `ios`, `android`, `web`, and `desktop`.
 
 This is **template materialize** (`vectis::scaffold::materialize`) — not asset materialize (`vectis::materialize` / the prepare prelude that exports design-system assets).
 
-1. **Resolve `$TEMPLATE_DIR`.** Default `${PROJECT_DIR}/../vectis-template`, else `VECTIS_TEMPLATE_DIR`. If the directory is missing or is not a `vectis-template` checkout, **stop** (`deferred`) — clone https://github.com/augentic/vectis-template.git; never invent scaffold files or pins.
+1. **Resolve `$TEMPLATE_DIR`.** Default `${PROJECT_DIR}/../vectis-exemplar`, else `VECTIS_EXEMPLAR_DIR`. If the directory is missing or is not a `vectis-exemplar` checkout, **stop** (`deferred`) — clone https://github.com/augentic/vectis-exemplar.git; never invent scaffold files or pins.
 2. **Mechanical allowlisted copy** into `${PROJECT_DIR}` with identity substitution (`APP_NAME`, `ANDROID_PACKAGE`). Copy root DX (`Makefile`, `Makefile.toml`, `Cargo.toml`, `Cargo.lock` when present, `rust-toolchain.toml`, `deny.toml`, `README.md`, `.gitignore`), plus `shared/`, `iOS/`, `Android/` (including the Gradle wrapper), `supply-chain/`, and `.maestro/`. **Never** copy `.git/`, `.github/`, `web/`, or `AGENTS.md`. Skip machine junk (`target/`, `.gradle/`, `*.xcodeproj/`, `local.properties`, …) per the `scaffold::materialize` denylist. One materialize stands up the whole workspace — do not invent per-shell scaffolds. Materialize refuses to overwrite any existing root DX file **except** `.gitignore`: an `emery init` stub is replaced with the template file (then Emery lines `.emery/scratch/` and `workspace/` are re-asserted). Do not hand-merge `.gitignore` around materialize.
 3. **Strip `VECTIS-OPTIONAL`.** Follow **`$TEMPLATE_DIR/AGENTS.md`** (not a consumer copy) against the `design.md` `## Adapters` capability matrix: remove unused `cap=http|kv|time|sse` units and always strip `cap=demo` for product apps. Do not invent FFI shapes or dependency versions while stripping. Keep Maestro infra (`.maestro/config.yaml`, `.maestro/test-ids.yaml`, `.maestro/scripts/load-test-ids.sh`) and root / shell DX after strip — see [`template-capabilities.md`](../references/template-capabilities.md).
 4. **iOS project generation.** After materialize, run `make -C iOS generate-project` (or `xcodegen`) — committed `.xcodeproj` trees are denylisted on purpose.
@@ -142,7 +142,7 @@ Dependency pins live only as bytes in `$TEMPLATE_DIR`. There is no adapter-side 
 
 **Agents:** detect → re-copy the drifted paths from `$TEMPLATE_DIR` with the same identity substitution as materialize → if the failure persists, mark the build `deferred` with a template / pin drift signal → **exit** (never invent versions). See [Consumer tooling boundary](../references/emery-runtime/guardrails.md#consumer-tooling-boundary).
 
-**Operators (separate maintainer session):** fix pins in [`augentic/vectis-template`](https://github.com/augentic/vectis-template); consumers re-copy from the refreshed checkout. Do not patch version tables inside the Vectis adapter.
+**Operators (separate maintainer session):** fix pins in [`augentic/vectis-exemplar`](https://github.com/augentic/vectis-exemplar); consumers re-copy from the refreshed checkout. Do not patch version tables inside the Vectis adapter.
 
 ## § Phase outcome contract
 

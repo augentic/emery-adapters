@@ -71,7 +71,7 @@ fn refresh_from_template(
         materialize::resolve_dir(project_root).ok_or_else(|| VectisError::InvalidProject {
             message: format!(
                 "cannot refresh DX files: $TEMPLATE_DIR not found (clone \
-                 https://github.com/augentic/vectis-template.git as {} or set {})",
+                 https://github.com/augentic/vectis-exemplar.git as {} or set {})",
                 materialize::DEFAULT_RELATIVE_DIR,
                 materialize::TEMPLATE_DIR_ENV
             ),
