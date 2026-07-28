@@ -62,6 +62,23 @@ Two compatibility choices are independent, for first- and third-party adapter au
 
 For sibling co-development against uncommitted engine changes, uncomment the `[patch."https://github.com/augentic/emery.git"]` block at the bottom of the root `Cargo.toml` (it points at `../emery`) and work in both trees; re-comment it before committing. The patch block must never be active at publish time.
 
+## Omnia exemplar templates
+
+The omnia target adapter does **not** commit scaffold templates. [`augentic/omnia-exemplar`](https://github.com/augentic/omnia-exemplar) owns `templates/guest/` (manifest, token set, proof modes); its CI (`template-check`) proves the contract. At `omnia` crate build time, `targets/omnia/build.rs` fetches that subtree into `OUT_DIR` and bakes it into the component via `include_str!`. The adapter tracks exemplar `main` **unpinned** (early-development posture; immutable pinning is a documented hardening step).
+
+Resolution order:
+
+1. `OMNIA_EXEMPLAR` — path to a local exemplar checkout (sibling co-development)
+2. Peer checkout at `../omnia-exemplar` relative to this repository root
+3. Shallow clone of `main` into the cargo `target/` cache (refreshed each build)
+
+```bash
+export OMNIA_EXEMPLAR=../omnia-exemplar   # optional; otherwise auto-detected or cloned
+cargo make check                          # build.rs fetches + embeds; scaffold tests hold
+```
+
+Never add a `targets/omnia/templates/` tree — change tooling upstream in the exemplar and rebuild the adapter.
+
 ## Local development loops
 
 ```bash

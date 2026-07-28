@@ -33,16 +33,16 @@ fn embeds_all_trees() {
     assert!(body(Adapter::docs(), "prompts/build.md").starts_with("# Omnia target — build prompt"));
 }
 
-/// The references is the point of this adapter: ~65 markdown files
-/// (~700 KB) across `references/` plus the prompts and rules must all
-/// embed. The floor guards against a silently truncated walk without
-/// pinning the exact prose inventory.
+/// The references is the point of this adapter: prompts, rules, and
+/// thin navigation refs (worked code lives in the exemplar checkout).
+/// The floor guards against a silently truncated walk without pinning
+/// the exact prose inventory.
 #[test]
 fn embed_floor() {
     let docs = Adapter::docs();
-    assert!(docs.len() >= 90, "expected the full prose references, got {} docs", docs.len());
+    assert!(docs.len() >= 70, "expected the full prose references, got {} docs", docs.len());
     let total: usize = docs.iter().map(|doc| doc.body.len()).sum();
-    assert!(total >= 700 * 1024, "expected >= 700 KiB of embedded prose, got {total} bytes");
+    assert!(total >= 400 * 1024, "expected >= 400 KiB of embedded prose, got {total} bytes");
 }
 
 /// The `references/emery-runtime` symlink into `codex/references/runtime/`

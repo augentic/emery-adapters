@@ -6,8 +6,8 @@ This document defines how to translate `[runtime]` constraints from Emery artifa
 
 | Emery `[runtime]` Constraint | Omnia Translation | Required Traits | Pattern Reference |
 | --- | --- | --- | --- |
-| Source uses in-memory cache with startup loading | On-demand **cache-aside**: `StateStore` for caching + original data source trait for fetching. Data loaded on first request (or cache miss), not at startup. | `StateStore` + data source trait (`DocumentStore`, `TableStore`, or `HttpRequest`) | [statestore.md](examples/crates/capabilities/statestore.md) |
-| Source uses `setTimeout`/`setInterval` for periodic refresh | **TTL-based cache expiry** via `StateStore`. Set TTL when writing; stale entries auto-evicted and re-fetched on next request. | `StateStore` | [statestore.md](examples/crates/capabilities/statestore.md) |
+| Source uses in-memory cache with startup loading | On-demand **cache-aside**: `StateStore` for caching + original data source trait for fetching. Data loaded on first request (or cache miss), not at startup. | `StateStore` + data source trait (`DocumentStore`, `TableStore`, or `HttpRequest`) | exemplar `crates/gtfs-adapter` |
+| Source uses `setTimeout`/`setInterval` for periodic refresh | **TTL-based cache expiry** via `StateStore`. Set TTL when writing; stale entries auto-evicted and re-fetched on next request. | `StateStore` | exemplar `crates/gtfs-adapter` |
 | Source uses circuit breaker library | **Provider-only HTTP**. The Omnia runtime handles transport-level resilience. No circuit breaker crate needed. | `HttpRequest` | [guardrails.md](guardrails.md) |
 | Source caches OAuth tokens in process memory | **`Identity` provider**. Token acquisition and caching delegated to the Omnia runtime via `Identity::access_token`. | `Identity` | [capabilities.md](capabilities.md#identity) |
 | Source uses global logger singleton | **`tracing`** crate. Use `tracing::info!`, `tracing::debug!`, etc. No global logger construction. | (none — `tracing` is a dependency, not a provider trait) | [guardrails.md](guardrails.md) |

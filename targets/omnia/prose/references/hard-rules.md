@@ -1,20 +1,21 @@
 # Crate Writer — Rules
 
-Read this when authoring or updating a generated crate. The Hard Rules and Authority Hierarchy below are normative — every generation pass must satisfy them. SKILL.md and the artifacts cannot weaken anything stated here.
+Read this when authoring or updating a generated crate. The Hard Rules and Authority Hierarchy below are normative — every generation pass must satisfy them. Slash-command `SKILL.md` wrappers only elicit arguments and relay CLI output; they carry no generation authority and cannot weaken anything stated here.
 
 ## Authority Hierarchy
 
 When conflicts arise, follow this strict precedence:
 
-1. **SKILL.md** (highest) -- generation/update rules and hard constraints
-2. **Emery artifacts (specs + design.md)** -- behavior specification (artifacts always win for changed behavior)
-3. **references/** -- authoritative patterns and SDK API
-4. **examples/** -- canonical production code patterns
-5. **Existing crate code** (UPDATE MODE ONLY) -- authoritative for unchanged behavior; trust existing code for anything the updated artifacts do not contradict
-6. **Original source** (if provided) -- reference for ambiguity only
-7. **LLM inference** (lowest) -- prohibited for `[unknown]` cases; use TODO markers
+1. **Emery artifacts (specs + design.md + tasks.md)** (highest) -- behavioral ground truth; artifacts always win for changed behavior. The Hard Rules below constrain *implementation*, never behavior: where an artifact prescribes an implementation detail that violates a hard rule (e.g. `HttpRequest` for a managed data store), the hard rule governs the implementation and the deviation is recorded.
+2. **Adapter prompts and engineering rules** -- this document, the build prompts, and the `OMNIA-*` / `UNI-*` rules.
+3. **references/** -- authoritative patterns and SDK API.
+4. **Existing crate code** (UPDATE MODE ONLY) -- authoritative for unchanged behavior; trust existing code for anything the updated artifacts do not contradict, and prefer its evidenced idioms over exemplar idioms when the consumer's Omnia pin differs from the exemplar's.
+5. **Exemplar checkout** -- current SDK implementation idioms as compiling code ([exemplar.md](exemplar.md)); in create mode this is the primary idiom source.
+6. **examples/** -- retained explanatory walkthroughs / checklists for subjects the exemplar does not demonstrate.
+7. **Original source** (if provided) -- reference for ambiguity only.
+8. **LLM inference** (lowest) -- prohibited for `[unknown]` cases; use TODO markers.
 
-**Key difference between modes**: In update mode, existing crate code sits at level 5 -- authoritative for any behavior the artifacts do not explicitly change. In create mode, there is no existing code; levels 5-6 are skipped.
+**Key difference between modes**: In update mode, existing crate code sits at level 4 -- authoritative for any behavior the artifacts do not explicitly change. In create mode, there is no existing code; levels 4 and 7 are skipped and the exemplar checkout is the primary idiom reference.
 
 ## Hard Rules
 

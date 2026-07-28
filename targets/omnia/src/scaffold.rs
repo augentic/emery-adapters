@@ -1,9 +1,10 @@
 //! Deterministic base-repo scaffold for Omnia guest workspaces.
 //!
 //! Writes the standard tooling files (cargo-make, deny, cargo-vet,
-//! GitHub workflows, toolchain, editor config) from the templates
-//! embedded via `templates/manifest.yaml`. Fill-only: an existing file
-//! is never overwritten, so consumer customizations always stand.
+//! GitHub workflows, toolchain, editor config) from the exemplar
+//! `templates/guest/` contract fetched at build time into `OUT_DIR`.
+//! Fill-only: an existing file is never overwritten, so consumer
+//! customizations always stand.
 
 mod templates;
 

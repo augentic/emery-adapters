@@ -22,6 +22,7 @@ The Omnia crate / test / guest / review instructions live in [`../prompts/build.
 ### Authority and hard constraints
 
 - [`hard-rules.md`](hard-rules.md) — full hard-rules set and authority hierarchy.
+- [`exemplar.md`](exemplar.md) — the exemplar checkout: worked-code reference contract, Omnia compatibility behavior, navigation map.
 - [`guardrails.md`](guardrails.md) — forbidden crates, std APIs, WASM constraints, serde / timestamp / DST idioms.
 - [`wasm-constraints.md`](wasm-constraints.md) — translating `[runtime]` constraints to Omnia/WASM patterns.
 
@@ -53,7 +54,7 @@ The Omnia crate / test / guest / review instructions live in [`../prompts/build.
 
 ### Guest writer depth
 
-- [`configuration.md`](configuration.md) — guest workspace `Cargo.toml`, `.env.example` shape, plus reference bodies for the tooling files the scaffold prelude writes (`.cargo/config.toml`, `deny.toml`, cargo-vet scaffold, the five GitHub workflows).
+- [`configuration.md`](configuration.md) — guest workspace `Cargo.toml` policy, version resolution against the exemplar's Omnia pin, the scaffolded-tooling table, and `publish.yaml` placeholders (template bodies live only in the exemplar's `templates/guest/`, fetched at adapter build).
 - [`handlers.md`](handlers.md) — typed operation routing, message subscriptions, WebSocket events, and explicit guest exports.
 - [`guest-patterns.md`](guest-patterns.md) — HTTP / Messaging / WebSocket guest export patterns.
 - [`guest-wiring.md`](guest-wiring.md) — crate → guest injection contract.
@@ -72,6 +73,5 @@ The Omnia crate / test / guest / review instructions live in [`../prompts/build.
 
 ### Worked examples
 
-- [`examples/crates/`](examples/crates/) — single-operation, multi-operation, anti-patterns; per-capability walkthroughs under `capabilities/`; per-update-category walkthroughs under `updates/`.
-- [`examples/tests/`](examples/tests/) — per-provider testing patterns (HTTP, StateStore, Publish, BlobStore, DocumentStore).
-- [`examples/replay/`](examples/replay/) — runtime capture replay (worked operation, test, and capture examples for migration).
+- The exemplar checkout ([`exemplar.md`](exemplar.md)) — the primary worked-code reference: compiling connectors, adapters, both guest styles, and test suites, cloned fresh each build.
+- [`examples/`](examples/) — retained explanatory walkthroughs for subjects the exemplar does not demonstrate: anti-patterns, uncovered capability traits (`Broadcast`, `Blobstore`, `DocumentStore`, `TableStore`), short update-category checklists under `crates/updates/`, capture-replay notes under `replay/`, and remaining test walkthroughs under `tests/`.

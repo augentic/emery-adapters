@@ -23,7 +23,8 @@ $DESIGN_PATH   = $SLICE_DIR/design.md
 $TASKS_PATH    = $SLICE_DIR/tasks.md
 $CRATE_NAME    = $SLICE_NAME with kebab → snake (or the slice's plan-level `crate:` override)
 $CRATE_PATH    = crates/$CRATE_NAME
-$GUEST_PATH    = workspace root (single `src/lib.rs` exports HTTP / Messaging / WebSocket guests)
+$GUEST_NAME    = deployable guest package name (kebab-case; often equals the workspace / service name)
+$GUEST_PATH    = guests/$GUEST_NAME (typed-router guest; `src/lib.rs` exports HTTP / Messaging / WebSocket)
 $REVIEW_OUTPUT = $CRATE_PATH/REVIEW.md
 ```
 
@@ -33,14 +34,18 @@ $REVIEW_OUTPUT = $CRATE_PATH/REVIEW.md
 
 Check whether `$CRATE_PATH/Cargo.toml` exists:
 
-- **Missing** → **create mode**: generate the crate, tests, and (if `src/lib.rs` is absent at the guest root) guest scaffolding.
+- **Missing** → **create mode**: generate the crate, tests, and (if `$GUEST_PATH/src/lib.rs` is absent) guest scaffolding under `guests/`.
 - **Present** → **update mode**: incremental change against the existing crate; guest wiring updates are folded into the crate-writer step (skip the guest phase).
+
+## § Exemplar checkout
+
+The generation leg's first step — before any writer prompt runs — is preparing the read-only exemplar checkout at `target/omnia-exemplar/` per [`exemplar.md`](../references/exemplar.md): shallow-clone `main` (or fetch + hard-reset an existing checkout), stop with a `## § Stop hint contract` hint when no checkout can be obtained, and proceed with a noted-stale checkout when only the refresh fails. The same document carries the compatibility contract: create mode adopts the checkout's `exemplar.yaml` Omnia `{ version, repository, rev }` when authoring dependencies; update mode preserves the consumer's existing pin, soft-warns on mismatch, and prefers consumer-evidenced idioms over exemplar idioms wherever the two conflict. Writer prompts link into `exemplar.md`'s navigation map rather than repeating any of this.
 
 ## Leg map
 
-Before the first leg, the adapter runs its deterministic scaffold prelude in-guest: any missing standard tooling file (cargo-make, deny, cargo-vet scaffold, GitHub workflows, toolchain/editor config) is written from the adapter's embedded templates — existing files are never overwritten. The generation user prompt carries the outcome as a `### scaffold prelude` block; never re-author the files it lists ([`configuration.md`](../references/configuration.md) describes them).
+Before the first leg, the adapter runs its deterministic scaffold prelude in-guest: any missing standard tooling file (cargo-make, deny, cargo-vet scaffold, GitHub workflows, toolchain/editor config) is written from the exemplar `templates/guest/` contract baked into this component at adapter build time — existing files are never overwritten, and a prelude I/O failure fails the build before generation. The generation user prompt carries the outcome as a `### scaffold prelude` block; never re-author the files it lists ([`configuration.md`](../references/configuration.md) describes them).
 
-The adapter core drives four legs in a fixed order — generation (crate writer, test writer, guest writer in create mode, then the § verify-repair loop), standards review ([`build/review.md`](build/review.md)), capture replay ([`build/replay.md`](build/replay.md), self-skipping when no `captures` source is bound), then the report leg (see `## Build report`). Within the generation leg, write the crate before the tests, mark `tasks.md` checkboxes complete as each task lands, and never transition the slice lifecycle — the deterministic in-guest report gate checks the report answer and the engine guest owns the `Refined → Built` transition.
+The adapter core drives four legs in a fixed order — generation (exemplar checkout, crate writer, test writer, guest writer in create mode, then the § verify-repair loop), standards review ([`build/review.md`](build/review.md)), capture replay ([`build/replay.md`](build/replay.md), self-skipping when no `captures` source is bound), then the report leg (see `## Build report`). Within the generation leg, write the crate before the tests, mark `tasks.md` checkboxes complete as each task lands, and never transition the slice lifecycle — the deterministic in-guest report gate checks the report answer and the engine guest owns the `Refined → Built` transition.
 
 ## § Verify-repair loop (max 3 iterations)
 
@@ -116,6 +121,7 @@ Each `findings[]` item validates against `schemas/diagnostics/diagnostic.schema.
 - [`guidance.md`](guidance.md), [`merge.md`](merge.md) — sibling prompts.
 - [`build/crate.md`](build/crate.md), [`build/test.md`](build/test.md), [`build/guest.md`](build/guest.md), [`build/review.md`](build/review.md), [`build/replay.md`](build/replay.md) — per-leg prompts.
 - [`../../../sources/captures/prose/references/capture-format.md`](../../../../sources/captures/prose/references/capture-format.md) — runtime capture wire format (when `captures` is bound).
+- [`exemplar.md`](../references/exemplar.md) — the exemplar checkout: contract, compatibility behavior, navigation map.
 - [`hard-rules.md`](../references/hard-rules.md) — full authority hierarchy and hard-rules set.
 - [`guardrails.md`](../references/guardrails.md), [`wasm-constraints.md`](../references/wasm-constraints.md) — forbidden crates / APIs, statelessness, serde / DST idioms.
 - [`capabilities.md`](../references/capabilities.md), [`capability-mapping.md`](../references/capability-mapping.md) — provider traits and artifact-to-trait mapping.
@@ -124,5 +130,5 @@ Each `findings[]` item validates against `schemas/diagnostics/diagnostic.schema.
 - [`mock-provider.md`](../references/mock-provider.md), [`spec-to-test-mapping.md`](../references/spec-to-test-mapping.md), [`replay-fixtures.md`](../references/replay-fixtures.md), [`replay-crate-layout.md`](../references/replay-crate-layout.md) — test depth.
 - [`handlers.md`](../references/handlers.md), [`guest-patterns.md`](../references/guest-patterns.md), [`guest-wiring.md`](../references/guest-wiring.md), [`runtime.md`](../references/runtime.md), [`project-layout.md`](../references/project-layout.md) — guest depth.
 - [`review-categories.md`](../references/review-categories.md), [`team-protocol-crate.md`](../references/team-protocol-crate.md), [`review-auto-fix.md`](../references/review-auto-fix.md), [`review-output-template.md`](../references/review-output-template.md), [`agent-teams.md`](../references/agent-teams.md), [`../rules/`](../rules/) (Omnia overlay), [`../rules/universal/`](../rules/universal/) (shared `UNI-*` pack, embedded in this adapter) — review depth.
-- [`providers/`](../references/providers/) — per-trait deep dives.
-- [`examples/`](../references/examples/) — worked examples for crate writing (single/multi-handler, per-capability, per-update-category) and test writing (per-provider).
+- [`providers/`](../references/providers/) — per-trait deep dives (API notes; compiling usage lives in the exemplar).
+- [`examples/`](../references/examples/) — retained walkthroughs only for subjects the exemplar does not yet demonstrate (see that folder's README).

@@ -1,30 +1,31 @@
 # Omnia Worked Examples
 
-Index of the worked-example corpus for Omnia crate generation. Pick the one file that matches the task at hand; do not read the tree wholesale.
+The **primary worked-code reference is the exemplar checkout** — a compiling, CI-green Omnia workspace the generation leg clones per [`exemplar.md`](../exemplar.md). Read real crates, guests, and test suites there first.
 
-## crates/ — crate-shape examples
+This folder retains explanatory walkthroughs **only** for subjects the exemplar does not (yet) demonstrate. Missing coverage is upstream backlog: extend the exemplar rather than growing this tree.
+
+Pick the one file that matches the task; do not read the tree wholesale.
+
+## crates/
 
 | File | Read when |
 | --- | --- |
-| [crates/single-handler.md](crates/single-handler.md) | Generating a crate with one handler (the `r9k-adapter` walkthrough). |
-| [crates/multi-handler.md](crates/multi-handler.md) | Generating a crate with several handlers sharing domain logic (the `cars` walkthrough). |
 | [crates/anti-patterns.md](crates/anti-patterns.md) | Reviewing generated code for known bad shapes before they ship. |
 
-### crates/capabilities/ — one example per capability trait
+### crates/capabilities/ — traits not exercised upstream
+
+`Config`, `Publish`, `HttpRequest`, `Identity`, and `StateStore` are demonstrated by the exemplar's production code and tests; no static walkthroughs remain for them.
 
 | File | Read when the spec requires |
 | --- | --- |
-| [crates/capabilities/http-request.md](crates/capabilities/http-request.md) | Outbound HTTP calls (`HttpRequest`). |
-| [crates/capabilities/config.md](crates/capabilities/config.md) | Environment configuration (`Config`). |
-| [crates/capabilities/statestore.md](crates/capabilities/statestore.md) | Caching / key-value state (`StateStore`). |
-| [crates/capabilities/publisher.md](crates/capabilities/publisher.md) | Publishing messages or events (`Publish`). |
 | [crates/capabilities/broadcast.md](crates/capabilities/broadcast.md) | Pushing data to WebSocket clients (`Broadcast`). |
-| [crates/capabilities/identity.md](crates/capabilities/identity.md) | Bearer-token authentication (`Identity`). |
 | [crates/capabilities/blobstore.md](crates/capabilities/blobstore.md) | Binary blob storage (`Blobstore`). |
 | [crates/capabilities/documentstore.md](crates/capabilities/documentstore.md) | JSON document storage / queries (`DocumentStore`). |
 | [crates/capabilities/tablestore.md](crates/capabilities/tablestore.md) | Tabular storage (`TableStore`). |
 
-### crates/updates/ — change-classification examples
+### crates/updates/ — change-classification checklists
+
+The exemplar is a snapshot; update flows stay here as short procedural checklists (no full crate listings). Compiling shapes still come from the checkout.
 
 | File | Read when the slice is classified |
 | --- | --- |
@@ -33,7 +34,9 @@ Index of the worked-example corpus for Omnia crate generation. Pick the one file
 | [crates/updates/structural.md](crates/updates/structural.md) | Structural — the domain model is refactored. |
 | [crates/updates/subtractive.md](crates/updates/subtractive.md) | Subtractive — an endpoint or handler is removed. |
 
-## replay/ — replay-harness examples
+## replay/
+
+Emery capture-replay wiring that is not Omnia-SDK idiom. Prefer the exemplar's `crates/pulse-adapter/tests` + `data/replay` for SDK replay shape first.
 
 | File | Read when |
 | --- | --- |
@@ -41,13 +44,12 @@ Index of the worked-example corpus for Omnia crate generation. Pick the one file
 | [replay/fixtures.md](replay/fixtures.md) | Authoring replay text fixtures from captured traffic. |
 | [replay/tests.md](replay/tests.md) | Wiring replay fixtures into the crate's test suite. |
 
-## tests/ — capability test walkthroughs
+## tests/
+
+HTTP / Publish / StateStore testing is demonstrated by the exemplar. Remaining walkthroughs cover traits the exemplar does not exercise.
 
 | File | Read when testing |
 | --- | --- |
-| [tests/testing.md](tests/testing.md) | Any crate — the general testing-pattern overview; start here. |
-| [tests/testing-http.md](tests/testing-http.md) | A simple HTTP handler (Example 01). |
-| [tests/testing-statestore.md](tests/testing-statestore.md) | Cache behavior over `StateStore` (Example 02). |
-| [tests/testing-publisher.md](tests/testing-publisher.md) | Messaging over `Publish` (Example 03). |
-| [tests/testing-blobstore.md](tests/testing-blobstore.md) | Blob storage over `Blobstore` (Example 04). |
-| [tests/testing-documentstore.md](tests/testing-documentstore.md) | Document storage over `DocumentStore` (Example 05). |
+| [tests/testing.md](tests/testing.md) | General testing-pattern overview (start here only if the exemplar suite is a poor match). |
+| [tests/testing-blobstore.md](tests/testing-blobstore.md) | Blob storage over `Blobstore`. |
+| [tests/testing-documentstore.md](tests/testing-documentstore.md) | Document storage over `DocumentStore`. |

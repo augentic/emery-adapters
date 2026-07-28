@@ -1,8 +1,8 @@
 # Omnia build — guest writer
 
-Loaded by [../build.md](../build.md) phase 4 on **first build only** (when no `src/lib.rs` exists at the workspace root). Subsequent builds skip this step; route / topic / WebSocket wiring updates are folded into [crate writer](crate.md)'s four-category cadence.
+Loaded by [../build.md](../build.md) phase 4 on **first build only** (when `$GUEST_PATH/src/lib.rs` is absent). Subsequent builds skip this step; route / topic / WebSocket wiring updates are folded into [crate writer](crate.md)'s four-category cadence.
 
-The guest is a thin WASI/wasm32 wrapper — it owns HTTP routing, topic dispatch, WebSocket exports, provider setup, and config validation; ALL business logic lives in domain crates under `crates/`.
+The guest is a thin WASI/wasm32 package under `guests/<service>/` — it owns HTTP routing, topic dispatch, WebSocket exports, provider setup, and config validation; ALL business logic lives in domain crates under `crates/`. Prefer the typed-router style; the exemplar's `guests/axum/` is escape-hatch only.
 
 ## Hard rules
 
@@ -19,15 +19,14 @@ The full constraint list lives at [`guardrails.md`](../../references/guardrails.
 
 ## Process
 
-The adapter's deterministic scaffold prelude has already written every missing standard tooling file from its embedded templates before this leg runs — `.cargo/config.toml`, `rust-toolchain.toml`, `rustfmt.toml`, `clippy.toml`, `taplo.toml`, `Makefile`, `Makefile.toml`, `deny.toml`, `.gitignore`, `.vscode/settings.json`, the `supply-chain/` cargo-vet scaffold, and the five GitHub workflows (`audit`, `ci`, `patch`, `publish`, `release`). Do not re-author or overwrite them; the generation user prompt's `### scaffold prelude` block lists exactly what was written. [`configuration.md`](../../references/configuration.md) describes each file.
+The adapter's deterministic scaffold prelude has already written every missing standard tooling file from its embedded exemplar templates before this leg runs — `rust-toolchain.toml`, `rustfmt.toml`, `clippy.toml`, `taplo.toml`, `Makefile`, `Makefile.toml`, `deny.toml`, `.gitignore`, `.vscode/settings.json`, the `supply-chain/` cargo-vet scaffold, and the five GitHub workflows (`audit`, `ci`, `patch`, `publish`, `release`). Do not re-author or overwrite them; the generation user prompt's `### scaffold prelude` block lists exactly what was written. [`configuration.md`](../../references/configuration.md) describes each file.
 
-1. **Lay down the workspace `Cargo.toml`** per [`configuration.md`](../../references/configuration.md) — workspace members, `[workspace.package]`, `[workspace.dependencies]`, lints, and the release profile.
-2. **Generate `src/lib.rs`** with explicit WIT exports and typed HTTP / messaging / command router assembly over the shared operation kernel. Pattern catalogue: [`handlers.md`](../../references/handlers.md) and [`guest-patterns.md`](../../references/guest-patterns.md).
-3. **Implement the `Provider` struct** that satisfies the consumed `omnia-wasi-*` adapter traits. Validate every required `Config::get` key in `Provider::new()` and document each in `examples/.env.example`. The crate → guest injection contract is at [`guest-wiring.md`](../../references/guest-wiring.md).
-4. **Author `examples/<guest-name>.rs`** with the `omnia::runtime!({ main: true, hosts: { … } });` block enumerating every WASI host the guest consumes. See [`runtime.md`](../../references/runtime.md) for the macro, host options, and `.env.example` shape.
+1. **Lay down the workspace `Cargo.toml`** per [`configuration.md`](../../references/configuration.md) — `members = ["crates/*", "guests/*"]`, `[workspace.package]`, `[workspace.dependencies]`, lints, and the release profile. Adopt the Omnia pin from the exemplar checkout's `exemplar.yaml`.
+2. **Generate `$GUEST_PATH/`** (`Cargo.toml`, `src/lib.rs`, `examples/runner.rs`, `examples/.env.example`) with explicit WIT exports and typed HTTP / messaging / command router assembly over the shared operation kernel. Pattern catalogue: [`handlers.md`](../../references/handlers.md) and [`guest-patterns.md`](../../references/guest-patterns.md); the exemplar checkout's `guests/typed/` is the compiling reference — see [`exemplar.md`](../../references/exemplar.md). Layout: [`project-layout.md`](../../references/project-layout.md).
+3. **Implement the `Provider` struct** that satisfies the consumed `omnia-wasi-*` adapter traits. Validate every required `Config::get` key in `Provider::new()` and document each in `examples/.env.example`. Injection contract: [`guest-wiring.md`](../../references/guest-wiring.md).
+4. **Author `examples/runner.rs`** with the `omnia::runtime!({ main: true, hosts: { … } });` block enumerating every WASI host the guest consumes. See [`runtime.md`](../../references/runtime.md).
 5. **Finish the scaffolded supply-chain and publish config**: fill the `<PACKAGE_NAME>` / `<STORAGE_ACCOUNT>` / `<RESOURCE_GROUP>` placeholders in `.github/workflows/publish.yaml`, and after the workspace builds for the first time and produces `Cargo.lock`, run `cargo vet regenerate {imports,exemptions,unpublished}` to populate `supply-chain/imports.lock` and the exemptions in `supply-chain/config.toml`.
-6. **Apply the project layout** described in [`project-layout.md`](../../references/project-layout.md).
-7. **Verify with `cargo check`** — fix any missing route / provider impl / wasm32-incompatible usage and re-check until clean. The build prompt's verify-repair loop runs after this step.
+6. **Verify with `cargo check`** — fix any missing route / provider impl / wasm32-incompatible usage and re-check until clean. The build prompt's verify-repair loop runs after this step.
 
 ## When `WasiIdentity` is consumed
 

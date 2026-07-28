@@ -33,13 +33,8 @@ Capture wire format authority stays at the source adapter — do not duplicate t
 
 ## Worked examples
 
-- [`examples/tests/testing.md`](../../references/examples/tests/testing.md) — core test patterns: layout, MockProvider, test structures, test data.
-- [`examples/tests/testing-http.md`](../../references/examples/tests/testing-http.md) — simple HTTP handler testing with Config-only MockProvider.
-- [`examples/tests/testing-statestore.md`](../../references/examples/tests/testing-statestore.md) — multi-trait MockProvider with StateStore and cache-aside.
-- [`examples/tests/testing-publisher.md`](../../references/examples/tests/testing-publisher.md) — publish, event capture, request-reply, topic checks.
-- [`examples/tests/testing-blobstore.md`](../../references/examples/tests/testing-blobstore.md) — Blobstore-backed handlers.
-- [`examples/tests/testing-documentstore.md`](../../references/examples/tests/testing-documentstore.md) — DocumentStore-backed handlers.
-- [`examples/replay/`](../../references/examples/replay/) — runtime capture replay for migration (time-sensitive handlers, directory-scanning replay runner).
+- **Primary:** the exemplar checkout's test suites — `crates/tally-connector/tests` (minimal mock provider), `crates/pulse-connector/tests`, `crates/gtfs-adapter/tests` (multi-trait + StateStore), `crates/pulse-adapter/tests` + `data/replay` (fixtures and replay). Navigation: [`exemplar.md`](../../references/exemplar.md).
+- Retained walkthroughs only for traits the exemplar does not exercise: [`examples/tests/`](../../references/examples/tests/) and [`examples/replay/`](../../references/examples/replay/) (see that folder's README).
 
 ## Output and quality checklist
 
