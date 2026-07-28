@@ -233,7 +233,7 @@ pub fn run(
     }
 
     for (_, dest) in &planned {
-        if dest.exists() && !is_gitignore(dest) {
+        if dest.exists() && !is_root_gitignore(dest_dir, dest) {
             return Err(ScaffoldError::InvalidProject {
                 message: format!(
                     "refusing to overwrite existing file at {} (materialize into an empty project tree)",
@@ -262,8 +262,10 @@ pub fn run(
     })
 }
 
-fn is_gitignore(path: &Path) -> bool {
-    path.file_name().is_some_and(|name| name == ".gitignore")
+/// True only for `${dest_dir}/.gitignore` — nested `.gitignore` files stay
+/// fail-closed like every other planned path.
+fn is_root_gitignore(dest_dir: &Path, dest: &Path) -> bool {
+    dest == dest_dir.join(".gitignore")
 }
 
 /// Idempotent: append each [`EMERY_GITIGNORE_ENTRIES`] line missing from the
