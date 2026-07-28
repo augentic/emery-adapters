@@ -188,6 +188,74 @@ fn refuses_overwrite_and_missing_template() {
     assert!(err.to_string().contains("refusing to overwrite"));
 }
 
+#[test]
+fn replaces_emery_init_gitignore_stub() {
+    let Some(template) = require_template() else {
+        return;
+    };
+    let dest = tempdir().unwrap();
+    // Shape of `.gitignore` after `emery init` — framework lines only.
+    fs::write(dest.path().join(".gitignore"), ".emery/scratch/\nworkspace/\n").unwrap();
+    let identity = Identity::new("Counter", "com.example.counter").unwrap();
+    let report = run(&template, dest.path(), &identity).unwrap();
+
+    assert!(report.files.iter().any(|p| p == ".gitignore"));
+    let gitignore = fs::read_to_string(dest.path().join(".gitignore")).unwrap();
+    assert!(
+        gitignore.lines().any(|line| line.trim() == "target/"),
+        "template platform ignores must land"
+    );
+    assert!(
+        gitignore.lines().any(|line| line.trim() == "Android/.gradle/"),
+        "template Android ignores must land"
+    );
+    assert!(
+        gitignore.lines().any(|line| line.trim() == ".emery/scratch/"),
+        "Emery scratch entry must survive"
+    );
+    assert!(
+        gitignore.lines().any(|line| line.trim() == "workspace/"),
+        "Emery workspace entry must survive"
+    );
+}
+
+#[test]
+fn refuses_non_gitignore_root_overwrite() {
+    let Some(template) = require_template() else {
+        return;
+    };
+    let dest = tempdir().unwrap();
+    fs::write(dest.path().join("Makefile"), "# pre-existing\n").unwrap();
+    let identity = Identity::new("Counter", "com.example.counter").unwrap();
+    let err = run(&template, dest.path(), &identity).unwrap_err();
+    assert!(err.to_string().contains("refusing to overwrite"));
+    assert!(err.to_string().contains("Makefile"));
+}
+
+#[test]
+fn refuses_nested_gitignore_overwrite() {
+    // Minimal template shape: nested `.gitignore` must stay fail-closed even
+    // though the root `.gitignore` stub is overwriteable.
+    let template = tempdir().unwrap();
+    fs::write(template.path().join("Cargo.toml"), "[workspace]\n").unwrap();
+    fs::write(template.path().join(".gitignore"), "target/\n").unwrap();
+    for dir in ["shared", "iOS", "Android", "supply-chain", ".maestro"] {
+        fs::create_dir_all(template.path().join(dir)).unwrap();
+    }
+    fs::write(template.path().join("Android/.gitignore"), "local.properties\n").unwrap();
+
+    let dest = tempdir().unwrap();
+    fs::create_dir_all(dest.path().join("Android")).unwrap();
+    fs::write(dest.path().join("Android/.gitignore"), "# keep me\n").unwrap();
+    // Root stub alone must not be enough to pass when a nested file collides.
+    fs::write(dest.path().join(".gitignore"), ".emery/scratch/\n").unwrap();
+
+    let identity = Identity::new("Counter", "com.example.counter").unwrap();
+    let err = run(template.path(), dest.path(), &identity).unwrap_err();
+    assert!(err.to_string().contains("refusing to overwrite"));
+    assert!(err.to_string().contains("Android"));
+}
+
 fn assert_byte_equal(template: &Path, dest: &Path, rel: &str) {
     let left = fs::read(template.join(rel)).unwrap_or_else(|err| {
         panic!("read template {rel}: {err}");
