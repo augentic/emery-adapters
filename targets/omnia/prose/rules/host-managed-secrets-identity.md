@@ -16,7 +16,7 @@ Authenticated HTTP should follow the `Config` -> `Identity::access_token` -> `Ht
 - Literal API keys, bearer tokens, connection strings, passwords, private keys, SAS tokens, SharedKey credentials, or certificate material.
 - `std::env::var`, dotenv loaders, or config files used to retrieve secrets inside a guest component.
 - `Authorization` headers built from hardcoded strings, configuration values that are themselves tokens, or manually generated HMAC signatures.
-- Azure Table, blob storage, SQL, Redis, MongoDB, or message-broker access implemented with raw credentials instead of `DocumentStore`, `TableStore`, `Blobstore`, `StateStore`, `Publish`, or `Identity`.
+- Azure Table, blob storage, SQL, Redis, MongoDB, or message-broker access implemented with raw credentials instead of `DocumentStore`, `TableStore`, `BlobStore`, `StateStore`, `Publish`, or `Identity`.
 - `tracing`, `println!`, debug output, error descriptions, or test snapshots that include secret values or bearer tokens.
 - Tokens cached in `static`, `OnceCell`, `StateStore`, request structs, or serialized output.
 

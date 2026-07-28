@@ -13,8 +13,8 @@ These crates are **never** allowed in generated code:
 | `redis`              | Direct connection not available | `StateStore` via provider                       |
 | `sqlx`, `diesel`     | Direct DB connection            | `TableStore` via provider                       |
 | `mongodb`            | Direct DB connection            | `DocumentStore` via provider                    |
-| `azure_storage_blobs` | Direct blob storage connection | `Blobstore` via provider                        |
-| `aws-sdk-s3`         | Direct blob storage connection  | `Blobstore` via provider                        |
+| `azure_storage_blobs` | Direct blob storage connection | `BlobStore` via provider                        |
+| `aws-sdk-s3`         | Direct blob storage connection  | `BlobStore` via provider                        |
 | `hyper`              | Server-side HTTP                | `omnia-wasi-http` + axum                        |
 | `dotenv`, `dotenvy`  | File system access              | `Config::get` via provider                      |
 | `rand`               | RNG not available in WASM       | Accept IDs as input or derive deterministically |
@@ -29,12 +29,12 @@ These standard library APIs are not available in WASM guests:
 | API                  | Reason                | Alternative                       |
 | -------------------- | --------------------- | --------------------------------- |
 | `std::env::var`      | No environment access | `Config::get` via provider        |
-| `std::fs::*`         | No filesystem access  | `StateStore`, `Blobstore`, `DocumentStore`, or `HttpRequest` |
+| `std::fs::*`         | No filesystem access  | `StateStore`, `BlobStore`, `DocumentStore`, or `HttpRequest` |
 | `std::net::*`        | No direct networking  | `HttpRequest::fetch` via provider |
 | `std::process::*`    | No process management | N/A                               |
 | `std::thread::spawn` | Single-threaded WASM  | Async patterns                    |
 
-> **`std::fs` replacement guide**: `StateStore` for small key-value state or cache entries; `Blobstore` for binary files, images, or large payloads; `DocumentStore` for JSON documents or structured data files; `HttpRequest` for fetching remote resources.
+> **`std::fs` replacement guide**: `StateStore` for small key-value state or cache entries; `BlobStore` for binary files, images, or large payloads; `DocumentStore` for JSON documents or structured data files; `HttpRequest` for fetching remote resources.
 
 ### Exceptions
 
@@ -74,8 +74,8 @@ const MAX_DELAY_SECS: i64 = 60;
 
 - No `unwrap()` or `expect()` in production code (allowed in tests)
 - Use `anyhow::Context` for error chaining
-- All errors must ultimately convert to `omnia_sdk::Error`
-- Domain errors use `thiserror` + `From<DomainError> for omnia_sdk::Error`
+- All errors must ultimately convert to `omnia_guest::Error`
+- Domain errors use `thiserror` + `From<DomainError> for omnia_guest::Error`
 - Use `bad_gateway!` for upstream API failures, `bad_request!` for input validation
 
 ## Code Quality

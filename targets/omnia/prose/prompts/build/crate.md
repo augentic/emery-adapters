@@ -38,7 +38,7 @@ The full Hard Rules + Authority Hierarchy live in [`../../references/hard-rules.
 7. Honour TODO markers, adapter overrides, and cache-aside patterns per [`todo-markers.md`](../../references/todo-markers.md).
 8. Emit accompanying output documents (`Migration.md`, `Architecture.md`, `CHANGELOG.md`, `.env.example`) per [`output-documents.md`](../../references/output-documents.md).
 
-Worked code: the exemplar checkout is the primary reference for compiling current-SDK crate shapes — `crates/tally-connector` (minimal), `crates/pulse-adapter` (compact adapter), `crates/gtfs-adapter` (full-size, stateful); navigation map in [`exemplar.md`](../../references/exemplar.md). Retained explanatory walkthroughs: per-capability examples under [`examples/crates/capabilities/`](../../references/examples/crates/capabilities/) and [`examples/crates/anti-patterns.md`](../../references/examples/crates/anti-patterns.md) for shapes to avoid.
+Worked code: the exemplar checkout is the primary reference for compiling current-SDK crate shapes — `crates/tally-connector` (minimal), `crates/pulse-adapter` (compact adapter), `crates/gtfs-adapter` (full-size, stateful); navigation map in [`exemplar.md`](../../references/exemplar.md); capability operations and mocks in `crates/capability-examples/`. Retained explanatory walkthrough: [`examples/crates/anti-patterns.md`](../../references/examples/crates/anti-patterns.md) for shapes to avoid.
 
 ## Update mode
 

@@ -22,7 +22,7 @@ Any functionality that cannot be fully implemented must be marked:
 
 ## Adapter Override for Managed Data Stores
 
-**Hard-rule authority — overrides artifacts for implementation choice.** When the artifacts or source code describe access to a managed data store — Azure Table Storage, Azure Cosmos DB, MongoDB, Azure Blob Storage, AWS S3, Redis, or similar — but assign `HttpRequest` as the provider, **override the artifacts and use the correct storage trait instead**. Azure Table Storage, Cosmos DB document API, and MongoDB map to `DocumentStore`; SQL databases map to `TableStore`; Azure Blob Storage and AWS S3 map to `Blobstore`; Redis and key-value caches map to `StateStore`. The Omnia runtime provides native adapters for these services; constructing raw HTTP requests with storage-specific authentication (SharedKey, HMAC-SHA256, SAS tokens) is always wrong. Update the handler's trait bounds accordingly. Precedence: adapter hard rules / engineering rules outrank artifact-prescribed implementation detail (see [`hard-rules.md`](hard-rules.md)). Contrastive example: [anti-patterns.md](examples/crates/anti-patterns.md) #10.
+**Hard-rule authority — overrides artifacts for implementation choice.** When the artifacts or source code describe access to a managed data store — Azure Table Storage, Azure Cosmos DB, MongoDB, Azure Blob Storage, AWS S3, Redis, or similar — but assign `HttpRequest` as the provider, **override the artifacts and use the correct storage trait instead**. Azure Table Storage, Cosmos DB document API, and MongoDB map to `DocumentStore`; SQL databases map to `TableStore`; Azure Blob Storage and AWS S3 map to `BlobStore`; Redis and key-value caches map to `StateStore`. The Omnia runtime provides native adapters for these services; constructing raw HTTP requests with storage-specific authentication (SharedKey, HMAC-SHA256, SAS tokens) is always wrong. Update the handler's trait bounds accordingly. Precedence: adapter hard rules / engineering rules outrank artifact-prescribed implementation detail (see [`hard-rules.md`](hard-rules.md)). Contrastive example: [anti-patterns.md](examples/crates/anti-patterns.md) #10.
 
 ### Recognizing Managed Data Stores in Artifacts
 
@@ -32,22 +32,22 @@ Look for these signals in design.md External Services, algorithm steps, or Sourc
 - Azure Cosmos DB (document API): `@azure/cosmos`, `CosmosClient`, `documents.azure.com` → **DocumentStore**
 - MongoDB: `mongodb`, `MongoClient`, `mongoose` → **DocumentStore**
 - SQL databases: `pg`, `mysql`, `mssql`, `@prisma/client`, `sequelize` → **TableStore**
-- Azure Blob Storage: `@azure/storage-blob`, `BlobServiceClient`, `blob.core.windows.net` → **Blobstore**
-- AWS S3: `aws-sdk`, `S3Client`, `s3.amazonaws.com` → **Blobstore**
+- Azure Blob Storage: `@azure/storage-blob`, `BlobServiceClient`, `blob.core.windows.net` → **BlobStore**
+- AWS S3: `aws-sdk`, `S3Client`, `s3.amazonaws.com` → **BlobStore**
 - Redis: `redis`, `ioredis`, `cache.windows.net` → **StateStore**
 
 When recognized, replace `HttpRequest` with the correct trait in handler bounds and generate code using the patterns from the corresponding adapter examples.
 
 ### Storage Trait Inference
 
-When the derived adapters include TableStore, DocumentStore, Blobstore, or StateStore and the design.md Business Logic (or optional "Data access" subsection per block) gives **actionable cues** — e.g. "Table access: SELECT entity WHERE col=$1", "Document: upsert customer record", "Blob: store report PDF", "Cache: get/set/delete key pattern" — generate real code using the exemplar checkout for `StateStore` (`crates/gtfs-adapter`) and the retained capability walkthroughs for the others ([tablestore.md](examples/crates/capabilities/tablestore.md), [documentstore.md](examples/crates/capabilities/documentstore.md), [blobstore.md](examples/crates/capabilities/blobstore.md)). Infer table/entity, document store, container, and key pattern from step text and design.md External Services. For `TableStore`, **prefer ORM** (SelectBuilder, InsertBuilder, UpdateBuilder, Filter) for CRUD and simple queries; use **raw SQL** (TableStore::query / TableStore::exec) only when the artifacts or legacy indicate GeoSearch/spatial (e.g. PostGIS), nested subqueries, or complex transactional flows. Only generate a TODO when the step is too vague (e.g. "cache invalidation" with no key pattern). Do not require full SQL or full key lists in the artifacts; canonical one-line hints are enough.
+When the derived adapters include TableStore, DocumentStore, BlobStore, or StateStore and the design.md Business Logic (or optional "Data access" subsection per block) gives **actionable cues** — e.g. "Table access: SELECT entity WHERE col=$1", "Document: upsert customer record", "Blob: store report PDF", "Cache: get/set/delete key pattern" — generate real code using the exemplar checkout: `crates/gtfs-adapter` for `StateStore` and `crates/capability-examples` for `TableStore`, `DocumentStore`, and `BlobStore`. Infer table/entity, document store, container, and key pattern from step text and design.md External Services. For `TableStore`, **prefer ORM** (SelectBuilder, InsertBuilder, UpdateBuilder, Filter) for CRUD and simple queries; use **raw SQL** (TableStore::query / TableStore::exec) only when the artifacts or legacy indicate GeoSearch/spatial (e.g. PostGIS), nested subqueries, or complex transactional flows. Only generate a TODO when the step is too vague (e.g. "cache invalidation" with no key pattern). Do not require full SQL or full key lists in the artifacts; canonical one-line hints are enough.
 
 ## Startup Cache → On-Demand Cache-Aside
 
 **Never assume external cron/ETL.** When the artifacts describe a legacy pattern of "load data from a data store on startup into an in-memory cache" (with optional periodic refresh via `setTimeout`/`setInterval`), the WASM translation is **on-demand cache-aside** within the handler:
 
 1. Check `StateStore` for cached data.
-2. On cache miss, query the original data source using the appropriate trait (`TableStore` for SQL databases, `DocumentStore` for Azure Table Storage and document databases, `Blobstore` for blob stores, `HttpRequest` for external APIs).
+2. On cache miss, query the original data source using the appropriate trait (`TableStore` for SQL databases, `DocumentStore` for Azure Table Storage and document databases, `BlobStore` for blob stores, `HttpRequest` for external APIs).
 3. Write the fetched data to `StateStore` with a TTL (replacing periodic refresh with TTL-based expiry).
 4. Return the data.
 

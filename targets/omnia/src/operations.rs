@@ -1,6 +1,7 @@
 //! `guidance` / `build` / `merge` over shared [`phase`] scaffolding.
 //!
-//! Build: generation → review → replay (self-skips without `captures`) →
+//! Build: preparation (exemplar checkout) → deterministic scaffold →
+//! generation → review → replay (self-skips without `captures`) →
 //! report, then a report-coherence gate.
 
 use std::path::Path;
@@ -50,10 +51,27 @@ impl Target for Adapter {
         let inputs_block = phase::render_inputs(inputs);
         let build_prompt = registry::body("prompts/build.md");
 
-        // Deterministic base-repo prelude: fill any missing standard
-        // tooling file from the embedded templates before the model runs.
-        // An I/O failure aborts the build here — the agent must never
-        // recreate deterministic files from prose.
+        // The agent prepares the read-only exemplar checkout the rest of
+        // the build reads: scaffold templates, worked code, and the Omnia
+        // compatibility contract all come from it.
+        let system = assemble(&["prompts/build.md", "prompts/build/prepare.md"]);
+        let user = format!(
+            "Run the preparation leg of the omnia build for slice `{slice}` \
+         (adapter `{}`): prepare the read-only exemplar checkout at \
+         `target/omnia-exemplar/` in the lent workspace per the preparation prompt — \
+         clone or refresh unpinned `main`, keep an existing checkout when only the \
+         refresh fails (note the staleness in your summary), and surface the stop \
+         hint per the build prompt's `## § Stop hint contract` in your summary when \
+         no checkout can be obtained. {REFERENCES_POINTER}",
+            ctx.adapter_id,
+        );
+        let preparation = phase::phase(model, ctx, system, user, "preparation").await?;
+
+        // Deterministic base-repo prelude: strictly validate the prepared
+        // checkout's template contract, then fill any missing standard
+        // tooling file from it. A missing or malformed checkout or an I/O
+        // failure aborts the build here — the agent must never recreate
+        // deterministic files from prose.
         let scaffold_block = scaffold_prelude(&tree_root)?;
 
         // Writer prompts share one system channel: verify-repair re-enters
@@ -68,10 +86,9 @@ impl Target for Adapter {
         let user = format!(
             "Run the generation leg of the omnia build for slice `{slice}` \
          (adapter `{}`).\n\n\
-         The project workspace is lent to you. First prepare the read-only exemplar \
-         checkout at `target/omnia-exemplar/` per the build prompt's `## § Exemplar \
-         checkout` (clone/refresh `main`; stop with a stop hint if no checkout can be \
-         obtained). Then detect create vs update mode per the \
+         The project workspace is lent to you. The read-only exemplar checkout at \
+         `target/omnia-exemplar/` is already prepared and validated — read it per \
+         `references/exemplar.md`. Detect create vs update mode per the \
          build prompt's `## Mode detection`, follow the crate-writer, test-writer, and \
          (create mode only) guest-writer prompts, then run the build prompt's \
          `## § Verify-repair loop` yourself — the cargo / clippy / test commands run \
@@ -111,9 +128,14 @@ impl Target for Adapter {
          guest scaffolding, when this build wrote it) as `platform: core` outputs \
          with paths relative to the project root.\n\n\
          Phase outcomes:\n{}",
-            [("generation", &generation), ("review", &review), ("replay", &replay)]
-                .map(|(name, answer)| phase::render_outcome(name, answer))
-                .join("\n"),
+            [
+                ("preparation", &preparation),
+                ("generation", &generation),
+                ("review", &review),
+                ("replay", &replay),
+            ]
+            .map(|(name, answer)| phase::render_outcome(name, answer))
+            .join("\n"),
         );
         let report = phase::report(model, ctx, build_prompt.to_string(), user).await?;
 
@@ -152,9 +174,11 @@ fn assemble(prompts: &[&str]) -> String {
     phase::assemble_system(&bodies)
 }
 
-// A scaffold I/O failure fails the build before model generation: the
+// A scaffold failure fails the build before model generation: the
 // templates are deterministic, so asking the agent to recreate them
-// from prose would only produce weaker copies.
+// from prose would only produce weaker copies. A missing or malformed
+// checkout is equally fatal — the preparation leg must be repaired, not
+// papered over.
 fn scaffold_prelude(tree_root: &Path) -> Result<String, Error> {
     use std::fmt::Write as _;
 
@@ -169,23 +193,20 @@ fn scaffold_prelude(tree_root: &Path) -> Result<String, Error> {
 
     let mut block = format!(
         "### scaffold prelude (already run in-guest)\n\nThe adapter wrote the missing \
-         standard tooling files from its embedded templates:\n{}\n\nDo not re-author or \
-         overwrite them.",
+         standard tooling files from the exemplar checkout's template contract:\n{}\n\n\
+         Do not re-author or overwrite them.",
         report.written.iter().map(|path| format!("- `{path}`")).collect::<Vec<_>>().join("\n"),
     );
-    if report.written.contains(&crate::scaffold::PUBLISH_WORKFLOW) {
-        let tokens = crate::scaffold::publish_placeholders()
-            .iter()
-            .map(|token| format!("`{token}`"))
-            .collect::<Vec<_>>()
-            .join(" / ");
+    if report.written.iter().any(|path| path == crate::scaffold::PUBLISH_WORKFLOW) {
+        let tokens =
+            report.tokens.iter().map(|token| format!("`{token}`")).collect::<Vec<_>>().join(" / ");
         let _ = write!(
             block,
             " Fill the {tokens} placeholders in `{}`.",
             crate::scaffold::PUBLISH_WORKFLOW,
         );
     }
-    if report.written.contains(&crate::scaffold::VET_CONFIG) {
+    if report.written.iter().any(|path| path == crate::scaffold::VET_CONFIG) {
         block.push_str(
             " Run `cargo vet regenerate {imports,exemptions,unpublished}` once \
              `Cargo.lock` exists.",

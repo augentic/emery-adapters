@@ -30,7 +30,7 @@ The Omnia crate / test / guest / review instructions live in [`../prompts/build.
 
 - [`capabilities.md`](capabilities.md) — provider trait signatures and adapter triggers (all nine providers).
 - [`capability-mapping.md`](capability-mapping.md) — mapping from Emery artifact adapters to Omnia provider traits.
-- [`providers/`](providers/) — per-trait deep dives (blobstore, broadcast, config, document-store, http-request, identity, publish, state-store).
+- [`providers/README.md`](providers/README.md) — per-trait selection notes, composition semantics, and exemplar demonstration map.
 
 ### Crate writer depth
 
@@ -54,9 +54,8 @@ The Omnia crate / test / guest / review instructions live in [`../prompts/build.
 
 ### Guest writer depth
 
-- [`configuration.md`](configuration.md) — guest workspace `Cargo.toml` policy, version resolution against the exemplar's Omnia pin, the scaffolded-tooling table, and `publish.yaml` placeholders (template bodies live only in the exemplar's `templates/guest/`, fetched at adapter build).
-- [`handlers.md`](handlers.md) — typed operation routing, message subscriptions, WebSocket events, and explicit guest exports.
-- [`guest-patterns.md`](guest-patterns.md) — HTTP / Messaging / WebSocket guest export patterns.
+- [`configuration.md`](configuration.md) — guest workspace `Cargo.toml` policy, version resolution against the exemplar's Omnia pin, the scaffolded-tooling table, and `publish.yaml` placeholders (template bodies live only in the exemplar checkout, read at consumer-build time by the scaffold prelude).
+- [`guest-patterns.md`](guest-patterns.md) — HTTP / Messaging / WebSocket / command guest export patterns and explicit exports.
 - [`guest-wiring.md`](guest-wiring.md) — crate → guest injection contract.
 - [`runtime.md`](runtime.md) — `omnia::runtime!` macro, WASI host options, `.env.example` shape.
 - [`project-layout.md`](project-layout.md) — directory layout for the guest project.
@@ -74,4 +73,4 @@ The Omnia crate / test / guest / review instructions live in [`../prompts/build.
 ### Worked examples
 
 - The exemplar checkout ([`exemplar.md`](exemplar.md)) — the primary worked-code reference: compiling connectors, adapters, both guest styles, and test suites, cloned fresh each build.
-- [`examples/`](examples/) — retained explanatory walkthroughs for subjects the exemplar does not demonstrate: anti-patterns, uncovered capability traits (`Broadcast`, `Blobstore`, `DocumentStore`, `TableStore`), short update-category checklists under `crates/updates/`, capture-replay notes under `replay/`, and remaining test walkthroughs under `tests/`.
+- [`examples/`](examples/) — retained explanatory walkthroughs for subjects the exemplar does not demonstrate: anti-patterns, short update-category checklists under `crates/updates/`, and capture-replay notes under `replay/`.

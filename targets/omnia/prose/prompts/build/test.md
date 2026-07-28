@@ -12,11 +12,11 @@ Manual tests in the existing suite are **flagged as drift, never silently delete
 
 ## Test generation process
 
-1. **Load artifacts and references** — `specs/<domain>/spec.md`, `design.md`, [`providers/`](../../references/providers/) for the trait-specific MockProvider patterns, [`mock-provider.md`](../../references/mock-provider.md) for Static + Replay variants, and the slice's `tests/data/` replay data if any.
+1. **Load artifacts and references** — `specs/<domain>/spec.md`, `design.md`, [`providers/README.md`](../../references/providers/README.md) for trait selection semantics, [`mock-provider.md`](../../references/mock-provider.md) for Static + Replay variants, and the slice's `tests/data/` replay data if any.
 2. **Inventory crate and tests** — enumerate handlers, provider trait bounds, request / response types, existing `tests/*.rs`, existing replay data.
 3. **Map specs to tests** — one deterministic test function per scenario, named `test_<crate>_<scenario_snake_case>`. Trace each test to the stable `REQ-XXX` ID in `specs/<domain>/spec.md` via a doc comment. Mapping rules: [`spec-to-test-mapping.md`](../../references/spec-to-test-mapping.md).
 4. **Assert side effects** — enumerate every provider interaction in `design.md` and emit assertions: `assert_eq!(provider.publish_calls(), &[…])`, `assert_eq!(provider.state_writes(…), …)`, cache-aside hit/miss order, transaction commit vs rollback.
-5. **Generate `MockProvider`** — implement only the provider traits the handler under test consumes. Static / replay variants per [`mock-provider.md`](../../references/mock-provider.md) and the per-trait deep dives under [`providers/`](../../references/providers/).
+5. **Generate `MockProvider`** — implement only the provider traits the handler under test consumes. Static / replay variants per [`mock-provider.md`](../../references/mock-provider.md); compiling per-trait mocks live in the exemplar checkout's `crates/*/tests/provider.rs` and `crates/capability-examples/tests/provider.rs`.
 6. **Load JSON replay data** — `include_str!("data/<capture>.json")` from `tests/data/`. Preserve any existing data style.
 7. **Report drift** — emit drift notes inline (a leading `// DRIFT: ...` comment on tests that needed regeneration) but never delete operator-authored tests.
 
@@ -33,8 +33,8 @@ Capture wire format authority stays at the source adapter — do not duplicate t
 
 ## Worked examples
 
-- **Primary:** the exemplar checkout's test suites — `crates/tally-connector/tests` (minimal mock provider), `crates/pulse-connector/tests`, `crates/gtfs-adapter/tests` (multi-trait + StateStore), `crates/pulse-adapter/tests` + `data/replay` (fixtures and replay). Navigation: [`exemplar.md`](../../references/exemplar.md).
-- Retained walkthroughs only for traits the exemplar does not exercise: [`examples/tests/`](../../references/examples/tests/) and [`examples/replay/`](../../references/examples/replay/) (see that folder's README).
+- **Primary:** the exemplar checkout's test suites — `crates/tally-connector/tests` (minimal mock provider), `crates/pulse-connector/tests`, `crates/gtfs-adapter/tests` (multi-trait + StateStore), `crates/capability-examples/tests` (Broadcast, BlobStore, DocumentStore, TableStore mocks), `crates/pulse-adapter/tests` + `data/replay` (fixtures and replay). Navigation: [`exemplar.md`](../../references/exemplar.md).
+- Retained walkthroughs for Emery capture-replay wiring only: [`examples/replay/`](../../references/examples/replay/) (see that folder's README).
 
 ## Output and quality checklist
 

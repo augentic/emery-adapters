@@ -4,22 +4,11 @@ The worked-code reference for Omnia builds is [`augentic/omnia-exemplar`](https:
 
 ## Checkout contract
 
-At the start of the generation leg, before writing any code, prepare the checkout inside the consumer workspace's `target/` directory (git-ignored, outside the cargo workspace):
-
-```bash
-if [ -d target/omnia-exemplar/.git ]; then
-  git -C target/omnia-exemplar fetch --depth 1 origin main \
-    && git -C target/omnia-exemplar reset --hard origin/main
-else
-  git clone --depth 1 https://github.com/augentic/omnia-exemplar target/omnia-exemplar
-fi
-```
+The build's preparation leg ([`prompts/build/prepare.md`](../prompts/build/prepare.md)) owns producing the checkout at `target/omnia-exemplar/` (git-ignored, outside the cargo workspace) — the clone/refresh algorithm, the stale-checkout fallback, and the stop-hint path live there. By the time any writer prompt runs, the checkout exists and the adapter has validated its template contract.
 
 - The checkout tracks `main` unpinned — each build reads current `main`.
 - **Read-only.** Never edit the checkout, never add it to the workspace members, and never copy files wholesale into the consumer workspace; read it to match idioms, then write consumer code against the slice's artifacts.
 - Validate only the generated consumer workspace. Exemplar code is compiled by exemplar CI, never by the consumer build.
-
-**Failure handling.** If the clone fails (network, availability) and no checkout exists, **stop**: surface a stop hint per the build prompt's `## § Stop hint contract` (`failing-task`: the exemplar checkout step; `next-action`: retry after restoring access) — there is no embedded fallback for the worked code, so proceeding would generate from weaker guidance than the operator expects. If a refresh fails but a previous checkout exists, proceed with the stale checkout and record the staleness as a non-blocking finding in the build report.
 
 ## Compatibility contract
 
@@ -54,7 +43,7 @@ omnia:
 
 The repository README carries the architecture, the route/topic tables, and a "Copy this, not that" list separating general patterns from Acme domain quirks — read it before the crates.
 
-Do **not** read `templates/guest/` from the checkout during builds: that subtree is the scaffold-template source baked into this adapter at adapter-build time, and the deterministic scaffold prelude has already written its output.
+Do **not** hand-copy from `templates/guest/` or the exemplar's root tooling files during builds: the adapter's deterministic scaffold prelude reads that contract (`exemplar.yaml` → `templates/guest/manifest.yaml`) from this same checkout and has already written its output before the writer prompts run.
 
 ## Authority
 

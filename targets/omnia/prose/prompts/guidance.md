@@ -103,5 +103,5 @@ The build prompt carries the detailed writer instructions; tasks.md should follo
 - [`../references/runtime.md`](../references/runtime.md) — `omnia::runtime!` macro, WASI host options, `.env.example` shape, identity env-var contract.
 - [`../references/guest-patterns.md`](../references/guest-patterns.md) — HTTP / Messaging / WebSocket guest export patterns.
 - [`../references/guest-wiring.md`](../references/guest-wiring.md) — Crate → guest injection contract.
-- [`../references/providers/`](../references/providers/) — Per-provider deep dives (blobstore, broadcast, config, document-store, http-request, identity, publish, state-store).
+- [`../references/providers/README.md`](../references/providers/README.md) — Per-trait selection notes, composition semantics, and the exemplar demonstration map.
 - [`../rules/`](../rules/) — Stable Omnia rules (classified errors, provider-only host access, host-managed secrets, WASM runtime constraints).

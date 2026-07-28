@@ -64,20 +64,9 @@ For sibling co-development against uncommitted engine changes, uncomment the `[p
 
 ## Omnia exemplar templates
 
-The omnia target adapter does **not** commit scaffold templates. [`augentic/omnia-exemplar`](https://github.com/augentic/omnia-exemplar) owns `templates/guest/` (manifest, token set, proof modes); its CI (`template-check`) proves the contract. At `omnia` crate build time, `targets/omnia/build.rs` fetches that subtree into `OUT_DIR` and bakes it into the component via `include_str!`. The adapter tracks exemplar `main` **unpinned** (early-development posture; immutable pinning is a documented hardening step).
+The omnia target adapter neither commits nor embeds scaffold templates. [`augentic/omnia-exemplar`](https://github.com/augentic/omnia-exemplar) owns the guest template contract (`exemplar.yaml` → `templates/guest/manifest.yaml`: token set, proof modes, repository-relative sources); its CI (`template-check`) proves the contract. The adapter reads that contract at **consumer-build time**: the build's preparation leg clones/refreshes exemplar `main` into the consumer workspace's `target/omnia-exemplar/`, and the adapter's deterministic scaffold prelude strictly parses the checkout and writes any missing tooling file, fill-only. Adapter compilation is network-free (`build.rs` embeds prose only), and the scaffold tests run against a synthetic contract in a temp directory — no checkout or network is required to build or test this repository. The adapter tracks exemplar `main` **unpinned** (early-development posture; immutable pinning is a documented hardening step).
 
-Resolution order:
-
-1. `OMNIA_EXEMPLAR` — path to a local exemplar checkout (sibling co-development)
-2. Peer checkout at `../omnia-exemplar` relative to this repository root
-3. Shallow clone of `main` into the cargo `target/` cache (refreshed each build)
-
-```bash
-export OMNIA_EXEMPLAR=../omnia-exemplar   # optional; otherwise auto-detected or cloned
-cargo make check                          # build.rs fetches + embeds; scaffold tests hold
-```
-
-Never add a `targets/omnia/templates/` tree — change tooling upstream in the exemplar and rebuild the adapter.
+Never add a `targets/omnia/templates/` tree — change tooling upstream in the exemplar; consumer builds pick it up on their next preparation leg.
 
 ## Local development loops
 

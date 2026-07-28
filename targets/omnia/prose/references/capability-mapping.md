@@ -6,15 +6,15 @@ This document defines how to translate the platform-agnostic **Source Capabiliti
 
 | Artifact Capability | Service Types | Omnia Trait | Import |
 | --- | --- | --- | --- |
-| Configuration | (any env var or config value in artifacts) | `Config` | `use omnia_sdk::Config;` |
-| Outbound HTTP | type: API | `HttpRequest` | `use omnia_sdk::HttpRequest;` |
-| Message publishing | type: message broker | `Publish` | `use omnia_sdk::{Publish, Message};` |
-| Key-value state | type: cache | `StateStore` | `use omnia_sdk::StateStore;` |
-| Authentication/Identity | type: identity provider | `Identity` | `use omnia_sdk::Identity;` |
-| SQL database access | type: database | `TableStore` | `use omnia_sdk::TableStore;` |
-| Real-time messaging | type: WebSocket | `Broadcast` | `use omnia_sdk::Broadcast;` |
-| Blob/file storage | type: blob store | `Blobstore` | `use omnia_sdk::Blobstore;` |
-| Document/table storage | type: document store, type: managed table store | `DocumentStore` | `use omnia_sdk::DocumentStore;` |
+| Configuration | (any env var or config value in artifacts) | `Config` | `use omnia_guest::Config;` |
+| Outbound HTTP | type: API | `HttpRequest` | `use omnia_guest::HttpRequest;` |
+| Message publishing | type: message broker | `Publish` | `use omnia_guest::{Publish, Message};` |
+| Key-value state | type: cache | `StateStore` | `use omnia_guest::StateStore;` |
+| Authentication/Identity | type: identity provider | `Identity` | `use omnia_guest::Identity;` |
+| SQL database access | type: database | `TableStore` | `use omnia_guest::TableStore;` |
+| Real-time messaging | type: WebSocket | `Broadcast` | `use omnia_guest::Broadcast;` |
+| Blob/file storage | type: blob store | `BlobStore` | `use omnia_guest::BlobStore;` |
+| Document/table storage | type: document store, type: managed table store | `DocumentStore` | `use omnia_guest::DocumentStore;` |
 
 ## Hard Rules
 
@@ -24,13 +24,13 @@ This document defines how to translate the platform-agnostic **Source Capabiliti
 
 3. **Databases always map to `TableStore`, never `StateStore`.** When design.md External Services lists type `database` (PostgreSQL, MySQL, SQL Server), the Omnia trait is `TableStore`.
 
-4. **`HttpRequest` is for external APIs only.** Do not use `HttpRequest` for managed data stores. If design.md documents an outbound HTTP call to a managed data store endpoint (e.g., `*.table.core.windows.net`), override and use the correct trait (`DocumentStore` for Azure Table Storage, `TableStore` for SQL databases, `Blobstore` for blob stores).
+4. **`HttpRequest` is for external APIs only.** Do not use `HttpRequest` for managed data stores. If design.md documents an outbound HTTP call to a managed data store endpoint (e.g., `*.table.core.windows.net`), override and use the correct trait (`DocumentStore` for Azure Table Storage, `TableStore` for SQL databases, `BlobStore` for blob stores).
 
 5. **Cache-aside requires both `StateStore` AND the data source trait.** When the artifacts describe a caching pattern where data is loaded from a data store on cache miss, the handler needs both `StateStore` (for the cache) and the appropriate data source trait (`DocumentStore` for Azure Table Storage and document databases, `TableStore` for SQL databases, `HttpRequest` for external APIs).
 
 6. **Document databases map to `DocumentStore`, not `TableStore`.** When design.md External Services lists a service with type `document store` (Cosmos DB document API, MongoDB), the Omnia trait is `DocumentStore`. Use `TableStore` for tabular/row data and SQL queries; use `DocumentStore` for JSON document storage with key-based access and document queries.
 
-7. **Blob storage maps to `Blobstore`, never `HttpRequest`.** When design.md External Services lists a service with type `blob store` (Azure Blob Storage, AWS S3, file storage), the Omnia trait is `Blobstore`. The Omnia runtime provides native adapters for blob storage behind this trait.
+7. **Blob storage maps to `BlobStore`, never `HttpRequest`.** When design.md External Services lists a service with type `blob store` (Azure Blob Storage, AWS S3, file storage), the Omnia trait is `BlobStore`. The Omnia runtime provides native adapters for blob storage behind this trait.
 
 ## Deriving Traits from Emery Artifacts
 
@@ -50,7 +50,7 @@ For each entry in design.md **External Services**, verify the trait mapping:
 Scan design.md **Business Logic** for data access phrasing:
 - `Table access: SELECT/INSERT/UPDATE/DELETE ...` → `TableStore`
 - `Document: get/insert/put/delete/query ...` → `DocumentStore`
-- `Blob: get_data/write_data/delete_object ...` → `Blobstore`
+- `Blob: get_data/write_data/delete_object ...` → `BlobStore`
 - `Cache: get/set/delete ...` → `StateStore`
 - `Cache: get ... on miss query database/table` → `StateStore` + data source trait (`DocumentStore` or `TableStore`)
 
