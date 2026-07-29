@@ -4,7 +4,9 @@ use std::fmt::Write;
 
 use usvg::Tree;
 
-use crate::materialize::svg::{collect_paths, path_data_string};
+use crate::materialize::svg::{
+    StrokeCap, StrokeJoin, StrokePaint, collect_paths, path_data_string,
+};
 
 /// Write a `drawable/<id>.xml` Vector Drawable for an icon.
 ///
@@ -30,13 +32,20 @@ pub fn write_vector_drawable(
         if path_data.is_empty() {
             continue;
         }
-        let (r, g, b, opacity) = drawable.color;
-        let _ = write!(
-            body,
-            "    <path\n        android:fillColor=\"{color}\"\n        android:fillAlpha=\"{opacity}\"\n        android:pathData=\"{path_data}\"/>\n",
-            color = android_color(r, g, b),
-            opacity = trim_num(opacity)
-        );
+        body.push_str("    <path\n");
+        match drawable.fill {
+            Some((r, g, b, opacity)) => {
+                let _ = writeln!(body, "        android:fillColor=\"{}\"", android_color(r, g, b));
+                let _ = writeln!(body, "        android:fillAlpha=\"{}\"", trim_num(opacity));
+            }
+            None => {
+                body.push_str("        android:fillColor=\"#00000000\"\n");
+            }
+        }
+        if let Some(stroke) = drawable.stroke {
+            append_stroke_attrs(&mut body, &stroke);
+        }
+        let _ = writeln!(body, "        android:pathData=\"{path_data}\"/>");
     }
 
     body.push_str("</vector>\n");
@@ -45,6 +54,35 @@ pub fn write_vector_drawable(
         std::fs::create_dir_all(parent)?;
     }
     std::fs::write(out_path, body)
+}
+
+fn append_stroke_attrs(body: &mut String, stroke: &StrokePaint) {
+    let (r, g, b) = stroke.color;
+    let _ = writeln!(body, "        android:strokeColor=\"{}\"", android_color(r, g, b));
+    let _ = writeln!(body, "        android:strokeWidth=\"{}\"", trim_num(stroke.width));
+    let _ = writeln!(body, "        android:strokeAlpha=\"{}\"", trim_num(stroke.opacity));
+    if let Some(cap) = android_linecap(stroke.linecap) {
+        let _ = writeln!(body, "        android:strokeLineCap=\"{cap}\"");
+    }
+    if let Some(join) = android_linejoin(stroke.linejoin) {
+        let _ = writeln!(body, "        android:strokeLineJoin=\"{join}\"");
+    }
+}
+
+const fn android_linecap(cap: StrokeCap) -> Option<&'static str> {
+    match cap {
+        StrokeCap::Butt => None,
+        StrokeCap::Round => Some("round"),
+        StrokeCap::Square => Some("square"),
+    }
+}
+
+const fn android_linejoin(join: StrokeJoin) -> Option<&'static str> {
+    match join {
+        StrokeJoin::Miter => None,
+        StrokeJoin::Round => Some("round"),
+        StrokeJoin::Bevel => Some("bevel"),
+    }
 }
 
 fn android_color(r: u8, g: u8, b: u8) -> String {

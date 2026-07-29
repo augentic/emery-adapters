@@ -6,7 +6,7 @@ use std::fmt::Write;
 
 pub use normalize::{NormalizeReport, normalize_for_export};
 use usvg::tiny_skia_path::{Path, PathSegment};
-use usvg::{Node, Paint, Tree};
+use usvg::{LineCap, LineJoin, Node, Paint, Tree};
 
 /// Parsed SVG ready for platform export.
 #[derive(Debug)]
@@ -175,20 +175,52 @@ pub(super) fn trim_num(value: f32) -> String {
     rounded.trim_end_matches('0').trim_end_matches('.').to_string()
 }
 
-/// Resolve a solid RGBA fill for PDF / Android export.
-#[must_use]
-pub fn path_fill_rgba(path: &usvg::Path) -> Option<(u8, u8, u8, f32)> {
-    if let Some(fill) = path.fill()
-        && let Paint::Color(color) = fill.paint()
-    {
-        return Some((color.red, color.green, color.blue, fill.opacity().get()));
-    }
-    if let Some(stroke) = path.stroke()
-        && let Paint::Color(color) = stroke.paint()
-    {
-        return Some((color.red, color.green, color.blue, stroke.opacity().get()));
-    }
-    None
+/// Stroke line cap for platform export.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StrokeCap {
+    /// Flat ends.
+    Butt,
+    /// Round ends.
+    Round,
+    /// Square projecting ends.
+    Square,
+}
+
+/// Stroke line join for platform export.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StrokeJoin {
+    /// Mitered corners.
+    Miter,
+    /// Round corners.
+    Round,
+    /// Bevelled corners.
+    Bevel,
+}
+
+/// Solid stroke paint plus geometry style.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct StrokePaint {
+    /// RGB colour.
+    pub color: (u8, u8, u8),
+    /// Opacity in `0.0..=1.0`.
+    pub opacity: f32,
+    /// Stroke width in canvas units.
+    pub width: f32,
+    /// Line cap.
+    pub linecap: StrokeCap,
+    /// Line join.
+    pub linejoin: StrokeJoin,
+}
+
+/// Canvas-space path plus optional solid fill and stroke.
+#[derive(Debug, Clone)]
+pub struct DrawablePath {
+    /// Path geometry in canvas coordinates.
+    pub geometry: Path,
+    /// Solid RGB fill plus opacity, when filled.
+    pub fill: Option<(u8, u8, u8, f32)>,
+    /// Solid stroke paint, when stroked.
+    pub stroke: Option<StrokePaint>,
 }
 
 /// Collect drawable paths in paint order for export backends.
@@ -200,10 +232,8 @@ pub fn collect_paths(group: &usvg::Group, out: &mut Vec<DrawablePath>) {
                 if !path.is_visible() {
                     continue;
                 }
-                if let Some(geometry) = absolute_path(path)
-                    && let Some(color) = path_fill_rgba(path)
-                {
-                    out.push(DrawablePath { geometry, color });
+                if let Some(drawable) = drawable_from_path(path) {
+                    out.push(drawable);
                 }
             }
             Node::Image(_) | Node::Text(_) => {}
@@ -211,11 +241,63 @@ pub fn collect_paths(group: &usvg::Group, out: &mut Vec<DrawablePath>) {
     }
 }
 
-/// Canvas-space path plus solid fill colour.
-#[derive(Debug, Clone)]
-pub struct DrawablePath {
-    /// Path geometry in canvas coordinates.
-    pub geometry: Path,
-    /// Solid RGB fill plus opacity.
-    pub color: (u8, u8, u8, f32),
+fn drawable_from_path(path: &usvg::Path) -> Option<DrawablePath> {
+    let geometry = absolute_path(path)?;
+    let fill = solid_fill(path);
+    let stroke = solid_stroke(path);
+    if fill.is_none() && stroke.is_none() {
+        return None;
+    }
+    Some(DrawablePath {
+        geometry,
+        fill,
+        stroke,
+    })
+}
+
+fn solid_fill(path: &usvg::Path) -> Option<(u8, u8, u8, f32)> {
+    let fill = path.fill()?;
+    let Paint::Color(color) = fill.paint() else {
+        return None;
+    };
+    Some((color.red, color.green, color.blue, fill.opacity().get()))
+}
+
+fn solid_stroke(path: &usvg::Path) -> Option<StrokePaint> {
+    let stroke = path.stroke()?;
+    let Paint::Color(color) = stroke.paint() else {
+        return None;
+    };
+    Some(StrokePaint {
+        color: (color.red, color.green, color.blue),
+        opacity: stroke.opacity().get(),
+        width: canvas_stroke_width(path, stroke.width().get()),
+        linecap: map_linecap(stroke.linecap()),
+        linejoin: map_linejoin(stroke.linejoin()),
+    })
+}
+
+/// Scale a local stroke width into canvas units using `abs_transform`.
+///
+/// Geometry is baked through [`absolute_path`]; stroke width must use the same
+/// scale or transformed icons export the wrong weight.
+pub(super) fn canvas_stroke_width(path: &usvg::Path, local_width: f32) -> f32 {
+    let (scale_x, scale_y) = path.abs_transform().get_scale();
+    local_width * (scale_x + scale_y) / 2.0
+}
+
+const fn map_linecap(cap: LineCap) -> StrokeCap {
+    match cap {
+        LineCap::Butt => StrokeCap::Butt,
+        LineCap::Round => StrokeCap::Round,
+        LineCap::Square => StrokeCap::Square,
+    }
+}
+
+const fn map_linejoin(join: LineJoin) -> StrokeJoin {
+    match join {
+        LineJoin::Miter | LineJoin::MiterClip => StrokeJoin::Miter,
+        LineJoin::Round => StrokeJoin::Round,
+        LineJoin::Bevel => StrokeJoin::Bevel,
+    }
 }
