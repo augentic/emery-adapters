@@ -21,6 +21,17 @@ const TRIANGLE: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 
   <path fill="#010203" d="M12 2L2 22h20z"/>
 </svg>"##;
 
+const CHECKMARK: &str = r##"<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g clip-path="url(#clip0)">
+<path d="M5 12L10 17L20 7" stroke="#1F2937" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<defs>
+<clipPath id="clip0">
+<rect width="24" height="24" fill="white"/>
+</clipPath>
+</defs>
+</svg>"##;
+
 #[test]
 fn platform_filter_matrix() {
     let tmp = tempdir().expect("tempdir");
@@ -226,6 +237,8 @@ fn svg_parse_matrix() {
     let mut paths = Vec::new();
     collect_paths(parsed.tree.root(), &mut paths);
     assert_eq!(path_data_string(&paths[0].geometry), "M12 2 L2 22 L22 22 Z");
+    assert!(paths[0].fill.is_some());
+    assert!(paths[0].stroke.is_none());
 
     let filtered = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
   <filter id="blur"><feGaussianBlur stdDeviation="2"/></filter>
@@ -234,6 +247,73 @@ fn svg_parse_matrix() {
     let err = parse_vector_svg(filtered.as_bytes(), "bad").unwrap_err();
     assert!(err.contains("bad"));
     assert!(err.contains("filters"));
+}
+
+#[test]
+fn stroke_icon_export_matrix() {
+    let tmp = tempdir().expect("tempdir");
+    let design = tmp.path();
+    let assets_dir = design.join("assets");
+    std::fs::create_dir_all(&assets_dir).expect("mkdir assets");
+    std::fs::write(assets_dir.join("check.svg"), CHECKMARK).expect("write svg");
+    let assets_yaml = design.join("assets.yaml");
+    std::fs::write(
+        &assets_yaml,
+        r"version: 1
+assets:
+  check:
+    alt: Check
+    kind: vector
+    role: icon
+    source: assets/check.svg
+",
+    )
+    .expect("write assets.yaml");
+
+    let summary = materialize_run(&MaterializeCommand::Assets(AssetsArgs {
+        path: Some(assets_yaml),
+        platform: None,
+        dry_run: false,
+        only: Some(vec!["check".into()]),
+    }))
+    .expect("materialize");
+    assert!(summary["errors"].as_array().is_some_and(Vec::is_empty), "{summary}");
+
+    let pdf_path = design.join("assets/exports/ios/check.imageset/check.pdf");
+    let pdf = std::fs::read(&pdf_path).expect("read pdf");
+    assert!(pdf.starts_with(b"%PDF-"), "pdf magic missing");
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    assert!(pdf_text.contains(" w\n"), "stroke width op missing: {pdf_text}");
+    assert!(pdf_text.contains(" RG\n"), "stroke colour op missing: {pdf_text}");
+    assert!(pdf_text.contains("S\nQ\n"), "stroke paint op missing: {pdf_text}");
+    assert!(!pdf_text.contains("\nf\n"), "stroke-only path must not fill: {pdf_text}");
+
+    let xml = std::fs::read_to_string(design.join("assets/exports/android/drawable/check.xml"))
+        .expect("read android");
+    assert!(xml.contains("android:strokeColor=\"#1F2937\""), "{xml}");
+    assert!(xml.contains("android:strokeWidth=\"2\""), "{xml}");
+    assert!(xml.contains("android:fillColor=\"#00000000\""), "{xml}");
+    assert!(!xml.contains("android:fillColor=\"#1F2937\""), "{xml}");
+
+    let filled = parse_vector_svg(TRIANGLE.as_bytes(), "tri").expect("parse fill");
+    let mut filled_paths = Vec::new();
+    collect_paths(filled.tree.root(), &mut filled_paths);
+    assert!(filled_paths[0].fill.is_some());
+    assert!(filled_paths[0].stroke.is_none());
+}
+
+#[test]
+fn stroke_normalize_preserves_stroke() {
+    let parsed = parse_vector_svg(CHECKMARK.as_bytes(), "check").expect("parse");
+    let report = parsed.normalization.expect("noop clip should normalize");
+    assert!(report.transforms.contains(&"stripped-noop-clip"));
+    let mut paths = Vec::new();
+    collect_paths(parsed.tree.root(), &mut paths);
+    assert_eq!(paths.len(), 1);
+    assert!(paths[0].fill.is_none());
+    let stroke = paths[0].stroke.expect("stroke");
+    assert_eq!(stroke.color, (0x1F, 0x29, 0x37));
+    assert!((stroke.width - 2.0).abs() < f32::EPSILON, "width={}", stroke.width);
 }
 
 #[test]
@@ -356,6 +436,19 @@ fn conventional_export_matrix() {
     assert!(!conventional_export_exists(design, "hero", "raster", "ios", &raster));
     std::fs::write(imageset.join("hero@3x.png"), b"PNG").expect("write png");
     assert!(conventional_export_exists(design, "hero", "raster", "ios", &raster));
+
+    let checkset = design.join("assets/exports/ios/check.imageset");
+    std::fs::create_dir_all(&checkset).expect("mkdir check");
+    std::fs::write(checkset.join("Contents.json"), "{\"images\":[]}").expect("write json");
+    std::fs::write(checkset.join("check.pdf"), b"1 0 obj\n<< /Type /Catalog >>\nendobj\n")
+        .expect("write junk pdf");
+    assert!(!imageset_has_materialized_content(&checkset));
+    let icon = json!({ "role": "icon", "kind": "vector" });
+    assert!(!conventional_export_exists(design, "check", "vector", "ios", &icon));
+    std::fs::write(checkset.join("check.pdf"), b"%PDF-1.4\n1 0 obj\n<< >>\nendobj\n")
+        .expect("write real pdf");
+    assert!(imageset_has_materialized_content(&checkset));
+    assert!(conventional_export_exists(design, "check", "vector", "ios", &icon));
 
     let png = design.join("assets/exports/android/drawable-mdpi/hero.png");
     std::fs::create_dir_all(png.parent().expect("parent")).expect("mkdir");

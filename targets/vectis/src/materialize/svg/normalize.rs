@@ -3,7 +3,7 @@
 use std::fmt::Write;
 
 use usvg::tiny_skia_path::Rect;
-use usvg::{BlendMode, ClipPath, Group, Node, Paint, Path, Tree};
+use usvg::{BlendMode, ClipPath, Group, LineCap, LineJoin, Node, Paint, Path, Tree};
 
 use super::{absolute_path, path_data_string, trim_num};
 
@@ -50,10 +50,18 @@ pub fn normalize_for_export(
     Ok(Some((svg.into_bytes(), report)))
 }
 
+struct FlatStroke {
+    color: (u8, u8, u8),
+    opacity: f32,
+    width: f32,
+    linecap: LineCap,
+    linejoin: LineJoin,
+}
+
 struct FlatPath {
     d: String,
     fill: Option<(u8, u8, u8, f32)>,
-    stroke: Option<(u8, u8, u8, f32)>,
+    stroke: Option<FlatStroke>,
 }
 
 fn collect_flat_paths(
@@ -145,7 +153,13 @@ fn push_flat_path(
         let alpha = stroke.opacity().get() * opacity_stack;
         match stroke.paint() {
             Paint::Color(color) => {
-                flat.stroke = Some((color.red, color.green, color.blue, alpha));
+                flat.stroke = Some(FlatStroke {
+                    color: (color.red, color.green, color.blue),
+                    opacity: alpha,
+                    width: stroke.width().get(),
+                    linecap: stroke.linecap(),
+                    linejoin: stroke.linejoin(),
+                });
             }
             Paint::LinearGradient(_) | Paint::RadialGradient(_) | Paint::Pattern(_) => {
                 return Err(format!(
@@ -214,38 +228,67 @@ fn rects_approx_equal(a: Rect, b: Rect, tolerance: f32) -> bool {
 }
 
 fn emit_minimal_svg(width: f32, height: f32, paths: &[FlatPath]) -> String {
-    let w = trim_num(width);
-    let h = trim_num(height);
+    let width_s = trim_num(width);
+    let height_s = trim_num(height);
     let mut svg = format!(
-        r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="{w}" height="{h}">"#
+        r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width_s} {height_s}" width="{width_s}" height="{height_s}">"#
     );
 
     for path in paths {
-        if let Some((r, g, b, alpha)) = path.fill
-            && alpha > 0.0
-        {
-            let _ = write!(svg, r#"<path fill="{}" "#, rgb_hex(r, g, b));
-            if alpha < 1.0 {
-                let _ = write!(svg, r#"fill-opacity="{}" "#, trim_num(alpha));
-            }
-            let _ = write!(svg, r#"d="{}"/>"#, path.d);
-        } else if let Some((r, g, b, alpha)) = path.stroke
-            && alpha > 0.0
-        {
-            // Chrome exporters (`collect_paths`, Android VD) are fill-only; mirror
-            // `path_fill_rgba` stroke fallback as a solid fill path.
-            let _ = write!(svg, r#"<path fill="{}" "#, rgb_hex(r, g, b));
-            if alpha < 1.0 {
-                let _ = write!(svg, r#"fill-opacity="{}" "#, trim_num(alpha));
-            }
-            let _ = write!(svg, r#"d="{}"/>"#, path.d);
+        let fill = path.fill.filter(|(_, _, _, alpha)| *alpha > 0.0);
+        let stroke = path.stroke.as_ref().filter(|s| s.opacity > 0.0);
+        if fill.is_none() && stroke.is_none() {
+            continue;
         }
+
+        svg.push_str("<path ");
+        match fill {
+            Some((red, green, blue, alpha)) => {
+                let _ = write!(svg, r#"fill="{}" "#, rgb_hex(red, green, blue));
+                if alpha < 1.0 {
+                    let _ = write!(svg, r#"fill-opacity="{}" "#, trim_num(alpha));
+                }
+            }
+            None => svg.push_str(r#"fill="none" "#),
+        }
+        if let Some(stroke) = stroke {
+            let (red, green, blue) = stroke.color;
+            let _ = write!(svg, r#"stroke="{}" "#, rgb_hex(red, green, blue));
+            let _ = write!(svg, r#"stroke-width="{}" "#, trim_num(stroke.width));
+            if stroke.opacity < 1.0 {
+                let _ = write!(svg, r#"stroke-opacity="{}" "#, trim_num(stroke.opacity));
+            }
+            if let Some(cap) = linecap_attr(stroke.linecap) {
+                let _ = write!(svg, r#"stroke-linecap="{cap}" "#);
+            }
+            if let Some(join) = linejoin_attr(stroke.linejoin) {
+                let _ = write!(svg, r#"stroke-linejoin="{join}" "#);
+            }
+        }
+        let _ = write!(svg, r#"d="{}"/>"#, path.d);
     }
 
     svg.push_str("</svg>");
     svg
 }
 
-fn rgb_hex(r: u8, g: u8, b: u8) -> String {
-    format!("#{r:02X}{g:02X}{b:02X}")
+const fn linecap_attr(cap: LineCap) -> Option<&'static str> {
+    match cap {
+        LineCap::Butt => None,
+        LineCap::Round => Some("round"),
+        LineCap::Square => Some("square"),
+    }
+}
+
+const fn linejoin_attr(join: LineJoin) -> Option<&'static str> {
+    match join {
+        LineJoin::Miter => None,
+        LineJoin::MiterClip => Some("miter-clip"),
+        LineJoin::Round => Some("round"),
+        LineJoin::Bevel => Some("bevel"),
+    }
+}
+
+fn rgb_hex(red: u8, green: u8, blue: u8) -> String {
+    format!("#{red:02X}{green:02X}{blue:02X}")
 }

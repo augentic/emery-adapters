@@ -1,23 +1,31 @@
 //! Minimal vector PDF writer for iOS imageset exports.
 
 use std::fmt::Write;
+use std::io;
 
 use usvg::Tree;
 use usvg::tiny_skia_path::{PathSegment, Point};
 
-use crate::materialize::svg::{DrawablePath, collect_paths};
+use crate::materialize::svg::{DrawablePath, StrokeCap, StrokeJoin, StrokePaint, collect_paths};
 
 /// Write a single-page vector PDF for an icon imageset.
 ///
 /// # Errors
-/// Returns I/O errors from the underlying write.
-pub fn write_icon_pdf(tree: &Tree, out_path: &std::path::Path) -> std::io::Result<()> {
+/// Returns I/O errors from the underlying write, or [`io::ErrorKind::InvalidData`]
+/// when the assembled bytes lack a PDF header.
+pub fn write_icon_pdf(tree: &Tree, out_path: &std::path::Path) -> io::Result<()> {
     let width = tree.size().width();
     let height = tree.size().height();
     let mut paths = Vec::new();
     collect_paths(tree.root(), &mut paths);
     let content = build_content_stream(&paths, height);
     let pdf = build_pdf(width, height, &content);
+    if !pdf.starts_with(b"%PDF-") {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "assembled icon PDF is missing a %PDF- header",
+        ));
+    }
     if let Some(parent) = out_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -27,20 +35,72 @@ pub fn write_icon_pdf(tree: &Tree, out_path: &std::path::Path) -> std::io::Resul
 fn build_content_stream(paths: &[DrawablePath], page_height: f32) -> String {
     let mut stream = String::new();
     for path in paths {
-        let (r, g, b, opacity) = path.color;
+        if path.fill.is_none() && path.stroke.is_none() {
+            continue;
+        }
         stream.push_str("q\n");
-        let _ = writeln!(
-            stream,
-            "{} {} {} rg",
-            f32::from(r) / 255.0,
-            f32::from(g) / 255.0,
-            f32::from(b) / 255.0
-        );
-        let _ = writeln!(stream, "{opacity} ca");
+        if let Some((r, g, b, opacity)) = path.fill {
+            append_fill_color(&mut stream, r, g, b, opacity);
+        }
+        if let Some(stroke) = path.stroke {
+            append_stroke_style(&mut stream, &stroke);
+        }
         append_pdf_path(&mut stream, &path.geometry, page_height);
-        stream.push_str("f\nQ\n");
+        stream.push_str(paint_op(path.fill.is_some(), path.stroke.is_some()));
+        stream.push_str("\nQ\n");
     }
     stream
+}
+
+fn append_fill_color(stream: &mut String, r: u8, g: u8, b: u8, opacity: f32) {
+    let _ = writeln!(
+        stream,
+        "{} {} {} rg",
+        f32::from(r) / 255.0,
+        f32::from(g) / 255.0,
+        f32::from(b) / 255.0
+    );
+    let _ = writeln!(stream, "{opacity} ca");
+}
+
+fn append_stroke_style(stream: &mut String, stroke: &StrokePaint) {
+    let (r, g, b) = stroke.color;
+    let _ = writeln!(
+        stream,
+        "{} {} {} RG",
+        f32::from(r) / 255.0,
+        f32::from(g) / 255.0,
+        f32::from(b) / 255.0
+    );
+    let _ = writeln!(stream, "{} CA", stroke.opacity);
+    let _ = writeln!(stream, "{} w", fmt(stroke.width));
+    let _ = writeln!(stream, "{} J", pdf_linecap(stroke.linecap));
+    let _ = writeln!(stream, "{} j", pdf_linejoin(stroke.linejoin));
+}
+
+const fn paint_op(has_fill: bool, has_stroke: bool) -> &'static str {
+    match (has_fill, has_stroke) {
+        (true, true) => "B",
+        (true, false) => "f",
+        (false, true) => "S",
+        (false, false) => "n",
+    }
+}
+
+const fn pdf_linecap(cap: StrokeCap) -> u8 {
+    match cap {
+        StrokeCap::Butt => 0,
+        StrokeCap::Round => 1,
+        StrokeCap::Square => 2,
+    }
+}
+
+const fn pdf_linejoin(join: StrokeJoin) -> u8 {
+    match join {
+        StrokeJoin::Miter => 0,
+        StrokeJoin::Round => 1,
+        StrokeJoin::Bevel => 2,
+    }
 }
 
 fn append_pdf_path(out: &mut String, path: &usvg::tiny_skia_path::Path, page_height: f32) {
@@ -105,7 +165,8 @@ fn fmt(value: f32) -> String {
 }
 
 fn build_pdf(width: f32, height: f32, content: &str) -> Vec<u8> {
-    let mut body = String::new();
+    const HEADER: &str = "%PDF-1.4\n";
+    let mut body = String::from(HEADER);
     let mut offsets = Vec::new();
 
     offsets.push(body.len());

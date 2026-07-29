@@ -15,7 +15,7 @@ pub fn conventional_export_exists(
     if let Some(plat) = Platform::parse(platform)
         && let Some(layout) = export_layout(role, kind, plat, id)
     {
-        return layout.artifacts.iter().any(|rel| assets_dir.join(rel).is_file());
+        return layout.artifacts.iter().any(|rel| export_artifact_counts(&assets_dir.join(rel)));
     }
     conventional_raster_export_exists(assets_dir, id, kind, platform)
 }
@@ -107,8 +107,25 @@ pub fn imageset_has_materialized_content(dir: &Path) -> bool {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return false;
     };
-    entries.filter_map(Result::ok).any(|entry| {
-        let path = entry.path();
-        path.is_file() && entry.file_name() != "Contents.json"
-    })
+    entries.filter_map(Result::ok).any(|entry| export_artifact_counts(&entry.path()))
+}
+
+fn export_artifact_counts(path: &Path) -> bool {
+    if !path.is_file() {
+        return false;
+    }
+    if path.file_name().is_some_and(|name| name == "Contents.json") {
+        return false;
+    }
+    if path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("pdf")) {
+        return pdf_has_magic(path);
+    }
+    true
+}
+
+fn pdf_has_magic(path: &Path) -> bool {
+    let Ok(bytes) = std::fs::read(path) else {
+        return false;
+    };
+    bytes.starts_with(b"%PDF-")
 }
