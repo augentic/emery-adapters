@@ -58,17 +58,20 @@ emery-prose = { git = "https://github.com/augentic/emery" }
 # emery-native = { path = "../emery/crates/native" }
 # emery-prose = { path = "../emery/crates/prose" }
 
-omnia = { git = "https://github.com/augentic/omnia" }
-omnia-cursor = { git = "https://github.com/augentic/backends" }
-omnia-guest = { git = "https://github.com/augentic/omnia" }
-omnia-testkit = { git = "https://github.com/augentic/omnia" }
-omnia-wasi-http = { git = "https://github.com/augentic/omnia" }
-omnia-wasi-model = { git = "https://github.com/augentic/omnia" }
-omnia-wasi-otel = { git = "https://github.com/augentic/omnia" }
-# omnia-cursor = { path = "../backends/crates/cursor" }
-# omnia-guest = { path = "../omnia/crates/omnia-guest" }
-# omnia-testkit = { path = "../omnia/crates/testkit" }
-# omnia-wasi-model = { path = "../omnia/crates/wasi-model" }
+# omnia = { git = "https://github.com/augentic/omnia" }
+# omnia-cursor = { git = "https://github.com/augentic/backends" }
+# omnia-guest = { git = "https://github.com/augentic/omnia" }
+# omnia-testkit = { git = "https://github.com/augentic/omnia" }
+# omnia-wasi-http = { git = "https://github.com/augentic/omnia" }
+# omnia-wasi-model = { git = "https://github.com/augentic/omnia" }
+# omnia-wasi-otel = { git = "https://github.com/augentic/omnia" }
+omnia = { path = "../omnia/crates/omnia" }
+omnia-cursor = { path = "../backends/crates/cursor" }
+omnia-guest = { path = "../omnia/crates/omnia-guest" }
+omnia-testkit = { path = "../omnia/crates/testkit" }
+omnia-wasi-http = { path = "../omnia/crates/wasi-http" }
+omnia-wasi-model = { path = "../omnia/crates/wasi-model" }
+omnia-wasi-otel = { path = "../omnia/crates/wasi-otel" }
 
 wrpc-transport = { git = "https://github.com/bytecodealliance/wrpc" }
 wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }
