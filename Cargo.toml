@@ -34,10 +34,10 @@ omnia-testkit = "0.35.0"
 
 # The engine crates keep short lib names (`adapter`, `native`, `probe`,
 # `prose`), so Rust `use` paths are unaffected by the emery-* package names.
-emery-adapter = "0.29.0"
-emery-native = "0.29.0"
-emery-probe = "0.29.0"
-emery-prose = "0.29.0"
+emery-adapter = "0.33.0"
+emery-native = "0.33.0"
+emery-probe = "0.33.0"
+emery-prose = "0.33.0"
 
 captures = { path = "sources/captures" }
 contracts = { path = "targets/contracts" }
@@ -65,10 +65,13 @@ omnia-testkit = { git = "https://github.com/augentic/omnia" }
 omnia-wasi-http = { git = "https://github.com/augentic/omnia" }
 omnia-wasi-model = { git = "https://github.com/augentic/omnia" }
 omnia-wasi-otel = { git = "https://github.com/augentic/omnia" }
+# omnia = { path = "../omnia/crates/omnia" }
 # omnia-cursor = { path = "../backends/crates/cursor" }
 # omnia-guest = { path = "../omnia/crates/omnia-guest" }
 # omnia-testkit = { path = "../omnia/crates/testkit" }
+# omnia-wasi-http = { path = "../omnia/crates/wasi-http" }
 # omnia-wasi-model = { path = "../omnia/crates/wasi-model" }
+# omnia-wasi-otel = { path = "../omnia/crates/wasi-otel" }
 
 wrpc-transport = { git = "https://github.com/bytecodealliance/wrpc" }
 wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }
