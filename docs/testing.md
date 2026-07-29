@@ -1,6 +1,6 @@
 # Testing
 
-Integration-first test posture for `emery-adapters`: integration owns every publicly reachable behavior, and the unit layer is deliberately thin. Design tests against the public surfaces — the WIT contract, each adapter crate's `tests/` suite, and the operator-invoked wasm example — never against private kernels. Read this before adding or deleting a test.
+Integration-first test posture for `emery-adapters`: integration owns every publicly reachable behavior, and the unit layer is deliberately thin. Design tests against the public surfaces — the WIT contract, each adapter crate's `tests/` suite, and the operator-invoked wasm examples — never against private kernels. Read this before adding or deleting a test.
 
 ## The five rungs
 
@@ -13,10 +13,10 @@ Fastest feedback first. **Every behavior is asserted on exactly one rung** — d
 | 1   | Native crate tests | Operation behavior, prompt assembly (scripted `Harness`)     | `cargo nextest run -p <adapter>` / `cargo make test`          |
 | 2   | Workflow eval cases | Cross-phase integration, real sources → working-tree outputs | [`examples/eval/`](../examples/eval/README.md)                |
 | 3   | Build eval cases   | One target build over a refined fixture, prompt quality      | [`examples/eval/`](../examples/eval/README.md)                |
-| 4   | Wasm example       | WASM/WIT conformance over the real component seam            | [`examples/wasm/`](../examples/wasm/README.md)                |
+| 4   | Wasm examples      | WASM/WIT conformance over the real component seam            | [`examples/wasm/`](../examples/wasm/README.md)                |
 | 5   | Consumer project   | Code (not prose) iteration via seeded `.wasm`                | `cargo make adapter [name]` + `emery adapter add`           |
 
-Ownership boundaries: omnia-testkit owns reusable model/runtime test mechanics; adapter `tests/` own operation behavior; the eval composition example owns the live case loop ([repo README](../README.md) for the day-to-day loop; [`examples/eval/`](../examples/eval/) for the case catalog); the wasm example owns component-seam conformance. Generic catalog/provider/command mechanics stay in `emery/crates/native/tests` (case/sandbox mechanics in `emery/crates/probe/tests`).
+Ownership boundaries: omnia-testkit owns reusable model/runtime test mechanics; adapter `tests/` own operation behavior; the eval composition example owns the live case loop ([repo README](../README.md) for the day-to-day loop; [`examples/eval/`](../examples/eval/) for the case catalog); the wasm examples own component-seam conformance. Generic catalog/provider/command mechanics stay in `emery/crates/native/tests` (case/sandbox mechanics in `emery/crates/probe/tests`).
 
 Sibling co-development: uncomment the `[patch."https://github.com/augentic/emery.git"]` block in the root `Cargo.toml` to resolve engine crates from `../emery` instead of the lockfile-pinned git dependencies.
 
@@ -44,12 +44,13 @@ cargo make eval omnia-health --restart       # a build case (rung 3)
 cargo make lab -- --project-dir <dir> slice list
 ```
 
-### 4. Wasm example — component seam
+### 4. Wasm examples — component seam
 
-[`examples/wasm/`](../examples/wasm/README.md) — shipped `emery` binary + built adapter components over the real WIT seam. Operator-invoked; per-leg ungraded (the graded native workflow case is rung 2).
+[`examples/wasm/`](../examples/wasm/README.md) — shipped `emery` binary + built adapter components over the real WIT seam. Operator-invoked; per-leg ungraded (the graded native workflow cases are rung 2). Two scenarios: `wasm-contracts` (orders / contracts) and `wasm-omnia-r9k` (typescript → omnia).
 
 ```bash
-cargo make wasm-run
+cargo make wasm-contracts
+cargo make wasm-omnia-r9k
 cargo make wasm-clean
 ```
 
