@@ -287,6 +287,7 @@ assets:
     assert!(pdf_text.contains(" RG\n"), "stroke colour op missing: {pdf_text}");
     assert!(pdf_text.contains("S\nQ\n"), "stroke paint op missing: {pdf_text}");
     assert!(!pdf_text.contains("\nf\n"), "stroke-only path must not fill: {pdf_text}");
+    assert!(!pdf_text.contains(" ca\n") && !pdf_text.contains(" CA\n"), "invalid opacity ops: {pdf_text}");
 
     let xml = std::fs::read_to_string(design.join("assets/exports/android/drawable/check.xml"))
         .expect("read android");
@@ -314,6 +315,25 @@ fn stroke_normalize_preserves_stroke() {
     let stroke = paths[0].stroke.expect("stroke");
     assert_eq!(stroke.color, (0x1F, 0x29, 0x37));
     assert!((stroke.width - 2.0).abs() < f32::EPSILON, "width={}", stroke.width);
+}
+
+#[test]
+fn stroke_width_scales_with_transform() {
+    let scaled = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <g transform="scale(2)">
+    <path d="M5 12L10 17L20 7" stroke="#112233" stroke-width="2" fill="none"/>
+  </g>
+</svg>"##;
+    let parsed = parse_vector_svg(scaled.as_bytes(), "scaled").expect("parse");
+    let mut paths = Vec::new();
+    collect_paths(parsed.tree.root(), &mut paths);
+    assert_eq!(paths.len(), 1);
+    let stroke = paths[0].stroke.expect("stroke");
+    assert!(
+        (stroke.width - 4.0).abs() < 0.01,
+        "expected canvas width 4, got {}",
+        stroke.width
+    );
 }
 
 #[test]

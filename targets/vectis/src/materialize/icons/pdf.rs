@@ -39,8 +39,9 @@ fn build_content_stream(paths: &[DrawablePath], page_height: f32) -> String {
             continue;
         }
         stream.push_str("q\n");
-        if let Some((r, g, b, opacity)) = path.fill {
-            append_fill_color(&mut stream, r, g, b, opacity);
+        if let Some((r, g, b, _opacity)) = path.fill {
+            // Opacity requires an ExtGState + `gs`; omit until that lands.
+            append_fill_color(&mut stream, r, g, b);
         }
         if let Some(stroke) = path.stroke {
             append_stroke_style(&mut stream, &stroke);
@@ -52,7 +53,7 @@ fn build_content_stream(paths: &[DrawablePath], page_height: f32) -> String {
     stream
 }
 
-fn append_fill_color(stream: &mut String, r: u8, g: u8, b: u8, opacity: f32) {
+fn append_fill_color(stream: &mut String, r: u8, g: u8, b: u8) {
     let _ = writeln!(
         stream,
         "{} {} {} rg",
@@ -60,7 +61,6 @@ fn append_fill_color(stream: &mut String, r: u8, g: u8, b: u8, opacity: f32) {
         f32::from(g) / 255.0,
         f32::from(b) / 255.0
     );
-    let _ = writeln!(stream, "{opacity} ca");
 }
 
 fn append_stroke_style(stream: &mut String, stroke: &StrokePaint) {
@@ -72,7 +72,7 @@ fn append_stroke_style(stream: &mut String, stroke: &StrokePaint) {
         f32::from(g) / 255.0,
         f32::from(b) / 255.0
     );
-    let _ = writeln!(stream, "{} CA", stroke.opacity);
+    // Stroke opacity likewise needs ExtGState; Android still carries alpha.
     let _ = writeln!(stream, "{} w", fmt(stroke.width));
     let _ = writeln!(stream, "{} J", pdf_linecap(stroke.linecap));
     let _ = writeln!(stream, "{} j", pdf_linejoin(stroke.linejoin));

@@ -5,7 +5,7 @@ use std::fmt::Write;
 use usvg::tiny_skia_path::Rect;
 use usvg::{BlendMode, ClipPath, Group, LineCap, LineJoin, Node, Paint, Path, Tree};
 
-use super::{absolute_path, path_data_string, trim_num};
+use super::{absolute_path, canvas_stroke_width, path_data_string, trim_num};
 
 const CLIP_BOUNDS_TOLERANCE: f32 = 0.5;
 
@@ -156,7 +156,7 @@ fn push_flat_path(
                 flat.stroke = Some(FlatStroke {
                     color: (color.red, color.green, color.blue),
                     opacity: alpha,
-                    width: stroke.width().get(),
+                    width: canvas_stroke_width(path, stroke.width().get()),
                     linecap: stroke.linecap(),
                     linejoin: stroke.linejoin(),
                 });

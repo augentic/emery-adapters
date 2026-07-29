@@ -271,10 +271,19 @@ fn solid_stroke(path: &usvg::Path) -> Option<StrokePaint> {
     Some(StrokePaint {
         color: (color.red, color.green, color.blue),
         opacity: stroke.opacity().get(),
-        width: stroke.width().get(),
+        width: canvas_stroke_width(path, stroke.width().get()),
         linecap: map_linecap(stroke.linecap()),
         linejoin: map_linejoin(stroke.linejoin()),
     })
+}
+
+/// Scale a local stroke width into canvas units using `abs_transform`.
+///
+/// Geometry is baked through [`absolute_path`]; stroke width must use the same
+/// scale or transformed icons export the wrong weight.
+pub(super) fn canvas_stroke_width(path: &usvg::Path, local_width: f32) -> f32 {
+    let (scale_x, scale_y) = path.abs_transform().get_scale();
+    local_width * (scale_x + scale_y) / 2.0
 }
 
 const fn map_linecap(cap: LineCap) -> StrokeCap {

@@ -124,8 +124,11 @@ fn export_artifact_counts(path: &Path) -> bool {
 }
 
 fn pdf_has_magic(path: &Path) -> bool {
-    let Ok(bytes) = std::fs::read(path) else {
+    use std::io::Read;
+
+    let Ok(mut file) = std::fs::File::open(path) else {
         return false;
     };
-    bytes.starts_with(b"%PDF-")
+    let mut magic = [0_u8; 5];
+    matches!(file.read_exact(&mut magic), Ok(())) && magic == *b"%PDF-"
 }
