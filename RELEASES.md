@@ -2,6 +2,12 @@
 
 Unreleased
 
+### Compatibility
+
+```text
+engine 0.29.x  ↔  adapters 0.6.x  (WIT emery:adapter@0.1.0, floor ≥ 0.28.0)
+```
+
 ### Added
 
 ### Changed
