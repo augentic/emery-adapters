@@ -9,7 +9,7 @@ homepage = "https://augentic.io"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/augentic/emery-adapters"
 rust-version = "1.97"
-version = "0.6.0"
+version = "0.7.0"
 publish = false
 
 [workspace.dependencies]
