@@ -5,7 +5,7 @@ The adapter core inlines this document into the system prompt of the merge leg w
 Two things make the Vectis `merge` gates different from the bare slice merge:
 
 1. **`composition.yaml` is a build output that lands at merge time.** It is not a Emery artifact authored under `.emery/specs/`; the `build` prompt regenerates it from `spec.md` + `design.md`, and the engine's deterministic merge promotes it into the baseline alongside the spec deltas. The preflight and postflight composition validators are the gate.
-2. **The cap matrix is re-verified against the merged baseline.** A green slice build is necessary but not sufficient — the postflight leg re-runs `cargo` / `make build` against the merged tree because cross-slice regressions (BoltFFI bridging drift, Gradle wrapper changes, pin drift, cap-marker expansion) only surface after deltas land.
+2. **The cap matrix is re-verified against the merged baseline.** Slice build already ran a final core verify-repair (and digest stamp) before report; postflight is a *second*, merged-baseline re-check for cross-slice / promotion regressions (BoltFFI bridging drift, Gradle wrapper changes, pin drift, cap-marker expansion) — not the primary build clippy gate.
 
 ## Preflight — staged composition validation
 
@@ -53,10 +53,12 @@ After the leg answers, the adapter re-runs its deterministic composition validat
 
 ### Why postflight, not preflight
 
-The postflight gate intentionally validates the merged baseline, not the staged delta. Shell verification (BoltFFI bridging, Gradle wrapper, pin faithfulness vs `$TEMPLATE_DIR`, cap-marker expansion) is only meaningful once the spec-level deltas are promoted and the writers have a stable baseline to build against. The build already verified the slice in isolation; this gate catches cross-slice regressions.
+The postflight gate intentionally validates the merged baseline, not the staged delta. Shell verification (BoltFFI bridging, Gradle wrapper, pin faithfulness vs `$TEMPLATE_DIR`, cap-marker expansion) is only meaningful once the spec-level deltas are promoted and the writers have a stable baseline to build against. The build already verified the slice in isolation (including post-review final core clippy); this gate catches cross-slice / promotion regressions on the landed tree.
 
 ## Failure semantics
 
-A blocking preflight finding aborts the merge before anything folds: the slice stays `built`, the plan entry stays `in-progress`, and the operator resolves and re-runs the merge. A blocking postflight finding is a terminal diagnostic, not a park: the engine has already committed and archived the merge, so the report surfaces the regression for a follow-up repair slice — never attempt to roll back the merge or edit the baseline's lifecycle state from this prompt.
+A blocking preflight finding aborts the merge before anything folds: the slice stays `built`, the plan entry stays `in-progress`, and the operator resolves and re-runs the merge. A blocking postflight finding is a terminal diagnostic, not a park: the engine has already committed and archived the merge (non-rollback), the plan entry is `done`, and the gate report lands at the archive's `merge/postflight.yaml` (including `status: failure`). Never attempt to roll back the merge, edit the baseline's lifecycle state, or retry `/emery:merge` for that archived slice from this prompt.
+
+Operator resume (engine-owned): inspect the archived `merge/postflight.yaml`, repair the unclean baseline (hand-fix or a follow-up slice via `/emery:plan`), then re-run `emery plan execute` to acknowledge the sticky `merge-postflight-failed` stop and continue (or finalize when the plan is otherwise drained).
 
 For cap-matrix failures that look like version-pin drift (AGP / Gradle / BoltFFI mismatch surfaced after pins changed in this slice), record the failure in the report findings and surface it — **agents exit** without editing emery-adapters or inventing pins (see [Consumer tooling boundary](../references/emery-runtime/guardrails.md#consumer-tooling-boundary)). The operator decides whether the next step is a pin fix in [`vectis-exemplar`](https://github.com/augentic/vectis-exemplar) ([build.md](build.md) § Template / version-pin drift handling), a pin rollback, or a follow-up slice.

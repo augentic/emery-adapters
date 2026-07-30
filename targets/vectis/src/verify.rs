@@ -4,11 +4,13 @@ mod android_toolchain;
 mod app_icon;
 mod catalog;
 mod compile_stamp;
+mod core_stamp;
 mod suppression_scan;
 
 use std::path::Path;
 
 pub use catalog::catalog_findings;
+pub use core_stamp::{CORE_VERIFY_STAMP, core_src_digest};
 use serde_json::Value;
 pub use suppression_scan::{FINDING_ID, suppression_scan_findings};
 
@@ -170,6 +172,7 @@ fn render_verify(statuses: &[PlatformStatus], project_root: &Path, platforms: &[
         ios_present,
         android_present,
     ));
+    findings.extend(core_stamp::core_stamp_findings(project_root));
 
     findings.extend(suppression_scan_findings(project_root, platforms));
 

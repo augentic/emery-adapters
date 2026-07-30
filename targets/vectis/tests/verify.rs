@@ -4,13 +4,18 @@
 use std::path::Path;
 
 use tempfile::tempdir;
-use vectis::verify::{VerifyMode, run, verify_exit_code};
+use vectis::verify::{CORE_VERIFY_STAMP, VerifyMode, core_src_digest, run, verify_exit_code};
 
 fn write(path: &Path, content: &str) {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).expect("create fixture parent");
     }
     std::fs::write(path, content).expect("write fixture");
+}
+
+fn write_fresh_core_stamp(root: &Path) {
+    let digest = core_src_digest(root).expect("core digest for present shared/src");
+    write(&root.join(CORE_VERIFY_STAMP), &format!("{digest}\n"));
 }
 
 fn project(root: &Path, platforms: &[&str]) {
@@ -82,6 +87,7 @@ fn fully_present_project(root: &Path) {
     write(&root.join("Android/app/build/outputs/apk/debug/app-debug.apk"), "debug apk");
     write(&root.join("iOS/.vectis/verify.ok"), "ok\n");
     write(&root.join("Android/.vectis/verify.ok"), "ok\n");
+    write_fresh_core_stamp(root);
 }
 
 #[test]
@@ -112,6 +118,7 @@ fn shell_presence_and_exit_code() {
     assert_eq!(verify_exit_code(&missing_core), 1);
 
     write(&core.path().join("shared/src/app.rs"), "pub struct App;");
+    write_fresh_core_stamp(core.path());
     let present_core = run(VerifyMode::Verify, core.path()).unwrap();
     assert!(finding_ids(&present_core).is_empty());
     assert_eq!(verify_exit_code(&present_core), 0);
@@ -129,10 +136,44 @@ fn shell_presence_and_exit_code() {
     let future = tempdir().unwrap();
     project(future.path(), &["core", "web", "desktop"]);
     write(&future.path().join("shared/src/app.rs"), "pub struct App;");
+    write_fresh_core_stamp(future.path());
     let unsupported = run(VerifyMode::Verify, future.path()).unwrap();
     let ids = finding_ids(&unsupported);
     assert_eq!(ids.iter().filter(|id| **id == "platform-not-yet-supported").count(), 2);
     assert_eq!(verify_exit_code(&unsupported), 0);
+}
+
+#[test]
+fn core_verify_stamp_missing_stale_fresh() {
+    let tmp = tempdir().unwrap();
+    project(tmp.path(), &["core"]);
+    write(&tmp.path().join("shared/src/app.rs"), "pub struct App;");
+
+    let missing = run(VerifyMode::Verify, tmp.path()).unwrap();
+    assert!(
+        finding_ids(&missing).contains(&"core-verify-stamp-missing"),
+        "present core without stamp: {missing}"
+    );
+    assert_eq!(verify_exit_code(&missing), 1);
+
+    write(&tmp.path().join(CORE_VERIFY_STAMP), "sha256:deadbeef\n");
+    let stale = run(VerifyMode::Verify, tmp.path()).unwrap();
+    assert!(finding_ids(&stale).contains(&"core-verify-stamp-stale"), "mismatched digest: {stale}");
+    assert!(!finding_ids(&stale).contains(&"core-verify-stamp-missing"));
+    assert_eq!(verify_exit_code(&stale), 1);
+
+    write_fresh_core_stamp(tmp.path());
+    let fresh = run(VerifyMode::Verify, tmp.path()).unwrap();
+    assert!(finding_ids(&fresh).is_empty(), "matching digest passes: {fresh}");
+    assert_eq!(verify_exit_code(&fresh), 0);
+
+    // Editing a tracked source after the stamp was written goes stale.
+    write(&tmp.path().join("shared/src/app.rs"), "pub struct App; // touched\n");
+    let after_edit = run(VerifyMode::Verify, tmp.path()).unwrap();
+    assert!(
+        finding_ids(&after_edit).contains(&"core-verify-stamp-stale"),
+        "post-stamp core edit: {after_edit}"
+    );
 }
 
 #[test]
@@ -153,6 +194,8 @@ fn catalog_project(root: &Path) {
     project(root, &["core", "ios"]);
     write(&root.join("shared/src/app.rs"), "pub struct App;");
     write(&root.join("iOS/TestApp/ContentView.swift"), "struct ContentView {}");
+    write(&root.join("iOS/.vectis/verify.ok"), "ok\n");
+    write_fresh_core_stamp(root);
     write(
         &root.join("design-system/assets.yaml"),
         "version: 1\nassets:\n  empty-state:\n    kind: vector\n    role: illustration\n    source: assets/empty-state.svg\n  app-logo:\n    kind: vector\n    role: app-icon\n    source: assets/app-logo.svg\n",
@@ -199,6 +242,7 @@ fn boltffi_dx_patterns_required() {
     write(&tmp.path().join("Android/app/build/outputs/apk/debug/app-debug.apk"), "debug apk");
     write(&tmp.path().join("iOS/.vectis/verify.ok"), "ok\n");
     write(&tmp.path().join("Android/.vectis/verify.ok"), "ok\n");
+    write_fresh_core_stamp(tmp.path());
 
     let result = run(VerifyMode::Verify, tmp.path()).unwrap();
     let ids = finding_ids(&result);
