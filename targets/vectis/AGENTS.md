@@ -47,10 +47,12 @@ The build order is:
 
 1. Regenerate and validate `composition.yaml`.
 2. Generate or update the shared Crux core (greenfield: materialize from `$TEMPLATE_DIR`, then strip).
-3. Generate tests and run the core verify-repair loop.
+3. Generate tests and run the mid-build core verify-repair loop (does **not** write `shared/.vectis/verify.ok`).
 4. Generate and verify the iOS shell when selected (`make build` / stamp `iOS/.vectis/verify.ok`).
 5. Generate and verify the Android shell when selected (`make build` / stamp `Android/.vectis/verify.ok`).
 6. Consolidate review findings and outputs.
+7. Final core verify-repair (Step 6 again) and write `shared/.vectis/verify.ok` with the `shared/src/**/*.rs` digest.
+8. Build report (deterministic shell / stamp gate).
 
 Keep writer and reviewer contracts in the phase prompts under [`prose/prompts/build/`](prose/prompts/build/). Put reusable Crux, SwiftUI, Compose, design-system, and review depth under [`prose/references/`](prose/references/). Engineering constraints that should produce stable review findings belong in [`prose/rules/`](prose/rules/) with `VECTIS-*` IDs.
 

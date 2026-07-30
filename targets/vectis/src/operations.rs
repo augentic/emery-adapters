@@ -2,7 +2,8 @@
 //!
 //! Judgment legs sit between a deterministic prepare prelude and a
 //! validate / report-coherence postlude. Build order: composition →
-//! core → per-shell → review → report. Host verify stays agent-side.
+//! core → per-shell → review → final-core-verify → report. Host verify
+//! stays agent-side.
 
 use std::path::Path;
 
@@ -172,10 +173,12 @@ impl Target for Adapter {
         let user = format!(
             "Run the Crux core phases (2-3) of the vectis build for slice `{slice}`: \
          generate or update the shared core per the core write prompt, write the \
-         Crux tests, then run the test prompt's core verify-repair loop yourself — \
-         the cargo check / clippy / test commands run in the lent workspace; this \
-         adapter cannot spawn them. Detect create vs update mode from the tree. When \
-         the template-materialize prelude below lists absent trees, materialize from \
+         Crux tests, then run the test prompt's mid-build core verify-repair loop \
+         yourself — the cargo check / clippy / test commands run in the lent \
+         workspace; this adapter cannot spawn them. Do not write \
+         `shared/.vectis/verify.ok` here; the final-core-verify leg after review owns \
+         that stamp. Detect create vs update mode from the tree. When the \
+         template-materialize prelude below lists absent trees, materialize from \
          `$TEMPLATE_DIR` first (host FS) before writing feature code.\n\n\
          {BINDING_NOTE}\n\n{scaffold_block}\n\n{REFERENCES_POINTER}\n\n{inputs_block}",
         );
@@ -221,24 +224,44 @@ impl Target for Adapter {
         );
         let review = phase::phase(model, ctx, system, user, "review").await?;
 
+        // Final core verify-repair after review may have edited `shared/`.
+        // Mid-build verify in the core leg does not write the durable stamp;
+        // only this leg refreshes `shared/.vectis/verify.ok`.
+        let system = assemble(&["prompts/build.md", "prompts/build/test.md"]);
+        let user = format!(
+            "Run the final core verify-repair pass for slice `{slice}` after review and \
+         before the build report. Re-run only Step 6 of the test prompt (fmt / check / \
+         clippy / test) against the current tree — no feature writing. When `shared/` \
+         exists, always run the four commands unconditionally (not only if review \
+         touched core). On success, write `shared/.vectis/verify.ok` containing the \
+         digest of `shared/src/**/*.rs` per the test prompt's stamp contract; the \
+         mid-build core verify-repair loop must NOT write this stamp. On exhausted \
+         repair budget, answer `applicable: true` with a failure summary so the report \
+         cannot claim success. {REFERENCES_POINTER}",
+        );
+        let final_core = phase::phase(model, ctx, system, user, "final-core-verify").await?;
+
         // The deterministic shell verify gate runs in-guest and feeds the
         // report leg, gated by the derived answer schema.
         let verify_block = render_verify_gate(&tree_root);
         let mut outcomes = vec![("composition", &composition), ("core", &core)];
         outcomes.extend(shell_outcomes.iter().map(|(name, answer)| (*name, answer)));
         outcomes.push(("review", &review));
+        outcomes.push(("final-core-verify", &final_core));
         let user = format!(
             "Write the build report for slice `{slice}` per the build prompt's `## Build \
          report`. The adapter already ran the deterministic shell verify gate in-guest \
          — its findings are below and re-run after your answer; a missing or empty \
          tree for a supported declared platform forces `status: failure`, so repair \
-         the tree first when the gate reports errors. Then mark the completed \
-         `tasks.md` checkboxes in the slice directory per the prompt before answering. \
-         A `success` report carries only non-blocking findings; an exhausted \
-         verify-repair budget, a failed composition gate, or unresolved blocking \
-         review findings mean `status: failure`. Declare `outputs[]` per supported \
-         platform with paths relative to the project root, and set \
-         `ui-surface.screens` from the slice's own screen count.\n\n\
+         the tree first when the gate reports errors. A missing or stale \
+         `shared/.vectis/verify.ok` digest stamp (when the core tree is present) also \
+         forces `status: failure`. Then mark the completed `tasks.md` checkboxes in \
+         the slice directory per the prompt before answering. A `success` report \
+         carries only non-blocking findings; an exhausted verify-repair budget, a \
+         failed composition gate, or unresolved blocking review findings mean \
+         `status: failure`. Declare `outputs[]` per supported platform with paths \
+         relative to the project root, and set `ui-surface.screens` from the slice's \
+         own screen count.\n\n\
          {verify_block}\n\n\
          Phase outcomes:\n{}",
             outcomes

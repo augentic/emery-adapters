@@ -1,12 +1,12 @@
 # Vectis build — core review
 
-Inlined by the adapter core into the review leg's system prompt (alongside [../../build.md](../../build.md) and the in-scope shell review prompts) after the core verify-repair loop succeeds. Scope: the Rust `shared` crate. Drives an agent team — three specialists plus an antagonist — through a bounded review-fix loop (max 3 iterations).
+Inlined by the adapter core into the review leg's system prompt (alongside [../../build.md](../../build.md) and the in-scope shell review prompts) after the mid-build core verify-repair loop succeeds. Scope: the Rust `shared` crate. Drives an agent team — three specialists plus an antagonist — through a bounded review-fix loop (max 3 iterations). Mechanical fixes to `shared/` remain allowed here; a dedicated final-core-verify leg always re-runs Step 6 (and refreshes the digest stamp) before the build report — mid-build verify is not the last clippy pass.
 
 The shared agent-team protocol lives in [`../../../references/agent-teams.md`](../../../references/agent-teams.md); the core-specific team-spawn protocol lives in [`review/team-protocol-core.md`](../../../references/review/team-protocol-core.md).
 
 ## Pipeline
 
-1. **Verify prerequisites** — the core verify-repair loop returned `success`, `${PROJECT_DIR}/shared/` exists, and `cargo check` passes.
+1. **Verify prerequisites** — the mid-build core verify-repair loop returned `success`, `${PROJECT_DIR}/shared/` exists, and `cargo check` passes.
 2. **Spawn specialists concurrently** with the verbatim prompts in [`review/team-protocol-core.md`](../../../references/review/team-protocol-core.md):
    - **Structural** — CRX-001..011: missing `render()`, serde derives, input validation, `PendingOp` timestamps, ViewModel typing, unused deps. Full library: [`review/crux-checks.md`](../../../references/review/crux-checks.md).
    - **Logic** — LOG-001..009: state-machine completeness, op coalescing, concurrent conflicts, temporal ordering, rapid-action sequences, spec gaps, spec-to-test coverage, stale tests. Full library: [`review/logic-checks.md`](../../../references/review/logic-checks.md).
