@@ -36,6 +36,85 @@ fn schema_format(request: &Request) -> (&str, &str) {
     }
 }
 
+fn assert_composition_leg(request: &Request) {
+    let system = request.system.as_deref().unwrap();
+    assert!(system.contains("# Vectis target — build prompt"), "build prompt in system");
+    assert!(system.contains("# Vectis target — `guidance`"), "guidance refresher in system");
+    assert!(system.contains("# Vectis build — composition"), "composition prompt in system");
+    let user = &request.messages[0].content;
+    assert!(user.contains("PROPOSAL-BODY") && user.contains("DESIGN-BODY"), "typed inputs");
+    assert!(user.contains("slice `demo`"), "slice named");
+    assert!(user.contains("prepare prelude"), "prelude summary feeds the first leg");
+    assert!(user.contains("\"skipped\":true"), "nothing to materialize in an empty workspace");
+    assert!(
+        user.contains("component-identity cluster report"),
+        "in-guest infer report feeds the leg"
+    );
+    assert!(user.contains("component-bindings.yaml"), "bindings file instructed");
+    assert!(!user.contains("emery catalog infer"), "no dead CLI verb in the prompt");
+    assert!(user.contains("vectis-references"), "user prompt points at the MCP references");
+    let (name, schema) = schema_format(request);
+    assert_eq!(name, "composition");
+    let compiled = serde_json::from_str::<serde_json::Value>(schema).unwrap();
+    assert!(jsonschema::validator_for(&compiled).is_ok(), "internal schema compiles");
+    assert!(request.lend_workspace);
+    assert_eq!(mcp_grants(request)[0].url, "http://references/mcp");
+}
+
+/// `… → review → final-core-verify → report` (after composition).
+fn assert_post_composition_leg_order(requests: &[Request]) {
+    let core = &requests[1];
+    assert_eq!(schema_format(core).0, "core");
+    assert!(core.system.as_deref().unwrap().contains("# Vectis build — core (write)"));
+    assert!(
+        core.system.as_deref().unwrap().contains("# Vectis build — tests + core verify-repair")
+    );
+    assert!(core.messages[0].content.contains("cannot spawn"), "agent-run cargo loop instructed");
+    assert!(
+        core.messages[0].content.contains("Do not write"),
+        "mid-build core leg must not own the durable stamp"
+    );
+    let ios = &requests[2];
+    assert_eq!(schema_format(ios).0, "ios");
+    assert!(ios.system.as_deref().unwrap().contains("# Vectis build — iOS shell (write + verify)"));
+    assert!(ios.messages[0].content.contains("applicable: false"), "shell legs may self-skip");
+    let android = &requests[3];
+    assert_eq!(schema_format(android).0, "android");
+    assert!(
+        android
+            .system
+            .as_deref()
+            .unwrap()
+            .contains("# Vectis build — Android shell (write + verify)")
+    );
+    let review = &requests[4];
+    assert_eq!(schema_format(review).0, "review");
+    assert!(review.system.as_deref().unwrap().contains("# Vectis build — core review"));
+    assert!(review.system.as_deref().unwrap().contains("# Vectis build — iOS review"));
+    assert!(review.system.as_deref().unwrap().contains("# Vectis build — Android review"));
+    let final_core = &requests[5];
+    assert_eq!(schema_format(final_core).0, "final-core-verify");
+    assert!(
+        final_core
+            .system
+            .as_deref()
+            .unwrap()
+            .contains("# Vectis build — tests + core verify-repair")
+    );
+    assert!(
+        final_core.messages[0].content.contains("shared/.vectis/verify.ok"),
+        "final leg owns the digest stamp"
+    );
+    let (name, schema) = schema_format(&requests[6]);
+    assert_eq!(name, "report");
+    assert_eq!(schema, REPORT_ANSWER_SCHEMA);
+    let report_user = &requests[6].messages[0].content;
+    assert!(report_user.contains("no shell work"), "phase outcomes feed the report leg");
+    assert!(report_user.contains("final-core-verify"), "final verify outcome feeds the report");
+    assert!(report_user.contains("shell verify gate"), "in-guest verify gate feeds the report");
+    assert!(!report_user.contains("emery extension run"), "no dead CLI verb in the prompt");
+}
+
 #[tokio::test]
 async fn build_phase_legs() {
     let tmp = TempDir::new().unwrap();
@@ -45,6 +124,7 @@ async fn build_phase_legs() {
         SHELL_SKIPPED,  // ios
         SHELL_SKIPPED,  // android
         PHASE_DONE,     // review
+        PHASE_DONE,     // final-core-verify
         SUCCESS_REPORT, // report
     ]);
     let inputs = vec![
@@ -67,67 +147,13 @@ async fn build_phase_legs() {
     assert!(report.findings.is_empty());
 
     let requests = model.requests();
-    assert_eq!(requests.len(), 6, "composition, core, two shells, review, then one report call");
-
-    // First leg: composition.
-    let first = &requests[0];
-    let system = first.system.as_deref().unwrap();
-    assert!(system.contains("# Vectis target — build prompt"), "build prompt in system");
-    assert!(system.contains("# Vectis target — `guidance`"), "guidance refresher in system");
-    assert!(system.contains("# Vectis build — composition"), "composition prompt in system");
-    let user = &first.messages[0].content;
-    assert!(user.contains("PROPOSAL-BODY") && user.contains("DESIGN-BODY"), "typed inputs");
-    assert!(user.contains("slice `demo`"), "slice named");
-    assert!(user.contains("prepare prelude"), "prelude summary feeds the first leg");
-    assert!(user.contains("\"skipped\":true"), "nothing to materialize in an empty workspace");
-    assert!(
-        user.contains("component-identity cluster report"),
-        "in-guest infer report feeds the leg"
+    assert_eq!(
+        requests.len(),
+        7,
+        "composition, core, two shells, review, final-core-verify, then one report call"
     );
-    assert!(user.contains("component-bindings.yaml"), "bindings file instructed");
-    assert!(!user.contains("emery catalog infer"), "no dead CLI verb in the prompt");
-    assert!(user.contains("vectis-references"), "user prompt points at the MCP references");
-    let (name, schema) = schema_format(first);
-    assert_eq!(name, "composition");
-    let compiled = serde_json::from_str::<serde_json::Value>(schema).unwrap();
-    assert!(jsonschema::validator_for(&compiled).is_ok(), "internal schema compiles");
-    assert!(first.lend_workspace);
-    assert_eq!(mcp_grants(first)[0].url, "http://references/mcp");
-
-    // Phase order: core, the two shell writes, review, then the report
-    // leg gated by the derived answer schema.
-    let core = &requests[1];
-    assert_eq!(schema_format(core).0, "core");
-    assert!(core.system.as_deref().unwrap().contains("# Vectis build — core (write)"));
-    assert!(
-        core.system.as_deref().unwrap().contains("# Vectis build — tests + core verify-repair")
-    );
-    assert!(core.messages[0].content.contains("cannot spawn"), "agent-run cargo loop instructed");
-    let ios = &requests[2];
-    assert_eq!(schema_format(ios).0, "ios");
-    assert!(ios.system.as_deref().unwrap().contains("# Vectis build — iOS shell (write + verify)"));
-    assert!(ios.messages[0].content.contains("applicable: false"), "shell legs may self-skip");
-    let android = &requests[3];
-    assert_eq!(schema_format(android).0, "android");
-    assert!(
-        android
-            .system
-            .as_deref()
-            .unwrap()
-            .contains("# Vectis build — Android shell (write + verify)")
-    );
-    let review = &requests[4];
-    assert_eq!(schema_format(review).0, "review");
-    assert!(review.system.as_deref().unwrap().contains("# Vectis build — core review"));
-    assert!(review.system.as_deref().unwrap().contains("# Vectis build — iOS review"));
-    assert!(review.system.as_deref().unwrap().contains("# Vectis build — Android review"));
-    let (name, schema) = schema_format(&requests[5]);
-    assert_eq!(name, "report");
-    assert_eq!(schema, REPORT_ANSWER_SCHEMA);
-    let report_user = &requests[5].messages[0].content;
-    assert!(report_user.contains("no shell work"), "phase outcomes feed the report leg");
-    assert!(report_user.contains("shell verify gate"), "in-guest verify gate feeds the report");
-    assert!(!report_user.contains("emery extension run"), "no dead CLI verb in the prompt");
+    assert_composition_leg(&requests[0]);
+    assert_post_composition_leg_order(&requests);
 }
 
 #[tokio::test]
@@ -140,16 +166,26 @@ async fn core_only_skips_shells() {
     // case owns platform-leg skipping, not greenfield materialize.
     fs::create_dir_all(tmp.path().join("shared/src")).unwrap();
     fs::write(tmp.path().join("shared/src/app.rs"), "pub struct App;\n").unwrap();
-    let model = Harness::answering([PHASE_DONE, PHASE_DONE, PHASE_DONE, SUCCESS_REPORT]);
+    let digest =
+        vectis::verify::core_src_digest(tmp.path()).expect("core digest io").expect("core digest");
+    fs::create_dir_all(tmp.path().join("shared/.vectis")).unwrap();
+    fs::write(tmp.path().join(vectis::verify::CORE_VERIFY_STAMP), format!("{digest}\n")).unwrap();
+    let model =
+        Harness::answering([PHASE_DONE, PHASE_DONE, PHASE_DONE, PHASE_DONE, SUCCESS_REPORT]);
 
     let report =
         Adapter::build(&model, &ctx(tmp.path(), None), "demo", &[], &tree()).await.unwrap();
 
     assert_eq!(report.status, Status::Success);
     let requests = model.requests();
-    assert_eq!(requests.len(), 4, "composition, core, review, report — no shell legs");
+    assert_eq!(
+        requests.len(),
+        5,
+        "composition, core, review, final-core-verify, report — no shell legs"
+    );
     assert_eq!(schema_format(&requests[1]).0, "core");
     assert_eq!(schema_format(&requests[2]).0, "review");
+    assert_eq!(schema_format(&requests[3]).0, "final-core-verify");
     let core_user = &requests[1].messages[0].content;
     assert!(
         core_user.contains("template-materialize prelude"),
@@ -176,6 +212,7 @@ async fn guest_does_not_embed_scaffold() {
         PHASE_DONE,     // composition
         PHASE_DONE,     // core
         PHASE_DONE,     // review
+        PHASE_DONE,     // final-core-verify
         SUCCESS_REPORT, // report (optimistic — gate rejects)
         FAILURE_REPORT, // report-repair
     ]);
@@ -237,11 +274,12 @@ async fn build_with_composition(composition: Option<&str>, report_answer: &'stat
         SHELL_SKIPPED,
         SHELL_SKIPPED,
         PHASE_DONE,
+        PHASE_DONE,
         report_answer,
     ]);
     let report =
         Adapter::build(&model, &ctx(tmp.path(), None), "demo", &[], &tree()).await.unwrap();
-    assert_eq!(model.requests().len(), 6, "coherence warnings never trigger the repair leg");
+    assert_eq!(model.requests().len(), 7, "coherence warnings never trigger the repair leg");
     report
 }
 

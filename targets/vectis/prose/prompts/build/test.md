@@ -1,6 +1,6 @@
 # Vectis build — tests + core verify-repair
 
-Inlined by the adapter core into the core leg's system prompt (alongside [../build.md](../build.md) and [core/write.md](core/write.md)); carries Step 5 (write tests) and Step 6 (verify-repair the shared core). Both phases run in their own sub-agents with clean context windows.
+Inlined by the adapter core into the **core** leg (alongside [../build.md](../build.md) and [core/write.md](core/write.md)) and again into the **final-core-verify** leg (alongside [../build.md](../build.md) only). Carries Step 5 (write tests; core leg only) and Step 6 (verify-repair the shared core). Mid-build Step 6 does **not** write the durable digest stamp; only the final-core-verify leg refreshes `shared/.vectis/verify.ok` after a green pass.
 
 Carries the cross-cutting Rust verify-repair loop. The spec-to-test mapping rules live in [`test-spec-mapping.md`](../../references/test-spec-mapping.md) and the operational runbook lives in [`test-runbook.md`](../../references/test-runbook.md).
 
@@ -70,3 +70,21 @@ After tests pass, compare results against the baseline from before the writers r
 ### Loop control
 
 Repeat until all four checks pass or 3 iterations are exhausted. If still failing after 3 iterations: **stop**. Do not mark the task complete. Report the remaining failures with full error output and escalate for guidance (the parent build prompt reads this as a `build` failure outcome).
+
+### Durable core verify stamp (final-core-verify leg only)
+
+After a green Step 6 in the **final-core-verify** leg (post-review, pre-report), write `${PROJECT_DIR}/shared/.vectis/verify.ok` with the digest of the current `shared/src/**/*.rs` tree. The mid-build core verify-repair loop (Phases 2–3) must **not** write or refresh this stamp.
+
+Digest contract (must match the in-guest report gate):
+
+1. Collect every `*.rs` file under `shared/src/` recursively, skipping any `generated/` directory.
+2. Sort paths by their path relative to `shared/src/` using `/` separators.
+3. For each file, append `<relpath>\n<sha256-hex of file bytes>\n` to a canonical buffer.
+4. SHA-256 that buffer and write the stamp as a single line: `sha256:<hex>`.
+
+```bash
+mkdir -p "${PROJECT_DIR}/shared/.vectis"
+# Write exactly `sha256:<hex>` (no bare `ok`) after computing the digest above.
+```
+
+A missing or stale stamp fails the deterministic report gate (`core-verify-stamp-missing` / `core-verify-stamp-stale`) when the core tree is present. An unreadable `shared/src/**/*.rs` tree fails closed as `core-verify-digest-unreadable` rather than skipping the stamp check.
