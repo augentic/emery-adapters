@@ -8,7 +8,7 @@ Compose patterns, Crux Android shell anatomy, Kotlin token templates, and design
 
 Inspect `${ANDROID_SHELL_DIR}/app/src/main/java/<package>/Core.kt` (or the package path materialize produced under `ANDROID_PACKAGE`):
 
-- Missing → **create mode**: materialize from `$TEMPLATE_DIR` per [../../build.md](../../build.md) § Template materialize (see the template-materialize prelude; the template ships the Gradle wrapper), strip unused `VECTIS-OPTIONAL` caps, enter pre-flight (see § Verify below), then update mode. Fail closed if `$TEMPLATE_DIR` is missing — do not invent an Android scaffold.
+- Missing → **create mode**: materialize from `$TEMPLATE_DIR` per [template-materialize.md](../../../references/template-materialize.md) (see the template-materialize prelude; the template ships the Gradle wrapper), strip unused `VECTIS-OPTIONAL` caps, enter pre-flight (see § Verify below), then update mode. Fail closed if `$TEMPLATE_DIR` is missing — do not invent an Android scaffold.
 - Present → **update mode**: diff core types against existing Kotlin code and apply targeted edits. When a newly enabled adapter requires a shell handler that was stripped, copy that `cap=` FILE/block from `$TEMPLATE_DIR` ([`template-capabilities.md`](../../../references/template-capabilities.md)) — do not invent handler shapes.
 
 Spawn the writer sub-agent with `mode: create|update` and `skip_verification: true`; the orchestrator runs the verify loop (§ Verify) after the writer returns.
@@ -64,7 +64,7 @@ mkdir -p "${ANDROID_SHELL_DIR}/.vectis" && echo ok > "${ANDROID_SHELL_DIR}/.vect
 
 On failure the orchestrator captures stderr and spawns a **repair-only** sub-agent (`task: android-verify-repair`) with Kotlin-only edit scope — **no shell**. The sub-agent returns edited Kotlin files or a patch plan; the orchestrator applies edits and re-runs the loop from step 1. **Structural fix only for warnings** — refactor (underscore-prefixed unused parameters, real handler wiring) until `make build` passes; never silence a warning with `@Suppress`.
 
-**Gradle / Makefile drift errors:** re-copy drifted DX files from `$TEMPLATE_DIR` with identity substitution, then retry. Never invent content for `Android/Makefile`, `Android/settings.gradle.kts`, `Android/build.gradle.kts`, `Android/app/build.gradle.kts`, or `Android/shared/build.gradle.kts`. If BoltFFI / pin drift persists after a refresh, escalate per [../../build.md](../../build.md) § Template / version-pin drift handling.
+**Gradle / Makefile drift errors:** re-copy drifted DX files from `$TEMPLATE_DIR` with identity substitution, then retry. Never invent content for `Android/Makefile`, `Android/settings.gradle.kts`, `Android/build.gradle.kts`, `Android/app/build.gradle.kts`, or `Android/shared/build.gradle.kts`. If BoltFFI / pin drift persists after a refresh, escalate per [template-capabilities.md](../../../references/template-capabilities.md) § Template / version-pin drift handling.
 
 If still failing after 3 iterations: **stop**, report the remaining failures with full error output, and escalate. When the host's default Java breaks AGP/Kotlin, pin a compatible JDK via `org.gradle.java.home` in `gradle.properties` (host-local).
 

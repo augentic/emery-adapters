@@ -1,6 +1,26 @@
 # Vectis build — composition
 
-Inlined by the adapter core into the composition leg's system prompt (alongside [../build.md](../build.md)), before any per-platform phase. Regenerates `${SLICE_DIR}/composition.yaml` from the canonical `spec.md` + `design.md`; the adapter runs the deterministic validator gate after the leg. `composition.yaml` is a build output (not a Emery artifact); the merge prompt lands it into the baseline alongside the code.
+Inlined by the adapter core into the composition leg's system prompt (alongside [../build.md](../build.md)), before any per-platform phase. Runs Step 0.5 component inference, then regenerates `${SLICE_DIR}/composition.yaml` from the canonical `spec.md` + `design.md`; the adapter runs the deterministic validator gate after the leg. `composition.yaml` is a build output (not a Emery artifact); the merge prompt lands it into the baseline alongside the code.
+
+## Step 0.5 — component inference
+
+Runs in this leg, ahead of composition regeneration. Component *identity* is deterministic and owned by the adapter's in-guest clustering engine (a structural fingerprint over each `group`'s normalized skeleton); component *identification and naming* are model judgement and owned by this prompt. The engine carries **no** component vocabulary — it reports identity + evidence, and the workflow's deterministic bind bookkeeping records the names it is handed; this prompt decides what each clustered structure *is* and what to call it. Inference runs before composition regeneration so the regeneration at step 6 below reads an up-to-date component set. **Timing.** The report clusters against the **merged** baseline plus the candidate cache and `parts.yaml` — not the current slice's composition, which has not merged yet. With one screen per slice and the default occurrence threshold of 2, a baseline-only path surfaces a repeated structure at the **third** slice's build (once two prior screens have merged); the screenshots candidate cache (RFC §B4) can supply the second occurrence **during** the second slice's build when stage-6 sidecars exist. B7 retroactive factoring runs on whichever build first binds the component.
+
+1. **Report.** The adapter runs the deterministic, **name-free** clustering in-guest against the current merged baseline (`${PROJECT_DIR}/.emery/specs/composition.yaml`) and injects the cluster report into the composition leg's prompt — do not attempt to re-run it. The clustering folds the screenshots candidate cache and, when present, the operator-authored `parts.yaml` (`${PROJECT_DIR}/.emery/design-system/parts.yaml`) into the same pass automatically. A `parts.yaml` part is a third authoritative input that carries two authorities the clustering honours silently: **naming** (its operator slug wins, so the matching cluster arrives with `bound-slug` already populated — leave it untouched in step 2) and **promotion** (a part matching at least one baseline group is surfaced as a cluster even below the occurrence threshold). Parts that match no baseline group surface in the report's non-blocking `unmatched-parts` list (informational); it never gates the build and is only authoritative over the complete baseline at change completion. An absent baseline yields an empty report (nothing to name). Each reported cluster carries a `fingerprint` (the opaque identity), an `occurrences` count, the `screens` provenance list, the representative normalized `skeleton`, an `evidence` block (`region`, `item-kinds`, `event-targets`, and an optional `candidate-names` list of stage-6 suggestions), and a `bound-slug` (the name already bound to that fingerprint, or `null`).
+2. **Identify and name by judgement.** For each reported cluster whose `bound-slug` is `null`, decide *what the component is* and *what to call it*: read its `evidence` and representative `skeleton`, and choose a kebab-case slug. There is **no fixed component vocabulary** — a repeated footer of navigation icons might be a `tab-bar`, a `rail`, or a novel navigation form this app invents; name it on its merits rather than forcing it into a known label. The `evidence.candidate-names` suggestions (when present) are non-authoritative stage-6 hints you MAY adopt or override — never an identity. A cluster whose `bound-slug` is **already populated** is already named — from a prior run's catalog binding, or from an operator `parts.yaml` pin whose name wins — so leave it untouched.
+3. **Bind.** Write your `{ fingerprint → slug }` decisions to the bindings file at `${SLICE_DIR}/build/component-bindings.yaml`; the workflow's deterministic bind bookkeeping records them into the catalog. The bindings file is a `bindings:` map keyed by each cluster's `fingerprint`, valued by the bare slug (or `{ slug, description }`):
+
+```yaml
+version: 1
+bindings:
+  <fingerprint-a>: tab-bar
+  <fingerprint-b>:
+    slug: detail-card
+    description: "Repeated detail card across list rows."
+```
+
+   The bind bookkeeping applies its deterministic guards — one skeleton per slug, never overwrite a `confirmed` / `rejected` entry, and stable fingerprint-derived suffixing (`slug-<fp-prefix>`) on a name collision — and is the **only** writer of `components.yaml`; never edit the catalog directly. Skip this step when the report names no unbound clusters.
+4. **Proceed.** Continue with composition regeneration: step 6 below treats your fresh bindings plus the existing catalog's confirmed entries as the effective component set and attaches `component: <slug>` directives to every group whose skeleton matches.
 
 ## Inputs
 

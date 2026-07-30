@@ -28,7 +28,7 @@ When a later slice's `design.md` `## Adapters` flips a capability from No → Ye
 2. In `$TEMPLATE_DIR`, discover the unit: `rg 'VECTIS-OPTIONAL.*cap=<cap>'` (and `FILE` markers). Read each opener's `Keep if:` / `Remove if:` / `Paired:` lines.
 3. For every scope the unit spans (`dep`, `core`, `shell`, `test` — skip `web/` shell files), copy the corresponding marked block or file into the consumer at the same relative path after identity substitution (`APP_NAME`, `ANDROID_PACKAGE` / package path). Prefer whole `FILE`-marked handlers over inventing stubs.
 4. Wire `Effect` / `Core` dispatch / imports so the project compiles; run `cargo make generate` when `Effect` variants or `facet_typegen` deps change (per template `Paired:` guidance).
-5. Diff pin files against `$TEMPLATE_DIR` (see [build.md](../prompts/build.md) § Template / version-pin drift handling). On mismatch, re-copy from the template — never guess versions.
+5. Diff pin files against `$TEMPLATE_DIR` (see § Template / version-pin drift handling below). On mismatch, re-copy from the template — never guess versions.
 6. Do **not** re-introduce `cap=demo` for product apps.
 
 Authoritative strip-unit map (paths use the template's `VectisApp` / `io.augentic.vectisapp` identity — rewrite to the consumer identity):
@@ -41,3 +41,21 @@ Authoritative strip-unit map (paths use the template's `VectisApp` / `io.augenti
 | `sse` | `shared/src/effects/sse.rs` (FILE); effect mod; iOS `sse.swift`; Android `core/SseClient.kt` |
 
 Full grammar and workflows: **`$TEMPLATE_DIR/AGENTS.md`**. Platform Makefile target names follow the live template (`make build`, iOS `run-sim`, Android `doctor`) — not retired `sim-build` / `make verify` names.
+
+## § Template / version-pin drift handling
+
+Dependency pins live only as bytes in `$TEMPLATE_DIR`. There is no adapter-side version registry. Detect drift when a verify-repair loop fails repeatedly with cargo / Gradle / Xcode / BoltFFI errors that look like API renames, missing imports, or toolchain mismatches rather than feature-level bugs — or when consumer pin files diverge from the template counterparts after identity substitution.
+
+**Pin-diff checklist (prompt-mandated; guest cannot see `$TEMPLATE_DIR`):** after materialize and on any pin-suspect failure, diff these consumer paths against the same relative paths under `$TEMPLATE_DIR`, allowing only identity substitution (`APP_NAME`, `ANDROID_PACKAGE` / package path forms):
+
+- `Cargo.toml` (workspace deps)
+- `Cargo.lock` (when present in both trees)
+- `rust-toolchain.toml`, `deny.toml`
+- `shared/Cargo.toml` (including the `boltffi = "…"` pin line)
+- `shared/boltffi.toml` (structure + non-identity fields; package id may differ after substitution)
+- `Android/gradle/libs.versions.toml`
+- iOS / Android Makefiles and `iOS/project.yml` (BoltFFI pack recipes + `DESTINATION`)
+
+**Agents:** detect → re-copy the drifted paths from `$TEMPLATE_DIR` with the same identity substitution as materialize → if the failure persists, mark the build `deferred` with a template / pin drift signal → **exit** (never invent versions). See [Consumer tooling boundary](emery-runtime/guardrails.md#consumer-tooling-boundary).
+
+**Operators (separate maintainer session):** fix pins in [`augentic/vectis-exemplar`](https://github.com/augentic/vectis-exemplar); consumers re-copy from the refreshed checkout. Do not patch version tables inside the Vectis adapter.

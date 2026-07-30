@@ -43,13 +43,13 @@ The adapter core runs the format sub-flows in this fixed order — the schema vo
 
 Import paths must produce an import report covering lossless changes, lossy changes, unsupported constructs, and manual-review warnings. See [`references/import-upgrade-policy.md`](../references/import-upgrade-policy.md).
 
-**Identity & version.** Every top-level OpenAPI / AsyncAPI document emitted into `$SLICE_DIR/contracts/` (root key `openapi:` or `asyncapi:`) MUST set an `info.version` value that parses as SemVer per [semver.org](https://semver.org). New top-level contracts SHOULD set `info.x-emery-id` to a kebab-case slug (typically the file stem; `^[a-z][a-z0-9-]*$`, ≤ 64 characters). The author sub-flows enforce both rules; the import sub-flows preserve any source `info.x-emery-id` verbatim and surface non-SemVer `info.version` values as `[manual review required]` rather than auto-rewriting.
+**Identity & version.** Every top-level OpenAPI / AsyncAPI document MUST carry a SemVer `info.version` and SHOULD carry a kebab-case `info.x-emery-id`; imports preserve source values verbatim rather than auto-rewriting. The canonical rules live in [`references/contract-identity.md`](../references/contract-identity.md) — the format sub-flows enforce them.
 
 ### Phase 3 — Verify
 
 Verification runs the verifier intent of each format sub-prompt that owns artifacts in the slice. Run only the formats that produced artifacts; skip the rest. The verifier siblings live under [`references/<format>/verifier.md`](../references/).
 
-For mixed-format slices, the final verifier pass must check cross-format `$ref` consistency and report duplicate schema identities before build can complete. The format verifiers enforce the identity & version rules inline (SemVer `info.version`; kebab-case + ≤64-char `info.x-emery-id` when present; in-slice uniqueness on declared ids). The **cross-repo** uniqueness check is **not** part of build-time verification; it is the merge gate's job (see [`merge.md`](merge.md)).
+For mixed-format slices, the final verifier pass must check cross-format `$ref` consistency and report duplicate schema identities before build can complete. The format verifiers enforce the identity & version rules inline ([`references/contract-identity.md`](../references/contract-identity.md)); the **cross-repo** uniqueness check is **not** part of build-time verification — it is the merge gate's job (see [`merge.md`](merge.md)).
 
 Run each format's verifier in `mode: single` against the slice directory. The verifier reads slice-local artefacts plus the baseline for binding-coverage cross-references and emits a markdown alignment report. The verifier siblings are read-only — they MUST NOT create, modify, or delete any files.
 
@@ -94,7 +94,7 @@ findings: []            # structured diagnostics; default []
 - **Unresolved build** — the verify-repair budget is exhausted (Phase 4) or the validator gate leaves residual findings after its repair budget (Phase 5) → `status: failure` with blocking findings mapped where possible.
 - **No-op** — the slice describes no API surface → `status: success`, `findings: []`.
 
-Each `findings[]` item validates against `schemas/diagnostics/diagnostic.schema.json` (the structured-diagnostic shape distributed with the CLI; required fields include `id`, `title`, `severity`, `source`, `artifact`, `evidence`, `impact`, `remediation`, `fingerprint`). Map the contract validator's findings (see [`report-shape.md`](../references/report-shape.md)) into that shape, carrying contract-domain detail under `evidence.kind: structured` with `target-adapter: contracts`.
+Map the contract validator's findings into the structured-diagnostic shape with `target-adapter: contracts`; the finding fields and the validator / verifier report formats live in [`report-shape.md`](../references/report-shape.md) (fetch via MCP when mapping findings).
 
 ## Output hygiene
 
@@ -104,11 +104,9 @@ Each `findings[]` item validates against `schemas/diagnostics/diagnostic.schema.
 
 ## See also
 
-- [`guidance.md`](guidance.md) — synthesis-time idiom guidance for the contracts target.
-- [`merge.md`](merge.md) — merge prompt, including the post-merge `contract` WASI tool gate.
+Every reference below (and the rest of the corpus) is fetchable via the granted MCP references server; fetch on need rather than front-loading.
+
 - [`build/json-schema.md`](build/json-schema.md), [`build/openapi.md`](build/openapi.md), [`build/asyncapi.md`](build/asyncapi.md) — per-format sub-prompts.
-- [`references/artifact-structure.md`](../references/artifact-structure.md) — directory layout for root `contracts/`.
 - [`references/baseline-vs-delta.md`](../references/baseline-vs-delta.md) — cross-format minimal-delta rules and merge semantics.
-- [`references/import-upgrade-policy.md`](../references/import-upgrade-policy.md) — shared framework for the importer siblings.
-- [`references/report-shape.md`](../references/report-shape.md) — single-mode markdown, baseline validator JSON, and compatibility report JSON formats.
-- [`references/cross-project-compatibility.md`](../references/cross-project-compatibility.md) — archived vocabulary for future consumer-impact reporting; today use the contract WASI verifier reports.
+- [`references/contract-identity.md`](../references/contract-identity.md) — canonical identity & version rules.
+- [`references/report-shape.md`](../references/report-shape.md) — validator / verifier report formats and finding fields.

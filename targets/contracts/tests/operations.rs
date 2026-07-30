@@ -40,7 +40,8 @@ fn schema_format(request: &Request) -> (&str, &str) {
 
 /// RFC-78 D7 re-bloat guard: each leg's system assemble is a pure function
 /// over the embedded prose registry, so its byte size is locked at the
-/// measured baseline plus ~10% headroom (re-measured after WP2's path-first inputs).
+/// measured baseline plus ~10% headroom (re-measured after the RFC-78 D3
+/// build.md thinning).
 fn assert_system_budget(request: &Request, leg: &str, budget: usize) {
     let bytes = request.system.as_deref().map_or(0, str::len);
     println!("{leg} system assemble: {bytes} bytes (budget {budget})");
@@ -88,12 +89,13 @@ async fn build_sub_flows() {
 
     let requests = model.requests();
     assert_eq!(requests.len(), 4, "three sub-flows plus one report call");
-    // Budget = measured baseline (per-leg comment, 2026-07-31) + ~10%.
+    // Budget = measured baseline (per-leg comment, 2026-07-31, after the
+    // RFC-78 D3 build.md thinning) + ~10%.
     for (i, (leg, budget)) in [
-        ("json-schema-sub-flow", 19_900), // baseline 18_069
-        ("openapi-sub-flow", 19_700),     // baseline 17_836
-        ("asyncapi-sub-flow", 19_000),    // baseline 17_270
-        ("report", 12_600),               // baseline 11_450
+        ("json-schema-sub-flow", 18_900), // baseline 17_178
+        ("openapi-sub-flow", 19_000),     // baseline 17_233
+        ("asyncapi-sub-flow", 18_400),    // baseline 16_668
+        ("report", 11_700),               // baseline 10_559
     ]
     .into_iter()
     .enumerate()
@@ -174,7 +176,7 @@ async fn build_repair_bounded() {
         !repair_system.contains("# contracts.build — asyncapi sub-flow"),
         "unaffected sub-prompts stay out of the repair prompt"
     );
-    assert_system_budget(&requests[3], "repair", 19_700); // baseline 17_836
+    assert_system_budget(&requests[3], "repair", 19_000); // baseline 17_233
 }
 
 #[tokio::test]

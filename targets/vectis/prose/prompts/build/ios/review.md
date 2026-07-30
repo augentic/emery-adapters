@@ -14,7 +14,7 @@ The iOS-specific team-spawn protocol lives in [`review/team-protocol-ios.md`](..
 3. **Universal checks (lead).** Apply every `UNI-*` rule from the shared universal codex pack ([`../../../rules/universal/`](../../../rules/universal/), embedded in this adapter) with Swift heuristics. Full library: [`review/universal-checks.md`](../../../references/review/universal-checks.md).
 4. **Adversarial challenge.** Forward all findings to the antagonist per [`agent-teams.md`](../../../references/agent-teams.md).
 5. **Synthesis.** Lead authors the iteration report per [`review/iteration-report.md`](../../../references/review/iteration-report.md).
-   - Return classified `design_findings` per [../../build.md](../../build.md) § Consolidate review findings.
+   - Return classified `design_findings` per [../core/review.md](../core/review.md) § Consolidate review findings.
 6. **Mechanical auto-fixes (when safe).** Accessibility labels, design-token swaps, missing `#Preview`, Inject boilerplate. Revert the batch if `swiftformat` or the build regresses.
 
 ## Finding-ID conventions

@@ -15,10 +15,10 @@ The preflight dispatch is fully deterministic: the adapter runs its in-guest com
 
 The merge surface is broader than spec / design / task deltas. In addition to the markdown deltas, the engine's deterministic merge promotes:
 
-- `composition.yaml` from the slice — lands as the baseline UI input set for downstream shell generations (`.emery/specs/composition.yaml`).
-- `tokens.yaml`, `assets.yaml`, and any referenced asset files under `design-system/assets/**` (or slice-local `assets/`) when the slice carried operator-curated updates to those manifests.
+- `composition.yaml` from the slice — lands as the baseline UI input set for downstream shell generations (`.emery/specs/composition.yaml`). Writing it into `.emery/specs/` is this merge's job, atomically, alongside the spec / design deltas — never the build's.
+- `tokens.yaml`, `assets.yaml`, and any referenced asset files under `design-system/assets/**` (or slice-local `assets/`) when the slice carried operator-curated updates to those manifests — promoted into `design-system/tokens.yaml` / `design-system/assets.yaml` (or slice-local equivalents) using the same delta merge path as the spec deltas.
 
-Neither merge gate performs this promotion, resolves baseline conflicts, transitions the lifecycle, or moves the slice into the archive — the engine owns all of it.
+The component catalog (`CATALOG_PATH`) is project-level and not slice-local; it is read as-is at build time and does not participate in the merge delta path. Neither merge gate performs the promotion above, resolves baseline conflicts, transitions the lifecycle, or moves the slice into the archive — the engine owns all of it.
 
 ## Postflight — host cap-matrix re-verification
 
@@ -61,4 +61,4 @@ A blocking preflight finding aborts the merge before anything folds: the slice s
 
 Operator resume (engine-owned): inspect the archived `merge/postflight.yaml`, repair the unclean baseline (hand-fix or a follow-up slice via `/emery:plan`), then re-run `emery plan execute` to acknowledge the sticky `merge-postflight-failed` stop and continue (or finalize when the plan is otherwise drained).
 
-For cap-matrix failures that look like version-pin drift (AGP / Gradle / BoltFFI mismatch surfaced after pins changed in this slice), record the failure in the report findings and surface it — **agents exit** without editing emery-adapters or inventing pins (see [Consumer tooling boundary](../references/emery-runtime/guardrails.md#consumer-tooling-boundary)). The operator decides whether the next step is a pin fix in [`vectis-exemplar`](https://github.com/augentic/vectis-exemplar) ([build.md](build.md) § Template / version-pin drift handling), a pin rollback, or a follow-up slice.
+For cap-matrix failures that look like version-pin drift (AGP / Gradle / BoltFFI mismatch surfaced after pins changed in this slice), record the failure in the report findings and surface it — **agents exit** without editing emery-adapters or inventing pins (see [Consumer tooling boundary](../references/emery-runtime/guardrails.md#consumer-tooling-boundary)). The operator decides whether the next step is a pin fix in [`vectis-exemplar`](https://github.com/augentic/vectis-exemplar) ([template-capabilities.md](../references/template-capabilities.md) § Template / version-pin drift handling), a pin rollback, or a follow-up slice.

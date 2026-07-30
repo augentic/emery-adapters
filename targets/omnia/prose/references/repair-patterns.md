@@ -1,5 +1,24 @@
 # Operation and Router Repair Patterns
 
+## Test-failure classification
+
+When `cargo test` fails inside the build prompt's `## § Verify-repair loop`, classify each failure:
+
+| Failure signal | Classification | Fix action |
+|---|---|---|
+| Error in `tests/` paths, `MockProvider`, or `provider.rs` | Test issue | Re-enter the test-writer prompt (`prompts/build/test.md`) |
+| Error in `src/` paths, missing trait impls in production | Code issue | Re-enter the crate-writer prompt (`prompts/build/crate.md`) |
+| Assertion mismatch where *actual* matches spec | Test issue | Test expectation is stale |
+| Assertion mismatch where *expected* matches spec | Code issue | Handler returns the wrong result |
+| MockProvider missing a trait impl the handler now requires | Test issue | Update MockProvider |
+| Unresolved import or missing crate in `Cargo.toml` | Workspace issue | Fix `Cargo.toml` paths or workspace member list directly |
+
+Group failures by classification and re-enter each writer prompt once with all same-class errors.
+
+## Update-mode regression check
+
+Before iteration 1 of the verify-repair loop in update mode, record the baseline: `cd $CRATE_PATH && cargo test 2>&1 | tee /tmp/${SLICE_NAME}-${CRATE_NAME}-baseline.txt`. After each iteration, for each test that passed before and now fails: if the spec explicitly changes the asserted behaviour → expected behavioural change, re-enter the test writer to align expectations; if the spec does not change the asserted behaviour → true regression, route the fix through the classification table above.
+
 ## Operation shape
 
 Repair stateful or transport-coupled business code into a zero-sized `Operation<P>` with typed input, plain output, typed error, and static `call(input, CallContext)`. Preserve the narrow union of provider capability bounds used by the operation and its helpers.

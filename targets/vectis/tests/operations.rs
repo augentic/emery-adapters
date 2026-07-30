@@ -40,7 +40,8 @@ fn schema_format(request: &Request) -> (&str, &str) {
 
 /// RFC-78 D7 re-bloat guard: each leg's system assemble is a pure function
 /// over the embedded prose registry, so its byte size is locked at the
-/// measured baseline plus ~10% headroom (re-measured after WP2's path-first inputs).
+/// measured baseline plus ~10% headroom (re-measured after the RFC-78 D3
+/// build.md thinning).
 fn assert_system_budget(request: &Request, leg: &str, budget: usize) {
     let bytes = request.system.as_deref().map_or(0, str::len);
     println!("{leg} system assemble: {bytes} bytes (budget {budget})");
@@ -57,8 +58,15 @@ fn assert_system_budget(request: &Request, leg: &str, budget: usize) {
 fn assert_composition_leg(request: &Request) {
     let system = request.system.as_deref().unwrap();
     assert!(system.contains("# Vectis target — build prompt"), "build prompt in system");
-    assert!(system.contains("# Vectis target — `guidance`"), "guidance refresher in system");
+    assert!(
+        !system.contains("# Vectis target — `guidance`"),
+        "guidance stays on the guidance operation — dropped from composition (RFC-78 D3)"
+    );
     assert!(system.contains("# Vectis build — composition"), "composition prompt in system");
+    assert!(
+        system.contains("## Step 0.5 — component inference"),
+        "Step 0.5 contract rides the composition prompt, not the shared preamble"
+    );
     let user = &request.messages[0].content;
     assert!(
         user.contains("### input: proposal → .emery/slices/demo/proposal.md")
@@ -135,6 +143,11 @@ fn assert_post_composition_leg_order(requests: &[Request]) {
     let (name, schema) = schema_format(&requests[6]);
     assert_eq!(name, "report");
     assert_eq!(schema, REPORT_ANSWER_SCHEMA);
+    let report_system = requests[6].system.as_deref().unwrap();
+    assert!(
+        report_system.contains("# Vectis build — report"),
+        "report contract rides the report phase prompt (RFC-78 D3)"
+    );
     let report_user = &requests[6].messages[0].content;
     assert!(report_user.contains("no shell work"), "phase outcomes feed the report leg");
     assert!(report_user.contains("final-core-verify"), "final verify outcome feeds the report");
@@ -182,15 +195,15 @@ async fn build_phase_legs() {
         "composition, core, two shells, review, final-core-verify, then one report call"
     );
     // Budget = measured baseline (per-leg comment, 2026-07-31, after the
-    // final-core-verify merge from main) + ~10%.
+    // RFC-78 D3 build.md thinning) + ~10%.
     for (i, (leg, budget)) in [
-        ("composition", 69_300),       // baseline 62_980
-        ("core", 53_600),              // baseline 48_719
-        ("ios", 47_600),               // baseline 43_301
-        ("android", 48_800),           // baseline 44_388
-        ("review", 49_400),            // baseline 44_949
-        ("final-core-verify", 45_100), // baseline 41_008
-        ("report", 36_100),            // baseline 32_820
+        ("composition", 32_700),       // baseline 29_681
+        ("core", 29_100),              // baseline 26_458
+        ("ios", 23_200),               // baseline 21_080
+        ("android", 24_400),           // baseline 22_167
+        ("review", 27_700),            // baseline 25_144
+        ("final-core-verify", 20_600), // baseline 18_733
+        ("report", 20_500),            // baseline 18_644
     ]
     .into_iter()
     .enumerate()
@@ -329,7 +342,7 @@ async fn composition_repair() {
     let repair = &requests[1];
     assert_eq!(schema_format(repair).0, "composition-repair");
     assert!(repair.messages[0].content.contains("composition validator found blocking issues"));
-    assert_system_budget(repair, "composition-repair", 52_000); // baseline 47_256
+    assert_system_budget(repair, "composition-repair", 32_700); // baseline 29_681
 }
 
 async fn build_with_composition(composition: Option<&str>, report_answer: &'static str) -> Report {
@@ -458,7 +471,7 @@ async fn merge_postflight_single_leg() {
     let requests = model.requests();
     assert_eq!(requests.len(), 1, "a coherent report needs no repair leg");
     assert!(requests[0].system.as_deref().unwrap().contains("# Vectis target — `merge`"));
-    assert_system_budget(&requests[0], "merge-postflight", 7_600); // baseline 6_914
+    assert_system_budget(&requests[0], "merge-postflight", 8_100); // baseline 7_402
     let user = &requests[0].messages[0].content;
     assert!(user.contains("postflight merge gate"), "phase named");
     assert!(user.contains("cap-matrix re-verification"), "agent-run host gates instructed");

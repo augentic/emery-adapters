@@ -99,7 +99,6 @@ impl Target for Adapter {
         let slice_dir = tree_root.join(&slice_dir_rel);
         let slice_composition = slice_dir.join("composition.yaml");
         let inputs_block = phase::render_inputs(inputs);
-        let build_prompt = registry::body("prompts/build.md");
 
         // The materialize scope derives from the same declared-platform
         // read as the shell legs, so a core-only project materializes
@@ -126,23 +125,26 @@ impl Target for Adapter {
         // name-free cluster report); *naming* is the leg's judgment,
         // recorded as a bindings file the workflow's deterministic bind
         // bookkeeping projects into the catalog.
+        // `guidance.md` stays on the `guidance` operation only — its idioms
+        // were folded into the artifacts at refine (RFC-78 D2/D3).
         let infer_block = render_infer_report(&tree_root);
-        let system =
-            assemble(&["prompts/build.md", "prompts/guidance.md", "prompts/build/composition.md"]);
+        let system = assemble(&["prompts/build.md", "prompts/build/composition.md"]);
         let user = format!(
             "Run component inference (Step 0.5) and composition regeneration (Phase 1) of \
          the vectis build for slice `{slice}` (adapter `{}`).\n\n\
          The project workspace is lent to you. The adapter already ran the \
          deterministic component-identity clustering in-guest — the name-free cluster \
          report is below; do not attempt to re-run it. Decide what each unbound \
-         cluster is and what to call it per the build prompt's Step 0.5, write your \
+         cluster is and what to call it per the composition prompt's Step 0.5, write your \
          `{{ fingerprint -> slug }}` decisions to \
          `{slice_dir_rel}/build/component-bindings.yaml` (echo populated `bound-slug` \
          names verbatim — operator parts carry naming authority), then regenerate \
          `{slice_dir_rel}/composition.yaml` from the slice artifacts per the \
          composition prompt, treating your fresh bindings plus the existing catalog \
-         as the effective component set. For a slice with no UI surface, write no \
-         composition and answer with `applicable: false`.\n\n\
+         as the effective component set. Guidance idioms were already folded into the \
+         slice artifacts at refine; re-read `design.md` and the specs. For a slice \
+         with no UI surface, write no composition and answer with \
+         `applicable: false`.\n\n\
          {infer_block}\n\n\
          {prelude_block}\n\n{REFERENCES_POINTER}\n\n{inputs_block}",
             ctx.adapter_id,
@@ -218,9 +220,9 @@ impl Target for Adapter {
         let user = format!(
             "Run the review phases (6-7) of the vectis build for slice `{slice}`: spawn \
          the core reviewer team and, for each in-scope shell, its platform reviewer \
-         team per the review prompts (reviewers run in parallel), then run the build \
-         prompt's `## § Consolidate review findings` and drive any remediation in the \
-         lent workspace. {REFERENCES_POINTER}",
+         team per the review prompts (reviewers run in parallel), then run the core \
+         review prompt's `## § Consolidate review findings` and drive any remediation \
+         in the lent workspace. {REFERENCES_POINTER}",
         );
         let review = phase::phase(model, ctx, system, user, "review").await?;
 
@@ -248,8 +250,12 @@ impl Target for Adapter {
         outcomes.extend(shell_outcomes.iter().map(|(name, answer)| (*name, answer)));
         outcomes.push(("review", &review));
         outcomes.push(("final-core-verify", &final_core));
+        // The report contract (shell verify gate, phase outcome, report
+        // shape) lives in the report phase prompt, not the shared preamble
+        // (RFC-78 D3), so only this leg and its gate pay those bytes.
+        let report_prompt = assemble(&["prompts/build.md", "prompts/build/report.md"]);
         let user = format!(
-            "Write the build report for slice `{slice}` per the build prompt's `## Build \
+            "Write the build report for slice `{slice}` per the report prompt's `## Build \
          report`. The adapter already ran the deterministic shell verify gate in-guest \
          — its findings are below and re-run after your answer; a missing or empty \
          tree for a supported declared platform forces `status: failure`, so repair \
@@ -270,12 +276,12 @@ impl Target for Adapter {
                 .collect::<Vec<_>>()
                 .join("\n"),
         );
-        let report = phase::report(model, ctx, build_prompt.to_string(), user).await?;
+        let report = phase::report(model, ctx, report_prompt.clone(), user).await?;
 
         let mut report = gate_report(
             model,
             ctx,
-            build_prompt,
+            &report_prompt,
             report,
             &tree_root,
             &slice_composition,

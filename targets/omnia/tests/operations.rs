@@ -44,7 +44,8 @@ fn schema_format(request: &Request) -> (&str, &str) {
 
 /// RFC-78 D7 re-bloat guard: each leg's system assemble is a pure function
 /// over the embedded prose registry, so its byte size is locked at the
-/// measured baseline plus ~10% headroom (re-measured after WP2's path-first inputs).
+/// measured baseline plus ~10% headroom (re-measured after the RFC-78 D3
+/// build.md thinning).
 fn assert_system_budget(request: &Request, leg: &str, budget: usize) {
     let bytes = request.system.as_deref().map_or(0, str::len);
     println!("{leg} system assemble: {bytes} bytes (budget {budget})");
@@ -67,6 +68,11 @@ fn assert_generation_leg(generation: &Request) {
     );
     assert!(system.contains("# Omnia build — crate writer"), "crate writer prompt in system");
     assert!(system.contains("# Omnia build — test writer"), "test writer prompt in system");
+    assert!(
+        !system.contains("| Failure signal |"),
+        "the test-failure classification table lives in repair-patterns.md, \
+         not the shared preamble (RFC-78 D3)"
+    );
     assert!(
         system.contains("# Omnia build — guest writer"),
         "guest writer prompt in system — create mode (no workspace-root src/lib.rs)"
@@ -140,13 +146,15 @@ async fn build_phase_legs() {
         "preparation, generation, review — no replay spawn without a captures binding, \
          the report is assembled in-guest (RFC-78 D6)"
     );
-    // Budget = measured baseline (per-leg comment, 2026-07-31, post-WP3) + ~10%.
-    // Generation dropped from 43_465 with RFC-78 D2: guidance.md left the
-    // assemble and guest.md ships only in create mode (this test's tree).
+    // Budget = measured baseline (per-leg comment, 2026-07-31, after the
+    // RFC-78 D3 build.md thinning) + ~10%. Generation dropped from 43_465
+    // with RFC-78 D2 (guidance.md left the assemble; guest.md ships only
+    // in create mode) and again with D3 (classification table, standards
+    // surface, and report contract left the shared preamble).
     for (i, (leg, budget)) in [
-        ("preparation", 19_300), // baseline 17_579
-        ("generation", 37_000),  // baseline 33_610
-        ("review", 24_800),      // baseline 22_550
+        ("preparation", 12_800), // baseline 11_667
+        ("generation", 30_500),  // baseline 27_698
+        ("review", 21_100),      // baseline 19_157
     ]
     .into_iter()
     .enumerate()
@@ -187,6 +195,10 @@ async fn build_phase_legs() {
         assert!(schema.contains(&format!("\"{field}\"")), "absorbed report residue: {field}");
     }
     assert!(review.system.as_deref().unwrap().contains("# Omnia build — standards review"));
+    assert!(
+        review.system.as_deref().unwrap().contains("## Build report"),
+        "the build-report contract rides the review phase prompt (RFC-78 D3)"
+    );
     let review_user = &review.messages[0].content;
     assert!(review_user.contains("- preparation:"), "preparation outcome feeds the review leg");
     assert!(review_user.contains("- generation:"), "generation outcome feeds the review leg");
@@ -232,7 +244,7 @@ async fn build_replay_leg_gated_on_captures_binding() {
         replay.messages[0].content.contains("binds the `captures` source"),
         "replay dispatch is deterministic — the leg is never asked to self-skip"
     );
-    assert_system_budget(replay, "replay", 19_600); // baseline 17_790
+    assert_system_budget(replay, "replay", 13_100); // baseline 11_878
     let review_user = &requests[3].messages[0].content;
     assert!(
         review_user.contains("- replay: applicable=true"),
