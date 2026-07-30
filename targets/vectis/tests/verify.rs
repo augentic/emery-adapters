@@ -14,7 +14,8 @@ fn write(path: &Path, content: &str) {
 }
 
 fn write_fresh_core_stamp(root: &Path) {
-    let digest = core_src_digest(root).expect("core digest for present shared/src");
+    let digest =
+        core_src_digest(root).expect("core digest io").expect("core digest for present shared/src");
     write(&root.join(CORE_VERIFY_STAMP), &format!("{digest}\n"));
 }
 
@@ -174,6 +175,54 @@ fn core_verify_stamp_missing_stale_fresh() {
         finding_ids(&after_edit).contains(&"core-verify-stamp-stale"),
         "post-stamp core edit: {after_edit}"
     );
+}
+
+#[test]
+fn core_src_digest_sorts_by_relative_path() {
+    let reverse = tempdir().unwrap();
+    // Create in reverse lexical order so directory walk order cannot
+    // accidentally match the required relative-path sort.
+    write(&reverse.path().join("shared/src/z.rs"), "z");
+    write(&reverse.path().join("shared/src/m/b.rs"), "b");
+    write(&reverse.path().join("shared/src/a.rs"), "a");
+
+    let forward = tempdir().unwrap();
+    write(&forward.path().join("shared/src/a.rs"), "a");
+    write(&forward.path().join("shared/src/m/b.rs"), "b");
+    write(&forward.path().join("shared/src/z.rs"), "z");
+
+    let left = core_src_digest(reverse.path()).expect("digest io").expect("shared/src present");
+    let right = core_src_digest(forward.path()).expect("digest io").expect("shared/src present");
+    assert_eq!(left, right, "digest must be independent of creation/walk order");
+}
+
+#[cfg(unix)]
+#[test]
+fn core_verify_digest_unreadable_fails_closed() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let tmp = tempdir().unwrap();
+    project(tmp.path(), &["core"]);
+    write(&tmp.path().join("shared/src/app.rs"), "pub struct App;");
+    let locked = tmp.path().join("shared/src/locked.rs");
+    write(&locked, "secret");
+    let mut permissions = std::fs::metadata(&locked).unwrap().permissions();
+    permissions.set_mode(0o000);
+    std::fs::set_permissions(&locked, permissions).unwrap();
+
+    let result = run(VerifyMode::Verify, tmp.path());
+
+    // Restore so tempdir cleanup can remove the tree.
+    let mut permissions = std::fs::metadata(&locked).unwrap().permissions();
+    permissions.set_mode(0o644);
+    std::fs::set_permissions(&locked, permissions).unwrap();
+
+    let findings = result.expect("verify returns findings JSON");
+    assert!(
+        finding_ids(&findings).contains(&"core-verify-digest-unreadable"),
+        "unreadable core source must not skip the stamp gate: {findings}"
+    );
+    assert_eq!(verify_exit_code(&findings), 1);
 }
 
 #[test]

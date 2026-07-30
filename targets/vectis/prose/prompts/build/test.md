@@ -87,4 +87,4 @@ mkdir -p "${PROJECT_DIR}/shared/.vectis"
 # Write exactly `sha256:<hex>` (no bare `ok`) after computing the digest above.
 ```
 
-A missing or stale stamp fails the deterministic report gate (`core-verify-stamp-missing` / `core-verify-stamp-stale`) when the core tree is present.
+A missing or stale stamp fails the deterministic report gate (`core-verify-stamp-missing` / `core-verify-stamp-stale`) when the core tree is present. An unreadable `shared/src/**/*.rs` tree fails closed as `core-verify-digest-unreadable` rather than skipping the stamp check.

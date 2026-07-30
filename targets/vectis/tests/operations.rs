@@ -166,7 +166,8 @@ async fn core_only_skips_shells() {
     // case owns platform-leg skipping, not greenfield materialize.
     fs::create_dir_all(tmp.path().join("shared/src")).unwrap();
     fs::write(tmp.path().join("shared/src/app.rs"), "pub struct App;\n").unwrap();
-    let digest = vectis::verify::core_src_digest(tmp.path()).expect("core digest");
+    let digest =
+        vectis::verify::core_src_digest(tmp.path()).expect("core digest io").expect("core digest");
     fs::create_dir_all(tmp.path().join("shared/.vectis")).unwrap();
     fs::write(tmp.path().join(vectis::verify::CORE_VERIFY_STAMP), format!("{digest}\n")).unwrap();
     let model =
