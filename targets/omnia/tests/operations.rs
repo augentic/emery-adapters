@@ -36,6 +36,19 @@ fn schema_format(request: &Request) -> (&str, &str) {
     }
 }
 
+/// RFC-78 D7 re-bloat guard: each leg's system assemble is a pure function
+/// over the embedded prose registry, so its byte size is locked at the
+/// measured baseline plus ~10% headroom. Budgets tighten in WP2.
+fn assert_system_budget(request: &Request, leg: &str, budget: usize) {
+    let bytes = request.system.as_deref().map_or(0, str::len);
+    println!("{leg} system assemble: {bytes} bytes (budget {budget})");
+    assert!(
+        bytes <= budget,
+        "{leg} system assemble is {bytes} bytes, over its {budget}-byte budget — \
+         trim the assemble or deliberately raise the budget"
+    );
+}
+
 #[tokio::test]
 async fn build_phase_legs() {
     let tmp = TempDir::new().unwrap();
@@ -65,6 +78,19 @@ async fn build_phase_legs() {
 
     let requests = model.requests();
     assert_eq!(requests.len(), 5, "preparation, generation, review, replay, then one report call");
+    // Budget = measured baseline (per-leg comment, 2026-07-31) + ~10%.
+    for (i, (leg, budget)) in [
+        ("preparation", 19_000), // baseline 17_202
+        ("generation", 47_900),  // baseline 43_465
+        ("review", 22_500),      // baseline 20_409
+        ("replay", 18_900),      // baseline 17_092
+        ("report", 16_100),      // baseline 14_561
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        assert_system_budget(&requests[i], leg, budget);
+    }
 
     let preparation = &requests[0];
     assert_eq!(schema_format(preparation).0, "preparation");
@@ -147,6 +173,7 @@ async fn merge_preflight_single_leg() {
     let requests = model.requests();
     assert_eq!(requests.len(), 1, "a coherent report needs no repair leg");
     assert!(requests[0].system.as_deref().unwrap().contains("# Omnia target — merge prompt"));
+    assert_system_budget(&requests[0], "merge-preflight", 4_400); // baseline 4_000
     let user = &requests[0].messages[0].content;
     assert!(user.contains("preflight merge gate"), "phase named");
     assert!(user.contains("pre-merge gate"), "agent-run cargo verification instructed");

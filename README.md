@@ -50,7 +50,7 @@ Use this path for Rust logic, validators, and deterministic behavior. Live eval 
 Needed only for `cargo make eval …`:
 
 1. Authenticated [`cursor-agent`](https://cursor.com/docs/cli) on `PATH` — `cursor-agent login`, or `CURSOR_API_KEY` in a repo-root `.env` (the `eval` task loads it).
-2. Optional: `CURSOR_MODEL=<model-id>`, `CURSOR_TIMEOUT_SECS=<secs>` (eval task defaults timeout to `1800`).
+2. Optional: `CURSOR_MODEL=<model-id>`, `CURSOR_TIMEOUT_SECS=<secs>` (the example tasks — `eval` and `wasm-*` — default the timeout to `1800`).
 
 If eval hangs or fails authenticating, check `cursor-agent` login / `.env` — see [CONTRIBUTING.md § Troubleshooting](CONTRIBUTING.md#troubleshooting-first-runs). Grading is **deterministic** (not a model): the eval binary links every first-party adapter into a native catalog and drives production verbs through the shared cursor backend.
 

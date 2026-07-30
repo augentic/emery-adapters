@@ -36,6 +36,19 @@ fn schema_format(request: &Request) -> (&str, &str) {
     }
 }
 
+/// RFC-78 D7 re-bloat guard: each leg's system assemble is a pure function
+/// over the embedded prose registry, so its byte size is locked at the
+/// measured baseline plus ~10% headroom. Budgets tighten in WP2.
+fn assert_system_budget(request: &Request, leg: &str, budget: usize) {
+    let bytes = request.system.as_deref().map_or(0, str::len);
+    println!("{leg} system assemble: {bytes} bytes (budget {budget})");
+    assert!(
+        bytes <= budget,
+        "{leg} system assemble is {bytes} bytes, over its {budget}-byte budget — \
+         trim the assemble or deliberately raise the budget"
+    );
+}
+
 #[tokio::test]
 async fn build_phase_legs() {
     let tmp = TempDir::new().unwrap();
@@ -68,6 +81,20 @@ async fn build_phase_legs() {
 
     let requests = model.requests();
     assert_eq!(requests.len(), 6, "composition, core, two shells, review, then one report call");
+    // Budget = measured baseline (per-leg comment, 2026-07-31) + ~10%.
+    for (i, (leg, budget)) in [
+        ("composition", 68_100), // baseline 61_869
+        ("core", 51_000),        // baseline 46_281
+        ("ios", 46_500),         // baseline 42_190
+        ("android", 47_700),     // baseline 43_277
+        ("review", 48_000),      // baseline 43_604
+        ("report", 34_900),      // baseline 31_709
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        assert_system_budget(&requests[i], leg, budget);
+    }
 
     // First leg: composition.
     let first = &requests[0];
@@ -222,6 +249,7 @@ async fn composition_repair() {
     let repair = &requests[1];
     assert_eq!(schema_format(repair).0, "composition-repair");
     assert!(repair.messages[0].content.contains("composition validator found blocking issues"));
+    assert_system_budget(repair, "composition-repair", 50_800); // baseline 46_145
 }
 
 async fn build_with_composition(composition: Option<&str>, report_answer: &'static str) -> Report {
@@ -341,6 +369,7 @@ async fn merge_postflight_single_leg() {
     let requests = model.requests();
     assert_eq!(requests.len(), 1, "a coherent report needs no repair leg");
     assert!(requests[0].system.as_deref().unwrap().contains("# Vectis target — `merge`"));
+    assert_system_budget(&requests[0], "merge-postflight", 7_100); // baseline 6_394
     let user = &requests[0].messages[0].content;
     assert!(user.contains("postflight merge gate"), "phase named");
     assert!(user.contains("cap-matrix re-verification"), "agent-run host gates instructed");

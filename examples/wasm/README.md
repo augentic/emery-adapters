@@ -42,7 +42,7 @@ We use `emery adapter add` to ensure the examples run against your freshly built
 
 **Key details:**
 - **Artifacts:** Output files are saved in `sandbox/wasm-contracts/` and `sandbox/wasm-omnia-r9k/`. These git-ignored folders contain the project files, store, and cache.
-- **Timeouts:** `GUEST_TIMEOUT_MS` is increased to one hour (from the 30s default) to give the model enough time to finish.
+- **Timeouts:** `GUEST_TIMEOUT_MS` is increased to one hour (from the 30s default) to give the model enough time to finish, and `CURSOR_TIMEOUT_SECS` defaults to `1800` (from the cursor backend's 600s) so long review legs are not killed mid-work. A "cursor-agent timed out after 600s" failure means the raised default was overridden — unset or raise `CURSOR_TIMEOUT_SECS` in `.env`.
 - **Logging:** Set the `RUST_LOG` environment variable if you need to debug. You can safely ignore the `no guest exports the http handler` warning.
 - **Model Selection:** Set `CURSOR_MODEL=<model-id>` to override the default AI model.
 - **Further Reading:** See the [repo README](../../README.md) for the evaluation loop and [docs/testing.md](../../docs/testing.md) for the testing strategy.

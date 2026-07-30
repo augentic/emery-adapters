@@ -36,6 +36,19 @@ fn schema_format(request: &Request) -> (&str, &str) {
     }
 }
 
+/// RFC-78 D7 re-bloat guard: each leg's system assemble is a pure function
+/// over the embedded prose registry, so its byte size is locked at the
+/// measured baseline plus ~10% headroom. Budgets tighten in WP2.
+fn assert_system_budget(request: &Request, leg: &str, budget: usize) {
+    let bytes = request.system.as_deref().map_or(0, str::len);
+    println!("{leg} system assemble: {bytes} bytes (budget {budget})");
+    assert!(
+        bytes <= budget,
+        "{leg} system assemble is {bytes} bytes, over its {budget}-byte budget — \
+         trim the assemble or deliberately raise the budget"
+    );
+}
+
 /// Seed one top-level contract whose `info.version` is not SemVer.
 fn seed_bad_contract(dir: &Path) {
     fs::create_dir_all(dir.join("http")).unwrap();
@@ -71,6 +84,18 @@ async fn build_sub_flows() {
 
     let requests = model.requests();
     assert_eq!(requests.len(), 4, "three sub-flows plus one report call");
+    // Budget = measured baseline (per-leg comment, 2026-07-31) + ~10%.
+    for (i, (leg, budget)) in [
+        ("json-schema-sub-flow", 19_900), // baseline 18_069
+        ("openapi-sub-flow", 19_700),     // baseline 17_836
+        ("asyncapi-sub-flow", 19_000),    // baseline 17_270
+        ("report", 12_600),               // baseline 11_450
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        assert_system_budget(&requests[i], leg, budget);
+    }
 
     let first = &requests[0];
     let system = first.system.as_deref().unwrap();
@@ -128,6 +153,7 @@ async fn build_repair_bounded() {
         !repair_system.contains("# contracts.build — asyncapi sub-flow"),
         "unaffected sub-prompts stay out of the repair prompt"
     );
+    assert_system_budget(&requests[3], "repair", 19_700); // baseline 17_836
 }
 
 #[tokio::test]
@@ -182,6 +208,7 @@ async fn merge_postflight_gate() {
     assert_eq!(requests.len(), 1, "one bounded repair leg on validator findings");
     assert!(requests[0].system.as_deref().unwrap().contains("# contracts.merge"));
     assert!(requests[0].messages[0].content.contains("postflight"));
+    assert_system_budget(&requests[0], "merge-postflight", 6_000); // baseline 5_444
 }
 
 #[tokio::test]
