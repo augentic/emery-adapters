@@ -76,11 +76,11 @@ pub fn core_stamp_findings(project_root: &Path) -> Vec<Value> {
 /// Stable digest of `shared/src/**/*.rs` (sorted relative paths + per-file
 /// content hashes), formatted as `sha256:<hex>`.
 ///
-/// Returns [`Ok(None)`] when `shared/src` is absent.
+/// Returns `Ok(None)` when `shared/src` is absent.
 ///
 /// # Errors
 ///
-/// Returns [`Err`] when the tree is present but cannot be fully enumerated or
+/// Returns `Err` when the tree is present but cannot be fully enumerated or
 /// read — a partial digest must never be attested.
 pub fn core_src_digest(project_root: &Path) -> Result<Option<String>, String> {
     let src_root = project_root.join("shared/src");
