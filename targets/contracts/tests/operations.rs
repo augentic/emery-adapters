@@ -14,11 +14,11 @@ use tempfile::TempDir;
 const NOT_APPLICABLE: &str = r#"{"applicable":false,"summary":"no surface this format owns"}"#;
 const SUCCESS_REPORT: &str = r#"{"status":"success","findings":[]}"#;
 
-const fn ctx<'a>(root: &'a Path, mcp_url: Option<&'a str>) -> Context<'a> {
+fn ctx<'a>(root: &'a Path, mcp_url: Option<&str>) -> Context<'a> {
     Context {
         adapter_id: "target:contracts",
         project_root: root,
-        mcp_url,
+        mcp_url: mcp_url.map(str::to_owned),
     }
 }
 

@@ -14,11 +14,11 @@ use tempfile::TempDir;
 const PHASE_DONE: &str = r#"{"applicable":true,"summary":"phase complete"}"#;
 const REPLAY_SKIPPED: &str = r#"{"applicable":false,"summary":"no captures binding"}"#;
 const SUCCESS_REPORT: &str = r#"{"status":"success","findings":[]}"#;
-const fn ctx<'a>(root: &'a Path, mcp_url: Option<&'a str>) -> Context<'a> {
+fn ctx<'a>(root: &'a Path, mcp_url: Option<&str>) -> Context<'a> {
     Context {
         adapter_id: "target:omnia",
         project_root: root,
-        mcp_url,
+        mcp_url: mcp_url.map(str::to_owned),
     }
 }
 

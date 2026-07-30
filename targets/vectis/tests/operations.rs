@@ -14,11 +14,11 @@ const PHASE_DONE: &str = r#"{"applicable":true,"summary":"phase complete"}"#;
 const SHELL_SKIPPED: &str = r#"{"applicable":false,"summary":"no shell work in this slice"}"#;
 const SUCCESS_REPORT: &str = r#"{"status":"success","findings":[]}"#;
 const FAILURE_REPORT: &str = r#"{"status":"failure","findings":[]}"#;
-const fn ctx<'a>(root: &'a Path, mcp_url: Option<&'a str>) -> Context<'a> {
+fn ctx<'a>(root: &'a Path, mcp_url: Option<&str>) -> Context<'a> {
     Context {
         adapter_id: "target:vectis",
         project_root: root,
-        mcp_url,
+        mcp_url: mcp_url.map(str::to_owned),
     }
 }
 

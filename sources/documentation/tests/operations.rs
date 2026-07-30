@@ -8,11 +8,11 @@ use adapter::{Format, MAX_REPAIRS, Request, Source as _};
 use documentation::Adapter;
 use omnia_testkit::model::{Harness, mcp_grants};
 
-fn ctx(mcp_url: Option<&str>) -> Context<'_> {
+fn ctx(mcp_url: Option<&str>) -> Context<'static> {
     Context {
         adapter_id: "source:documentation",
         project_root: Path::new("."),
-        mcp_url,
+        mcp_url: mcp_url.map(str::to_owned),
     }
 }
 

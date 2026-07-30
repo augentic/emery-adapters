@@ -50,7 +50,8 @@ script = "rm -rf sandbox/wasm-contracts sandbox/wasm-omnia-r9k"
 script = '''
   cargo build -p emery --lib --target wasm32-wasip2 --manifest-path ../emery/Cargo.toml
   cargo build -p emery --bin emery --manifest-path ../emery/Cargo.toml
-  cargo build -p documentation -p intent -p contracts -p typescript -p omnia --target wasm32-wasip2
+  cargo build -p documentation -p intent -p contracts -p typescript --target wasm32-wasip2
+  cargo build --manifest-path targets/omnia/Cargo.toml --target wasm32-wasip2
 '''
 
 [tasks.wasm-contracts]
@@ -62,11 +63,13 @@ script = '''
 
   export EMERY_HOME="$PWD/sandbox/wasm-contracts"
   export GUEST_TIMEOUT_MS="${GUEST_TIMEOUT_MS:-3600000}"
-  export RUST_LOG="${RUST_LOG:-info,opentelemetry=off,opentelemetry_sdk=off,omnia_wasi_otel=off,omnia::telemetry=off}"
 
   rm -rf "$EMERY_HOME"
   mkdir -p "$EMERY_HOME/project"
   cp -R examples/wasm/fixture/. "$EMERY_HOME/project/"
+  # Own git root: cursor-agent anchors the workspace (and .cursor/mcp.json
+  # discovery — the adapter MCP reference grants) at the git toplevel.
+  git init -q "$EMERY_HOME/project"
 
   EMERY="$PWD/../emery/target/debug/emery"
   TARGET="$PWD/target"
@@ -94,10 +97,7 @@ script = '''
 
   export EMERY_HOME="$PWD/sandbox/wasm-omnia-r9k"
   export GUEST_TIMEOUT_MS="${GUEST_TIMEOUT_MS:-3600000}"
-  export RUST_LOG="${RUST_LOG:-info,opentelemetry=off,opentelemetry_sdk=off,omnia_wasi_otel=off,omnia::telemetry=off}"
 
-  # Share the eval case's gitignored fixture cache (UNLICENSED upstream).
-  # Same clone-on-miss semantics as probe::case::clone_into.
   CACHE="$PWD/examples/eval/cases/omnia-r9k/fixture"
   DEST="$CACHE/legacy/at_r9k_position_adapter"
   URL="https://bitbucket.org/Propellerhead/at_r9k_position_adapter.git"
@@ -110,6 +110,9 @@ script = '''
   rm -rf "$EMERY_HOME"
   mkdir -p "$EMERY_HOME/project"
   cp -R "$CACHE"/. "$EMERY_HOME/project/"
+  # Own git root: cursor-agent anchors the workspace (and .cursor/mcp.json
+  # discovery — the adapter MCP reference grants) at the git toplevel.
+  git init -q "$EMERY_HOME/project"
 
   EMERY="$PWD/../emery/target/debug/emery"
   TARGET="$PWD/target"

@@ -49,14 +49,16 @@ typescript = { path = "sources/typescript" }
 vectis = { path = "targets/vectis" }
 
 [patch.crates-io]
-emery-adapter = { git = "https://github.com/augentic/emery" }
-emery-probe = { git = "https://github.com/augentic/emery" }
-emery-native = { git = "https://github.com/augentic/emery" }
-emery-prose = { git = "https://github.com/augentic/emery" }
-# emery-adapter = { path = "../emery/crates/adapter" }
-# emery-probe = { path = "../emery/crates/probe" }
-# emery-native = { path = "../emery/crates/native" }
-# emery-prose = { path = "../emery/crates/prose" }
+# Sibling path patches while the wasm MCP grant change is unpublished;
+# restore the git patches once emery releases.
+emery-adapter = { path = "../emery/crates/adapter" }
+emery-probe = { path = "../emery/crates/probe" }
+emery-native = { path = "../emery/crates/native" }
+emery-prose = { path = "../emery/crates/prose" }
+# emery-adapter = { git = "https://github.com/augentic/emery" }
+# emery-probe = { git = "https://github.com/augentic/emery" }
+# emery-native = { git = "https://github.com/augentic/emery" }
+# emery-prose = { git = "https://github.com/augentic/emery" }
 
 omnia = { git = "https://github.com/augentic/omnia" }
 omnia-cursor = { git = "https://github.com/augentic/backends" }
