@@ -1,12 +1,12 @@
 //! Shell asset-catalog completeness for verify mode.
 
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde_json::{Value, json};
 
 use crate::materialize::paths::{ANDROID_DENSITIES, kebab_to_snake};
-use crate::shell::shell_present;
+use crate::shell::{ios_xcassets_roots, shell_present};
 use crate::validate::ValidateMode;
 use crate::validate::engine::{
     collect_asset_references, discover_artifact, imageset_has_materialized_content,
@@ -113,18 +113,6 @@ fn ios_shell_has_imageset(project_root: &Path, asset_id: &str) -> bool {
         let imageset = xcassets.join(format!("{asset_id}.imageset"));
         imageset.is_dir() && imageset_has_materialized_content(&imageset)
     })
-}
-
-fn ios_xcassets_roots(project_dir: &Path) -> Vec<PathBuf> {
-    let ios_root = project_dir.join("iOS");
-    let Ok(entries) = std::fs::read_dir(&ios_root) else {
-        return Vec::new();
-    };
-    entries
-        .flatten()
-        .map(|entry| entry.path().join("Resources/Assets.xcassets"))
-        .filter(|path| path.is_dir())
-        .collect()
 }
 
 fn android_shell_has_asset(project_root: &Path, asset_id: &str, entry: &Value) -> bool {

@@ -23,7 +23,7 @@ fn scaffold_project(root: &Path) {
     std::fs::create_dir_all(&shared).expect("mkdir shared");
     std::fs::write(shared.join("app.rs"), "pub struct App;").expect("write app.rs");
     let ios = root.join("iOS/TodoApp");
-    std::fs::create_dir_all(ios.join("Resources/Assets.xcassets")).expect("mkdir ios");
+    std::fs::create_dir_all(ios.join("Assets.xcassets")).expect("mkdir ios");
     std::fs::write(ios.join("ContentView.swift"), "struct ContentView {}").expect("write swift");
     let android = root.join("Android/app/src/main/kotlin/com/test");
     std::fs::create_dir_all(&android).expect("mkdir android");
@@ -72,10 +72,45 @@ fn contents_json_only_imageset() {
     scaffold_project(tmp.path());
     write_inventory(tmp.path());
 
+    let imageset = tmp.path().join("iOS/TodoApp/Assets.xcassets/empty-tasks-hero.imageset");
+    std::fs::create_dir_all(&imageset).expect("mkdir imageset");
+    std::fs::write(imageset.join("Contents.json"), "{\"images\":[]}").expect("write json");
+
+    let findings = catalog_findings(tmp.path(), &["ios".to_string()]);
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0]["id"], "shell-catalog-entry-missing");
+}
+
+#[test]
+fn exemplar_layout_pdf_imageset_present() {
+    let tmp = tempdir().unwrap();
+    scaffold_project(tmp.path());
+    write_inventory(tmp.path());
+
+    let imageset = tmp.path().join("iOS/TodoApp/Assets.xcassets/empty-tasks-hero.imageset");
+    std::fs::create_dir_all(&imageset).expect("mkdir imageset");
+    std::fs::write(imageset.join("Contents.json"), "{\"images\":[]}").expect("write json");
+    std::fs::write(imageset.join("empty-tasks-hero.pdf"), b"%PDF-1.4\n1 0 obj\n<< >>\nendobj\n")
+        .expect("write pdf");
+
+    let findings = catalog_findings(tmp.path(), &["ios".to_string()]);
+    assert!(findings.is_empty(), "exemplar layout with PDF magic must satisfy catalog verify");
+}
+
+#[test]
+fn resources_prefix_not_accepted() {
+    let tmp = tempdir().unwrap();
+    scaffold_project(tmp.path());
+    write_inventory(tmp.path());
+
+    // Hard cut: only `iOS/<App>/Assets.xcassets/` counts — a lone
+    // `Resources/Assets.xcassets/` tree from the retired layout is ignored.
     let imageset =
         tmp.path().join("iOS/TodoApp/Resources/Assets.xcassets/empty-tasks-hero.imageset");
     std::fs::create_dir_all(&imageset).expect("mkdir imageset");
     std::fs::write(imageset.join("Contents.json"), "{\"images\":[]}").expect("write json");
+    std::fs::write(imageset.join("empty-tasks-hero.pdf"), b"%PDF-1.4\n1 0 obj\n<< >>\nendobj\n")
+        .expect("write pdf");
 
     let findings = catalog_findings(tmp.path(), &["ios".to_string()]);
     assert_eq!(findings.len(), 1);

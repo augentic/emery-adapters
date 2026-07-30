@@ -3,7 +3,7 @@
 How the iOS writer integrates `tokens.yaml` and `assets.yaml` into a generated
 SwiftUI shell. Tokens become **shell-local** Theme code under
 `iOS/<App>/Theme/`; referenced asset files are **copied** into
-`iOS/<App>/Resources/Assets.xcassets/` during generation. There is no shared
+`iOS/<App>/Assets.xcassets/` during generation. There is no shared
 Swift Package, no `import VectisDesign`, and no path back into
 `design-system/` from the rendered shell project.
 
@@ -41,16 +41,15 @@ iOS/
     │   ├── Spacing.swift
     │   ├── (Elevation.swift, Border.swift, Opacity.swift, … as needed)
     │   └── Theme.swift
-    └── Resources/
-        └── Assets.xcassets/               # copied from assets/exports/ios/
-            ├── AppIcon.appiconset/
-            └── <asset-id>.imageset/
+    └── Assets.xcassets/                   # copied from assets/exports/ios/
+        ├── AppIcon.appiconset/
+        └── <asset-id>.imageset/
 ```
 
 The adapter's deterministic iOS scaffold render step produces `<App>/`, the
 entry point, `Core.swift`, `ContentView.swift`, and the starter `Views/`
 directory. The iOS writer adds `Components/`, `Theme/`, and
-`Resources/Assets.xcassets/` on first generation when the corresponding input
+`Assets.xcassets/` on first generation when the corresponding input
 artifacts exist. XcodeGen's `project.yml` already lists `<App>/` as a source
 root; nested directories are picked up automatically — no `project.yml` edits
 are required when adding new theme or component files.
@@ -231,7 +230,7 @@ Figma-exported **`kind: vector` masters** (icons, decorative chrome, illustratio
 
 Build hand-off is **materialize-then-copy**: the iOS writer **copies** files
 from each entry's resolved `sources.ios` export path(s) into the shell target's
-asset catalog at `iOS/<App>/Resources/Assets.xcassets/`. The canonical
+asset catalog at `iOS/<App>/Assets.xcassets/`. The canonical
 `source:` file is provenance only — never copied into the shell. The generated
 shell project must build from its own platform directory after generation; it
 MUST NOT symlink, alias, or path-reference `design-system/assets/` from
@@ -276,7 +275,7 @@ from `composition.yaml`.
 
 When an asset entry is removed from `assets.yaml`, the iOS writer deletes
 the corresponding `<asset-id>.imageset/` (and any other generated catalog
-entries) from `Resources/Assets.xcassets/`. Operator-authored catalog
+entries) from `Assets.xcassets/`. Operator-authored catalog
 entries (e.g. `AppIcon.appiconset/`) are preserved; the writer only deletes
 entries it generated.
 
