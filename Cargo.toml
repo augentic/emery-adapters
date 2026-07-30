@@ -53,6 +53,7 @@ emery-adapter = { git = "https://github.com/augentic/emery" }
 emery-probe = { git = "https://github.com/augentic/emery" }
 emery-native = { git = "https://github.com/augentic/emery" }
 emery-prose = { git = "https://github.com/augentic/emery" }
+
 # emery-adapter = { path = "../emery/crates/adapter" }
 # emery-probe = { path = "../emery/crates/probe" }
 # emery-native = { path = "../emery/crates/native" }

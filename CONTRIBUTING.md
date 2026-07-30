@@ -4,7 +4,7 @@ Human-facing contributor guide (toolchain, layout, prompts, pin, publishing). Cr
 
 ## Getting started
 
-1. Clone this repository. The engine crates (`emery-adapter`, `emery-native`, `emery-probe`, `emery-prose`) resolve as git dependencies on [`augentic/emery`](https://github.com/augentic/emery), pinned by release tag (`tag = "vX.Y.Z"`) and the committed `Cargo.lock` — no sibling checkout is needed to build or test. A sibling checkout at `../emery` is required only for [co-development against uncommitted engine changes](#engine-pin-and-sibling-co-development) and for `cargo make wasm-run`.
+1. Clone this repository. The engine crates (`emery-adapter`, `emery-native`, `emery-probe`, `emery-prose`) resolve as git dependencies on [`augentic/emery`](https://github.com/augentic/emery), pinned by release tag (`tag = "vX.Y.Z"`) and the committed `Cargo.lock` — no sibling checkout is needed to build or test. A sibling checkout at `../emery` is required only for [co-development against uncommitted engine changes](#engine-pin-and-sibling-co-development) and for `cargo make wasm-contracts` / `cargo make wasm-omnia-r9k`.
 2. Optional for Vectis materialize FS tests: clone [`augentic/vectis-exemplar`](https://github.com/augentic/vectis-exemplar) at `../vectis-exemplar` (or set `VECTIS_EXEMPLAR_DIR`). CI does **not** network-clone it; without the checkout those tests skip clearly. Live Vectis eval builds need the same prerequisite relative to the eval sandbox (see [`examples/eval/README.md`](examples/eval/README.md)).
 3. `rustup` picks up the pinned **stable** toolchain from `rust-toolchain.toml` (including the `wasm32-wasip2` target); a nightly toolchain is additionally needed for the `fmt` arm (`cargo +nightly fmt`). Install `cargo-make`, `cargo-nextest`, `cargo-deny`, and `cargo-vet`. Publishing also uses `wkg`.
 4. Run `cargo make check` from the repo root. Before opening a PR, run `cargo make ci`.
@@ -17,7 +17,7 @@ Unless you are fixing a known bug, discuss larger changes in a GitHub issue firs
 
 - **`cargo make fmt` fails** — the fmt arm shells out to `cargo +nightly fmt`; install any nightly toolchain (`rustup toolchain install nightly --component rustfmt`).
 - **Eval case commands hang or fail authenticating** — they need [`cursor-agent`](https://cursor.com/docs/cli) on `PATH`, authenticated via `cursor-agent login` or `CURSOR_API_KEY` in a repo-root `.env`.
-- **`cargo make wasm-run` fails immediately** — it requires the sibling [`augentic/emery`](https://github.com/augentic/emery) checkout at `../emery` (it drives that repo's built `emery` binary).
+- **`cargo make wasm-contracts` / `wasm-omnia-r9k` fails immediately** — they require the sibling [`augentic/emery`](https://github.com/augentic/emery) checkout at `../emery` (they drive that repo's built `emery` binary).
 - **Patch-resolution errors after editing the root `Cargo.toml`** — the `[patch."https://github.com/augentic/emery.git"]` block only resolves when `../emery` exists; re-comment it if you are not co-developing.
 
 ## Layout
@@ -36,7 +36,7 @@ Every adapter — the three targets and the five sources — shares the same gue
     tests/            # native integration suite
 codex/                # cross-adapter rules/ and references/runtime/
 examples/
-  wasm/               # component-seam example (`cargo make wasm-run`)
+  wasm/               # component-seam examples (`cargo make wasm-contracts` / `wasm-omnia-r9k`)
   eval/               # native catalog and live eval cases
 Cargo.toml            # virtual workspace: `examples/eval` + `{sources,targets}/*`
 ```
@@ -78,7 +78,7 @@ cargo make release               # release-build every adapter
 cargo make lab -- ARGS       # any emery verb through the native lab shim
 ```
 
-The `fmt` arm uses nightly `rustfmt`. Eval runs **natively** and proves prompt quality; WASM/WIT conformance stays with the wasm example (`cargo make wasm-run`). See [docs/testing.md](docs/testing.md) for the five-rung map and the [repo README](README.md) for the live eval repair loop.
+The `fmt` arm uses nightly `rustfmt`. Eval runs **natively** and proves prompt quality; WASM/WIT conformance stays with the wasm examples (`cargo make wasm-contracts` / `cargo make wasm-omnia-r9k`). See [docs/testing.md](docs/testing.md) for the five-rung map and the [repo README](README.md) for the live eval repair loop.
 
 Local no-registry loop: `cargo make adapter <name>` then `emery adapter add <path.wasm>`. The `emery` runtime installs published artifacts automatically on a cold package-pin miss (`emery:<name>@<version>`).
 

@@ -51,7 +51,7 @@ cargo make lab -- --project-dir sandbox/orders-contracts plan execute
 
 ## Continuing a run
 
-Each case owns one stable retained sandbox at the repository-root `sandbox/<id>/` (composition-owned; beside the wasm example's `sandbox/wasm/`), kept on success and failure alike. `--restart` is the only runner-owned reset; an existing sandbox without it refuses before mutation. The runner never infers workflow progress — continue or debug a retained sandbox explicitly through the native verbs:
+Each case owns one stable retained sandbox at the repository-root `sandbox/<id>/` (composition-owned; beside the wasm examples' `sandbox/wasm-*/` trees), kept on success and failure alike. `--restart` is the only runner-owned reset; an existing sandbox without it refuses before mutation. The runner never infers workflow progress — continue or debug a retained sandbox explicitly through the native verbs:
 
 ```bash
 cargo make lab -- --project-dir sandbox/orders-contracts plan approve
@@ -122,7 +122,7 @@ Linked adapters need only the directory. A third-party adapter also needs a Carg
 
 `vectis-single-screen` (and any live Vectis build that materializes shells) needs a local [`vectis-exemplar`](https://github.com/augentic/vectis-exemplar) checkout.
 
-`cargo make eval` / `cargo make lab` auto-set `VECTIS_EXEMPLAR_DIR` to the absolute path of a workspace-sibling `../vectis-exemplar` when the env var is unset. That matters because the eval sandbox is `sandbox/<case>/`: without the export, the build prelude's default `../vectis-exemplar` would resolve to `sandbox/vectis-exemplar`. For non-sibling layouts, export `VECTIS_EXEMPLAR_DIR` yourself to an absolute path before invoking make.
+`cargo make eval` / `cargo make lab` auto-set `VECTIS_EXEMPLAR_DIR` to the workspace-sibling `../vectis-exemplar` when that checkout exists and the env var is unset. That matters because the eval sandbox is `sandbox/<case>/`: without the export, the build prelude's default `../vectis-exemplar` would resolve to `sandbox/vectis-exemplar`. For non-sibling layouts, export `VECTIS_EXEMPLAR_DIR` yourself to an absolute path before invoking make.
 
 After materialize the agent strips `VECTIS-OPTIONAL` / `cap=demo` per `$TEMPLATE_DIR/AGENTS.md`, regenerates the iOS Xcode project (`make -C iOS generate-project`), runs `make build`, and stamps `iOS/.vectis/verify.ok` / `Android/.vectis/verify.ok` (adapter-owned; not in the template).
 
@@ -134,13 +134,14 @@ The upstream tree is `UNLICENSED`, so the case's `clone` shallow-clones it into 
 
 ```bash
 cargo make eval omnia-r9k --restart          # tens of minutes of live model time
+cargo make wasm-omnia-r9k                    # same rhythm over the real WASM seam
 ```
 
-Pass/fail from grading is lifecycle + provenance; for migration quality, treat the generated crate, guest, tests, and `REVIEW.md` in the retained sandbox as the real signal. If you are editing omnia `prose/` and only need to know whether **build** still produces a crate, use `omnia-health` instead — do not burn a full r9k run for prompt typos.
+The component-seam twin shares the case's gitignored fixture cache. Pass/fail from grading is lifecycle + provenance; for migration quality, treat the generated crate, guest, tests, and `REVIEW.md` in the retained sandbox as the real signal. If you are editing omnia `prose/` and only need to know whether **build** still produces a crate, use `omnia-health` instead — do not burn a full r9k run for prompt typos.
 
 ## Related
 
 - [docs/testing.md](../../docs/testing.md) — five-rung map
-- [examples/wasm/](../wasm/README.md) — same rhythm over the real WASM component seam
+- [examples/wasm/](../wasm/README.md) — same rhythms (`wasm-contracts`, `wasm-omnia-r9k`) over the real WASM component seam
 - Engine case-runner mechanics: `[crates/probe/README.md](https://github.com/augentic/emery/blob/main/crates/probe/README.md)`
 

@@ -21,7 +21,7 @@ use std::process::ExitCode;
 const CASES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/cases");
 
 /// Retained per-case sandboxes at the repository root, beside the
-/// wasm example's `sandbox/wasm/` tree.
+/// wasm examples' `sandbox/wasm-*/` trees.
 #[cfg(not(target_arch = "wasm32"))]
 const SANDBOX: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../sandbox");
 

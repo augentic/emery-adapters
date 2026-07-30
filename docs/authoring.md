@@ -20,7 +20,7 @@ The same trait implementation runs on two hosts:
 | Host | How it links | Used by |
 | ---- | ------------ | ------- |
 | **Native** | The crate is `rlib`; the engine's `native` catalog links it directly | `cargo nextest`, `cargo make eval`, `cargo make lab` |
-| **Wasm** | The crate is `cdylib`; the `wasm32-wasip2` build exports the WIT world | The shipped `emery` CLI, `cargo make wasm-run` |
+| **Wasm** | The crate is `cdylib`; the `wasm32-wasip2` build exports the WIT world | The shipped `emery` CLI, `cargo make wasm-contracts` / `wasm-omnia-r9k` |
 
 This split is why the day-to-day loop is fast: prose and Rust changes are picked up by native tests and live eval with no component build.
 
@@ -279,7 +279,7 @@ Seed it into any Emery project (re-run after each rebuild):
 emery adapter add target/wasm32-wasip2/release/changelog.wasm
 ```
 
-The project then resolves the adapter by bare name (`changelog`) from its component cache. `cargo make wasm-run` exercises the real component seam end-to-end for the adapters it scripts. Publishing a pinned version to GHCR (`emery:changelog@<version>`) is the operator flow in [CONTRIBUTING.md § Publishing](../CONTRIBUTING.md#publishing).
+The project then resolves the adapter by bare name (`changelog`) from its component cache. `cargo make wasm-contracts` / `cargo make wasm-omnia-r9k` exercise the real component seam end-to-end for the adapters they script. Publishing a pinned version to GHCR (`emery:changelog@<version>`) is the operator flow in [CONTRIBUTING.md § Publishing](../CONTRIBUTING.md#publishing).
 
 ## Definition of done
 

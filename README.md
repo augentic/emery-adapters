@@ -96,7 +96,7 @@ Depth: [eval README § Omnia legacy migration](examples/eval/README.md#omnia-leg
 
 ## After a run
 
-Every case keeps one stable sandbox at `sandbox/<id>/` (beside the wasm example's `sandbox/wasm/`), on success and failure alike:
+Every case keeps one stable sandbox at `sandbox/<id>/` (beside the wasm examples' `sandbox/wasm-*/` trees), on success and failure alike:
 
 ```text
 sandbox/<id>/
@@ -129,7 +129,7 @@ Do not burn a workflow case for a prompt typo — use a build case, or [add one]
 | --- | --- |
 | Eval hangs / auth errors | `cursor-agent login` or `CURSOR_API_KEY` in repo-root `.env` |
 | `cargo make fmt` fails | Install nightly rustfmt: `rustup toolchain install nightly --component rustfmt` |
-| `cargo make wasm-run` fails immediately | Needs sibling [`augentic/emery`](https://github.com/augentic/emery) at `../emery` |
+| `cargo make wasm-contracts` / `wasm-omnia-r9k` fails immediately | Needs sibling [`augentic/emery`](https://github.com/augentic/emery) at `../emery` |
 | Patch-resolution errors after editing root `Cargo.toml` | `[patch."https://github.com/augentic/emery.git"]` needs `../emery`; re-comment if not co-developing |
 | Case fails with a green-looking report | Check `expect` paths in `case.toml` — missing files fail the gate |
 | `sandbox … already exists` | Rerun with `--restart`, or continue it via `cargo make lab -- --project-dir <sandbox> …` |

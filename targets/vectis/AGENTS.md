@@ -73,7 +73,7 @@ cargo clippy -p vectis --all-targets --all-features -- -D warnings
 cargo make check
 ```
 
-Materialize FS tests resolve `VECTIS_EXEMPLAR_DIR` or `../vectis-exemplar` from the emery-adapters workspace and skip clearly when absent. For component-boundary changes, also run `cargo make wasm-run`. Live tests are reserved for prompt-quality evaluation.
+Materialize FS tests resolve `VECTIS_EXEMPLAR_DIR` or `../vectis-exemplar` from the emery-adapters workspace and skip clearly when absent. For component-boundary changes, also run `cargo make wasm-contracts` (or `wasm-omnia-r9k` when the change touches that axis). Live tests are reserved for prompt-quality evaluation.
 
 ## Troubleshooting signals
 
