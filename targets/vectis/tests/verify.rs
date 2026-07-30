@@ -232,7 +232,7 @@ fn catalog_through_verify() {
     assert!(catalog_findings[0]["message"].as_str().unwrap().contains("empty-state"));
     assert_eq!(verify_exit_code(&missing), 1);
 
-    let imageset = tmp.path().join("iOS/TestApp/Resources/Assets.xcassets/empty-state.imageset");
+    let imageset = tmp.path().join("iOS/TestApp/Assets.xcassets/empty-state.imageset");
     write(
         &imageset.join("Contents.json"),
         r#"{"images":[{"filename":"empty-state.png"}],"info":{"version":1,"author":"xcode"}}"#,

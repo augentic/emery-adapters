@@ -261,7 +261,7 @@ Per the iOS scaffold immutability contract ([`hard-rules-ios.md`](../hard-rules-
 3. Flag evidence that Makefile or `project.yml` was hand-authored or patched during agent work rather than re-copied from `$TEMPLATE_DIR`.
 4. When the in-guest shell-verify gate findings riding the report-leg prompt include `ios-scaffold-file-drift`, treat it as a confirmed defect and cite `rule_id: VECTIS-007`.
 
-**Fix**: Do not patch DX files by hand. Re-copy from `$TEMPLATE_DIR` (`vectis::scaffold::materialize` / sync ios-scaffold) and regenerate the Xcode project (`make -C iOS generate-project` / `xcodegen`). Limit verify-repair to Swift under `iOS/<APP_NAME>/`, plus `Theme/`, `Components/`, and `Resources/`.
+**Fix**: Do not patch DX files by hand. Re-copy from `$TEMPLATE_DIR` (`vectis::scaffold::materialize` / sync ios-scaffold) and regenerate the Xcode project (`make -C iOS generate-project` / `xcodegen`). Limit verify-repair to Swift under `iOS/<APP_NAME>/`, plus `Theme/`, `Components/`, and `Assets.xcassets/`.
 
 ## IOS-022: No inline lint suppressions
 

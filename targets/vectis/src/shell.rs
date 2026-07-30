@@ -3,8 +3,10 @@
 use std::path::Path;
 
 mod launcher;
+mod xcassets;
 
 pub use launcher::shell_resident_app_icon;
+pub(crate) use xcassets::ios_xcassets_roots;
 
 /// Platform strings with on-disk shell interpretations today.
 pub const SUPPORTED_SHELL_PLATFORMS: &[&str] = &["core", "ios", "android"];

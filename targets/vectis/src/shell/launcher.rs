@@ -14,20 +14,9 @@ pub fn shell_resident_app_icon(project_dir: &Path, platform: &str) -> bool {
 }
 
 fn ios_shell_resident_app_icon(project_dir: &Path) -> bool {
-    let ios_root = project_dir.join("iOS");
-    if !ios_root.is_dir() {
-        return false;
-    }
-    let Ok(entries) = std::fs::read_dir(&ios_root) else {
-        return false;
-    };
-    for entry in entries.flatten() {
-        let appiconset = entry.path().join("Resources/Assets.xcassets/AppIcon.appiconset");
-        if ios_appiconset_satisfied(&appiconset) {
-            return true;
-        }
-    }
-    false
+    super::ios_xcassets_roots(project_dir)
+        .into_iter()
+        .any(|xcassets| ios_appiconset_satisfied(&xcassets.join("AppIcon.appiconset")))
 }
 
 fn ios_appiconset_satisfied(appiconset_dir: &Path) -> bool {

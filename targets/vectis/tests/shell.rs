@@ -6,7 +6,7 @@ use tempfile::tempdir;
 use vectis::shell::shell_resident_app_icon;
 
 fn scaffold_ios_appiconset(root: &Path, contents_json: &str, png_bytes: Option<&[u8]>) {
-    let appiconset = root.join("iOS/TestApp/Resources/Assets.xcassets/AppIcon.appiconset");
+    let appiconset = root.join("iOS/TestApp/Assets.xcassets/AppIcon.appiconset");
     std::fs::create_dir_all(&appiconset).expect("mkdir appiconset");
     std::fs::write(appiconset.join("Contents.json"), contents_json).expect("write Contents.json");
     if let Some(bytes) = png_bytes {
