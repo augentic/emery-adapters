@@ -14,7 +14,7 @@ The Android-specific team-spawn protocol lives in [`review/team-protocol-android
 3. **Universal checks (lead).** Apply every `UNI-*` rule from the shared universal codex pack ([`../../../rules/universal/`](../../../rules/universal/), embedded in this adapter) with Kotlin / Android heuristics. Full library: [`review/universal-checks.md`](../../../references/review/universal-checks.md).
 4. **Adversarial challenge.** Forward all findings to the antagonist per [`agent-teams.md`](../../../references/agent-teams.md).
 5. **Synthesis.** Lead authors the iteration report per [`review/iteration-report.md`](../../../references/review/iteration-report.md).
-   - Return classified `design_findings` per [../../build.md](../../build.md) § Consolidate review findings.
+   - Return classified `design_findings` per [../core/review.md](../core/review.md) § Consolidate review findings.
 6. **Mechanical auto-fixes (when safe).** `contentDescription`, design-token swaps, missing `@Preview`, generated-FFI-type imports (`import <ANDROID_PACKAGE>.*` / `import <ANDROID_PACKAGE>.shared.CoreFfi`), `CancellationException` rethrow, replacing stale `import com.vectis.design.*` with `import <ANDROID_PACKAGE>.ui.theme.*`. Never rewrite imports or paths to a hardcoded `com.vectis.*` fallback when `ANDROID_PACKAGE` differs. Revert the batch if the Gradle build regresses.
 
 ## Finding-ID conventions

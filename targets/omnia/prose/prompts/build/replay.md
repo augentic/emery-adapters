@@ -1,6 +1,6 @@
 # Omnia build — capture replay
 
-Loaded by [../build.md](../build.md) phase 7 when the slice's `plan.yaml.sources[]` list carries a `captures` binding.
+Dispatched by the adapter core only when the build context's bound source names carry `captures` — the engine forwards the slice's bindings on the build call, so when `captures` is unbound the adapter skips this leg in-guest and no agent is spawned. The leg runs after generation and before standards review, whose findings synthesis folds unresolved replay failures.
 
 ## Shared contract
 
@@ -10,7 +10,7 @@ Read [`../../../../codex/references/replay/hook-contract.md`](../../../../../cod
 
 In addition to the shared contract:
 
-- Phases 2–6 complete: crate, tests, guest (create mode), verify-repair loop, and code review have run.
+- Generation complete: crate, tests, guest (create mode), and the verify-repair loop have run.
 - Replay data is present under `$CRATE_PATH/tests/data/replays/` — copied or symlinked during [test writer](test.md) when a `captures` binding exists.
 
 Capture wire format: [`captures/references/capture-format.md`](../../../../../sources/captures/prose/references/capture-format.md). Claim shape and 64 KiB inline cap: [`captures/prompts/extract.md`](../../../../../sources/captures/prose/prompts/extract.md).
@@ -27,7 +27,7 @@ Capture wire format: [`captures/references/capture-format.md`](../../../../../so
 
    Fall back to `cargo test` when nextest is unavailable. The operator's `captures` binding may point at a different root than the crate copy — replay always runs against `$CRATE_PATH/tests/data/replays/`.
 
-3. **Classify results** in the build transcript (passed / failed / skipped) per the shared contract (advisory in v1). Do **not** emit a journal event and do **not** hand-edit `metadata.yaml`.
+3. **Classify results** in the build transcript and your answer's summary (passed / failed / skipped) per the shared contract (advisory in v1) — the standards-review leg folds unresolved failures into the build report's findings. Do **not** emit a journal event and do **not** hand-edit `metadata.yaml`.
 
 ## References
 

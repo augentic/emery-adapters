@@ -9,8 +9,8 @@ The Vectis core / test / iOS / Android writer and reviewer orchestration lives i
 | Prompt | Purpose |
 |--------|---------|
 | [`guidance.md`](../prompts/guidance.md) | Idiom guidance for core synthesis. |
-| [`build.md`](../prompts/build.md) | Parent build prompt: phase vocabulary, sub-agent contract, verify-serial / review-parallel rule, consolidation, template-drift signal, phase outcome. |
-| [`build/composition.md`](../prompts/build/composition.md) | Regenerate `composition.yaml` from `spec.md` + `design.md`; gated by the deterministic validator. |
+| [`build.md`](../prompts/build.md) | Parent build prompt: inputs, standard arguments, platform scope, leg order, delegation pointer. |
+| [`build/composition.md`](../prompts/build/composition.md) | Step 0.5 component inference, then regenerate `composition.yaml` from `spec.md` + `design.md`; gated by the deterministic validator. |
 | [`build/core/write.md`](../prompts/build/core/write.md) | Generate / update the Crux shared core. |
 | [`build/core/review.md`](../prompts/build/core/review.md) | Agent-team review of the Rust `shared` crate. |
 | [`build/test.md`](../prompts/build/test.md) | Generate / update Crux tests; run the core verify-repair loop. |
@@ -18,13 +18,19 @@ The Vectis core / test / iOS / Android writer and reviewer orchestration lives i
 | [`build/ios/review.md`](../prompts/build/ios/review.md) | Agent-team review of the iOS shell. |
 | [`build/android/write.md`](../prompts/build/android/write.md) | Generate / update the Compose Android shell + verify. |
 | [`build/android/review.md`](../prompts/build/android/review.md) | Agent-team review of the Android shell. |
+| [`build/report.md`](../prompts/build/report.md) | Report leg: shell verify gate, phase outcome contract, build-report shape. |
 | [`merge.md`](../prompts/merge.md) | Merge-leg gates around the delta fold. |
 
 ## References
 
 ### Template bootstrap
 
-- [`template-capabilities.md`](template-capabilities.md) — DX completeness after materialize; late-capability re-adoption from `$TEMPLATE_DIR` (strip grammar stays in `$TEMPLATE_DIR/AGENTS.md`).
+- [`template-materialize.md`](template-materialize.md) — greenfield template materialize: `$TEMPLATE_DIR` resolve, allowlisted copy, `VECTIS-OPTIONAL` strip, iOS project generation.
+- [`template-capabilities.md`](template-capabilities.md) — DX completeness after materialize; late-capability re-adoption from `$TEMPLATE_DIR` (strip grammar stays in `$TEMPLATE_DIR/AGENTS.md`); template / version-pin drift handling.
+
+### Orchestration depth
+
+- [`sub-agent-contract.md`](sub-agent-contract.md) — writer / reviewer sub-agent inputs and outputs; why verify is serial and review is parallel.
 
 ### Runtime schemas
 

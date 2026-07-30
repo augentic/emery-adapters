@@ -8,7 +8,7 @@ The Crux 0.17 idioms and the artifact-to-code mapping live in the [`../../../ref
 
 Inspect `${PROJECT_DIR}/shared/src/app.rs`:
 
-- Missing → **create mode**: materialize from `$TEMPLATE_DIR` per [../../build.md](../../build.md) § Template materialize (see the template-materialize prelude in the leg's prompt), strip unused `VECTIS-OPTIONAL` caps, then enter update mode for feature-specific code. Fail closed if `$TEMPLATE_DIR` is missing — do not invent a core scaffold.
+- Missing → **create mode**: materialize from `$TEMPLATE_DIR` per [template-materialize.md](../../../references/template-materialize.md) (see the template-materialize prelude in the leg's prompt), strip unused `VECTIS-OPTIONAL` caps, then enter update mode for feature-specific code. Fail closed if `$TEMPLATE_DIR` is missing — do not invent a core scaffold.
 - Present → **update mode**: diff the artifact-derived target against the existing implementation and apply targeted edits. When `design.md` `## Adapters` newly enables a cap that was stripped at greenfield, re-adopt that `cap=` strip-unit from `$TEMPLATE_DIR` per [`template-capabilities.md`](../../../references/template-capabilities.md) before feature edits — do not invent deps or FFI shapes.
 
 Repair sub-agent (invoked by the verify-repair loop in [../test.md](../test.md)) uses `mode: repair` plus the failing error output to apply the minimum **structural** change to fix the reported errors — never add or preserve `#[allow]` / `#[expect]`; refactor so `RUSTFLAGS="-D warnings"` and `clippy -- -D warnings` pass cleanly.

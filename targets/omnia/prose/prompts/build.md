@@ -1,6 +1,6 @@
 # Omnia target — build prompt
 
-> The omnia adapter core inlines this document into the system prompt of every build leg — generation, standards review, capture replay, and the report — alongside the leg's own prompt under [`build/`](build/). Leg sequencing lives in the adapter core (`src/operations.rs`), not here: each leg's user prompt names the sections of this document to follow. Synthesis idioms (provider DI, WASM guardrails, error variants, validation placement) live in [`guidance.md`](guidance.md) and must already be reflected in the slice's `specs/<domain>/spec.md` + `design.md` before the build runs.
+> The omnia adapter core inlines this document into the system prompt of every build leg — preparation, generation, capture replay, and standards review — alongside the leg's own prompt under [`build/`](build/). Leg sequencing lives in the adapter core (`src/operations.rs`), not here: each leg's user prompt names the sections of this document to follow. Synthesis idioms (provider DI, WASM guardrails, error variants, validation placement) live in [`guidance.md`](guidance.md) and must already be reflected in the slice's `specs/<domain>/spec.md` + `design.md` before the build runs.
 
 ## Inputs and bindings
 
@@ -39,13 +39,13 @@ Check whether `$CRATE_PATH/Cargo.toml` exists:
 
 ## § Exemplar checkout
 
-The build's first leg is the preparation leg ([`build/prepare.md`](build/prepare.md)): it produces the read-only exemplar checkout at `target/omnia-exemplar/` (clone or refresh unpinned `main`, proceed noted-stale when only the refresh fails, stop with a `## § Stop hint contract` hint when no checkout can be obtained). [`exemplar.md`](../references/exemplar.md) carries the compatibility contract: create mode adopts the checkout's `exemplar.yaml` Omnia `{ version, repository, rev }` when authoring dependencies; update mode preserves the consumer's existing pin, soft-warns on mismatch, and prefers consumer-evidenced idioms over exemplar idioms wherever the two conflict. Writer prompts link into `exemplar.md`'s navigation map rather than repeating any of this.
+The preparation leg ([`build/prepare.md`](build/prepare.md)) produces the read-only exemplar checkout at `target/omnia-exemplar/`. The compatibility contract — create-mode pin adoption, update-mode pin preservation, consumer-evidenced idioms winning conflicts — lives in [`exemplar.md`](../references/exemplar.md); writer prompts link into its navigation map rather than repeating any of it.
 
 ## Leg map
 
-Between the preparation leg and generation, the adapter runs its deterministic scaffold prelude in-guest: it strictly validates the checkout's template contract (`exemplar.yaml` → `templates/guest/manifest.yaml`), then writes any missing standard tooling file (cargo-make, deny, cargo-vet scaffold, GitHub workflows, toolchain/editor config) from the checkout — existing files are never overwritten, and a missing or malformed checkout or a prelude I/O failure fails the build before generation. The generation user prompt carries the outcome as a `### scaffold prelude` block; never re-author the files it lists ([`configuration.md`](../references/configuration.md) describes them).
+Between preparation and generation, the adapter runs its deterministic scaffold prelude in-guest: it validates the checkout's template contract, then writes any missing standard tooling file from the checkout (existing files are never overwritten; a missing or malformed checkout fails the build before generation). The generation user prompt carries the outcome as a `### scaffold prelude` block; never re-author the files it lists ([`configuration.md`](../references/configuration.md) describes them).
 
-The adapter core drives five legs in a fixed order — preparation ([`build/prepare.md`](build/prepare.md), the exemplar checkout), generation (crate writer, test writer, guest writer in create mode, then the § verify-repair loop), standards review ([`build/review.md`](build/review.md)), capture replay ([`build/replay.md`](build/replay.md), self-skipping when no `captures` source is bound), then the report leg (see `## Build report`). Within the generation leg, write the crate before the tests, mark `tasks.md` checkboxes complete as each task lands, and never transition the slice lifecycle — the deterministic in-guest report gate checks the report answer and the engine guest owns the `Refined → Built` transition.
+The adapter core drives the legs in a fixed order — preparation ([`build/prepare.md`](build/prepare.md)), generation (crate writer, test writer, guest writer in create mode, then the § verify-repair loop), capture replay ([`build/replay.md`](build/replay.md), dispatched only when the build context binds a `captures` source — skipped in-guest otherwise), then standards review ([`build/review.md`](build/review.md)), which closes the build: its answer carries the findings synthesis and output declaration the adapter assembles the build report from in-guest (see the review prompt's `## Build report`) — there is no separate report leg. Within the generation leg, write the crate before the tests, mark `tasks.md` checkboxes complete as each task lands, and never transition the slice lifecycle — the deterministic in-guest report gate checks the assembled report and the engine guest owns the `Refined → Built` transition.
 
 ## § Verify-repair loop (max 3 iterations)
 
@@ -62,22 +62,11 @@ If `cargo fmt --check` fails, run `cargo fmt` once. Formatting is mechanical; on
 
 If `cargo check` or `cargo clippy` fails, re-enter [`build/crate.md`](build/crate.md) with the error output as context. Apply minimum-change repair discipline (see [`repair-patterns.md`](../references/repair-patterns.md)).
 
-If `cargo test` fails, classify each failure:
-
-| Failure signal | Classification | Fix action |
-|---|---|---|
-| Error in `tests/` paths, `MockProvider`, or `provider.rs` | Test issue | Re-enter [`build/test.md`](build/test.md) |
-| Error in `src/` paths, missing trait impls in production | Code issue | Re-enter [`build/crate.md`](build/crate.md) |
-| Assertion mismatch where *actual* matches spec | Test issue | Test expectation is stale |
-| Assertion mismatch where *expected* matches spec | Code issue | Handler returns the wrong result |
-| MockProvider missing a trait impl the handler now requires | Test issue | Update MockProvider |
-| Unresolved import or missing crate in `Cargo.toml` | Workspace issue | Fix `Cargo.toml` paths or workspace member list directly |
+If `cargo test` fails, classify each failure: errors in `tests/` paths or `MockProvider` are test issues (re-enter [`build/test.md`](build/test.md)); errors in `src/` paths are code issues (re-enter [`build/crate.md`](build/crate.md)); manifest / workspace errors are fixed in `Cargo.toml` directly. The full classification table and the update-mode regression check (baseline capture, regression-vs-expected routing) live in [`repair-patterns.md`](../references/repair-patterns.md) — fetch it via MCP on the first test failure.
 
 **Repair discipline.** Minimum change only — fix the reported error and nothing else. Scope the diff to files and functions named in the error output. Group failures by classification and re-enter each writer prompt once with all same-class errors. Full repair recipes: [`repair-patterns.md`](../references/repair-patterns.md).
 
-**Update-mode regression check.** Before iteration 1, record the baseline: `cd $CRATE_PATH && cargo test 2>&1 | tee /tmp/${SLICE_NAME}-${CRATE_NAME}-baseline.txt`. After each iteration, for each test that passed before and now fails: if the spec explicitly changes the asserted behaviour → expected behavioural change, re-enter test writer to align expectations; if the spec does not change the asserted behaviour → true regression, route the fix through the classification table.
-
-Repeat until all four checks pass or 3 iterations exhausted. If still failing after 3 iterations: **STOP**. Write a `status: failure` build report (see `## Build report`) mapping the remaining failures as blocking findings, surface the stop hint below with full error output, and do not transition the slice — a failure report parks it for human review.
+Repeat until all four checks pass or 3 iterations exhausted. If still failing after 3 iterations: **STOP**. Surface the stop hint below with full error output and do not transition the slice — the standards-review leg maps the remaining failures as blocking findings, so the assembled build report is `status: failure` and parks the slice for human review.
 
 ## § Stop hint contract
 
@@ -89,46 +78,16 @@ A build failure surfaces a stop hint as the body's final output — a single str
 - `log-path` — absolute path to the captured stdout/stderr.
 - `next-action` — typically `re-run /emery:build $SLICE after fix`.
 
-Render the hint as the final visible output of the run, alongside the `status: failure` build report (see `## Build report`). Never write the lifecycle yourself — the deterministic in-guest report gate checks the answer and the engine guest owns the lifecycle, so the slice stays `refined` and the loop (or a re-invocation) re-enters cleanly.
+Render the hint as the final visible output of the run, alongside the blocking findings that make the assembled build report `status: failure` (see the review prompt's `## Build report`). Never write the lifecycle yourself — the deterministic in-guest report gate checks the assembled report and the engine guest owns the lifecycle, so the slice stays `refined` and the loop (or a re-invocation) re-enters cleanly.
 
-## § Standards review surface
-
-Phase 6 writes `$REVIEW_OUTPUT` (`REVIEW.md`) — the model-assisted surface: specialist + antagonist judgment per [`team-protocol-crate.md`](../references/team-protocol-crate.md) and [`build/review.md`](build/review.md), applying the engineering-standards rules shipped under [`../rules/`](../rules/) (the Omnia overlay plus the shared `UNI-*` pack at `rules/universal/`).
-
-Per [Standards layer](../references/emery-runtime/standards-layer-snippet.md), standards findings may block CI but never transition plan entries, slices, or changes. CI wiring is consumer-project policy, not adapter policy; this prompt acknowledges the surface and links out for the contract.
-
-## Build report
-
-When the algorithm resolves, return a schema-valid build report as the answer to the build's report leg (the schema-gated report answer — no report file is written). This is the build's final deliverable. Never transition the slice lifecycle — the deterministic in-guest report gate checks the answer's coherence against the working tree and the engine guest owns the `Refined → Built` transition.
-
-```yaml
-version: 1
-slice: <slice-name>     # matches the build request's `slice`
-target: omnia@1.0.0        # this adapter at its manifest version
-status: success         # or: failure
-findings: []            # structured diagnostics; default []
-```
-
-**Success vs failure findings rule.** A `status: success` report carries an empty `findings[]` or only non-blocking findings (`suggestion` / `optional`); the deterministic report gate downgrades a `success` report carrying any blocking (`critical` / `important`) finding to `failure`. A `status: failure` report populates `findings[]` with the blocking violations the target can map from the verify-repair output and `REVIEW.md`, and leaves `findings: []` when no specifics are mappable.
-
-- **Clean build** — the verify-repair loop passes (`cargo fmt --check`, `cargo check`, `cargo clippy -- -D warnings`, `cargo test`), the code-review remediation cycle leaves no unresolved `critical` / `important` findings in `REVIEW.md`, and replay passes when a `captures` binding is present → `status: success`, `findings: []`.
-- **Unresolved build** — the verify-repair budget is exhausted (3 iterations) or the review remediation cycle cannot clear its blocking findings → `status: failure` with blocking findings mapped where possible.
-
-Each `findings[]` item validates against `schemas/diagnostics/diagnostic.schema.json` (the structured-diagnostic shape distributed with the CLI; required fields include `id`, `title`, `severity`, `source`, `artifact`, `evidence`, `impact`, `remediation`, `fingerprint`). Map omnia's verify-repair and `REVIEW.md` findings into that shape, carrying detail under `evidence.kind: structured` with `target-adapter: omnia`.
+The standards-review surface and the build-report contract (in-guest assembly, derived status, findings shape) live with the leg that owns them: [`build/review.md`](build/review.md).
 
 ## References
 
-- [`guidance.md`](guidance.md), [`merge.md`](merge.md) — sibling prompts.
-- [`build/prepare.md`](build/prepare.md), [`build/crate.md`](build/crate.md), [`build/test.md`](build/test.md), [`build/guest.md`](build/guest.md), [`build/review.md`](build/review.md), [`build/replay.md`](build/replay.md) — per-leg prompts.
-- [`../../../sources/captures/prose/references/capture-format.md`](../../../../sources/captures/prose/references/capture-format.md) — runtime capture wire format (when `captures` is bound).
-- [`exemplar.md`](../references/exemplar.md) — the exemplar checkout: contract, compatibility behavior, navigation map.
-- [`hard-rules.md`](../references/hard-rules.md) — full authority hierarchy and hard-rules set.
-- [`guardrails.md`](../references/guardrails.md), [`wasm-constraints.md`](../references/wasm-constraints.md) — forbidden crates / APIs, statelessness, serde / DST idioms.
-- [`capabilities.md`](../references/capabilities.md), [`capability-mapping.md`](../references/capability-mapping.md) — provider traits and artifact-to-trait mapping.
-- [`sdk-api.md`](../references/sdk-api.md), [`cargo-toml.md`](../references/cargo-toml.md), [`error-handling.md`](../references/error-handling.md), [`configuration.md`](../references/configuration.md) — SDK / workspace / error / guest-config templates.
-- [`cross-cutting-matrices.md`](../references/cross-cutting-matrices.md), [`update-patterns.md`](../references/update-patterns.md), [`change-classification.md`](../references/change-classification.md), [`repair-patterns.md`](../references/repair-patterns.md), [`todo-markers.md`](../references/todo-markers.md), [`checklists.md`](../references/checklists.md), [`output-documents.md`](../references/output-documents.md) — analysis tables, strategy patterns, recipes.
-- [`mock-provider.md`](../references/mock-provider.md), [`spec-to-test-mapping.md`](../references/spec-to-test-mapping.md), [`replay-fixtures.md`](../references/replay-fixtures.md), [`replay-crate-layout.md`](../references/replay-crate-layout.md) — test depth.
-- [`guest-patterns.md`](../references/guest-patterns.md), [`guest-wiring.md`](../references/guest-wiring.md), [`runtime.md`](../references/runtime.md), [`project-layout.md`](../references/project-layout.md) — guest depth.
-- [`review-categories.md`](../references/review-categories.md), [`team-protocol-crate.md`](../references/team-protocol-crate.md), [`review-auto-fix.md`](../references/review-auto-fix.md), [`review-output-template.md`](../references/review-output-template.md), [`agent-teams.md`](../references/agent-teams.md), [`../rules/`](../rules/) (Omnia overlay), [`../rules/universal/`](../rules/universal/) (shared `UNI-*` pack, embedded in this adapter) — review depth.
-- [`providers/README.md`](../references/providers/README.md) — per-trait selection notes (compiling usage lives in the exemplar).
-- [`examples/`](../references/examples/) — retained walkthroughs only for subjects the exemplar does not yet demonstrate (see that folder's README).
+Every reference below (and the rest of the corpus) is fetchable via the granted MCP references server; fetch on need rather than front-loading.
+
+- [`guidance.md`](guidance.md), [`merge.md`](merge.md) — sibling prompts; [`build/prepare.md`](build/prepare.md), [`build/crate.md`](build/crate.md), [`build/test.md`](build/test.md), [`build/guest.md`](build/guest.md), [`build/replay.md`](build/replay.md), [`build/review.md`](build/review.md) — per-leg prompts.
+- [`exemplar.md`](../references/exemplar.md) — the exemplar checkout contract and navigation map.
+- [`hard-rules.md`](../references/hard-rules.md), [`guardrails.md`](../references/guardrails.md), [`wasm-constraints.md`](../references/wasm-constraints.md) — authority hierarchy, forbidden crates / APIs, WASM idioms.
+- [`repair-patterns.md`](../references/repair-patterns.md) — repair recipes, test-failure classification, update-mode regression check.
+- The remaining depth (capabilities, SDK / workspace / guest templates, update strategies, test depth, review depth) is catalogued in [`../references/README.md`](../references/README.md).

@@ -1,6 +1,6 @@
 # Omnia build — standards review (code reviewer)
 
-Loaded by [../build.md](../build.md) phase 6, after the verify-repair loop succeeds. Applies **engineering standards** with model-assisted judgment: an agent team of three specialists (Security, Correctness, Quality) plus an antagonist; the lead synthesises findings into `$REVIEW_OUTPUT = $CRATE_PATH/REVIEW.md`. This is build-time standards application, not plan Gate 1.
+Loaded by [../build.md](../build.md) for the standards-review leg — the build's final judgment leg, after the verify-repair loop (and capture replay, when the build context binds `captures`). Applies **engineering standards** with model-assisted judgment: an agent team of three specialists (Security, Correctness, Quality) plus an antagonist; the lead synthesises findings into `$REVIEW_OUTPUT = $CRATE_PATH/REVIEW.md`. This is build-time standards application, not plan Gate 1. The leg also closes the build (see `## Build close-out`): its answer carries the findings synthesis and output declaration the adapter assembles the build report from in-guest — there is no separate report leg.
 
 ## Review pipeline
 
@@ -39,6 +39,31 @@ After auto-fix completes:
 3. **`suggestion`** — auto-fix when available; otherwise document as accepted technical debt in `REVIEW.md`.
 4. **`optional`** — document only.
 5. Re-run this review (without `fix`) to verify fix quality. If new `critical` / `important` findings appear, repeat the remediation cycle once.
+
+## Build close-out (absorbed report residue)
+
+After the remediation cycle resolves, close out the build in this same leg — the adapter assembles the build report from this answer in-guest, so no report leg follows:
+
+1. **Mark `tasks.md` checkboxes.** Check off every completed task in the slice directory's `tasks.md`; leave genuinely unfinished tasks unchecked.
+2. **Declare outputs.** List the build outputs in the answer's `outputs[]`: the slice's crate tree (`$CRATE_PATH`) and, when this build wrote the guest scaffolding (create mode), the workspace-root guest files — each as `platform: core` with a path relative to the project root. Declare only paths the working tree actually contains; the deterministic report gate fails the build on a declared-but-missing path.
+3. **Synthesise findings.** Fold the findings left unresolved after remediation — from `REVIEW.md`, the verify-repair output, and capture replay's classification (its outcome rides the user prompt's `Phase outcomes` block) — into the answer's `findings[]` (`title` / `severity` / `impact` / `remediation`, plus `rule-id` for codex citations). Status is derived, never judged: any `critical` / `important` finding makes the assembled report `status: failure`, so a build that cannot succeed (an exhausted verify-repair budget, unclearable blocking findings, confirmed replay failures) must carry at least one blocking finding. A clean build answers with non-blocking findings only (or none).
+
+## § Standards review surface
+
+This leg writes `$REVIEW_OUTPUT` (`REVIEW.md`) — the model-assisted surface: specialist + antagonist judgment per [`team-protocol-crate.md`](../../references/team-protocol-crate.md), applying the engineering-standards rules shipped under [`../../rules/`](../../rules/) (the Omnia overlay plus the shared `UNI-*` pack at `rules/universal/`).
+
+Per [Standards layer](../../references/emery-runtime/standards-layer-snippet.md), standards findings may block CI but never transition plan entries, slices, or changes. CI wiring is consumer-project policy, not adapter policy; this prompt acknowledges the surface and links out for the contract.
+
+## Build report
+
+The build report is assembled **in-guest** from this leg's schema-gated answer — no report leg is spawned and no report file is written. The answer's `## Build close-out` above carries the report's judgmental residue: the findings left unresolved after the remediation cycle and the declared build outputs. Never transition the slice lifecycle — the deterministic in-guest report gate checks the assembled report's coherence against the working tree and the engine guest owns the `Refined → Built` transition.
+
+**Status is derived, never judged.** The assembled report is `status: success` iff the answer carries no blocking (`critical` / `important`) finding and every declared output exists in the working tree; the deterministic gate adds a blocking finding for any declared-but-missing output. A build that cannot succeed — an exhausted verify-repair budget, unresolved blocking review findings, replay failures the review confirms — must carry at least one blocking finding in the answer.
+
+- **Clean build** — the verify-repair loop passes (`cargo fmt --check`, `cargo check`, `cargo clippy -- -D warnings`, `cargo test`), the remediation cycle leaves no unresolved `critical` / `important` findings in `REVIEW.md`, and replay passes when the build context binds `captures` → an answer with no blocking findings assembles as `status: success`.
+- **Unresolved build** — the verify-repair budget is exhausted (3 iterations) or the remediation cycle cannot clear its blocking findings → blocking findings in the answer assemble as `status: failure`.
+
+Each answer finding carries `title`, `severity`, `impact`, and `remediation` (plus `rule-id` when it cites a codex rule); the adapter folds them into the engine's report findings. Map omnia's verify-repair, `REVIEW.md`, and replay findings into that shape.
 
 ## See also
 

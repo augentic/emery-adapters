@@ -9,12 +9,12 @@ The Omnia crate / test / guest / review instructions live in [`../prompts/build.
 | Prompt | Purpose |
 |--------|---------|
 | [`guidance.md`](../prompts/guidance.md) | Idiom guidance (provider DI, WASM guardrails, error variants, validation placement) consumed by core synthesis. |
-| [`build.md`](../prompts/build.md) | Shared build preamble: bindings, mode detection, verify-repair loop, stop-hint contract, report shape. |
+| [`build.md`](../prompts/build.md) | Shared build preamble: bindings, mode detection, verify-repair loop, stop-hint contract. |
 | [`build/crate.md`](../prompts/build/crate.md) | Generation leg: generate or update the Rust crate. |
 | [`build/test.md`](../prompts/build/test.md) | Generation leg: generate or update the test suite. |
 | [`build/guest.md`](../prompts/build/guest.md) | Generation leg (create mode only): scaffold the WASM guest wrapper. |
-| [`build/review.md`](../prompts/build/review.md) | Review leg: agent-team code review and remediation cycle. |
-| [`build/replay.md`](../prompts/build/replay.md) | Replay leg (self-skipping): runtime capture replay when a `captures` source is bound. Delegates hook contract to [`../../../codex/references/replay/`](../../../../codex/references/replay/). |
+| [`build/review.md`](../prompts/build/review.md) | Review leg: agent-team code review, remediation cycle, build close-out, and the build-report contract (in-guest assembly, derived status). |
+| [`build/replay.md`](../prompts/build/replay.md) | Replay leg (dispatched only when the build context binds a `captures` source; skipped in-guest otherwise): runtime capture replay. Delegates hook contract to [`../../../codex/references/replay/`](../../../../codex/references/replay/). |
 | [`merge.md`](../prompts/merge.md) | Merge leg: delta fold plus the pre-merge gate (cargo + clippy + test + wasm32 build). |
 
 ## References
@@ -40,7 +40,7 @@ The Omnia crate / test / guest / review instructions live in [`../prompts/build.
 - [`cross-cutting-matrices.md`](cross-cutting-matrices.md) — Side-Effect / Outbound-Message / Transaction-Boundary matrices.
 - [`update-patterns.md`](update-patterns.md) — strategy patterns per update category.
 - [`change-classification.md`](change-classification.md) — classifying artifact-vs-code diffs.
-- [`repair-patterns.md`](repair-patterns.md) — common verify-loop repair recipes.
+- [`repair-patterns.md`](repair-patterns.md) — common verify-loop repair recipes, test-failure classification, update-mode regression check.
 - [`checklists.md`](checklists.md) — pre-generation and verification checklists.
 - [`todo-markers.md`](todo-markers.md) — TODO marker rules, adapter overrides, cache-aside patterns.
 - [`output-documents.md`](output-documents.md) — `Migration.md`, `Architecture.md`, `CHANGELOG.md`, `.env.example` shapes.

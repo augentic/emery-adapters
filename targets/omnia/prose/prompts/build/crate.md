@@ -17,7 +17,7 @@ The full Hard Rules + Authority Hierarchy live in [`../../references/hard-rules.
 
 ## Critical path
 
-1. Read [guidance.md](../guidance.md) refresher and the slice's `specs/<domain>/spec.md` + `design.md` + `tasks.md`.
+1. Read the slice's `specs/<domain>/spec.md` + `design.md` + `tasks.md` — [guidance.md](../guidance.md) idioms were already folded into them at refine; fetch it via MCP only when a design decision looks under-specified.
 2. **Build the three cross-cutting matrices** per [`cross-cutting-matrices.md`](../../references/cross-cutting-matrices.md): Side-Effect, Outbound-Message, Transaction-Boundary. Every cell must land in code.
 3. **Mode dispatch.** Inherited from the build prompt: create mode (no `Cargo.toml`) vs update mode.
 4. Apply the per-mode process below; in update mode walk the four categories in fixed order.

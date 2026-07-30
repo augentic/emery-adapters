@@ -7,8 +7,8 @@ use std::path::Path;
 
 use adapter::registry::Doc;
 use adapter::seam::{
-    BuildInput, Context, Error, Finding, Input, MergePhase, Report, Severity, TargetMetadata,
-    WorkingTree,
+    BuildContext, BuildInput, Context, Error, Finding, Input, MergePhase, Report, Severity,
+    TargetMetadata, WorkingTree,
 };
 use adapter::{AdapterIdentity, Model, Target, phase};
 
@@ -73,7 +73,8 @@ impl Target for Adapter {
     }
 
     async fn build<P: Model>(
-        model: &P, ctx: &Context<'_>, slice: &str, inputs: &[Input], tree: &WorkingTree,
+        model: &P, ctx: &Context<'_>, slice: &str, inputs: &[Input], _context: &BuildContext,
+        tree: &WorkingTree,
     ) -> Result<Report, Error> {
         let slice_contracts_rel = format!(".emery/slices/{slice}/contracts");
         let slice_contracts = ctx.tree_root(tree).join(&slice_contracts_rel);

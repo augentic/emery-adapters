@@ -55,3 +55,4 @@ The three intents share a common artefact contract (channel addresses, message n
 5. **Baseline immutability.** All output goes in the slice-local `contracts/` directory; baseline `contracts/` is read-only here.
 6. **No invention.** When the spec does not provide enough detail to derive a channel or message shape, mark the gap with `[unknown]`. The importer flags unrecognised constructs with `[import — manual review required]`.
 7. **Read-only verifier.** The verifier sibling must not create, modify, or delete any files in either mode.
+8. **Identity & version.** Every top-level AsyncAPI document carries a SemVer `info.version` and (for new contracts) a kebab-case `info.x-emery-id`; imports preserve source values verbatim. Canonical rules: [`../../references/contract-identity.md`](../../references/contract-identity.md).

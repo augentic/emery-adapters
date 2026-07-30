@@ -12,6 +12,7 @@ mod operations;
 mod registry {
     adapter::registry!();
 }
+mod review;
 pub mod scaffold;
 
 pub use operations::Adapter;

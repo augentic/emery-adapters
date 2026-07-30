@@ -4,7 +4,9 @@ use std::fs;
 use std::path::Path;
 
 use adapter::answers::REPORT_ANSWER_SCHEMA;
-use adapter::seam::{Context, Input, MergePhase, Report, Severity, Status, WorkingTree};
+use adapter::seam::{
+    BuildContext, Context, Input, MergePhase, Payload, Report, Severity, Status, WorkingTree,
+};
 use adapter::{Format, Request, Target as _};
 use omnia_testkit::model::{Harness, mcp_grants};
 use tempfile::TempDir;
@@ -36,13 +38,46 @@ fn schema_format(request: &Request) -> (&str, &str) {
     }
 }
 
+/// RFC-78 D7 re-bloat guard: each leg's system assemble is a pure function
+/// over the embedded prose registry, so its byte size is locked at the
+/// measured baseline plus ~10% headroom (re-measured after the RFC-78 D3
+/// build.md thinning).
+fn assert_system_budget(request: &Request, leg: &str, budget: usize) {
+    let bytes = request.system.as_deref().map_or(0, str::len);
+    println!("{leg} system assemble: {bytes} bytes (budget {budget})");
+    assert!(
+        bytes <= budget,
+        "{leg} system assemble is {bytes} bytes, over its {budget}-byte budget — \
+         trim the assemble or deliberately raise the budget"
+    );
+}
+
+/// The composition leg's assemble and path-form user prompt (RFC-78
+/// D1): inputs render as project-relative path sections with a
+/// read-before-writing instruction, never inlined bodies.
 fn assert_composition_leg(request: &Request) {
     let system = request.system.as_deref().unwrap();
     assert!(system.contains("# Vectis target — build prompt"), "build prompt in system");
-    assert!(system.contains("# Vectis target — `guidance`"), "guidance refresher in system");
+    assert!(
+        !system.contains("# Vectis target — `guidance`"),
+        "guidance stays on the guidance operation — dropped from composition (RFC-78 D3)"
+    );
     assert!(system.contains("# Vectis build — composition"), "composition prompt in system");
+    assert!(
+        system.contains("## Step 0.5 — component inference"),
+        "Step 0.5 contract rides the composition prompt, not the shared preamble"
+    );
     let user = &request.messages[0].content;
-    assert!(user.contains("PROPOSAL-BODY") && user.contains("DESIGN-BODY"), "typed inputs");
+    assert!(
+        user.contains("### input: proposal → .emery/slices/demo/proposal.md")
+            && user.contains("### input: design → .emery/slices/demo/design.md"),
+        "typed inputs render as path-form sections: {user}"
+    );
+    assert!(!user.contains("PROPOSAL-BODY"), "artifact bodies are not inlined");
+    assert!(
+        user.contains("Read each path from the working tree"),
+        "read-before-writing instruction rides the inputs block"
+    );
     assert!(user.contains("slice `demo`"), "slice named");
     assert!(user.contains("prepare prelude"), "prelude summary feeds the first leg");
     assert!(user.contains("\"skipped\":true"), "nothing to materialize in an empty workspace");
@@ -108,6 +143,11 @@ fn assert_post_composition_leg_order(requests: &[Request]) {
     let (name, schema) = schema_format(&requests[6]);
     assert_eq!(name, "report");
     assert_eq!(schema, REPORT_ANSWER_SCHEMA);
+    let report_system = requests[6].system.as_deref().unwrap();
+    assert!(
+        report_system.contains("# Vectis build — report"),
+        "report contract rides the report phase prompt (RFC-78 D3)"
+    );
     let report_user = &requests[6].messages[0].content;
     assert!(report_user.contains("no shell work"), "phase outcomes feed the report leg");
     assert!(report_user.contains("final-core-verify"), "final verify outcome feeds the report");
@@ -127,10 +167,11 @@ async fn build_phase_legs() {
         PHASE_DONE,     // final-core-verify
         SUCCESS_REPORT, // report
     ]);
+    let input = |path: &str| Payload::Path(path.to_string());
     let inputs = vec![
-        Input::Proposal("PROPOSAL-BODY".to_string()),
-        Input::Spec("SPEC-BODY".to_string()),
-        Input::Design("DESIGN-BODY".to_string()),
+        Input::Proposal(input(".emery/slices/demo/proposal.md")),
+        Input::Spec(input(".emery/slices/demo/specs/core/spec.md")),
+        Input::Design(input(".emery/slices/demo/design.md")),
     ];
 
     let report = Adapter::build(
@@ -138,6 +179,7 @@ async fn build_phase_legs() {
         &ctx(tmp.path(), Some("http://references/mcp")),
         "demo",
         &inputs,
+        &BuildContext::default(),
         &tree(),
     )
     .await
@@ -152,6 +194,23 @@ async fn build_phase_legs() {
         7,
         "composition, core, two shells, review, final-core-verify, then one report call"
     );
+    // Budget = measured baseline (per-leg comment, 2026-07-31, after the
+    // RFC-78 D3 build.md thinning) + ~10%.
+    for (i, (leg, budget)) in [
+        ("composition", 32_700),       // baseline 29_681
+        ("core", 29_100),              // baseline 26_458
+        ("ios", 23_200),               // baseline 21_080
+        ("android", 24_400),           // baseline 22_167
+        ("review", 27_700),            // baseline 25_144
+        ("final-core-verify", 20_600), // baseline 18_733
+        ("report", 20_500),            // baseline 18_644
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        assert_system_budget(&requests[i], leg, budget);
+    }
+
     assert_composition_leg(&requests[0]);
     assert_post_composition_leg_order(&requests);
 }
@@ -173,8 +232,16 @@ async fn core_only_skips_shells() {
     let model =
         Harness::answering([PHASE_DONE, PHASE_DONE, PHASE_DONE, PHASE_DONE, SUCCESS_REPORT]);
 
-    let report =
-        Adapter::build(&model, &ctx(tmp.path(), None), "demo", &[], &tree()).await.unwrap();
+    let report = Adapter::build(
+        &model,
+        &ctx(tmp.path(), None),
+        "demo",
+        &[],
+        &BuildContext::default(),
+        &tree(),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(report.status, Status::Success);
     let requests = model.requests();
@@ -217,8 +284,16 @@ async fn guest_does_not_embed_scaffold() {
         FAILURE_REPORT, // report-repair
     ]);
 
-    let report =
-        Adapter::build(&model, &ctx(tmp.path(), None), "demo", &[], &tree()).await.unwrap();
+    let report = Adapter::build(
+        &model,
+        &ctx(tmp.path(), None),
+        "demo",
+        &[],
+        &BuildContext::default(),
+        &tree(),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(report.status, Status::Failure, "missing core tree fails the shell verify gate");
     let core_user = &model.requests()[1].messages[0].content;
@@ -246,8 +321,16 @@ async fn composition_repair() {
         PHASE_DONE, // composition-repair 2
     ]);
 
-    let report =
-        Adapter::build(&model, &ctx(tmp.path(), None), "demo", &[], &tree()).await.unwrap();
+    let report = Adapter::build(
+        &model,
+        &ctx(tmp.path(), None),
+        "demo",
+        &[],
+        &BuildContext::default(),
+        &tree(),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(report.status, Status::Failure, "an exhausted gate parks the slice");
     assert_eq!(report.findings[0].severity, Severity::Important);
@@ -259,6 +342,7 @@ async fn composition_repair() {
     let repair = &requests[1];
     assert_eq!(schema_format(repair).0, "composition-repair");
     assert!(repair.messages[0].content.contains("composition validator found blocking issues"));
+    assert_system_budget(repair, "composition-repair", 32_700); // baseline 29_681
 }
 
 async fn build_with_composition(composition: Option<&str>, report_answer: &'static str) -> Report {
@@ -277,8 +361,16 @@ async fn build_with_composition(composition: Option<&str>, report_answer: &'stat
         PHASE_DONE,
         report_answer,
     ]);
-    let report =
-        Adapter::build(&model, &ctx(tmp.path(), None), "demo", &[], &tree()).await.unwrap();
+    let report = Adapter::build(
+        &model,
+        &ctx(tmp.path(), None),
+        "demo",
+        &[],
+        &BuildContext::default(),
+        &tree(),
+    )
+    .await
+    .unwrap();
     assert_eq!(model.requests().len(), 7, "coherence warnings never trigger the repair leg");
     report
 }
@@ -379,6 +471,7 @@ async fn merge_postflight_single_leg() {
     let requests = model.requests();
     assert_eq!(requests.len(), 1, "a coherent report needs no repair leg");
     assert!(requests[0].system.as_deref().unwrap().contains("# Vectis target — `merge`"));
+    assert_system_budget(&requests[0], "merge-postflight", 8_100); // baseline 7_402
     let user = &requests[0].messages[0].content;
     assert!(user.contains("postflight merge gate"), "phase named");
     assert!(user.contains("cap-matrix re-verification"), "agent-run host gates instructed");

@@ -4,7 +4,9 @@ use std::fs;
 use std::path::Path;
 
 use adapter::answers::REPORT_ANSWER_SCHEMA;
-use adapter::seam::{Context, Input, MergePhase, Severity, Status, WorkingTree};
+use adapter::seam::{
+    BuildContext, Context, Input, MergePhase, Payload, Severity, Status, WorkingTree,
+};
 use adapter::{Format, Request, Target as _};
 use contracts::Adapter;
 use contracts::validate::RULE_VERSION_IS_SEMVER;
@@ -36,6 +38,20 @@ fn schema_format(request: &Request) -> (&str, &str) {
     }
 }
 
+/// RFC-78 D7 re-bloat guard: each leg's system assemble is a pure function
+/// over the embedded prose registry, so its byte size is locked at the
+/// measured baseline plus ~10% headroom (re-measured after the RFC-78 D3
+/// build.md thinning).
+fn assert_system_budget(request: &Request, leg: &str, budget: usize) {
+    let bytes = request.system.as_deref().map_or(0, str::len);
+    println!("{leg} system assemble: {bytes} bytes (budget {budget})");
+    assert!(
+        bytes <= budget,
+        "{leg} system assemble is {bytes} bytes, over its {budget}-byte budget — \
+         trim the assemble or deliberately raise the budget"
+    );
+}
+
 /// Seed one top-level contract whose `info.version` is not SemVer.
 fn seed_bad_contract(dir: &Path) {
     fs::create_dir_all(dir.join("http")).unwrap();
@@ -51,9 +67,10 @@ async fn build_sub_flows() {
     let tmp = TempDir::new().unwrap();
     let model =
         Harness::answering([NOT_APPLICABLE, NOT_APPLICABLE, NOT_APPLICABLE, SUCCESS_REPORT]);
+    let input = |path: &str| Payload::Path(path.to_string());
     let inputs = vec![
-        Input::Proposal("PROPOSAL-BODY".to_string()),
-        Input::Design("DESIGN-BODY".to_string()),
+        Input::Proposal(input(".emery/slices/demo/proposal.md")),
+        Input::Design(input(".emery/slices/demo/design.md")),
     ];
 
     let report = Adapter::build(
@@ -61,6 +78,7 @@ async fn build_sub_flows() {
         &ctx(tmp.path(), Some("http://references/mcp")),
         "demo",
         &inputs,
+        &BuildContext::default(),
         &tree(),
     )
     .await
@@ -71,13 +89,35 @@ async fn build_sub_flows() {
 
     let requests = model.requests();
     assert_eq!(requests.len(), 4, "three sub-flows plus one report call");
+    // Budget = measured baseline (per-leg comment, 2026-07-31, after the
+    // RFC-78 D3 build.md thinning) + ~10%.
+    for (i, (leg, budget)) in [
+        ("json-schema-sub-flow", 18_900), // baseline 17_178
+        ("openapi-sub-flow", 19_000),     // baseline 17_233
+        ("asyncapi-sub-flow", 18_400),    // baseline 16_668
+        ("report", 11_700),               // baseline 10_559
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        assert_system_budget(&requests[i], leg, budget);
+    }
 
     let first = &requests[0];
     let system = first.system.as_deref().unwrap();
     assert!(system.contains("# contracts.build"), "build prompt in system");
     assert!(system.contains("json-schema sub-flow"), "sub-prompt in system");
     let user = &first.messages[0].content;
-    assert!(user.contains("PROPOSAL-BODY") && user.contains("DESIGN-BODY"), "typed inputs");
+    assert!(
+        user.contains("### input: proposal → .emery/slices/demo/proposal.md")
+            && user.contains("### input: design → .emery/slices/demo/design.md"),
+        "typed inputs render as path-form sections: {user}"
+    );
+    assert!(!user.contains("PROPOSAL-BODY"), "artifact bodies are not inlined");
+    assert!(
+        user.contains("Read each path from the working tree"),
+        "read-before-writing instruction rides the inputs block"
+    );
     assert!(user.contains(".emery/slices/demo/contracts"), "slice delta dir named");
     let (name, schema) = schema_format(first);
     assert_eq!(name, "json-schema-sub-flow");
@@ -106,8 +146,16 @@ async fn build_repair_bounded() {
         SUCCESS_REPORT,
     ]);
 
-    let report =
-        Adapter::build(&model, &ctx(tmp.path(), None), "demo", &[], &tree()).await.unwrap();
+    let report = Adapter::build(
+        &model,
+        &ctx(tmp.path(), None),
+        "demo",
+        &[],
+        &BuildContext::default(),
+        &tree(),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(report.status, Status::Failure, "residual validator finding forces failure");
     let finding = &report.findings[0];
@@ -128,6 +176,7 @@ async fn build_repair_bounded() {
         !repair_system.contains("# contracts.build — asyncapi sub-flow"),
         "unaffected sub-prompts stay out of the repair prompt"
     );
+    assert_system_budget(&requests[3], "repair", 19_000); // baseline 17_233
 }
 
 #[tokio::test]
@@ -182,6 +231,7 @@ async fn merge_postflight_gate() {
     assert_eq!(requests.len(), 1, "one bounded repair leg on validator findings");
     assert!(requests[0].system.as_deref().unwrap().contains("# contracts.merge"));
     assert!(requests[0].messages[0].content.contains("postflight"));
+    assert_system_budget(&requests[0], "merge-postflight", 6_000); // baseline 5_444
 }
 
 #[tokio::test]
