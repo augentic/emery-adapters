@@ -53,7 +53,7 @@ Before completing, verify ALL items.
 ### Compilation
 
 - [ ] `cargo check` passes
-- [ ] `cargo clippy` passes without warnings (where possible)
+- [ ] `cargo clippy --all-targets -- -D warnings` passes (matches the merge preflight gate)
 - [ ] No `println!`, `dbg!`, or `unsafe` code
 - [ ] All dependencies use `workspace = true`
 - [ ] `Cargo.toml`, `Migration.md`, `Architecture.md`, `.env.example` exist
