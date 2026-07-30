@@ -54,7 +54,7 @@ Run after both crate writer and test writer have completed. Each iteration runs 
 ```bash
 cd $CRATE_PATH && cargo fmt --check
 cd $CRATE_PATH && cargo check
-cd $CRATE_PATH && cargo clippy -- -D warnings
+cd $CRATE_PATH && cargo clippy --all-targets -- -D warnings
 cd $CRATE_PATH && cargo test
 ```
 

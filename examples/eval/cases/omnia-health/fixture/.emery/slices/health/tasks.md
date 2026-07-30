@@ -21,7 +21,7 @@ Tasks follow the omnia build legs: crate, tests, guest, verify-repair, then stan
 
 ## Verify-repair
 
-- [ ] Run `cargo fmt --check`, `cargo check`, `cargo clippy -- -D warnings`, and `cargo test` under `crates/health/` (max 3 repair iterations).
+- [ ] Run `cargo fmt --check`, `cargo check`, `cargo clippy --all-targets -- -D warnings`, and `cargo test` under `crates/health/` (max 3 repair iterations).
 
 ## Review
 

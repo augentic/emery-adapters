@@ -61,4 +61,4 @@ The full checklist lives at [`checklists.md`](../../references/checklists.md). H
 - Every `Config::get` key in `design.md` has a matching read in the operation (or in `Provider::new`).
 - Every `omnia_guest::Error` mapping in `design.md` has a matching arm in `impl From<DomainError>`.
 - No forbidden crate or forbidden std API per [`guardrails.md`](../../references/guardrails.md).
-- `cargo fmt`, `cargo check`, `cargo clippy -- -D warnings` all pass before entering the build prompt's verify-repair loop.
+- `cargo fmt`, `cargo check`, `cargo clippy --all-targets -- -D warnings` all pass before entering the build prompt's verify-repair loop.

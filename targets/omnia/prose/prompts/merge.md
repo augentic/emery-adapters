@@ -15,7 +15,9 @@ The slice's built code is already present in the lent workspace — the build ph
 
 ## § Omnia pre-merge gate
 
-Run these from `$WORKSPACE_ROOT` (or `$CRATE_PATH` where noted). All four MUST pass. Any failure means the merge report is `status: failure` (see `## Merge report`).
+Run these from `$WORKSPACE_ROOT` (or `$CRATE_PATH` where noted), in order, **fail-fast**: when a step fails (beyond step 1's `cargo fmt` repair), skip the remaining steps, map its output into blocking findings, and answer `status: failure` (see `## Merge report`).
+
+This prompt carries the full gate contract — do not enumerate MCP tools or pre-fetch references; fetch `references/guardrails.md` only on a step-4 forbidden-crate / std-API failure.
 
 ### 1. Format and lint
 
@@ -24,7 +26,7 @@ cd $CRATE_PATH && cargo fmt --check
 cd $CRATE_PATH && cargo clippy --all-targets -- -D warnings
 ```
 
-Formatting failures are repaired with `cargo fmt` and the gate re-run. Clippy failures are build regressions — report them as blocking findings and fail the merge.
+Formatting failures are repaired with `cargo fmt` and the gate re-run. Clippy failures are build regressions — report them as blocking findings and fail the merge without running steps 2–4.
 
 ### 2. Workspace check
 
@@ -48,7 +50,7 @@ The build's verify-repair loop already enforces a passing test suite. Re-running
 cargo build --target wasm32-wasip2 --release --workspace
 ```
 
-The wasm32-wasip2 build is the definitive deployment-target check. A native `cargo check` will accept code that uses forbidden std APIs or non-WASM-compatible crates; only the wasm32 build proves the slice compiles for the real target. A failure here is a guardrail violation that the build missed. Reference [`../references/guardrails.md`](../references/guardrails.md) for the forbidden crate / API table.
+The wasm32-wasip2 build is the definitive deployment-target check. A native `cargo check` will accept code that uses forbidden std APIs or non-WASM-compatible crates; only the wasm32 build proves the slice compiles for the real target. A failure here is a guardrail violation that the build missed — fetch [`../references/guardrails.md`](../references/guardrails.md) then for the forbidden crate / API table.
 
 ## Merge report
 
