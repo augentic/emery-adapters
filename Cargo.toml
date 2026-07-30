@@ -49,10 +49,10 @@ typescript = { path = "sources/typescript" }
 vectis = { path = "targets/vectis" }
 
 [patch.crates-io]
-emery-adapter = { git = "https://github.com/augentic/emery", branch = "rfc-78" }
-emery-probe = { git = "https://github.com/augentic/emery", branch = "rfc-78" }
-emery-native = { git = "https://github.com/augentic/emery", branch = "rfc-78" }
-emery-prose = { git = "https://github.com/augentic/emery", branch = "rfc-78" }
+emery-adapter = { git = "https://github.com/augentic/emery", tag = "v0.33.0" }
+emery-probe = { git = "https://github.com/augentic/emery", tag = "v0.33.0" }
+emery-native = { git = "https://github.com/augentic/emery", tag = "v0.33.0" }
+emery-prose = { git = "https://github.com/augentic/emery", tag = "v0.33.0" }
 
 # emery-adapter = { path = "../emery/crates/adapter" }
 # emery-probe = { path = "../emery/crates/probe" }
