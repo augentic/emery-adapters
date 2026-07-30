@@ -3,7 +3,7 @@
 # -------------------------------------
 
 [env]
-# CURSOR_MODEL = "opus"
+CURSOR_MODEL = "cursor-grok-4.5-high-fast"
 # CURSOR_TIMEOUT_SECS = "1800"
 RUST_LOG = 'info,opentelemetry=off,opentelemetry_sdk=off,omnia_wasi_otel=off,omnia_cursor=debug,omnia_wasi_http=debug'
 VECTIS_EXEMPLAR_DIR = { value = "${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/../vectis-exemplar", condition = { env_not_set = ["VECTIS_EXEMPLAR_DIR"], files_exist = ["${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/../vectis-exemplar"] } }

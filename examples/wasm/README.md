@@ -1,12 +1,6 @@
-# Wasm Examples
+# WebAssembly (Wasm) Examples
 
-End-to-end runs of the Emery change workflow over the real WASM component seam: the shipped `emery` binary from the sibling `augentic/emery` checkout (embedded engine guest) plus this repo's built adapter components.
-
-There is no `omnia.toml`: each scenario invokes the built binary directly. The run scripts sandbox the layout with `EMERY_HOME`, seed adapters via `emery adapter add`, and initialize the project by bare target name.
-
-`adapter add` remains the local-bytes path, and cache hits always win: a bare name whose component is seeded in the project cache stays bare and resolves the seed. In production (no seed), a bare first-party name auto-pins to the host binary's embedded adapter train (`emery:<name>@<train>`, shown by `emery --version`) and pulls from GHCR — which is why the `adapter add` lines in the example Makefile stay: they pin the runs to the freshly built debug `.wasm` components instead of the published train.
-
-See the [repo README](../../README.md) for the graded native eval-case repair loop; [docs/testing.md](../../docs/testing.md) for the five-rung map.
+These examples run the full Emery workflow end-to-end using real WebAssembly components. They combine the `emery` CLI tool (from the sibling `augentic/emery` repository) with the adapter components built in this repository.
 
 ## Quick start
 
@@ -18,12 +12,14 @@ agent login
 
 or set `CURSOR_API_KEY` in `.env`.
 
-Requires the sibling [`augentic/emery`](https://github.com/augentic/emery) checkout at `../emery` (the examples build and drive that repo's shipped `emery` binary).
+Requires the sibling `[augentic/emery](https://github.com/augentic/emery)` checkout at `../emery` (the examples build and drive that repo's shipped `emery` binary).
 
-| Scenario | Task | Graded native twin |
-| --- | --- | --- |
+
+| Scenario                           | Task                        | Graded native twin |
+| ---------------------------------- | --------------------------- | ------------------ |
 | documentation → contracts (orders) | `cargo make wasm-contracts` | `orders-contracts` |
-| typescript → omnia (r9k migration) | `cargo make wasm-omnia-r9k` | `omnia-r9k` |
+| typescript → omnia (r9k migration) | `cargo make wasm-omnia-r9k` | `omnia-r9k`        |
+
 
 ```bash
 cargo make wasm-contracts
@@ -36,9 +32,20 @@ Each run wipes its own sandbox then rebuilds only when Cargo says so. To remove 
 cargo make wasm-clean
 ```
 
-Artifacts land under the gitignored sandboxes — `sandbox/wasm-contracts/` and `sandbox/wasm-omnia-r9k/` — each with a `project/` tree and the store/cache beside it.
 
-`GUEST_TIMEOUT_MS` defaults to one hour (Omnia's per-invocation wall-clock cap; default is 30s). Set `RUST_LOG` yourself when debugging the seam. The runtime may log a non-fatal `no guest exports the http handler; http trigger inert` line per invocation — command mode proceeds without it. `CURSOR_MODEL=<model-id>` sets the default model when a request leaves it unset.
+
+## About
+
+These examples run the `emery` binary directly (no `omnia.toml` required). The run scripts isolate the environment using `EMERY_HOME`, load local adapters via `emery adapter add`, and initialize the project.
+
+We use `emery adapter add` to ensure the examples run against your freshly built, local `.wasm` components. If we didn't do this, Emery would automatically download and use the published adapter versions from GHCR.
+
+**Key details:**
+- **Artifacts:** Output files are saved in `sandbox/wasm-contracts/` and `sandbox/wasm-omnia-r9k/`. These git-ignored folders contain the project files, store, and cache.
+- **Timeouts:** `GUEST_TIMEOUT_MS` is increased to one hour (from the 30s default) to give the model enough time to finish.
+- **Logging:** Set the `RUST_LOG` environment variable if you need to debug. You can safely ignore the `no guest exports the http handler` warning.
+- **Model Selection:** Set `CURSOR_MODEL=<model-id>` to override the default AI model.
+- **Further Reading:** See the [repo README](../../README.md) for the evaluation loop and [docs/testing.md](../../docs/testing.md) for the testing strategy.
 
 ## wasm-contracts
 
@@ -54,6 +61,8 @@ After running, inspect:
 ```text
 sandbox/wasm-contracts/project/contracts/
 ```
+
+
 
 ## wasm-omnia-r9k
 
