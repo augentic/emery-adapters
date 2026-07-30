@@ -122,7 +122,7 @@ Linked adapters need only the directory. A third-party adapter also needs a Carg
 
 `vectis-single-screen` (and any live Vectis build that materializes shells) needs a local [`vectis-exemplar`](https://github.com/augentic/vectis-exemplar) checkout.
 
-`cargo make eval` / `cargo make lab` auto-set `VECTIS_EXEMPLAR_DIR` to the absolute path of a workspace-sibling `../vectis-exemplar` when the env var is unset. That matters because the eval sandbox is `sandbox/<case>/`: without the export, the build prelude's default `../vectis-exemplar` would resolve to `sandbox/vectis-exemplar`. For non-sibling layouts, export `VECTIS_EXEMPLAR_DIR` yourself to an absolute path before invoking make.
+`cargo make eval` / `cargo make lab` auto-set `VECTIS_EXEMPLAR_DIR` to the workspace-sibling `../vectis-exemplar` when that checkout exists and the env var is unset. That matters because the eval sandbox is `sandbox/<case>/`: without the export, the build prelude's default `../vectis-exemplar` would resolve to `sandbox/vectis-exemplar`. For non-sibling layouts, export `VECTIS_EXEMPLAR_DIR` yourself to an absolute path before invoking make.
 
 After materialize the agent strips `VECTIS-OPTIONAL` / `cap=demo` per `$TEMPLATE_DIR/AGENTS.md`, regenerates the iOS Xcode project (`make -C iOS generate-project`), runs `make build`, and stamps `iOS/.vectis/verify.ok` / `Android/.vectis/verify.ok` (adapter-owned; not in the template).
 

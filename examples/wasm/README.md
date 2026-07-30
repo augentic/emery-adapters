@@ -4,6 +4,8 @@ End-to-end runs of the Emery change workflow over the real WASM component seam: 
 
 There is no `omnia.toml`: each scenario invokes the built binary directly. The run scripts sandbox the layout with `EMERY_HOME`, seed adapters via `emery adapter add`, and initialize the project by bare target name.
 
+`adapter add` remains the local-bytes path, and cache hits always win: a bare name whose component is seeded in the project cache stays bare and resolves the seed. In production (no seed), a bare first-party name auto-pins to the host binary's embedded adapter train (`emery:<name>@<train>`, shown by `emery --version`) and pulls from GHCR — which is why the `adapter add` lines in the example Makefile stay: they pin the runs to the freshly built debug `.wasm` components instead of the published train.
+
 See the [repo README](../../README.md) for the graded native eval-case repair loop; [docs/testing.md](../../docs/testing.md) for the five-rung map.
 
 ## Quick start
