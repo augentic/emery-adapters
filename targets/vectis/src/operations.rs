@@ -8,8 +8,8 @@ use std::path::Path;
 
 use adapter::registry::Doc;
 use adapter::seam::{
-    BuildInput, Context, Error, Finding, Input, MergePhase, Platform, PlatformsCapability, Report,
-    Severity, Status, TargetMetadata, WorkingTree,
+    BuildContext, BuildInput, Context, Error, Finding, Input, MergePhase, Platform,
+    PlatformsCapability, Report, Severity, Status, TargetMetadata, WorkingTree,
 };
 use adapter::{AdapterIdentity, Model, Target, phase};
 use serde_json::Value;
@@ -90,7 +90,8 @@ impl Target for Adapter {
         reason = "One linear leg-by-leg walk of the prompt's phase order; splitting hides the order."
     )]
     async fn build<P: Model>(
-        model: &P, ctx: &Context<'_>, slice: &str, inputs: &[Input], tree: &WorkingTree,
+        model: &P, ctx: &Context<'_>, slice: &str, inputs: &[Input], _context: &BuildContext,
+        tree: &WorkingTree,
     ) -> Result<Report, Error> {
         let tree_root = ctx.tree_root(tree);
         let slice_dir_rel = format!(".emery/slices/{slice}");

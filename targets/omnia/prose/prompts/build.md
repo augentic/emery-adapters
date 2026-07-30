@@ -1,6 +1,6 @@
 # Omnia target — build prompt
 
-> The omnia adapter core inlines this document into the system prompt of every build leg — generation, standards review, capture replay, and the report — alongside the leg's own prompt under [`build/`](build/). Leg sequencing lives in the adapter core (`src/operations.rs`), not here: each leg's user prompt names the sections of this document to follow. Synthesis idioms (provider DI, WASM guardrails, error variants, validation placement) live in [`guidance.md`](guidance.md) and must already be reflected in the slice's `specs/<domain>/spec.md` + `design.md` before the build runs.
+> The omnia adapter core inlines this document into the system prompt of every build leg — preparation, generation, capture replay, and standards review — alongside the leg's own prompt under [`build/`](build/). Leg sequencing lives in the adapter core (`src/operations.rs`), not here: each leg's user prompt names the sections of this document to follow. Synthesis idioms (provider DI, WASM guardrails, error variants, validation placement) live in [`guidance.md`](guidance.md) and must already be reflected in the slice's `specs/<domain>/spec.md` + `design.md` before the build runs.
 
 ## Inputs and bindings
 
@@ -45,7 +45,7 @@ The build's first leg is the preparation leg ([`build/prepare.md`](build/prepare
 
 Between the preparation leg and generation, the adapter runs its deterministic scaffold prelude in-guest: it strictly validates the checkout's template contract (`exemplar.yaml` → `templates/guest/manifest.yaml`), then writes any missing standard tooling file (cargo-make, deny, cargo-vet scaffold, GitHub workflows, toolchain/editor config) from the checkout — existing files are never overwritten, and a missing or malformed checkout or a prelude I/O failure fails the build before generation. The generation user prompt carries the outcome as a `### scaffold prelude` block; never re-author the files it lists ([`configuration.md`](../references/configuration.md) describes them).
 
-The adapter core drives five legs in a fixed order — preparation ([`build/prepare.md`](build/prepare.md), the exemplar checkout), generation (crate writer, test writer, guest writer in create mode, then the § verify-repair loop), standards review ([`build/review.md`](build/review.md)), capture replay ([`build/replay.md`](build/replay.md), self-skipping when no `captures` source is bound), then the report leg (see `## Build report`). Within the generation leg, write the crate before the tests, mark `tasks.md` checkboxes complete as each task lands, and never transition the slice lifecycle — the deterministic in-guest report gate checks the report answer and the engine guest owns the `Refined → Built` transition.
+The adapter core drives the legs in a fixed order — preparation ([`build/prepare.md`](build/prepare.md), the exemplar checkout), generation (crate writer, test writer, guest writer in create mode, then the § verify-repair loop), capture replay ([`build/replay.md`](build/replay.md), dispatched only when the build context binds a `captures` source — the adapter skips it in-guest otherwise, with no leg spawned), then standards review ([`build/review.md`](build/review.md)), which closes the build: it drives the remediation cycle, marks the completed `tasks.md` checkboxes, and its answer carries the findings synthesis and output declaration the adapter assembles the build report from in-guest (see `## Build report`) — there is no separate report leg. Within the generation leg, write the crate before the tests, mark `tasks.md` checkboxes complete as each task lands, and never transition the slice lifecycle — the deterministic in-guest report gate checks the assembled report and the engine guest owns the `Refined → Built` transition.
 
 ## § Verify-repair loop (max 3 iterations)
 
@@ -77,7 +77,7 @@ If `cargo test` fails, classify each failure:
 
 **Update-mode regression check.** Before iteration 1, record the baseline: `cd $CRATE_PATH && cargo test 2>&1 | tee /tmp/${SLICE_NAME}-${CRATE_NAME}-baseline.txt`. After each iteration, for each test that passed before and now fails: if the spec explicitly changes the asserted behaviour → expected behavioural change, re-enter test writer to align expectations; if the spec does not change the asserted behaviour → true regression, route the fix through the classification table.
 
-Repeat until all four checks pass or 3 iterations exhausted. If still failing after 3 iterations: **STOP**. Write a `status: failure` build report (see `## Build report`) mapping the remaining failures as blocking findings, surface the stop hint below with full error output, and do not transition the slice — a failure report parks it for human review.
+Repeat until all four checks pass or 3 iterations exhausted. If still failing after 3 iterations: **STOP**. Surface the stop hint below with full error output and do not transition the slice — the standards-review leg maps the remaining failures as blocking findings, so the assembled build report is `status: failure` and parks the slice for human review.
 
 ## § Stop hint contract
 
@@ -89,37 +89,29 @@ A build failure surfaces a stop hint as the body's final output — a single str
 - `log-path` — absolute path to the captured stdout/stderr.
 - `next-action` — typically `re-run /emery:build $SLICE after fix`.
 
-Render the hint as the final visible output of the run, alongside the `status: failure` build report (see `## Build report`). Never write the lifecycle yourself — the deterministic in-guest report gate checks the answer and the engine guest owns the lifecycle, so the slice stays `refined` and the loop (or a re-invocation) re-enters cleanly.
+Render the hint as the final visible output of the run, alongside the blocking findings that make the assembled build report `status: failure` (see `## Build report`). Never write the lifecycle yourself — the deterministic in-guest report gate checks the assembled report and the engine guest owns the lifecycle, so the slice stays `refined` and the loop (or a re-invocation) re-enters cleanly.
 
 ## § Standards review surface
 
-Phase 6 writes `$REVIEW_OUTPUT` (`REVIEW.md`) — the model-assisted surface: specialist + antagonist judgment per [`team-protocol-crate.md`](../references/team-protocol-crate.md) and [`build/review.md`](build/review.md), applying the engineering-standards rules shipped under [`../rules/`](../rules/) (the Omnia overlay plus the shared `UNI-*` pack at `rules/universal/`).
+The standards-review leg writes `$REVIEW_OUTPUT` (`REVIEW.md`) — the model-assisted surface: specialist + antagonist judgment per [`team-protocol-crate.md`](../references/team-protocol-crate.md) and [`build/review.md`](build/review.md), applying the engineering-standards rules shipped under [`../rules/`](../rules/) (the Omnia overlay plus the shared `UNI-*` pack at `rules/universal/`).
 
 Per [Standards layer](../references/emery-runtime/standards-layer-snippet.md), standards findings may block CI but never transition plan entries, slices, or changes. CI wiring is consumer-project policy, not adapter policy; this prompt acknowledges the surface and links out for the contract.
 
 ## Build report
 
-When the algorithm resolves, return a schema-valid build report as the answer to the build's report leg (the schema-gated report answer — no report file is written). This is the build's final deliverable. Never transition the slice lifecycle — the deterministic in-guest report gate checks the answer's coherence against the working tree and the engine guest owns the `Refined → Built` transition.
+The build report is assembled **in-guest** from the standards-review leg's schema-gated answer — no report leg is spawned and no report file is written. The review answer's `## Build close-out` (see [`build/review.md`](build/review.md)) carries the report's judgmental residue: the findings left unresolved after the remediation cycle and the declared build outputs (the slice's crate tree, plus the guest scaffolding in create mode, as `platform: core` paths relative to the project root). Never transition the slice lifecycle — the deterministic in-guest report gate checks the assembled report's coherence against the working tree and the engine guest owns the `Refined → Built` transition.
 
-```yaml
-version: 1
-slice: <slice-name>     # matches the build request's `slice`
-target: omnia@1.0.0        # this adapter at its manifest version
-status: success         # or: failure
-findings: []            # structured diagnostics; default []
-```
+**Status is derived, never judged.** The assembled report is `status: success` iff the review answer carries no blocking (`critical` / `important`) finding and every declared output exists in the working tree; the deterministic gate adds a blocking finding for any declared-but-missing output. A build that cannot succeed — an exhausted verify-repair budget, unresolved blocking review findings, replay failures the review confirms — must carry at least one blocking finding in the review answer.
 
-**Success vs failure findings rule.** A `status: success` report carries an empty `findings[]` or only non-blocking findings (`suggestion` / `optional`); the deterministic report gate downgrades a `success` report carrying any blocking (`critical` / `important`) finding to `failure`. A `status: failure` report populates `findings[]` with the blocking violations the target can map from the verify-repair output and `REVIEW.md`, and leaves `findings: []` when no specifics are mappable.
+- **Clean build** — the verify-repair loop passes (`cargo fmt --check`, `cargo check`, `cargo clippy -- -D warnings`, `cargo test`), the code-review remediation cycle leaves no unresolved `critical` / `important` findings in `REVIEW.md`, and replay passes when the build context binds `captures` → an answer with no blocking findings assembles as `status: success`.
+- **Unresolved build** — the verify-repair budget is exhausted (3 iterations) or the review remediation cycle cannot clear its blocking findings → blocking findings in the review answer assemble as `status: failure`.
 
-- **Clean build** — the verify-repair loop passes (`cargo fmt --check`, `cargo check`, `cargo clippy -- -D warnings`, `cargo test`), the code-review remediation cycle leaves no unresolved `critical` / `important` findings in `REVIEW.md`, and replay passes when a `captures` binding is present → `status: success`, `findings: []`.
-- **Unresolved build** — the verify-repair budget is exhausted (3 iterations) or the review remediation cycle cannot clear its blocking findings → `status: failure` with blocking findings mapped where possible.
-
-Each `findings[]` item validates against `schemas/diagnostics/diagnostic.schema.json` (the structured-diagnostic shape distributed with the CLI; required fields include `id`, `title`, `severity`, `source`, `artifact`, `evidence`, `impact`, `remediation`, `fingerprint`). Map omnia's verify-repair and `REVIEW.md` findings into that shape, carrying detail under `evidence.kind: structured` with `target-adapter: omnia`.
+Each review-answer finding carries `title`, `severity`, `impact`, and `remediation` (plus `rule-id` when it cites a codex rule); the adapter folds them into the engine's report findings. Map omnia's verify-repair, `REVIEW.md`, and replay findings into that shape.
 
 ## References
 
 - [`guidance.md`](guidance.md), [`merge.md`](merge.md) — sibling prompts.
-- [`build/prepare.md`](build/prepare.md), [`build/crate.md`](build/crate.md), [`build/test.md`](build/test.md), [`build/guest.md`](build/guest.md), [`build/review.md`](build/review.md), [`build/replay.md`](build/replay.md) — per-leg prompts.
+- [`build/prepare.md`](build/prepare.md), [`build/crate.md`](build/crate.md), [`build/test.md`](build/test.md), [`build/guest.md`](build/guest.md), [`build/replay.md`](build/replay.md), [`build/review.md`](build/review.md) — per-leg prompts.
 - [`../../../sources/captures/prose/references/capture-format.md`](../../../../sources/captures/prose/references/capture-format.md) — runtime capture wire format (when `captures` is bound).
 - [`exemplar.md`](../references/exemplar.md) — the exemplar checkout: contract, compatibility behavior, navigation map.
 - [`hard-rules.md`](../references/hard-rules.md) — full authority hierarchy and hard-rules set.

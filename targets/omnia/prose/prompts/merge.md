@@ -52,7 +52,7 @@ The wasm32-wasip2 build is the definitive deployment-target check. A native `car
 
 ## Merge report
 
-Answer the leg with a schema-valid merge report (the schema-gated report answer — no report file is written). A `status: success` report means all four gate steps passed. Any gate failure means `status: failure`, with the failing step's output mapped into blocking `findings[]` (the same diagnostic shape as the build report); the engine then aborts the merge with the slice still at `built` for human review — never transition the lifecycle yourself. Omnia adds no postflight validator or adapter-specific adoption mechanics — every artefact under `specs/` is promoted by the engine's deterministic merge, and there are no generated outputs to refresh at merge time.
+Answer the leg with a schema-valid merge report (the schema-gated report answer — no report file is written). A `status: success` report means all four gate steps passed. Any gate failure means `status: failure`, with the failing step's output mapped into blocking `findings[]` (the report answer schema's diagnostic shape); the engine then aborts the merge with the slice still at `built` for human review — never transition the lifecycle yourself. Omnia adds no postflight validator or adapter-specific adoption mechanics — every artefact under `specs/` is promoted by the engine's deterministic merge, and there are no generated outputs to refresh at merge time.
 
 ## References
 

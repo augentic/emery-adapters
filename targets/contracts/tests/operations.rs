@@ -4,7 +4,9 @@ use std::fs;
 use std::path::Path;
 
 use adapter::answers::REPORT_ANSWER_SCHEMA;
-use adapter::seam::{Context, Input, MergePhase, Severity, Status, WorkingTree};
+use adapter::seam::{
+    BuildContext, Context, Input, MergePhase, Payload, Severity, Status, WorkingTree,
+};
 use adapter::{Format, Request, Target as _};
 use contracts::Adapter;
 use contracts::validate::RULE_VERSION_IS_SEMVER;
@@ -38,7 +40,7 @@ fn schema_format(request: &Request) -> (&str, &str) {
 
 /// RFC-78 D7 re-bloat guard: each leg's system assemble is a pure function
 /// over the embedded prose registry, so its byte size is locked at the
-/// measured baseline plus ~10% headroom. Budgets tighten in WP2.
+/// measured baseline plus ~10% headroom (re-measured after WP2's path-first inputs).
 fn assert_system_budget(request: &Request, leg: &str, budget: usize) {
     let bytes = request.system.as_deref().map_or(0, str::len);
     println!("{leg} system assemble: {bytes} bytes (budget {budget})");
@@ -64,9 +66,10 @@ async fn build_sub_flows() {
     let tmp = TempDir::new().unwrap();
     let model =
         Harness::answering([NOT_APPLICABLE, NOT_APPLICABLE, NOT_APPLICABLE, SUCCESS_REPORT]);
+    let input = |path: &str| Payload::Path(path.to_string());
     let inputs = vec![
-        Input::Proposal("PROPOSAL-BODY".to_string()),
-        Input::Design("DESIGN-BODY".to_string()),
+        Input::Proposal(input(".emery/slices/demo/proposal.md")),
+        Input::Design(input(".emery/slices/demo/design.md")),
     ];
 
     let report = Adapter::build(
@@ -74,6 +77,7 @@ async fn build_sub_flows() {
         &ctx(tmp.path(), Some("http://references/mcp")),
         "demo",
         &inputs,
+        &BuildContext::default(),
         &tree(),
     )
     .await
@@ -102,7 +106,16 @@ async fn build_sub_flows() {
     assert!(system.contains("# contracts.build"), "build prompt in system");
     assert!(system.contains("json-schema sub-flow"), "sub-prompt in system");
     let user = &first.messages[0].content;
-    assert!(user.contains("PROPOSAL-BODY") && user.contains("DESIGN-BODY"), "typed inputs");
+    assert!(
+        user.contains("### input: proposal → .emery/slices/demo/proposal.md")
+            && user.contains("### input: design → .emery/slices/demo/design.md"),
+        "typed inputs render as path-form sections: {user}"
+    );
+    assert!(!user.contains("PROPOSAL-BODY"), "artifact bodies are not inlined");
+    assert!(
+        user.contains("Read each path from the working tree"),
+        "read-before-writing instruction rides the inputs block"
+    );
     assert!(user.contains(".emery/slices/demo/contracts"), "slice delta dir named");
     let (name, schema) = schema_format(first);
     assert_eq!(name, "json-schema-sub-flow");
@@ -131,8 +144,16 @@ async fn build_repair_bounded() {
         SUCCESS_REPORT,
     ]);
 
-    let report =
-        Adapter::build(&model, &ctx(tmp.path(), None), "demo", &[], &tree()).await.unwrap();
+    let report = Adapter::build(
+        &model,
+        &ctx(tmp.path(), None),
+        "demo",
+        &[],
+        &BuildContext::default(),
+        &tree(),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(report.status, Status::Failure, "residual validator finding forces failure");
     let finding = &report.findings[0];

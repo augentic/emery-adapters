@@ -13,8 +13,8 @@ The Omnia crate / test / guest / review instructions live in [`../prompts/build.
 | [`build/crate.md`](../prompts/build/crate.md) | Generation leg: generate or update the Rust crate. |
 | [`build/test.md`](../prompts/build/test.md) | Generation leg: generate or update the test suite. |
 | [`build/guest.md`](../prompts/build/guest.md) | Generation leg (create mode only): scaffold the WASM guest wrapper. |
-| [`build/review.md`](../prompts/build/review.md) | Review leg: agent-team code review and remediation cycle. |
-| [`build/replay.md`](../prompts/build/replay.md) | Replay leg (self-skipping): runtime capture replay when a `captures` source is bound. Delegates hook contract to [`../../../codex/references/replay/`](../../../../codex/references/replay/). |
+| [`build/review.md`](../prompts/build/review.md) | Review leg: agent-team code review, remediation cycle, and the build close-out (findings synthesis + output declaration the in-guest report assembly consumes). |
+| [`build/replay.md`](../prompts/build/replay.md) | Replay leg (dispatched only when the build context binds a `captures` source; skipped in-guest otherwise): runtime capture replay. Delegates hook contract to [`../../../codex/references/replay/`](../../../../codex/references/replay/). |
 | [`merge.md`](../prompts/merge.md) | Merge leg: delta fold plus the pre-merge gate (cargo + clippy + test + wasm32 build). |
 
 ## References
