@@ -34,10 +34,10 @@ omnia-testkit = "0.35.0"
 
 # The engine crates keep short lib names (`adapter`, `native`, `probe`,
 # `prose`), so Rust `use` paths are unaffected by the emery-* package names.
-emery-adapter = "0.33.0"
-emery-native = "0.33.0"
-emery-probe = "0.33.0"
-emery-prose = "0.33.0"
+emery-adapter = "0.34.0"
+emery-native = "0.34.0"
+emery-probe = "0.34.0"
+emery-prose = "0.34.0"
 
 captures = { path = "sources/captures" }
 contracts = { path = "targets/contracts" }
@@ -49,10 +49,11 @@ typescript = { path = "sources/typescript" }
 vectis = { path = "targets/vectis" }
 
 [patch.crates-io]
-emery-adapter = { git = "https://github.com/augentic/emery", tag = "v0.33.0" }
-emery-probe = { git = "https://github.com/augentic/emery", tag = "v0.33.0" }
-emery-native = { git = "https://github.com/augentic/emery", tag = "v0.33.0" }
-emery-prose = { git = "https://github.com/augentic/emery", tag = "v0.33.0" }
+# Exact rev until emery tags v0.34.0 (Omnia verify-grant removal).
+emery-adapter = { git = "https://github.com/augentic/emery", rev = "0686ea4a18809a0a613f794d109dc6796b47eefa" }
+emery-probe = { git = "https://github.com/augentic/emery", rev = "0686ea4a18809a0a613f794d109dc6796b47eefa" }
+emery-native = { git = "https://github.com/augentic/emery", rev = "0686ea4a18809a0a613f794d109dc6796b47eefa" }
+emery-prose = { git = "https://github.com/augentic/emery", rev = "0686ea4a18809a0a613f794d109dc6796b47eefa" }
 
 # emery-adapter = { path = "../emery/crates/adapter" }
 # emery-probe = { path = "../emery/crates/probe" }
