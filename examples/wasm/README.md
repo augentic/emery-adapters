@@ -43,7 +43,7 @@ We use `emery adapter add` to ensure the examples run against your freshly built
 **Key details:**
 - **Artifacts:** Output files are saved in `sandbox/wasm-contracts/` and `sandbox/wasm-omnia-r9k/`. These git-ignored folders contain the project files, store, and cache.
 - **Timeouts:** Per-spawn `cursor-agent` wall-clock uses the Cursor backend default (600s); raise `CURSOR_TIMEOUT_SECS` in `.env` if a leg needs longer.
-- **Logging:** Set the `RUST_LOG` environment variable if you need to debug. You can safely ignore the `no guest exports the http handler` warning.
+- **Logging:** Set the `RUST_LOG` environment variable if you need to debug the scripted runs; ad-hoc `emery` invocations can use the reserved host flags `--debug` / `--quiet` instead (they win over any ambient `RUST_LOG`). You can safely ignore the `no guest exports the http handler` warning.
 - **Model Selection:** Set `CURSOR_MODEL=<model-id>` to override the default AI model.
 - **Further Reading:** See the [repo README](../../README.md) for the evaluation loop and [docs/testing.md](../../docs/testing.md) for the testing strategy.
 
