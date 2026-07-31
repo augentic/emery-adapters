@@ -49,11 +49,11 @@ typescript = { path = "sources/typescript" }
 vectis = { path = "targets/vectis" }
 
 [patch.crates-io]
-# Exact rev until emery tags v0.34.0 (Omnia verify-grant removal).
-emery-adapter = { git = "https://github.com/augentic/emery", rev = "f8266565f1b5ce616f9908029aba36574cf6baa7" }
-emery-probe = { git = "https://github.com/augentic/emery", rev = "f8266565f1b5ce616f9908029aba36574cf6baa7" }
-emery-native = { git = "https://github.com/augentic/emery", rev = "f8266565f1b5ce616f9908029aba36574cf6baa7" }
-emery-prose = { git = "https://github.com/augentic/emery", rev = "f8266565f1b5ce616f9908029aba36574cf6baa7" }
+# Released engine pin (crates.io emery-* still blocked on omnia publish).
+emery-adapter = { git = "https://github.com/augentic/emery", tag = "v0.34.0" }
+emery-probe = { git = "https://github.com/augentic/emery", tag = "v0.34.0" }
+emery-native = { git = "https://github.com/augentic/emery", tag = "v0.34.0" }
+emery-prose = { git = "https://github.com/augentic/emery", tag = "v0.34.0" }
 
 # emery-adapter = { path = "../emery/crates/adapter" }
 # emery-probe = { path = "../emery/crates/probe" }
