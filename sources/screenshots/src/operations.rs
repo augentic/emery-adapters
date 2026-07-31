@@ -27,7 +27,7 @@ impl Source for Adapter {
 
     fn metadata() -> SourceMetadata {
         SourceMetadata {
-            emery_floor: Some("0.34.0".to_string()),
+            emery_floor: Some("0.35.0".to_string()),
         }
     }
 
