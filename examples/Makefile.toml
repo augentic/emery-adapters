@@ -40,7 +40,6 @@ script = '''
   set -euo pipefail
 
   export EMERY_HOME="$PWD/sandbox/wasm-contracts"
-  export GUEST_TIMEOUT_MS="3600000"
 
   rm -rf "$EMERY_HOME"
   mkdir -p "$EMERY_HOME/project"
@@ -74,7 +73,6 @@ script = '''
   set -euo pipefail
 
   export EMERY_HOME="$PWD/sandbox/wasm-omnia-r9k"
-  export GUEST_TIMEOUT_MS="3600000"
 
   CACHE="$PWD/examples/eval/cases/omnia-r9k/fixture"
   DEST="$CACHE/legacy/at_r9k_position_adapter"
