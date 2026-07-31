@@ -4,9 +4,8 @@
 
 [env]
 CURSOR_MODEL = "cursor-grok-4.5-high-fast"
-CURSOR_TIMEOUT_SECS = "1800"
 RUST_LOG = 'info,opentelemetry=off,opentelemetry_sdk=off,omnia_wasi_otel=off,omnia_cursor=debug,omnia_wasi_http=debug'
-VECTIS_EXEMPLAR_DIR = { value = "${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/../vectis-exemplar", condition = { env_not_set = ["VECTIS_EXEMPLAR_DIR"], files_exist = ["${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/../vectis-exemplar"] } }
+VECTIS_EXEMPLAR_DIR = "${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/../vectis-exemplar"
 
 [tasks.eval]
 env_files = [".env"]
@@ -41,7 +40,7 @@ script = '''
   set -euo pipefail
 
   export EMERY_HOME="$PWD/sandbox/wasm-contracts"
-  export GUEST_TIMEOUT_MS="${GUEST_TIMEOUT_MS:-3600000}"
+  export GUEST_TIMEOUT_MS="3600000"
 
   rm -rf "$EMERY_HOME"
   mkdir -p "$EMERY_HOME/project"
@@ -51,20 +50,20 @@ script = '''
   git init -q "$EMERY_HOME/project"
 
   EMERY_BIN="$PWD/../emery/target/debug/emery"
-  run() { (cd "$EMERY_HOME/project" && "$EMERY_BIN" "$@"); }
+  emery() { (cd "$EMERY_HOME/project" && "$EMERY_BIN" "$@"); }
 
   ADAPTER_DIR="$PWD/target/wasm32-wasip2/debug"
-  run adapter add "$ADAPTER_DIR/documentation.wasm"
-  run adapter add "$ADAPTER_DIR/intent.wasm"
-  run adapter add "$ADAPTER_DIR/contracts.wasm"
+  emery adapter add "$ADAPTER_DIR/documentation.wasm"
+  emery adapter add "$ADAPTER_DIR/intent.wasm"
+  emery adapter add "$ADAPTER_DIR/contracts.wasm"
 
-  run init contracts --name orders
+  emery init contracts --name orders
 
-  run plan author orders \
-    --intent "Author the API contracts for the orders service described under docs/: the JSON Schema vocabulary plus the HTTP (OpenAPI) surface. Contracts only - no service implementation." \
+  emery plan author orders \
+    --intent "Author the API contracts for the orders service" \
     --source "docs=documentation:docs"
-  run plan approve
-  run plan execute
+  emery plan approve
+  emery plan execute
 '''
 
 [tasks.wasm-omnia-r9k]
@@ -75,7 +74,7 @@ script = '''
   set -euo pipefail
 
   export EMERY_HOME="$PWD/sandbox/wasm-omnia-r9k"
-  export GUEST_TIMEOUT_MS="${GUEST_TIMEOUT_MS:-3600000}"
+  export GUEST_TIMEOUT_MS="3600000"
 
   CACHE="$PWD/examples/eval/cases/omnia-r9k/fixture"
   DEST="$CACHE/legacy/at_r9k_position_adapter"
@@ -94,18 +93,19 @@ script = '''
   git init -q "$EMERY_HOME/project"
 
   EMERY_BIN="$PWD/../emery/target/debug/emery"
-  run() { (cd "$EMERY_HOME/project" && "$EMERY_BIN" "$@"); }
+  emery() { (cd "$EMERY_HOME/project" && "$EMERY_BIN" "$@"); }
 
   ADAPTER_DIR="$PWD/target/wasm32-wasip2/debug"
-  run adapter add "$ADAPTER_DIR/typescript.wasm"
-  run adapter add "$ADAPTER_DIR/intent.wasm"
-  run adapter add "$ADAPTER_DIR/omnia.wasm"
+  emery adapter add "$ADAPTER_DIR/typescript.wasm"
+  emery adapter add "$ADAPTER_DIR/intent.wasm"
+  emery adapter add "$ADAPTER_DIR/omnia.wasm"
 
-  run init omnia --name at-r9k-position-adapter
+  emery init omnia --name at-r9k-position-adapter
 
-  run plan author at-r9k-position-adapter \
-    --intent "Migrate the legacy TypeScript at_r9k_position_adapter (https://bitbucket.org/Propellerhead/at_r9k_position_adapter) under legacy/ into a new Omnia WASM crate with provider-based dependency injection. Survey and extract behaviour from the TypeScript tree; build the guest, crate, and tests; merge specs into the baseline." \
+  emery plan author at-r9k-position-adapter \
+    --intent "Migrate https://bitbucket.org/Propellerhead/at_r9k_position_adapter" \
     --source "legacy=typescript:legacy/at_r9k_position_adapter"
-  run plan approve
-  run plan execute
+
+  emery plan approve
+  emery plan execute
 '''
