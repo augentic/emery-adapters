@@ -57,7 +57,7 @@ All output goes into `$SLICE_DIR/contracts/`. Never edit a file under root `cont
 Two reasons:
 
 1. **Reviewability.** A reviewer needs to see exactly what a slice contributes to the contract surface. Mixing edits across the baseline and the slice directory makes the diff ambiguous.
-2. **Mergeability.** `emery slice merge conflict-check` compares the slice's `defined-at` timestamp against the baseline files it intends to replace. Edits to the baseline outside this audit trail will be flagged as conflicts at merge time and may be silently lost.
+2. **Mergeability.** `emery slice merge run --conflict-check` compares the slice's `defined-at` timestamp against the baseline files it intends to replace. Edits to the baseline outside this audit trail will be flagged as conflicts at merge time and may be silently lost.
 
 The verifier flags every modification to a baseline file made by an author / importer run as a hard failure.
 
@@ -77,7 +77,7 @@ Two consequences for authors:
 
 ## Conflict detection
 
-Two concurrent changes that both modify the same contract file conflict. `emery slice merge conflict-check` detects this by comparing the slice's `defined-at` timestamp against the baseline file's last-merged timestamp:
+Two concurrent changes that both modify the same contract file conflict. `emery slice merge run --conflict-check` detects this by comparing the slice's `defined-at` timestamp against the baseline file's last-merged timestamp:
 
 - **No conflict.** Baseline file unchanged since the slice was defined → merge proceeds.
 - **Conflict.** Baseline file modified after the slice's `defined-at` → merge is blocked. Resolution: re-run the slice's define phase against the updated baseline (typically via `/emery:refine` resume), recompute the delta, and re-merge.

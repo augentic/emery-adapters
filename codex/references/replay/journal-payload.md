@@ -4,7 +4,7 @@ Closed shapes for the build-time `replay` hook. Recording rules and merge postur
 
 ## No journal event
 
-Emery core does **not** define a `slice.replay.completed` journal event. Replay results are advisory in the build transcript only — classify `passed` / `failed` / `skipped` there and stop. Do not call `emery journal emit` for replay.
+Emery core does **not** define a `slice.replay.completed` journal event. Replay results are advisory in the build transcript only — classify `passed` / `failed` / `skipped` there and stop. Do not write journal events for replay (there is no emit verb; journal writes are engine-orchestration side effects).
 
 ## Aspirational `metadata.yaml` block (future CLI)
 
