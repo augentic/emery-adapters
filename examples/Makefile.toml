@@ -4,7 +4,11 @@
 
 [env]
 CURSOR_MODEL = "cursor-grok-4.5-high-fast"
-RUST_LOG = "info,opentelemetry=off,opentelemetry_sdk=off,omnia_wasi_otel=off,omnia_cursor=debug,omnia_wasi_http=debug"
+# Env-driven filter for both rungs (no `--debug`/`--quiet` flag, so `RUST_LOG`
+# applies): the native probe client and the emery host both mute the OTel
+# chatter themselves; `omnia::telemetry=off` suppresses the host's
+# collectorless flush warnings (a preset-only mute on the env path).
+RUST_LOG = "info,omnia::telemetry=off,omnia_cursor=debug,omnia_wasi_http=debug"
 VECTIS_EXEMPLAR_DIR = "${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/../vectis-exemplar"
 
 [tasks.eval]
