@@ -156,7 +156,7 @@ impl Source for Adapter {
     fn metadata() -> SourceMetadata {
         // Declare the minimum host that can run this adapter once it depends
         // on host behavior; first-party adapters set it on every train release.
-        SourceMetadata { emery_floor: Some("0.34.0".to_string()) }
+        SourceMetadata { emery_floor: Some("0.35.0".to_string()) }
     }
 
     fn docs() -> &'static [Doc] {
