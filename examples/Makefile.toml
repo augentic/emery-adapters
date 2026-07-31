@@ -4,17 +4,15 @@
 
 [env]
 CURSOR_MODEL = "cursor-grok-4.5-high-fast"
-# Env-driven filter for both rungs (no `--debug`/`--quiet` flag, so `RUST_LOG`
-# applies): the native probe client and the emery host both mute the OTel
-# chatter themselves; `omnia::telemetry=off` suppresses the host's
-# collectorless flush warnings (a preset-only mute on the env path).
-RUST_LOG = "info,omnia::telemetry=off,omnia_cursor=debug,omnia_wasi_http=debug"
 VECTIS_EXEMPLAR_DIR = "${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/../vectis-exemplar"
 
+# The eval loop wants backend visibility (`--debug` selects
+# `info,omnia_cursor=debug,omnia_wasi_http=debug`); `lab` stays flagless
+# (`info` + mutes) so the operator can pass `--debug` or `--quiet` per run.
 [tasks.eval]
 env_files = [".env"]
 command = "cargo"
-args = ["run", "-p", "eval", "--", "eval", "${@}"]
+args = ["run", "-p", "eval", "--", "--debug", "eval", "${@}"]
 
 [tasks.lab]
 env_files = [".env"]
@@ -52,7 +50,8 @@ script = '''
   git init -q "$EMERY_HOME/project"
 
   EMERY_BIN="$PWD/../emery/target/debug/emery"
-  emery() { (cd "$EMERY_HOME/project" && "$EMERY_BIN" "$@"); }
+  # `--debug` keeps the seam visibility the env-driven filter used to give.
+  emery() { (cd "$EMERY_HOME/project" && "$EMERY_BIN" --debug "$@"); }
 
   ADAPTER_DIR="$PWD/target/wasm32-wasip2/debug"
   emery adapter add "$ADAPTER_DIR/documentation.wasm"
@@ -92,7 +91,8 @@ script = '''
   git init -q "$EMERY_HOME/project"
 
   EMERY_BIN="$PWD/../emery/target/debug/emery"
-  emery() { (cd "$EMERY_HOME/project" && "$EMERY_BIN" "$@"); }
+  # `--debug` keeps the seam visibility the env-driven filter used to give.
+  emery() { (cd "$EMERY_HOME/project" && "$EMERY_BIN" --debug "$@"); }
 
   ADAPTER_DIR="$PWD/target/wasm32-wasip2/debug"
   emery adapter add "$ADAPTER_DIR/typescript.wasm"
