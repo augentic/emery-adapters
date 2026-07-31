@@ -1040,10 +1040,6 @@ criteria = "safe-to-deploy"
 version = "1.1.10"
 criteria = "safe-to-deploy"
 
-[[exemptions.time]]
-version = "0.3.54"
-criteria = "safe-to-deploy"
-
 [[exemptions.tiny-skia]]
 version = "0.12.0"
 criteria = "safe-to-deploy"
@@ -1206,6 +1202,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.wasm-bindgen-shared]]
 version = "0.2.126"
+criteria = "safe-to-deploy"
+
+[[exemptions.wasm-streams]]
+version = "0.5.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasm-tokio]]
