@@ -2,27 +2,21 @@
 
 Unreleased
 
-### Added
+### Compatibility
+
+```text
+engine 0.34.x  ↔  adapters 0.8.x  (WIT emery:adapter@0.1.0, floor ≥ 0.34.0)
+```
+
+Requires engine **v0.34.0**. Aligns operator docs and eval/wasm scripts with Gate 1 = first `emery plan execute` (no separate approve).
 
 ### Changed
 
-## What's Changed
-* Bump to 0.7.0 by @augentic-releases[bot] in https://github.com/augentic/emery-adapters/pull/51
-* more accurate transformation of svg to pdf for iOS by @andrew-goldie in https://github.com/augentic/emery-adapters/pull/52
-* Minor workflow improvements by @andrewweston in https://github.com/augentic/emery-adapters/pull/53
-* Cursor usability improvements by @andrewweston in https://github.com/augentic/emery-adapters/pull/54
-* fix incorrect assumption on image asset location by @andrew-goldie in https://github.com/augentic/emery-adapters/pull/55
-* Wasm omnia example by @andrewweston in https://github.com/augentic/emery-adapters/pull/56
-* Gate Vectis builds with post-review core verify by @andrew-goldie in https://github.com/augentic/emery-adapters/pull/57
-* RFC 78 - Prompt budget by @andrewweston in https://github.com/augentic/emery-adapters/pull/58
-* Omnia build performance tweaks by @andrewweston in https://github.com/augentic/emery-adapters/pull/59
-* Bump to 0.8.0 by @augentic-releases[bot] in https://github.com/augentic/emery-adapters/pull/60
-* simplify Makefile by @andrewweston in https://github.com/augentic/emery-adapters/pull/61
-* Usability by @andrewweston in https://github.com/augentic/emery-adapters/pull/62
-* Pin emery to v0.34.0 by @andrewweston in https://github.com/augentic/emery-adapters/pull/63
+* Engine pin advances to **`tag = "v0.34.0"`**; every adapter `emery_floor` rises to **0.34.0**.
+* Docs, eval/wasm examples, and contracts merge prose follow the 0.34 operator surface: Gate 1 is `emery plan execute`, plan entry undo is `emery plan transition --undo`, and conflict detection is `emery slice merge run --conflict-check`.
+* Omnia / omnia-cursor git pins refresh (`omnia-cursor` from `augentic/backends` to `augentic/omnia-backends`); supply-chain allow-git and cargo-vet imports follow.
 
-
-**Full Changelog**: https://github.com/augentic/emery-adapters/compare/v0.6.0...v0.8.0
+**Full Changelog**: https://github.com/augentic/emery-adapters/compare/v0.7.0...v0.8.0
 
 ---
 
