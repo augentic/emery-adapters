@@ -111,7 +111,7 @@ Grading checks lifecycle, the report, `expect` paths, and (workflow) provenance;
 An existing sandbox refuses to rerun without `--restart`. Continue or debug it explicitly through the native verbs instead:
 
 ```bash
-cargo make lab -- --project-dir sandbox/orders-contracts plan approve
+cargo make lab -- --project-dir sandbox/orders-contracts plan execute
 ```
 
 ## Repair loop

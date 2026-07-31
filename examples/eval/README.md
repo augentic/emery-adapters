@@ -33,7 +33,6 @@ Each case owns its own sandbox at `sandbox/<case>/` which allows for review and 
 Continue or debug a run explicitly using the CLI:
 
 ```bash
-cargo make lab -- --project-dir sandbox/orders-contracts plan approve
 cargo make lab -- --project-dir sandbox/orders-contracts plan execute
 ```
 
@@ -54,7 +53,6 @@ cargo make lab -- --project-dir sandbox/orders-contracts plan execute
 Each case owns one stable retained sandbox at the repository-root `sandbox/<id>/` (composition-owned; beside the wasm examples' `sandbox/wasm-*/` trees), kept on success and failure alike. `--restart` is the only runner-owned reset; an existing sandbox without it refuses before mutation. The runner never infers workflow progress — continue or debug a retained sandbox explicitly through the native verbs:
 
 ```bash
-cargo make lab -- --project-dir sandbox/orders-contracts plan approve
 cargo make lab -- --project-dir sandbox/orders-contracts plan execute
 ```
 
@@ -67,7 +65,6 @@ cargo make lab -- --project-dir /path/to/project init omnia --name <name>
 cargo make lab -- --project-dir /path/to/project plan author <change> \
   --intent "…" \
   --source "legacy=typescript:legacy/at_r9k_position_adapter"
-cargo make lab -- --project-dir /path/to/project plan approve
 cargo make lab -- --project-dir /path/to/project plan execute
 ```
 
@@ -114,7 +111,7 @@ source trees that cannot ship as committed fixtures, e.g. the
 the cached tree.
 
 - `build` — `slice` + `expect`: the fixture carries the exact refined state `emery slice build` consumes (`.emery/project.yaml`, the slice's `metadata.yaml` at `status: refined`, proposal / design / tasks / specs, and any source material such as `vendor/`). The runner invokes `slice build <slice>` once and gates on `built` metadata, the authoritative `build/report.yaml`, and every confined `expect` path.
-- `workflow` — `target` + `change` + `intent` / `[sources]`: init, `plan author`, then (past `--until plan`) `plan approve` and the genuine drained `plan execute`; `--until finalize` adds `plan archive`. Gates: a non-empty pending plan at Gate 1, every entry `done` after execute, then provenance grading.
+- `workflow` — `target` + `change` + `intent` / `[sources]`: init, `plan author`, then (past `--until plan`) the genuine drained `plan execute` (its first run stamps Gate 1); `--until finalize` adds `plan archive`. Gates: a non-empty pending plan at Gate 1, every entry `done` after execute, then provenance grading.
 
 Linked adapters need only the directory. A third-party adapter also needs a Cargo dep on `eval` and a catalog line in `[src/main.rs](src/main.rs)`.
 
