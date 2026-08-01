@@ -2,20 +2,21 @@
 
 Unreleased
 
-### Added
+### Compatibility
+
+```text
+engine 0.36.x  ↔  adapters 0.10.x  (WIT emery:adapter@0.1.0, floor ≥ 0.36.0)
+```
+
+Requires engine **v0.36.0**.
 
 ### Changed
 
-## What's Changed
-* Bump to 0.9.0 by @augentic-releases[bot] in https://github.com/augentic/emery-adapters/pull/64
-* Operator simplifications by @andrewweston in https://github.com/augentic/emery-adapters/pull/65
-* Pin emery engine crates to v0.35.0. by @andrewweston in https://github.com/augentic/emery-adapters/pull/66
-* Bump to 0.10.0 by @augentic-releases[bot] in https://github.com/augentic/emery-adapters/pull/67
-* CLI ergonomics by @andrewweston in https://github.com/augentic/emery-adapters/pull/68
-* Pin emery engine crates to v0.36.0. by @andrewweston in https://github.com/augentic/emery-adapters/pull/69
+* Engine pin advances to **`tag = "v0.36.0"`**; every adapter `emery_floor` rises to **0.36.0**.
+* **Vectis:** greenfield scaffolding is host-side via `references/template-materialize.md` — `vectis::scaffold::materialize` / `sync` CLIs and exit-code helpers are gone; scaffold drift messages point at manual re-copy from `$TEMPLATE_DIR`.
+* Omnia / contracts prose and tests drop RFC ticket archaeology; workspace deps refresh (`serde-saphyr` 1.0.0, `jsonschema` 0.49.2, `toml` 1.1.4).
 
-
-**Full Changelog**: https://github.com/augentic/emery-adapters/compare/v0.8.0...v0.10.0
+**Full Changelog**: https://github.com/augentic/emery-adapters/compare/v0.9.0...v0.10.0
 
 ---
 
