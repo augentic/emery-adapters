@@ -607,7 +607,7 @@ dependencies = [
  "omnia-testkit",
  "semver",
  "serde",
- "serde-saphyr 1.0.0",
+ "serde-saphyr",
  "serde_json",
  "tempfile",
  "tokio",
@@ -1084,7 +1084,7 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 [[package]]
 name = "emery-adapter"
 version = "0.36.0"
-source = "git+https://github.com/augentic/emery#453153d112f4ca48474193ccf7f2817af44ccd68"
+source = "git+https://github.com/augentic/emery#dd6be025c5062e1b0d6dddfb4165acd2c984079c"
 dependencies = [
  "omnia-guest",
  "omnia-wasi-http",
@@ -1098,7 +1098,7 @@ dependencies = [
 [[package]]
 name = "emery-artifacts"
 version = "0.36.0"
-source = "git+https://github.com/augentic/emery#453153d112f4ca48474193ccf7f2817af44ccd68"
+source = "git+https://github.com/augentic/emery#dd6be025c5062e1b0d6dddfb4165acd2c984079c"
 dependencies = [
  "emery-diagnostics",
  "emery-error",
@@ -1106,7 +1106,7 @@ dependencies = [
  "regex",
  "schemars",
  "serde",
- "serde-saphyr 0.0.29",
+ "serde-saphyr",
  "serde_json",
  "strum",
  "tempfile",
@@ -1115,7 +1115,7 @@ dependencies = [
 [[package]]
 name = "emery-change"
 version = "0.36.0"
-source = "git+https://github.com/augentic/emery#453153d112f4ca48474193ccf7f2817af44ccd68"
+source = "git+https://github.com/augentic/emery#dd6be025c5062e1b0d6dddfb4165acd2c984079c"
 dependencies = [
  "emery-artifacts",
  "emery-diagnostics",
@@ -1127,7 +1127,7 @@ dependencies = [
  "omnia-guest",
  "semver",
  "serde",
- "serde-saphyr 0.0.29",
+ "serde-saphyr",
  "serde_json",
  "tracing",
 ]
@@ -1135,12 +1135,12 @@ dependencies = [
 [[package]]
 name = "emery-diagnostics"
 version = "0.36.0"
-source = "git+https://github.com/augentic/emery#453153d112f4ca48474193ccf7f2817af44ccd68"
+source = "git+https://github.com/augentic/emery#dd6be025c5062e1b0d6dddfb4165acd2c984079c"
 dependencies = [
  "base16ct",
  "schemars",
  "serde",
- "serde-saphyr 0.0.29",
+ "serde-saphyr",
  "serde_json",
  "sha2 0.11.0",
 ]
@@ -1148,16 +1148,16 @@ dependencies = [
 [[package]]
 name = "emery-error"
 version = "0.36.0"
-source = "git+https://github.com/augentic/emery#453153d112f4ca48474193ccf7f2817af44ccd68"
+source = "git+https://github.com/augentic/emery#dd6be025c5062e1b0d6dddfb4165acd2c984079c"
 dependencies = [
- "serde-saphyr 0.0.29",
+ "serde-saphyr",
  "thiserror 2.0.19",
 ]
 
 [[package]]
 name = "emery-native"
 version = "0.36.0"
-source = "git+https://github.com/augentic/emery#453153d112f4ca48474193ccf7f2817af44ccd68"
+source = "git+https://github.com/augentic/emery#dd6be025c5062e1b0d6dddfb4165acd2c984079c"
 dependencies = [
  "axum",
  "emery-adapter",
@@ -1175,7 +1175,7 @@ dependencies = [
 [[package]]
 name = "emery-probe"
 version = "0.36.0"
-source = "git+https://github.com/augentic/emery#453153d112f4ca48474193ccf7f2817af44ccd68"
+source = "git+https://github.com/augentic/emery#dd6be025c5062e1b0d6dddfb4165acd2c984079c"
 dependencies = [
  "anyhow",
  "clap",
@@ -1197,7 +1197,7 @@ dependencies = [
 [[package]]
 name = "emery-project"
 version = "0.36.0"
-source = "git+https://github.com/augentic/emery#453153d112f4ca48474193ccf7f2817af44ccd68"
+source = "git+https://github.com/augentic/emery#dd6be025c5062e1b0d6dddfb4165acd2c984079c"
 dependencies = [
  "emery-artifacts",
  "emery-diagnostics",
@@ -1208,7 +1208,7 @@ dependencies = [
  "schemars",
  "semver",
  "serde",
- "serde-saphyr 0.0.29",
+ "serde-saphyr",
  "serde_json",
  "strum",
  "thiserror 2.0.19",
@@ -1219,12 +1219,12 @@ dependencies = [
 [[package]]
 name = "emery-prose"
 version = "0.36.0"
-source = "git+https://github.com/augentic/emery#453153d112f4ca48474193ccf7f2817af44ccd68"
+source = "git+https://github.com/augentic/emery#dd6be025c5062e1b0d6dddfb4165acd2c984079c"
 
 [[package]]
 name = "emery-slice"
 version = "0.36.0"
-source = "git+https://github.com/augentic/emery#453153d112f4ca48474193ccf7f2817af44ccd68"
+source = "git+https://github.com/augentic/emery#dd6be025c5062e1b0d6dddfb4165acd2c984079c"
 dependencies = [
  "emery-artifacts",
  "emery-diagnostics",
@@ -1236,7 +1236,7 @@ dependencies = [
  "regex",
  "schemars",
  "serde",
- "serde-saphyr 0.0.29",
+ "serde-saphyr",
  "serde_json",
  "strum",
  "tracing",
@@ -1245,7 +1245,7 @@ dependencies = [
 [[package]]
 name = "emery-transport"
 version = "0.36.0"
-source = "git+https://github.com/augentic/emery#453153d112f4ca48474193ccf7f2817af44ccd68"
+source = "git+https://github.com/augentic/emery#dd6be025c5062e1b0d6dddfb4165acd2c984079c"
 dependencies = [
  "clap",
  "emery-artifacts",
@@ -1629,16 +1629,6 @@ name = "glob"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e4eba85ea1d0a966a983acd07deee566e67395d2d96b6fb39e62b5a833f1eb0b"
-
-[[package]]
-name = "granit-parser"
-version = "0.0.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d03f81ad4732830d85cfd417a9f62cde6dadda4354d37d078a6084a19560aa2d"
-dependencies = [
- "arraydeque",
- "smallvec",
-]
 
 [[package]]
 name = "granit-parser"
@@ -2601,7 +2591,7 @@ dependencies = [
  "jsonschema",
  "omnia-testkit",
  "serde",
- "serde-saphyr 1.0.0",
+ "serde-saphyr",
  "serde_json",
  "tempfile",
  "tokio",
@@ -3974,25 +3964,6 @@ dependencies = [
 
 [[package]]
 name = "serde-saphyr"
-version = "0.0.29"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7bd22781911de0ca6debda95f073c8f18bec65d1a94f1fa9573f3102e514cea4"
-dependencies = [
- "ahash",
- "annotate-snippets",
- "base64 0.22.1",
- "encoding_rs_io",
- "getrandom 0.3.4",
- "granit-parser 0.0.7",
- "nohash-hasher",
- "num-traits",
- "serde_core",
- "smallvec",
- "zmij",
-]
-
-[[package]]
-name = "serde-saphyr"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5bb49c0aa8a5bb88c00b833c11bae50d1611fb89e01336f53b05f7c643b1c883"
@@ -4000,7 +3971,7 @@ dependencies = [
  "annotate-snippets",
  "base64 0.23.0",
  "encoding_rs_io",
- "granit-parser 1.0.0",
+ "granit-parser",
  "nohash-hasher",
  "num-traits",
  "serde_core",
@@ -4936,7 +4907,7 @@ dependencies = [
  "omnia-testkit",
  "resvg",
  "serde",
- "serde-saphyr 1.0.0",
+ "serde-saphyr",
  "serde_json",
  "sha2 0.11.0",
  "tempfile",
