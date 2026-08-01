@@ -50,25 +50,3 @@ fn pixel_dim(logical: f32, factor: f32) -> u32 {
         scaled as u32
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::materialize::svg::parse_vector_svg;
-    use crate::materialize::svg::tests::TRIANGLE;
-
-    #[test]
-    fn render_matrix() {
-        let parsed = parse_vector_svg(TRIANGLE.as_bytes(), "tri").expect("parse");
-        let (w, h) = scaled_dimensions(&parsed.tree, 2.0);
-        assert_eq!((w, h), (48, 48));
-        let png = render_tree_to_png(&parsed.tree, w, h).expect("render");
-        assert!(png.starts_with(b"\x89PNG\r\n\x1a\n"));
-        assert!(png.len() > 64);
-
-        let (w3, h3) = scaled_dimensions(&parsed.tree, 3.0);
-        let first = render_tree_to_png(&parsed.tree, w3, h3).expect("first");
-        let second = render_tree_to_png(&parsed.tree, w3, h3).expect("second");
-        assert_eq!(first, second);
-    }
-}

@@ -302,11 +302,15 @@ const fn map_linejoin(join: LineJoin) -> StrokeJoin {
     }
 }
 
+// Collapse (dense private matrix): SVG parse/normalize edge cases —
+// unsupported-feature rejection and stroke geometry math — are cheap
+// only in-process; the export contract over these kernels is owned by
+// `tests/materialize_assets.rs` via the public `materialize::run`.
 #[cfg(test)]
-pub mod tests {
+mod tests {
     use super::*;
 
-    pub const TRIANGLE: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+    const TRIANGLE: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
   <path fill="#010203" d="M12 2L2 22h20z"/>
 </svg>"##;
 

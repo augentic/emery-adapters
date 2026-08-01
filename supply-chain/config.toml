@@ -96,14 +96,6 @@ criteria = "safe-to-deploy"
 version = "1.5.1"
 criteria = "safe-to-deploy"
 
-[[exemptions.aws-lc-rs]]
-version = "1.17.3"
-criteria = "safe-to-deploy"
-
-[[exemptions.aws-lc-sys]]
-version = "0.43.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.axum]]
 version = "0.8.9"
 criteria = "safe-to-deploy"
@@ -352,10 +344,6 @@ criteria = "safe-to-deploy"
 version = "0.20.3"
 criteria = "safe-to-deploy"
 
-[[exemptions.fs_extra]]
-version = "1.3.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.futures]]
 version = "0.3.33"
 criteria = "safe-to-deploy"
@@ -564,10 +552,6 @@ criteria = "safe-to-deploy"
 version = "0.4.1"
 criteria = "safe-to-deploy"
 
-[[exemptions.jobserver]]
-version = "0.1.35"
-criteria = "safe-to-deploy"
-
 [[exemptions.js-sys]]
 version = "0.3.103"
 criteria = "safe-to-deploy"
@@ -685,10 +669,6 @@ version = "0.2.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.opentelemetry]]
-version = "0.32.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.opentelemetry-http]]
 version = "0.32.0"
 criteria = "safe-to-deploy"
 

@@ -181,6 +181,10 @@ pub fn skeleton_to_json(skeleton: &Skeleton) -> Value {
     }
 }
 
+// Collapse (dense private matrix): the fingerprint equivalence table
+// (wiring ignored, cardinality and `*-when` keys significant) is pure
+// and dense; the operator-visible identity rule is owned by
+// `tests/validate.rs` via the public `validate::run`.
 #[cfg(test)]
 mod tests {
     use serde_json::Map;

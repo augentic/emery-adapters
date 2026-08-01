@@ -106,12 +106,6 @@ user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
 
-[[publisher.cmake]]
-version = "0.1.58"
-when = "2026-03-26"
-user-id = 55123
-user-login = "rust-lang-owner"
-
 [[publisher.colorchoice]]
 version = "1.0.5"
 when = "2026-03-13"
@@ -2657,16 +2651,6 @@ who = "Jack Grigg <jack@electriccoin.co>"
 criteria = "safe-to-deploy"
 delta = "0.20.11 -> 0.21.3"
 aggregated-from = "https://raw.githubusercontent.com/zcash/wallet/main/supply-chain/audits.toml"
-
-[[audits.zcash.audits.dunce]]
-who = "Jack Grigg <jack@electriccoin.co>"
-criteria = "safe-to-deploy"
-version = "1.0.5"
-notes = """
-Does what it says on the tin. No `unsafe`, and the only IO is `std::fs::canonicalize`.
-Path and string handling looks plausibly correct.
-"""
-aggregated-from = "https://raw.githubusercontent.com/zcash/librustzcash/main/supply-chain/audits.toml"
 
 [[audits.zcash.audits.generic-array]]
 who = "Sean Bowe <ewillbefull@gmail.com>"
