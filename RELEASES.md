@@ -2,20 +2,20 @@
 
 Unreleased
 
-### Added
+### Compatibility
+
+```text
+engine 0.37.x  ↔  adapters 0.11.x  (WIT emery:adapter@0.1.0, floor ≥ 0.37.0)
+```
+
+Requires engine **v0.37.0**.
 
 ### Changed
 
-## What's Changed
-* Bump to 0.10.0 by @augentic-releases[bot] in https://github.com/augentic/emery-adapters/pull/67
-* CLI ergonomics by @andrewweston in https://github.com/augentic/emery-adapters/pull/68
-* Pin emery engine crates to v0.36.0. by @andrewweston in https://github.com/augentic/emery-adapters/pull/69
-* Bump to 0.11.0 by @augentic-releases[bot] in https://github.com/augentic/emery-adapters/pull/70
-* Align verbs by @andrewweston in https://github.com/augentic/emery-adapters/pull/71
-* Pin emery engine crates to v0.37.0. by @andrewweston in https://github.com/augentic/emery-adapters/pull/72
+* Engine pin advances to **`tag = "v0.37.0"`**; every adapter `emery_floor` rises to **0.37.0**.
+* Shared runtime guardrails name **`cargo make adapter`** and **`emery adapter add`** as the forbidden rebuild/re-seed paths during slice execute (replacing the retired `emery adapter build` wording).
 
-
-**Full Changelog**: https://github.com/augentic/emery-adapters/compare/v0.9.0...v0.11.0
+**Full Changelog**: https://github.com/augentic/emery-adapters/compare/v0.10.0...v0.11.0
 
 ---
 
