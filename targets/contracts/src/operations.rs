@@ -55,7 +55,7 @@ impl Target for Adapter {
 
     fn metadata() -> TargetMetadata {
         TargetMetadata {
-            emery_floor: Some("0.36.0".to_string()),
+            emery_floor: Some("0.37.0".to_string()),
             inputs: vec![BuildInput {
                 path: "contracts".to_string(),
                 required: false,
