@@ -14,7 +14,7 @@ references:
 
 ## Rule
 
-`iOS/Makefile` and `iOS/project.yml` are template-owned DX. They land from `$TEMPLATE_DIR` (`../vectis-exemplar` or `VECTIS_EXEMPLAR_DIR`) via `vectis::scaffold::materialize` with identity substitution. Agents must never author, invent, or edit these files in create or update mode — `$TEMPLATE_DIR` is the sole shell example and DX authority.
+`iOS/Makefile` and `iOS/project.yml` are template-owned DX. They land from `$TEMPLATE_DIR` (`../vectis-exemplar` or `VECTIS_EXEMPLAR_DIR`) through the template-materialize copy procedure with identity substitution. Agents must never author, invent, or edit these files in create or update mode — `$TEMPLATE_DIR` is the sole shell example and DX authority.
 
 The live template's verify destination is Makefile-owned:
 

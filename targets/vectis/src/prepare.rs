@@ -1,8 +1,8 @@
-//! Slice-build prepare — scope resolution, materialize step, and prepare orchestration.
+//! Slice-build prepare — scope resolution and the materialize step.
 
 mod scope;
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 pub use scope::{
     EffectiveAssets, MaterializeScope, materialize_platform_csv, resolve_effective_assets,
@@ -11,11 +11,7 @@ pub use scope::{
 use serde_json::{Value, json};
 
 use crate::VectisError;
-use crate::materialize::{
-    AssetsArgs, MaterializeCommand, materialize_exit_code, run as run_materialize,
-};
-use crate::validate::engine::load_shell_platforms;
-use crate::verify::{VerifyMode, run as run_verify, verify_exit_code};
+use crate::materialize::{AssetsArgs, MaterializeCommand, run as run_materialize};
 
 /// Run the prepare materialize step for one slice build.
 ///
@@ -59,63 +55,4 @@ fn skipped_materialize_summary(path: &Path, platforms: &[String]) -> Value {
         "errors": [],
         "skipped": true,
     })
-}
-
-/// Run the full slice-build prepare for one slice.
-///
-/// # Errors
-///
-/// Returns [`VectisError::InvalidProject`] when the slice directory
-/// cannot be resolved, and propagates materialize / verify / sync
-/// failures.
-pub fn run_build(project_root: &Path, slice_dir: &Path) -> Result<Value, VectisError> {
-    let slice_dir = resolve_slice_dir(project_root, slice_dir)?;
-    let platforms = load_shell_platforms(project_root);
-
-    let materialized = materialize_step(&slice_dir, project_root, &platforms)?;
-
-    let bootstrap = run_verify(VerifyMode::BootstrapAppIcon, project_root)?;
-
-    // Gradle wrapper lands via `scaffold::materialize` from `$TEMPLATE_DIR`.
-    // DX refresh is host/agent-owned (see `crate::sync`).
-
-    Ok(json!({
-        "command": "prepare build",
-        "slice_dir": slice_dir.strip_prefix(project_root)
-            .map_or_else(|_| slice_dir.to_string_lossy().into_owned(), |p| p.to_string_lossy().into_owned()),
-        "platforms": platforms,
-        "materialized": materialized,
-        "bootstrap_app_icon": bootstrap,
-    }))
-}
-
-/// Compute the exit code for a [`run_build`] payload: `1` when the
-/// materialize step or the bootstrap gate surfaced errors, `0` otherwise.
-#[must_use]
-pub fn exit_code(value: &Value) -> u8 {
-    if let Some(materialized) = value.get("materialized")
-        && materialize_exit_code(materialized) != 0
-    {
-        return 1;
-    }
-    if let Some(bootstrap) = value.get("bootstrap_app_icon")
-        && verify_exit_code(bootstrap) != 0
-    {
-        return 1;
-    }
-    0
-}
-
-fn resolve_slice_dir(project_root: &Path, slice_dir: &Path) -> Result<PathBuf, VectisError> {
-    let resolved = if slice_dir.is_absolute() {
-        slice_dir.to_path_buf()
-    } else {
-        project_root.join(slice_dir)
-    };
-    if !resolved.is_dir() {
-        return Err(VectisError::InvalidProject {
-            message: format!("slice directory not found at {}", resolved.display()),
-        });
-    }
-    Ok(resolved)
 }

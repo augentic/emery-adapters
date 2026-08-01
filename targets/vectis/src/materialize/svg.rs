@@ -301,3 +301,71 @@ const fn map_linejoin(join: LineJoin) -> StrokeJoin {
         LineJoin::Bevel => StrokeJoin::Bevel,
     }
 }
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+
+    pub const TRIANGLE: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <path fill="#010203" d="M12 2L2 22h20z"/>
+</svg>"##;
+
+    const CHECKMARK: &str = r##"<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g clip-path="url(#clip0)">
+<path d="M5 12L10 17L20 7" stroke="#1F2937" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<defs>
+<clipPath id="clip0">
+<rect width="24" height="24" fill="white"/>
+</clipPath>
+</defs>
+</svg>"##;
+
+    #[test]
+    fn parse_matrix() {
+        let parsed = parse_vector_svg(TRIANGLE.as_bytes(), "tri").expect("parse");
+        assert!(parsed.tree.size().width() > 0.0);
+        let mut paths = Vec::new();
+        collect_paths(parsed.tree.root(), &mut paths);
+        assert_eq!(path_data_string(&paths[0].geometry), "M12 2 L2 22 L22 22 Z");
+        assert!(paths[0].fill.is_some());
+        assert!(paths[0].stroke.is_none());
+
+        let filtered = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <filter id="blur"><feGaussianBlur stdDeviation="2"/></filter>
+  <rect width="24" height="24" filter="url(#blur)"/>
+</svg>"#;
+        let err = parse_vector_svg(filtered.as_bytes(), "bad").unwrap_err();
+        assert!(err.contains("bad"));
+        assert!(err.contains("filters"));
+    }
+
+    #[test]
+    fn stroke_normalize_preserved() {
+        let parsed = parse_vector_svg(CHECKMARK.as_bytes(), "check").expect("parse");
+        let report = parsed.normalization.expect("noop clip should normalize");
+        assert!(report.transforms.contains(&"stripped-noop-clip"));
+        let mut paths = Vec::new();
+        collect_paths(parsed.tree.root(), &mut paths);
+        assert_eq!(paths.len(), 1);
+        assert!(paths[0].fill.is_none());
+        let stroke = paths[0].stroke.expect("stroke");
+        assert_eq!(stroke.color, (0x1F, 0x29, 0x37));
+        assert!((stroke.width - 2.0).abs() < f32::EPSILON, "width={}", stroke.width);
+    }
+
+    #[test]
+    fn stroke_width_scales() {
+        let scaled = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <g transform="scale(2)">
+    <path d="M5 12L10 17L20 7" stroke="#112233" stroke-width="2" fill="none"/>
+  </g>
+</svg>"##;
+        let parsed = parse_vector_svg(scaled.as_bytes(), "scaled").expect("parse");
+        let mut paths = Vec::new();
+        collect_paths(parsed.tree.root(), &mut paths);
+        assert_eq!(paths.len(), 1);
+        let stroke = paths[0].stroke.expect("stroke");
+        assert!((stroke.width - 4.0).abs() < 0.01, "expected canvas width 4, got {}", stroke.width);
+    }
+}

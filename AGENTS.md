@@ -38,7 +38,7 @@ Generation behavior belongs in adapter prompts and wasm-free adapter logic, not 
 
 ## Rust and testing
 
-Follow the workspace lint configuration in `Cargo.toml`. Prefer strong domain types, explicit errors, small functions, and comments that explain current invariants rather than history.
+The external Rust baseline is the [Pragmatic Rust Guidelines](https://microsoft.github.io/rust-guidelines/guidelines/index.html), layered under the engine repo's [docs/standards/](https://github.com/augentic/emery/tree/main/docs/standards) house deltas (deltas win). Follow the workspace lint configuration in `Cargo.toml`. Prefer strong domain types, explicit errors, small functions, and comments that explain current invariants rather than history.
 
 Testing is integration-first:
 

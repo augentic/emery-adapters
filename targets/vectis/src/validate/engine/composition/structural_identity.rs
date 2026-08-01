@@ -180,3 +180,61 @@ pub fn skeleton_to_json(skeleton: &Skeleton) -> Value {
         }),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use serde_json::Map;
+
+    use super::*;
+
+    fn group(items: Value) -> Value {
+        let mut map = Map::new();
+        map.insert("items".to_string(), items);
+        Value::Object(map)
+    }
+
+    // Bind/event wiring is ignored by fingerprinting.
+    #[test]
+    fn fingerprint_and_skeleton() {
+        let skeleton = build_group_skeleton(&group(json!([
+            { "icon-button": { "bind": "home", "event": "Navigate(Home)" } },
+            { "icon-button": { "bind": "search", "event": "Navigate(Search)" } },
+        ])));
+        assert_eq!(fingerprint(&skeleton), fingerprint(&skeleton));
+
+        let rewired = build_group_skeleton(&group(json!([
+            { "icon-button": { "bind": "profile", "event": "Navigate(Profile)" } },
+            { "icon-button": { "bind": "inbox", "event": "Navigate(Inbox)" } },
+        ])));
+        assert_eq!(fingerprint(&skeleton), fingerprint(&rewired));
+
+        let two =
+            build_group_skeleton(&group(json!([ { "icon-button": {} }, { "icon-button": {} } ])));
+        let three = build_group_skeleton(&group(json!([
+            { "icon-button": {} },
+            { "icon-button": {} },
+            { "icon-button": {} },
+        ])));
+        assert_ne!(fingerprint(&two), fingerprint(&three));
+
+        let bare = build_group_skeleton(&json!({ "items": [ { "text": {} } ] }));
+        let conditional =
+            build_group_skeleton(&json!({ "active-when": "$x", "items": [ { "text": {} } ] }));
+        assert_ne!(fingerprint(&bare), fingerprint(&conditional));
+
+        let nested = build_group_skeleton(&json!({
+            "active-when": "$route",
+            "items": [
+                { "icon-button": {} },
+                { "group": { "items": [ { "text": {} } ] } },
+            ],
+        }));
+        let projected = skeleton_to_json(&nested);
+        assert_eq!(projected["group"]["when_keys"], json!(["active-when"]));
+        assert_eq!(projected["group"]["items"][0], json!({ "item": "icon-button" }));
+        assert_eq!(
+            projected["group"]["items"][1],
+            json!({ "group": { "when_keys": [], "items": [ { "item": "text" } ] } })
+        );
+    }
+}

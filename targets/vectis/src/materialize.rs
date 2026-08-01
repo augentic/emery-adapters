@@ -1,16 +1,14 @@
 //! Canonical-to-export asset conversion — the materialize library.
 
-pub mod app_icon;
-pub mod icons;
-pub mod illustrations;
-pub mod paths;
+pub(crate) mod app_icon;
+pub(crate) mod icons;
+pub(crate) mod illustrations;
+pub(crate) mod paths;
 mod raster_copy;
-// `render`, `svg`, and `yaml_pins` are public so the integration suite
-// can pin their kernels directly.
-pub mod render;
+pub(crate) mod render;
 mod rgba;
-pub mod svg;
-pub mod yaml_pins;
+pub(crate) mod svg;
+pub(crate) mod yaml_pins;
 
 use std::path::{Path, PathBuf};
 
@@ -19,7 +17,6 @@ use icons::materialize_icon_vectors;
 use illustrations::materialize_illustration_vectors;
 use raster_copy::materialize_photo_rasters;
 use serde_json::{Value, json};
-pub use svg::{collect_paths, parse_vector_svg};
 use yaml_pins::{apply_auto_pins, atomic_yaml_write, collect_auto_pins, serialise_yaml};
 
 use crate::VectisError;
@@ -57,12 +54,6 @@ pub fn run(command: &MaterializeCommand) -> Result<Value, VectisError> {
     match command {
         MaterializeCommand::Assets(args) => run_assets(args),
     }
-}
-
-/// Exit non-zero when the summary carries conversion errors.
-#[must_use]
-pub fn materialize_exit_code(value: &Value) -> u8 {
-    u8::from(value.get("errors").and_then(Value::as_array).is_some_and(|arr| !arr.is_empty()))
 }
 
 fn run_assets(args: &AssetsArgs) -> Result<Value, VectisError> {

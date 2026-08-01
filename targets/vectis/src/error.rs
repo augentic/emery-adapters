@@ -1,17 +1,10 @@
-//! Unified terminal-error type shared by every `vectis` subcommand.
-//!
-//! The wire payload is `{"error": "...", "message": "..."}` plus an
-//! injected `"exit-code"`.
+//! Unified terminal-error type shared by the vectis engines.
 
 use std::io;
 
-use serde_json::Value;
 use thiserror::Error;
 
-/// Process exit code for all terminal `vectis` failures.
-pub const EXIT_FAILURE: u8 = 2;
-
-/// Terminal failure modes for any `vectis` subcommand.
+/// Terminal failure modes for the vectis engines.
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum VectisError {
@@ -32,39 +25,4 @@ pub enum VectisError {
         /// Diagnostic describing what went wrong.
         message: String,
     },
-}
-
-impl VectisError {
-    /// Process exit code for this error.
-    #[must_use]
-    pub const fn exit_code(&self) -> u8 {
-        EXIT_FAILURE
-    }
-
-    /// Kebab-case identifier used in the structured JSON payload.
-    #[must_use]
-    pub const fn variant_str(&self) -> &'static str {
-        match self {
-            Self::Io(_) => "io",
-            Self::InvalidProject { .. } => "invalid-project",
-            Self::Internal { .. } => "internal",
-        }
-    }
-
-    /// Render the error as the structured JSON shape.
-    #[must_use]
-    pub fn to_json(&self) -> Value {
-        match self {
-            Self::Io(err) => serde_json::json!({
-                "error": self.variant_str(),
-                "message": err.to_string(),
-            }),
-            Self::InvalidProject { message } | Self::Internal { message } => {
-                serde_json::json!({
-                    "error": self.variant_str(),
-                    "message": message,
-                })
-            }
-        }
-    }
 }

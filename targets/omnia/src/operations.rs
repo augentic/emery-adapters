@@ -4,7 +4,7 @@
 //! generation → replay (dispatched only when the build context binds
 //! `captures`) → review (closes the build: findings synthesis, output
 //! declaration), then the in-guest report assembly and its
-//! deterministic gate (RFC-78 D6).
+//! deterministic gate.
 
 use std::path::Path;
 
@@ -80,7 +80,7 @@ impl Target for Adapter {
         // Writer prompts share one system channel: verify-repair re-enters
         // the owning writer, so one leg must hold crate / test / guest together.
         // `guidance.md` stays on the `guidance` operation only — its idioms
-        // were folded into the artifacts at refine (RFC-78 D2). The guest
+        // were folded into the artifacts at refine. The guest
         // writer ships only in create mode: its own header loads it on first
         // build only, keyed on the workspace-root `src/lib.rs` the prelude's
         // tree walk already sees.
@@ -111,7 +111,7 @@ impl Target for Adapter {
         // Whether the slice binds `captures` is deterministic — the
         // engine forwards the bound source names on the build context —
         // so the leg is dispatched only when bound; no spawn exists to
-        // answer `applicable: false` (RFC-78 D6). It runs before review
+        // answer `applicable: false`. It runs before review
         // so the review's findings synthesis can fold replay failures.
         let replay = if context.sources.iter().any(|source| source == "captures") {
             let system = assemble(&["prompts/build.md", "prompts/build/replay.md"]);
@@ -127,9 +127,9 @@ impl Target for Adapter {
         };
 
         // Review closes the build: remediation may re-enter the writers
-        // and verify-repair, then the answer carries the absorbed report
-        // residue (tasks.md checkboxes, findings synthesis, output
-        // declaration) — no separate report leg is spawned (RFC-78 D6).
+        // and verify-repair, then the answer carries the inline report
+        // fields (tasks.md checkboxes, findings synthesis, output
+        // declaration) — no separate report leg is spawned.
         let mut outcomes = vec![
             phase::render_outcome("preparation", &preparation),
             phase::render_outcome("generation", &generation),

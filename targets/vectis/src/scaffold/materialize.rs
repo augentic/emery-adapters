@@ -106,9 +106,10 @@ const EMERY_GITIGNORE_ENTRIES: &[&str] = &[".emery/scratch/", "workspace/"];
 
 /// DX paths agents must keep aligned with `$TEMPLATE_DIR` (iOS).
 ///
-/// Only paths that exist under a current `vectis-exemplar` checkout are
-/// refreshed by [`crate::sync`]; absent template counterparts are reported
-/// rather than invented. Pattern checks live in [`crate::ios_scaffold`].
+/// The build agent refreshes drifted paths by re-copying them from a
+/// current `vectis-exemplar` checkout with identity substitution; absent
+/// template counterparts are reported rather than invented. Pattern
+/// checks live in [`crate::ios_scaffold`].
 pub const IOS_DX_RELATIVE_PATHS: &[&str] = &["iOS/Makefile", "iOS/project.yml"];
 
 /// DX paths agents must keep aligned with `$TEMPLATE_DIR` (Android).

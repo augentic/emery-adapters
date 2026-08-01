@@ -120,6 +120,10 @@ criteria = "safe-to-deploy"
 version = "1.0.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.base64]]
+version = "0.23.0"
+criteria = "safe-to-deploy"
+
 [[exemptions.base64ct]]
 version = "1.8.3"
 criteria = "safe-to-deploy"
@@ -413,7 +417,7 @@ version = "0.3.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.granit-parser]]
-version = "0.0.7"
+version = "1.0.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.h2]]
@@ -921,7 +925,7 @@ version = "1.0.229"
 criteria = "safe-to-deploy"
 
 [[exemptions.serde-saphyr]]
-version = "0.0.29"
+version = "1.0.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.serde_core]]

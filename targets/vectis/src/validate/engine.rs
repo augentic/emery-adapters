@@ -2,7 +2,7 @@
 
 mod all;
 mod assets;
-pub mod composition;
+pub(crate) mod composition;
 mod layout;
 mod paths;
 mod shared;
@@ -10,7 +10,7 @@ mod tokens;
 
 use std::path::Path;
 
-pub use assets::exports::{
+pub(crate) use assets::exports::{
     app_icon_export_exists, conventional_export_exists, imageset_has_materialized_content,
     platform_pin_active,
 };

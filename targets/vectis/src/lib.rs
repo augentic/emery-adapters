@@ -22,9 +22,8 @@ pub mod prepare;
 pub mod scaffold;
 pub mod schema_source;
 pub mod shell;
-pub mod sync;
 pub mod validate;
 pub mod verify;
 
-pub use error::{EXIT_FAILURE, VectisError};
+pub use error::VectisError;
 pub use operations::Adapter;
