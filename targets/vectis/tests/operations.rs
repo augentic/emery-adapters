@@ -38,10 +38,9 @@ fn schema_format(request: &Request) -> (&str, &str) {
     }
 }
 
-/// RFC-78 D7 re-bloat guard: each leg's system assemble is a pure function
-/// over the embedded prose registry, so its byte size is locked at the
-/// measured baseline plus ~10% headroom (re-measured after the RFC-78 D3
-/// build.md thinning).
+/// Re-bloat guard: each leg's system assemble is a pure function over
+/// the embedded prose registry, so its byte size is locked at the
+/// measured baseline plus ~10% headroom.
 fn assert_system_budget(request: &Request, leg: &str, budget: usize) {
     let bytes = request.system.as_deref().map_or(0, str::len);
     println!("{leg} system assemble: {bytes} bytes (budget {budget})");
@@ -52,15 +51,15 @@ fn assert_system_budget(request: &Request, leg: &str, budget: usize) {
     );
 }
 
-/// The composition leg's assemble and path-form user prompt (RFC-78
-/// D1): inputs render as project-relative path sections with a
+/// The composition leg's assemble and path-form user prompt: inputs
+/// render as project-relative path sections with a
 /// read-before-writing instruction, never inlined bodies.
 fn assert_composition_leg(request: &Request) {
     let system = request.system.as_deref().unwrap();
     assert!(system.contains("# Vectis target — build prompt"), "build prompt in system");
     assert!(
         !system.contains("# Vectis target — `guidance`"),
-        "guidance stays on the guidance operation — dropped from composition (RFC-78 D3)"
+        "guidance stays on the guidance operation — never assembled into composition"
     );
     assert!(system.contains("# Vectis build — composition"), "composition prompt in system");
     assert!(
@@ -146,7 +145,7 @@ fn assert_post_composition_leg_order(requests: &[Request]) {
     let report_system = requests[6].system.as_deref().unwrap();
     assert!(
         report_system.contains("# Vectis build — report"),
-        "report contract rides the report phase prompt (RFC-78 D3)"
+        "report contract rides the report phase prompt, not the shared preamble"
     );
     let report_user = &requests[6].messages[0].content;
     assert!(report_user.contains("no shell work"), "phase outcomes feed the report leg");
@@ -194,8 +193,7 @@ async fn build_phase_legs() {
         7,
         "composition, core, two shells, review, final-core-verify, then one report call"
     );
-    // Budget = measured baseline (per-leg comment, 2026-07-31, after the
-    // RFC-78 D3 build.md thinning) + ~10%.
+    // Budget = measured baseline (per-leg comment, 2026-07-31) + ~10%.
     for (i, (leg, budget)) in [
         ("composition", 32_700),       // baseline 29_681
         ("core", 29_100),              // baseline 26_458
@@ -299,7 +297,7 @@ async fn guest_does_not_embed_scaffold() {
     let core_user = &model.requests()[1].messages[0].content;
     assert!(core_user.contains("Absent declared trees: `core`"));
     assert!(core_user.contains("$TEMPLATE_DIR"));
-    assert!(core_user.contains("vectis::scaffold::materialize"));
+    assert!(core_user.contains("references/template-materialize.md"));
     assert!(
         !tmp.path().join("shared/src/app.rs").is_file(),
         "guest must not write trees from embedded templates"

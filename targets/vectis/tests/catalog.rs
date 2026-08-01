@@ -104,7 +104,7 @@ fn resources_prefix_not_accepted() {
     write_inventory(tmp.path());
 
     // Hard cut: only `iOS/<App>/Assets.xcassets/` counts — a lone
-    // `Resources/Assets.xcassets/` tree from the retired layout is ignored.
+    // `Resources/Assets.xcassets/` tree elsewhere is ignored.
     let imageset =
         tmp.path().join("iOS/TodoApp/Resources/Assets.xcassets/empty-tasks-hero.imageset");
     std::fs::create_dir_all(&imageset).expect("mkdir imageset");

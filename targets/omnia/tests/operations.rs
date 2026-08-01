@@ -42,10 +42,9 @@ fn schema_format(request: &Request) -> (&str, &str) {
     }
 }
 
-/// RFC-78 D7 re-bloat guard: each leg's system assemble is a pure function
-/// over the embedded prose registry, so its byte size is locked at the
-/// measured baseline plus ~10% headroom (re-measured after the RFC-78 D3
-/// build.md thinning).
+/// Re-bloat guard: each leg's system assemble is a pure function over
+/// the embedded prose registry, so its byte size is locked at the
+/// measured baseline plus ~10% headroom.
 fn assert_system_budget(request: &Request, leg: &str, budget: usize) {
     let bytes = request.system.as_deref().map_or(0, str::len);
     println!("{leg} system assemble: {bytes} bytes (budget {budget})");
@@ -56,22 +55,22 @@ fn assert_system_budget(request: &Request, leg: &str, budget: usize) {
     );
 }
 
-/// The generation leg's create-mode assemble and path-form user prompt
-/// (RFC-78 D1/D2): guidance dropped, guest writer present, inputs as
-/// project-relative path sections with a read-before-writing instruction.
+/// The generation leg's create-mode assemble and path-form user prompt:
+/// guidance dropped, guest writer present, inputs as project-relative
+/// path sections with a read-before-writing instruction.
 fn assert_generation_leg(generation: &Request) {
     let system = generation.system.as_deref().unwrap();
     assert!(system.contains("# Omnia target — build prompt"), "build prompt in system");
     assert!(
         !system.contains("# Omnia target — guidance prompt"),
-        "guidance stays on the guidance operation — dropped from generation (RFC-78 D2)"
+        "guidance stays on the guidance operation — never assembled into generation"
     );
     assert!(system.contains("# Omnia build — crate writer"), "crate writer prompt in system");
     assert!(system.contains("# Omnia build — test writer"), "test writer prompt in system");
     assert!(
         !system.contains("| Failure signal |"),
         "the test-failure classification table lives in repair-patterns.md, \
-         not the shared preamble (RFC-78 D3)"
+         not the shared preamble"
     );
     assert!(
         system.contains("# Omnia build — guest writer"),
@@ -144,13 +143,12 @@ async fn build_phase_legs() {
         requests.len(),
         3,
         "preparation, generation, review — no replay spawn without a captures binding, \
-         the report is assembled in-guest (RFC-78 D6)"
+         the report is assembled in-guest"
     );
-    // Budget = measured baseline (per-leg comment, 2026-07-31, after the
-    // RFC-78 D3 build.md thinning) + ~10%. Generation dropped from 43_465
-    // with RFC-78 D2 (guidance.md left the assemble; guest.md ships only
-    // in create mode) and again with D3 (classification table, standards
-    // surface, and report contract left the shared preamble).
+    // Budget = measured baseline (per-leg comment, 2026-07-31) + ~10%.
+    // The generation assemble carries guidance.md nowhere and guest.md
+    // only in create mode; the classification table, standards surface,
+    // and report contract live outside the shared preamble.
     for (i, (leg, budget)) in [
         ("preparation", 12_800), // baseline 11_667
         ("generation", 30_500),  // baseline 27_698
@@ -192,12 +190,12 @@ async fn build_phase_legs() {
     let compiled = serde_json::from_str::<serde_json::Value>(schema).unwrap();
     assert!(jsonschema::validator_for(&compiled).is_ok(), "review answer schema compiles");
     for field in ["findings", "outputs"] {
-        assert!(schema.contains(&format!("\"{field}\"")), "absorbed report residue: {field}");
+        assert!(schema.contains(&format!("\"{field}\"")), "inline report field: {field}");
     }
     assert!(review.system.as_deref().unwrap().contains("# Omnia build — standards review"));
     assert!(
         review.system.as_deref().unwrap().contains("## Build report"),
-        "the build-report contract rides the review phase prompt (RFC-78 D3)"
+        "the build-report contract rides the review phase prompt, not the shared preamble"
     );
     let review_user = &review.messages[0].content;
     assert!(review_user.contains("- preparation:"), "preparation outcome feeds the review leg");
@@ -214,8 +212,8 @@ async fn build_phase_legs() {
 }
 
 // The replay leg spawns only when the engine-forwarded build context
-// carries a `captures` source binding (RFC-78 D6); it runs before the
-// review leg so replay failures reach the findings synthesis.
+// carries a `captures` source binding; it runs before the review leg
+// so replay failures reach the findings synthesis.
 #[tokio::test]
 async fn build_replay_leg_gated_on_captures_binding() {
     let tmp = TempDir::new().unwrap();

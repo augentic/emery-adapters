@@ -1,12 +1,12 @@
 //! iOS DX path presence and `BoltFFI` pattern drift detection.
 //!
-//! Immutable DX paths match [`crate::scaffold::materialize::IOS_DX_RELATIVE_PATHS`].
+//! Immutable DX paths are [`crate::scaffold::materialize::IOS_DX_RELATIVE_PATHS`].
 //! Required substrings are derived from the live `vectis-exemplar` iOS Makefile /
-//! `project.yml` (`BoltFFI` pack + generic simulator destination). Byte-compare
-//! against an embedded template is retired — refresh is host/agent-owned via
-//! [`crate::sync`] from `$TEMPLATE_DIR`. Pin faithfulness for workspace
-//! `Cargo.toml` / `shared/boltffi.toml` is prompt-mandated against `$TEMPLATE_DIR`
-//! (the guest cannot see a sibling checkout).
+//! `project.yml` (`BoltFFI` pack + generic simulator destination). Refresh is
+//! host/agent-owned: the build agent re-copies drifted paths from `$TEMPLATE_DIR`
+//! with identity substitution. Pin faithfulness for workspace `Cargo.toml` /
+//! `shared/boltffi.toml` is prompt-mandated against `$TEMPLATE_DIR` (the guest
+//! cannot see a sibling checkout).
 
 use std::fs;
 use std::path::Path;
@@ -14,10 +14,8 @@ use std::path::Path;
 use serde_json::{Value, json};
 
 use crate::VectisError;
+use crate::scaffold::materialize::IOS_DX_RELATIVE_PATHS;
 use crate::scaffold::validate_app_name;
-
-/// Relative paths under the project root that agents must keep aligned with `$TEMPLATE_DIR`.
-pub const IMMUTABLE_RELATIVE_PATHS: [&str; 2] = ["iOS/Makefile", "iOS/project.yml"];
 
 /// Diagnostic id for scaffold drift findings.
 pub const DRIFT_FINDING_ID: &str = "ios-scaffold-file-drift";
@@ -44,7 +42,7 @@ pub fn ios_scaffold_drift_findings(project_root: &Path) -> Vec<Value> {
         )];
     }
 
-    IMMUTABLE_RELATIVE_PATHS
+    IOS_DX_RELATIVE_PATHS
         .iter()
         .filter_map(|relative_path| {
             let target = project_root.join(relative_path);
@@ -52,8 +50,8 @@ pub fn ios_scaffold_drift_findings(project_root: &Path) -> Vec<Value> {
                 return Some(drift_finding(
                     relative_path,
                     &format!(
-                        "{relative_path} is missing; re-copy from $TEMPLATE_DIR \
-                         (vectis::scaffold::materialize / sync ios-scaffold) — do not invent DX"
+                        "{relative_path} is missing; re-copy from $TEMPLATE_DIR with identity \
+                         substitution (references/template-materialize.md) — do not invent DX"
                     ),
                 ));
             }

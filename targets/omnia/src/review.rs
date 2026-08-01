@@ -1,9 +1,9 @@
-//! Standards-review answer: the phase answer plus the absorbed report
-//! residue (RFC-78 D6).
+//! Standards-review answer: the phase answer plus the inline report
+//! fields.
 //!
 //! The review leg closes the build — its answer carries the findings
-//! synthesis and the output declaration the separate report leg used to
-//! spawn for. The adapter assembles the seam [`Report`] from it in-guest;
+//! synthesis and the output declaration, so no separate report leg is
+//! spawned. The adapter assembles the seam [`Report`] from it in-guest;
 //! the deterministic report gate (missing outputs, blocking findings)
 //! still applies to the assembled report.
 

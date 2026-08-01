@@ -1,14 +1,12 @@
 //! App-icon materialization — shared launcher canvas and per-platform exports.
 
-// `android` is public so the integration suite can pin the
-// adaptive/legacy export tree directly.
 pub mod android;
 mod canvas;
 mod ios;
 
 use std::path::Path;
 
-pub use canvas::{LAUNCHER_CANVAS_SIZE, LauncherCanvas, decode_to_launcher_canvas};
+pub use canvas::{LauncherCanvas, decode_to_launcher_canvas};
 use serde_json::{Value, json};
 
 use crate::materialize::icons::{active_platform_pin, asset_error, materialized_entry};

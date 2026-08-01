@@ -62,15 +62,8 @@ pub fn run(mode: ValidateMode, path: Option<&Path>) -> Result<Value, crate::Vect
     engine::run(mode, path)
 }
 
-/// Exit code for a success payload: `1` when any real sub-report
-/// carries errors, `0` otherwise.
-#[must_use]
-pub fn validate_exit_code(value: &Value) -> u8 {
-    u8::from(envelope_has_errors(value))
-}
-
 /// Whether a validation envelope (or any folded sub-report) carries
-/// errors. Shared by `validate_exit_code` and the guest postlude.
+/// errors. Consumed by the guest postlude.
 #[must_use]
 pub fn envelope_has_errors(node: &Value) -> bool {
     if node.get("errors").and_then(Value::as_array).is_some_and(|arr| !arr.is_empty()) {

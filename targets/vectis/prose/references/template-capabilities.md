@@ -6,7 +6,7 @@ Greenfield trees come from a local [`vectis-exemplar`](https://github.com/augent
 
 ## After materialize: DX that must remain
 
-`vectis::scaffold::materialize` copies root + shell DX, `shared/` (including `boltffi.toml` and `shared/src/bin/codegen/`), `supply-chain/`, and `.maestro/`. After stripping `VECTIS-OPTIONAL` (especially `cap=demo`), keep:
+Template materialize (the copy procedure in [`template-materialize.md`](template-materialize.md)) copies root + shell DX, `shared/` (including `boltffi.toml` and `shared/src/bin/codegen/`), `supply-chain/`, and `.maestro/`. After stripping `VECTIS-OPTIONAL` (especially `cap=demo`), keep:
 
 | Path | Role |
 |------|------|
