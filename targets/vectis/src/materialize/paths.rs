@@ -218,6 +218,10 @@ pub fn resolve_under_assets_dir(assets_dir: &Path, pin_rel: &str) -> PathBuf {
     assets_dir.join(pin_rel)
 }
 
+// Collapse (dense private matrix): the export-layout / scale / naming
+// table is pure math with a case-per-cell shape; porting it to the
+// public materialize surface would be a matrix explosion for no new
+// boundary signal.
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -95,6 +95,14 @@ command = "cargo"
 args = ["doc", "--no-deps", "--workspace", "--all-features", "--locked"]
 env = { RUSTDOCFLAGS = "-Dwarnings" }
 
+# Coverage brake for unit-test reductions (docs/testing.md).
+# Usage: CRATE=vectis cargo make cov
+# Operator-invoked, never part of `ci`.
+[tasks.cov]
+workspace = false
+script = "cargo llvm-cov nextest -p ${CRATE} --summary-only"
+install_crate = "cargo-llvm-cov"
+
 # Miri
 [tasks.miri]
 script = '''

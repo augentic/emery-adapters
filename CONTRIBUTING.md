@@ -113,7 +113,7 @@ cargo make publish <name>
 
 1. Branch off `main`.
 2. Run `cargo make ci` (or say exactly which narrower checks ran and why the full gate was unavailable).
-3. Prefer integration tests in each adapter's `tests/` suite; read [docs/testing.md](docs/testing.md) before adding or relocating tests.
+3. Read [docs/testing.md](docs/testing.md) before adding, deleting, or relocating tests. New tests default to the adapter's `tests/` suite; do not add a `src` `#[cfg(test)]` module without a one-line Keep or Collapse reason from that document, and never widen `pub` surface solely for a test. When deleting unit coverage, run the coverage brake (`CRATE=<adapter> cargo make cov`) before and after.
 4. Keep adapter names unique across the source and target axes.
 5. Do not commit built `.wasm` artifacts.
 

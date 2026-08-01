@@ -67,7 +67,7 @@ When changing platform support, preserve existing platforms and add only the sel
 
 ## Tests and verification
 
-Prefer Vectis crate integration tests under `tests/` for public behavior. Keep focused unit matrices only where the root testing policy permits them.
+Prefer Vectis crate integration tests under `tests/` for public behavior: asset and export contracts belong in `tests/materialize_assets.rs` (over `vectis::materialize::run`) and the validate suites (over `vectis::validate::run`) — assert on the export tree, findings, and summaries, not private helpers. `src` unit matrices are reserved for pure math only (`materialize/paths.rs`, `materialize/svg.rs`, composition `structural_identity`); do not add mocked unit tests for orchestration or anything observable at the public surface.
 
 ```bash
 cargo nextest run -p vectis

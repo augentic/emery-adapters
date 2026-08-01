@@ -73,20 +73,22 @@ Every behavior gets a home in exactly one layer. Decide the layer **before** wri
 
 ## Triage rules
 
+Current posture: every source adapter plus `omnia` and `contracts` already carry **zero** `src` unit tests — their behavior lives entirely in `tests/` suites. `vectis` is the one intentional Collapse exception, and only for dense pure materialize/validate math (`materialize/paths.rs`, `materialize/svg.rs`, `validate/engine/composition/structural_identity.rs`); everything operator-observable is asserted through the public `materialize::run` / `validate::run` surfaces in its `tests/` suites.
+
 Applied to every existing `#[cfg(test)]` / `tests.rs`:
 
 - **Delete** — the observable behavior is already asserted by an integration test, or it is tautological, mock-heavy, or an internal snapshot that gives an agent no boundary signal.
-- **Collapse (stay unit)** — a dense pure `(input → output/code)` matrix (e.g. `app_icon/canvas` render math, `svg`, `materialize/paths`) becomes one table-driven `#[test]` with a block per case. Coverage-neutral by construction.
+- **Collapse (stay unit)** — a dense pure `(input → output/code)` matrix (e.g. `svg` parse edges, `materialize/paths` layout math, composition `structural_identity` fingerprints) becomes one table-driven `#[test]` with a block per case. Coverage-neutral by construction.
 - **Re-home** — behavior reachable through the library lands in the crate's `tests/` tree.
 - **Keep** — a genuinely unreachable defensive branch or error variant no caller can trigger, with a one-line comment saying why an agent cannot get the same signal from integration.
 
 ## Coverage is the brake on deletion
 
-`cargo llvm-cov` line/region coverage on still-live code is the safety net. The [`Makefile.toml`](../Makefile.toml) has no coverage task, so run it directly, per crate, before and after a reduction:
+`cargo llvm-cov` line/region coverage on still-live code is the safety net. Run the `cov` task in [`Makefile.toml`](../Makefile.toml), per crate, before and after a reduction:
 
 ```bash
-cargo llvm-cov nextest -p vectis --summary-only
-cargo llvm-cov nextest -p contracts --summary-only
+CRATE=vectis cargo make cov      # cargo llvm-cov nextest -p vectis --summary-only
+CRATE=contracts cargo make cov
 ```
 
 A `TOTAL` line/region drop on still-live code means real coverage was lost: backfill with an integration assertion (preferred) or revert that specific deletion. A pure collapse of redundant cases is coverage-neutral.
