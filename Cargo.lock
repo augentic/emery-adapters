@@ -439,7 +439,7 @@ dependencies = [
 
 [[package]]
 name = "captures"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "emery-adapter",
  "emery-prose",
@@ -599,7 +599,7 @@ checksum = "a6ef517f0926dd24a1582492c791b6a4818a4d94e789a334894aa15b0d12f55c"
 
 [[package]]
 name = "contracts"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "emery-adapter",
  "emery-prose",
@@ -1034,7 +1034,7 @@ dependencies = [
 
 [[package]]
 name = "documentation"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "emery-adapter",
  "emery-prose",
@@ -1305,7 +1305,7 @@ dependencies = [
 
 [[package]]
 name = "eval"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "captures",
@@ -1314,7 +1314,7 @@ dependencies = [
  "emery-native",
  "emery-probe",
  "intent",
- "omnia 0.10.0",
+ "omnia 0.11.0",
  "screenshots",
  "tokio",
  "typescript",
@@ -2032,7 +2032,7 @@ dependencies = [
 
 [[package]]
 name = "intent"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "emery-adapter",
  "emery-prose",
@@ -2584,7 +2584,7 @@ dependencies = [
 
 [[package]]
 name = "omnia"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "emery-adapter",
  "emery-prose",
@@ -3902,7 +3902,7 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
 name = "screenshots"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "emery-adapter",
  "emery-prose",
@@ -4762,7 +4762,7 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
 name = "typescript"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "emery-adapter",
  "emery-prose",
@@ -4898,7 +4898,7 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "vectis"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "emery-adapter",
  "emery-prose",
