@@ -82,7 +82,7 @@ During a slice's define phase, proposed contract modifications live in the slice
 
 ### Merge Semantics
 
-When `emery slice merge run` processes a slice:
+When `emery slice merge` processes a slice:
 
 - Files in the slice's `contracts/` are copied into root `contracts/`, replacing files at the same path.
 - Files absent from the slice's `contracts/` are left untouched in the baseline.
@@ -90,7 +90,7 @@ When `emery slice merge run` processes a slice:
 
 ### Conflict Detection
 
-Two concurrent changes that both modify the same contract file (e.g. both add paths to `http/user-api.yaml`) will conflict. `emery slice merge run --conflict-check` detects this: if the baseline file was modified after the slice's `defined-at` timestamp, the merge is blocked. Resolution: re-run the slice's define phase against the updated baseline.
+Two concurrent changes that both modify the same contract file (e.g. both add paths to `http/user-api.yaml`) will conflict. `emery slice merge --conflict-check` detects this: if the baseline file was modified after the slice's `defined-at` timestamp, the merge is blocked. Resolution: re-run the slice's define phase against the updated baseline.
 
 ## Baseline vs Change-Level
 
