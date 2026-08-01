@@ -26,6 +26,6 @@ Contract authoring skills (OpenAPI, AsyncAPI, JSON Schema) write only inside the
 During slice **execute / build / merge**, agents are **consumers** of Emery and adapters — not maintainers.
 
 - **Do not** edit `emery`, `emery-adapters`, adapter templates, `guest.wasm`, or `~/.cache/emery/**` to unblock a failing build.
-- **Do not** run `emery adapter build`, `sync *-scaffold`, or rebuild/copy WASM to work around verify drift during consumer execute (sync/scaffold remain orchestrator-owned per the Vectis build prompt; this rule blocks *agent-initiated* upstream patching).
+- **Do not** rebuild or re-seed adapter components (`cargo make adapter`, `emery adapter add`), run `sync *-scaffold`, or copy WASM to work around verify drift during consumer execute (sync/scaffold remain orchestrator-owned per the Vectis build prompt; this rule blocks *agent-initiated* upstream patching).
 - On scaffold, verify, finalize, or toolchain failure: **stop**, print CLI `stop:` / `hint:` / `resume:` output, and exit. Tooling fixes belong in emery / emery-adapters in a separate maintainer session.
 - Canonical "stop, don't patch" example: Vectis [Template / version-pin drift handling](https://github.com/augentic/emery-adapters/blob/main/targets/vectis/prose/prompts/build.md#template--version-pin-drift-handling) (`targets/vectis/prose/prompts/build.md` in emery-adapters).
