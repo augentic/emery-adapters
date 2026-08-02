@@ -34,7 +34,7 @@ All phase prompts assume these symbols are resolved by the leg's orchestrating a
 
 | Symbol | Meaning |
 | --- | --- |
-| `SLICE_ID` | The active slice name (`emery plan next` output, or `emery slice` argument). |
+| `SLICE_ID` | The active slice name (`emery plan advance` output, or `emery slice` argument). |
 | `SLICE_DIR` | `.emery/slices/<SLICE_ID>/`. |
 | `DOMAIN_NAME` | The single domain spec folder under `SLICE_DIR/specs/`. When the slice carries multiple domains, iterate the per-domain phase prompts in declaration order. |
 | `PROJECT_DIR` | The target project root (single-repo mode) or the resolved workspace slot (workspace mode). |

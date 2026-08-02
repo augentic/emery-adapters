@@ -35,7 +35,7 @@ One discrete screen the source images describe. Recognition rules, in order:
 
 Triage authority: explicit `state <slug>:<name>=<path>` and `group <slug>:<paths>` mappings (passed through as optional source-binding metadata) beat visual similarity; if no operator hints are supplied, group by visual similarity alone.
 
-Skip images that contain no application content (orphan splash screens, full-screen brand marks, internal QA cards). When in doubt, emit the lead — `propose` and the operator at Gate 1 reconcile false positives.
+Skip images that contain no application content (orphan splash screens, full-screen brand marks, internal QA cards). When in doubt, emit the lead — `propose` and the operator's plan review reconcile false positives.
 
 ## Lead id and synopsis
 

@@ -84,7 +84,7 @@ Prefer a **build case** when iterating on one target adapter's build (minutes). 
 | --- | --- | --- |
 | Command | `cargo make eval <id> --restart` | `cargo make eval <id> --restart [--until plan]` |
 | Fixture | committed refined slice | source trees + intent, plan authored live |
-| Gates | `built` metadata, `build/report.yaml`, `expect` paths | pending plan at Gate 1, drained plan, provenance |
+| Gates | `built` metadata, `build/report.yaml`, `expect` paths | authored plan awaiting review, drained plan, provenance |
 
 Omnia has a stock migration workflow case; the `UNLICENSED` Propellerhead upstream is shallow-cloned into the case's gitignored `fixture/` cache on first run and reused offline after that:
 
