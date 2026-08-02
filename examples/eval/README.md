@@ -6,7 +6,7 @@ Live-model eval cases for first-party adapters, over real `emery` verbs and dete
 | ------------------------------------------------------ | ----------------------------------------------------- |
 | You changed adapter prose                              | You need survey → extract → synthesis → build → merge |
 | You have a committed refined slice fixture             | Sources are real trees (docs, TypeScript, …)          |
-| You care about one build's report + `expect` artifacts | You care about plan lifecycle and the merged baseline |
+| You care about one build's report + `expect` artifacts | You care about plan progress and the merged baseline |
 
 ## Quick start
 
@@ -77,7 +77,7 @@ Hard assertions only (the shared `probe` case runner):
 
 | Case kind          | Check      | Pass condition                                                 |
 | ------------------ | ---------- | -------------------------------------------------------------- |
-| workflow (plan)    | Entries    | `plan author` produces at least one entry, lifecycle `pending` |
+| workflow (plan)    | Entries    | `plan author` produces at least one entry, every entry `pending` |
 | workflow (execute) | Lifecycle  | Every plan entry is `done`                                     |
 | workflow (execute) | Provenance | Every evidenced requirement carries sources; ids are present   |
 | build              | Lifecycle  | Slice metadata is `built`                                      |
@@ -111,7 +111,7 @@ source trees that cannot ship as committed fixtures, e.g. the
 the cached tree.
 
 - `build` — `slice` + `expect`: the fixture carries the exact refined state `emery slice build` consumes (`.emery/project.yaml`, the slice's `metadata.yaml` at `status: refined`, proposal / design / tasks / specs, and any source material such as `vendor/`). The runner invokes `slice build <slice>` once and gates on `built` metadata, the authoritative `build/report.yaml`, and every confined `expect` path.
-- `workflow` — `target` + `change` + `intent` / `[sources]`: init, `plan author`, then (past `--until plan`) the genuine drained `plan execute` (its first run stamps Gate 1); `--until finalize` adds `plan archive`. Gates: a non-empty pending plan at Gate 1, every entry `done` after execute, then provenance grading.
+- `workflow` — `target` + `change` + `intent` / `[sources]`: init, `plan author`, then (past `--until plan`) the genuine drained `plan execute` (running it is the approval); `--until finalize` adds `plan archive`. Gates: a non-empty authored plan with every entry pending, every entry `done` after execute, then provenance grading.
 
 Linked adapters need only the directory. A third-party adapter also needs a Cargo dep on `eval` and a catalog line in `[src/main.rs](src/main.rs)`.
 

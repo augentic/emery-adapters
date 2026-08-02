@@ -1,6 +1,6 @@
 # Omnia build — standards review (code reviewer)
 
-Loaded by [../build.md](../build.md) for the standards-review leg — the build's final judgment leg, after the verify-repair loop (and capture replay, when the build context binds `captures`). Applies **engineering standards** with model-assisted judgment: an agent team of three specialists (Security, Correctness, Quality) plus an antagonist; the lead synthesises findings into `$REVIEW_OUTPUT = $CRATE_PATH/REVIEW.md`. This is build-time standards application, not plan Gate 1. The leg also closes the build (see `## Build close-out`): its answer carries the findings synthesis and output declaration the adapter assembles the build report from in-guest — there is no separate report leg.
+Loaded by [../build.md](../build.md) for the standards-review leg — the build's final judgment leg, after the verify-repair loop (and capture replay, when the build context binds `captures`). Applies **engineering standards** with model-assisted judgment: an agent team of three specialists (Security, Correctness, Quality) plus an antagonist; the lead synthesises findings into `$REVIEW_OUTPUT = $CRATE_PATH/REVIEW.md`. This is build-time standards application, not plan approval. The leg also closes the build (see `## Build close-out`): its answer carries the findings synthesis and output declaration the adapter assembles the build report from in-guest — there is no separate report leg.
 
 ## Review pipeline
 

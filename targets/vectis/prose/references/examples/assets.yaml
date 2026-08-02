@@ -8,7 +8,7 @@
 # platform bootstrap (missing iOS/Android shell) and no shell-resident launcher
 # icon satisfies the platform yet. Declare a satisfiable `role: app-icon` entry
 # (path A: `source:` master, or path B: operator-pinned export roots) before
-# Gate 1 on bootstrap plans — there is no default placeholder asset in v1.
+# executing bootstrap plans — there is no default placeholder asset in v1.
 
 version: 1
 

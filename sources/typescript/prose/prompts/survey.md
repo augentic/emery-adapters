@@ -109,7 +109,7 @@ When a larger source decomposes into multiple leads, emit one block per surface 
 ## Anti-patterns
 
 - **Dead code.** A handler defined but never wired to a framework (no `app.post(...)`, no `@Get()`, no `new Worker(...)`) is not a surface. Survey from registration sites, not from likely-looking functions.
-- **Feature-flag-disabled handlers.** A registration unambiguously disabled in production (`if (process.env.ENABLE_LEGACY === "1") app.post(...)`) is not a surface. When the guard is ambiguous, emit it and let the operator decide at Gate 1.
+- **Feature-flag-disabled handlers.** A registration unambiguously disabled in production (`if (process.env.ENABLE_LEGACY === "1") app.post(...)`) is not a surface. When the guard is ambiguous, emit it and let the operator decide during plan review.
 - **Hallucinated framework signatures.** If `package.json` does not depend on `bullmq`, do not emit BullMQ surfaces. Framework absence is dispositive.
 - **Test files.** Skip `*.test.*`, `*.spec.*`, and anything under `tests/` or `__tests__/`. Tests validate production surfaces, they are not production surfaces.
 - **Type-only `.d.ts` files in `touches`.** They contribute zero production LOC and inflate lead sizing.

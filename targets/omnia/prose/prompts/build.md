@@ -15,7 +15,7 @@ The build runs against the build request the CLI prepared at `.emery/slices/<sli
 These working names, bound from the request and the resolved crate, are used throughout:
 
 ```text
-$SLICE_NAME    = active in-progress plan entry's slice name (from `emery plan next`)
+$SLICE_NAME    = active in-progress plan entry's slice name (from `emery plan advance`)
 $SLICE_DIR     = .emery/slices/$SLICE_NAME
 $DOMAIN_NAME   = domain slug from proposal.md ## Domains (typically equals crate name for single-crate slices)
 $SPEC_PATH     = $SLICE_DIR/specs/$DOMAIN_NAME/spec.md
@@ -72,7 +72,7 @@ Repeat until all four checks pass or 3 iterations exhausted. If still failing af
 
 A build failure surfaces a stop hint as the body's final output — a single structured message the parent skill or the parent loop can act on without re-deriving context:
 
-- `slice` — slice name from `emery plan next`.
+- `slice` — slice name from `emery plan advance`.
 - `phase` — `build`.
 - `failing-task` — the `tasks.md` checkbox (or sub-step) that exited non-zero.
 - `log-path` — absolute path to the captured stdout/stderr.
