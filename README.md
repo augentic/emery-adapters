@@ -75,6 +75,7 @@ cargo make eval    # list the cases
 | contracts | `cargo make eval contracts-design --restart` |
 | omnia | `cargo make eval omnia-health --restart` |
 | vectis | `cargo make eval vectis-single-screen --restart` |
+| vectis (open-GAP) | `cargo make eval vectis-open-gap-fab --restart` — [pass criteria](examples/eval/cases/vectis-open-gap-fab/README.md) |
 
 ## Build vs workflow cases
 

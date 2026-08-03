@@ -5,10 +5,20 @@ Unreleased
 ### Added
 
 - Vectis: open-GAP inventiveness contract — default stub-faithful for unspecified scenarios; same-build B′ closure of build-editable surfaces (`spec.md` scenario body, `design.md` TBD, composition `# GAP`) only when a grounded destination exists; LOG-010 review check (`important`, default `code-fix`).
+- Eval: `vectis-open-gap-fab` build case — My Lists–shaped FAB with unspecified activation + grounded `Page::NewList` pressure; pass criteria and consumer Wasm desk-check in the [case README](examples/eval/cases/vectis-open-gap-fab/README.md).
 
 ### Changed
 
 - Vectis: LOG-007 scoped to input-validation / adversarial gaps on otherwise specified actions (not navigation inventiveness); core review Logic specialist and non-mechanical set cover LOG-001..010; UNI-004 dedupe range bumped accordingly.
+
+### Desk-check (unreleased Wasm)
+
+```bash
+cargo make adapter vectis   # or: cargo build -p vectis --target wasm32-wasip2 --release
+emery adapter add target/wasm32-wasip2/release/vectis.wasm
+# then: emery slice build my-lists-platform  (todo-app)  and/or
+#       cargo make eval vectis-open-gap-fab --restart
+```
 
 ---
 

@@ -12,7 +12,7 @@ Fastest feedback first. **Every behavior is asserted on exactly one rung** — d
 | --- | ------------------ | ------------------------------------------------------------ | ------------------------------------------------------------- |
 | 1   | Native crate tests | Operation behavior, prompt assembly (scripted `Harness`)     | `cargo nextest run -p <adapter>` / `cargo make test`          |
 | 2   | Workflow eval cases | Cross-phase integration, real sources → working-tree outputs | [`examples/eval/`](../examples/eval/README.md)                |
-| 3   | Build eval cases   | One target build over a refined fixture, prompt quality      | [`examples/eval/`](../examples/eval/README.md)                |
+| 3   | Build eval cases   | One target build over a refined fixture, prompt quality      | [`examples/eval/`](../examples/eval/README.md) (Vectis inventiveness: [`vectis-open-gap-fab`](../examples/eval/cases/vectis-open-gap-fab/README.md)) |
 | 4   | Wasm examples      | WASM/WIT conformance over the real component seam            | [`examples/wasm/`](../examples/wasm/README.md)                |
 | 5   | Consumer project   | Code (not prose) iteration via seeded `.wasm`                | `cargo make adapter [name]` + `emery adapter add`           |
 
@@ -41,8 +41,11 @@ Native catalog, live cursor backend, operator-invoked (never CI). How to run, de
 cargo make eval                              # list the cases
 cargo make eval orders-contracts --restart   # a workflow case (rung 2)
 cargo make eval omnia-health --restart       # a build case (rung 3)
+cargo make eval vectis-open-gap-fab --restart  # Vectis open-GAP inventiveness (sandbox inspection)
 cargo make lab -- --project-dir <dir> slice list
 ```
+
+Vectis open-GAP inventiveness quality is not asserted by probe — inspect `sandbox/vectis-open-gap-fab/` against the case [pass criteria](../examples/eval/cases/vectis-open-gap-fab/README.md) (stub-faithful or honest B′ closure).
 
 ### 4. Wasm examples — component seam
 
