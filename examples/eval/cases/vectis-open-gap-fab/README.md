@@ -48,10 +48,7 @@ All of the following, consistently:
 Native eval picks up Vectis prose from the linked crate — no Wasm rebuild for prompt iteration. For a **consumer** desk-check (`todo-app` `my-lists-platform`, or this sandbox after a Wasm-hosted run):
 
 ```bash
-# Prefer the fast one-adapter task (restored); full release also works.
-cargo make adapter vectis
-# or: cargo build -p vectis --target wasm32-wasip2 --release
-# or: cargo make release
+cargo build -p vectis --target wasm32-wasip2 --release   # or: cargo make release
 
 # Seed the project-cache entry (cache hits win over GHCR).
 emery adapter add target/wasm32-wasip2/release/vectis.wasm

@@ -124,29 +124,6 @@ install_crate = "cargo-vet"
 command = "cargo"
 args = ["build", "--workspace", "--target", "wasm32-wasip2", "--release"]
 
-# Adapter — fast development component build (LTO off, opt-level 1)
-# into `target/wasm32-wasip2/release/<name>.wasm`. One adapter when
-# named; every adapter when bare. Publishing uses the full `release`
-# profile; switching flavors changes the profile fingerprint and
-# forces a rebuild — publishing is rare, so the trade is accepted.
-[tasks.adapter]
-script_runner = "bash"
-script = '''
-set -euo pipefail
-
-export CARGO_PROFILE_RELEASE_LTO=off
-export CARGO_PROFILE_RELEASE_OPT_LEVEL=1
-
-version="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version *= *"\(.*\)"/\1/p' Cargo.toml)"
-if [ -n "${1:-}" ]; then
-  # `<name>@<version>` disambiguates adapters whose package name also
-  # appears among dependencies (the `omnia` target adapter).
-  cargo build -p "$1@$version" --target wasm32-wasip2 --release
-else
-  cargo build --workspace --exclude eval --target wasm32-wasip2 --release
-fi
-'''
-
 # Publish — push one built component to its exact GHCR SemVer tag as a
 # standard Wasm OCI artifact. Used by Publish Release (adapters.yaml) and
 # as a local breakout: log in first (`gh auth token | docker login ghcr.io

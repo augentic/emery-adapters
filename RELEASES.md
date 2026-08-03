@@ -14,7 +14,7 @@ Unreleased
 ### Desk-check (unreleased Wasm)
 
 ```bash
-cargo make adapter vectis   # or: cargo build -p vectis --target wasm32-wasip2 --release
+cargo build -p vectis --target wasm32-wasip2 --release   # or: cargo make release
 emery adapter add target/wasm32-wasip2/release/vectis.wasm
 # then: emery slice build my-lists-platform  (todo-app)  and/or
 #       cargo make eval vectis-open-gap-fab --restart
