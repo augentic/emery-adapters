@@ -8,7 +8,7 @@ The lead applies every `UNI-*` rule from the shared universal codex pack, embedd
 |---|---|---|
 | UNI-002 Unvalidated input | CRX-002, LOG-007 | Skip |
 | UNI-003 Serialization failures | CRX-005, GEN-009 | Skip |
-| UNI-004 Logic bugs | LOG-001..008 | Skip |
+| UNI-004 Logic bugs | LOG-001..010 | Skip |
 | UNI-006 Race conditions | LOG-003, LOG-006 | Skip |
 | UNI-010 Panics/crashes | GEN-001, CRX-011 | Skip |
 | UNI-017 Type safety (partial) | CRX-008 | Apply beyond ViewModel |

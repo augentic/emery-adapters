@@ -4,7 +4,11 @@ Unreleased
 
 ### Added
 
+- Vectis: open-GAP inventiveness contract — default stub-faithful for unspecified scenarios; same-build B′ closure of build-editable surfaces (`spec.md` scenario body, `design.md` TBD, composition `# GAP`) only when a grounded destination exists; LOG-010 review check (`important`, default `code-fix`).
+
 ### Changed
+
+- Vectis: LOG-007 scoped to input-validation / adversarial gaps on otherwise specified actions (not navigation inventiveness); core review Logic specialist and non-mechanical set cover LOG-001..010; UNI-004 dedupe range bumped accordingly.
 
 ---
 
