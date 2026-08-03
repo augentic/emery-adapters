@@ -41,7 +41,7 @@ Do **not** drop failing steps to chase green runs. Use `# GAP: …` only when Ma
 |------|------|
 | `composition.yaml` inline `test_id` | SSOT for Maestro / accessibility ids |
 | `contract/ui-strings.yaml`, `contract/ui-errors.yaml` | SSOT for display copy and error messages |
-| `contract/test-ids.yaml` (optional) | Demo seed only; product apps use composition |
+| `contract/test-ids.yaml` | Exemplar demo seed; product apps receive composition projection at `emery build` |
 | `.maestro/config.yaml` | Project config (`entries/**`, tag `ci`) |
 | `.maestro/entries/maestro.mobile.yaml` | iOS + Android entry (`appId` + `launchApp` + `runFlow` journeys) |
 | `.maestro/entries/maestro.web.yaml` | Web entry (`url` + `openLink` + `runFlow` journeys) |

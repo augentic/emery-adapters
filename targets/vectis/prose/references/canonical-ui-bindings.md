@@ -6,17 +6,17 @@ Single source of truth for **UI test ids** is inline `test_id` on composition it
 
 | Source | Authoring | Generated (examples) |
 |--------|-----------|----------------------|
-| `composition.yaml` inline `test_id:` | Composition leg (`bind` / `event` alongside) | `.vectis/generated/test-ids.yaml` (adapter projection during `emery build`) → `MaestroTestIds.*` (shell), `${MAESTRO_*}` (Maestro env) |
-| `contract/test-ids.yaml` (optional demo overlay) | Template demo only — keep `test_ids: {}` in product apps | Unioned by exemplar codegen only when keys do not overlap canonical projection |
+| `composition.yaml` inline `test_id:` | Composition leg (`bind` / `event` alongside) | `contract/test-ids.yaml` (adapter projection during `emery build`) → `MaestroTestIds.*` (shell), `${MAESTRO_*}` (Maestro env) |
+| `contract/test-ids.yaml` (exemplar demo only) | Hand-written counter demo in template checkout | Same file → codegen (product apps overwrite from composition) |
 | `contract/ui-strings.yaml` | `strings:` keys | `UiStrings.*` (shell), `shared/src/ui_strings.rs` (core) |
 | `contract/ui-errors.yaml` | `errors:` keys | `UiErrors.*` (shell), `shared/src/ui_errors.rs` (core) |
 | `contract/seed.yaml` | Slice-start fixture data (app-defined shape) | `shared/src/seed_data.rs` (`include_str!`) + core serde test |
 
-Codegen entrypoint: **`shared/src/bin/codegen/`** (plugin registry). Composition `test_id` values are harvested by the Vectis adapter during `emery build` into **`.vectis/generated/test-ids.yaml`**; exemplar codegen unions that flat file with `contract/test-ids.yaml` (demo overlay; duplicate keys fail at codegen). Emery product apps must keep `contract/test-ids.yaml` as `test_ids: {}` — the adapter verify gate enforces this (`canonical-test-id-contract-forbidden`). Refresh:
+Codegen entrypoint: **`shared/src/bin/codegen/`** (plugin registry). In Emery-managed product apps, the Vectis adapter harvests composition `test_id` values during `emery build` and overwrites **`contract/test-ids.yaml`**; exemplar codegen reads that single file. In a bare exemplar checkout (no composition), demo ids live in the same file under a `cap=demo` block. Refresh:
 
 | Changed | Run |
 |---------|-----|
-| `composition.yaml` `test_id` | `emery build` (refreshes `.vectis/generated/test-ids.yaml`), then `cargo make generate-bindings` |
+| `composition.yaml` `test_id` | `emery build` (refreshes `contract/test-ids.yaml`), then `cargo make generate-bindings` |
 | `contract/ui-strings.yaml` / `contract/ui-errors.yaml` only | `cargo make generate-bindings` |
 | Crux types / Effect variants | `cargo make generate` (includes bindings) |
 
@@ -26,11 +26,11 @@ Generated paths (do not edit):
 - `Android/generated/<package>/MaestroTestIds.kt`, `UiStrings.kt`, `UiErrors.kt`
 - `shared/src/ui_strings.rs`, `shared/src/ui_errors.rs`
 
-Run **`cargo make build-hooks`** once per machine (or after pulling `tools/cursor-guard`) so `.cursor/hooks.json` can block direct edits to generated files during **desk / IDE** sessions. Hooks load at agent session start — they do not protect the first materialize build session. **Build-time enforcement** is the deterministic in-guest verify gate only (`canonical-ui-literal-hardcoded`, `canonical-test-id-raw`, `canonical-test-tag-resource-id`, `canonical-test-id-projection-stale`, `canonical-test-id-duplicated`, `canonical-test-id-contract-forbidden`, `canonical-seed-version`).
+Run **`cargo make build-hooks`** once per machine (or after pulling `tools/cursor-guard`) so `.cursor/hooks.json` can block direct edits to generated files during **desk / IDE** sessions. Hooks load at agent session start — they do not protect the first materialize build session. **Build-time enforcement** is the deterministic in-guest verify gate only (`canonical-ui-literal-hardcoded`, `canonical-test-id-raw`, `canonical-test-tag-resource-id`, `canonical-test-id-projection-stale`, `canonical-seed-version`).
 
 ## Authoring rules (build agents)
 
-1. **Test ids** — add `test_id: <kebab-case>` on interactive composition items/groups during the composition leg. Do **not** duplicate ids in `contract/test-ids.yaml` (product apps keep `test_ids: {}`). Run `emery build` to refresh `.vectis/generated/test-ids.yaml`, then `cargo make generate-bindings` before wiring shell tags.
+1. **Test ids** — add `test_id: <kebab-case>` on interactive composition items/groups during the composition leg. Do not hand-edit `contract/test-ids.yaml` in product apps — `emery build` overwrites it from composition. Run `cargo make generate-bindings` before wiring shell tags.
 2. **Strings and errors** — add keys to `contract/ui-strings.yaml` / `contract/ui-errors.yaml` (not in generated or shell sources).
 3. **Run `cargo make generate-bindings`** — never hand-write generated files.
 4. **Wire shell UI** — use generated constants (`MaestroTestIds.SPLASH_CTA`, `UiStrings.SPLASH_TITLE`, …). On Android, enable **`testTagsAsResourceId = true`** on the root `Surface` in `ContentView` so Maestro `id:` selectors resolve (exemplar ships this by default).
@@ -57,6 +57,7 @@ Canonical UI rules are enforced **only** by the Vectis adapter **deterministic i
 | `canonical-ui-literal-hardcoded` | Hardcoded contract copy in shell/core static UI APIs |
 | `canonical-test-id-raw` | Raw `.testTag("…")` / `accessibilityIdentifier("…")` instead of `MaestroTestIds.*` |
 | `canonical-test-tag-resource-id` | Android `testTag` without root `semantics { testTagsAsResourceId = true }` |
+| `canonical-test-id-projection-stale` | `contract/test-ids.yaml` out of sync with composition `test_id` harvest |
 | `canonical-seed-version` | `contract/seed.yaml` `version` is not `1` |
 
 These error findings block `Refined → Built` until shell/core use generated bindings and expose Maestro `id:` selectors on Android. Seed **shape** (field names, types, required keys) is validated by the core via a serde deserialize test on `SEED_YAML` — not by the adapter. Do not store derived values (counts, aggregates) in seed; compute them in `view()`. Run **`cargo make generate-bindings`** after contract/composition edits so generated constants exist before build.

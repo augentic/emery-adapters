@@ -1,4 +1,4 @@
-//! Project composition inline `test_id` values into `.vectis/generated/test-ids.yaml`.
+//! Project composition inline `test_id` values into `contract/test-ids.yaml`.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -11,8 +11,8 @@ use crate::validate::engine::composition::{
     collect_test_id_values, is_kebab_test_id, kebab_to_maestro_key,
 };
 
-/// Relative path to the canonical flat test-id registry (adapter-owned derived artifact).
-pub const GENERATED_REL: &str = ".vectis/generated/test-ids.yaml";
+/// Relative path to the flat test-id registry consumed by exemplar codegen.
+pub const REGISTRY_REL: &str = "contract/test-ids.yaml";
 
 type Entries = BTreeMap<String, String>;
 
@@ -57,14 +57,14 @@ pub fn harvest_entries(
     }
 }
 
-/// Write `.vectis/generated/test-ids.yaml` from the effective composition.
+/// Write `contract/test-ids.yaml` from the effective composition.
 ///
 /// # Errors
 ///
 /// Propagates [`harvest_entries`] failures and I/O errors while writing the derived file.
 pub fn write_generated(project_root: &Path, active_slice: Option<&str>) -> Result<(), VectisError> {
     let entries = harvest_entries(project_root, active_slice)?;
-    let path = project_root.join(GENERATED_REL);
+    let path = project_root.join(REGISTRY_REL);
     let body = format_generated_yaml(&entries);
 
     if path.is_file() {
@@ -241,7 +241,7 @@ mod tests {
         .unwrap();
 
         write_generated(root, None).expect("first write");
-        let path = root.join(GENERATED_REL);
+        let path = root.join(REGISTRY_REL);
         let first = fs::read_to_string(&path).unwrap();
 
         write_generated(root, None).expect("second write");
