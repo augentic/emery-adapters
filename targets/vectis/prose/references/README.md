@@ -31,6 +31,7 @@ The Vectis core / test / iOS / Android writer and reviewer orchestration lives i
 ### Orchestration depth
 
 - [`sub-agent-contract.md`](sub-agent-contract.md) — writer / reviewer sub-agent inputs and outputs; why verify is serial and review is parallel.
+- [`open-gap-contract.md`](open-gap-contract.md) — open-GAP inventiveness: stub-faithful default, B′ closure eligibility, write authority, test policy.
 
 ### Runtime schemas
 
