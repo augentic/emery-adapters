@@ -1,4 +1,4 @@
-//! Canonical UI bindings: detect hardcoded contract copy and raw test tags in shell/core.
+//! Canonical UI bindings: detect hardcoded UI contract copy and raw test tags in shell/core.
 //!
 //! In-guest verify implementation (no `cargo` / `python3` / shell on the Wasm host path).
 
@@ -18,17 +18,17 @@ pub const TEST_ID_FINDING_ID: &str = "canonical-test-id-raw";
 /// Finding id when Android uses `testTag` without `testTagsAsResourceId` on a root.
 pub const TEST_TAGS_RESOURCE_ID_FINDING_ID: &str = "canonical-test-tag-resource-id";
 
-/// Emit findings when shell/core sources hard-code contract copy or raw test tags.
+/// Emit findings when shell/core sources hard-code UI contract copy or raw test tags.
 #[must_use]
 pub fn ui_literals_findings(project_root: &Path, platforms: &[String]) -> Vec<Value> {
-    let strings_yaml = project_root.join("contract/ui-strings.yaml");
+    let strings_yaml = project_root.join("ui-contract/ui-strings.yaml");
     if !strings_yaml.is_file() {
         return Vec::new();
     }
 
     let mut contract_values = load_yaml_map_values(&strings_yaml, "strings");
     contract_values
-        .extend(load_yaml_map_values(&project_root.join("contract/ui-errors.yaml"), "errors"));
+        .extend(load_yaml_map_values(&project_root.join("ui-contract/ui-errors.yaml"), "errors"));
     contract_values.sort_by_key(|b| std::cmp::Reverse(b.len()));
     contract_values.dedup();
 
@@ -204,7 +204,7 @@ fn scan_shell_file(
                     path,
                     line_no + 1,
                     &format!(
-                        "hardcoded contract value \"{val}\" — add/use UiStrings or ui_strings key; run `cargo make generate-bindings`"
+                        "hardcoded UI contract value \"{val}\" — add/use UiStrings or ui_strings key; run `cargo make generate-bindings`"
                     ),
                 );
             }
@@ -302,7 +302,7 @@ fn scan_rust_file(
                     path,
                     line_no + 1,
                     &format!(
-                        "hardcoded contract value \"{val}\" in core — use ui_strings:: / ui_errors::*"
+                        "hardcoded UI contract value \"{val}\" in core — use ui_strings:: / ui_errors::*"
                     ),
                 );
             }
@@ -367,7 +367,7 @@ fn android_test_tag_resource_id_findings(project_root: &Path, platforms: &[Strin
     if !platforms.iter().any(|p| p == "android") || !shell_present(project_root, "android") {
         return Vec::new();
     }
-    if !project_root.join("contract/ui-strings.yaml").is_file() {
+    if !project_root.join("ui-contract/ui-strings.yaml").is_file() {
         return Vec::new();
     }
 
@@ -460,7 +460,7 @@ mod tests {
     #[test]
     fn flags_hardcoded_text_in_shell() {
         let tmp = tempdir().unwrap();
-        write(&tmp.path().join("contract/ui-strings.yaml"), "strings:\n  SPLASH_TITLE: Task\n");
+        write(&tmp.path().join("ui-contract/ui-strings.yaml"), "strings:\n  SPLASH_TITLE: Task\n");
         write(
             &tmp.path().join("Android/app/src/main/kotlin/com/example/SplashScreen.kt"),
             "fun Preview() { Text(\"Task\") }\n",
@@ -475,7 +475,7 @@ mod tests {
     #[test]
     fn allows_ui_strings_reference() {
         let tmp = tempdir().unwrap();
-        write(&tmp.path().join("contract/ui-strings.yaml"), "strings:\n  SPLASH_TITLE: Task\n");
+        write(&tmp.path().join("ui-contract/ui-strings.yaml"), "strings:\n  SPLASH_TITLE: Task\n");
         write(
             &tmp.path().join("Android/app/src/main/kotlin/com/example/SplashScreen.kt"),
             "fun Preview() { Text(UiStrings.SPLASH_TITLE) }\n",
@@ -488,7 +488,7 @@ mod tests {
     #[test]
     fn flags_raw_test_tag() {
         let tmp = tempdir().unwrap();
-        write(&tmp.path().join("contract/ui-strings.yaml"), "strings:\n  X: y\n");
+        write(&tmp.path().join("ui-contract/ui-strings.yaml"), "strings:\n  X: y\n");
         write(
             &tmp.path().join("Android/app/src/main/kotlin/com/example/Home.kt"),
             "Modifier.testTag(\"splash-cta\")\n",
@@ -509,7 +509,7 @@ mod tests {
     #[test]
     fn allows_test_tag_with_resource_id_flag() {
         let tmp = tempdir().unwrap();
-        write(&tmp.path().join("contract/ui-strings.yaml"), "strings:\n  X: y\n");
+        write(&tmp.path().join("ui-contract/ui-strings.yaml"), "strings:\n  X: y\n");
         write(
             &tmp.path().join("Android/app/src/main/kotlin/com/example/ContentView.kt"),
             "Modifier.semantics { testTagsAsResourceId = true }\nModifier.testTag(MaestroTestIds.X)\n",

@@ -17,13 +17,13 @@
 //! **Root files:** `Makefile`, `Makefile.toml`, `Cargo.toml`, `Cargo.lock`,
 //! `rust-toolchain.toml`, `deny.toml`, `README.md`, `.gitignore`.
 //!
-//! **Root directories:** `shared/`, `contract/`, `supply-chain/`, `.maestro/`,
+//! **Root directories:** `shared/`, `ui-contract/`, `supply-chain/`, `.maestro/`,
 //! `tools/`, and shell trees `iOS/` / `Android/` when the matching platform
 //! token is listed in the materialize `platforms` argument (from
 //! `.emery/project.yaml`). Cross-cutting trees always copy; out-of-scope shells
 //! are omitted so a `core`+`android` project does not inherit a stale iOS demo.
 //!
-//! After strip, Maestro **infra** must remain: `contract/*.yaml`,
+//! After strip, Maestro **infra** must remain: `ui-contract/*.yaml`,
 //! `.maestro/config.yaml`, `.maestro/scripts/load-{test-ids,strings,errors}.sh`,
 //! and `shared/src/bin/codegen/`. Late-cap re-adoption copies strip-units from
 //! `$TEMPLATE_DIR` — see `prose/references/template-capabilities.md`.
@@ -82,7 +82,7 @@ const ROOT_FILES: &[&str] = &[
 const ROOT_NESTED_FILES: &[&str] = &[".cursor/hooks.json"];
 
 const ROOT_DIRS: &[&str] =
-    &["shared", "contract", "iOS", "Android", "supply-chain", ".maestro", "tools"];
+    &["shared", "ui-contract", "iOS", "Android", "supply-chain", ".maestro", "tools"];
 
 /// Platform tokens that select which shell trees [`run`] copies from the template.
 pub const ALL_SHELL_PLATFORMS: &[&str] = &["core", "ios", "android"];

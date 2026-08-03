@@ -1,4 +1,4 @@
-//! Verify `contract/test-ids.yaml` matches the effective composition projection.
+//! Verify `ui-contract/test-ids.yaml` matches the effective composition projection.
 
 use std::path::Path;
 
@@ -8,7 +8,7 @@ use crate::projections::test_ids::{self, REGISTRY_REL};
 
 pub const PROJECTION_STALE_ID: &str = "canonical-test-id-projection-stale";
 
-/// Emit findings when `contract/test-ids.yaml` is stale relative to composition.
+/// Emit findings when `ui-contract/test-ids.yaml` is stale relative to composition.
 #[must_use]
 pub fn test_id_projection_findings(project_root: &Path, active_slice: Option<&str>) -> Vec<Value> {
     let mut findings = Vec::new();
@@ -107,7 +107,7 @@ mod tests {
     fn clean_when_composition_and_registry_are_empty() {
         let tmp = tempdir().unwrap();
         let root = tmp.path();
-        fs::create_dir_all(root.join("contract")).unwrap();
+        fs::create_dir_all(root.join("ui-contract")).unwrap();
         fs::write(root.join(REGISTRY_REL), "test_ids: {}\n").unwrap();
 
         let findings = test_id_projection_findings(root, None);

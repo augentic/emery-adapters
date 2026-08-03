@@ -107,9 +107,9 @@ fn allowlist_and_denylist() {
             .any(|p| { p == "Android/app/src/main/java/com/example/counter/MainActivity.kt" })
     );
     assert!(report.files.iter().any(|p| p == ".maestro/config.yaml"));
-    assert!(report.files.iter().any(|p| p == "contract/test-ids.yaml"));
-    assert!(report.files.iter().any(|p| p == "contract/ui-strings.yaml"));
-    assert!(report.files.iter().any(|p| p == "contract/ui-errors.yaml"));
+    assert!(report.files.iter().any(|p| p == "ui-contract/test-ids.yaml"));
+    assert!(report.files.iter().any(|p| p == "ui-contract/ui-strings.yaml"));
+    assert!(report.files.iter().any(|p| p == "ui-contract/ui-errors.yaml"));
     assert!(report.files.iter().any(|p| p == ".maestro/scripts/load-test-ids.sh"));
     assert!(report.files.iter().any(|p| p == ".maestro/scripts/load-strings.sh"));
     assert!(report.files.iter().any(|p| p == ".maestro/scripts/load-errors.sh"));
@@ -270,7 +270,7 @@ fn refuses_nested_gitignore_overwrite() {
     let template = tempdir().unwrap();
     fs::write(template.path().join("Cargo.toml"), "[workspace]\n").unwrap();
     fs::write(template.path().join(".gitignore"), "target/\n").unwrap();
-    for dir in ["shared", "iOS", "Android", "supply-chain", ".maestro", "contract", "tools"] {
+    for dir in ["shared", "iOS", "Android", "supply-chain", ".maestro", "ui-contract", "tools"] {
         fs::create_dir_all(template.path().join(dir)).unwrap();
     }
     fs::create_dir_all(template.path().join(".cursor")).unwrap();

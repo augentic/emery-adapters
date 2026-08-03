@@ -2,7 +2,7 @@
 id: VECTIS-010
 title: Canonical UI Bindings
 severity: important
-trigger: Shell or core sources hand-write UI test ids, display strings, or error copy that should come from composition inline test_id or contract YAML and codegen.
+trigger: Shell or core sources hand-write UI test ids, display strings, or error copy that should come from composition inline test_id or ui-contract YAML and codegen.
 applicability:
   adapters: [vectis]
 references:
@@ -17,21 +17,21 @@ references:
 Agents MUST:
 
 1. Add or update **test ids** as inline `test_id: <kebab-case>` on composition items/groups (composition leg) — not in shell sources or `component-bindings.yaml`.
-2. Add or update **strings and errors** in `contract/{ui-strings,ui-errors}.yaml` when those files exist (not in generated or shell sources).
+2. Add or update **strings and errors** in `ui-contract/{ui-strings,ui-errors}.yaml` when those files exist (not in generated or shell sources).
 3. Run `cargo make generate-bindings` before wiring new test tags, copy, or error messages.
-4. Run **`cargo make generate-bindings`** after contract/composition or shell/core edits. The Vectis adapter projects composition `test_id` values into **`contract/test-ids.yaml`** during `emery build` (after composition gate). The Vectis adapter **deterministic in-guest verify** enforces canonical UI rules at build time (`canonical-ui-literal-hardcoded`, `canonical-test-id-raw`, `canonical-test-tag-resource-id`, `canonical-test-id-projection-stale`, `canonical-seed-version`) — build cannot succeed until shells consume generated constants and expose Maestro `id:` selectors on Android. Seed shape is validated by a core serde deserialize test on `SEED_YAML`, not by the adapter.
+4. Run **`cargo make generate-bindings`** after ui-contract or composition or shell/core edits. The Vectis adapter projects composition `test_id` values into **`ui-contract/test-ids.yaml`** during `emery build` (after composition gate). The Vectis adapter **deterministic in-guest verify** enforces canonical UI rules at build time (`canonical-ui-literal-hardcoded`, `canonical-test-id-raw`, `canonical-test-tag-resource-id`, `canonical-test-id-projection-stale`, `canonical-seed-version`) — build cannot succeed until shells consume generated constants and expose Maestro `id:` selectors on Android. Seed shape is validated by a core serde deserialize test on `SEED_YAML`, not by the adapter.
 5. Consume generated `MaestroTestIds.*`, `UiStrings.*`, `UiErrors.*`, `crate::ui_strings::*`, and `crate::ui_errors::*` — never duplicate the same literal in shell Kotlin/Swift or Rust core. On Android, keep `testTagsAsResourceId = true` on the root `Surface` in `ContentView`.
 
-In exemplar-only checkouts (no composition), demo test ids live in committed `contract/test-ids.yaml`. Product apps author test ids in composition; `emery build` overwrites that file.
+In exemplar-only checkouts (no composition), demo test ids live in committed `ui-contract/test-ids.yaml`. Product apps author test ids in composition; `emery build` overwrites that file.
 
 ## Look For
 
-- `Text("Save")` / `stringResource(R.string.…)` with hand-written product copy when `UiStrings.SAVE` exists or should exist in contract.
+- `Text("Save")` / `stringResource(R.string.…)` with hand-written product copy when `UiStrings.SAVE` exists or should exist in ui-contract.
 - Hardcoded accessibility/test tags instead of `MaestroTestIds.*` or `testTag(MaestroTestIds.…)`.
-- Hand-edited `shared/src/ui_strings.rs` or `shared/src/ui_errors.rs` (generated — use contract + codegen).
+- Hand-edited `shared/src/ui_strings.rs` or `shared/src/ui_errors.rs` (generated — use ui-contract + codegen).
 - Maestro YAML with raw id strings instead of `${MAESTRO_…}`.
-- Confusing `component-bindings.yaml` (composition catalog) with inline `test_id` or hand-editing `contract/test-ids.yaml` in product apps.
+- Confusing `component-bindings.yaml` (composition catalog) with inline `test_id` or hand-editing `ui-contract/test-ids.yaml` in product apps.
 
 ## Fix
 
-Add composition `test_id` and/or contract keys → `cargo make generate-bindings` → wire shell/core with generated constants → update Maestro YAML to use env vars from `load-*.sh`. Build verify enforces bindings.
+Add composition `test_id` and/or ui-contract keys → `cargo make generate-bindings` → wire shell/core with generated constants → update Maestro YAML to use env vars from `load-*.sh`. Build verify enforces bindings.

@@ -16,7 +16,7 @@ Operators wire this into desk-check runners between **execute** and **finalize**
 ## Authoring workflow
 
 ```text
-requirements + design + composition test_id + contract/ui-strings.yaml
+requirements + design + composition test_id + ui-contract/ui-strings.yaml
   → add composition test_id + contract string keys + cargo make generate-bindings
   → wire MaestroTestIds / UiStrings into shell UI
   → author .maestro/journeys/ and wire runFlow steps in platform entries
@@ -40,8 +40,8 @@ Do **not** drop failing steps to chase green runs. Use `# GAP: …` only when Ma
 | Path | Role |
 |------|------|
 | `composition.yaml` inline `test_id` | SSOT for Maestro / accessibility ids |
-| `contract/ui-strings.yaml`, `contract/ui-errors.yaml` | SSOT for display copy and error messages |
-| `contract/test-ids.yaml` | Exemplar demo seed; product apps receive composition projection at `emery build` |
+| `ui-contract/ui-strings.yaml`, `ui-contract/ui-errors.yaml` | SSOT for display copy and error messages |
+| `ui-contract/test-ids.yaml` | Exemplar demo seed; product apps receive composition projection at `emery build` |
 | `.maestro/config.yaml` | Project config (`entries/**`, tag `ci`) |
 | `.maestro/entries/maestro.mobile.yaml` | iOS + Android entry (`appId` + `launchApp` + `runFlow` journeys) |
 | `.maestro/entries/maestro.web.yaml` | Web entry (`url` + `openLink` + `runFlow` journeys) |
@@ -62,9 +62,9 @@ appId: ${APP_ID}
 
 Web entry uses `url: ${APP_URL}` and `openLink` instead.
 
-Use **`${MAESTRO_…}`** for test ids and **`"${SPLASH_TITLE}"`** etc. for display strings — never hardcode values that exist in `contract/`.
+Use **`${MAESTRO_…}`** for test ids and **`"${SPLASH_TITLE}"`** etc. for display strings — never hardcode values that exist in `ui-contract/`.
 
-On Android, Maestro `id:` selectors require `testTagsAsResourceId = true` on the root `Surface` (exemplar `ContentView` ships this). Prefer `id:` for test tags; use visible text asserts only for display strings from `contract/ui-strings.yaml`.
+On Android, Maestro `id:` selectors require `testTagsAsResourceId = true` on the root `Surface` (exemplar `ContentView` ships this). Prefer `id:` for test tags; use visible text asserts only for display strings from `ui-contract/ui-strings.yaml`.
 
 ## MCP vs CLI
 
@@ -89,7 +89,7 @@ Prerequisites: Maestro CLI on `PATH`, simulator/emulator booted (native), app bu
 
 During slice **build**, agents MAY:
 
-- Edit `contract/*.yaml`
+- Edit `ui-contract/*.yaml`
 - Run `cargo make generate-bindings`
 - Add `.maestro/journeys/` and update `runFlow` steps in `maestro.mobile.yaml` / `maestro.web.yaml`
 

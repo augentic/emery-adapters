@@ -1,10 +1,10 @@
 //! Detect partial template materialize (scaffold allowlist incomplete).
 //!
 //! Build agents sometimes copy only shell/core trees needed for `make verify`
-//! and skip Maestro/canonical infra (`Makefile.toml`, `contract/`, `.maestro/`,
+//! and skip Maestro/canonical infra (`Makefile.toml`, `ui-contract/`, `.maestro/`,
 //! `tools/`). Once a materialized workspace has started (`Cargo.toml` +
 //! `shared/`), workspace bootstrap paths must be present per `scaffold::materialize`.
-//! Canonical-UI / Maestro directories (`contract/`, `.maestro/`, `tools/`) are
+//! Canonical-UI / Maestro directories (`ui-contract/`, `.maestro/`, `tools/`) are
 //! required only when a composition declares `test_id` (UI intent).
 
 use std::path::Path;
@@ -20,7 +20,7 @@ const ALWAYS_REQUIRED_ROOT_FILES: &[&str] = &["Makefile.toml"];
 const ALWAYS_REQUIRED_ROOT_DIRS: &[&str] = &["supply-chain"];
 
 /// Canonical-UI / Maestro infra required only when the composition declares UI intent.
-const UI_REQUIRED_ROOT_DIRS: &[&str] = &["contract", ".maestro", "tools"];
+const UI_REQUIRED_ROOT_DIRS: &[&str] = &["ui-contract", ".maestro", "tools"];
 
 /// Emit findings when a materialized workspace is missing allowlisted bootstrap paths.
 #[must_use]

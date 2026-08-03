@@ -1,4 +1,4 @@
-//! Domain-neutral `contract/seed.yaml` version gate.
+//! Domain-neutral `ui-contract/seed.yaml` version gate.
 //!
 //! Shape validation (field names, types, required keys) belongs in the core:
 //! product apps define a `Deserialize` seed type and a `cargo test` that parses
@@ -10,15 +10,15 @@ use std::path::Path;
 
 use serde_json::{Value, json};
 
-/// Finding id when `contract/seed.yaml` declares an unsupported `version`.
+/// Finding id when `ui-contract/seed.yaml` declares an unsupported `version`.
 pub const SEED_VERSION_FINDING_ID: &str = "canonical-seed-version";
 
-/// Emit findings when `contract/seed.yaml` declares an unsupported `version`.
+/// Emit findings when `ui-contract/seed.yaml` declares an unsupported `version`.
 ///
 /// Skips silently when the file is absent or whitespace-only.
 #[must_use]
 pub fn seed_version_findings(project_root: &Path) -> Vec<Value> {
-    let Ok(text) = fs::read_to_string(project_root.join("contract/seed.yaml")) else {
+    let Ok(text) = fs::read_to_string(project_root.join("ui-contract/seed.yaml")) else {
         return Vec::new();
     };
 
@@ -30,7 +30,7 @@ pub fn seed_version_findings(project_root: &Path) -> Vec<Value> {
         return Vec::new();
     }
 
-    vec![error_finding(SEED_VERSION_FINDING_ID, "contract/seed.yaml `version` must be 1")]
+    vec![error_finding(SEED_VERSION_FINDING_ID, "ui-contract/seed.yaml `version` must be 1")]
 }
 
 fn error_finding(id: &str, message: impl Into<String>) -> Value {
@@ -38,7 +38,7 @@ fn error_finding(id: &str, message: impl Into<String>) -> Value {
         "id": id,
         "severity": "error",
         "source": "deterministic",
-        "path": "contract/seed.yaml",
+        "path": "ui-contract/seed.yaml",
         "message": message.into(),
     })
 }
@@ -58,7 +58,7 @@ mod tests {
     use super::*;
 
     fn write_seed(root: &Path, body: &str) {
-        let path = root.join("contract/seed.yaml");
+        let path = root.join("ui-contract/seed.yaml");
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, body).unwrap();
     }

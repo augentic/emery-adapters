@@ -362,7 +362,7 @@ fn partial_materialize_infra_missing() {
     );
     assert!(
         ids.contains(&"materialize-ui-dir-missing"),
-        "composition with test_id must flag missing contract/.maestro/tools: {result}"
+        "composition with test_id must flag missing ui-contract/.maestro/tools: {result}"
     );
     assert_eq!(verify_exit_code(&result), 1);
 }
@@ -372,7 +372,7 @@ fn hardcoded_ui_literals_fail_verify() {
     let tmp = tempdir().unwrap();
     project(tmp.path(), &["core", "android"]);
     write(
-        &tmp.path().join("contract/ui-strings.yaml"),
+        &tmp.path().join("ui-contract/ui-strings.yaml"),
         "strings:\n  SPLASH_TITLE: Task\n  SPLASH_CTA_LABEL: Get Organised!\n  MY_LISTS_STUB_MESSAGE: My Lists coming soon\n",
     );
     write(&tmp.path().join("shared/src/app.rs"), "pub struct App;");
@@ -411,7 +411,7 @@ fn wrong_seed_version_fails_verify() {
     let tmp = tempdir().unwrap();
     project(tmp.path(), &["core", "android"]);
     write(&tmp.path().join("shared/src/app.rs"), "pub struct App;");
-    write(&tmp.path().join("contract/seed.yaml"), "version: 2\n");
+    write(&tmp.path().join("ui-contract/seed.yaml"), "version: 2\n");
 
     let result = run(VerifyMode::Verify, tmp.path(), None).unwrap();
     let ids = finding_ids(&result);

@@ -1,4 +1,4 @@
-//! Project composition inline `test_id` values into `contract/test-ids.yaml`.
+//! Project composition inline `test_id` values into `ui-contract/test-ids.yaml`.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -12,7 +12,7 @@ use crate::validate::engine::composition::{
 };
 
 /// Relative path to the flat test-id registry consumed by exemplar codegen.
-pub const REGISTRY_REL: &str = "contract/test-ids.yaml";
+pub const REGISTRY_REL: &str = "ui-contract/test-ids.yaml";
 
 type Entries = BTreeMap<String, String>;
 
@@ -57,7 +57,7 @@ pub fn harvest_entries(
     }
 }
 
-/// Write `contract/test-ids.yaml` from the effective composition.
+/// Write `ui-contract/test-ids.yaml` from the effective composition.
 ///
 /// # Errors
 ///
@@ -80,7 +80,7 @@ pub fn write_generated(project_root: &Path, active_slice: Option<&str>) -> Resul
     Ok(())
 }
 
-/// Parse a flat `test_ids:` map from generated or contract YAML.
+/// Parse a flat `test_ids:` map from generated or ui-contract YAML.
 ///
 /// # Errors
 ///

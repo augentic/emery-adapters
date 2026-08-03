@@ -6,20 +6,20 @@ Greenfield trees come from a local [`vectis-exemplar`](https://github.com/augent
 
 ## After materialize: DX that must remain
 
-`vectis::scaffold::materialize` copies root + shell DX, `shared/` (including `boltffi.toml` and `shared/src/bin/codegen/`), `contract/` (Maestro test ids, UI strings, errors), `supply-chain/`, `.maestro/`, `tools/cursor-guard`, and `.cursor/hooks.json`. After stripping `VECTIS-OPTIONAL` (especially `cap=demo`), keep:
+`vectis::scaffold::materialize` copies root + shell DX, `shared/` (including `boltffi.toml` and `shared/src/bin/codegen/`), `ui-contract/` (Maestro test ids, UI strings, errors), `supply-chain/`, `.maestro/`, `tools/cursor-guard`, and `.cursor/hooks.json`. After stripping `VECTIS-OPTIONAL` (especially `cap=demo`), keep:
 
 | Path | Role |
 |------|------|
 | Root `Makefile`, `Makefile.toml`, `Cargo.toml` / `Cargo.lock`, `rust-toolchain.toml`, `deny.toml` | Workspace DX and pins |
 | `iOS/Makefile`, `iOS/project.yml` | BoltFFI pack + xcodegen DX (`make build` / `run-sim`) |
 | `Android/Makefile` + Gradle wrapper + `gradle/libs.versions.toml` | BoltFFI pack + assemble DX (`make build` / `doctor`) |
-| `shared/boltffi.toml`, `shared/src/bin/codegen/` | FFI + contract → shell/Rust binding codegen |
-| `contract/test-ids.yaml` (optional demo seed), `contract/ui-strings.yaml`, `contract/ui-errors.yaml`, `contract/seed.yaml` | Canonical UI bindings — test ids from composition; strings/errors from contract; seed fixture (app-defined shape, core serde test) |
+| `shared/boltffi.toml`, `shared/src/bin/codegen/` | FFI + ui-contract → shell/Rust binding codegen |
+| `ui-contract/test-ids.yaml` (optional demo seed), `ui-contract/ui-strings.yaml`, `ui-contract/ui-errors.yaml`, `ui-contract/seed.yaml` | Canonical UI bindings — test ids from composition; strings/errors from ui-contract; seed fixture (app-defined shape, core serde test) |
 | `tools/cursor-guard/` | Generated-binding edit guard (`cargo make build-hooks`) |
 | `.maestro/config.yaml`, `.maestro/entries/maestro.{mobile,web}.yaml`, `.maestro/scripts/run-maestro.sh`, `.maestro/scripts/load-{test-ids,strings,errors}.sh`, `.maestro/scripts/maestro-env.sh` | Maestro infra (not demo journeys) |
 | `tools/cursor-guard/`, `.cursor/hooks.json` | Guard generated bindings from direct agent edits (`cargo make build-hooks`) |
 
-Strip demo Maestro journeys (`journeys/smoke-counter/`, etc.) and `cap=demo` blocks inside `contract/*.yaml` per `$TEMPLATE_DIR/AGENTS.md` and `$TEMPLATE_DIR/.maestro/README.md`. Do **not** delete platform entries (`maestro.mobile.yaml`, `maestro.web.yaml`), `run-maestro.sh`, or the load scripts above. README demo (`cap=demo` doc) blocks may be trimmed; keep the file.
+Strip demo Maestro journeys (`journeys/smoke-counter/`, etc.) and `cap=demo` blocks inside `ui-contract/*.yaml` per `$TEMPLATE_DIR/AGENTS.md` and `$TEMPLATE_DIR/.maestro/README.md`. Do **not** delete platform entries (`maestro.mobile.yaml`, `maestro.web.yaml`), `run-maestro.sh`, or the load scripts above. README demo (`cap=demo` doc) blocks may be trimmed; keep the file.
 
 `web/` is never materialized (out of scope). Regenerate `iOS/*.xcodeproj` via `make -C iOS generate-project` after materialize.
 
