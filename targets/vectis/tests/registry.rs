@@ -22,6 +22,8 @@ fn embeds_all_trees() {
         "references/hard-rules-ios.md",
         "references/hard-rules-android.md",
         "references/agent-teams.md",
+        "references/open-gap-contract.md",
+        "references/sub-agent-contract.md",
         "rules/VECTIS-006-asset-render-by-kind.md",
         "rules/VECTIS-007-ios-scaffold-immutability.md",
         "rules/VECTIS-008-prompts-forbid-named-simulator.md",

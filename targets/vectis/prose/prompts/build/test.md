@@ -2,7 +2,7 @@
 
 Inlined by the adapter core into the **core** leg (alongside [../build.md](../build.md) and [core/write.md](core/write.md)) and again into the **final-core-verify** leg (alongside [../build.md](../build.md) only). Carries Step 5 (write tests; core leg only) and Step 6 (verify-repair the shared core). Mid-build Step 6 does **not** write the durable digest stamp; only the final-core-verify leg refreshes `shared/.vectis/verify.ok` after a green pass.
 
-Carries the cross-cutting Rust verify-repair loop. The spec-to-test mapping rules live in [`test-spec-mapping.md`](../../references/test-spec-mapping.md) and the operational runbook lives in [`test-runbook.md`](../../references/test-runbook.md).
+Carries the cross-cutting Rust verify-repair loop. The spec-to-test mapping rules live in [`test-spec-mapping.md`](../../references/test-spec-mapping.md) and the operational runbook lives in [`test-runbook.md`](../../references/test-runbook.md). Open-GAP stub-faithful asserts: [`open-gap-contract.md`](../../references/open-gap-contract.md).
 
 ## Step 5 — Crux tests (test-writer body)
 
@@ -14,12 +14,12 @@ Run after [core/write.md](core/write.md) in the same slice. Detect mode from the
 
 ### Inline writer steps
 
-1. **Read inputs.** `${SPEC_PATH}`, `${DESIGN_PATH}`, `${APP_RS}`. Use spec-to-test mapping rules: one synchronous `#[test]` per scenario, named after the scenario, with a `/// Spec: <domain> > REQ-XXX > Scenario: <scenario>` traceability comment. Full mapping rules: [`test-spec-mapping.md`](../../references/test-spec-mapping.md).
-2. **Map scenarios deterministically.** Each `#### Scenario:` block produces exactly one test function. The `**WHEN**` clause becomes the test setup (model state, dispatched events). The `**THEN**` clause becomes assertions over `Command` effects and `view()` output. Stable `REQ-XXX` ID + scenario title is the drift-detection key.
+1. **Read inputs.** `${SPEC_PATH}`, `${DESIGN_PATH}`, `${APP_RS}`, plus current-slice open-GAP markers (see [`open-gap-contract.md`](../../references/open-gap-contract.md)). Use spec-to-test mapping rules: one synchronous `#[test]` per scenario, named after the scenario, with a `/// Spec: <domain> > REQ-XXX > Scenario: <scenario>` traceability comment. Full mapping rules: [`test-spec-mapping.md`](../../references/test-spec-mapping.md).
+2. **Map scenarios deterministically.** Each `#### Scenario:` block produces exactly one test function. The `**WHEN**` clause becomes the test setup (model state, dispatched events). The `**THEN**` clause becomes assertions over `Command` effects and `view()` output. Stable `REQ-XXX` ID + scenario title is the drift-detection key. Open-GAP scenarios: stub-faithful asserts only ([`open-gap-contract.md`](../../references/open-gap-contract.md)); never invent destinations; still one test per scenario (LOG-008). Do not apply the runbook’s vague-THEN→ViewModel heuristic to explicit unspecified/GAP withholds.
 3. **Write tests inside `#[cfg(test)] mod tests`** in `app.rs` (Crux convention — not a separate `tests/` directory). Preserve existing helpers, factory functions, and test style.
 4. **Coverage requirements.** Every scenario; every shell-facing `Event` variant; every page transition (Loading → Main, Error → retry); every validation rule; every adapter's happy and error path; factory helpers for repeated setup.
 5. **Crux test API.** Synchronous only — never `#[tokio::test]` or any async runtime. Call `update()` directly; inspect `Command` effects; resolve effects with simulated responses (`expect_one_effect()`, `expect_http()`, `resolve()`); assert on model and view-model state (`expect_one_event()`). Patterns: [`crux/testing-patterns.md`](../../references/crux/testing-patterns.md).
-6. **Do not run `cargo test` in create or update mode** — orchestration owns it. In repair mode, run `cargo test` to get fresh errors and verify the fix before returning. Preserve test names, `/// Spec:` traceability comments, and assertion intent — only adjust the syntax used to express them.
+6. **Do not run `cargo test` in create or update mode** — orchestration owns it. In repair mode, run `cargo test` to get fresh errors and verify the fix before returning. Preserve test names, `/// Spec:` traceability comments, and assertion intent — only adjust the syntax used to express them. Open-GAP destination asserts while markers remain → remediate in this core budget (prefer revert to stub; B′ close only when eligible) — do not burn shell verify on a known contradiction.
 
 ## Step 6 — Core verify-repair loop (max 3 iterations)
 
@@ -48,6 +48,7 @@ cd "$PROJECT_DIR" && RUSTFLAGS="-D warnings" cargo test                     # 4.
 | Error in production code (`app.rs` outside `#[cfg(test)]`), missing types or methods | Code issue | Spawn `core-writer` repair sub-agent — see [`core/write.md`](core/write.md). |
 | Assertion mismatch where *actual* looks correct per spec | Test issue | Spawn `test-writer` repair sub-agent — the expected value is wrong. |
 | Assertion mismatch where *expected* matches spec | Code issue | Spawn `core-writer` repair sub-agent — the handler returns the wrong result. |
+| Destination assert while open-GAP markers remain | Open-GAP inventiveness | Prefer `core-writer` revert (or B′ close when eligible), then stub asserts — [`open-gap-contract.md`](../../references/open-gap-contract.md). |
 | Type mismatch between handler output and assertion | Per spec | Classify per spec, spawn the appropriate repair sub-agent. |
 | API surface mismatch: wrong method on `Command`, incorrect `expect_*` chain, stale builder, wrong `resolve()` argument shape | Test issue | Spawn `test-writer` repair sub-agent (the Crux 0.17 API surface is non-trivial; the sub-agent reads the relevant Crux docs / template before fixing). |
 | Unresolved import or missing crate in `Cargo.toml` | Workspace issue | Edit `Cargo.toml` directly (no sub-agent needed). |

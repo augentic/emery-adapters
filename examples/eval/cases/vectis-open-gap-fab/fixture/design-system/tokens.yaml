@@ -1,0 +1,17 @@
+version: 1
+
+provenance:
+  sources:
+    - kind: manual
+      captured_at: "2026-07-01T00:00:00Z"
+
+colors:
+  primary:
+    light: "#0066CC"
+    dark: "#3399FF"
+  background:
+    light: "#FFFFFF"
+    dark: "#111111"
+  text-primary:
+    light: "#111111"
+    dark: "#EEEEEE"
