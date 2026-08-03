@@ -14,11 +14,13 @@ mod registry {
 }
 
 pub mod android_scaffold;
+mod composition_manifests;
 mod error;
 pub mod infer;
 pub mod ios_scaffold;
 pub mod materialize;
 pub mod prepare;
+pub(crate) mod projections;
 pub mod scaffold;
 pub mod schema_source;
 pub mod shell;

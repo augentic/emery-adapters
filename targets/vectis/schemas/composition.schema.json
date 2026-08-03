@@ -271,7 +271,8 @@
         "items": { "$ref": "#/$defs/contentNodeArray" },
         "label": { "type": "string" },
         "role": { "type": "string", "enum": ["heading", "button", "image", "link"] },
-        "hint": { "type": "string" }
+        "hint": { "type": "string" },
+        "test_id": { "$ref": "#/$defs/testId" }
       },
       "additionalProperties": true
     },
@@ -340,9 +341,16 @@
 
         "label": { "type": "string" },
         "role": { "type": "string", "enum": ["heading", "button", "image", "link"] },
-        "hint": { "type": "string" }
+        "hint": { "type": "string" },
+        "test_id": { "$ref": "#/$defs/testId" }
       },
       "additionalProperties": true
+    },
+
+    "testId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+      "description": "Stable kebab-case UI test identifier (Maestro / accessibility). Authored in the composition leg; codegen derives MAESTRO_<UPPER_SNAKE>."
     },
 
     "deltaDocument": {

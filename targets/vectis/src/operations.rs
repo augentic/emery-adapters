@@ -134,6 +134,10 @@ impl Target for Adapter {
             return Ok(failure_report(residual));
         }
 
+        if let Err(err) = crate::projections::test_ids::write_generated(&tree_root, Some(slice)) {
+            return Ok(failure_report(vec![format!("- [test-id-projection] {err}")]));
+        }
+
         let scaffold_block = prelude::scaffold_missing_trees(&tree_root);
         let core = core_leg(model, ctx, slice, &scaffold_block, &inputs_block).await?;
         let shell_outcomes =
@@ -156,6 +160,7 @@ impl Target for Adapter {
             &slice_composition,
             "build",
             true,
+            Some(slice),
         )
         .await?;
 
@@ -207,6 +212,7 @@ impl Target for Adapter {
             &baseline_composition,
             "merge-postflight",
             false,
+            None,
         )
         .await
     }
@@ -326,7 +332,7 @@ async fn report_leg<P: Model>(
     model: &P, ctx: &Context<'_>, slice: &str, tree_root: &Path,
     outcomes: &[(&str, &phase::PhaseAnswer)],
 ) -> Result<(Report, String), Error> {
-    let verify_block = prelude::render_verify_gate(tree_root);
+    let verify_block = prelude::render_verify_gate(tree_root, Some(slice));
     let report_prompt = assemble(&["prompts/build.md", "prompts/build/report.md"]);
     let user = format!(
         "Write the build report for slice `{slice}` per the report prompt's `## Build \

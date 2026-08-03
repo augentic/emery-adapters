@@ -40,12 +40,12 @@ pub(super) async fn composition_gate<P: Model>(
 #[expect(clippy::too_many_arguments, reason = "One internal gate call site per operation.")]
 pub(super) async fn gate_report<P: Model>(
     model: &P, ctx: &Context<'_>, prompt: &str, mut report: Report, tree_root: &Path,
-    composition: &Path, operation: &str, shell_verify: bool,
+    composition: &Path, operation: &str, shell_verify: bool, active_slice: Option<&str>,
 ) -> Result<Report, Error> {
     let gather = |report: &Report| {
         let mut residual = validation_findings(composition);
         if shell_verify {
-            residual.extend(shell_verify_findings(tree_root));
+            residual.extend(shell_verify_findings(tree_root, active_slice));
         }
         residual.extend(phase::missing_outputs(report, tree_root));
         residual
@@ -69,7 +69,7 @@ pub(super) fn bootstrap_findings(tree_root: &Path) -> Vec<String> {
     if !tree_root.join(".emery/project.yaml").exists() {
         return Vec::new();
     }
-    match verify::run(verify::VerifyMode::BootstrapAppIcon, tree_root) {
+    match verify::run(verify::VerifyMode::BootstrapAppIcon, tree_root, None) {
         Ok(payload) => payload
             .get("findings")
             .and_then(Value::as_array)
@@ -88,11 +88,11 @@ pub(super) fn bootstrap_findings(tree_root: &Path) -> Vec<String> {
     }
 }
 
-fn shell_verify_findings(tree_root: &Path) -> Vec<String> {
+fn shell_verify_findings(tree_root: &Path, active_slice: Option<&str>) -> Vec<String> {
     if !tree_root.join(".emery/project.yaml").exists() {
         return Vec::new();
     }
-    match verify::run(verify::VerifyMode::Verify, tree_root) {
+    match verify::run(verify::VerifyMode::Verify, tree_root, active_slice) {
         Ok(payload) => payload
             .get("findings")
             .and_then(Value::as_array)

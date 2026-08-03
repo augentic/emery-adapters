@@ -38,9 +38,9 @@ pub(super) fn render_infer_report(tree_root: &Path) -> String {
     format!("### component-identity cluster report (already run in-guest)\n\n{report}")
 }
 
-pub(super) fn render_verify_gate(tree_root: &Path) -> String {
+pub(super) fn render_verify_gate(tree_root: &Path, active_slice: Option<&str>) -> String {
     let body = if tree_root.join(".emery/project.yaml").exists() {
-        match verify::run(verify::VerifyMode::Verify, tree_root) {
+        match verify::run(verify::VerifyMode::Verify, tree_root, active_slice) {
             Ok(payload) => serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string()),
             Err(err) => format!("verify gate could not run: {err}"),
         }

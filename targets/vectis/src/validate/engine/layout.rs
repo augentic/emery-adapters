@@ -6,7 +6,7 @@ use std::path::Path;
 
 use serde_json::{Value, json};
 
-use super::composition::{Finding, check_structural_identity};
+use super::composition::{Finding, check_structural_identity, check_test_ids};
 use super::paths::resolve_default_path;
 use super::shared::{composition_validator, escape_pointer_token};
 use crate::validate::ValidateMode;
@@ -48,6 +48,9 @@ pub(super) fn validate(path: Option<&Path>) -> Result<Value, VectisError> {
                 let mut identity: Vec<Finding> = Vec::new();
                 check_structural_identity(screens, "/screens", &mut identity);
                 errors.extend(identity.into_iter().map(Value::from));
+                let mut test_id_findings: Vec<Finding> = Vec::new();
+                check_test_ids(screens, "/screens", &mut test_id_findings);
+                errors.extend(test_id_findings.into_iter().map(Value::from));
             }
         }
         Err(err) => {

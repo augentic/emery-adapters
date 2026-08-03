@@ -5,7 +5,11 @@ mod app_icon;
 mod catalog;
 mod compile_stamp;
 mod core_stamp;
+mod materialize_completeness;
+mod seed_version;
 mod suppression_scan;
+mod test_id_projection;
+mod ui_literals;
 
 use std::path::Path;
 
@@ -42,14 +46,16 @@ struct PlatformStatus {
 ///
 /// Returns [`VectisError::InvalidProject`] when `project.yaml` is
 /// missing or unparseable, or lacks a `platforms` field.
-pub fn run(mode: VerifyMode, project_root: &Path) -> Result<Value, VectisError> {
+pub fn run(
+    mode: VerifyMode, project_root: &Path, active_slice: Option<&str>,
+) -> Result<Value, VectisError> {
     let platforms = load_platforms(project_root)?;
 
     match mode {
         VerifyMode::Verify => {
             let statuses: Vec<PlatformStatus> =
                 platforms.iter().map(|p| check_platform(p, project_root)).collect();
-            Ok(render_verify(&statuses, project_root, &platforms))
+            Ok(render_verify(&statuses, project_root, &platforms, active_slice))
         }
         VerifyMode::BootstrapAppIcon => Ok(render_bootstrap_app_icon(project_root, &platforms)),
     }
@@ -116,7 +122,10 @@ fn render_bootstrap_app_icon(project_root: &Path, platforms: &[String]) -> Value
     })
 }
 
-fn render_verify(statuses: &[PlatformStatus], project_root: &Path, platforms: &[String]) -> Value {
+fn render_verify(
+    statuses: &[PlatformStatus], project_root: &Path, platforms: &[String],
+    active_slice: Option<&str>,
+) -> Value {
     let mut findings: Vec<Value> = Vec::new();
 
     for status in statuses {
@@ -174,7 +183,15 @@ fn render_verify(statuses: &[PlatformStatus], project_root: &Path, platforms: &[
     ));
     findings.extend(core_stamp::core_stamp_findings(project_root));
 
+    findings.extend(materialize_completeness::materialize_completeness_findings(project_root));
+
     findings.extend(suppression_scan_findings(project_root, platforms));
+
+    findings.extend(ui_literals::ui_literals_findings(project_root, platforms));
+
+    findings.extend(test_id_projection::test_id_projection_findings(project_root, active_slice));
+
+    findings.extend(seed_version::seed_version_findings(project_root));
 
     serde_json::json!({
         "mode": "verify",

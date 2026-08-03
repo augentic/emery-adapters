@@ -17,14 +17,15 @@
 //! **Root files:** `Makefile`, `Makefile.toml`, `Cargo.toml`, `Cargo.lock`,
 //! `rust-toolchain.toml`, `deny.toml`, `README.md`, `.gitignore`.
 //!
-//! **Root directories:** `shared/` (includes `boltffi.toml` and
-//! `shared/src/bin/codegen/`), `iOS/`, `Android/` (including the Gradle
-//! wrapper and per-shell `Makefile`), `supply-chain/`, `.maestro/` (infra
-//! plus demo journeys; the agent strips `cap=demo` after copy).
+//! **Root directories:** `shared/`, `contract/`, `supply-chain/`, `.maestro/`,
+//! `tools/`, and shell trees `iOS/` / `Android/` when the matching platform
+//! token is listed in the materialize `platforms` argument (from
+//! `.emery/project.yaml`). Cross-cutting trees always copy; out-of-scope shells
+//! are omitted so a `core`+`android` project does not inherit a stale iOS demo.
 //!
-//! After strip, Maestro **infra** must remain: `config.yaml`,
-//! `test-ids.yaml` (file kept; demo keys stripped), and
-//! `scripts/load-test-ids.sh`. Late-cap re-adoption copies strip-units from
+//! After strip, Maestro **infra** must remain: `contract/*.yaml`,
+//! `.maestro/config.yaml`, `.maestro/scripts/load-{test-ids,strings,errors}.sh`,
+//! and `shared/src/bin/codegen/`. Late-cap re-adoption copies strip-units from
 //! `$TEMPLATE_DIR` — see `prose/references/template-capabilities.md`.
 //!
 //! # `.gitignore` overwrite
@@ -77,7 +78,14 @@ const ROOT_FILES: &[&str] = &[
     ".gitignore",
 ];
 
-const ROOT_DIRS: &[&str] = &["shared", "iOS", "Android", "supply-chain", ".maestro"];
+/// Nested paths under the template root (not whole-directory copies).
+const ROOT_NESTED_FILES: &[&str] = &[".cursor/hooks.json"];
+
+const ROOT_DIRS: &[&str] =
+    &["shared", "contract", "iOS", "Android", "supply-chain", ".maestro", "tools"];
+
+/// Platform tokens that select which shell trees [`run`] copies from the template.
+pub const ALL_SHELL_PLATFORMS: &[&str] = &["core", "ios", "android"];
 
 const SKIP_DIR_NAMES: &[&str] = &[
     ".git",
@@ -188,13 +196,23 @@ pub fn resolve_dir(anchor: &Path) -> Option<PathBuf> {
     candidate.is_dir().then_some(candidate)
 }
 
+/// All declared shell platform tokens (for tests and full greenfield bootstrap).
+#[must_use]
+pub fn all_shell_platforms() -> Vec<String> {
+    ALL_SHELL_PLATFORMS.iter().map(|p| (*p).to_string()).collect()
+}
+
 /// Copy the allowlisted template tree into `dest_dir` with identity substitution.
+///
+/// `platforms` comes from `.emery/project.yaml` (e.g. `core` + `android`). Shell
+/// trees (`iOS/`, `Android/`) copy only when the matching token is listed. When
+/// `platforms` is empty, all shell trees copy (full bootstrap).
 ///
 /// # Errors
 /// Returns [`ScaffoldError`] when the template is missing required roots, a
 /// destination path already exists (other than `.gitignore`), or I/O fails.
 pub fn run(
-    template_dir: &Path, dest_dir: &Path, identity: &Identity,
+    template_dir: &Path, dest_dir: &Path, identity: &Identity, platforms: &[String],
 ) -> Result<Report, ScaffoldError> {
     if !template_dir.is_dir() {
         return Err(ScaffoldError::InvalidProject {
@@ -219,7 +237,23 @@ pub fn run(
         let rel = map_relative_path(name, identity);
         planned.push((src, dest_dir.join(&rel)));
     }
+    for name in ROOT_NESTED_FILES {
+        let src = template_dir.join(name);
+        if !src.is_file() {
+            return Err(ScaffoldError::InvalidProject {
+                message: format!(
+                    "template is missing required file {name} under {}",
+                    template_dir.display()
+                ),
+            });
+        }
+        let rel = map_relative_path(name, identity);
+        planned.push((src, dest_dir.join(&rel)));
+    }
     for name in ROOT_DIRS {
+        if !should_materialize_root_dir(name, platforms) {
+            continue;
+        }
         let src_root = template_dir.join(name);
         if !src_root.is_dir() {
             return Err(ScaffoldError::InvalidProject {
@@ -297,6 +331,17 @@ fn ensure_emery_gitignore_entries(dest_dir: &Path) -> Result<(), ScaffoldError> 
         fs::write(&path, updated)?;
     }
     Ok(())
+}
+
+fn should_materialize_root_dir(name: &str, platforms: &[String]) -> bool {
+    if platforms.is_empty() {
+        return true;
+    }
+    match name {
+        "iOS" => platforms.iter().any(|p| p == "ios"),
+        "Android" => platforms.iter().any(|p| p == "android"),
+        _ => true,
+    }
 }
 
 fn ensure_template_shape(template_dir: &Path) -> Result<(), ScaffoldError> {
@@ -416,4 +461,24 @@ pub fn substitute_identity(input: &str, identity: &Identity) -> String {
         &format!("<string name=\"app_name\">{app}</string>"),
     );
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn platform_scope_filters_shell_dirs() {
+        let android_only = vec!["core".into(), "android".into()];
+        assert!(should_materialize_root_dir("shared", &android_only));
+        assert!(should_materialize_root_dir("Android", &android_only));
+        assert!(!should_materialize_root_dir("iOS", &android_only));
+
+        let ios_only = vec!["core".into(), "ios".into()];
+        assert!(!should_materialize_root_dir("Android", &ios_only));
+        assert!(should_materialize_root_dir("iOS", &ios_only));
+
+        assert!(should_materialize_root_dir("iOS", &[]));
+        assert!(should_materialize_root_dir("Android", &[]));
+    }
 }
