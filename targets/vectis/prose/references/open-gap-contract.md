@@ -13,7 +13,7 @@ An interaction / `Event` is an **open GAP** when **any** of the following holds 
 3. **Composition GAP comment** — a `# GAP:` comment on or immediately adjacent to the wired control (FAB, row, etc.) naming that interaction or REQ id.
 4. **Missing THEN outcome** — scenario has WHEN but no concrete observable THEN (no page, state, validation, or effect named).
 
-`model.yaml` scenario text is also a detection input: if it still says unspecified for the interaction, treat that as an open-GAP marker for inventory / review unless the core write also closed `spec.md` scenario body in this leg under [Closure eligibility](#closure-eligibility).
+`model.yaml` scenario text is also a detection input: if it still says unspecified for the interaction, treat that as an open-GAP marker for inventory / review **while `spec.md` remains unspecified**. After an honest B′ close of `spec.md` (and the other build-editable markers) under [Closure eligibility](#closure-eligibility), leftover `model.yaml` unspecified text is lag — not a reason to keep inventing blocked or to refuse the close.
 
 **Not** an open GAP (do not conflate with LOG-007):
 
@@ -43,7 +43,7 @@ Writer **may** implement concrete navigation/state **only if all** hold:
 1. **Closes build-editable markers in the core leg** — same core write updates `spec.md` scenario THEN prose to the concrete outcome, removes design TBD/risk language for that Event, and removes or rewrites the matching composition `# GAP` so it no longer claims unspecified.
 2. **Destination already grounded** — the target screen / `Route` / `Page` variant **already exists** in current `design.md` (including baseline carried into this slice’s design) **or** is introduced by **other** non-unspecified requirements in this same slice’s spec. Writers must not invent a new destination screen solely to close a GAP.
 3. **No contradictory Evidence** — closing must not invent outcomes that contradict remaining Evidence claims under `${SLICE_DIR}/evidence/`; if Evidence still says unanswered, keep stub (operator refine / amend first). Naming pressure alone (`Add list`, `CreateList`, prior-slice hints) is **not** Evidence.
-4. **`model.yaml` lag is not a license to skip stub** — if `model.yaml` still says unspecified after a `spec.md`-only close, prefer **stub** unless the writer also closed `spec.md` in this leg **and** eligibility (2)–(3) hold. Document the `model.yaml` lag as acceptable audit debt for v1.
+4. **`model.yaml` lag does not block honest B′ closure** — after the writer closes `spec.md` scenario body in this leg **and** eligibility (2)–(3) hold, a still-unspecified `model.yaml` scenario is acceptable audit debt for v1 (do not refuse valid closure on lag alone). Conversely, lag is **not** a license to invent while `spec.md` remains unspecified — prefer stub until build-editable markers are closed.
 
 Writer **must refuse** and keep a **stub-faithful** handler when eligibility fails:
 

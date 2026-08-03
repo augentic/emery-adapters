@@ -2,7 +2,7 @@
 
 Build case for Vectis **open-GAP inventiveness** (stub-faithful default vs B′ closure). Reproduces the `todo-app` / `my-lists-platform` failure mode in a committed refined fixture: FAB wired as `CreateList` with unspecified THEN, design TBD, composition `# GAP`, and an already-grounded `Page::NewList` naming pressure.
 
-Normative contract: [`targets/vectis/prose/references/open-gap-contract.md`](../../../targets/vectis/prose/references/open-gap-contract.md).
+Normative contract: [`targets/vectis/prose/references/open-gap-contract.md`](../../../../targets/vectis/prose/references/open-gap-contract.md).
 
 ## Run
 

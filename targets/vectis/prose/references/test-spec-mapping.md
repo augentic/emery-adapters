@@ -48,7 +48,7 @@ The THEN clause determines what the test asserts:
 | THEN app renders | `cmd.expect_one_effect().expect_render();` |
 | THEN app renders and fetches data | `cmd.expect_effect().expect_render();` then `cmd.expect_one_effect().expect_http();` |
 | THEN field F has value V | `assert_eq!(model.field, expected_value);` or `assert_eq!(view.field, expected_value);` |
-| THEN outcome is unspecified / open GAP (see below) | Stub-faithful: `expect_render()` (or documented stub effects); assert page/route/tab for the unspecified dimension **unchanged**; never assert an invented destination |
+| THEN outcome is unspecified / open GAP (see below) | Stub-faithful: `cmd.expect_one_effect().expect_render();` (or documented stub effects); assert page/route/tab for the unspecified dimension **unchanged**; never assert an invented destination |
 
 ## Open-GAP scenarios
 

@@ -51,4 +51,7 @@ Status: agreed
 
 A floating action button is present on My Lists; the action triggered when the user activates it is not evidenced.
 
-#### Scenario: WHEN the user activates the My Lists floating action button THEN the resulting navigation or state change is unspecified — operator must supply acceptance criteria
+#### Scenario: FAB activation outcome
+
+- **WHEN** the user activates the My Lists floating action button
+- **THEN** the resulting navigation or state change is unspecified — operator must supply acceptance criteria
