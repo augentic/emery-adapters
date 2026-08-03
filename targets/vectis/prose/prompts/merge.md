@@ -22,7 +22,7 @@ The component catalog (`CATALOG_PATH`) is project-level and not slice-local; it 
 
 ## Postflight — host cap-matrix re-verification
 
-The postflight dispatch runs after the engine's commit: the slice's deltas are promoted into the baseline, the slice is `merged`, and its directory is archived. Verify the now-updated project root with host commands that match the assemblies present in the merged tree:
+The postflight dispatch runs after the engine's commit: the slice's deltas are promoted into the baseline, the slice is `merged`, and its directory is archived. Verify the now-updated project root with host commands scoped to the platforms declared in `.emery/project.yaml` (`platforms:`):
 
 ```bash
 # core, when ${PROJECT_DIR}/shared exists
@@ -31,10 +31,10 @@ cd "$PROJECT_DIR" && RUSTFLAGS="-D warnings" cargo check
 cd "$PROJECT_DIR" && cargo clippy --all-targets -- -D warnings
 cd "$PROJECT_DIR" && RUSTFLAGS="-D warnings" cargo test
 
-# iOS, when ${PROJECT_DIR}/iOS exists (DX files stay aligned with $TEMPLATE_DIR)
+# iOS, when `ios` is in platforms:
 cd "$PROJECT_DIR/iOS" && make build
 
-# Android, when ${PROJECT_DIR}/Android exists
+# Android, when `android` is in platforms:
 rustup target list --installed | grep android
 cd "$PROJECT_DIR/Android" && make build
 ```
