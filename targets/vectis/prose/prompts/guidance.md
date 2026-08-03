@@ -73,8 +73,7 @@ Naming conventions to keep `design.md` and the eventual `composition.yaml` align
 - Tasks are organised by **build phase**, not by feature. All features in the slice share one task list, ordered: core first, shells second.
 - Each task references the domain's spec at `specs/<domain>/spec.md`. The spec contains both core requirements and the platform-specific requirements sections.
 - Tokens / assets / layout work is **input context** for the shells (the shell writers read `tokens.yaml` / `assets.yaml` / regenerated `composition.yaml` directly) — never a separate task tier.
-- Tasks must be **agent-completable** with code or local tooling. No manual mobile-app testing during **build verify** (no real-world API calls, no production credentials, no visual inspection, no physical-device-only checks, no app-store-review tasks). Express verification through fixture-backed tests, mocked effects, and local build commands available to the `build` prompt.
-- Maestro is post-drain, local-dev only — never schedule a Maestro **run** as a build task. (Authoring lives in the build prompts.)
+- Tasks must be **agent-completable** with code or local tooling. No manual mobile-app testing, no real-world API calls, no production credentials, no visual inspection, no physical-device-only checks, no app-store-review tasks. Express verification through fixture-backed tests, mocked effects, and local build commands available to the `build` prompt.
 
 ## Operator-curated build inputs (never synthesised)
 
