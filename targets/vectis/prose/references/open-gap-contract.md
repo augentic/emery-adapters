@@ -77,4 +77,5 @@ Build order is unchanged: composition → core → shells → review → final-c
 - [`../prompts/build/core/write.md`](../prompts/build/core/write.md) — Event inventory and stub vs closure.
 - [`../prompts/build/test.md`](../prompts/build/test.md) — stub-faithful asserts.
 - [`test-spec-mapping.md`](test-spec-mapping.md) / [`test-runbook.md`](test-runbook.md) — scenario → test mapping carve-outs.
+- [`crux/update-change-patterns.md`](crux/update-change-patterns.md) — update-mode: keep stub on open-GAP Events.
 - [`review/logic-checks.md`](review/logic-checks.md) — LOG-010 open-GAP inventiveness (when present).

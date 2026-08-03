@@ -22,6 +22,7 @@ Before generating tests, read these documents:
 
 1. [`spec-to-test-mapping.md`](test-spec-mapping.md) — how spec scenarios map to test functions, traceability format, and drift detection
 2. [`crux-testing-patterns.md`](crux/testing-patterns.md) — Crux test API: `update()`, `Command`, effect assertions, resolving effects
+3. [`open-gap-contract.md`](open-gap-contract.md) — stub-faithful asserts for open-GAP / unspecified scenarios
 
 ## Authority Hierarchy
 
@@ -313,6 +314,8 @@ Some spec scenarios describe behavior that is triggered by internal events (e.g.
 ### Spec uses vague THEN clauses
 
 When the spec's THEN clause is not specific enough to derive assertions (e.g., "the user sees the updated list"), derive assertions from the ViewModel structure: assert on the fields of the per-page view struct that `view()` would populate from the model state described in the WHEN clause.
+
+**Carve-out — explicit unspecified / open GAP is not “vague THEN”.** If the THEN (or sibling markers) **withholds** the outcome — phrases in the family `unspecified`, “operator must supply acceptance criteria”, design TBD for that Event, a composition `# GAP`, or WHEN with no concrete THEN — do **not** invent a destination or domain mutation from ViewModel / naming pressure. Apply [open-gap-contract.md](open-gap-contract.md) stub-faithful asserts (render + unchanged page/route/tab). The ViewModel heuristic above applies only when THEN is vague **but not** an explicit unspecified/GAP withhold.
 
 ### Multiple scenarios share setup
 

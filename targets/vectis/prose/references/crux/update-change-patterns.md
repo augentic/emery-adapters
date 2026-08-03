@@ -80,3 +80,12 @@ Reverse of adding -- remove in this order to avoid compilation errors:
 1. Locate the match arm(s) in `update()` that enforce the rule.
 2. Update the guard condition, validation logic, or helper function.
 3. Ensure changed rule is testable (test-writer will update tests).
+
+## Open-GAP Events (update mode)
+
+When update-mode diffs touch handlers for Events that remain [open GAP](../open-gap-contract.md) in **this** slice’s artifacts:
+
+1. Keep or restore **stub-faithful** behaviour (`render()` / no-op; do not change page/route/tab/domain state the unspecified scenario left open).
+2. Prior-slice render-only stubs and archived tasks are **not** a license to invent in a later slice.
+3. Wiring a previously stubbed Event requires this slice to satisfy [closure eligibility](../open-gap-contract.md#closure-eligibility) (close build-editable markers + grounded destination). Out-of-slice plan docs that are not in slice sources do not count as closure.
+4. Baseline screens from prior merges that this slice does not reference stay carried forward — do not invent new behaviour for them either.
