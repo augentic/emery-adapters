@@ -78,4 +78,3 @@ Do not fold Maestro test ids into `component-bindings.yaml` — names collide wi
 
 - `$TEMPLATE_DIR/.maestro/README.md` — operator runbook
 - [`maestro/journey-authoring.md`](maestro/journey-authoring.md) — journey YAML after drain
-- [`VECTIS-010`](../rules/VECTIS-010-canonical-ui-bindings.md) — review rule
