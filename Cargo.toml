@@ -15,8 +15,8 @@ publish = false
 [workspace.dependencies]
 anyhow = "1.0.104"
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
-jsonschema = { version = "0.49.2", default-features = false }
-resvg = { version = "0.47.0", default-features = false }
+jsonschema = { version = "0.49.4", default-features = false }
+resvg = { version = "0.48.1", default-features = false }
 semver = "1"
 serde = { version = "1.0.229", features = ["derive"] }
 serde-saphyr = "1.0.0"
@@ -27,7 +27,7 @@ thiserror = "2"
 tiny-skia = { version = "0.12.0", default-features = false }
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
 toml = "1.1.4"
-usvg = { version = "0.47", default-features = false }
+usvg = { version = "0.48", default-features = false }
 
 omnia-guest = "0.35.0"
 omnia-testkit = "0.35.0"
@@ -47,33 +47,29 @@ typescript = { path = "sources/typescript" }
 vectis = { path = "targets/vectis" }
 
 [patch.crates-io]
-# RFC-87 co-dev: the engine crates resolve the sibling `../emery`
-# checkout (the workspace seam cut) and the omnia entries resolve the
-# sibling checkout's `workspace-grants` branch, matching the engine's
-# own patch. Re-pin both to the released tags when the engine ships.
-# emery-adapter = { git = "https://github.com/augentic/emery", tag = "v0.37.0" }
-# emery-probe = { git = "https://github.com/augentic/emery", tag = "v0.37.0" }
-# emery-native = { git = "https://github.com/augentic/emery", tag = "v0.37.0" }
-# emery-prose = { git = "https://github.com/augentic/emery", tag = "v0.37.0" }
-emery-adapter = { path = "../emery/crates/adapter" }
-emery-probe = { path = "../emery/crates/probe" }
-emery-native = { path = "../emery/crates/native" }
-emery-prose = { path = "../emery/crates/prose" }
+emery-adapter = { git = "https://github.com/augentic/emery" }
+emery-probe = { git = "https://github.com/augentic/emery"}
+emery-native = { git = "https://github.com/augentic/emery" }
+emery-prose = { git = "https://github.com/augentic/emery" }
+# emery-adapter = { path = "../emery/crates/adapter" }
+# emery-probe = { path = "../emery/crates/probe" }
+# emery-native = { path = "../emery/crates/native" }
+# emery-prose = { path = "../emery/crates/prose" }
 
-# omnia = { git = "https://github.com/augentic/omnia" }
+omnia = { git = "https://github.com/augentic/omnia" }
 omnia-cursor = { git = "https://github.com/augentic/omnia-backends" }
-# omnia-guest = { git = "https://github.com/augentic/omnia" }
-# omnia-testkit = { git = "https://github.com/augentic/omnia" }
-# omnia-wasi-http = { git = "https://github.com/augentic/omnia" }
-# omnia-wasi-model = { git = "https://github.com/augentic/omnia" }
-# omnia-wasi-otel = { git = "https://github.com/augentic/omnia" }
-omnia = { path = "../omnia/crates/omnia" }
+omnia-guest = { git = "https://github.com/augentic/omnia" }
+omnia-testkit = { git = "https://github.com/augentic/omnia" }
+omnia-wasi-http = { git = "https://github.com/augentic/omnia" }
+omnia-wasi-model = { git = "https://github.com/augentic/omnia" }
+omnia-wasi-otel = { git = "https://github.com/augentic/omnia" }
+# omnia = { path = "../omnia/crates/omnia" }
 # omnia-cursor = { path = "../omnia-backends/crates/cursor" }
-omnia-guest = { path = "../omnia/crates/omnia-guest" }
-omnia-testkit = { path = "../omnia/crates/testkit" }
-omnia-wasi-http = { path = "../omnia/crates/wasi-http" }
-omnia-wasi-model = { path = "../omnia/crates/wasi-model" }
-omnia-wasi-otel = { path = "../omnia/crates/wasi-otel" }
+# omnia-guest = { path = "../omnia/crates/omnia-guest" }
+# omnia-testkit = { path = "../omnia/crates/testkit" }
+# omnia-wasi-http = { path = "../omnia/crates/wasi-http" }
+# omnia-wasi-model = { path = "../omnia/crates/wasi-model" }
+# omnia-wasi-otel = { path = "../omnia/crates/wasi-otel" }
 
 wrpc-transport = { git = "https://github.com/bytecodealliance/wrpc" }
 wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }

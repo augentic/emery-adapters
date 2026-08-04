@@ -113,7 +113,7 @@ version = "1.0.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.base64]]
-version = "0.23.0"
+version = "0.23.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.base64ct]]
@@ -261,7 +261,7 @@ version = "6.2.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.data-encoding]]
-version = "2.11.0"
+version = "2.11.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.data-url]]
@@ -301,7 +301,7 @@ version = "0.2.9"
 criteria = "safe-to-deploy"
 
 [[exemptions.encoding_rs_io]]
-version = "0.1.7"
+version = "0.1.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.fancy-regex]]
@@ -497,7 +497,7 @@ version = "0.2.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.imagesize]]
-version = "0.14.0"
+version = "0.15.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.io-extras]]
@@ -513,7 +513,7 @@ version = "3.0.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.ipnet]]
-version = "2.12.0"
+version = "2.12.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.itertools]]
@@ -557,15 +557,15 @@ version = "0.3.103"
 criteria = "safe-to-deploy"
 
 [[exemptions.jsonschema]]
-version = "0.49.2"
+version = "0.49.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.jsonschema-regex]]
-version = "0.49.2"
+version = "0.49.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.jsonschema-value]]
-version = "0.49.2"
+version = "0.49.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.kurbo]]
@@ -809,7 +809,7 @@ version = "0.5.18"
 criteria = "safe-to-deploy"
 
 [[exemptions.referencing]]
-version = "0.49.2"
+version = "0.49.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.reqwest]]
@@ -821,7 +821,7 @@ version = "0.13.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.resvg]]
-version = "0.47.0"
+version = "0.48.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.rgb]]
@@ -1137,7 +1137,7 @@ version = "0.9.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.usvg]]
-version = "0.47.0"
+version = "0.48.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.utf8-tokio]]
@@ -1222,10 +1222,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.writeable]]
 version = "0.6.3"
-criteria = "safe-to-deploy"
-
-[[exemptions.xmlwriter]]
-version = "0.1.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.yoke]]
