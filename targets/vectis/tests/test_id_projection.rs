@@ -54,6 +54,28 @@ fn harvests_test_ids_from_merged_baseline_and_slice() {
 }
 
 #[test]
+fn rejects_duplicate_test_id_across_merged_baseline_and_slice() {
+    let tmp = tempdir().unwrap();
+    let root = tmp.path();
+
+    write(
+        &root.join(".emery/specs/composition.yaml"),
+        "version: 1\nscreens:\n  splash:\n    name: Splash\n    body:\n      - button:\n          test_id: splash-cta\n",
+    );
+    write(
+        &root.join(".emery/slices/follow-up/composition.yaml"),
+        "version: 1\ndelta:\n  added:\n    stub:\n      name: Stub\n      body:\n        - text:\n            test_id: splash-cta\n  modified: {}\n  removed: {}\n",
+    );
+
+    let err = test_id_registry::harvest_entries(root, Some("follow-up")).unwrap_err();
+    let message = format!("{err}");
+    assert!(
+        message.contains("duplicate `test_id` `splash-cta`"),
+        "expected duplicate test_id error, got: {message}"
+    );
+}
+
+#[test]
 fn modified_screen_replaces_old_test_id() {
     let tmp = tempdir().unwrap();
     let root = tmp.path();

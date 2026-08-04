@@ -403,6 +403,20 @@ fun StubPreview() {
         ids.contains(&"canonical-ui-literal-hardcoded"),
         "hardcoded shell literals must fail verify: {result}"
     );
+    let literal_count = result["findings"]
+        .as_array()
+        .expect("findings array")
+        .iter()
+        .filter(|f| f["id"].as_str() == Some("canonical-ui-literal-hardcoded"))
+        .filter(|f| {
+            f["path"].as_str().is_some_and(|p| p.contains("SplashScreen.kt"))
+                && f["line"].as_u64() == Some(4)
+        })
+        .count();
+    assert_eq!(
+        literal_count, 1,
+        "duplicate literal findings on the same line must be deduped: {result}"
+    );
     assert_eq!(verify_exit_code(&result), 1);
 }
 

@@ -24,7 +24,8 @@ type Entries = BTreeMap<String, String>;
 /// # Errors
 ///
 /// Returns [`VectisError::InvalidProject`] when composition is unreadable, invalid,
-/// or when the same `MAESTRO_*` key maps to conflicting kebab values.
+/// or when the same `test_id` value appears on more than one element in the
+/// effective (merged) composition document.
 pub fn harvest_entries(
     project_root: &Path, active_slice: Option<&str>,
 ) -> Result<Entries, VectisError> {
@@ -34,6 +35,11 @@ pub fn harvest_entries(
 
     let mut collected: BTreeMap<String, String> = BTreeMap::new();
     collect_test_id_values(&document, "", &mut collected);
+
+    // `kebab_to_maestro_key` is injective for schema kebab ids, so duplicate
+    // `test_id` values on different elements collapse into one Maestro constant
+    // unless we enforce document-wide uniqueness here (validate runs per-file only).
+    let mut key_source: BTreeMap<String, String> = BTreeMap::new();
 
     for (json_path, value) in collected {
         if !is_kebab_test_id(&value) {
@@ -45,7 +51,16 @@ pub fn harvest_entries(
         }
 
         let key = kebab_to_maestro_key(&value);
-        insert_entry(&mut entries, &key, &value, &format!("effective:{json_path}"), &mut errors);
+        let source = format!("effective:{json_path}");
+        if let Some(first_path) = key_source.get(&key) {
+            errors.push(format!(
+                "duplicate `test_id` `{value}` at {source} \
+                 (also at {first_path}); test ids must be unique within the document"
+            ));
+        } else {
+            key_source.insert(key.clone(), source);
+            entries.insert(key, value);
+        }
     }
 
     if errors.is_empty() {
@@ -122,22 +137,6 @@ pub fn format_generated_yaml(entries: &Entries) -> String {
     out
 }
 
-fn insert_entry(
-    entries: &mut Entries, key: &str, value: &str, source: &str, errors: &mut Vec<String>,
-) {
-    match entries.get(key) {
-        Some(existing) if existing == value => {}
-        Some(existing) => {
-            errors.push(format!(
-                "`{key}` maps to conflicting values `{existing}` and `{value}` (from {source})"
-            ));
-        }
-        None => {
-            entries.insert(key.to_owned(), value.to_owned());
-        }
-    }
-}
-
 fn parse_flat_yaml(content: &str) -> Result<Entries, String> {
     let document: BTreeMap<String, Entries> =
         serde_saphyr::from_str(content).map_err(|err| format!("invalid YAML: {err}"))?;
@@ -157,14 +156,6 @@ fn parse_flat_yaml(content: &str) -> Result<Entries, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn rejects_conflicting_union_values() {
-        let mut entries = Entries::from([("MAESTRO_SAME_ID".to_owned(), "same-id".to_owned())]);
-        let mut errors = Vec::new();
-        insert_entry(&mut entries, "MAESTRO_SAME_ID", "other-id", "test", &mut errors);
-        assert_eq!(errors.len(), 1);
-    }
 
     #[test]
     fn round_trips_flat_yaml() {

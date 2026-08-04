@@ -1,6 +1,6 @@
 //! Canonical UI bindings: detect hardcoded UI contract copy and raw test tags in shell/core.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -9,13 +9,13 @@ use serde_json::{Value, json};
 use crate::shell::shell_present;
 
 /// Finding id for hardcoded UI copy that should use generated bindings.
-pub const LITERAL_FINDING_ID: &str = "canonical-ui-literal-hardcoded";
+const LITERAL_FINDING_ID: &str = "canonical-ui-literal-hardcoded";
 
 /// Finding id for raw test-tag strings instead of `MaestroTestIds.*`.
-pub const TEST_ID_FINDING_ID: &str = "canonical-test-id-raw";
+const TEST_ID_FINDING_ID: &str = "canonical-test-id-raw";
 
 /// Finding id when Android uses `testTag` without `testTagsAsResourceId` on a root.
-pub const TEST_TAGS_RESOURCE_ID_FINDING_ID: &str = "canonical-test-tag-resource-id";
+const TEST_TAGS_RESOURCE_ID_FINDING_ID: &str = "canonical-test-tag-resource-id";
 
 /// Emit findings when shell/core sources hard-code UI contract copy or raw test tags.
 #[must_use]
@@ -58,6 +58,18 @@ pub fn ui_literals_findings(project_root: &Path, platforms: &[String]) -> Vec<Va
     }
 
     findings.extend(android_test_tag_resource_id_findings(project_root, platforms));
+
+    // A quoted contract value on a `Text("…")` line is flagged by both the API
+    // scan and the generic contract-value scan; keep one finding per (id, path, line).
+    let mut seen = BTreeSet::new();
+    findings.retain(|finding| {
+        let key = (
+            finding["id"].as_str().unwrap_or_default().to_owned(),
+            finding["path"].as_str().unwrap_or_default().to_owned(),
+            finding["line"].as_u64().unwrap_or_default(),
+        );
+        seen.insert(key)
+    });
 
     findings
 }
