@@ -134,14 +134,15 @@ impl Target for Adapter {
             return Ok(failure_report(residual));
         }
 
+        let scaffold_block = prelude::scaffold_missing_trees(&tree_root);
+        let core = core_leg(model, ctx, slice, &scaffold_block, &inputs_block).await?;
+
         if let Err(err) =
             crate::projections::test_id_registry::write_generated(&tree_root, Some(slice))
         {
             return Ok(failure_report(vec![format!("- [test-id-projection] {err}")]));
         }
 
-        let scaffold_block = prelude::scaffold_missing_trees(&tree_root);
-        let core = core_leg(model, ctx, slice, &scaffold_block, &inputs_block).await?;
         let shell_outcomes =
             shells::run_write_legs(model, ctx, slice, &tree_root, &scaffold_block).await?;
         let review = review_leg(model, ctx, slice, &tree_root).await?;
