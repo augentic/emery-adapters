@@ -94,19 +94,19 @@ fn fully_present_project(root: &Path) {
 #[test]
 fn project_contract() {
     let missing = tempdir().unwrap();
-    run(VerifyMode::Verify, missing.path(), None).unwrap_err();
+    run(VerifyMode::Verify, missing.path(), missing.path(), None).unwrap_err();
 
     let malformed = tempdir().unwrap();
     write(&malformed.path().join(".emery/project.yaml"), "platforms: [");
-    run(VerifyMode::Verify, malformed.path(), None).unwrap_err();
+    run(VerifyMode::Verify, malformed.path(), malformed.path(), None).unwrap_err();
 
     let absent = tempdir().unwrap();
     write(&absent.path().join(".emery/project.yaml"), "name: test\n");
-    run(VerifyMode::Verify, absent.path(), None).unwrap_err();
+    run(VerifyMode::Verify, absent.path(), absent.path(), None).unwrap_err();
 
     let non_string = tempdir().unwrap();
     write(&non_string.path().join(".emery/project.yaml"), "platforms:\n  - 7\n");
-    run(VerifyMode::Verify, non_string.path(), None).unwrap_err();
+    run(VerifyMode::Verify, non_string.path(), non_string.path(), None).unwrap_err();
 }
 
 #[test]
@@ -114,13 +114,13 @@ fn shell_presence_and_exit_code() {
     let core = tempdir().unwrap();
     project(core.path(), &["core"]);
 
-    let missing_core = run(VerifyMode::Verify, core.path(), None).unwrap();
+    let missing_core = run(VerifyMode::Verify, core.path(), core.path(), None).unwrap();
     assert!(finding_ids(&missing_core).contains(&"platform-shell-missing"));
     assert_eq!(verify_exit_code(&missing_core), 1);
 
     write(&core.path().join("shared/src/app.rs"), "pub struct App;");
     write_fresh_core_stamp(core.path());
-    let present_core = run(VerifyMode::Verify, core.path(), None).unwrap();
+    let present_core = run(VerifyMode::Verify, core.path(), core.path(), None).unwrap();
     assert!(finding_ids(&present_core).is_empty());
     assert_eq!(verify_exit_code(&present_core), 0);
 
@@ -129,7 +129,7 @@ fn shell_presence_and_exit_code() {
     write(&shells.path().join("shared/src/app.rs"), "pub struct App;");
     std::fs::create_dir_all(shells.path().join("iOS/App")).unwrap();
     std::fs::create_dir_all(shells.path().join("Android/app/src/main/kotlin")).unwrap();
-    let missing_sources = run(VerifyMode::Verify, shells.path(), None).unwrap();
+    let missing_sources = run(VerifyMode::Verify, shells.path(), shells.path(), None).unwrap();
     let ids = finding_ids(&missing_sources);
     assert_eq!(ids.iter().filter(|id| **id == "platform-shell-missing").count(), 2);
     assert_eq!(verify_exit_code(&missing_sources), 1);
@@ -138,7 +138,7 @@ fn shell_presence_and_exit_code() {
     project(future.path(), &["core", "web", "desktop"]);
     write(&future.path().join("shared/src/app.rs"), "pub struct App;");
     write_fresh_core_stamp(future.path());
-    let unsupported = run(VerifyMode::Verify, future.path(), None).unwrap();
+    let unsupported = run(VerifyMode::Verify, future.path(), future.path(), None).unwrap();
     let ids = finding_ids(&unsupported);
     assert_eq!(ids.iter().filter(|id| **id == "platform-not-yet-supported").count(), 2);
     assert_eq!(verify_exit_code(&unsupported), 0);
@@ -150,7 +150,7 @@ fn core_verify_stamp_missing_stale_fresh() {
     project(tmp.path(), &["core"]);
     write(&tmp.path().join("shared/src/app.rs"), "pub struct App;");
 
-    let missing = run(VerifyMode::Verify, tmp.path(), None).unwrap();
+    let missing = run(VerifyMode::Verify, tmp.path(), tmp.path(), None).unwrap();
     assert!(
         finding_ids(&missing).contains(&"core-verify-stamp-missing"),
         "present core without stamp: {missing}"
@@ -158,19 +158,19 @@ fn core_verify_stamp_missing_stale_fresh() {
     assert_eq!(verify_exit_code(&missing), 1);
 
     write(&tmp.path().join(CORE_VERIFY_STAMP), "sha256:deadbeef\n");
-    let stale = run(VerifyMode::Verify, tmp.path(), None).unwrap();
+    let stale = run(VerifyMode::Verify, tmp.path(), tmp.path(), None).unwrap();
     assert!(finding_ids(&stale).contains(&"core-verify-stamp-stale"), "mismatched digest: {stale}");
     assert!(!finding_ids(&stale).contains(&"core-verify-stamp-missing"));
     assert_eq!(verify_exit_code(&stale), 1);
 
     write_fresh_core_stamp(tmp.path());
-    let fresh = run(VerifyMode::Verify, tmp.path(), None).unwrap();
+    let fresh = run(VerifyMode::Verify, tmp.path(), tmp.path(), None).unwrap();
     assert!(finding_ids(&fresh).is_empty(), "matching digest passes: {fresh}");
     assert_eq!(verify_exit_code(&fresh), 0);
 
     // Editing a tracked source after the stamp was written goes stale.
     write(&tmp.path().join("shared/src/app.rs"), "pub struct App; // touched\n");
-    let after_edit = run(VerifyMode::Verify, tmp.path(), None).unwrap();
+    let after_edit = run(VerifyMode::Verify, tmp.path(), tmp.path(), None).unwrap();
     assert!(
         finding_ids(&after_edit).contains(&"core-verify-stamp-stale"),
         "post-stamp core edit: {after_edit}"
@@ -210,7 +210,7 @@ fn core_verify_digest_unreadable_fails_closed() {
     permissions.set_mode(0o000);
     std::fs::set_permissions(&locked, permissions).unwrap();
 
-    let result = run(VerifyMode::Verify, tmp.path(), None);
+    let result = run(VerifyMode::Verify, tmp.path(), tmp.path(), None);
 
     // Restore so tempdir cleanup can remove the tree.
     let mut permissions = std::fs::metadata(&locked).unwrap().permissions();
@@ -230,7 +230,7 @@ fn all_platforms_present() {
     let tmp = tempdir().unwrap();
     fully_present_project(tmp.path());
 
-    let result = run(VerifyMode::Verify, tmp.path(), None).unwrap();
+    let result = run(VerifyMode::Verify, tmp.path(), tmp.path(), None).unwrap();
 
     assert!(
         finding_ids(&result).is_empty(),
@@ -293,7 +293,7 @@ fn boltffi_dx_patterns_required() {
     write(&tmp.path().join("Android/.vectis/verify.ok"), "ok\n");
     write_fresh_core_stamp(tmp.path());
 
-    let result = run(VerifyMode::Verify, tmp.path(), None).unwrap();
+    let result = run(VerifyMode::Verify, tmp.path(), tmp.path(), None).unwrap();
     let ids = finding_ids(&result);
     assert!(
         ids.contains(&"ios-scaffold-file-drift"),
@@ -310,7 +310,7 @@ fn catalog_through_verify() {
     let tmp = tempdir().unwrap();
     catalog_project(tmp.path());
 
-    let missing = run(VerifyMode::Verify, tmp.path(), None).unwrap();
+    let missing = run(VerifyMode::Verify, tmp.path(), tmp.path(), None).unwrap();
     let catalog_findings: Vec<&serde_json::Value> = missing["findings"]
         .as_array()
         .unwrap()
@@ -332,7 +332,7 @@ fn catalog_through_verify() {
     );
     write(&imageset.join("empty-state.png"), "materialized");
 
-    let present = run(VerifyMode::Verify, tmp.path(), None).unwrap();
+    let present = run(VerifyMode::Verify, tmp.path(), tmp.path(), None).unwrap();
     assert!(!finding_ids(&present).contains(&"shell-catalog-entry-missing"));
 }
 
@@ -354,7 +354,7 @@ fn partial_materialize_infra_missing() {
         "screens:\n  - name: Splash\n    test_id: splash-screen\n",
     );
 
-    let result = run(VerifyMode::Verify, tmp.path(), None).unwrap();
+    let result = run(VerifyMode::Verify, tmp.path(), tmp.path(), None).unwrap();
     let ids = finding_ids(&result);
     assert!(
         ids.contains(&"materialize-root-file-missing"),
@@ -397,7 +397,7 @@ fun StubPreview() {
 "#,
     );
 
-    let result = run(VerifyMode::Verify, tmp.path(), None).unwrap();
+    let result = run(VerifyMode::Verify, tmp.path(), tmp.path(), None).unwrap();
     let ids = finding_ids(&result);
     assert!(
         ids.contains(&"canonical-ui-literal-hardcoded"),
@@ -439,7 +439,7 @@ fun SplashPreview() {
 "#,
     );
 
-    let result = run(VerifyMode::Verify, tmp.path(), None).unwrap();
+    let result = run(VerifyMode::Verify, tmp.path(), tmp.path(), None).unwrap();
     let ids = finding_ids(&result);
     assert!(
         ids.contains(&"canonical-ui-literal-hardcoded"),
@@ -454,7 +454,7 @@ fn wrong_seed_version_fails_verify() {
     write(&tmp.path().join("shared/src/app.rs"), "pub struct App;");
     write(&tmp.path().join("ui-contract/seed.yaml"), "version: 2\n");
 
-    let result = run(VerifyMode::Verify, tmp.path(), None).unwrap();
+    let result = run(VerifyMode::Verify, tmp.path(), tmp.path(), None).unwrap();
     let ids = finding_ids(&result);
     assert!(
         ids.contains(&"canonical-seed-version"),
@@ -474,7 +474,7 @@ fn raw_test_tag_without_resource_id_fails_verify() {
         "Modifier.testTag(\"splash-cta\")\n",
     );
 
-    let result = run(VerifyMode::Verify, tmp.path(), None).unwrap();
+    let result = run(VerifyMode::Verify, tmp.path(), tmp.path(), None).unwrap();
     let ids = finding_ids(&result);
     assert!(ids.contains(&"canonical-test-id-raw"), "raw test tag must fail verify: {result}");
     assert!(
@@ -495,7 +495,7 @@ fn test_tag_with_resource_id_flag_passes_resource_id_gate() {
         "Modifier.semantics { testTagsAsResourceId = true }\nModifier.testTag(MaestroTestIds.X)\n",
     );
 
-    let result = run(VerifyMode::Verify, tmp.path(), None).unwrap();
+    let result = run(VerifyMode::Verify, tmp.path(), tmp.path(), None).unwrap();
     let ids = finding_ids(&result);
     assert!(
         !ids.contains(&"canonical-test-tag-resource-id"),
@@ -513,7 +513,7 @@ fn stale_test_id_projection_fails_verify() {
         "screens:\n  splash:\n    name: Splash\n    body:\n      - button:\n          test_id: splash-cta\n",
     );
 
-    let result = run(VerifyMode::Verify, tmp.path(), None).unwrap();
+    let result = run(VerifyMode::Verify, tmp.path(), tmp.path(), None).unwrap();
     let ids = finding_ids(&result);
     assert!(
         ids.contains(&"canonical-test-id-projection-stale"),
@@ -532,7 +532,7 @@ fn partial_materialize_without_composition_skips_ui_dirs() {
     );
     write(&tmp.path().join("shared/src/app.rs"), "pub struct App;");
 
-    let result = run(VerifyMode::Verify, tmp.path(), None).unwrap();
+    let result = run(VerifyMode::Verify, tmp.path(), tmp.path(), None).unwrap();
     let ids = finding_ids(&result);
     assert!(ids.contains(&"materialize-root-file-missing"));
     assert!(ids.contains(&"materialize-root-dir-missing"));

@@ -14,7 +14,7 @@ use std::path::Path;
 use adapter::registry::Doc;
 use adapter::seam::{
     BuildContext, BuildInput, Context, Error, Finding, Input, MergePhase, Platform,
-    PlatformsCapability, Report, Status, TargetMetadata, WorkingTree,
+    PlatformsCapability, Report, Status, TargetMetadata, Workspace,
 };
 use adapter::{AdapterIdentity, Model, Target, phase};
 
@@ -88,28 +88,33 @@ impl Target for Adapter {
 
     async fn build<P: Model>(
         model: &P, ctx: &Context<'_>, slice: &str, inputs: &[Input], _context: &BuildContext,
-        tree: &WorkingTree,
+        workspace: &Workspace,
     ) -> Result<Report, Error> {
-        let tree_root = ctx.tree_root(tree);
+        // RFC-87 split: change-tree artifacts (`.emery/*`) read through
+        // the adapter's own `"."` preopen; product code (shells,
+        // design-system) lives in the prepared private workspace.
+        let change_root = ctx.project_root;
+        let code_root = workspace.root_path();
         let slice_dir_rel = format!(".emery/slices/{slice}");
-        let slice_dir = tree_root.join(&slice_dir_rel);
+        let slice_dir = change_root.join(&slice_dir_rel);
         let slice_composition = slice_dir.join("composition.yaml");
-        let inputs_block = phase::render_inputs(inputs);
+        let inputs_block = phase::render_inputs(inputs, workspace);
 
         // The materialize scope derives from the same declared-platform
         // read as the shell legs, so a core-only project materializes
-        // nothing for shells it will not build.
-        let shell_platforms: Vec<String> = shells::declared_shell_legs(&tree_root)
+        // nothing for shells it will not build. Exports land beside the
+        // workspace's design-system baseline, so capture records them.
+        let shell_platforms: Vec<String> = shells::declared_shell_legs(change_root)
             .iter()
             .map(|leg| leg.name.to_string())
             .collect();
-        let prepared = prepare::materialize_step(&slice_dir, &tree_root, &shell_platforms)
+        let prepared = prepare::materialize_step(&slice_dir, code_root, &shell_platforms)
             .map_err(error_from_vectis)?;
         let prelude_block = prelude::render_prelude(&prepared);
 
         // Bootstrap gate (§L): the launcher app-icon must be satisfiable for
         // every declared UI platform before any write leg.
-        let bootstrap = gate::bootstrap_findings(&tree_root);
+        let bootstrap = gate::bootstrap_findings(change_root, code_root);
         if !bootstrap.is_empty() {
             return Ok(failure_report(bootstrap));
         }
@@ -119,7 +124,8 @@ impl Target for Adapter {
             ctx,
             slice,
             &slice_dir_rel,
-            &tree_root,
+            workspace,
+            change_root,
             &prelude_block,
             &inputs_block,
         )
@@ -134,18 +140,20 @@ impl Target for Adapter {
             return Ok(failure_report(residual));
         }
 
-        let scaffold_block = prelude::scaffold_missing_trees(&tree_root);
+        let scaffold_block = prelude::scaffold_missing_trees(change_root, code_root);
         let core = core_leg(model, ctx, slice, &scaffold_block, &inputs_block).await?;
 
-        if let Err(err) =
-            crate::projections::test_id_registry::write_generated(&tree_root, Some(slice))
-        {
+        if let Err(err) = crate::projections::test_id_registry::write_generated(
+            change_root,
+            code_root,
+            Some(slice),
+        ) {
             return Ok(failure_report(vec![format!("- [test-id-projection] {err}")]));
         }
 
         let shell_outcomes =
-            shells::run_write_legs(model, ctx, slice, &tree_root, &scaffold_block).await?;
-        let review = review_leg(model, ctx, slice, &tree_root).await?;
+            shells::run_write_legs(model, ctx, slice, change_root, &scaffold_block).await?;
+        let review = review_leg(model, ctx, slice, change_root).await?;
         let final_core = final_core_leg(model, ctx, slice).await?;
 
         let mut outcomes = vec![("composition", &composition), ("core", &core)];
@@ -153,13 +161,15 @@ impl Target for Adapter {
         outcomes.push(("review", &review));
         outcomes.push(("final-core-verify", &final_core));
 
-        let (report, report_prompt) = report_leg(model, ctx, slice, &tree_root, &outcomes).await?;
+        let (report, report_prompt) =
+            report_leg(model, ctx, slice, change_root, code_root, &outcomes).await?;
         let mut report = gate::gate_report(
             model,
             ctx,
             &report_prompt,
             report,
-            &tree_root,
+            change_root,
+            code_root,
             &slice_composition,
             "build",
             true,
@@ -175,15 +185,19 @@ impl Target for Adapter {
     }
 
     async fn merge<P: Model>(
-        model: &P, ctx: &Context<'_>, slice: &str, phase: MergePhase, tree: &WorkingTree,
+        model: &P, ctx: &Context<'_>, slice: &str, phase: MergePhase, workspace: &Workspace,
     ) -> Result<Report, Error> {
-        let tree_root = ctx.tree_root(tree);
+        // Change-tree state (staged and baseline compositions) reads
+        // through the `"."` preopen; the lent workspace is a read-only
+        // view of the built result code.
+        let change_root = ctx.project_root;
+        let code_root = workspace.root_path();
         let merge_prompt = registry::body("prompts/merge.md");
 
         if phase == MergePhase::Preflight {
             // Deterministic gate: an invalid staged slice composition blocks
             // the merge before the engine folds it, per the merge prompt.
-            let staged = tree_root.join(format!(".emery/slices/{slice}/composition.yaml"));
+            let staged = change_root.join(format!(".emery/slices/{slice}/composition.yaml"));
             let staged_findings = gate::validation_findings(&staged);
             if staged_findings.is_empty() {
                 return Ok(Report::success());
@@ -191,17 +205,18 @@ impl Target for Adapter {
             return Ok(failure_report(staged_findings));
         }
 
-        let baseline_composition = tree_root.join(".emery/specs/composition.yaml");
+        let baseline_composition = change_root.join(".emery/specs/composition.yaml");
         let user = format!(
             "Run the postflight merge gate for slice `{slice}` (adapter `{}`). The engine \
          has already folded the slice's deltas — including its `composition.yaml` and \
          any operator-curated `tokens.yaml` / `assets.yaml` updates — into the \
-         baseline and archived the slice. Run the merge prompt's `## Postflight — \
-         host cap-matrix re-verification` yourself: the cargo / make / gradlew \
-         commands run in the lent workspace; this adapter cannot spawn them. The \
-         composition validator re-runs deterministically in-guest after your answer. \
-         Any gate failure means `status: failure`. Answer with the report body. \
-         {REFERENCES_POINTER}",
+         baseline and archived the slice. A read-only view of the accepted result \
+         snapshot is lent to you as your workspace; nothing you write there is \
+         captured. Run the merge prompt's `## Postflight — host cap-matrix \
+         re-verification` yourself: the cargo / make / gradlew commands run in the \
+         lent workspace; this adapter cannot spawn them. The composition validator \
+         re-runs deterministically in-guest after your answer. Any gate failure means \
+         `status: failure`. Answer with the report body. {REFERENCES_POINTER}",
             ctx.adapter_id,
         );
         let report = phase::report(model, ctx, merge_prompt.to_string(), user).await?;
@@ -211,7 +226,8 @@ impl Target for Adapter {
             ctx,
             merge_prompt,
             report,
-            &tree_root,
+            change_root,
+            code_root,
             &baseline_composition,
             "merge-postflight",
             false,
@@ -236,23 +252,29 @@ fn failure_report(findings: Vec<String>) -> Report {
 // bookkeeping projects into the catalog. `guidance.md` stays on the
 // `guidance` operation only — its idioms were folded into the
 // artifacts at refine.
+#[expect(clippy::too_many_arguments, reason = "One internal leg call site.")]
 async fn composition_leg<P: Model>(
-    model: &P, ctx: &Context<'_>, slice: &str, slice_dir_rel: &str, tree_root: &Path,
-    prelude_block: &str, inputs_block: &str,
+    model: &P, ctx: &Context<'_>, slice: &str, slice_dir_rel: &str, workspace: &Workspace,
+    change_root: &Path, prelude_block: &str, inputs_block: &str,
 ) -> Result<phase::PhaseAnswer, Error> {
-    let infer_block = prelude::render_infer_report(tree_root);
+    let infer_block = prelude::render_infer_report(change_root);
+    // The staged composition and bindings are change-tree artifacts:
+    // the agent (whose working directory is the lent workspace)
+    // reaches them through the read-only-rooted artifact path.
+    let slice_dir_agent = workspace.artifact_path(slice_dir_rel);
     let system = assemble(&["prompts/build.md", "prompts/build/composition.md"]);
     let user = format!(
         "Run component inference (Step 0.5) and composition regeneration (Phase 1) of \
          the vectis build for slice `{slice}` (adapter `{}`).\n\n\
-         The project workspace is lent to you. The adapter already ran the \
+         A private workspace is lent to you; the slice's change-tree artifacts live \
+         outside it at `{slice_dir_agent}/`. The adapter already ran the \
          deterministic component-identity clustering in-guest — the name-free cluster \
          report is below; do not attempt to re-run it. Decide what each unbound \
          cluster is and what to call it per the composition prompt's Step 0.5, write your \
          `{{ fingerprint -> slug }}` decisions to \
-         `{slice_dir_rel}/build/component-bindings.yaml` (echo populated `bound-slug` \
+         `{slice_dir_agent}/build/component-bindings.yaml` (echo populated `bound-slug` \
          names verbatim — operator parts carry naming authority), then regenerate \
-         `{slice_dir_rel}/composition.yaml` from the slice artifacts per the \
+         `{slice_dir_agent}/composition.yaml` from the slice artifacts per the \
          composition prompt, treating your fresh bindings plus the existing catalog \
          as the effective component set. Guidance idioms were already folded into the \
          slice artifacts at refine; re-read `design.md` and the specs. For a slice \
@@ -289,11 +311,11 @@ async fn core_leg<P: Model>(
 }
 
 async fn review_leg<P: Model>(
-    model: &P, ctx: &Context<'_>, slice: &str, tree_root: &Path,
+    model: &P, ctx: &Context<'_>, slice: &str, change_root: &Path,
 ) -> Result<phase::PhaseAnswer, Error> {
     let mut review_prompts = vec!["prompts/build.md", "prompts/build/core/review.md"];
     review_prompts
-        .extend(shells::declared_shell_legs(tree_root).iter().map(|shell| shell.review_prompt));
+        .extend(shells::declared_shell_legs(change_root).iter().map(|shell| shell.review_prompt));
     let system = assemble(&review_prompts);
     let user = format!(
         "Run the review phases (6-7) of the vectis build for slice `{slice}`: spawn \
@@ -332,10 +354,10 @@ async fn final_core_leg<P: Model>(
 // phase prompt, not the shared preamble, so only this leg and its gate
 // pay those bytes.
 async fn report_leg<P: Model>(
-    model: &P, ctx: &Context<'_>, slice: &str, tree_root: &Path,
+    model: &P, ctx: &Context<'_>, slice: &str, change_root: &Path, code_root: &Path,
     outcomes: &[(&str, &phase::PhaseAnswer)],
 ) -> Result<(Report, String), Error> {
-    let verify_block = prelude::render_verify_gate(tree_root, Some(slice));
+    let verify_block = prelude::render_verify_gate(change_root, code_root, Some(slice));
     let report_prompt = assemble(&["prompts/build.md", "prompts/build/report.md"]);
     let user = format!(
         "Write the build report for slice `{slice}` per the report prompt's `## Build \
@@ -349,7 +371,7 @@ async fn report_leg<P: Model>(
          carries only non-blocking findings; an exhausted verify-repair budget, a \
          failed composition gate, or unresolved blocking review findings mean \
          `status: failure`. Declare `outputs[]` per supported platform with paths \
-         relative to the project root, and set `ui-surface.screens` from the slice's \
+         relative to the workspace root, and set `ui-surface.screens` from the slice's \
          own screen count.\n\n\
          {verify_block}\n\n\
          Phase outcomes:\n{}",

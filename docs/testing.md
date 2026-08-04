@@ -11,7 +11,7 @@ Fastest feedback first. **Every behavior is asserted on exactly one rung** — d
 | #   | Rung               | Owns                                                         | Entry                                                         |
 | --- | ------------------ | ------------------------------------------------------------ | ------------------------------------------------------------- |
 | 1   | Native crate tests | Operation behavior, prompt assembly (scripted `Harness`)     | `cargo nextest run -p <adapter>` / `cargo make test`          |
-| 2   | Workflow eval cases | Cross-phase integration, real sources → working-tree outputs | [`examples/eval/`](../examples/eval/README.md)                |
+| 2   | Workflow eval cases | Cross-phase integration, real sources → product-tree outputs | [`examples/eval/`](../examples/eval/README.md)                |
 | 3   | Build eval cases   | One target build over a refined fixture, prompt quality      | [`examples/eval/`](../examples/eval/README.md) (Vectis inventiveness: [`vectis-open-gap-fab`](../examples/eval/cases/vectis-open-gap-fab/README.md)) |
 | 4   | Wasm examples      | WASM/WIT conformance over the real component seam            | [`examples/wasm/`](../examples/wasm/README.md)                |
 | 5   | Consumer project   | Code (not prose) iteration via seeded `.wasm`                | `cargo make adapter [name]` + `emery adapter add`           |

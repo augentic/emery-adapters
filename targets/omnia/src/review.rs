@@ -67,7 +67,7 @@ pub const REVIEW_ANSWER_SCHEMA: &str = r#"{
     },
     "outputs": {
       "default": [],
-      "description": "Build outputs the working tree now carries: the slice's crate tree and, in create mode, the guest scaffolding — `platform: core`, paths relative to the project root. The deterministic report gate fails the build when a declared path is missing.",
+      "description": "Build outputs the workspace now carries: the slice's crate tree and, in create mode, the guest scaffolding — `platform: core`, paths relative to the workspace root. The deterministic report gate fails the build when a declared path is missing.",
       "items": {
         "additionalProperties": false,
         "properties": {
@@ -99,7 +99,7 @@ pub struct ReviewAnswer {
     /// Findings left unresolved after the remediation cycle.
     #[serde(default)]
     pub findings: Vec<Diagnostic>,
-    /// Build outputs the working tree carries.
+    /// Build outputs the workspace carries.
     #[serde(default)]
     pub outputs: Vec<BuildOutput>,
 }

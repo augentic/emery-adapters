@@ -5,7 +5,7 @@ use std::path::Path;
 
 use adapter::answers::REPORT_ANSWER_SCHEMA;
 use adapter::seam::{
-    BuildContext, Context, Input, MergePhase, Payload, Report, Severity, Status, WorkingTree,
+    BuildContext, Context, Input, MergePhase, Payload, Report, Severity, Status, Workspace,
 };
 use adapter::{Format, Request, Target as _};
 use omnia_testkit::model::{Harness, mcp_grants};
@@ -21,13 +21,17 @@ fn ctx<'a>(root: &'a Path, mcp_url: Option<&str>) -> Context<'a> {
         adapter_id: "target:vectis",
         project_root: root,
         mcp_url: mcp_url.map(str::to_owned),
+        lend: root.display().to_string(),
     }
 }
 
-fn tree() -> WorkingTree {
-    WorkingTree {
-        base: "rev-1".to_string(),
-        subpath: None,
+// The degenerate single-checkout shape: workspace root and artifact
+// root both point at the test tree.
+fn workspace(root: &Path) -> Workspace {
+    Workspace {
+        id: "ws-1".to_string(),
+        root: root.display().to_string(),
+        artifacts: root.display().to_string(),
     }
 }
 
@@ -68,13 +72,13 @@ fn assert_composition_leg(request: &Request) {
     );
     let user = &request.messages[0].content;
     assert!(
-        user.contains("### input: proposal → .emery/slices/demo/proposal.md")
-            && user.contains("### input: design → .emery/slices/demo/design.md"),
-        "typed inputs render as path-form sections: {user}"
+        user.contains("/.emery/slices/demo/proposal.md")
+            && user.contains("/.emery/slices/demo/design.md"),
+        "typed inputs render as artifact-rooted path sections: {user}"
     );
     assert!(!user.contains("PROPOSAL-BODY"), "artifact bodies are not inlined");
     assert!(
-        user.contains("Read each path from the working tree"),
+        user.contains("Read each path"),
         "read-before-writing instruction rides the inputs block"
     );
     assert!(user.contains("slice `demo`"), "slice named");
@@ -91,7 +95,10 @@ fn assert_composition_leg(request: &Request) {
     assert_eq!(name, "composition");
     let compiled = serde_json::from_str::<serde_json::Value>(schema).unwrap();
     assert!(jsonschema::validator_for(&compiled).is_ok(), "internal schema compiles");
-    assert!(request.lend_workspace);
+    assert!(
+        request.workspace.as_deref().is_some_and(|path| !path.is_empty()),
+        "the build leg lends the prepared workspace path"
+    );
     assert_eq!(mcp_grants(request)[0].url, "http://references/mcp");
 }
 
@@ -179,7 +186,7 @@ async fn build_phase_legs() {
         "demo",
         &inputs,
         &BuildContext::default(),
-        &tree(),
+        &workspace(tmp.path()),
     )
     .await
     .unwrap();
@@ -236,7 +243,7 @@ async fn core_only_skips_shells() {
         "demo",
         &[],
         &BuildContext::default(),
-        &tree(),
+        &workspace(tmp.path()),
     )
     .await
     .unwrap();
@@ -288,7 +295,7 @@ async fn guest_does_not_embed_scaffold() {
         "demo",
         &[],
         &BuildContext::default(),
-        &tree(),
+        &workspace(tmp.path()),
     )
     .await
     .unwrap();
@@ -329,7 +336,7 @@ async fn composition_repair() {
         "demo",
         &[],
         &BuildContext::default(),
-        &tree(),
+        &workspace(tmp.path()),
     )
     .await
     .unwrap();
@@ -369,7 +376,7 @@ async fn build_with_composition(composition: Option<&str>, report_answer: &'stat
         "demo",
         &[],
         &BuildContext::default(),
-        &tree(),
+        &workspace(tmp.path()),
     )
     .await
     .unwrap();
@@ -439,10 +446,15 @@ async fn merge_preflight_deterministic() {
     let model = Harness::answering::<&str>([]);
 
     // A clean (absent) staged composition passes without a judgment leg.
-    let report =
-        Adapter::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
-            .await
-            .unwrap();
+    let report = Adapter::merge(
+        &model,
+        &ctx(tmp.path(), None),
+        "demo",
+        MergePhase::Preflight,
+        &workspace(tmp.path()),
+    )
+    .await
+    .unwrap();
     assert_eq!(report.status, Status::Success);
     assert!(model.requests().is_empty(), "preflight is deterministic: no leg");
 
@@ -450,10 +462,15 @@ async fn merge_preflight_deterministic() {
     fs::create_dir_all(tmp.path().join(".emery/slices/demo")).unwrap();
     fs::write(tmp.path().join(".emery/slices/demo/composition.yaml"), "screens: [broken\n")
         .unwrap();
-    let report =
-        Adapter::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
-            .await
-            .unwrap();
+    let report = Adapter::merge(
+        &model,
+        &ctx(tmp.path(), None),
+        "demo",
+        MergePhase::Preflight,
+        &workspace(tmp.path()),
+    )
+    .await
+    .unwrap();
     assert_eq!(report.status, Status::Failure);
     assert!(report.findings[0].detail.contains("[composition]"));
     assert!(model.requests().is_empty(), "a staged failure still spends no judgment leg");
@@ -464,10 +481,15 @@ async fn merge_postflight_single_leg() {
     let tmp = TempDir::new().unwrap();
     let model = Harness::answering([SUCCESS_REPORT]);
 
-    let report =
-        Adapter::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Postflight, &tree())
-            .await
-            .unwrap();
+    let report = Adapter::merge(
+        &model,
+        &ctx(tmp.path(), None),
+        "demo",
+        MergePhase::Postflight,
+        &workspace(tmp.path()),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(report.status, Status::Success);
     let requests = model.requests();
@@ -488,10 +510,15 @@ async fn merge_postflight_gates_composition() {
     fs::write(tmp.path().join(".emery/specs/composition.yaml"), "screens: [broken\n").unwrap();
     let model = Harness::answering([SUCCESS_REPORT, SUCCESS_REPORT]);
 
-    let report =
-        Adapter::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Postflight, &tree())
-            .await
-            .unwrap();
+    let report = Adapter::merge(
+        &model,
+        &ctx(tmp.path(), None),
+        "demo",
+        MergePhase::Postflight,
+        &workspace(tmp.path()),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(report.status, Status::Failure);
     assert!(report.findings[0].detail.contains("[composition]"));

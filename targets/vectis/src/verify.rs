@@ -40,24 +40,29 @@ struct PlatformStatus {
     present: bool,
 }
 
-/// Run one verification mode against an explicit project root.
+/// Run one verification mode against explicit roots.
+///
+/// RFC-87 split: `change_root` carries the Emery change tree
+/// (`.emery/*` reads) and `code_root` carries the product code (shell
+/// trees, design-system, stamps). A single-checkout caller passes the
+/// same path twice.
 ///
 /// # Errors
 ///
 /// Returns [`VectisError::InvalidProject`] when `project.yaml` is
 /// missing or unparseable, or lacks a `platforms` field.
 pub fn run(
-    mode: VerifyMode, project_root: &Path, active_slice: Option<&str>,
+    mode: VerifyMode, change_root: &Path, code_root: &Path, active_slice: Option<&str>,
 ) -> Result<Value, VectisError> {
-    let platforms = load_platforms(project_root)?;
+    let platforms = load_platforms(change_root)?;
 
     match mode {
         VerifyMode::Verify => {
             let statuses: Vec<PlatformStatus> =
-                platforms.iter().map(|p| check_platform(p, project_root)).collect();
-            Ok(render_verify(&statuses, project_root, &platforms, active_slice))
+                platforms.iter().map(|p| check_platform(p, code_root)).collect();
+            Ok(render_verify(&statuses, change_root, code_root, &platforms, active_slice))
         }
-        VerifyMode::BootstrapAppIcon => Ok(render_bootstrap_app_icon(project_root, &platforms)),
+        VerifyMode::BootstrapAppIcon => Ok(render_bootstrap_app_icon(code_root, &platforms)),
     }
 }
 
@@ -123,22 +128,9 @@ fn render_bootstrap_app_icon(project_root: &Path, platforms: &[String]) -> Value
 }
 
 fn render_verify(
-    statuses: &[PlatformStatus], project_root: &Path, platforms: &[String],
+    statuses: &[PlatformStatus], change_root: &Path, code_root: &Path, platforms: &[String],
     active_slice: Option<&str>,
 ) -> Value {
-    let mut findings = scaffold_findings(statuses, project_root, platforms);
-    findings.extend(canonical_ui_findings(project_root, platforms, active_slice));
-
-    serde_json::json!({
-        "mode": "verify",
-        "project-root": project_root.display().to_string(),
-        "findings": findings,
-    })
-}
-
-fn scaffold_findings(
-    statuses: &[PlatformStatus], project_root: &Path, platforms: &[String],
-) -> Vec<Value> {
     let mut findings: Vec<Value> = Vec::new();
 
     for status in statuses {
@@ -162,53 +154,63 @@ fn scaffold_findings(
                 "message": format!(
                     "declared platform `{}` has no shell tree under `{}`",
                     status.platform,
-                    project_root.display(),
+                    code_root.display(),
                 ),
             }));
         }
     }
 
-    findings.extend(catalog_findings(project_root, platforms));
+    findings.extend(catalog_findings(change_root, code_root, platforms));
 
     let android_declared = platforms.iter().any(|p| p == "android");
     let android_present =
         statuses.iter().find(|s| s.platform == "android").is_some_and(|s| s.present);
     findings.extend(android_toolchain::android_toolchain_findings(
-        project_root,
+        code_root,
         android_declared,
         android_present,
     ));
 
-    if platforms.iter().any(|p| p == "ios") && shell_present(project_root, "ios") {
-        findings.extend(ios_scaffold_drift_findings(project_root));
+    if platforms.iter().any(|p| p == "ios") && shell_present(code_root, "ios") {
+        findings.extend(ios_scaffold_drift_findings(code_root));
     }
 
-    if platforms.iter().any(|p| p == "android") && shell_present(project_root, "android") {
-        findings.extend(android_scaffold_drift_findings(project_root));
+    if platforms.iter().any(|p| p == "android") && shell_present(code_root, "android") {
+        findings.extend(android_scaffold_drift_findings(code_root));
     }
 
     let ios_present = statuses.iter().find(|s| s.platform == "ios").is_some_and(|s| s.present);
     findings.extend(compile_stamp::compile_stamp_findings(
-        project_root,
+        code_root,
         platforms,
         ios_present,
         android_present,
     ));
-    findings.extend(core_stamp::core_stamp_findings(project_root));
-    findings.extend(materialize_completeness::materialize_completeness_findings(project_root));
-    findings.extend(suppression_scan_findings(project_root, platforms));
+    findings.extend(core_stamp::core_stamp_findings(code_root));
+    findings.extend(materialize_completeness::materialize_completeness_findings(code_root));
+    findings.extend(suppression_scan_findings(code_root, platforms));
+    findings.extend(canonical_ui_findings(change_root, code_root, platforms, active_slice));
 
-    findings
+    serde_json::json!({
+        "mode": "verify",
+        "project-root": code_root.display().to_string(),
+        "findings": findings,
+    })
 }
 
 /// Canonical UI bindings: `ui-contract` literals, composition→`test-ids.yaml`
-/// projection, and seed version. Only `test_id_projection` needs `active_slice`.
+/// projection, and seed version. Composition reads come from `change_root`
+/// (`.emery/*`); `ui-contract/` reads come from `code_root`.
 fn canonical_ui_findings(
-    project_root: &Path, platforms: &[String], active_slice: Option<&str>,
+    change_root: &Path, code_root: &Path, platforms: &[String], active_slice: Option<&str>,
 ) -> Vec<Value> {
     let mut findings = Vec::new();
-    findings.extend(ui_literals::ui_literals_findings(project_root, platforms));
-    findings.extend(test_id_projection::test_id_projection_findings(project_root, active_slice));
-    findings.extend(seed_version::seed_version_findings(project_root));
+    findings.extend(ui_literals::ui_literals_findings(code_root, platforms));
+    findings.extend(test_id_projection::test_id_projection_findings(
+        change_root,
+        code_root,
+        active_slice,
+    ));
+    findings.extend(seed_version::seed_version_findings(code_root));
     findings
 }

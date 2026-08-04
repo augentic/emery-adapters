@@ -18,14 +18,15 @@ pub(super) fn render_prelude(summary: &Value) -> String {
     )
 }
 
-pub(super) fn render_infer_report(tree_root: &Path) -> String {
-    let composition = tree_root.join(".emery/specs/composition.yaml");
+pub(super) fn render_infer_report(change_root: &Path) -> String {
+    let composition = change_root.join(".emery/specs/composition.yaml");
     let report = if composition.exists() {
         let args = infer::InferArgs {
             composition,
-            candidate_cache: Some(tree_root.join(".emery/.cache/component-candidates"))
+            candidate_cache: Some(change_root.join(".emery/.cache/component-candidates"))
                 .filter(|p| p.is_dir()),
-            parts: Some(tree_root.join(".emery/design-system/parts.yaml")).filter(|p| p.is_file()),
+            parts: Some(change_root.join(".emery/design-system/parts.yaml"))
+                .filter(|p| p.is_file()),
             min_occurrences: infer::DEFAULT_MIN_OCCURRENCES,
         };
         match infer::run(&args) {
@@ -38,9 +39,11 @@ pub(super) fn render_infer_report(tree_root: &Path) -> String {
     format!("### component-identity cluster report (already run in-guest)\n\n{report}")
 }
 
-pub(super) fn render_verify_gate(tree_root: &Path, active_slice: Option<&str>) -> String {
-    let body = if tree_root.join(".emery/project.yaml").exists() {
-        match verify::run(verify::VerifyMode::Verify, tree_root, active_slice) {
+pub(super) fn render_verify_gate(
+    change_root: &Path, code_root: &Path, active_slice: Option<&str>,
+) -> String {
+    let body = if change_root.join(".emery/project.yaml").exists() {
+        match verify::run(verify::VerifyMode::Verify, change_root, code_root, active_slice) {
             Ok(payload) => serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string()),
             Err(err) => format!("verify gate could not run: {err}"),
         }
@@ -50,13 +53,13 @@ pub(super) fn render_verify_gate(tree_root: &Path, active_slice: Option<&str>) -
     format!("### shell verify gate (already run in-guest)\n\n{body}")
 }
 
-pub(super) fn scaffold_missing_trees(tree_root: &Path) -> String {
+pub(super) fn scaffold_missing_trees(change_root: &Path, code_root: &Path) -> String {
     let mut targets: Vec<&'static str> = Vec::new();
-    if !shell::shell_present(tree_root, "core") {
+    if !shell::shell_present(code_root, "core") {
         targets.push("core");
     }
-    for leg in declared_shell_legs(tree_root) {
-        if !shell::shell_present(tree_root, leg.name) {
+    for leg in declared_shell_legs(change_root) {
+        if !shell::shell_present(code_root, leg.name) {
             targets.push(leg.name);
         }
     }
@@ -66,7 +69,7 @@ pub(super) fn scaffold_missing_trees(tree_root: &Path) -> String {
                 `$TEMPLATE_DIR` with identity substitution — never invent versions."
             .to_string();
     }
-    let identity = resolve_scaffold_app_name(tree_root).map_or_else(
+    let identity = resolve_scaffold_app_name(change_root, code_root).map_or_else(
         || {
             "- Resolve `app_name` (PascalCase from `design.md` `App` / `project.yaml` \
              `name:`) and `android_package` before materialize; refuse to invent them."
@@ -102,14 +105,14 @@ pub(super) fn scaffold_missing_trees(tree_root: &Path) -> String {
     )
 }
 
-fn resolve_scaffold_app_name(tree_root: &Path) -> Option<String> {
-    if let Ok(name) = ios_scaffold::resolve_ios_app_name(tree_root) {
+fn resolve_scaffold_app_name(change_root: &Path, code_root: &Path) -> Option<String> {
+    if let Ok(name) = ios_scaffold::resolve_ios_app_name(code_root) {
         return Some(name);
     }
-    if let Ok(name) = android_scaffold::resolve_android_app_name(tree_root) {
+    if let Ok(name) = android_scaffold::resolve_android_app_name(code_root) {
         return Some(name);
     }
-    let source = std::fs::read_to_string(tree_root.join(".emery/project.yaml")).ok()?;
+    let source = std::fs::read_to_string(change_root.join(".emery/project.yaml")).ok()?;
     let doc: Value = serde_saphyr::from_str(&source).ok()?;
     let raw = doc.get("name")?.as_str()?;
     let pascal: String = raw

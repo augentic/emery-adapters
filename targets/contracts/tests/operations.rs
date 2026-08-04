@@ -5,7 +5,7 @@ use std::path::Path;
 
 use adapter::answers::REPORT_ANSWER_SCHEMA;
 use adapter::seam::{
-    BuildContext, Context, Input, MergePhase, Payload, Severity, Status, WorkingTree,
+    BuildContext, Context, Input, MergePhase, Payload, Severity, Status, Workspace,
 };
 use adapter::{Format, Request, Target as _};
 use contracts::Adapter;
@@ -21,13 +21,17 @@ fn ctx<'a>(root: &'a Path, mcp_url: Option<&str>) -> Context<'a> {
         adapter_id: "target:contracts",
         project_root: root,
         mcp_url: mcp_url.map(str::to_owned),
+        lend: root.display().to_string(),
     }
 }
 
-fn tree() -> WorkingTree {
-    WorkingTree {
-        base: "rev-1".to_string(),
-        subpath: None,
+// The degenerate single-checkout shape: workspace root and artifact
+// root both point at the test tree.
+fn workspace(root: &Path) -> Workspace {
+    Workspace {
+        id: "ws-1".to_string(),
+        root: root.display().to_string(),
+        artifacts: root.display().to_string(),
     }
 }
 
@@ -78,7 +82,7 @@ async fn build_sub_flows() {
         "demo",
         &inputs,
         &BuildContext::default(),
-        &tree(),
+        &workspace(tmp.path()),
     )
     .await
     .unwrap();
@@ -107,13 +111,13 @@ async fn build_sub_flows() {
     assert!(system.contains("json-schema sub-flow"), "sub-prompt in system");
     let user = &first.messages[0].content;
     assert!(
-        user.contains("### input: proposal → .emery/slices/demo/proposal.md")
-            && user.contains("### input: design → .emery/slices/demo/design.md"),
-        "typed inputs render as path-form sections: {user}"
+        user.contains("/.emery/slices/demo/proposal.md")
+            && user.contains("/.emery/slices/demo/design.md"),
+        "typed inputs render as artifact-rooted path sections: {user}"
     );
     assert!(!user.contains("PROPOSAL-BODY"), "artifact bodies are not inlined");
     assert!(
-        user.contains("Read each path from the working tree"),
+        user.contains("Read each path"),
         "read-before-writing instruction rides the inputs block"
     );
     assert!(user.contains(".emery/slices/demo/contracts"), "slice delta dir named");
@@ -121,7 +125,11 @@ async fn build_sub_flows() {
     assert_eq!(name, "json-schema-sub-flow");
     let compiled = serde_json::from_str::<serde_json::Value>(schema).unwrap();
     assert!(jsonschema::validator_for(&compiled).is_ok(), "internal schema compiles");
-    assert!(first.lend_workspace);
+    assert_eq!(
+        first.workspace.as_deref(),
+        Some(tmp.path().to_str().unwrap()),
+        "the build leg lends the prepared workspace path"
+    );
     assert_eq!(mcp_grants(first)[0].url, "http://references/mcp");
 
     assert_eq!(schema_format(&requests[1]).0, "openapi-sub-flow");
@@ -150,7 +158,7 @@ async fn build_repair_bounded() {
         "demo",
         &[],
         &BuildContext::default(),
-        &tree(),
+        &workspace(tmp.path()),
     )
     .await
     .unwrap();
@@ -183,19 +191,29 @@ async fn merge_preflight_deterministic() {
     let model = Harness::answering::<&str>([]);
 
     // A clean (absent) staged delta passes without a judgment leg.
-    let report =
-        Adapter::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
-            .await
-            .unwrap();
+    let report = Adapter::merge(
+        &model,
+        &ctx(tmp.path(), None),
+        "demo",
+        MergePhase::Preflight,
+        &workspace(tmp.path()),
+    )
+    .await
+    .unwrap();
     assert_eq!(report.status, Status::Success);
     assert!(model.requests().is_empty(), "preflight is deterministic: no leg");
 
     // A broken staged delta parks the merge before the engine promotes it.
     seed_bad_contract(&tmp.path().join(".emery/slices/demo/contracts"));
-    let report =
-        Adapter::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
-            .await
-            .unwrap();
+    let report = Adapter::merge(
+        &model,
+        &ctx(tmp.path(), None),
+        "demo",
+        MergePhase::Preflight,
+        &workspace(tmp.path()),
+    )
+    .await
+    .unwrap();
     assert_eq!(report.status, Status::Failure);
     assert_eq!(report.findings[0].rule_id.as_deref(), Some(RULE_VERSION_IS_SEMVER));
     assert!(model.requests().is_empty(), "a staged failure still spends no judgment leg");
@@ -204,20 +222,17 @@ async fn merge_preflight_deterministic() {
 #[tokio::test]
 async fn merge_postflight_gate() {
     let tmp = TempDir::new().unwrap();
-    // Baseline under a working-tree subpath, mirroring a scoped mount.
-    seed_bad_contract(&tmp.path().join("proj/contracts"));
+    // The merged baseline lives in the project tree — postflight
+    // validates it there, not in the lent read-only result view.
+    seed_bad_contract(&tmp.path().join("contracts"));
     let model = Harness::answering([SUCCESS_REPORT]);
-    let subpath_tree = WorkingTree {
-        base: "rev-1".to_string(),
-        subpath: Some("proj".to_string()),
-    };
 
     let report = Adapter::merge(
         &model,
         &ctx(tmp.path(), None),
         "demo",
         MergePhase::Postflight,
-        &subpath_tree,
+        &workspace(tmp.path()),
     )
     .await
     .unwrap();
@@ -237,10 +252,15 @@ async fn merge_postflight_clean_baseline() {
     let tmp = TempDir::new().unwrap();
     let model = Harness::answering::<&str>([]);
 
-    let report =
-        Adapter::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Postflight, &tree())
-            .await
-            .unwrap();
+    let report = Adapter::merge(
+        &model,
+        &ctx(tmp.path(), None),
+        "demo",
+        MergePhase::Postflight,
+        &workspace(tmp.path()),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(report.status, Status::Success);
     assert!(model.requests().is_empty(), "a clean baseline spends no judgment leg");

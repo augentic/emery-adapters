@@ -39,22 +39,23 @@ pub(super) async fn composition_gate<P: Model>(
 
 #[expect(clippy::too_many_arguments, reason = "One internal gate call site per operation.")]
 pub(super) async fn gate_report<P: Model>(
-    model: &P, ctx: &Context<'_>, prompt: &str, mut report: Report, tree_root: &Path,
-    composition: &Path, operation: &str, shell_verify: bool, active_slice: Option<&str>,
+    model: &P, ctx: &Context<'_>, prompt: &str, mut report: Report, change_root: &Path,
+    code_root: &Path, composition: &Path, operation: &str, shell_verify: bool,
+    active_slice: Option<&str>,
 ) -> Result<Report, Error> {
     let gather = |report: &Report| {
         let mut residual = validation_findings(composition);
         if shell_verify {
-            residual.extend(shell_verify_findings(tree_root, active_slice));
+            residual.extend(shell_verify_findings(change_root, code_root, active_slice));
         }
-        residual.extend(phase::missing_outputs(report, tree_root));
+        residual.extend(phase::missing_outputs(report, code_root));
         residual
     };
     let mut residual = gather(&report);
     if !residual.is_empty() {
         let user = format!(
             "The deterministic report gate rejected the {operation} report:\n\n{}\n\n\
-             Repair the working tree (or correct the report), then answer with the \
+             Repair the workspace (or correct the report), then answer with the \
              corrected report body.",
             residual.join("\n"),
         );
@@ -65,11 +66,11 @@ pub(super) async fn gate_report<P: Model>(
     Ok(phase::enforce(report, findings))
 }
 
-pub(super) fn bootstrap_findings(tree_root: &Path) -> Vec<String> {
-    if !tree_root.join(".emery/project.yaml").exists() {
+pub(super) fn bootstrap_findings(change_root: &Path, code_root: &Path) -> Vec<String> {
+    if !change_root.join(".emery/project.yaml").exists() {
         return Vec::new();
     }
-    match verify::run(verify::VerifyMode::BootstrapAppIcon, tree_root, None) {
+    match verify::run(verify::VerifyMode::BootstrapAppIcon, change_root, code_root, None) {
         Ok(payload) => payload
             .get("findings")
             .and_then(Value::as_array)
@@ -88,11 +89,13 @@ pub(super) fn bootstrap_findings(tree_root: &Path) -> Vec<String> {
     }
 }
 
-fn shell_verify_findings(tree_root: &Path, active_slice: Option<&str>) -> Vec<String> {
-    if !tree_root.join(".emery/project.yaml").exists() {
+fn shell_verify_findings(
+    change_root: &Path, code_root: &Path, active_slice: Option<&str>,
+) -> Vec<String> {
+    if !change_root.join(".emery/project.yaml").exists() {
         return Vec::new();
     }
-    match verify::run(verify::VerifyMode::Verify, tree_root, active_slice) {
+    match verify::run(verify::VerifyMode::Verify, change_root, code_root, active_slice) {
         Ok(payload) => payload
             .get("findings")
             .and_then(Value::as_array)

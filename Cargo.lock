@@ -33,9 +33,9 @@ dependencies = [
 
 [[package]]
 name = "aho-corasick"
-version = "1.1.4"
+version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ddd31a130427c27518df266943a5308ed92d4b226cc639f5a8f1002816174301"
+checksum = "c982642fa9e8606056828ee9a8505737230110bb1099153c79efe865c59d12ba"
 dependencies = [
  "memchr",
 ]
@@ -253,9 +253,9 @@ checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
 name = "base64"
-version = "0.23.0"
+version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b25655df2c3cdd83c5e5b293b88acd880332b2ddadd7c30ac43144fdc0033da9"
+checksum = "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5"
 
 [[package]]
 name = "base64ct"
@@ -925,9 +925,9 @@ dependencies = [
 
 [[package]]
 name = "data-encoding"
-version = "2.11.0"
+version = "2.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
+checksum = "4583a4551df46e2792f82ceeac45e850d2e2d5debba0b91f102385cda5b11f06"
 
 [[package]]
 name = "data-url"
@@ -1043,8 +1043,8 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
 name = "emery-adapter"
-version = "0.37.0"
-source = "git+https://github.com/augentic/emery?tag=v0.37.0#f6dd2523a70dd81b8c5e7274ec3ef571febf99ec"
+version = "0.38.0"
+source = "git+https://github.com/augentic/emery#5a01316a0caa11370076cfb450b30e281f576efb"
 dependencies = [
  "omnia-guest",
  "omnia-wasi-http",
@@ -1057,8 +1057,8 @@ dependencies = [
 
 [[package]]
 name = "emery-artifacts"
-version = "0.37.0"
-source = "git+https://github.com/augentic/emery?tag=v0.37.0#f6dd2523a70dd81b8c5e7274ec3ef571febf99ec"
+version = "0.38.0"
+source = "git+https://github.com/augentic/emery#5a01316a0caa11370076cfb450b30e281f576efb"
 dependencies = [
  "emery-diagnostics",
  "emery-error",
@@ -1074,8 +1074,8 @@ dependencies = [
 
 [[package]]
 name = "emery-change"
-version = "0.37.0"
-source = "git+https://github.com/augentic/emery?tag=v0.37.0#f6dd2523a70dd81b8c5e7274ec3ef571febf99ec"
+version = "0.38.0"
+source = "git+https://github.com/augentic/emery#5a01316a0caa11370076cfb450b30e281f576efb"
 dependencies = [
  "emery-artifacts",
  "emery-diagnostics",
@@ -1094,8 +1094,8 @@ dependencies = [
 
 [[package]]
 name = "emery-diagnostics"
-version = "0.37.0"
-source = "git+https://github.com/augentic/emery?tag=v0.37.0#f6dd2523a70dd81b8c5e7274ec3ef571febf99ec"
+version = "0.38.0"
+source = "git+https://github.com/augentic/emery#5a01316a0caa11370076cfb450b30e281f576efb"
 dependencies = [
  "base16ct",
  "schemars",
@@ -1107,8 +1107,8 @@ dependencies = [
 
 [[package]]
 name = "emery-error"
-version = "0.37.0"
-source = "git+https://github.com/augentic/emery?tag=v0.37.0#f6dd2523a70dd81b8c5e7274ec3ef571febf99ec"
+version = "0.38.0"
+source = "git+https://github.com/augentic/emery#5a01316a0caa11370076cfb450b30e281f576efb"
 dependencies = [
  "serde-saphyr",
  "thiserror 2.0.19",
@@ -1116,8 +1116,8 @@ dependencies = [
 
 [[package]]
 name = "emery-native"
-version = "0.37.0"
-source = "git+https://github.com/augentic/emery?tag=v0.37.0#f6dd2523a70dd81b8c5e7274ec3ef571febf99ec"
+version = "0.38.0"
+source = "git+https://github.com/augentic/emery#5a01316a0caa11370076cfb450b30e281f576efb"
 dependencies = [
  "axum",
  "emery-adapter",
@@ -1134,8 +1134,8 @@ dependencies = [
 
 [[package]]
 name = "emery-probe"
-version = "0.37.0"
-source = "git+https://github.com/augentic/emery?tag=v0.37.0#f6dd2523a70dd81b8c5e7274ec3ef571febf99ec"
+version = "0.38.0"
+source = "git+https://github.com/augentic/emery#5a01316a0caa11370076cfb450b30e281f576efb"
 dependencies = [
  "anyhow",
  "clap",
@@ -1148,6 +1148,7 @@ dependencies = [
  "omnia-guest",
  "omnia-wasi-model",
  "serde",
+ "serde-saphyr",
  "tokio",
  "toml",
  "tracing",
@@ -1156,8 +1157,8 @@ dependencies = [
 
 [[package]]
 name = "emery-project"
-version = "0.37.0"
-source = "git+https://github.com/augentic/emery?tag=v0.37.0#f6dd2523a70dd81b8c5e7274ec3ef571febf99ec"
+version = "0.38.0"
+source = "git+https://github.com/augentic/emery#5a01316a0caa11370076cfb450b30e281f576efb"
 dependencies = [
  "emery-artifacts",
  "emery-diagnostics",
@@ -1178,13 +1179,13 @@ dependencies = [
 
 [[package]]
 name = "emery-prose"
-version = "0.37.0"
-source = "git+https://github.com/augentic/emery?tag=v0.37.0#f6dd2523a70dd81b8c5e7274ec3ef571febf99ec"
+version = "0.38.0"
+source = "git+https://github.com/augentic/emery#5a01316a0caa11370076cfb450b30e281f576efb"
 
 [[package]]
 name = "emery-slice"
-version = "0.37.0"
-source = "git+https://github.com/augentic/emery?tag=v0.37.0#f6dd2523a70dd81b8c5e7274ec3ef571febf99ec"
+version = "0.38.0"
+source = "git+https://github.com/augentic/emery#5a01316a0caa11370076cfb450b30e281f576efb"
 dependencies = [
  "emery-artifacts",
  "emery-diagnostics",
@@ -1204,8 +1205,8 @@ dependencies = [
 
 [[package]]
 name = "emery-transport"
-version = "0.37.0"
-source = "git+https://github.com/augentic/emery?tag=v0.37.0#f6dd2523a70dd81b8c5e7274ec3ef571febf99ec"
+version = "0.38.0"
+source = "git+https://github.com/augentic/emery#5a01316a0caa11370076cfb450b30e281f576efb"
 dependencies = [
  "clap",
  "emery-artifacts",
@@ -1231,9 +1232,9 @@ dependencies = [
 
 [[package]]
 name = "encoding_rs_io"
-version = "0.1.7"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1cc3c5651fb62ab8aa3103998dade57efdd028544bd300516baa31840c252a83"
+checksum = "fba3fe847045ecff794b9c138293a80db914678c453ad63fbf0c6a9eb6e00b22"
 dependencies = [
  "encoding_rs",
 ]
@@ -1968,9 +1969,9 @@ dependencies = [
 
 [[package]]
 name = "imagesize"
-version = "0.14.0"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09e54e57b4c48b40f7aec75635392b12b3421fa26fe8b4332e63138ed278459c"
+checksum = "65b27460c2c92b037f3f94c538ed9a3342f3fdf923606781629ccb35f82d042a"
 
 [[package]]
 name = "indexmap"
@@ -2018,9 +2019,9 @@ checksum = "2f0fb0570afe1fed943c5c3d4102d5358592d8625fda6a0007fdbe65a92fba96"
 
 [[package]]
 name = "ipnet"
-version = "2.12.0"
+version = "2.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d98f6fed1fde3f8c21bc40a1abb88dd75e67924f9cffc3ef95607bad8017f8e2"
+checksum = "6a756c3fac73139e83f14c2d742155dd2b78d3ee56597b419a0579b7bdd6dd78"
 
 [[package]]
 name = "is_terminal_polyfill"
@@ -2141,9 +2142,9 @@ dependencies = [
 
 [[package]]
 name = "jsonschema"
-version = "0.49.2"
+version = "0.49.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8a77951c56b6a0af03c22af6953d6ffcfba9403c765578921f3f1089b999db6"
+checksum = "257549c093d8f3d043337ba0d507e8eeace2447dfae3f0ee37eb0f57d3df7655"
 dependencies = [
  "ahash",
  "bytecount",
@@ -2170,18 +2171,18 @@ dependencies = [
 
 [[package]]
 name = "jsonschema-regex"
-version = "0.49.2"
+version = "0.49.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4c2e64f341a1d6a15d2daa3c967e48921cf15b9c7f23a9899e8b63c7f7c4199"
+checksum = "474790e948498099d61ec85c10dc72d459d61298b7975eda7fb163af1934b134"
 dependencies = [
  "regex-syntax",
 ]
 
 [[package]]
 name = "jsonschema-value"
-version = "0.49.2"
+version = "0.49.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94e097778f3e9c6a33862077dbf07aca0360d0b18d2a7abc323da132df49ee83"
+checksum = "8212315eb8e0bc44959d1af653cd5ec515771a3cdca966cfc0a10999bff144b9"
 dependencies = [
  "ahash",
  "bytecount",
@@ -2544,7 +2545,7 @@ dependencies = [
 [[package]]
 name = "omnia"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
+source = "git+https://github.com/augentic/omnia#fdc527908a6fe0177c33e64d1d5f481496cc49ec"
 dependencies = [
  "anyhow",
  "bytes",
@@ -2578,7 +2579,7 @@ dependencies = [
 [[package]]
 name = "omnia-cursor"
 version = "0.29.0"
-source = "git+https://github.com/augentic/omnia-backends#cd156c6111a79978255baa0cd9dbfca5c3c85a00"
+source = "git+https://github.com/augentic/omnia-backends#ffc2c87450e2b7ac5c69e808782050c2a0f2a3e7"
 dependencies = [
  "anyhow",
  "fromenv",
@@ -2593,7 +2594,7 @@ dependencies = [
 [[package]]
 name = "omnia-guest"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
+source = "git+https://github.com/augentic/omnia#fdc527908a6fe0177c33e64d1d5f481496cc49ec"
 dependencies = [
  "anyhow",
  "axum",
@@ -2629,7 +2630,7 @@ dependencies = [
 [[package]]
 name = "omnia-guest-macros"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
+source = "git+https://github.com/augentic/omnia#fdc527908a6fe0177c33e64d1d5f481496cc49ec"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2639,7 +2640,7 @@ dependencies = [
 [[package]]
 name = "omnia-host-macros"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
+source = "git+https://github.com/augentic/omnia#fdc527908a6fe0177c33e64d1d5f481496cc49ec"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2649,7 +2650,7 @@ dependencies = [
 [[package]]
 name = "omnia-testkit"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
+source = "git+https://github.com/augentic/omnia#fdc527908a6fe0177c33e64d1d5f481496cc49ec"
 dependencies = [
  "anyhow",
  "bytes",
@@ -2670,7 +2671,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-blobstore"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
+source = "git+https://github.com/augentic/omnia#fdc527908a6fe0177c33e64d1d5f481496cc49ec"
 dependencies = [
  "anyhow",
  "bytes",
@@ -2686,7 +2687,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-config"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
+source = "git+https://github.com/augentic/omnia#fdc527908a6fe0177c33e64d1d5f481496cc49ec"
 dependencies = [
  "anyhow",
  "omnia 0.35.0",
@@ -2699,7 +2700,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-docstore"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
+source = "git+https://github.com/augentic/omnia#fdc527908a6fe0177c33e64d1d5f481496cc49ec"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2715,7 +2716,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-http"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
+source = "git+https://github.com/augentic/omnia#fdc527908a6fe0177c33e64d1d5f481496cc49ec"
 dependencies = [
  "anyhow",
  "axum",
@@ -2745,7 +2746,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-identity"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
+source = "git+https://github.com/augentic/omnia#fdc527908a6fe0177c33e64d1d5f481496cc49ec"
 dependencies = [
  "anyhow",
  "fromenv",
@@ -2762,7 +2763,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-keyvalue"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
+source = "git+https://github.com/augentic/omnia#fdc527908a6fe0177c33e64d1d5f481496cc49ec"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2780,7 +2781,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-messaging"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
+source = "git+https://github.com/augentic/omnia#fdc527908a6fe0177c33e64d1d5f481496cc49ec"
 dependencies = [
  "anyhow",
  "futures",
@@ -2796,7 +2797,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-model"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
+source = "git+https://github.com/augentic/omnia#fdc527908a6fe0177c33e64d1d5f481496cc49ec"
 dependencies = [
  "anyhow",
  "cap-primitives",
@@ -2817,7 +2818,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-otel"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
+source = "git+https://github.com/augentic/omnia#fdc527908a6fe0177c33e64d1d5f481496cc49ec"
 dependencies = [
  "anyhow",
  "futures",
@@ -2838,7 +2839,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-sql"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
+source = "git+https://github.com/augentic/omnia#fdc527908a6fe0177c33e64d1d5f481496cc49ec"
 dependencies = [
  "anyhow",
  "fromenv",
@@ -2856,7 +2857,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-websocket"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
+source = "git+https://github.com/augentic/omnia#fdc527908a6fe0177c33e64d1d5f481496cc49ec"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -3437,9 +3438,9 @@ dependencies = [
 
 [[package]]
 name = "referencing"
-version = "0.49.2"
+version = "0.49.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b772e96f8eb6badd4eb10fbc08b8a98244c09b4af37e72e8fa612c854604b870"
+checksum = "2bf1a74e036be2546c0c81cdfad6b2def6a25bf31c4e34a468037058d3bd05c6"
 dependencies = [
  "ahash",
  "fluent-uri",
@@ -3481,9 +3482,9 @@ dependencies = [
 
 [[package]]
 name = "regex-automata"
-version = "0.4.16"
+version = "0.4.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fcfdb36bda0c880c5931cdc7a2bcdc8ba4556847b9d912bca70bc94708711ad"
+checksum = "ad8553b9b26413251cbf30e620595c7a41b3887f03da04579c0e6b0d6a06b4b2"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -3574,10 +3575,11 @@ dependencies = [
 
 [[package]]
 name = "resvg"
-version = "0.47.0"
+version = "0.48.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9be183ad6a216aa96f33e4c8033b0988b8b3ea6fd2359d19af5bac4643fd8e81"
+checksum = "67e3803f97b999e80cbf7c6ecdd07a8102204d92e1633cf48783720c521196bd"
 dependencies = [
+ "bytemuck",
  "log",
  "pico-args",
  "rgb",
@@ -3892,7 +3894,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5bb49c0aa8a5bb88c00b833c11bae50d1611fb89e01336f53b05f7c643b1c883"
 dependencies = [
  "annotate-snippets",
- "base64 0.23.0",
+ "base64 0.23.1",
  "encoding_rs_io",
  "granit-parser",
  "nohash-hasher",
@@ -4744,13 +4746,11 @@ dependencies = [
 
 [[package]]
 name = "usvg"
-version = "0.47.0"
+version = "0.48.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d46cf96c5f498d36b7a9693bc6a7075c0bb9303189d61b2249b0dc3d309c07de"
+checksum = "977d0a4abdef933f424a99fe09f95576e089b90aebc6f016a3bc813762493e91"
 dependencies = [
- "base64 0.22.1",
  "data-url",
- "flate2",
  "imagesize",
  "kurbo",
  "log",
@@ -4761,7 +4761,6 @@ dependencies = [
  "strict-num",
  "svgtypes",
  "tiny-skia-path",
- "xmlwriter",
 ]
 
 [[package]]
@@ -5842,7 +5841,7 @@ checksum = "1ffae5123b2d3fc086436f8834ae3ab053a283cfac8fe0a0b8eaae044768a4c4"
 [[package]]
 name = "wrpc-introspect"
 version = "0.7.0"
-source = "git+https://github.com/bytecodealliance/wrpc#46b098312ad64a300cfc75e535a64a3505aa7181"
+source = "git+https://github.com/bytecodealliance/wrpc#1198ffe66f409df7f63f511a727014e2e03afeac"
 dependencies = [
  "wit-parser 0.251.0",
 ]
@@ -5850,7 +5849,7 @@ dependencies = [
 [[package]]
 name = "wrpc-transport"
 version = "0.29.0"
-source = "git+https://github.com/bytecodealliance/wrpc#46b098312ad64a300cfc75e535a64a3505aa7181"
+source = "git+https://github.com/bytecodealliance/wrpc#1198ffe66f409df7f63f511a727014e2e03afeac"
 dependencies = [
  "anyhow",
  "bytes",
@@ -5867,7 +5866,7 @@ dependencies = [
 [[package]]
 name = "wrpc-wasmtime"
 version = "0.1.0"
-source = "git+https://github.com/bytecodealliance/wrpc#46b098312ad64a300cfc75e535a64a3505aa7181"
+source = "git+https://github.com/bytecodealliance/wrpc#1198ffe66f409df7f63f511a727014e2e03afeac"
 dependencies = [
  "anyhow",
  "bytes",
@@ -5883,12 +5882,6 @@ dependencies = [
  "wrpc-introspect",
  "wrpc-transport",
 ]
-
-[[package]]
-name = "xmlwriter"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec7a2a501ed189703dba8b08142f057e887dfc4b2cc4db2d343ac6376ba3e0b9"
 
 [[package]]
 name = "yoke"

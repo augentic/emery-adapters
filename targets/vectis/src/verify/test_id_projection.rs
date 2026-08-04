@@ -9,11 +9,16 @@ use crate::projections::test_id_registry::{self, REGISTRY_REL};
 pub const PROJECTION_STALE_ID: &str = "canonical-test-id-projection-stale";
 
 /// Emit findings when `ui-contract/test-ids.yaml` is stale relative to composition.
+///
+/// Composition is harvested from `change_root` (`.emery/*`); the on-disk
+/// registry lives under `code_root` (`ui-contract/`).
 #[must_use]
-pub fn test_id_projection_findings(project_root: &Path, active_slice: Option<&str>) -> Vec<Value> {
+pub fn test_id_projection_findings(
+    change_root: &Path, code_root: &Path, active_slice: Option<&str>,
+) -> Vec<Value> {
     let mut findings = Vec::new();
 
-    let expected = match test_id_registry::harvest_entries(project_root, active_slice) {
+    let expected = match test_id_registry::harvest_entries(change_root, active_slice) {
         Ok(entries) => entries,
         Err(err) => {
             findings.push(error_finding(
@@ -24,7 +29,7 @@ pub fn test_id_projection_findings(project_root: &Path, active_slice: Option<&st
         }
     };
 
-    let registry_path = project_root.join(REGISTRY_REL);
+    let registry_path = code_root.join(REGISTRY_REL);
     let on_disk = match test_id_registry::parse_flat_file(&registry_path) {
         Ok(entries) => entries,
         Err(err) => {

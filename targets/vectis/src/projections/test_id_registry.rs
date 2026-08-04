@@ -74,12 +74,18 @@ pub fn harvest_entries(
 
 /// Write `ui-contract/test-ids.yaml` from the effective composition.
 ///
+/// Composition is harvested from `change_root` (`.emery/*`); the registry is
+/// written under `code_root` (`ui-contract/`). A single-checkout caller passes
+/// the same path twice.
+///
 /// # Errors
 ///
 /// Propagates [`harvest_entries`] failures and I/O errors while writing the derived file.
-pub fn write_generated(project_root: &Path, active_slice: Option<&str>) -> Result<(), VectisError> {
-    let entries = harvest_entries(project_root, active_slice)?;
-    let path = project_root.join(REGISTRY_REL);
+pub fn write_generated(
+    change_root: &Path, code_root: &Path, active_slice: Option<&str>,
+) -> Result<(), VectisError> {
+    let entries = harvest_entries(change_root, active_slice)?;
+    let path = code_root.join(REGISTRY_REL);
     let body = format_generated_yaml(&entries);
 
     if path.is_file() {

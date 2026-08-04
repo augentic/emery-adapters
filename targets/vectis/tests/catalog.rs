@@ -76,7 +76,7 @@ fn contents_json_only_imageset() {
     std::fs::create_dir_all(&imageset).expect("mkdir imageset");
     std::fs::write(imageset.join("Contents.json"), "{\"images\":[]}").expect("write json");
 
-    let findings = catalog_findings(tmp.path(), &["ios".to_string()]);
+    let findings = catalog_findings(tmp.path(), tmp.path(), &["ios".to_string()]);
     assert_eq!(findings.len(), 1);
     assert_eq!(findings[0]["id"], "shell-catalog-entry-missing");
 }
@@ -93,7 +93,7 @@ fn exemplar_layout_pdf_imageset_present() {
     std::fs::write(imageset.join("empty-tasks-hero.pdf"), b"%PDF-1.4\n1 0 obj\n<< >>\nendobj\n")
         .expect("write pdf");
 
-    let findings = catalog_findings(tmp.path(), &["ios".to_string()]);
+    let findings = catalog_findings(tmp.path(), tmp.path(), &["ios".to_string()]);
     assert!(findings.is_empty(), "exemplar layout with PDF magic must satisfy catalog verify");
 }
 
@@ -112,7 +112,7 @@ fn resources_prefix_not_accepted() {
     std::fs::write(imageset.join("empty-tasks-hero.pdf"), b"%PDF-1.4\n1 0 obj\n<< >>\nendobj\n")
         .expect("write pdf");
 
-    let findings = catalog_findings(tmp.path(), &["ios".to_string()]);
+    let findings = catalog_findings(tmp.path(), tmp.path(), &["ios".to_string()]);
     assert_eq!(findings.len(), 1);
     assert_eq!(findings[0]["id"], "shell-catalog-entry-missing");
 }
@@ -146,7 +146,7 @@ screens:
 ",
     );
 
-    let findings = catalog_findings(tmp.path(), &["ios".to_string()]);
+    let findings = catalog_findings(tmp.path(), tmp.path(), &["ios".to_string()]);
     assert!(findings.is_empty());
 }
 
@@ -177,7 +177,7 @@ screens:
 ",
     );
 
-    let findings = catalog_findings(tmp.path(), &["android".to_string()]);
+    let findings = catalog_findings(tmp.path(), tmp.path(), &["android".to_string()]);
     assert_eq!(findings.len(), 1);
     assert_eq!(findings[0]["id"], "shell-catalog-entry-missing");
     assert!(findings[0]["message"].as_str().unwrap().contains("drawable/settings.xml"));
@@ -194,7 +194,7 @@ fn android_density_raster_missing() {
     // search; with no `res/drawable-<density>/empty_tasks_hero.png` on disk it
     // exhausts every density and reports the entry missing (the
     // `android_shell_has_density_raster` no-match return).
-    let findings = catalog_findings(tmp.path(), &["android".to_string()]);
+    let findings = catalog_findings(tmp.path(), tmp.path(), &["android".to_string()]);
     assert_eq!(findings.len(), 1);
     assert_eq!(findings[0]["id"], "shell-catalog-entry-missing");
     let message = findings[0]["message"].as_str().unwrap();

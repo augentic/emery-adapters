@@ -9,20 +9,25 @@ use crate::materialize::paths::{ANDROID_DENSITIES, kebab_to_snake};
 use crate::shell::{ios_xcassets_roots, shell_present};
 use crate::validate::ValidateMode;
 use crate::validate::engine::{
-    collect_asset_references, discover_artifact, imageset_has_materialized_content,
-    parse_yaml_file, resolve_default_path_with_root,
+    collect_asset_references, imageset_has_materialized_content, parse_yaml_file,
+    resolve_default_path_with_roots,
 };
 
-/// Findings for composition-referenced assets absent from a present platform shell tree.
+/// Findings for composition-referenced assets absent from a present
+/// platform shell tree.
+///
+/// RFC-87 split roots: `change_root` resolves the `.emery/*` artifacts
+/// (slice-local manifests, baseline composition), `code_root` the
+/// product tree (design-system manifests, shells).
 #[must_use]
-pub fn catalog_findings(project_root: &Path, declared_platforms: &[String]) -> Vec<Value> {
-    let assets_path = resolve_default_path_with_root(ValidateMode::Assets, project_root);
+pub fn catalog_findings(
+    change_root: &Path, code_root: &Path, declared_platforms: &[String],
+) -> Vec<Value> {
+    let assets_path = resolve_default_path_with_roots(ValidateMode::Assets, change_root, code_root);
     let Some(assets_value) = parse_yaml_file(&assets_path) else {
         return Vec::new();
     };
-    let Some(comp_path) = discover_artifact(&assets_path, ValidateMode::Composition) else {
-        return Vec::new();
-    };
+    let comp_path = sibling_or_resolved_composition(&assets_path, change_root, code_root);
     let Some(comp_value) = parse_yaml_file(&comp_path) else {
         return Vec::new();
     };
@@ -43,13 +48,13 @@ pub fn catalog_findings(project_root: &Path, declared_platforms: &[String]) -> V
             continue;
         }
         for platform in declared_platforms {
-            if !shell_present(project_root, platform) {
+            if !shell_present(code_root, platform) {
                 continue;
             }
             if !is_supported_shell_platform(platform) {
                 continue;
             }
-            if shell_catalog_entry_present(project_root, platform, &asset_ref.id, entry) {
+            if shell_catalog_entry_present(code_root, platform, &asset_ref.id, entry) {
                 continue;
             }
             findings.push(json!({
@@ -68,6 +73,20 @@ pub fn catalog_findings(project_root: &Path, declared_platforms: &[String]) -> V
     }
 
     findings
+}
+
+/// A slice-local assets manifest pairs with its sibling composition;
+/// otherwise the composition resolves through the split-root defaults.
+fn sibling_or_resolved_composition(
+    assets_path: &Path, change_root: &Path, code_root: &Path,
+) -> std::path::PathBuf {
+    if let Some(parent) = assets_path.parent() {
+        let sibling = parent.join("composition.yaml");
+        if sibling.is_file() {
+            return sibling;
+        }
+    }
+    resolve_default_path_with_roots(ValidateMode::Composition, change_root, code_root)
 }
 
 fn catalog_asset_applicable(entry: &Value) -> bool {

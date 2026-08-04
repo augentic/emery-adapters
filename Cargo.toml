@@ -15,8 +15,8 @@ publish = false
 [workspace.dependencies]
 anyhow = "1.0.104"
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
-jsonschema = { version = "0.49.2", default-features = false }
-resvg = { version = "0.47.0", default-features = false }
+jsonschema = { version = "0.49.4", default-features = false }
+resvg = { version = "0.48.1", default-features = false }
 semver = "1"
 serde = { version = "1.0.229", features = ["derive"] }
 serde-saphyr = "1.0.0"
@@ -27,15 +27,15 @@ thiserror = "2"
 tiny-skia = { version = "0.12.0", default-features = false }
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
 toml = "1.1.4"
-usvg = { version = "0.47", default-features = false }
+usvg = { version = "0.48", default-features = false }
 
 omnia-guest = "0.35.0"
 omnia-testkit = "0.35.0"
 
-emery-adapter = "0.37.0"
-emery-native = "0.37.0"
-emery-probe = "0.37.0"
-emery-prose = "0.37.0"
+emery-adapter = "0.38.0"
+emery-native = "0.38.0"
+emery-probe = "0.38.0"
+emery-prose = "0.38.0"
 
 captures = { path = "sources/captures" }
 contracts = { path = "targets/contracts" }
@@ -47,11 +47,10 @@ typescript = { path = "sources/typescript" }
 vectis = { path = "targets/vectis" }
 
 [patch.crates-io]
-# Released engine pin (crates.io emery-* still blocked on omnia publish).
-emery-adapter = { git = "https://github.com/augentic/emery", tag = "v0.37.0" }
-emery-probe = { git = "https://github.com/augentic/emery", tag = "v0.37.0" }
-emery-native = { git = "https://github.com/augentic/emery", tag = "v0.37.0" }
-emery-prose = { git = "https://github.com/augentic/emery", tag = "v0.37.0" }
+emery-adapter = { git = "https://github.com/augentic/emery" }
+emery-probe = { git = "https://github.com/augentic/emery"}
+emery-native = { git = "https://github.com/augentic/emery" }
+emery-prose = { git = "https://github.com/augentic/emery" }
 # emery-adapter = { path = "../emery/crates/adapter" }
 # emery-probe = { path = "../emery/crates/probe" }
 # emery-native = { path = "../emery/crates/native" }

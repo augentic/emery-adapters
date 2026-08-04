@@ -125,11 +125,11 @@ fn write_generated_is_idempotent() {
         "screens:\n  splash:\n    name: Splash\n    body:\n      - button:\n          test_id: splash-cta\n",
     );
 
-    test_id_registry::write_generated(root, None).expect("first write");
+    test_id_registry::write_generated(root, root, None).expect("first write");
     let path = root.join(REGISTRY_REL);
     let first = fs::read_to_string(&path).unwrap();
 
-    test_id_registry::write_generated(root, None).expect("second write");
+    test_id_registry::write_generated(root, root, None).expect("second write");
     let second = fs::read_to_string(&path).unwrap();
     assert_eq!(first, second);
     assert!(second.contains("MAESTRO_SPLASH_CTA: splash-cta"));
