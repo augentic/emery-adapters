@@ -437,90 +437,28 @@ fn finding(project_root: &Path, path: &Path, line: usize, id: &str, message: &st
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-
-    use tempfile::tempdir;
-
     use super::*;
 
-    fn write(path: &Path, content: &str) {
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).unwrap();
-        }
-        fs::write(path, content).unwrap();
+    #[test]
+    fn is_allowed_shell_line_accepts_generated_bindings() {
+        assert!(is_allowed_shell_line("Text(UiStrings.SPLASH_TITLE)"));
+        assert!(!is_allowed_shell_line("Text(\"Task\")"));
     }
 
     #[test]
-    fn skipped_without_strings_contract() {
-        let tmp = tempdir().unwrap();
-        let findings = ui_literals_findings(tmp.path(), &["android".into()]);
-        assert!(findings.is_empty());
+    fn should_report_string_literal_filters_short_and_special() {
+        assert!(should_report_string_literal("Task"));
+        assert!(!should_report_string_literal("ok"));
+        assert!(!should_report_string_literal("a$b"));
     }
 
     #[test]
-    fn flags_hardcoded_text_in_shell() {
-        let tmp = tempdir().unwrap();
-        write(&tmp.path().join("ui-contract/ui-strings.yaml"), "strings:\n  SPLASH_TITLE: Task\n");
-        write(
-            &tmp.path().join("Android/app/src/main/kotlin/com/example/SplashScreen.kt"),
-            "fun Preview() { Text(\"Task\") }\n",
+    fn extract_quoted_literals_from_shell_lines() {
+        assert_eq!(
+            extract_quoted_after_key("contentDescription = \"Splash illustration\"", "contentDescription"),
+            Some("Splash illustration")
         );
-
-        let findings = ui_literals_findings(tmp.path(), &["android".into()]);
-        assert!(
-            findings.iter().filter_map(|f| f["id"].as_str()).any(|id| id == LITERAL_FINDING_ID)
-        );
-    }
-
-    #[test]
-    fn allows_ui_strings_reference() {
-        let tmp = tempdir().unwrap();
-        write(&tmp.path().join("ui-contract/ui-strings.yaml"), "strings:\n  SPLASH_TITLE: Task\n");
-        write(
-            &tmp.path().join("Android/app/src/main/kotlin/com/example/SplashScreen.kt"),
-            "fun Preview() { Text(UiStrings.SPLASH_TITLE) }\n",
-        );
-
-        let findings = ui_literals_findings(tmp.path(), &["android".into()]);
-        assert!(findings.is_empty());
-    }
-
-    #[test]
-    fn flags_raw_test_tag() {
-        let tmp = tempdir().unwrap();
-        write(&tmp.path().join("ui-contract/ui-strings.yaml"), "strings:\n  X: y\n");
-        write(
-            &tmp.path().join("Android/app/src/main/kotlin/com/example/Home.kt"),
-            "Modifier.testTag(\"splash-cta\")\n",
-        );
-
-        let findings = ui_literals_findings(tmp.path(), &["android".into()]);
-        assert!(
-            findings.iter().filter_map(|f| f["id"].as_str()).any(|id| id == TEST_ID_FINDING_ID)
-        );
-        assert!(
-            findings
-                .iter()
-                .filter_map(|f| f["id"].as_str())
-                .any(|id| id == TEST_TAGS_RESOURCE_ID_FINDING_ID)
-        );
-    }
-
-    #[test]
-    fn allows_test_tag_with_resource_id_flag() {
-        let tmp = tempdir().unwrap();
-        write(&tmp.path().join("ui-contract/ui-strings.yaml"), "strings:\n  X: y\n");
-        write(
-            &tmp.path().join("Android/app/src/main/kotlin/com/example/ContentView.kt"),
-            "Modifier.semantics { testTagsAsResourceId = true }\nModifier.testTag(MaestroTestIds.X)\n",
-        );
-
-        let findings = ui_literals_findings(tmp.path(), &["android".into()]);
-        assert!(
-            !findings
-                .iter()
-                .filter_map(|f| f["id"].as_str())
-                .any(|id| id == TEST_TAGS_RESOURCE_ID_FINDING_ID)
-        );
+        assert_eq!(extract_after_quoted("Text(\"Task\")", "Text("), Some("Task"));
+        assert_eq!(quoted_from_start("\"Task\")"), Some("Task"));
     }
 }

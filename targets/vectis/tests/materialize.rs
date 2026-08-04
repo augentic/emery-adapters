@@ -152,20 +152,36 @@ fn allowlist_and_denylist() {
 }
 
 #[test]
-fn android_only_omits_ios_tree() {
+fn platform_scope_filters_shell_trees() {
     let Some(template) = require_template() else {
         return;
     };
-    let dest = tempdir().unwrap();
     let identity = Identity::new("Counter", "com.example.counter").unwrap();
-    let platforms = vec!["core".into(), "android".into()];
-    let report = run(&template, dest.path(), &identity, &platforms).unwrap();
 
+    let dest_android = tempdir().unwrap();
+    let android_only = vec!["core".into(), "android".into()];
+    let report = run(&template, dest_android.path(), &identity, &android_only).unwrap();
     assert!(report.files.iter().any(|p| p.starts_with("Android/")));
     assert!(!report.files.iter().any(|p| p.starts_with("iOS/")));
-    assert!(!dest.path().join("iOS").exists());
-    assert!(dest.path().join("Android").exists());
-    assert!(dest.path().join("shared").exists());
+    assert!(!dest_android.path().join("iOS").exists());
+    assert!(dest_android.path().join("Android").exists());
+    assert!(dest_android.path().join("shared").exists());
+
+    let dest_ios = tempdir().unwrap();
+    let ios_only = vec!["core".into(), "ios".into()];
+    let report = run(&template, dest_ios.path(), &identity, &ios_only).unwrap();
+    assert!(report.files.iter().any(|p| p.starts_with("iOS/")));
+    assert!(!report.files.iter().any(|p| p.starts_with("Android/")));
+    assert!(!dest_ios.path().join("Android").exists());
+    assert!(dest_ios.path().join("iOS").exists());
+    assert!(dest_ios.path().join("shared").exists());
+
+    let dest_full = tempdir().unwrap();
+    let report = run(&template, dest_full.path(), &identity, &[]).unwrap();
+    assert!(report.files.iter().any(|p| p.starts_with("Android/")));
+    assert!(report.files.iter().any(|p| p.starts_with("iOS/")));
+    assert!(dest_full.path().join("Android").exists());
+    assert!(dest_full.path().join("iOS").exists());
 }
 
 #[test]

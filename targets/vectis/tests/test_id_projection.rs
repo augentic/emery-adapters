@@ -4,7 +4,7 @@ use std::fs;
 use std::path::Path;
 
 use tempfile::tempdir;
-use vectis::projections::test_ids::{self, REGISTRY_REL};
+use vectis::projections::test_id_registry::{self, REGISTRY_REL};
 
 fn write(path: &Path, content: &str) {
     if let Some(parent) = path.parent() {
@@ -27,7 +27,7 @@ fn harvests_test_ids_from_merged_baseline_and_slice() {
         "version: 1\ndelta:\n  added:\n    stub:\n      name: Stub\n      body:\n        - text:\n            test_id: stub-message\n  modified: {}\n  removed: {}\n",
     );
 
-    let entries = test_ids::harvest_entries(root, Some("follow-up")).expect("harvest");
+    let entries = test_id_registry::harvest_entries(root, Some("follow-up")).expect("harvest");
     assert_eq!(entries.len(), 2);
     assert_eq!(entries.get("MAESTRO_SPLASH_CTA"), Some(&"splash-cta".to_string()));
     assert_eq!(entries.get("MAESTRO_STUB_MESSAGE"), Some(&"stub-message".to_string()));
@@ -47,7 +47,7 @@ fn modified_screen_replaces_old_test_id() {
         "version: 1\ndelta:\n  added: {}\n  modified:\n    list:\n      name: List\n      body:\n        - button:\n            test_id: list-row-updated\n  removed: {}\n",
     );
 
-    let entries = test_ids::harvest_entries(root, Some("rename")).expect("harvest");
+    let entries = test_id_registry::harvest_entries(root, Some("rename")).expect("harvest");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries.get("MAESTRO_LIST_ROW_UPDATED"), Some(&"list-row-updated".to_string()));
     assert!(!entries.contains_key("MAESTRO_LIST_ROW"));
@@ -67,7 +67,7 @@ fn removed_screen_drops_test_ids_from_harvest() {
         "version: 1\ndelta:\n  added: {}\n  modified: {}\n  removed:\n    drop:\n      reason: obsolete\n",
     );
 
-    let entries = test_ids::harvest_entries(root, Some("prune")).expect("harvest");
+    let entries = test_id_registry::harvest_entries(root, Some("prune")).expect("harvest");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries.get("MAESTRO_KEEP_CTA"), Some(&"keep-cta".to_string()));
     assert!(!entries.contains_key("MAESTRO_DROP_CTA"));
@@ -83,11 +83,11 @@ fn write_generated_is_idempotent() {
         "screens:\n  splash:\n    name: Splash\n    body:\n      - button:\n          test_id: splash-cta\n",
     );
 
-    test_ids::write_generated(root, None).expect("first write");
+    test_id_registry::write_generated(root, None).expect("first write");
     let path = root.join(REGISTRY_REL);
     let first = fs::read_to_string(&path).unwrap();
 
-    test_ids::write_generated(root, None).expect("second write");
+    test_id_registry::write_generated(root, None).expect("second write");
     let second = fs::read_to_string(&path).unwrap();
     assert_eq!(first, second);
     assert!(second.contains("MAESTRO_SPLASH_CTA: splash-cta"));

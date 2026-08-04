@@ -53,57 +53,17 @@ fn seed_version_ok(text: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use tempfile::tempdir;
-
     use super::*;
 
-    fn write_seed(root: &Path, body: &str) {
-        let path = root.join("ui-contract/seed.yaml");
-        fs::create_dir_all(path.parent().unwrap()).unwrap();
-        fs::write(path, body).unwrap();
-    }
-
-    fn has_finding(findings: &[Value], id: &str) -> bool {
-        findings.iter().filter_map(|f| f["id"].as_str()).any(|found| found == id)
+    #[test]
+    fn seed_version_ok_accepts_version_one() {
+        assert!(seed_version_ok("version: 1\n"));
+        assert!(seed_version_ok("version: 1\nitems:\n  - id: a\n    title: Example\n"));
     }
 
     #[test]
-    fn absent_seed_is_skipped() {
-        let tmp = tempdir().unwrap();
-        assert!(seed_version_findings(tmp.path()).is_empty());
-    }
-
-    #[test]
-    fn neutral_scaffold_is_ok() {
-        let tmp = tempdir().unwrap();
-        write_seed(tmp.path(), "version: 1\n");
-        assert!(seed_version_findings(tmp.path()).is_empty());
-    }
-
-    #[test]
-    fn app_domain_payload_with_version_one_is_ok() {
-        let tmp = tempdir().unwrap();
-        write_seed(
-            tmp.path(),
-            "version: 1\n\
-             items:\n  - id: a\n    title: Example\n",
-        );
-        assert!(seed_version_findings(tmp.path()).is_empty());
-    }
-
-    #[test]
-    fn wrong_version_is_flagged() {
-        let tmp = tempdir().unwrap();
-        write_seed(tmp.path(), "version: 2\n");
-        let findings = seed_version_findings(tmp.path());
-        assert!(has_finding(&findings, SEED_VERSION_FINDING_ID));
-    }
-
-    #[test]
-    fn missing_version_is_flagged() {
-        let tmp = tempdir().unwrap();
-        write_seed(tmp.path(), "items:\n  - id: a\n");
-        let findings = seed_version_findings(tmp.path());
-        assert!(has_finding(&findings, SEED_VERSION_FINDING_ID));
+    fn seed_version_ok_rejects_wrong_or_missing_version() {
+        assert!(!seed_version_ok("version: 2\n"));
+        assert!(!seed_version_ok("items:\n  - id: a\n"));
     }
 }

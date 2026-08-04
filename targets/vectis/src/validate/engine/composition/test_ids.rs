@@ -13,32 +13,33 @@ use crate::validate::engine::shared::escape_pointer_token;
 /// document-wide uniqueness.
 pub fn check_test_ids(node: &Value, json_path: &str, errors: &mut Vec<Finding>) {
     let mut seen: BTreeMap<String, String> = BTreeMap::new();
-    walk_test_ids(node, json_path, &mut seen, errors);
+    for_each_test_id(node, json_path, &mut |object_path, test_id| {
+        let path = format!("{object_path}/test_id");
+        if !is_kebab_test_id(test_id) {
+            errors.push(Finding::new(
+                path,
+                format!(
+                    "`test_id` value `{test_id}` must match `[a-z][a-z0-9]*(-[a-z0-9]+)*`"
+                ),
+            ));
+        } else if let Some(first_path) = seen.get(test_id) {
+            errors.push(Finding::new(
+                path,
+                format!(
+                    "duplicate `test_id` `{test_id}` (also at {first_path}); test ids must be unique within the document"
+                ),
+            ));
+        } else {
+            seen.insert(test_id.to_string(), path);
+        }
+    });
 }
 
 /// Collect every `test_id` value in a composition sub-tree (`json_path` → kebab id).
 pub fn collect_test_id_values(node: &Value, json_path: &str, out: &mut BTreeMap<String, String>) {
-    match node {
-        Value::Object(map) => {
-            if let Some(test_id) = map.get("test_id").and_then(Value::as_str) {
-                out.insert(json_path.to_string(), test_id.to_string());
-            }
-            for (key, val) in map {
-                let child_path = if json_path.is_empty() {
-                    format!("/{key}")
-                } else {
-                    format!("{json_path}/{}", escape_pointer_token(key))
-                };
-                collect_test_id_values(val, &child_path, out);
-            }
-        }
-        Value::Array(arr) => {
-            for (i, val) in arr.iter().enumerate() {
-                collect_test_id_values(val, &format!("{json_path}/{i}"), out);
-            }
-        }
-        _ => {}
-    }
+    for_each_test_id(node, json_path, &mut |object_path, test_id| {
+        out.insert(object_path.to_string(), test_id.to_string());
+    });
 }
 
 /// Derive a portable `MAESTRO_*` constant name from a kebab-case test id.
@@ -47,40 +48,23 @@ pub fn kebab_to_maestro_key(value: &str) -> String {
     format!("MAESTRO_{}", value.replace('-', "_").to_uppercase())
 }
 
-fn walk_test_ids(
-    node: &Value, json_path: &str, seen: &mut BTreeMap<String, String>, errors: &mut Vec<Finding>,
-) {
+fn child_pointer(json_path: &str, token: &str) -> String {
+    format!("{json_path}/{}", escape_pointer_token(token))
+}
+
+fn for_each_test_id(node: &Value, json_path: &str, visit: &mut impl FnMut(&str, &str)) {
     match node {
         Value::Object(map) => {
             if let Some(test_id) = map.get("test_id").and_then(Value::as_str) {
-                let path = format!("{json_path}/test_id");
-                if !is_kebab_test_id(test_id) {
-                    errors.push(Finding::new(
-                        path,
-                        format!(
-                            "`test_id` value `{test_id}` must match `[a-z][a-z0-9]*(-[a-z0-9]+)*`"
-                        ),
-                    ));
-                } else if let Some(first_path) = seen.get(test_id) {
-                    errors.push(Finding::new(
-                        path,
-                        format!(
-                            "duplicate `test_id` `{test_id}` (also at {first_path}); test ids must be unique within the document"
-                        ),
-                    ));
-                } else {
-                    seen.insert(test_id.to_string(), path);
-                }
+                visit(json_path, test_id);
             }
-
             for (key, val) in map {
-                let child_path = format!("{json_path}/{}", escape_pointer_token(key));
-                walk_test_ids(val, &child_path, seen, errors);
+                for_each_test_id(val, &child_pointer(json_path, key), visit);
             }
         }
         Value::Array(arr) => {
-            for (i, v) in arr.iter().enumerate() {
-                walk_test_ids(v, &format!("{json_path}/{i}"), seen, errors);
+            for (i, val) in arr.iter().enumerate() {
+                for_each_test_id(val, &format!("{json_path}/{i}"), visit);
             }
         }
         _ => {}
@@ -94,19 +78,21 @@ pub fn is_kebab_test_id(value: &str) -> bool {
     let Some(first) = segments.next() else {
         return false;
     };
-    let mut chars = first.chars();
-    let Some(start) = chars.next() else {
+    let mut head = first.bytes();
+    let Some(start) = head.next() else {
         return false;
     };
     if !start.is_ascii_lowercase() {
         return false;
     }
-    if !chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) {
+    if !head.all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit()) {
         return false;
     }
     segments.all(|segment| {
         !segment.is_empty()
-            && segment.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
+            && segment
+                .bytes()
+                .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
     })
 }
 
@@ -115,6 +101,8 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    // Walk smoke tests; duplicate/format integration coverage lives in validate suites.
 
     #[test]
     fn accepts_unique_kebab_test_ids() {

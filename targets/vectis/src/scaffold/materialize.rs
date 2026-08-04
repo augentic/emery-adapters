@@ -84,9 +84,6 @@ const ROOT_NESTED_FILES: &[&str] = &[".cursor/hooks.json"];
 const ROOT_DIRS: &[&str] =
     &["shared", "ui-contract", "iOS", "Android", "supply-chain", ".maestro", "tools"];
 
-/// Platform tokens that select which shell trees [`run`] copies from the template.
-pub const ALL_SHELL_PLATFORMS: &[&str] = &["core", "ios", "android"];
-
 const SKIP_DIR_NAMES: &[&str] = &[
     ".git",
     ".github",
@@ -199,7 +196,7 @@ pub fn resolve_dir(anchor: &Path) -> Option<PathBuf> {
 /// All declared shell platform tokens (for tests and full greenfield bootstrap).
 #[must_use]
 pub fn all_shell_platforms() -> Vec<String> {
-    ALL_SHELL_PLATFORMS.iter().map(|p| (*p).to_string()).collect()
+    crate::shell::SUPPORTED_SHELL_PLATFORMS.iter().map(|p| (*p).to_string()).collect()
 }
 
 /// Copy the allowlisted template tree into `dest_dir` with identity substitution.
@@ -461,24 +458,4 @@ pub fn substitute_identity(input: &str, identity: &Identity) -> String {
         &format!("<string name=\"app_name\">{app}</string>"),
     );
     out
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn platform_scope_filters_shell_dirs() {
-        let android_only = vec!["core".into(), "android".into()];
-        assert!(should_materialize_root_dir("shared", &android_only));
-        assert!(should_materialize_root_dir("Android", &android_only));
-        assert!(!should_materialize_root_dir("iOS", &android_only));
-
-        let ios_only = vec!["core".into(), "ios".into()];
-        assert!(!should_materialize_root_dir("Android", &ios_only));
-        assert!(should_materialize_root_dir("iOS", &ios_only));
-
-        assert!(should_materialize_root_dir("iOS", &[]));
-        assert!(should_materialize_root_dir("Android", &[]));
-    }
 }

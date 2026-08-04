@@ -134,7 +134,9 @@ impl Target for Adapter {
             return Ok(failure_report(residual));
         }
 
-        if let Err(err) = crate::projections::test_ids::write_generated(&tree_root, Some(slice)) {
+        if let Err(err) =
+            crate::projections::test_id_registry::write_generated(&tree_root, Some(slice))
+        {
             return Ok(failure_report(vec![format!("- [test-id-projection] {err}")]));
         }
 

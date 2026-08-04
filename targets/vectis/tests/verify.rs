@@ -421,3 +421,82 @@ fn wrong_seed_version_fails_verify() {
     );
     assert_eq!(verify_exit_code(&result), 1);
 }
+
+#[test]
+fn raw_test_tag_without_resource_id_fails_verify() {
+    let tmp = tempdir().unwrap();
+    project(tmp.path(), &["core", "android"]);
+    write(&tmp.path().join("shared/src/app.rs"), "pub struct App;");
+    write(&tmp.path().join("ui-contract/ui-strings.yaml"), "strings:\n  X: y\n");
+    write(
+        &tmp.path().join("Android/app/src/main/kotlin/com/example/Home.kt"),
+        "Modifier.testTag(\"splash-cta\")\n",
+    );
+
+    let result = run(VerifyMode::Verify, tmp.path(), None).unwrap();
+    let ids = finding_ids(&result);
+    assert!(ids.contains(&"canonical-test-id-raw"), "raw test tag must fail verify: {result}");
+    assert!(
+        ids.contains(&"canonical-test-tag-resource-id"),
+        "missing testTagsAsResourceId must fail verify: {result}"
+    );
+    assert_eq!(verify_exit_code(&result), 1);
+}
+
+#[test]
+fn test_tag_with_resource_id_flag_passes_resource_id_gate() {
+    let tmp = tempdir().unwrap();
+    project(tmp.path(), &["core", "android"]);
+    write(&tmp.path().join("shared/src/app.rs"), "pub struct App;");
+    write(&tmp.path().join("ui-contract/ui-strings.yaml"), "strings:\n  X: y\n");
+    write(
+        &tmp.path().join("Android/app/src/main/kotlin/com/example/ContentView.kt"),
+        "Modifier.semantics { testTagsAsResourceId = true }\nModifier.testTag(MaestroTestIds.X)\n",
+    );
+
+    let result = run(VerifyMode::Verify, tmp.path(), None).unwrap();
+    let ids = finding_ids(&result);
+    assert!(
+        !ids.contains(&"canonical-test-tag-resource-id"),
+        "testTagsAsResourceId must satisfy the Maestro resource-id gate: {result}"
+    );
+}
+
+#[test]
+fn stale_test_id_projection_fails_verify() {
+    let tmp = tempdir().unwrap();
+    project(tmp.path(), &["core", "android"]);
+    write(&tmp.path().join("shared/src/app.rs"), "pub struct App;");
+    write(
+        &tmp.path().join(".emery/specs/composition.yaml"),
+        "screens:\n  splash:\n    name: Splash\n    body:\n      - button:\n          test_id: splash-cta\n",
+    );
+
+    let result = run(VerifyMode::Verify, tmp.path(), None).unwrap();
+    let ids = finding_ids(&result);
+    assert!(
+        ids.contains(&"canonical-test-id-projection-stale"),
+        "composition with test_id but no registry must fail verify: {result}"
+    );
+    assert_eq!(verify_exit_code(&result), 1);
+}
+
+#[test]
+fn partial_materialize_without_composition_skips_ui_dirs() {
+    let tmp = tempdir().unwrap();
+    project(tmp.path(), &["core", "android"]);
+    write(
+        &tmp.path().join("Cargo.toml"),
+        "[workspace]\nmembers = [\"shared\"]\nresolver = \"3\"\n",
+    );
+    write(&tmp.path().join("shared/src/app.rs"), "pub struct App;");
+
+    let result = run(VerifyMode::Verify, tmp.path(), None).unwrap();
+    let ids = finding_ids(&result);
+    assert!(ids.contains(&"materialize-root-file-missing"));
+    assert!(ids.contains(&"materialize-root-dir-missing"));
+    assert!(
+        !ids.contains(&"materialize-ui-dir-missing"),
+        "without composition test_id, ui dirs should not be required: {result}"
+    );
+}
