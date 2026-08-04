@@ -21,6 +21,7 @@ async fn extract_spatial_kinds() {
         adapter_id: "source:screenshots",
         project_root: Path::new("."),
         mcp_url: None,
+        lend: ".".to_string(),
     };
     let lead = Lead {
         lead: "task-list".to_string(),

@@ -56,19 +56,39 @@ pub(super) fn default_project_root() -> PathBuf {
 /// Resolve a per-mode default path against an explicit project root.
 #[must_use]
 pub fn resolve_default_path_with_root(mode: ValidateMode, project_root: &Path) -> PathBuf {
+    resolve_default_path_with_roots(mode, project_root, project_root)
+}
+
+/// [`resolve_default_path_with_root`] over split roots (RFC-87):
+/// `.emery/*` templates expand under `change_root` (the Emery change
+/// tree) and everything else under `code_root` (the product tree).
+#[must_use]
+pub fn resolve_default_path_with_roots(
+    mode: ValidateMode, change_root: &Path, code_root: &Path,
+) -> PathBuf {
     let key = artifact_key_for_mode(mode).unwrap_or("composition");
     let templates = paths_for_key(key);
 
     let mut last_candidate: Option<PathBuf> = None;
     for template in &templates {
-        for resolved in expand_path_template(template, project_root) {
+        let root = template_root(template, change_root, code_root);
+        for resolved in expand_path_template(template, root) {
             if resolved.is_file() {
                 return resolved;
             }
             last_candidate = Some(resolved);
         }
     }
-    last_candidate.unwrap_or_else(|| project_root.join(canonical_default_template(key)))
+    last_candidate.unwrap_or_else(|| {
+        let template = canonical_default_template(key);
+        template_root(template, change_root, code_root).join(template)
+    })
+}
+
+/// The root a `paths.<role>` template resolves against under the
+/// RFC-87 change/code split.
+fn template_root<'a>(template: &str, change_root: &'a Path, code_root: &'a Path) -> &'a Path {
+    if template.starts_with(".emery") { change_root } else { code_root }
 }
 
 /// Locate a sibling artifact for a caller anchored at `start`.

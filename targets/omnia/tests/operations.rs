@@ -6,7 +6,7 @@ use std::path::Path;
 
 use adapter::answers::REPORT_ANSWER_SCHEMA;
 use adapter::seam::{
-    BuildContext, Context, Input, MergePhase, Payload, Platform, Severity, Status, WorkingTree,
+    BuildContext, Context, Input, MergePhase, Payload, Platform, Severity, Status, Workspace,
 };
 use adapter::{Format, Request, Target as _};
 use omnia::Adapter;
@@ -21,13 +21,17 @@ fn ctx<'a>(root: &'a Path, mcp_url: Option<&str>) -> Context<'a> {
         adapter_id: "target:omnia",
         project_root: root,
         mcp_url: mcp_url.map(str::to_owned),
+        lend: root.display().to_string(),
     }
 }
 
-fn tree() -> WorkingTree {
-    WorkingTree {
-        base: "rev-1".to_string(),
-        subpath: None,
+// The degenerate single-checkout shape: workspace root and artifact
+// root both point at the test tree, like the engine's mock sessions.
+fn workspace(root: &Path) -> Workspace {
+    Workspace {
+        id: "ws-1".to_string(),
+        root: root.display().to_string(),
+        artifacts: root.display().to_string(),
     }
 }
 
@@ -78,14 +82,14 @@ fn assert_generation_leg(generation: &Request) {
     );
     let user = &generation.messages[0].content;
     assert!(
-        user.contains("### input: proposal → .emery/slices/demo/proposal.md")
-            && user.contains("### input: design → .emery/slices/demo/design.md")
-            && user.contains("### input: spec → .emery/slices/demo/specs/core/spec.md"),
-        "typed inputs render as path-form sections: {user}"
+        user.contains("/.emery/slices/demo/proposal.md")
+            && user.contains("/.emery/slices/demo/design.md")
+            && user.contains("/.emery/slices/demo/specs/core/spec.md"),
+        "typed inputs render as artifact-rooted path sections: {user}"
     );
     assert!(!user.contains("PROPOSAL-BODY"), "artifact bodies are not inlined");
     assert!(
-        user.contains("Read each path from the working tree"),
+        user.contains("Read each path"),
         "read-before-writing instruction rides the inputs block"
     );
     assert!(
@@ -127,7 +131,7 @@ async fn build_phase_legs() {
         "demo",
         &inputs,
         &context,
-        &tree(),
+        &workspace(tmp.path()),
     )
     .await
     .unwrap();
@@ -181,7 +185,11 @@ async fn build_phase_legs() {
     assert_eq!(name, "generation");
     let compiled = serde_json::from_str::<serde_json::Value>(schema).unwrap();
     assert!(jsonschema::validator_for(&compiled).is_ok(), "internal schema compiles");
-    assert!(generation.lend_workspace);
+    assert_eq!(
+        generation.workspace.as_deref(),
+        Some(tmp.path().to_str().unwrap()),
+        "the build leg lends the prepared workspace path"
+    );
     assert_eq!(mcp_grants(generation)[0].url, "http://references/mcp");
 
     let review = &requests[2];
@@ -228,9 +236,16 @@ async fn build_replay_leg_gated_on_captures_binding() {
         sources: vec!["intent".to_string(), "captures".to_string()],
     };
 
-    let report = Adapter::build(&model, &ctx(tmp.path(), None), "demo", &[], &context, &tree())
-        .await
-        .unwrap();
+    let report = Adapter::build(
+        &model,
+        &ctx(tmp.path(), None),
+        "demo",
+        &[],
+        &context,
+        &workspace(tmp.path()),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(report.status, Status::Success);
     let requests = model.requests();
@@ -269,7 +284,7 @@ async fn build_report_from_review_findings() {
         "demo",
         &[],
         &BuildContext::default(),
-        &tree(),
+        &workspace(tmp.path()),
     )
     .await
     .unwrap();
@@ -303,7 +318,7 @@ async fn build_report_missing_output_fails() {
         "demo",
         &[],
         &BuildContext::default(),
-        &tree(),
+        &workspace(tmp.path()),
     )
     .await
     .unwrap();
@@ -327,9 +342,16 @@ async fn build_update_mode_skips_guest_writer() {
     let model =
         Harness::answering([PHASE_DONE, PHASE_DONE, r#"{"applicable":true,"summary":"ok"}"#]);
 
-    Adapter::build(&model, &ctx(tmp.path(), None), "demo", &[], &BuildContext::default(), &tree())
-        .await
-        .unwrap();
+    Adapter::build(
+        &model,
+        &ctx(tmp.path(), None),
+        "demo",
+        &[],
+        &BuildContext::default(),
+        &workspace(tmp.path()),
+    )
+    .await
+    .unwrap();
 
     let generation = &model.requests()[1];
     let system = generation.system.as_deref().unwrap();
@@ -351,7 +373,7 @@ async fn build_fails_closed_without_checkout() {
         "demo",
         &[],
         &BuildContext::default(),
-        &tree(),
+        &workspace(tmp.path()),
     )
     .await
     .unwrap_err();
@@ -365,10 +387,15 @@ async fn merge_preflight_single_leg() {
     let tmp = TempDir::new().unwrap();
     let model = Harness::answering([SUCCESS_REPORT]);
 
-    let report =
-        Adapter::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
-            .await
-            .unwrap();
+    let report = Adapter::merge(
+        &model,
+        &ctx(tmp.path(), None),
+        "demo",
+        MergePhase::Preflight,
+        &workspace(tmp.path()),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(report.status, Status::Success);
     let requests = model.requests();
@@ -388,10 +415,15 @@ async fn merge_postflight_deterministic() {
     let tmp = TempDir::new().unwrap();
     let model = Harness::answering::<&str>([]);
 
-    let report =
-        Adapter::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Postflight, &tree())
-            .await
-            .unwrap();
+    let report = Adapter::merge(
+        &model,
+        &ctx(tmp.path(), None),
+        "demo",
+        MergePhase::Postflight,
+        &workspace(tmp.path()),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(report.status, Status::Success);
     assert!(report.findings.is_empty());
@@ -405,10 +437,15 @@ async fn merge_diagnostics() {
         r#"{"status":"failure","findings":[{"rule-id":"OMNIA-002","title":"Forbidden std API","severity":"critical","impact":"The wasm32 build breaks.","remediation":"Route through the provider trait."}]}"#,
     ]);
 
-    let report =
-        Adapter::merge(&model, &ctx(tmp.path(), None), "demo", MergePhase::Preflight, &tree())
-            .await
-            .unwrap();
+    let report = Adapter::merge(
+        &model,
+        &ctx(tmp.path(), None),
+        "demo",
+        MergePhase::Preflight,
+        &workspace(tmp.path()),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(report.status, Status::Failure);
     let finding = &report.findings[0];

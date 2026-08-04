@@ -52,10 +52,10 @@ fn declared_platforms(project_root: &Path) -> Option<Vec<String>> {
 /// substitution; the guest does not re-render them from embedded
 /// templates (sibling checkout is outside the project mount).
 pub(super) async fn run_write_legs<P: Model>(
-    model: &P, ctx: &Context<'_>, slice: &str, tree_root: &Path, scaffold_block: &str,
+    model: &P, ctx: &Context<'_>, slice: &str, change_root: &Path, scaffold_block: &str,
 ) -> Result<Vec<(&'static str, phase::PhaseAnswer)>, Error> {
     let mut outcomes = Vec::new();
-    for shell in declared_shell_legs(tree_root) {
+    for shell in declared_shell_legs(change_root) {
         let system = assemble(&["prompts/build.md", shell.write_prompt]);
         let user = format!(
             "Run the {name} shell phase of the vectis build for slice `{slice}`: \

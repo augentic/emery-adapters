@@ -78,7 +78,7 @@ When the slice's specs describe no API interactions and no Source Material lists
 
 ## Build report
 
-When the algorithm resolves, return a schema-valid build report as the answer to the build's report leg (the schema-gated report answer — no report file is written). This is the build's final deliverable. The build legs never transition the slice lifecycle — the deterministic in-guest report gate checks the answer's coherence against the working tree and the engine guest owns the `Refined → Built` transition.
+When the algorithm resolves, return a schema-valid build report as the answer to the build's report leg (the schema-gated report answer — no report file is written). This is the build's final deliverable. The build legs never transition the slice lifecycle — the deterministic in-guest report gate checks the answer's coherence against the workspace and the engine guest owns the `Refined → Built` transition.
 
 ```yaml
 version: 1
