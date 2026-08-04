@@ -1,5 +1,6 @@
 //! Canonical UI bindings: detect hardcoded UI contract copy and raw test tags in shell/core.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -66,49 +67,19 @@ fn load_yaml_map_values(path: &Path, section: &str) -> Vec<String> {
         return Vec::new();
     };
 
-    let section_prefix = format!("{section}:");
-    let mut in_section = false;
-    let mut values = Vec::new();
+    // Same shape exemplar codegen reads (`BTreeMap<section, BTreeMap<key, value>>`).
+    // Hand-rolled line scans miss quoted values, nested maps, and block scalars.
+    let Ok(document) =
+        serde_saphyr::from_str::<BTreeMap<String, BTreeMap<String, String>>>(&content)
+    else {
+        return Vec::new();
+    };
 
-    for line in content.lines() {
-        let trimmed = line.trim_end();
-        if trimmed == section_prefix || trimmed.starts_with(&format!("{section}:")) {
-            in_section = true;
-            continue;
-        }
-        if in_section {
-            if !line.starts_with(' ') && !line.starts_with('\t') && !trimmed.is_empty() {
-                break;
-            }
-            if let Some((_, val)) = parse_yaml_kv_line(trimmed)
-                && !val.is_empty()
-                && !val.starts_with('#')
-            {
-                values.push(val);
-            }
-        }
-    }
+    let Some(entries) = document.get(section) else {
+        return Vec::new();
+    };
 
-    values
-}
-
-fn parse_yaml_kv_line(line: &str) -> Option<(String, String)> {
-    let trimmed = line.trim();
-    if trimmed.starts_with('#') {
-        return None;
-    }
-    let (key_part, val_part) = trimmed.split_once(':')?;
-    let key = key_part.trim().to_string();
-    if key.is_empty() {
-        return None;
-    }
-    let mut val = val_part.trim().to_string();
-    if (val.starts_with('"') && val.ends_with('"'))
-        || (val.starts_with('\'') && val.ends_with('\''))
-    {
-        val = val[1..val.len() - 1].to_string();
-    }
-    Some((key, val))
+    entries.values().filter(|val| !val.is_empty() && !val.starts_with('#')).cloned().collect()
 }
 
 fn scan_shell_tree(
@@ -457,5 +428,17 @@ mod tests {
         );
         assert_eq!(extract_after_quoted("Text(\"Task\")", "Text("), Some("Task"));
         assert_eq!(quoted_from_start("\"Task\")"), Some("Task"));
+    }
+
+    #[test]
+    fn load_yaml_map_values_reads_quoted_and_plain() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("ui-strings.yaml");
+        fs::write(&path, "strings:\n  PLAIN: Hello\n  QUOTED: \"Get Organised!\"\n  EMPTY: \"\"\n")
+            .unwrap();
+        let values = load_yaml_map_values(&path, "strings");
+        assert!(values.contains(&"Hello".to_string()));
+        assert!(values.contains(&"Get Organised!".to_string()));
+        assert!(!values.iter().any(String::is_empty));
     }
 }

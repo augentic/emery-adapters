@@ -407,6 +407,33 @@ fun StubPreview() {
 }
 
 #[test]
+fn quoted_ui_string_values_still_gate_hardcoded_literals() {
+    let tmp = tempdir().unwrap();
+    project(tmp.path(), &["core", "android"]);
+    write(
+        &tmp.path().join("ui-contract/ui-strings.yaml"),
+        "strings:\n  SPLASH_CTA_LABEL: \"Get Organised!\"\n",
+    );
+    write(&tmp.path().join("shared/src/app.rs"), "pub struct App;");
+    write(
+        &tmp.path()
+            .join("Android/app/src/main/kotlin/com/vectis/todoapp/ui/screens/SplashScreen.kt"),
+        r#"@Preview
+fun SplashPreview() {
+    Text("Get Organised!")
+}
+"#,
+    );
+
+    let result = run(VerifyMode::Verify, tmp.path(), None).unwrap();
+    let ids = finding_ids(&result);
+    assert!(
+        ids.contains(&"canonical-ui-literal-hardcoded"),
+        "quoted ui-strings values must still be detected: {result}"
+    );
+}
+
+#[test]
 fn wrong_seed_version_fails_verify() {
     let tmp = tempdir().unwrap();
     project(tmp.path(), &["core", "android"]);

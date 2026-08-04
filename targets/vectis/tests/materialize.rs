@@ -241,6 +241,43 @@ fn refuses_overwrite_and_missing_template() {
 }
 
 #[test]
+fn refuses_outdated_exemplar_missing_ui_contract() {
+    // Pre-canonical-UI exemplar shape: shared + shells, no ui-contract/.
+    let template = tempdir().unwrap();
+    fs::write(template.path().join("Cargo.toml"), "[workspace]\n").unwrap();
+    for dir in ["shared", "iOS", "Android"] {
+        fs::create_dir_all(template.path().join(dir)).unwrap();
+    }
+    let dest = tempdir().unwrap();
+    let identity = Identity::new("Counter", "com.example.counter").unwrap();
+    let err = run(template.path(), dest.path(), &identity, &all_shell_platforms()).unwrap_err();
+    let message = err.to_string();
+    assert!(message.contains("ui-contract"), "must name the missing ui-contract shape: {message}");
+    assert!(
+        message.contains("current vectis-exemplar") || message.contains("VECTIS_EXEMPLAR_DIR"),
+        "must be actionable about updating the checkout: {message}"
+    );
+}
+
+#[test]
+fn android_only_does_not_require_ios_in_template_shape() {
+    let template = tempdir().unwrap();
+    fs::write(template.path().join("Cargo.toml"), "[workspace]\n").unwrap();
+    for dir in ["shared", "Android", "supply-chain", ".maestro", "ui-contract", "tools"] {
+        fs::create_dir_all(template.path().join(dir)).unwrap();
+    }
+    fs::create_dir_all(template.path().join(".cursor")).unwrap();
+    fs::write(template.path().join(".cursor/hooks.json"), "{}\n").unwrap();
+    // Intentionally no iOS/ — android-only platforms must still materialize.
+    let dest = tempdir().unwrap();
+    let identity = Identity::new("Counter", "com.example.counter").unwrap();
+    let platforms = vec!["android".to_string()];
+    let report = run(template.path(), dest.path(), &identity, &platforms).expect("android-only");
+    assert!(report.files.iter().any(|p| p.starts_with("Android") || p == "Cargo.toml"));
+    assert!(!dest.path().join("iOS").exists());
+}
+
+#[test]
 fn replaces_emery_init_gitignore_stub() {
     let Some(template) = require_template() else {
         return;
