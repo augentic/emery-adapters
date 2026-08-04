@@ -10,7 +10,7 @@ use std::path::Path;
 
 use adapter::registry::Doc;
 use adapter::seam::{
-    BuildContext, Context, Error, Finding, Input, MergePhase, Report, TargetMetadata, WorkingTree,
+    BuildContext, Context, Error, Finding, Input, MergePhase, Report, TargetMetadata, Workspace,
 };
 use adapter::{AdapterIdentity, Model, Target, phase};
 
@@ -49,10 +49,10 @@ impl Target for Adapter {
 
     async fn build<P: Model>(
         model: &P, ctx: &Context<'_>, slice: &str, inputs: &[Input], context: &BuildContext,
-        tree: &WorkingTree,
+        workspace: &Workspace,
     ) -> Result<Report, Error> {
-        let tree_root = ctx.tree_root(tree);
-        let inputs_block = phase::render_inputs(inputs);
+        let workspace_root = workspace.root_path();
+        let inputs_block = phase::render_inputs(inputs, workspace);
 
         // The agent prepares the read-only exemplar checkout the rest of
         // the build reads: scaffold templates, worked code, and the Omnia
@@ -75,7 +75,7 @@ impl Target for Adapter {
         // tooling file from it. A missing or malformed checkout or an I/O
         // failure aborts the build here — the agent must never recreate
         // deterministic files from prose.
-        let scaffold_block = scaffold_prelude(&tree_root)?;
+        let scaffold_block = scaffold_prelude(workspace_root)?;
 
         // Writer prompts share one system channel: verify-repair re-enters
         // the owning writer, so one leg must hold crate / test / guest together.
@@ -84,7 +84,7 @@ impl Target for Adapter {
         // writer ships only in create mode: its own header loads it on first
         // build only, keyed on the workspace-root `src/lib.rs` the prelude's
         // tree walk already sees.
-        let create_mode = !tree_root.join("src").join("lib.rs").is_file();
+        let create_mode = !workspace_root.join("src").join("lib.rs").is_file();
         let mut generation_prompts =
             vec!["prompts/build.md", "prompts/build/crate.md", "prompts/build/test.md"];
         if create_mode {
@@ -147,7 +147,7 @@ impl Target for Adapter {
          Then close out the build per the review prompt's `## Build close-out`: \
          mark the completed `tasks.md` checkboxes in the slice directory, declare \
          the slice's crate tree (and the guest scaffolding, when this build wrote \
-         it) as `platform: core` outputs with paths relative to the project root, \
+         it) as `platform: core` outputs with paths relative to the workspace root, \
          and synthesise the findings left unresolved after remediation into your \
          answer — the adapter assembles the build report from it in-guest; there \
          is no separate report leg. A build that cannot succeed (an exhausted \
@@ -165,34 +165,34 @@ impl Target for Adapter {
         // repair re-prompt: the review agent declared paths it just
         // verified, so a miss parks the slice for human review.
         let report = review.into_report();
-        let missing = phase::missing_outputs(&report, &tree_root);
+        let missing = phase::missing_outputs(&report, workspace_root);
         Ok(phase::enforce(report, missing.into_iter().map(Finding::blocking).collect()))
     }
 
     async fn merge<P: Model>(
-        model: &P, ctx: &Context<'_>, slice: &str, phase: MergePhase, tree: &WorkingTree,
+        model: &P, ctx: &Context<'_>, slice: &str, phase: MergePhase, workspace: &Workspace,
     ) -> Result<Report, Error> {
         // No merged-baseline validator — postflight is deterministic success.
         if phase == MergePhase::Postflight {
             return Ok(Report::success());
         }
 
-        let tree_root = ctx.tree_root(tree);
         let merge_prompt = registry::body("prompts/merge.md");
 
         let user = format!(
-            "Run the preflight merge gate for slice `{slice}` (adapter `{}`). The project \
-         workspace is lent to you; the build already wrote the slice's code in place, \
-         and the engine folds the slice's spec deltas only after this gate passes. Run \
-         the merge prompt's `## § Omnia pre-merge gate` yourself — the cargo / clippy \
-         / test / wasm32-wasip2 commands run in the lent workspace; this adapter \
-         cannot spawn them. Any gate failure means `status: failure`. Answer with the \
-         report body. {REFERENCES_POINTER}",
+            "Run the preflight merge gate for slice `{slice}` (adapter `{}`). A view of \
+         the built result snapshot is lent to you as your workspace; nothing you write \
+         there is captured, and the engine folds the slice's spec deltas only after \
+         this gate passes. Run the merge prompt's `## § Omnia pre-merge gate` yourself \
+         — the cargo / clippy / test / wasm32-wasip2 commands run in the lent \
+         workspace; this adapter cannot spawn them. Any gate failure means \
+         `status: failure`. Answer with the report body. {REFERENCES_POINTER}",
             ctx.adapter_id,
         );
         let report = phase::report(model, ctx, merge_prompt.to_string(), user).await?;
 
-        gate_report(model, ctx, merge_prompt, report, &tree_root, "merge-preflight").await
+        gate_report(model, ctx, merge_prompt, report, workspace.root_path(), "merge-preflight")
+            .await
     }
 }
 
@@ -206,10 +206,10 @@ fn assemble(prompts: &[&str]) -> String {
 // from prose would only produce weaker copies. A missing or malformed
 // checkout is equally fatal — the preparation leg must be repaired, not
 // papered over.
-fn scaffold_prelude(tree_root: &Path) -> Result<String, Error> {
+fn scaffold_prelude(workspace_root: &Path) -> Result<String, Error> {
     use std::fmt::Write as _;
 
-    let report = crate::scaffold::ensure_missing(tree_root)
+    let report = crate::scaffold::ensure_missing(workspace_root)
         .map_err(|err| Error::Io(format!("base-repo scaffold prelude failed: {err}")))?;
 
     let mut block = if report.written.is_empty() {
@@ -260,21 +260,21 @@ fn scaffold_prelude(tree_root: &Path) -> Result<String, Error> {
 }
 
 async fn gate_report<P: Model>(
-    model: &P, ctx: &Context<'_>, prompt: &str, mut report: Report, tree_root: &Path,
+    model: &P, ctx: &Context<'_>, prompt: &str, mut report: Report, workspace_root: &Path,
     operation: &str,
 ) -> Result<Report, Error> {
-    let mut missing = phase::missing_outputs(&report, tree_root);
+    let mut missing = phase::missing_outputs(&report, workspace_root);
     if !missing.is_empty() {
         let user = format!(
             "The deterministic report gate rejected the {operation} report: it claims \
-             `status: success` but declares outputs the working tree does not \
+             `status: success` but declares outputs the workspace does not \
              contain.\n\n{}\n\n\
-             Repair the working tree or correct the report, then answer with the \
+             Repair the workspace or correct the report, then answer with the \
              corrected report body.",
             missing.join("\n"),
         );
         report = phase::report(model, ctx, prompt.to_string(), user).await?;
-        missing = phase::missing_outputs(&report, tree_root);
+        missing = phase::missing_outputs(&report, workspace_root);
     }
     Ok(phase::enforce(report, missing.into_iter().map(Finding::blocking).collect()))
 }

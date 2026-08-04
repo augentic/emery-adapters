@@ -13,6 +13,7 @@ fn ctx(mcp_url: Option<&str>) -> Context<'static> {
         adapter_id: "source:documentation",
         project_root: Path::new("."),
         mcp_url: mcp_url.map(str::to_owned),
+        lend: ".".to_string(),
     }
 }
 
@@ -56,7 +57,7 @@ async fn survey_leg() {
     let (name, schema) = schema_format(request);
     assert_eq!(name, "leads");
     assert_eq!(schema, LEADS_ANSWER_SCHEMA);
-    assert!(request.lend_workspace);
+    assert_eq!(request.workspace.as_deref(), Some("."));
     let grants = mcp_grants(request);
     assert_eq!(grants[0].url, "http://references/mcp");
     assert_eq!(grants[0].name, "documentation-references");
@@ -144,7 +145,7 @@ async fn extract_leg() {
     let (name, schema) = schema_format(request);
     assert_eq!(name, "evidence");
     assert_eq!(schema, EVIDENCE_ANSWER_SCHEMA);
-    assert!(request.lend_workspace);
+    assert_eq!(request.workspace.as_deref(), Some("."));
     assert_eq!(mcp_grants(request)[0].url, "http://references/mcp");
 }
 

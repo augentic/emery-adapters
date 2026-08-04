@@ -15,7 +15,10 @@ pub(crate) use assets::exports::{
     platform_pin_active,
 };
 pub use assets::{collect_asset_references, load_shell_platforms};
-pub use paths::{discover_artifact, find_project_root, resolve_default_path_with_root};
+pub use paths::{
+    discover_artifact, find_project_root, resolve_default_path_with_root,
+    resolve_default_path_with_roots,
+};
 use serde_json::Value;
 pub use shared::parse_yaml_file;
 

@@ -8,7 +8,7 @@ use std::path::Path;
 use adapter::registry::Doc;
 use adapter::seam::{
     BuildContext, BuildInput, Context, Error, Finding, Input, MergePhase, Report, Severity,
-    TargetMetadata, WorkingTree,
+    TargetMetadata, Workspace,
 };
 use adapter::{AdapterIdentity, Model, Target, phase};
 
@@ -74,11 +74,17 @@ impl Target for Adapter {
 
     async fn build<P: Model>(
         model: &P, ctx: &Context<'_>, slice: &str, inputs: &[Input], _context: &BuildContext,
-        tree: &WorkingTree,
+        workspace: &Workspace,
     ) -> Result<Report, Error> {
+        // The staged contract delta is a change-tree artifact, not
+        // product code: the adapter validates it through its own `"."`
+        // preopen, and the agent reaches it through the workspace's
+        // read-only-rooted artifact path (the deterministic merge fold
+        // promotes it into the `contracts/` baseline later).
         let slice_contracts_rel = format!(".emery/slices/{slice}/contracts");
-        let slice_contracts = ctx.tree_root(tree).join(&slice_contracts_rel);
-        let inputs_block = phase::render_inputs(inputs);
+        let slice_contracts = ctx.project_root.join(&slice_contracts_rel);
+        let slice_contracts_agent = workspace.artifact_path(&slice_contracts_rel);
+        let inputs_block = phase::render_inputs(inputs, workspace);
         let build_prompt = registry::body("prompts/build.md");
 
         // Each sub-flow judges applicability and self-skips.
@@ -89,10 +95,12 @@ impl Target for Adapter {
             let user = format!(
                 "Run the `{format}` sub-flow of the contracts build for slice `{slice}` \
              (adapter `{}`).\n\n\
-             The project workspace is lent to you. Write only `.yaml` files under \
-             `{slice_contracts_rel}/`; the root `contracts/` baseline is read-only \
-             context for `$ref` reuse. When the slice has no surface this format owns, \
-             write nothing and answer with `applicable: false`.\n\n\
+             A private workspace is lent to you. Write only `.yaml` files under the \
+             slice's staged contract delta at `{slice_contracts_agent}/` (a change-tree \
+             artifact root outside your workspace); the `contracts/` baseline in your \
+             workspace is read-only context for `$ref` reuse. When the slice has no \
+             surface this format owns, write nothing and answer with \
+             `applicable: false`.\n\n\
              {inputs_block}",
                 ctx.adapter_id,
             );
@@ -111,7 +119,7 @@ impl Target for Adapter {
                 format!("{build_prompt}{}", owning_sub_prompts(&findings, &slice_contracts));
             let user = format!(
                 "The contract validators found blocking issues in slice `{slice}`'s delta \
-             under `{slice_contracts_rel}/`. Re-enter the owning format sub-prompt(s) \
+             under `{slice_contracts_agent}/`. Re-enter the owning format sub-prompt(s) \
              per the build prompt's Phase 4 and repair the files in place.\n\n\
              {}\n\n\
              Answer `applicable: true` with a summary of the repairs.",
@@ -123,7 +131,7 @@ impl Target for Adapter {
         let system = build_prompt.to_string();
         let user = format!(
             "Write the build report for slice `{slice}`. Verify the delta under \
-         `{slice_contracts_rel}/` per the build prompt's Phase 3, then answer with \
+         `{slice_contracts_agent}/` per the build prompt's Phase 3, then answer with \
          the report body (`status`, `findings`, `outputs`, `ui-surface`). A \
          `success` report carries only non-blocking findings. Contract artifacts \
          declare no per-platform outputs, so `outputs` is normally empty.\n\n\
@@ -137,14 +145,17 @@ impl Target for Adapter {
     }
 
     async fn merge<P: Model>(
-        model: &P, ctx: &Context<'_>, slice: &str, phase: MergePhase, tree: &WorkingTree,
+        model: &P, ctx: &Context<'_>, slice: &str, phase: MergePhase, workspace: &Workspace,
     ) -> Result<Report, Error> {
+        // Both gates validate change-tree and baseline state through the
+        // adapter's own `"."` preopen — the lent read-only result view
+        // carries product code only.
         if phase == MergePhase::Preflight {
-            let staged = ctx.tree_root(tree).join(format!(".emery/slices/{slice}/contracts"));
+            let staged = ctx.project_root.join(format!(".emery/slices/{slice}/contracts"));
             return Ok(enforce_validators(Report::success(), &validate_baseline(&staged)));
         }
 
-        let baseline = ctx.tree_root(tree).join("contracts");
+        let baseline = ctx.project_root.join("contracts");
         let merge_prompt = registry::body("prompts/merge.md");
 
         // Clean baseline → deterministic success; otherwise one repair leg.
@@ -153,9 +164,12 @@ impl Target for Adapter {
         if !findings.is_empty() {
             let user = format!(
                 "The postflight contract validators found blocking issues in the merged \
-             `contracts/` baseline (slice `{slice}`, adapter `{}`). The engine has \
-             already promoted the slice's delta and archived the slice. Repair the \
-             baseline files in place, then answer with the corrected report body.\n\n{}",
+             `contracts/` baseline at `{}` (slice `{slice}`, adapter `{}`) — the \
+             baseline lives in the project tree outside your read-only workspace \
+             view. The engine has already promoted the slice's delta and archived \
+             the slice. Repair the baseline files in place, then answer with the \
+             corrected report body.\n\n{}",
+                workspace.artifact_path("contracts"),
                 ctx.adapter_id,
                 render_validator_findings(&findings),
             );

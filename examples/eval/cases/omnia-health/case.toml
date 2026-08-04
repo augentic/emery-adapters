@@ -4,6 +4,6 @@ kind = "build"
 slice = "health"
 
 # Deterministic artifact-exists gate: a success report must leave the
-# create-mode crate under the working tree (kebab slice → snake crate
+# create-mode crate in the product tree (kebab slice → snake crate
 # path per the omnia build prompt).
 expect = ["crates/health/Cargo.toml", "crates/health/src/lib.rs"]

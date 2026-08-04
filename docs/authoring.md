@@ -33,8 +33,8 @@ What the engine calls, per axis:
 | source | `extract` | `Context`, one `Lead` | `Evidence` | `.emery/slices/<slice>/evidence/<source>.yaml` |
 | target | `metadata` | — | `TargetMetadata` (floor, build `inputs[]`, platforms) | resolve-time record |
 | target | `guidance` | `Context` | prompt `String` | read by core synthesis |
-| target | `build` | `Context`, slice name, typed `inputs`, `WorkingTree` | `Report` | build report; gates the `built` transition |
-| target | `merge` | `Context`, slice name, `MergePhase`, `WorkingTree` | `Report` | merge gate report (`preflight` before the commit, `postflight` after) |
+| target | `build` | `Context`, slice name, typed `inputs`, `Workspace` | `Report` | build report; gates the `built` transition |
+| target | `merge` | `Context`, slice name, `MergePhase`, `Workspace` | `Report` | merge gate report (`preflight` before the commit, `postflight` after) |
 
 Three ideas carry every operation:
 
@@ -246,8 +246,8 @@ Run with `cargo nextest run -p changelog` (never bare `cargo test` — see [test
 
 The skeleton (steps 1–3) is identical apart from `adapter::target!`. The differences are in the trait and the prose tree:
 
-- **`TargetMetadata` declares more.** `inputs: Vec<BuildInput>` names the working-tree paths the engine assembles into each build request (e.g. contracts declares `{ path: "contracts", required: false }`), and `platforms: Option<PlatformsCapability>` declares required/allowed/default platform sets (vectis) or `None` (contracts, omnia).
-- **Three operations.** `guidance` returns a prompt string read by core synthesis. `build` receives the slice name, typed `Input` documents (proposal / design / tasks / spec), and a `WorkingTree`; resolve paths with `ctx.tree_root(tree)`. `merge` runs twice per slice: `MergePhase::Preflight` before the engine's deterministic commit (a failure blocks the merge), `Postflight` after it (a failure is reported but the merge stands).
+- **`TargetMetadata` declares more.** `inputs: Vec<BuildInput>` names the product-tree paths the engine assembles into each build request (e.g. contracts declares `{ path: "contracts", required: false }`), and `platforms: Option<PlatformsCapability>` declares required/allowed/default platform sets (vectis) or `None` (contracts, omnia).
+- **Three operations.** `guidance` returns a prompt string read by core synthesis. `build` receives the slice name, typed `Input` documents (proposal / design / tasks / spec), and a `Workspace`; resolve product-code paths with `workspace.root_path()` and slice-artifact paths with `workspace.artifact_path(...)`. `merge` runs twice per slice: `MergePhase::Preflight` before the engine's deterministic commit (a failure blocks the merge), `Postflight` after it (a failure is reported but the merge stands).
 - **You return a `Report`, and you should enforce it.** A `success` report with blocking findings is rejected engine-side, so the strong pattern (see `contracts`) is *validate-before-visible*: run your deterministic in-guest validator after the model answers and override the report with any residual blocking findings via `phase::enforce`. Model-facing phases go through `phase::phase` / `phase::report` rather than raw `repaired`.
 - **Targets carry rules.** Engineering standards ship as `prose/rules/*.md` with stable rule IDs, embedded like any other prose and applied by your build review prompts. Cross-adapter rules live under `codex/rules/`; see [codex/rules/README.md](../codex/rules/README.md) for the namespace model.
 - **Prompts per axis.** Targets need `prose/prompts/{guidance,build,merge}.md`; per-phase depth goes in `prose/prompts/build/<phase>.md` (or `build/<platform>/<phase>.md` for per-platform targets like vectis).

@@ -12,6 +12,7 @@ fn ctx() -> Context<'static> {
         adapter_id: "source:intent",
         project_root: Path::new("."),
         mcp_url: None,
+        lend: ".".to_string(),
     }
 }
 

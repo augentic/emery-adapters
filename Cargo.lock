@@ -1043,8 +1043,7 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
 name = "emery-adapter"
-version = "0.37.0"
-source = "git+https://github.com/augentic/emery?tag=v0.37.0#f6dd2523a70dd81b8c5e7274ec3ef571febf99ec"
+version = "0.38.0"
 dependencies = [
  "omnia-guest",
  "omnia-wasi-http",
@@ -1057,8 +1056,7 @@ dependencies = [
 
 [[package]]
 name = "emery-artifacts"
-version = "0.37.0"
-source = "git+https://github.com/augentic/emery?tag=v0.37.0#f6dd2523a70dd81b8c5e7274ec3ef571febf99ec"
+version = "0.38.0"
 dependencies = [
  "emery-diagnostics",
  "emery-error",
@@ -1074,8 +1072,7 @@ dependencies = [
 
 [[package]]
 name = "emery-change"
-version = "0.37.0"
-source = "git+https://github.com/augentic/emery?tag=v0.37.0#f6dd2523a70dd81b8c5e7274ec3ef571febf99ec"
+version = "0.38.0"
 dependencies = [
  "emery-artifacts",
  "emery-diagnostics",
@@ -1094,8 +1091,7 @@ dependencies = [
 
 [[package]]
 name = "emery-diagnostics"
-version = "0.37.0"
-source = "git+https://github.com/augentic/emery?tag=v0.37.0#f6dd2523a70dd81b8c5e7274ec3ef571febf99ec"
+version = "0.38.0"
 dependencies = [
  "base16ct",
  "schemars",
@@ -1107,8 +1103,7 @@ dependencies = [
 
 [[package]]
 name = "emery-error"
-version = "0.37.0"
-source = "git+https://github.com/augentic/emery?tag=v0.37.0#f6dd2523a70dd81b8c5e7274ec3ef571febf99ec"
+version = "0.38.0"
 dependencies = [
  "serde-saphyr",
  "thiserror 2.0.19",
@@ -1116,8 +1111,7 @@ dependencies = [
 
 [[package]]
 name = "emery-native"
-version = "0.37.0"
-source = "git+https://github.com/augentic/emery?tag=v0.37.0#f6dd2523a70dd81b8c5e7274ec3ef571febf99ec"
+version = "0.38.0"
 dependencies = [
  "axum",
  "emery-adapter",
@@ -1134,8 +1128,7 @@ dependencies = [
 
 [[package]]
 name = "emery-probe"
-version = "0.37.0"
-source = "git+https://github.com/augentic/emery?tag=v0.37.0#f6dd2523a70dd81b8c5e7274ec3ef571febf99ec"
+version = "0.38.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1148,6 +1141,7 @@ dependencies = [
  "omnia-guest",
  "omnia-wasi-model",
  "serde",
+ "serde-saphyr",
  "tokio",
  "toml",
  "tracing",
@@ -1156,8 +1150,7 @@ dependencies = [
 
 [[package]]
 name = "emery-project"
-version = "0.37.0"
-source = "git+https://github.com/augentic/emery?tag=v0.37.0#f6dd2523a70dd81b8c5e7274ec3ef571febf99ec"
+version = "0.38.0"
 dependencies = [
  "emery-artifacts",
  "emery-diagnostics",
@@ -1178,13 +1171,11 @@ dependencies = [
 
 [[package]]
 name = "emery-prose"
-version = "0.37.0"
-source = "git+https://github.com/augentic/emery?tag=v0.37.0#f6dd2523a70dd81b8c5e7274ec3ef571febf99ec"
+version = "0.38.0"
 
 [[package]]
 name = "emery-slice"
-version = "0.37.0"
-source = "git+https://github.com/augentic/emery?tag=v0.37.0#f6dd2523a70dd81b8c5e7274ec3ef571febf99ec"
+version = "0.38.0"
 dependencies = [
  "emery-artifacts",
  "emery-diagnostics",
@@ -1204,8 +1195,7 @@ dependencies = [
 
 [[package]]
 name = "emery-transport"
-version = "0.37.0"
-source = "git+https://github.com/augentic/emery?tag=v0.37.0#f6dd2523a70dd81b8c5e7274ec3ef571febf99ec"
+version = "0.38.0"
 dependencies = [
  "clap",
  "emery-artifacts",
@@ -2544,7 +2534,6 @@ dependencies = [
 [[package]]
 name = "omnia"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
 dependencies = [
  "anyhow",
  "bytes",
@@ -2593,7 +2582,6 @@ dependencies = [
 [[package]]
 name = "omnia-guest"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
 dependencies = [
  "anyhow",
  "axum",
@@ -2629,7 +2617,6 @@ dependencies = [
 [[package]]
 name = "omnia-guest-macros"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2639,7 +2626,6 @@ dependencies = [
 [[package]]
 name = "omnia-host-macros"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2649,7 +2635,6 @@ dependencies = [
 [[package]]
 name = "omnia-testkit"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
 dependencies = [
  "anyhow",
  "bytes",
@@ -2670,7 +2655,6 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-blobstore"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
 dependencies = [
  "anyhow",
  "bytes",
@@ -2686,7 +2670,6 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-config"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
 dependencies = [
  "anyhow",
  "omnia 0.35.0",
@@ -2699,7 +2682,6 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-docstore"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2715,7 +2697,6 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-http"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
 dependencies = [
  "anyhow",
  "axum",
@@ -2745,7 +2726,6 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-identity"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
 dependencies = [
  "anyhow",
  "fromenv",
@@ -2762,7 +2742,6 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-keyvalue"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2780,7 +2759,6 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-messaging"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
 dependencies = [
  "anyhow",
  "futures",
@@ -2796,7 +2774,6 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-model"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
 dependencies = [
  "anyhow",
  "cap-primitives",
@@ -2817,7 +2794,6 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-otel"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
 dependencies = [
  "anyhow",
  "futures",
@@ -2838,7 +2814,6 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-sql"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
 dependencies = [
  "anyhow",
  "fromenv",
@@ -2856,7 +2831,6 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-websocket"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia#4d408b0323dfab944872d5acee90ee675570bb26"
 dependencies = [
  "anyhow",
  "dashmap",
