@@ -9,13 +9,13 @@ The shared agent-team protocol lives in [`../../../references/agent-teams.md`](.
 1. **Verify prerequisites** — the mid-build core verify-repair loop returned `success`, `${PROJECT_DIR}/shared/` exists, and `cargo check` passes.
 2. **Spawn specialists concurrently** with the verbatim prompts in [`review/team-protocol-core.md`](../../../references/review/team-protocol-core.md):
    - **Structural** — CRX-001..011: missing `render()`, serde derives, input validation, `PendingOp` timestamps, ViewModel typing, unused deps. Full library: [`review/crux-checks.md`](../../../references/review/crux-checks.md).
-   - **Logic** — LOG-001..009: state-machine completeness, op coalescing, concurrent conflicts, temporal ordering, rapid-action sequences, spec gaps, spec-to-test coverage, stale tests. Full library: [`review/logic-checks.md`](../../../references/review/logic-checks.md).
+   - **Logic** — LOG-001..010: state-machine completeness, op coalescing, concurrent conflicts, temporal ordering, rapid-action sequences, spec gaps (validation only — LOG-007), spec-to-test coverage, stale tests, open-GAP inventiveness (LOG-010). Full library: [`review/logic-checks.md`](../../../references/review/logic-checks.md). Open-GAP contract: [`open-gap-contract.md`](../../../references/open-gap-contract.md).
    - **Quality** — GEN-001..013: no `unwrap` / `expect` outside test setup, no debug output, no hardcoded secrets, error propagation, match exhaustiveness, function length, no inline lint suppressions (**GEN-013**, codex `VECTIS-009`). Full library: [`review/general-checks.md`](../../../references/review/general-checks.md).
 3. **Universal checks (lead).** Apply every `UNI-*` rule from the shared universal codex pack ([`../../../rules/universal/`](../../../rules/universal/), embedded in this adapter) with Rust / Crux heuristics. Full library: [`review/universal-checks.md`](../../../references/review/universal-checks.md). Skip universal checks already covered by the specialists per the dedupe table in [`review/team-protocol-core.md`](../../../references/review/team-protocol-core.md).
 4. **Adversarial challenge.** Forward all findings to the antagonist. The antagonist confirms, upgrades, downgrades, disputes, and may add `NEW-` findings. Protocol: [`agent-teams.md`](../../../references/agent-teams.md).
 5. **Synthesis.** Lead authors the iteration report per [`review/iteration-report.md`](../../../references/review/iteration-report.md).
 6. **Mechanical auto-fixes (when safe).** Missing serde derives, `render().and(...)` wraps, `.trim()` / empty input checks, unused deps. Revert the full batch if `cargo check` / `cargo clippy` / `cargo test` regress.
-7. **Logic findings stay non-mechanical.** Never auto-fix LOG-001..008 without explicit confirmation; surface them as design-level findings classified `code-fix` or `spec-change`.
+7. **Logic findings stay non-mechanical.** Never auto-fix LOG-001..010 without explicit confirmation; surface them as design-level findings classified `code-fix` or `spec-change`.
 
 ## Standalone vs orchestrated
 
@@ -27,7 +27,7 @@ When all in-scope reviews complete:
 
 1. **Merge findings.** Combine `design_findings` from each reviewer into a single list. Deduplicate universal findings (UNI-prefixed) that both reviewers flagged with identical check IDs and matching evidence — keep the higher-severity instance. Platform-specific findings (CRX-, LOG-, GEN-, IOS-, SWF-, AND-, KTL-, INT-prefixed) are always distinct.
 2. **Empty list.** Skip the rest of this section.
-3. **Validate classifications.** Each finding already carries `code-fix` or `spec-change`. Treat that as the source of truth. Resolve disagreements between platforms by applying: spec is clear but code is wrong → `code-fix`; spec is silent, ambiguous, or problematic → `spec-change`.
+3. **Validate classifications.** Each finding already carries `code-fix` or `spec-change`. Treat that as the source of truth. Resolve disagreements between platforms by applying: spec is clear but code is wrong → `code-fix`; spec is silent, ambiguous, or problematic → `spec-change`. For **LOG-010** (open-GAP inventiveness): default `code-fix` (revert to stub or perform B′ closure); use `spec-change` only when Evidence blocks honest closure — see [`open-gap-contract.md`](../../../references/open-gap-contract.md). Intentional open GAP + stub-faithful code/tests is not a finding.
 4. **Surface findings.** Findings flow to the operator alongside the build outcome. Cross-platform follow-up work is queued as a new slice via the operator's normal `/emery:plan` flow rather than letting reviewers spawn slices directly.
 
 ## § Standards review surface

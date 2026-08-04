@@ -45,6 +45,7 @@ cargo make lab -- --project-dir sandbox/orders-contracts plan execute
 | `contracts-import`     | build    | Import vendored OpenAPI                                        |
 | `omnia-health`         | build    | Tiny create-mode crate (`GET /health`)                         |
 | `vectis-single-screen` | build    | Single-screen feature on `core + ios` (needs `$TEMPLATE_DIR`)  |
+| `vectis-open-gap-fab`  | build    | Open-GAP FAB inventiveness desk-check (`core + ios`; needs `$TEMPLATE_DIR`) — [case README](cases/vectis-open-gap-fab/README.md) |
 | `orders-contracts`     | workflow | docs → contracts (`[examples/wasm/fixture](../wasm/fixture/)`) |
 | `omnia-r9k`            | workflow | `at_r9k_position_adapter` → omnia (cloned on first run)        |
 
@@ -117,11 +118,15 @@ Linked adapters need only the directory. A third-party adapter also needs a Carg
 
 ## Vectis greenfield prerequisite
 
-`vectis-single-screen` (and any live Vectis build that materializes shells) needs a local [`vectis-exemplar`](https://github.com/augentic/vectis-exemplar) checkout.
+`vectis-single-screen`, `vectis-open-gap-fab`, and any live Vectis build that materializes shells need a local [`vectis-exemplar`](https://github.com/augentic/vectis-exemplar) checkout.
 
 `cargo make eval` / `cargo make lab` auto-set `VECTIS_EXEMPLAR_DIR` to the workspace-sibling `../vectis-exemplar` when that checkout exists and the env var is unset. That matters because the eval sandbox is `sandbox/<case>/`: without the export, the build prelude's default `../vectis-exemplar` would resolve to `sandbox/vectis-exemplar`. For non-sibling layouts, export `VECTIS_EXEMPLAR_DIR` yourself to an absolute path before invoking make.
 
 After materialize the agent strips `VECTIS-OPTIONAL` / `cap=demo` per `$TEMPLATE_DIR/AGENTS.md`, regenerates the iOS Xcode project (`make -C iOS generate-project`), runs `make build`, and stamps `iOS/.vectis/verify.ok` / `Android/.vectis/verify.ok` (adapter-owned; not in the template).
+
+### Open-GAP inventiveness (`vectis-open-gap-fab`)
+
+Build fixture for stub-faithful vs B′ closure when a FAB is unspecified but `Page::NewList` already exists. Probe grading is existence-level; inventiveness quality is sandbox inspection. Pass criteria and consumer Wasm desk-check seed: [cases/vectis-open-gap-fab/README.md](cases/vectis-open-gap-fab/README.md).
 
 ## Omnia legacy migration (r9k)
 

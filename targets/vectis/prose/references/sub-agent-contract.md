@@ -6,6 +6,16 @@ Each writer / reviewer phase prompt runs in its **own sub-agent** with a clean c
 
 **Outputs (sub-agent → orchestrator):** `status` (`success` / `failure` / `pending`), `files_modified`, `verification` (inline result when the sub-agent ran one), `errors`, `warnings`, `design_findings` (reviewers only; empty list when nothing surfaced).
 
+## Open-GAP closure write carve-out (`core-writer`)
+
+By default, build legs treat `spec.md` / `design.md` as already-synthesised inputs and edit implementation trees only. Under the [open-GAP inventiveness contract](open-gap-contract.md), the `core-writer` sub-agent may additionally edit, in the same core leg and only when closing an eligible open GAP:
+
+- `specs/<domain>/spec.md` **scenario body / THEN prose** (never kernel-rendered `ID:` / `Sources:` / `Status:` lines)
+- `design.md` TBD / risk lines for that Event
+- matching `composition.yaml` `# GAP` comments (in-place patch after the composition leg)
+
+`model.yaml`, Evidence, and plan docs remain out of bounds. Test / shell / repair sub-agents do not inherit this carve-out.
+
 ## Why verify is serial; review is parallel
 
 The iOS verify pipeline (`make build` → typegen + `boltffi pack apple` + xcodegen + simulator build) and the Android verify pipeline (`make build` → typegen + `boltffi pack android` + `:app:assembleDebug`) both invoke `cargo` against the same shared Rust workspace. Cargo uses a workspace-level lock file, so concurrent invocations serialise on the lock rather than running in parallel. The reviewers are pure code-analysis agent teams; they use different formatters (`swiftformat` vs Kotlin) and never invoke `cargo`, Gradle, or Xcode. With no shared mutable state and no build-tool contention, they are safe to run concurrently.

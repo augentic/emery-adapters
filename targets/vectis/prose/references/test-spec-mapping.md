@@ -48,6 +48,11 @@ The THEN clause determines what the test asserts:
 | THEN app renders | `cmd.expect_one_effect().expect_render();` |
 | THEN app renders and fetches data | `cmd.expect_effect().expect_render();` then `cmd.expect_one_effect().expect_http();` |
 | THEN field F has value V | `assert_eq!(model.field, expected_value);` or `assert_eq!(view.field, expected_value);` |
+| THEN outcome is unspecified / open GAP (see below) | Stub-faithful: `cmd.expect_one_effect().expect_render();` (or documented stub effects); assert page/route/tab for the unspecified dimension **unchanged**; never assert an invented destination |
+
+## Open-GAP scenarios
+
+When the scenario (or sibling markers) withhold the outcome — `unspecified`, “operator must supply acceptance criteria”, design TBD, a composition `# GAP` on the wired control, or a WHEN with no concrete THEN — treat it as an [open GAP](open-gap-contract.md). Still emit **exactly one** test (LOG-008): assert render + unchanged page/route/tab; do **not** assert a concrete destination (`Page::NewList`, etc.) or invented domain mutations; do **not** skip the scenario. If the same build closed the GAP under the contract’s B′ eligibility, assert the closed THEN verbatim — never assert closed behaviour while `# GAP` / unspecified / TBD still remain.
 
 ## Effect chain mapping
 
