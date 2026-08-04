@@ -98,6 +98,9 @@ pub fn parse_flat_file(path: &Path) -> Result<Entries, VectisError> {
 }
 
 /// Format the canonical flat test-id registry YAML document.
+///
+/// Keys and values are emitted unquoted. Safe only while values remain
+/// schema kebab-case and keys remain `MAESTRO_*` (no `:`, `#`, or whitespace).
 #[must_use]
 pub fn format_generated_yaml(entries: &Entries) -> String {
     let mut out = String::from(
@@ -153,102 +156,7 @@ fn parse_flat_yaml(content: &str) -> Result<Entries, String> {
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
-    use tempfile::tempdir;
-
     use super::*;
-
-    #[test]
-    fn harvests_test_ids_from_merged_baseline_and_slice() {
-        let tmp = tempdir().unwrap();
-        let root = tmp.path();
-
-        fs::create_dir_all(root.join(".emery/specs")).unwrap();
-        fs::write(
-            root.join(".emery/specs/composition.yaml"),
-            "version: 1\nscreens:\n  splash:\n    name: Splash\n    body:\n      - button:\n          test_id: splash-cta\n",
-        )
-        .unwrap();
-
-        fs::create_dir_all(root.join(".emery/slices/follow-up")).unwrap();
-        fs::write(
-            root.join(".emery/slices/follow-up/composition.yaml"),
-            "version: 1\ndelta:\n  added:\n    stub:\n      name: Stub\n      body:\n        - text:\n            test_id: stub-message\n  modified: {}\n  removed: {}\n",
-        )
-        .unwrap();
-
-        let entries = harvest_entries(root, Some("follow-up")).expect("harvest");
-        assert_eq!(entries.len(), 2);
-        assert_eq!(entries.get("MAESTRO_SPLASH_CTA"), Some(&"splash-cta".to_string()));
-        assert_eq!(entries.get("MAESTRO_STUB_MESSAGE"), Some(&"stub-message".to_string()));
-    }
-
-    #[test]
-    fn modified_screen_replaces_old_test_id() {
-        let tmp = tempdir().unwrap();
-        let root = tmp.path();
-        fs::create_dir_all(root.join(".emery/specs")).unwrap();
-        fs::create_dir_all(root.join(".emery/slices/rename")).unwrap();
-        fs::write(
-            root.join(".emery/specs/composition.yaml"),
-            "version: 1\nscreens:\n  list:\n    name: List\n    body:\n      - button:\n          test_id: list-row\n",
-        )
-        .unwrap();
-        fs::write(
-            root.join(".emery/slices/rename/composition.yaml"),
-            "version: 1\ndelta:\n  added: {}\n  modified:\n    list:\n      name: List\n      body:\n        - button:\n            test_id: list-row-updated\n  removed: {}\n",
-        )
-        .unwrap();
-
-        let entries = harvest_entries(root, Some("rename")).expect("harvest");
-        assert_eq!(entries.len(), 1);
-        assert_eq!(entries.get("MAESTRO_LIST_ROW_UPDATED"), Some(&"list-row-updated".to_string()));
-        assert!(!entries.contains_key("MAESTRO_LIST_ROW"));
-    }
-
-    #[test]
-    fn removed_screen_drops_test_ids_from_harvest() {
-        let tmp = tempdir().unwrap();
-        let root = tmp.path();
-        fs::create_dir_all(root.join(".emery/specs")).unwrap();
-        fs::create_dir_all(root.join(".emery/slices/prune")).unwrap();
-        fs::write(
-            root.join(".emery/specs/composition.yaml"),
-            "version: 1\nscreens:\n  keep:\n    name: Keep\n    body:\n      - button:\n          test_id: keep-cta\n  drop:\n    name: Drop\n    body:\n      - button:\n          test_id: drop-cta\n",
-        )
-        .unwrap();
-        fs::write(
-            root.join(".emery/slices/prune/composition.yaml"),
-            "version: 1\ndelta:\n  added: {}\n  modified: {}\n  removed:\n    drop:\n      reason: obsolete\n",
-        )
-        .unwrap();
-
-        let entries = harvest_entries(root, Some("prune")).expect("harvest");
-        assert_eq!(entries.len(), 1);
-        assert_eq!(entries.get("MAESTRO_KEEP_CTA"), Some(&"keep-cta".to_string()));
-        assert!(!entries.contains_key("MAESTRO_DROP_CTA"));
-    }
-
-    #[test]
-    fn write_generated_is_idempotent() {
-        let tmp = tempdir().unwrap();
-        let root = tmp.path();
-        fs::create_dir_all(root.join(".emery/specs")).unwrap();
-        fs::write(
-            root.join(".emery/specs/composition.yaml"),
-            "screens:\n  splash:\n    name: Splash\n    body:\n      - button:\n          test_id: splash-cta\n",
-        )
-        .unwrap();
-
-        write_generated(root, None).expect("first write");
-        let path = root.join(REGISTRY_REL);
-        let first = fs::read_to_string(&path).unwrap();
-
-        write_generated(root, None).expect("second write");
-        let second = fs::read_to_string(&path).unwrap();
-        assert_eq!(first, second);
-        assert!(second.contains("MAESTRO_SPLASH_CTA: splash-cta"));
-    }
 
     #[test]
     fn rejects_conflicting_union_values() {
@@ -274,20 +182,5 @@ mod tests {
         let yaml = format_generated_yaml(&Entries::new());
         assert!(yaml.contains("test_ids:\n  {}\n"));
         assert!(parse_flat_yaml(&yaml).expect("parse").is_empty());
-    }
-
-    #[test]
-    fn collect_test_id_values_matches_validator_paths() {
-        let doc = json!({
-            "screens": {
-                "splash": {
-                    "body": [{ "button": { "test_id": "splash-cta" } }]
-                }
-            }
-        });
-        let mut collected = BTreeMap::new();
-        collect_test_id_values(&doc, "", &mut collected);
-        assert_eq!(collected.len(), 1);
-        assert!(collected.values().any(|value| value == "splash-cta"));
     }
 }

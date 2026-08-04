@@ -20,7 +20,7 @@ pub mod infer;
 pub mod ios_scaffold;
 pub mod materialize;
 pub mod prepare;
-pub(crate) mod projections;
+pub mod projections;
 pub mod scaffold;
 pub mod schema_source;
 pub mod shell;

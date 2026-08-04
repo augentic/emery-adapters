@@ -87,14 +87,27 @@ fn walk_test_ids(
     }
 }
 
-/// Whether `value` matches the portable kebab-case test-id grammar.
+/// Whether `value` matches `^[a-z][a-z0-9]*(-[a-z0-9]+)*$`.
 #[must_use]
 pub fn is_kebab_test_id(value: &str) -> bool {
-    !value.is_empty()
-        && value.split('-').all(|segment| {
-            !segment.is_empty()
-                && segment.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
-        })
+    let mut segments = value.split('-');
+    let Some(first) = segments.next() else {
+        return false;
+    };
+    let mut chars = first.chars();
+    let Some(start) = chars.next() else {
+        return false;
+    };
+    if !start.is_ascii_lowercase() {
+        return false;
+    }
+    if !chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) {
+        return false;
+    }
+    segments.all(|segment| {
+        !segment.is_empty()
+            && segment.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
+    })
 }
 
 #[cfg(test)]
@@ -145,6 +158,16 @@ mod tests {
         check_test_ids(&doc, "", &mut errors);
         assert_eq!(errors.len(), 1);
         assert!(errors[0].message.contains("duplicate"));
+    }
+
+    #[test]
+    fn kebab_grammar_matches_schema() {
+        for ok in ["splash-cta", "a", "a1", "row-2", "list-row-updated"] {
+            assert!(is_kebab_test_id(ok), "expected accept: {ok}");
+        }
+        for bad in ["", "1-foo", "9", "-a", "a-", "Splash-CTA", "splash_cta", "a--b"] {
+            assert!(!is_kebab_test_id(bad), "expected reject: {bad}");
+        }
     }
 
     #[test]

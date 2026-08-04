@@ -126,6 +126,19 @@ fn render_verify(
     statuses: &[PlatformStatus], project_root: &Path, platforms: &[String],
     active_slice: Option<&str>,
 ) -> Value {
+    let mut findings = scaffold_findings(statuses, project_root, platforms);
+    findings.extend(canonical_ui_findings(project_root, platforms, active_slice));
+
+    serde_json::json!({
+        "mode": "verify",
+        "project-root": project_root.display().to_string(),
+        "findings": findings,
+    })
+}
+
+fn scaffold_findings(
+    statuses: &[PlatformStatus], project_root: &Path, platforms: &[String],
+) -> Vec<Value> {
     let mut findings: Vec<Value> = Vec::new();
 
     for status in statuses {
@@ -182,20 +195,20 @@ fn render_verify(
         android_present,
     ));
     findings.extend(core_stamp::core_stamp_findings(project_root));
-
     findings.extend(materialize_completeness::materialize_completeness_findings(project_root));
-
     findings.extend(suppression_scan_findings(project_root, platforms));
 
+    findings
+}
+
+/// Canonical UI bindings: `ui-contract` literals, composition→`test-ids.yaml`
+/// projection, and seed version. Only `test_id_projection` needs `active_slice`.
+fn canonical_ui_findings(
+    project_root: &Path, platforms: &[String], active_slice: Option<&str>,
+) -> Vec<Value> {
+    let mut findings = Vec::new();
     findings.extend(ui_literals::ui_literals_findings(project_root, platforms));
-
     findings.extend(test_id_projection::test_id_projection_findings(project_root, active_slice));
-
     findings.extend(seed_version::seed_version_findings(project_root));
-
-    serde_json::json!({
-        "mode": "verify",
-        "project-root": project_root.display().to_string(),
-        "findings": findings,
-    })
+    findings
 }
