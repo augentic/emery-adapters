@@ -4,12 +4,20 @@ Unreleased
 
 ### Added
 
+- Vectis: canonical UI bindings — composition inline `test_id` projects to `ui-contract/test-ids.yaml` during `emery build`; display strings / fixed errors / seed live under `ui-contract/`; deterministic in-guest verify gates (`canonical-ui-literal-hardcoded`, `canonical-test-id-raw`, `canonical-test-tag-resource-id`, `canonical-test-id-projection-stale`, `canonical-seed-version`). See [`targets/vectis/prose/references/canonical-ui-bindings.md`](targets/vectis/prose/references/canonical-ui-bindings.md).
+- Vectis: platform-scoped template materialize — `iOS/` / `Android/` copy only when listed in `project.yaml.platforms`; allowlist also covers `ui-contract/`, `tools/` (`cursor-guard`), and `.cursor/hooks.json`.
 - Vectis: open-GAP inventiveness contract — default stub-faithful for unspecified scenarios; same-build B′ closure of build-editable surfaces (`spec.md` scenario body, `design.md` TBD, composition `# GAP`) only when a grounded destination exists; LOG-010 review check (`important`, default `code-fix`).
 - Eval: `vectis-open-gap-fab` build case — My Lists–shaped FAB with unspecified activation + grounded `Page::NewList` pressure; pass criteria and consumer Wasm desk-check in the [case README](examples/eval/cases/vectis-open-gap-fab/README.md).
 
 ### Changed
 
+- Vectis: rename template/product UI contract path `contract/` → `ui-contract/` (test ids, strings, errors, seed).
 - Vectis: LOG-007 scoped to input-validation / adversarial gaps on otherwise specified actions (not navigation inventiveness); core review Logic specialist and non-mechanical set cover LOG-001..010; UNI-004 dedupe range bumped accordingly.
+
+### Requires
+
+- Matching [`augentic/vectis-exemplar`](https://github.com/augentic/vectis-exemplar) checkout that includes `ui-contract/`, `tools/`, and `.cursor/hooks.json`. An older exemplar (`main` before those landed) fails materialize with an actionable missing-shape error — update the sibling clone (or `VECTIS_EXEMPLAR_DIR`) before greenfield builds.
+- Sibling [`augentic/emery`](https://github.com/augentic/emery) checkout at `../emery` that includes the local `emery-composition` crate (path workspace dep until emery tags `v0.38.0` and this repo switches the pin to that tag).
 
 ### Desk-check (unreleased Wasm)
 

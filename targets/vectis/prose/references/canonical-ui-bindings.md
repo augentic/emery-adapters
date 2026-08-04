@@ -26,7 +26,7 @@ Generated paths (do not edit):
 - `Android/generated/<package>/MaestroTestIds.kt`, `UiStrings.kt`, `UiErrors.kt`
 - `shared/src/ui_strings.rs`, `shared/src/ui_errors.rs`
 
-Run **`cargo make build-hooks`** once per machine (or after pulling `tools/cursor-guard`) so `.cursor/hooks.json` can block direct edits to generated files during **desk / IDE** sessions. Hooks load at agent session start — they do not protect the first materialize build session. **Build-time enforcement** is the deterministic in-guest verify gate only (`canonical-ui-literal-hardcoded`, `canonical-test-id-raw`, `canonical-test-tag-resource-id`, `canonical-test-id-projection-stale`, `canonical-seed-version`).
+Run **`cargo make build-hooks`** once per machine (or after pulling `tools/cursor-guard`) so `.cursor/hooks.json` can block direct edits to generated files during **desk / IDE** sessions. Hooks load at agent session start — they do not protect the first materialize build session. **Build-time enforcement** is the deterministic in-guest verify gate only (see *Mechanical gates* below).
 
 ## Authoring rules (build agents)
 
@@ -37,16 +37,9 @@ Run **`cargo make build-hooks`** once per machine (or after pulling `tools/curso
 5. **Wire Rust core** — use `crate::ui_strings::…` / `crate::ui_errors::…`; do not duplicate string literals in `app.rs` when a ui-contract key exists.
 6. **Maestro YAML** — reference `${MAESTRO_…}` for test ids and `"${SPLASH_TITLE}"` for display strings (via `load-*.sh` + `-e` flags). Never copy raw id values or layout demo copy into journey files.
 
-### Save FAB (todo-app design)
+### Icon-only and repeated controls
 
-Screenshots show **icon-only** check FABs (no visible `"Save"` text). Use separate a11y keys — never a generic `Save`:
-
-| Context | `ui-contract/ui-strings.yaml` | Shell a11y |
-|---------|---------------------------|------------|
-| List save FAB | `SAVE_LIST: Save list` | `UiStrings.SAVE_LIST` |
-| Task save FAB | `SAVE_TASK: Save task` | `UiStrings.SAVE_TASK` |
-
-Do not assert visible `"Save"` in Maestro; tap by `test_id` / `${MAESTRO_…}`.
+Controls with no visible label (icon-only buttons/FABs) or the same verb reused across screens must get **context-specific** a11y keys and `test_id`s — never a single generic `Save` / `Delete`. Give each occurrence its own `ui-contract` string key (e.g. per-screen `SAVE_<CONTEXT>`) and its own composition `test_id`. In Maestro, tap by `test_id` / `${MAESTRO_…}`; do not assert a shared visible label.
 
 ### Mechanical gates (build only)
 

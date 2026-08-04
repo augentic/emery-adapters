@@ -1,10 +1,23 @@
-# Maestro journey authoring (local-dev, post-drain)
+# Maestro journey authoring
 
-Maestro provides **③b shell interaction** feedback — journey taps and navigation — after compile verify (③a) passes. It is **not** part of the build verify gate.
+Operator and build-agent reference for authoring Maestro journey YAML after the plan is **drained**. Maestro exercises the built iOS / Android / web shell with real taps and navigation; it is **post-drain desk feedback**, not part of the slice **build verify gate**.
+
+Canonical UI bindings (`test_id`, `ui-contract`, codegen, in-guest verify findings) live in [`canonical-ui-bindings.md`](../canonical-ui-bindings.md). This document covers **when** to run Maestro and **how** to author journeys. Execution commands and template file layout are in `$TEMPLATE_DIR/.maestro/README.md`.
+
+## Verification layers
+
+Vectis separates **build-time** verification from **runtime shell interaction**:
+
+| Layer | Authority | When |
+|-------|-----------|------|
+| **Build verify gate** | In-guest `verify::run` (`canonical-*` findings), compile assurance (`make build`, verify stamps) | `emery build`, per slice — see [`build/report.md`](../../prompts/build/report.md) |
+| **Shell interaction** | Maestro journeys (taps, navigation, visible-text asserts on the running app) | Post-drain only — operator desk-check between **execute** and **finalize** |
+
+Maestro is the second layer. It runs only after the first layer passes for the slices that built the app; it does **not** block `Refined → Built` and agents MUST NOT invoke `maestro test` inside the Android/iOS verify loop (host device state is not guaranteed mid-build).
 
 ## When to run
 
-Run only after **`emery plan execute` projects `drained`** (every slice `done`). Per-slice Maestro is usually meaningless until the full app exists.
+Run only after **`emery plan status` projects `drained`** (every plan entry `done`). Per-slice Maestro is usually meaningless until the full app exists.
 
 ```bash
 emery plan status    # must show drained
@@ -20,11 +33,12 @@ requirements + design + composition test_id + ui-contract/ui-strings.yaml
   → add composition test_id + contract string keys + cargo make generate-bindings
   → wire MaestroTestIds / UiStrings into shell UI
   → author .maestro/journeys/ and wire runFlow steps in platform entries
-  → (optional) MCP inspect / inline run while drafting
   → commit YAML
-  → cargo make maestro-<platform>   # deterministic gate
+  → cargo make maestro-<platform>   # deterministic CLI gate
   → fail → repair shell UI or YAML → re-run
 ```
+
+Committed journey YAML plus `cargo make maestro-*` is the authority; author journeys from the composition `test_id` and `ui-contract` keys, not from screen scraping.
 
 ### Outcome quality (fact-based)
 
@@ -35,19 +49,7 @@ requirements + design + composition test_id + ui-contract/ui-strings.yaml
 
 Do **not** drop failing steps to chase green runs. Use `# GAP: …` only when Maestro cannot express a step (no stable selector) — never because the app is broken.
 
-## File layout
-
-| Path | Role |
-|------|------|
-| `composition.yaml` inline `test_id` | SSOT for Maestro / accessibility ids |
-| `ui-contract/ui-strings.yaml`, `ui-contract/ui-errors.yaml` | SSOT for display copy and error messages |
-| `ui-contract/test-ids.yaml` | Exemplar demo seed; product apps receive composition projection at `emery build` |
-| `.maestro/config.yaml` | Project config (`entries/**`, tag `ci`) |
-| `.maestro/entries/maestro.mobile.yaml` | iOS + Android entry (`appId` + `launchApp` + `runFlow` journeys) |
-| `.maestro/entries/maestro.web.yaml` | Web entry (`url` + `openLink` + `runFlow` journeys) |
-| `.maestro/journeys/**/*.yaml` | Shared steps referenced by entries |
-| `.maestro/scripts/load-*.sh` | Export contract vars for `maestro test -e` |
-| `.maestro/scripts/run-maestro.sh` | Single runner invoked by `cargo make maestro-*` |
+## Authoring conventions
 
 **One entry per platform.** Do not add feature-named entry files — add journeys under `.maestro/journeys/` and wire them from the platform entry via `runFlow`.
 
@@ -66,31 +68,18 @@ Use **`${MAESTRO_…}`** for test ids and **`"${SPLASH_TITLE}"`** etc. for displ
 
 On Android, Maestro `id:` selectors require `testTagsAsResourceId = true` on the root `Surface` (exemplar `ContentView` ships this). Prefer `id:` for test tags; use visible text asserts only for display strings from `ui-contract/ui-strings.yaml`.
 
-## MCP vs CLI
-
-| Phase | Tool |
-|-------|------|
-| Explore / first draft | Maestro MCP (`inspect_screen`, inline `run`) |
-| Gate / dev loop / CI | `maestro test` / `cargo make maestro-*` (committed YAML) |
-
-See Emery insight: CLI = deterministic gate; MCP = authoring aid.
-
-## Platform runners
-
-| Task | Script |
-|------|--------|
-| `cargo make maestro-android` | `bash .maestro/scripts/run-maestro.sh android` |
-| `cargo make maestro-ios` | `bash .maestro/scripts/run-maestro.sh ios` |
-| `cargo make maestro-web` | `bash .maestro/scripts/run-maestro.sh web` |
-
-Prerequisites: Maestro CLI on `PATH`, simulator/emulator booted (native), app builds via `make -C <shell> build`.
-
 ## Build agents
 
 During slice **build**, agents MAY:
 
-- Edit `ui-contract/*.yaml`
+- Edit `ui-contract/*.yaml` (strings/errors; product apps must not hand-edit projected `test-ids.yaml` — see [`canonical-ui-bindings.md`](../canonical-ui-bindings.md))
 - Run `cargo make generate-bindings`
 - Add `.maestro/journeys/` and update `runFlow` steps in `maestro.mobile.yaml` / `maestro.web.yaml`
 
 Agents MUST NOT run `maestro test` inside the Android/iOS verify loop — host device state is not guaranteed mid-build.
+
+## See also
+
+- [`canonical-ui-bindings.md`](../canonical-ui-bindings.md) — `test_id` projection, codegen, in-guest verify findings
+- [`build/report.md`](../../prompts/build/report.md) — shell verify gate at the report leg
+- `$TEMPLATE_DIR/.maestro/README.md` — operator run commands and template strip/keep rules
