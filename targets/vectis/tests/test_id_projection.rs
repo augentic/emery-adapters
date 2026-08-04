@@ -14,6 +14,26 @@ fn write(path: &Path, content: &str) {
 }
 
 #[test]
+fn harvests_baseline_only_when_no_active_slice() {
+    let tmp = tempdir().unwrap();
+    let root = tmp.path();
+
+    write(
+        &root.join(".emery/specs/composition.yaml"),
+        "version: 1\nscreens:\n  splash:\n    name: Splash\n    body:\n      - button:\n          test_id: splash-cta\n",
+    );
+    write(
+        &root.join(".emery/slices/follow-up/composition.yaml"),
+        "version: 1\ndelta:\n  added:\n    stub:\n      name: Stub\n      body:\n        - text:\n            test_id: stub-message\n  modified: {}\n  removed: {}\n",
+    );
+
+    let entries = test_id_registry::harvest_entries(root, None).expect("harvest");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries.get("MAESTRO_SPLASH_CTA"), Some(&"splash-cta".to_string()));
+    assert!(!entries.contains_key("MAESTRO_STUB_MESSAGE"));
+}
+
+#[test]
 fn harvests_test_ids_from_merged_baseline_and_slice() {
     let tmp = tempdir().unwrap();
     let root = tmp.path();

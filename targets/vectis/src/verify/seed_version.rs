@@ -43,12 +43,17 @@ fn error_finding(id: &str, message: impl Into<String>) -> Value {
     })
 }
 
-/// True when a top-level `version:` line declares exactly `1`.
+/// True when the top-level `version:` field parses as exactly `1`.
+///
+/// Parses structurally (like `load_platforms`) so trailing comments and
+/// formatting variations do not cause false results; malformed YAML yields
+/// `false`. `version` is read as an integer to match the core seed type
+/// (`version: u32`).
 fn seed_version_ok(text: &str) -> bool {
-    text.lines().any(|line| {
-        let line = line.trim_end();
-        line.strip_prefix("version:").is_some_and(|rest| rest.trim() == "1")
-    })
+    serde_saphyr::from_str::<Value>(text)
+        .ok()
+        .and_then(|doc| doc.get("version").and_then(Value::as_u64))
+        == Some(1)
 }
 
 #[cfg(test)]
@@ -62,8 +67,15 @@ mod tests {
     }
 
     #[test]
-    fn seed_version_ok_rejects_wrong_or_missing_version() {
+    fn seed_version_ok_accepts_trailing_comment() {
+        assert!(seed_version_ok("version: 1  # schema pin\n"));
+    }
+
+    #[test]
+    fn seed_version_ok_rejects_wrong_missing_or_unparseable() {
         assert!(!seed_version_ok("version: 2\n"));
         assert!(!seed_version_ok("items:\n  - id: a\n"));
+        assert!(!seed_version_ok("version: \"1\"\n"));
+        assert!(!seed_version_ok("[unclosed\n"));
     }
 }

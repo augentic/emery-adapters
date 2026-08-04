@@ -1,6 +1,4 @@
 //! Canonical UI bindings: detect hardcoded UI contract copy and raw test tags in shell/core.
-//!
-//! In-guest verify implementation (no `cargo` / `python3` / shell on the Wasm host path).
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -120,7 +118,7 @@ fn scan_shell_tree(
     let mut files = Vec::new();
     collect_shell_files(root, extension, &mut files);
     for path in files {
-        scan_shell_file(&path, extension, project_root, contract_values, findings);
+        scan_shell_file(&path, project_root, contract_values, findings);
     }
 }
 
@@ -143,8 +141,7 @@ fn collect_shell_files(dir: &Path, extension: &str, out: &mut Vec<PathBuf>) {
 }
 
 fn scan_shell_file(
-    path: &Path, extension: &str, project_root: &Path, contract_values: &[String],
-    findings: &mut Vec<Value>,
+    path: &Path, project_root: &Path, contract_values: &[String], findings: &mut Vec<Value>,
 ) {
     let Ok(source) = fs::read_to_string(path) else {
         return;
@@ -195,20 +192,19 @@ fn scan_shell_file(
             }
         }
 
-        for val in contract_values {
-            let needle = format!("\"{val}\"");
-            if line.contains(&needle) {
-                push_literal_finding(
-                    findings,
-                    project_root,
-                    path,
-                    line_no + 1,
-                    &format!(
-                        "hardcoded UI contract value \"{val}\" — add/use UiStrings or ui_strings key; run `cargo make generate-bindings`"
-                    ),
-                );
-            }
-        }
+        push_contract_value_findings(
+            findings,
+            project_root,
+            path,
+            line_no + 1,
+            line,
+            contract_values,
+            |val| {
+                format!(
+                    "hardcoded UI contract value \"{val}\" — add/use UiStrings or ui_strings key; run `cargo make generate-bindings`"
+                )
+            },
+        );
 
         if !line.contains("MaestroTestIds.") {
             if let Some(val) = extract_after_quoted(line, "testTag(") {
@@ -229,18 +225,7 @@ fn scan_shell_file(
                     &format!("use MaestroTestIds.* instead of accessibilityIdentifier(\"{val}\")"),
                 );
             }
-            if let Some(val) = extract_after_quoted(line, ".accessibilityIdentifier(") {
-                push_test_id_finding(
-                    findings,
-                    project_root,
-                    path,
-                    line_no + 1,
-                    &format!("use MaestroTestIds.* instead of .accessibilityIdentifier(\"{val}\")"),
-                );
-            }
         }
-
-        let _ = extension;
     }
 }
 
@@ -293,27 +278,24 @@ fn scan_rust_file(
         {
             continue;
         }
-        for val in contract_values {
-            let needle = format!("\"{val}\"");
-            if line.contains(&needle) {
-                push_literal_finding(
-                    findings,
-                    project_root,
-                    path,
-                    line_no + 1,
-                    &format!(
-                        "hardcoded UI contract value \"{val}\" in core — use ui_strings:: / ui_errors::*"
-                    ),
-                );
-            }
-        }
+        push_contract_value_findings(
+            findings,
+            project_root,
+            path,
+            line_no + 1,
+            line,
+            contract_values,
+            |val| {
+                format!(
+                    "hardcoded UI contract value \"{val}\" in core — use ui_strings:: / ui_errors::*"
+                )
+            },
+        );
     }
 }
 
 fn is_allowed_shell_line(line: &str) -> bool {
     line.contains("UiStrings.")
-        || line.contains("ui_strings::")
-        || line.contains("ui_errors::")
         || line.contains("UiErrors.")
         || line.contains("stringResource(")
         || line.contains("LocalizedStringKey")
@@ -361,6 +343,18 @@ fn push_test_id_finding(
     findings: &mut Vec<Value>, project_root: &Path, path: &Path, line: usize, message: &str,
 ) {
     findings.push(finding(project_root, path, line, TEST_ID_FINDING_ID, message));
+}
+
+/// Emit a hardcoded-contract-value finding for each ui-contract value quoted on `line`.
+fn push_contract_value_findings(
+    findings: &mut Vec<Value>, project_root: &Path, path: &Path, line_no: usize, line: &str,
+    contract_values: &[String], message_for: impl Fn(&str) -> String,
+) {
+    for val in contract_values {
+        if line.contains(&format!("\"{val}\"")) {
+            push_literal_finding(findings, project_root, path, line_no, &message_for(val));
+        }
+    }
 }
 
 fn android_test_tag_resource_id_findings(project_root: &Path, platforms: &[String]) -> Vec<Value> {
@@ -455,7 +449,10 @@ mod tests {
     #[test]
     fn extract_quoted_literals_from_shell_lines() {
         assert_eq!(
-            extract_quoted_after_key("contentDescription = \"Splash illustration\"", "contentDescription"),
+            extract_quoted_after_key(
+                "contentDescription = \"Splash illustration\"",
+                "contentDescription"
+            ),
             Some("Splash illustration")
         );
         assert_eq!(extract_after_quoted("Text(\"Task\")", "Text("), Some("Task"));

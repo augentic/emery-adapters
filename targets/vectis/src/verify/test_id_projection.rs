@@ -36,18 +36,16 @@ pub fn test_id_projection_findings(project_root: &Path, active_slice: Option<&st
         }
     };
 
-    if expected != on_disk {
-        if expected.is_empty() && !registry_path.is_file() {
-            // No composition test ids and no registry file — nothing to check.
-        } else {
-            findings.push(error_finding(
-                PROJECTION_STALE_ID,
-                format!(
-                    "`{REGISTRY_REL}` is stale or missing; re-run `emery build` after editing \
-                     composition `test_id` values"
-                ),
-            ));
-        }
+    // No composition test ids and no registry file — nothing to check.
+    let nothing_to_check = expected.is_empty() && !registry_path.is_file();
+    if expected != on_disk && !nothing_to_check {
+        findings.push(error_finding(
+            PROJECTION_STALE_ID,
+            format!(
+                "`{REGISTRY_REL}` is stale or missing; re-run `emery build` after editing \
+                 composition `test_id` values"
+            ),
+        ));
     }
 
     findings

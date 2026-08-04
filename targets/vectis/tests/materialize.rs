@@ -9,9 +9,14 @@ use std::path::{Path, PathBuf};
 
 use tempfile::tempdir;
 use vectis::scaffold::materialize::{
-    DEFAULT_RELATIVE_DIR, Identity, TEMPLATE_DIR_ENV, all_shell_platforms, map_relative_path,
-    resolve_dir, run, substitute_identity,
+    DEFAULT_RELATIVE_DIR, Identity, TEMPLATE_DIR_ENV, map_relative_path, resolve_dir, run,
+    substitute_identity,
 };
+use vectis::shell::SUPPORTED_SHELL_PLATFORMS;
+
+fn all_shell_platforms() -> Vec<String> {
+    SUPPORTED_SHELL_PLATFORMS.iter().map(|p| (*p).to_string()).collect()
+}
 
 fn template_dir() -> Option<PathBuf> {
     if let Ok(raw) = std::env::var(TEMPLATE_DIR_ENV) {

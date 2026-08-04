@@ -81,12 +81,7 @@ fn materialize_tree_started(project_root: &Path) -> bool {
 
 /// UI intent signal: any composition file declares at least one `test_id`.
 fn has_ui_intent(project_root: &Path) -> bool {
-    composition_files(project_root).iter().any(|path| file_declares_test_id(path))
-}
-
-/// Baseline + per-slice composition manifests, when present.
-fn composition_files(project_root: &Path) -> Vec<std::path::PathBuf> {
-    composition_manifest_paths(project_root)
+    composition_manifest_paths(project_root).iter().any(|path| file_declares_test_id(path))
 }
 
 fn file_declares_test_id(path: &Path) -> bool {

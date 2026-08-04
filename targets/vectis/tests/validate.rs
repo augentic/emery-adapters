@@ -212,3 +212,59 @@ fn structural_identity_matrix() {
     assert!(messages[0].contains("structural-identity"), "{messages:?}");
     assert!(messages[0].contains("`nav-row`"), "{messages:?}");
 }
+
+const UNIQUE_TEST_IDS_COMPOSITION: &str = r"version: 1
+screens:
+  splash:
+    name: Splash
+    body:
+      - button:
+          label: Go
+          test_id: splash-cta
+";
+
+const DUPLICATE_TEST_IDS_COMPOSITION: &str = r"version: 1
+screens:
+  a:
+    name: A
+    body:
+      - button:
+          test_id: same-id
+  b:
+    name: B
+    body:
+      - button:
+          test_id: same-id
+";
+
+const NON_KEBAB_TEST_ID_COMPOSITION: &str = r"version: 1
+screens:
+  splash:
+    name: Splash
+    body:
+      - button:
+          test_id: Splash_CTA
+";
+
+// `test_id` format and uniqueness through `validate composition`.
+#[test]
+fn composition_test_id_matrix() {
+    let (_tmp, path) = composition_file(UNIQUE_TEST_IDS_COMPOSITION);
+    let envelope = run(ValidateMode::Composition, Some(&path)).expect("run succeeds");
+    assert!(errors_array(&envelope).is_empty(), "unique kebab test ids must validate: {envelope}");
+
+    let (_tmp, path) = composition_file(DUPLICATE_TEST_IDS_COMPOSITION);
+    let envelope = run(ValidateMode::Composition, Some(&path)).expect("run succeeds");
+    let messages = error_messages(&envelope);
+    assert_eq!(messages.len(), 1, "one duplicate finding expected: {messages:?}");
+    assert!(messages[0].contains("duplicate"), "{messages:?}");
+    assert!(messages[0].contains("same-id"), "{messages:?}");
+
+    let (_tmp, path) = composition_file(NON_KEBAB_TEST_ID_COMPOSITION);
+    let envelope = run(ValidateMode::Composition, Some(&path)).expect("run succeeds");
+    let messages = error_messages(&envelope);
+    assert!(
+        messages.iter().any(|m| m.contains("must match") && m.contains("Splash_CTA")),
+        "format finding expected: {messages:?}"
+    );
+}

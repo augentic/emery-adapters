@@ -193,12 +193,6 @@ pub fn resolve_dir(anchor: &Path) -> Option<PathBuf> {
     candidate.is_dir().then_some(candidate)
 }
 
-/// All declared shell platform tokens (for tests and full greenfield bootstrap).
-#[must_use]
-pub fn all_shell_platforms() -> Vec<String> {
-    crate::shell::SUPPORTED_SHELL_PLATFORMS.iter().map(|p| (*p).to_string()).collect()
-}
-
 /// Copy the allowlisted template tree into `dest_dir` with identity substitution.
 ///
 /// `platforms` comes from `.emery/project.yaml` (e.g. `core` + `android`). Shell

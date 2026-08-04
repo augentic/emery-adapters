@@ -18,9 +18,7 @@ pub fn check_test_ids(node: &Value, json_path: &str, errors: &mut Vec<Finding>) 
         if !is_kebab_test_id(test_id) {
             errors.push(Finding::new(
                 path,
-                format!(
-                    "`test_id` value `{test_id}` must match `[a-z][a-z0-9]*(-[a-z0-9]+)*`"
-                ),
+                format!("`test_id` value `{test_id}` must match `[a-z][a-z0-9]*(-[a-z0-9]+)*`"),
             ));
         } else if let Some(first_path) = seen.get(test_id) {
             errors.push(Finding::new(
@@ -90,63 +88,15 @@ pub fn is_kebab_test_id(value: &str) -> bool {
     }
     segments.all(|segment| {
         !segment.is_empty()
-            && segment
-                .bytes()
-                .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
+            && segment.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
     })
 }
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
-
     use super::*;
 
-    // Walk smoke tests; duplicate/format integration coverage lives in validate suites.
-
-    #[test]
-    fn accepts_unique_kebab_test_ids() {
-        let doc = json!({
-            "screens": {
-                "splash": {
-                    "name": "Splash",
-                    "body": [
-                        {
-                            "button": {
-                                "label": "Go",
-                                "test_id": "splash-cta"
-                            }
-                        }
-                    ]
-                }
-            }
-        });
-
-        let mut errors = Vec::new();
-        check_test_ids(&doc, "", &mut errors);
-        assert!(errors.is_empty(), "{errors:?}");
-    }
-
-    #[test]
-    fn rejects_duplicate_test_ids() {
-        let doc = json!({
-            "screens": {
-                "a": {
-                    "name": "A",
-                    "body": [{ "button": { "test_id": "same-id" } }]
-                },
-                "b": {
-                    "name": "B",
-                    "body": [{ "button": { "test_id": "same-id" } }]
-                }
-            }
-        });
-
-        let mut errors = Vec::new();
-        check_test_ids(&doc, "", &mut errors);
-        assert_eq!(errors.len(), 1);
-        assert!(errors[0].message.contains("duplicate"));
-    }
+    // Pure grammar matrix; duplicate/format coverage lives in tests/validate.rs.
 
     #[test]
     fn kebab_grammar_matches_schema() {
@@ -156,22 +106,5 @@ mod tests {
         for bad in ["", "1-foo", "9", "-a", "a-", "Splash-CTA", "splash_cta", "a--b"] {
             assert!(!is_kebab_test_id(bad), "expected reject: {bad}");
         }
-    }
-
-    #[test]
-    fn rejects_non_kebab_test_ids() {
-        let doc = json!({
-            "screens": {
-                "splash": {
-                    "name": "Splash",
-                    "body": [{ "button": { "test_id": "Splash_CTA" } }]
-                }
-            }
-        });
-
-        let mut errors = Vec::new();
-        check_test_ids(&doc, "", &mut errors);
-        assert_eq!(errors.len(), 1);
-        assert!(errors[0].message.contains("must match"));
     }
 }
