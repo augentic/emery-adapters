@@ -74,7 +74,8 @@ During slice **build**, agents MAY:
 
 - Edit `ui-contract/*.yaml` (strings/errors; product apps must not hand-edit projected `test-ids.yaml` — see [`canonical-ui-bindings.md`](../canonical-ui-bindings.md))
 - Run `cargo make generate-bindings`
-- Add `.maestro/journeys/` and update `runFlow` steps in `maestro.mobile.yaml` / `maestro.web.yaml`
+
+Journey authoring is **required, not optional, whenever the regenerated `composition.yaml` declares ≥1 `test_id`** (the slice has an interactive UI surface): author one `.maestro/journeys/` flow per `spec.md` scenario and wire each into `maestro.mobile.yaml` / `maestro.web.yaml` via `runFlow`. The trigger is the composition's `test_id` / `event` / screen map — **not** a prose call-out in `design.md` / `tasks.md`. Mobile journeys are shared by iOS + Android; extend the shared entry idempotently rather than authoring twice. Core-only slices (no composition, no `test_id`) have no journeys.
 
 Agents MUST NOT run `maestro test` inside the Android/iOS verify loop — host device state is not guaranteed mid-build.
 
