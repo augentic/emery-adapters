@@ -5,7 +5,11 @@ mod app_icon;
 mod catalog;
 mod compile_stamp;
 mod core_stamp;
+mod materialize_completeness;
+mod seed_version;
 mod suppression_scan;
+mod test_id_projection;
+mod ui_literals;
 
 use std::path::Path;
 
@@ -47,14 +51,16 @@ struct PlatformStatus {
 ///
 /// Returns [`VectisError::InvalidProject`] when `project.yaml` is
 /// missing or unparseable, or lacks a `platforms` field.
-pub fn run(mode: VerifyMode, change_root: &Path, code_root: &Path) -> Result<Value, VectisError> {
+pub fn run(
+    mode: VerifyMode, change_root: &Path, code_root: &Path, active_slice: Option<&str>,
+) -> Result<Value, VectisError> {
     let platforms = load_platforms(change_root)?;
 
     match mode {
         VerifyMode::Verify => {
             let statuses: Vec<PlatformStatus> =
                 platforms.iter().map(|p| check_platform(p, code_root)).collect();
-            Ok(render_verify(&statuses, change_root, code_root, &platforms))
+            Ok(render_verify(&statuses, change_root, code_root, &platforms, active_slice))
         }
         VerifyMode::BootstrapAppIcon => Ok(render_bootstrap_app_icon(code_root, &platforms)),
     }
@@ -123,6 +129,7 @@ fn render_bootstrap_app_icon(project_root: &Path, platforms: &[String]) -> Value
 
 fn render_verify(
     statuses: &[PlatformStatus], change_root: &Path, code_root: &Path, platforms: &[String],
+    active_slice: Option<&str>,
 ) -> Value {
     let mut findings: Vec<Value> = Vec::new();
 
@@ -180,12 +187,30 @@ fn render_verify(
         android_present,
     ));
     findings.extend(core_stamp::core_stamp_findings(code_root));
-
+    findings.extend(materialize_completeness::materialize_completeness_findings(code_root));
     findings.extend(suppression_scan_findings(code_root, platforms));
+    findings.extend(canonical_ui_findings(change_root, code_root, platforms, active_slice));
 
     serde_json::json!({
         "mode": "verify",
         "project-root": code_root.display().to_string(),
         "findings": findings,
     })
+}
+
+/// Canonical UI bindings: `ui-contract` literals, composition→`test-ids.yaml`
+/// projection, and seed version. Composition reads come from `change_root`
+/// (`.emery/*`); `ui-contract/` reads come from `code_root`.
+fn canonical_ui_findings(
+    change_root: &Path, code_root: &Path, platforms: &[String], active_slice: Option<&str>,
+) -> Vec<Value> {
+    let mut findings = Vec::new();
+    findings.extend(ui_literals::ui_literals_findings(code_root, platforms));
+    findings.extend(test_id_projection::test_id_projection_findings(
+        change_root,
+        code_root,
+        active_slice,
+    ));
+    findings.extend(seed_version::seed_version_findings(code_root));
+    findings
 }

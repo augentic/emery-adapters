@@ -12,6 +12,11 @@ use vectis::scaffold::materialize::{
     DEFAULT_RELATIVE_DIR, Identity, TEMPLATE_DIR_ENV, map_relative_path, resolve_dir, run,
     substitute_identity,
 };
+use vectis::shell::SUPPORTED_SHELL_PLATFORMS;
+
+fn all_shell_platforms() -> Vec<String> {
+    SUPPORTED_SHELL_PLATFORMS.iter().map(|p| (*p).to_string()).collect()
+}
 
 fn template_dir() -> Option<PathBuf> {
     if let Ok(raw) = std::env::var(TEMPLATE_DIR_ENV) {
@@ -85,7 +90,7 @@ fn allowlist_and_denylist() {
     };
     let dest = tempdir().unwrap();
     let identity = Identity::new("Counter", "com.example.counter").unwrap();
-    let report = run(&template, dest.path(), &identity).unwrap();
+    let report = run(&template, dest.path(), &identity, &all_shell_platforms()).unwrap();
 
     assert!(report.files.iter().any(|p| p == "Cargo.toml"));
     assert!(report.files.iter().any(|p| p == "Cargo.lock"));
@@ -107,8 +112,16 @@ fn allowlist_and_denylist() {
             .any(|p| { p == "Android/app/src/main/java/com/example/counter/MainActivity.kt" })
     );
     assert!(report.files.iter().any(|p| p == ".maestro/config.yaml"));
-    assert!(report.files.iter().any(|p| p == ".maestro/test-ids.yaml"));
+    assert!(report.files.iter().any(|p| p == "ui-contract/test-ids.yaml"));
+    assert!(report.files.iter().any(|p| p == "ui-contract/ui-strings.yaml"));
+    assert!(report.files.iter().any(|p| p == "ui-contract/ui-errors.yaml"));
     assert!(report.files.iter().any(|p| p == ".maestro/scripts/load-test-ids.sh"));
+    assert!(report.files.iter().any(|p| p == ".maestro/scripts/load-strings.sh"));
+    assert!(report.files.iter().any(|p| p == ".maestro/scripts/load-errors.sh"));
+    assert!(
+        !report.files.iter().any(|p| p.starts_with(".cursor/") || p.starts_with("tools/")),
+        "Cursor hooks and tools/ are no longer part of the materialize allowlist"
+    );
     assert!(report.files.iter().any(|p| p == "shared/src/bin/codegen/main.rs"));
     assert!(report.files.iter().any(|p| p == "iOS/Makefile"));
     assert!(report.files.iter().any(|p| p == "Android/Makefile"));
@@ -138,13 +151,46 @@ fn allowlist_and_denylist() {
 }
 
 #[test]
+fn platform_scope_filters_shell_trees() {
+    let Some(template) = require_template() else {
+        return;
+    };
+    let identity = Identity::new("Counter", "com.example.counter").unwrap();
+
+    let dest_android = tempdir().unwrap();
+    let android_only = vec!["core".into(), "android".into()];
+    let report = run(&template, dest_android.path(), &identity, &android_only).unwrap();
+    assert!(report.files.iter().any(|p| p.starts_with("Android/")));
+    assert!(!report.files.iter().any(|p| p.starts_with("iOS/")));
+    assert!(!dest_android.path().join("iOS").exists());
+    assert!(dest_android.path().join("Android").exists());
+    assert!(dest_android.path().join("shared").exists());
+
+    let dest_ios = tempdir().unwrap();
+    let ios_only = vec!["core".into(), "ios".into()];
+    let report = run(&template, dest_ios.path(), &identity, &ios_only).unwrap();
+    assert!(report.files.iter().any(|p| p.starts_with("iOS/")));
+    assert!(!report.files.iter().any(|p| p.starts_with("Android/")));
+    assert!(!dest_ios.path().join("Android").exists());
+    assert!(dest_ios.path().join("iOS").exists());
+    assert!(dest_ios.path().join("shared").exists());
+
+    let dest_full = tempdir().unwrap();
+    let report = run(&template, dest_full.path(), &identity, &[]).unwrap();
+    assert!(report.files.iter().any(|p| p.starts_with("Android/")));
+    assert!(report.files.iter().any(|p| p.starts_with("iOS/")));
+    assert!(dest_full.path().join("Android").exists());
+    assert!(dest_full.path().join("iOS").exists());
+}
+
+#[test]
 fn pin_files_byte_equal() {
     let Some(template) = require_template() else {
         return;
     };
     let dest = tempdir().unwrap();
     let identity = Identity::new("Counter", "com.example.counter").unwrap();
-    run(&template, dest.path(), &identity).unwrap();
+    run(&template, dest.path(), &identity, &all_shell_platforms()).unwrap();
 
     // Identity-free pin / policy surfaces must be byte-identical to the template.
     for rel in [
@@ -177,15 +223,50 @@ fn refuses_overwrite_and_missing_template() {
     let missing = Path::new("/no/such/vectis-exemplar-dir-for-test");
     let dest = tempdir().unwrap();
     let identity = Identity::new("Counter", "com.example.counter").unwrap();
-    let err = run(missing, dest.path(), &identity).unwrap_err();
+    let err = run(missing, dest.path(), &identity, &all_shell_platforms()).unwrap_err();
     assert!(err.to_string().contains("template directory not found"));
 
     let Some(template) = require_template() else {
         return;
     };
-    run(&template, dest.path(), &identity).unwrap();
-    let err = run(&template, dest.path(), &identity).unwrap_err();
+    run(&template, dest.path(), &identity, &all_shell_platforms()).unwrap();
+    let err = run(&template, dest.path(), &identity, &all_shell_platforms()).unwrap_err();
     assert!(err.to_string().contains("refusing to overwrite"));
+}
+
+#[test]
+fn refuses_outdated_exemplar_missing_ui_contract() {
+    // Pre-canonical-UI exemplar shape: shared + shells, no ui-contract/.
+    let template = tempdir().unwrap();
+    fs::write(template.path().join("Cargo.toml"), "[workspace]\n").unwrap();
+    for dir in ["shared", "iOS", "Android"] {
+        fs::create_dir_all(template.path().join(dir)).unwrap();
+    }
+    let dest = tempdir().unwrap();
+    let identity = Identity::new("Counter", "com.example.counter").unwrap();
+    let err = run(template.path(), dest.path(), &identity, &all_shell_platforms()).unwrap_err();
+    let message = err.to_string();
+    assert!(message.contains("ui-contract"), "must name the missing ui-contract shape: {message}");
+    assert!(
+        message.contains("current vectis-exemplar") || message.contains("VECTIS_EXEMPLAR_DIR"),
+        "must be actionable about updating the checkout: {message}"
+    );
+}
+
+#[test]
+fn android_only_does_not_require_ios_in_template_shape() {
+    let template = tempdir().unwrap();
+    fs::write(template.path().join("Cargo.toml"), "[workspace]\n").unwrap();
+    for dir in ["shared", "Android", "supply-chain", ".maestro", "ui-contract"] {
+        fs::create_dir_all(template.path().join(dir)).unwrap();
+    }
+    // Intentionally no iOS/ — android-only platforms must still materialize.
+    let dest = tempdir().unwrap();
+    let identity = Identity::new("Counter", "com.example.counter").unwrap();
+    let platforms = vec!["android".to_string()];
+    let report = run(template.path(), dest.path(), &identity, &platforms).expect("android-only");
+    assert!(report.files.iter().any(|p| p.starts_with("Android") || p == "Cargo.toml"));
+    assert!(!dest.path().join("iOS").exists());
 }
 
 #[test]
@@ -197,7 +278,7 @@ fn replaces_emery_init_gitignore_stub() {
     // Shape of `.gitignore` after `emery init` — framework lines only.
     fs::write(dest.path().join(".gitignore"), ".emery/scratch/\nworkspace/\n").unwrap();
     let identity = Identity::new("Counter", "com.example.counter").unwrap();
-    let report = run(&template, dest.path(), &identity).unwrap();
+    let report = run(&template, dest.path(), &identity, &all_shell_platforms()).unwrap();
 
     assert!(report.files.iter().any(|p| p == ".gitignore"));
     let gitignore = fs::read_to_string(dest.path().join(".gitignore")).unwrap();
@@ -227,7 +308,7 @@ fn refuses_non_gitignore_root_overwrite() {
     let dest = tempdir().unwrap();
     fs::write(dest.path().join("Makefile"), "# pre-existing\n").unwrap();
     let identity = Identity::new("Counter", "com.example.counter").unwrap();
-    let err = run(&template, dest.path(), &identity).unwrap_err();
+    let err = run(&template, dest.path(), &identity, &all_shell_platforms()).unwrap_err();
     assert!(err.to_string().contains("refusing to overwrite"));
     assert!(err.to_string().contains("Makefile"));
 }
@@ -239,7 +320,7 @@ fn refuses_nested_gitignore_overwrite() {
     let template = tempdir().unwrap();
     fs::write(template.path().join("Cargo.toml"), "[workspace]\n").unwrap();
     fs::write(template.path().join(".gitignore"), "target/\n").unwrap();
-    for dir in ["shared", "iOS", "Android", "supply-chain", ".maestro"] {
+    for dir in ["shared", "iOS", "Android", "supply-chain", ".maestro", "ui-contract"] {
         fs::create_dir_all(template.path().join(dir)).unwrap();
     }
     fs::write(template.path().join("Android/.gitignore"), "local.properties\n").unwrap();
@@ -251,7 +332,7 @@ fn refuses_nested_gitignore_overwrite() {
     fs::write(dest.path().join(".gitignore"), ".emery/scratch/\n").unwrap();
 
     let identity = Identity::new("Counter", "com.example.counter").unwrap();
-    let err = run(template.path(), dest.path(), &identity).unwrap_err();
+    let err = run(template.path(), dest.path(), &identity, &all_shell_platforms()).unwrap_err();
     assert!(err.to_string().contains("refusing to overwrite"));
     assert!(err.to_string().contains("Android"));
 }

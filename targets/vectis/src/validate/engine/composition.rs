@@ -10,6 +10,7 @@ mod catalog;
 mod finding;
 mod refs;
 pub mod structural_identity;
+mod test_ids;
 
 use std::path::Path;
 
@@ -18,6 +19,9 @@ use serde_json::{Value, json};
 pub use self::finding::Finding;
 pub use self::structural_identity::{
     Skeleton, build_group_skeleton, check_structural_identity, fingerprint, skeleton_to_json,
+};
+pub use self::test_ids::{
+    check_test_ids, collect_test_id_values, is_kebab_test_id, kebab_to_maestro_key,
 };
 use super::paths::{discover_artifact, discover_catalog, resolve_default_path};
 use super::run_inner;
@@ -58,9 +62,11 @@ pub(super) fn validate(path: Option<&Path>) -> Result<Value, VectisError> {
             // `delta` is present at a time.
             if let Some(screens) = instance.get("screens") {
                 check_structural_identity(screens, "/screens", &mut errors);
+                check_test_ids(screens, "/screens", &mut errors);
             }
             if let Some(delta) = instance.get("delta") {
                 check_structural_identity(delta, "/delta", &mut errors);
+                check_test_ids(delta, "/delta", &mut errors);
             }
 
             // `tokens` runs before `assets` so `results` matches the

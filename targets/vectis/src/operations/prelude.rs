@@ -39,9 +39,11 @@ pub(super) fn render_infer_report(change_root: &Path) -> String {
     format!("### component-identity cluster report (already run in-guest)\n\n{report}")
 }
 
-pub(super) fn render_verify_gate(change_root: &Path, code_root: &Path) -> String {
+pub(super) fn render_verify_gate(
+    change_root: &Path, code_root: &Path, active_slice: Option<&str>,
+) -> String {
     let body = if change_root.join(".emery/project.yaml").exists() {
-        match verify::run(verify::VerifyMode::Verify, change_root, code_root) {
+        match verify::run(verify::VerifyMode::Verify, change_root, code_root, active_slice) {
             Ok(payload) => serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string()),
             Err(err) => format!("verify gate could not run: {err}"),
         }
@@ -89,13 +91,16 @@ pub(super) fn scaffold_missing_trees(change_root: &Path, code_root: &Path) -> St
          1. Resolve `$TEMPLATE_DIR` (`VECTIS_EXEMPLAR_DIR` or `../vectis-exemplar`); fail \
          closed if missing.\n\
          2. Run the allowlisted copy procedure in `references/template-materialize.md` \
-         (root DX + `shared/` + `iOS/` + `Android/` + `supply-chain/` + `.maestro/`; \
+         (root DX + `shared/` + `ui-contract/` + shell trees for declared platforms \
+         (`iOS/` when `ios`, `Android/` when `android`) + `supply-chain/` + `.maestro/`; \
          never `web/`, `.git/`, `.github/`, or `AGENTS.md`). One materialize covers the \
-         workspace — do not invent per-shell scaffolds or pins.\n\
+         workspace for the declared platforms — do not invent per-shell scaffolds or \
+         pins.\n\
          3. Strip `VECTIS-OPTIONAL` per `$TEMPLATE_DIR/AGENTS.md` against the \
          `design.md` capability matrix (`http` / `kv` / `time` / `sse` / `demo`).\n\
-         4. iOS: regenerate the Xcode project (`make -C iOS generate-project` / \
-         `xcodegen`) — `.xcodeproj` is denylisted on purpose.\n\
+         4. When `ios` is declared, regenerate the Xcode project \
+         (`make -C iOS generate-project` / `xcodegen`) — `.xcodeproj` is denylisted on \
+         purpose.\n\
          {identity}"
     )
 }

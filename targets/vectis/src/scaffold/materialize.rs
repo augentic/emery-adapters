@@ -17,14 +17,15 @@
 //! **Root files:** `Makefile`, `Makefile.toml`, `Cargo.toml`, `Cargo.lock`,
 //! `rust-toolchain.toml`, `deny.toml`, `README.md`, `.gitignore`.
 //!
-//! **Root directories:** `shared/` (includes `boltffi.toml` and
-//! `shared/src/bin/codegen/`), `iOS/`, `Android/` (including the Gradle
-//! wrapper and per-shell `Makefile`), `supply-chain/`, `.maestro/` (infra
-//! plus demo journeys; the agent strips `cap=demo` after copy).
+//! **Root directories:** `shared/`, `ui-contract/`, `supply-chain/`, `.maestro/`,
+//! `tools/`, and shell trees `iOS/` / `Android/` when the matching platform
+//! token is listed in the materialize `platforms` argument (from
+//! `.emery/project.yaml`). Cross-cutting trees always copy; out-of-scope shells
+//! are omitted so a `core`+`android` project does not inherit a stale iOS demo.
 //!
-//! After strip, Maestro **infra** must remain: `config.yaml`,
-//! `test-ids.yaml` (file kept; demo keys stripped), and
-//! `scripts/load-test-ids.sh`. Late-cap re-adoption copies strip-units from
+//! After strip, Maestro **infra** must remain: `ui-contract/*.yaml`,
+//! `.maestro/config.yaml`, `.maestro/scripts/load-{test-ids,strings,errors}.sh`,
+//! and `shared/src/bin/codegen/`. Late-cap re-adoption copies strip-units from
 //! `$TEMPLATE_DIR` — see `prose/references/template-capabilities.md`.
 //!
 //! # `.gitignore` overwrite
@@ -77,7 +78,7 @@ const ROOT_FILES: &[&str] = &[
     ".gitignore",
 ];
 
-const ROOT_DIRS: &[&str] = &["shared", "iOS", "Android", "supply-chain", ".maestro"];
+const ROOT_DIRS: &[&str] = &["shared", "ui-contract", "iOS", "Android", "supply-chain", ".maestro"];
 
 const SKIP_DIR_NAMES: &[&str] = &[
     ".git",
@@ -190,11 +191,15 @@ pub fn resolve_dir(anchor: &Path) -> Option<PathBuf> {
 
 /// Copy the allowlisted template tree into `dest_dir` with identity substitution.
 ///
+/// `platforms` comes from `.emery/project.yaml` (e.g. `core` + `android`). Shell
+/// trees (`iOS/`, `Android/`) copy only when the matching token is listed. When
+/// `platforms` is empty, all shell trees copy (full bootstrap).
+///
 /// # Errors
 /// Returns [`ScaffoldError`] when the template is missing required roots, a
 /// destination path already exists (other than `.gitignore`), or I/O fails.
 pub fn run(
-    template_dir: &Path, dest_dir: &Path, identity: &Identity,
+    template_dir: &Path, dest_dir: &Path, identity: &Identity, platforms: &[String],
 ) -> Result<Report, ScaffoldError> {
     if !template_dir.is_dir() {
         return Err(ScaffoldError::InvalidProject {
@@ -204,7 +209,7 @@ pub fn run(
             ),
         });
     }
-    ensure_template_shape(template_dir)?;
+    ensure_template_shape(template_dir, platforms)?;
 
     if !dest_dir.exists() {
         fs::create_dir_all(dest_dir)?;
@@ -220,6 +225,9 @@ pub fn run(
         planned.push((src, dest_dir.join(&rel)));
     }
     for name in ROOT_DIRS {
+        if !should_materialize_root_dir(name, platforms) {
+            continue;
+        }
         let src_root = template_dir.join(name);
         if !src_root.is_dir() {
             return Err(ScaffoldError::InvalidProject {
@@ -299,13 +307,45 @@ fn ensure_emery_gitignore_entries(dest_dir: &Path) -> Result<(), ScaffoldError> 
     Ok(())
 }
 
-fn ensure_template_shape(template_dir: &Path) -> Result<(), ScaffoldError> {
-    for name in ["Cargo.toml", "shared", "iOS", "Android"] {
+fn should_materialize_root_dir(name: &str, platforms: &[String]) -> bool {
+    if platforms.is_empty() {
+        return true;
+    }
+    match name {
+        "iOS" => platforms.iter().any(|p| p == "ios"),
+        "Android" => platforms.iter().any(|p| p == "android"),
+        _ => true,
+    }
+}
+
+fn ensure_template_shape(template_dir: &Path, platforms: &[String]) -> Result<(), ScaffoldError> {
+    // Always-required roots. `ui-contract/` distinguishes a current exemplar
+    // from a pre-canonical-UI checkout (`main` before that landed) — fail fast
+    // with an actionable message rather than copying a half-shaped tree and
+    // dying later in verify.
+    for name in ["Cargo.toml", "shared", "ui-contract"] {
         let path = template_dir.join(name);
         if !path.exists() {
             return Err(ScaffoldError::InvalidProject {
                 message: format!(
-                    "template at {} is missing {name} (not a vectis-exemplar checkout?)",
+                    "template at {} is missing `{name}` — checkout is not a current \
+                     vectis-exemplar (need a revision that includes `ui-contract/`; \
+                     update the sibling clone or set {TEMPLATE_DIR_ENV})",
+                    template_dir.display()
+                ),
+            });
+        }
+    }
+    for name in ["iOS", "Android"] {
+        if !should_materialize_root_dir(name, platforms) {
+            continue;
+        }
+        let path = template_dir.join(name);
+        if !path.exists() {
+            return Err(ScaffoldError::InvalidProject {
+                message: format!(
+                    "template at {} is missing `{name}` required for declared platforms \
+                     (not a vectis-exemplar checkout?)",
                     template_dir.display()
                 ),
             });

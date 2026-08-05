@@ -142,6 +142,15 @@ impl Target for Adapter {
 
         let scaffold_block = prelude::scaffold_missing_trees(change_root, code_root);
         let core = core_leg(model, ctx, slice, &scaffold_block, &inputs_block).await?;
+
+        if let Err(err) = crate::projections::test_id_registry::write_generated(
+            change_root,
+            code_root,
+            Some(slice),
+        ) {
+            return Ok(failure_report(vec![format!("- [test-id-projection] {err}")]));
+        }
+
         let shell_outcomes =
             shells::run_write_legs(model, ctx, slice, change_root, &scaffold_block).await?;
         let review = review_leg(model, ctx, slice, change_root).await?;
@@ -164,6 +173,7 @@ impl Target for Adapter {
             &slice_composition,
             "build",
             true,
+            Some(slice),
         )
         .await?;
 
@@ -221,6 +231,7 @@ impl Target for Adapter {
             &baseline_composition,
             "merge-postflight",
             false,
+            None,
         )
         .await
     }
@@ -346,7 +357,7 @@ async fn report_leg<P: Model>(
     model: &P, ctx: &Context<'_>, slice: &str, change_root: &Path, code_root: &Path,
     outcomes: &[(&str, &phase::PhaseAnswer)],
 ) -> Result<(Report, String), Error> {
-    let verify_block = prelude::render_verify_gate(change_root, code_root);
+    let verify_block = prelude::render_verify_gate(change_root, code_root, Some(slice));
     let report_prompt = assemble(&["prompts/build.md", "prompts/build/report.md"]);
     let user = format!(
         "Write the build report for slice `{slice}` per the report prompt's `## Build \

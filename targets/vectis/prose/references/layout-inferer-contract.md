@@ -44,6 +44,7 @@ Arguments deliberately excluded from the common surface:
   - overlay `trigger`
   - navigation targets encoded inside event values
   - conditional visual keys that end with `-when` (e.g. `strikethrough-when`, `disabled-when`)
+- Inferers MAY emit **`test_id`** on items and groups as a presentation hint (kebab-case). It is not define-owned wiring; the composition leg is the authoritative place to author test ids for Maestro / accessibility.
 - Inferers MAY use **token references** when the source supplies a named token, variable, or style that confidently maps to an entry in `tokens.yaml`. Otherwise they SHOULD prefer raw layout values that the composition schema permits and add `# TODO` comments where tokenisation is expected later. Inferers MUST NOT invent token names.
 - Inferers MAY reference **asset IDs** only when those IDs resolve through `assets.yaml`, or when the reference is paired with a `# TODO` comment asking the operator to add the missing inventory entry. Inferers MUST NOT crop or extract production assets from source material.
 - Inferers MAY emit the `component: <slug>` directive only under the rules in [Component directive emission](#component-directive-emission). The directive belongs to the unwired subset and `/emery:refine` MUST preserve it; inferers stay conservative so refine-time review remains the operator's call.

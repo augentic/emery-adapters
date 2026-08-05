@@ -306,6 +306,10 @@ async fn guest_does_not_embed_scaffold() {
     assert!(core_user.contains("$TEMPLATE_DIR"));
     assert!(core_user.contains("references/template-materialize.md"));
     assert!(
+        core_user.contains("ui-contract/"),
+        "prelude must name ui-contract in the allowlisted copy set"
+    );
+    assert!(
         !tmp.path().join("shared/src/app.rs").is_file(),
         "guest must not write trees from embedded templates"
     );

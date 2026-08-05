@@ -41,11 +41,12 @@ pub(super) async fn composition_gate<P: Model>(
 pub(super) async fn gate_report<P: Model>(
     model: &P, ctx: &Context<'_>, prompt: &str, mut report: Report, change_root: &Path,
     code_root: &Path, composition: &Path, operation: &str, shell_verify: bool,
+    active_slice: Option<&str>,
 ) -> Result<Report, Error> {
     let gather = |report: &Report| {
         let mut residual = validation_findings(composition);
         if shell_verify {
-            residual.extend(shell_verify_findings(change_root, code_root));
+            residual.extend(shell_verify_findings(change_root, code_root, active_slice));
         }
         residual.extend(phase::missing_outputs(report, code_root));
         residual
@@ -69,7 +70,7 @@ pub(super) fn bootstrap_findings(change_root: &Path, code_root: &Path) -> Vec<St
     if !change_root.join(".emery/project.yaml").exists() {
         return Vec::new();
     }
-    match verify::run(verify::VerifyMode::BootstrapAppIcon, change_root, code_root) {
+    match verify::run(verify::VerifyMode::BootstrapAppIcon, change_root, code_root, None) {
         Ok(payload) => payload
             .get("findings")
             .and_then(Value::as_array)
@@ -88,11 +89,13 @@ pub(super) fn bootstrap_findings(change_root: &Path, code_root: &Path) -> Vec<St
     }
 }
 
-fn shell_verify_findings(change_root: &Path, code_root: &Path) -> Vec<String> {
+fn shell_verify_findings(
+    change_root: &Path, code_root: &Path, active_slice: Option<&str>,
+) -> Vec<String> {
     if !change_root.join(".emery/project.yaml").exists() {
         return Vec::new();
     }
-    match verify::run(verify::VerifyMode::Verify, change_root, code_root) {
+    match verify::run(verify::VerifyMode::Verify, change_root, code_root, active_slice) {
         Ok(payload) => payload
             .get("findings")
             .and_then(Value::as_array)
