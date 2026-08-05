@@ -5,6 +5,7 @@
 //! in `$TEMPLATE_DIR` — this crate no longer embeds a template corpus or
 //! version registry.
 
+pub mod allowlist;
 pub mod materialize;
 
 /// Alias for the crate-wide error type used by scaffold-side callers.

@@ -362,7 +362,7 @@ fn partial_materialize_infra_missing() {
     );
     assert!(
         ids.contains(&"materialize-ui-dir-missing"),
-        "composition with test_id must flag missing ui-contract/.maestro/tools: {result}"
+        "composition with test_id must flag missing ui-contract/.maestro: {result}"
     );
     assert_eq!(verify_exit_code(&result), 1);
 }
