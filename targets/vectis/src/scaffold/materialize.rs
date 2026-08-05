@@ -18,7 +18,7 @@
 //! `rust-toolchain.toml`, `deny.toml`, `README.md`, `.gitignore`.
 //!
 //! **Root directories:** `shared/`, `ui-contract/`, `supply-chain/`, `.maestro/`,
-//! `tools/`, and shell trees `iOS/` / `Android/` when the matching platform
+//! and shell trees `iOS/` / `Android/` when the matching platform
 //! token is listed in the materialize `platforms` argument (from
 //! `.emery/project.yaml`). Cross-cutting trees always copy; out-of-scope shells
 //! are omitted so a `core`+`android` project does not inherit a stale iOS demo.
@@ -54,6 +54,9 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use super::allowlist::{
+    CROSS_CUTTING_ROOT_DIRS, PLATFORM_ROOT_DIRS, REQUIRED_TEMPLATE_SHAPE_ENTRIES, ROOT_FILES,
+};
 use super::{ScaffoldError, validate_app_name};
 
 /// Default `$TEMPLATE_DIR` relative to the consumer project root.
@@ -66,19 +69,6 @@ pub const TEMPLATE_DIR_ENV: &str = "VECTIS_EXEMPLAR_DIR";
 pub const TEMPLATE_APP_NAME: &str = "VectisApp";
 /// Android / bundle application id in the template.
 pub const TEMPLATE_ANDROID_PACKAGE: &str = "io.augentic.vectisapp";
-
-const ROOT_FILES: &[&str] = &[
-    "Makefile",
-    "Makefile.toml",
-    "Cargo.toml",
-    "Cargo.lock",
-    "rust-toolchain.toml",
-    "deny.toml",
-    "README.md",
-    ".gitignore",
-];
-
-const ROOT_DIRS: &[&str] = &["shared", "ui-contract", "iOS", "Android", "supply-chain", ".maestro"];
 
 const SKIP_DIR_NAMES: &[&str] = &[
     ".git",
@@ -224,7 +214,7 @@ pub fn run(
         let rel = map_relative_path(name, identity);
         planned.push((src, dest_dir.join(&rel)));
     }
-    for name in ROOT_DIRS {
+    for name in CROSS_CUTTING_ROOT_DIRS.iter().chain(PLATFORM_ROOT_DIRS.iter()).copied() {
         if !should_materialize_root_dir(name, platforms) {
             continue;
         }
@@ -323,7 +313,7 @@ fn ensure_template_shape(template_dir: &Path, platforms: &[String]) -> Result<()
     // from a pre-canonical-UI checkout (`main` before that landed) — fail fast
     // with an actionable message rather than copying a half-shaped tree and
     // dying later in verify.
-    for name in ["Cargo.toml", "shared", "ui-contract"] {
+    for name in REQUIRED_TEMPLATE_SHAPE_ENTRIES {
         let path = template_dir.join(name);
         if !path.exists() {
             return Err(ScaffoldError::InvalidProject {
@@ -336,7 +326,7 @@ fn ensure_template_shape(template_dir: &Path, platforms: &[String]) -> Result<()
             });
         }
     }
-    for name in ["iOS", "Android"] {
+    for name in PLATFORM_ROOT_DIRS {
         if !should_materialize_root_dir(name, platforms) {
             continue;
         }
