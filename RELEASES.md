@@ -11,7 +11,6 @@ Unreleased
 
 ### Changed
 
-- Vectis: rename template/product UI contract path `contract/` → `ui-contract/` (test ids, strings, errors, seed).
 - Vectis: LOG-007 scoped to input-validation / adversarial gaps on otherwise specified actions (not navigation inventiveness); core review Logic specialist and non-mechanical set cover LOG-001..010; UNI-004 dedupe range bumped accordingly.
 
 ### Requires
