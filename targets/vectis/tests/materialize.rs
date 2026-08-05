@@ -118,15 +118,9 @@ fn allowlist_and_denylist() {
     assert!(report.files.iter().any(|p| p == ".maestro/scripts/load-test-ids.sh"));
     assert!(report.files.iter().any(|p| p == ".maestro/scripts/load-strings.sh"));
     assert!(report.files.iter().any(|p| p == ".maestro/scripts/load-errors.sh"));
-    assert!(report.files.iter().any(|p| p == "tools/cursor-guard/Cargo.toml"));
-    assert!(report.files.iter().any(|p| p == ".cursor/hooks.json"));
     assert!(
-        !report.files.iter().any(|p| p.starts_with(".cursor/bin/")),
-        ".cursor/bin/ must not be materialized (build-hooks builds cursor-guard locally)"
-    );
-    assert!(
-        !dest.path().join(".cursor/bin").exists(),
-        ".cursor/bin must not exist after materialize"
+        !report.files.iter().any(|p| p.starts_with(".cursor/") || p.starts_with("tools/")),
+        "Cursor hooks and tools/ are no longer part of the materialize allowlist"
     );
     assert!(report.files.iter().any(|p| p == "shared/src/bin/codegen/main.rs"));
     assert!(report.files.iter().any(|p| p == "iOS/Makefile"));
@@ -263,11 +257,9 @@ fn refuses_outdated_exemplar_missing_ui_contract() {
 fn android_only_does_not_require_ios_in_template_shape() {
     let template = tempdir().unwrap();
     fs::write(template.path().join("Cargo.toml"), "[workspace]\n").unwrap();
-    for dir in ["shared", "Android", "supply-chain", ".maestro", "ui-contract", "tools"] {
+    for dir in ["shared", "Android", "supply-chain", ".maestro", "ui-contract"] {
         fs::create_dir_all(template.path().join(dir)).unwrap();
     }
-    fs::create_dir_all(template.path().join(".cursor")).unwrap();
-    fs::write(template.path().join(".cursor/hooks.json"), "{}\n").unwrap();
     // Intentionally no iOS/ — android-only platforms must still materialize.
     let dest = tempdir().unwrap();
     let identity = Identity::new("Counter", "com.example.counter").unwrap();
@@ -328,11 +320,9 @@ fn refuses_nested_gitignore_overwrite() {
     let template = tempdir().unwrap();
     fs::write(template.path().join("Cargo.toml"), "[workspace]\n").unwrap();
     fs::write(template.path().join(".gitignore"), "target/\n").unwrap();
-    for dir in ["shared", "iOS", "Android", "supply-chain", ".maestro", "ui-contract", "tools"] {
+    for dir in ["shared", "iOS", "Android", "supply-chain", ".maestro", "ui-contract"] {
         fs::create_dir_all(template.path().join(dir)).unwrap();
     }
-    fs::create_dir_all(template.path().join(".cursor")).unwrap();
-    fs::write(template.path().join(".cursor/hooks.json"), "{}\n").unwrap();
     fs::write(template.path().join("Android/.gitignore"), "local.properties\n").unwrap();
 
     let dest = tempdir().unwrap();

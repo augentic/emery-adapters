@@ -6,7 +6,7 @@ Greenfield trees come from a local [`vectis-exemplar`](https://github.com/augent
 
 ## After materialize: DX that must remain
 
-`vectis::scaffold::materialize` (procedure in [`template-materialize.md`](template-materialize.md)) copies root + shell DX, `shared/` (including `boltffi.toml` and `shared/src/bin/codegen/`), `ui-contract/` (Maestro test ids, UI strings, errors), `supply-chain/`, `.maestro/`, `tools/cursor-guard`, and `.cursor/hooks.json`. After stripping `VECTIS-OPTIONAL` (especially `cap=demo`), keep:
+`vectis::scaffold::materialize` (procedure in [`template-materialize.md`](template-materialize.md)) copies root + shell DX, `shared/` (including `boltffi.toml` and `shared/src/bin/codegen/`), `ui-contract/` (Maestro test ids, UI strings, errors), `supply-chain/`, and `.maestro/`. After stripping `VECTIS-OPTIONAL` (especially `cap=demo`), keep:
 
 | Path | Role |
 |------|------|
@@ -16,7 +16,6 @@ Greenfield trees come from a local [`vectis-exemplar`](https://github.com/augent
 | `shared/boltffi.toml`, `shared/src/bin/codegen/` | FFI + ui-contract → shell/Rust binding codegen |
 | `ui-contract/test-ids.yaml` (optional demo seed), `ui-contract/ui-strings.yaml`, `ui-contract/ui-errors.yaml`, `ui-contract/seed.yaml` | Canonical UI bindings — test ids from composition; strings/errors from ui-contract; seed fixture (app-defined shape, core serde test) |
 | `.maestro/config.yaml`, `.maestro/entries/maestro.{mobile,web}.yaml`, `.maestro/scripts/run-maestro.sh`, `.maestro/scripts/load-{test-ids,strings,errors}.sh`, `.maestro/scripts/maestro-env.sh` | Maestro infra (not demo journeys) |
-| `tools/cursor-guard/`, `.cursor/hooks.json` | Guard generated bindings from direct agent edits (`cargo make build-hooks`) |
 
 Strip demo Maestro journeys (everything under `.maestro/journeys/`) and `cap=demo` blocks inside `ui-contract/*.yaml` per `$TEMPLATE_DIR/AGENTS.md` and `$TEMPLATE_DIR/.maestro/README.md`. Do **not** delete platform entries (`maestro.mobile.yaml`, `maestro.web.yaml`), `run-maestro.sh`, or the load scripts above. README demo (`cap=demo` doc) blocks may be trimmed; keep the file.
 

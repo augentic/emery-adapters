@@ -26,7 +26,7 @@ Generated paths (do not edit):
 - `Android/generated/<package>/MaestroTestIds.kt`, `UiStrings.kt`, `UiErrors.kt`
 - `shared/src/ui_strings.rs`, `shared/src/ui_errors.rs`
 
-Run **`cargo make build-hooks`** once per machine (or after pulling `tools/cursor-guard`) so `.cursor/hooks.json` can block direct edits to generated files during **desk / IDE** sessions. Hooks load at agent session start — they do not protect the first materialize build session. **Build-time enforcement** is the deterministic in-guest verify gate only (see *Mechanical gates* below).
+**Build-time enforcement** is the deterministic in-guest verify gate only (see *Mechanical gates* below).
 
 ## Authoring rules (build agents)
 

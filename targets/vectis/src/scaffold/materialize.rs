@@ -78,11 +78,7 @@ const ROOT_FILES: &[&str] = &[
     ".gitignore",
 ];
 
-/// Nested paths under the template root (not whole-directory copies).
-const ROOT_NESTED_FILES: &[&str] = &[".cursor/hooks.json"];
-
-const ROOT_DIRS: &[&str] =
-    &["shared", "ui-contract", "iOS", "Android", "supply-chain", ".maestro", "tools"];
+const ROOT_DIRS: &[&str] = &["shared", "ui-contract", "iOS", "Android", "supply-chain", ".maestro"];
 
 const SKIP_DIR_NAMES: &[&str] = &[
     ".git",
@@ -228,19 +224,6 @@ pub fn run(
         let rel = map_relative_path(name, identity);
         planned.push((src, dest_dir.join(&rel)));
     }
-    for name in ROOT_NESTED_FILES {
-        let src = template_dir.join(name);
-        if !src.is_file() {
-            return Err(ScaffoldError::InvalidProject {
-                message: format!(
-                    "template is missing required file {name} under {}",
-                    template_dir.display()
-                ),
-            });
-        }
-        let rel = map_relative_path(name, identity);
-        planned.push((src, dest_dir.join(&rel)));
-    }
     for name in ROOT_DIRS {
         if !should_materialize_root_dir(name, platforms) {
             continue;
@@ -336,33 +319,22 @@ fn should_materialize_root_dir(name: &str, platforms: &[String]) -> bool {
 }
 
 fn ensure_template_shape(template_dir: &Path, platforms: &[String]) -> Result<(), ScaffoldError> {
-    // Always-required roots. `ui-contract/` and `.cursor/hooks.json` distinguish
-    // a current exemplar from a pre-canonical-UI checkout (`main` before that
-    // landed) — fail fast with an actionable message rather than copying a
-    // half-shaped tree and dying later in verify.
+    // Always-required roots. `ui-contract/` distinguishes a current exemplar
+    // from a pre-canonical-UI checkout (`main` before that landed) — fail fast
+    // with an actionable message rather than copying a half-shaped tree and
+    // dying later in verify.
     for name in ["Cargo.toml", "shared", "ui-contract"] {
         let path = template_dir.join(name);
         if !path.exists() {
             return Err(ScaffoldError::InvalidProject {
                 message: format!(
                     "template at {} is missing `{name}` — checkout is not a current \
-                     vectis-exemplar (need a revision that includes `ui-contract/`, \
-                     `tools/`, and `.cursor/hooks.json`; update the sibling clone or \
-                     set {TEMPLATE_DIR_ENV})",
+                     vectis-exemplar (need a revision that includes `ui-contract/`; \
+                     update the sibling clone or set {TEMPLATE_DIR_ENV})",
                     template_dir.display()
                 ),
             });
         }
-    }
-    let hooks = template_dir.join(".cursor/hooks.json");
-    if !hooks.is_file() {
-        return Err(ScaffoldError::InvalidProject {
-            message: format!(
-                "template at {} is missing `.cursor/hooks.json` — checkout is not a \
-                 current vectis-exemplar (update the sibling clone or set {TEMPLATE_DIR_ENV})",
-                template_dir.display()
-            ),
-        });
     }
     for name in ["iOS", "Android"] {
         if !should_materialize_root_dir(name, platforms) {
