@@ -17,7 +17,7 @@ Runtime checklist for source adapters and synthesis self-review. Full artifact r
 
 ## Tasks
 
-- `tasks.md` exists when `/emery:build` depends on it
+- `tasks.md` exists when the build phase depends on it
 - Tasks are implementation steps and checkpoints only
 - Every task uses numbered checkbox format (`- [ ] X.Y …`) grouped under `## N.` headings
 

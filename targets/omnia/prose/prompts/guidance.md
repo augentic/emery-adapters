@@ -1,6 +1,6 @@
 # Omnia target — guidance prompt
 
-> This document is **prose guidance only**, returned verbatim by the adapter's `guidance` operation. Core synthesis (the `/emery:refine` pipeline) consumes the guidance below when authoring `proposal.md`, `specs/<domain>/spec.md`, and `design.md` for a slice whose `Slice.target == omnia`. It does **not** read sources or write artifacts — it carries idioms the synthesiser folds into the canonical artifacts. The same guidance applies whether the slice's evidence is pure intent, documentation, code, or any combination; per eval scenario #5h, both fixtures pick up identical `guidance`.
+> This document is **prose guidance only**, returned verbatim by the adapter's `guidance` operation. Core synthesis (the refine phase's pipeline) consumes the guidance below when authoring `proposal.md`, `specs/<domain>/spec.md`, and `design.md` for a slice whose `Slice.target == omnia`. It does **not** read sources or write artifacts — it carries idioms the synthesiser folds into the canonical artifacts. The same guidance applies whether the slice's evidence is pure intent, documentation, code, or any combination; per eval scenario #5h, both fixtures pick up identical `guidance`.
 
 ## Omnia domains
 

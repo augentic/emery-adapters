@@ -8,7 +8,7 @@
 2. **Never hand-author DX / pin files.** `iOS/Makefile` and `iOS/project.yml` must come from `$TEMPLATE_DIR` after identity substitution — not from memory.
 3. **Keep DX aligned with `$TEMPLATE_DIR`.** On drift, re-copy those paths from the template; agents must not patch pins or destinations during verify-repair or feature work.
 4. **Never set a named simulator destination in verify DX.** The template Makefile owns `DESTINATION ?= generic/platform=iOS Simulator`. Do not substitute `name=iPhone …` or run `xcodebuild` with a device-specific destination.
-5. **Orchestrator runs verify; repair sub-agents are Swift-only.** The `/emery:build` orchestrator executes `swiftformat` and `make build` (typegen + `boltffi pack apple` + xcodegen + simulator build). `ios-verify-repair` sub-agents must not run `make`, `xcodebuild`, or edit DX paths — they return Swift edits only. After a clean `make build`, write `iOS/.vectis/verify.ok` (adapter stamp; not template DX).
+5. **Orchestrator runs verify; repair sub-agents are Swift-only.** The build-phase orchestrator executes `swiftformat` and `make build` (typegen + `boltffi pack apple` + xcodegen + simulator build). `ios-verify-repair` sub-agents must not run `make`, `xcodebuild`, or edit DX paths — they return Swift edits only. After a clean `make build`, write `iOS/.vectis/verify.ok` (adapter stamp; not template DX).
 
 ## Running iOS locally
 

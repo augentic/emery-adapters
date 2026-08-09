@@ -57,7 +57,7 @@ The postflight gate intentionally validates the merged baseline, not the staged 
 
 ## Failure semantics
 
-A blocking preflight finding aborts the merge before anything folds: the slice stays `built`, the plan entry stays `in-progress`, and the operator resolves and re-runs the merge. A blocking postflight finding is a terminal diagnostic, not a park: the engine has already committed and archived the merge (non-rollback), the plan entry is `done`, and the gate report lands at the archive's `merge/postflight.yaml` (including `status: failure`). Never attempt to roll back the merge, edit the baseline's lifecycle state, or retry `/emery:merge` for that archived slice from this prompt.
+A blocking preflight finding aborts the merge before anything folds: the slice stays `built`, the plan entry stays `in-progress`, and the operator resolves and re-runs the merge. A blocking postflight finding is a terminal diagnostic, not a park: the engine has already committed and archived the merge (non-rollback), the plan entry is `done`, and the gate report lands at the archive's `merge/postflight.yaml` (including `status: failure`). Never attempt to roll back the merge, edit the baseline's lifecycle state, or retry the merge for that archived slice from this prompt.
 
 Operator resume (engine-owned): inspect the archived `merge/postflight.yaml`, repair the unclean baseline (hand-fix or a follow-up slice via `/emery:plan`), then re-run `emery plan execute` to acknowledge the sticky `merge-postflight-failed` stop and continue (or finalize when the plan is otherwise drained).
 

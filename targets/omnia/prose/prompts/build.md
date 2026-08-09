@@ -15,7 +15,7 @@ The build runs against the build request the CLI prepared at `.emery/slices/<sli
 These working names, bound from the request and the resolved crate, are used throughout:
 
 ```text
-$SLICE_NAME    = active in-progress plan entry's slice name (from `emery plan advance`)
+$SLICE_NAME    = active in-progress plan entry's slice name (claimed by the execute loop)
 $SLICE_DIR     = .emery/slices/$SLICE_NAME
 $DOMAIN_NAME   = domain slug from proposal.md ## Domains (typically equals crate name for single-crate slices)
 $SPEC_PATH     = $SLICE_DIR/specs/$DOMAIN_NAME/spec.md
@@ -72,11 +72,11 @@ Repeat until all four checks pass or 3 iterations exhausted. If still failing af
 
 A build failure surfaces a stop hint as the body's final output — a single structured message the parent skill or the parent loop can act on without re-deriving context:
 
-- `slice` — slice name from `emery plan advance`.
+- `slice` — the active slice name claimed by the execute loop.
 - `phase` — `build`.
 - `failing-task` — the `tasks.md` checkbox (or sub-step) that exited non-zero.
 - `log-path` — absolute path to the captured stdout/stderr.
-- `next-action` — typically `re-run /emery:build $SLICE after fix`.
+- `next-action` — typically `re-run emery plan execute after fix` (the loop resumes at the build phase).
 
 Render the hint as the final visible output of the run, alongside the blocking findings that make the assembled build report `status: failure` (see the review prompt's `## Build report`). Never write the lifecycle yourself — the deterministic in-guest report gate checks the assembled report and the engine guest owns the lifecycle, so the slice stays `refined` and the loop (or a re-invocation) re-enters cleanly.
 

@@ -309,7 +309,7 @@ Per-platform binaries live under `design-system/assets/exports/android/` and are
 recorded in `sources.android` (operator-pinned or auto-written by
 the adapter's materialize step). Materialization runs automatically as an
 in-guest prelude of the build operation for in-scope assets with missing exports;
-operators re-materialize by re-running the slice build
+operators re-materialize by re-running the build phase
 after editing canonical masters. Committed `exports/` trees are version-controlled
 — CI and shell builds consume them without re-running materialize on every job.
 

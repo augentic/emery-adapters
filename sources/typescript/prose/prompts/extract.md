@@ -1,6 +1,6 @@
 # TypeScript / JavaScript source extract
 
-`/emery:refine` invokes this prompt once per `slices[].sources[]` binding whose adapter is `typescript`. Your job: for a single `(source, lead)` pair, locate the matching TypeScript module(s) under `$SOURCE_DIR`, read the surrounding code, and emit one Evidence YAML document the CLI persists to `.emery/slices/<slice>/evidence/<source>.yaml`.
+The refine phase of `emery plan execute` invokes this prompt once per `slices[].sources[]` binding whose adapter is `typescript`. Your job: for a single `(source, lead)` pair, locate the matching TypeScript module(s) under `$SOURCE_DIR`, read the surrounding code, and emit one Evidence YAML document the CLI persists to `.emery/slices/<slice>/evidence/<source>.yaml`.
 
 ## Inputs
 
@@ -109,7 +109,7 @@ Same skip-root and traversal rules as the survey prompt: relative paths only, no
 - **Speculative claims.** Do not infer behaviour the code does not exhibit. If the handler does not enforce uniqueness, do not emit a uniqueness `excerpt`. Synthesis tags unknowns; you do not.
 - **Tests-as-evidence.** Skip `*.test.*`, `*.spec.*`, `tests/`, `__tests__/`. Test files document expected behaviour; this adapter extracts observed behaviour from production source.
 - **Type-only `.d.ts` files.** A `.d.ts` declares ambient types, not behaviour. Use the originating `.ts` file when possible; emit no claim when only a `.d.ts` is reachable.
-- **Cross-source synthesis.** Do not reconcile this lead's claims with another source's Evidence — that is core synthesis's job in `/emery:refine` after every `extract` returns (see [From sources to slices](../references/emery-runtime/reconciliation.md#slice-time-evidence-becomes-a-spec)). Emit Evidence purely from `$SOURCE_DIR`.
+- **Cross-source synthesis.** Do not reconcile this lead's claims with another source's Evidence — that is core synthesis's job in the refine phase after every `extract` returns (see [From sources to slices](../references/emery-runtime/reconciliation.md#slice-time-evidence-becomes-a-spec)). Emit Evidence purely from `$SOURCE_DIR`.
 - **Whole-file paths without anchors.** A `path: src/users/register.ts` claim is legal under the schema but useless for synthesis. Always anchor to the smallest meaningful range.
 
 ## Failure modes

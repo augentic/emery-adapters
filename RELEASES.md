@@ -23,7 +23,7 @@ Unreleased
 ```bash
 cargo build -p vectis --target wasm32-wasip2 --release   # or: cargo make release
 emery adapter add target/wasm32-wasip2/release/vectis.wasm
-# then: emery slice build my-lists-platform  (todo-app)  and/or
+# then: emery plan execute  (todo-app — drives the build phase)  and/or
 #       cargo make eval vectis-open-gap-fab --restart
 ```
 

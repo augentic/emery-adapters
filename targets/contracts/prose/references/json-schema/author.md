@@ -1,6 +1,6 @@
 # JSON Schema — Author
 
-> **When to read this.** Read this when authoring or extending standalone JSON Schema documents under `contracts/schemas/` for a Emery change — i.e. when the contracts adapter build prompt during `/emery:build` selects the author intent for shared payload vocabulary, or when an operator extends the baseline for new payload types referenced (or about to be referenced) by the `openapi` or `asyncapi` sub-flows. Skip this file when importing external schema files (use [`importer.md`](./importer.md)) or when verifying existing artefacts (use [`verifier.md`](./verifier.md)).
+> **When to read this.** Read this when authoring or extending standalone JSON Schema documents under `contracts/schemas/` for a Emery change — i.e. when the contracts adapter build prompt during the build phase selects the author intent for shared payload vocabulary, or when an operator extends the baseline for new payload types referenced (or about to be referenced) by the `openapi` or `asyncapi` sub-flows. Skip this file when importing external schema files (use [`importer.md`](./importer.md)) or when verifying existing artefacts (use [`verifier.md`](./verifier.md)).
 
 ## Inputs
 

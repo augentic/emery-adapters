@@ -1,6 +1,6 @@
 # Shared engineering standards (UNI-\*)
 
-Shared **engineering standards** catalog — target-agnostic rules under `codex/`. Codex is the on-disk rule format; these files are durable policy, not workflow state or slice artifacts. Read by every code-generating target adapter's build review prompt during `/emery:build`: the pack is embedded into each adapter component via a `prose/rules/universal` symlink and served by the adapter's references server. Findings cite a rule here as a stable `rule_id` (for example `UNI-014`) alongside a report-local occurrence id (for example `UNI-3`) in `REVIEW.md`.
+Shared **engineering standards** catalog — target-agnostic rules under `codex/`. Codex is the on-disk rule format; these files are durable policy, not workflow state or slice artifacts. Read by every code-generating target adapter's build review prompt during the build phase of `emery plan execute`: the pack is embedded into each adapter component via a `prose/rules/universal` symlink and served by the adapter's references server. Findings cite a rule here as a stable `rule_id` (for example `UNI-014`) alongside a report-local occurrence id (for example `UNI-3`) in `REVIEW.md`.
 
 See [docs/explanation/standards-layer.md](https://github.com/augentic/emery/blob/main/docs/explanation/standards-layer.md) for how engineering standards relate to workflow, artifacts, and `docs/standards/` (authoring house style).
 
@@ -12,7 +12,7 @@ Sibling shared hook directory: [`codex/references/replay/`](../../references/rep
 
 Rules are grouped by severity (highest first). `UNI-*` ids are stable citation keys — they are not renumbered when severity or grouping changes.
 
-**Enforcement mode.** Every `UNI-*` rule is applied as a **model-assisted review finding** by the target build review prompts during `/emery:build`; none gate deterministically. Rules are agent-readable prose — there is no deterministic hint machinery.
+**Enforcement mode.** Every `UNI-*` rule is applied as a **model-assisted review finding** by the target build review prompts during the build phase; none gate deterministically. Rules are agent-readable prose — there is no deterministic hint machinery.
 
 ### Critical
 

@@ -262,7 +262,7 @@ The eval composition ([`examples/eval/`](../examples/eval/)) links adapters stat
 
 How to exercise it live depends on the axis:
 
-- **Target adapter** — add a build case: a data directory under `examples/eval/cases/<id>/` with a `case.toml` (`kind = "build"`, slice name, `expect` artifacts) and a `fixture/` carrying the exact refined state `slice build` consumes (`.emery/project.yaml`, the slice's `metadata.yaml`, proposal / design / tasks / specs, plus any source material). Anatomy and the `expect` gate: [examples/eval/README.md](../examples/eval/README.md#case-shapes). Run it with `cargo make eval <id> --restart`.
+- **Target adapter** — add a build case: a data directory under `examples/eval/cases/<id>/` with a `case.toml` (`kind = "build"`, slice name, `expect` artifacts) and a `fixture/` carrying the exact refined state the build phase consumes (`.emery/project.yaml`, the slice's `metadata.yaml`, proposal / design / tasks / specs, plus any source material). Anatomy and the `expect` gate: [examples/eval/README.md](../examples/eval/README.md#case-shapes). Run it with `cargo make eval <id> --restart`.
 - **Source adapter** — build cases drive only the target build today, so exercise `survey` / `extract` live through a workflow case (`kind = "workflow"`) that binds your source, e.g. `notes = "changelog:notes"` under `[sources]` over a fixture tree.
 
 Either way needs an authenticated `cursor-agent`. From here you are in the standard repair loop — edit `prose/**`, re-run, compare scratch trees — documented in the [repo README](../README.md).

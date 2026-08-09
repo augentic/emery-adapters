@@ -8,9 +8,9 @@ Per-skill guardrails — rules that only make sense for one skill ("never auto-p
 
 The CLI is the **only** writer for change and slice lifecycle state. Skills route every write through a CLI verb; they never edit the underlying files by hand.
 
-- **Never hand-edit `plan.yaml`.** Append entries through `emery plan add`; running `emery plan execute` is the operator's approval (nothing is stamped); walk entries backwards through `emery plan undo`; close out the plan through `emery plan archive`. The single-writer contract lives in the [`plan` skill](https://emery.augentic.io/reference/change-skills/plan.html).
-- **Never hand-edit `.emery/slices/<name>/metadata.yaml`.** Status transitions and timestamp writes are owned by the guest orchestrations (`emery slice refine` / `build` / `merge` / `drop`). The CLI enforces the legal lifecycle edges — skills do not need to track them.
-- **Never hand-edit `.emery/archive/`.** Archive moves are atomic operations performed by `emery slice merge`, `emery slice drop`, and `emery plan archive`.
+- **Never hand-edit `plan.yaml`.** Append entries through `emery plan add`; running `emery plan execute` is the operator's approval (nothing is stamped); abandon an entry's slice through `emery plan drop`; close out the plan through `emery plan archive`. The single-writer contract lives in the [skills reference](https://emery.augentic.io/reference/skills/index.html).
+- **Never hand-edit `.emery/slices/<name>/metadata.yaml`.** Status transitions and timestamp writes are owned by the guest orchestration phases (refine / build / merge) inside `emery plan execute` and by `emery plan drop`. The CLI enforces the legal lifecycle edges — skills do not need to track them.
+- **Never hand-edit `.emery/archive/`.** Archive moves are atomic operations performed by the merge phase, `emery plan drop`, and `emery plan archive`.
 - **Never hand-roll `AGENTS.md` during init.** `emery init` generates it when absent, preserves an existing root `AGENTS.md`, and writes `.emery/context.lock` as the generation fingerprint.
 
 ## Baseline immutability for contract authoring
@@ -18,7 +18,7 @@ The CLI is the **only** writer for change and slice lifecycle state. Skills rout
 Contract authoring skills (OpenAPI, AsyncAPI, JSON Schema) write only inside the active slice directory. The shared baseline is read-only to authoring; merge into the baseline is a separate, explicit step.
 
 - **Do not modify any file outside `$SLICE_DIR/contracts/`** (or `$SLICE_DIR/contracts/schemas/` for the JSON Schema skill).
-- **Never modify baseline files in root `contracts/`.** All authored output lands in the slice-local `contracts/` directory; merging into the baseline is `emery slice merge`'s job.
+- **Never modify baseline files in root `contracts/`.** All authored output lands in the slice-local `contracts/` directory; merging into the baseline is the merge phase's job.
 - **Never silently delete or narrow a baseline schema's fields.** If the spec requires it, surface the slice as a warning and let a human operator decide whether to bump the schema's `$id`.
 
 ## Consumer tooling boundary

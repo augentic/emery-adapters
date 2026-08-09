@@ -6,7 +6,7 @@ The verifier runs in two modes:
 
 | Surface                            | Output format                                  | Caller                                         | Trigger                                        |
 | ---------------------------------- | ---------------------------------------------- | ---------------------------------------------- | ---------------------------------------------- |
-| Format verifier `single` (default) | Markdown                                       | contracts adapter build prompt in `/emery:build` | Post-author or post-import; verify-repair loop |
+| Format verifier `single` (default) | Markdown                                       | contracts adapter build prompt in the build phase | Post-author or post-import; verify-repair loop |
 | Format verifier `cross-project`    | JSON envelope from the adapter's in-guest contract validator | contracts adapter merge prompt                  | Post-merge baseline validation gate            |
 
 `single` mode is human-readable; the contracts adapter build prompt drives a verify-repair loop until the report is clean. Format-verifier `cross-project` mode describes the adapter's in-guest contract validator and preserves its baseline-validation JSON envelope.

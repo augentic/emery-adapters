@@ -42,7 +42,7 @@ A future CLI surface may persist a `replay:` block to `$SLICE_DIR/metadata.yaml`
 
 ## Merge posture
 
-When a `replay:` block is present on `metadata.yaml` (operator tooling or a future CLI surface), `/emery:merge` surfaces a one-line summary in its closing message:
+When a `replay:` block is present on `metadata.yaml` (operator tooling or a future CLI surface), the merge phase surfaces a one-line summary in its closing message:
 
 ```text
 replay: <passed> passed, <failed> failed, <skipped> skipped
@@ -53,7 +53,7 @@ Rules:
 - **Missing block** → omit the line; absence is not an error (the normal v1 case).
 - **`failed > 0`** → `merge` does **not** auto-refuse; the operator decides whether to land.
 
-Capture the block before archival if present — `emery slice merge` moves the slice directory.
+Capture the block before archival if present — the merge phase moves the slice directory.
 
 ## See also
 
