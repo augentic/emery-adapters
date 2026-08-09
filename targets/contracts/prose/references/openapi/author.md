@@ -1,6 +1,6 @@
 # OpenAPI — Author
 
-> **When to read this.** Read this when authoring or extending the OpenAPI document for a Emery change — i.e. when the contracts adapter build prompt during `/emery:build` selects the author intent, or an operator wants to add new HTTP interactions to the platform's HTTP baseline. Skip this file when importing an external document (use [`importer.md`](./importer.md)) or when verifying an existing artefact (use [`verifier.md`](./verifier.md)).
+> **When to read this.** Read this when authoring or extending the OpenAPI document for a Emery change — i.e. when the contracts adapter build prompt during the build phase selects the author intent, or an operator wants to add new HTTP interactions to the platform's HTTP baseline. Skip this file when importing an external document (use [`importer.md`](./importer.md)) or when verifying an existing artefact (use [`verifier.md`](./verifier.md)).
 
 ## Inputs
 
@@ -142,7 +142,7 @@ The full structural rules — path conventions, method semantics, response code 
 Shared payload schemas live in `contracts/schemas/` and are owned by the `json-schema` sub-flow. The author of an OpenAPI file does **not** create or edit schema files — it only references them.
 
 - **Always `$ref`** request bodies, response bodies, and reusable parameter schemas to `../schemas/<type>.yaml`.
-- **Never inline** a domain type. If the spec mentions a new payload type, route the schema work to the `json-schema` sub-flow (or, in the same `/emery:build` invocation, rely on the contracts adapter build prompt's fixed `json-schema`-first ordering).
+- **Never inline** a domain type. If the spec mentions a new payload type, route the schema work to the `json-schema` sub-flow (or, in the same build-phase run, rely on the contracts adapter build prompt's fixed `json-schema`-first ordering).
 - **`$ref` resolution scope.** All `$ref` paths must resolve either to `$CONTRACTS_DIR/schemas/` (this slice's delta) or `$BASELINE_DIR/schemas/` (the platform baseline). The verifier flags any `$ref` that does not resolve.
 - **Inline `$defs`** for one-shot sub-objects used only inside one parent payload are acceptable in the schema files themselves, but not in the OpenAPI document. Keep the OpenAPI side a flat list of `$ref` pointers.
 - **`components/schemas` is forbidden** for domain types. The `components` block may host `parameters`, `headers`, or `securitySchemes` (see Auth below).
@@ -161,7 +161,7 @@ Computation rules applied at file scope:
 
 1. **One file per API domain.** Always read the matching baseline file first. The delta file replaces it wholesale at merge time.
 2. **`info.version` MUST parse as SemVer (contract identity/version validation).** New top-level OpenAPI documents MUST set `info.version` to a value that parses per [semver.org](https://semver.org), including optional prerelease labels (`1.0.0-draft.1`). Do not bump the baseline's `info.version` automatically — version policy is a platform decision, not an authoring decision. If the slice requires a version bump, the contracts adapter build prompt flags it for human review. The verifier sibling enforces SemVer in single mode (Check 4), and the adapter's in-guest contract validator enforces it again at merge time on the baseline (the contracts adapter merge contract); a non-SemVer value is a hard validation failure at both gates.
-3. **`info.x-emery-id` rename-stable identifier (contract identity/version validation).** SHOULD set `info.x-emery-id` on every new top-level OpenAPI document to a kebab-case slug (typically the file stem; `^[a-z][a-z0-9-]*$`, ≤ 64 characters). The id is a hint that survives file moves and version bumps. MUST preserve any pre-existing `info.x-emery-id` when extending the baseline; MUST NOT change it across `info.version` bumps. Path-based references in `registry.yaml` remain canonical — the id is a rename-stable hint, not a substitute.
+3. **`info.x-emery-id` rename-stable identifier (contract identity/version validation).** SHOULD set `info.x-emery-id` on every new top-level OpenAPI document to a kebab-case slug (typically the file stem; `^[a-z][a-z0-9-]*$`, ≤ 64 characters). The id is a hint that survives file moves and version bumps. MUST preserve any pre-existing `info.x-emery-id` when extending the baseline; MUST NOT change it across `info.version` bumps. The contract's path under root `contracts/` remains canonical — the id is a rename-stable hint, not a substitute.
 4. **Preserve `operationId` keys.** When extending a baseline file, every existing operation's `operationId` stays exactly as it is. New operations get fresh kebab-cased or camelCased `operationId` values that are unique across the contract tree.
 5. **Diff at the operation level.** When modifying an existing operation, change only the keys the spec asserts. Do not reformat or reorder unrelated keys — opaque file replacement means a re-ordered file looks like a wholesale rewrite to reviewers.
 

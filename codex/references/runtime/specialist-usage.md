@@ -2,7 +2,7 @@
 
 Augentic-specific supplement: how specialist skills (Omnia, Vectis, and friends) *consume* the standard artifacts. For artifact structure see [Artifact format](https://emery.augentic.io/reference/artifact-format.html) and [Artifacts in depth](https://emery.augentic.io/explanation/artifacts.html).
 
-Augentic uses stock Emery as its executable workflow contract. Specialist operations read the four artifacts `proposal.md`, `spec.md`, `design.md`, and `tasks.md` during `/emery:plan → emery plan execute` (which drives refine → build → merge per slice), but they must not redefine the runtime contract. Artifact validation runs automatically inside `emery slice build` before implementation begins.
+Augentic uses stock Emery as its executable workflow contract. Specialist operations read the four artifacts `proposal.md`, `spec.md`, `design.md`, and `tasks.md` during `/emery:plan → emery plan execute` (which drives the refine → build → merge phases per slice), but they must not redefine the runtime contract. Artifact validation runs automatically inside the build phase before implementation begins.
 
 ## Where specialists read and write
 
@@ -50,7 +50,7 @@ Tasks are implemented by the active target adapter's build operation, which carr
 
 ## Decision Records
 
-A slice may author **Decision Records** at `$DECISIONS_DIR/<slug>.md` for the durable *why* behind a design choice — the engine's synthesis authors them structurally, and `emery slice merge` promotes them into `$BASELINE_DECISIONS/DEC-NNNN-<slug>.md`. See [Decision Records](https://emery.augentic.io/reference/artifact-format.html#decision-records-design-why) for the format and promotion rules. Accepted decisions also sharpen the project's plan-time routing identity (a third axis beside what the project does and what recently changed).
+A slice may author **Decision Records** at `$DECISIONS_DIR/<slug>.md` for the durable *why* behind a design choice — the engine's synthesis authors them structurally, and the merge phase promotes them into `$BASELINE_DECISIONS/DEC-NNNN-<slug>.md`. See [Decision Records](https://emery.augentic.io/reference/artifact-format.html#decision-records-design-why) for the format and promotion rules. Accepted decisions also sharpen the project's plan-time routing identity (a third axis beside what the project does and what recently changed).
 
 ## See also
 

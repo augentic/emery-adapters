@@ -111,7 +111,7 @@ source trees that cannot ship as committed fixtures, e.g. the
 `.gitignore` in the case directory. Refresh the snapshot by deleting
 the cached tree.
 
-- `build` — `slice` + `expect`: the fixture carries the exact refined state `emery slice build` consumes (`.emery/project.yaml`, the slice's `metadata.yaml` at `status: refined`, proposal / design / tasks / specs, and any source material such as `vendor/`). The runner invokes `slice build <slice>` once and gates on `built` metadata, the authoritative `build/report.yaml`, and every confined `expect` path.
+- `build` — `slice` + `expect`: the fixture carries the exact refined state the build phase consumes (`.emery/project.yaml`, the slice's `metadata.yaml` at `status: refined`, proposal / design / tasks / specs, and any source material such as `vendor/`). The runner drives the build orchestration for that slice once and gates on `built` metadata, the authoritative `build/report.yaml`, and every confined `expect` path.
 - `workflow` — `target` + `change` + `intent` / `[sources]`: init, `plan author`, then (past `--until plan`) the genuine drained `plan execute` (running it is the approval); `--until finalize` adds `plan archive`. Gates: a non-empty authored plan with every entry pending, every entry `done` after execute, then provenance grading.
 
 Linked adapters need only the directory. A third-party adapter also needs a Cargo dep on `eval` and a catalog line in `[src/main.rs](src/main.rs)`.

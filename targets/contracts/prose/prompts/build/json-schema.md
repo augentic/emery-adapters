@@ -39,7 +39,7 @@ Conventions enforced for every schema file in either location:
 
 | Intent | Trigger | Sibling |
 |---|---|---|
-| Author or extend reusable schemas from a spec | build prompt during `/emery:build`; operator extending the baseline for new payload types | [`../../references/json-schema/author.md`](../../references/json-schema/author.md) |
+| Author or extend reusable schemas from a spec | build prompt during the build phase; operator extending the baseline for new payload types | [`../../references/json-schema/author.md`](../../references/json-schema/author.md) |
 | Import or normalise external schema files | operator drops schema files into a slice's `contracts/schemas/` directory | [`../../references/json-schema/importer.md`](../../references/json-schema/importer.md) |
 | Verify `$ref` consistency, metadata, cross-format consumer compatibility, or merge-time baseline validation | build verification; post-merge contract baseline gate | [`../../references/json-schema/verifier.md`](../../references/json-schema/verifier.md) |
 

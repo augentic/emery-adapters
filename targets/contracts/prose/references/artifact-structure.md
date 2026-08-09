@@ -36,9 +36,8 @@ contracts/
 
 Contracts sit outside the per-adapter spec tree. A single OpenAPI document or schema type often spans multiple adapters — a `POST /users` endpoint might touch `user-registration`, `auth`, and `notifications` adapters. Flattening contracts out of the adapter hierarchy avoids the question of "which adapter owns this schema?" — nobody does; it is platform vocabulary.
 
-Three platform concerns, three top-level locations:
+Two platform concerns, two top-level locations:
 
-- **`registry.yaml`** declares *who* the participants are.
 - **`plan.yaml`** declares *what* changes are planned.
 - **`contracts/`** declares *how* participants communicate.
 
@@ -82,7 +81,7 @@ During a slice's define phase, proposed contract modifications live in the slice
 
 ### Merge Semantics
 
-When `emery slice merge` processes a slice:
+When the merge phase processes a slice:
 
 - Files in the slice's `contracts/` are copied into root `contracts/`, replacing files at the same path.
 - Files absent from the slice's `contracts/` are left untouched in the baseline.
@@ -90,7 +89,7 @@ When `emery slice merge` processes a slice:
 
 ### Conflict Detection
 
-Two concurrent changes that both modify the same contract file (e.g. both add paths to `http/user-api.yaml`) will conflict. `emery slice merge --conflict-check` detects this: if the baseline file was modified after the slice's `defined-at` timestamp, the merge is blocked. Resolution: re-run the slice's define phase against the updated baseline.
+Two concurrent changes that both modify the same contract file (e.g. both add paths to `http/user-api.yaml`) will conflict. The baseline-conflict check (surfaced by `emery slice validate`, enforced by the merge phase) detects this: if the baseline file was modified after the slice's `defined-at` timestamp, the merge is blocked. Resolution: re-run `emery plan execute` so the slice re-refines against the updated baseline.
 
 ## Baseline vs Change-Level
 

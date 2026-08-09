@@ -1,6 +1,6 @@
 # Shared replay hook contract
 
-Cross-target, build-time `replay` rules under `codex/` — read by any target adapter that opts into the capture-backed replay workflow hook during `/emery:build`. This directory is shared support material, not part of any adapter's artifact; it is not a target adapter and does not add a fourth operation.
+Cross-target, build-time `replay` rules under `codex/` — read by any target adapter that opts into the capture-backed replay workflow hook during the build phase of `emery plan execute`. This directory is shared support material, not part of any adapter's artifact; it is not a target adapter and does not add a fourth operation.
 
 ## Relationship to `captures`
 

@@ -24,7 +24,7 @@ Worked examples:
 - With block: [`quality/fixtures/reference/targets/omnia/with-replay/`](https://github.com/augentic/emery/tree/main/quality/fixtures/reference/targets/omnia/with-replay)
 - Without block (omission-is-not-an-error): [`quality/fixtures/reference/targets/omnia/without-replay/`](https://github.com/augentic/emery/tree/main/quality/fixtures/reference/targets/omnia/without-replay)
 
-The block is additive; it must not reshape other `metadata.yaml` fields. `/emery:merge` reads it when present for the one-line closing summary described in [`hook-contract.md`](hook-contract.md).
+The block is additive; it must not reshape other `metadata.yaml` fields. The merge phase reads it when present for the one-line closing summary described in [`hook-contract.md`](hook-contract.md).
 
 ## See also
 

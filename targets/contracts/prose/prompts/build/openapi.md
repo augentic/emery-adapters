@@ -46,7 +46,7 @@ Pick the sibling that matches the trigger. Each sibling is a self-contained algo
 
 | Intent | Trigger | Sibling |
 |---|---|---|
-| Author or extend the OpenAPI document from a spec | build prompt during `/emery:build`; operator extending the baseline for new HTTP interactions | [`../../references/openapi/author.md`](../../references/openapi/author.md) |
+| Author or extend the OpenAPI document from a spec | build prompt during the build phase; operator extending the baseline for new HTTP interactions | [`../../references/openapi/author.md`](../../references/openapi/author.md) |
 | Import or normalise an external OpenAPI document | operator drops an OpenAPI file into a slice's `contracts/http/` directory | [`../../references/openapi/importer.md`](../../references/openapi/importer.md) |
 | Verify internal consistency or run merge-time baseline validation | build verification; post-merge contract baseline gate; operator invoking validation against an existing OpenAPI artefact | [`../../references/openapi/verifier.md`](../../references/openapi/verifier.md) |
 

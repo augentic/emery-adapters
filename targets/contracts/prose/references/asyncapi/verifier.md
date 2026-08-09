@@ -10,7 +10,7 @@ The verifier accepts a `--mode {single, cross-project}` flag. The mode determine
 
 | Mode               | Caller                                         | Trigger                                            | Scope                                                             | Output                                                |
 | ------------------ | ---------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------- |
-| `single` (default) | contracts adapter build prompt in `/emery:build` | Post-author or post-import                         | One slice's `contracts/messages/` inside one project              | Markdown report for the verify-repair loop            |
+| `single` (default) | contracts adapter build prompt in the build phase | Post-author or post-import                         | One slice's `contracts/messages/` inside one project              | Markdown report for the verify-repair loop            |
 | `cross-project`    | contracts adapter merge prompt                  | Producer-side merge of an AsyncAPI contract change | Walk the merged `contracts/` baseline; enforce contract identity/version validation | Deterministic findings from the adapter's in-guest contract validator |
 
 `single` mode feeds the build's verify-repair loop. `cross-project` mode describes the adapter's deterministic in-guest contract validator — the merge gate runs it itself and surfaces its findings; the verifier does not implement its own cross-baseline check. Both modes share the read-only contract.
@@ -35,7 +35,7 @@ $CHANGE_SPECS        = $SLICE_DIR/specs/
 Caller passes the merged baseline directory:
 
 ```text
-$BASELINE_CONTRACTS = $PROJECT_ROOT/contracts   # the merged baseline, post-`emery slice merge`
+$BASELINE_CONTRACTS = $PROJECT_ROOT/contracts   # the merged baseline, post-merge
 ```
 
 The adapter's in-guest contract validator walks every top-level OpenAPI 3.1 / AsyncAPI 3.0 document under `$BASELINE_CONTRACTS` and enforces the contract identity/version validation rules. No producer / consumer arguments are accepted — the tool's scope is the baseline as a whole.

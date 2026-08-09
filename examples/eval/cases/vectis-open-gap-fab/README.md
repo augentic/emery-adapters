@@ -54,4 +54,4 @@ cargo build -p vectis --target wasm32-wasip2 --release   # or: cargo make releas
 emery adapter add target/wasm32-wasip2/release/vectis.wasm
 ```
 
-Then re-run `emery slice build my-lists-platform` in `todo-app` (or `cargo make eval vectis-open-gap-fab --restart` for the fixture). Existing invented `create_list` → `Page::NewList` code should be reverted by LOG-010 / `code-fix`, or fixed via honest B′ closure if product intent is NewList.
+Then re-run `emery plan execute` in `todo-app` (the loop resumes at the build phase for `my-lists-platform`), or `cargo make eval vectis-open-gap-fab --restart` for the fixture. Existing invented `create_list` → `Page::NewList` code should be reverted by LOG-010 / `code-fix`, or fixed via honest B′ closure if product intent is NewList.

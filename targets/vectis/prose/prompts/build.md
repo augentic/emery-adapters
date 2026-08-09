@@ -34,10 +34,10 @@ All phase prompts assume these symbols are resolved by the leg's orchestrating a
 
 | Symbol | Meaning |
 | --- | --- |
-| `SLICE_ID` | The active slice name (`emery plan advance` output, or `emery slice` argument). |
+| `SLICE_ID` | The active slice name (claimed by the execute loop). |
 | `SLICE_DIR` | `.emery/slices/<SLICE_ID>/`. |
 | `DOMAIN_NAME` | The single domain spec folder under `SLICE_DIR/specs/`. When the slice carries multiple domains, iterate the per-domain phase prompts in declaration order. |
-| `PROJECT_DIR` | The target project root (single-repo mode) or the resolved workspace slot (workspace mode). |
+| `PROJECT_DIR` | The target project root. |
 | `TEMPLATE_DIR` | Local [`vectis-exemplar`](https://github.com/augentic/vectis-exemplar) checkout. Default `${PROJECT_DIR}/../vectis-exemplar`; override with `VECTIS_EXEMPLAR_DIR`. Required for greenfield materialize and pin refresh. |
 | `IOS_SHELL_DIR` | `${PROJECT_DIR}/iOS` (only when `ios` is in scope). |
 | `ANDROID_SHELL_DIR` | `${PROJECT_DIR}/Android` (only when `android` is in scope). |

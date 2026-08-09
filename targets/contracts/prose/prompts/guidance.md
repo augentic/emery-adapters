@@ -1,6 +1,6 @@
 # contracts.guidance
 
-Idiom guidance core synthesis (`/emery:refine`) folds into the generated `specs/<domain>/spec.md` and `design.md` for slices that target the `contracts` adapter. The contracts target produces **contract artifacts** — machine-readable interface definitions under `contracts/` — not application code, so the synthesised specs and `design.md` shape themselves around the contract's behavioural surface and its persisted format, not around runtime providers or DI patterns.
+Idiom guidance core synthesis (the refine phase) folds into the generated `specs/<domain>/spec.md` and `design.md` for slices that target the `contracts` adapter. The contracts target produces **contract artifacts** — machine-readable interface definitions under `contracts/` — not application code, so the synthesised specs and `design.md` shape themselves around the contract's behavioural surface and its persisted format, not around runtime providers or DI patterns.
 
 ## Contract domains
 
@@ -15,7 +15,7 @@ For a contracts target, the canonical artifacts answer two questions:
 
 ## Contract format selection
 
-The contracts target dispatches at `build` time to one of three contract sub-types based on the slice's needs. Core synthesis should make the format choice explicit in `design.md` so `/emery:build` can route the work without re-deriving the decision:
+The contracts target dispatches at `build` time to one of three contract sub-types based on the slice's needs. Core synthesis should make the format choice explicit in `design.md` so the build phase can route the work without re-deriving the decision:
 
 | Contract surface | Format | `design.md` should note |
 |------------------|--------|--------------------------|
@@ -35,12 +35,12 @@ The merge gate runs the adapter's deterministic contract validator in-guest agai
 
 ## Source-driven authoring vs import
 
-The contracts target supports both contract-first authoring (specs drive a new contract) and contract-given import (operator supplies an external OpenAPI / AsyncAPI / JSON Schema file and the build step normalises it). The `Sources:` provenance on each requirement in `specs/<domain>/spec.md` tells `/emery:build` which path applies — a `documentation` or `intent` source typically signals authoring; a code-source binding (`typescript`, future contract source adapters) typically signals import or reverse-engineering from observed behaviour.
+The contracts target supports both contract-first authoring (specs drive a new contract) and contract-given import (operator supplies an external OpenAPI / AsyncAPI / JSON Schema file and the build step normalises it). The `Sources:` provenance on each requirement in `specs/<domain>/spec.md` tells the build phase which path applies — a `documentation` or `intent` source typically signals authoring; a code-source binding (`typescript`, future contract source adapters) typically signals import or reverse-engineering from observed behaviour.
 
 When a slice is import-driven, `design.md` should name the supplied file path and the format detected. The `build` operation's format sub-flows handle version detection and upgrades (Swagger 2.0 → OpenAPI 3.1, AsyncAPI 2.x → AsyncAPI 3.0, JSON Schema draft-04/06/07/2019-09 → 2020-12) per `references/import-upgrade-policy.md`.
 
 ## What synthesis MUST NOT do
 
 - Do not emit application-layer guidance (provider traits, error variants, crate layout, runtime sandbox notes). Those belong to Omnia / Vectis target shapes, not contracts.
-- Do not write contract YAML inline into `specs/<domain>/spec.md` or `design.md`. The contract files themselves are `/emery:build`'s output, landing under `contracts/`.
+- Do not write contract YAML inline into `specs/<domain>/spec.md` or `design.md`. The contract files themselves are the build phase's output, landing under `contracts/`.
 - Do not invent endpoints, channels, or schemas the Evidence does not justify. Mark gaps with `[unknown]` per the standard synthesis rules and let the operator fill them in before build.
