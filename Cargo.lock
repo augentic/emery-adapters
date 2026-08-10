@@ -252,6 +252,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
+name = "base64"
+version = "0.23.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5"
+
+[[package]]
 name = "base64ct"
 version = "1.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1038,6 +1044,7 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 [[package]]
 name = "emery-adapter"
 version = "0.38.0"
+source = "git+https://github.com/augentic/emery#fc5380ff542ccbd910946700c68c26903c9b99a1"
 dependencies = [
  "omnia-guest",
  "omnia-wasi-http",
@@ -1051,6 +1058,7 @@ dependencies = [
 [[package]]
 name = "emery-artifacts"
 version = "0.38.0"
+source = "git+https://github.com/augentic/emery#fc5380ff542ccbd910946700c68c26903c9b99a1"
 dependencies = [
  "emery-diagnostics",
  "emery-error",
@@ -1067,6 +1075,7 @@ dependencies = [
 [[package]]
 name = "emery-change"
 version = "0.38.0"
+source = "git+https://github.com/augentic/emery#fc5380ff542ccbd910946700c68c26903c9b99a1"
 dependencies = [
  "emery-artifacts",
  "emery-diagnostics",
@@ -1086,6 +1095,7 @@ dependencies = [
 [[package]]
 name = "emery-diagnostics"
 version = "0.38.0"
+source = "git+https://github.com/augentic/emery#fc5380ff542ccbd910946700c68c26903c9b99a1"
 dependencies = [
  "base16ct",
  "schemars",
@@ -1098,6 +1108,7 @@ dependencies = [
 [[package]]
 name = "emery-error"
 version = "0.38.0"
+source = "git+https://github.com/augentic/emery#fc5380ff542ccbd910946700c68c26903c9b99a1"
 dependencies = [
  "serde-saphyr",
  "thiserror 2.0.20",
@@ -1106,6 +1117,7 @@ dependencies = [
 [[package]]
 name = "emery-native"
 version = "0.38.0"
+source = "git+https://github.com/augentic/emery#fc5380ff542ccbd910946700c68c26903c9b99a1"
 dependencies = [
  "axum",
  "emery-adapter",
@@ -1123,6 +1135,7 @@ dependencies = [
 [[package]]
 name = "emery-probe"
 version = "0.38.0"
+source = "git+https://github.com/augentic/emery#fc5380ff542ccbd910946700c68c26903c9b99a1"
 dependencies = [
  "anyhow",
  "clap",
@@ -1146,6 +1159,7 @@ dependencies = [
 [[package]]
 name = "emery-project"
 version = "0.38.0"
+source = "git+https://github.com/augentic/emery#fc5380ff542ccbd910946700c68c26903c9b99a1"
 dependencies = [
  "emery-artifacts",
  "emery-diagnostics",
@@ -1168,10 +1182,12 @@ dependencies = [
 [[package]]
 name = "emery-prose"
 version = "0.38.0"
+source = "git+https://github.com/augentic/emery#fc5380ff542ccbd910946700c68c26903c9b99a1"
 
 [[package]]
 name = "emery-slice"
 version = "0.38.0"
+source = "git+https://github.com/augentic/emery#fc5380ff542ccbd910946700c68c26903c9b99a1"
 dependencies = [
  "emery-artifacts",
  "emery-diagnostics",
@@ -1192,6 +1208,7 @@ dependencies = [
 [[package]]
 name = "emery-transport"
 version = "0.38.0"
+source = "git+https://github.com/augentic/emery#fc5380ff542ccbd910946700c68c26903c9b99a1"
 dependencies = [
  "clap",
  "emery-artifacts",
@@ -1769,7 +1786,7 @@ version = "0.1.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96547c2556ec9d12fb1578c4eaf448b04993e7fb79cbaad930a656880a6bdfa0"
 dependencies = [
- "base64",
+ "base64 0.22.1",
  "bytes",
  "futures-channel",
  "futures-util",
@@ -2128,9 +2145,9 @@ dependencies = [
 
 [[package]]
 name = "jsonschema"
-version = "0.49.8"
+version = "0.49.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce93912abc8220a3fdb768b2c4a826a7a9a4b1599cfb4d760d422eaa1faf88c7"
+checksum = "59ec8a241beed129f06114aa68007e905ca350e7baeb6e17a7631bb7978d91b2"
 dependencies = [
  "ahash",
  "bytecount",
@@ -2157,18 +2174,18 @@ dependencies = [
 
 [[package]]
 name = "jsonschema-regex"
-version = "0.49.8"
+version = "0.49.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8165657ebed4d32c50f3c250c1986d8428b16fbfeac355222e8fec50aa26eb1d"
+checksum = "91994f45017ed5e66aa8e59b8415f4cb033a6380d7200387b7cf117595fbdf85"
 dependencies = [
  "regex-syntax",
 ]
 
 [[package]]
 name = "jsonschema-value"
-version = "0.49.8"
+version = "0.49.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b069c5fdda3e9c2242bba49d811d5bbdb488abd8d234ed44a6312fd2891113e1"
+checksum = "7ec7637f83e510868ae6ed625f7ebfbbde4554ee8ce49854caa5126a8b9b9ecb"
 dependencies = [
  "ahash",
  "bytecount",
@@ -2363,9 +2380,9 @@ dependencies = [
 
 [[package]]
 name = "moka"
-version = "0.12.15"
+version = "0.12.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "957228ad12042ee839f93c8f257b62b4c0ab5eaae1d4fa60de53b27c9d7c5046"
+checksum = "4293f18e7567a1caf3c584855554377025c65e0aa445344d04171f5ad63d19b9"
 dependencies = [
  "crossbeam-channel",
  "crossbeam-epoch",
@@ -2487,7 +2504,7 @@ version = "5.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51e219e79014df21a225b1860a479e2dcd7cbd9130f4defd4bd0e191ea31d67d"
 dependencies = [
- "base64",
+ "base64 0.22.1",
  "chrono",
  "getrandom 0.2.17",
  "http",
@@ -2915,7 +2932,7 @@ version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56d658ba1faf63f7b9c492cfbe6e0ec365440a16132d3270c1065f7b33f1b638"
 dependencies = [
- "base64",
+ "base64 0.22.1",
  "const-hex",
  "opentelemetry",
  "opentelemetry_sdk",
@@ -3058,9 +3075,9 @@ dependencies = [
 
 [[package]]
 name = "portable-atomic"
-version = "1.14.0"
+version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d20d5497ef88037a52ff98267d066e7f11fcc5e99bbfbd58a42336193aacec3"
+checksum = "05c8b63e8d9609db387f0324918f81d68fe27748f084ef092fb35954d0539a85"
 
 [[package]]
 name = "portable-atomic-util"
@@ -3424,9 +3441,9 @@ dependencies = [
 
 [[package]]
 name = "referencing"
-version = "0.49.8"
+version = "0.49.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f39f4c36ce0f50e96fb740d895f1cad34cfa76c4ab5c36934d6590bcd7029087"
+checksum = "6efa2154ea6f5ce0fdecdd2a8d18f2fa1a39a8fbba91564f555a592e4dce8278"
 dependencies = [
  "ahash",
  "fluent-uri",
@@ -3489,7 +3506,7 @@ version = "0.12.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eddd3ca559203180a307f12d114c268abf583f59b03cb906fd0b3ff8646c1147"
 dependencies = [
- "base64",
+ "base64 0.22.1",
  "bytes",
  "futures-core",
  "http",
@@ -3527,7 +3544,7 @@ version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "219c5811de6525e5416c7d5d53bb656d3afdbc6c5af816e0802bcfa42dbdc1c3"
 dependencies = [
- "base64",
+ "base64 0.22.1",
  "bytes",
  "futures-core",
  "futures-util",
@@ -3880,7 +3897,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af2c6921c8ce48fb1b052b457619d008834039d80325992ed3bc55bbe6c155ad"
 dependencies = [
  "annotate-snippets",
- "base64",
+ "base64 0.23.1",
  "encoding_rs_io",
  "granit-parser",
  "nohash-hasher",
@@ -4475,7 +4492,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac2a5518c70fa84342385732db33fb3f44bc4cc748936eb5833d2df34d6445ef"
 dependencies = [
  "async-trait",
- "base64",
+ "base64 0.22.1",
  "bytes",
  "http",
  "http-body",
