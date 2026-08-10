@@ -1,9 +1,9 @@
-# Iteration report template
+# Review report template
 
-Output format for `2g. Produce iteration report`. Use the full template on the first iteration; on subsequent iterations report only new findings and note the iteration number.
+Output format for the review synthesis step. The review is one engine-dispatched pass: report every finding the team confirmed in this pass — the engine owns any repair routing and re-review dispatch, so never number passes or carry findings over from earlier reports.
 
 ````
-## Code Review Report: {app-name} (iteration {N})
+## Code Review Report: {app-name}
 
 **Review Team**: 3 specialists + 1 antagonist
 **Confidence Level**: [high | medium | low]
@@ -70,7 +70,7 @@ Output format for `2g. Produce iteration report`. Use the full template on the f
 - Missing test for: ...
 ````
 
-Classify each finding as **mechanical** (auto-fixable) or **design-level** (requires architectural decisions). Add design-level findings to the accumulated list.
+Classify each finding as **mechanical** (safe for a bounded fix) or **design-level** (requires architectural decisions). The classification is metadata for the engine-dispatched `repair(origin: review)` pass — review itself applies nothing.
 
 ## Finding-ID conventions
 

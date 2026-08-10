@@ -77,7 +77,7 @@ Optional frontmatter fields (`applicability`, `references`, `deprecated`) may ri
 
 Target review prompts read this directory directly and apply each rule with target-specific heuristics:
 
-- **Omnia** — [`targets/omnia/prose/prompts/build/review.md`](../../../targets/omnia/prose/prompts/build/review.md) phase 3 ("Universal checks (lead)") applies every `UNI-*` rule in the inventory above, skipping rules already covered by the SEC / COR / QUA specialists per the table in [`review-categories.md`](../../../targets/omnia/prose/references/review-categories.md).
+- **Omnia** — [`targets/omnia/prose/prompts/review.md`](../../../targets/omnia/prose/prompts/review.md) step 3 ("Universal checks (lead)") applies every `UNI-*` rule in the inventory above, skipping rules already covered by the SEC / COR / QUA specialists per the table in [`review-categories.md`](../../../targets/omnia/prose/references/review-categories.md).
 - **Vectis** — [`targets/vectis/prose/references/review/universal-checks.md`](../../../targets/vectis/prose/references/review/universal-checks.md) lists the Crux/Rust heuristics for each `UNI-*` and the overlaps to skip.
 - **Contracts** — [`docs/reference/targets/contracts.md`](https://github.com/augentic/emery/blob/main/docs/reference/targets/contracts.md) cites its overlay alongside this shared set.
 

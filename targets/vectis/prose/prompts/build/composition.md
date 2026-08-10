@@ -1,6 +1,6 @@
 # Vectis build — composition
 
-Inlined by the adapter core into the composition leg's system prompt (alongside [../build.md](../build.md)), before any per-platform phase. Runs Step 0.5 component inference, then regenerates `${SLICE_DIR}/composition.yaml` from the canonical `spec.md` + `design.md`; the adapter runs the deterministic validator gate after the leg. `composition.yaml` is a build output (not a Emery artifact); the merge prompt lands it into the baseline alongside the code.
+Inlined by the adapter core into the composition leg's system prompt (alongside [../build.md](../build.md)), before any per-platform phase. Runs Step 0.5 component inference, then regenerates `${STAGE_DIR}/composition.yaml` from the canonical `spec.md` + `design.md`; the adapter runs the deterministic validator gate once after the leg — blocking findings end the build and ride the phase report (repair routing is engine policy). `composition.yaml` is a build output (not a Emery artifact) written to the writable artifact stage; the merge prompt lands it into the baseline alongside the code. `${SLICE_DIR}` below is the stage alias from [../build.md](../build.md) § Standard arguments.
 
 ## Step 0.5 — component inference
 
@@ -79,9 +79,9 @@ delta:
 
 A whole-document `screens:` composition against a non-empty baseline is blocked at merge time (`composition-baseline-overwrite-blocked`); routine per-screen add / modify / remove flows through `delta:` and never reaches that gate.
 
-Write the regenerated `${SLICE_DIR}/composition.yaml` directly; the adapter's deterministic composition validator gates it in-guest immediately after this leg (with a bounded repair loop) and again in the report gate, so a broken composition never reaches the platform phases.
+Write the regenerated `${SLICE_DIR}/composition.yaml` directly (the writable artifact stage); the adapter's deterministic composition validator gates it in-guest immediately after this leg and again after the report leg, so a broken composition never reaches the platform phases.
 
-The validator auto-invokes `tokens` and `assets` modes against any sibling `tokens.yaml` / `assets.yaml`. Errors are blocking — the gate feeds them back for repair; an exhausted repair budget parks the slice. Warnings forward into the operator-facing summary. Clean runs proceed silently. On a persistent validation error, fix `spec.md` / `design.md` (or the operator-curated `tokens.yaml` / `assets.yaml`) and re-run `emery plan execute` (the loop resumes at the build phase); regeneration is idempotent against unchanged inputs.
+The validator auto-invokes `tokens` and `assets` modes against any sibling `tokens.yaml` / `assets.yaml`. Errors are blocking — they ride the phase report as deterministic findings and the engine routes them through its bounded repair dispatch. Warnings forward into the operator-facing summary. Clean runs proceed silently. On a persistent validation error, fix `spec.md` / `design.md` (or the operator-curated `tokens.yaml` / `assets.yaml`) and re-run `emery plan execute` (the loop resumes at the build phase); regeneration is idempotent against unchanged inputs.
 
 When the slice has no UI surface at all, this step writes no `composition.yaml`. Detect this from the slice's own `spec.md`: skip composition regeneration when `spec.md` describes **no** screen-bearing requirements (Step 1 identifies zero screens), regardless of which platforms `## Platforms` lists. `## Platforms` is an app-level constant stamped verbatim to every slice and never narrows per slice, so it cannot signal whether *this slice* contributes any UI — never key the skip off it.
 

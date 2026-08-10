@@ -15,6 +15,11 @@ use crate::materialize::{AssetsArgs, MaterializeCommand, run as run_materialize}
 
 /// Run the prepare materialize step for one slice build.
 ///
+/// The inventory is read wherever it resolves (slice-local staged copy
+/// first), but exports always land under the product workspace's
+/// `design-system/` — never onto the slice tree / artifact stage,
+/// which sits outside the build's writable grants (RFC-90).
+///
 /// # Errors
 ///
 /// Returns [`VectisError::InvalidProject`] when the effective inventory
@@ -23,6 +28,7 @@ use crate::materialize::{AssetsArgs, MaterializeCommand, run as run_materialize}
 pub fn materialize_step(
     slice_dir: &Path, project_root: &Path, shell_platforms: &[String],
 ) -> Result<Value, VectisError> {
+    let exports_dir = project_root.join("design-system");
     let Some(effective) = resolve_effective_assets(slice_dir, project_root) else {
         return Ok(skipped_materialize_summary(
             &project_root.join("design-system/assets.yaml"),
@@ -30,14 +36,15 @@ pub fn materialize_step(
         ));
     };
     validate_effective_inventory(&effective)?;
-    let scope = resolve_materialize_scope(slice_dir, project_root, shell_platforms, &effective);
-    if scope_needs_materialize(&scope, &effective, shell_platforms) {
+    let scope = resolve_materialize_scope(slice_dir, shell_platforms, &effective, &exports_dir);
+    if scope_needs_materialize(&scope, &effective, shell_platforms, &exports_dir) {
         let only: Vec<String> = scope.asset_ids.into_iter().collect();
         run_materialize(&MaterializeCommand::Assets(AssetsArgs {
             path: Some(effective.path),
             platform: Some(shell_platforms.to_vec()),
             dry_run: false,
             only: Some(only),
+            output_root: Some(exports_dir),
         }))
     } else {
         Ok(skipped_materialize_summary(&effective.path, shell_platforms))

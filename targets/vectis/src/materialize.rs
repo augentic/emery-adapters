@@ -44,6 +44,27 @@ pub struct AssetsArgs {
 
     /// Limit materialization to these asset ids.
     pub only: Option<Vec<String>>,
+
+    /// Explicit export root (`assets/exports/**` lands beneath it).
+    /// `None` derives it from the inventory file's directory. When set
+    /// to a directory other than the inventory's own, auto-pin
+    /// write-back is suppressed — the recorded pins would be relative
+    /// to a root the inventory does not live in (RFC-90: a slice-local
+    /// staged inventory is not writable by the build).
+    pub output_root: Option<PathBuf>,
+}
+
+/// The two roots one materialize run resolves against.
+///
+/// Canonical `source:` masters (and the sibling `tokens.yaml`) read
+/// relative to the inventory's directory; export writes and
+/// pin-existence checks resolve against the export root.
+#[derive(Debug, Clone, Copy)]
+pub struct MaterializeRoots<'a> {
+    /// The inventory file's directory — anchors `source:` reads.
+    pub masters: &'a Path,
+    /// The export root — anchors `assets/exports/**` writes and pin checks.
+    pub exports: &'a Path,
 }
 
 /// Dispatch a [`MaterializeCommand`].
@@ -91,8 +112,13 @@ fn run_assets(args: &AssetsArgs) -> Result<Value, VectisError> {
         }
     };
 
+    let masters_dir = path.parent().unwrap_or_else(|| Path::new(".")).to_path_buf();
+    let record_pins = args.output_root.as_deref().is_none_or(|root| root == masters_dir);
     if let Some(assets) = instance.get("assets").and_then(Value::as_object) {
-        let assets_dir = path.parent().unwrap_or_else(|| Path::new("."));
+        let roots = MaterializeRoots {
+            masters: &masters_dir,
+            exports: args.output_root.as_deref().unwrap_or(&masters_dir),
+        };
         let filter = MaterializeFilter {
             dry_run: args.dry_run,
             only: args.only.as_deref(),
@@ -103,20 +129,21 @@ fn run_assets(args: &AssetsArgs) -> Result<Value, VectisError> {
             errors: &mut errors,
             normalized: &mut normalized,
         };
-        materialize_icon_vectors(assets_dir, assets, &platforms, &filter, &mut sink);
-        materialize_illustration_vectors(assets_dir, assets, &platforms, &filter, &mut sink);
+        materialize_icon_vectors(roots, assets, &platforms, &filter, &mut sink);
+        materialize_illustration_vectors(roots, assets, &platforms, &filter, &mut sink);
         materialize_photo_rasters(
-            assets_dir,
+            roots,
             assets,
             &platforms,
             &filter,
             sink.materialized,
             sink.errors,
         );
-        materialize_app_icons(assets_dir, assets, &platforms, &filter, &mut sink);
+        materialize_app_icons(roots, assets, &platforms, &filter, &mut sink);
     }
 
     if !args.dry_run
+        && record_pins
         && let Some(assets) = instance.get("assets").and_then(Value::as_object)
     {
         let pins = collect_auto_pins(&materialized, assets);

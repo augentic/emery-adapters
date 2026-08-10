@@ -1,8 +1,8 @@
 # Vectis reference material
 
-Reference documentation for the Vectis target adapter at [`adapters/targets/vectis/`](..). In Emery, Vectis is a **target adapter** — `guidance`, `build`, `merge` — not a slash-command plugin.
+Reference documentation for the Vectis target adapter at [`adapters/targets/vectis/`](..). In Emery, Vectis is a **target adapter** — `guidance`, `build`, `verify`, `repair`, `review`, `merge` — not a slash-command plugin.
 
-The Vectis core / test / iOS / Android writer and reviewer orchestration lives in [`../prompts/build.md`](../prompts/build.md) and eight phase prompts under [`../prompts/build/`](../prompts/build/). The depth (Crux idioms, SwiftUI patterns, Compose patterns, hard rules, review check libraries, token templates, design-system integration) lives in this folder. The live `$TEMPLATE_DIR` ([`vectis-exemplar`](https://github.com/augentic/vectis-exemplar)) checkout is the worked example for core + shells + DX; sample Emery artifacts sit under [`examples/`](examples/README.md).
+The Vectis core / test / iOS / Android writer orchestration lives in [`../prompts/build.md`](../prompts/build.md) and the phase prompts under [`../prompts/build/`](../prompts/build/); the check / repair / review passes have their own operation prompts ([`../prompts/verify.md`](../prompts/verify.md), [`../prompts/repair.md`](../prompts/repair.md), [`../prompts/review.md`](../prompts/review.md)). The depth (Crux idioms, SwiftUI patterns, Compose patterns, hard rules, review check libraries, token templates, design-system integration) lives in this folder. The live `$TEMPLATE_DIR` ([`vectis-exemplar`](https://github.com/augentic/vectis-exemplar)) checkout is the worked example for core + shells + DX; sample Emery artifacts sit under [`examples/`](examples/README.md).
 
 ## Prompts
 
@@ -13,12 +13,15 @@ The Vectis core / test / iOS / Android writer and reviewer orchestration lives i
 | [`build/composition.md`](../prompts/build/composition.md) | Step 0.5 component inference, then regenerate `composition.yaml` from `spec.md` + `design.md`; gated by the deterministic validator. |
 | [`build/core/write.md`](../prompts/build/core/write.md) | Generate / update the Crux shared core. |
 | [`build/core/review.md`](../prompts/build/core/review.md) | Agent-team review of the Rust `shared` crate. |
-| [`build/test.md`](../prompts/build/test.md) | Generate / update Crux tests; run the core verify-repair loop. |
-| [`build/ios/write.md`](../prompts/build/ios/write.md) | Generate / update the SwiftUI iOS shell + verify. |
-| [`build/ios/review.md`](../prompts/build/ios/review.md) | Agent-team review of the iOS shell. |
-| [`build/android/write.md`](../prompts/build/android/write.md) | Generate / update the Compose Android shell + verify. |
-| [`build/android/review.md`](../prompts/build/android/review.md) | Agent-team review of the Android shell. |
-| [`build/report.md`](../prompts/build/report.md) | Report leg: shell verify gate, phase outcome contract, build-report shape. |
+| [`build/test.md`](../prompts/build/test.md) | Generate / update Crux tests (generation only). |
+| [`build/ios/write.md`](../prompts/build/ios/write.md) | Generate / update the SwiftUI iOS shell. |
+| [`build/ios/review.md`](../prompts/build/ios/review.md) | Agent-team review of the iOS shell (review operation). |
+| [`build/android/write.md`](../prompts/build/android/write.md) | Generate / update the Compose Android shell. |
+| [`build/android/review.md`](../prompts/build/android/review.md) | Agent-team review of the Android shell (review operation). |
+| [`build/report.md`](../prompts/build/report.md) | Report leg: phase outcome contract and the build phase-report shape. |
+| [`verify.md`](../prompts/verify.md) | One check pass: core four-command checks, shell `make build`, verify stamps. |
+| [`repair.md`](../prompts/repair.md) | One findings-directed repair pass keyed on the engine's gate origin. |
+| [`review.md`](../prompts/review.md) | Parent review prompt: team fan-out, consolidation, phase-report mapping. |
 | [`merge.md`](../prompts/merge.md) | Merge-leg gates around the delta fold. |
 
 ## References
@@ -30,7 +33,7 @@ The Vectis core / test / iOS / Android writer and reviewer orchestration lives i
 
 ### Orchestration depth
 
-- [`sub-agent-contract.md`](sub-agent-contract.md) — writer / reviewer sub-agent inputs and outputs; why verify is serial and review is parallel.
+- [`sub-agent-contract.md`](sub-agent-contract.md) — writer / reviewer sub-agent inputs and outputs across the build / verify / repair / review operations.
 - [`open-gap-contract.md`](open-gap-contract.md) — open-GAP inventiveness: stub-faithful default, B′ closure eligibility, write authority, test policy.
 
 ### Runtime schemas
@@ -78,7 +81,7 @@ The Vectis core / test / iOS / Android writer and reviewer orchestration lives i
 - [`agent-teams.md`](agent-teams.md) — shared specialists + antagonist + lead synthesis pattern.
 - [`review/team-protocol-core.md`](review/team-protocol-core.md), [`review/team-protocol-ios.md`](review/team-protocol-ios.md), [`review/team-protocol-android.md`](review/team-protocol-android.md) — per-platform team-spawn prompts.
 - [`review/crux-checks.md`](review/crux-checks.md), [`review/logic-checks.md`](review/logic-checks.md), [`review/general-checks.md`](review/general-checks.md), [`review/ios-checks.md`](review/ios-checks.md), [`review/swift-quality-checks.md`](review/swift-quality-checks.md), [`review/android-checks.md`](review/android-checks.md), [`review/kotlin-quality-checks.md`](review/kotlin-quality-checks.md), [`review/universal-checks.md`](review/universal-checks.md) — check libraries.
-- [`review/iteration-report.md`](review/iteration-report.md) — iteration-report template and finding-ID conventions.
+- [`review/review-report.md`](review/review-report.md) — review-report template and finding-ID conventions.
 
 ### Asset materialization (implemented)
 

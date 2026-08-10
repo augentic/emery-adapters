@@ -4,7 +4,7 @@
 
 ## Scaffold immutability (create and update mode)
 
-1. **Keep DX aligned with `$TEMPLATE_DIR`.** `Android/Makefile`, `Android/settings.gradle.kts`, `Android/build.gradle.kts`, `Android/app/build.gradle.kts`, and `Android/shared/build.gradle.kts` come from the local `vectis-exemplar` checkout after identity substitution. On drift, re-copy from `$TEMPLATE_DIR` — agents must not invent pins during verify-repair or feature work.
+1. **Keep DX aligned with `$TEMPLATE_DIR`.** `Android/Makefile`, `Android/settings.gradle.kts`, `Android/build.gradle.kts`, `Android/app/build.gradle.kts`, and `Android/shared/build.gradle.kts` come from the local `vectis-exemplar` checkout after identity substitution. On drift, re-copy from `$TEMPLATE_DIR` — agents must not invent pins during repair or feature work.
 2. **Gradle wrapper lands from the template.** Materialize copies `gradlew` and `gradle/wrapper/` — do not invent a wrapper pin. Host SDK paths stay in `local.properties` (denylisted from materialize; operator/host owned).
 
 ## Preservation Rules (Update Mode)
@@ -32,4 +32,4 @@
 - **Hot reloading**: Jetpack Compose's built-in Live Edit and `@Preview` composables provide the development-time iteration equivalent. Every screen composable should include a `@Preview` with sample data (checked by AND-008).
 - **Crash recovery handler**: Prefer persisting crash info and restarting the Activity instead of letting the app terminate — Crux cores re-render from state. See references/crux-android-shell-pattern.md for the pattern when present in the template.
 - **Emery integration**: When `slice-dir` is provided, the skill reads the `## Android Shell Requirements` section from the feature spec and the `## Android Shell Details` section from design.md. The primary input remains `app.rs` from the core; the feature spec's platform section supplements with requirements that may not be expressed in the Rust types alone.
-- **Verify stamp**: After a clean `make build`, write `Android/.vectis/verify.ok` (adapter stamp; not template DX).
+- **Verify stamp**: The engine-dispatched `verify` operation runs the checks; after a clean `make build` it writes `Android/.vectis/verify.ok` (adapter stamp; not template DX — verify may report workspace writes under `written`). `android-repair` sub-agents return Kotlin edits only and never write the stamp.

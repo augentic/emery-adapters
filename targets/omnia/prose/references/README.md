@@ -1,21 +1,24 @@
 # Omnia reference material
 
-Reference documentation for the Omnia target adapter at [`adapters/targets/omnia/`](..). In Emery, Omnia is a **target adapter** — `guidance`, `build`, `merge` — not a slash-command plugin.
+Reference documentation for the Omnia target adapter at [`adapters/targets/omnia/`](..). In Emery, Omnia is a **target adapter** — `guidance`, `build`, `verify`, `repair`, `review`, `merge` — not a slash-command plugin.
 
-The Omnia crate / test / guest / review instructions live in [`../prompts/build.md`](../prompts/build.md) and the per-leg prompts under [`../prompts/build/`](../prompts/build/); the adapter core (`../../src/operations.rs`) owns leg sequencing. The depth (templates, hard rules, mapping tables, mock-provider patterns, specialist prompts, rules) and worked examples live in this folder.
+The Omnia crate / test / guest instructions live in [`../prompts/build.md`](../prompts/build.md) and the per-leg prompts under [`../prompts/build/`](../prompts/build/); the adapter core (`../../src/operations.rs`) owns leg sequencing, and the engine owns operation order, repair routing, and budgets (RFC-90). The depth (templates, hard rules, mapping tables, mock-provider patterns, specialist prompts, rules) and worked examples live in this folder.
 
 ## Prompts
 
 | Prompt | Purpose |
 |--------|---------|
 | [`guidance.md`](../prompts/guidance.md) | Idiom guidance (provider DI, WASM guardrails, error variants, validation placement) consumed by core synthesis. |
-| [`build.md`](../prompts/build.md) | Shared build preamble: bindings, mode detection, verify-repair loop, stop-hint contract. |
+| [`build.md`](../prompts/build.md) | Shared build preamble: bindings, mode detection, leg map, stop-hint contract. |
 | [`build/crate.md`](../prompts/build/crate.md) | Generation leg: generate or update the Rust crate. |
 | [`build/test.md`](../prompts/build/test.md) | Generation leg: generate or update the test suite. |
 | [`build/guest.md`](../prompts/build/guest.md) | Generation leg (create mode only): scaffold the WASM guest wrapper. |
-| [`build/review.md`](../prompts/build/review.md) | Review leg: agent-team code review, remediation cycle, build close-out, and the build-report contract (in-guest assembly, derived status). |
 | [`build/replay.md`](../prompts/build/replay.md) | Replay leg (dispatched only when the build context binds a `captures` source; skipped in-guest otherwise): runtime capture replay. Delegates hook contract to [`../../../codex/references/replay/`](../../../../codex/references/replay/). |
-| [`merge.md`](../prompts/merge.md) | Merge leg: delta fold plus the pre-merge gate (cargo + clippy + test + wasm32 build). |
+| [`build/report.md`](../prompts/build/report.md) | Close-out leg: staged `tasks.md` checkboxes, output declaration, findings synthesis — the build's phase report. |
+| [`verify.md`](../prompts/verify.md) | `verify` operation: one check pass (fmt + check + clippy + test) over the lent candidate workspace; findings only, no fixes. |
+| [`repair.md`](../prompts/repair.md) | `repair` operation: one findings-directed writer pass, branching on `repair-origin` (verification vs review). |
+| [`review.md`](../prompts/review.md) | `review` operation: one agent-team engineering-standards pass synthesising `REVIEW.md`; no remediation cycle. |
+| [`merge.md`](../prompts/merge.md) | Merge gate: delta fold plus the pre-merge gate (cargo + clippy + test + wasm32 build). |
 
 ## References
 
@@ -40,7 +43,7 @@ The Omnia crate / test / guest / review instructions live in [`../prompts/build.
 - [`cross-cutting-matrices.md`](cross-cutting-matrices.md) — Side-Effect / Outbound-Message / Transaction-Boundary matrices.
 - [`update-patterns.md`](update-patterns.md) — strategy patterns per update category.
 - [`change-classification.md`](change-classification.md) — classifying artifact-vs-code diffs.
-- [`repair-patterns.md`](repair-patterns.md) — common verify-loop repair recipes, test-failure classification, update-mode regression check.
+- [`repair-patterns.md`](repair-patterns.md) — repair-pass recipes, test-failure classification, update-mode regression check.
 - [`checklists.md`](checklists.md) — pre-generation and verification checklists.
 - [`todo-markers.md`](todo-markers.md) — TODO marker rules, adapter overrides, cache-aside patterns.
 - [`output-documents.md`](output-documents.md) — `Migration.md`, `Architecture.md`, `CHANGELOG.md`, `.env.example` shapes.

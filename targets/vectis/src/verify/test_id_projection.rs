@@ -10,15 +10,16 @@ pub const PROJECTION_STALE_ID: &str = "canonical-test-id-projection-stale";
 
 /// Emit findings when `ui-contract/test-ids.yaml` is stale relative to composition.
 ///
-/// Composition is harvested from `change_root` (`.emery/*`); the on-disk
-/// registry lives under `code_root` (`ui-contract/`).
+/// Composition is harvested from `change_root` (`.emery/*`) plus the
+/// optional candidate slice `composition.yaml` path; the on-disk registry
+/// lives under `code_root` (`ui-contract/`).
 #[must_use]
 pub fn test_id_projection_findings(
-    change_root: &Path, code_root: &Path, active_slice: Option<&str>,
+    change_root: &Path, code_root: &Path, slice_composition: Option<&Path>,
 ) -> Vec<Value> {
     let mut findings = Vec::new();
 
-    let expected = match test_id_registry::harvest_entries(change_root, active_slice) {
+    let expected = match test_id_registry::harvest_entries(change_root, slice_composition) {
         Ok(entries) => entries,
         Err(err) => {
             findings.push(error_finding(

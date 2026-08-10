@@ -36,26 +36,24 @@ pub fn composition_manifest_paths(project_root: &Path) -> Vec<PathBuf> {
 
 /// Effective composition document for test-id projection.
 ///
-/// When `active_slice` is set, merges that slice's `composition.yaml` onto the
-/// baseline using the same screen-level semantics as the Emery engine merge.
-/// When `active_slice` is `None`, only the merged baseline is used (post-merge /
-/// desk verify).
+/// When `slice_composition` names the active slice's candidate
+/// `composition.yaml` (the staged copy during the build loop), its delta
+/// merges onto the baseline using the same screen-level semantics as the
+/// Emery engine merge. When `None`, only the merged baseline is used
+/// (post-merge / desk verify).
 ///
 /// # Errors
 ///
 /// Returns [`VectisError::InvalidProject`] when manifests are unreadable, malformed,
 /// or when a slice delta conflicts with the baseline.
 pub fn effective_composition(
-    project_root: &Path, active_slice: Option<&str>,
+    project_root: &Path, slice_composition: Option<&Path>,
 ) -> Result<Value, VectisError> {
     let baseline_path = project_root.join(".emery/specs/composition.yaml");
     let baseline_text = read_optional_text(&baseline_path)?;
 
-    let slice_text = match active_slice {
-        Some(slice) => {
-            let path = project_root.join(format!(".emery/slices/{slice}/composition.yaml"));
-            read_optional_text(&path)?
-        }
+    let slice_text = match slice_composition {
+        Some(path) => read_optional_text(path)?,
         None => None,
     };
 

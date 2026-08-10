@@ -52,7 +52,7 @@ Writer **must refuse** and keep a **stub-faithful** handler when eligibility fai
 
 ### Sequencing
 
-Build order is unchanged: composition → core → shells → review → final-core-verify → report. Closure patches happen in the **core** leg after composition has already emitted `# GAP` — that is intentional. Closing removes or rewrites the matching `# GAP` in-place; do not re-run the composition leg solely to clear comments.
+Build leg order is unchanged: composition → core → shells → report (verification and standards review run as separate engine-dispatched operations afterwards). Closure patches happen in the **core** leg after composition has already emitted `# GAP` — that is intentional. Closing removes or rewrites the matching `# GAP` in-place; do not re-run the composition leg solely to clear comments.
 
 ## Cross-slice / update-mode inventiveness
 

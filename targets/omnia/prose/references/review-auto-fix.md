@@ -1,18 +1,16 @@
 # Auto-Fix Protocol
 
-> **When to read this**: Read this only when the operator passed `--fix`. It defines which findings are eligible for automatic repair, the regression guard (`cargo check`), expected success rates per category, and the recovery procedure if auto-fix breaks the build.
+> **When to read this**: Read this from the `repair` operation's review branch (`repair-origin: review`). It defines which standards findings are eligible for safe automatic repair, the regression guard (`cargo check`), expected success rates per category, and the recovery procedure if a fix breaks the build. The review operation itself never applies fixes — it reports findings and the engine routes them here.
 
-## Step 6: Auto-Fix (if --fix flag provided)
+## Applying safe fixes
 
-If `$AUTO_FIX == true`:
+The repair pass applies fixes directly. The finding prefix (SEC-, COR-, QUA-, UNI-) tracks which reviewer or pass identified the issue for accountability.
 
-The **lead** applies all auto-fixes directly (specialists and antagonist have completed their analysis at this point). The finding prefix (SEC-, COR-, QUA-, UNI-) tracks which reviewer or pass identified the issue for accountability in the report.
+**FOR EACH** supplied auto-fixable finding (the engine's repair brief carries only confirmed blocking findings):
 
-**FOR EACH** confirmed or upgraded auto-fixable issue (not disputed):
-
-1. **Verify** fix is safe (no side effects, antagonist did not flag regression risk)
+1. **Verify** fix is safe (no side effects, the finding carries no regression flag)
 2. **Apply** fix using Edit tool
-3. **Mark** issue as "Fixed" in report, noting the originating reviewer prefix
+3. **Mark** issue as "Fixed" in the answer, noting the originating reviewer prefix
 4. **Add** to auto-fix log
 
 **RE-CHECK**: Run `cargo check` to verify fixes compile
@@ -41,18 +39,16 @@ If errors introduced:
 | Issue                              | Cause                                       | Resolution                                                               |
 | ---------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------ |
 | Crate path not found               | Incorrect `$CRATE_PATH` argument            | Verify the path exists and contains `src/` with `.rs` files              |
-| No `.rs` files in `src/`           | Crate not yet generated or wrong directory  | Run `crate-writer` first, then re-run code review                        |
+| No `.rs` files in `src/`           | Crate not yet generated or wrong directory  | Report as unrepairable; the build produced no candidate crate            |
 | `cargo check` fails after auto-fix | Auto-fix introduced a compilation error     | Revert all auto-fixes and document issues for manual resolution          |
 | Review report empty                | All files excluded or no issues found       | Verify `src/` directory is not empty; check file permissions             |
 | Auto-fix modifies test files       | Test code scanned alongside production code | Review should focus on `src/` only; exclude `tests/` from auto-fix scope |
 
 ## Recovery Process
 
-1. If auto-fix caused compilation errors: revert changes with `git checkout -- src/`
-2. Re-run review without `--fix` to get a report without auto-fixes
-3. Apply fixes manually based on the report recommendations
-4. Run `cargo check` and `cargo test` after each manual fix
-5. Re-run review to verify issues are resolved
+1. If a fix caused compilation errors: restore the pre-fix content of the specific files that fix edited (re-apply the content you read before editing — the lent workspace is a materialized snapshot, not necessarily a git checkout, and a tree-wide revert would destroy the build's own output)
+2. Apply the remaining fixes manually based on the findings' remediations
+3. Note anything left unrepaired in the answer — the engine's next verification and review passes are the authority; do not re-run either yourself
 
 ## Auto-Fix Verification Checklist
 

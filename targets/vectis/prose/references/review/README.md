@@ -1,6 +1,6 @@
 # Vectis Review References
 
-Index of the review corpus for Vectis builds. Check files carry the per-surface review checklists; protocol files define how each antagonist reviewer runs; the report template closes each iteration.
+Index of the review corpus for Vectis builds. Check files carry the per-surface review checklists; protocol files define how each antagonist reviewer runs; the report template closes the single engine-dispatched review pass.
 
 ## Check lists
 
@@ -22,4 +22,4 @@ Index of the review corpus for Vectis builds. Check files carry the per-surface 
 | [team-protocol-core.md](team-protocol-core.md) | Running the core-reviewer antagonist. |
 | [team-protocol-ios.md](team-protocol-ios.md) | Running the iOS-reviewer antagonist. |
 | [team-protocol-android.md](team-protocol-android.md) | Running the Android-reviewer antagonist. |
-| [iteration-report.md](iteration-report.md) | Writing the per-iteration review report. |
+| [review-report.md](review-report.md) | Writing the single-pass review report. |

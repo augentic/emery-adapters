@@ -10,10 +10,10 @@ The verifier accepts a `--mode {single, cross-project}` flag. The mode determine
 
 | Mode               | Caller                                         | Trigger                                                   | Scope                                                                                                           | Output                                                |
 | ------------------ | ---------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `single` (default) | contracts adapter build prompt in the build phase | Post-author or post-import                                | One slice's `contracts/schemas/` inside one project, plus the slice's and baseline's HTTP / messaging consumers | Markdown report for the verify-repair loop            |
+| `single` (default) | contracts verify prompt in the engine's verify phase | Post-author or post-import                                | One slice's `contracts/schemas/` inside one project, plus the slice's and baseline's HTTP / messaging consumers | Markdown report for the verify phase's findings            |
 | `cross-project`    | contracts adapter merge prompt                 | Producer-side merge of a contract change touching schemas | Walk the merged `contracts/` baseline; enforce contract identity/version validation                                               | Deterministic findings from the adapter's in-guest contract validator |
 
-`single` mode feeds the build's verify-repair loop and is the natural exit point for both author and importer runs. `cross-project` mode describes the adapter's deterministic in-guest contract validator — the merge gate runs it itself and surfaces its findings; the verifier does not implement its own cross-baseline check. Both modes share the read-only contract.
+`single` mode feeds the engine's verify phase, whose findings the engine routes through bounded repair dispatches. `cross-project` mode describes the adapter's deterministic in-guest contract validator — the merge gate runs it itself and surfaces its findings; the verifier does not implement its own cross-baseline check. Both modes share the read-only contract.
 
 `--mode` is an internal flag of the format-specific verifier. Cross-project consumer-impact analysis is deferred until a real consumer workflow exists; this verifier owns deterministic single-slice and merged-baseline checks.
 
@@ -26,7 +26,7 @@ Note: the in-guest contract validator walks **top-level OpenAPI 3.1 / AsyncAPI 3
 Inferred from the active slice context — no positional arguments required:
 
 ```text
-$SLICE_DIR          = .emery/slices/<slice-name>
+$SLICE_DIR          = .emery/slices/<slice-name>  # reached via the lent artifact stage, which mirrors this tree
 $CHANGE_CONTRACTS    = $SLICE_DIR/contracts/
 $CHANGE_SCHEMAS      = $CHANGE_CONTRACTS/schemas/
 $BASELINE_CONTRACTS  = contracts/
@@ -42,7 +42,7 @@ Caller passes the merged baseline directory:
 $BASELINE_CONTRACTS = $PROJECT_ROOT/contracts   # the merged baseline, post-merge
 ```
 
-The adapter's in-guest contract validator walks every top-level OpenAPI 3.1 / AsyncAPI 3.0 document under `$BASELINE_CONTRACTS` and enforces the contract identity/version validation rules. Standalone schemas under `$BASELINE_CONTRACTS/schemas/` are not validated by the tool — they are payload vocabulary, not top-level contracts (the top-level contract filter + §Non-goals). Schema-side issues are caught earlier, in `single` mode, during the build verify-repair loop.
+The adapter's in-guest contract validator walks every top-level OpenAPI 3.1 / AsyncAPI 3.0 document under `$BASELINE_CONTRACTS` and enforces the contract identity/version validation rules. Standalone schemas under `$BASELINE_CONTRACTS/schemas/` are not validated by the tool — they are payload vocabulary, not top-level contracts (the top-level contract filter + §Non-goals). Schema-side issues are caught earlier, in `single` mode, during the engine's verify phase.
 
 ## Prerequisites
 
@@ -94,7 +94,7 @@ Every JSON Schema file in `$CHANGE_SCHEMAS` must have the required metadata fiel
 | `$schema`     | Present and equal to `"https://json-schema.org/draft/2020-12/schema"`. Older drafts emit `WARN` (importer should have upgraded).                                                     |
 | `$id`         | Present, well-formed URN of the shape `urn:emery:schemas/<segment>` where `<segment>` matches the kebab-case filename.                                                             |
 | `title`       | Present, non-empty, PascalCase, and corresponds to the filename (kebab-case → PascalCase round-trips).                                                                               |
-| `description` | Present, non-empty. The placeholder `"[imported — description pending review]"` counts as present but **emits a `WARN`** to surface the gap for the verify-repair loop before merge. |
+| `description` | Present, non-empty. The placeholder `"[imported — description pending review]"` counts as present but **emits a `WARN`** to surface the gap for the verify phase before merge. |
 | `type`        | Present (almost always `object`; primitives are rare).                                                                                                                               |
 
 Report format (one entry per failure):
@@ -159,7 +159,7 @@ Algorithm:
 
 3. **For each schema with no consumers**, skip Check 4 — there is no binding-side risk surface inside the slice. The compatibility risk lives entirely in `cross-project` mode (downstream projects may have their own consumers).
 
-The `change-kind` enum above is a contract-domain classification — not the `Diagnostic` severity enum. The Severity column gives the markdown-report ladder for the verify-repair loop; if a Check 4 finding is later surfaced as a `Diagnostic`, the closed `Diagnostic` severity enum (`critical` / `important` / `suggestion` / `optional`) sits on the envelope while `change-kind` and the per-property contract context (schema pointer, property name, baseline binding paths) travel inside `evidence.kind: structured` under `evidence.data` (see `schemas/diagnostics/diagnostic.schema.json`).
+The `change-kind` enum above is a contract-domain classification — not the `Diagnostic` severity enum. The Severity column gives the markdown-report ladder for the verify phase's report; if a Check 4 finding is later surfaced as a `Diagnostic`, the closed `Diagnostic` severity enum (`critical` / `important` / `suggestion` / `optional`) sits on the envelope while `change-kind` and the per-property contract context (schema pointer, property name, baseline binding paths) travel inside `evidence.kind: structured` under `evidence.data` (see `schemas/diagnostics/diagnostic.schema.json`).
 
 Report format:
 

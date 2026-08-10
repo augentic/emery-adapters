@@ -11,11 +11,11 @@ use serde_json::{Value, json};
 
 use crate::materialize::icons::{active_platform_pin, asset_error, materialized_entry};
 use crate::materialize::paths::{Platform, export_layout, resolve_under_assets_dir};
-use crate::materialize::{MaterializeFilter, MaterializeSink, matches_only};
+use crate::materialize::{MaterializeFilter, MaterializeRoots, MaterializeSink, matches_only};
 
 /// Materialize `role: app-icon` entries with a canonical `source:` master.
 pub fn materialize_app_icons(
-    assets_dir: &Path, assets: &serde_json::Map<String, Value>, platforms: &[String],
+    roots: MaterializeRoots<'_>, assets: &serde_json::Map<String, Value>, platforms: &[String],
     filter: &MaterializeFilter<'_>, sink: &mut MaterializeSink<'_>,
 ) {
     for (asset_id, entry) in assets {
@@ -28,7 +28,7 @@ pub fn materialize_app_icons(
         let Some(source_rel) = entry.get("source").and_then(Value::as_str) else {
             continue;
         };
-        let source_path = assets_dir.join(source_rel);
+        let source_path = roots.masters.join(source_rel);
 
         let launcher = match decode_to_launcher_canvas(&source_path, source_rel, asset_id) {
             Ok(canvas) => canvas,
@@ -46,7 +46,7 @@ pub fn materialize_app_icons(
             let Some(platform) = Platform::parse(platform_name) else {
                 continue;
             };
-            if let Some(pin) = active_platform_pin(entry, platform_name, assets_dir) {
+            if let Some(pin) = active_platform_pin(entry, platform_name, roots.exports) {
                 sink.skipped_pins.push(json!({
                     "asset_id": asset_id,
                     "platform": platform_name,
@@ -60,13 +60,17 @@ pub fn materialize_app_icons(
             };
 
             let result = match platform {
-                Platform::Ios => {
-                    materialize_ios(asset_id, assets_dir, &layout, &launcher.image, filter.dry_run)
-                }
+                Platform::Ios => materialize_ios(
+                    asset_id,
+                    roots.exports,
+                    &layout,
+                    &launcher.image,
+                    filter.dry_run,
+                ),
                 Platform::Android => materialize_android(
                     asset_id,
                     entry,
-                    assets_dir,
+                    roots,
                     &layout,
                     &launcher.image,
                     filter.dry_run,
@@ -81,7 +85,7 @@ pub fn materialize_app_icons(
 }
 
 fn materialize_ios(
-    asset_id: &str, assets_dir: &Path, layout: &crate::materialize::paths::ExportLayout,
+    asset_id: &str, exports_dir: &Path, layout: &crate::materialize::paths::ExportLayout,
     canvas: &image::RgbaImage, dry_run: bool,
 ) -> Result<Vec<Value>, String> {
     if dry_run {
@@ -92,7 +96,7 @@ fn materialize_ios(
             .collect());
     }
 
-    let appiconset_dir = resolve_under_assets_dir(assets_dir, &layout.pin);
+    let appiconset_dir = resolve_under_assets_dir(exports_dir, &layout.pin);
     ios::write_appiconset(canvas, &appiconset_dir)
         .map_err(|err| format!("asset `{asset_id}`: iOS app-icon export failed: {err}"))?;
 
@@ -104,7 +108,7 @@ fn materialize_ios(
 }
 
 fn materialize_android(
-    asset_id: &str, entry: &Value, assets_dir: &Path,
+    asset_id: &str, entry: &Value, roots: MaterializeRoots<'_>,
     layout: &crate::materialize::paths::ExportLayout, canvas: &image::RgbaImage, dry_run: bool,
 ) -> Result<Vec<Value>, String> {
     if dry_run {
@@ -115,8 +119,9 @@ fn materialize_android(
             .collect());
     }
 
-    let export_root = resolve_under_assets_dir(assets_dir, &layout.pin);
-    let background = android::resolve_launcher_background(entry, assets_dir);
+    let export_root = resolve_under_assets_dir(roots.exports, &layout.pin);
+    // `tokens.yaml` lives beside the inventory, like the masters.
+    let background = android::resolve_launcher_background(entry, roots.masters);
     android::write_android_export(canvas, &background, &export_root)
         .map_err(|err| format!("asset `{asset_id}`: Android app-icon export failed: {err}"))?;
 

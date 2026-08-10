@@ -1,14 +1,14 @@
 # iOS-Writer Rules and Important Notes
 
-**When to read this**: open this file at the start of every iOS shell run, and again before final verification. It captures the DX immutability contract plus the normative facts about the iOS build surface — Makefile / `project.yml` ownership, BoltFFI pack flow, simulator destination policy, and verify-repair scope — that are easy to violate by hand-editing template-owned DX or inventing pins from memory.
+**When to read this**: open this file at the start of every iOS shell run, and again before final verification. It captures the DX immutability contract plus the normative facts about the iOS build surface — Makefile / `project.yml` ownership, BoltFFI pack flow, simulator destination policy, and verify / repair scope — that are easy to violate by hand-editing template-owned DX or inventing pins from memory.
 
 ## Scaffold immutability (create and update mode)
 
 1. **Create mode must materialize first.** Copy from `$TEMPLATE_DIR` (`../vectis-exemplar` or `VECTIS_EXEMPLAR_DIR`) per [`template-materialize.md`](template-materialize.md), then regenerate the Xcode project (`make -C iOS generate-project` / `xcodegen`). Do not invent Swift or DX files when the template is missing.
 2. **Never hand-author DX / pin files.** `iOS/Makefile` and `iOS/project.yml` must come from `$TEMPLATE_DIR` after identity substitution — not from memory.
-3. **Keep DX aligned with `$TEMPLATE_DIR`.** On drift, re-copy those paths from the template; agents must not patch pins or destinations during verify-repair or feature work.
+3. **Keep DX aligned with `$TEMPLATE_DIR`.** On drift, re-copy those paths from the template; agents must not patch pins or destinations during repair or feature work.
 4. **Never set a named simulator destination in verify DX.** The template Makefile owns `DESTINATION ?= generic/platform=iOS Simulator`. Do not substitute `name=iPhone …` or run `xcodebuild` with a device-specific destination.
-5. **Orchestrator runs verify; repair sub-agents are Swift-only.** The build-phase orchestrator executes `swiftformat` and `make build` (typegen + `boltffi pack apple` + xcodegen + simulator build). `ios-verify-repair` sub-agents must not run `make`, `xcodebuild`, or edit DX paths — they return Swift edits only. After a clean `make build`, write `iOS/.vectis/verify.ok` (adapter stamp; not template DX).
+5. **Verify runs the checks; repair sub-agents are Swift-only.** The engine-dispatched `verify` operation executes `swiftformat` and `make build` (typegen + `boltffi pack apple` + xcodegen + simulator build) and, after a clean `make build`, writes `iOS/.vectis/verify.ok` (adapter stamp; not template DX — verify may report workspace writes under `written`). `ios-repair` sub-agents must not run `make`, `xcodebuild`, or edit DX paths — they return Swift edits only.
 
 ## Running iOS locally
 
