@@ -45,14 +45,16 @@ struct PlatformStatus {
 /// RFC-87 split: `change_root` carries the Emery change tree
 /// (`.emery/*` reads) and `code_root` carries the product code (shell
 /// trees, design-system, stamps). A single-checkout caller passes the
-/// same path twice.
+/// same path twice. `slice_composition` names the active slice's
+/// candidate `composition.yaml` (the staged copy during the build
+/// loop); `None` checks the merged baseline only.
 ///
 /// # Errors
 ///
 /// Returns [`VectisError::InvalidProject`] when `project.yaml` is
 /// missing or unparseable, or lacks a `platforms` field.
 pub fn run(
-    mode: VerifyMode, change_root: &Path, code_root: &Path, active_slice: Option<&str>,
+    mode: VerifyMode, change_root: &Path, code_root: &Path, slice_composition: Option<&Path>,
 ) -> Result<Value, VectisError> {
     let platforms = load_platforms(change_root)?;
 
@@ -60,7 +62,7 @@ pub fn run(
         VerifyMode::Verify => {
             let statuses: Vec<PlatformStatus> =
                 platforms.iter().map(|p| check_platform(p, code_root)).collect();
-            Ok(render_verify(&statuses, change_root, code_root, &platforms, active_slice))
+            Ok(render_verify(&statuses, change_root, code_root, &platforms, slice_composition))
         }
         VerifyMode::BootstrapAppIcon => Ok(render_bootstrap_app_icon(code_root, &platforms)),
     }
@@ -129,7 +131,7 @@ fn render_bootstrap_app_icon(project_root: &Path, platforms: &[String]) -> Value
 
 fn render_verify(
     statuses: &[PlatformStatus], change_root: &Path, code_root: &Path, platforms: &[String],
-    active_slice: Option<&str>,
+    slice_composition: Option<&Path>,
 ) -> Value {
     let mut findings: Vec<Value> = Vec::new();
 
@@ -189,7 +191,7 @@ fn render_verify(
     findings.extend(core_stamp::core_stamp_findings(code_root));
     findings.extend(materialize_completeness::materialize_completeness_findings(code_root));
     findings.extend(suppression_scan_findings(code_root, platforms));
-    findings.extend(canonical_ui_findings(change_root, code_root, platforms, active_slice));
+    findings.extend(canonical_ui_findings(change_root, code_root, platforms, slice_composition));
 
     serde_json::json!({
         "mode": "verify",
@@ -202,14 +204,14 @@ fn render_verify(
 /// projection, and seed version. Composition reads come from `change_root`
 /// (`.emery/*`); `ui-contract/` reads come from `code_root`.
 fn canonical_ui_findings(
-    change_root: &Path, code_root: &Path, platforms: &[String], active_slice: Option<&str>,
+    change_root: &Path, code_root: &Path, platforms: &[String], slice_composition: Option<&Path>,
 ) -> Vec<Value> {
     let mut findings = Vec::new();
     findings.extend(ui_literals::ui_literals_findings(code_root, platforms));
     findings.extend(test_id_projection::test_id_projection_findings(
         change_root,
         code_root,
-        active_slice,
+        slice_composition,
     ));
     findings.extend(seed_version::seed_version_findings(code_root));
     findings

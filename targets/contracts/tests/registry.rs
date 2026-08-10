@@ -10,6 +10,8 @@ fn embeds_all_trees() {
     for path in [
         "prompts/guidance.md",
         "prompts/build.md",
+        "prompts/verify.md",
+        "prompts/repair.md",
         "prompts/merge.md",
         "prompts/build/json-schema.md",
         "prompts/build/openapi.md",

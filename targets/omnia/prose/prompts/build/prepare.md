@@ -18,7 +18,7 @@ fi
 ## Outcomes
 
 - **Fresh clone or successful refresh** — answer `applicable: true` with a summary naming the checkout state (fresh or refreshed).
-- **Refresh failed, previous checkout present** — proceed with the stale checkout; say so in the summary. The standards-review leg records the staleness as a non-blocking finding in its build close-out.
+- **Refresh failed, previous checkout present** — proceed with the stale checkout; say so in the summary. The build's close-out leg records the staleness as a non-blocking finding on the phase report.
 - **No checkout obtainable** (clone failed, nothing on disk) — do not improvise a fallback: surface a stop hint per the build prompt's `## § Stop hint contract` in your summary (`failing-task`: the exemplar checkout step; `next-action`: retry after restoring access). The adapter's deterministic checkout validation then fails the build before generation.
 
 ## Constraints

@@ -10,14 +10,14 @@ Read [`../../../../codex/references/replay/hook-contract.md`](../../../../../cod
 
 In addition to the shared contract:
 
-- Generation complete: crate, tests, guest (create mode), and the verify-repair loop have run.
+- Generation complete: the crate, tests, and guest (create mode) have been written.
 - Replay data is present under `$CRATE_PATH/tests/data/replays/` — copied or symlinked during [test writer](test.md) when a `captures` binding exists.
 
 Capture wire format: [`captures/references/capture-format.md`](../../../../../sources/captures/prose/references/capture-format.md). Claim shape and 64 KiB inline cap: [`captures/prompts/extract.md`](../../../../../sources/captures/prose/prompts/extract.md).
 
 ## Omnia execution
 
-1. **Confirm replay tree.** List `$CRATE_PATH/tests/data/replays/<handler>/*.json`. Every scenario file the `captures` adapter extracted should have a corresponding integration test from phase 3; if gaps exist, re-enter [test.md](test.md) before replay.
+1. **Confirm replay tree.** List `$CRATE_PATH/tests/data/replays/<handler>/*.json`. Every scenario file the `captures` adapter extracted should have a corresponding integration test from the test-writer pass ([test.md](test.md)); if gaps exist, record each as an unresolved replay finding in your summary — do not write tests in this leg.
 
 2. **Run the replay suite.**
 
@@ -27,7 +27,7 @@ Capture wire format: [`captures/references/capture-format.md`](../../../../../so
 
    Fall back to `cargo test` when nextest is unavailable. The operator's `captures` binding may point at a different root than the crate copy — replay always runs against `$CRATE_PATH/tests/data/replays/`.
 
-3. **Classify results** in the build transcript and your answer's summary (passed / failed / skipped) per the shared contract (advisory in v1) — the standards-review leg folds unresolved failures into the build report's findings. Do **not** emit a journal event and do **not** hand-edit `metadata.yaml`.
+3. **Classify results** in the build transcript and your answer's summary (passed / failed / skipped) per the shared contract (advisory in v1) — the build's close-out leg folds unresolved failures into the build phase report's findings. Do **not** emit a journal event and do **not** hand-edit `metadata.yaml`.
 
 ## References
 

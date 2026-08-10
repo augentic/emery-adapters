@@ -33,7 +33,7 @@ Violations of any rule below fail generation or update. Positive shape — the o
 
 ### Update-Specific Rules (update mode only)
 
-8. **No regressions** -- the build orchestration layer captures a test baseline before changes and runs a verify-repair loop after both crate-writer and test-writer complete; crate-writer must not introduce changes that break previously-passing tests
+8. **No regressions** -- the engine dispatches a verification pass after the build and bounded repair rounds after failures; crate-writer must not introduce changes that break previously-passing tests
 9. **Artifacts win for changed behavior** -- when the updated artifacts contradict existing code, trust the artifacts; the old behavior is intentionally being replaced
 10. **Preserve unchanged code** -- do not reformat, restructure, or modify code regions that the slice set does not touch
 11. **No silent removals** -- every subtractive change must be documented in CHANGELOG.md with the reason (the artifacts no longer specify this behavior)

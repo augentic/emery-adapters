@@ -9,10 +9,9 @@ This sub-flow is OpenAPI-only. Shared payload schemas under `contracts/schemas/`
 1. **Read the build prompt and specs.** Open [../build.md](../build.md) and the slice's `specs/<domain>/spec.md` files to identify what HTTP interactions the slice requires; read `contracts/http/` (the HTTP baseline) to know what already exists.
 2. **Identify the intent.** Map the trigger to one of three sibling references using the [intent dispatch](#intent-dispatch) table — author, importer, or verifier. Stop reading sub-flow prose once the sibling is selected; load only the relevant sibling.
 3. **Dispatch to the sibling.** Open and follow [`../../references/openapi/author.md`](../../references/openapi/author.md), [`../../references/openapi/importer.md`](../../references/openapi/importer.md), or [`../../references/openapi/verifier.md`](../../references/openapi/verifier.md). Each sibling owns its complete algorithm, decision rules, and output format.
-4. **Write outputs to `contracts/http/`.** Author and importer paths produce or normalise OpenAPI 3.1 YAML files under `$SLICE_DIR/contracts/http/`. Decomposed payload schemas land under `$SLICE_DIR/contracts/schemas/` (json-schema-sub-flow territory) — never inline them.
-5. **Run the verifier.** After authoring or importing, invoke the verifier sibling against the slice directory to check `$ref` resolution, schema metadata completeness, and binding coverage.
-6. **Surface diagnostics.** Render the markdown alignment / import / validation report (single mode) or the contract-tool JSON envelope (cross-project mode). Cross-project consumer impact is deferred until a real consumer workflow exists.
-7. **Stay within change-local `contracts/http/`.** Do not modify baseline files in root `contracts/`, do not touch `contracts/messages/` or shared schemas beyond writing decomposed `$ref` targets, and do not invent constructs that the spec does not justify — mark unknowns with `[unknown]` instead.
+4. **Write outputs to `contracts/http/`.** Author and importer paths produce or normalise OpenAPI 3.1 YAML files under `$ARTIFACT_STAGE/contracts/http/` (the staged slice delta). Decomposed payload schemas land under `$ARTIFACT_STAGE/contracts/schemas/` (json-schema-sub-flow territory) — never inline them.
+5. **Surface diagnostics.** Author and importer runs render the markdown alignment / import report. Cross-project consumer impact is deferred until a real consumer workflow exists.
+6. **Stay within change-local `contracts/http/`.** Do not modify baseline files in root `contracts/`, do not touch `contracts/messages/` or shared schemas beyond writing decomposed `$ref` targets, and do not invent constructs that the spec does not justify — mark unknowns with `[unknown]` instead.
 
 ## Artifact layout
 
@@ -23,7 +22,7 @@ contracts/
 └── http/
     └── <api-domain>.yaml              # Baseline: merged contracts only
 
-.emery/slices/<slice-name>/
+.emery/slices/<slice-name>/            # Written via the artifact stage, which mirrors this tree
 └── contracts/
     ├── http/
     │   └── <api-domain>.yaml          # Slice-local delta or normalised import
@@ -48,9 +47,9 @@ Pick the sibling that matches the trigger. Each sibling is a self-contained algo
 |---|---|---|
 | Author or extend the OpenAPI document from a spec | build prompt during the build phase; operator extending the baseline for new HTTP interactions | [`../../references/openapi/author.md`](../../references/openapi/author.md) |
 | Import or normalise an external OpenAPI document | operator drops an OpenAPI file into a slice's `contracts/http/` directory | [`../../references/openapi/importer.md`](../../references/openapi/importer.md) |
-| Verify internal consistency or run merge-time baseline validation | build verification; post-merge contract baseline gate; operator invoking validation against an existing OpenAPI artefact | [`../../references/openapi/verifier.md`](../../references/openapi/verifier.md) |
+| Verify internal consistency or run merge-time baseline validation | the engine's verify phase ([`../verify.md`](../verify.md)); post-merge contract baseline gate; operator invoking validation against an existing OpenAPI artefact | [`../../references/openapi/verifier.md`](../../references/openapi/verifier.md) |
 
-The three intents share a common artefact contract (paths, file naming, `$ref` discipline) but have distinct algorithms — never conflate them. An import must be followed by a verifier run before the build considers the artefact ready for merge; an author run normally ends with a verifier run too.
+The three intents share a common artefact contract (paths, file naming, `$ref` discipline) but have distinct algorithms — never conflate them. Verification is not part of a build leg: the engine dispatches the separate verify phase after build returns and routes findings back through one repair dispatch.
 
 ## Hard rules
 

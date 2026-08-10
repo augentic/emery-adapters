@@ -18,7 +18,9 @@ For EACH finding (CRX-, LOG-, GEN-, UNI-, and CMP- prefixed):
    (`critical` / `important` / `suggestion` / `optional`).
 3. Check for false positives: Could this be a non-issue or acceptable
    Crux pattern?
-4. Assess auto-fix safety: Could the suggested fix introduce regressions?
+4. Assess fix safety: Could the suggested fix introduce regressions? This is
+   metadata for the later engine-dispatched `repair` pass — review applies
+   nothing.
 5. Preserve any attached rule_id (codex citations match `^VECTIS-[0-9]{3}$`
    for Vectis-owned rules and `^UNI-[0-9]{3}$` for shared rules; the markdown
    `rule_id:` prose maps to the kebab-case `rule-id` field on the

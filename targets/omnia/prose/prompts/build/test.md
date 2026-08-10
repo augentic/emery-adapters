@@ -42,4 +42,4 @@ Capture wire format authority stays at the source adapter — do not duplicate t
 - Every provider interaction in `design.md` has at least one assertion.
 - The MockProvider implements exactly the trait set the handlers consume (no extras).
 - Replay JSON files referenced by `include_str!` exist under `tests/data/`.
-- No `cargo test` invocation here — execution belongs to the build prompt's verify-repair loop.
+- No `cargo test` invocation here — execution belongs to the engine-dispatched verify operation (and to the capture-replay leg for replay suites).

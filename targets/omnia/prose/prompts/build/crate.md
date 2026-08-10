@@ -22,7 +22,7 @@ The full Hard Rules + Authority Hierarchy live in [`../../references/hard-rules.
 3. **Mode dispatch.** Inherited from the build prompt: create mode (no `Cargo.toml`) vs update mode.
 4. Apply the per-mode process below; in update mode walk the four categories in fixed order.
 5. Run the inventory re-scan after every structural change.
-6. Continue with the build prompt's verify-repair loop.
+6. Stop after writing — verification, repair, and standards review are separate engine-dispatched operations; do not run the check suite here.
 
 ## Create mode
 
@@ -44,12 +44,12 @@ Worked code: the exemplar checkout is the primary reference for compiling curren
 
 Walk the four categories in fixed order; re-scan after structural before proceeding. The strategy library per category lives at [`update-patterns.md`](../../references/update-patterns.md); diff classification rules live at [`change-classification.md`](../../references/change-classification.md).
 
-1. **Structural** — type renames, file moves, module reshuffles. Apply via small, semantics-preserving rewrites. Re-run `cargo check` before moving on. Worked example: [`examples/crates/updates/structural.md`](../../references/examples/crates/updates/structural.md).
+1. **Structural** — type renames, file moves, module reshuffles. Apply via small, semantics-preserving rewrites, and re-run the inventory scan before moving on. Worked example: [`examples/crates/updates/structural.md`](../../references/examples/crates/updates/structural.md).
 2. **Subtractive** — delete operations / fields / types the new artifacts no longer name and remove their HTTP route or exact messaging-topic registration from the guest. Worked example: [`examples/crates/updates/subtractive.md`](../../references/examples/crates/updates/subtractive.md).
 3. **Modifying** — change an operation's behaviour, output shape, validation rules, provider dependencies, or guest boundary mapping in place. Update the matching `Cargo.toml` adapter dependency if a new provider trait is consumed. Worked example: [`examples/crates/updates/modifying.md`](../../references/examples/crates/updates/modifying.md).
 4. **Additive** — add new operations, guest routes/topics, types, and variants. Additive code MUST compile against the already-updated structural layer. Worked example: [`examples/crates/updates/additive.md`](../../references/examples/crates/updates/additive.md).
 
-When a `cargo` failure surfaces during this pass, apply minimum-change repair via [`repair-patterns.md`](../../references/repair-patterns.md) before re-entering the parent verify-repair loop.
+Do not run the check suite during this pass: the engine dispatches the verification operation after the build and routes failures through the repair operation ([`repair-patterns.md`](../../references/repair-patterns.md) holds the repair recipes it uses).
 
 ## Outputs and quality checklist
 
@@ -61,4 +61,4 @@ The full checklist lives at [`checklists.md`](../../references/checklists.md). H
 - Every `Config::get` key in `design.md` has a matching read in the operation (or in `Provider::new`).
 - Every `omnia_guest::Error` mapping in `design.md` has a matching arm in `impl From<DomainError>`.
 - No forbidden crate or forbidden std API per [`guardrails.md`](../../references/guardrails.md).
-- `cargo fmt`, `cargo check`, `cargo clippy --all-targets -- -D warnings` all pass before entering the build prompt's verify-repair loop.
+- No check-suite invocation here — `cargo fmt` / `check` / `clippy` / `test` belong to the engine-dispatched verify operation.

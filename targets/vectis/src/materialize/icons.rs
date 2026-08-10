@@ -13,11 +13,11 @@ use crate::materialize::paths::{
     Platform, export_layout, ios_imageset_dir, resolve_under_assets_dir,
 };
 use crate::materialize::svg::parse_vector_svg;
-use crate::materialize::{MaterializeFilter, MaterializeSink, matches_only};
+use crate::materialize::{MaterializeFilter, MaterializeRoots, MaterializeSink, matches_only};
 
 /// Materialize every in-scope `role: icon` / `role: decorative` vector entry.
 pub fn materialize_icon_vectors(
-    assets_dir: &Path, assets: &serde_json::Map<String, Value>, platforms: &[String],
+    roots: MaterializeRoots<'_>, assets: &serde_json::Map<String, Value>, platforms: &[String],
     filter: &MaterializeFilter<'_>, sink: &mut MaterializeSink<'_>,
 ) {
     for (asset_id, entry) in assets {
@@ -30,7 +30,7 @@ pub fn materialize_icon_vectors(
         let Some(source_rel) = entry.get("source").and_then(Value::as_str) else {
             continue;
         };
-        let source_path = assets_dir.join(source_rel);
+        let source_path = roots.masters.join(source_rel);
         let svg_bytes = match std::fs::read(&source_path) {
             Ok(bytes) => bytes,
             Err(err) => {
@@ -59,7 +59,7 @@ pub fn materialize_icon_vectors(
         }
 
         for platform_name in platforms {
-            if let Some(pin) = active_platform_pin(entry, platform_name, assets_dir) {
+            if let Some(pin) = active_platform_pin(entry, platform_name, roots.exports) {
                 sink.skipped_pins.push(json!({
                     "asset_id": asset_id,
                     "platform": platform_name,
@@ -84,7 +84,7 @@ pub fn materialize_icon_vectors(
                 &parsed.tree,
                 asset_id,
                 platform,
-                assets_dir,
+                roots.exports,
                 &layout,
                 filter.dry_run,
             ) {
@@ -96,13 +96,13 @@ pub fn materialize_icon_vectors(
 }
 
 fn materialize_for_platform(
-    tree: &Tree, asset_id: &str, platform: Platform, assets_dir: &Path,
+    tree: &Tree, asset_id: &str, platform: Platform, exports_dir: &Path,
     layout: &crate::materialize::paths::ExportLayout, dry_run: bool,
 ) -> Result<Vec<Value>, String> {
     let mut written = Vec::new();
     match platform {
         Platform::Ios => {
-            let imageset_dir = resolve_under_assets_dir(assets_dir, &ios_imageset_dir(asset_id));
+            let imageset_dir = resolve_under_assets_dir(exports_dir, &ios_imageset_dir(asset_id));
             if dry_run {
                 for artifact in &layout.artifacts {
                     written.push(materialized_entry(asset_id, platform, artifact));
@@ -117,7 +117,7 @@ fn materialize_for_platform(
         }
         Platform::Android => {
             let xml_rel = layout.pin.as_str();
-            let xml_path = resolve_under_assets_dir(assets_dir, xml_rel);
+            let xml_path = resolve_under_assets_dir(exports_dir, xml_rel);
             let drawable_name = xml_path.file_stem().and_then(|s| s.to_str()).unwrap_or(asset_id);
             if dry_run {
                 for artifact in &layout.artifacts {
@@ -141,9 +141,9 @@ fn is_icon_vector_entry(entry: &Value) -> bool {
     matches!(role, Some("icon" | "decorative")) && kind == Some("vector")
 }
 
-pub fn active_platform_pin(entry: &Value, platform: &str, assets_dir: &Path) -> Option<String> {
+pub fn active_platform_pin(entry: &Value, platform: &str, exports_dir: &Path) -> Option<String> {
     let pin = entry.get("sources")?.get(platform)?.as_str()?;
-    let path = assets_dir.join(pin);
+    let path = exports_dir.join(pin);
     path.exists().then(|| pin.to_string())
 }
 

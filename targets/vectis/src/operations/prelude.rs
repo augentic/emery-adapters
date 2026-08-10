@@ -1,13 +1,13 @@
 //! Deterministic pre-write blocks rendered into build-leg prompts:
-//! the in-guest prepare / component-inference / shell-verify summaries
-//! and the template-materialize prelude for absent declared trees.
+//! the in-guest prepare / component-inference summaries and the
+//! template-materialize prelude for absent declared trees.
 
 use std::path::Path;
 
 use serde_json::Value;
 
 use super::shells::declared_shell_legs;
-use crate::{android_scaffold, infer, ios_scaffold, scaffold, shell, verify};
+use crate::{android_scaffold, infer, ios_scaffold, scaffold, shell};
 
 pub(super) fn render_prelude(summary: &Value) -> String {
     format!(
@@ -37,20 +37,6 @@ pub(super) fn render_infer_report(change_root: &Path) -> String {
         "no merged baseline yet — empty report (nothing to name)".to_string()
     };
     format!("### component-identity cluster report (already run in-guest)\n\n{report}")
-}
-
-pub(super) fn render_verify_gate(
-    change_root: &Path, code_root: &Path, active_slice: Option<&str>,
-) -> String {
-    let body = if change_root.join(".emery/project.yaml").exists() {
-        match verify::run(verify::VerifyMode::Verify, change_root, code_root, active_slice) {
-            Ok(payload) => serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string()),
-            Err(err) => format!("verify gate could not run: {err}"),
-        }
-    } else {
-        "no declared platform set (`.emery/project.yaml` absent) — gate skipped".to_string()
-    };
-    format!("### shell verify gate (already run in-guest)\n\n{body}")
 }
 
 pub(super) fn scaffold_missing_trees(change_root: &Path, code_root: &Path) -> String {

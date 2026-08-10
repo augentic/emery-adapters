@@ -1,21 +1,21 @@
-# Vectis build — Android review
+# Vectis review — Android
 
-Inlined by the adapter core into the review leg's system prompt (alongside [../../build.md](../../build.md)) after [Android verify](write.md#verify-max-3-iterations) succeeds. Scope: every Kotlin file under `${ANDROID_SHELL_DIR}` plus read-only access to `${PROJECT_DIR}/shared/src/app.rs` and the wired UI input set (`composition.yaml`, `tokens.yaml`, `assets.yaml`).
+Inlined by the adapter core into the engine-dispatched `review` operation's system prompt (alongside [../../review.md](../../review.md) and [../core/review.md](../core/review.md)) when `android` is in scope. One pass, report only — no fixes. Scope: every Kotlin file under `${ANDROID_SHELL_DIR}` plus read-only access to `${PROJECT_DIR}/shared/src/app.rs` and the wired UI input set (`composition.yaml`, `tokens.yaml`, `assets.yaml`).
 
 The Android-specific team-spawn protocol lives in [`review/team-protocol-android.md`](../../../references/review/team-protocol-android.md).
 
 ## Pipeline
 
-1. **Verify prerequisites** — Android verify succeeded; ktlint / detekt are available.
+1. **Verify prerequisites** — `${ANDROID_SHELL_DIR}` exists with Kotlin files (skip the Android team when it does not).
 2. **Spawn specialists concurrently** with the verbatim prompts in [`review/team-protocol-android.md`](../../../references/review/team-protocol-android.md):
    - **Structural** — AND-001..027: screen / ViewModel correspondence, effect handlers, token usage, BoltFFI `CoreFfi` bridge, generated-type imports, coroutine safety, recurring-group component candidates. Full library: [`review/android-checks.md`](../../../references/review/android-checks.md).
    - **Quality** — KTL-001..010: force-unwraps, debug output, coroutine cancellation, Compose state, previews, a11y `contentDescription`, no inline lint suppressions (**AND-029**, codex `VECTIS-009`). Full library: [`review/kotlin-quality-checks.md`](../../../references/review/kotlin-quality-checks.md).
-   - **Integration** — only on the first full-scope iteration. Token / asset / composition cross-artifact checks per [`review/team-protocol-android.md`](../../../references/review/team-protocol-android.md) § Integration, including **AND-028** (render-by-`kind`, codex `VECTIS-006`) in [`review/android-checks.md`](../../../references/review/android-checks.md).
+   - **Integration** — always in scope. Token / asset / composition cross-artifact checks per [`review/team-protocol-android.md`](../../../references/review/team-protocol-android.md) § Integration, including **AND-028** (render-by-`kind`, codex `VECTIS-006`) in [`review/android-checks.md`](../../../references/review/android-checks.md).
 3. **Universal checks (lead).** Apply every `UNI-*` rule from the shared universal codex pack ([`../../../rules/universal/`](../../../rules/universal/), embedded in this adapter) with Kotlin / Android heuristics. Full library: [`review/universal-checks.md`](../../../references/review/universal-checks.md).
 4. **Adversarial challenge.** Forward all findings to the antagonist per [`agent-teams.md`](../../../references/agent-teams.md).
-5. **Synthesis.** Lead authors the iteration report per [`review/iteration-report.md`](../../../references/review/iteration-report.md).
+5. **Synthesis.** Lead authors the review report per [`review/review-report.md`](../../../references/review/review-report.md).
    - Return classified `design_findings` per [../core/review.md](../core/review.md) § Consolidate review findings.
-6. **Mechanical auto-fixes (when safe).** `contentDescription`, design-token swaps, missing `@Preview`, generated-FFI-type imports (`import <ANDROID_PACKAGE>.*` / `import <ANDROID_PACKAGE>.shared.CoreFfi`), `CancellationException` rethrow, replacing stale `import com.vectis.design.*` with `import <ANDROID_PACKAGE>.ui.theme.*`. Never rewrite imports or paths to a hardcoded `com.vectis.*` fallback when `ANDROID_PACKAGE` differs. Revert the batch if the Gradle build regresses.
+6. **No fixes of any kind.** `contentDescription`, token swaps, missing `@Preview` blocks, generated-FFI-type imports, and `CancellationException` rethrows are findings, never edits — the engine routes blocking findings through its `repair` dispatch. When flagging a package-path finding, cite the resolved `ANDROID_PACKAGE`, never a hardcoded `com.vectis.*` fallback.
 
 ## Finding-ID conventions
 
@@ -24,4 +24,4 @@ The Android-specific team-spawn protocol lives in [`review/team-protocol-android
 
 Severity values in finding output use the closed `Diagnostic` severity enum: `critical`, `important`, `suggestion`, `optional`.
 
-See [iteration-report.md](../../../references/review/iteration-report.md) § Finding-ID conventions for severity and `file:line` rules.
+See [review-report.md](../../../references/review/review-report.md) § Finding-ID conventions for severity and `file:line` rules.

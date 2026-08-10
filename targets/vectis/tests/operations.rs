@@ -1,11 +1,15 @@
-//! Vectis build / merge operation behavior.
+//! Vectis operation behavior across the RFC-90 six-operation split:
+//! `build` (generation), `verify` / `repair` / `review` (one pass
+//! each), and the phased `merge` gates.
 
 use std::fs;
 use std::path::Path;
 
-use adapter::answers::REPORT_ANSWER_SCHEMA;
+use adapter::answers::PHASE_REPORT_ANSWER_SCHEMA;
 use adapter::seam::{
-    BuildContext, Context, Input, MergePhase, Payload, Report, Severity, Status, Workspace,
+    ArtifactStage, BuildContext, Context, DiagnosticSource, FindingArtifact, FindingEvidence,
+    FindingKind, Input, MergePhase, Payload, PhaseFinding, PhaseOutcome, PhaseReport, PhaseSource,
+    RepairOrigin, Severity, Status, Workspace, WritableArtifact, WritableArtifactKind,
 };
 use adapter::{Format, Request, Target as _};
 use omnia_testkit::model::{Harness, mcp_grants};
@@ -14,8 +18,9 @@ use vectis::Adapter;
 
 const PHASE_DONE: &str = r#"{"applicable":true,"summary":"phase complete"}"#;
 const SHELL_SKIPPED: &str = r#"{"applicable":false,"summary":"no shell work in this slice"}"#;
+const PHASE_REPORT_CLEAN: &str = r#"{"outcome":"completed","source":"model-assisted"}"#;
 const SUCCESS_REPORT: &str = r#"{"status":"success","findings":[]}"#;
-const FAILURE_REPORT: &str = r#"{"status":"failure","findings":[]}"#;
+
 fn ctx<'a>(root: &'a Path, mcp_url: Option<&str>) -> Context<'a> {
     Context {
         adapter_id: "target:vectis",
@@ -25,13 +30,26 @@ fn ctx<'a>(root: &'a Path, mcp_url: Option<&str>) -> Context<'a> {
     }
 }
 
-// The degenerate single-checkout shape: workspace root and artifact
-// root both point at the test tree.
+// The degenerate stage-less shape: workspace root and artifact root
+// both point at the test tree, no lent artifact stage.
 fn workspace(root: &Path) -> Workspace {
     Workspace {
         id: "ws-1".to_string(),
         root: root.display().to_string(),
         artifacts: root.display().to_string(),
+        artifact_stage: None,
+    }
+}
+
+// The RFC-90 shape: the engine lends a writable artifact stage beside
+// the workspace.
+fn staged_workspace(root: &Path, stage: &Path) -> Workspace {
+    Workspace {
+        artifact_stage: Some(ArtifactStage {
+            id: "stage-1".to_string(),
+            root: stage.display().to_string(),
+        }),
+        ..workspace(root)
     }
 }
 
@@ -55,10 +73,127 @@ fn assert_system_budget(request: &Request, leg: &str, budget: usize) {
     );
 }
 
-/// The composition leg's assemble and path-form user prompt: inputs
-/// render as project-relative path sections with a
-/// read-before-writing instruction, never inlined bodies.
-fn assert_composition_leg(request: &Request) {
+/// A check-pass report is sanitized: no outputs, no UI surface, no
+/// continuation change.
+fn assert_check_shape(report: &PhaseReport) {
+    assert!(report.outputs.is_empty(), "check passes declare no outputs");
+    assert!(report.ui_surface.is_none(), "check passes carry no UI surface");
+    assert!(report.next_continuation.is_none(), "vectis preserves the continuation");
+}
+
+fn blocking_finding(title: &str) -> PhaseFinding {
+    PhaseFinding {
+        id: "GATE-0001".to_string(),
+        rule_id: None,
+        related_rule_ids: Vec::new(),
+        title: title.to_string(),
+        severity: Severity::Important,
+        source: DiagnosticSource::Deterministic,
+        kind: FindingKind::Violation,
+        artifact: FindingArtifact::Code,
+        location: None,
+        evidence: FindingEvidence::Snippet {
+            value: title.to_string(),
+        },
+        impact: "blocking".to_string(),
+        remediation: "fix it".to_string(),
+        confidence: None,
+        fingerprint: String::new(),
+    }
+}
+
+#[test]
+fn metadata_grants() {
+    let metadata = Adapter::metadata();
+    assert_eq!(metadata.emery_floor.as_deref(), Some("0.38.0"));
+    let grants: Vec<(&str, WritableArtifactKind)> = metadata
+        .writable_artifacts
+        .iter()
+        .map(|artifact| (artifact.path.as_str(), artifact.kind))
+        .collect();
+    assert_eq!(
+        grants,
+        vec![
+            ("tasks.md", WritableArtifactKind::File),
+            ("composition.yaml", WritableArtifactKind::File),
+            ("build", WritableArtifactKind::Tree),
+        ],
+        "RFC-90 D5: tasks, composition, and the build bookkeeping subtree"
+    );
+    assert_eq!(metadata.writable_artifacts[2], WritableArtifact::tree("build"));
+    assert!(metadata.platforms.is_some_and(|capability| capability.required));
+}
+
+#[tokio::test]
+async fn build_phase_legs() {
+    let tmp = TempDir::new().unwrap();
+    let stage = TempDir::new().unwrap();
+    let model = Harness::answering([
+        PHASE_DONE,    // composition
+        PHASE_DONE,    // core
+        SHELL_SKIPPED, // ios
+        SHELL_SKIPPED, // android
+        r#"{"outcome":"completed","source":"model-assisted",
+            "outputs":[{"platform":"core","path":"shared/"}],
+            "ui-surface":{"screens":1}}"#, // build report
+    ]);
+    let input = |path: &str| Payload::Path(path.to_string());
+    let inputs = vec![
+        Input::Proposal(input(".emery/slices/demo/proposal.md")),
+        Input::Spec(input(".emery/slices/demo/specs/core/spec.md")),
+        Input::Design(input(".emery/slices/demo/design.md")),
+    ];
+
+    let report = Adapter::build(
+        &model,
+        &ctx(tmp.path(), Some("http://references/mcp")),
+        "demo",
+        &inputs,
+        &BuildContext::default(),
+        &staged_workspace(tmp.path(), stage.path()),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(report.outcome, PhaseOutcome::Completed);
+    assert_eq!(
+        report.source,
+        PhaseSource::ModelAssisted,
+        "no project.yaml and no staged composition — no in-guest check contributed"
+    );
+    assert_eq!(report.outputs.len(), 1, "build carries the per-platform outputs");
+    assert_eq!(report.ui_surface.map(|surface| surface.screens), Some(1));
+    assert!(report.next_continuation.is_none(), "vectis carries no writer-session state");
+
+    let requests = model.requests();
+    assert_eq!(
+        requests.len(),
+        5,
+        "composition, core, two shells, then one report leg — no \
+         verify / repair / review legs inside build"
+    );
+    // Budget = measured baseline (per-leg comment, 2026-08-10) + ~10%.
+    for (i, (leg, budget)) in [
+        ("composition", 34_400),  // baseline 31_270
+        ("core", 25_700),         // baseline 23_346
+        ("ios", 22_300),          // baseline 20_189
+        ("android", 24_400),      // baseline 22_127
+        ("build-report", 16_700), // baseline 15_158
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        assert_system_budget(&requests[i], leg, budget);
+    }
+
+    let stage_display = stage.path().display().to_string();
+    assert_composition_leg(&requests[0], &stage_display);
+    assert_generation_legs(&requests);
+    assert_report_leg(&requests[4], &stage_display);
+}
+
+/// Composition leg: assemble, path-form inputs, stage-routed writes.
+fn assert_composition_leg(request: &Request, stage_display: &str) {
     let system = request.system.as_deref().unwrap();
     assert!(system.contains("# Vectis target — build prompt"), "build prompt in system");
     assert!(
@@ -77,19 +212,18 @@ fn assert_composition_leg(request: &Request) {
         "typed inputs render as artifact-rooted path sections: {user}"
     );
     assert!(!user.contains("PROPOSAL-BODY"), "artifact bodies are not inlined");
-    assert!(
-        user.contains("Read each path"),
-        "read-before-writing instruction rides the inputs block"
-    );
+    assert!(user.contains("Read each path"), "read-before-writing instruction rides the inputs");
     assert!(user.contains("slice `demo`"), "slice named");
     assert!(user.contains("prepare prelude"), "prelude summary feeds the first leg");
-    assert!(user.contains("\"skipped\":true"), "nothing to materialize in an empty workspace");
+    assert!(user.contains("component-identity cluster report"), "in-guest infer report feeds it");
     assert!(
-        user.contains("component-identity cluster report"),
-        "in-guest infer report feeds the leg"
+        user.contains(&format!("{stage_display}/build/component-bindings.yaml")),
+        "bindings write routes to the artifact stage: {user}"
     );
-    assert!(user.contains("component-bindings.yaml"), "bindings file instructed");
-    assert!(!user.contains("emery catalog infer"), "no dead CLI verb in the prompt");
+    assert!(
+        user.contains(&format!("{stage_display}/composition.yaml")),
+        "composition write routes to the artifact stage"
+    );
     assert!(user.contains("vectis-references"), "user prompt points at the MCP references");
     let (name, schema) = schema_format(request);
     assert_eq!(name, "composition");
@@ -102,140 +236,60 @@ fn assert_composition_leg(request: &Request) {
     assert_eq!(mcp_grants(request)[0].url, "http://references/mcp");
 }
 
-/// `… → review → final-core-verify → report` (after composition).
-fn assert_post_composition_leg_order(requests: &[Request]) {
+/// Core and shell legs are generation-only.
+fn assert_generation_legs(requests: &[Request]) {
     let core = &requests[1];
     assert_eq!(schema_format(core).0, "core");
     assert!(core.system.as_deref().unwrap().contains("# Vectis build — core (write)"));
+    assert!(core.system.as_deref().unwrap().contains("# Vectis build — Crux tests"));
     assert!(
-        core.system.as_deref().unwrap().contains("# Vectis build — tests + core verify-repair")
+        core.messages[0].content.contains("generation-only pass"),
+        "core leg is generation only"
     );
-    assert!(core.messages[0].content.contains("cannot spawn"), "agent-run cargo loop instructed");
     assert!(
-        core.messages[0].content.contains("Do not write"),
-        "mid-build core leg must not own the durable stamp"
+        core.messages[0].content.contains("separate verify operation"),
+        "verification is dispatched by the engine, not the core leg"
     );
     let ios = &requests[2];
     assert_eq!(schema_format(ios).0, "ios");
-    assert!(ios.system.as_deref().unwrap().contains("# Vectis build — iOS shell (write + verify)"));
+    assert!(ios.system.as_deref().unwrap().contains("# Vectis build — iOS shell (write)"));
     assert!(ios.messages[0].content.contains("applicable: false"), "shell legs may self-skip");
+    assert!(ios.messages[0].content.contains("generation-only pass"));
     let android = &requests[3];
     assert_eq!(schema_format(android).0, "android");
-    assert!(
-        android
-            .system
-            .as_deref()
-            .unwrap()
-            .contains("# Vectis build — Android shell (write + verify)")
-    );
-    let review = &requests[4];
-    assert_eq!(schema_format(review).0, "review");
-    assert!(review.system.as_deref().unwrap().contains("# Vectis build — core review"));
-    assert!(review.system.as_deref().unwrap().contains("# Vectis build — iOS review"));
-    assert!(review.system.as_deref().unwrap().contains("# Vectis build — Android review"));
-    let final_core = &requests[5];
-    assert_eq!(schema_format(final_core).0, "final-core-verify");
-    assert!(
-        final_core
-            .system
-            .as_deref()
-            .unwrap()
-            .contains("# Vectis build — tests + core verify-repair")
-    );
-    assert!(
-        final_core.messages[0].content.contains("shared/.vectis/verify.ok"),
-        "final leg owns the digest stamp"
-    );
-    let (name, schema) = schema_format(&requests[6]);
-    assert_eq!(name, "report");
-    assert_eq!(schema, REPORT_ANSWER_SCHEMA);
-    let report_system = requests[6].system.as_deref().unwrap();
-    assert!(
-        report_system.contains("# Vectis build — report"),
-        "report contract rides the report phase prompt, not the shared preamble"
-    );
-    let report_user = &requests[6].messages[0].content;
-    assert!(report_user.contains("no shell work"), "phase outcomes feed the report leg");
-    assert!(report_user.contains("final-core-verify"), "final verify outcome feeds the report");
-    assert!(report_user.contains("shell verify gate"), "in-guest verify gate feeds the report");
-    assert!(!report_user.contains("emery extension run"), "no dead CLI verb in the prompt");
+    assert!(android.system.as_deref().unwrap().contains("# Vectis build — Android shell (write)"));
 }
 
-#[tokio::test]
-async fn build_phase_legs() {
-    let tmp = TempDir::new().unwrap();
-    let model = Harness::answering([
-        PHASE_DONE,     // composition
-        PHASE_DONE,     // core
-        SHELL_SKIPPED,  // ios
-        SHELL_SKIPPED,  // android
-        PHASE_DONE,     // review
-        PHASE_DONE,     // final-core-verify
-        SUCCESS_REPORT, // report
-    ]);
-    let input = |path: &str| Payload::Path(path.to_string());
-    let inputs = vec![
-        Input::Proposal(input(".emery/slices/demo/proposal.md")),
-        Input::Spec(input(".emery/slices/demo/specs/core/spec.md")),
-        Input::Design(input(".emery/slices/demo/design.md")),
-    ];
-
-    let report = Adapter::build(
-        &model,
-        &ctx(tmp.path(), Some("http://references/mcp")),
-        "demo",
-        &inputs,
-        &BuildContext::default(),
-        &workspace(tmp.path()),
-    )
-    .await
-    .unwrap();
-
-    assert_eq!(report.status, Status::Success);
-    assert!(report.findings.is_empty());
-
-    let requests = model.requests();
-    assert_eq!(
-        requests.len(),
-        7,
-        "composition, core, two shells, review, final-core-verify, then one report call"
+/// Report leg: the typed phase report, tasks marked in the stage.
+fn assert_report_leg(request: &Request, stage_display: &str) {
+    let (name, schema) = schema_format(request);
+    assert_eq!(name, "build-report");
+    assert_eq!(schema, PHASE_REPORT_ANSWER_SCHEMA);
+    let report_system = request.system.as_deref().unwrap();
+    assert!(
+        report_system.contains("# Vectis build — phase report"),
+        "phase-report contract rides the report phase prompt"
     );
-    // Budget = measured baseline (per-leg comment, 2026-07-31) + ~10%.
-    for (i, (leg, budget)) in [
-        ("composition", 32_700),       // baseline 29_681
-        ("core", 29_100),              // baseline 26_458
-        ("ios", 23_200),               // baseline 21_080
-        ("android", 24_400),           // baseline 22_167
-        ("review", 27_700),            // baseline 25_144
-        ("final-core-verify", 20_600), // baseline 18_733
-        ("report", 20_500),            // baseline 18_644
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        assert_system_budget(&requests[i], leg, budget);
-    }
-
-    assert_composition_leg(&requests[0]);
-    assert_post_composition_leg_order(&requests);
+    let report_user = &request.messages[0].content;
+    assert!(report_user.contains("no shell work"), "phase outcomes feed the report leg");
+    assert!(
+        report_user.contains(&format!("{stage_display}/tasks.md")),
+        "tasks bookkeeping routes to the artifact stage"
+    );
+    assert!(
+        report_user.contains("never write `build/report.yaml`"),
+        "terminal report assembly is engine-owned"
+    );
 }
 
 #[tokio::test]
 async fn core_only_skips_shells() {
     let tmp = TempDir::new().unwrap();
+    let stage = TempDir::new().unwrap();
     fs::create_dir_all(tmp.path().join(".emery")).unwrap();
     fs::write(tmp.path().join(".emery/project.yaml"), "name: demo-app\nplatforms:\n  - core\n")
         .unwrap();
-    // Core tree already present so the shell-verify gate stays clean; this
-    // case owns platform-leg skipping, not greenfield materialize.
-    fs::create_dir_all(tmp.path().join("shared/src")).unwrap();
-    fs::write(tmp.path().join("shared/src/app.rs"), "pub struct App;\n").unwrap();
-    let digest =
-        vectis::verify::core_src_digest(tmp.path()).expect("core digest io").expect("core digest");
-    fs::create_dir_all(tmp.path().join("shared/.vectis")).unwrap();
-    fs::write(tmp.path().join(vectis::verify::CORE_VERIFY_STAMP), format!("{digest}\n")).unwrap();
-    let model =
-        Harness::answering([PHASE_DONE, PHASE_DONE, PHASE_DONE, PHASE_DONE, SUCCESS_REPORT]);
+    let model = Harness::answering([PHASE_DONE, PHASE_DONE, PHASE_REPORT_CLEAN]);
 
     let report = Adapter::build(
         &model,
@@ -243,64 +297,50 @@ async fn core_only_skips_shells() {
         "demo",
         &[],
         &BuildContext::default(),
-        &workspace(tmp.path()),
+        &staged_workspace(tmp.path(), stage.path()),
     )
     .await
     .unwrap();
 
-    assert_eq!(report.status, Status::Success);
-    let requests = model.requests();
+    assert_eq!(report.outcome, PhaseOutcome::Completed);
     assert_eq!(
-        requests.len(),
-        5,
-        "composition, core, review, final-core-verify, report — no shell legs"
+        report.source,
+        PhaseSource::Hybrid,
+        "the deterministic bootstrap gate ran alongside the model legs"
     );
+    let requests = model.requests();
+    assert_eq!(requests.len(), 3, "composition, core, report — no shell legs");
     assert_eq!(schema_format(&requests[1]).0, "core");
-    assert_eq!(schema_format(&requests[2]).0, "review");
-    assert_eq!(schema_format(&requests[3]).0, "final-core-verify");
+    assert_eq!(schema_format(&requests[2]).0, "build-report");
     let core_user = &requests[1].messages[0].content;
     assert!(
         core_user.contains("template-materialize prelude"),
         "prelude names the host-side template materialize contract"
     );
-    assert!(
-        core_user.contains("already present"),
-        "present core tree skips greenfield materialize"
-    );
-    let review_system = requests[2].system.as_deref().unwrap();
-    assert!(!review_system.contains("iOS review"), "no iOS review prompt for a core-only project");
 }
 
 #[tokio::test]
 async fn guest_does_not_embed_scaffold() {
     let tmp = TempDir::new().unwrap();
+    let stage = TempDir::new().unwrap();
     fs::create_dir_all(tmp.path().join(".emery")).unwrap();
     fs::write(tmp.path().join(".emery/project.yaml"), "name: demo-app\nplatforms:\n  - core\n")
         .unwrap();
     // Absent `shared/` → prelude asks the host agent to materialize; the
-    // guest must not write from embedded templates. Report-gate repair
-    // fires because the shell verify gate sees a missing core tree.
-    let model = Harness::answering([
-        PHASE_DONE,     // composition
-        PHASE_DONE,     // core
-        PHASE_DONE,     // review
-        PHASE_DONE,     // final-core-verify
-        SUCCESS_REPORT, // report (optimistic — gate rejects)
-        FAILURE_REPORT, // report-repair
-    ]);
+    // guest must not write from embedded templates.
+    let model = Harness::answering([PHASE_DONE, PHASE_DONE, PHASE_REPORT_CLEAN]);
 
-    let report = Adapter::build(
+    Adapter::build(
         &model,
         &ctx(tmp.path(), None),
         "demo",
         &[],
         &BuildContext::default(),
-        &workspace(tmp.path()),
+        &staged_workspace(tmp.path(), stage.path()),
     )
     .await
     .unwrap();
 
-    assert_eq!(report.status, Status::Failure, "missing core tree fails the shell verify gate");
     let core_user = &model.requests()[1].messages[0].content;
     assert!(core_user.contains("Absent declared trees: `core`"));
     assert!(core_user.contains("$TEMPLATE_DIR"));
@@ -316,19 +356,14 @@ async fn guest_does_not_embed_scaffold() {
 }
 
 #[tokio::test]
-async fn composition_repair() {
+async fn build_blocks_on_invalid_composition() {
     let tmp = TempDir::new().unwrap();
-    // The mock never fixes the unparseable composition, so both bounded
-    // repair iterations fire and no downstream leg is spent against the
-    // knowingly-broken composition.
-    let slice_dir = tmp.path().join(".emery/slices/demo");
-    fs::create_dir_all(&slice_dir).unwrap();
-    fs::write(slice_dir.join("composition.yaml"), "screens: [broken\n").unwrap();
-    let model = Harness::answering([
-        PHASE_DONE, // composition
-        PHASE_DONE, // composition-repair 1
-        PHASE_DONE, // composition-repair 2
-    ]);
+    let stage = TempDir::new().unwrap();
+    // The composition leg leaves an unparseable staged composition; the
+    // in-guest validator blocks generation and its findings ride the
+    // build report — no repair loop runs inside build.
+    fs::write(stage.path().join("composition.yaml"), "screens: [broken\n").unwrap();
+    let model = Harness::answering([PHASE_DONE]);
 
     let report = Adapter::build(
         &model,
@@ -336,85 +371,368 @@ async fn composition_repair() {
         "demo",
         &[],
         &BuildContext::default(),
-        &workspace(tmp.path()),
+        &staged_workspace(tmp.path(), stage.path()),
     )
     .await
     .unwrap();
 
-    assert_eq!(report.status, Status::Failure, "an exhausted gate parks the slice");
-    assert_eq!(report.findings[0].severity, Severity::Important);
-    assert!(report.findings[0].detail.contains("[composition]"), "finding names the validator");
+    assert_eq!(report.outcome, PhaseOutcome::Completed);
+    assert_eq!(
+        report.source,
+        PhaseSource::Hybrid,
+        "in-guest validator findings plus a model leg is a hybrid report"
+    );
+    assert!(!report.findings.is_empty(), "validator findings ride the report");
+    let finding = &report.findings[0];
+    assert_eq!(finding.severity, Severity::Important);
+    assert_eq!(finding.kind, FindingKind::Violation);
+    assert_eq!(finding.source, DiagnosticSource::Deterministic);
+    assert_eq!(finding.artifact, FindingArtifact::Composition);
+    assert!(finding.title.contains("[composition]"), "finding names the validator: {finding:?}");
     assert!(report.outputs.is_empty(), "no platform phase ran, so no outputs are declared");
 
     let requests = model.requests();
-    assert_eq!(requests.len(), 3, "the composition leg plus both bounded repairs, nothing more");
-    let repair = &requests[1];
-    assert_eq!(schema_format(repair).0, "composition-repair");
-    assert!(repair.messages[0].content.contains("composition validator found blocking issues"));
-    assert_system_budget(repair, "composition-repair", 32_700); // baseline 29_681
+    assert_eq!(requests.len(), 1, "the composition leg only — repair routing is engine policy");
 }
 
-async fn build_with_composition(composition: Option<&str>, report_answer: &'static str) -> Report {
+// RFC-90 grants: a slice-local `assets.yaml` staged by the engine is
+// read from the stage, but the materialize prelude's exports must land
+// under the product workspace's `design-system/` — never onto the
+// stage, which only grants `tasks.md`, `composition.yaml`, and
+// `build/`.
+#[tokio::test]
+async fn build_materialize_exports_land_in_workspace() {
+    const SQUARE: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <path fill="#336699" d="M2 2h20v20H2z"/>
+</svg>"##;
+
     let tmp = TempDir::new().unwrap();
-    if let Some(body) = composition {
-        let slice_dir = tmp.path().join(".emery/slices/demo");
-        fs::create_dir_all(&slice_dir).unwrap();
-        fs::write(slice_dir.join("composition.yaml"), body).unwrap();
-    }
-    let model = Harness::answering([
-        PHASE_DONE,
-        PHASE_DONE,
-        SHELL_SKIPPED,
-        SHELL_SKIPPED,
-        PHASE_DONE,
-        PHASE_DONE,
-        report_answer,
-    ]);
+    let stage = TempDir::new().unwrap();
+    fs::create_dir_all(tmp.path().join(".emery")).unwrap();
+    fs::write(
+        tmp.path().join(".emery/project.yaml"),
+        "name: demo-app\nplatforms:\n  - core\n  - ios\n",
+    )
+    .unwrap();
+    // Workspace design-system baseline satisfies the bootstrap app-icon
+    // gate for the declared ios platform.
+    fs::create_dir_all(tmp.path().join("design-system/assets")).unwrap();
+    fs::write(tmp.path().join("design-system/assets/launcher.svg"), SQUARE).unwrap();
+    fs::write(
+        tmp.path().join("design-system/assets.yaml"),
+        "version: 1\napp-icon: launcher\nassets:\n  launcher:\n    alt: Launcher\n    kind: \
+         vector\n    role: app-icon\n    source: assets/launcher.svg\n",
+    )
+    .unwrap();
+    // The slice-local inventory arrives on the lent stage; its master
+    // reads relative to the inventory (the stage), its exports must not.
+    fs::create_dir_all(stage.path().join("assets")).unwrap();
+    fs::write(stage.path().join("assets/check.svg"), SQUARE).unwrap();
+    let staged_inventory = "version: 1\nassets:\n  check:\n    alt: Check\n    kind: vector\n    \
+                            role: icon\n    source: assets/check.svg\n";
+    fs::write(stage.path().join("assets.yaml"), staged_inventory).unwrap();
+
+    let model = Harness::answering([PHASE_DONE, PHASE_DONE, SHELL_SKIPPED, PHASE_REPORT_CLEAN]);
     let report = Adapter::build(
         &model,
         &ctx(tmp.path(), None),
         "demo",
         &[],
         &BuildContext::default(),
-        &workspace(tmp.path()),
+        &staged_workspace(tmp.path(), stage.path()),
     )
     .await
     .unwrap();
-    assert_eq!(model.requests().len(), 7, "coherence warnings never trigger the repair leg");
+    assert_eq!(report.outcome, PhaseOutcome::Completed);
+
+    // Exports land under the workspace design-system, where the shell
+    // write legs expect them.
+    assert!(
+        tmp.path().join("design-system/assets/exports/ios/check.imageset/check.pdf").is_file(),
+        "materialized export missing from the workspace design-system"
+    );
+
+    // The staged tree gains nothing outside the declared grants: the
+    // two seeded entries only, and no auto-pin write-back mutates the
+    // staged inventory.
+    let mut staged_entries: Vec<String> = fs::read_dir(stage.path())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    staged_entries.sort();
+    assert_eq!(
+        staged_entries,
+        vec!["assets".to_string(), "assets.yaml".to_string()],
+        "the stage gains no entries outside the declared grants"
+    );
+    assert!(
+        !stage.path().join("assets/exports").exists(),
+        "no exports may land on the artifact stage"
+    );
+    assert_eq!(
+        fs::read_to_string(stage.path().join("assets.yaml")).unwrap(),
+        staged_inventory,
+        "auto-pin write-back must not touch the staged inventory"
+    );
+}
+
+// Dirty scripted answer through a check pass: outputs, UI surface,
+// continuation, and `tool` finding attributions are sanitized in code,
+// and a not-applicable outcome clears `written`.
+#[tokio::test]
+async fn verify_dirty_answer_sanitized() {
+    let tmp = TempDir::new().unwrap();
+    let dirty = r#"{"outcome":"not-applicable","source":"tool","findings":[{
+        "title":"xcodebuild failed",
+        "severity":"important",
+        "source":"tool",
+        "kind":"violation",
+        "artifact":"code",
+        "evidence":{"kind":"snippet","value":"exit status 65"},
+        "impact":"the ios shell does not build",
+        "remediation":"fix the compile error"
+    }],
+    "outputs":[{"platform":"ios","path":"ios/"}],
+    "ui-surface":{"screens":2},
+    "next-continuation":null,
+    "written":[{"root":"workspace","path":"ios/App.swift"}]}"#;
+    let model = Harness::answering([dirty]);
+
+    let report =
+        Adapter::verify(&model, &ctx(tmp.path(), None), &workspace(tmp.path())).await.unwrap();
+
+    assert_check_shape(&report);
+    assert_eq!(report.source, PhaseSource::ModelAssisted);
+    assert_eq!(report.findings.len(), 1);
+    assert_eq!(
+        report.findings[0].source,
+        DiagnosticSource::ModelAssisted,
+        "tool attribution is sanitized to model-assisted"
+    );
+    assert_eq!(
+        report.outcome,
+        PhaseOutcome::Completed,
+        "not-applicable with findings flips to completed"
+    );
+
+    // A findings-free not-applicable answer stays not-applicable and
+    // must shed its written entries (`target-phase-not-applicable-dirty`).
+    let clean_na = r#"{"outcome":"not-applicable","source":"model-assisted",
+        "written":[{"root":"workspace","path":"ios/App.swift"}]}"#;
+    let model = Harness::answering([clean_na]);
+    let report =
+        Adapter::verify(&model, &ctx(tmp.path(), None), &workspace(tmp.path())).await.unwrap();
+    assert_eq!(report.outcome, PhaseOutcome::NotApplicable);
+    assert!(report.written.is_empty(), "a not-applicable report must be clean");
+}
+
+#[tokio::test]
+async fn verify_single_pass() {
+    let tmp = TempDir::new().unwrap();
+    let stage = TempDir::new().unwrap();
+    // Declared core platform with no `shared/` tree: the deterministic
+    // in-guest shell verify gate contributes a blocking finding.
+    fs::create_dir_all(tmp.path().join(".emery")).unwrap();
+    fs::write(tmp.path().join(".emery/project.yaml"), "name: demo-app\nplatforms:\n  - core\n")
+        .unwrap();
+    let model = Harness::answering([PHASE_REPORT_CLEAN]);
+
+    let report = Adapter::verify(
+        &model,
+        &ctx(tmp.path(), None),
+        &staged_workspace(tmp.path(), stage.path()),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(report.outcome, PhaseOutcome::Completed);
+    assert_eq!(
+        report.source,
+        PhaseSource::Hybrid,
+        "the in-guest verify gate contributed alongside the model pass"
+    );
+    assert!(
+        report.findings.iter().any(|finding| finding.title.contains("platform-shell-missing")),
+        "deterministic gate findings ride the report: {:?}",
+        report.findings
+    );
+    assert_check_shape(&report);
+
+    let requests = model.requests();
+    assert_eq!(requests.len(), 1, "verify is one pass — no retry loop");
+    let (name, schema) = schema_format(&requests[0]);
+    assert_eq!(name, "verify");
+    assert_eq!(schema, PHASE_REPORT_ANSWER_SCHEMA);
+    let system = requests[0].system.as_deref().unwrap();
+    assert!(system.contains("# Vectis target — verify prompt"));
+    assert!(system.contains("One pass only"), "single-pass contract in the prompt");
+    let user = &requests[0].messages[0].content;
+    assert!(!user.contains("demo"), "verify receives no slice identity: {user}");
+    assert!(user.contains("no slice identity is supplied"), "workspace-self-contained prose");
+    assert!(
+        user.contains(&stage.path().display().to_string()),
+        "the lent artifact stage is named for candidate slice-artifact reads"
+    );
+    assert_system_budget(&requests[0], "verify", 5_600); // baseline 5_064
+}
+
+#[tokio::test]
+async fn verify_model_assisted_without_gates() {
+    let tmp = TempDir::new().unwrap();
+    // No `.emery/project.yaml` and no lent stage: neither in-guest gate
+    // runs, so the report stays model-assisted.
+    let model = Harness::answering([PHASE_REPORT_CLEAN]);
+
+    let report =
+        Adapter::verify(&model, &ctx(tmp.path(), None), &workspace(tmp.path())).await.unwrap();
+
+    assert_eq!(report.source, PhaseSource::ModelAssisted);
+    assert!(report.findings.is_empty());
+    assert_check_shape(&report);
+}
+
+#[tokio::test]
+async fn repair_single_pass() {
+    let tmp = TempDir::new().unwrap();
+    let stage = TempDir::new().unwrap();
+    let model = Harness::answering([PHASE_REPORT_CLEAN]);
+    let findings = vec![blocking_finding("cargo clippy failed: unused variable `x`")];
+
+    let report = Adapter::repair(
+        &model,
+        &ctx(tmp.path(), None),
+        "demo",
+        RepairOrigin::Verification,
+        &findings,
+        Some(b"opaque-continuation"),
+        &staged_workspace(tmp.path(), stage.path()),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(report.outcome, PhaseOutcome::Completed);
+    assert_eq!(report.source, PhaseSource::ModelAssisted, "repair runs no in-guest gate");
+    assert_check_shape(&report);
+
+    let requests = model.requests();
+    assert_eq!(requests.len(), 1, "repair is one findings-directed pass");
+    let (name, _) = schema_format(&requests[0]);
+    assert_eq!(name, "repair");
+    let system = requests[0].system.as_deref().unwrap();
+    assert!(system.contains("# Vectis target — repair prompt"));
+    let user = &requests[0].messages[0].content;
+    assert!(user.contains("verification"), "origin keys the brief");
+    assert!(
+        user.contains("cargo clippy failed: unused variable `x`"),
+        "typed findings render into the brief via render_findings: {user}"
+    );
+    assert!(user.contains("slice `demo`"), "repair is slice-scoped");
+    assert!(
+        user.contains(&stage.path().display().to_string()),
+        "artifact-stage fixes are routed to the stage"
+    );
+    assert_system_budget(&requests[0], "repair", 4_900); // baseline 4_427
+}
+
+#[tokio::test]
+async fn review_single_pass() {
+    let tmp = TempDir::new().unwrap();
+    let stage = TempDir::new().unwrap();
+    fs::create_dir_all(tmp.path().join(".emery")).unwrap();
+    fs::write(
+        tmp.path().join(".emery/project.yaml"),
+        "name: demo-app\nplatforms:\n  - core\n  - ios\n",
+    )
+    .unwrap();
+    let model = Harness::answering([PHASE_REPORT_CLEAN]);
+
+    let report = Adapter::review(
+        &model,
+        &ctx(tmp.path(), None),
+        "demo",
+        None,
+        &staged_workspace(tmp.path(), stage.path()),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(report.outcome, PhaseOutcome::Completed);
+    assert_eq!(report.source, PhaseSource::ModelAssisted, "review is a pure model pass");
+    assert_check_shape(&report);
+
+    let requests = model.requests();
+    assert_eq!(requests.len(), 1, "review is one pass — remediation routes through repair");
+    let (name, _) = schema_format(&requests[0]);
+    assert_eq!(name, "review");
+    let system = requests[0].system.as_deref().unwrap();
+    assert!(system.contains("# Vectis target — review prompt"));
+    assert!(system.contains("# Vectis review — core"));
+    assert!(system.contains("# Vectis review — iOS"), "declared ios shell review is assembled");
+    assert!(
+        !system.contains("# Vectis review — Android"),
+        "android is not declared, so its review prompt stays out"
+    );
+    let user = &requests[0].messages[0].content;
+    assert!(user.contains("Consolidate review findings"), "consolidation instructed");
+    assert!(user.contains("never remediates"), "report-only contract");
+    assert_system_budget(&requests[0], "review", 15_100); // baseline 13_673
+}
+
+async fn build_with_composition(
+    composition: Option<&str>, report_answer: &'static str,
+) -> PhaseReport {
+    let tmp = TempDir::new().unwrap();
+    let stage = TempDir::new().unwrap();
+    if let Some(body) = composition {
+        fs::write(stage.path().join("composition.yaml"), body).unwrap();
+    }
+    let model =
+        Harness::answering([PHASE_DONE, PHASE_DONE, SHELL_SKIPPED, SHELL_SKIPPED, report_answer]);
+    let report = Adapter::build(
+        &model,
+        &ctx(tmp.path(), None),
+        "demo",
+        &[],
+        &BuildContext::default(),
+        &staged_workspace(tmp.path(), stage.path()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(model.requests().len(), 5, "coherence warnings never trigger extra legs");
     report
 }
 
 #[tokio::test]
 async fn ui_surface_coherence() {
-    const NON_UI: &str = r#"{"status":"success","findings":[],"ui-surface":{"screens":0}}"#;
-    const UI: &str = r#"{"status":"success","findings":[],"ui-surface":{"screens":2}}"#;
+    const NON_UI: &str =
+        r#"{"outcome":"completed","source":"model-assisted","ui-surface":{"screens":0}}"#;
+    const UI: &str =
+        r#"{"outcome":"completed","source":"model-assisted","ui-surface":{"screens":2}}"#;
     const SCREENS: &str = "version: 1\nscreens:\n  home:\n    name: Home\n";
     const EMPTY_SCREENS: &str = "version: 1\nscreens: {}\n";
 
     // screens == 0 against a non-empty `screens:` composition warns
     // unexpected-for-non-ui.
     let report = build_with_composition(Some(SCREENS), NON_UI).await;
-    assert_eq!(report.status, Status::Success, "coherence warnings never fail the report");
+    assert_eq!(report.outcome, PhaseOutcome::Completed);
     assert_eq!(report.findings.len(), 1, "expected one warning, got {:?}", report.findings);
     assert_eq!(
         report.findings[0].rule_id.as_deref(),
         Some("composition-unexpected-for-non-ui-slice")
     );
     assert_eq!(report.findings[0].severity, Severity::Suggestion);
+    assert_eq!(report.findings[0].kind, FindingKind::Review);
     assert!(!report.findings[0].severity.blocking(), "A4 warnings must never block");
 
     // screens > 0 against an empty `screens: {}` composition warns
     // empty-for-ui-slice.
     let report = build_with_composition(Some(EMPTY_SCREENS), UI).await;
-    assert_eq!(report.status, Status::Success);
     assert_eq!(report.findings.len(), 1, "expected one warning, got {:?}", report.findings);
     assert_eq!(report.findings[0].rule_id.as_deref(), Some("composition-empty-for-ui-slice"));
-    assert_eq!(report.findings[0].severity, Severity::Suggestion);
 
     // An absent composition with a UI-surface claim also flags
     // empty-for-ui (an unreadable file is treated as empty).
     let report = build_with_composition(None, UI).await;
-    assert_eq!(report.status, Status::Success);
     assert_eq!(report.findings.len(), 1, "absent composition for a UI slice warns");
     assert_eq!(report.findings[0].rule_id.as_deref(), Some("composition-empty-for-ui-slice"));
 
@@ -423,7 +741,7 @@ async fn ui_surface_coherence() {
     assert!(report.findings.is_empty(), "ui slice + non-empty composition is coherent");
     let report = build_with_composition(Some(EMPTY_SCREENS), NON_UI).await;
     assert!(report.findings.is_empty(), "non-ui slice + empty composition is coherent");
-    let report = build_with_composition(Some(SCREENS), SUCCESS_REPORT).await;
+    let report = build_with_composition(Some(SCREENS), PHASE_REPORT_CLEAN).await;
     assert!(report.findings.is_empty(), "absent ui-surface emits no warnings");
 
     // A non-empty `delta:` envelope counts as a UI surface; an all-empty

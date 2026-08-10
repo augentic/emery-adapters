@@ -2,7 +2,7 @@
 
 These instructions extend the repository root [`AGENTS.md`](../../AGENTS.md) for all work under `targets/vectis/`.
 
-Vectis is a Emery **target adapter**. Its `guidance`, `build`, and `merge` operations generate Crux shared cores, SwiftUI iOS shells, and Kotlin/Jetpack Compose Android shells from synthesised Emery artifacts plus operator-curated design-system inputs.
+Vectis is a Emery **target adapter**. Its six operations (`guidance`, `build`, `verify`, `repair`, `review`, `merge`) generate, check, repair, and review Crux shared cores, SwiftUI iOS shells, and Kotlin/Jetpack Compose Android shells from synthesised Emery artifacts plus operator-curated design-system inputs. The engine owns the build-loop phase machine and budgets; each vectis operation is a single pass.
 
 ## Ownership boundaries
 
@@ -30,7 +30,7 @@ There is **no** adapter-side version registry. Fix pins upstream in `vectis-exem
 ```text
 targets/vectis/
 ├── prose/
-│   ├── prompts/       # guidance, build phases, merge
+│   ├── prompts/       # guidance, build phases, verify, repair, review, merge
 │   ├── references/    # Crux, shell, design-system, template-capabilities, review
 │   └── rules/         # VECTIS-* engineering standards
 ├── src/               # wasm-free engines plus the wasm32 guest shim
@@ -41,20 +41,19 @@ targets/vectis/
 
 The component identity is the crate version plus the target world exported through WIT. Resolve-time facts come from the WIT metadata operation; there is no `adapter.yaml`.
 
-## Build behavior
+## Operation behavior
 
-The build order is:
+The engine owns the build-loop phase machine (RFC-90); vectis contributes one single-pass operation per dispatch. The `build` operation is generation only:
 
-1. Regenerate and validate `composition.yaml`.
-2. Generate or update the shared Crux core (greenfield: materialize from `$TEMPLATE_DIR`, then strip).
-3. Generate tests and run the mid-build core verify-repair loop (does **not** write `shared/.vectis/verify.ok`).
-4. Generate and verify the iOS shell when selected (`make build` / stamp `iOS/.vectis/verify.ok`).
-5. Generate and verify the Android shell when selected (`make build` / stamp `Android/.vectis/verify.ok`).
-6. Consolidate review findings and outputs.
-7. Final core verify-repair (Step 6 again) and write `shared/.vectis/verify.ok` with the `shared/src/**/*.rs` digest.
-8. Build report (deterministic shell / stamp gate).
+1. Deterministic prepare prelude (asset materialize scope, bootstrap app-icon gate, component-identity clustering).
+2. Regenerate `composition.yaml` into the writable artifact stage; the in-guest validator gates it once — blocking findings end the build and ride the phase report.
+3. Generate or update the shared Crux core plus its tests (greenfield: materialize from `$TEMPLATE_DIR`, then strip).
+4. Generate or update the iOS / Android shells when declared (write only — no `make build`, no stamps).
+5. Answer with the build phase report (`outputs[]` tree paths, `ui-surface`, `tasks.md` checkboxes marked in the stage).
 
-Keep writer and reviewer contracts in the phase prompts under [`prose/prompts/build/`](prose/prompts/build/). Put reusable Crux, SwiftUI, Compose, design-system, and review depth under [`prose/references/`](prose/references/). Engineering constraints that should produce stable review findings belong in [`prose/rules/`](prose/rules/) with `VECTIS-*` IDs.
+The `verify` operation runs one check pass (core four-command checks, per-shell `make build`, verify stamps) plus the deterministic in-guest shell-verify and composition gates; `repair` applies one findings-directed pass keyed on the engine gate's origin; `review` runs the reviewer teams once and reports without fixing. Slice-artifact writes (`composition.yaml`, `tasks.md`, `build/component-bindings.yaml`) route through the engine-lent artifact stage; the authoritative slice tree is read-only.
+
+Keep writer and reviewer contracts in the phase prompts under [`prose/prompts/build/`](prose/prompts/build/) and the per-operation prompts (`prose/prompts/verify.md`, `repair.md`, `review.md`). Put reusable Crux, SwiftUI, Compose, design-system, and review depth under [`prose/references/`](prose/references/). Engineering constraints that should produce stable review findings belong in [`prose/rules/`](prose/rules/) with `VECTIS-*` IDs.
 
 When changing platform support, preserve existing platforms and add only the selected platform's writer, validator, and capability coverage. Token or asset changes must flow through both shell design-system integrations without substituting platform glyphs for declared vector or raster assets. `web/` in the template remains out of scope for materialize and writers.
 

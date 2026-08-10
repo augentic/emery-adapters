@@ -5,7 +5,7 @@ The adapter core inlines this document into the system prompt of the merge leg w
 Two things make the Vectis `merge` gates different from the bare slice merge:
 
 1. **`composition.yaml` is a build output that lands at merge time.** It is not a Emery artifact authored under `.emery/specs/`; the `build` prompt regenerates it from `spec.md` + `design.md`, and the engine's deterministic merge promotes it into the baseline alongside the spec deltas. The preflight and postflight composition validators are the gate.
-2. **The cap matrix is re-verified against the merged baseline.** Slice build already ran a final core verify-repair (and digest stamp) before report; postflight is a *second*, merged-baseline re-check for cross-slice / promotion regressions (BoltFFI bridging drift, Gradle wrapper changes, pin drift, cap-marker expansion) — not the primary build clippy gate.
+2. **The cap matrix is re-verified against the merged baseline.** The slice's build loop already passed the engine-dispatched `verify` operation (and digest stamp) before merging; postflight is a *second*, merged-baseline re-check for cross-slice / promotion regressions (BoltFFI bridging drift, Gradle wrapper changes, pin drift, cap-marker expansion) — not the primary build clippy gate.
 
 ## Preflight — staged composition validation
 
