@@ -23,6 +23,7 @@ The build runs against the build request the CLI prepared at `.emery/slices/<sli
 - `inputs.artifacts.design` (`design.md`) — the format selection (OpenAPI 3.1 / AsyncAPI 3.0 / JSON Schema), file-layout intent, and any cross-contract dependency notes (see [`guidance.md`](guidance.md)).
 - `inputs.artifacts.tasks` (`tasks.md`) — progress tracking.
 - `inputs.artifacts.additional[]` — the optional `contracts/` subtree the adapter's `metadata` record declares: partial deltas written by a prior pass, present only when the slice already carries them.
+- `deferred[]` — the request's build-scope exclusion set (RFC-86a D4): the slice-local requirement id, title, and requirement digest of every deferred gap requirement. These requirements are **out of the build's obligations**: author no contract artifacts (schemas, paths, channels, operations) for them, invent no placeholder definitions, and leave no TODO markers in the delta. The baseline spec carries the debt; the contract delta carries nothing. Empty (or absent) when nothing is deferred.
 - The root `contracts/` baseline — read-only context for `$ref` reuse and extension authoring; outside the request manifest, not a slice delta.
 
 Build consumes the synthesised Emery artifacts as its primary source. Do not treat raw design documentation as the contract source unless the proposal names it as Source Material and the synthesised `specs/<domain>/spec.md` files have captured the required behaviour.
@@ -89,6 +90,8 @@ findings: []            # structured diagnostics; default []
 ```
 
 **Success vs failure findings rule.** A `status: success` report carries an empty `findings[]` or only non-blocking findings (`suggestion` / `optional`); the deterministic report gate downgrades a `success` report carrying any blocking (`critical` / `important`) finding to `failure`. A `status: failure` report populates `findings[]` with the blocking violations the target can map from the contract validator / verifier output, and leaves `findings: []` when no specifics are mappable.
+
+**Deferred requirements are out of scope.** The build request's `deferred[]` set (RFC-86a D4) excluded those requirements from the build's obligations: the slice delta must carry no contract artifacts, placeholder definitions, or TODO markers for them, and the report must never claim them in its coverage declaration (`covered[]`, where the report shape carries one) — the engine's report gate rejects a report that claims coverage of a deferred requirement (`target-build-deferred-covered`).
 
 - **Clean build** — Phase 5 validator gate clean and verifiers clean → `status: success`, `findings: []` (or only advisory `suggestion` / `optional` findings).
 - **Unresolved build** — the verify-repair budget is exhausted (Phase 4) or the validator gate leaves residual findings after its repair budget (Phase 5) → `status: failure` with blocking findings mapped where possible.
