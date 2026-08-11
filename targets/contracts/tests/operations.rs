@@ -182,12 +182,12 @@ async fn build_sub_flows() {
 
     let requests = model.requests();
     assert_eq!(requests.len(), 4, "three sub-flows plus the close-out leg");
-    // Budget = measured baseline (per-leg comment, 2026-08-10) + ~10%.
+    // Budget = measured baseline (per-leg comment, 2026-08-11) + ~10%.
     for (i, (leg, budget)) in [
-        ("json-schema-sub-flow", 15_400), // baseline 13_995
-        ("openapi-sub-flow", 15_400),     // baseline 13_989
-        ("asyncapi-sub-flow", 14_900),    // baseline 13_580
-        ("close-out", 8_100),             // baseline 7_351
+        ("json-schema-sub-flow", 16_700), // baseline 15_210
+        ("openapi-sub-flow", 16_700),     // baseline 15_204
+        ("asyncapi-sub-flow", 16_300),    // baseline 14_795
+        ("close-out", 9_500),             // baseline 8_626
     ]
     .into_iter()
     .enumerate()

@@ -17,6 +17,10 @@ The Android-specific team-spawn protocol lives in [`review/team-protocol-android
    - Return classified `design_findings` per [../core/review.md](../core/review.md) § Consolidate review findings.
 6. **No fixes of any kind.** `contentDescription`, token swaps, missing `@Preview` blocks, generated-FFI-type imports, and `CancellationException` rethrows are findings, never edits — the engine routes blocking findings through its `repair` dispatch. When flagging a package-path finding, cite the resolved `ANDROID_PACKAGE`, never a hardcoded `com.vectis.*` fallback.
 
+## Deferred requirements are out of scope
+
+The build request's `deferred[]` set (RFC-86a D4) excludes those requirements from the build's obligations end-to-end (see [../../build.md](../../build.md) § Inputs). Missing screens, effect handlers, or previews for a deferred requirement are not findings — never raise structural or coverage findings against a deferred id. Conversely, `${ANDROID_SHELL_DIR}` must carry no implementation, scaffolding, placeholders, or TODO markers for one; flag any residue as a `code-fix` finding so it is removed before the report leg. Deferred ids must never be claimed in the report's coverage declaration (`covered[]`, where the report shape carries one) — the engine's report gate rejects a report that claims coverage of a deferred requirement (`target-build-deferred-covered`).
+
 ## Finding-ID conventions
 
 - Report-local occurrence IDs: `AND-1`, `KTL-1`, `INT-1`, `UNI-1`, `NEW-1`. These are **report-local** counters — the `id` field on a structured `Diagnostic` (the `Diagnostic` schema uses the equivalent `FIND-0001` shape; this review uses prefixed counters for human triage). They restart in each report and must not be confused with codex `rule-id`s.

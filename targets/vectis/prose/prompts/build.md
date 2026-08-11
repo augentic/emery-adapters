@@ -26,6 +26,7 @@ The build runs against the build request the engine assembled; consume the input
   - `tokens.yaml` — design tokens; absent → HIG (iOS) / Material 3 (Android) theme fallback in the shell writers.
   - `assets.yaml` — asset inventory; the composition validator's `tokens` / `assets` modes run only when the respective file is present.
   - `components.yaml` — the agent-inferred component catalog (surfaced as `CATALOG_PATH`); written by the workflow's deterministic bind bookkeeping from the Step 0.5 bindings file and read back during composition regeneration; absent → no component factoring.
+- `deferred[]` — the request's build-scope exclusion set (RFC-86a D4): the slice-local requirement id, title, and requirement digest of every deferred gap requirement. These requirements are **out of the build's obligations** in every leg — composition regeneration, core, and shell writers skip their screens and scenarios rather than scaffolding them (no implementation, no invented placeholders, and no TODO markers in product code); the review legs treat that absence as correct and flag any deferred residue for removal; and the report leg never claims a deferred id in its coverage declaration (`covered[]`, where the report shape carries one — the engine's report gate rejects such a claim with `target-build-deferred-covered`). The baseline spec carries the debt; product code carries nothing. Empty (or absent) when nothing is deferred.
 
 ## Consumer posture
 
