@@ -11,6 +11,7 @@ The build runs against the build request the CLI prepared at `.emery/slices/<sli
 - `inputs.artifacts.design` (`design.md`) — domain model, provider DI, error variants, and WASM idioms (see [`guidance.md`](guidance.md)).
 - `inputs.artifacts.tasks` (`tasks.md`) — implementation sequencing and progress tracking.
 - `inputs.artifacts.additional[]` — empty for omnia: the adapter's `metadata` record declares no extra slice-tree inputs. Omnia reads the lent workspace's `Cargo.toml` directly for Cargo-workspace context; that is not a slice-tree input.
+- `deferred[]` — the request's build-scope exclusion set (RFC-86a D4): the slice-local requirement id, title, and requirement digest of every deferred gap requirement. These requirements are **out of the build's obligations**: write no implementation, no scaffolding, no invented placeholders, and no TODO markers in product code for them, and skip any `tasks.md` item that exists only to serve one. The baseline spec carries the debt; product code carries nothing. Empty (or absent) when nothing is deferred.
 
 These working names, bound from the request and the resolved crate, are used throughout:
 

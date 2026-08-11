@@ -172,13 +172,13 @@ async fn build_phase_legs() {
         "composition, core, two shells, then one report leg — no \
          verify / repair / review legs inside build"
     );
-    // Budget = measured baseline (per-leg comment, 2026-08-10) + ~10%.
+    // Budget = measured baseline (per-leg comment, 2026-08-11) + ~10%.
     for (i, (leg, budget)) in [
-        ("composition", 34_400),  // baseline 31_270
-        ("core", 25_700),         // baseline 23_346
-        ("ios", 22_300),          // baseline 20_189
-        ("android", 24_400),      // baseline 22_127
-        ("build-report", 16_700), // baseline 15_158
+        ("composition", 35_400),  // baseline 32_199
+        ("core", 26_700),         // baseline 24_275
+        ("ios", 23_200),          // baseline 21_118
+        ("android", 25_400),      // baseline 23_056
+        ("build-report", 18_400), // baseline 16_713
     ]
     .into_iter()
     .enumerate()
@@ -675,7 +675,7 @@ async fn review_single_pass() {
     let user = &requests[0].messages[0].content;
     assert!(user.contains("Consolidate review findings"), "consolidation instructed");
     assert!(user.contains("never remediates"), "report-only contract");
-    assert_system_budget(&requests[0], "review", 15_100); // baseline 13_673
+    assert_system_budget(&requests[0], "review", 17_000); // baseline 15_433
 }
 
 async fn build_with_composition(
