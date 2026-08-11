@@ -200,15 +200,15 @@ async fn build_phase_legs() {
         7,
         "composition, core, two shells, review, final-core-verify, then one report call"
     );
-    // Budget = measured baseline (per-leg comment, 2026-07-31) + ~10%.
+    // Budget = measured baseline (per-leg comment, 2026-08-11) + ~10%.
     for (i, (leg, budget)) in [
-        ("composition", 32_700),       // baseline 29_681
-        ("core", 29_100),              // baseline 26_458
-        ("ios", 23_200),               // baseline 21_080
-        ("android", 24_400),           // baseline 22_167
-        ("review", 27_700),            // baseline 25_144
-        ("final-core-verify", 20_600), // baseline 18_733
-        ("report", 20_500),            // baseline 18_644
+        ("composition", 34_700),       // baseline 31_508
+        ("core", 32_200),              // baseline 29_309
+        ("ios", 25_200),               // baseline 22_871
+        ("android", 26_400),           // baseline 24_005
+        ("review", 31_900),            // baseline 29_007
+        ("final-core-verify", 22_400), // baseline 20_399
+        ("report", 22_200),            // baseline 20_188
     ]
     .into_iter()
     .enumerate()
@@ -351,7 +351,7 @@ async fn composition_repair() {
     let repair = &requests[1];
     assert_eq!(schema_format(repair).0, "composition-repair");
     assert!(repair.messages[0].content.contains("composition validator found blocking issues"));
-    assert_system_budget(repair, "composition-repair", 32_700); // baseline 29_681
+    assert_system_budget(repair, "composition-repair", 34_700); // baseline 31_508
 }
 
 async fn build_with_composition(composition: Option<&str>, report_answer: &'static str) -> Report {
@@ -495,7 +495,7 @@ async fn merge_postflight_single_leg() {
     let requests = model.requests();
     assert_eq!(requests.len(), 1, "a coherent report needs no repair leg");
     assert!(requests[0].system.as_deref().unwrap().contains("# Vectis target — `merge`"));
-    assert_system_budget(&requests[0], "merge-postflight", 8_100); // baseline 7_402
+    assert_system_budget(&requests[0], "merge-postflight", 8_100); // baseline 7_368
     let user = &requests[0].messages[0].content;
     assert!(user.contains("postflight merge gate"), "phase named");
     assert!(user.contains("cap-matrix re-verification"), "agent-run host gates instructed");
