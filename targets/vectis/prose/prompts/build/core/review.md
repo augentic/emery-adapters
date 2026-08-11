@@ -17,6 +17,14 @@ The shared agent-team protocol lives in [`../../../references/agent-teams.md`](.
 6. **Mechanical auto-fixes (when safe).** Missing serde derives, `render().and(...)` wraps, `.trim()` / empty input checks, unused deps. Revert the full batch if `cargo check` / `cargo clippy` / `cargo test` regress.
 7. **Logic findings stay non-mechanical.** Never auto-fix LOG-001..010 without explicit confirmation; surface them as design-level findings classified `code-fix` or `spec-change`.
 
+## Deferred requirements are out of scope
+
+The build request's `deferred[]` set (RFC-86a D4) excludes those requirements from the build's obligations end-to-end (see [../../build.md](../../build.md) § Inputs). In review:
+
+- **Absence is correct.** Missing model variants, events, scenarios, or tests for a deferred requirement are not findings — never raise spec-gap or coverage findings (LOG-007 / LOG-008) against a deferred id, and never classify a deferred requirement's absence as `spec-change`.
+- **Residue is a finding.** `shared/` must carry no implementation, scaffolding, placeholders, or TODO markers for a deferred requirement; flag any residue as a `code-fix` finding so it is removed before the report leg.
+- **Never claim deferred coverage.** The report leg's coverage declaration (`covered[]`, where the report shape carries one) must never claim a deferred id — the engine's report gate rejects a report that claims coverage of a deferred requirement (`target-build-deferred-covered`).
+
 ## Standalone vs orchestrated
 
 The core reviewer has no orchestrated mode — when design-level findings accumulate it always returns them for consolidation by the parent build prompt / operator. Per-platform shell reviewers ([`../ios/review.md`](../ios/review.md), [`../android/review.md`](../android/review.md)) honour the `orchestrated: true` flag.
