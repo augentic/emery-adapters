@@ -23,7 +23,7 @@ Fold what this build could not resolve into the answer's `findings[]`:
 
 Each finding uses the full diagnostic shape: `title`, `severity` (`critical` / `important` / `suggestion` / `optional`), `source: model-assisted`, `kind` (default `violation`), `artifact` (`code` / `tests` / `tasks` / …), optional `location` (`path` + `line`), `evidence` (usually `kind: snippet`), `impact`, `remediation`, and `rule-id` when it cites a codex rule. A build that cannot produce its candidate must carry at least one blocking (`critical` / `important`) finding. Do **not** report check-suite or standards findings — those passes have not run yet.
 
-**Deferred requirements are out of scope.** The build request's `deferred[]` set (RFC-86a D4) excluded those requirements from the build's obligations: a deferred requirement's absence is not a gap finding, the workspace must carry no implementation, scaffolding, placeholders, or TODO markers for one, and the answer must never claim a deferred id in its coverage declaration (`covered[]`, where the report shape carries one) — the engine's report gate rejects a report that claims coverage of a deferred requirement (`target-build-deferred-covered`).
+**Deferred requirements are out of scope.** The build request's `deferred[]` set (RFC-86a D4) excludes those requirements from the build's obligations: a deferred requirement's absence is not a gap finding, the workspace must carry no implementation, scaffolding, placeholders, or TODO markers for one, and the answer must never claim a deferred id in its coverage declaration (`covered[]`, where the report shape carries one) — the engine's report gate rejects a report that claims coverage of a deferred requirement (`target-build-deferred-covered`).
 
 ## Phase report contract
 
