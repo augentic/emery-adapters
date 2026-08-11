@@ -10,7 +10,7 @@ Emit one `Evidence` document carrying a single `kind: intent` claim. The `intent
 
 ## Output contract
 
-Return one `Evidence` document for the refine phase to persist at `.emery/slices/<slice>/evidence/<source>.yaml`:
+Return one `Evidence` document for the `emery plan refine` stage to persist at `.emery/slices/<slice>/evidence/<source>.yaml`:
 
 ```yaml
 authority: intent

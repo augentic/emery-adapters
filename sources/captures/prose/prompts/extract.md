@@ -1,6 +1,6 @@
 # Runtime capture extract
 
-The refine phase of `emery plan execute` invokes this prompt once per `slices[].sources[]` binding whose adapter is `captures`. Your job: for a single `(source, lead)` pair, locate the matching `tests/data/replays/<handler>/` directory under `$SOURCE_DIR`, read every scenario capture, and emit one Evidence YAML document the CLI persists to `.emery/slices/<slice>/evidence/<source>.yaml`.
+The `emery plan refine` stage invokes this prompt once per `slices[].sources[]` binding whose adapter is `captures`. Your job: for a single `(source, lead)` pair, locate the matching `tests/data/replays/<handler>/` directory under `$SOURCE_DIR`, read every scenario capture, and emit one Evidence YAML document the CLI persists to `.emery/slices/<slice>/evidence/<source>.yaml`.
 
 ## Binding
 
