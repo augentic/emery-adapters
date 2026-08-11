@@ -1,8 +1,8 @@
-# Vectis build — tests + core verify-repair
+# Vectis build — Crux tests
 
-Inlined by the adapter core into the **core** leg (alongside [../build.md](../build.md) and [core/write.md](core/write.md)) and again into the **final-core-verify** leg (alongside [../build.md](../build.md) only). Carries Step 5 (write tests; core leg only) and Step 6 (verify-repair the shared core). Mid-build Step 6 does **not** write the durable digest stamp; only the final-core-verify leg refreshes `shared/.vectis/verify.ok` after a green pass.
+Inlined by the adapter core into the **core** write leg (alongside [../build.md](../build.md) and [core/write.md](core/write.md)). Carries Step 5: authoring the Crux tests. This is a generation step — running the four-command check pass (`cargo fmt` / `check` / `clippy` / `test`), findings-directed repair, and the durable `shared/.vectis/verify.ok` stamp all belong to the engine-dispatched `verify` and `repair` operations, never to this leg.
 
-Carries the cross-cutting Rust verify-repair loop. The spec-to-test mapping rules live in [`test-spec-mapping.md`](../../references/test-spec-mapping.md) and the operational runbook lives in [`test-runbook.md`](../../references/test-runbook.md). Open-GAP stub-faithful asserts: [`open-gap-contract.md`](../../references/open-gap-contract.md).
+The spec-to-test mapping rules live in [`test-spec-mapping.md`](../../references/test-spec-mapping.md) and the operational runbook lives in [`test-runbook.md`](../../references/test-runbook.md). Open-GAP stub-faithful asserts: [`open-gap-contract.md`](../../references/open-gap-contract.md).
 
 ## Step 5 — Crux tests (test-writer body)
 
@@ -10,7 +10,6 @@ Run after [core/write.md](core/write.md) in the same slice. Detect mode from the
 
 - No tests yet → **create mode**.
 - Tests exist, spec changed → **update mode** (drift detection: diff spec scenarios against existing tests, add tests for new scenarios, update assertions for modified scenarios, flag stale tests for removed scenarios with `// STALE: scenario removed from spec`).
-- Verify-repair failure → **repair mode** (sub-agent invoked with `mode: repair` plus failing test output).
 
 ### Inline writer steps
 
@@ -19,73 +18,4 @@ Run after [core/write.md](core/write.md) in the same slice. Detect mode from the
 3. **Write tests inside `#[cfg(test)] mod tests`** in `app.rs` (Crux convention — not a separate `tests/` directory). Preserve existing helpers, factory functions, and test style.
 4. **Coverage requirements.** Every scenario; every shell-facing `Event` variant; every page transition (Loading → Main, Error → retry); every validation rule; every adapter's happy and error path; factory helpers for repeated setup.
 5. **Crux test API.** Synchronous only — never `#[tokio::test]` or any async runtime. Call `update()` directly; inspect `Command` effects; resolve effects with simulated responses (`expect_one_effect()`, `expect_http()`, `resolve()`); assert on model and view-model state (`expect_one_event()`). Patterns: [`crux/testing-patterns.md`](../../references/crux/testing-patterns.md).
-6. **Do not run `cargo test` in create or update mode** — orchestration owns it. In repair mode, run `cargo test` to get fresh errors and verify the fix before returning. Preserve test names, `/// Spec:` traceability comments, and assertion intent — only adjust the syntax used to express them. Open-GAP destination asserts while markers remain → remediate in this core budget (prefer revert to stub; B′ close only when eligible) — do not burn shell verify on a known contradiction.
-
-## Step 6 — Core verify-repair loop (max 3 iterations)
-
-Spawn in its own sub-agent with `PROJECT_DIR`, the spec path, and (in update mode) a baseline test log captured before the writers ran. The sub-agent returns `status`, `iterations_used`, and any unresolved errors.
-
-Capture the baseline before the writers (update mode only):
-
-```bash
-cd "$PROJECT_DIR" && RUSTFLAGS="-D warnings" cargo test 2>&1 | tee "/tmp/${SLICE_ID}-${DOMAIN_NAME}-baseline.txt"
-```
-
-Each iteration runs all four checks; if any fail, apply the targeted fix and start a new iteration.
-
-```bash
-cd "$PROJECT_DIR" && cargo fmt --check                                      # 1. Formatting (auto-fix with `cargo fmt`).
-cd "$PROJECT_DIR" && RUSTFLAGS="-D warnings" cargo check                    # 2. Compilation.
-cd "$PROJECT_DIR" && cargo clippy --all-targets -- -D warnings            # 3. Lint.
-cd "$PROJECT_DIR" && RUSTFLAGS="-D warnings" cargo test                     # 4. Tests.
-```
-
-### Failure classification → repair sub-agent routing
-
-| Failure signal | Classification | Fix action |
-|---|---|---|
-| Error in `#[cfg(test)] mod tests`, test helpers, or factories | Test issue | Spawn `test-writer` repair sub-agent with the error output. |
-| Error in production code (`app.rs` outside `#[cfg(test)]`), missing types or methods | Code issue | Spawn `core-writer` repair sub-agent — see [`core/write.md`](core/write.md). |
-| Assertion mismatch where *actual* looks correct per spec | Test issue | Spawn `test-writer` repair sub-agent — the expected value is wrong. |
-| Assertion mismatch where *expected* matches spec | Code issue | Spawn `core-writer` repair sub-agent — the handler returns the wrong result. |
-| Destination assert while open-GAP markers remain | Open-GAP inventiveness | Prefer `core-writer` revert (or B′ close when eligible), then stub asserts — [`open-gap-contract.md`](../../references/open-gap-contract.md). |
-| Type mismatch between handler output and assertion | Per spec | Classify per spec, spawn the appropriate repair sub-agent. |
-| API surface mismatch: wrong method on `Command`, incorrect `expect_*` chain, stale builder, wrong `resolve()` argument shape | Test issue | Spawn `test-writer` repair sub-agent (the Crux 0.17 API surface is non-trivial; the sub-agent reads the relevant Crux docs / template before fixing). |
-| Unresolved import or missing crate in `Cargo.toml` | Workspace issue | Edit `Cargo.toml` directly (no sub-agent needed). |
-| Compiler warning, clippy lint, or `allow_attributes` / `allow_attributes_without_reason` promotion under `-D warnings` | Code issue | Spawn `core-writer` repair sub-agent — fix code structure; never add or preserve `#[allow]` / `#[expect]`. |
-
-### Repair discipline
-
-- **Structural fix only for warnings.** Compiler and clippy warnings are code issues — refactor (extract helpers, split match arms, narrow types) until the four-command loop passes under `-D warnings`. Never silence a warning with `#[allow]` or `#[expect]`.
-- **Minimum change only.** Fix the reported error and nothing else.
-- **Scope the diff.** Before committing a repair, verify the change is limited to files and functions identified in the error output.
-- **One failure class per sub-agent.** When multiple failures are present, group them by classification (code vs test) and spawn one repair sub-agent per class.
-
-### Regression check (update mode only)
-
-After tests pass, compare results against the baseline from before the writers ran. For each test that passed before and now fails:
-
-- If the test asserts behaviour the updated spec **explicitly changes** → expected behavioural change, not a regression.
-- If the test asserts behaviour the spec does **not** change → true regression. Surface as a failure and route to the appropriate repair sub-agent.
-
-### Loop control
-
-Repeat until all four checks pass or 3 iterations are exhausted. If still failing after 3 iterations: **stop**. Do not mark the task complete. Report the remaining failures with full error output and escalate for guidance (the parent build prompt reads this as a `build` failure outcome).
-
-### Durable core verify stamp (final-core-verify leg only)
-
-After a green Step 6 in the **final-core-verify** leg (post-review, pre-report), write `${PROJECT_DIR}/shared/.vectis/verify.ok` with the digest of the current `shared/src/**/*.rs` tree. The mid-build core verify-repair loop (Phases 2–3) must **not** write or refresh this stamp.
-
-Digest contract (must match the in-guest report gate):
-
-1. Collect every `*.rs` file under `shared/src/` recursively, skipping any `generated/` directory.
-2. Sort paths by their path relative to `shared/src/` using `/` separators.
-3. For each file, append `<relpath>\n<sha256-hex of file bytes>\n` to a canonical buffer.
-4. SHA-256 that buffer and write the stamp as a single line: `sha256:<hex>`.
-
-```bash
-mkdir -p "${PROJECT_DIR}/shared/.vectis"
-# Write exactly `sha256:<hex>` (no bare `ok`) after computing the digest above.
-```
-
-A missing or stale stamp fails the deterministic report gate (`core-verify-stamp-missing` / `core-verify-stamp-stale`) when the core tree is present. An unreadable `shared/src/**/*.rs` tree fails closed as `core-verify-digest-unreadable` rather than skipping the stamp check.
+6. **Smoke gate only.** You may run `cargo check` to confirm the tests compile, but do not run the full check pass or fix pre-existing failures — the engine-dispatched `verify` operation runs the four-command pass afterwards and its findings route through `repair`. Preserve test names, `/// Spec:` traceability comments, and assertion intent. Open-GAP destination asserts while markers remain contradict the open-GAP contract — write stub-faithful asserts from the start (prefer revert to stub; B′ close only when eligible).

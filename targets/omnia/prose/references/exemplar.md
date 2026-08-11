@@ -22,7 +22,7 @@ omnia:
 ```
 
 - **Create mode** — adopt that contract when authoring dependencies: use the declared `version` for the `omnia`/`omnia-*` workspace dependencies and mirror the exemplar's `[patch.crates-io]` block at the declared `rev`. Do not resolve a different omnia version.
-- **Update mode** — preserve the consumer's existing pin; never upgrade as a side effect. When the consumer's pin differs from the exemplar's, the scaffold prelude records a soft warning in the generation user prompt **and prefer idioms evidenced in the consumer's existing crates over exemplar idioms wherever the two conflict** — the exemplar's `main` moves ahead of consumers by default, and copying newer-SDK patterns into an older-SDK workspace burns the verify-repair budget. Stop (per `## § Stop hint contract`) only on a concrete API incompatibility that prevents the requested build.
+- **Update mode** — preserve the consumer's existing pin; never upgrade as a side effect. When the consumer's pin differs from the exemplar's, the scaffold prelude records a soft warning in the generation user prompt **and prefer idioms evidenced in the consumer's existing crates over exemplar idioms wherever the two conflict** — the exemplar's `main` moves ahead of consumers by default, and copying newer-SDK patterns into an older-SDK workspace burns the engine's verification-repair budget. Stop (per `## § Stop hint contract`) only on a concrete API incompatibility that prevents the requested build.
 
 ### Schema-version coupling
 

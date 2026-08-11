@@ -9,10 +9,9 @@ This sub-flow is AsyncAPI-only. Shared payload schemas under `contracts/schemas/
 1. **Read the build prompt and specs.** Open [../build.md](../build.md) and the slice's `specs/<domain>/spec.md` files to identify what evented interactions the slice requires; read `contracts/messages/` (the AsyncAPI baseline) to know which channels, operations, and messages already exist.
 2. **Identify the intent.** Map the trigger to one of three sibling references using the [intent dispatch](#intent-dispatch) table — author, importer, or verifier. Load only the relevant sibling.
 3. **Dispatch to the sibling.** Open and follow [`../../references/asyncapi/author.md`](../../references/asyncapi/author.md), [`../../references/asyncapi/importer.md`](../../references/asyncapi/importer.md), or [`../../references/asyncapi/verifier.md`](../../references/asyncapi/verifier.md). Each sibling owns its complete algorithm, decision rules, and output format.
-4. **Write outputs to `contracts/messages/`.** Author and importer paths produce or normalise AsyncAPI 3.0 YAML files under `$SLICE_DIR/contracts/messages/`. Decomposed payload schemas land under `$SLICE_DIR/contracts/schemas/` (json-schema-sub-flow territory) — never inline them.
-5. **Run the verifier.** After authoring or importing, invoke the verifier sibling against the slice directory to check `$ref` resolution, message metadata completeness, and binding coverage.
-6. **Surface diagnostics.** Render the markdown alignment / import / validation report (single mode) or the contract-tool JSON envelope (cross-project mode). Cross-project consumer impact is deferred until a real consumer workflow exists.
-7. **Stay within change-local `contracts/messages/`.** Do not modify baseline files in root `contracts/`, do not touch `contracts/http/` or shared schemas beyond writing decomposed `$ref` targets, and do not invent constructs that the spec does not justify — mark unknowns with `[unknown]` instead.
+4. **Write outputs to `contracts/messages/`.** Author and importer paths produce or normalise AsyncAPI 3.0 YAML files under `$ARTIFACT_STAGE/contracts/messages/` (the staged slice delta). Decomposed payload schemas land under `$ARTIFACT_STAGE/contracts/schemas/` (json-schema-sub-flow territory) — never inline them.
+5. **Surface diagnostics.** Author and importer runs render the markdown alignment / import report. Cross-project consumer impact is deferred until a real consumer workflow exists.
+6. **Stay within change-local `contracts/messages/`.** Do not modify baseline files in root `contracts/`, do not touch `contracts/http/` or shared schemas beyond writing decomposed `$ref` targets, and do not invent constructs that the spec does not justify — mark unknowns with `[unknown]` instead.
 
 ## Artifact layout
 
@@ -21,7 +20,7 @@ contracts/
 └── messages/
     └── <event-domain>-events.yaml       # Baseline: merged contracts only
 
-.emery/slices/<slice-name>/
+.emery/slices/<slice-name>/              # Written via the artifact stage, which mirrors this tree
 └── contracts/
     ├── messages/
     │   └── <event-domain>-events.yaml   # Slice-local delta or normalised import
@@ -42,9 +41,9 @@ Conventions enforced for every AsyncAPI file in either location:
 |---|---|---|
 | Author or extend the AsyncAPI document from a spec | build prompt during the build phase; operator extending the baseline for new evented interactions | [`../../references/asyncapi/author.md`](../../references/asyncapi/author.md) |
 | Import or normalise an external AsyncAPI document | operator drops an AsyncAPI file into a slice's `contracts/messages/` directory | [`../../references/asyncapi/importer.md`](../../references/asyncapi/importer.md) |
-| Verify internal consistency or run merge-time baseline validation | build verification; post-merge contract baseline gate; operator invoking validation against an existing AsyncAPI artefact | [`../../references/asyncapi/verifier.md`](../../references/asyncapi/verifier.md) |
+| Verify internal consistency or run merge-time baseline validation | the engine's verify phase ([`../verify.md`](../verify.md)); post-merge contract baseline gate; operator invoking validation against an existing AsyncAPI artefact | [`../../references/asyncapi/verifier.md`](../../references/asyncapi/verifier.md) |
 
-The three intents share a common artefact contract (channel addresses, message naming, `$ref` discipline) but have distinct algorithms — never conflate them.
+The three intents share a common artefact contract (channel addresses, message naming, `$ref` discipline) but have distinct algorithms — never conflate them. Verification is not part of a build leg: the engine dispatches the separate verify phase after build returns and routes findings back through one repair dispatch.
 
 ## Hard rules
 

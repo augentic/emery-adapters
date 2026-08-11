@@ -9,10 +9,9 @@ This sub-flow is JSON-Schema-only. Protocol bindings under `contracts/http/` bel
 1. **Read the build prompt and specs.** Open [../build.md](../build.md) and the slice's `specs/<domain>/spec.md` files to identify which payload types the slice requires; read `contracts/schemas/` (the schema baseline) to know what shared vocabulary already exists.
 2. **Identify the intent.** Map the trigger to one of three sibling references using the [intent dispatch](#intent-dispatch) table — author, importer, or verifier. Load only the relevant sibling.
 3. **Dispatch to the sibling.** Open and follow [`../../references/json-schema/author.md`](../../references/json-schema/author.md), [`../../references/json-schema/importer.md`](../../references/json-schema/importer.md), or [`../../references/json-schema/verifier.md`](../../references/json-schema/verifier.md). Each sibling owns its complete algorithm, decision rules, and output format.
-4. **Write outputs to `contracts/schemas/`.** Author and importer paths produce or normalise JSON Schema YAML files under `$SLICE_DIR/contracts/schemas/` — one named type per file, kebab-case filenames, URN `$id` derived from the file path.
-5. **Run the verifier.** After authoring or importing, invoke the verifier sibling to check `$ref` resolution, metadata completeness, duplicate-`$id` collisions, and cross-format consumer compatibility against any HTTP and messaging bindings that already reference the schema.
-6. **Surface diagnostics.** Render the markdown alignment / import / validation report (single mode) or the contract-tool JSON envelope (cross-project mode). Cross-project consumer impact is deferred until a real consumer workflow exists.
-7. **Stay within change-local `contracts/schemas/`.** Do not modify baseline files in root `contracts/`, do not touch `contracts/http/` or `contracts/messages/`, and do not invent fields the spec does not justify — mark unknowns with `[unknown]`.
+4. **Write outputs to `contracts/schemas/`.** Author and importer paths produce or normalise JSON Schema YAML files under `$ARTIFACT_STAGE/contracts/schemas/` (the staged slice delta) — one named type per file, kebab-case filenames, URN `$id` derived from the file path.
+5. **Surface diagnostics.** Author and importer runs render the markdown alignment / import report. Cross-project consumer impact is deferred until a real consumer workflow exists.
+6. **Stay within change-local `contracts/schemas/`.** Do not modify baseline files in root `contracts/`, do not touch `contracts/http/` or `contracts/messages/`, and do not invent fields the spec does not justify — mark unknowns with `[unknown]`.
 
 ## Artifact layout
 
@@ -21,7 +20,7 @@ contracts/
 └── schemas/
     └── <type>.yaml                 # Baseline: merged schemas only
 
-.emery/slices/<slice-name>/
+.emery/slices/<slice-name>/         # Written via the artifact stage, which mirrors this tree
 └── contracts/
     └── schemas/
         └── <type>.yaml             # Slice-local delta or normalised import
@@ -41,9 +40,9 @@ Conventions enforced for every schema file in either location:
 |---|---|---|
 | Author or extend reusable schemas from a spec | build prompt during the build phase; operator extending the baseline for new payload types | [`../../references/json-schema/author.md`](../../references/json-schema/author.md) |
 | Import or normalise external schema files | operator drops schema files into a slice's `contracts/schemas/` directory | [`../../references/json-schema/importer.md`](../../references/json-schema/importer.md) |
-| Verify `$ref` consistency, metadata, cross-format consumer compatibility, or merge-time baseline validation | build verification; post-merge contract baseline gate | [`../../references/json-schema/verifier.md`](../../references/json-schema/verifier.md) |
+| Verify `$ref` consistency, metadata, cross-format consumer compatibility, or merge-time baseline validation | the engine's verify phase ([`../verify.md`](../verify.md)); post-merge contract baseline gate | [`../../references/json-schema/verifier.md`](../../references/json-schema/verifier.md) |
 
-The three intents share a common artefact contract (filename → `$id` derivation, one-type-per-file, draft policy) but have distinct algorithms — never conflate them.
+The three intents share a common artefact contract (filename → `$id` derivation, one-type-per-file, draft policy) but have distinct algorithms — never conflate them. Verification is not part of a build leg: the engine dispatches the separate verify phase after build returns and routes findings back through one repair dispatch.
 
 ## Hard rules
 

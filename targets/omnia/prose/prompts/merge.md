@@ -42,7 +42,7 @@ Catches missing workspace members, broken `Cargo.toml` paths, and provider-trait
 cd $CRATE_PATH && cargo test
 ```
 
-The build's verify-repair loop already enforces a passing test suite. Re-running here catches drift caused by sibling slices landing between the build and the merge attempt. A regression is a blocking finding naming the failing tests.
+The build loop's engine-dispatched verification already enforces a passing test suite. Re-running here catches drift caused by sibling slices landing between the build and the merge attempt. A regression is a blocking finding naming the failing tests.
 
 ### 4. WASM target build
 

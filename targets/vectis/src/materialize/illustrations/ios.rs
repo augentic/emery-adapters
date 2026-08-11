@@ -16,7 +16,7 @@ use crate::materialize::render::{render_tree_to_png, scaled_dimensions};
 /// # Errors
 /// Returns I/O or render errors from the underlying writes.
 pub fn write_imageset(
-    tree: &Tree, asset_id: &str, assets_dir: &Path, imageset_dir: &Path, dry_run: bool,
+    tree: &Tree, asset_id: &str, exports_dir: &Path, imageset_dir: &Path, dry_run: bool,
 ) -> Result<Vec<String>, String> {
     let mut written = Vec::new();
     let mut images = Vec::new();
@@ -38,7 +38,7 @@ pub fn write_imageset(
             ios_scale_factor(scale).ok_or_else(|| format!("unsupported iOS scale `{scale}`"))?;
         let (width, height) = scaled_dimensions(tree, factor);
         let png = render_tree_to_png(tree, width, height)?;
-        let out_path = resolve_under_assets_dir(assets_dir, &rel);
+        let out_path = resolve_under_assets_dir(exports_dir, &rel);
         if let Some(parent) = out_path.parent() {
             std::fs::create_dir_all(parent).map_err(|err| err.to_string())?;
         }
@@ -57,7 +57,7 @@ pub fn write_imageset(
                 "version": 1
             }
         });
-        let contents_path = resolve_under_assets_dir(assets_dir, &contents_rel);
+        let contents_path = resolve_under_assets_dir(exports_dir, &contents_rel);
         std::fs::write(contents_path, serde_json::to_vec_pretty(&contents).expect("contents json"))
             .map_err(|err| err.to_string())?;
     }

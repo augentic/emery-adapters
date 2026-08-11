@@ -43,7 +43,7 @@ Check whether `$APP_RS` contains a `#[cfg(test)]` module with spec traceability 
 
 ### Repair mode
 
-This skill may be invoked as a **repair sub-agent** from the verify-repair loop. In repair mode the skill receives:
+This skill may be invoked as a **repair sub-agent** from the engine-dispatched `repair` operation. In repair mode the skill receives:
 
 - `mode: repair` (not `create` or `update`)
 - The full compiler or test error output
@@ -52,13 +52,13 @@ This skill may be invoked as a **repair sub-agent** from the verify-repair loop.
 
 When invoked in repair mode:
 
-1. Run `cargo test` in `$PROJECT_DIR` to get the actual compiler and test errors. The passed-in error output is a starting point, but a fresh run captures the current state after any prior partial fixes in the same verify-repair iteration.
-2. Read the `#[cfg(test)]` module in `app.rs` and any files referenced in the fresh `cargo test` output from step 1.
+1. Work from the compiler and test error output the findings brief carries — the engine's verification gate produced it; do not re-run the test suite yourself.
+2. Read the `#[cfg(test)]` module in `app.rs` and any files the brief's error output references.
 3. Read [`crux-testing-patterns.md`](crux/testing-patterns.md) and [`crux-command-api.md`](crux/command-api.md) to identify the correct Crux 0.17 API surface for the failing code. These references are the canonical source for method signatures, effect assertion patterns (`expect_one_effect()`, `expect_http()`, `resolve()`), HTTP/KV/SSE builder APIs, and `Command` combinators.
-4. Diagnose the root cause from the fresh `cargo test` output. Common API-surface mismatches include: wrong method name on `Command`, incorrect effect assertion chain, stale `HttpRequest`/`HttpResponse` builder pattern, wrong `resolve()` argument shape, missing or incorrect imports.
+4. Diagnose the root cause from the brief's error output. Common API-surface mismatches include: wrong method name on `Command`, incorrect effect assertion chain, stale `HttpRequest`/`HttpResponse` builder pattern, wrong `resolve()` argument shape, missing or incorrect imports.
 5. Apply the minimum change to fix the reported errors — update test assertions, fix factory functions, correct imports, adjust API calls to match the patterns in the references. **Preserve test logic and spec traceability**: do not change test names, `/// Spec:` traceability comments, or the intent of assertions (what is being checked). Only the syntax used to express them should change.
-6. Run `cargo test` again to verify the fix. If errors remain, report the remaining failures in the sub-agent output rather than returning a broken state. Do not loop internally — the outer verify-repair loop owns iteration control.
-7. Return the list of files modified, the fix applied, and the verification result (pass or remaining errors).
+6. Confirm the targeted fix compiles — at most a `cargo check` smoke gate. Do not run the test suite or loop internally; the engine's next `verify` dispatch runs the checks and owns repair iteration control.
+7. Return the list of files modified, the fix applied, and anything the fix could not address (report it rather than returning a broken state).
 
 ## Test Generation Process: Create Mode
 
@@ -301,7 +301,7 @@ Before completing, verify ALL structural items. In create and update modes, comp
 
 ### Tests won't compile after core-writer changes
 
-The verify-repair loop at the orchestration level classifies failures and routes them to the correct skill. If the failure is in the test module (type mismatch, missing field on a constructed type), test-writer is re-entered in repair mode with the error output and Crux API references. The repair sub-agent runs `cargo test` to get fresh errors, reads the testing pattern references for correct API surface, applies the minimum fix, and verifies the fix before returning.
+The engine-dispatched `repair` operation classifies failures and routes them to the correct skill. If the failure is in the test module (type mismatch, missing field on a constructed type), test-writer is re-entered in repair mode with the error output and Crux API references. The repair sub-agent works from the findings' error output, reads the testing pattern references for correct API surface, and applies the minimum fix — at most a `cargo check` smoke gate before returning; the engine's next `verify` dispatch runs the test suite.
 
 ### Tests use wrong Crux API surface
 

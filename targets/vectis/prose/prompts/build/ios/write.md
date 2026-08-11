@@ -1,6 +1,6 @@
-# Vectis build — iOS shell (write + verify)
+# Vectis build — iOS shell (write)
 
-Inlined by the adapter core into the iOS shell leg's system prompt (alongside [../../build.md](../../build.md)) when `ios` is in the platform set (carried from `project.yaml.platforms` via `proposal.md ## Platforms`). The composition validation gate ([../composition.md](../composition.md)) MUST have passed first.
+Inlined by the adapter core into the iOS shell write leg's system prompt (alongside [../../build.md](../../build.md)) when `ios` is in the platform set (carried from `project.yaml.platforms` via `proposal.md ## Platforms`). The composition validation gate ([../composition.md](../composition.md)) MUST have passed first. This is a generation-only leg: the `swiftformat` / `make build` checks, the `iOS/.vectis/verify.ok` stamp, and any repair pass belong to the engine-dispatched `verify` and `repair` operations.
 
 The SwiftUI patterns, Crux iOS shell anatomy, token templates, and design-system integration depth live in [`../../../references/ios/`](../../../references/ios/).
 
@@ -11,9 +11,7 @@ Inspect `${IOS_SHELL_DIR}` for any `.swift` files:
 - No Swift files → **create mode**: materialize from `$TEMPLATE_DIR` per [template-materialize.md](../../../references/template-materialize.md) (see the template-materialize prelude), strip unused `VECTIS-OPTIONAL` caps, then `make -C iOS generate-project` / `xcodegen` before writing feature Swift. Fail closed if `$TEMPLATE_DIR` is missing — do not invent an iOS scaffold.
 - Swift files present → **update mode**: diff core types against existing Swift code and apply targeted edits. When a newly enabled adapter requires a shell handler that was stripped, copy that `cap=` FILE/block from `$TEMPLATE_DIR` ([`template-capabilities.md`](../../../references/template-capabilities.md)) — do not invent handler shapes.
 
-Spawn the writer sub-agent with `mode: create|update` and `skip_verification: true`; the orchestrator runs the verify loop (§ Verify) after the writer returns.
-
-Repair sub-agent (`task: ios-verify-repair`, invoked by the verify loop below) applies the minimum **structural** change to fix reported Swift / Xcode errors — never add or preserve `swiftlint:disable`, `swift-format-ignore`, or other lint/format suppression comments; refactor until `make build` is clean.
+Spawn the writer sub-agent with `mode: create|update` and `skip_verification: true`; the leg ends when the writer returns — the engine dispatches verification separately.
 
 ## Writer steps
 
@@ -28,11 +26,11 @@ Repair sub-agent (`task: ios-verify-repair`, invoked by the verify loop below) a
      - `role: icon` or `decorative` + `kind: vector` — copy `assets/exports/ios/<id>.imageset/` (PDF + `Contents.json`) into `Assets.xcassets/<id>.imageset/`.
      - `role: illustration` + `kind: vector` — copy `assets/exports/ios/<id>.imageset/` (`@2x` / `@3x` PNG + `Contents.json`).
      - `kind: raster` (operator-pinned per-density masters) — copy pinned `{1x,2x,3x}` files into `<id>.imageset/` per `sources.ios`.
-   - **Render by `kind`.** `vector` / `raster` ids emit `Image("<id>")` from the copied imageset; never substitute SF Symbols for non-`symbol` entries. When `CATALOG_PATH` exists, every `confirmed` catalog entry referenced by a `component:` directive in `composition.yaml` produces a `<Slug>View.swift` file under `iOS/<APP_NAME>/Components/`. Per-screen views reference the shared component view instead of inlining the layout. Props are derived from the variation across instances of the same `component:` slug in `composition.yaml`. When the catalog is absent, component files are still emitted for any `component:` directives that appear in `composition.yaml` (backward-compatible behaviour), but the catalog is the authoritative driver for which slugs to factor. **Retroactive factoring (B7).** When a component newly `confirmed` this build is referenced by baseline screens *outside the current slice's domains* (composition.md Step 6a attached the `component: <slug>` directive to those prior screens via `delta.modified`), generate `Components/<Slug>View.swift` **and** refactor those prior screens' generated views to consume the shared component in place of the inlined layout — the writer runs in `update` mode against the live shell tree, so editing prior-slice views is in scope. The refactor is behaviour-preserving because the skeletons are structurally identical by construction; the verify loop below catches any regression. Idempotent: a prior screen already consuming the shared view needs no further edit.
+   - **Render by `kind`.** `vector` / `raster` ids emit `Image("<id>")` from the copied imageset; never substitute SF Symbols for non-`symbol` entries. When `CATALOG_PATH` exists, every `confirmed` catalog entry referenced by a `component:` directive in `composition.yaml` produces a `<Slug>View.swift` file under `iOS/<APP_NAME>/Components/`. Per-screen views reference the shared component view instead of inlining the layout. Props are derived from the variation across instances of the same `component:` slug in `composition.yaml`. When the catalog is absent, component files are still emitted for any `component:` directives that appear in `composition.yaml` (backward-compatible behaviour), but the catalog is the authoritative driver for which slugs to factor. **Retroactive factoring (B7).** When a component newly `confirmed` this build is referenced by baseline screens *outside the current slice's domains* (composition.md Step 6a attached the `component: <slug>` directive to those prior screens via `delta.modified`), generate `Components/<Slug>View.swift` **and** refactor those prior screens' generated views to consume the shared component in place of the inlined layout — the writer runs in `update` mode against the live shell tree, so editing prior-slice views is in scope. The refactor is behaviour-preserving because the skeletons are structurally identical by construction; the engine-dispatched verify pass catches any regression. Idempotent: a prior screen already consuming the shared view needs no further edit.
 5. **Enforce shell boundaries.** Keep all business logic in the Rust core; the shell only renders views and performs platform I/O. Remove any `import VectisDesign` — there is no shared Swift Package; the writer emits shell-local theme + asset code exclusively.
    - **Canonical UI bindings.** Per [`canonical-ui-bindings.md`](../../../references/canonical-ui-bindings.md): use **`MaestroTestIds.*`** / **`UiStrings.*`** for tags and display copy — never hand-write test tags or product strings when a generated constant exists. Run **`cargo make generate-bindings`** after shell/core edits.
 6. **SwiftUI hazards to avoid.** Never place `TextField` or a small `Button` inside a `ScrollView` within a `NavigationStack` — the `UIScrollView` touch-delay mechanism suppresses taps. Always include `#Preview` blocks for new screens to keep Xcode previews working.
-7. **Maestro journeys.** When the regenerated `composition.yaml` declares ≥1 `test_id` (the slice has an interactive UI surface), author one `.maestro/journeys/` flow per `spec.md` scenario — targeting the composition's `test_id` / `event` / screen map — and wire each into `maestro.mobile.yaml` via `runFlow`, per [`maestro/journey-authoring.md`](../../../references/maestro/journey-authoring.md). Mobile journeys are shared by iOS + Android: extend the existing entry idempotently, never duplicate. When `composition.yaml` has no `test_id` (e.g. a core-only slice), author nothing. Do **not** run `maestro test` in the build verify loop — it runs post-drain via `cargo make maestro-ios`.
+7. **Maestro journeys.** When the regenerated `composition.yaml` declares ≥1 `test_id` (the slice has an interactive UI surface), author one `.maestro/journeys/` flow per `spec.md` scenario — targeting the composition's `test_id` / `event` / screen map — and wire each into `maestro.mobile.yaml` via `runFlow`, per [`maestro/journey-authoring.md`](../../../references/maestro/journey-authoring.md). Mobile journeys are shared by iOS + Android: extend the existing entry idempotently, never duplicate. When `composition.yaml` has no `test_id` (e.g. a core-only slice), author nothing. Do **not** run `maestro test` in the build — it runs post-drain via `cargo make maestro-ios`.
 
 ## Hard rules
 
@@ -43,35 +41,7 @@ Full set at [`hard-rules-ios.md`](../../../references/hard-rules-ios.md). Highli
 - Never substitute a named simulator destination (`name=iPhone …`); use the template's generic/`simctl` DX.
 - Zero-warning policy: fix structure, never suppress — no `swiftlint:disable`, `swift-format-ignore`, or similar in shell Swift (`iOS/<APP_NAME>/**/*.swift` excluding `generated/`).
 
-## Verify (max 3 iterations)
-
-The shell leg's **orchestrating agent** runs the verify loop — not a sub-agent with shell access. The orchestrator is the **sole source of truth** for iOS shell checkboxes in `tasks.md`; never mark an iOS task complete or report success unless all three commands below have actually run and passed in the same iteration.
-
-After the writer sub-agent returns, the orchestrator executes this loop (max 3 iterations):
-
-```bash
-swiftformat "${IOS_SHELL_DIR}/${APP_NAME}/"                    # 1. Format.
-cd "$IOS_SHELL_DIR" && make build                              # 2. typegen + boltffi pack apple + xcodegen + simulator build.
-# On success, write the adapter verify stamp (not template DX):
-mkdir -p "${IOS_SHELL_DIR}/.vectis" && echo ok > "${IOS_SHELL_DIR}/.vectis/verify.ok"
-```
-
-On failure the orchestrator captures stderr and spawns a **repair-only** sub-agent (`task: ios-verify-repair`) with:
-
-- `forbidden_paths: [iOS/Makefile, iOS/project.yml]`
-- `allowed_paths: iOS/<APP_NAME>/**/*.swift, Theme/, Components/, Assets.xcassets/`
-- `error_output:` the captured stderr from the failing step
-- **No shell** — the sub-agent returns edited Swift files or a patch plan only; the orchestrator applies edits and re-runs the loop from step 1.
-
-**Structural fix only for warnings** — refactor (underscore-prefixed unused parameters, real handler wiring, visibility adjustments) until `make build` passes; never silence a warning with `swiftlint:disable`, `swift-format-ignore`, or similar comments.
-
-**Destination / DX drift errors:** re-copy drifted files from `$TEMPLATE_DIR` with identity substitution, then retry. Never invent Makefile / `project.yml` content. Never run `xcodebuild` with a named device destination. If generic destination still fails after a retry, escalate — do not substitute `name=iPhone …`.
-
-Operators may use `make run-sim` for local desk checks; the orchestrator verify loop uses only `make build` (the live template has no `sim-build` target).
-
-If still failing after 3 iterations: **stop**, report the remaining failures with full error output, and escalate.
-
-If `make build` fails with FFI / BoltFFI contract errors that look like pin drift rather than feature bugs, re-copy pins from `$TEMPLATE_DIR` (see [template-capabilities.md](../../../references/template-capabilities.md) § Template / version-pin drift handling); do not guess versions.
+After the writer returns, the leg answers — do not run `swiftformat`, `make build`, or mark `tasks.md` checkboxes here. Verification (the format + `make build` pass and the `iOS/.vectis/verify.ok` stamp) is the engine-dispatched `verify` operation's pass; its findings route through `repair`. Operators may use `make run-sim` for local desk checks.
 
 ## Worked example
 

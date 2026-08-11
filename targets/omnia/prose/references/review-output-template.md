@@ -4,7 +4,7 @@
 
 ## Finding-ID prefix conventions
 
-Every finding in `REVIEW.md` carries a review-local prefix so the originating reviewer (or pass) is preserved through synthesis and auto-fix:
+Every finding in `REVIEW.md` carries a review-local prefix so the originating reviewer (or pass) is preserved through synthesis and any later engine-dispatched repair:
 
 | Prefix | Origin                     | Categories                                        | Default severities                                                         |
 | ------ | -------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------- |
@@ -26,7 +26,6 @@ Severity values use the closed `Diagnostic` severity enum: `critical`, `importan
 **Generated**: [timestamp]
 **Crate**: [name]
 **Review Team**: 3 specialists + 1 antagonist
-**Auto-fix**: [enabled/disabled]
 **Confidence Level**: [high | medium | low]
 
 ---
@@ -59,7 +58,7 @@ let api_url = std::env::var("API_URL").unwrap();
 \```
 
 **Risk**: Compilation failure or runtime panic in WASM
-**Fix Applied**: ✅ Auto-fixed
+**Fix**: Route the read through the provider config
 
 \```rust
 let api_url = ctx.config.get("API_URL")?;
@@ -130,22 +129,6 @@ let api_url = ctx.config.get("API_URL")?;
 
 ---
 
-## Auto-Fix Summary
-
-**Total Fixes Applied**: [count]
-**Successful**: [count]
-**Failed**: [count]
-
-**Modified Files**:
-
-- src/handlers.rs ([count] fixes)
-- src/config.rs ([count] fixes)
-- src/types.rs ([count] fixes)
-
-**Verification**: [✅ cargo check passed | ⚠️ reverted due to errors]
-
----
-
 ## Quality Metrics
 
 | Metric                   | This Crate | AI Baseline | Human Baseline | Status   |
@@ -159,11 +142,10 @@ let api_url = ctx.config.get("API_URL")?;
 
 ## Next Steps
 
-1. [✅ | ⏭️] Auto-fixes applied and verified
-2. ⏭️ Manual review of remaining critical issues
-3. ⏭️ Address antagonist new findings
-4. ⏭️ Integration testing
-5. ⏭️ Security audit (cargo-audit)
+1. ⏭️ Manual review of remaining critical issues
+2. ⏭️ Address antagonist new findings
+3. ⏭️ Integration testing
+4. ⏭️ Security audit (cargo-audit)
 
 ---
 

@@ -10,10 +10,10 @@ The verifier accepts a `--mode {single, cross-project}` flag. The mode determine
 
 | Mode               | Caller                                         | Trigger                                           | Scope                                                             | Output                                                |
 | ------------------ | ---------------------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------- |
-| `single` (default) | contracts adapter build prompt in the build phase | Post-author or post-import                        | One slice's `contracts/http/` inside one project                  | Markdown report for the verify-repair loop            |
+| `single` (default) | contracts verify prompt in the engine's verify phase | Post-author or post-import                        | One slice's `contracts/http/` inside one project                  | Markdown report for the verify phase's findings            |
 | `cross-project`    | contracts adapter merge prompt                  | Producer-side merge of an OpenAPI contract change | Walk the merged `contracts/` baseline; enforce contract identity/version validation | Deterministic findings from the adapter's in-guest contract validator |
 
-`single` mode feeds the build's verify-repair loop. `cross-project` mode describes the adapter's deterministic in-guest contract validator — the merge gate runs it itself and surfaces its findings; the verifier does not implement its own cross-baseline check. Both modes share the read-only contract.
+`single` mode feeds the engine's verify phase, whose findings the engine routes through bounded repair dispatches. `cross-project` mode describes the adapter's deterministic in-guest contract validator — the merge gate runs it itself and surfaces its findings; the verifier does not implement its own cross-baseline check. Both modes share the read-only contract.
 
 `--mode` is an internal flag of the format-specific verifier. Cross-project consumer-impact analysis is deferred until a real consumer workflow exists; this verifier owns deterministic single-slice and merged-baseline checks.
 
@@ -24,7 +24,7 @@ The verifier accepts a `--mode {single, cross-project}` flag. The mode determine
 Inferred from the active slice context — no positional arguments required:
 
 ```text
-$SLICE_DIR          = .emery/slices/<slice-name>
+$SLICE_DIR          = .emery/slices/<slice-name>  # reached via the lent artifact stage, which mirrors this tree
 $CHANGE_CONTRACTS    = $SLICE_DIR/contracts/
 $BASELINE_CONTRACTS  = contracts/
 $CHANGE_SPECS        = $SLICE_DIR/specs/
@@ -88,7 +88,7 @@ Every JSON Schema file in `$CHANGE_CONTRACTS/schemas/` referenced by an OpenAPI 
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `$id`         | Present and a valid URI (URN format: `urn:emery:schemas/<name>`).                                                                                                        |
 | `title`       | Present and non-empty, matching the type name.                                                                                                                             |
-| `description` | Present and non-empty. The placeholder `"[imported — description pending review]"` counts as present but **emits a `WARN`** to surface the gap for the verify-repair loop. |
+| `description` | Present and non-empty. The placeholder `"[imported — description pending review]"` counts as present but **emits a `WARN`** to surface the gap for the verify phase. |
 
 Report format (one entry per failure):
 
@@ -133,7 +133,7 @@ FAIL: contracts/schemas/user-registration.yaml — appears as request body in sp
 WARN: contracts/schemas/oauth-token.yaml — appears in spec but has no protocol binding (may be shared vocabulary — verify intent)
 ```
 
-Use `FAIL` when the schema is unambiguously a top-level payload in a spec scenario. Use `WARN` when classification is ambiguous — the verify-repair loop surfaces the warning for human review.
+Use `FAIL` when the schema is unambiguously a top-level payload in a spec scenario. Use `WARN` when classification is ambiguous — the verify phase's report surfaces the warning for human review.
 
 When the slice has **no specs**, skip Check 3 — there are no scenarios to cross-reference. Record this in the report so the build knows the check was deliberately bypassed.
 

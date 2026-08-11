@@ -18,8 +18,9 @@ type Entries = BTreeMap<String, String>;
 
 /// Harvest `MAESTRO_*` → kebab entries from the effective composition document.
 ///
-/// Pass `active_slice` during `emery build` so slice deltas merge onto baseline;
-/// pass `None` for post-merge / desk verify (baseline only).
+/// Pass the active slice's candidate `composition.yaml` path (the staged
+/// copy during the build loop) so its delta merges onto the baseline; pass
+/// `None` for post-merge / desk verify (baseline only).
 ///
 /// # Errors
 ///
@@ -27,9 +28,9 @@ type Entries = BTreeMap<String, String>;
 /// or when the same `test_id` value appears on more than one element in the
 /// effective (merged) composition document.
 pub fn harvest_entries(
-    project_root: &Path, active_slice: Option<&str>,
+    project_root: &Path, slice_composition: Option<&Path>,
 ) -> Result<Entries, VectisError> {
-    let document = effective_composition(project_root, active_slice)?;
+    let document = effective_composition(project_root, slice_composition)?;
     let mut entries = Entries::new();
     let mut errors = Vec::new();
 
@@ -82,9 +83,9 @@ pub fn harvest_entries(
 ///
 /// Propagates [`harvest_entries`] failures and I/O errors while writing the derived file.
 pub fn write_generated(
-    change_root: &Path, code_root: &Path, active_slice: Option<&str>,
+    change_root: &Path, code_root: &Path, slice_composition: Option<&Path>,
 ) -> Result<(), VectisError> {
-    let entries = harvest_entries(change_root, active_slice)?;
+    let entries = harvest_entries(change_root, slice_composition)?;
     let path = code_root.join(REGISTRY_REL);
     let body = format_generated_yaml(&entries);
 

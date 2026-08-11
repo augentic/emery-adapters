@@ -50,7 +50,7 @@ For each row in the Transaction Boundary Matrix where **Atomic=Yes**:
 
 - Verify that transaction-scoped wrapping encloses the handler's write operations and that post-commit side effects are outside the transaction.
 
-If any verification fails: implement the missing code path before proceeding. Do not rely on the verify-repair loop or test-writer to catch these — the code must satisfy the spec before handoff. After implementing any missing code paths, re-run `cargo check` to verify the new code compiles.
+If any verification fails: implement the missing code path before proceeding. Do not rely on the engine's verify/repair rounds or the test-writer to catch these — the code must satisfy the spec before handoff. After implementing any missing code paths, re-run `cargo check` to verify the new code compiles.
 
 ## Update mode — example plan
 

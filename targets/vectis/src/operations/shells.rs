@@ -58,17 +58,17 @@ pub(super) async fn run_write_legs<P: Model>(
     for shell in declared_shell_legs(change_root) {
         let system = assemble(&["prompts/build.md", shell.write_prompt]);
         let user = format!(
-            "Run the {name} shell phase of the vectis build for slice `{slice}`: \
+            "Run the {name} shell write phase of the vectis build for slice `{slice}`: \
              generate or update the shell per the write prompt. When the \
              template-materialize prelude below lists absent trees, materialize from \
              `$TEMPLATE_DIR` on the host FS first — do not hand-invent scaffold \
-             boilerplate or version pins. Then run the write prompt's \
-             orchestrator-owned verify loop yourself in the lent workspace — this \
-             adapter cannot spawn host commands. Keep DX files (Makefiles, \
-             `project.yml`, assembly Gradle files, BoltFFI pack recipes) consistent \
-             with `$TEMPLATE_DIR` after identity substitution; refresh by re-copying \
-             those paths from the template, never by guessing pins. When the slice \
-             introduces no work for this shell, write nothing \
+             boilerplate or version pins. This is a generation-only pass: do not run \
+             a verify-repair loop, `make build`, or write any `.vectis/verify.ok` \
+             stamp — the engine dispatches a separate verify operation. Keep DX \
+             files (Makefiles, `project.yml`, assembly Gradle files, BoltFFI pack \
+             recipes) consistent with `$TEMPLATE_DIR` after identity substitution; \
+             refresh by re-copying those paths from the template, never by guessing \
+             pins. When the slice introduces no work for this shell, write nothing \
              and answer with `applicable: false`; when a host prerequisite is \
              missing, stop per the prompt's deferred contract and report it in your \
              summary.\n\n{BINDING_NOTE}\n\n{scaffold_block}\n\n{REFERENCES_POINTER}",

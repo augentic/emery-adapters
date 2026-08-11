@@ -201,4 +201,4 @@ The full report shape lives in [`output.md`](review-output-template.md).
 
 Lead shuts down all teammates and cleans up the agent team.
 
-> Step 6 (`--fix` application) lives in [`auto-fix.md`](review-auto-fix.md) so the lead can skip loading it when no `--fix` flag was passed.
+> Fix application is not part of the review pass: the engine routes blocking findings to the `repair` operation (`repair-origin: review`), whose safe-fix recipes live in [`auto-fix.md`](review-auto-fix.md).

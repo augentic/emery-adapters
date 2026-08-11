@@ -28,7 +28,7 @@ The adapter's deterministic scaffold prelude has already written every missing t
 3. **Implement the `Provider` struct** that satisfies the consumed `omnia-wasi-*` adapter traits. Validate every required `Config::get` key in `Provider::new()` and document each in `.env.example`. Injection contract: [`guest-wiring.md`](../../references/guest-wiring.md).
 4. **Author `examples/runtime.rs`** with the `omnia::runtime!({ hosts: { … } });` block enumerating every WASI host the guest consumes. See [`runtime.md`](../../references/runtime.md).
 5. **Finish the scaffolded supply-chain and publish config**: fill every `<UPPER_SNAKE>` placeholder still listed in the scaffold prelude (typically `<PACKAGE_NAME>` / `<STORAGE_ACCOUNT>` / `<RESOURCE_GROUP>` in `.github/workflows/publish.yaml`), and after the workspace builds for the first time and produces `Cargo.lock`, run `cargo vet regenerate {imports,exemptions,unpublished}` to populate `supply-chain/imports.lock` and the exemptions in `supply-chain/config.toml`.
-6. **Verify with `cargo check`** — fix any missing route / provider impl / wasm32-incompatible usage and re-check until clean. The build prompt's verify-repair loop runs after this step.
+6. **Stop after writing** — do not run `cargo check` or fix-and-recheck: the engine dispatches the verification operation after the build and routes any missing route / provider impl / wasm32-incompatible usage through the repair operation.
 
 ## When `WasiIdentity` is consumed
 

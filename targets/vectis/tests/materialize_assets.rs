@@ -32,6 +32,7 @@ fn platform_filter_matrix() {
             platform,
             dry_run: true,
             only: None,
+            output_root: None,
         })
     };
 
@@ -72,6 +73,7 @@ assets:
         platform: None,
         dry_run: false,
         only: Some(vec!["check".into()]),
+        output_root: None,
     }))
     .expect("materialize");
     assert!(summary["errors"].as_array().is_some_and(Vec::is_empty), "{summary}");
@@ -107,6 +109,7 @@ fn run_assets(assets_yaml: &Path) -> Value {
         platform: None,
         dry_run: false,
         only: None,
+        output_root: None,
     }))
     .expect("materialize run")
 }

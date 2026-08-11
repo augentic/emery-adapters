@@ -2,22 +2,22 @@
 
 ## Test-failure classification
 
-When `cargo test` fails inside the build prompt's `## § Verify-repair loop`, classify each failure:
+When a verification pass reports `cargo test` failures and the engine dispatches a repair (`repair-origin: verification`), classify each failure:
 
 | Failure signal | Classification | Fix action |
 |---|---|---|
-| Error in `tests/` paths, `MockProvider`, or `provider.rs` | Test issue | Re-enter the test-writer prompt (`prompts/build/test.md`) |
-| Error in `src/` paths, missing trait impls in production | Code issue | Re-enter the crate-writer prompt (`prompts/build/crate.md`) |
+| Error in `tests/` paths, `MockProvider`, or `provider.rs` | Test issue | Fix test-side per the test-writer conventions (`prompts/build/test.md`) |
+| Error in `src/` paths, missing trait impls in production | Code issue | Fix code-side per the crate-writer conventions (`prompts/build/crate.md`) |
 | Assertion mismatch where *actual* matches spec | Test issue | Test expectation is stale |
 | Assertion mismatch where *expected* matches spec | Code issue | Handler returns the wrong result |
 | MockProvider missing a trait impl the handler now requires | Test issue | Update MockProvider |
 | Unresolved import or missing crate in `Cargo.toml` | Workspace issue | Fix `Cargo.toml` paths or workspace member list directly |
 
-Group failures by classification and re-enter each writer prompt once with all same-class errors.
+Group failures by classification and fix each class once within the single repair pass.
 
 ## Update-mode regression check
 
-Before iteration 1 of the verify-repair loop in update mode, record the baseline: `cd $CRATE_PATH && cargo test 2>&1 | tee /tmp/${SLICE_NAME}-${CRATE_NAME}-baseline.txt`. After each iteration, for each test that passed before and now fails: if the spec explicitly changes the asserted behaviour → expected behavioural change, re-enter the test writer to align expectations; if the spec does not change the asserted behaviour → true regression, route the fix through the classification table above.
+In update mode, for each test that passed before the build and now fails: if the spec explicitly changes the asserted behaviour → expected behavioural change, align the test's expectations; if the spec does not change the asserted behaviour → true regression, route the fix through the classification table above (fix the code, not the test).
 
 ## Operation shape
 

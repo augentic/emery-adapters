@@ -78,9 +78,15 @@ pub fn validate_effective_inventory(effective: &EffectiveAssets) -> Result<(), V
 }
 
 /// Whether any in-scope asset lacks on-disk exports for a declared shell platform.
+///
+/// Masters (`source:` / per-density photo sources) resolve relative to
+/// the inventory's directory; pins and conventional exports are
+/// checked under `exports_dir` (the design-system root exports land
+/// beneath).
 #[must_use]
 pub fn scope_needs_materialize(
     scope: &MaterializeScope, effective: &EffectiveAssets, shell_platforms: &[String],
+    exports_dir: &Path,
 ) -> bool {
     if scope.asset_ids.is_empty() {
         return false;
@@ -94,12 +100,12 @@ pub fn scope_needs_materialize(
     let Some(assets) = doc.get("assets").and_then(Value::as_object) else {
         return false;
     };
-    let assets_dir = effective.path.parent().unwrap_or_else(|| Path::new("."));
+    let masters_dir = effective.path.parent().unwrap_or_else(|| Path::new("."));
 
     scope.asset_ids.iter().any(|id| {
-        assets
-            .get(id)
-            .is_some_and(|entry| asset_needs_materialize(entry, id, assets_dir, shell_platforms))
+        assets.get(id).is_some_and(|entry| {
+            asset_needs_materialize(entry, id, masters_dir, exports_dir, shell_platforms)
+        })
     })
 }
 
@@ -110,9 +116,12 @@ pub fn materialize_platform_csv(shell_platforms: &[String]) -> String {
 }
 
 /// Derive the RFC §2.1 materialization reference set for a slice build.
+///
+/// `exports_dir` anchors the pin-activity checks (pins point at
+/// export paths, which land under the design-system root).
 #[must_use]
 pub fn resolve_materialize_scope(
-    slice_dir: &Path, project_dir: &Path, ui_platforms: &[String], effective: &EffectiveAssets,
+    slice_dir: &Path, ui_platforms: &[String], effective: &EffectiveAssets, exports_dir: &Path,
 ) -> MaterializeScope {
     let Ok(raw) = fs::read_to_string(&effective.path) else {
         return MaterializeScope::default();
@@ -124,11 +133,9 @@ pub fn resolve_materialize_scope(
         return MaterializeScope::default();
     };
 
-    let assets_dir = effective.path.parent().unwrap_or(project_dir);
-
     let mut reference_ids = collect_reference_ids(slice_dir, assets);
     if effective.slice_local {
-        reference_ids.extend(unpinned_source_inventory(assets, assets_dir, ui_platforms));
+        reference_ids.extend(unpinned_source_inventory(assets, exports_dir, ui_platforms));
     }
 
     let mut asset_ids: BTreeSet<String> = reference_ids
@@ -211,23 +218,23 @@ const fn is_id_char(byte: u8) -> bool {
 }
 
 fn unpinned_source_inventory(
-    assets: &serde_json::Map<String, Value>, assets_dir: &Path, shell_platforms: &[String],
+    assets: &serde_json::Map<String, Value>, exports_dir: &Path, shell_platforms: &[String],
 ) -> BTreeSet<String> {
     assets
         .iter()
         .filter(|(_, entry)| entry.get("source").and_then(Value::as_str).is_some())
-        .filter(|(_, entry)| entry_lacks_satisfiable_pin(entry, assets_dir, shell_platforms))
+        .filter(|(_, entry)| entry_lacks_satisfiable_pin(entry, exports_dir, shell_platforms))
         .map(|(id, _)| id.clone())
         .collect()
 }
 
 fn entry_lacks_satisfiable_pin(
-    entry: &Value, assets_dir: &Path, shell_platforms: &[String],
+    entry: &Value, exports_dir: &Path, shell_platforms: &[String],
 ) -> bool {
     if entry.get("source").and_then(Value::as_str).is_none() {
         return false;
     }
-    shell_platforms.iter().any(|platform| !platform_pin_active(entry, platform, assets_dir))
+    shell_platforms.iter().any(|platform| !platform_pin_active(entry, platform, exports_dir))
 }
 
 fn is_materializable_kind(entry: &Value) -> bool {
@@ -253,12 +260,12 @@ fn append_app_icon(
 }
 
 fn asset_needs_materialize(
-    entry: &Value, id: &str, assets_dir: &Path, shell_platforms: &[String],
+    entry: &Value, id: &str, masters_dir: &Path, exports_dir: &Path, shell_platforms: &[String],
 ) -> bool {
     if entry.get("role").and_then(Value::as_str) == Some("app-icon") {
         return shell_platforms.iter().any(|platform| {
-            !platform_pin_active(entry, platform, assets_dir)
-                && !app_icon_export_exists(assets_dir, platform)
+            !platform_pin_active(entry, platform, exports_dir)
+                && !app_icon_export_exists(exports_dir, platform)
         });
     }
     let role = entry.get("role").and_then(Value::as_str);
@@ -266,15 +273,15 @@ fn asset_needs_materialize(
         return false;
     };
     if role == Some("photo") && kind == "raster" {
-        return shell_platforms
-            .iter()
-            .any(|platform| photo_platform_needs_materialize(entry, id, assets_dir, platform));
+        return shell_platforms.iter().any(|platform| {
+            photo_platform_needs_materialize(entry, id, masters_dir, exports_dir, platform)
+        });
     }
     shell_platforms.iter().any(|platform| {
-        if platform_pin_active(entry, platform, assets_dir) {
+        if platform_pin_active(entry, platform, exports_dir) {
             return false;
         }
-        if conventional_export_exists(assets_dir, id, kind, platform, entry) {
+        if conventional_export_exists(exports_dir, id, kind, platform, entry) {
             return false;
         }
         entry.get("source").and_then(Value::as_str).is_some()
@@ -282,7 +289,7 @@ fn asset_needs_materialize(
 }
 
 fn photo_platform_needs_materialize(
-    entry: &Value, id: &str, assets_dir: &Path, platform: &str,
+    entry: &Value, id: &str, masters_dir: &Path, exports_dir: &Path, platform: &str,
 ) -> bool {
     let Some(density_map) =
         entry.get("sources").and_then(|sources| sources.get(platform)).and_then(Value::as_object)
@@ -292,10 +299,10 @@ fn photo_platform_needs_materialize(
     if density_map.is_empty() {
         return false;
     }
-    if conventional_export_exists(assets_dir, id, "raster", platform, entry) {
+    if conventional_export_exists(exports_dir, id, "raster", platform, entry) {
         return false;
     }
     density_map
         .values()
-        .any(|value| value.as_str().is_some_and(|rel| assets_dir.join(rel).is_file()))
+        .any(|value| value.as_str().is_some_and(|rel| masters_dir.join(rel).is_file()))
 }

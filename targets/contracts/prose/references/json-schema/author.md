@@ -5,7 +5,7 @@
 ## Inputs
 
 ```text
-$SLICE_DIR     = .emery/slices/<slice-name>
+$SLICE_DIR     = .emery/slices/<slice-name>  # reached via the lent writable artifact stage, which mirrors this tree
 $SPECS_DIR      = $SLICE_DIR/specs
 $CONTRACTS_DIR  = $SLICE_DIR/contracts
 $SCHEMAS_DIR    = $CONTRACTS_DIR/schemas
@@ -259,7 +259,7 @@ Every author run produces an alignment report alongside the delta files. The rep
 - `pagination.yaml` — added missing `description`
 ```
 
-After producing the report, run [`verifier.md`](./verifier.md) in `single` mode against `$SLICE_DIR` to confirm `$ref` resolution, metadata completeness, duplicate-`$id` checks, and cross-format consumer compatibility before declaring the artefacts ready.
+Do not run [`verifier.md`](./verifier.md) from the authoring pass: the engine dispatches its separate verify phase after build returns (confirming `$ref` resolution, metadata completeness, duplicate-`$id` checks, and cross-format consumer compatibility) and routes any blocking findings through one repair dispatch.
 
 ## Edge cases
 
@@ -283,7 +283,7 @@ Before declaring the author run complete:
 - [ ] Property names are `snake_case`.
 - [ ] No invented fields; every property traces back to a spec scenario or a baseline schema.
 - [ ] Alignment report enumerates coverage, warnings, generated delta files, backwards-compatibility flags, and normalisation entries.
-- [ ] [`verifier.md`](./verifier.md) (single mode) ran clean against `$SLICE_DIR`.
+- [ ] No verifier run from this pass — verification belongs to the engine's verify phase.
 
 ## See also
 

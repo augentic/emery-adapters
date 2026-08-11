@@ -1,7 +1,5 @@
 //! Copy-only raster materialization for `role: photo` per-density masters.
 
-use std::path::Path;
-
 use serde_json::{Value, json};
 
 use crate::materialize::icons::{asset_error, materialized_entry};
@@ -9,11 +7,11 @@ use crate::materialize::paths::{
     ANDROID_DENSITIES, IOS_RASTER_SCALES, Platform, android_raster_artifact_rel, ios_imageset_dir,
     ios_raster_artifact_rel, ios_raster_filename, resolve_under_assets_dir,
 };
-use crate::materialize::{MaterializeFilter, matches_only};
+use crate::materialize::{MaterializeFilter, MaterializeRoots, matches_only};
 
 /// Copy per-density raster sources into conventional export paths for `role: photo`.
 pub fn materialize_photo_rasters(
-    assets_dir: &Path, assets: &serde_json::Map<String, Value>, platforms: &[String],
+    roots: MaterializeRoots<'_>, assets: &serde_json::Map<String, Value>, platforms: &[String],
     filter: &MaterializeFilter<'_>, materialized: &mut Vec<Value>, errors: &mut Vec<Value>,
 ) {
     for (asset_id, entry) in assets {
@@ -39,13 +37,7 @@ pub fn materialize_photo_rasters(
                 continue;
             };
 
-            match copy_platform_densities(
-                asset_id,
-                platform,
-                assets_dir,
-                density_map,
-                filter.dry_run,
-            ) {
+            match copy_platform_densities(asset_id, platform, roots, density_map, filter.dry_run) {
                 Ok(written) => {
                     for path in written {
                         materialized.push(materialized_entry(asset_id, platform, &path));
@@ -58,7 +50,7 @@ pub fn materialize_photo_rasters(
 }
 
 fn copy_platform_densities(
-    asset_id: &str, platform: Platform, assets_dir: &Path,
+    asset_id: &str, platform: Platform, roots: MaterializeRoots<'_>,
     density_map: &serde_json::Map<String, Value>, dry_run: bool,
 ) -> Result<Vec<String>, String> {
     let mut written = Vec::new();
@@ -82,7 +74,7 @@ fn copy_platform_densities(
                     continue;
                 }
 
-                copy_file(assets_dir, source_rel, &export_rel)?;
+                copy_file(roots, source_rel, &export_rel)?;
             }
 
             if images.is_empty() {
@@ -94,7 +86,7 @@ fn copy_platform_densities(
 
             if !dry_run {
                 let imageset_dir =
-                    resolve_under_assets_dir(assets_dir, &ios_imageset_dir(asset_id));
+                    resolve_under_assets_dir(roots.exports, &ios_imageset_dir(asset_id));
                 std::fs::create_dir_all(&imageset_dir).map_err(|err| err.to_string())?;
                 let contents = json!({
                     "images": images,
@@ -103,7 +95,7 @@ fn copy_platform_densities(
                         "version": 1
                     }
                 });
-                let contents_path = resolve_under_assets_dir(assets_dir, &contents_rel);
+                let contents_path = resolve_under_assets_dir(roots.exports, &contents_rel);
                 std::fs::write(
                     contents_path,
                     serde_json::to_vec_pretty(&contents).expect("contents json"),
@@ -123,7 +115,7 @@ fn copy_platform_densities(
                     continue;
                 }
 
-                copy_file(assets_dir, source_rel, &export_rel)?;
+                copy_file(roots, source_rel, &export_rel)?;
             }
         }
     }
@@ -131,9 +123,11 @@ fn copy_platform_densities(
     Ok(written)
 }
 
-fn copy_file(assets_dir: &Path, source_rel: &str, export_rel: &str) -> Result<(), String> {
-    let source_path = assets_dir.join(source_rel);
-    let dest_path = resolve_under_assets_dir(assets_dir, export_rel);
+fn copy_file(
+    roots: MaterializeRoots<'_>, source_rel: &str, export_rel: &str,
+) -> Result<(), String> {
+    let source_path = roots.masters.join(source_rel);
+    let dest_path = resolve_under_assets_dir(roots.exports, export_rel);
     if let Some(parent) = dest_path.parent() {
         std::fs::create_dir_all(parent).map_err(|err| err.to_string())?;
     }

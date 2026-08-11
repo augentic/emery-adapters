@@ -1,21 +1,22 @@
-//! `guidance` / `build` / `merge` over shared [`phase`] scaffolding.
+//! The six target operations over shared [`phase`] scaffolding.
 //!
-//! Build: json-schema → openapi → asyncapi, then verify-repair, then
-//! report; validators re-gate the answer (validate-before-visible).
-
-use std::path::Path;
+//! Build is generation only (json-schema → openapi → asyncapi onto the
+//! lent artifact stage); `verify` runs one check pass (in-guest
+//! validator + one verifier leg); `repair` performs one
+//! findings-directed pass — iteration and budgets are engine policy
+//! (RFC-90 D1). Contracts runs no standards review.
 
 use adapter::registry::Doc;
 use adapter::seam::{
-    BuildContext, BuildInput, Context, Error, Finding, Input, MergePhase, Report, Severity,
-    TargetMetadata, Workspace,
+    ArtifactStage, BuildContext, BuildInput, Context, DiagnosticSource, Error, Finding,
+    FindingArtifact, FindingConfidence, FindingEvidence, FindingKind, Input, MergePhase,
+    PhaseFinding, PhaseLocation, PhaseOutcome, PhaseReport, PhaseRoot, PhaseSource, PhaseWrite,
+    RepairOrigin, Report, Severity, TargetMetadata, Workspace, WritableArtifact,
 };
 use adapter::{AdapterIdentity, Model, Target, phase};
 
 use crate::registry;
 use crate::validate::{ContractFinding, validate_baseline};
-
-const MAX_REPAIR_ITERATIONS: usize = 2;
 
 struct SubFlow {
     format: &'static str,
@@ -55,12 +56,16 @@ impl Target for Adapter {
 
     fn metadata() -> TargetMetadata {
         TargetMetadata {
-            emery_floor: Some("0.37.0".to_string()),
+            emery_floor: Some("0.38.0".to_string()),
             inputs: vec![BuildInput {
                 path: "contracts".to_string(),
                 required: false,
             }],
             platforms: None,
+            writable_artifacts: vec![
+                WritableArtifact::file("tasks.md"),
+                WritableArtifact::tree("contracts"),
+            ],
         }
     }
 
@@ -75,20 +80,20 @@ impl Target for Adapter {
     async fn build<P: Model>(
         model: &P, ctx: &Context<'_>, slice: &str, inputs: &[Input], _context: &BuildContext,
         workspace: &Workspace,
-    ) -> Result<Report, Error> {
-        // The staged contract delta is a change-tree artifact, not
-        // product code: the adapter validates it through its own `"."`
-        // preopen, and the agent reaches it through the workspace's
-        // read-only-rooted artifact path (the deterministic merge fold
-        // promotes it into the `contracts/` baseline later).
-        let slice_contracts_rel = format!(".emery/slices/{slice}/contracts");
-        let slice_contracts = ctx.project_root.join(&slice_contracts_rel);
-        let slice_contracts_agent = workspace.artifact_path(&slice_contracts_rel);
+    ) -> Result<PhaseReport, Error> {
+        // Generation only: the staged contract delta goes onto the lent
+        // writable artifact stage (mirroring the slice tree); the engine
+        // dispatches `verify` / `repair` separately (RFC-90 D3).
+        let stage = artifact_stage(workspace)?;
+        let stage_contracts = stage_contracts(stage);
         let inputs_block = phase::render_inputs(inputs, workspace);
         let build_prompt = registry::body("prompts/build.md");
 
-        // Each sub-flow judges applicability and self-skips.
-        let mut summaries: Vec<String> = Vec::new();
+        // Each sub-flow judges applicability and self-skips; each answers
+        // the full phase-report shape so a failed generation leg can
+        // surface blocking findings instead of passing silently.
+        let mut findings: Vec<PhaseFinding> = Vec::new();
+        let mut written: Vec<PhaseWrite> = Vec::new();
         for sub_flow in &SUB_FLOWS {
             let format = sub_flow.format;
             let system = format!("{build_prompt}\n\n---\n\n{}", registry::body(sub_flow.prompt));
@@ -96,52 +101,154 @@ impl Target for Adapter {
                 "Run the `{format}` sub-flow of the contracts build for slice `{slice}` \
              (adapter `{}`).\n\n\
              A private workspace is lent to you. Write only `.yaml` files under the \
-             slice's staged contract delta at `{slice_contracts_agent}/` (a change-tree \
-             artifact root outside your workspace); the `contracts/` baseline in your \
-             workspace is read-only context for `$ref` reuse. When the slice has no \
-             surface this format owns, write nothing and answer with \
-             `applicable: false`.\n\n\
+             slice's staged contract delta at `{stage_contracts}/` (the writable artifact \
+             stage mirrors the slice tree; the engine promotes staged writes on terminal \
+             success); the `contracts/` baseline in your workspace is read-only context \
+             for `$ref` reuse. Answer with the phase report: `written` entries carry \
+             root `artifacts` with paths relative to the stage root, e.g. \
+             `contracts/http/user-api.yaml`. When the slice has no surface this format \
+             owns, write nothing and answer `outcome: not-applicable`; when this format \
+             applies but you could not produce its artifacts, report what blocked you \
+             as a blocking (`important`) finding.\n\n\
              {inputs_block}",
                 ctx.adapter_id,
             );
-            let answer =
-                phase::phase(model, ctx, system, user, &format!("{format}-sub-flow")).await?;
-            summaries.push(phase::render_outcome(format, &answer));
+            let leg = phase::phase_report(model, ctx, system, user, &format!("{format}-sub-flow"))
+                .await?;
+            findings.extend(leg.findings);
+            written.extend(leg.written);
         }
 
-        // Session-less repair: every finding in one call, owning sub-prompts inlined.
-        for _ in 0..MAX_REPAIR_ITERATIONS {
-            let findings = validate_baseline(&slice_contracts);
-            if findings.is_empty() {
-                break;
-            }
-            let system =
-                format!("{build_prompt}{}", owning_sub_prompts(&findings, &slice_contracts));
-            let user = format!(
-                "The contract validators found blocking issues in slice `{slice}`'s delta \
-             under `{slice_contracts_agent}/`. Re-enter the owning format sub-prompt(s) \
-             per the build prompt's Phase 4 and repair the files in place.\n\n\
-             {}\n\n\
-             Answer `applicable: true` with a summary of the repairs.",
-                render_validator_findings(&findings),
-            );
-            phase::phase(model, ctx, system, user, "repair").await?;
-        }
-
-        let system = build_prompt.to_string();
+        // Close-out: tick the completed task checkboxes in the staged
+        // tasks.md (the `tasks.md` writable grant), like the sibling
+        // targets' build close-outs.
         let user = format!(
-            "Write the build report for slice `{slice}`. Verify the delta under \
-         `{slice_contracts_agent}/` per the build prompt's Phase 3, then answer with \
-         the report body (`status`, `findings`, `outputs`, `ui-surface`). A \
-         `success` report carries only non-blocking findings. Contract artifacts \
-         declare no per-platform outputs, so `outputs` is normally empty.\n\n\
-         Sub-flow outcomes:\n{}",
-            summaries.join("\n"),
+            "Run the close-out leg of the contracts build for slice `{slice}` (adapter \
+         `{}`): the format sub-flows have finished. Mark the completed task \
+         checkboxes in the stage copy of the task list at `{}/tasks.md` — never in \
+         the authoritative slice tree — ticking only tasks this build's staged \
+         contract delta actually completed. Report the written path relative to the \
+         stage root (`tasks.md`).",
+            ctx.adapter_id, stage.root,
         );
-        let report = phase::report(model, ctx, system, user).await?;
+        let closeout =
+            phase::phase(model, ctx, build_prompt.to_string(), user, "close-out").await?;
+        written.extend(closeout.written.iter().map(|path| stage_write(path)));
 
-        // Validate-before-visible: residual blocking findings override the answer.
-        Ok(enforce_validators(report, &validate_baseline(&slice_contracts)))
+        // One merged generation report. Contract artifacts declare no
+        // per-platform outputs or UI surface, and every finding here came
+        // from a model leg — any other attribution is an unreachable
+        // claim, so it is forced back to `model-assisted` for coherence.
+        let mut report = PhaseReport::completed(PhaseSource::ModelAssisted);
+        report.findings = findings;
+        for finding in &mut report.findings {
+            finding.source = DiagnosticSource::ModelAssisted;
+        }
+        report.written = written;
+        Ok(report)
+    }
+
+    async fn verify<P: Model>(
+        model: &P, ctx: &Context<'_>, workspace: &Workspace,
+    ) -> Result<PhaseReport, Error> {
+        // One check pass over the candidate: the deterministic in-guest
+        // validator always runs; one verifier-reference leg runs only
+        // when the staged delta carries artifacts. No loop — the engine
+        // routes blocking findings to `repair` (RFC-90 D1). A missing
+        // stage is a malformed dispatch, exactly as in build and repair
+        // — never a vacuous pass.
+        let stage = artifact_stage(workspace)?;
+        let staged = stage.root_path().join("contracts");
+        let mut findings: Vec<PhaseFinding> = validate_baseline(&staged)
+            .iter()
+            .map(|finding| phase_finding(finding, stage.root_path()))
+            .collect();
+
+        if !has_entries(&staged) {
+            // Only the in-guest validator ran (vacuously, on an empty delta).
+            let mut report = PhaseReport::completed(PhaseSource::Deterministic);
+            report.findings = findings;
+            return Ok(report);
+        }
+
+        let user = format!(
+            "Run one verification pass over the contracts candidate (adapter `{}`).\n\n\
+         The staged contract delta lives at `{stage_contracts}/` — read-only for this \
+         pass, like everything else; the `contracts/` baseline in the lent workspace is \
+         read-only cross-reference context. Run the verifier reference of each format \
+         that owns staged artifacts and skip the rest, then answer with the phase \
+         report (`source: model-assisted`; carry a location path wherever the verifier \
+         names a file). Do not repair anything and do not re-run checks.",
+            ctx.adapter_id,
+            stage_contracts = stage_contracts(stage),
+        );
+        let mut answer = phase::phase_report(
+            model,
+            ctx,
+            registry::body("prompts/verify.md").to_string(),
+            user,
+            "verify",
+        )
+        .await?;
+        // `tool` / `human` finding attributions never cross the seam;
+        // the leg is a model pass, so sanitize them in code.
+        for finding in &mut answer.findings {
+            if matches!(finding.source, DiagnosticSource::Tool | DiagnosticSource::Human) {
+                finding.source = DiagnosticSource::ModelAssisted;
+            }
+        }
+        findings.extend(answer.findings);
+
+        // Deterministic validator + model leg both contributed: the
+        // report is hybrid, and verify never declares outputs, a UI
+        // surface, writes, or a continuation change.
+        let mut report = PhaseReport::completed(PhaseSource::Hybrid);
+        report.findings = findings;
+        Ok(report)
+    }
+
+    async fn repair<P: Model>(
+        model: &P, ctx: &Context<'_>, slice: &str, origin: RepairOrigin, findings: &[PhaseFinding],
+        _continuation: Option<&[u8]>, workspace: &Workspace,
+    ) -> Result<PhaseReport, Error> {
+        // One findings-directed pass; the engine owns iteration, budgets,
+        // and the verification that follows (RFC-90 D1/D4).
+        let stage = artifact_stage(workspace)?;
+        let system =
+            format!("{}{}", registry::body("prompts/repair.md"), owning_sub_prompts(findings));
+        let user = format!(
+            "Perform one findings-directed repair pass for slice `{slice}` (adapter `{}`, \
+         origin: `{origin}`).\n\n\
+         Repair the staged contract delta in place under `{stage_contracts}/` (the \
+         writable artifact stage); the `contracts/` baseline in your workspace is \
+         read-only. Fix only what the findings name — do not re-run verification and do \
+         not loop; the engine dispatches the next verification itself. Report written \
+         paths relative to the stage root and answer `applicable: true` with a summary \
+         of the repairs.\n\n\
+         Findings from the `{origin}` gate:\n\n{findings_block}",
+            ctx.adapter_id,
+            origin = origin.as_str(),
+            stage_contracts = stage_contracts(stage),
+            findings_block = phase::render_findings(findings),
+        );
+        let answer = phase::phase(model, ctx, system, user, "repair").await?;
+
+        let mut report = PhaseReport::completed(PhaseSource::ModelAssisted);
+        if answer.applicable {
+            report.written = answer.written.iter().map(|path| stage_write(path)).collect();
+        } else {
+            report.outcome = PhaseOutcome::NotApplicable;
+        }
+        Ok(report)
+    }
+
+    async fn review<P: Model>(
+        _model: &P, _ctx: &Context<'_>, _slice: &str, _continuation: Option<&[u8]>,
+        _workspace: &Workspace,
+    ) -> Result<PhaseReport, Error> {
+        // Contracts carries no standards-review team: a typed
+        // non-applicable report, no judgment leg (RFC-90 D7).
+        Ok(PhaseReport::not_applicable())
     }
 
     async fn merge<P: Model>(
@@ -181,20 +288,78 @@ impl Target for Adapter {
     }
 }
 
+// Build-loop operations receive a lent stage; its absence is a
+// malformed dispatch, not a skippable input.
+fn artifact_stage(workspace: &Workspace) -> Result<&ArtifactStage, Error> {
+    workspace.artifact_stage.as_ref().ok_or_else(|| {
+        Error::InvalidRequest("contracts build-loop operations require an artifact stage".into())
+    })
+}
+
+// The staged contract delta's deployment-local (agent-visible) path.
+fn stage_contracts(stage: &ArtifactStage) -> String {
+    format!("{}/contracts", stage.root)
+}
+
+fn has_entries(dir: &std::path::Path) -> bool {
+    std::fs::read_dir(dir).is_ok_and(|mut entries| entries.next().is_some())
+}
+
+fn stage_write(path: &str) -> PhaseWrite {
+    PhaseWrite {
+        root: PhaseRoot::Artifacts,
+        path: path.to_string(),
+    }
+}
+
 // Findings that route nowhere pull in every sub-prompt.
-fn owning_sub_prompts(findings: &[ContractFinding], contracts_dir: &Path) -> String {
-    let unrouted = findings.iter().any(|finding| {
-        !SUB_FLOWS.iter().any(|sub_flow| finding.path.starts_with(contracts_dir.join(sub_flow.dir)))
-    });
+fn owning_sub_prompts(findings: &[PhaseFinding]) -> String {
+    let owns = |sub_flow: &SubFlow, finding: &PhaseFinding| {
+        finding
+            .location
+            .as_ref()
+            .is_some_and(|location| location.path.contains(&format!("contracts/{}/", sub_flow.dir)))
+    };
+    let unrouted =
+        findings.iter().any(|finding| !SUB_FLOWS.iter().any(|sub_flow| owns(sub_flow, finding)));
     let mut inlined = String::new();
     for sub_flow in &SUB_FLOWS {
-        let owned_dir = contracts_dir.join(sub_flow.dir);
-        if unrouted || findings.iter().any(|finding| finding.path.starts_with(&owned_dir)) {
+        if unrouted || findings.iter().any(|finding| owns(sub_flow, finding)) {
             inlined.push_str("\n\n---\n\n");
             inlined.push_str(registry::body(sub_flow.prompt));
         }
     }
     inlined
+}
+
+// One in-guest validator finding as a deterministic phase finding; the
+// location is the finding's stage-relative path (the slice-relative
+// form of the staged file).
+fn phase_finding(finding: &ContractFinding, stage_root: &std::path::Path) -> PhaseFinding {
+    let path = finding.path.strip_prefix(stage_root).unwrap_or(&finding.path);
+    PhaseFinding {
+        id: String::new(),
+        rule_id: Some(finding.rule_id.to_string()),
+        related_rule_ids: Vec::new(),
+        title: format!("contract validator: {}", finding.rule_id),
+        severity: Severity::Important,
+        source: DiagnosticSource::Deterministic,
+        kind: FindingKind::Violation,
+        artifact: FindingArtifact::Contracts,
+        location: Some(PhaseLocation {
+            path: path.display().to_string(),
+            ..PhaseLocation::default()
+        }),
+        evidence: FindingEvidence::Snippet {
+            value: finding.detail.clone(),
+        },
+        impact: finding.detail.clone(),
+        remediation: "Repair the contract document so the in-guest validator passes; the \
+                      identity and version rules live in `references/contract-identity.md`."
+            .to_string(),
+        confidence: Some(FindingConfidence::High),
+        fingerprint: String::new(),
+    }
 }
 
 fn validator_finding(finding: &ContractFinding) -> Finding {

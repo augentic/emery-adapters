@@ -18,7 +18,9 @@ For EACH finding (AND-, KTL-, INT-, and UNI- prefixed):
    (`critical` / `important` / `suggestion` / `optional`).
 3. Check for false positives: Could this be a non-issue or acceptable
    Android/Compose pattern?
-4. Assess auto-fix safety: Could the suggested fix introduce regressions?
+4. Assess fix safety: Could the suggested fix introduce regressions? This is
+   metadata for the later engine-dispatched `repair` pass — review applies
+   nothing.
 5. Preserve any attached rule_id (codex citations match `^VECTIS-[0-9]{3}$`
    for Vectis-owned rules and `^UNI-[0-9]{3}$` for shared rules; the markdown
    `rule_id:` prose maps to the kebab-case `rule-id` field on the
@@ -52,9 +54,9 @@ Severity downgrades move at most one level along the closed `Diagnostic` severit
 (`critical` → `important`, not `critical` → `suggestion`).
 ```
 
-## Integration (first full-scope iteration only)
+## Integration
 
-The Integration specialist cross-checks wired UI input artifacts (`composition.yaml`, effective `assets.yaml`, `tokens.yaml`) against shell sources. Run these checks once per build when all three artifacts are in scope:
+The Integration specialist cross-checks wired UI input artifacts (`composition.yaml`, effective `assets.yaml`, `tokens.yaml`) against shell sources. Run these checks in every review pass when all three artifacts are in scope:
 
 | Check | Codex | Library |
 | --- | --- | --- |

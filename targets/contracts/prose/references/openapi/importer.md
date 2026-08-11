@@ -5,7 +5,7 @@
 ## Inputs
 
 ```text
-$SLICE_DIR     = .emery/slices/<slice-name>
+$SLICE_DIR     = .emery/slices/<slice-name>  # reached via the lent writable artifact stage, which mirrors this tree
 $CONTRACTS_DIR  = $SLICE_DIR/contracts
 $BASELINE_DIR   = contracts
 ```
@@ -367,7 +367,7 @@ Remove the original file when the canonical location differs from where the oper
 
 #### Validate
 
-Run [`verifier.md`](./verifier.md) in `single` mode against `$SLICE_DIR` to confirm `$ref` resolution, schema metadata completeness, and binding coverage. If the verifier reports issues, re-enter Steps 4–5 for targeted repair before producing the report.
+Validation runs in the engine's separate verify phase ([`verifier.md`](./verifier.md) in `single` mode — `$ref` resolution, schema metadata completeness, binding coverage). Do not run it or re-enter earlier steps from the importing pass; the engine routes any blocking findings through one repair dispatch.
 
 #### Report
 
@@ -406,7 +406,7 @@ Report semantics:
 
 - **Zero manual review items** is the ideal outcome — every file detected, upgraded, decomposed, and metadata-injected automatically.
 - **Manual review items are expected for complex imports.** Vendor-specific constructs and unclassifiable files surface here rather than being silently dropped.
-- **The validation result confirms internal consistency.** If the verifier reports issues, fix and re-run — do not finalise the report until the verifier passes.
+- **Verification happens in the engine's verify phase.** After the importing pass returns, the engine dispatches `verify` and routes any blocking verifier findings through one repair dispatch — do not run the verifier or retry from the importing pass.
 
 ## Edge cases
 
