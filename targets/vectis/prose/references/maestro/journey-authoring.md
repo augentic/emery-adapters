@@ -79,6 +79,10 @@ Journey authoring is **required, not optional, whenever the regenerated `composi
 
 Agents MUST NOT run `maestro test` inside the Android/iOS verify loop — host device state is not guaranteed mid-build.
 
+## MCP inspection (optional)
+
+Regression above is the default path (`cargo make maestro-*`). **MCP inspection** is an optional post-drain sibling — contract [`mcp-inspection/authoring.md`](mcp-inspection/authoring.md); run/spawn [`mcp-inspection/team.md`](mcp-inspection/team.md). Session YAML under `.maestro/journeys/mcp-inspect/` replays via the same `cargo make maestro-*` when present.
+
 ## See also
 
 - [`canonical-ui-bindings.md`](../canonical-ui-bindings.md) — `test_id` projection, codegen, in-guest verify findings
