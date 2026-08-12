@@ -634,6 +634,51 @@ async fn repair_single_pass() {
     assert_system_budget(&requests[0], "repair", 4_900); // baseline 4_427
 }
 
+// Brief entries arrive with `source: deterministic`; repair runs no
+// in-guest gate, so check_pass normalizes them before the RFC-90 D2
+// gate.
+#[tokio::test]
+async fn repair_brief_deterministic_findings_sanitized() {
+    let tmp = TempDir::new().unwrap();
+    let stage = TempDir::new().unwrap();
+    let unrepaired = r#"{"outcome":"completed","source":"model-assisted","findings":[{
+        "title":"[core-verify-stamp-missing] shared/.vectis/verify.ok not found",
+        "severity":"important",
+        "source":"deterministic",
+        "kind":"violation",
+        "artifact":"code",
+        "location":{"path":"shared/.vectis/verify.ok"},
+        "evidence":{"kind":"snippet","value":"Repair target forbids stamp writing."},
+        "impact":"Core verify stamp absent until the engine runs the core verify gate.",
+        "remediation":"Engine: run core verify and write shared/.vectis/verify.ok."
+    }],
+    "written":[{"root":"workspace","path":"shared/src/lib.rs"}]}"#;
+    let model = Harness::answering([unrepaired]);
+    let findings =
+        vec![blocking_finding("[core-verify-stamp-missing] shared/.vectis/verify.ok not found")];
+
+    let report = Adapter::repair(
+        &model,
+        &ctx(tmp.path(), None),
+        "demo",
+        RepairOrigin::Verification,
+        &findings,
+        None,
+        &staged_workspace(tmp.path(), stage.path()),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(report.source, PhaseSource::ModelAssisted);
+    assert_eq!(report.findings.len(), 1);
+    assert_eq!(
+        report.findings[0].source,
+        DiagnosticSource::ModelAssisted,
+        "brief-derived deterministic attribution is sanitized to model-assisted"
+    );
+    assert_check_shape(&report);
+}
+
 #[tokio::test]
 async fn review_single_pass() {
     let tmp = TempDir::new().unwrap();
