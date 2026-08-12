@@ -5,7 +5,7 @@
 use std::fs;
 use std::path::Path;
 
-use adapter::answers::PHASE_REPORT_ANSWER_SCHEMA;
+use adapter::answers::PHASE_REPORT_ANSWER;
 use adapter::seam::{
     ArtifactStage, BuildContext, Context, DiagnosticSource, FindingArtifact, FindingEvidence,
     FindingKind, Input, MergePhase, Payload, PhaseFinding, PhaseOutcome, PhaseReport, PhaseSource,
@@ -264,7 +264,7 @@ fn assert_generation_legs(requests: &[Request]) {
 fn assert_report_leg(request: &Request, stage_display: &str) {
     let (name, schema) = schema_format(request);
     assert_eq!(name, "build-report");
-    assert_eq!(schema, PHASE_REPORT_ANSWER_SCHEMA);
+    assert_eq!(schema, PHASE_REPORT_ANSWER);
     let report_system = request.system.as_deref().unwrap();
     assert!(
         report_system.contains("# Vectis build — phase report"),
@@ -562,7 +562,7 @@ async fn verify_single_pass() {
     assert_eq!(requests.len(), 1, "verify is one pass — no retry loop");
     let (name, schema) = schema_format(&requests[0]);
     assert_eq!(name, "verify");
-    assert_eq!(schema, PHASE_REPORT_ANSWER_SCHEMA);
+    assert_eq!(schema, PHASE_REPORT_ANSWER);
     let system = requests[0].system.as_deref().unwrap();
     assert!(system.contains("# Vectis target — verify prompt"));
     assert!(system.contains("One pass only"), "single-pass contract in the prompt");

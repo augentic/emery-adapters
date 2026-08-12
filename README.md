@@ -79,7 +79,7 @@ cargo make eval    # list the cases
 
 ## Build vs workflow cases
 
-Prefer a **build case** when iterating on one target adapter's build (minutes). Use a **workflow case** only when you need `plan → execute → finalize` or real source trees (tens of minutes). Catalog: [examples/eval/README.md](examples/eval/README.md).
+Prefer a **build case** when iterating on one target adapter's build (minutes). Use a **workflow case** only when you need `plan → refine → execute → finalize` or real source trees (tens of minutes). Catalog: [examples/eval/README.md](examples/eval/README.md).
 
 | | Build case | Workflow case |
 | --- | --- | --- |

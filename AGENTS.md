@@ -10,7 +10,7 @@ Use these roles verbatim:
 - **target adapter** — output role exporting `guidance`, `build`, and `merge`; consumes Emery artifacts and writes target outputs.
 - **Cursor plugin** — operator-facing skills and rules distributed by the Emery repository. Adapters are not Cursor plugins.
 
-Emery's **engine** owns lifecycle, artifact schemas, synthesis, and deterministic state transitions. Adapters contribute specialist behavior through their WIT operations and embedded prose. Do not move plan/slice orchestration into adapter prompts or infer new lifecycle states here. Reserve **workflow** for the operator loop (`plan → execute → finalize`).
+Emery's **engine** owns lifecycle, artifact schemas, synthesis, and deterministic state transitions. Adapters contribute specialist behavior through their WIT operations and embedded prose. Do not move plan/slice orchestration into adapter prompts or infer new lifecycle states here. Reserve **workflow** for the operator loop (`plan → refine → execute → finalize`).
 
 Artifacts outrank source behavior. Preserve missing information as `[unknown]` rather than guessing. Keep behavioral requirements platform-neutral in `spec.md`; target-specific implementation choices belong in target guidance, build prompts, references, and generated code.
 

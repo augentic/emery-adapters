@@ -89,7 +89,7 @@ When the merge phase processes a slice:
 
 ### Conflict Detection
 
-Two concurrent changes that both modify the same contract file (e.g. both add paths to `http/user-api.yaml`) will conflict. The baseline-conflict check (surfaced by `emery slice validate`, enforced by the merge phase) detects this: if the baseline file was modified after the slice's `defined-at` timestamp, the merge is blocked. Resolution: re-run `emery plan execute` so the slice re-refines against the updated baseline.
+Two concurrent changes that both modify the same contract file (e.g. both add paths to `http/user-api.yaml`) will conflict. The baseline-conflict check (surfaced by `emery slice validate`, enforced by the merge phase) detects this: if the baseline file was modified after the slice's `defined-at` timestamp, the merge is blocked. Resolution: re-run `emery plan refine` so the slice re-refines against the updated baseline, then `emery plan execute`.
 
 ## Baseline vs Change-Level
 

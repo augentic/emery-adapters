@@ -138,7 +138,7 @@ Three scenarios, three claims, three digests. Synthesis reconciles these with si
 - **Speculative claims.** Do not infer behaviour the captures do not exhibit. If no capture demonstrates duplicate-email handling, emit no claim for it — synthesis tags unknowns; you do not.
 - **`INSTRUCTIONS.md` as evidence.** The per-handler `INSTRUCTIONS.md` is operator hint material for Omnia test generation ([`build/test.md`](../../../../targets/omnia/prose/prompts/build/test.md)); not behavioural evidence. Read it for surface-naming context if needed; do not turn its prose into claims.
 - **Whole-file dumps in `statement`.** The `path:` + `replay-digest:` pair is the citation; `statement:` is a single-line summary. The body fields (`input` / `output`) carry observed structure; raw JSON paste in `statement:` is wrong.
-- **Cross-source synthesis.** Do not reconcile this lead's claims with another source's Evidence — that is core synthesis's job in the refine phase. Emit Evidence purely from `$SOURCE_DIR`.
+- **Cross-source synthesis.** Do not reconcile this lead's claims with another source's Evidence — that is core synthesis's job in the refinement stage. Emit Evidence purely from `$SOURCE_DIR`.
 
 ## Failure modes
 
