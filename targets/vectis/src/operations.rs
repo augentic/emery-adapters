@@ -400,8 +400,9 @@ fn deterministic_blocked(details: Vec<String>) -> PhaseReport {
 /// report-level assurance source (`hybrid` when an in-guest check
 /// contributed alongside the model leg), and enforce the non-build
 /// coherence rules — empty outputs, no UI surface, no continuation
-/// change, no `tool`/`human` finding attributions, and no declared
-/// writes on a `not-applicable` outcome.
+/// change, no `tool`/`human` finding attributions, no brief-derived
+/// `deterministic` finding attributions on a model-only pass, and no
+/// declared writes on a `not-applicable` outcome.
 fn check_pass(
     mut report: PhaseReport, deterministic: Vec<PhaseFinding>, deterministic_ran: bool,
 ) -> PhaseReport {
@@ -412,7 +413,9 @@ fn check_pass(
     report.source =
         if deterministic_ran { PhaseSource::Hybrid } else { PhaseSource::ModelAssisted };
     for finding in &mut report.findings {
-        if matches!(finding.source, DiagnosticSource::Tool | DiagnosticSource::Human) {
+        let mislabeled = matches!(finding.source, DiagnosticSource::Tool | DiagnosticSource::Human)
+            || (!deterministic_ran && finding.source == DiagnosticSource::Deterministic);
+        if mislabeled {
             finding.source = DiagnosticSource::ModelAssisted;
         }
     }
