@@ -3,7 +3,7 @@
 use std::fs;
 use std::path::Path;
 
-use adapter::answers::PHASE_REPORT_ANSWER_SCHEMA;
+use adapter::answers::PHASE_REPORT_ANSWER;
 use adapter::seam::{
     ArtifactStage, BuildContext, Context, DiagnosticSource, FindingArtifact, FindingEvidence,
     FindingKind, Input, MergePhase, Payload, PhaseFinding, PhaseLocation, PhaseOutcome, PhaseRoot,
@@ -386,7 +386,7 @@ async fn verify_validator_finding() {
     assert!(requests[0].messages[0].content.contains(&staged));
     let (name, schema) = schema_format(&requests[0]);
     assert_eq!(name, "verify");
-    assert_eq!(schema, PHASE_REPORT_ANSWER_SCHEMA);
+    assert_eq!(schema, PHASE_REPORT_ANSWER);
     assert_system_budget(&requests[0], "verify", 3_200); // baseline 2_870
 }
 
