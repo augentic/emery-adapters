@@ -1,8 +1,8 @@
 # Maestro journey authoring
 
-Operator and build-agent reference for authoring Maestro journey YAML after the plan is **drained**. Maestro exercises the built iOS / Android / web shell with real taps and navigation; it is **post-drain desk feedback**, not part of the slice **build verify gate**.
+Build-agent reference for authoring Maestro journey YAML. Maestro exercises the built iOS / Android / web shell with real taps and navigation. Authoring happens during **slice build**; **running** journeys is post-drain desk feedback, not part of the slice **build verify gate**.
 
-Canonical UI bindings (`test_id`, `ui-contract`, codegen, in-guest verify findings) live in [`canonical-ui-bindings.md`](../canonical-ui-bindings.md). This document covers **when** to run Maestro and **how** to author journeys. Execution commands and template file layout are in `$TEMPLATE_DIR/.maestro/README.md`.
+Canonical UI bindings (`test_id`, `ui-contract`, codegen, in-guest verify findings) live in [`canonical-ui-bindings.md`](../canonical-ui-bindings.md). This document covers **how** to author journeys and what build agents must not invoke.
 
 ## Verification layers
 
@@ -17,14 +17,12 @@ Maestro is the second layer. It runs only after the first layer passes for the s
 
 ## When to run
 
-Run only after **`emery plan status` projects `drained`** (every plan entry `done`). Per-slice Maestro is usually meaningless until the full app exists.
+After **`emery plan status` projects `drained`** (every plan entry `done`), between **execute** and **finalize**:
 
-```bash
-emery plan status    # must show drained
-cargo make maestro-android   # or maestro-ios / maestro-web — booted device required (native)
-```
+1. **Regression CLI** — `$TEMPLATE_DIR/.maestro/README.md` (`cargo make maestro-<platform>`).
+2. **MCP inspection** — `$TEMPLATE_DIR/.maestro/mcp-inspection.md`. Do not skip. Do not collapse into (1).
 
-Operators wire this into desk-check runners between **execute** and **finalize**.
+Never during slice **build / verify / repair / merge / finalize**. Per-slice CLI runs are usually meaningless until the full app exists.
 
 ## Authoring workflow
 
@@ -79,12 +77,11 @@ Journey authoring is **required, not optional, whenever the regenerated `composi
 
 Agents MUST NOT run `maestro test` inside the Android/iOS verify loop — host device state is not guaranteed mid-build.
 
-## MCP inspection (optional)
-
-Regression above is the default path (`cargo make maestro-*`). **MCP inspection** is an optional post-drain sibling — contract [`mcp-inspection/authoring.md`](mcp-inspection/authoring.md); run/spawn [`mcp-inspection/team.md`](mcp-inspection/team.md). Session YAML under `.maestro/journeys/mcp-inspect/` replays via the same `cargo make maestro-*` when present.
+Agents MUST NOT drive Maestro MCP during build / verify / repair / merge / finalize. MUST NOT wire `journeys/mcp-inspect/` into platform entries.
 
 ## See also
 
 - [`canonical-ui-bindings.md`](../canonical-ui-bindings.md) — `test_id` projection, codegen, in-guest verify findings
 - [`build/report.md`](../../prompts/build/report.md) — shell verify gate at the report leg
-- `$TEMPLATE_DIR/.maestro/README.md` — operator run commands and template strip/keep rules
+- `$TEMPLATE_DIR/.maestro/README.md` — Maestro CLI
+- `$TEMPLATE_DIR/.maestro/mcp-inspection.md` — MCP inspection
