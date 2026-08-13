@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA};
-use adapter::seam::{Authority, ClaimKind, Context, Error, Lead};
+use adapter::seam::{Authority, ClaimKind, Context, Error, Lead, SourceInput};
 use adapter::{Format, MAX_REPAIRS, Request, Source as _};
 use documentation::Adapter;
 use omnia_testkit::model::{Harness, mcp_grants};
@@ -13,8 +13,13 @@ fn ctx(mcp_url: Option<&str>) -> Context<'static> {
         adapter_id: "source:documentation",
         project_root: Path::new("."),
         mcp_url: mcp_url.map(str::to_owned),
-        lend: ".".to_string(),
+        lend: "/prepared/docs".to_string(),
+        source_key: Some("product-notes".to_string()),
     }
+}
+
+fn input() -> SourceInput {
+    SourceInput::Workspace("/prepared/docs".to_string())
 }
 
 fn lead() -> Lead {
@@ -38,7 +43,8 @@ async fn survey_leg() {
         r#"{"leads":[{"lead":"password-reset","synopsis":"Reset flow.","topics":["identity"]}]}"#,
     ]);
 
-    let leads = Adapter::survey(&model, &ctx(Some("http://references/mcp"))).await.unwrap();
+    let leads =
+        Adapter::survey(&model, &ctx(Some("http://references/mcp")), &input()).await.unwrap();
 
     assert_eq!(leads.len(), 1);
     assert_eq!(leads[0].lead, "password-reset");
@@ -51,16 +57,29 @@ async fn survey_leg() {
     assert!(system.starts_with("# `documentation.survey`"), "survey prompt is the system channel");
     let user = &request.messages[0].content;
     assert!(user.contains("source:documentation"), "user message names the adapter id");
-    assert!(user.contains("plan.yaml") && user.contains("sources.<key>"), "binding resolution");
-    assert!(user.contains("$SOURCE_DIR"), "binding is mapped onto the prompt's vocabulary");
+    assert!(user.contains("Source binding key: `product-notes`"), "and the binding key");
+    assert!(user.contains("working directory"), "the lent tree is the agent's workspace");
+    assert!(user.contains("$SOURCE_DIR"), "mapped onto the prompt's vocabulary");
+    assert!(!user.contains("plan.yaml"), "no location recovery is asked of the model");
     assert!(user.contains("re-survey"), "re-survey framing is carried");
     let (name, schema) = schema_format(request);
     assert_eq!(name, "leads");
     assert_eq!(schema, LEADS_ANSWER_SCHEMA);
-    assert_eq!(request.workspace.as_deref(), Some("."));
+    assert_eq!(request.workspace.as_deref(), Some("/prepared/docs"), "the prepared tree is lent");
     let grants = mcp_grants(request);
     assert_eq!(grants[0].url, "http://references/mcp");
     assert_eq!(grants[0].name, "documentation-references");
+}
+
+#[tokio::test]
+async fn survey_rejects_inline_input() {
+    let model = Harness::answering([r#"{"leads":[]}"#]);
+    let inline = SourceInput::Inline("not a tree".to_string());
+
+    let result = Adapter::survey(&model, &ctx(None), &inline).await;
+
+    assert!(matches!(result, Err(Error::InvalidRequest(_))), "got {result:?}");
+    assert!(model.requests().is_empty(), "no judgment leg runs on a malformed input");
 }
 
 // A tail-invalid survey answer is repaired: the second leg carries the
@@ -72,7 +91,8 @@ async fn survey_repaired() {
         r#"{"leads":[{"lead":"password-reset","synopsis":"Reset flow."}]}"#,
     ]);
 
-    let leads = Adapter::survey(&model, &ctx(None)).await.expect("repaired survey succeeds");
+    let leads =
+        Adapter::survey(&model, &ctx(None), &input()).await.expect("repaired survey succeeds");
 
     assert_eq!(leads.len(), 1);
     assert_eq!(leads[0].lead, "password-reset");
@@ -91,7 +111,7 @@ async fn survey_budget_exhausted() {
         [r#"{"leads":[{"lead":"still-bad","synopsis":"   "}]}"#; 1 + MAX_REPAIRS],
     );
 
-    let result = Adapter::survey(&model, &ctx(None)).await;
+    let result = Adapter::survey(&model, &ctx(None), &input()).await;
 
     match result {
         Err(Error::Internal(detail)) => {
@@ -106,7 +126,7 @@ async fn survey_budget_exhausted() {
 async fn survey_no_mcp_no_grant() {
     let model = Harness::answering([r#"{"leads":[]}"#]);
 
-    Adapter::survey(&model, &ctx(None)).await.unwrap();
+    Adapter::survey(&model, &ctx(None), &input()).await.unwrap();
 
     assert!(model.requests()[0].tools.is_empty(), "no URL means no reference grant");
 }
@@ -121,8 +141,9 @@ async fn extract_leg() {
             ]
         }"#]);
 
-    let evidence =
-        Adapter::extract(&model, &ctx(Some("http://references/mcp")), &lead()).await.unwrap();
+    let evidence = Adapter::extract(&model, &ctx(Some("http://references/mcp")), &input(), &lead())
+        .await
+        .unwrap();
 
     assert_eq!(evidence.authority, Authority::Documentation);
     assert_eq!(evidence.claims.len(), 2);
@@ -141,11 +162,12 @@ async fn extract_leg() {
     assert!(user.contains("- lead: password-reset"), "user message carries the lead id");
     assert!(user.contains("Reset flow with expiring links."), "and its synopsis");
     assert!(user.contains("- topics: [identity]"), "and its topics");
-    assert!(user.contains("plan.yaml"), "binding resolution is carried");
+    assert!(user.contains("Source binding key: `product-notes`"), "and the binding key");
+    assert!(!user.contains("plan.yaml"), "no location recovery is asked of the model");
     let (name, schema) = schema_format(request);
     assert_eq!(name, "evidence");
     assert_eq!(schema, EVIDENCE_ANSWER_SCHEMA);
-    assert_eq!(request.workspace.as_deref(), Some("."));
+    assert_eq!(request.workspace.as_deref(), Some("/prepared/docs"), "the prepared tree is lent");
     assert_eq!(mcp_grants(request)[0].url, "http://references/mcp");
 }
 
@@ -158,8 +180,9 @@ async fn extract_repaired() {
         r#"{"authority":"documentation","claims":[{"kind":"requirement","id":"password-reset.request"}]}"#,
     ]);
 
-    let evidence =
-        Adapter::extract(&model, &ctx(None), &lead()).await.expect("repaired extract succeeds");
+    let evidence = Adapter::extract(&model, &ctx(None), &input(), &lead())
+        .await
+        .expect("repaired extract succeeds");
 
     assert_eq!(evidence.claims[0].id.as_deref(), Some("password-reset.request"));
     let requests = model.requests();
@@ -178,7 +201,7 @@ async fn extract_budget_exhausted() {
             1 + MAX_REPAIRS],
     );
 
-    let result = Adapter::extract(&model, &ctx(None), &lead()).await;
+    let result = Adapter::extract(&model, &ctx(None), &input(), &lead()).await;
 
     match result {
         Err(Error::Internal(detail)) => {

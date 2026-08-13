@@ -1,11 +1,11 @@
 # TypeScript / JavaScript source extract
 
-The `emery plan refine` stage invokes this prompt once per `slices[].sources[]` binding whose adapter is `typescript`. Your job: for a single `(source, lead)` pair, locate the matching TypeScript module(s) under `$SOURCE_DIR`, read the surrounding code, and emit one Evidence YAML document the CLI persists to `.emery/slices/<slice>/evidence/<source>.yaml`.
+This prompt runs once per `(source, lead)` pair whose adapter is `typescript`. Your job: locate the matching TypeScript module(s) under `$SOURCE_DIR`, read the surrounding code, and emit one Evidence YAML document. The engine persists the result; this prompt returns the YAML body only.
 
 ## Inputs
 
 - **`$SOURCE_DIR`** — read-only preopen of the operator-bound source root (same path the survey prompt walked). Walk it; resolve `tsconfig.json` `paths` mappings relative to it.
-- **`<lead>`** — the kebab-case id of the `## Lead inventory` block the slice is bound to. Look it up in `discovery.md` (the runner provides it via the binding); the block tells you which surface(s) to extract.
+- **`<lead>`** — the kebab-case lead id, produced by this adapter's survey (the runner provides it); it names the surface to extract.
 - **`<source>`** — the kebab-case source key the binding resolves through.
 
 `$PROJECT_DIR` is unreachable; do not attempt to read project lifecycle state. Writes back into `$SOURCE_DIR` are denied. Use `$SCRATCH_DIR` for any internal staging.
@@ -30,7 +30,7 @@ Load on demand when the lead's surface needs deeper analysis. The bodies carry T
 
 ## Output: Evidence YAML
 
-Return one Evidence document matching `schemas/evidence.schema.json`. The CLI atomically writes it to `evidence/<source>.yaml`; you produce the body. Top-level fields are required:
+Return one Evidence document matching `schemas/evidence.schema.json`. You produce the body; the engine persists it. Top-level fields are required:
 
 ```yaml
 authority: behaviour
@@ -47,7 +47,7 @@ claims:
     callee: "<module>:<symbol>"
 ```
 
-`authority` is fixed at `behaviour` for this adapter. `lead` is kebab-case (validated by `evidence.schema.json` against `^[a-z0-9]+(-[a-z0-9]+)*$`). The document's `(slice, source)` identity is path-borne (the CLI persists it at `.emery/slices/<slice>/evidence/<source>.yaml`) and the adapter resolves from `plan.yaml.sources.<source>.adapter`, so neither is written in-document. `claims: []` is valid when the lead has no in-scope code under `$SOURCE_DIR` — failure surfaces as a host-runner error, not as an empty file.
+`authority` is fixed at `behaviour` for this adapter. `lead` is kebab-case (validated by `evidence.schema.json` against `^[a-z0-9]+(-[a-z0-9]+)*$`). The document's source identity is engine-owned, so neither the source key nor the adapter is written in-document. `claims: []` is valid when the lead has no in-scope code under `$SOURCE_DIR` — failure surfaces as a host-runner error, not as an empty document.
 
 ## Claim kinds
 
@@ -58,6 +58,8 @@ This adapter emits three kinds from the closed enum (`evidence.schema.json#/$def
 - **`call`** — an observed cross-module call that contributes to the lead's behaviour. Use this when synthesis must know that a handler delegates to another module (the call is the wire). The body field is `callee:` — `<module>:<symbol>` matching the `handler` resolution rules from the survey prompt (named export, `<ClassName>.<method>`, framework-suffixed inline arrow, etc.).
 
 `id` is optional on `excerpt` / `type` / `call` (per `evidence.schema.json` — required only on `requirement` and `criterion`). You MAY carry it for deterministic cross-source reconciliation when the claim corresponds to a stable concept; otherwise omit it.
+
+**Cover what the surface actually does.** Extract of one surface must emit the calls, contracts, types, and excerpts that surface actually has: a `POST /orders` handler that writes an orders store must carry that write as a `call` claim; a handler that invokes an external service must carry that call site. Downstream correlation evidences invocation, read/write, and ownership relationships from these structured claims — do not bury them in `excerpt` prose, and do not write a second behavioural spec in prose instead of emitting the structured claims.
 
 ## Anchors and excerpts
 
@@ -97,11 +99,11 @@ claims:
     callee: "src/users/repository.ts:insertUser"
 ```
 
-Three claims, three anchors, no raw source bodies. Synthesis reconciles these into `Status: agreed` requirements with `Sources: [legacy-monolith]` when no other source contributes; when documentation or intent also contributes, the authority precedence (`intent > documentation > behaviour`) defined in [`authority.md`](../references/emery-runtime/synthesis/authority.md) decides.
+Three claims, three anchors, no raw source bodies. Downstream synthesis reconciles these claims with other sources' Evidence; when documentation or intent also contributes, the authority precedence (`intent > documentation > behaviour`) defined in [`authority.md`](../references/emery-runtime/synthesis/authority.md) decides.
 
 ## Path rules
 
-Same skip-root and traversal rules as the survey prompt: relative paths only, no `..`, no leading `/`, never under `node_modules`, `vendor`, `target`, `.venv`, `dist`, `build`, no `*.d.ts` files. A symlink inside `$SOURCE_DIR` pointing outside is denied at canonicalization; the host runner returns `source-extract-path-denied` and the slice stays `refining` per workflow §Extraction reliability.
+Same skip-root and traversal rules as the survey prompt: relative paths only, no `..`, no leading `/`, never under `node_modules`, `vendor`, `target`, `.venv`, `dist`, `build`, no `*.d.ts` files. A symlink inside `$SOURCE_DIR` pointing outside is denied at canonicalization; the host runner returns `source-extract-path-denied`.
 
 ## Anti-patterns
 
@@ -109,15 +111,15 @@ Same skip-root and traversal rules as the survey prompt: relative paths only, no
 - **Speculative claims.** Do not infer behaviour the code does not exhibit. If the handler does not enforce uniqueness, do not emit a uniqueness `excerpt`. Synthesis tags unknowns; you do not.
 - **Tests-as-evidence.** Skip `*.test.*`, `*.spec.*`, `tests/`, `__tests__/`. Test files document expected behaviour; this adapter extracts observed behaviour from production source.
 - **Type-only `.d.ts` files.** A `.d.ts` declares ambient types, not behaviour. Use the originating `.ts` file when possible; emit no claim when only a `.d.ts` is reachable.
-- **Cross-source synthesis.** Do not reconcile this lead's claims with another source's Evidence — that is core synthesis's job in the refinement stage after every `extract` returns (see [From sources to slices](../references/emery-runtime/reconciliation.md#slice-time-evidence-becomes-a-spec)). Emit Evidence purely from `$SOURCE_DIR`.
+- **Cross-source synthesis.** Do not reconcile this lead's claims with another source's Evidence — that is the engine's job after every `extract` returns (see [From sources to slices](../references/emery-runtime/reconciliation.md#slice-time-evidence-becomes-a-spec)). Emit Evidence purely from `$SOURCE_DIR`.
 - **Whole-file paths without anchors.** A `path: src/users/register.ts` claim is legal under the schema but useless for synthesis. Always anchor to the smallest meaningful range.
 
 ## Failure modes
 
 | Condition                                                | Action                                                                                                                          |
 | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Lead id not present in `discovery.md`               | The runner refuses to invoke the prompt; not a prompt-level failure mode.                                                       |
-| Lead maps to no file under `$SOURCE_DIR`            | Return `claims: []`. Core synthesis surfaces `[unknown]` on every affected requirement.                                         |
-| Read denied outside `$SOURCE_DIR` / `$CAPABILITY_DIR`    | Host runner returns `source-extract-path-denied`; slice stays `refining` and no Evidence is written.                            |
-| Production source uses an out-of-scope framework only    | Emit any in-scope `excerpt` / `type` / `call` claims; the gap surfaces as `[unknown]` requirements at synthesis.                |
-| `evidence.schema.json` validation fails on emit          | CLI rejects the Evidence; slice stays `refining`. Re-emit with the missing `id` / `kind` / `path` corrected.              |
+| Lead id unknown to the runner                            | The runner refuses to invoke the prompt; not a prompt-level failure mode.                                                       |
+| Lead maps to no file under `$SOURCE_DIR`            | Return `claims: []`. Downstream synthesis surfaces the gap as `[unknown]`.                                         |
+| Read denied outside `$SOURCE_DIR` / `$CAPABILITY_DIR`    | Host runner returns `source-extract-path-denied`; no Evidence is persisted.                            |
+| Production source uses an out-of-scope framework only    | Emit any in-scope `excerpt` / `type` / `call` claims; the gap surfaces as `[unknown]` downstream.                |
+| `evidence.schema.json` validation fails on emit          | The engine rejects the Evidence. Re-emit with the missing `id` / `kind` / `path` corrected.              |

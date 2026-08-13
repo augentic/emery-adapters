@@ -94,29 +94,16 @@ Walk every container claim produced in stage 4 and compare every `container: gro
 
 Apply the conservative emission policy:
 
-- Promote a container claim to `component: <slug>` only when **either** the operator confirms a candidate (a previous accepted Evidence carries the slug already) **or** the prompt observes ≥2 structurally identical groups across screens of the *same run* (within `<lead>` plus any prior leads extracted for the same plan — synthesis aggregates across leads).
+- Promote a container claim to `component: <slug>` only when **either** the operator confirms a candidate (a previous accepted Evidence carries the slug already) **or** the prompt observes ≥2 structurally identical groups across screens of the *same run* (within `<lead>` plus any prior leads extracted in the same run — downstream synthesis aggregates across leads).
 - Otherwise leave `component:` unset on the claim and add `notes.candidate_component: <slug>` so the operator can promote it explicitly later.
 - Slugs MUST match `^[a-z][a-z0-9]*(-[a-z0-9]+)*$` (kebab-case). Reserved region names (`header`, `body`, `footer`, `fab`) MUST NOT be used as slugs.
 - Derive slugs from visible content (`task-row`, `setting-row`, `chip-tag`) — never from layout shape (`row-1`, `card-2`).
 
 When in doubt, leave `component:` unset and emit the note. Promoting a note to a directive is cheap; demoting an emitted directive is operator work.
 
-### Feed candidate skeletons forward into inference (candidate cache)
+### Candidate notes feed build-time inference
 
-Whenever you emit a `notes.candidate_component: <slug>` hint, also write a candidate-cache sidecar so build-time component inference (the vectis adapter's in-guest clustering) has cross-slice memory before the composition baseline accumulates the screens. Write one YAML file per hinted group at `${PROJECT_DIR}/.emery/.cache/component-candidates/<slice>/<screen>/<group-path>.yaml`, keyed **strictly by provenance** — the slice slug, the screen slug, and the dotted group path within the screen. Never key the file by the derived slug (two distinct skeletons sharing a name would silently clobber each other) and never by a fingerprint: this is a vision prompt, so it cannot compute the inference tool's canonical structural hash, and it must not try — provenance keys are collision-free by construction and the tool recomputes the canonical fingerprint at read time from the skeleton you store.
-
-The sidecar body carries the **normalized `group` skeleton** as a composition-`group`-shaped fragment — the exact shape the inference tool's normalizer consumes — plus the derived slug stored as an inner `candidate_component:` label hint (a suggestion the build skill may adopt or override at naming time; it is never an identity) and the enclosing `region:`. Because stage 4 emits Evidence `container: group` claims (and child `container` / `leaf` claims) rather than composition nodes, perform the Evidence→composition shape translation at write time: assemble the group's `items:` array in claim order, mapping each child leaf to its `{ <kind>: { … } }` item and each nested container `group` to a nested `group:`, so the cached fragment is already in composition shape. Wiring values (`bind`, `event`, `*-when` conditions, asset / token references, free text) are illustrative and stripped before fingerprinting, so copy them through verbatim or omit them — they never affect identity.
-
-```yaml
-candidate_component: task-row   # derived slug — a non-authoritative label hint
-region: body                    # enclosing region for the inferred group
-group:                          # composition-`group`-shaped fragment
-  items:
-    - icon: {}
-    - text: {}
-```
-
-Re-runs are byte-stable: the same source images produce the same provenance path and the same normalized fragment, so the cache file is overwritten in place with identical content.
+Whenever you emit a `notes.candidate_component: <slug>` hint, that note on the Evidence claim is the whole feed — do not write a sidecar file. `$PROJECT_DIR` is unreachable from this prompt (`$SOURCE_DIR` is the only filesystem grant; `$SCRATCH_DIR` is ephemeral). Also emit `bbox: { x, y, w, h }` on that group and every descendant: Vectis reconstructs composition-shaped group skeletons from these claims at build time, sorting siblings by bbox (left-to-right in a `direction: row` group, top-to-bottom otherwise) so nested `container: group` children keep their visual place among sibling leaves. Child leaves become `{ <kind>: {} }` items; nested groups become nested `group:` nodes. The reconstruction folds into clustering alongside the merged baseline, so cross-slice memory does not depend on a writable project cache. The derived slug is a non-authoritative label hint the composition leg may adopt or override; it is never an identity.
 
 ## 7. Emit gaps
 
@@ -129,11 +116,11 @@ Record uncertainty on the affected claim under a `notes:` map when:
 - An asset reference is expected but `assets.yaml` does not list the ID (`notes.todo: add image '<id>' to assets.yaml`).
 - A candidate component skeleton is borderline (`notes.candidate_component: <slug>` — see stage 6).
 
-Each `notes.todo` and `notes.candidate_component` surfaces in the slice's synthesis output as a `[unknown]` tag against the affected requirement during reconciliation.
+Each `notes.todo` and `notes.candidate_component` surfaces as an `[unknown]` tag against the affected requirement during downstream reconciliation.
 
 ## Determinism
 
-- Emit claims in pipeline order: regions first (in the closed-region order above), then containers (in pre-order tree walk under each region), then leaves (in pre-order tree walk under each container).
+- Emit claims in visual pre-order under each region (closed-region order first): walk each region's tree in visual sibling order, emitting a container immediately before its descendants. Nested containers and leaves interleave in that walk — do not kind-group all containers ahead of all leaves. Sibling order is left-to-right in a `direction: row` group and top-to-bottom in a `direction: column` group.
 - `id`s follow the dotted-kebab grammar defined in [../extract.md](../extract.md). Re-running against unchanged inputs produces byte-identical Evidence.
 - Quote `content` / `label` / `title` verbatim from the screen where legible. Light grammatical normalisation (terminal punctuation) is allowed; rephrasing is not.
 - Do not invent layout properties. Omit `gap` / `padding` / `align` / `size` when measurement is unconfident; emit `notes.todo` instead.
@@ -141,8 +128,8 @@ Each `notes.todo` and `notes.candidate_component` surfaces in the slice's synthe
 
 ## Idempotence
 
-Re-runs are additive and conservative; the CLI replaces Evidence by `(<source>, <lead>)` tuple, but within a run:
+Re-runs are additive and conservative; the engine replaces Evidence by `(<source>, <lead>)` tuple, but within a run:
 
 - A re-run against the same source images MAY refine previously emitted body fields when the same images still support the refinement.
-- Operator overrides committed at synthesis time (post-reconciliation edits in `spec.md` / `design.md`) are NOT visible to `extract`; the prompt only sees the source images. Use stable `id`s so the reconciliation layer can detect and preserve operator edits.
+- Operator overrides committed downstream (post-reconciliation edits) are NOT visible to `extract`; the prompt only sees the source images. Use stable `id`s so the reconciliation layer can detect and preserve operator edits.
 - When the new screenshots no longer contain a previously inferred element, simply do not emit its claim. The synthesis layer detects the drop via the missing `id` and tags affected requirements with `[unknown]` / `[divergence]` — there is no `# stale-source:` annotation at the Evidence layer.

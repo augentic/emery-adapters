@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use adapter::Source as _;
-use adapter::seam::{Authority, ClaimKind, Context, Lead};
+use adapter::seam::{Authority, ClaimKind, Context, Lead, SourceInput};
 use captures::Adapter;
 use omnia_testkit::model::Harness;
 
@@ -12,8 +12,13 @@ fn ctx() -> Context<'static> {
         adapter_id: "source:captures",
         project_root: Path::new("."),
         mcp_url: None,
-        lend: ".".to_string(),
+        lend: "/prepared/captures".to_string(),
+        source_key: Some("runtime".to_string()),
     }
+}
+
+fn input() -> SourceInput {
+    SourceInput::Workspace("/prepared/captures".to_string())
 }
 
 fn lead() -> Lead {
@@ -40,7 +45,7 @@ async fn extract_example_claims() {
             }]
         }"#]);
 
-    let evidence = Adapter::extract(&model, &ctx(), &lead()).await.unwrap();
+    let evidence = Adapter::extract(&model, &ctx(), &input(), &lead()).await.unwrap();
 
     assert_eq!(evidence.authority, Authority::Behaviour);
     assert_eq!(evidence.claims.len(), 1);
@@ -48,8 +53,8 @@ async fn extract_example_claims() {
     assert_eq!(evidence.claims[0].id.as_deref(), Some("password-reset.expired-token"));
     let request = &model.requests()[0];
     assert!(request.system.as_deref().unwrap().starts_with("# Runtime capture extract"));
-    assert!(
-        request.messages[0].content.contains("tests/data/replays"),
-        "the binding note names the capture-tree layout"
-    );
+    let user = &request.messages[0].content;
+    assert!(user.contains("tests/data/replays"), "the binding note names the capture-tree layout");
+    assert!(user.contains("Source binding key: `runtime`"), "and the binding key");
+    assert!(user.contains("working directory"), "the lent tree is the agent's workspace");
 }

@@ -1,15 +1,17 @@
 # `screenshots.extract`
 
-For one `Lead`, run the vision-assisted spatial pipeline against the image(s) bound to that screen under `$SOURCE_DIR` and return a single `Evidence` document carrying `region` / `container` / `leaf` claims. The CLI persists the result at `.emery/slices/<slice>/evidence/<source>.yaml`; this prompt returns the YAML body only.
+For one `Lead`, run the vision-assisted spatial pipeline against the image(s) bound to that screen under `$SOURCE_DIR` and return a single `Evidence` document carrying `region` / `container` / `leaf` claims. The engine persists the result; this prompt returns the YAML body only.
 
-The pipeline body lives in [`extract/pipeline.md`](extract/pipeline.md) and runs the spatial-inference pipeline — triage → chrome cropping → regions → containers → leaves → conservative component detection. The pipeline emits flat claims, not a hierarchical `layout.yaml`. Downstream synthesis (core) folds the claims back into the canonical artifacts (see [From sources to slices](../references/emery-runtime/reconciliation.md#slice-time-evidence-becomes-a-spec)); `adapters/targets/vectis/build` regenerates `composition.yaml` from the synthesised `spec.md` / `design.md`.
+The pipeline body lives in [`extract/pipeline.md`](extract/pipeline.md) and runs the spatial-inference pipeline — triage → chrome cropping → regions → containers → leaves → conservative component detection. The pipeline emits flat claims, not a hierarchical `layout.yaml`. Downstream synthesis folds the claims into higher-level structure (see [From sources to slices](../references/emery-runtime/reconciliation.md#slice-time-evidence-becomes-a-spec)).
 
 ## Inputs
 
 - `$SOURCE_DIR` — read-only preopen of the bound screenshots directory.
-- `<source>` — the plan-level binding key under `plan.yaml.sources.<key>`.
-- `<lead>` — the lead from `discovery.md` this run is extracting Evidence for (one screen, possibly with state and platform variants attached).
-- `$SCRATCH_DIR` — per-slice write-only scratch space. Use only for unavoidable intermediate state (cropped image staging).
+- `<source>` — the source binding key, interpolated into the prompt.
+- `<lead>` — the lead this run is extracting Evidence for (one screen, possibly with state and platform variants attached; produced by `screenshots.survey`).
+- `$SCRATCH_DIR` — per-run write-only scratch space. Use only for unavoidable intermediate state (cropped image staging).
+
+`$PROJECT_DIR` is unreachable; do not attempt to read project lifecycle state or write a candidate-cache sidecar. Writes back into `$SOURCE_DIR` are denied.
 
 ## Vision prerequisite
 
@@ -23,7 +25,7 @@ The lead id was produced by `screenshots.survey` from one screen (potentially wi
 2. Fall back to images whose kebab-cased filename stem equals `<lead>` (or starts with `<lead>-` for state variants).
 3. When operator `state` / `group` / `platform` hints accompany the source binding, apply them as authoritative: hint-bound images win over visual similarity.
 
-If no image resolves, return Evidence with `claims: []` rather than fabricating content. The CLI treats empty `claims:` as valid; an unresolvable lead becomes a `Status: unknown` requirement during synthesis.
+If no image resolves, return Evidence with `claims: []` rather than fabricating content. The engine treats empty `claims:` as valid; an unresolvable lead surfaces as `[unknown]` downstream.
 
 ## Pipeline
 
@@ -89,14 +91,14 @@ Return one Evidence document matching `schemas/evidence.schema.json`. Field orde
 - **container** — `screen`, `region`, `parent`, `container` (closed enum: `group | list | grid | form | card | surface | divider`); optional `direction`, `gap`, `padding`, `align`, `justify`, `size`, `background`, `corner_radius`, `elevation`, `each`, `columns`, `rows`, `style`, `component`, `notes.candidate_component`, `notes.todo`.
 - **leaf** — `screen`, `region`, `parent`, `leaf` (closed enum: `text | button | icon-button | link | icon | image | field | checkbox | switch | radio | slider | segmented-control | progress-indicator | badge | chip | divider | spacer`); optional `content`, `label`, `style`, `role`, `name`, `color`, `notes.todo`.
 
-`authority` is always the literal `documentation` (operator-provided written product / technical intent; the authority precedence `intent > documentation > behaviour` is defined in [`authority.md`](../references/emery-runtime/synthesis/authority.md)). The document's `(slice, source)` identity is path-borne (the CLI persists it at `.emery/slices/<slice>/evidence/<source>.yaml`) and the adapter resolves from `plan.yaml.sources.<source>.adapter`, so neither is written in-document.
+`authority` is always the literal `documentation` (operator-provided written product / technical intent; the authority precedence `intent > documentation > behaviour` is defined in [`authority.md`](../references/emery-runtime/synthesis/authority.md)). The document's source identity is engine-owned, so neither the source key nor the adapter is written in-document.
 
 Worked example: [`references/examples/task-list.md`](../references/examples/task-list.md) — a `task-list` lead with populated and empty-state images, ending in a candidate-component note that promotes to `component: task-row` on the next pass.
 
 ## Guardrails
 
-- `$SOURCE_DIR` is read-only. Reads outside it surface as `source-extract-path-denied`; never attempt to widen the preopen.
-- Never write Evidence to disk yourself — return the YAML body to the CLI, which persists it under `.emery/slices/<slice>/evidence/<source>.yaml`.
+- `$SOURCE_DIR` is read-only. Reads outside it surface as `source-extract-path-denied`; never attempt to widen the preopen. `$PROJECT_DIR` is unreachable.
+- Never write Evidence to disk yourself — return the YAML body; the engine persists it.
 - Never emit define-owned wiring on a claim: no `maps_to`, no `bind`, no `event`, no `error`, no overlay `trigger`, no navigation events, no `*-when` body keys. The `state_when:` body field on a `states.<name>` region claim is the *condition expression* lifted from visible cues, not a `*-when` wiring key.
 - Never emit closed-enum claim kinds outside `{region, container, leaf}` from this adapter. Behavioural kinds (`excerpt` / `type` / `call`) belong to code source adapters; intent kinds belong to `intent`.
 - Never crop or extract production assets out of screenshots. `$SCRATCH_DIR` is for transient chrome-cropping staging only.
