@@ -26,7 +26,7 @@ fn ctx<'a>(root: &'a Path, mcp_url: Option<&str>) -> Context<'a> {
         adapter_id: "target:contracts",
         project_root: root,
         mcp_url: mcp_url.map(str::to_owned),
-        lend: root.display().to_string(),
+        lend: Some(root.display().to_string()),
     }
 }
 
@@ -509,7 +509,7 @@ async fn merge_preflight_deterministic() {
     assert!(model.requests().is_empty(), "preflight is deterministic: no leg");
 
     // A broken staged delta parks the merge before the engine promotes it.
-    seed_bad_contract(&tmp.path().join(".emery/slices/demo/contracts"));
+    seed_bad_contract(&tmp.path().join(".emery/change/slices/demo/contracts"));
     let report = Adapter::merge(
         &model,
         &ctx(tmp.path(), None),
@@ -527,8 +527,8 @@ async fn merge_preflight_deterministic() {
 #[tokio::test]
 async fn merge_postflight_gate() {
     let tmp = TempDir::new().unwrap();
-    // The merged baseline lives in the project tree — postflight
-    // validates it there, not in the lent read-only result view.
+    // The merged baseline lives in the lent workspace — postflight
+    // validates it there (the test tree is both project root and workspace).
     seed_bad_contract(&tmp.path().join("contracts"));
     let model = Harness::answering([SUCCESS_REPORT]);
 

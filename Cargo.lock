@@ -176,6 +176,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
+name = "aws-lc-rs"
+version = "1.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce2b2dcc879c3bae0d371e77c99f2238400ef24ec001394befa67b6e543add9e"
+dependencies = [
+ "aws-lc-sys",
+ "zeroize",
+]
+
+[[package]]
+name = "aws-lc-sys"
+version = "0.44.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f09fae7be8bb3174e05c6afdb34199e6dc0c7c04ba9fa237b1967adfbde27483"
+dependencies = [
+ "cc",
+ "cmake",
+ "dunce",
+ "fs_extra",
+ "pkg-config",
+]
+
+[[package]]
 name = "axum"
 version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -431,6 +454,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d262e149917187838d5b42777c8253bcb64500067342904e7d429499a6f277e"
 dependencies = [
  "find-msvc-tools",
+ "jobserver",
+ "libc",
  "shlex",
 ]
 
@@ -519,6 +544,15 @@ name = "clap_lex"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
+
+[[package]]
+name = "cmake"
+version = "0.1.58"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0f78a02292a74a88ac736019ab962ece0bc380e3f977bf72e376c5d78ff0678"
+dependencies = [
+ "cc",
+]
 
 [[package]]
 name = "cobs"
@@ -1009,6 +1043,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "dunce"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
+
+[[package]]
 name = "dyn-clone"
 version = "1.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1044,7 +1084,6 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 [[package]]
 name = "emery-adapter"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#7909609a9d19ca5cec6886925cb5766e2968d9f4"
 dependencies = [
  "omnia-guest",
  "omnia-wasi-http",
@@ -1058,7 +1097,6 @@ dependencies = [
 [[package]]
 name = "emery-artifacts"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#7909609a9d19ca5cec6886925cb5766e2968d9f4"
 dependencies = [
  "emery-diagnostics",
  "emery-error",
@@ -1075,7 +1113,6 @@ dependencies = [
 [[package]]
 name = "emery-change"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#7909609a9d19ca5cec6886925cb5766e2968d9f4"
 dependencies = [
  "emery-artifacts",
  "emery-diagnostics",
@@ -1095,7 +1132,6 @@ dependencies = [
 [[package]]
 name = "emery-diagnostics"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#7909609a9d19ca5cec6886925cb5766e2968d9f4"
 dependencies = [
  "base16ct",
  "schemars",
@@ -1108,7 +1144,6 @@ dependencies = [
 [[package]]
 name = "emery-error"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#7909609a9d19ca5cec6886925cb5766e2968d9f4"
 dependencies = [
  "serde-saphyr",
  "thiserror 2.0.20",
@@ -1117,7 +1152,6 @@ dependencies = [
 [[package]]
 name = "emery-native"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#7909609a9d19ca5cec6886925cb5766e2968d9f4"
 dependencies = [
  "axum",
  "emery-adapter",
@@ -1135,7 +1169,6 @@ dependencies = [
 [[package]]
 name = "emery-probe"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#7909609a9d19ca5cec6886925cb5766e2968d9f4"
 dependencies = [
  "anyhow",
  "clap",
@@ -1159,7 +1192,6 @@ dependencies = [
 [[package]]
 name = "emery-project"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#7909609a9d19ca5cec6886925cb5766e2968d9f4"
 dependencies = [
  "emery-artifacts",
  "emery-diagnostics",
@@ -1167,6 +1199,7 @@ dependencies = [
  "jiff",
  "omnia-guest",
  "petgraph",
+ "reqwest 0.13.4",
  "schemars",
  "semver",
  "serde",
@@ -1182,12 +1215,10 @@ dependencies = [
 [[package]]
 name = "emery-prose"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#7909609a9d19ca5cec6886925cb5766e2968d9f4"
 
 [[package]]
 name = "emery-slice"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#7909609a9d19ca5cec6886925cb5766e2968d9f4"
 dependencies = [
  "emery-artifacts",
  "emery-diagnostics",
@@ -1208,7 +1239,6 @@ dependencies = [
 [[package]]
 name = "emery-transport"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#7909609a9d19ca5cec6886925cb5766e2968d9f4"
 dependencies = [
  "clap",
  "emery-artifacts",
@@ -1430,6 +1460,12 @@ dependencies = [
  "rustix",
  "windows-sys 0.59.0",
 ]
+
+[[package]]
+name = "fs_extra"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
 
 [[package]]
 name = "futures"
@@ -2130,6 +2166,16 @@ checksum = "38c0b942f458fe50cdac086d2f946512305e5631e720728f2a61aabcd47a6264"
 dependencies = [
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "jobserver"
+version = "0.1.35"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c00acbd29eabad4a2392fa0e921c874934dbbf4194312ad20f04a0ed67a3cb3"
+dependencies = [
+ "getrandom 0.4.3",
+ "libc",
 ]
 
 [[package]]
@@ -3245,6 +3291,7 @@ version = "0.11.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2f4bfc015262b9df63c8845072ce59068853ff5872180c2ce2f13038b970e560"
 dependencies = [
+ "aws-lc-rs",
  "bytes",
  "getrandom 0.4.3",
  "lru-slab",
@@ -3546,6 +3593,8 @@ checksum = "219c5811de6525e5416c7d5d53bb656d3afdbc6c5af816e0802bcfa42dbdc1c3"
 dependencies = [
  "base64 0.22.1",
  "bytes",
+ "encoding_rs",
+ "futures-channel",
  "futures-core",
  "futures-util",
  "h2",
@@ -3557,8 +3606,10 @@ dependencies = [
  "hyper-util",
  "js-sys",
  "log",
+ "mime",
  "percent-encoding",
  "pin-project-lite",
+ "quinn",
  "rustls",
  "rustls-pki-types",
  "rustls-platform-verifier",
@@ -3698,6 +3749,7 @@ version = "0.23.43"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0283386ce02abc0151e1761d08802dfe86c173b0b494af5cbc086574e453da06"
 dependencies = [
+ "aws-lc-rs",
  "log",
  "once_cell",
  "ring",
@@ -3762,6 +3814,7 @@ version = "0.103.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0527518605e68109d875e248ea259b6758801cf165e4b2c2733ae3b51f12535a"
 dependencies = [
+ "aws-lc-rs",
  "ring",
  "rustls-pki-types",
  "untrusted",

@@ -26,7 +26,7 @@ fn ctx<'a>(root: &'a Path, mcp_url: Option<&str>) -> Context<'a> {
         adapter_id: "target:vectis",
         project_root: root,
         mcp_url: mcp_url.map(str::to_owned),
-        lend: root.display().to_string(),
+        lend: Some(root.display().to_string()),
     }
 }
 
@@ -822,8 +822,8 @@ async fn merge_preflight_deterministic() {
     assert!(model.requests().is_empty(), "preflight is deterministic: no leg");
 
     // A broken staged slice composition parks the merge before the fold.
-    fs::create_dir_all(tmp.path().join(".emery/slices/demo")).unwrap();
-    fs::write(tmp.path().join(".emery/slices/demo/composition.yaml"), "screens: [broken\n")
+    fs::create_dir_all(tmp.path().join(".emery/change/slices/demo")).unwrap();
+    fs::write(tmp.path().join(".emery/change/slices/demo/composition.yaml"), "screens: [broken\n")
         .unwrap();
     let report = Adapter::merge(
         &model,

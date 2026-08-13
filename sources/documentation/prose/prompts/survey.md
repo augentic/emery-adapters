@@ -1,12 +1,15 @@
 # `documentation.survey`
 
-Walk `$SOURCE_DIR` (a read-only preopen of the operator-bound docs path) and emit one `Lead` per top-level concept the docs describe. The CLI persists the result; this prompt returns the lead-block payload only.
+Walk `$SOURCE_DIR` (the read-only CID view of the bound docs tree) and emit one `Lead` per top-level concept the docs describe. The caller persists the catalog; this prompt returns the lead-block payload only.
 
 ## Inputs
 
-- `$SOURCE_DIR` — read-only directory holding the bound documentation set. Never write here.
-- `<source>` — the plan-level binding key under `plan.yaml.sources.<key>`; the CLI passes it in for context and stamps each lead's `source` itself, so this prompt does not emit it.
-- `$SCRATCH_DIR` — per-slice write-only scratch space; use only if intermediate state is unavoidable.
+- `$SOURCE_DIR` — read-only CID view of the bound documentation set. Absent when the binding is an inline `value`. Never write here.
+- **Source key** — the plan source-binding key the engine passed on the wire. The caller stamps each lead's `source` from it; this prompt does not emit it.
+- **Optional parent lead** — when present, this is a focused survey: return stable child leads under that parent. Inherit parent/focus from the passed record; do not look it up in `leads.md` or `slices/`.
+- `$SCRATCH_DIR` — write-only scratch space; use only if intermediate state is unavoidable.
+
+The change home and `$PROJECT_DIR` are unreachable. Do not read `plan.yaml`, `leads.md`, `discovery.md`, or `slices/`. Unfocused survey always returns the complete current set from `$SOURCE_DIR`; do not consult a catalog to decide this is a re-survey.
 
 ## What is a top-level concept
 
@@ -25,7 +28,7 @@ Skip files that contain no behavioural content (e.g. tables of contents, license
 
 ## Output
 
-Return one block per lead, in alphabetical `lead` order. The CLI appends them under the existing `## Lead inventory` heading in `discovery.md`; this prompt never writes the heading itself.
+Return one block per lead, in alphabetical `lead` order. The caller persists the catalog; this prompt never writes `leads.md` or `discovery.md`.
 
 ```markdown
 ### password-reset
@@ -72,6 +75,6 @@ A full input/output fixture for this example lives at [`quality/fixtures/referen
 ## Guardrails
 
 - `$SOURCE_DIR` is read-only. Reads outside it surface as `source-survey-path-denied`; never attempt to widen the preopen.
-- Do not write or rewrite the `## Lead inventory` heading — the CLI owns the section frame.
+- Do not write the catalog — the caller owns persistence.
 - Do not emit Evidence here. Per-claim extraction is `documentation.extract`'s job, run once per lead at slice time.
 - Do not invent a lead the docs do not describe. Empty inventories (`$SOURCE_DIR` parseable but no behavioural concepts) are valid output.

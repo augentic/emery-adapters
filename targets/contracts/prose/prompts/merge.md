@@ -4,13 +4,13 @@ Merge prompt for slices that target the `contracts` adapter — the contracts ad
 
 ## Preflight — staged delta validation
 
-The preflight dispatch is fully deterministic: the adapter runs its compiled-in contract validator against the slice's staged delta (`.emery/slices/<slice>/contracts/`) and answers without a judgment leg. Blocking findings mean `status: failure`, and the engine aborts the merge with the slice still at `built` — the same delta the build phase already validated, re-checked so drift between build and merge cannot land.
+The preflight dispatch is fully deterministic: the adapter runs its compiled-in contract validator against the slice's staged delta (`.emery/change/slices/<slice>/contracts/` in-place) and answers without a judgment leg. Blocking findings mean `status: failure`, and the engine aborts the merge with the slice still at `built` — the same delta the build phase already validated, re-checked so drift between build and merge cannot land.
 
 ## Postflight — merged-baseline validation
 
 After the engine has promoted the slice's `contracts/` delta into root `contracts/`, the adapter runs the same deterministic validator against the now-updated baseline, with one bounded repair leg; residual findings force `status: failure`.
 
-The validator enforces the contract validation rules across every top-level OpenAPI 3.1 / AsyncAPI 3.0 document under `$PROJECT_ROOT/contracts`:
+The validator enforces the contract validation rules across every top-level OpenAPI 3.1 / AsyncAPI 3.0 document under the lent workspace's `contracts/` (the merged baseline lives in the workspace tree, not the operator checkout):
 
 - `contract.version-is-semver` — `info.version` parses as SemVer per [semver.org](https://semver.org).
 - `contract.id-format` — when `info.x-emery-id` is present, the value matches `^[a-z][a-z0-9-]*$` and is ≤ 64 characters.

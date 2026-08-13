@@ -1,14 +1,14 @@
 # TypeScript / JavaScript source extract
 
-The `emery plan refine` stage invokes this prompt once per `slices[].sources[]` binding whose adapter is `typescript`. Your job: for a single `(source, lead)` pair, locate the matching TypeScript module(s) under `$SOURCE_DIR`, read the surrounding code, and emit one Evidence YAML document the CLI persists to `.emery/slices/<slice>/evidence/<source>.yaml`.
+The engine invokes this prompt once per terminal `(source, lead)` pair whose adapter is `typescript`. Your job: locate the matching TypeScript module(s) under `$SOURCE_DIR`, read the surrounding code, and emit one Evidence YAML document. The caller persists it; this prompt returns the body only.
 
 ## Inputs
 
-- **`$SOURCE_DIR`** — read-only preopen of the operator-bound source root (same path the survey prompt walked). Walk it; resolve `tsconfig.json` `paths` mappings relative to it.
-- **`<lead>`** — the kebab-case id of the `## Lead inventory` block the slice is bound to. Look it up in `discovery.md` (the runner provides it via the binding); the block tells you which surface(s) to extract.
-- **`<source>`** — the kebab-case source key the binding resolves through.
+- **`$SOURCE_DIR`** — read-only CID view of the bound source root (same path the survey prompt walked). Walk it; resolve `tsconfig.json` `paths` mappings relative to it. Absent when the binding is an inline `value`.
+- **Terminal lead** — the catalog lead the engine passed on `input.focus` (id, synopsis, optional parent/focus). That record tells you which surface(s) to extract. Do not look it up in `leads.md`, `discovery.md`, or `slices/`. Child extraction inherits parent context from the passed record.
+- **Source key** — the kebab-case source key the engine passed on the wire.
 
-`$PROJECT_DIR` is unreachable; do not attempt to read project lifecycle state. Writes back into `$SOURCE_DIR` are denied. Use `$SCRATCH_DIR` for any internal staging.
+The change home and `$PROJECT_DIR` are unreachable; do not attempt to read project lifecycle state. Do not read `plan.yaml`, `leads.md`, `discovery.md`, or `slices/`. Writes back into `$SOURCE_DIR` are denied. Use `$SCRATCH_DIR` for any internal staging.
 
 ## References
 
@@ -47,7 +47,7 @@ claims:
     callee: "<module>:<symbol>"
 ```
 
-`authority` is fixed at `behaviour` for this adapter. `lead` is kebab-case (validated by `evidence.schema.json` against `^[a-z0-9]+(-[a-z0-9]+)*$`). The document's `(slice, source)` identity is path-borne (the CLI persists it at `.emery/slices/<slice>/evidence/<source>.yaml`) and the adapter resolves from `plan.yaml.sources.<source>.adapter`, so neither is written in-document. `claims: []` is valid when the lead has no in-scope code under `$SOURCE_DIR` — failure surfaces as a host-runner error, not as an empty file.
+`authority` is fixed at `behaviour` for this adapter. `lead` is kebab-case (validated by `evidence.schema.json` against `^[a-z0-9]+(-[a-z0-9]+)*$`). The document's `(slice, source)` identity is path-borne — the caller persists it and stamps the source from the binding — so neither is written in-document. `claims: []` is valid when the lead has no in-scope code under `$SOURCE_DIR` — failure surfaces as a host-runner error, not as an empty file.
 
 ## Claim kinds
 
@@ -116,7 +116,7 @@ Same skip-root and traversal rules as the survey prompt: relative paths only, no
 
 | Condition                                                | Action                                                                                                                          |
 | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Lead id not present in `discovery.md`               | The runner refuses to invoke the prompt; not a prompt-level failure mode.                                                       |
+| Terminal lead missing on the extract input          | The runner refuses to invoke the prompt; not a prompt-level failure mode.                                                       |
 | Lead maps to no file under `$SOURCE_DIR`            | Return `claims: []`. Core synthesis surfaces `[unknown]` on every affected requirement.                                         |
 | Read denied outside `$SOURCE_DIR` / `$CAPABILITY_DIR`    | Host runner returns `source-extract-path-denied`; slice stays `refining` and no Evidence is written.                            |
 | Production source uses an out-of-scope framework only    | Emit any in-scope `excerpt` / `type` / `call` claims; the gap surfaces as `[unknown]` requirements at synthesis.                |

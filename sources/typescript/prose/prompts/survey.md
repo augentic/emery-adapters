@@ -1,15 +1,16 @@
 # TypeScript / JavaScript source survey
 
-`/emery:plan` invokes this prompt once per binding under `plan.yaml.sources.<key>` whose adapter is `typescript`. Your job: walk the read-only source tree at `$SOURCE_DIR`, identify slice-sized units of work using the framework grammar below, and return one lead block per unit. The CLI appends your blocks under `## Lead inventory` in `discovery.md`; you never write `discovery.md` directly.
+The engine invokes this prompt for a `typescript` source binding. Your job: walk the read-only CID view at `$SOURCE_DIR`, identify slice-sized units of work using the framework grammar below, and return one lead block per unit. The caller persists the catalog; you never write `leads.md` or `discovery.md`.
 
 JavaScript sources (`.js`, `.mjs`, `.cjs`, `.jsx`) fold into this prompt: the framework idioms are the same. Detect the file extension purely to widen the import-graph walk; the prompt content does not branch on it.
 
 ## Inputs
 
-- **`$SOURCE_DIR`** — read-only preopen of the operator-bound source root (the `path:` from `plan.yaml.sources.<key>`). Walk this tree; resolve `tsconfig.json` `paths` mappings relative to it.
-- **Source key** — kebab-case identifier passed in via the runner (the `<key>` from `plan.yaml.sources.<key>`). The CLI stamps each lead's `source` from it; this prompt does not emit it.
+- **`$SOURCE_DIR`** — read-only CID view of the bound source root. Walk this tree; resolve `tsconfig.json` `paths` mappings relative to it. Absent when the binding is an inline `value`.
+- **Source key** — kebab-case identifier the engine passed on the wire. The caller stamps each lead's `source` from it; this prompt does not emit it.
+- **Optional parent lead** — when present, this is a focused survey: return stable child leads under that parent. Inherit parent/focus from the passed record; do not look it up in `leads.md` or `slices/`.
 
-The bound directory is the only filesystem grant; `$PROJECT_DIR` is unreachable. Treat the tree as read-only — no writes back into `$SOURCE_DIR`.
+The bound directory is the only filesystem grant; the change home and `$PROJECT_DIR` are unreachable. Do not read `plan.yaml`, `leads.md`, `discovery.md`, or `slices/`. Treat the tree as read-only — no writes back into `$SOURCE_DIR`. Unfocused survey always returns the complete current set from `$SOURCE_DIR`; do not consult a catalog to decide this is a re-survey.
 
 ## Output: lead blocks
 
@@ -56,7 +57,7 @@ Out of scope for v1: tRPC, GraphQL resolvers, gRPC services, AWS Lambda handlers
 2. **Size check.** Compute the union-of-`touches` LOC across every identified surface. If the union is `< 1000` production LOC, emit **one source-level lead** named after the source key (or its dominant subject) covering every surface, and stop for that source.
 3. **Surface leads.** Otherwise, treat each surface as the default lead.
 4. **Minimal same-source clustering.** Merge surface leads only when ALL of these hold:
-    - One signal fires: shared `touches` overlap ≥ 50% (computed as `|intersection| / |smaller set|`), **or** shared `handler` / call site, **or** an explicit grouping the operator already wrote in `discovery.md`'s `## Lead inventory`.
+    - One signal fires: shared `touches` overlap ≥ 50% (computed as `|intersection| / |smaller set|`), **or** shared `handler` / call site. Do not read `leads.md` or `discovery.md` for grouping hints.
     - The merged LOC stays `< 1000`. If merging pushes the lead over, do not merge.
 5. **`too-large` after clustering.** A lead whose LOC stays `≥ 1000` is still emitted; flag the staged JSON entry with an internal `unresolved: true` marker so `/emery:plan`'s `propose` sub-step can call it out. Survey exits 0 either way — `propose` is the gate, not `survey`.
 
@@ -77,7 +78,7 @@ A symlink inside `$SOURCE_DIR` pointing outside the bound root is denied at cano
 
 For internal staging only (not an artifact). Top-level: `{ version: 1, source, language, surfaces[] }`. Each surface: `{ id, kind, identifier, handler, touches[], declared-at[] }`. `kind` is one of `http-route | message-pub | message-sub | ws-handler | scheduled-job | cli-command | ui-route | external-call-out`. `handler` is `<file>:<symbol>` (named export, `<ClassName>.<method>`, verb export, `<file>:<line>` for inline arrows, `<file>:<framework>-handler-<n>` when the framework provides no name). `touches[]` is a static, file-level reach analysis: import-graph walk from the handler file through relative + `tsconfig.json` `paths`-aliased imports, stopping at bare module specifiers; include the handler file itself. `declared-at[]` carries the registration site (`<file>` or `<file>:<line>`).
 
-You never publish this shape. The lead algorithm reads from it; only the lead blocks reach `discovery.md`.
+You never publish this shape. The lead algorithm reads from it; only the lead blocks reach the caller.
 
 ## Worked example
 
@@ -114,13 +115,13 @@ When a larger source decomposes into multiple leads, emit one block per surface 
 - **Test files.** Skip `*.test.*`, `*.spec.*`, and anything under `tests/` or `__tests__/`. Tests validate production surfaces, they are not production surfaces.
 - **Type-only `.d.ts` files in `touches`.** They contribute zero production LOC and inflate lead sizing.
 - **Cross-source coalescing.** This prompt only sees one source's tree. Cross-source merges happen later in `/emery:plan`'s `propose` sub-step — see [From sources to slices](../references/emery-runtime/reconciliation.md#plan-time-leads-become-slices) for how leads reconcile into slices.
-- **Writing `discovery.md` or `plan.yaml`.** Only lead blocks. The CLI owns every lifecycle file.
+- **Writing `leads.md`, `discovery.md`, or `plan.yaml`.** Only lead blocks. The caller owns every lifecycle file.
 
 ## Failure modes
 
 | Condition                                              | Action                                                                                                                          |
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| `$SOURCE_DIR` empty / no recognised framework imports  | Return zero leads. Operator reviews in `discovery.md`.                                                                     |
+| `$SOURCE_DIR` empty / no recognised framework imports  | Return zero leads. The caller persists the empty set.                                                                  |
 | Read denied outside `$SOURCE_DIR`                      | Host runner returns `source-survey-path-denied`; the slice stays `refining`.                                                 |
 | Internal staged JSON malformed                         | Repair within the run; the lead algorithm is the final consumer, not an external schema check.                             |
 | Surface uses an out-of-scope framework (tRPC, gRPC, …) | Skip it. Return whatever in-scope leads the tree has; document the gap in the synopsis of the relevant source-level lead. |

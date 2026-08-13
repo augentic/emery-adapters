@@ -3,7 +3,9 @@
 use std::path::Path;
 
 use adapter::Source as _;
-use adapter::seam::{Authority, ClaimKind, Context, Lead};
+use adapter::seam::{
+    Authority, ClaimKind, Context, Lead, SourceContent, SourceInput, SourceWorkspace,
+};
 use captures::Adapter;
 use omnia_testkit::model::Harness;
 
@@ -12,16 +14,42 @@ fn ctx() -> Context<'static> {
         adapter_id: "source:captures",
         project_root: Path::new("."),
         mcp_url: None,
-        lend: ".".to_string(),
+        lend: Some(".".to_string()),
+    }
+}
+
+fn workspace_input() -> SourceInput {
+    SourceInput {
+        key: "runtime".to_string(),
+        content: SourceContent::Workspace(SourceWorkspace {
+            id: "view-1".to_string(),
+            root: ".".to_string(),
+        }),
+        focus: None,
     }
 }
 
 fn lead() -> Lead {
-    Lead {
-        lead: "password-reset".to_string(),
-        synopsis: "POST /password-reset handler with three captured scenarios.".to_string(),
-        topics: Vec::new(),
-    }
+    Lead::new("password-reset", "POST /password-reset handler with three captured scenarios.")
+}
+
+#[tokio::test]
+async fn survey_focused_children() {
+    let model = Harness::answering([
+        r#"{"children":[{"lead":"password-reset-expired","synopsis":"Expired-token scenario.","parent":"password-reset","focus":"password-reset"}]}"#,
+    ]);
+    let mut input = workspace_input();
+    input.focus = Some(lead());
+
+    let result = Adapter::survey(&model, &ctx(), &input).await.unwrap();
+
+    assert!(result.leads.is_empty(), "focused returns children only");
+    assert_eq!(result.children.len(), 1);
+    assert_eq!(result.children[0].lead, "password-reset-expired");
+    assert_eq!(result.children[0].parent.as_deref(), Some("password-reset"));
+    let user = &model.requests()[0].messages[0].content;
+    assert!(user.contains("focused survey"), "user message names the focused path");
+    assert!(user.contains("tests/data/replays"), "the note names the capture-tree layout");
 }
 
 // The open per-kind body fields (`replay-digest`, `input`, `output`)
@@ -39,8 +67,10 @@ async fn extract_example_claims() {
                 "output": {"status": 410}
             }]
         }"#]);
+    let mut input = workspace_input();
+    input.focus = Some(lead());
 
-    let evidence = Adapter::extract(&model, &ctx(), &lead()).await.unwrap();
+    let evidence = Adapter::extract(&model, &ctx(), &input).await.unwrap();
 
     assert_eq!(evidence.authority, Authority::Behaviour);
     assert_eq!(evidence.claims.len(), 1);
@@ -50,6 +80,6 @@ async fn extract_example_claims() {
     assert!(request.system.as_deref().unwrap().starts_with("# Runtime capture extract"));
     assert!(
         request.messages[0].content.contains("tests/data/replays"),
-        "the binding note names the capture-tree layout"
+        "the note names the capture-tree layout"
     );
 }

@@ -22,21 +22,21 @@ The component catalog (`CATALOG_PATH`) is project-level and not slice-local; it 
 
 ## Postflight — host cap-matrix re-verification
 
-The postflight dispatch runs after the engine's commit: the slice's deltas are promoted into the baseline, the slice is `merged`, and its directory is archived. Verify the now-updated project root with host commands scoped to the platforms declared in `.emery/project.yaml` (`platforms:`):
+The postflight dispatch runs after the engine's commit: the slice's deltas are promoted into the baseline inside the lent workspace, the slice is `merged`, and its directory is archived. Verify the now-updated workspace with host commands scoped to the platforms declared in the workspace's `.emery/project.yaml` (`platforms:`):
 
 ```bash
-# core, when ${PROJECT_DIR}/shared exists
-cd "$PROJECT_DIR" && cargo fmt --check
-cd "$PROJECT_DIR" && RUSTFLAGS="-D warnings" cargo check
-cd "$PROJECT_DIR" && cargo clippy --all-targets -- -D warnings
-cd "$PROJECT_DIR" && RUSTFLAGS="-D warnings" cargo test
+# core, when ${WORKSPACE}/shared exists
+cd "$WORKSPACE" && cargo fmt --check
+cd "$WORKSPACE" && RUSTFLAGS="-D warnings" cargo check
+cd "$WORKSPACE" && cargo clippy --all-targets -- -D warnings
+cd "$WORKSPACE" && RUSTFLAGS="-D warnings" cargo test
 
 # iOS, when `ios` is in platforms:
-cd "$PROJECT_DIR/iOS" && make build
+cd "$WORKSPACE/iOS" && make build
 
 # Android, when `android` is in platforms:
 rustup target list --installed | grep android
-cd "$PROJECT_DIR/Android" && make build
+cd "$WORKSPACE/Android" && make build
 ```
 
 Record every host step in a structured list with these fields:

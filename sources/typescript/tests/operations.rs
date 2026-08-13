@@ -3,7 +3,9 @@
 use std::path::Path;
 
 use adapter::Source as _;
-use adapter::seam::{Authority, ClaimKind, Context, Lead};
+use adapter::seam::{
+    Authority, ClaimKind, Context, Lead, SourceContent, SourceInput, SourceWorkspace,
+};
 use omnia_testkit::model::Harness;
 use typescript::Adapter;
 
@@ -12,7 +14,18 @@ fn ctx() -> Context<'static> {
         adapter_id: "source:typescript",
         project_root: Path::new("."),
         mcp_url: None,
-        lend: ".".to_string(),
+        lend: Some(".".to_string()),
+    }
+}
+
+fn workspace_input() -> SourceInput {
+    SourceInput {
+        key: "legacy-monolith".to_string(),
+        content: SourceContent::Workspace(SourceWorkspace {
+            id: "view-1".to_string(),
+            root: ".".to_string(),
+        }),
+        focus: None,
     }
 }
 
@@ -22,18 +35,40 @@ async fn survey_framework_grammar() {
         r#"{"leads":[{"lead":"task-service","synopsis":"Task CRUD service module."}]}"#,
     ]);
 
-    let leads = Adapter::survey(&model, &ctx()).await.unwrap();
+    let result = Adapter::survey(&model, &ctx(), &workspace_input()).await.unwrap();
 
-    assert_eq!(leads[0].lead, "task-service");
+    assert_eq!(result.leads[0].lead, "task-service");
+    assert!(result.children.is_empty(), "unfocused returns leads only");
     let request = &model.requests()[0];
     assert!(request.system.as_deref().unwrap().starts_with("# TypeScript / JavaScript source"));
     let user = &request.messages[0].content;
     assert!(user.contains("framework grammar"), "survey framing names the prompt's grammar");
     assert!(
         user.contains("TypeScript / JavaScript source tree"),
-        "the binding note names the TS / JS tree"
+        "the note names the TS / JS tree"
     );
-    assert!(user.contains("read-only"), "the binding note marks the tree read-only");
+    assert!(user.contains("read-only"), "the note marks the tree read-only");
+    assert!(user.contains("CID view"), "workspace is the CID view");
+    assert!(user.contains("Do not read `plan.yaml`"), "adapters never parse the plan");
+}
+
+#[tokio::test]
+async fn survey_focused_children() {
+    let model = Harness::answering([
+        r#"{"children":[{"lead":"task-create","synopsis":"POST /tasks handler.","parent":"task-service","focus":"task-service"}]}"#,
+    ]);
+    let mut input = workspace_input();
+    input.focus = Some(Lead::new("task-service", "Task CRUD service module."));
+
+    let result = Adapter::survey(&model, &ctx(), &input).await.unwrap();
+
+    assert!(result.leads.is_empty(), "focused returns children only");
+    assert_eq!(result.children.len(), 1);
+    assert_eq!(result.children[0].lead, "task-create");
+    assert_eq!(result.children[0].parent.as_deref(), Some("task-service"));
+    let user = &model.requests()[0].messages[0].content;
+    assert!(user.contains("focused survey"), "user message names the focused path");
+    assert!(user.contains("- lead: task-service"), "parent lead is rendered");
 }
 
 #[tokio::test]
@@ -46,13 +81,10 @@ async fn extract_references_pointer() {
                 {"kind": "excerpt", "path": "src/tasks/service.ts#L40-L55"}
             ]
         }"#]);
-    let lead = Lead {
-        lead: "task-service".to_string(),
-        synopsis: "Task CRUD service module.".to_string(),
-        topics: Vec::new(),
-    };
+    let mut input = workspace_input();
+    input.focus = Some(Lead::new("task-service", "Task CRUD service module."));
 
-    let evidence = Adapter::extract(&model, &ctx(), &lead).await.unwrap();
+    let evidence = Adapter::extract(&model, &ctx(), &input).await.unwrap();
 
     assert_eq!(evidence.authority, Authority::Behaviour);
     let kinds: Vec<ClaimKind> = evidence.claims.iter().map(|claim| claim.kind).collect();

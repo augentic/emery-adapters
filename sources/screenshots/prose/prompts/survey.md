@@ -1,12 +1,15 @@
 # `screenshots.survey`
 
-Walk `$SOURCE_DIR` (a read-only preopen of an operator-bound directory of screen images), identify one lead per screen via vision inference, and return one lead block per screen for the CLI to append under `## Lead inventory` in `discovery.md`. The CLI persists the result; this prompt returns the lead-block payload only.
+Walk `$SOURCE_DIR` (the read-only CID view of an operator-bound directory of screen images), identify one lead per screen via vision inference, and return one lead block per screen. The caller persists the catalog; this prompt returns the lead-block payload only.
 
 ## Inputs
 
-- `$SOURCE_DIR` — read-only directory holding the bound screen-image set. Never write here.
-- `<source>` — the plan-level binding key under `plan.yaml.sources.<key>`; the CLI passes it in for context and stamps each lead's `source` itself, so this prompt does not emit it.
-- `$SCRATCH_DIR` — per-slice write-only scratch space; use only for unavoidable intermediate state (e.g. cropped staging files when chrome cropping is required to disambiguate a screen).
+- `$SOURCE_DIR` — read-only CID view holding the bound screen-image set. Absent when the binding is an inline `value`. Never write here.
+- **Source key** — the plan source-binding key the engine passed on the wire. The caller stamps each lead's `source` from it; this prompt does not emit it.
+- **Optional parent lead** — when present, this is a focused survey: return stable child leads under that parent. Inherit parent/focus from the passed record; do not look it up in `leads.md` or `slices/`.
+- `$SCRATCH_DIR` — write-only scratch space; use only for unavoidable intermediate state (e.g. cropped staging files when chrome cropping is required to disambiguate a screen).
+
+The change home and `$PROJECT_DIR` are unreachable. Do not read `plan.yaml`, `leads.md`, `discovery.md`, or `slices/`. Unfocused survey always returns the complete current set from `$SOURCE_DIR`; do not consult a catalog to decide this is a re-survey.
 
 ## Vision prerequisite
 
@@ -45,7 +48,7 @@ Skip images that contain no application content (orphan splash screens, full-scr
 
 ## Output
 
-Return one block per lead, in alphabetical `lead` order. The CLI appends them under the existing `## Lead inventory` heading in `discovery.md`; this prompt never writes the heading itself.
+Return one block per lead, in alphabetical `lead` order. The caller persists the catalog; this prompt never writes `leads.md` or `discovery.md`.
 
 ```markdown
 ### task-list
@@ -94,7 +97,7 @@ A full input / output fixture for this example lives at [`quality/fixtures/refer
 
 - `$SOURCE_DIR` is read-only. Reads outside it surface as `source-survey-path-denied`; never attempt to widen the preopen.
 - Never crop or extract production assets out of screenshots. Cropping platform chrome (status bars, navigation bars, browser chrome, emulator frames) into `$SCRATCH_DIR` is permitted only as a triage aid; cropped pixels never leave the prompt.
-- Do not write or rewrite the `## Lead inventory` heading — the CLI owns the section frame.
+- Do not write the catalog — the caller owns persistence.
 - Do not emit Evidence here. Per-screen spatial extraction is `screenshots.extract`'s job, run once per lead at slice time.
 - Do not invent a lead the screens do not depict. Empty inventories (`$SOURCE_DIR` parseable but no application screens) are valid output.
 - Do not fall back to filename-based inference when the vision prerequisite fails — exit `1` per the prerequisite block.

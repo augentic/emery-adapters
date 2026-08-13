@@ -254,15 +254,15 @@ impl Target for Adapter {
     async fn merge<P: Model>(
         model: &P, ctx: &Context<'_>, slice: &str, phase: MergePhase, workspace: &Workspace,
     ) -> Result<Report, Error> {
-        // Both gates validate change-tree and baseline state through the
-        // adapter's own `"."` preopen — the lent read-only result view
-        // carries product code only.
+        // Preflight reads the staged slice delta from the change home
+        // (excluded from snapshots). Postflight validates the merged
+        // baseline inside the lent workspace (steps 2–3).
         if phase == MergePhase::Preflight {
-            let staged = ctx.project_root.join(format!(".emery/slices/{slice}/contracts"));
+            let staged = ctx.project_root.join(format!(".emery/change/slices/{slice}/contracts"));
             return Ok(enforce_validators(Report::success(), &validate_baseline(&staged)));
         }
 
-        let baseline = ctx.project_root.join("contracts");
+        let baseline = workspace.root_path().join("contracts");
         let merge_prompt = registry::body("prompts/merge.md");
 
         // Clean baseline → deterministic success; otherwise one repair leg.
@@ -272,10 +272,9 @@ impl Target for Adapter {
             let user = format!(
                 "The postflight contract validators found blocking issues in the merged \
              `contracts/` baseline at `{}` (slice `{slice}`, adapter `{}`) — the \
-             baseline lives in the project tree outside your read-only workspace \
-             view. The engine has already promoted the slice's delta and archived \
-             the slice. Repair the baseline files in place, then answer with the \
-             corrected report body.\n\n{}",
+             baseline lives in the lent workspace. The engine has already promoted \
+             the slice's delta and archived the slice. Repair the baseline files in \
+             place, then answer with the corrected report body.\n\n{}",
                 workspace.artifact_path("contracts"),
                 ctx.adapter_id,
                 render_validator_findings(&findings),

@@ -1,19 +1,10 @@
 # Runtime capture survey
 
-`/emery:plan` invokes this prompt once per binding under `plan.yaml.sources.<key>` whose adapter is `captures`. Your job: walk the read-only capture tree at `$SOURCE_DIR`, identify one handler-grain lead per `tests/data/replays/<handler>/` directory the wiretapper captured, and return one lead block per handler. The CLI appends your blocks under `## Lead inventory` in `discovery.md`; you never write `discovery.md` directly.
+The engine invokes this prompt for a `captures` source binding. Your job: walk the read-only CID view at `$SOURCE_DIR`, identify one handler-grain lead per `tests/data/replays/<handler>/` directory the wiretapper captured, and return one lead block per handler. The caller persists the catalog; you never write `leads.md` or `discovery.md`.
 
 ## Binding
 
-Operators bind a captured runtime-data directory under `plan.yaml.sources.<key>`:
-
-```yaml
-sources:
-  runtime:
-    adapter: captures
-    path: ./captures/replays
-```
-
-The bound `path:` becomes `$SOURCE_DIR` at invocation time. The expected layout matches the format `/capture:wiretapper` writes — see [capture-format reference](../references/capture-format.md):
+The engine passes the source key and a read-only CID view of the capture tree as `$SOURCE_DIR`. The expected layout matches the format `/capture:wiretapper` writes — see [capture-format reference](../references/capture-format.md):
 
 ```text
 $SOURCE_DIR/
@@ -29,10 +20,11 @@ Operators with a non-conforming layout adapt the directory or write a thin wrapp
 
 ## Inputs
 
-- **`$SOURCE_DIR`** — read-only preopen of the operator-bound capture root. Walk this tree; never write into it.
-- **Source key** — kebab-case identifier passed in via the runner (the `<key>` from `plan.yaml.sources.<key>`). The CLI stamps each lead's `source` from it; this prompt does not emit it.
+- **`$SOURCE_DIR`** — read-only CID view of the bound capture root. Walk this tree; never write into it. Absent when the binding is an inline `value`.
+- **Source key** — kebab-case identifier the engine passed on the wire. The caller stamps each lead's `source` from it; this prompt does not emit it.
+- **Optional parent lead** — when present, this is a focused survey: return stable child leads under that parent. Inherit parent/focus from the passed record; do not look it up in `leads.md` or `slices/`.
 
-The bound directory is the only filesystem grant — `$PROJECT_DIR` is unreachable, host env is unreadable, the network is denied. Use `$SCRATCH_DIR` for unavoidable intermediate state.
+The bound directory is the only filesystem grant — the change home and `$PROJECT_DIR` are unreachable, host env is unreadable, the network is denied. Do not read `plan.yaml`, `leads.md`, `discovery.md`, or `slices/`. Unfocused survey always returns the complete current set from `$SOURCE_DIR`; do not consult a catalog to decide this is a re-survey. Use `$SCRATCH_DIR` for unavoidable intermediate state.
 
 ## Lead grain
 
@@ -117,13 +109,13 @@ Expected output (alphabetically by `lead`; the CLI stamps `source: runtime`):
 - **Inventing handlers from `INSTRUCTIONS.md`.** The prose is operator hint material; the directory listing is the lead source of truth. If a handler is named in `INSTRUCTIONS.md` but has no scenario JSON files, emit nothing for it.
 - **Per-scenario leads.** One block per `<handler>/` directory, never one per `<scenario>.json`. Scenario-level detail belongs in `extract`'s `kind: example` claims.
 - **Cross-source slug mismatches here.** When another source surfaces the same handler under a different slug, reconciliation is propose-time agent judgment and plan-review `--sources` edits; this prompt sees one source's tree. See [From sources to slices](../references/emery-runtime/reconciliation.md#plan-time-leads-become-slices) for how leads reconcile into slices.
-- **Writing `discovery.md` or `plan.yaml`.** Only lead blocks. The CLI owns every lifecycle file.
+- **Writing `leads.md`, `discovery.md`, or `plan.yaml`.** Only lead blocks. The caller owns every lifecycle file.
 
 ## Failure modes
 
 | Condition | Action |
 | --- | --- |
-| `$SOURCE_DIR` empty or missing `tests/data/replays/` | Return zero leads. Operator reviews in `discovery.md`. |
+| `$SOURCE_DIR` empty or missing `tests/data/replays/` | Return zero leads. The caller persists the empty set. |
 | `tests/data/replays/<handler>/` contains no `*.json` files | Skip the handler silently. |
 | Read denied outside `$SOURCE_DIR` | Host runner returns `source-survey-path-denied`; slice stays `refining`. |
 | Capture JSON unparseable during surface identification | Continue with the remaining scenarios; surface ambiguity surfaces in the `synopsis` line. |
