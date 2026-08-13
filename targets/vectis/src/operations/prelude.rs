@@ -23,6 +23,7 @@ pub(super) fn render_infer_report(change_root: &Path) -> String {
     let report = if composition.exists() {
         let args = infer::InferArgs {
             composition,
+            slices: Some(change_root.join(".emery/slices")).filter(|p| p.is_dir()),
             candidate_cache: Some(change_root.join(".emery/.cache/component-candidates"))
                 .filter(|p| p.is_dir()),
             parts: Some(change_root.join(".emery/design-system/parts.yaml"))

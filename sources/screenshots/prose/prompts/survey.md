@@ -8,6 +8,8 @@ Walk `$SOURCE_DIR` (a read-only preopen of an operator-bound directory of screen
 - `<source>` — the source binding key, interpolated into the prompt for context; the engine stamps each lead's `source` itself, so this prompt does not emit it.
 - `$SCRATCH_DIR` — per-run write-only scratch space; use only for unavoidable intermediate state (e.g. cropped staging files when chrome cropping is required to disambiguate a screen).
 
+`$PROJECT_DIR` is unreachable; do not attempt to read project lifecycle state. Writes back into `$SOURCE_DIR` are denied.
+
 ## Vision prerequisite
 
 The prompt assumes the agent runtime can inspect attached images. The check is **positive**: at least one of the input image paths MUST be successfully read through the runtime's native attachment / file-read mechanism. The prompt MUST NOT consult a host-provided "vision adapter" flag (those are announced inconsistently across runtimes), and it MUST NOT fall back to filename-based or metadata-only inference.
@@ -92,7 +94,7 @@ A full input / output fixture for this example lives at [`quality/fixtures/refer
 
 ## Guardrails
 
-- `$SOURCE_DIR` is read-only. Reads outside it surface as `source-survey-path-denied`; never attempt to widen the preopen.
+- `$SOURCE_DIR` is read-only. Reads outside it surface as `source-survey-path-denied`; never attempt to widen the preopen. `$PROJECT_DIR` is unreachable.
 - Never crop or extract production assets out of screenshots. Cropping platform chrome (status bars, navigation bars, browser chrome, emulator frames) into `$SCRATCH_DIR` is permitted only as a triage aid; cropped pixels never leave the prompt.
 - Return lead blocks only — the engine owns persistence.
 - Do not emit Evidence here. Per-screen spatial extraction is `screenshots.extract`'s job, run once per lead at extract time.

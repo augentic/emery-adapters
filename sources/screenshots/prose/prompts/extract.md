@@ -11,6 +11,8 @@ The pipeline body lives in [`extract/pipeline.md`](extract/pipeline.md) and runs
 - `<lead>` — the lead this run is extracting Evidence for (one screen, possibly with state and platform variants attached; produced by `screenshots.survey`).
 - `$SCRATCH_DIR` — per-run write-only scratch space. Use only for unavoidable intermediate state (cropped image staging).
 
+`$PROJECT_DIR` is unreachable; do not attempt to read project lifecycle state or write a candidate-cache sidecar. Writes back into `$SOURCE_DIR` are denied.
+
 ## Vision prerequisite
 
 Identical to `screenshots.survey`: read at least one of the input image paths through the runtime's native attachment mechanism. On failure, exit `1` with the supported-runtimes message — never fall back to filename or metadata inference.
@@ -95,7 +97,7 @@ Worked example: [`references/examples/task-list.md`](../references/examples/task
 
 ## Guardrails
 
-- `$SOURCE_DIR` is read-only. Reads outside it surface as `source-extract-path-denied`; never attempt to widen the preopen.
+- `$SOURCE_DIR` is read-only. Reads outside it surface as `source-extract-path-denied`; never attempt to widen the preopen. `$PROJECT_DIR` is unreachable.
 - Never write Evidence to disk yourself — return the YAML body; the engine persists it.
 - Never emit define-owned wiring on a claim: no `maps_to`, no `bind`, no `event`, no `error`, no overlay `trigger`, no navigation events, no `*-when` body keys. The `state_when:` body field on a `states.<name>` region claim is the *condition expression* lifted from visible cues, not a `*-when` wiring key.
 - Never emit closed-enum claim kinds outside `{region, container, leaf}` from this adapter. Behavioural kinds (`excerpt` / `type` / `call`) belong to code source adapters; intent kinds belong to `intent`.

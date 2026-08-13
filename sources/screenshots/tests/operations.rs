@@ -42,4 +42,8 @@ async fn extract_spatial_kinds() {
     assert!(user.contains("screen images"), "the binding note names the image-set material");
     assert!(user.contains("Source binding key: `mockups`"), "and the binding key");
     assert!(user.contains("working directory"), "the lent tree is the agent's workspace");
+    assert!(
+        request.system.as_deref().unwrap().contains("`$PROJECT_DIR` is unreachable"),
+        "extract must not instruct a project-tree candidate-cache write"
+    );
 }
