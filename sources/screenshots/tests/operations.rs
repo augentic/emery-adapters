@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use adapter::Source as _;
-use adapter::seam::{Authority, ClaimKind, Context, Lead};
+use adapter::seam::{Authority, ClaimKind, Context, Lead, SourceInput};
 use omnia_testkit::model::Harness;
 use screenshots::Adapter;
 
@@ -21,23 +21,25 @@ async fn extract_spatial_kinds() {
         adapter_id: "source:screenshots",
         project_root: Path::new("."),
         mcp_url: None,
-        lend: ".".to_string(),
+        lend: "/prepared/screens".to_string(),
+        source_key: Some("mockups".to_string()),
     };
+    let input = SourceInput::Workspace("/prepared/screens".to_string());
     let lead = Lead {
         lead: "task-list".to_string(),
         synopsis: "Task list screen with add button.".to_string(),
         topics: Vec::new(),
     };
 
-    let evidence = Adapter::extract(&model, &ctx, &lead).await.unwrap();
+    let evidence = Adapter::extract(&model, &ctx, &input, &lead).await.unwrap();
 
     assert_eq!(evidence.authority, Authority::Documentation);
     let kinds: Vec<ClaimKind> = evidence.claims.iter().map(|claim| claim.kind).collect();
     assert_eq!(kinds, [ClaimKind::Region, ClaimKind::Container, ClaimKind::Leaf]);
     let request = &model.requests()[0];
     assert!(request.system.as_deref().unwrap().starts_with("# `screenshots.extract`"));
-    assert!(
-        request.messages[0].content.contains("screen images"),
-        "the binding note names the image-set material"
-    );
+    let user = &request.messages[0].content;
+    assert!(user.contains("screen images"), "the binding note names the image-set material");
+    assert!(user.contains("Source binding key: `mockups`"), "and the binding key");
+    assert!(user.contains("working directory"), "the lent tree is the agent's workspace");
 }

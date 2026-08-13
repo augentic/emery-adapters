@@ -94,7 +94,7 @@ Walk every container claim produced in stage 4 and compare every `container: gro
 
 Apply the conservative emission policy:
 
-- Promote a container claim to `component: <slug>` only when **either** the operator confirms a candidate (a previous accepted Evidence carries the slug already) **or** the prompt observes ≥2 structurally identical groups across screens of the *same run* (within `<lead>` plus any prior leads extracted for the same plan — synthesis aggregates across leads).
+- Promote a container claim to `component: <slug>` only when **either** the operator confirms a candidate (a previous accepted Evidence carries the slug already) **or** the prompt observes ≥2 structurally identical groups across screens of the *same run* (within `<lead>` plus any prior leads extracted in the same run — downstream synthesis aggregates across leads).
 - Otherwise leave `component:` unset on the claim and add `notes.candidate_component: <slug>` so the operator can promote it explicitly later.
 - Slugs MUST match `^[a-z][a-z0-9]*(-[a-z0-9]+)*$` (kebab-case). Reserved region names (`header`, `body`, `footer`, `fab`) MUST NOT be used as slugs.
 - Derive slugs from visible content (`task-row`, `setting-row`, `chip-tag`) — never from layout shape (`row-1`, `card-2`).
@@ -129,7 +129,7 @@ Record uncertainty on the affected claim under a `notes:` map when:
 - An asset reference is expected but `assets.yaml` does not list the ID (`notes.todo: add image '<id>' to assets.yaml`).
 - A candidate component skeleton is borderline (`notes.candidate_component: <slug>` — see stage 6).
 
-Each `notes.todo` and `notes.candidate_component` surfaces in the slice's synthesis output as a `[unknown]` tag against the affected requirement during reconciliation.
+Each `notes.todo` and `notes.candidate_component` surfaces as an `[unknown]` tag against the affected requirement during downstream reconciliation.
 
 ## Determinism
 
@@ -141,8 +141,8 @@ Each `notes.todo` and `notes.candidate_component` surfaces in the slice's synthe
 
 ## Idempotence
 
-Re-runs are additive and conservative; the CLI replaces Evidence by `(<source>, <lead>)` tuple, but within a run:
+Re-runs are additive and conservative; the engine replaces Evidence by `(<source>, <lead>)` tuple, but within a run:
 
 - A re-run against the same source images MAY refine previously emitted body fields when the same images still support the refinement.
-- Operator overrides committed at synthesis time (post-reconciliation edits in `spec.md` / `design.md`) are NOT visible to `extract`; the prompt only sees the source images. Use stable `id`s so the reconciliation layer can detect and preserve operator edits.
+- Operator overrides committed downstream (post-reconciliation edits) are NOT visible to `extract`; the prompt only sees the source images. Use stable `id`s so the reconciliation layer can detect and preserve operator edits.
 - When the new screenshots no longer contain a previously inferred element, simply do not emit its claim. The synthesis layer detects the drop via the missing `id` and tags affected requirements with `[unknown]` / `[divergence]` — there is no `# stale-source:` annotation at the Evidence layer.

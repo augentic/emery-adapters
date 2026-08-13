@@ -29,8 +29,8 @@ What the engine calls, per axis:
 | Axis | Operation | Engine passes | You return | Engine persists it as |
 | ---- | --------- | ------------- | ---------- | --------------------- |
 | source | `metadata` | — | `SourceMetadata` | resolve-time record |
-| source | `survey` | `Context` | `Vec<Lead>` | `## Lead inventory` blocks in `discovery.md` |
-| source | `extract` | `Context`, one `Lead` | `Evidence` | `.emery/slices/<slice>/evidence/<source>.yaml` |
+| source | `survey` | `Context`, `SourceInput` | `Vec<Lead>` | `## Lead inventory` blocks in `discovery.md` |
+| source | `extract` | `Context`, `SourceInput`, one `Lead` | `Evidence` | `.emery/slices/<slice>/evidence/<source>.yaml` |
 | target | `metadata` | — | `TargetMetadata` (floor, build `inputs[]`, platforms) | resolve-time record |
 | target | `guidance` | `Context` | prompt `String` | read by core synthesis |
 | target | `build` | `Context`, slice name, typed `inputs`, `Workspace` | `Report` | build report; gates the `built` transition |
@@ -138,7 +138,7 @@ pub use operations::Adapter;
 ```rust
 use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA, evidence_tail, leads_tail};
 use adapter::registry::Doc;
-use adapter::seam::{Context, Error, Evidence, Lead, SourceMetadata};
+use adapter::seam::{Context, Error, Evidence, Lead, SourceInput, SourceMetadata};
 use adapter::{AdapterIdentity, Model, Source, repaired};
 
 use crate::registry;
@@ -156,18 +156,20 @@ impl Source for Adapter {
     fn metadata() -> SourceMetadata {
         // Declare the minimum host that can run this adapter once it depends
         // on host behavior; first-party adapters set it on every train release.
-        SourceMetadata { emery_floor: Some("0.37.0".to_string()) }
+        SourceMetadata { emery_floor: Some("0.38.0".to_string()) }
     }
 
     fn docs() -> &'static [Doc] {
         registry::docs()
     }
 
-    async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>, Error> {
+    async fn survey<P: Model>(
+        model: &P, ctx: &Context<'_>, input: &SourceInput,
+    ) -> Result<Vec<Lead>, Error> {
+        let note = binding_note(ctx, input)?;
         let system = registry::body("prompts/survey.md").to_string();
         let user = format!(
-            "Survey the changelog source bound to adapter `{id}`. Resolve the binding \
-             from `plan.yaml` under `sources.<key>`; its `path` names the bound tree. \
+            "Survey the changelog source bound to adapter `{id}`.\n\n{note}\n\n\
              Answer with one JSON object matching the gated schema: a `leads` array.",
             id = ctx.adapter_id,
         );
@@ -175,23 +177,39 @@ impl Source for Adapter {
     }
 
     async fn extract<P: Model>(
-        model: &P, ctx: &Context<'_>, lead: &Lead,
+        model: &P, ctx: &Context<'_>, input: &SourceInput, lead: &Lead,
     ) -> Result<Evidence, Error> {
+        let note = binding_note(ctx, input)?;
         let system = registry::body("prompts/extract.md").to_string();
         let user = format!(
-            "Extract Evidence for this lead:\n\n{lead}\n\nAnswer with one JSON object \
-             matching the gated schema (Evidence body: `authority`, `claims`).",
+            "Extract Evidence for this lead:\n\n{lead}\n\n{note}\n\nAnswer with one JSON \
+             object matching the gated schema (Evidence body: `authority`, `claims`).",
             lead = lead.render(),
         );
         repaired(model, ctx, system, user, "evidence", EVIDENCE_ANSWER_SCHEMA, evidence_tail).await
     }
+}
+
+/// The binding key and lent tree, framed for the model. The engine
+/// resolved the binding and prepared the input before dispatch.
+fn binding_note(ctx: &Context<'_>, input: &SourceInput) -> Result<String, Error> {
+    let key = ctx.source_key.as_deref().ok_or_else(|| {
+        Error::InvalidRequest("source dispatch carries no source-binding key".to_string())
+    })?;
+    if input.root().is_none() {
+        return Err(Error::InvalidRequest("changelog reads a tree binding".to_string()));
+    }
+    Ok(format!(
+        "Source binding key: `{key}`. The engine lent the bound changelog tree to you \
+         as your read-only working directory; do not resolve the binding yourself."
+    ))
 }
 ```
 
 Points that generalize:
 
 - **Operations write no workflow artifacts.** The engine persists leads and Evidence; your job is to return well-formed values. Say so explicitly in the prompt ("the caller persists…; do not write it yourself") because the model has workspace access.
-- **The binding is resolved by prompt, not by API.** The agent reads `plan.yaml` inside the lent workspace; `ctx.adapter_id` names which binding is yours.
+- **The engine resolves and prepares the binding — never recover it yourself.** Every `survey` / `extract` call carries the binding key (`ctx.source_key`) and the prepared `SourceInput` on the wire: a tree binding (`path:`) arrives as `SourceInput::Workspace` and is already lent as the operation's workspace (`ctx.lend`), an inline binding (`value:`) arrives as `SourceInput::Inline` — interpolate `input.content()` into the prompt. Do not ask the agent to read `plan.yaml` or resolve a source location.
 - **`repaired` owns the parse-and-retry loop.** Pick the schema constant and tail matching the operation; the committed goldens live in the engine repo under `crates/project/answers/`.
 
 ### 5. Author the prose
@@ -214,7 +232,7 @@ The embed walker follows symlinks and fails the build on any dangling relative l
 use std::path::Path;
 
 use adapter::Source as _;
-use adapter::seam::Context;
+use adapter::seam::{Context, SourceInput};
 use changelog::Adapter;
 use omnia_testkit::model::Harness;
 
@@ -223,6 +241,8 @@ fn ctx() -> Context<'static> {
         adapter_id: "source:changelog",
         project_root: Path::new("."),
         mcp_url: None,
+        lend: "/prepared/changelog".to_string(),
+        source_key: Some("changelog".to_string()),
     }
 }
 
@@ -232,7 +252,8 @@ async fn survey_prompts_and_parses() {
         [r#"{"leads":[{"lead":"release-notes","synopsis":"Publish release notes."}]}"#],
     );
 
-    let leads = Adapter::survey(&model, &ctx()).await.unwrap();
+    let input = SourceInput::Workspace("/prepared/changelog".to_string());
+    let leads = Adapter::survey(&model, &ctx(), &input).await.unwrap();
 
     assert_eq!(leads.len(), 1);
     let request = &model.requests()[0];

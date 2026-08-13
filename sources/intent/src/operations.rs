@@ -3,18 +3,22 @@
 
 use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA, evidence_tail, leads_tail};
 use adapter::registry::Doc;
-use adapter::seam::{Context, Error, Evidence, Lead, SourceMetadata};
+use adapter::seam::{Context, Error, Evidence, Lead, SourceInput, SourceMetadata};
 use adapter::{AdapterIdentity, Model, Source, repaired};
 
 use crate::registry;
 
-const BINDING_NOTE: &str = "The operator's project workspace is lent to you, and there is no \
-                            session: every input you need lives in the workspace tree and this \
-                            prompt. Resolve the bound source material from the plan — read \
-                            `plan.yaml` at the workspace root and find the binding under \
-                            `sources.<key>` whose `adapter` is `intent`; its inline `value` \
-                            carries the operator's free-form intent string, verbatim (`path` \
-                            is absent for intent bindings — no source tree is bound).";
+/// The binding key and inline intent string from the engine-prepared
+/// call, rejecting a tree-form input (intent bindings are `value:`-only).
+fn binding<'a>(ctx: &'a Context<'_>, input: &'a SourceInput) -> Result<(&'a str, &'a str), Error> {
+    let key = ctx.source_key.as_deref().ok_or_else(|| {
+        Error::InvalidRequest("source dispatch carries no source-binding key".to_string())
+    })?;
+    let intent = input.content().ok_or_else(|| {
+        Error::InvalidRequest("intent reads an inline `value:` binding; got a tree".to_string())
+    })?;
+    Ok((key, intent))
+}
 
 /// Inline intent binding → one lead and one `kind: intent` claim.
 #[derive(Clone, Copy, Debug)]
@@ -28,7 +32,7 @@ impl Source for Adapter {
 
     fn metadata() -> SourceMetadata {
         SourceMetadata {
-            emery_floor: Some("0.37.0".to_string()),
+            emery_floor: Some("0.38.0".to_string()),
         }
     }
 
@@ -36,15 +40,20 @@ impl Source for Adapter {
         registry::docs()
     }
 
-    async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>, Error> {
+    async fn survey<P: Model>(
+        model: &P, ctx: &Context<'_>, input: &SourceInput,
+    ) -> Result<Vec<Lead>, Error> {
+        let (key, intent) = binding(ctx, input)?;
         let system = registry::body("prompts/survey.md").to_string();
         let user = format!(
             "Survey the intent source bound to adapter `{id}`.\n\n\
-         {BINDING_NOTE}\n\n\
-         The lead id is the slice name the plan derived for this binding (the prompt's \
-         `slice-name` input): resolve it from the `plan.yaml` entry under `slices[]` \
-         that binds this source. Re-running this survey replaces the prior lead by its \
-         `(source, lead)` pair, exactly as the prompt describes — emit the single \
+         Source binding key: `{key}`. The engine resolved the binding and passed its \
+         inline `value` — the operator's free-form intent string, verbatim (no source \
+         tree is bound for intent):\n\n\
+         {intent}\n\n\
+         The lead id is a stable kebab-case slug derived from the intent string itself, \
+         per the prompt's slug rules. Re-running this survey replaces the prior lead by \
+         its `(source, lead)` pair, exactly as the prompt describes — emit the single \
          current lead.\n\n\
          Answer with one JSON object matching the gated schema: a `leads` array carrying \
          exactly one lead whose `synopsis` is the operator's intent string, verbatim, per \
@@ -56,13 +65,17 @@ impl Source for Adapter {
     }
 
     async fn extract<P: Model>(
-        model: &P, ctx: &Context<'_>, lead: &Lead,
+        model: &P, ctx: &Context<'_>, input: &SourceInput, lead: &Lead,
     ) -> Result<Evidence, Error> {
+        let (key, intent) = binding(ctx, input)?;
         let system = registry::body("prompts/extract.md").to_string();
         let user = format!(
             "Extract Evidence from the intent source bound to adapter `{id}` for this \
          lead:\n\n{lead}\n\n\
-         {BINDING_NOTE}\n\n\
+         Source binding key: `{key}`. The engine resolved the binding and passed its \
+         inline `value` — the operator's intent string, verbatim (no source tree is \
+         bound for intent):\n\n\
+         {intent}\n\n\
          Answer with one JSON object matching the gated schema: the Evidence body \
          (`authority: \"intent\"`, one `kind: \"intent\"` claim whose `id` equals the \
          lead id and whose `statement` carries the operator's intent string verbatim, \

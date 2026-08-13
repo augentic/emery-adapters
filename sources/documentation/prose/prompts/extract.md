@@ -1,13 +1,13 @@
 # `documentation.extract`
 
-For one `Lead`, walk `$SOURCE_DIR` (read-only) and return a single `Evidence` document of structured claims. The CLI persists the result at `.emery/slices/<slice>/evidence/<source>.yaml`; this prompt returns the YAML body only. Core synthesis later reconciles this Evidence with every other bound source's into the slice's `spec.md` — see [From sources to slices](../references/emery-runtime/reconciliation.md#slice-time-evidence-becomes-a-spec).
+For one `Lead`, walk `$SOURCE_DIR` (read-only) and return a single `Evidence` document of structured claims. The engine persists the result; this prompt returns the YAML body only. Downstream synthesis later reconciles this Evidence with every other bound source's — see [From sources to slices](../references/emery-runtime/reconciliation.md#slice-time-evidence-becomes-a-spec).
 
 ## Inputs
 
 - `$SOURCE_DIR` — read-only preopen of the bound docs path.
 - `<source>` — the plan-level binding key under `plan.yaml.sources.<key>`.
-- `<lead>` — the lead from `discovery.md` this run is extracting Evidence for.
-- `$SCRATCH_DIR` — per-slice write-only scratch space; use only for unavoidable intermediate state.
+- `<lead>` — the lead this run is extracting Evidence for (produced by `documentation.survey`).
+- `$SCRATCH_DIR` — per-run write-only scratch space; use only for unavoidable intermediate state.
 
 ## Locate the lead's docs
 
@@ -17,7 +17,7 @@ The lead id was produced by `documentation.survey` from a top-heading (or a logi
 2. Fall back to the file whose kebab-cased stem equals `<lead>`.
 3. In a monolithic file, anchor to the section whose H1 (or top-most heading) slugs to `<lead>`.
 
-If no doc resolves, return Evidence with `claims: []` rather than fabricating content. The CLI treats empty `claims:` as valid; an unresolvable lead becomes a `Status: unknown` requirement during synthesis.
+If no doc resolves, return Evidence with `claims: []` rather than fabricating content. The engine treats empty `claims:` as valid; an unresolvable lead surfaces as `[unknown]` downstream.
 
 ## Claim kinds
 
@@ -63,7 +63,7 @@ claims:
     decision: "..."
 ```
 
-`authority` is always the literal `documentation` (operator-provided written product/technical intent; the authority precedence `intent > documentation > behaviour` is defined in [`authority.md`](../references/emery-runtime/synthesis/authority.md)). `lead` is the supplied `<lead>`. The document's `(slice, source)` identity is path-borne (the CLI persists it at `.emery/slices/<slice>/evidence/<source>.yaml`) and the adapter resolves from `plan.yaml.sources.<source>.adapter`, so neither is written in-document.
+`authority` is always the literal `documentation` (operator-provided written product/technical intent; the authority precedence `intent > documentation > behaviour` is defined in [`authority.md`](../references/emery-runtime/synthesis/authority.md)). `lead` is the supplied `<lead>`. The document's source identity is engine-owned, so neither the source key nor the adapter is written in-document.
 
 ## Worked example
 
@@ -81,7 +81,7 @@ Acceptance:
 Decision: use the existing transactional email provider rather than introducing a new notification service.
 ```
 
-Output (Evidence for `lead: password-reset`, bound under `source: product-notes`, persisted at `evidence/product-notes.yaml`):
+Output (Evidence for `lead: password-reset`, bound under `source: product-notes`):
 
 ```yaml
 authority: documentation
@@ -115,7 +115,7 @@ A full input/output fixture for this example lives at [`quality/fixtures/referen
 ## Guardrails
 
 - `$SOURCE_DIR` is read-only. Reads outside it surface as `source-extract-path-denied`; never attempt to widen the preopen.
-- Never write Evidence to disk yourself — return the YAML body to the CLI, which persists it under `.emery/slices/<slice>/evidence/<source>.yaml`.
+- Never write Evidence to disk yourself — return the YAML body; the engine persists it.
 - Never emit closed-enum kinds outside `{requirement, criterion, decision, section}` from this adapter. Spatial kinds (`region`/`container`/`leaf`) belong to `screenshots`; behaviour kinds (`excerpt`/`type`/`call`) belong to code source adapters.
-- Never omit `id` on `requirement` or `criterion`. The CLI validates Evidence against `schemas/evidence.schema.json` before synthesis; a missing `id` fails the slice in `refining`.
+- Never omit `id` on `requirement` or `criterion`. The engine validates Evidence against `schemas/evidence.schema.json` before synthesis; a missing `id` fails validation.
 - Empty `claims: []` is valid output when a lead cannot be resolved to any doc content. Do not pad with speculative claims.
