@@ -88,6 +88,73 @@ fn baseline_only_waits_for_second_merged_screen() {
 }
 
 #[test]
+fn mixed_child_order_from_bbox() {
+    let tmp = TempDir::new().expect("tempdir");
+    write_rel(
+        tmp.path(),
+        ".emery/specs/composition.yaml",
+        r"
+version: 1
+screens:
+  archive:
+    body:
+      group:
+        items:
+          - checkbox: {}
+          - group:
+              items:
+                - text: {}
+          - icon: {}
+",
+    );
+    write_rel(
+        tmp.path(),
+        ".emery/slices/task-list/evidence/screens.yaml",
+        r"
+authority: documentation
+lead: task-list
+claims:
+  - kind: container
+    id: task-list.body.task-row
+    screen: task-list
+    region: body
+    parent: task-list.body
+    container: group
+    direction: row
+    bbox: { x: 0, y: 10, w: 300, h: 40 }
+    notes:
+      candidate_component: task-row
+  - kind: container
+    id: task-list.body.task-row.title-group
+    parent: task-list.body.task-row
+    container: group
+    direction: column
+    bbox: { x: 40, y: 10, w: 200, h: 40 }
+  - kind: leaf
+    id: task-list.body.task-row.checkbox
+    parent: task-list.body.task-row
+    leaf: checkbox
+    bbox: { x: 0, y: 10, w: 32, h: 32 }
+  - kind: leaf
+    id: task-list.body.task-row.chevron
+    parent: task-list.body.task-row
+    leaf: icon
+    bbox: { x: 250, y: 10, w: 24, h: 24 }
+  - kind: leaf
+    id: task-list.body.task-row.title
+    parent: task-list.body.task-row.title-group
+    leaf: text
+    bbox: { x: 40, y: 10, w: 200, h: 20 }
+",
+    );
+
+    let report = run(&args(tmp.path(), true, None)).expect("infer");
+    let clusters = clusters(&report);
+    assert_eq!(clusters.len(), 1, "bbox sort recovers visual order from kind-grouped claims");
+    assert_eq!(clusters[0]["occurrences"], 2);
+}
+
+#[test]
 fn sidecar_overlay_still_folds() {
     let tmp = TempDir::new().expect("tempdir");
     write_rel(tmp.path(), ".emery/specs/composition.yaml", ROW_GROUP);

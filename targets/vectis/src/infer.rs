@@ -278,16 +278,23 @@ fn assemble_group(
     claim: &Value, claims: &[Value], by_parent: &BTreeMap<String, Vec<usize>>,
 ) -> Value {
     let id = claim.get("id").and_then(Value::as_str).unwrap_or("");
-    json!({ "items": assemble_items(id, claims, by_parent) })
+    json!({ "items": assemble_items(id, claim_direction(claim), claims, by_parent) })
 }
 
 fn assemble_items(
-    parent_id: &str, claims: &[Value], by_parent: &BTreeMap<String, Vec<usize>>,
+    parent_id: &str, direction: Option<&str>, claims: &[Value],
+    by_parent: &BTreeMap<String, Vec<usize>>,
 ) -> Vec<Value> {
     let Some(indexes) = by_parent.get(parent_id) else {
         return Vec::new();
     };
-    indexes.iter().filter_map(|&index| claim_to_item(&claims[index], claims, by_parent)).collect()
+    // Claim-array order is not visual order for mixed nested-group /
+    // leaf children; sort by bbox when every sibling has one.
+    let mut ordered: Vec<usize> = indexes.clone();
+    if ordered.iter().all(|&index| bbox_xy(&claims[index]).is_some()) {
+        ordered.sort_by_key(|&index| sibling_key(&claims[index], direction, index));
+    }
+    ordered.iter().filter_map(|&index| claim_to_item(&claims[index], claims, by_parent)).collect()
 }
 
 fn claim_to_item(
@@ -302,12 +309,37 @@ fn claim_to_item(
             let container = claim.get("container").and_then(Value::as_str)?;
             if container == "group" {
                 let id = claim.get("id").and_then(Value::as_str).unwrap_or("");
-                Some(json!({ "group": { "items": assemble_items(id, claims, by_parent) } }))
+                Some(json!({
+                    "group": {
+                        "items": assemble_items(id, claim_direction(claim), claims, by_parent)
+                    }
+                }))
             } else {
                 Some(json!({ container: {} }))
             }
         }
         _ => None,
+    }
+}
+
+fn claim_direction(claim: &Value) -> Option<&str> {
+    claim.get("direction").and_then(Value::as_str)
+}
+
+fn bbox_xy(claim: &Value) -> Option<(i64, i64)> {
+    let bbox = claim.get("bbox")?;
+    Some((json_i64(bbox.get("x")?)?, json_i64(bbox.get("y")?)?))
+}
+
+fn json_i64(value: &Value) -> Option<i64> {
+    value.as_i64().or_else(|| value.as_u64().and_then(|n| i64::try_from(n).ok()))
+}
+
+fn sibling_key(claim: &Value, direction: Option<&str>, index: usize) -> (i64, i64, usize) {
+    match bbox_xy(claim) {
+        Some((x, y)) if direction == Some("row") => (x, y, index),
+        Some((x, y)) => (y, x, index),
+        None => (i64::MAX, 0, index),
     }
 }
 

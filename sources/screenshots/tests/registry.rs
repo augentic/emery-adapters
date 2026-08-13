@@ -22,6 +22,15 @@ fn embeds_prompts() {
         !pipeline.contains(".emery/.cache/component-candidates"),
         "stage-6 candidates ride Evidence notes; the prompt must not write a project-tree sidecar"
     );
+    assert!(
+        !pipeline
+            .contains("then containers (in pre-order tree walk under each region), then leaves"),
+        "kind-grouped emission puts nested groups before sibling leaves"
+    );
+    assert!(
+        pipeline.contains("bbox") && pipeline.contains("visual sibling order"),
+        "candidate reconstruction needs bbox-sorted visual sibling order"
+    );
 }
 
 #[test]

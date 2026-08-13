@@ -103,7 +103,7 @@ When in doubt, leave `component:` unset and emit the note. Promoting a note to a
 
 ### Candidate notes feed build-time inference
 
-Whenever you emit a `notes.candidate_component: <slug>` hint, that note on the Evidence claim is the whole feed — do not write a sidecar file. `$PROJECT_DIR` is unreachable from this prompt (`$SOURCE_DIR` is the only filesystem grant; `$SCRATCH_DIR` is ephemeral). Vectis reconstructs composition-shaped group skeletons from these claims at build time (child leaves in claim order become `{ <kind>: {} }` items; nested `container: group` claims become nested `group:` nodes) and folds them into clustering alongside the merged baseline, so cross-slice memory does not depend on a writable project cache. The derived slug is a non-authoritative label hint the composition leg may adopt or override; it is never an identity.
+Whenever you emit a `notes.candidate_component: <slug>` hint, that note on the Evidence claim is the whole feed — do not write a sidecar file. `$PROJECT_DIR` is unreachable from this prompt (`$SOURCE_DIR` is the only filesystem grant; `$SCRATCH_DIR` is ephemeral). Also emit `bbox: { x, y, w, h }` on that group and every descendant: Vectis reconstructs composition-shaped group skeletons from these claims at build time, sorting siblings by bbox (left-to-right in a `direction: row` group, top-to-bottom otherwise) so nested `container: group` children keep their visual place among sibling leaves. Child leaves become `{ <kind>: {} }` items; nested groups become nested `group:` nodes. The reconstruction folds into clustering alongside the merged baseline, so cross-slice memory does not depend on a writable project cache. The derived slug is a non-authoritative label hint the composition leg may adopt or override; it is never an identity.
 
 ## 7. Emit gaps
 
@@ -120,7 +120,7 @@ Each `notes.todo` and `notes.candidate_component` surfaces as an `[unknown]` tag
 
 ## Determinism
 
-- Emit claims in pipeline order: regions first (in the closed-region order above), then containers (in pre-order tree walk under each region), then leaves (in pre-order tree walk under each container).
+- Emit claims in visual pre-order under each region (closed-region order first): walk each region's tree in visual sibling order, emitting a container immediately before its descendants. Nested containers and leaves interleave in that walk — do not kind-group all containers ahead of all leaves. Sibling order is left-to-right in a `direction: row` group and top-to-bottom in a `direction: column` group.
 - `id`s follow the dotted-kebab grammar defined in [../extract.md](../extract.md). Re-running against unchanged inputs produces byte-identical Evidence.
 - Quote `content` / `label` / `title` verbatim from the screen where legible. Light grammatical normalisation (terminal punctuation) is allowed; rephrasing is not.
 - Do not invent layout properties. Omit `gap` / `padding` / `align` / `size` when measurement is unconfident; emit `notes.todo` instead.
