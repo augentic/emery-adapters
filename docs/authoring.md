@@ -29,8 +29,8 @@ What the engine calls, per axis:
 | Axis | Operation | Engine passes | You return | Engine persists it as |
 | ---- | --------- | ------------- | ---------- | --------------------- |
 | source | `metadata` | — | `SourceMetadata` | resolve-time record |
-| source | `survey` | `Context`, `SourceInput` | `Vec<Lead>` | `## Lead inventory` blocks in `discovery.md` |
-| source | `extract` | `Context`, `SourceInput`, one `Lead` | `Evidence` | `.emery/slices/<slice>/evidence/<source>.yaml` |
+| source | `survey` | `Context`, `SourceInput` | `Vec<Lead>` | the consumer's lead inventory (one lead per surface) |
+| source | `extract` | `Context`, `SourceInput`, one `Lead` | `Evidence` | the consumer's Evidence store, per `(source, lead)` |
 | target | `metadata` | — | `TargetMetadata` (floor, build `inputs[]`, platforms) | resolve-time record |
 | target | `guidance` | `Context` | prompt `String` | read by core synthesis |
 | target | `build` | `Context`, slice name, typed `inputs`, `Workspace` | `Report` | build report; gates the `built` transition |
@@ -143,7 +143,7 @@ use adapter::{AdapterIdentity, Model, Source, repaired};
 
 use crate::registry;
 
-/// Surveys a bound changelog tree into slice-sized leads.
+/// Surveys a bound changelog tree into one lead per changelog surface.
 #[derive(Clone, Copy, Debug)]
 pub struct Adapter;
 

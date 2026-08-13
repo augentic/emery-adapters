@@ -4,16 +4,7 @@ This prompt runs once per bound source whose adapter is `captures`. Your job: wa
 
 ## Binding
 
-Operators bind a captured runtime-data directory under `plan.yaml.sources.<key>`:
-
-```yaml
-sources:
-  runtime:
-    adapter: captures
-    path: ./captures/replays
-```
-
-The bound `path:` becomes `$SOURCE_DIR` at invocation time. The expected layout matches the format `/capture:wiretapper` writes — see [capture-format reference](../references/capture-format.md):
+The engine resolves the operator's binding and lends the prepared read-only capture tree on the wire — it arrives as `$SOURCE_DIR` at invocation time. The expected layout matches the format `/capture:wiretapper` writes — see [capture-format reference](../references/capture-format.md):
 
 ```text
 $SOURCE_DIR/
@@ -30,7 +21,7 @@ Operators with a non-conforming layout adapt the directory or write a thin wrapp
 ## Inputs
 
 - **`$SOURCE_DIR`** — read-only preopen of the operator-bound capture root. Walk this tree; never write into it.
-- **Source key** — kebab-case identifier passed in via the runner (the `<key>` from `plan.yaml.sources.<key>`). The engine stamps each lead's `source` from it; this prompt does not emit it.
+- **Source key** — kebab-case binding identifier, interpolated into the prompt. The engine stamps each lead's `source` from it; this prompt does not emit it.
 
 The bound directory is the only filesystem grant — `$PROJECT_DIR` is unreachable, host env is unreadable, the network is denied. Use `$SCRATCH_DIR` for unavoidable intermediate state.
 

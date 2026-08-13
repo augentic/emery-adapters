@@ -60,8 +60,7 @@ impl Source for Adapter {
              byte-stable re-survey diffs).\n\n\
              Answer with one JSON object matching the gated schema: a `leads` array carrying \
              the same `lead` / `synopsis` / optional `topics` content as the prompt's lead \
-             blocks. The caller persists the leads into `discovery.md`; do not write it \
-             yourself.",
+             blocks. The engine persists the leads; do not write them yourself.",
             id = ctx.adapter_id,
         );
         repaired(model, ctx, system, user, "leads", LEADS_ANSWER_SCHEMA, leads_tail).await
@@ -81,8 +80,8 @@ impl Source for Adapter {
              Answer with one JSON object matching the gated schema: the Evidence body \
              (`authority: \"behaviour\"`, `kind: \"example\"` claims carrying the \
              `replay-digest` / `input` / `output` body fields the prompt describes), without \
-             the envelope `lead` key — this call names the lead. The caller persists the \
-             document under `.emery/slices/<slice>/evidence/`; do not write it yourself.",
+             the envelope `lead` key — this call names the lead. The engine persists the \
+             document; do not write it yourself.",
             id = ctx.adapter_id,
             lead = lead.render(),
         );

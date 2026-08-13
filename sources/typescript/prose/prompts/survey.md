@@ -6,8 +6,8 @@ JavaScript sources (`.js`, `.mjs`, `.cjs`, `.jsx`) fold into this prompt: the fr
 
 ## Inputs
 
-- **`$SOURCE_DIR`** — read-only preopen of the operator-bound source root (the `path:` from `plan.yaml.sources.<key>`). Walk this tree; resolve `tsconfig.json` `paths` mappings relative to it.
-- **Source key** — kebab-case identifier passed in via the runner (the `<key>` from `plan.yaml.sources.<key>`). The engine stamps each lead's `source` from it; this prompt does not emit it.
+- **`$SOURCE_DIR`** — the prepared read-only source tree the engine lent on the wire. Walk this tree; resolve `tsconfig.json` `paths` mappings relative to it.
+- **Source key** — kebab-case binding identifier, interpolated into the prompt. The engine stamps each lead's `source` from it; this prompt does not emit it.
 
 The bound directory is the only filesystem grant; `$PROJECT_DIR` is unreachable. Treat the tree as read-only — no writes back into `$SOURCE_DIR`.
 

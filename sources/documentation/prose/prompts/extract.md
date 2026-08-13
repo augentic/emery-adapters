@@ -5,7 +5,7 @@ For one `Lead`, walk `$SOURCE_DIR` (read-only) and return a single `Evidence` do
 ## Inputs
 
 - `$SOURCE_DIR` — read-only preopen of the bound docs path.
-- `<source>` — the plan-level binding key under `plan.yaml.sources.<key>`.
+- `<source>` — the source binding key, interpolated into the prompt.
 - `<lead>` — the lead this run is extracting Evidence for (produced by `documentation.survey`).
 - `$SCRATCH_DIR` — per-run write-only scratch space; use only for unavoidable intermediate state.
 

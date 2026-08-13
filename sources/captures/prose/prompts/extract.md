@@ -4,16 +4,7 @@ This prompt runs once per `(source, lead)` pair whose adapter is `captures`. You
 
 ## Binding
 
-The plan-level binding looks the same as `survey`'s:
-
-```yaml
-sources:
-  runtime:
-    adapter: captures
-    path: ./captures/replays
-```
-
-The bound `path:` becomes `$SOURCE_DIR`. The capture layout is the one `/capture:wiretapper` writes — see [capture-format reference](../references/capture-format.md) for the per-file TestDef shape (`input`, `params`, `http_requests`, `output`; `setup` is test-harness-only).
+As with `survey`, the engine resolves the operator's binding and lends the prepared read-only capture tree on the wire as `$SOURCE_DIR`. The capture layout is the one `/capture:wiretapper` writes — see [capture-format reference](../references/capture-format.md) for the per-file TestDef shape (`input`, `params`, `http_requests`, `output`; `setup` is test-harness-only).
 
 ## References
 
@@ -26,7 +17,7 @@ Load both references — they own everything the prompt does not spell out.
 
 - **`$SOURCE_DIR`** — read-only preopen of the bound capture root.
 - **`<lead>`** — the kebab-case lead id produced by `captures.survey`. It matches the `tests/data/replays/<lead>/` directory name verbatim.
-- **`<source>`** — the plan-level binding key under `plan.yaml.sources.<key>`.
+- **`<source>`** — the source binding key, interpolated into the prompt.
 - **`$SCRATCH_DIR`** — per-run write-only scratch space; use only for unavoidable intermediate state.
 
 `$PROJECT_DIR` is unreachable, host env is unreadable, the network is denied. Writes back into `$SOURCE_DIR` are denied.

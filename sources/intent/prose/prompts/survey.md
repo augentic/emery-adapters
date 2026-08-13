@@ -26,7 +26,7 @@ Rules:
 
 ## Worked example
 
-Input — the binding's inline `value`:
+Input — the operator's intent string:
 
 ```
 Add a search filter to the user list.

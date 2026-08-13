@@ -5,7 +5,7 @@ Walk `$SOURCE_DIR` (a read-only preopen of the operator-bound docs path) and emi
 ## Inputs
 
 - `$SOURCE_DIR` — read-only directory holding the bound documentation set. Never write here.
-- `<source>` — the plan-level binding key under `plan.yaml.sources.<key>`; the engine passes it in for context and stamps each lead's `source` itself, so this prompt does not emit it.
+- `<source>` — the source binding key, interpolated into the prompt for context; the engine stamps each lead's `source` itself, so this prompt does not emit it.
 - `$SCRATCH_DIR` — per-run write-only scratch space; use only if intermediate state is unavoidable.
 
 ## What is a document surface

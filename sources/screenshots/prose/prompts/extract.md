@@ -7,7 +7,7 @@ The pipeline body lives in [`extract/pipeline.md`](extract/pipeline.md) and runs
 ## Inputs
 
 - `$SOURCE_DIR` — read-only preopen of the bound screenshots directory.
-- `<source>` — the plan-level binding key under `plan.yaml.sources.<key>`.
+- `<source>` — the source binding key, interpolated into the prompt.
 - `<lead>` — the lead this run is extracting Evidence for (one screen, possibly with state and platform variants attached; produced by `screenshots.survey`).
 - `$SCRATCH_DIR` — per-run write-only scratch space. Use only for unavoidable intermediate state (cropped image staging).
 

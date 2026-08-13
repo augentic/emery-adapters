@@ -5,7 +5,7 @@ Walk `$SOURCE_DIR` (a read-only preopen of an operator-bound directory of screen
 ## Inputs
 
 - `$SOURCE_DIR` — read-only directory holding the bound screen-image set. Never write here.
-- `<source>` — the plan-level binding key under `plan.yaml.sources.<key>`; the engine passes it in for context and stamps each lead's `source` itself, so this prompt does not emit it.
+- `<source>` — the source binding key, interpolated into the prompt for context; the engine stamps each lead's `source` itself, so this prompt does not emit it.
 - `$SCRATCH_DIR` — per-run write-only scratch space; use only for unavoidable intermediate state (e.g. cropped staging files when chrome cropping is required to disambiguate a screen).
 
 ## Vision prerequisite

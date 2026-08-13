@@ -2050,6 +2050,7 @@ dependencies = [
  "emery-adapter",
  "emery-prose",
  "omnia-testkit",
+ "tempfile",
  "tokio",
 ]
 
