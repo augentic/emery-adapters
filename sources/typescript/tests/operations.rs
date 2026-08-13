@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use adapter::Source as _;
-use adapter::seam::{Authority, ClaimKind, Context, Lead};
+use adapter::seam::{Authority, ClaimKind, Context, Lead, SourceInput};
 use omnia_testkit::model::Harness;
 use typescript::Adapter;
 
@@ -12,8 +12,13 @@ fn ctx() -> Context<'static> {
         adapter_id: "source:typescript",
         project_root: Path::new("."),
         mcp_url: None,
-        lend: ".".to_string(),
+        lend: "/prepared/src".to_string(),
+        source_key: Some("legacy-app".to_string()),
     }
+}
+
+fn input() -> SourceInput {
+    SourceInput::Workspace("/prepared/src".to_string())
 }
 
 #[tokio::test]
@@ -22,7 +27,7 @@ async fn survey_framework_grammar() {
         r#"{"leads":[{"lead":"task-service","synopsis":"Task CRUD service module."}]}"#,
     ]);
 
-    let leads = Adapter::survey(&model, &ctx()).await.unwrap();
+    let leads = Adapter::survey(&model, &ctx(), &input()).await.unwrap();
 
     assert_eq!(leads[0].lead, "task-service");
     let request = &model.requests()[0];
@@ -33,7 +38,10 @@ async fn survey_framework_grammar() {
         user.contains("TypeScript / JavaScript source tree"),
         "the binding note names the TS / JS tree"
     );
+    assert!(user.contains("Source binding key: `legacy-app`"), "and the binding key");
+    assert!(user.contains("working directory"), "the lent tree is the agent's workspace");
     assert!(user.contains("read-only"), "the binding note marks the tree read-only");
+    assert!(!user.contains("plan.yaml"), "no location recovery is asked of the model");
 }
 
 #[tokio::test]
@@ -52,7 +60,7 @@ async fn extract_references_pointer() {
         topics: Vec::new(),
     };
 
-    let evidence = Adapter::extract(&model, &ctx(), &lead).await.unwrap();
+    let evidence = Adapter::extract(&model, &ctx(), &input(), &lead).await.unwrap();
 
     assert_eq!(evidence.authority, Authority::Behaviour);
     let kinds: Vec<ClaimKind> = evidence.claims.iter().map(|claim| claim.kind).collect();
@@ -62,4 +70,5 @@ async fn extract_references_pointer() {
     let user = &request.messages[0].content;
     assert!(user.contains("references"), "the prompt points at the MCP-served references");
     assert!(user.contains("- lead: task-service"), "the lead renders as the prompt's block shape");
+    assert!(user.contains("Source binding key: `legacy-app`"), "the binding key is carried");
 }

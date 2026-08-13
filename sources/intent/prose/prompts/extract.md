@@ -1,16 +1,16 @@
 # intent.extract
 
-Emit one `Evidence` document carrying a single `kind: intent` claim. The `intent` source is degenerate — `extract` returns the operator's intent string verbatim, with `authority: intent` so downstream synthesis treats it as the highest-priority signal under the authority precedence (`intent > documentation > behaviour`) defined in [`authority.md`](../references/emery-runtime/synthesis/authority.md). Core synthesis reconciles it with any sibling sources' Evidence into the slice's `spec.md` — see [From sources to slices](../references/emery-runtime/reconciliation.md#slice-time-evidence-becomes-a-spec).
+Emit one `Evidence` document carrying a single `kind: intent` claim. The `intent` source is degenerate — `extract` returns the operator's intent string verbatim, with `authority: intent` so downstream synthesis treats it as the highest-priority signal under the authority precedence (`intent > documentation > behaviour`) defined in [`authority.md`](../references/emery-runtime/synthesis/authority.md). Downstream synthesis reconciles it with any sibling sources' Evidence — see [From sources to slices](../references/emery-runtime/reconciliation.md#slice-time-evidence-becomes-a-spec).
 
 ## Inputs
 
-- `Lead` — the lead id resolved from the slice's `Slice.sources` binding. For the degenerate intent path this equals the slice's `name`.
-- `Source` — the `plan.yaml.sources.<source>` binding. `Source.value` carries the operator's intent string verbatim. `Source.path` is absent; no `$SOURCE_DIR` is preopened.
-- `source` — the key the binding was registered under in `plan.yaml.sources` (typically `intent`).
+- `Lead` — the lead id produced by `intent.survey` (the stable slug derived from the intent string).
+- `Source` — the source binding. `Source.value` carries the operator's intent string verbatim. `Source.path` is absent; no `$SOURCE_DIR` is preopened.
+- `source` — the key the binding was registered under (typically `intent`).
 
 ## Output contract
 
-Return one `Evidence` document for the `emery plan refine` stage to persist at `.emery/slices/<slice>/evidence/<source>.yaml`:
+Return one `Evidence` document; the engine persists it:
 
 ```yaml
 authority: intent
@@ -21,15 +21,15 @@ claims:
     statement: "<Source.value, verbatim>"
 ```
 
-The document's `(slice, source)` identity is carried by its on-disk path — the CLI persists it at `.emery/slices/<slice>/evidence/<source>.yaml`, deriving the `<source>.yaml` filename from the binding — and the adapter resolves from `plan.yaml.sources.<source>.adapter`. Neither is written in-document.
+The document's source identity is engine-owned — the engine persists it and derives attribution from the binding. Neither the source key nor the adapter is written in-document.
 
 Rules:
 
 - `authority` MUST be the literal string `intent`. The `intent` adapter is the only first-party source that emits this authority class; `documentation` and code adapters emit `documentation` or `behaviour` per the authority hierarchy.
-- `lead` MUST equal the `Lead` argument (the lead id, not the slice name; the two are equal under the degenerate intent path).
-- `claims` MUST contain exactly one entry with `kind: intent`, an `id:` set to the `Lead` id, and a `statement:` field carrying the operator's intent string verbatim. The `id` is the stable anchor synthesis references — although the Evidence schema only *requires* it on `requirement` / `criterion` / `example` kinds, an id-less intent claim is unanchorable, so the slice's sole requirement would render an empty `Sources:` line and fail `emery slice validate` (`spec.requirement-sources-empty`). Setting `id` equal to the lead keeps the document deterministic and idempotent.
+- `lead` MUST equal the `Lead` argument.
+- `claims` MUST contain exactly one entry with `kind: intent`, an `id:` set to the `Lead` id, and a `statement:` field carrying the operator's intent string verbatim. The `id` is the stable anchor downstream synthesis references — although the Evidence schema only *requires* it on `requirement` / `criterion` / `example` kinds, an id-less intent claim is unanchorable downstream. Setting `id` equal to the lead keeps the document deterministic and idempotent.
 - Do not emit a `path:` on the claim. The intent source has no filesystem locus; `path` is reserved for file-backed sources.
-- Do not emit additional claims. Operators who want multi-claim intent split the work into multiple slices (the lead per slice handles that).
+- Do not emit additional claims. Operators who want to express more than one intent supply more than one intent string, each its own binding and lead.
 
 ## Worked example
 
@@ -52,5 +52,5 @@ claims:
 
 ## Notes
 
-- Empty `claims: []` is schema-valid for sources with nothing to say, but the intent adapter is never legitimately empty — the lead exists because the operator supplied an intent string. Treat an empty `Source.value` as an extract failure and stay `refining` per §Extraction reliability.
+- Empty `claims: []` is schema-valid for sources with nothing to say, but the intent adapter is never legitimately empty — the lead exists because the operator supplied an intent string. Treat an empty `Source.value` as an extract failure.
 - Re-running `intent.extract` is idempotent: the same `(Lead, Source)` pair yields a byte-identical Evidence document.

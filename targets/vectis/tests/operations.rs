@@ -27,6 +27,7 @@ fn ctx<'a>(root: &'a Path, mcp_url: Option<&str>) -> Context<'a> {
         project_root: root,
         mcp_url: mcp_url.map(str::to_owned),
         lend: root.display().to_string(),
+        source_key: None,
     }
 }
 
