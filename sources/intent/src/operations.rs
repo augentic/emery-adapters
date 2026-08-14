@@ -1,5 +1,8 @@
-//! Intent bindings carry the operator's free-form brief inline, so both
-//! legs echo rather than infer.
+//! Intent bindings carry the operator's free-form brief — inline
+//! (delivery `value:` bindings) or as a single-file locator the engine
+//! materialized as a one-file tree — so both legs echo rather than infer.
+
+use std::path::{Path, PathBuf};
 
 use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA, evidence_tail, leads_tail};
 use adapter::registry::Doc;
@@ -9,6 +12,35 @@ use adapter::seam::{
 use adapter::{AdapterIdentity, Model, Source, repaired};
 
 use crate::registry;
+
+/// Read the one regular file in the prepared tree as the intent string.
+fn single_file_intent(root: &Path) -> Result<String, Error> {
+    let mut files = Vec::new();
+    collect_files(root, &mut files)?;
+    match files.as_slice() {
+        [file] => std::fs::read_to_string(file).map_err(|err| Error::Io(err.to_string())),
+        _ => Err(Error::InvalidRequest(format!(
+            "intent reads an inline `value:` binding or a single-file location; the \
+             prepared tree holds {} files",
+            files.len()
+        ))),
+    }
+}
+
+/// Collect every regular file beneath `dir` (the one-file tree encoding
+/// may nest).
+fn collect_files(dir: &Path, files: &mut Vec<PathBuf>) -> Result<(), Error> {
+    for entry in std::fs::read_dir(dir).map_err(|err| Error::Io(err.to_string()))? {
+        let entry = entry.map_err(|err| Error::Io(err.to_string()))?;
+        let file_type = entry.file_type().map_err(|err| Error::Io(err.to_string()))?;
+        if file_type.is_dir() {
+            collect_files(&entry.path(), files)?;
+        } else if file_type.is_file() {
+            files.push(entry.path());
+        }
+    }
+    Ok(())
+}
 
 /// Inline intent binding → one lead and one `kind: intent` claim.
 #[derive(Clone, Copy, Debug)]
@@ -22,7 +54,7 @@ impl Source for Adapter {
 
     fn metadata() -> SourceMetadata {
         SourceMetadata {
-            emery_floor: Some("0.37.0".to_string()),
+            emery_floor: Some("0.38.0".to_string()),
         }
     }
 
@@ -38,7 +70,7 @@ impl Source for Adapter {
             model,
             ctx,
             system,
-            survey_user(ctx, input),
+            survey_user(ctx, input)?,
             "leads",
             LEADS_ANSWER_SCHEMA,
             leads_tail,
@@ -63,7 +95,7 @@ impl Source for Adapter {
             id = ctx.adapter_id,
             key = input.key,
             lead = lead.render(),
-            content = content_note(input),
+            content = content_note(input)?,
         );
         repaired(model, ctx, system, user, "evidence", EVIDENCE_ANSWER_SCHEMA, evidence_tail).await
     }
@@ -75,25 +107,29 @@ fn terminal(input: &SourceInput) -> Result<&Lead, Error> {
     })
 }
 
-fn content_note(input: &SourceInput) -> String {
+fn content_note(input: &SourceInput) -> Result<String, Error> {
     match &input.content {
-        SourceContent::Value(value) => format!(
+        SourceContent::Value(value) => Ok(format!(
             "The bound material is this inline value; no `$SOURCE_DIR` is lent:\n\n{value}\n\n\
              The change home and `$PROJECT_DIR` are unreachable. Do not read `plan.yaml`, \
              `leads.md`, or `slices/`."
-        ),
-        SourceContent::Workspace(view) => format!(
-            "`$SOURCE_DIR` is the read-only CID view at `{}`. The change home and \
-             `$PROJECT_DIR` are unreachable. Do not read `plan.yaml`, `leads.md`, \
-             `slices/`.",
-            view.root
-        ),
+        )),
+        SourceContent::Workspace(view) => {
+            let intent = single_file_intent(Path::new(&view.root))?;
+            Ok(format!(
+                "The bound material is a one-file tree at `{}`; the operator's intent \
+                 string is:\n\n{intent}\n\n\
+                 The change home and `$PROJECT_DIR` are unreachable. Do not read `plan.yaml`, \
+                 `leads.md`, or `slices/`.",
+                view.root
+            ))
+        }
     }
 }
 
-fn survey_user(ctx: &Context<'_>, input: &SourceInput) -> String {
-    let content = content_note(input);
-    input.focus.as_ref().map_or_else(
+fn survey_user(ctx: &Context<'_>, input: &SourceInput) -> Result<String, Error> {
+    let content = content_note(input)?;
+    Ok(input.focus.as_ref().map_or_else(
         || {
             format!(
                 "Survey the intent source bound to adapter `{id}` (source key `{key}`).\n\n\
@@ -124,5 +160,5 @@ fn survey_user(ctx: &Context<'_>, input: &SourceInput) -> String {
                 parent = parent.render(),
             )
         },
-    )
+    ))
 }

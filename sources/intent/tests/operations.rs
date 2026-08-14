@@ -3,7 +3,9 @@
 use std::path::Path;
 
 use adapter::Source as _;
-use adapter::seam::{Authority, ClaimKind, Context, Error, Lead, SourceInput};
+use adapter::seam::{
+    Authority, ClaimKind, Context, Error, Lead, SourceContent, SourceInput, SourceWorkspace,
+};
 use intent::Adapter;
 use omnia_testkit::model::Harness;
 
@@ -18,6 +20,17 @@ fn ctx() -> Context<'static> {
 
 fn value_input() -> SourceInput {
     SourceInput::value("intent", "Let users reset passwords by email.")
+}
+
+fn workspace_input(root: &Path) -> SourceInput {
+    SourceInput {
+        key: "intent".to_string(),
+        content: SourceContent::Workspace(SourceWorkspace {
+            id: "view-1".to_string(),
+            root: root.display().to_string(),
+        }),
+        focus: None,
+    }
 }
 
 fn extract_input(lead: Lead) -> SourceInput {
@@ -65,6 +78,50 @@ async fn survey_focused_children() {
     assert!(user.contains("focused survey"), "user message names the focused path");
     assert!(user.contains("- lead: password-reset"), "parent lead is rendered");
     assert!(user.contains("`children` array"), "answer shape is children");
+}
+
+#[tokio::test]
+async fn survey_single_file_workspace() {
+    let model = Harness::answering([
+        r#"{"leads":[{"lead":"password-reset","synopsis":"Let users reset passwords by email."}]}"#,
+    ]);
+    let root = tempfile::tempdir().unwrap();
+    let nested = root.path().join("nested");
+    std::fs::create_dir(&nested).unwrap();
+    std::fs::write(nested.join("intent.md"), "Let users reset passwords by email.").unwrap();
+
+    let result = Adapter::survey(&model, &ctx(), &workspace_input(root.path())).await.unwrap();
+
+    assert_eq!(result.leads.len(), 1);
+    let user = &model.requests()[0].messages[0].content;
+    assert!(
+        user.contains("Let users reset passwords by email."),
+        "the located file's contents are interpolated as the intent string"
+    );
+}
+
+#[tokio::test]
+async fn survey_rejects_multi_file_workspace() {
+    let model = Harness::answering([r#"{"leads":[]}"#]);
+    let root = tempfile::tempdir().unwrap();
+    std::fs::write(root.path().join("one.md"), "first").unwrap();
+    std::fs::write(root.path().join("two.md"), "second").unwrap();
+
+    let result = Adapter::survey(&model, &ctx(), &workspace_input(root.path())).await;
+
+    assert!(matches!(result, Err(Error::InvalidRequest(_))), "got {result:?}");
+    assert!(model.requests().is_empty(), "no judgment leg runs on a malformed input");
+}
+
+#[tokio::test]
+async fn survey_rejects_empty_workspace() {
+    let model = Harness::answering([r#"{"leads":[]}"#]);
+    let root = tempfile::tempdir().unwrap();
+
+    let result = Adapter::survey(&model, &ctx(), &workspace_input(root.path())).await;
+
+    assert!(matches!(result, Err(Error::InvalidRequest(_))), "got {result:?}");
+    assert!(model.requests().is_empty(), "no judgment leg runs on a malformed input");
 }
 
 #[tokio::test]
