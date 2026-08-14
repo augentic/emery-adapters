@@ -92,6 +92,10 @@ fn content_note(input: &SourceInput) -> String {
 
 fn survey_user(ctx: &Context<'_>, input: &SourceInput) -> String {
     let content = content_note(input);
+    let bound = match &input.content {
+        SourceContent::Workspace(_) => "`$SOURCE_DIR`",
+        SourceContent::Value(_) => "the inline value",
+    };
     input.focus.as_ref().map_or_else(
         || {
             format!(
@@ -99,7 +103,7 @@ fn survey_user(ctx: &Context<'_>, input: &SourceInput) -> String {
              key `{key}`) using the prompt's framework grammar.\n\n\
              {content}\n\n\
              This is an unfocused survey: return the complete current lead set from \
-             `$SOURCE_DIR`. Do not consult a catalog to decide this is a re-survey.\n\n\
+             {bound}. Do not consult a catalog to decide this is a re-survey.\n\n\
              Answer with one JSON object matching the gated schema: a `leads` array \
              carrying the same `lead` / `synopsis` / optional `topics` content as the \
              prompt's lead blocks (leave `children` empty). The caller persists the \

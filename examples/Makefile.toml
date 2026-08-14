@@ -49,6 +49,8 @@ script = '''
   rm -rf "$EMERY_HOME"
   mkdir -p "$CHANGE" "$PRODUCT"
   cp -R examples/wasm/fixture/. "$CHANGE/"
+  # Coverage locators (`definition/intent.txt`, `docs`) join the change home.
+  cp -R "$DEFINITION" "$CHANGE/definition"
   # cursor-agent anchors the workspace (and .cursor/mcp.json discovery) at the git toplevel.
   git init -q "$CHANGE"
   git init -q "$PRODUCT"
@@ -65,7 +67,7 @@ script = '''
 
   emery_product init contracts --name orders
 
-  emery plan author orders --from "$DEFINITION" --wave deliver
+  emery plan author orders --from "$CHANGE/definition" --wave deliver
   emery plan refine
   emery plan execute
 '''
@@ -94,6 +96,8 @@ script = '''
   rm -rf "$EMERY_HOME"
   mkdir -p "$CHANGE" "$PRODUCT"
   cp -R "$CACHE"/. "$CHANGE/"
+  # Coverage locators (`definition/intent.txt`, `legacy/…`) join the change home.
+  cp -R "$DEFINITION" "$CHANGE/definition"
   git init -q "$CHANGE"
   git init -q "$PRODUCT"
 
@@ -108,7 +112,7 @@ script = '''
 
   emery_product init omnia --name at-r9k-position-adapter
 
-  emery plan author at-r9k-position-adapter --from "$DEFINITION" --wave deliver
+  emery plan author at-r9k-position-adapter --from "$CHANGE/definition" --wave deliver
   emery plan refine
   emery plan execute
 '''

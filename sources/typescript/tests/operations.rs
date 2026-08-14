@@ -50,6 +50,23 @@ async fn survey_framework_grammar() {
     assert!(user.contains("read-only"), "the note marks the tree read-only");
     assert!(user.contains("CID view"), "workspace is the CID view");
     assert!(user.contains("Do not read `plan.yaml`"), "adapters never parse the plan");
+    assert!(user.contains("from `$SOURCE_DIR`"), "workspace survey names the lent tree");
+}
+
+#[tokio::test]
+async fn survey_inline_value() {
+    let model = Harness::answering([r#"{"leads":[]}"#]);
+    let input = SourceInput::value("legacy-monolith", "export function ping() {}");
+
+    Adapter::survey(&model, &ctx(), &input).await.unwrap();
+
+    let user = &model.requests()[0].messages[0].content;
+    assert!(user.contains("no `$SOURCE_DIR`"), "value binding lends no tree");
+    assert!(user.contains("from the inline value"), "unfocused instruction matches the value arm");
+    assert!(
+        !user.contains("from `$SOURCE_DIR`"),
+        "value survey must not tell the model to walk a tree that was not lent"
+    );
 }
 
 #[tokio::test]
