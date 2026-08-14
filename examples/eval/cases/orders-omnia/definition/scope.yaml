@@ -1,0 +1,3 @@
+version: 1
+id: orders-and-health
+decision: Author orders contracts, then a health crate that consumes them

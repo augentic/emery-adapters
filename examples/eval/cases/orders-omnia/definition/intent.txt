@@ -1,0 +1,1 @@
+Author the orders API contracts from docs/, then a small Omnia health crate that depends on those contracts. Two targets: contracts first, then omnia.

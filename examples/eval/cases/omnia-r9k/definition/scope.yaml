@@ -1,0 +1,3 @@
+version: 1
+id: at-r9k-position-adapter
+decision: Migrate the r9k position adapter into Omnia
