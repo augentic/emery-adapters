@@ -65,7 +65,7 @@ directory after generation.
 
 The iOS writer's primary token input is `tokens.yaml`. Resolution order:
 
-1. Slice-local `.emery/slices/<name>/tokens.yaml`, when present.
+1. Slice-local `.emery/change/slices/<name>/tokens.yaml`, when present.
 2. Project-level `design-system/tokens.yaml`.
 3. Neither — fall through to the HIG fallback policy below.
 
@@ -201,8 +201,8 @@ writer shortcut. Platform glyph use requires an explicit `kind: symbol` entry
 
 The iOS writer's primary asset input is `assets.yaml`. Resolution order:
 
-1. Slice-local `.emery/slices/<name>/assets.yaml`, when present, plus
-   files under `.emery/slices/<name>/assets/`.
+1. Slice-local `.emery/change/slices/<name>/assets.yaml`, when present, plus
+   files under `.emery/change/slices/<name>/assets/`.
 2. Project-level `design-system/assets.yaml` plus files under
    `design-system/assets/`.
 3. Neither — generate views without referenced asset entries (any

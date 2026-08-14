@@ -6,10 +6,10 @@ For one terminal `Lead`, walk `$SOURCE_DIR` (read-only CID view) and return a si
 
 - `$SOURCE_DIR` — read-only CID view of the bound docs path. Absent when the binding is an inline `value`.
 - **Source key** — the plan source-binding key the engine passed on the wire.
-- **Terminal lead** — the catalog lead the engine passed on `input.focus` (id, synopsis, optional parent/focus). Do not look it up in `leads.md`, `discovery.md`, or `slices/`. Child extraction inherits parent context from that record.
+- **Terminal lead** — the catalog lead the engine passed on `input.focus` (id, synopsis, optional parent/focus). Do not look it up in `leads.md`, or `slices/`. Child extraction inherits parent context from that record.
 - `$SCRATCH_DIR` — write-only scratch space; use only for unavoidable intermediate state.
 
-The change home and `$PROJECT_DIR` are unreachable. Do not read `plan.yaml`, `leads.md`, `discovery.md`, or `slices/`.
+The change home and `$PROJECT_DIR` are unreachable. Do not read `plan.yaml`, `leads.md`, or `slices/`.
 
 ## Locate the lead's docs
 

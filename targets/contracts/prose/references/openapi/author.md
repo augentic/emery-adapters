@@ -5,7 +5,7 @@
 ## Inputs
 
 ```text
-$SLICE_DIR     = .emery/slices/<slice-name>  # reached via the lent writable artifact stage, which mirrors this tree
+$SLICE_DIR     = .emery/change/slices/<slice-name>  # reached via the lent writable artifact stage, which mirrors this tree
 $SPECS_DIR      = $SLICE_DIR/specs
 $CONTRACTS_DIR  = $SLICE_DIR/contracts
 $BASELINE_DIR   = contracts

@@ -16,11 +16,11 @@ Load both references — they own everything the prompt does not spell out.
 ## Inputs
 
 - **`$SOURCE_DIR`** — read-only CID view of the bound capture root. Absent when the binding is an inline `value`.
-- **Terminal lead** — the catalog lead the engine passed on `input.focus`. Its id matches the `tests/data/replays/<lead>/` directory name verbatim. Do not look it up in `leads.md`, `discovery.md`, or `slices/`. Child extraction inherits parent context from the passed record.
+- **Terminal lead** — the catalog lead the engine passed on `input.focus`. Its id matches the `tests/data/replays/<lead>/` directory name verbatim. Do not look it up in `leads.md`, or `slices/`. Child extraction inherits parent context from the passed record.
 - **Source key** — the plan source-binding key the engine passed on the wire.
 - **`$SCRATCH_DIR`** — write-only scratch space; use only for unavoidable intermediate state.
 
-The change home and `$PROJECT_DIR` are unreachable, host env is unreadable, the network is denied. Do not read `plan.yaml`, `leads.md`, `discovery.md`, or `slices/`. Writes back into `$SOURCE_DIR` are denied.
+The change home and `$PROJECT_DIR` are unreachable, host env is unreadable, the network is denied. Do not read `plan.yaml`, `leads.md`, or `slices/`. Writes back into `$SOURCE_DIR` are denied.
 
 ## Claim grain
 

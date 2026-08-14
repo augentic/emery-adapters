@@ -122,9 +122,9 @@ fn assert_generation_leg(generation: &Request) {
     );
     let user = &generation.messages[0].content;
     assert!(
-        user.contains("/.emery/slices/demo/proposal.md")
-            && user.contains("/.emery/slices/demo/design.md")
-            && user.contains("/.emery/slices/demo/specs/core/spec.md"),
+        user.contains("/.emery/change/slices/demo/proposal.md")
+            && user.contains("/.emery/change/slices/demo/design.md")
+            && user.contains("/.emery/change/slices/demo/specs/core/spec.md"),
         "typed inputs render as artifact-rooted path sections: {user}"
     );
     assert!(!user.contains("PROPOSAL-BODY"), "artifact bodies are not inlined");
@@ -206,9 +206,9 @@ async fn build_phase_legs() {
     std::fs::create_dir_all(tmp.path().join("crates/demo")).unwrap();
     let model = Harness::answering([PHASE_DONE, PHASE_DONE, REPORT_DONE]);
     let inputs = vec![
-        Input::Proposal(input(".emery/slices/demo/proposal.md")),
-        Input::Spec(input(".emery/slices/demo/specs/core/spec.md")),
-        Input::Design(input(".emery/slices/demo/design.md")),
+        Input::Proposal(input(".emery/change/slices/demo/proposal.md")),
+        Input::Spec(input(".emery/change/slices/demo/specs/core/spec.md")),
+        Input::Design(input(".emery/change/slices/demo/design.md")),
     ];
     let context = BuildContext {
         sources: vec!["intent".to_string(), "typescript".to_string()],

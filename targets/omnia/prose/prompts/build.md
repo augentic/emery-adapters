@@ -4,7 +4,7 @@
 
 ## Inputs and bindings
 
-The build runs against the build request the CLI prepared at `.emery/slices/<slice>/build/request.yaml`; consume its `inputs` manifest rather than relying on convention. Every artifact path resolves against `inputs.root` (the slice tree).
+The build runs against the build request the CLI prepared at `.emery/change/slices/<slice>/build/request.yaml`; consume its `inputs` manifest rather than relying on convention. Every artifact path resolves against `inputs.root` (the slice tree).
 
 - `inputs.artifacts.proposal` (`proposal.md`) — domain inventory and slice scope.
 - `inputs.artifacts.specs[]` (`specs/<domain>/spec.md`) — behavioural requirements, one file per `proposal.md ## Domains` entry.
@@ -17,7 +17,7 @@ These working names, bound from the request and the resolved crate, are used thr
 
 ```text
 $SLICE_NAME    = active in-progress plan entry's slice name (claimed by the execute loop)
-$SLICE_DIR     = .emery/slices/$SLICE_NAME
+$SLICE_DIR     = .emery/change/slices/$SLICE_NAME
 $DOMAIN_NAME   = domain slug from proposal.md ## Domains (typically equals crate name for single-crate slices)
 $SPEC_PATH     = $SLICE_DIR/specs/$DOMAIN_NAME/spec.md
 $DESIGN_PATH   = $SLICE_DIR/design.md

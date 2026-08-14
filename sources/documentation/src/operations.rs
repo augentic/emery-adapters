@@ -76,13 +76,13 @@ fn content_note(input: &SourceInput) -> String {
         SourceContent::Workspace(view) => format!(
             "`$SOURCE_DIR` is the read-only CID view at `{}` — the documentation tree \
              the prompt walks. The change home and `$PROJECT_DIR` are unreachable. Do \
-             not read `plan.yaml`, `leads.md`, `discovery.md`, or `slices/`.",
+             not read `plan.yaml`, `leads.md`, or `slices/`.",
             view.root
         ),
         SourceContent::Value(value) => format!(
             "The bound material is this inline value; no `$SOURCE_DIR` is lent:\n\n{value}\n\n\
              The change home and `$PROJECT_DIR` are unreachable. Do not read `plan.yaml`, \
-             `leads.md`, `discovery.md`, or `slices/`."
+             `leads.md`, or `slices/`."
         ),
     }
 }

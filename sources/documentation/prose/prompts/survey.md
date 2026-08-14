@@ -9,7 +9,7 @@ Walk `$SOURCE_DIR` (the read-only CID view of the bound docs tree) and emit one 
 - **Optional parent lead** — when present, this is a focused survey: return stable child leads under that parent. Inherit parent/focus from the passed record; do not look it up in `leads.md` or `slices/`.
 - `$SCRATCH_DIR` — write-only scratch space; use only if intermediate state is unavoidable.
 
-The change home and `$PROJECT_DIR` are unreachable. Do not read `plan.yaml`, `leads.md`, `discovery.md`, or `slices/`. Unfocused survey always returns the complete current set from `$SOURCE_DIR`; do not consult a catalog to decide this is a re-survey.
+The change home and `$PROJECT_DIR` are unreachable. Do not read `plan.yaml`, `leads.md`, or `slices/`. Unfocused survey always returns the complete current set from `$SOURCE_DIR`; do not consult a catalog to decide this is a re-survey.
 
 ## What is a top-level concept
 
@@ -28,7 +28,7 @@ Skip files that contain no behavioural content (e.g. tables of contents, license
 
 ## Output
 
-Return one block per lead, in alphabetical `lead` order. The caller persists the catalog; this prompt never writes `leads.md` or `discovery.md`.
+Return one block per lead, in alphabetical `lead` order. The caller persists the catalog; this prompt never writes `leads.md`.
 
 ```markdown
 ### password-reset

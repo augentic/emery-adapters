@@ -139,9 +139,9 @@ async fn build_phase_legs() {
     ]);
     let input = |path: &str| Payload::Path(path.to_string());
     let inputs = vec![
-        Input::Proposal(input(".emery/slices/demo/proposal.md")),
-        Input::Spec(input(".emery/slices/demo/specs/core/spec.md")),
-        Input::Design(input(".emery/slices/demo/design.md")),
+        Input::Proposal(input(".emery/change/slices/demo/proposal.md")),
+        Input::Spec(input(".emery/change/slices/demo/specs/core/spec.md")),
+        Input::Design(input(".emery/change/slices/demo/design.md")),
     ];
 
     let report = Adapter::build(
@@ -207,8 +207,8 @@ fn assert_composition_leg(request: &Request, stage_display: &str) {
     );
     let user = &request.messages[0].content;
     assert!(
-        user.contains("/.emery/slices/demo/proposal.md")
-            && user.contains("/.emery/slices/demo/design.md"),
+        user.contains("/.emery/change/slices/demo/proposal.md")
+            && user.contains("/.emery/change/slices/demo/design.md"),
         "typed inputs render as artifact-rooted path sections: {user}"
     );
     assert!(!user.contains("PROPOSAL-BODY"), "artifact bodies are not inlined");

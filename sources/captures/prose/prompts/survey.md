@@ -1,6 +1,6 @@
 # Runtime capture survey
 
-The engine invokes this prompt for a `captures` source binding. Your job: walk the read-only CID view at `$SOURCE_DIR`, identify one handler-grain lead per `tests/data/replays/<handler>/` directory the wiretapper captured, and return one lead block per handler. The caller persists the catalog; you never write `leads.md` or `discovery.md`.
+The engine invokes this prompt for a `captures` source binding. Your job: walk the read-only CID view at `$SOURCE_DIR`, identify one handler-grain lead per `tests/data/replays/<handler>/` directory the wiretapper captured, and return one lead block per handler. The caller persists the catalog; you never write `leads.md`.
 
 ## Binding
 
@@ -24,7 +24,7 @@ Operators with a non-conforming layout adapt the directory or write a thin wrapp
 - **Source key** — kebab-case identifier the engine passed on the wire. The caller stamps each lead's `source` from it; this prompt does not emit it.
 - **Optional parent lead** — when present, this is a focused survey: return stable child leads under that parent. Inherit parent/focus from the passed record; do not look it up in `leads.md` or `slices/`.
 
-The bound directory is the only filesystem grant — the change home and `$PROJECT_DIR` are unreachable, host env is unreadable, the network is denied. Do not read `plan.yaml`, `leads.md`, `discovery.md`, or `slices/`. Unfocused survey always returns the complete current set from `$SOURCE_DIR`; do not consult a catalog to decide this is a re-survey. Use `$SCRATCH_DIR` for unavoidable intermediate state.
+The bound directory is the only filesystem grant — the change home and `$PROJECT_DIR` are unreachable, host env is unreadable, the network is denied. Do not read `plan.yaml`, `leads.md`, or `slices/`. Unfocused survey always returns the complete current set from `$SOURCE_DIR`; do not consult a catalog to decide this is a re-survey. Use `$SCRATCH_DIR` for unavoidable intermediate state.
 
 ## Lead grain
 
@@ -109,7 +109,7 @@ Expected output (alphabetically by `lead`; the CLI stamps `source: runtime`):
 - **Inventing handlers from `INSTRUCTIONS.md`.** The prose is operator hint material; the directory listing is the lead source of truth. If a handler is named in `INSTRUCTIONS.md` but has no scenario JSON files, emit nothing for it.
 - **Per-scenario leads.** One block per `<handler>/` directory, never one per `<scenario>.json`. Scenario-level detail belongs in `extract`'s `kind: example` claims.
 - **Cross-source slug mismatches here.** When another source surfaces the same handler under a different slug, reconciliation is propose-time agent judgment and plan-review `--sources` edits; this prompt sees one source's tree. See [From sources to slices](../references/emery-runtime/reconciliation.md#plan-time-leads-become-slices) for how leads reconcile into slices.
-- **Writing `leads.md`, `discovery.md`, or `plan.yaml`.** Only lead blocks. The caller owns every lifecycle file.
+- **Writing `leads.md` or `plan.yaml`.** Only lead blocks. The caller owns every lifecycle file.
 
 ## Failure modes
 

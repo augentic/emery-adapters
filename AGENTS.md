@@ -6,7 +6,7 @@ This repository owns Emery's first-party source and target adapters. Each adapte
 
 Use these roles verbatim:
 
-- **source adapter** — input role exporting `survey` and `extract`; emits leads and Evidence.
+- **source adapter** — input role exporting `survey` and `extract`. Both take a typed `SourceInput` (`key`, workspace-or-value, optional parent/terminal `Lead`); unfocused survey returns `leads[]`, focused survey returns `children[]`, extract requires `input.focus`. Catalog context is typed on the call — sources receive no change-home filesystem grant and must not read `plan.yaml`, `leads.md`, or `slices/`. Emits leads and Evidence; the engine persists the catalog and Evidence documents.
 - **target adapter** — output role exporting `guidance`, `build`, and `merge`; consumes Emery artifacts and writes target outputs.
 - **Cursor plugin** — operator-facing skills and rules distributed by the Emery repository. Adapters are not Cursor plugins.
 

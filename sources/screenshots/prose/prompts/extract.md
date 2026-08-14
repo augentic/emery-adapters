@@ -8,10 +8,10 @@ The pipeline body lives in [`extract/pipeline.md`](extract/pipeline.md) and runs
 
 - `$SOURCE_DIR` — read-only CID view of the bound screenshots directory. Absent when the binding is an inline `value`.
 - **Source key** — the plan source-binding key the engine passed on the wire.
-- **Terminal lead** — the catalog lead the engine passed on `input.focus` (one screen, possibly with state and platform variants; optional parent/focus). Do not look it up in `leads.md`, `discovery.md`, or `slices/`. Child extraction inherits parent context from that record.
+- **Terminal lead** — the catalog lead the engine passed on `input.focus` (one screen, possibly with state and platform variants; optional parent/focus). Do not look it up in `leads.md`, or `slices/`. Child extraction inherits parent context from that record.
 - `$SCRATCH_DIR` — write-only scratch space. Use only for unavoidable intermediate state (cropped image staging).
 
-The change home and `$PROJECT_DIR` are unreachable. Do not read `plan.yaml`, `leads.md`, `discovery.md`, or `slices/`.
+The change home and `$PROJECT_DIR` are unreachable. Do not read `plan.yaml`, `leads.md`, or `slices/`.
 
 ## Vision prerequisite
 

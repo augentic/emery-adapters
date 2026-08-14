@@ -8,7 +8,7 @@ Emit exactly one lead. The `intent` source is degenerate by construction — it 
 - **Inline value** — the operator's free-form intent string. No `$SOURCE_DIR` is lent.
 - **Optional parent lead** — when present, this is a focused survey: return stable child leads under that parent. Inherit parent/focus from the passed record. Intent is degenerate, so a focused call typically returns no children unless the value itself names separately acceptable child boundaries.
 
-The change home and `$PROJECT_DIR` are unreachable. Do not read `plan.yaml`, `leads.md`, `discovery.md`, or `slices/`.
+The change home and `$PROJECT_DIR` are unreachable. Do not read `plan.yaml`, `leads.md`, or `slices/`.
 
 ## Unfocused output
 
@@ -52,5 +52,5 @@ Unfocused output:
 ## Notes
 
 - Re-running `intent.survey` against the same value replaces the lead by its `(source, lead)` pair. Editing the intent string and re-running yields the same lead with an updated synopsis when the slug is unchanged.
-- The caller persists the catalog; this prompt never writes `leads.md` or `discovery.md`.
+- The caller persists the catalog; this prompt never writes `leads.md`.
 - See [From sources to slices](../references/emery-runtime/reconciliation.md#plan-time-leads-become-slices) for how leads reconcile into slices.

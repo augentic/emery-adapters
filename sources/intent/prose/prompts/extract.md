@@ -8,7 +8,7 @@ Emit one `Evidence` document carrying a single `kind: intent` claim. The `intent
 - **Inline value** — the operator's intent string, verbatim. No `$SOURCE_DIR` is lent.
 - **Source key** — the plan source-binding key the engine passed on the wire (typically `intent`).
 
-The change home and `$PROJECT_DIR` are unreachable. Do not read `plan.yaml`, `leads.md`, `discovery.md`, or `slices/`.
+The change home and `$PROJECT_DIR` are unreachable. Do not read `plan.yaml`, `leads.md`, or `slices/`.
 
 ## Output contract
 

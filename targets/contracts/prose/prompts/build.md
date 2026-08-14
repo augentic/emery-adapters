@@ -6,7 +6,7 @@ Build authors and imports machine-readable contract artifacts under the slice's 
 
 ## Scope
 
-Build writes only the slice's staged contract delta: the `contracts/` directory of the writable artifact stage the engine lends (`$ARTIFACT_STAGE/contracts/` — the user prompt names the concrete path). The stage mirrors the slice tree at `.emery/slices/<slice>/`; the engine promotes staged writes on terminal success. The authoritative slice tree is read-only — never write it directly.
+Build writes only the slice's staged contract delta: the `contracts/` directory of the writable artifact stage the engine lends (`$ARTIFACT_STAGE/contracts/` — the user prompt names the concrete path). The stage mirrors the slice tree at `.emery/change/slices/<slice>/`; the engine promotes staged writes on terminal success. The authoritative slice tree is read-only — never write it directly.
 
 - `contracts/schemas/*.yaml` — reusable JSON Schema payload vocabulary (one named type per file).
 - `contracts/http/*.yaml` — OpenAPI 3.1 HTTP / resource-style documents.
@@ -16,7 +16,7 @@ Progress ticks in the slice's `tasks.md` also belong on the stage (`$ARTIFACT_ST
 
 ## Inputs
 
-The build runs against the build request the CLI prepared at `.emery/slices/<slice>/build/request.yaml`; the adapter core renders its `inputs` manifest into each leg's user prompt as `### input:` sections.
+The build runs against the build request the CLI prepared at `.emery/change/slices/<slice>/build/request.yaml`; the adapter core renders its `inputs` manifest into each leg's user prompt as `### input:` sections.
 
 - `inputs.artifacts.proposal` (`proposal.md`) — authorship mode (author vs import), source material, interface scope, producer/consumer roles.
 - `inputs.artifacts.specs[]` (`specs/<domain>/spec.md`) — behavioural requirements: endpoints / channels / payloads / errors (one file per `proposal.md ## Domains` entry). Provenance lines tell the build whether the slice is author-driven (`Sources: [intent | <doc-key>]`) or import-driven (`Sources: [<code-or-contract-source>]`).

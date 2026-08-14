@@ -1,6 +1,6 @@
 # TypeScript / JavaScript source survey
 
-The engine invokes this prompt for a `typescript` source binding. Your job: walk the read-only CID view at `$SOURCE_DIR`, identify slice-sized units of work using the framework grammar below, and return one lead block per unit. The caller persists the catalog; you never write `leads.md` or `discovery.md`.
+The engine invokes this prompt for a `typescript` source binding. Your job: walk the read-only CID view at `$SOURCE_DIR`, identify slice-sized units of work using the framework grammar below, and return one lead block per unit. The caller persists the catalog; you never write `leads.md`.
 
 JavaScript sources (`.js`, `.mjs`, `.cjs`, `.jsx`) fold into this prompt: the framework idioms are the same. Detect the file extension purely to widen the import-graph walk; the prompt content does not branch on it.
 
@@ -10,7 +10,7 @@ JavaScript sources (`.js`, `.mjs`, `.cjs`, `.jsx`) fold into this prompt: the fr
 - **Source key** — kebab-case identifier the engine passed on the wire. The caller stamps each lead's `source` from it; this prompt does not emit it.
 - **Optional parent lead** — when present, this is a focused survey: return stable child leads under that parent. Inherit parent/focus from the passed record; do not look it up in `leads.md` or `slices/`.
 
-The bound directory is the only filesystem grant; the change home and `$PROJECT_DIR` are unreachable. Do not read `plan.yaml`, `leads.md`, `discovery.md`, or `slices/`. Treat the tree as read-only — no writes back into `$SOURCE_DIR`. Unfocused survey always returns the complete current set from `$SOURCE_DIR`; do not consult a catalog to decide this is a re-survey.
+The bound directory is the only filesystem grant; the change home and `$PROJECT_DIR` are unreachable. Do not read `plan.yaml`, `leads.md`, or `slices/`. Treat the tree as read-only — no writes back into `$SOURCE_DIR`. Unfocused survey always returns the complete current set from `$SOURCE_DIR`; do not consult a catalog to decide this is a re-survey.
 
 ## Output: lead blocks
 
@@ -57,7 +57,7 @@ Out of scope for v1: tRPC, GraphQL resolvers, gRPC services, AWS Lambda handlers
 2. **Size check.** Compute the union-of-`touches` LOC across every identified surface. If the union is `< 1000` production LOC, emit **one source-level lead** named after the source key (or its dominant subject) covering every surface, and stop for that source.
 3. **Surface leads.** Otherwise, treat each surface as the default lead.
 4. **Minimal same-source clustering.** Merge surface leads only when ALL of these hold:
-    - One signal fires: shared `touches` overlap ≥ 50% (computed as `|intersection| / |smaller set|`), **or** shared `handler` / call site. Do not read `leads.md` or `discovery.md` for grouping hints.
+    - One signal fires: shared `touches` overlap ≥ 50% (computed as `|intersection| / |smaller set|`), **or** shared `handler` / call site. Do not read `leads.md` for grouping hints.
     - The merged LOC stays `< 1000`. If merging pushes the lead over, do not merge.
 5. **`too-large` after clustering.** A lead whose LOC stays `≥ 1000` is still emitted; flag the staged JSON entry with an internal `unresolved: true` marker so `/emery:plan`'s `propose` sub-step can call it out. Survey exits 0 either way — `propose` is the gate, not `survey`.
 
@@ -115,7 +115,7 @@ When a larger source decomposes into multiple leads, emit one block per surface 
 - **Test files.** Skip `*.test.*`, `*.spec.*`, and anything under `tests/` or `__tests__/`. Tests validate production surfaces, they are not production surfaces.
 - **Type-only `.d.ts` files in `touches`.** They contribute zero production LOC and inflate lead sizing.
 - **Cross-source coalescing.** This prompt only sees one source's tree. Cross-source merges happen later in `/emery:plan`'s `propose` sub-step — see [From sources to slices](../references/emery-runtime/reconciliation.md#plan-time-leads-become-slices) for how leads reconcile into slices.
-- **Writing `leads.md`, `discovery.md`, or `plan.yaml`.** Only lead blocks. The caller owns every lifecycle file.
+- **Writing `leads.md` or `plan.yaml`.** Only lead blocks. The caller owns every lifecycle file.
 
 ## Failure modes
 

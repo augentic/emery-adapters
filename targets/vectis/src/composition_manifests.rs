@@ -18,7 +18,7 @@ pub fn composition_manifest_paths(project_root: &Path) -> Vec<PathBuf> {
         paths.push(baseline);
     }
 
-    let slices_root = project_root.join(".emery/slices");
+    let slices_root = project_root.join(".emery/change/slices");
     if slices_root.is_dir()
         && let Ok(read_dir) = std::fs::read_dir(&slices_root)
     {

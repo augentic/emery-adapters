@@ -5,10 +5,10 @@ The engine invokes this prompt once per terminal `(source, lead)` pair whose ada
 ## Inputs
 
 - **`$SOURCE_DIR`** — read-only CID view of the bound source root (same path the survey prompt walked). Walk it; resolve `tsconfig.json` `paths` mappings relative to it. Absent when the binding is an inline `value`.
-- **Terminal lead** — the catalog lead the engine passed on `input.focus` (id, synopsis, optional parent/focus). That record tells you which surface(s) to extract. Do not look it up in `leads.md`, `discovery.md`, or `slices/`. Child extraction inherits parent context from the passed record.
+- **Terminal lead** — the catalog lead the engine passed on `input.focus` (id, synopsis, optional parent/focus). That record tells you which surface(s) to extract. Do not look it up in `leads.md`, or `slices/`. Child extraction inherits parent context from the passed record.
 - **Source key** — the kebab-case source key the engine passed on the wire.
 
-The change home and `$PROJECT_DIR` are unreachable; do not attempt to read project lifecycle state. Do not read `plan.yaml`, `leads.md`, `discovery.md`, or `slices/`. Writes back into `$SOURCE_DIR` are denied. Use `$SCRATCH_DIR` for any internal staging.
+The change home and `$PROJECT_DIR` are unreachable; do not attempt to read project lifecycle state. Do not read `plan.yaml`, `leads.md`, or `slices/`. Writes back into `$SOURCE_DIR` are denied. Use `$SCRATCH_DIR` for any internal staging.
 
 ## References
 

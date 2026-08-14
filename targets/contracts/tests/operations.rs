@@ -143,8 +143,8 @@ async fn build_sub_flows() {
     ]);
     let input = |path: &str| Payload::Path(path.to_string());
     let inputs = vec![
-        Input::Proposal(input(".emery/slices/demo/proposal.md")),
-        Input::Design(input(".emery/slices/demo/design.md")),
+        Input::Proposal(input(".emery/change/slices/demo/proposal.md")),
+        Input::Design(input(".emery/change/slices/demo/design.md")),
     ];
 
     let report = Adapter::build(
@@ -209,8 +209,8 @@ async fn build_sub_flows() {
     assert!(system.contains("json-schema sub-flow"), "sub-prompt in system");
     let user = &first.messages[0].content;
     assert!(
-        user.contains("/.emery/slices/demo/proposal.md")
-            && user.contains("/.emery/slices/demo/design.md"),
+        user.contains("/.emery/change/slices/demo/proposal.md")
+            && user.contains("/.emery/change/slices/demo/design.md"),
         "typed inputs render as artifact-rooted path sections: {user}"
     );
     assert!(!user.contains("PROPOSAL-BODY"), "artifact bodies are not inlined");

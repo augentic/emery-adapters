@@ -8,7 +8,7 @@ Augentic uses stock Emery as its executable workflow contract. Specialist operat
 
 ```text
 $PROJECT_DIR        = <workspace>
-$SLICE_DIR          = $PROJECT_DIR/.emery/slices/<slice-name>
+$SLICE_DIR          = $PROJECT_DIR/.emery/change/slices/<slice-name>
 $SPECS_DIR          = $SLICE_DIR/specs
 $DESIGN_PATH        = $SLICE_DIR/design.md
 $PROPOSAL_PATH      = $SLICE_DIR/proposal.md

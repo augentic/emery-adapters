@@ -11,7 +11,7 @@ There are two distinct reconciliation moments, and they answer different questio
 
 ### A lead is a unit of work a source can see
 
-When you run `/emery:plan`, each bound source runs its `survey` operation and emits **leads** — one block per slice-sized unit of work it can identify, written under `## Lead inventory` in `discovery.md`. A lead is identified by its `(source, lead)` pair, because the same lead name can appear in more than one source.
+When you run `/emery:plan`, each bound source runs its `survey` operation and emits **leads** — one block per slice-sized unit of work it can identify, written under `## Lead inventory` in `leads.md`. A lead is identified by its `(source, lead)` pair, because the same lead name can appear in more than one source.
 
 For example, a legacy-code source and a design-notes source might each surface a `user-registration` lead. They are describing the same feature, but `survey` does not yet know that — it only reports what each source sees on its own.
 
@@ -33,7 +33,7 @@ You review and adjust the proposed slices before running `emery plan refine`; ru
 
 ### Extract gathers evidence per source
 
-When the refinement stage runs for a slice, each bound source runs its `extract` operation against its matched lead and returns an **Evidence** document, persisted to `.emery/slices/<slice>/evidence/<source>.yaml`. Evidence is structured: a list of `claims` (requirements, criteria, decisions, code excerpts, and so on) plus a top-level `authority` that records how much weight the source carries.
+When the refinement stage runs for a slice, each bound source runs its `extract` operation against its matched lead and returns an **Evidence** document, persisted to `.emery/change/slices/<slice>/evidence/<source>.yaml`. Evidence is structured: a list of `claims` (requirements, criteria, decisions, code excerpts, and so on) plus a top-level `authority` that records how much weight the source carries.
 
 ### Synthesize reconciles evidence into one spec
 
@@ -62,7 +62,7 @@ Tags never park the slice. Synthesis tags the requirement and proceeds. The oper
 
 ## model.yaml and the provenance trail
 
-`model.yaml` (at `.emery/slices/<slice>/model.yaml`) is the single structured record of a refined slice. It holds the requirement set with **inline provenance** — for each requirement, which claims contributed and which one won — plus the task list and a small header. It is the artifact `emery slice validate` checks for drift, and it is what later steps read instead of re-parsing the markdown.
+`model.yaml` (at `.emery/change/slices/<slice>/model.yaml`) is the single structured record of a refined slice. It holds the requirement set with **inline provenance** — for each requirement, which claims contributed and which one won — plus the task list and a small header. It is the artifact `emery slice validate` checks for drift, and it is what later steps read instead of re-parsing the markdown.
 
 There is no separate `provenance.yaml` on disk. The full audit view is *projected on demand* from `model.yaml` and the Evidence files by `emery slice provenance`, so the trail can never drift out of sync with the spec.
 

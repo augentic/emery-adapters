@@ -28,7 +28,7 @@ cargo make eval contracts-design --restart
 
 Each case owns its own sandbox at `sandbox/<case>/` which allows for review and continued runs without having to re-run the entire workflow.
 
- Build reports (`.emery/slices/<slice>/build/report.yaml`) are available for review on build success. To correct input or output, edit the adapter prose and re-run the case using `--restart`.
+ Build reports (`.emery/change/slices/<slice>/build/report.yaml`) are available for review on build success. To correct input or output, edit the adapter prose and re-run the case using `--restart`.
 
 Continue or debug a run explicitly using the CLI:
 
@@ -83,7 +83,7 @@ Hard assertions only (the shared `probe` case runner):
 | workflow (execute) | Lifecycle  | Every plan entry is `done`                                     |
 | workflow (execute) | Provenance | Every evidenced requirement on each materialized accepted CID carries sources; ids are present |
 | build              | Lifecycle  | Slice metadata is `built`                                      |
-| build              | Report     | `.emery/slices/<slice>/build/report.yaml` exists             |
+| build              | Report     | `.emery/change/slices/<slice>/build/report.yaml` exists             |
 | build              | Artifacts  | Every `expect` path holds a file inside the sandbox            |
 
 
