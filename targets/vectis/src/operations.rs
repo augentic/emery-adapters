@@ -324,7 +324,7 @@ impl Target for Adapter {
             // Deterministic gate: an invalid staged slice composition blocks
             // the merge before the engine folds it, per the merge prompt.
             let staged =
-                ctx.project_root.join(format!(".emery/change/slices/{slice}/composition.yaml"));
+                change_home(ctx.project_root).join("slices").join(slice).join("composition.yaml");
             let staged_findings = gate::validation_findings(&staged);
             if staged_findings.is_empty() {
                 return Ok(Report::success());
@@ -362,12 +362,25 @@ struct SliceRoots {
     agent: String,
 }
 
+fn change_home(project_root: &Path) -> PathBuf {
+    if project_root.join("plan.yaml").is_file() {
+        project_root.to_path_buf()
+    } else {
+        project_root.join(".emery/change")
+    }
+}
+
 fn slice_stage(workspace: &Workspace, ctx: &Context<'_>, slice: &str) -> SliceRoots {
     workspace.artifact_stage.as_ref().map_or_else(
         || {
-            let relative = format!(".emery/change/slices/{slice}");
+            let home = change_home(ctx.project_root);
+            let relative = if ctx.project_root.join("plan.yaml").is_file() {
+                format!("slices/{slice}")
+            } else {
+                format!(".emery/change/slices/{slice}")
+            };
             SliceRoots {
-                fs: ctx.project_root.join(&relative),
+                fs: home.join("slices").join(slice),
                 agent: workspace.artifact_path(&relative),
             }
         },

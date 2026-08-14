@@ -508,6 +508,22 @@ async fn merge_preflight_deterministic() {
     assert_eq!(report.status, Status::Success);
     assert!(model.requests().is_empty(), "preflight is deterministic: no leg");
 
+    // Detached change home: `.` is the change root (`slices/<slice>/`).
+    let detached = TempDir::new().unwrap();
+    fs::write(detached.path().join("plan.yaml"), "name: demo\n").unwrap();
+    seed_bad_contract(&detached.path().join("slices/demo/contracts"));
+    let report = Adapter::merge(
+        &model,
+        &ctx(detached.path(), None),
+        "demo",
+        MergePhase::Preflight,
+        &merge_workspace(detached.path()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(report.status, Status::Failure);
+    assert!(model.requests().is_empty(), "detached staged failure spends no judgment leg");
+
     // A broken staged delta parks the merge before the engine promotes it.
     seed_bad_contract(&tmp.path().join(".emery/change/slices/demo/contracts"));
     let report = Adapter::merge(

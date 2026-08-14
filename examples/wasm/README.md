@@ -56,11 +56,7 @@ Fixture inputs live under [fixture/](fixture/) (shared with the graded `orders-c
 3. Emery reconciles them and drives refinement (`plan refine`), then build → merge (`plan execute`).
 4. The contracts target builds and merges the API contract surface.
 
-After running, inspect:
-
-```text
-sandbox/wasm-contracts/project/contracts/
-```
+After running, inspect exit code, `.emery/change` journal facts under `sandbox/wasm-contracts/change/`, and each slice's `build/report.yaml`. Merged code stays store-only until RFC-95.
 
 
 
@@ -75,10 +71,6 @@ The upstream is `UNLICENSED`, so the script reuses the eval case's gitignored fi
 3. Emery reconciles and drives refinement (`plan refine`), then build → merge (`plan execute`).
 4. The omnia target builds the guest, crate, and tests, then merges.
 
-After running, inspect the generated result under:
-
-```text
-sandbox/wasm-omnia-r9k/project/
-```
+After running, inspect exit code, journal facts under `sandbox/wasm-omnia-r9k/change/`, and each slice's `build/report.yaml`. Merged code stays store-only until RFC-95.
 
 Expect tens of minutes of live model time — the same cost class as `cargo make eval omnia-r9k`.

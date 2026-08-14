@@ -4,7 +4,7 @@ Merge prompt for slices that target the `contracts` adapter — the contracts ad
 
 ## Preflight — staged delta validation
 
-The preflight dispatch is fully deterministic: the adapter runs its compiled-in contract validator against the slice's staged delta (`.emery/change/slices/<slice>/contracts/` in-place) and answers without a judgment leg. Blocking findings mean `status: failure`, and the engine aborts the merge with the slice still at `built` — the same delta the build phase already validated, re-checked so drift between build and merge cannot land.
+The preflight dispatch is fully deterministic: the adapter runs its compiled-in contract validator against the slice's staged delta (`slices/<slice>/contracts/` relative to the change home) and answers without a judgment leg. Blocking findings mean `status: failure`, and the engine aborts the merge with the slice still at `built` — the same delta the build phase already validated, re-checked so drift between build and merge cannot land.
 
 ## Postflight — merged-baseline validation
 

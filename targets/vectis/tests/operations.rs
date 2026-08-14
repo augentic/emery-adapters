@@ -821,6 +821,23 @@ async fn merge_preflight_deterministic() {
     assert_eq!(report.status, Status::Success);
     assert!(model.requests().is_empty(), "preflight is deterministic: no leg");
 
+    // Detached change home: `.` is the change root (`slices/<slice>/`).
+    let detached = TempDir::new().unwrap();
+    fs::write(detached.path().join("plan.yaml"), "name: demo\n").unwrap();
+    fs::create_dir_all(detached.path().join("slices/demo")).unwrap();
+    fs::write(detached.path().join("slices/demo/composition.yaml"), "screens: [broken\n").unwrap();
+    let report = Adapter::merge(
+        &model,
+        &ctx(detached.path(), None),
+        "demo",
+        MergePhase::Preflight,
+        &workspace(detached.path()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(report.status, Status::Failure);
+    assert!(model.requests().is_empty(), "detached staged failure spends no judgment leg");
+
     // A broken staged slice composition parks the merge before the fold.
     fs::create_dir_all(tmp.path().join(".emery/change/slices/demo")).unwrap();
     fs::write(tmp.path().join(".emery/change/slices/demo/composition.yaml"), "screens: [broken\n")

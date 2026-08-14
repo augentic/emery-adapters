@@ -6,6 +6,8 @@
 //! findings-directed pass — iteration and budgets are engine policy
 //! (RFC-90 D1). Contracts runs no standards review.
 
+use std::path::{Path, PathBuf};
+
 use adapter::registry::Doc;
 use adapter::seam::{
     ArtifactStage, BuildContext, BuildInput, Context, DiagnosticSource, Error, Finding,
@@ -258,7 +260,7 @@ impl Target for Adapter {
         // (excluded from snapshots). Postflight validates the merged
         // baseline inside the lent workspace (steps 2–3).
         if phase == MergePhase::Preflight {
-            let staged = ctx.project_root.join(format!(".emery/change/slices/{slice}/contracts"));
+            let staged = change_home(ctx.project_root).join("slices").join(slice).join("contracts");
             return Ok(enforce_validators(Report::success(), &validate_baseline(&staged)));
         }
 
@@ -300,7 +302,15 @@ fn stage_contracts(stage: &ArtifactStage) -> String {
     format!("{}/contracts", stage.root)
 }
 
-fn has_entries(dir: &std::path::Path) -> bool {
+fn change_home(project_root: &Path) -> PathBuf {
+    if project_root.join("plan.yaml").is_file() {
+        project_root.to_path_buf()
+    } else {
+        project_root.join(".emery/change")
+    }
+}
+
+fn has_entries(dir: &Path) -> bool {
     std::fs::read_dir(dir).is_ok_and(|mut entries| entries.next().is_some())
 }
 
@@ -334,7 +344,7 @@ fn owning_sub_prompts(findings: &[PhaseFinding]) -> String {
 // One in-guest validator finding as a deterministic phase finding; the
 // location is the finding's stage-relative path (the slice-relative
 // form of the staged file).
-fn phase_finding(finding: &ContractFinding, stage_root: &std::path::Path) -> PhaseFinding {
+fn phase_finding(finding: &ContractFinding, stage_root: &Path) -> PhaseFinding {
     let path = finding.path.strip_prefix(stage_root).unwrap_or(&finding.path);
     PhaseFinding {
         id: String::new(),

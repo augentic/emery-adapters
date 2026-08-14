@@ -1150,6 +1150,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "emery-mock"
+version = "0.38.0"
+dependencies = [
+ "emery-adapter",
+ "emery-artifacts",
+ "emery-error",
+ "emery-native",
+ "emery-project",
+ "jiff",
+ "omnia-guest",
+ "omnia-testkit",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "emery-native"
 version = "0.38.0"
 dependencies = [
@@ -1173,6 +1189,7 @@ dependencies = [
  "anyhow",
  "clap",
  "emery-artifacts",
+ "emery-mock",
  "emery-native",
  "emery-project",
  "emery-slice",

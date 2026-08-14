@@ -1,0 +1,44 @@
+version: 1
+definition: at-r9k-position-adapter
+scope-digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+coverage-digest: sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+sources-digest: sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+system-model-digest: sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+migration-plan-digest: sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+wave:
+  id: deliver
+  digest: sha256:5555555555555555555555555555555555555555555555555555555555555555
+  outcome: Migrate the r9k position adapter into Omnia
+  architecture:
+    before:
+      id: as-is
+      digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    after:
+      id: target
+      digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  targets:
+  - id: service
+    locator: product
+    adapter: emery:omnia@0.12.0
+  evidence-scopes:
+  - source: intent
+    value: >-
+      Migrate the legacy TypeScript at_r9k_position_adapter
+      (https://bitbucket.org/Propellerhead/at_r9k_position_adapter) under legacy/ into a new Omnia WASM crate
+      with provider-based dependency injection.
+    adapter: emery:intent@0.12.0
+    lead: intent
+    evidence-digest: sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+  - source: legacy
+    source-cid: sha256:6666666666666666666666666666666666666666666666666666666666666666
+    adapter: emery:typescript@0.12.0
+    locator: legacy/at_r9k_position_adapter
+    lead: legacy
+    evidence-digest: sha256:7777777777777777777777777777777777777777777777777777777777777777
+  delivery-mappings:
+  - source: intent
+    lead: intent
+    target: service
+  - source: legacy
+    lead: legacy
+    target: service

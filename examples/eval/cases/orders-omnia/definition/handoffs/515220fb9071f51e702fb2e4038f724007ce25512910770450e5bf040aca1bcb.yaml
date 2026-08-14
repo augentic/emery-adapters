@@ -1,0 +1,47 @@
+version: 1
+definition: orders-and-health
+scope-digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+coverage-digest: sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+sources-digest: sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+system-model-digest: sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+migration-plan-digest: sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+wave:
+  id: deliver
+  digest: sha256:5555555555555555555555555555555555555555555555555555555555555555
+  outcome: Author orders contracts, then a health crate that consumes them
+  architecture:
+    before:
+      id: as-is
+      digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    after:
+      id: target
+      digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  targets:
+  - id: orders
+    locator: product/orders
+    adapter: emery:contracts@0.12.0
+  - id: health
+    locator: product/health
+    adapter: emery:omnia@0.12.0
+  evidence-scopes:
+  - source: intent
+    value: "Author the orders API contracts from docs/, then a small Omnia health crate that depends on those contracts. Two targets: contracts first, then omnia."
+    adapter: emery:intent@0.12.0
+    lead: intent
+    evidence-digest: sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+  - source: docs
+    source-cid: sha256:2222222222222222222222222222222222222222222222222222222222222222
+    adapter: emery:documentation@0.12.0
+    locator: docs
+    lead: docs
+    evidence-digest: sha256:3333333333333333333333333333333333333333333333333333333333333333
+  delivery-mappings:
+  - source: intent
+    lead: intent
+    target: orders
+  - source: docs
+    lead: docs
+    target: orders
+  - source: intent
+    lead: intent
+    target: health
