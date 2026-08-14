@@ -31,7 +31,7 @@ Rules:
 - `lead` MUST equal the terminal lead's id (not a slice name; the two are equal only on the degenerate single-lead path).
 - `claims` MUST contain exactly one entry with `kind: intent`, an `id:` set to the lead id, and a `statement:` field carrying the operator's intent string verbatim. The `id` is the stable anchor synthesis references — although the Evidence schema only *requires* it on `requirement` / `criterion` / `example` kinds, an id-less intent claim is unanchorable, so the slice's sole requirement would render an empty `Sources:` line and fail `emery slice validate` (`spec.requirement-sources-empty`). Setting `id` equal to the lead keeps the document deterministic and idempotent.
 - Do not emit a `path:` on the claim. The intent source has no filesystem locus; `path` is reserved for file-backed sources.
-- Do not emit additional claims. Operators who want multi-claim intent split the work into multiple slices (the lead per slice handles that).
+- Do not emit additional claims. Operators who want to express more than one intent supply more than one intent string, each its own binding and lead.
 
 ## Worked example
 

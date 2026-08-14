@@ -59,6 +59,8 @@ This adapter emits three kinds from the closed enum (`evidence.schema.json#/$def
 
 `id` is optional on `excerpt` / `type` / `call` (per `evidence.schema.json` — required only on `requirement` and `criterion`). You MAY carry it for deterministic cross-source reconciliation when the claim corresponds to a stable concept; otherwise omit it.
 
+**Cover what the surface actually does.** Extract of one surface must emit the calls, contracts, types, and excerpts that surface actually has: a `POST /orders` handler that writes an orders store must carry that write as a `call` claim; a handler that invokes an external service must carry that call site. Downstream correlation evidences invocation, read/write, and ownership relationships from these structured claims — do not bury them in `excerpt` prose, and do not write a second behavioural spec in prose instead of emitting the structured claims.
+
 ## Anchors and excerpts
 
 Every claim's `path:` carries a `<path>` or `<path>#L<n>` or `<path>#L<start>-L<end>` anchor matching the `evidence.schema.json` claim-path grammar (`^[^\s][^\s]*(#L[1-9][0-9]*(-L[1-9][0-9]*)?)?$`). Paths are relative under `$SOURCE_DIR` (no leading `/`, no `..`, not under a skip-root). The anchor IS the citation; the body field carries short context.

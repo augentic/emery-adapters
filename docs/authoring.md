@@ -145,7 +145,7 @@ use adapter::{AdapterIdentity, Model, Source, repaired};
 
 use crate::registry;
 
-/// Surveys a bound changelog tree into slice-sized leads.
+/// Surveys a bound changelog tree into one lead per changelog surface.
 #[derive(Clone, Copy, Debug)]
 pub struct Adapter;
 
@@ -158,7 +158,7 @@ impl Source for Adapter {
     fn metadata() -> SourceMetadata {
         // Declare the minimum host that can run this adapter once it depends
         // on host behavior; first-party adapters set it on every train release.
-        SourceMetadata { emery_floor: Some("0.37.0".to_string()) }
+        SourceMetadata { emery_floor: Some("0.38.0".to_string()) }
     }
 
     fn docs() -> &'static [Doc] {
@@ -221,12 +221,13 @@ fn survey_user(ctx: &Context<'_>, input: &SourceInput) -> String {
 Points that generalize:
 
 - **Operations write no workflow artifacts.** The engine persists leads and Evidence; your job is to return well-formed values. Say so explicitly in the prompt ("the caller persists…; do not write it yourself") because the model has workspace access.
-- **Catalog context is typed on the call.** `SourceInput` carries `key`, workspace-or-value content, and optional `focus`. Do not read `plan.yaml`, `leads.md`, or `slices/` — sources receive no change-home filesystem grant and no `$PROJECT_DIR`. Unfocused survey returns `leads[]`; focused survey returns `children[]`; extract requires `input.focus`.
+- **Catalog context is typed on the call.** `SourceInput` carries `key`, workspace-or-value content, and optional `focus`. Do not read `plan.yaml`, `leads.md`, or `slices/` — sources receive no change-home filesystem grant and no `$PROJECT_DIR`. Unfocused survey returns `leads[]`; focused survey returns `children[]` only when the parent is still coarser than a buildable boundary; extract requires `input.focus`.
+- **The engine prepares the binding — never recover `plan.yaml`.** Every `survey` / `extract` call already carries `input.key` and prepared content: a tree binding arrives as `SourceContent::Workspace` (lent as `$SOURCE_DIR`), an inline binding as `SourceContent::Value`. Interpolate that content into the prompt. Do not ask the agent to read `plan.yaml` or resolve a source location.
 - **`repaired` owns the parse-and-retry loop.** Pick the schema constant and tail matching the operation; the committed goldens live in the engine repo under `crates/project/answers/`.
 
 ### 5. Author the prose
 
-Sources need two prompts: `prose/prompts/survey.md` and `prose/prompts/extract.md`. The shape rules are in [CONTRIBUTING.md § Prompt authoring](../CONTRIBUTING.md#prompt-authoring) — headline: parent prompts orchestrate and stay under ~150 non-blank lines, phase sub-prompts carry one phase (hard cap 800), and references are cited by relative link, never inlined.
+Sources need two prompts: `prose/prompts/survey.md` and `prose/prompts/extract.md`. Survey emits one lead per adapter-native surface (one endpoint, topic, job, document, screen, or intent string). Downstream consumers group those leads; focused child survey is the exception when a parent is still coarser than a buildable boundary. The shape rules are in [CONTRIBUTING.md § Prompt authoring](../CONTRIBUTING.md#prompt-authoring) — headline: parent prompts orchestrate and stay under ~150 non-blank lines, phase sub-prompts carry one phase (hard cap 800), and references are cited by relative link, never inlined.
 
 Add the shared runtime references symlink so your prompts can cite the cross-adapter corpus:
 

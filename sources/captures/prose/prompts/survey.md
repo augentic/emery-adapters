@@ -22,15 +22,15 @@ Operators with a non-conforming layout adapt the directory or write a thin wrapp
 
 - **`$SOURCE_DIR`** — read-only CID view of the bound capture root. Walk this tree; never write into it. Absent when the binding is an inline `value`.
 - **Source key** — kebab-case identifier the engine passed on the wire. The caller stamps each lead's `source` from it; this prompt does not emit it.
-- **Optional parent lead** — when present, this is a focused survey: return stable child leads under that parent. Inherit parent/focus from the passed record; do not look it up in `leads.md` or `slices/`.
+- **Optional parent lead** — when present, this is a focused survey: the exception path for a parent still coarser than a buildable boundary, not a second walk to recover handlers unfocused survey already emitted. Return stable child leads under that parent. Inherit parent/focus from the passed record; do not look it up in `leads.md` or `slices/`.
 
 The bound directory is the only filesystem grant — the change home and `$PROJECT_DIR` are unreachable, host env is unreadable, the network is denied. Do not read `plan.yaml`, `leads.md`, or `slices/`. Unfocused survey always returns the complete current set from `$SOURCE_DIR`; do not consult a catalog to decide this is a re-survey. Use `$SCRATCH_DIR` for unavoidable intermediate state.
 
 ## Lead grain
 
-One lead per observed handler — that is, one per `tests/data/replays/<handler>/` directory. Each directory groups every captured scenario for one HTTP route, message handler, scheduled job, or WebSocket handler. The slice grain operators reason about is the handler, not the individual capture; per-scenario detail lives in `extract`-time claims (one `kind: example` claim per scenario file).
+One lead per observed handler — that is, one per `tests/data/replays/<handler>/` directory. Each directory groups every captured scenario for one HTTP route, message handler, scheduled job, or WebSocket handler. A lead is the handler surface — the smallest surface this adapter can name — not a work unit; per-scenario detail lives in `extract`-time claims (one `kind: example` claim per scenario file).
 
-The directory name is the kebab-case handler identifier — keep it verbatim as the lead `lead`. When two sources surface the same handler under different slugs (e.g. `password-reset` here, `account-pwd-reset` in the legacy code source), cross-source reconciliation is agent judgment at propose time and plan-review curation via `emery plan amend <entry> --sources`; do not invent alternate names here.
+The directory name is the kebab-case handler identifier — keep it verbatim as the lead `lead`. When two sources surface the same handler under different slugs (e.g. `password-reset` here, `account-pwd-reset` in the legacy code source), cross-source reconciliation happens downstream in the engine and under operator review; do not invent alternate names here.
 
 ## Output: lead blocks
 
@@ -44,7 +44,7 @@ Emit one fenced block per identified handler, in the shape the CLI appends under
 - topics: [<optional-kebab-slugs>]
 ```
 
-Field order is fixed (`lead`, `synopsis`, then optional `topics`). `lead` is kebab-case and matches the `<handler>/` directory name verbatim. Do not emit `source`; the CLI stamps it from the survey binding. `topics` (optional) is an inline list of kebab-case domain slugs drawn from the handler's surface; author them only when the captures clearly support the classification, omit the bullet otherwise. They are extra grouping context for `propose` and the join key for the decision-contradiction warning — never a grouping the CLI computes. `synopsis` names the surface (HTTP route + method, queue + job name, cron expression, WebSocket topic) and the captured-scenario count — content-bearing enough that a same-slug lead from another source can be matched or distinguished on content, not just the shared slug. Prefer one line; it MAY run to a few lines when one is too thin. Quote concrete counts the captures themselves verify; do not infer from `INSTRUCTIONS.md` prose alone. After the CLI stamps `source`, the block validates against `schemas/discovery/lead.schema.json`.
+Field order is fixed (`lead`, `synopsis`, then optional `topics`). `lead` is kebab-case and matches the `<handler>/` directory name verbatim. Do not emit `source`; the CLI stamps it from the survey binding. `topics` (optional) is an inline list of kebab-case domain slugs drawn from the handler's surface; author them only when the captures clearly support the classification, omit the bullet otherwise. They are extra grouping context for downstream reconciliation — never a grouping the CLI computes. `synopsis` names the surface (HTTP route + method, queue + job name, cron expression, WebSocket topic) and the captured-scenario count — content-bearing enough that a same-slug lead from another source can be matched or distinguished on content, not just the shared slug. Prefer one line; it MAY run to a few lines when one is too thin. Quote concrete counts the captures themselves verify; do not infer from `INSTRUCTIONS.md` prose alone. After the CLI stamps `source`, the block validates against `schemas/discovery/lead.schema.json`.
 
 Emit blocks sorted alphabetically by `lead` so re-survey produces byte-stable diffs.
 
@@ -53,7 +53,7 @@ Emit blocks sorted alphabetically by `lead` so re-survey produces byte-stable di
 1. **Walk `tests/data/replays/`.** Survey immediate subdirectories. Skip `samples/` (shared payloads, not handlers) and any directory whose name begins with `.` or `_`.
 2. **Per handler, inventory scenarios.** List `<handler>/*.json`. Skip the optional per-handler `INSTRUCTIONS.md` — it is not authoritative for surface naming. Zero-scenario handler directories are skipped silently (the operator drops them upstream).
 3. **Identify the surface.** Inspect one or two scenario files to derive the route / topic / job identifier and method (e.g. `POST /users`, queue `user.created`, cron `0 */5 * * *`). When scenarios disagree, prefer the most common surface and note the spread in `synopsis`.
-4. **Emit one lead block per handler.** Sort by `lead`. Each block carries the handler `lead` and a reconciliation-grade synopsis; the CLI stamps `source` from the survey binding.
+4. **Emit one lead block per handler.** Sort by `lead`. Each block carries the handler `lead` and a reconciliation-grade synopsis; the CLI stamps `source` from the survey binding. Never merge handler directories into larger units.
 
 ## Path rules
 
@@ -108,7 +108,7 @@ Expected output (alphabetically by `lead`; the CLI stamps `source: runtime`):
 
 - **Inventing handlers from `INSTRUCTIONS.md`.** The prose is operator hint material; the directory listing is the lead source of truth. If a handler is named in `INSTRUCTIONS.md` but has no scenario JSON files, emit nothing for it.
 - **Per-scenario leads.** One block per `<handler>/` directory, never one per `<scenario>.json`. Scenario-level detail belongs in `extract`'s `kind: example` claims.
-- **Cross-source slug mismatches here.** When another source surfaces the same handler under a different slug, reconciliation is propose-time agent judgment and plan-review `--sources` edits; this prompt sees one source's tree. See [From sources to slices](../references/emery-runtime/reconciliation.md#plan-time-leads-become-slices) for how leads reconcile into slices.
+- **Cross-source slug mismatches here.** When another source surfaces the same handler under a different slug, reconciliation happens downstream in the engine and under operator review; this prompt sees one source's tree. See [From sources to slices](../references/emery-runtime/reconciliation.md#plan-time-leads-become-slices) for how leads reconcile into slices.
 - **Writing `leads.md` or `plan.yaml`.** Only lead blocks. The caller owns every lifecycle file.
 
 ## Failure modes
