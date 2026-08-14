@@ -26,8 +26,7 @@ fn ctx<'a>(root: &'a Path, mcp_url: Option<&str>) -> Context<'a> {
         adapter_id: "target:contracts",
         project_root: root,
         mcp_url: mcp_url.map(str::to_owned),
-        lend: root.display().to_string(),
-        source_key: None,
+        lend: Some(root.display().to_string()),
     }
 }
 
@@ -144,8 +143,8 @@ async fn build_sub_flows() {
     ]);
     let input = |path: &str| Payload::Path(path.to_string());
     let inputs = vec![
-        Input::Proposal(input(".emery/slices/demo/proposal.md")),
-        Input::Design(input(".emery/slices/demo/design.md")),
+        Input::Proposal(input(".emery/change/slices/demo/proposal.md")),
+        Input::Design(input(".emery/change/slices/demo/design.md")),
     ];
 
     let report = Adapter::build(
@@ -210,8 +209,8 @@ async fn build_sub_flows() {
     assert!(system.contains("json-schema sub-flow"), "sub-prompt in system");
     let user = &first.messages[0].content;
     assert!(
-        user.contains("/.emery/slices/demo/proposal.md")
-            && user.contains("/.emery/slices/demo/design.md"),
+        user.contains("/.emery/change/slices/demo/proposal.md")
+            && user.contains("/.emery/change/slices/demo/design.md"),
         "typed inputs render as artifact-rooted path sections: {user}"
     );
     assert!(!user.contains("PROPOSAL-BODY"), "artifact bodies are not inlined");
@@ -509,8 +508,24 @@ async fn merge_preflight_deterministic() {
     assert_eq!(report.status, Status::Success);
     assert!(model.requests().is_empty(), "preflight is deterministic: no leg");
 
+    // Detached change home: `.` is the change root (`slices/<slice>/`).
+    let detached = TempDir::new().unwrap();
+    fs::write(detached.path().join("plan.yaml"), "name: demo\n").unwrap();
+    seed_bad_contract(&detached.path().join("slices/demo/contracts"));
+    let report = Adapter::merge(
+        &model,
+        &ctx(detached.path(), None),
+        "demo",
+        MergePhase::Preflight,
+        &merge_workspace(detached.path()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(report.status, Status::Failure);
+    assert!(model.requests().is_empty(), "detached staged failure spends no judgment leg");
+
     // A broken staged delta parks the merge before the engine promotes it.
-    seed_bad_contract(&tmp.path().join(".emery/slices/demo/contracts"));
+    seed_bad_contract(&tmp.path().join(".emery/change/slices/demo/contracts"));
     let report = Adapter::merge(
         &model,
         &ctx(tmp.path(), None),
@@ -528,8 +543,8 @@ async fn merge_preflight_deterministic() {
 #[tokio::test]
 async fn merge_postflight_gate() {
     let tmp = TempDir::new().unwrap();
-    // The merged baseline lives in the project tree — postflight
-    // validates it there, not in the lent read-only result view.
+    // The merged baseline lives in the lent workspace — postflight
+    // validates it there (the test tree is both project root and workspace).
     seed_bad_contract(&tmp.path().join("contracts"));
     let model = Harness::answering([SUCCESS_REPORT]);
 

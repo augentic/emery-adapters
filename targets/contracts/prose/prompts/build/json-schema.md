@@ -20,7 +20,7 @@ contracts/
 └── schemas/
     └── <type>.yaml                 # Baseline: merged schemas only
 
-.emery/slices/<slice-name>/         # Written via the artifact stage, which mirrors this tree
+.emery/change/slices/<slice-name>/         # Written via the artifact stage, which mirrors this tree
 └── contracts/
     └── schemas/
         └── <type>.yaml             # Slice-local delta or normalised import

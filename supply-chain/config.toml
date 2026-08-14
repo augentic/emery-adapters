@@ -152,6 +152,10 @@ criteria = "safe-to-deploy"
 version = "0.2.4"
 criteria = "safe-to-deploy"
 
+[[exemptions.bstr]]
+version = "1.13.1"
+criteria = "safe-to-deploy"
+
 [[exemptions.bytecount]]
 version = "0.6.9"
 criteria = "safe-to-deploy"
@@ -420,6 +424,10 @@ criteria = "safe-to-deploy"
 version = "0.3.4"
 criteria = "safe-to-deploy"
 
+[[exemptions.globset]]
+version = "0.4.20"
+criteria = "safe-to-deploy"
+
 [[exemptions.granit-parser]]
 version = "1.0.1"
 criteria = "safe-to-deploy"
@@ -441,7 +449,7 @@ version = "1.1.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.http-body-util]]
-version = "0.1.5"
+version = "0.1.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.hybrid-array]]
@@ -502,6 +510,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.idna_adapter]]
 version = "1.2.2"
+criteria = "safe-to-deploy"
+
+[[exemptions.ignore]]
+version = "0.4.33"
 criteria = "safe-to-deploy"
 
 [[exemptions.image]]
@@ -917,7 +929,7 @@ version = "1.2.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.sea-query]]
-version = "1.0.2"
+version = "1.0.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.security-framework]]

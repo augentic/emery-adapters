@@ -10,7 +10,7 @@ fn embeds_prompts() {
     assert!(body(Adapter::docs(), "prompts/survey.md").starts_with("# `screenshots.survey`"));
     assert!(body(Adapter::docs(), "prompts/extract.md").starts_with("# `screenshots.extract`"));
     assert!(
-        body(Adapter::docs(), "prompts/extract.md").contains("`$PROJECT_DIR` is unreachable"),
+        body(Adapter::docs(), "prompts/extract.md").contains("`$PROJECT_DIR` are unreachable"),
         "extract names the prepared-tree grant boundary"
     );
     let pipeline = body(Adapter::docs(), "prompts/extract/pipeline.md");

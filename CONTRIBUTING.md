@@ -18,7 +18,7 @@ Unless you are fixing a known bug, discuss larger changes in a GitHub issue firs
 - **`cargo make fmt` fails** — the fmt arm shells out to `cargo +nightly fmt`; install any nightly toolchain (`rustup toolchain install nightly --component rustfmt`).
 - **Eval case commands hang or fail authenticating** — they need [`cursor-agent`](https://cursor.com/docs/cli) on `PATH`, authenticated via `cursor-agent login` or `CURSOR_API_KEY` in a repo-root `.env`.
 - **`cargo make wasm-contracts` / `wasm-omnia-r9k` fails immediately** — they require the sibling [`augentic/emery`](https://github.com/augentic/emery) checkout at `../emery` (they drive that repo's built `emery` binary).
-- **Patch-resolution errors after editing the root `Cargo.toml`** — the `[patch."https://github.com/augentic/emery.git"]` block only resolves when `../emery` exists; re-comment it if you are not co-developing.
+- **Patch-resolution errors after editing the root `Cargo.toml`** — the path patches in `[patch.crates-io]` only resolve when `../emery` exists; re-comment them if you are not co-developing.
 
 ## Layout
 
@@ -60,7 +60,7 @@ Two compatibility choices are independent, for first- and third-party adapter au
 1. **WIT contract version** — the `emery:adapter` WIT package, embedded in the `adapter` SDK and published from `augentic/emery`'s `wit/emery.wit`.
 2. **Engine revision** — the workspace resolves `emery-adapter`, `emery-native`, `emery-probe`, and `emery-prose` as git dependencies on `augentic/emery`, pinned by **release tag** (`tag = "vX.Y.Z"` in the root `Cargo.toml`; RFC-77 D13) plus the committed `Cargo.lock`. Advancing the pin is deliberate: bump the tag on all four dependencies to a released engine line, run `cargo update -p emery-adapter -p emery-native -p emery-probe -p emery-prose`, and commit both files — never resolve a floating branch.
 
-For sibling co-development against uncommitted engine changes, uncomment the `[patch."https://github.com/augentic/emery.git"]` block at the bottom of the root `Cargo.toml` (it points at `../emery`) and work in both trees; re-comment it before committing. The patch block must never be active at publish time.
+For sibling co-development against uncommitted engine changes, uncomment the path patches in the root `Cargo.toml` `[patch.crates-io]` block (they point at `../emery`) and work in both trees; re-comment them before committing. The path patches must never be active at publish time.
 
 ## Omnia exemplar templates
 

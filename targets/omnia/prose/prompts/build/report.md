@@ -7,7 +7,7 @@ Loaded with [`../build.md`](../build.md) for the close-out leg — the build's f
 The lent workspace record carries a writable **artifact stage** seeded from the slice tree; the user prompt names the exact stage path for `tasks.md`. Check off every completed task; leave genuinely unfinished tasks unchecked.
 
 - Write **only** the staged `tasks.md` — it is omnia's sole declared writable slice artifact; a staged write outside that grant fails the build at an engine gate.
-- Never write the authoritative slice tree (`.emery/slices/...`): the engine validates and promotes the staged diff only after the whole build loop succeeds.
+- Never write the authoritative slice tree (`.emery/change/slices/...`): the engine validates and promotes the staged diff only after the whole build loop succeeds.
 
 ## 2. Declare outputs
 

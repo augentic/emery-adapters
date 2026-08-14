@@ -12,7 +12,7 @@ A private workspace is lent to the build; nothing is written to the operator's c
 
 - **Product code** (`shared/`, `iOS/`, `Android/`, `ui-contract/`, `design-system/` exports) goes under the workspace root (`PROJECT_DIR`).
 - **Candidate slice artifacts** — the regenerated `composition.yaml`, `tasks.md` checkbox updates, and the `build/` bookkeeping subtree (`build/component-bindings.yaml`) — go **only** to the writable artifact stage (`STAGE_DIR`), the engine-lent mirror of the slice tree. The engine promotes staged writes atomically on success.
-- The authoritative slice tree (`.emery/slices/<SLICE_ID>/`) and every other `.emery/` path are **read-only** to every build leg.
+- The authoritative slice tree (`.emery/change/slices/<SLICE_ID>/`) and every other `.emery/` path are **read-only** to every build leg.
 
 ## Inputs
 

@@ -1,0 +1,1 @@
+Migrate the legacy TypeScript at_r9k_position_adapter (https://bitbucket.org/Propellerhead/at_r9k_position_adapter) under legacy/ into a new Omnia WASM crate with provider-based dependency injection.

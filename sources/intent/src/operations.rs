@@ -6,25 +6,12 @@ use std::path::{Path, PathBuf};
 
 use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA, evidence_tail, leads_tail};
 use adapter::registry::Doc;
-use adapter::seam::{Context, Error, Evidence, Lead, SourceInput, SourceMetadata};
+use adapter::seam::{
+    Context, Error, Evidence, Lead, SourceContent, SourceInput, SourceMetadata, SurveyResult,
+};
 use adapter::{AdapterIdentity, Model, Source, repaired};
 
 use crate::registry;
-
-/// The binding key and intent string from the engine-prepared call. An
-/// inline input carries the intent verbatim; a tree input is a file
-/// locator — the prepared workspace must hold exactly one regular file,
-/// whose contents are the intent.
-fn binding<'a>(ctx: &'a Context<'_>, input: &SourceInput) -> Result<(&'a str, String), Error> {
-    let key = ctx.source_key.as_deref().ok_or_else(|| {
-        Error::InvalidRequest("source dispatch carries no source-binding key".to_string())
-    })?;
-    let intent = match input {
-        SourceInput::Inline(content) => content.clone(),
-        SourceInput::Workspace(root) => single_file_intent(Path::new(root))?,
-    };
-    Ok((key, intent))
-}
 
 /// Read the one regular file in the prepared tree as the intent string.
 fn single_file_intent(root: &Path) -> Result<String, Error> {
@@ -77,45 +64,101 @@ impl Source for Adapter {
 
     async fn survey<P: Model>(
         model: &P, ctx: &Context<'_>, input: &SourceInput,
-    ) -> Result<Vec<Lead>, Error> {
-        let (key, intent) = binding(ctx, input)?;
+    ) -> Result<SurveyResult, Error> {
         let system = registry::body("prompts/survey.md").to_string();
-        let user = format!(
-            "Survey the intent source bound to adapter `{id}`.\n\n\
-         Source binding key: `{key}`. The engine resolved the binding to the \
-         operator's free-form intent string and passed it verbatim:\n\n\
-         {intent}\n\n\
-         The lead id is a stable kebab-case slug derived from the intent string itself, \
-         per the prompt's slug rules. Re-running this survey replaces the prior lead by \
-         its `(source, lead)` pair, exactly as the prompt describes — emit the single \
-         current lead.\n\n\
-         Answer with one JSON object matching the gated schema: a `leads` array carrying \
-         exactly one lead whose `synopsis` is the operator's intent string, verbatim, per \
-         the prompt. The engine persists the lead; do not write it yourself.",
-            id = ctx.adapter_id,
-        );
-        repaired(model, ctx, system, user, "leads", LEADS_ANSWER_SCHEMA, leads_tail).await
+        repaired(
+            model,
+            ctx,
+            system,
+            survey_user(ctx, input)?,
+            "leads",
+            LEADS_ANSWER_SCHEMA,
+            leads_tail,
+        )
+        .await
     }
 
     async fn extract<P: Model>(
-        model: &P, ctx: &Context<'_>, input: &SourceInput, lead: &Lead,
+        model: &P, ctx: &Context<'_>, input: &SourceInput,
     ) -> Result<Evidence, Error> {
-        let (key, intent) = binding(ctx, input)?;
+        let lead = terminal(input)?;
         let system = registry::body("prompts/extract.md").to_string();
         let user = format!(
-            "Extract Evidence from the intent source bound to adapter `{id}` for this \
-         lead:\n\n{lead}\n\n\
-         Source binding key: `{key}`. The engine resolved the binding to the \
-         operator's intent string and passed it verbatim:\n\n\
-         {intent}\n\n\
-         Answer with one JSON object matching the gated schema: the Evidence body \
-         (`authority: \"intent\"`, one `kind: \"intent\"` claim whose `id` equals the \
-         lead id and whose `statement` carries the operator's intent string verbatim, \
-         per the prompt), without the envelope `lead` key — this call names the lead. \
-         The engine persists the document; do not write it yourself.",
+            "Extract Evidence from the intent source bound to adapter `{id}` \
+             (source key `{key}`) for this lead:\n\n{lead}\n\n\
+             {content}\n\n\
+             Answer with one JSON object matching the gated schema: the Evidence body \
+             (`authority: \"intent\"`, one `kind: \"intent\"` claim whose `id` equals the \
+             lead id and whose `statement` carries the operator's intent string verbatim, \
+             per the prompt), without the envelope `lead` key — this call names the lead. \
+             The caller persists the document; do not write it yourself.",
             id = ctx.adapter_id,
+            key = input.key,
             lead = lead.render(),
+            content = content_note(input)?,
         );
         repaired(model, ctx, system, user, "evidence", EVIDENCE_ANSWER_SCHEMA, evidence_tail).await
     }
+}
+
+fn terminal(input: &SourceInput) -> Result<&Lead, Error> {
+    input.focus.as_ref().ok_or_else(|| {
+        Error::InvalidRequest("extract requires a terminal lead on input.focus".into())
+    })
+}
+
+fn content_note(input: &SourceInput) -> Result<String, Error> {
+    match &input.content {
+        SourceContent::Value(value) => Ok(format!(
+            "The bound material is this inline value; no `$SOURCE_DIR` is lent:\n\n{value}\n\n\
+             The change home and `$PROJECT_DIR` are unreachable. Do not read `plan.yaml`, \
+             `leads.md`, or `slices/`."
+        )),
+        SourceContent::Workspace(view) => {
+            let intent = single_file_intent(Path::new(&view.root))?;
+            Ok(format!(
+                "The bound material is a one-file tree at `{}`; the operator's intent \
+                 string is:\n\n{intent}\n\n\
+                 The change home and `$PROJECT_DIR` are unreachable. Do not read `plan.yaml`, \
+                 `leads.md`, or `slices/`.",
+                view.root
+            ))
+        }
+    }
+}
+
+fn survey_user(ctx: &Context<'_>, input: &SourceInput) -> Result<String, Error> {
+    let content = content_note(input)?;
+    Ok(input.focus.as_ref().map_or_else(
+        || {
+            format!(
+                "Survey the intent source bound to adapter `{id}` (source key `{key}`).\n\n\
+             {content}\n\n\
+             This is an unfocused survey: emit the single current lead whose synopsis is \
+             the operator's intent string, verbatim. Re-running replaces the prior lead \
+             by its `(source, lead)` pair.\n\n\
+             Answer with one JSON object matching the gated schema: a `leads` array \
+             carrying exactly one lead (leave `children` empty). The caller persists \
+             the catalog; do not write it yourself.",
+                id = ctx.adapter_id,
+                key = input.key,
+            )
+        },
+        |parent| {
+            format!(
+                "Survey the intent source bound to adapter `{id}` (source key `{key}`).\n\n\
+             {content}\n\n\
+             This is a focused survey under the parent lead below. Inherit parent/focus \
+             context from this record — do not look it up in `leads.md` or slice files. \
+             Return stable child leads under this parent (intent is degenerate: typically \
+             none).\n\n{parent}\n\n\
+             Answer with one JSON object matching the gated schema: a `children` array \
+             (leave `leads` empty). Stamp each child's `parent` and `focus` to the \
+             focused lead id. The caller persists the catalog; do not write it yourself.",
+                id = ctx.adapter_id,
+                key = input.key,
+                parent = parent.render(),
+            )
+        },
+    ))
 }

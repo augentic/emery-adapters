@@ -313,18 +313,18 @@ impl Target for Adapter {
     }
 
     async fn merge<P: Model>(
-        model: &P, ctx: &Context<'_>, slice: &str, phase: MergePhase, _workspace: &Workspace,
+        model: &P, ctx: &Context<'_>, slice: &str, phase: MergePhase, workspace: &Workspace,
     ) -> Result<Report, Error> {
-        // Change-tree state (staged and baseline compositions) reads
-        // through the `"."` preopen; the lent workspace is a read-only
-        // view of the built result code.
-        let change_root = ctx.project_root;
+        // Preflight reads the staged slice composition from the change
+        // home (excluded from snapshots). Postflight validates the
+        // merged baseline inside the lent workspace (steps 2–3).
         let merge_prompt = registry::body("prompts/merge.md");
 
         if phase == MergePhase::Preflight {
             // Deterministic gate: an invalid staged slice composition blocks
             // the merge before the engine folds it, per the merge prompt.
-            let staged = change_root.join(format!(".emery/slices/{slice}/composition.yaml"));
+            let staged =
+                change_home(ctx.project_root).join("slices").join(slice).join("composition.yaml");
             let staged_findings = gate::validation_findings(&staged);
             if staged_findings.is_empty() {
                 return Ok(Report::success());
@@ -332,7 +332,7 @@ impl Target for Adapter {
             return Ok(failure_report(staged_findings));
         }
 
-        let baseline_composition = change_root.join(".emery/specs/composition.yaml");
+        let baseline_composition = workspace.root_path().join(".emery/specs/composition.yaml");
         let user = format!(
             "Run the postflight merge gate for slice `{slice}` (adapter `{}`). The engine \
          has already folded the slice's deltas — including its `composition.yaml` and \
@@ -362,12 +362,25 @@ struct SliceRoots {
     agent: String,
 }
 
+fn change_home(project_root: &Path) -> PathBuf {
+    if project_root.join("plan.yaml").is_file() {
+        project_root.to_path_buf()
+    } else {
+        project_root.join(".emery/change")
+    }
+}
+
 fn slice_stage(workspace: &Workspace, ctx: &Context<'_>, slice: &str) -> SliceRoots {
     workspace.artifact_stage.as_ref().map_or_else(
         || {
-            let relative = format!(".emery/slices/{slice}");
+            let home = change_home(ctx.project_root);
+            let relative = if ctx.project_root.join("plan.yaml").is_file() {
+                format!("slices/{slice}")
+            } else {
+                format!(".emery/change/slices/{slice}")
+            };
             SliceRoots {
-                fs: ctx.project_root.join(&relative),
+                fs: home.join("slices").join(slice),
                 agent: workspace.artifact_path(&relative),
             }
         },

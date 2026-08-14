@@ -9,7 +9,7 @@ Per-skill guardrails — rules that only make sense for one skill ("never auto-p
 The CLI is the **only** writer for change and slice lifecycle state. Skills route every write through a CLI verb; they never edit the underlying files by hand.
 
 - **Never hand-edit `plan.yaml`.** Append entries through `emery plan add`; running `emery plan execute` is the operator's approval (nothing is stamped); abandon an entry's slice through `emery plan drop`; close out the plan through `emery plan archive`. The single-writer contract lives in the [skills reference](https://emery.augentic.io/reference/skills/index.html).
-- **Never hand-edit `.emery/slices/<name>/metadata.yaml`.** Status transitions and timestamp writes are owned by the guest orchestration stages — `emery plan refine` (refinement) and the build / merge phases inside `emery plan execute` — and by `emery plan drop`. The CLI enforces the legal lifecycle edges — skills do not need to track them.
+- **Never hand-edit `.emery/change/slices/<name>/metadata.yaml`.** Status transitions and timestamp writes are owned by the guest orchestration stages — `emery plan refine` (refinement) and the build / merge phases inside `emery plan execute` — and by `emery plan drop`. The CLI enforces the legal lifecycle edges — skills do not need to track them.
 - **Never hand-edit `.emery/archive/`.** Archive moves are atomic operations performed by the merge phase, `emery plan drop`, and `emery plan archive`.
 - **Never hand-roll `AGENTS.md` during init.** `emery init` generates it when absent, preserves an existing root `AGENTS.md`, and writes `.emery/context.lock` as the generation fingerprint.
 

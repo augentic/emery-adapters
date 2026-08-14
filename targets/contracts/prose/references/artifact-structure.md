@@ -58,7 +58,7 @@ One type per schema file. A single binding file may contain multiple related end
 During a slice's define phase, proposed contract modifications live in the slice directory:
 
 ```text
-.emery/slices/add-oauth/
+.emery/change/slices/add-oauth/
 ├── contracts/
 │   ├── schemas/
 │   │   └── oauth-token.yaml        # New type
@@ -95,7 +95,7 @@ Two concurrent changes that both modify the same contract file (e.g. both add pa
 
 | Aspect | Baseline | Change-Level |
 |--------|----------|-------------|
-| Location | `contracts/` | `.emery/slices/<name>/contracts/` |
+| Location | `contracts/` | `.emery/change/slices/<name>/contracts/` |
 | Scope | Full platform contract surface | Only files this slice adds or replaces |
 | Lifetime | Persists across changes | Exists during the slice lifecycle, merged or dropped |
 | Authority | Source of truth for the current contract state | Proposed modification, pending review and merge |

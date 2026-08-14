@@ -1,14 +1,15 @@
 # `screenshots.survey`
 
-Walk `$SOURCE_DIR` (a read-only preopen of an operator-bound directory of screen images), identify one lead per screen via vision inference, and return one lead block per screen. The engine persists the result; this prompt returns the lead-block payload only.
+Walk `$SOURCE_DIR` (the read-only CID view of an operator-bound directory of screen images), identify one lead per screen via vision inference, and return one lead block per screen. The caller persists the catalog; this prompt returns the lead-block payload only.
 
 ## Inputs
 
-- `$SOURCE_DIR` — read-only directory holding the bound screen-image set. Never write here.
-- `<source>` — the source binding key, interpolated into the prompt for context; the engine stamps each lead's `source` itself, so this prompt does not emit it.
-- `$SCRATCH_DIR` — per-run write-only scratch space; use only for unavoidable intermediate state (e.g. cropped staging files when chrome cropping is required to disambiguate a screen).
+- `$SOURCE_DIR` — read-only CID view holding the bound screen-image set. Absent when the binding is an inline `value`. Never write here.
+- **Source key** — the plan source-binding key the engine passed on the wire. The caller stamps each lead's `source` from it; this prompt does not emit it.
+- **Optional parent lead** — when present, this is a focused survey: the exception path for a parent still coarser than a buildable boundary, not a second walk to recover screens unfocused survey already emitted. Return stable child leads under that parent. Inherit parent/focus from the passed record; do not look it up in `leads.md` or `slices/`.
+- `$SCRATCH_DIR` — write-only scratch space; use only for unavoidable intermediate state (e.g. cropped staging files when chrome cropping is required to disambiguate a screen).
 
-`$PROJECT_DIR` is unreachable; do not attempt to read project lifecycle state. Writes back into `$SOURCE_DIR` are denied.
+The change home and `$PROJECT_DIR` are unreachable. Do not read `plan.yaml`, `leads.md`, or `slices/`. Unfocused survey always returns the complete current set from `$SOURCE_DIR`; do not consult a catalog to decide this is a re-survey.
 
 ## Vision prerequisite
 
@@ -43,11 +44,11 @@ Skip images that contain no application content (orphan splash screens, full-scr
 
 - `lead`: kebab-case slug derived from the screen's vision-inferred title (visible app-bar title, prominent heading) or, when no title is legible, from the input filename stem with `-` substituted for non-kebab characters. Lowercase, strip punctuation, replace whitespace with `-`. Example: visible header "Task list" → `task-list`; filename `Settings Detail.png` → `settings-detail`. Re-surveying the same source replaces by `(source, lead)`, so stability matters more than prettiness.
 - `synopsis`: a content-bearing description of the screen — typically `<screen-title>: <one-sentence content summary>` lifted from visible cues (e.g. "Task list: today's open tasks for the signed-in user."). Name the screen's surface and its salient content so a same-slug lead from another source can be matched or distinguished on content, not just the shared slug. Prefer one line and keep it tight (~200 characters); it MAY run to a few lines when one is too thin. Do not invent content the screens do not show.
-- `topics` (optional): an inline list of kebab-case slugs naming the screen's domains, drawn from visible cues (e.g. `[tasks, list-view]`). Author them only when the screen clearly supports the classification; omit the bullet when unsure. They are extra grouping context for downstream reconciliation — never a grouping the engine computes.
+- `topics` (optional): an inline list of kebab-case slugs naming the screen's domains, drawn from visible cues (e.g. `[tasks, list-view]`). Author them only when the screen clearly supports the classification; omit the bullet when unsure. They are extra grouping context for downstream reconciliation — never a grouping the CLI computes.
 
 ## Output
 
-Return one block per lead, in alphabetical `lead` order. The engine persists them; this prompt returns lead blocks only.
+Return one block per lead, in alphabetical `lead` order. The caller persists the catalog; this prompt never writes `leads.md`.
 
 ```markdown
 ### task-list
@@ -57,7 +58,7 @@ Return one block per lead, in alphabetical `lead` order. The engine persists the
 - topics: [tasks, list-view]
 ```
 
-Field order is fixed (`lead`, `synopsis`, then optional `topics`). Do not emit `source`; the engine stamps it from the survey binding. Cross-source merging happens downstream in the engine, not in this prompt — see [From sources to slices](../references/emery-runtime/reconciliation.md#plan-time-leads-become-slices).
+Field order is fixed (`lead`, `synopsis`, then optional `topics`). Do not emit `source`; the CLI stamps it from the survey binding. Cross-source merging happens downstream in the engine, not in this prompt — see [From sources to slices](../references/emery-runtime/reconciliation.md#plan-time-leads-become-slices) for how leads reconcile into slices.
 
 ## Worked example
 
@@ -94,9 +95,9 @@ A full input / output fixture for this example lives at [`quality/fixtures/refer
 
 ## Guardrails
 
-- `$SOURCE_DIR` is read-only. Reads outside it surface as `source-survey-path-denied`; never attempt to widen the preopen. `$PROJECT_DIR` is unreachable.
+- `$SOURCE_DIR` is read-only. Reads outside it surface as `source-survey-path-denied`; never attempt to widen the preopen.
 - Never crop or extract production assets out of screenshots. Cropping platform chrome (status bars, navigation bars, browser chrome, emulator frames) into `$SCRATCH_DIR` is permitted only as a triage aid; cropped pixels never leave the prompt.
-- Return lead blocks only — the engine owns persistence.
+- Do not write the catalog — the caller owns persistence.
 - Do not emit Evidence here. Per-screen spatial extraction is `screenshots.extract`'s job, run once per lead at extract time.
 - Do not invent a lead the screens do not depict. Empty inventories (`$SOURCE_DIR` parseable but no application screens) are valid output.
 - Do not fall back to filename-based inference when the vision prerequisite fails — exit `1` per the prerequisite block.

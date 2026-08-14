@@ -1,19 +1,20 @@
 # TypeScript / JavaScript source survey
 
-This prompt runs once per bound source whose adapter is `typescript`. Your job: walk the read-only source tree at `$SOURCE_DIR`, identify the source's framework surfaces using the grammar below, and return one lead block per surface. The engine persists the leads; this prompt returns lead blocks only.
+The engine invokes this prompt for a `typescript` source binding. Your job: walk the read-only CID view at `$SOURCE_DIR`, identify the source's framework surfaces using the grammar below, and return one lead block per surface. The caller persists the catalog; you never write `leads.md`.
 
 JavaScript sources (`.js`, `.mjs`, `.cjs`, `.jsx`) fold into this prompt: the framework idioms are the same. Detect the file extension purely to widen the import-graph walk; the prompt content does not branch on it.
 
 ## Inputs
 
-- **`$SOURCE_DIR`** — the prepared read-only source tree the engine lent on the wire. Walk this tree; resolve `tsconfig.json` `paths` mappings relative to it.
-- **Source key** — kebab-case binding identifier, interpolated into the prompt. The engine stamps each lead's `source` from it; this prompt does not emit it.
+- **`$SOURCE_DIR`** — read-only CID view of the bound source root. Walk this tree; resolve `tsconfig.json` `paths` mappings relative to it. Absent when the binding is an inline `value`.
+- **Source key** — kebab-case identifier the engine passed on the wire. The caller stamps each lead's `source` from it; this prompt does not emit it.
+- **Optional parent lead** — when present, this is a focused survey: the exception path for a parent still coarser than a buildable boundary (a generated mega-handler), not a second walk to recover endpoints unfocused survey already emitted. Return stable child leads under that parent. Inherit parent/focus from the passed record; do not look it up in `leads.md` or `slices/`.
 
-The bound directory is the only filesystem grant; `$PROJECT_DIR` is unreachable. Treat the tree as read-only — no writes back into `$SOURCE_DIR`.
+The bound directory is the only filesystem grant; the change home and `$PROJECT_DIR` are unreachable. Do not read `plan.yaml`, `leads.md`, or `slices/`. Treat the tree as read-only — no writes back into `$SOURCE_DIR`. Unfocused survey always returns the complete current set from `$SOURCE_DIR`; do not consult a catalog to decide this is a re-survey.
 
 ## Output: lead blocks
 
-Emit one fenced block per identified surface:
+Emit one fenced block per identified surface, in the shape the CLI appends under `## Lead inventory`:
 
 ```markdown
 ### <lead>
@@ -23,11 +24,11 @@ Emit one fenced block per identified surface:
 - topics: [<optional-kebab-slugs>]
 ```
 
-`lead` is kebab-case, derived from the surface identifier or handler path (e.g. `POST /users` → `user-registration`, `email.send` queue → `email-send`). It is the stable handle re-survey writes against (keyed by `(source, lead)`). After the engine stamps `source`, the block validates against `schemas/discovery/lead.schema.json` (kebab-case `lead`, scalar `source`, content-bearing `synopsis`, optional kebab-case `topics`). One block per lead.
+`lead` is kebab-case, derived from the surface identifier or handler path (e.g. `POST /users` → `user-registration`, `email.send` queue → `email-send`). It is the stable handle re-survey writes against (keyed by `(source, lead)`). After the CLI stamps `source`, the block validates against `schemas/discovery/lead.schema.json` (kebab-case `lead`, scalar `source`, content-bearing `synopsis`, optional kebab-case `topics`). One block per lead.
 
-`synopsis` SHOULD name the handler's surface (route + method, queue + job, topic) and its salient behaviour/constraint so a same-slug lead from another source can be matched or distinguished on content, not just the shared slug. Prefer one line; it MAY run to a few lines when one is too thin. It stays headline material — deeper behaviour belongs in `typescript.extract` claims, not here.
+`synopsis` SHOULD name the handler's surface (route + method, queue + job, topic) and its salient behaviour/constraint so a same-slug lead from another source can be matched or distinguished on content, not just the shared slug. Prefer one line; it MAY run to a few lines when one is too thin. It stays plan-time headline material — extract-time behaviour belongs in `typescript.extract` claims, not here.
 
-`topics` (optional) is an inline list of kebab-case domain slugs drawn from the surface (e.g. `[identity, http-route]`); author them only when the code clearly supports the classification, omit the bullet otherwise. They are extra grouping context for downstream reconciliation — never a grouping the engine computes.
+`topics` (optional) is an inline list of kebab-case domain slugs drawn from the surface (e.g. `[identity, http-route]`); author them only when the code clearly supports the classification, omit the bullet otherwise. They are extra grouping context for downstream reconciliation — never a grouping the CLI computes.
 
 ## Internal staging
 
@@ -66,13 +67,13 @@ Every internal staged reference to a file under `$SOURCE_DIR` MUST be a relative
 - Resolves to a file under `$SOURCE_DIR`.
 - Not under a skip-root (`node_modules`, `vendor`, `target`, `.venv`, `dist`, `build`).
 
-A symlink inside `$SOURCE_DIR` pointing outside the bound root is denied at canonicalization; the host runner returns `source-survey-path-denied`.
+A symlink inside `$SOURCE_DIR` pointing outside the bound root is denied at canonicalization; the host runner returns `source-survey-path-denied` and the slice stays `refining` per workflow §Extraction reliability.
 
 ## Working JSON shape
 
 For internal staging only (not an artifact). Top-level: `{ version: 1, source, language, surfaces[] }`. Each surface: `{ id, kind, identifier, handler, touches[], declared-at[] }`. `kind` is one of `http-route | message-pub | message-sub | ws-handler | scheduled-job | cli-command | ui-route | external-call-out`. `handler` is `<file>:<symbol>` (named export, `<ClassName>.<method>`, verb export, `<file>:<line>` for inline arrows, `<file>:<framework>-handler-<n>` when the framework provides no name). `touches[]` is a static, file-level reach analysis: import-graph walk from the handler file through relative + `tsconfig.json` `paths`-aliased imports, stopping at bare module specifiers; include the handler file itself. `declared-at[]` carries the registration site (`<file>` or `<file>:<line>`).
 
-You never publish this shape. Lead emission reads from it; only the lead blocks are returned.
+You never publish this shape. Lead emission reads from it; only the lead blocks reach the caller.
 
 ## Worked example
 
@@ -104,19 +105,19 @@ When a source has many surfaces, emit one block per surface in source order (alp
 ## Anti-patterns
 
 - **Dead code.** A handler defined but never wired to a framework (no `app.post(...)`, no `@Get()`, no `new Worker(...)`) is not a surface. Survey from registration sites, not from likely-looking functions.
-- **Feature-flag-disabled handlers.** A registration unambiguously disabled in production (`if (process.env.ENABLE_LEGACY === "1") app.post(...)`) is not a surface. When the guard is ambiguous, emit it and let the operator decide during review.
+- **Feature-flag-disabled handlers.** A registration unambiguously disabled in production (`if (process.env.ENABLE_LEGACY === "1") app.post(...)`) is not a surface. When the guard is ambiguous, emit it and let the operator decide during plan review.
 - **Hallucinated framework signatures.** If `package.json` does not depend on `bullmq`, do not emit BullMQ surfaces. Framework absence is dispositive.
 - **Test files.** Skip `*.test.*`, `*.spec.*`, and anything under `tests/` or `__tests__/`. Tests validate production surfaces, they are not production surfaces.
 - **Type-only `.d.ts` files in `touches`.** They declare ambient types, not behaviour; keep them out of the reach analysis.
 - **Merging surfaces.** Two endpoints sharing a handler file are still two leads. Grouping surfaces into larger units is a downstream judgment, never this prompt's.
-- **Cross-source coalescing.** This prompt only sees one source's tree. Cross-source reconciliation happens downstream in the engine — see [From sources to slices](../references/emery-runtime/reconciliation.md#plan-time-leads-become-slices).
-- **Writing engine state.** Return lead blocks only; the engine owns persistence and every lifecycle file.
+- **Cross-source coalescing.** This prompt only sees one source's tree. Cross-source reconciliation happens downstream in the engine — see [From sources to slices](../references/emery-runtime/reconciliation.md#plan-time-leads-become-slices) for how leads reconcile into slices.
+- **Writing `leads.md` or `plan.yaml`.** Only lead blocks. The caller owns every lifecycle file.
 
 ## Failure modes
 
 | Condition                                              | Action                                                                                                                          |
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| `$SOURCE_DIR` empty / no recognised framework imports  | Return zero leads; the operator reviews the surveyed inventory.                                                                     |
-| Read denied outside `$SOURCE_DIR`                      | Host runner returns `source-survey-path-denied`.                                                 |
+| `$SOURCE_DIR` empty / no recognised framework imports  | Return zero leads. The caller persists the empty set.                                                                  |
+| Read denied outside `$SOURCE_DIR`                      | Host runner returns `source-survey-path-denied`; the slice stays `refining`.                                                 |
 | Internal staged JSON malformed                         | Repair within the run; lead emission is the final consumer, not an external schema check.                             |
-| Surface uses an out-of-scope framework (tRPC, gRPC, …) | Skip it. Return whatever in-scope leads the tree has. |
+| Surface uses an out-of-scope framework (tRPC, gRPC, …) | Skip it. Return whatever in-scope leads the tree has; document the gap in the synopsis of the relevant source-level lead. |

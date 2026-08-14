@@ -1,29 +1,11 @@
 use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA, evidence_tail, leads_tail};
 use adapter::registry::Doc;
-use adapter::seam::{Context, Error, Evidence, Lead, SourceInput, SourceMetadata};
+use adapter::seam::{
+    Context, Error, Evidence, Lead, SourceContent, SourceInput, SourceMetadata, SurveyResult,
+};
 use adapter::{AdapterIdentity, Model, Source, repaired};
 
 use crate::registry;
-
-/// Frame the engine-prepared binding for the model: the binding key,
-/// plus the lent tree mapped onto the prompt's `$SOURCE_DIR` vocabulary.
-fn binding_note(ctx: &Context<'_>, input: &SourceInput) -> Result<String, Error> {
-    let key = ctx.source_key.as_deref().ok_or_else(|| {
-        Error::InvalidRequest("source dispatch carries no source-binding key".to_string())
-    })?;
-    if input.root().is_none() {
-        return Err(Error::InvalidRequest(
-            "documentation reads a tree (`path:`) binding; got an inline value".to_string(),
-        ));
-    }
-    Ok(format!(
-        "Source binding key: `{key}`. The engine resolved the binding and lent its \
-         prepared documentation tree to you as your working directory — the working \
-         directory you were given is the read-only tree the prompt calls `$SOURCE_DIR`. \
-         Every input you need is that tree and this prompt; do not resolve the binding \
-         yourself."
-    ))
-}
 
 /// Written specifications / documentation trees → leads and Evidence.
 #[derive(Clone, Copy, Debug)]
@@ -47,39 +29,99 @@ impl Source for Adapter {
 
     async fn survey<P: Model>(
         model: &P, ctx: &Context<'_>, input: &SourceInput,
-    ) -> Result<Vec<Lead>, Error> {
-        let note = binding_note(ctx, input)?;
+    ) -> Result<SurveyResult, Error> {
         let system = registry::body("prompts/survey.md").to_string();
-        let user = format!(
-            "Survey the documentation source bound to adapter `{id}`.\n\n\
-         {note}\n\n\
-         When the caller already holds leads for this source, treat this call as a \
-         re-survey: return the complete current lead set — the caller replaces prior \
-         leads by their `(source, lead)` pairs, exactly as the prompt describes.\n\n\
-         Answer with one JSON object matching the gated schema: a `leads` array carrying \
-         the same `lead` / `synopsis` / optional `topics` content as the prompt's lead \
-         blocks. The engine persists the leads; do not write them yourself.",
-            id = ctx.adapter_id,
-        );
-        repaired(model, ctx, system, user, "leads", LEADS_ANSWER_SCHEMA, leads_tail).await
+        repaired(
+            model,
+            ctx,
+            system,
+            survey_user(ctx, input),
+            "leads",
+            LEADS_ANSWER_SCHEMA,
+            leads_tail,
+        )
+        .await
     }
 
     async fn extract<P: Model>(
-        model: &P, ctx: &Context<'_>, input: &SourceInput, lead: &Lead,
+        model: &P, ctx: &Context<'_>, input: &SourceInput,
     ) -> Result<Evidence, Error> {
-        let note = binding_note(ctx, input)?;
+        let lead = terminal(input)?;
         let system = registry::body("prompts/extract.md").to_string();
         let user = format!(
-            "Extract Evidence from the documentation source bound to adapter `{id}` for this \
-         lead:\n\n{lead}\n\n\
-         {note}\n\n\
-         Answer with one JSON object matching the gated schema: the Evidence body \
-         (`authority`, `claims`) the prompt describes, without the envelope `lead` key — \
-         this call names the lead. The engine persists the document; do not write it \
-         yourself.",
+            "Extract Evidence from the documentation source bound to adapter `{id}` \
+             (source key `{key}`) for this lead:\n\n{lead}\n\n\
+             {content}\n\n\
+             Answer with one JSON object matching the gated schema: the Evidence body \
+             (`authority`, `claims`) the prompt describes, without the envelope `lead` \
+             key — this call names the lead. The caller persists the document; do not \
+             write it yourself.",
             id = ctx.adapter_id,
+            key = input.key,
             lead = lead.render(),
+            content = content_note(input),
         );
         repaired(model, ctx, system, user, "evidence", EVIDENCE_ANSWER_SCHEMA, evidence_tail).await
     }
+}
+
+fn terminal(input: &SourceInput) -> Result<&Lead, Error> {
+    input.focus.as_ref().ok_or_else(|| {
+        Error::InvalidRequest("extract requires a terminal lead on input.focus".into())
+    })
+}
+
+fn content_note(input: &SourceInput) -> String {
+    match &input.content {
+        SourceContent::Workspace(view) => format!(
+            "`$SOURCE_DIR` is the read-only CID view at `{}` — the documentation tree \
+             the prompt walks. The change home and `$PROJECT_DIR` are unreachable. Do \
+             not read `plan.yaml`, `leads.md`, or `slices/`.",
+            view.root
+        ),
+        SourceContent::Value(value) => format!(
+            "The bound material is this inline value; no `$SOURCE_DIR` is lent:\n\n{value}\n\n\
+             The change home and `$PROJECT_DIR` are unreachable. Do not read `plan.yaml`, \
+             `leads.md`, or `slices/`."
+        ),
+    }
+}
+
+fn survey_user(ctx: &Context<'_>, input: &SourceInput) -> String {
+    let content = content_note(input);
+    let bound = match &input.content {
+        SourceContent::Workspace(_) => "`$SOURCE_DIR`",
+        SourceContent::Value(_) => "the inline value",
+    };
+    input.focus.as_ref().map_or_else(
+        || {
+            format!(
+                "Survey the documentation source bound to adapter `{id}` (source key `{key}`).\n\n\
+             {content}\n\n\
+             This is an unfocused survey: return the complete current lead set from \
+             {bound}. Do not consult a catalog to decide this is a re-survey.\n\n\
+             Answer with one JSON object matching the gated schema: a `leads` array \
+             carrying the same `lead` / `synopsis` / optional `topics` content as the \
+             prompt's lead blocks (leave `children` empty). The caller persists the \
+             catalog; do not write it yourself.",
+                id = ctx.adapter_id,
+                key = input.key,
+            )
+        },
+        |parent| {
+            format!(
+                "Survey the documentation source bound to adapter `{id}` (source key `{key}`).\n\n\
+             {content}\n\n\
+             This is a focused survey under the parent lead below. Inherit parent/focus \
+             context from this record — do not look it up in `leads.md` or slice files. \
+             Return stable child leads under this parent.\n\n{parent}\n\n\
+             Answer with one JSON object matching the gated schema: a `children` array \
+             (leave `leads` empty). Stamp each child's `parent` and `focus` to the \
+             focused lead id. The caller persists the catalog; do not write it yourself.",
+                id = ctx.adapter_id,
+                key = input.key,
+                parent = parent.render(),
+            )
+        },
+    )
 }

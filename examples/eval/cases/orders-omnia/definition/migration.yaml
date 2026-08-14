@@ -1,0 +1,30 @@
+version: 1
+dispositions: []
+waves:
+- id: deliver
+  outcome: Author orders contracts, then a health crate that consumes them
+  architecture:
+    before: as-is
+    after: target
+  evidence-scopes:
+  - source: intent
+    lead: intent
+  - source: docs
+    lead: docs
+  targets:
+  - id: orders
+    locator: product/orders
+    adapter: emery:contracts@0.12.0
+  - id: health
+    locator: product/health
+    adapter: emery:omnia@0.12.0
+  delivery-mappings:
+  - source: intent
+    lead: intent
+    target: orders
+  - source: docs
+    lead: docs
+    target: orders
+  - source: intent
+    lead: intent
+    target: health

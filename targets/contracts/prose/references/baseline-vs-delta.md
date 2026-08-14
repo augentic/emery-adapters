@@ -9,7 +9,7 @@ The rules apply uniformly to OpenAPI HTTP bindings, AsyncAPI message bindings, a
 | Concept | Path | Lifetime |
 |---|---|---|
 | **Baseline** | `contracts/{schemas,http,messages}/` | Persists across changes; merged contracts only. |
-| **Change-local delta** | `.emery/slices/<slice-name>/contracts/{schemas,http,messages}/` | Exists during the slice lifecycle; merged into the baseline by the merge phase or discarded at `emery plan drop`. |
+| **Change-local delta** | `.emery/change/slices/<slice-name>/contracts/{schemas,http,messages}/` | Exists during the slice lifecycle; merged into the baseline by the merge phase or discarded at `emery plan drop`. |
 
 The baseline is the source of truth for the platform's current contract surface. The slice-local delta is a **proposed modification**, pending review and merge. The delta directory contains **only the files this slice adds or replaces** — never a full copy of the baseline.
 

@@ -5,4 +5,4 @@ slice = "daily-quote"
 
 # Deterministic artifact-exists gate: a success report must leave the
 # slice composition staged.
-expect = [".emery/slices/daily-quote/composition.yaml"]
+expect = [".emery/change/slices/daily-quote/composition.yaml"]

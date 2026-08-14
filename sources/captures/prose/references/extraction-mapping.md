@@ -27,7 +27,7 @@ claims:
           payload-shape: { ... }
 ```
 
-The document's identity is engine-borne (the engine persists Evidence per `(source, lead)` pair) and the binding arrives as the prepared input plus source key on the wire, so neither is written in-document. `authority` is the literal `behaviour` for every Evidence document this adapter emits; per-kind overrides via `authority-overrides:` are rarely needed (runtime captures are behaviour by definition). `id`, `path`, `replay-digest`, and `statement` are required on every `kind: example` claim; `input`, `output`, and any other observed shape are open per-kind body fields documented below.
+The document's `(slice, source)` identity is path-borne — the caller persists it and stamps the source from the binding — so neither is written in-document. `authority` is the literal `behaviour` for every Evidence document this adapter emits; per-kind overrides via `authority-overrides:` are rarely needed (runtime captures are behaviour by definition). `id`, `path`, `replay-digest`, and `statement` are required on every `kind: example` claim; `input`, `output`, and any other observed shape are open per-kind body fields documented below.
 
 ## Claim fields
 

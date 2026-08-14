@@ -363,6 +363,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc0b364ead1874514c8c2855ab558056ebfeb775653e7ae45ff72f28f8f3166c"
 
 [[package]]
+name = "bstr"
+version = "1.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6bb31b46c14244e20ee9984b11bf5c992b91fb6939fea616e3512c8baecdbe5f"
+dependencies = [
+ "memchr",
+ "serde_core",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1084,7 +1094,7 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 [[package]]
 name = "emery-adapter"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#69889cfe62b31ce76c382321c8b63d3be704e017"
+source = "git+https://github.com/augentic/emery?branch=main#e8f780c4f57d952627ce1f2e587705b8c3e149a0"
 dependencies = [
  "omnia-guest",
  "omnia-wasi-http",
@@ -1098,7 +1108,7 @@ dependencies = [
 [[package]]
 name = "emery-artifacts"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#69889cfe62b31ce76c382321c8b63d3be704e017"
+source = "git+https://github.com/augentic/emery?branch=main#e8f780c4f57d952627ce1f2e587705b8c3e149a0"
 dependencies = [
  "emery-diagnostics",
  "emery-error",
@@ -1115,7 +1125,7 @@ dependencies = [
 [[package]]
 name = "emery-change"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#69889cfe62b31ce76c382321c8b63d3be704e017"
+source = "git+https://github.com/augentic/emery?branch=main#e8f780c4f57d952627ce1f2e587705b8c3e149a0"
 dependencies = [
  "emery-artifacts",
  "emery-diagnostics",
@@ -1123,6 +1133,7 @@ dependencies = [
  "emery-project",
  "emery-prose",
  "emery-slice",
+ "emery-system",
  "jiff",
  "omnia-guest",
  "semver",
@@ -1135,7 +1146,7 @@ dependencies = [
 [[package]]
 name = "emery-diagnostics"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#69889cfe62b31ce76c382321c8b63d3be704e017"
+source = "git+https://github.com/augentic/emery?branch=main#e8f780c4f57d952627ce1f2e587705b8c3e149a0"
 dependencies = [
  "base16ct",
  "schemars",
@@ -1148,16 +1159,34 @@ dependencies = [
 [[package]]
 name = "emery-error"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#69889cfe62b31ce76c382321c8b63d3be704e017"
+source = "git+https://github.com/augentic/emery?branch=main#e8f780c4f57d952627ce1f2e587705b8c3e149a0"
 dependencies = [
  "serde-saphyr",
  "thiserror 2.0.20",
 ]
 
 [[package]]
+name = "emery-mock"
+version = "0.38.0"
+source = "git+https://github.com/augentic/emery?branch=main#e8f780c4f57d952627ce1f2e587705b8c3e149a0"
+dependencies = [
+ "emery-adapter",
+ "emery-artifacts",
+ "emery-error",
+ "emery-native",
+ "emery-project",
+ "emery-system",
+ "jiff",
+ "omnia-guest",
+ "omnia-testkit",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "emery-native"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#69889cfe62b31ce76c382321c8b63d3be704e017"
+source = "git+https://github.com/augentic/emery?branch=main#e8f780c4f57d952627ce1f2e587705b8c3e149a0"
 dependencies = [
  "axum",
  "emery-adapter",
@@ -1175,14 +1204,16 @@ dependencies = [
 [[package]]
 name = "emery-probe"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#69889cfe62b31ce76c382321c8b63d3be704e017"
+source = "git+https://github.com/augentic/emery?branch=main#e8f780c4f57d952627ce1f2e587705b8c3e149a0"
 dependencies = [
  "anyhow",
  "clap",
  "emery-artifacts",
+ "emery-mock",
  "emery-native",
  "emery-project",
  "emery-slice",
+ "emery-system",
  "jiff",
  "omnia 0.35.0",
  "omnia-cursor",
@@ -1199,11 +1230,12 @@ dependencies = [
 [[package]]
 name = "emery-project"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#69889cfe62b31ce76c382321c8b63d3be704e017"
+source = "git+https://github.com/augentic/emery?branch=main#e8f780c4f57d952627ce1f2e587705b8c3e149a0"
 dependencies = [
  "emery-artifacts",
  "emery-diagnostics",
  "emery-error",
+ "ignore",
  "jiff",
  "omnia-guest",
  "petgraph",
@@ -1223,12 +1255,12 @@ dependencies = [
 [[package]]
 name = "emery-prose"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#69889cfe62b31ce76c382321c8b63d3be704e017"
+source = "git+https://github.com/augentic/emery?branch=main#e8f780c4f57d952627ce1f2e587705b8c3e149a0"
 
 [[package]]
 name = "emery-slice"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#69889cfe62b31ce76c382321c8b63d3be704e017"
+source = "git+https://github.com/augentic/emery?branch=main#e8f780c4f57d952627ce1f2e587705b8c3e149a0"
 dependencies = [
  "emery-artifacts",
  "emery-diagnostics",
@@ -1249,7 +1281,7 @@ dependencies = [
 [[package]]
 name = "emery-system"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#69889cfe62b31ce76c382321c8b63d3be704e017"
+source = "git+https://github.com/augentic/emery?branch=main#e8f780c4f57d952627ce1f2e587705b8c3e149a0"
 dependencies = [
  "emery-artifacts",
  "emery-diagnostics",
@@ -1268,7 +1300,7 @@ dependencies = [
 [[package]]
 name = "emery-transport"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#69889cfe62b31ce76c382321c8b63d3be704e017"
+source = "git+https://github.com/augentic/emery?branch=main#e8f780c4f57d952627ce1f2e587705b8c3e149a0"
 dependencies = [
  "clap",
  "emery-artifacts",
@@ -1656,6 +1688,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e4eba85ea1d0a966a983acd07deee566e67395d2d96b6fb39e62b5a833f1eb0b"
 
 [[package]]
+name = "globset"
+version = "0.4.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "07c34a9410465b45bd9787443bc7370f37735bad04b0f0cd57ff1a3186c98988"
+dependencies = [
+ "aho-corasick",
+ "bstr",
+ "log",
+ "regex-automata",
+ "regex-syntax",
+]
+
+[[package]]
 name = "granit-parser"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1764,9 +1809,9 @@ dependencies = [
 
 [[package]]
 name = "http-body-util"
-version = "0.1.5"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23169fe34a5fbcdd3f3862e78fb9b6fccd5f02a6dc6f732547005d45631ce71c"
+checksum = "e9f41fd6a08e4d4ec69df65976da761afd5ad5e58a9d4acb46bd1c953a9e3ff2"
 dependencies = [
  "bytes",
  "futures-core",
@@ -2009,6 +2054,22 @@ checksum = "cb68373c0d6620ef8105e855e7745e18b0d00d3bdb07fb532e434244cdb9a714"
 dependencies = [
  "icu_normalizer",
  "icu_properties",
+]
+
+[[package]]
+name = "ignore"
+version = "0.4.33"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "00b69833ed729dc5aa7d19541d96d6cf8e9137194207a04916d658e43168402f"
+dependencies = [
+ "crossbeam-deque",
+ "globset",
+ "log",
+ "memchr",
+ "regex-automata",
+ "same-file",
+ "walkdir",
+ "winapi-util",
 ]
 
 [[package]]
@@ -3931,9 +3992,9 @@ dependencies = [
 
 [[package]]
 name = "sea-query"
-version = "1.0.2"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "546040c653a705e60ec65ecd3191a809603734bebbc225775916dea9ae409b31"
+checksum = "8d190cfb3bcceb8a8d7d04dee5a0c77f60c7627979cdcb47fdcb8934f009badf"
 dependencies = [
  "chrono",
 ]

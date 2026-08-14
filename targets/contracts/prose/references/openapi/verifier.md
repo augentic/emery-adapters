@@ -24,7 +24,7 @@ The verifier accepts a `--mode {single, cross-project}` flag. The mode determine
 Inferred from the active slice context — no positional arguments required:
 
 ```text
-$SLICE_DIR          = .emery/slices/<slice-name>  # reached via the lent artifact stage, which mirrors this tree
+$SLICE_DIR          = .emery/change/slices/<slice-name>  # reached via the lent artifact stage, which mirrors this tree
 $CHANGE_CONTRACTS    = $SLICE_DIR/contracts/
 $BASELINE_CONTRACTS  = contracts/
 $CHANGE_SPECS        = $SLICE_DIR/specs/

@@ -10,19 +10,19 @@ Every layout inferer accepts the following arguments. Source-specific arguments 
 
 | Argument | How it is used | Default | Precedence |
 |---|---|---|---|
-| `--output <path>` | Names the exact file the inferer should write. | Active slice directory's `layout.yaml` (`.emery/slices/<name>/layout.yaml`); falls back to `design-system/layout.yaml` when no slice is active. | Explicit `--output` wins over every project-side default. |
+| `--output <path>` | Names the exact file the inferer should write. | Active slice directory's `layout.yaml` (`.emery/change/slices/<name>/layout.yaml`); falls back to `design-system/layout.yaml` when no slice is active. | Explicit `--output` wins over every project-side default. |
 | `--baseline <path>` | Existing `layout.yaml` (or wired `composition.yaml`) the inferer should refine rather than overwrite. | Existing output-path content; then `design-system/layout.yaml`; then `.emery/specs/composition.yaml`. | Explicit `--baseline` wins over discovered local or baseline files. |
 | `--screen <slug>=<hint>` | Repeatable screen-boundary hint. The hint is source-specific (frame ID, screenshot group name, source-code view entrypoint). | None — inferers derive screen candidates from their source material. | Hints constrain or name inferred candidates; they MUST NOT force schema-invalid output. |
 
 Argument placeholders:
 
-- `<path>` — local file or directory path, relative or absolute (e.g. `screenshots/login.png`, `.emery/slices/onboarding/layout.yaml`).
+- `<path>` — local file or directory path, relative or absolute (e.g. `screenshots/login.png`, `.emery/change/slices/onboarding/layout.yaml`).
 - `<slug>` — stable kebab-case identifier for a logical screen (e.g. `login`, `task-list`, `settings-detail`).
 - `<hint>` — source-specific evidence that helps name or bound a screen.
 
 Arguments deliberately excluded from the common surface:
 
-- `--slice-dir <path>` — redundant with default active-slice discovery plus `--output` for explicit routing. When active-slice detection is ambiguous, operators pass `--output .emery/slices/<name>/layout.yaml`.
+- `--slice-dir <path>` — redundant with default active-slice discovery plus `--output` for explicit routing. When active-slice detection is ambiguous, operators pass `--output .emery/change/slices/<name>/layout.yaml`.
 - `--tokens <path>` / `--assets <path>` — inferers SHOULD auto-discover `design-system/tokens.yaml` and `design-system/assets.yaml` for reference checks. Non-standard locations wait for demonstrated demand or live in source-specific arguments on individual skills.
 
 ## Operator ergonomics

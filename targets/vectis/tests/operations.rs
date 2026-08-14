@@ -26,8 +26,7 @@ fn ctx<'a>(root: &'a Path, mcp_url: Option<&str>) -> Context<'a> {
         adapter_id: "target:vectis",
         project_root: root,
         mcp_url: mcp_url.map(str::to_owned),
-        lend: root.display().to_string(),
-        source_key: None,
+        lend: Some(root.display().to_string()),
     }
 }
 
@@ -140,9 +139,9 @@ async fn build_phase_legs() {
     ]);
     let input = |path: &str| Payload::Path(path.to_string());
     let inputs = vec![
-        Input::Proposal(input(".emery/slices/demo/proposal.md")),
-        Input::Spec(input(".emery/slices/demo/specs/core/spec.md")),
-        Input::Design(input(".emery/slices/demo/design.md")),
+        Input::Proposal(input(".emery/change/slices/demo/proposal.md")),
+        Input::Spec(input(".emery/change/slices/demo/specs/core/spec.md")),
+        Input::Design(input(".emery/change/slices/demo/design.md")),
     ];
 
     let report = Adapter::build(
@@ -208,8 +207,8 @@ fn assert_composition_leg(request: &Request, stage_display: &str) {
     );
     let user = &request.messages[0].content;
     assert!(
-        user.contains("/.emery/slices/demo/proposal.md")
-            && user.contains("/.emery/slices/demo/design.md"),
+        user.contains("/.emery/change/slices/demo/proposal.md")
+            && user.contains("/.emery/change/slices/demo/design.md"),
         "typed inputs render as artifact-rooted path sections: {user}"
     );
     assert!(!user.contains("PROPOSAL-BODY"), "artifact bodies are not inlined");
@@ -822,9 +821,26 @@ async fn merge_preflight_deterministic() {
     assert_eq!(report.status, Status::Success);
     assert!(model.requests().is_empty(), "preflight is deterministic: no leg");
 
+    // Detached change home: `.` is the change root (`slices/<slice>/`).
+    let detached = TempDir::new().unwrap();
+    fs::write(detached.path().join("plan.yaml"), "name: demo\n").unwrap();
+    fs::create_dir_all(detached.path().join("slices/demo")).unwrap();
+    fs::write(detached.path().join("slices/demo/composition.yaml"), "screens: [broken\n").unwrap();
+    let report = Adapter::merge(
+        &model,
+        &ctx(detached.path(), None),
+        "demo",
+        MergePhase::Preflight,
+        &workspace(detached.path()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(report.status, Status::Failure);
+    assert!(model.requests().is_empty(), "detached staged failure spends no judgment leg");
+
     // A broken staged slice composition parks the merge before the fold.
-    fs::create_dir_all(tmp.path().join(".emery/slices/demo")).unwrap();
-    fs::write(tmp.path().join(".emery/slices/demo/composition.yaml"), "screens: [broken\n")
+    fs::create_dir_all(tmp.path().join(".emery/change/slices/demo")).unwrap();
+    fs::write(tmp.path().join(".emery/change/slices/demo/composition.yaml"), "screens: [broken\n")
         .unwrap();
     let report = Adapter::merge(
         &model,

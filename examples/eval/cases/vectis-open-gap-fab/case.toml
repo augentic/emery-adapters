@@ -5,4 +5,4 @@
 kind = "build"
 slice = "open-gap-fab"
 
-expect = [".emery/slices/open-gap-fab/composition.yaml"]
+expect = [".emery/change/slices/open-gap-fab/composition.yaml"]
