@@ -47,24 +47,24 @@ typescript = { path = "sources/typescript" }
 vectis = { path = "targets/vectis" }
 
 [patch.crates-io]
-emery-adapter = { git = "https://github.com/augentic/emery", branch = "main" }
-emery-probe = { git = "https://github.com/augentic/emery", branch = "main" }
-emery-native = { git = "https://github.com/augentic/emery", branch = "main" }
-emery-prose = { git = "https://github.com/augentic/emery", branch = "main" }
+emery-adapter = { git = "https://github.com/augentic/emery" }
+emery-probe = { git = "https://github.com/augentic/emery" }
+emery-native = { git = "https://github.com/augentic/emery" }
+emery-prose = { git = "https://github.com/augentic/emery" }
 # emery-adapter = { path = "../emery/crates/adapter" }
 # emery-probe = { path = "../emery/crates/probe" }
 # emery-native = { path = "../emery/crates/native" }
 # emery-prose = { path = "../emery/crates/prose" }
 
 omnia = { git = "https://github.com/augentic/omnia" }
-omnia-cursor = { git = "https://github.com/augentic/omnia-backends" }
+# omnia-cursor = { git = "https://github.com/augentic/omnia-backends" }
 omnia-guest = { git = "https://github.com/augentic/omnia" }
 omnia-testkit = { git = "https://github.com/augentic/omnia" }
 omnia-wasi-http = { git = "https://github.com/augentic/omnia" }
 omnia-wasi-model = { git = "https://github.com/augentic/omnia" }
 omnia-wasi-otel = { git = "https://github.com/augentic/omnia" }
 # omnia = { path = "../omnia/crates/omnia" }
-# omnia-cursor = { path = "../omnia-backends/crates/cursor" }
+omnia-cursor = { path = "../omnia-backends/crates/cursor" }
 # omnia-guest = { path = "../omnia/crates/omnia-guest" }
 # omnia-testkit = { path = "../omnia/crates/testkit" }
 # omnia-wasi-http = { path = "../omnia/crates/wasi-http" }

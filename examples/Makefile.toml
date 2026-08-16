@@ -3,7 +3,7 @@
 # -------------------------------------
 
 [env]
-CURSOR_MODEL = "cursor-grok-4.5-high-fast"
+CURSOR_MODEL = "cursor-grok-4.6-high-fast"
 VECTIS_EXEMPLAR_DIR = "${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/../vectis-exemplar"
 
 # The eval loop wants backend visibility (`--debug` selects
