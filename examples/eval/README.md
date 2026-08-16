@@ -49,6 +49,8 @@ cargo make lab -- --change-dir sandbox/orders-contracts plan execute
 | `orders-contracts`     | workflow | docs → contracts over a reviewed definition home (`[examples/wasm/fixture](../wasm/fixture/)`) |
 | `omnia-r9k`            | workflow | `at_r9k_position_adapter` → omnia (cloned on first run)        |
 | `orders-omnia`         | workflow | two-target docs → contracts, then intent → omnia              |
+| `orders-cap-one`       | workflow | the cap-comparison pair's serial half (`cap = 1`) over the orders-omnia shape, with a shared blind acceptance set (RFC-96 D11) |
+| `orders-cap-four`      | workflow | the cap-comparison pair's concurrent half (`cap = 4`), same definition, fixture, and blind set as `orders-cap-one` |
 
 ## Continuing a run
 
@@ -82,12 +84,15 @@ Hard assertions only (the shared `probe` case runner):
 | workflow (plan)    | Entries    | `plan author` produces at least one entry, every entry `pending` |
 | workflow (execute) | Lifecycle  | Every plan entry is `done`                                     |
 | workflow (execute) | Provenance | Every evidenced requirement on each materialized accepted CID carries sources; ids are present |
+| workflow (execute) | Blind set  | When the case declares `blind`, every `accept` needle appears in the accepted baseline (the set is never copied into the sandbox, so workflow model calls cannot read it) |
 | build              | Lifecycle  | Slice metadata is `built`                                      |
 | build              | Report     | `.emery/change/slices/<slice>/build/report.yaml` exists             |
 | build              | Artifacts  | Every `expect` path holds a file inside the sandbox            |
 
 
 Per-leg request / repair counts are **reported, not asserted**. A leg drifting from zero repairs toward the budget is the early signal that a prompt or answer-schema change degraded the model's first answer.
+
+After a completed workflow execute the runner also renders the **coordination-cost report** (RFC-96 D11) — accepted requirements/CIDs and code growth per target, time to first accepted result, build starts and rebuilds, waves per target, touched-path heat, per-leg request counts, and reported cost. Everything projects from journal facts, build records, and request telemetry — nothing is written into workflow artifacts, and cost stays `unknown` until RFC-92 provider usage facts land. Run a cap-comparison pair (`orders-cap-one` vs `orders-cap-four`) and compare the two reports.
 
 Grading does **not** assert target-specific quality (contract YAML shape, generated Rust compiling outside the adapter's own verify-repair, etc.). Inspect the retained sandbox for that.
 
@@ -113,7 +118,7 @@ source trees that cannot ship as committed fixtures, e.g. the
 the cached tree.
 
 - `build` — `slice` + `expect`: the fixture carries the exact refined state the build phase consumes (`.emery/project.yaml`, the slice's `metadata.yaml` at `status: refined`, proposal / design / tasks / specs, and any source material such as `vendor/`). The runner drives the build orchestration for that slice once and gates on `built` metadata, the authoritative `build/report.yaml`, and every confined `expect` path.
-- `workflow` — `change` + `wave` + a definition home (`definition = "…"` or sibling `definition/`): the runner copies the home, inits each path-locator target tree, then drives `plan author --from --wave` → `plan refine` → `plan execute`. `--until plan` / `refine` stop early; `--until finalize` adds `plan archive`. In-place mint from `intent` / `[sources]` remains for engine probe tests. Gates: a non-empty authored plan with every entry pending, every entry `done` after execute, then provenance grading over materialized accepted CIDs.
+- `workflow` — `change` + `wave` + a definition home (`definition = "…"` or sibling `definition/`): the runner copies the home, inits each path-locator target tree, then drives `plan author --from --wave` → `plan refine` → `plan execute`. `--until plan` / `refine` stop early; `--until finalize` adds `plan archive`. In-place mint from `intent` / `[sources]` remains for engine probe tests. Gates: a non-empty authored plan with every entry pending, every entry `done` after execute, then provenance grading over materialized accepted CIDs. Two optional RFC-96 D11 keys: `cap = <1..=8>` injects `EMERY_POOL` for the run (`1` is the serial reference of a cap-comparison pair), and `blind = "<path>"` names a TOML `accept = […]` blind acceptance set graded only against the accepted baseline — never copied into the sandbox.
 
 Linked adapters need only the directory. A third-party adapter also needs a Cargo dep on `eval` and a catalog line in `[src/main.rs](src/main.rs)`.
 
