@@ -57,14 +57,14 @@ emery-prose = { git = "https://github.com/augentic/emery" }
 # emery-prose = { path = "../emery/crates/prose" }
 
 omnia = { git = "https://github.com/augentic/omnia" }
-# omnia-cursor = { git = "https://github.com/augentic/omnia-backends" }
+omnia-cursor = { git = "https://github.com/augentic/omnia-backends" }
 omnia-guest = { git = "https://github.com/augentic/omnia" }
 omnia-testkit = { git = "https://github.com/augentic/omnia" }
 omnia-wasi-http = { git = "https://github.com/augentic/omnia" }
 omnia-wasi-model = { git = "https://github.com/augentic/omnia" }
 omnia-wasi-otel = { git = "https://github.com/augentic/omnia" }
 # omnia = { path = "../omnia/crates/omnia" }
-omnia-cursor = { path = "../omnia-backends/crates/cursor" }
+# omnia-cursor = { path = "../omnia-backends/crates/cursor" }
 # omnia-guest = { path = "../omnia/crates/omnia-guest" }
 # omnia-testkit = { path = "../omnia/crates/testkit" }
 # omnia-wasi-http = { path = "../omnia/crates/wasi-http" }
