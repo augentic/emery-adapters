@@ -333,13 +333,6 @@ user-id = 2915
 user-login = "Amanieu"
 user-name = "Amanieu d'Antras"
 
-[[publisher.potential_utf]]
-version = "0.1.5"
-when = "2026-04-01"
-user-id = 1139
-user-login = "Manishearth"
-user-name = "Manish Goregaokar"
-
 [[publisher.prettyplease]]
 version = "0.2.37"
 when = "2025-08-19"
