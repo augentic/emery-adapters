@@ -62,7 +62,7 @@ From the repository root, run one build case (~2–5 minutes; needs cursor auth)
 cargo make eval contracts-design --restart
 ```
 
-A passing run prints the retained sandbox and the authoritative report path — `.emery/slices/returns-api/contracts/` in that sandbox carries the generated contract delta. A success report that wrote nothing still fails the case's `expect` gate.
+A passing run prints the retained sandbox and the authoritative report path — `.emery/change/slices/returns-api/contracts/` in that sandbox carries the generated contract delta. A success report that wrote nothing still fails the case's `expect` gate.
 
 To start developing, edit the contracts adapter’s prompts or references under `targets/contracts/prose/`, then run the same command again and compare the sandbox with the previous run (`--restart` replaces it). Native runs pick up prose changes automatically — no Wasm build is required.
 
@@ -79,7 +79,7 @@ cargo make eval    # list the cases
 
 ## Build vs workflow cases
 
-Prefer a **build case** when iterating on one target adapter's build (minutes). Use a **workflow case** only when you need `plan → execute → finalize` or real source trees (tens of minutes). Catalog: [examples/eval/README.md](examples/eval/README.md).
+Prefer a **build case** when iterating on one target adapter's build (minutes). Use a **workflow case** only when you need `plan → refine → execute → finalize` or real source trees (tens of minutes). Catalog: [examples/eval/README.md](examples/eval/README.md).
 
 | | Build case | Workflow case |
 | --- | --- | --- |
@@ -101,9 +101,9 @@ Every case keeps one stable sandbox at `sandbox/<id>/` (beside the wasm examples
 
 ```text
 sandbox/<id>/
-  plan.yaml / change.md / discovery.md   # workflow cases
-  .emery/slices/<slice>/               # proposal, specs, design, tasks, evidence
-  .emery/slices/<slice>/build/report.yaml   # the authoritative build report
+  plan.yaml / change.md / discovery.yaml / leads.md   # workflow cases
+  .emery/change/slices/<slice>/               # proposal, specs, design, tasks, evidence
+  .emery/change/slices/<slice>/build/report.yaml   # the authoritative build report
   …target outputs (contracts, crates/, shells, …)
 ```
 
@@ -112,7 +112,7 @@ Grading checks lifecycle, the report, `expect` paths, and (workflow) provenance;
 An existing sandbox refuses to rerun without `--restart`. Continue or debug it explicitly through the native verbs instead:
 
 ```bash
-cargo make lab -- --project-dir sandbox/orders-contracts plan execute
+cargo make lab -- --change-dir sandbox/orders-contracts plan execute
 ```
 
 ## Repair loop

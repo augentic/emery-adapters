@@ -1,0 +1,48 @@
+version: 1
+definition: orders-and-health
+scope-digest: sha256:af78cfa0fabb3231620ac52f5877b66822f79c732e57396f879a08e601be3489
+coverage-digest: sha256:f3bf9b44d87778e41c67c76f8e9b63fca104555b40f34634dff0e3ef60fca92d
+system-model-digest: sha256:123c8e668151f2177a6584cd74f62246c6760f1363773831c0cdb37f4a6c0c8f
+migration-plan-digest: sha256:64414e2839cd2582bb2643d3597b1831d918e160fe2f3f55061a3ae0096a7579
+decisions-digest: sha256:37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570
+wave:
+  id: deliver
+  digest: sha256:670ba5bd8a885b1f4ebc83672bf801fd8759b789823ffc112cb97e000ae4043d
+  outcome: Author orders contracts, then a health crate that consumes them
+  architecture:
+    before:
+      id: as-is
+      digest: sha256:4ea94fedcd78fb71cddb1493aab042f8ea5827653720bf58732e87eab5ca0f6f
+    after:
+      id: target
+      digest: sha256:4ea94fedcd78fb71cddb1493aab042f8ea5827653720bf58732e87eab5ca0f6f
+  targets:
+  - id: orders
+    locator: product/orders
+    adapter: emery:contracts@0.12.0
+  - id: health
+    locator: product/health
+    adapter: emery:omnia@0.12.0
+  evidence-scopes:
+  - source: intent
+    location: definition/intent.txt
+    adapter: emery:intent@0.12.0
+    lead: intent
+    evidence-digest: sha256:73510423b424d159a2050350a35e8c86546a1543d4556b13a38669084e56cff0
+    observed-cid: sha256:1111111111111111111111111111111111111111111111111111111111111111
+  - source: docs
+    location: docs
+    adapter: emery:documentation@0.12.0
+    lead: docs
+    evidence-digest: sha256:ad4defb57e98caba095ee1bc7331e36daa1b8cec4c361f012530dcb19e58bc50
+    observed-cid: sha256:1111111111111111111111111111111111111111111111111111111111111111
+  delivery-mappings:
+  - source: intent
+    lead: intent
+    target: orders
+  - source: docs
+    lead: docs
+    target: orders
+  - source: intent
+    lead: intent
+    target: health

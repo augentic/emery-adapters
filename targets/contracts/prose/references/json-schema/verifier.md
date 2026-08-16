@@ -26,7 +26,7 @@ Note: the in-guest contract validator walks **top-level OpenAPI 3.1 / AsyncAPI 3
 Inferred from the active slice context — no positional arguments required:
 
 ```text
-$SLICE_DIR          = .emery/slices/<slice-name>  # reached via the lent artifact stage, which mirrors this tree
+$SLICE_DIR          = .emery/change/slices/<slice-name>  # reached via the lent artifact stage, which mirrors this tree
 $CHANGE_CONTRACTS    = $SLICE_DIR/contracts/
 $CHANGE_SCHEMAS      = $CHANGE_CONTRACTS/schemas/
 $BASELINE_CONTRACTS  = contracts/

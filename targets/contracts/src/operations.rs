@@ -6,6 +6,8 @@
 //! findings-directed pass — iteration and budgets are engine policy
 //! (RFC-90 D1). Contracts runs no standards review.
 
+use std::path::{Path, PathBuf};
+
 use adapter::registry::Doc;
 use adapter::seam::{
     ArtifactStage, BuildContext, BuildInput, Context, DiagnosticSource, Error, Finding,
@@ -254,15 +256,15 @@ impl Target for Adapter {
     async fn merge<P: Model>(
         model: &P, ctx: &Context<'_>, slice: &str, phase: MergePhase, workspace: &Workspace,
     ) -> Result<Report, Error> {
-        // Both gates validate change-tree and baseline state through the
-        // adapter's own `"."` preopen — the lent read-only result view
-        // carries product code only.
+        // Preflight reads the staged slice delta from the change home
+        // (excluded from snapshots). Postflight validates the merged
+        // baseline inside the lent workspace (steps 2–3).
         if phase == MergePhase::Preflight {
-            let staged = ctx.project_root.join(format!(".emery/slices/{slice}/contracts"));
+            let staged = change_home(ctx.project_root).join("slices").join(slice).join("contracts");
             return Ok(enforce_validators(Report::success(), &validate_baseline(&staged)));
         }
 
-        let baseline = ctx.project_root.join("contracts");
+        let baseline = workspace.root_path().join("contracts");
         let merge_prompt = registry::body("prompts/merge.md");
 
         // Clean baseline → deterministic success; otherwise one repair leg.
@@ -272,10 +274,9 @@ impl Target for Adapter {
             let user = format!(
                 "The postflight contract validators found blocking issues in the merged \
              `contracts/` baseline at `{}` (slice `{slice}`, adapter `{}`) — the \
-             baseline lives in the project tree outside your read-only workspace \
-             view. The engine has already promoted the slice's delta and archived \
-             the slice. Repair the baseline files in place, then answer with the \
-             corrected report body.\n\n{}",
+             baseline lives in the lent workspace. The engine has already promoted \
+             the slice's delta and archived the slice. Repair the baseline files in \
+             place, then answer with the corrected report body.\n\n{}",
                 workspace.artifact_path("contracts"),
                 ctx.adapter_id,
                 render_validator_findings(&findings),
@@ -301,7 +302,15 @@ fn stage_contracts(stage: &ArtifactStage) -> String {
     format!("{}/contracts", stage.root)
 }
 
-fn has_entries(dir: &std::path::Path) -> bool {
+fn change_home(project_root: &Path) -> PathBuf {
+    if project_root.join("plan.yaml").is_file() {
+        project_root.to_path_buf()
+    } else {
+        project_root.join(".emery/change")
+    }
+}
+
+fn has_entries(dir: &Path) -> bool {
     std::fs::read_dir(dir).is_ok_and(|mut entries| entries.next().is_some())
 }
 
@@ -335,7 +344,7 @@ fn owning_sub_prompts(findings: &[PhaseFinding]) -> String {
 // One in-guest validator finding as a deterministic phase finding; the
 // location is the finding's stage-relative path (the slice-relative
 // form of the staged file).
-fn phase_finding(finding: &ContractFinding, stage_root: &std::path::Path) -> PhaseFinding {
+fn phase_finding(finding: &ContractFinding, stage_root: &Path) -> PhaseFinding {
     let path = finding.path.strip_prefix(stage_root).unwrap_or(&finding.path);
     PhaseFinding {
         id: String::new(),

@@ -2,13 +2,13 @@
 
 Augentic-specific supplement: how specialist skills (Omnia, Vectis, and friends) *consume* the standard artifacts. For artifact structure see [Artifact format](https://emery.augentic.io/reference/artifact-format.html) and [Artifacts in depth](https://emery.augentic.io/explanation/artifacts.html).
 
-Augentic uses stock Emery as its executable workflow contract. Specialist operations read the four artifacts `proposal.md`, `spec.md`, `design.md`, and `tasks.md` during `/emery:plan → emery plan execute` (which drives the refine → build → merge phases per slice), but they must not redefine the runtime contract. Artifact validation runs automatically inside the build phase before implementation begins.
+Augentic uses stock Emery as its executable workflow contract. Specialist operations read the four artifacts `proposal.md`, `spec.md`, `design.md`, and `tasks.md` during `/emery:plan → emery plan refine → emery plan execute` (`plan refine` synthesizes the artifacts per slice; execute drives the build → merge phases), but they must not redefine the runtime contract. Artifact validation runs automatically inside the build phase before implementation begins.
 
 ## Where specialists read and write
 
 ```text
 $PROJECT_DIR        = <workspace>
-$SLICE_DIR          = $PROJECT_DIR/.emery/slices/<slice-name>
+$SLICE_DIR          = $PROJECT_DIR/.emery/change/slices/<slice-name>
 $SPECS_DIR          = $SLICE_DIR/specs
 $DESIGN_PATH        = $SLICE_DIR/design.md
 $PROPOSAL_PATH      = $SLICE_DIR/proposal.md

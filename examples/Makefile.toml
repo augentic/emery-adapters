@@ -3,12 +3,13 @@
 # -------------------------------------
 
 [env]
-CURSOR_MODEL = "cursor-grok-4.5-high-fast"
+CURSOR_MODEL = "cursor-grok-4.6-high-fast"
+CURSOR_TIMEOUT_SECS = 1200
 VECTIS_EXEMPLAR_DIR = "${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/../vectis-exemplar"
 
-# The eval loop wants backend visibility (`--debug` selects
-# `info,omnia_cursor=debug,omnia_wasi_http=debug`); `lab` stays flagless
-# (`info` + mutes) so the operator can pass `--debug` or `--quiet` per run.
+# The eval loop wants backend visibility 
+# (`--debug` selects `info,omnia_cursor=debug,omnia_wasi_http=debug`); 
+# `lab` stays flagless
 [tasks.eval]
 env_files = [".env"]
 command = "cargo"
@@ -42,27 +43,33 @@ script = '''
   set -euo pipefail
   export EMERY_HOME="$PWD/sandbox/wasm-contracts"
 
-  rm -rf "$EMERY_HOME"
-  mkdir -p "$EMERY_HOME/project"
-  cp -R examples/wasm/fixture/. "$EMERY_HOME/project/"
+  CHANGE="$EMERY_HOME/change"
+  PRODUCT="$EMERY_HOME/product"
+  DEFINITION="$PWD/examples/eval/cases/orders-contracts/definition"
 
+  rm -rf "$EMERY_HOME"
+  mkdir -p "$CHANGE" "$PRODUCT"
+  cp -R examples/wasm/fixture/. "$CHANGE/"
+  # Coverage locators (`definition/intent.txt`, `docs`) join the change home.
+  cp -R "$DEFINITION" "$CHANGE/definition"
   # cursor-agent anchors the workspace (and .cursor/mcp.json discovery) at the git toplevel.
-  git init -q "$EMERY_HOME/project"
+  git init -q "$CHANGE"
+  git init -q "$PRODUCT"
 
   EMERY_BIN="$PWD/../emery/target/debug/emery"
   # `--debug` keeps the seam visibility the env-driven filter used to give.
-  emery() { (cd "$EMERY_HOME/project" && "$EMERY_BIN" --debug "$@"); }
+  emery() { (cd "$CHANGE" && "$EMERY_BIN" --debug "$@"); }
+  emery_product() { (cd "$PRODUCT" && "$EMERY_BIN" --debug "$@"); }
 
   ADAPTER_DIR="$PWD/target/wasm32-wasip2/debug"
   emery adapter add "$ADAPTER_DIR/documentation.wasm"
   emery adapter add "$ADAPTER_DIR/intent.wasm"
   emery adapter add "$ADAPTER_DIR/contracts.wasm"
 
-  emery init contracts --name orders
+  emery_product init contracts --name orders
 
-  emery plan author orders \
-    --intent "Author the API contracts for the orders service" \
-    --source "docs=documentation:docs"
+  emery plan author orders --from "$CHANGE/definition" --wave deliver
+  emery plan refine
   emery plan execute
 '''
 
@@ -83,27 +90,30 @@ script = '''
     rm -rf "$DEST/.git"
   fi
 
-  rm -rf "$EMERY_HOME"
-  mkdir -p "$EMERY_HOME/project"
-  cp -R "$CACHE"/. "$EMERY_HOME/project/"
+  CHANGE="$EMERY_HOME/change"
+  PRODUCT="$EMERY_HOME/product"
+  DEFINITION="$PWD/examples/eval/cases/omnia-r9k/definition"
 
-  # cursor-agent anchors the workspace (and .cursor/mcp.json discovery) at the git toplevel.
-  git init -q "$EMERY_HOME/project"
+  rm -rf "$EMERY_HOME"
+  mkdir -p "$CHANGE" "$PRODUCT"
+  cp -R "$CACHE"/. "$CHANGE/"
+  # Coverage locators (`definition/intent.txt`, `legacy/…`) join the change home.
+  cp -R "$DEFINITION" "$CHANGE/definition"
+  git init -q "$CHANGE"
+  git init -q "$PRODUCT"
 
   EMERY_BIN="$PWD/../emery/target/debug/emery"
-  # `--debug` keeps the seam visibility the env-driven filter used to give.
-  emery() { (cd "$EMERY_HOME/project" && "$EMERY_BIN" --debug "$@"); }
+  emery() { (cd "$CHANGE" && "$EMERY_BIN" --debug "$@"); }
+  emery_product() { (cd "$PRODUCT" && "$EMERY_BIN" --debug "$@"); }
 
   ADAPTER_DIR="$PWD/target/wasm32-wasip2/debug"
   emery adapter add "$ADAPTER_DIR/typescript.wasm"
   emery adapter add "$ADAPTER_DIR/intent.wasm"
   emery adapter add "$ADAPTER_DIR/omnia.wasm"
 
-  emery init omnia --name at-r9k-position-adapter
+  emery_product init omnia --name at-r9k-position-adapter
 
-  emery plan author at-r9k-position-adapter \
-    --intent "Migrate https://bitbucket.org/Propellerhead/at_r9k_position_adapter" \
-    --source "legacy=typescript:legacy/at_r9k_position_adapter"
-
+  emery plan author at-r9k-position-adapter --from "$CHANGE/definition" --wave deliver
+  emery plan refine
   emery plan execute
 '''

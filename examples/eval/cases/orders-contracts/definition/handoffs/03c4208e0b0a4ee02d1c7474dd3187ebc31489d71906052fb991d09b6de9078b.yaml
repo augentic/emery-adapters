@@ -1,0 +1,42 @@
+version: 1
+definition: orders
+scope-digest: sha256:771924f8aa0a88552a53fe7018020b442835fc47c3eca78749fae30ba2e53445
+coverage-digest: sha256:f3bf9b44d87778e41c67c76f8e9b63fca104555b40f34634dff0e3ef60fca92d
+system-model-digest: sha256:123c8e668151f2177a6584cd74f62246c6760f1363773831c0cdb37f4a6c0c8f
+migration-plan-digest: sha256:809cf02c0fbd90217937d3318cdb7bd9677700de02609ef6cde65bc4c0ed4a65
+decisions-digest: sha256:37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570
+wave:
+  id: deliver
+  digest: sha256:54567c364fc51247816a5e3b6f7350c285ee417db101e9d2a3681a87d0fb60bc
+  outcome: Author the orders API contracts
+  architecture:
+    before:
+      id: as-is
+      digest: sha256:4ea94fedcd78fb71cddb1493aab042f8ea5827653720bf58732e87eab5ca0f6f
+    after:
+      id: target
+      digest: sha256:4ea94fedcd78fb71cddb1493aab042f8ea5827653720bf58732e87eab5ca0f6f
+  targets:
+  - id: orders
+    locator: product
+    adapter: emery:contracts@0.12.0
+  evidence-scopes:
+  - source: intent
+    location: definition/intent.txt
+    adapter: emery:intent@0.12.0
+    lead: intent
+    evidence-digest: sha256:73510423b424d159a2050350a35e8c86546a1543d4556b13a38669084e56cff0
+    observed-cid: sha256:1111111111111111111111111111111111111111111111111111111111111111
+  - source: docs
+    location: docs
+    adapter: emery:documentation@0.12.0
+    lead: docs
+    evidence-digest: sha256:ad4defb57e98caba095ee1bc7331e36daa1b8cec4c361f012530dcb19e58bc50
+    observed-cid: sha256:1111111111111111111111111111111111111111111111111111111111111111
+  delivery-mappings:
+  - source: intent
+    lead: intent
+    target: orders
+  - source: docs
+    lead: docs
+    target: orders

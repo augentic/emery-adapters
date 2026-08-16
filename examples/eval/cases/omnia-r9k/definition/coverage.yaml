@@ -1,0 +1,14 @@
+version: 1
+candidates:
+- key: intent
+  location: definition/intent.txt
+  adapter: emery:intent@0.12.0
+  disposition: included
+  reason: included
+  observed-cid: sha256:1111111111111111111111111111111111111111111111111111111111111111
+- key: legacy
+  location: legacy/at_r9k_position_adapter
+  adapter: emery:typescript@0.12.0
+  disposition: included
+  reason: included
+  observed-cid: sha256:1111111111111111111111111111111111111111111111111111111111111111

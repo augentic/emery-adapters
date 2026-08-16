@@ -4,7 +4,7 @@ Vectis-only, agent-inferred and operator-reviewable: `.emery/design-system/compo
 
 ## Problem: cross-slice component drift
 
-Each `screenshots.extract` invocation only sees one lead. Stage-6 detection promotes `component: <slug>` only when two or more identical groups appear in the same run. Across slices, the adapter has no memory — repeated structures can be inlined twice and drift. Build-time component inference closes this gap: the vectis adapter's in-guest clustering engine clusters structurally identical groups across the accumulated composition baseline (plus the screenshots candidate cache), and the build's composition leg identifies, names, and binds each shared structure into the catalog — so components are discovered automatically rather than declared by hand.
+Each `screenshots.extract` invocation only sees one lead. Stage-6 detection promotes `component: <slug>` only when two or more identical groups appear in the same run. Across slices, the adapter has no memory — repeated structures can be inlined twice and drift. Build-time component inference closes this gap: the vectis adapter's in-guest clustering engine clusters structurally identical groups across the accumulated composition baseline (plus candidate groups reconstructed from screenshots Evidence `notes.candidate_component` claims), and the build's composition leg identifies, names, and binds each shared structure into the catalog — so components are discovered automatically rather than declared by hand.
 
 ## File location
 
@@ -35,7 +35,7 @@ components:
 Inference is the default author; the operator reviews rather than curating from nothing.
 
 0. **Pre-define (optional)** — declare a known shared part up front in `parts.yaml` ([Operator-defined parts](#operator-defined-parts-partsyaml)). A part seeds inference with an authoritative name and is factored even below the occurrence threshold; inference discovers the rest. Skip this when no parts are known in advance.
-1. **Infer** — each Vectis build runs the adapter's deterministic, name-free cluster report over the accumulated baseline (plus the screenshots candidate cache), the build's composition leg identifies and names each new shared structure by judgement, and the workflow's deterministic bind bookkeeping writes the named entries as `status: confirmed`. This is the only writer of the catalog.
+1. **Infer** — each Vectis build runs the adapter's deterministic, name-free cluster report over the accumulated baseline (plus candidate groups reconstructed from screenshots Evidence), the build's composition leg identifies and names each new shared structure by judgement, and the workflow's deterministic bind bookkeeping writes the named entries as `status: confirmed`. This is the only writer of the catalog.
 2. **Factor** — composition regeneration attaches `component: <slug>` to every matching group, and the shell writers factor `shared/src/components/<slug>.rs`, iOS `Components/<Slug>View.swift`, Android `components/<Slug>Component.kt` per confirmed slug referenced in `composition.yaml`. Retroactive factoring reaches backward into prior-slice screens that share the structure.
 3. **Review** — inspect what was clustered and named via the build summary's cluster report and the catalog diff it records.
 4. **Reject or rename** — set `status: rejected` to permanently suppress a slug, or rename an inferred entry; `bind`'s no-overwrite rule keeps both stable on later runs.

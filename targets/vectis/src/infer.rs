@@ -23,8 +23,12 @@ pub struct InferArgs {
     /// Composition baseline to cluster (`.emery/specs/composition.yaml`).
     pub composition: PathBuf,
 
-    /// Candidate-cache directory: screenshot stage-6 candidate
-    /// skeletons, keyed by provenance, folded into clustering.
+    /// `.emery/slices` root. `*/evidence/*.yaml` claims with
+    /// `notes.candidate_component` reconstruct as group occurrences.
+    pub slices: Option<PathBuf>,
+
+    /// Optional extra composition-shaped candidate YAML tree, keyed
+    /// by provenance. Overlay on top of Evidence reconstruction.
     pub candidate_cache: Option<PathBuf>,
 
     /// Operator parts file: authoritative parts that seed inference
@@ -76,6 +80,11 @@ pub fn run(args: &InferArgs) -> Result<Value, VectisError> {
 
     let mut occurrences: Vec<GroupOccurrence> = Vec::new();
     collect_baseline_groups(&instance, &mut occurrences);
+    if let Some(slices_dir) = &args.slices
+        && slices_dir.is_dir()
+    {
+        collect_evidence_groups(slices_dir, &mut occurrences);
+    }
     if let Some(cache_dir) = &args.candidate_cache
         && cache_dir.is_dir()
     {
@@ -86,8 +95,8 @@ pub fn run(args: &InferArgs) -> Result<Value, VectisError> {
     let pins =
         args.parts.as_ref().map_or_else(Vec::new, |parts_path| collect_part_pins(parts_path));
 
-    // Fingerprints present in the baseline/cache, splitting matched
-    // pins (promoted + named) from unmatched pins (reported).
+    // Fingerprints present in the baseline/Evidence/cache, splitting
+    // matched pins (promoted + named) from unmatched pins (reported).
     let observed: BTreeSet<String> =
         occurrences.iter().map(|occ| fingerprint(&occ.skeleton)).collect();
 
@@ -189,6 +198,148 @@ fn collect_event_targets(node: &Value, out: &mut BTreeSet<String>) {
             }
         }
         _ => {}
+    }
+}
+
+fn collect_evidence_groups(slices_dir: &Path, out: &mut Vec<GroupOccurrence>) {
+    let mut files: Vec<PathBuf> = Vec::new();
+    collect_slice_evidence_files(slices_dir, &mut files);
+    files.sort();
+    for file in &files {
+        let Ok(source) = std::fs::read_to_string(file) else {
+            continue;
+        };
+        let Ok(doc) = serde_saphyr::from_str::<Value>(&source) else {
+            continue;
+        };
+        collect_evidence_doc(&doc, out);
+    }
+}
+
+fn collect_slice_evidence_files(slices_dir: &Path, out: &mut Vec<PathBuf>) {
+    let Ok(slices) = std::fs::read_dir(slices_dir) else {
+        return;
+    };
+    for slice in slices.flatten() {
+        let evidence = slice.path().join("evidence");
+        if evidence.is_dir() {
+            collect_yaml_files(&evidence, out);
+        }
+    }
+}
+
+fn collect_evidence_doc(doc: &Value, out: &mut Vec<GroupOccurrence>) {
+    let Some(claims) = doc.get("claims").and_then(Value::as_array) else {
+        return;
+    };
+    let lead = doc.get("lead").and_then(Value::as_str).unwrap_or("");
+    let mut by_parent: BTreeMap<String, Vec<usize>> = BTreeMap::new();
+    for (index, claim) in claims.iter().enumerate() {
+        if let Some(parent) = claim.get("parent").and_then(Value::as_str) {
+            by_parent.entry(parent.to_string()).or_default().push(index);
+        }
+    }
+    for claim in claims {
+        if !is_group_container(claim) {
+            continue;
+        }
+        let Some(name) = candidate_component(claim) else {
+            continue;
+        };
+        let screen = claim.get("screen").and_then(Value::as_str).unwrap_or(lead).to_string();
+        let region = claim.get("region").and_then(Value::as_str).unwrap_or_default().to_string();
+        let group = assemble_group(claim, claims, &by_parent);
+        let mut event_targets = BTreeSet::new();
+        collect_event_targets(&group, &mut event_targets);
+        out.push(GroupOccurrence {
+            screen,
+            region,
+            skeleton: build_group_skeleton(&group),
+            event_targets,
+            candidate_name: Some(name.to_string()),
+        });
+    }
+}
+
+fn is_group_container(claim: &Value) -> bool {
+    claim.get("kind").and_then(Value::as_str) == Some("container")
+        && claim.get("container").and_then(Value::as_str) == Some("group")
+}
+
+fn candidate_component(claim: &Value) -> Option<&str> {
+    let notes = claim.get("notes")?;
+    notes
+        .get("candidate_component")
+        .or_else(|| notes.get("candidate-component"))
+        .and_then(Value::as_str)
+}
+
+fn assemble_group(
+    claim: &Value, claims: &[Value], by_parent: &BTreeMap<String, Vec<usize>>,
+) -> Value {
+    let id = claim.get("id").and_then(Value::as_str).unwrap_or("");
+    json!({ "items": assemble_items(id, claim_direction(claim), claims, by_parent) })
+}
+
+fn assemble_items(
+    parent_id: &str, direction: Option<&str>, claims: &[Value],
+    by_parent: &BTreeMap<String, Vec<usize>>,
+) -> Vec<Value> {
+    let Some(indexes) = by_parent.get(parent_id) else {
+        return Vec::new();
+    };
+    // Claim-array order is not visual order for mixed nested-group /
+    // leaf children; sort by bbox when every sibling has one.
+    let mut ordered: Vec<usize> = indexes.clone();
+    if ordered.iter().all(|&index| bbox_xy(&claims[index]).is_some()) {
+        ordered.sort_by_key(|&index| sibling_key(&claims[index], direction, index));
+    }
+    ordered.iter().filter_map(|&index| claim_to_item(&claims[index], claims, by_parent)).collect()
+}
+
+fn claim_to_item(
+    claim: &Value, claims: &[Value], by_parent: &BTreeMap<String, Vec<usize>>,
+) -> Option<Value> {
+    match claim.get("kind").and_then(Value::as_str)? {
+        "leaf" => {
+            let leaf = claim.get("leaf").and_then(Value::as_str)?;
+            Some(json!({ leaf: {} }))
+        }
+        "container" => {
+            let container = claim.get("container").and_then(Value::as_str)?;
+            if container == "group" {
+                let id = claim.get("id").and_then(Value::as_str).unwrap_or("");
+                Some(json!({
+                    "group": {
+                        "items": assemble_items(id, claim_direction(claim), claims, by_parent)
+                    }
+                }))
+            } else {
+                Some(json!({ container: {} }))
+            }
+        }
+        _ => None,
+    }
+}
+
+fn claim_direction(claim: &Value) -> Option<&str> {
+    claim.get("direction").and_then(Value::as_str)
+}
+
+fn bbox_xy(claim: &Value) -> Option<(i64, i64)> {
+    let bbox = claim.get("bbox")?;
+    Some((json_i64(bbox.get("x")?)?, json_i64(bbox.get("y")?)?))
+}
+
+fn json_i64(value: &Value) -> Option<i64> {
+    value.as_i64().or_else(|| value.as_u64().and_then(|n| i64::try_from(n).ok()))
+}
+
+fn sibling_key(claim: &Value, direction: Option<&str>, index: usize) -> (i64, i64, usize) {
+    match bbox_xy(claim) {
+        Some((x, y)) if direction == Some("row") => (x, y, index),
+        Some((x, y)) => (y, x, index),
+        None => (i64::MAX, 0, index),
     }
 }
 

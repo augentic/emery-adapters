@@ -29,8 +29,8 @@ What the engine calls, per axis:
 | Axis | Operation | Engine passes | You return | Engine persists it as |
 | ---- | --------- | ------------- | ---------- | --------------------- |
 | source | `metadata` | — | `SourceMetadata` | resolve-time record |
-| source | `survey` | `Context` | `Vec<Lead>` | `## Lead inventory` blocks in `discovery.md` |
-| source | `extract` | `Context`, one `Lead` | `Evidence` | `.emery/slices/<slice>/evidence/<source>.yaml` |
+| source | `survey` | `Context`, typed `SourceInput` | `SurveyResult` (`leads[]` unfocused, `children[]` focused) | `## Lead inventory` blocks in `leads.md` |
+| source | `extract` | `Context`, same `SourceInput` with required terminal `focus` | `Evidence` | `.emery/change/slices/<slice>/evidence/<source>.yaml` |
 | target | `metadata` | — | `TargetMetadata` (floor, build `inputs[]`, platforms) | resolve-time record |
 | target | `guidance` | `Context` | prompt `String` | read by core synthesis |
 | target | `build` | `Context`, slice name, typed `inputs`, `Workspace` | `Report` | build report; gates the `built` transition |
@@ -138,12 +138,14 @@ pub use operations::Adapter;
 ```rust
 use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, LEADS_ANSWER_SCHEMA, evidence_tail, leads_tail};
 use adapter::registry::Doc;
-use adapter::seam::{Context, Error, Evidence, Lead, SourceMetadata};
+use adapter::seam::{
+    Context, Error, Evidence, Lead, SourceContent, SourceInput, SourceMetadata, SurveyResult,
+};
 use adapter::{AdapterIdentity, Model, Source, repaired};
 
 use crate::registry;
 
-/// Surveys a bound changelog tree into slice-sized leads.
+/// Surveys a bound changelog tree into one lead per changelog surface.
 #[derive(Clone, Copy, Debug)]
 pub struct Adapter;
 
@@ -156,47 +158,76 @@ impl Source for Adapter {
     fn metadata() -> SourceMetadata {
         // Declare the minimum host that can run this adapter once it depends
         // on host behavior; first-party adapters set it on every train release.
-        SourceMetadata { emery_floor: Some("0.37.0".to_string()) }
+        SourceMetadata { emery_floor: Some("0.38.0".to_string()) }
     }
 
     fn docs() -> &'static [Doc] {
         registry::docs()
     }
 
-    async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Lead>, Error> {
+    async fn survey<P: Model>(
+        model: &P, ctx: &Context<'_>, input: &SourceInput,
+    ) -> Result<SurveyResult, Error> {
         let system = registry::body("prompts/survey.md").to_string();
-        let user = format!(
-            "Survey the changelog source bound to adapter `{id}`. Resolve the binding \
-             from `plan.yaml` under `sources.<key>`; its `path` names the bound tree. \
-             Answer with one JSON object matching the gated schema: a `leads` array.",
-            id = ctx.adapter_id,
-        );
-        repaired(model, ctx, system, user, "leads", LEADS_ANSWER_SCHEMA, leads_tail).await
+        repaired(
+            model,
+            ctx,
+            system,
+            survey_user(ctx, input),
+            "leads",
+            LEADS_ANSWER_SCHEMA,
+            leads_tail,
+        )
+        .await
     }
 
     async fn extract<P: Model>(
-        model: &P, ctx: &Context<'_>, lead: &Lead,
+        model: &P, ctx: &Context<'_>, input: &SourceInput,
     ) -> Result<Evidence, Error> {
+        let lead = input.focus.as_ref().ok_or_else(|| {
+            Error::InvalidRequest("extract requires a terminal lead on input.focus".into())
+        })?;
         let system = registry::body("prompts/extract.md").to_string();
         let user = format!(
-            "Extract Evidence for this lead:\n\n{lead}\n\nAnswer with one JSON object \
+            "Extract Evidence for source key `{key}`:\n\n{lead}\n\nAnswer with one JSON object \
              matching the gated schema (Evidence body: `authority`, `claims`).",
+            key = input.key,
             lead = lead.render(),
         );
         repaired(model, ctx, system, user, "evidence", EVIDENCE_ANSWER_SCHEMA, evidence_tail).await
     }
+}
+
+fn survey_user(ctx: &Context<'_>, input: &SourceInput) -> String {
+    let content = match &input.content {
+        SourceContent::Workspace(view) => format!(
+            "`$SOURCE_DIR` is the read-only CID view at `{}`. The change home and \
+             `$PROJECT_DIR` are unreachable. Do not read `plan.yaml`, `leads.md`, or `slices/`.",
+            view.root
+        ),
+        SourceContent::Value(value) => format!(
+            "The bound material is this inline value; no `$SOURCE_DIR` is lent:\n\n{value}"
+        ),
+    };
+    format!(
+        "Survey the changelog source bound to adapter `{id}` (source key `{key}`).\n\n\
+         {content}\n\nAnswer with one JSON object matching the gated schema: a `leads` array.",
+        id = ctx.adapter_id,
+        key = input.key,
+    )
 }
 ```
 
 Points that generalize:
 
 - **Operations write no workflow artifacts.** The engine persists leads and Evidence; your job is to return well-formed values. Say so explicitly in the prompt ("the caller persists…; do not write it yourself") because the model has workspace access.
-- **The binding is resolved by prompt, not by API.** The agent reads `plan.yaml` inside the lent workspace; `ctx.adapter_id` names which binding is yours.
+- **Catalog context is typed on the call.** `SourceInput` carries `key`, workspace-or-value content, and optional `focus`. Do not read `plan.yaml`, `leads.md`, or `slices/` — sources receive no change-home filesystem grant and no `$PROJECT_DIR`. Unfocused survey returns `leads[]`; focused survey returns `children[]` only when the parent is still coarser than a buildable boundary; extract requires `input.focus`.
+- **The engine prepares the binding — never recover `plan.yaml`.** Every `survey` / `extract` call already carries `input.key` and prepared content: a tree binding arrives as `SourceContent::Workspace` (lent as `$SOURCE_DIR`), an inline binding as `SourceContent::Value`. Interpolate that content into the prompt. Do not ask the agent to read `plan.yaml` or resolve a source location.
 - **`repaired` owns the parse-and-retry loop.** Pick the schema constant and tail matching the operation; the committed goldens live in the engine repo under `crates/project/answers/`.
 
 ### 5. Author the prose
 
-Sources need two prompts: `prose/prompts/survey.md` and `prose/prompts/extract.md`. The shape rules are in [CONTRIBUTING.md § Prompt authoring](../CONTRIBUTING.md#prompt-authoring) — headline: parent prompts orchestrate and stay under ~150 non-blank lines, phase sub-prompts carry one phase (hard cap 800), and references are cited by relative link, never inlined.
+Sources need two prompts: `prose/prompts/survey.md` and `prose/prompts/extract.md`. Survey emits one lead per adapter-native surface (one endpoint, topic, job, document, screen, or intent string). Downstream consumers group those leads; focused child survey is the exception when a parent is still coarser than a buildable boundary. The shape rules are in [CONTRIBUTING.md § Prompt authoring](../CONTRIBUTING.md#prompt-authoring) — headline: parent prompts orchestrate and stay under ~150 non-blank lines, phase sub-prompts carry one phase (hard cap 800), and references are cited by relative link, never inlined.
 
 Add the shared runtime references symlink so your prompts can cite the cross-adapter corpus:
 
@@ -214,7 +245,7 @@ The embed walker follows symlinks and fails the build on any dangling relative l
 use std::path::Path;
 
 use adapter::Source as _;
-use adapter::seam::Context;
+use adapter::seam::{Context, SourceContent, SourceInput, SourceWorkspace};
 use changelog::Adapter;
 use omnia_testkit::model::Harness;
 
@@ -223,6 +254,18 @@ fn ctx() -> Context<'static> {
         adapter_id: "source:changelog",
         project_root: Path::new("."),
         mcp_url: None,
+        lend: Some(".".to_string()),
+    }
+}
+
+fn workspace_input() -> SourceInput {
+    SourceInput {
+        key: "notes".to_string(),
+        content: SourceContent::Workspace(SourceWorkspace {
+            id: "view-1".to_string(),
+            root: ".".to_string(),
+        }),
+        focus: None,
     }
 }
 
@@ -232,9 +275,10 @@ async fn survey_prompts_and_parses() {
         [r#"{"leads":[{"lead":"release-notes","synopsis":"Publish release notes."}]}"#],
     );
 
-    let leads = Adapter::survey(&model, &ctx()).await.unwrap();
+    let result = Adapter::survey(&model, &ctx(), &workspace_input()).await.unwrap();
 
-    assert_eq!(leads.len(), 1);
+    assert_eq!(result.leads.len(), 1);
+    assert!(result.children.is_empty());
     let request = &model.requests()[0];
     assert!(request.system.as_deref().unwrap().starts_with("# changelog.survey"));
 }
@@ -263,7 +307,7 @@ The eval composition ([`examples/eval/`](../examples/eval/)) links adapters stat
 How to exercise it live depends on the axis:
 
 - **Target adapter** — add a build case: a data directory under `examples/eval/cases/<id>/` with a `case.toml` (`kind = "build"`, slice name, `expect` artifacts) and a `fixture/` carrying the exact refined state the build phase consumes (`.emery/project.yaml`, the slice's `metadata.yaml`, proposal / design / tasks / specs, plus any source material). Anatomy and the `expect` gate: [examples/eval/README.md](../examples/eval/README.md#case-shapes). Run it with `cargo make eval <id> --restart`.
-- **Source adapter** — build cases drive only the target build today, so exercise `survey` / `extract` live through a workflow case (`kind = "workflow"`) that binds your source, e.g. `notes = "changelog:notes"` under `[sources]` over a fixture tree.
+- **Source adapter** — build cases drive only the target build today, so exercise `survey` / `extract` live through a workflow case (`kind = "workflow"`) over a reviewed definition home (`definition` + `wave`) that binds your source.
 
 Either way needs an authenticated `cursor-agent`. From here you are in the standard repair loop — edit `prose/**`, re-run, compare scratch trees — documented in the [repo README](../README.md).
 

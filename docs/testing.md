@@ -18,7 +18,7 @@ Fastest feedback first. **Every behavior is asserted on exactly one rung** — d
 
 Ownership boundaries: omnia-testkit owns reusable model/runtime test mechanics; adapter `tests/` own operation behavior; the eval composition example owns the live case loop ([repo README](../README.md) for the day-to-day loop; [`examples/eval/`](../examples/eval/) for the case catalog); the wasm examples own component-seam conformance. Generic catalog/provider/command mechanics stay in `emery/crates/native/tests` (case/sandbox mechanics in `emery/crates/probe/tests`).
 
-Sibling co-development: uncomment the `[patch."https://github.com/augentic/emery.git"]` block in the root `Cargo.toml` to resolve engine crates from `../emery` instead of the lockfile-pinned git dependencies.
+Sibling co-development: uncomment the path patches in the root `Cargo.toml` `[patch.crates-io]` block to resolve engine crates from `../emery` instead of the lockfile-pinned git dependencies.
 
 Testing a brand-new adapter, including its first eval case and catalog wiring: [authoring.md](authoring.md).
 

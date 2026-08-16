@@ -22,7 +22,7 @@ contracts/
 └── http/
     └── <api-domain>.yaml              # Baseline: merged contracts only
 
-.emery/slices/<slice-name>/            # Written via the artifact stage, which mirrors this tree
+.emery/change/slices/<slice-name>/            # Written via the artifact stage, which mirrors this tree
 └── contracts/
     ├── http/
     │   └── <api-domain>.yaml          # Slice-local delta or normalised import

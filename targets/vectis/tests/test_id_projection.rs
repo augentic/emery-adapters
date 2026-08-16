@@ -23,7 +23,7 @@ fn harvests_baseline_only_when_no_active_slice() {
         "version: 1\nscreens:\n  splash:\n    name: Splash\n    body:\n      - button:\n          test_id: splash-cta\n",
     );
     write(
-        &root.join(".emery/slices/follow-up/composition.yaml"),
+        &root.join(".emery/change/slices/follow-up/composition.yaml"),
         "version: 1\ndelta:\n  added:\n    stub:\n      name: Stub\n      body:\n        - text:\n            test_id: stub-message\n  modified: {}\n  removed: {}\n",
     );
 
@@ -43,11 +43,11 @@ fn harvests_test_ids_from_merged_baseline_and_slice() {
         "version: 1\nscreens:\n  splash:\n    name: Splash\n    body:\n      - button:\n          test_id: splash-cta\n",
     );
     write(
-        &root.join(".emery/slices/follow-up/composition.yaml"),
+        &root.join(".emery/change/slices/follow-up/composition.yaml"),
         "version: 1\ndelta:\n  added:\n    stub:\n      name: Stub\n      body:\n        - text:\n            test_id: stub-message\n  modified: {}\n  removed: {}\n",
     );
 
-    let slice = root.join(".emery/slices/follow-up/composition.yaml");
+    let slice = root.join(".emery/change/slices/follow-up/composition.yaml");
     let entries = test_id_registry::harvest_entries(root, Some(&slice)).expect("harvest");
     assert_eq!(entries.len(), 2);
     assert_eq!(entries.get("MAESTRO_SPLASH_CTA"), Some(&"splash-cta".to_string()));
@@ -64,11 +64,11 @@ fn rejects_duplicate_test_id_across_merged_baseline_and_slice() {
         "version: 1\nscreens:\n  splash:\n    name: Splash\n    body:\n      - button:\n          test_id: splash-cta\n",
     );
     write(
-        &root.join(".emery/slices/follow-up/composition.yaml"),
+        &root.join(".emery/change/slices/follow-up/composition.yaml"),
         "version: 1\ndelta:\n  added:\n    stub:\n      name: Stub\n      body:\n        - text:\n            test_id: splash-cta\n  modified: {}\n  removed: {}\n",
     );
 
-    let slice = root.join(".emery/slices/follow-up/composition.yaml");
+    let slice = root.join(".emery/change/slices/follow-up/composition.yaml");
     let err = test_id_registry::harvest_entries(root, Some(&slice)).unwrap_err();
     let message = format!("{err}");
     assert!(
@@ -87,11 +87,11 @@ fn modified_screen_replaces_old_test_id() {
         "version: 1\nscreens:\n  list:\n    name: List\n    body:\n      - button:\n          test_id: list-row\n",
     );
     write(
-        &root.join(".emery/slices/rename/composition.yaml"),
+        &root.join(".emery/change/slices/rename/composition.yaml"),
         "version: 1\ndelta:\n  added: {}\n  modified:\n    list:\n      name: List\n      body:\n        - button:\n            test_id: list-row-updated\n  removed: {}\n",
     );
 
-    let slice = root.join(".emery/slices/rename/composition.yaml");
+    let slice = root.join(".emery/change/slices/rename/composition.yaml");
     let entries = test_id_registry::harvest_entries(root, Some(&slice)).expect("harvest");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries.get("MAESTRO_LIST_ROW_UPDATED"), Some(&"list-row-updated".to_string()));
@@ -108,11 +108,11 @@ fn removed_screen_drops_test_ids_from_harvest() {
         "version: 1\nscreens:\n  keep:\n    name: Keep\n    body:\n      - button:\n          test_id: keep-cta\n  drop:\n    name: Drop\n    body:\n      - button:\n          test_id: drop-cta\n",
     );
     write(
-        &root.join(".emery/slices/prune/composition.yaml"),
+        &root.join(".emery/change/slices/prune/composition.yaml"),
         "version: 1\ndelta:\n  added: {}\n  modified: {}\n  removed:\n    drop:\n      reason: obsolete\n",
     );
 
-    let slice = root.join(".emery/slices/prune/composition.yaml");
+    let slice = root.join(".emery/change/slices/prune/composition.yaml");
     let entries = test_id_registry::harvest_entries(root, Some(&slice)).expect("harvest");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries.get("MAESTRO_KEEP_CTA"), Some(&"keep-cta".to_string()));

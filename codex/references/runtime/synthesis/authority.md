@@ -133,7 +133,7 @@ slices:
 Rules:
 
 - Plan-wide and project-wide overrides are out of scope; the map is scoped to a single slice.
-- Orphan source keys (a value that is not in the slice's own `sources[]`) are rejected by `emery slice validate` with the structured error `slice-authority-override-orphan-source` before the refine phase runs.
+- Orphan source keys (a value that is not in the slice's own `sources[]`) are rejected by `emery slice validate` with the structured error `slice-authority-override-orphan-source` before the refinement stage runs.
 - Operators author the map via the CLI; the synthesis playbook never asks an agent to hand-edit `plan.yaml`:
 
 ```bash
@@ -149,7 +149,7 @@ When a requirement's `agreement` verdict is `disagreed`, the kernel walks the fo
 
 1. **`per-slice-authority-override`** — the slice's `authority-override.<kind>` names a source key that appears in the reconciled group's contributing sources. That source wins; the kernel derives `status: divergence` (or `agreed` when the override aligns with a shared value), and the runner-up survives with `winner: false`.
 2. **`document-authority-ordering`** — fall back to the document-level `authority:` enum (`intent > documentation > behaviour`). Highest class wins; ties at the top class continue to step 3.
-3. **`tied-conflict`** — still tied. The kernel derives `status: conflict` with the `[conflict]` tag; no winner markers. The operator reconciles by amending the override or the source set and re-running `emery plan execute` — the drifted slice re-refines before the build phase.
+3. **`tied-conflict`** — still tied. The kernel derives `status: conflict` with the `[conflict]` tag; no winner markers. The operator reconciles by amending the override or the source set and re-running `emery plan refine` — the stale slice re-refines before `emery plan execute` builds it.
 
 Steps 1–2 yield `status: divergence` when the chosen source disagrees with at least one other contributor and `status: agreed` when every contributor's value matches the winner's. Step 3 yields `status: conflict`. Step names are byte-stable across runs and match the projected `requirements[].resolution-trace.step` exactly — `emery slice provenance` projects the audit shape, and the per-kind body landing rules live in the engine's embedded synthesis prompt corpus. (The deferred per-Evidence surface would insert a `per-evidence-authority-override` step between 1 and 2.)
 
@@ -193,5 +193,5 @@ The runner-up (`identity-design-notes`) is preserved verbatim as a `Note:` line.
 - Authority does **not** apply at plan-time `propose` (no `Evidence` yet); it activates here at slice-time synthesis.
 - Per-kind and per-claim overrides remain out of scope for v1 (the per-Evidence `authority-overrides` surface is deferred to a future RFC). The override seam below per-slice granularity is a re-refine with a different `agreement` verdict or amended `plan.yaml.slices[].authority-override`, never a hand-edit of the kernel-rendered `spec.md` provenance lines.
 - The kernel renders the `Sources:` list with every contributing source key, highest authority first **after override resolution** — a per-slice override that promotes a `behaviour`-class source to the operative winner promotes that key to the front of the list for the affected block.
-- The provenance parser cross-resolves every `Sources:` key against the slice's `plan.yaml.slices[].sources[]` bindings; a stale or missing key fails validation. Per-slice `authority-override` source keys are checked by the same parser before the refine phase runs.
+- The provenance parser cross-resolves every `Sources:` key against the slice's `plan.yaml.slices[].sources[]` bindings; a stale or missing key fails validation. Per-slice `authority-override` source keys are checked by the same parser before the refinement stage runs.
 - Every override resolution — including step 2 fallbacks where no override fired — lands inline in `model.yaml` at `requirements[].resolution-trace.step` and is surfaced by `emery slice provenance`. The projected provenance view is the audit surface; `spec.md` carries operator-facing prose only.

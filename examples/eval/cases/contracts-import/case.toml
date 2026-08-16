@@ -5,4 +5,4 @@ slice = "import-ticket-api-contract"
 
 # Deterministic artifact-exists gate: a success report must leave the
 # slice contracts delta non-empty.
-expect = [".emery/slices/import-ticket-api-contract/contracts"]
+expect = [".emery/change/slices/import-ticket-api-contract/contracts"]

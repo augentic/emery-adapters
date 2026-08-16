@@ -1,41 +1,46 @@
 # intent.survey
 
-Emit exactly one lead block under `## Lead inventory` in `discovery.md`. The `intent` source is degenerate by construction — it does not crawl, parse, or infer anything. It echoes the operator's intent string into the lead that backs the slice driving the plan.
+Emit exactly one lead. The `intent` source is degenerate by construction — it does not crawl, parse, or infer anything. It echoes the operator's intent string into a single lead.
 
 ## Inputs
 
-- `Source` — the `plan.yaml.sources.<source>` binding bound to this adapter. `Source.value` carries the operator's free-form intent string. `Source.path` is absent for `intent` bindings; no filesystem root is preopened.
-- `slice-name` — the kebab-case identifier `/emery:plan` derived for the lead's slice. Used verbatim as the lead `lead`.
+- **Source key** — the plan source-binding key the engine passed on the wire (typically `intent`). The caller stamps each lead's `source` from it; this prompt does not emit it.
+- **Inline value** — the operator's free-form intent string. No `$SOURCE_DIR` is lent.
+- **Optional parent lead** — when present, this is a focused survey: the exception path for a parent still coarser than a buildable boundary. Inherit parent/focus from the passed record. Intent is degenerate, so a focused call typically returns no children unless the value itself names separately acceptable child boundaries.
 
-## Output contract
+The change home and `$PROJECT_DIR` are unreachable. Do not read `plan.yaml`, `leads.md`, or `slices/`.
 
-Append (or replace by `lead`) one block under `## Lead inventory` in `discovery.md`:
+## Unfocused output
+
+Return exactly one top-level lead:
 
 ```markdown
-### <slice-name>
+### <lead>
 
-- lead: <slice-name>
-- synopsis: <Source.value, one line, verbatim>
+- lead: <kebab-slug-from-the-intent>
+- synopsis: <inline value, one line, verbatim>
 ```
 
 Rules:
 
-- `lead` MUST equal `slice-name`. The bare-string `Slice.sources` shorthand `[<source>]` in `plan.yaml` only normalises cleanly when the lead matches the slice name.
-- Do not emit `source`. The CLI stamps each lead's `source` from the survey binding (the key the source was registered under, typically `intent`); attribution is CLI-owned.
+- `lead` is a stable kebab-case slug derived from the intent string (lowercase, strip punctuation, replace whitespace with `-`). Keep it stable across re-surveys of the same value.
+- Do not emit `source`. The caller stamps each lead's `source` from the survey binding.
 - `synopsis` MUST be the operator's intent string, verbatim. Collapse internal whitespace to single spaces; do not paraphrase, truncate, or annotate. A multi-line intent MAY stay multi-line when folding to one line would lose discriminating content the operator wrote.
-- Do not emit `topics`. The optional per-lead `topics` field is for sources that read and classify material; `intent` infers nothing, so it always omits the bullet.
+- Do not emit `topics`, `parent`, or `focus` on the unfocused lead. Intent infers nothing.
+
+## Focused output
+
+When a parent lead is passed, return stable child leads under it (or none). Stamp each child's `parent` and `focus` to the focused lead id. Inherit the parent's synopsis as context; do not look the parent up in `leads.md`.
 
 ## Worked example
 
-Input — `plan.yaml.sources.intent.value`:
+Input — inline value:
 
 ```
 Add a search filter to the user list.
 ```
 
-Slice name: `add-search-filter`.
-
-Output — block appended under `## Lead inventory` in `discovery.md`:
+Unfocused output:
 
 ```markdown
 ### add-search-filter
@@ -46,6 +51,7 @@ Output — block appended under `## Lead inventory` in `discovery.md`:
 
 ## Notes
 
-- Re-running `intent.survey` against the same source replaces the lead by its `(source, lead)` pair. Editing the intent string and re-running yields the same lead with an updated synopsis.
-- The single lead becomes the slice driving the plan; see [From sources to slices](../references/emery-runtime/reconciliation.md#plan-time-leads-become-slices) for how leads reconcile into slices.
-- `discovery.md`'s `## Summary` and `## Source inventory` sections are owned by `/emery:plan`, not this prompt; this prompt only writes inside `## Lead inventory`.
+- Re-running `intent.survey` against the same value replaces the lead by its `(source, lead)` pair. Editing the intent string and re-running yields the same lead with an updated synopsis when the slug is unchanged.
+- The caller persists the catalog; this prompt never writes `leads.md`.
+- Downstream consumers group or correlate leads themselves; this prompt only emits the single intent lead.
+- See [From sources to slices](../references/emery-runtime/reconciliation.md#plan-time-leads-become-slices) for how leads reconcile into slices.

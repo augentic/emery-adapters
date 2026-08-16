@@ -1,6 +1,6 @@
 # contracts.guidance
 
-Idiom guidance core synthesis (the refine phase) folds into the generated `specs/<domain>/spec.md` and `design.md` for slices that target the `contracts` adapter. The contracts target produces **contract artifacts** — machine-readable interface definitions under `contracts/` — not application code, so the synthesised specs and `design.md` shape themselves around the contract's behavioural surface and its persisted format, not around runtime providers or DI patterns.
+Idiom guidance core synthesis (the refinement stage) folds into the generated `specs/<domain>/spec.md` and `design.md` for slices that target the `contracts` adapter. The contracts target produces **contract artifacts** — machine-readable interface definitions under `contracts/` — not application code, so the synthesised specs and `design.md` shape themselves around the contract's behavioural surface and its persisted format, not around runtime providers or DI patterns.
 
 ## Contract domains
 

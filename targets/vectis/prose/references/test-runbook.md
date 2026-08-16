@@ -8,7 +8,7 @@ Operational detail for `vectis-test-writer`. The SKILL.md keeps only the orienta
 $DOMAIN_NAME    = $ARGUMENTS[0]
 
 # Path derivation
-$SLICE_DIR      = .emery/slices/<active-change>
+$SLICE_DIR      = .emery/change/slices/<active-change>
 $SPECS_DIR      = $SLICE_DIR/specs
 $SPEC_PATH      = $SPECS_DIR/$DOMAIN_NAME/spec.md
 $DESIGN_PATH    = $SLICE_DIR/design.md

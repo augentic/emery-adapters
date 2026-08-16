@@ -13,28 +13,28 @@ const EMBEDDED_ARTIFACT_PATHS: &[(&str, &[(&str, &str)])] = &[
     (
         "layout",
         &[
-            ("change_local", ".emery/slices/<name>/layout.yaml"),
+            ("change_local", ".emery/change/slices/<name>/layout.yaml"),
             ("project", "design-system/layout.yaml"),
         ],
     ),
     (
         "tokens",
         &[
-            ("change_local", ".emery/slices/<name>/tokens.yaml"),
+            ("change_local", ".emery/change/slices/<name>/tokens.yaml"),
             ("project", "design-system/tokens.yaml"),
         ],
     ),
     (
         "assets",
         &[
-            ("change_local", ".emery/slices/<name>/assets.yaml"),
+            ("change_local", ".emery/change/slices/<name>/assets.yaml"),
             ("project", "design-system/assets.yaml"),
         ],
     ),
     (
         "composition",
         &[
-            ("change_local", ".emery/slices/<name>/composition.yaml"),
+            ("change_local", ".emery/change/slices/<name>/composition.yaml"),
             ("baseline", ".emery/specs/composition.yaml"),
         ],
     ),
@@ -188,7 +188,7 @@ pub fn expand_path_template(template: &str, project_root: &Path) -> Vec<PathBuf>
     if !template.contains("<name>") {
         return vec![project_root.join(template)];
     }
-    let slices_dir = project_root.join(".emery/slices");
+    let slices_dir = project_root.join(".emery/change/slices");
     let Ok(entries) = std::fs::read_dir(&slices_dir) else {
         return Vec::new();
     };

@@ -9,7 +9,7 @@ The rules apply uniformly to OpenAPI HTTP bindings, AsyncAPI message bindings, a
 | Concept | Path | Lifetime |
 |---|---|---|
 | **Baseline** | `contracts/{schemas,http,messages}/` | Persists across changes; merged contracts only. |
-| **Change-local delta** | `.emery/slices/<slice-name>/contracts/{schemas,http,messages}/` | Exists during the slice lifecycle; merged into the baseline by the merge phase or discarded at `emery plan drop`. |
+| **Change-local delta** | `.emery/change/slices/<slice-name>/contracts/{schemas,http,messages}/` | Exists during the slice lifecycle; merged into the baseline by the merge phase or discarded at `emery plan drop`. |
 
 The baseline is the source of truth for the platform's current contract surface. The slice-local delta is a **proposed modification**, pending review and merge. The delta directory contains **only the files this slice adds or replaces** — never a full copy of the baseline.
 
@@ -80,7 +80,7 @@ Two consequences for authors:
 Two concurrent changes that both modify the same contract file conflict. The baseline-conflict check (surfaced by `emery slice validate` and enforced by the merge phase) detects this by comparing the slice's `defined-at` timestamp against the baseline file's last-merged timestamp:
 
 - **No conflict.** Baseline file unchanged since the slice was defined → merge proceeds.
-- **Conflict.** Baseline file modified after the slice's `defined-at` → merge is blocked. Resolution: re-run `emery plan execute` — the drifted slice re-refines against the updated baseline, recomputes the delta, and re-merges.
+- **Conflict.** Baseline file modified after the slice's `defined-at` → merge is blocked. Resolution: re-run `emery plan refine` — the stale slice re-refines against the updated baseline and recomputes the delta — then `emery plan execute` to re-merge.
 
 Conflicts are detected at file granularity, not at the property / path / channel level. Two changes that add disjoint paths to the same `user-api.yaml` will still conflict — Emery defers to the operator to merge them manually (the format authors run again with the second change rebased onto the post-first-merge baseline).
 

@@ -313,18 +313,18 @@ impl Target for Adapter {
     }
 
     async fn merge<P: Model>(
-        model: &P, ctx: &Context<'_>, slice: &str, phase: MergePhase, _workspace: &Workspace,
+        model: &P, ctx: &Context<'_>, slice: &str, phase: MergePhase, workspace: &Workspace,
     ) -> Result<Report, Error> {
-        // Change-tree state (staged and baseline compositions) reads
-        // through the `"."` preopen; the lent workspace is a read-only
-        // view of the built result code.
-        let change_root = ctx.project_root;
+        // Preflight reads the staged slice composition from the change
+        // home (excluded from snapshots). Postflight validates the
+        // merged baseline inside the lent workspace (steps 2–3).
         let merge_prompt = registry::body("prompts/merge.md");
 
         if phase == MergePhase::Preflight {
             // Deterministic gate: an invalid staged slice composition blocks
             // the merge before the engine folds it, per the merge prompt.
-            let staged = change_root.join(format!(".emery/slices/{slice}/composition.yaml"));
+            let staged =
+                change_home(ctx.project_root).join("slices").join(slice).join("composition.yaml");
             let staged_findings = gate::validation_findings(&staged);
             if staged_findings.is_empty() {
                 return Ok(Report::success());
@@ -332,7 +332,7 @@ impl Target for Adapter {
             return Ok(failure_report(staged_findings));
         }
 
-        let baseline_composition = change_root.join(".emery/specs/composition.yaml");
+        let baseline_composition = workspace.root_path().join(".emery/specs/composition.yaml");
         let user = format!(
             "Run the postflight merge gate for slice `{slice}` (adapter `{}`). The engine \
          has already folded the slice's deltas — including its `composition.yaml` and \
@@ -362,12 +362,25 @@ struct SliceRoots {
     agent: String,
 }
 
+fn change_home(project_root: &Path) -> PathBuf {
+    if project_root.join("plan.yaml").is_file() {
+        project_root.to_path_buf()
+    } else {
+        project_root.join(".emery/change")
+    }
+}
+
 fn slice_stage(workspace: &Workspace, ctx: &Context<'_>, slice: &str) -> SliceRoots {
     workspace.artifact_stage.as_ref().map_or_else(
         || {
-            let relative = format!(".emery/slices/{slice}");
+            let home = change_home(ctx.project_root);
+            let relative = if ctx.project_root.join("plan.yaml").is_file() {
+                format!("slices/{slice}")
+            } else {
+                format!(".emery/change/slices/{slice}")
+            };
             SliceRoots {
-                fs: ctx.project_root.join(&relative),
+                fs: home.join("slices").join(slice),
                 agent: workspace.artifact_path(&relative),
             }
         },
@@ -400,8 +413,9 @@ fn deterministic_blocked(details: Vec<String>) -> PhaseReport {
 /// report-level assurance source (`hybrid` when an in-guest check
 /// contributed alongside the model leg), and enforce the non-build
 /// coherence rules — empty outputs, no UI surface, no continuation
-/// change, no `tool`/`human` finding attributions, and no declared
-/// writes on a `not-applicable` outcome.
+/// change, no `tool`/`human` finding attributions, no brief-derived
+/// `deterministic` finding attributions on a model-only pass, and no
+/// declared writes on a `not-applicable` outcome.
 fn check_pass(
     mut report: PhaseReport, deterministic: Vec<PhaseFinding>, deterministic_ran: bool,
 ) -> PhaseReport {
@@ -412,7 +426,9 @@ fn check_pass(
     report.source =
         if deterministic_ran { PhaseSource::Hybrid } else { PhaseSource::ModelAssisted };
     for finding in &mut report.findings {
-        if matches!(finding.source, DiagnosticSource::Tool | DiagnosticSource::Human) {
+        let mislabeled = matches!(finding.source, DiagnosticSource::Tool | DiagnosticSource::Human)
+            || (!deterministic_ran && finding.source == DiagnosticSource::Deterministic);
+        if mislabeled {
             finding.source = DiagnosticSource::ModelAssisted;
         }
     }

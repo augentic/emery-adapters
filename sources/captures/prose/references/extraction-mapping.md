@@ -27,7 +27,7 @@ claims:
           payload-shape: { ... }
 ```
 
-The document's `(slice, source)` identity is path-borne (the CLI persists it at `.emery/slices/<slice>/evidence/<source>.yaml`) and the adapter resolves from `plan.yaml.sources.<source>.adapter`, so neither is written in-document. `authority` is the literal `behaviour` for every Evidence document this adapter emits; per-kind overrides via `authority-overrides:` are rarely needed (runtime captures are behaviour by definition). `id`, `path`, `replay-digest`, and `statement` are required on every `kind: example` claim; `input`, `output`, and any other observed shape are open per-kind body fields documented below.
+The document's `(slice, source)` identity is path-borne — the caller persists it and stamps the source from the binding — so neither is written in-document. `authority` is the literal `behaviour` for every Evidence document this adapter emits; per-kind overrides via `authority-overrides:` are rarely needed (runtime captures are behaviour by definition). `id`, `path`, `replay-digest`, and `statement` are required on every `kind: example` claim; `input`, `output`, and any other observed shape are open per-kind body fields documented below.
 
 ## Claim fields
 
@@ -138,7 +138,7 @@ Three scenarios, three claims, three digests. Synthesis reconciles these with si
 - **Speculative claims.** Do not infer behaviour the captures do not exhibit. If no capture demonstrates duplicate-email handling, emit no claim for it — synthesis tags unknowns; you do not.
 - **`INSTRUCTIONS.md` as evidence.** The per-handler `INSTRUCTIONS.md` is operator hint material for Omnia test generation ([`build/test.md`](../../../../targets/omnia/prose/prompts/build/test.md)); not behavioural evidence. Read it for surface-naming context if needed; do not turn its prose into claims.
 - **Whole-file dumps in `statement`.** The `path:` + `replay-digest:` pair is the citation; `statement:` is a single-line summary. The body fields (`input` / `output`) carry observed structure; raw JSON paste in `statement:` is wrong.
-- **Cross-source synthesis.** Do not reconcile this lead's claims with another source's Evidence — that is core synthesis's job in the refine phase. Emit Evidence purely from `$SOURCE_DIR`.
+- **Cross-source synthesis.** Do not reconcile this lead's claims with another source's Evidence — that is core synthesis's job in the refinement stage. Emit Evidence purely from `$SOURCE_DIR`.
 
 ## Failure modes
 

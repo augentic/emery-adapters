@@ -5,13 +5,13 @@ Emery turns raw inputs — operator intent, written documentation, legacy code, 
 There are two distinct reconciliation moments, and they answer different questions:
 
 - **Plan time — what work exists?** `/emery:plan` surveys each bound source for *leads* and reconciles them into the *slices* that make up the change.
-- **Slice time — what must each domain do?** The refine phase of `emery plan execute` extracts *evidence* from each source and synthesizes it into the domain's `specs/<domain>/spec.md`, recording exactly which source contributed each requirement.
+- **Slice time — what must each domain do?** The `emery plan refine` stage extracts *evidence* from each source and synthesizes it into the domain's `specs/<domain>/spec.md`, recording exactly which source contributed each requirement.
 
 ## Plan time: leads become slices
 
 ### A lead is a unit of work a source can see
 
-When you run `/emery:plan`, each bound source runs its `survey` operation and emits **leads** — one block per slice-sized unit of work it can identify, written under `## Lead inventory` in `discovery.md`. A lead is identified by its `(source, lead)` pair, because the same lead name can appear in more than one source.
+When you run `/emery:plan`, each bound source runs its `survey` operation and emits **leads** — one block per slice-sized unit of work it can identify, written under `## Lead inventory` in `leads.md`. A lead is identified by its `(source, lead)` pair, because the same lead name can appear in more than one source.
 
 For example, a legacy-code source and a design-notes source might each surface a `user-registration` lead. They are describing the same feature, but `survey` does not yet know that — it only reports what each source sees on its own.
 
@@ -27,13 +27,13 @@ Three rules keep this predictable:
 
 This is why a one-source, one-lead change and a twelve-slice migration use exactly the same machinery — the only difference is how many leads `survey` produced.
 
-You review and adjust the proposed slices before running `emery plan execute` — running it is your approval.
+You review and adjust the proposed slices before running `emery plan refine`; running `emery plan execute` afterwards is your approval.
 
 ## Slice time: evidence becomes a spec
 
 ### Extract gathers evidence per source
 
-When the refine phase runs for a slice, each bound source runs its `extract` operation against its matched lead and returns an **Evidence** document, persisted to `.emery/slices/<slice>/evidence/<source>.yaml`. Evidence is structured: a list of `claims` (requirements, criteria, decisions, code excerpts, and so on) plus a top-level `authority` that records how much weight the source carries.
+When the refinement stage runs for a slice, each bound source runs its `extract` operation against its matched lead and returns an **Evidence** document, persisted to `.emery/change/slices/<slice>/evidence/<source>.yaml`. Evidence is structured: a list of `claims` (requirements, criteria, decisions, code excerpts, and so on) plus a top-level `authority` that records how much weight the source carries.
 
 ### Synthesize reconciles evidence into one spec
 
@@ -58,11 +58,11 @@ Status: agreed
 
 Two sources can disagree about the same requirement. Emery resolves this with **authority** — a closed ranking declared per source (`intent` > `documentation` > `behaviour`), sharpened by an optional per-slice override the operator records during plan review. The winner's value becomes the operative requirement and the loser survives as inline commentary (`[divergence]`); a tie at the top authority class has no winner (`[conflict]`). The canonical hierarchy, override surface, and step-by-step resolution order live in [Authority hierarchy](./synthesis/authority.md#resolution-order).
 
-Tags never park the slice. Synthesis tags the requirement and proceeds. The operator reconciles a `[conflict]` or `[divergence]` by recording a per-slice authority override (`emery plan amend --authority-override`) or amending the plan's sources, then re-running `emery plan execute` (the drifted slice re-refines) — never by hand-editing the kernel-rendered `spec.md` provenance lines.
+Tags never park the slice. Synthesis tags the requirement and proceeds. The operator reconciles a `[conflict]` or `[divergence]` by recording a per-slice authority override (`emery plan amend --authority-override`) or amending the plan's sources, then re-running `emery plan refine` (the stale slice re-refines) before `emery plan execute` — never by hand-editing the kernel-rendered `spec.md` provenance lines.
 
 ## model.yaml and the provenance trail
 
-`model.yaml` (at `.emery/slices/<slice>/model.yaml`) is the single structured record of a refined slice. It holds the requirement set with **inline provenance** — for each requirement, which claims contributed and which one won — plus the task list and a small header. It is the artifact `emery slice validate` checks for drift, and it is what later steps read instead of re-parsing the markdown.
+`model.yaml` (at `.emery/change/slices/<slice>/model.yaml`) is the single structured record of a refined slice. It holds the requirement set with **inline provenance** — for each requirement, which claims contributed and which one won — plus the task list and a small header. It is the artifact `emery slice validate` checks for drift, and it is what later steps read instead of re-parsing the markdown.
 
 There is no separate `provenance.yaml` on disk. The full audit view is *projected on demand* from `model.yaml` and the Evidence files by `emery slice provenance`, so the trail can never drift out of sync with the spec.
 

@@ -5,7 +5,7 @@
 use std::fs;
 use std::path::Path;
 
-use adapter::answers::PHASE_REPORT_ANSWER_SCHEMA;
+use adapter::answers::PHASE_REPORT_ANSWER;
 use adapter::seam::{
     ArtifactStage, BuildContext, Context, DiagnosticSource, FindingArtifact, FindingEvidence,
     FindingKind, Input, MergePhase, Payload, PhaseFinding, PhaseOutcome, PhaseReport, PhaseSource,
@@ -26,7 +26,7 @@ fn ctx<'a>(root: &'a Path, mcp_url: Option<&str>) -> Context<'a> {
         adapter_id: "target:vectis",
         project_root: root,
         mcp_url: mcp_url.map(str::to_owned),
-        lend: root.display().to_string(),
+        lend: Some(root.display().to_string()),
     }
 }
 
@@ -139,9 +139,9 @@ async fn build_phase_legs() {
     ]);
     let input = |path: &str| Payload::Path(path.to_string());
     let inputs = vec![
-        Input::Proposal(input(".emery/slices/demo/proposal.md")),
-        Input::Spec(input(".emery/slices/demo/specs/core/spec.md")),
-        Input::Design(input(".emery/slices/demo/design.md")),
+        Input::Proposal(input(".emery/change/slices/demo/proposal.md")),
+        Input::Spec(input(".emery/change/slices/demo/specs/core/spec.md")),
+        Input::Design(input(".emery/change/slices/demo/design.md")),
     ];
 
     let report = Adapter::build(
@@ -207,8 +207,8 @@ fn assert_composition_leg(request: &Request, stage_display: &str) {
     );
     let user = &request.messages[0].content;
     assert!(
-        user.contains("/.emery/slices/demo/proposal.md")
-            && user.contains("/.emery/slices/demo/design.md"),
+        user.contains("/.emery/change/slices/demo/proposal.md")
+            && user.contains("/.emery/change/slices/demo/design.md"),
         "typed inputs render as artifact-rooted path sections: {user}"
     );
     assert!(!user.contains("PROPOSAL-BODY"), "artifact bodies are not inlined");
@@ -264,7 +264,7 @@ fn assert_generation_legs(requests: &[Request]) {
 fn assert_report_leg(request: &Request, stage_display: &str) {
     let (name, schema) = schema_format(request);
     assert_eq!(name, "build-report");
-    assert_eq!(schema, PHASE_REPORT_ANSWER_SCHEMA);
+    assert_eq!(schema, PHASE_REPORT_ANSWER);
     let report_system = request.system.as_deref().unwrap();
     assert!(
         report_system.contains("# Vectis build — phase report"),
@@ -562,7 +562,7 @@ async fn verify_single_pass() {
     assert_eq!(requests.len(), 1, "verify is one pass — no retry loop");
     let (name, schema) = schema_format(&requests[0]);
     assert_eq!(name, "verify");
-    assert_eq!(schema, PHASE_REPORT_ANSWER_SCHEMA);
+    assert_eq!(schema, PHASE_REPORT_ANSWER);
     let system = requests[0].system.as_deref().unwrap();
     assert!(system.contains("# Vectis target — verify prompt"));
     assert!(system.contains("One pass only"), "single-pass contract in the prompt");
@@ -632,6 +632,51 @@ async fn repair_single_pass() {
         "artifact-stage fixes are routed to the stage"
     );
     assert_system_budget(&requests[0], "repair", 4_900); // baseline 4_427
+}
+
+// Brief entries arrive with `source: deterministic`; repair runs no
+// in-guest gate, so check_pass normalizes them before the RFC-90 D2
+// gate.
+#[tokio::test]
+async fn repair_brief_deterministic_findings_sanitized() {
+    let tmp = TempDir::new().unwrap();
+    let stage = TempDir::new().unwrap();
+    let unrepaired = r#"{"outcome":"completed","source":"model-assisted","findings":[{
+        "title":"[core-verify-stamp-missing] shared/.vectis/verify.ok not found",
+        "severity":"important",
+        "source":"deterministic",
+        "kind":"violation",
+        "artifact":"code",
+        "location":{"path":"shared/.vectis/verify.ok"},
+        "evidence":{"kind":"snippet","value":"Repair target forbids stamp writing."},
+        "impact":"Core verify stamp absent until the engine runs the core verify gate.",
+        "remediation":"Engine: run core verify and write shared/.vectis/verify.ok."
+    }],
+    "written":[{"root":"workspace","path":"shared/src/lib.rs"}]}"#;
+    let model = Harness::answering([unrepaired]);
+    let findings =
+        vec![blocking_finding("[core-verify-stamp-missing] shared/.vectis/verify.ok not found")];
+
+    let report = Adapter::repair(
+        &model,
+        &ctx(tmp.path(), None),
+        "demo",
+        RepairOrigin::Verification,
+        &findings,
+        None,
+        &staged_workspace(tmp.path(), stage.path()),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(report.source, PhaseSource::ModelAssisted);
+    assert_eq!(report.findings.len(), 1);
+    assert_eq!(
+        report.findings[0].source,
+        DiagnosticSource::ModelAssisted,
+        "brief-derived deterministic attribution is sanitized to model-assisted"
+    );
+    assert_check_shape(&report);
 }
 
 #[tokio::test]
@@ -776,9 +821,26 @@ async fn merge_preflight_deterministic() {
     assert_eq!(report.status, Status::Success);
     assert!(model.requests().is_empty(), "preflight is deterministic: no leg");
 
+    // Detached change home: `.` is the change root (`slices/<slice>/`).
+    let detached = TempDir::new().unwrap();
+    fs::write(detached.path().join("plan.yaml"), "name: demo\n").unwrap();
+    fs::create_dir_all(detached.path().join("slices/demo")).unwrap();
+    fs::write(detached.path().join("slices/demo/composition.yaml"), "screens: [broken\n").unwrap();
+    let report = Adapter::merge(
+        &model,
+        &ctx(detached.path(), None),
+        "demo",
+        MergePhase::Preflight,
+        &workspace(detached.path()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(report.status, Status::Failure);
+    assert!(model.requests().is_empty(), "detached staged failure spends no judgment leg");
+
     // A broken staged slice composition parks the merge before the fold.
-    fs::create_dir_all(tmp.path().join(".emery/slices/demo")).unwrap();
-    fs::write(tmp.path().join(".emery/slices/demo/composition.yaml"), "screens: [broken\n")
+    fs::create_dir_all(tmp.path().join(".emery/change/slices/demo")).unwrap();
+    fs::write(tmp.path().join(".emery/change/slices/demo/composition.yaml"), "screens: [broken\n")
         .unwrap();
     let report = Adapter::merge(
         &model,

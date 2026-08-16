@@ -58,7 +58,7 @@ One type per schema file. A single binding file may contain multiple related end
 During a slice's define phase, proposed contract modifications live in the slice directory:
 
 ```text
-.emery/slices/add-oauth/
+.emery/change/slices/add-oauth/
 ├── contracts/
 │   ├── schemas/
 │   │   └── oauth-token.yaml        # New type
@@ -89,13 +89,13 @@ When the merge phase processes a slice:
 
 ### Conflict Detection
 
-Two concurrent changes that both modify the same contract file (e.g. both add paths to `http/user-api.yaml`) will conflict. The baseline-conflict check (surfaced by `emery slice validate`, enforced by the merge phase) detects this: if the baseline file was modified after the slice's `defined-at` timestamp, the merge is blocked. Resolution: re-run `emery plan execute` so the slice re-refines against the updated baseline.
+Two concurrent changes that both modify the same contract file (e.g. both add paths to `http/user-api.yaml`) will conflict. The baseline-conflict check (surfaced by `emery slice validate`, enforced by the merge phase) detects this: if the baseline file was modified after the slice's `defined-at` timestamp, the merge is blocked. Resolution: re-run `emery plan refine` so the slice re-refines against the updated baseline, then `emery plan execute`.
 
 ## Baseline vs Change-Level
 
 | Aspect | Baseline | Change-Level |
 |--------|----------|-------------|
-| Location | `contracts/` | `.emery/slices/<name>/contracts/` |
+| Location | `contracts/` | `.emery/change/slices/<name>/contracts/` |
 | Scope | Full platform contract surface | Only files this slice adds or replaces |
 | Lifetime | Persists across changes | Exists during the slice lifecycle, merged or dropped |
 | Authority | Source of truth for the current contract state | Proposed modification, pending review and merge |

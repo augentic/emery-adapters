@@ -28,12 +28,12 @@ cargo make eval contracts-design --restart
 
 Each case owns its own sandbox at `sandbox/<case>/` which allows for review and continued runs without having to re-run the entire workflow.
 
- Build reports (`.emery/slices/<slice>/build/report.yaml`) are available for review on build success. To correct input or output, edit the adapter prose and re-run the case using `--restart`.
+ Build reports (`.emery/change/slices/<slice>/build/report.yaml`) are available for review on build success. To correct input or output, edit the adapter prose and re-run the case using `--restart`.
 
 Continue or debug a run explicitly using the CLI:
 
 ```bash
-cargo make lab -- --project-dir sandbox/orders-contracts plan execute
+cargo make lab -- --change-dir sandbox/orders-contracts plan execute
 ```
 
 ## Catalog
@@ -46,15 +46,18 @@ cargo make lab -- --project-dir sandbox/orders-contracts plan execute
 | `omnia-health`         | build    | Tiny create-mode crate (`GET /health`)                         |
 | `vectis-single-screen` | build    | Single-screen feature on `core + ios` (needs `$TEMPLATE_DIR`)  |
 | `vectis-open-gap-fab`  | build    | Open-GAP FAB inventiveness desk-check (`core + ios`; needs `$TEMPLATE_DIR`) — [case README](cases/vectis-open-gap-fab/README.md) |
-| `orders-contracts`     | workflow | docs → contracts (`[examples/wasm/fixture](../wasm/fixture/)`) |
+| `orders-contracts`     | workflow | docs → contracts over a reviewed definition home (`[examples/wasm/fixture](../wasm/fixture/)`) |
 | `omnia-r9k`            | workflow | `at_r9k_position_adapter` → omnia (cloned on first run)        |
+| `orders-omnia`         | workflow | two-target docs → contracts, then intent → omnia              |
+| `orders-cap-one`       | workflow | the cap-comparison pair's serial half (`cap = 1`) over the orders-omnia shape, with a shared blind acceptance set (RFC-96 D11) |
+| `orders-cap-four`      | workflow | the cap-comparison pair's concurrent half (`cap = 4`), same definition, fixture, and blind set as `orders-cap-one` |
 
 ## Continuing a run
 
 Each case owns one stable retained sandbox at the repository-root `sandbox/<id>/` (composition-owned; beside the wasm examples' `sandbox/wasm-*/` trees), kept on success and failure alike. `--restart` is the only runner-owned reset; an existing sandbox without it refuses before mutation. The runner never infers workflow progress — continue or debug a retained sandbox explicitly through the native verbs:
 
 ```bash
-cargo make lab -- --project-dir sandbox/orders-contracts plan execute
+cargo make lab -- --change-dir sandbox/orders-contracts plan execute
 ```
 
 ## Manual native verbs
@@ -62,11 +65,11 @@ cargo make lab -- --project-dir sandbox/orders-contracts plan execute
 For maximum control (skip the case runner, keep a project across sessions), drive the catalog yourself:
 
 ```bash
-cargo make lab -- --project-dir /path/to/project init omnia --name <name>
-cargo make lab -- --project-dir /path/to/project plan author <change> \
-  --intent "…" \
-  --source "legacy=typescript:legacy/at_r9k_position_adapter"
-cargo make lab -- --project-dir /path/to/project plan execute
+cargo make lab -- --project-dir /path/to/product init omnia --name <name>
+cargo make lab -- --change-dir /path/to/change plan author <change> \
+  --from /path/to/definition --wave deliver
+cargo make lab -- --change-dir /path/to/change plan refine
+cargo make lab -- --change-dir /path/to/change plan execute
 ```
 
 This is the same native seam as the case runner; you own lifecycle and grading.
@@ -80,13 +83,16 @@ Hard assertions only (the shared `probe` case runner):
 | ------------------ | ---------- | -------------------------------------------------------------- |
 | workflow (plan)    | Entries    | `plan author` produces at least one entry, every entry `pending` |
 | workflow (execute) | Lifecycle  | Every plan entry is `done`                                     |
-| workflow (execute) | Provenance | Every evidenced requirement carries sources; ids are present   |
+| workflow (execute) | Provenance | Every evidenced requirement on each materialized accepted CID carries sources; ids are present |
+| workflow (execute) | Blind set  | When the case declares `blind`, every `accept` needle appears in the accepted baseline (the set is never copied into the sandbox, so workflow model calls cannot read it) |
 | build              | Lifecycle  | Slice metadata is `built`                                      |
-| build              | Report     | `.emery/slices/<slice>/build/report.yaml` exists             |
+| build              | Report     | `.emery/change/slices/<slice>/build/report.yaml` exists             |
 | build              | Artifacts  | Every `expect` path holds a file inside the sandbox            |
 
 
 Per-leg request / repair counts are **reported, not asserted**. A leg drifting from zero repairs toward the budget is the early signal that a prompt or answer-schema change degraded the model's first answer.
+
+After a completed workflow execute the runner also renders the **coordination-cost report** (RFC-96 D11) — accepted requirements/CIDs and code growth per target, time to first accepted result, build starts and rebuilds, waves per target, touched-path heat, per-leg request counts, and reported cost. Everything projects from journal facts, build records, and request telemetry — nothing is written into workflow artifacts, and cost stays `unknown` until RFC-92 provider usage facts land. Run a cap-comparison pair (`orders-cap-one` vs `orders-cap-four`) and compare the two reports.
 
 Grading does **not** assert target-specific quality (contract YAML shape, generated Rust compiling outside the adapter's own verify-repair, etc.). Inspect the retained sandbox for that.
 
@@ -112,7 +118,7 @@ source trees that cannot ship as committed fixtures, e.g. the
 the cached tree.
 
 - `build` — `slice` + `expect`: the fixture carries the exact refined state the build phase consumes (`.emery/project.yaml`, the slice's `metadata.yaml` at `status: refined`, proposal / design / tasks / specs, and any source material such as `vendor/`). The runner drives the build orchestration for that slice once and gates on `built` metadata, the authoritative `build/report.yaml`, and every confined `expect` path.
-- `workflow` — `target` + `change` + `intent` / `[sources]`: init, `plan author`, then (past `--until plan`) the genuine drained `plan execute` (running it is the approval); `--until finalize` adds `plan archive`. Gates: a non-empty authored plan with every entry pending, every entry `done` after execute, then provenance grading.
+- `workflow` — `change` + `wave` + a definition home (`definition = "…"` or sibling `definition/`): the runner copies the home, inits each path-locator target tree, then drives `plan author --from --wave` → `plan refine` → `plan execute`. `--until plan` / `refine` stop early; `--until finalize` adds `plan archive`. In-place mint from `intent` / `[sources]` remains for engine probe tests. Gates: a non-empty authored plan with every entry pending, every entry `done` after execute, then provenance grading over materialized accepted CIDs. Two optional RFC-96 D11 keys: `cap = <1..=8>` injects `EMERY_POOL` for the run (`1` is the serial reference of a cap-comparison pair), and `blind = "<path>"` names a TOML `accept = […]` blind acceptance set graded only against the accepted baseline — never copied into the sandbox.
 
 Linked adapters need only the directory. A third-party adapter also needs a Cargo dep on `eval` and a catalog line in `[src/main.rs](src/main.rs)`.
 
