@@ -1094,6 +1094,7 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 [[package]]
 name = "emery-adapter"
 version = "0.38.0"
+source = "git+https://github.com/augentic/emery#b97a2b588198b3a92b90cdd215453adf03be3406"
 dependencies = [
  "omnia-guest",
  "omnia-wasi-http",
@@ -1107,6 +1108,7 @@ dependencies = [
 [[package]]
 name = "emery-artifacts"
 version = "0.38.0"
+source = "git+https://github.com/augentic/emery#b97a2b588198b3a92b90cdd215453adf03be3406"
 dependencies = [
  "emery-diagnostics",
  "emery-error",
@@ -1123,6 +1125,7 @@ dependencies = [
 [[package]]
 name = "emery-change"
 version = "0.38.0"
+source = "git+https://github.com/augentic/emery#b97a2b588198b3a92b90cdd215453adf03be3406"
 dependencies = [
  "emery-artifacts",
  "emery-diagnostics",
@@ -1143,6 +1146,7 @@ dependencies = [
 [[package]]
 name = "emery-diagnostics"
 version = "0.38.0"
+source = "git+https://github.com/augentic/emery#b97a2b588198b3a92b90cdd215453adf03be3406"
 dependencies = [
  "base16ct",
  "schemars",
@@ -1155,6 +1159,7 @@ dependencies = [
 [[package]]
 name = "emery-error"
 version = "0.38.0"
+source = "git+https://github.com/augentic/emery#b97a2b588198b3a92b90cdd215453adf03be3406"
 dependencies = [
  "serde-saphyr",
  "thiserror 2.0.20",
@@ -1163,6 +1168,7 @@ dependencies = [
 [[package]]
 name = "emery-mock"
 version = "0.38.0"
+source = "git+https://github.com/augentic/emery#b97a2b588198b3a92b90cdd215453adf03be3406"
 dependencies = [
  "emery-adapter",
  "emery-artifacts",
@@ -1180,6 +1186,7 @@ dependencies = [
 [[package]]
 name = "emery-native"
 version = "0.38.0"
+source = "git+https://github.com/augentic/emery#b97a2b588198b3a92b90cdd215453adf03be3406"
 dependencies = [
  "axum",
  "emery-adapter",
@@ -1199,6 +1206,7 @@ dependencies = [
 [[package]]
 name = "emery-probe"
 version = "0.38.0"
+source = "git+https://github.com/augentic/emery#b97a2b588198b3a92b90cdd215453adf03be3406"
 dependencies = [
  "anyhow",
  "clap",
@@ -1224,6 +1232,7 @@ dependencies = [
 [[package]]
 name = "emery-project"
 version = "0.38.0"
+source = "git+https://github.com/augentic/emery#b97a2b588198b3a92b90cdd215453adf03be3406"
 dependencies = [
  "emery-artifacts",
  "emery-diagnostics",
@@ -1248,10 +1257,12 @@ dependencies = [
 [[package]]
 name = "emery-prose"
 version = "0.38.0"
+source = "git+https://github.com/augentic/emery#b97a2b588198b3a92b90cdd215453adf03be3406"
 
 [[package]]
 name = "emery-slice"
 version = "0.38.0"
+source = "git+https://github.com/augentic/emery#b97a2b588198b3a92b90cdd215453adf03be3406"
 dependencies = [
  "emery-artifacts",
  "emery-diagnostics",
@@ -1272,6 +1283,7 @@ dependencies = [
 [[package]]
 name = "emery-system"
 version = "0.38.0"
+source = "git+https://github.com/augentic/emery#b97a2b588198b3a92b90cdd215453adf03be3406"
 dependencies = [
  "emery-artifacts",
  "emery-diagnostics",
@@ -1290,6 +1302,7 @@ dependencies = [
 [[package]]
 name = "emery-transport"
 version = "0.38.0"
+source = "git+https://github.com/augentic/emery#b97a2b588198b3a92b90cdd215453adf03be3406"
 dependencies = [
  "clap",
  "emery-artifacts",
