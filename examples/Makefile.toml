@@ -13,9 +13,9 @@ VECTIS_EXEMPLAR_DIR = "${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/../vectis-exemp
 # one (an existing sandbox resumes; `--restart` reruns from fresh
 # state), any emery verb passes through (`cargo make eval <id> plan
 # status` binds the case's retained sandbox). The probe client owns
-# the log presets (case runs default to the debug preset, passthrough
-# to `info`); cargo-make needs `--` only when the first token is a
-# cargo-make flag.
+# the log presets (flagless invocations default to `info`, `--debug`
+# adds the backend dumps); cargo-make needs `--` only when the first
+# token is a cargo-make flag.
 [tasks.eval]
 env_files = [".env"]
 command = "cargo"
