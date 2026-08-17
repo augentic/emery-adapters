@@ -109,7 +109,7 @@ sandbox/<id>/
 
 Grading checks lifecycle, the report, `expect` paths, and (workflow) provenance; target quality is still a human look — see [eval README § Grading](examples/eval/README.md#grading). Per-leg repair counts are reported, not asserted; drift toward the repair budget is an early signal that prose or answer-schema changes degraded the first answer.
 
-A failed or stopped workflow run is continued — graded — by re-running the same command: an existing sandbox holding an authored plan resumes at `plan refine`. Build sandboxes and author-incomplete workflow sandboxes refuse without `--restart` (build-case repair is `--restart`). Inspect a retained sandbox with a bound native verb:
+A failed or stopped workflow run is continued — graded — by re-running the same command: an existing sandbox holding an authored plan resumes at `plan refine`; a bound-not-authored sandbox re-runs `plan author`, which resumes its open and parked domains. Build sandboxes and unbound workflow sandboxes refuse without `--restart` (build-case repair is `--restart`). Inspect a retained sandbox with a bound native verb:
 
 ```bash
 cargo make eval orders-contracts plan status

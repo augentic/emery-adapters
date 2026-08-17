@@ -2,13 +2,19 @@
 
 Live-model eval cases for first-party adapters, over real `emery` verbs and deterministic grading (not a model). Day-to-day repair loop: [repo README](../../README.md).
 
+
 | Reach for a build case when…                           | Prefer a workflow case when…                          |
 | ------------------------------------------------------ | ----------------------------------------------------- |
 | You changed adapter prose                              | You need survey → extract → synthesis → build → merge |
 | You have a committed refined slice fixture             | Sources are real trees (docs, TypeScript, …)          |
-| You care about one build's report + `expect` artifacts | You care about plan progress and the merged baseline |
+| You care about one build's report + `expect` artifacts | You care about plan progress and the merged baseline  |
+
+
+
 
 ## Quick start
+
+
 
 ### Prerequisites
 
@@ -24,6 +30,8 @@ cargo make eval omnia-r9k --restart
 cargo make eval contracts-design --restart
 ```
 
+
+
 ### Eval sandbox
 
 Each case owns its own sandbox at `sandbox/<case>/` which allows for review and continued runs without having to re-run the entire workflow.
@@ -36,30 +44,37 @@ Inspect or debug a retained run with a bound native verb:
 cargo make eval orders-contracts plan status
 ```
 
+
+
 ## Catalog
 
 
-| Id                     | Kind     | Shape                                                          |
-| ---------------------- | -------- | -------------------------------------------------------------- |
-| `contracts-design`     | build    | Contracts from a design document                               |
-| `contracts-import`     | build    | Import vendored OpenAPI                                        |
-| `omnia-health`         | build    | Tiny create-mode crate (`GET /health`)                         |
-| `vectis-single-screen` | build    | Single-screen feature on `core + ios` (needs `$TEMPLATE_DIR`)  |
+| Id                     | Kind     | Shape                                                                                                                            |
+| ---------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `contracts-design`     | build    | Contracts from a design document                                                                                                 |
+| `contracts-import`     | build    | Import vendored OpenAPI                                                                                                          |
+| `omnia-health`         | build    | Tiny create-mode crate (`GET /health`)                                                                                           |
+| `vectis-single-screen` | build    | Single-screen feature on `core + ios` (needs `$TEMPLATE_DIR`)                                                                    |
 | `vectis-open-gap-fab`  | build    | Open-GAP FAB inventiveness desk-check (`core + ios`; needs `$TEMPLATE_DIR`) — [case README](cases/vectis-open-gap-fab/README.md) |
-| `orders-contracts`     | workflow | docs → contracts over a reviewed definition home (`[examples/wasm/fixture](../wasm/fixture/)`) |
-| `omnia-r9k`            | workflow | `at_r9k_position_adapter` → omnia (cloned on first run)        |
-| `orders-omnia`         | workflow | two-target docs → contracts, then intent → omnia              |
-| `orders-cap-one`       | workflow | the cap-comparison pair's serial half (`cap = 1`) over the orders-omnia shape, with a shared blind acceptance set (RFC-96 D11) |
-| `orders-cap-four`      | workflow | the cap-comparison pair's concurrent half (`cap = 4`), same definition, fixture, and blind set as `orders-cap-one` |
+| `orders-contracts`     | workflow | docs → contracts over a reviewed definition home (`[examples/wasm/fixture](../wasm/fixture/)`)                                   |
+| `omnia-r9k`            | workflow | `at_r9k_position_adapter` → omnia (cloned on first run)                                                                          |
+| `orders-omnia`         | workflow | two-target docs → contracts, then intent → omnia                                                                                 |
+| `orders-cap-one`       | workflow | the cap-comparison pair's serial half (`cap = 1`) over the orders-omnia shape, with a shared blind acceptance set (RFC-96 D11)   |
+| `orders-cap-four`      | workflow | the cap-comparison pair's concurrent half (`cap = 4`), same definition, fixture, and blind set as `orders-cap-one`               |
+
+
+
 
 ## Continuing a run
 
-Each case owns one stable retained sandbox at the repository-root `sandbox/<id>/` (composition-owned; beside the wasm examples' `sandbox/wasm-*/` trees), kept on success and failure alike. A failed or stopped **workflow** run is continued — graded — by re-running the same command: a sandbox holding an authored plan resumes at `plan refine` (the engine's own re-run contract) and still reaches the graded tail. `--restart` is the only runner-owned reset; build sandboxes and author-incomplete workflow sandboxes refuse without it (a single build phase has no resume semantics — build-case repair is `--restart`). Inspect a retained sandbox with a bound native verb — a leading case id binds that case's sandbox-local stores:
+Each case owns one stable retained sandbox at the repository-root `sandbox/<id>/` (composition-owned; beside the wasm examples' `sandbox/wasm-*/` trees), kept on success and failure alike. A failed or stopped **workflow** run is continued — graded — by re-running the same command: a sandbox holding an authored plan resumes at `plan refine` (the engine's own re-run contract) and still reaches the graded tail; a bound-not-authored sandbox re-runs `plan author`, which resumes its open and parked domains. `--restart` is the only runner-owned reset; build sandboxes and unbound workflow sandboxes refuse without it (a single build phase has no resume semantics — build-case repair is `--restart`). Inspect a retained sandbox with a bound native verb — a leading case id binds that case's sandbox-local stores:
 
 ```bash
 cargo make eval orders-contracts           # resume the parked run, graded
 cargo make eval orders-contracts plan status   # inspect it
 ```
+
+
 
 ## Manual native verbs
 
@@ -80,15 +95,15 @@ This is the same native seam as the case runner; you own lifecycle and grading.
 Hard assertions only (the shared `probe` case runner):
 
 
-| Case kind          | Check      | Pass condition                                                 |
-| ------------------ | ---------- | -------------------------------------------------------------- |
-| workflow (plan)    | Entries    | `plan author` produces at least one entry, every entry `pending` |
-| workflow (execute) | Lifecycle  | Every plan entry is `done`                                     |
-| workflow (execute) | Provenance | Every evidenced requirement on each materialized accepted CID carries sources; ids are present |
+| Case kind          | Check      | Pass condition                                                                                                                                                            |
+| ------------------ | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| workflow (plan)    | Entries    | `plan author` produces at least one entry, every entry `pending`                                                                                                          |
+| workflow (execute) | Lifecycle  | Every plan entry is `done`                                                                                                                                                |
+| workflow (execute) | Provenance | Every evidenced requirement on each materialized accepted CID carries sources; ids are present                                                                            |
 | workflow (execute) | Blind set  | When the case declares `blind`, every `accept` needle appears in the accepted baseline (the set is never copied into the sandbox, so workflow model calls cannot read it) |
-| build              | Lifecycle  | Slice metadata is `built`                                      |
-| build              | Report     | `.emery/change/slices/<slice>/build/report.yaml` exists             |
-| build              | Artifacts  | Every `expect` path holds a file inside the sandbox            |
+| build              | Lifecycle  | Slice metadata is `built`                                                                                                                                                 |
+| build              | Report     | `.emery/change/slices/<slice>/build/report.yaml` exists                                                                                                                   |
+| build              | Artifacts  | Every `expect` path holds a file inside the sandbox                                                                                                                       |
 
 
 Per-leg request / repair counts are **reported, not asserted**. A leg drifting from zero repairs toward the budget is the early signal that a prompt or answer-schema change degraded the model's first answer.
@@ -125,7 +140,7 @@ Linked adapters need only the directory. A third-party adapter also needs a Carg
 
 ## Vectis greenfield prerequisite
 
-`vectis-single-screen`, `vectis-open-gap-fab`, and any live Vectis build that materializes shells need a local [`vectis-exemplar`](https://github.com/augentic/vectis-exemplar) checkout.
+`vectis-single-screen`, `vectis-open-gap-fab`, and any live Vectis build that materializes shells need a local `[vectis-exemplar](https://github.com/augentic/vectis-exemplar)` checkout.
 
 `cargo make eval` auto-sets `VECTIS_EXEMPLAR_DIR` to the workspace-sibling `../vectis-exemplar` when that checkout exists and the env var is unset. That matters because the eval sandbox is `sandbox/<case>/`: without the export, the build prelude's default `../vectis-exemplar` would resolve to `sandbox/vectis-exemplar`. For non-sibling layouts, export `VECTIS_EXEMPLAR_DIR` yourself to an absolute path before invoking make.
 
