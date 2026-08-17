@@ -1,12 +1,11 @@
 //! Declared-platform shell legs: the closed iOS / Android leg table,
-//! the `project.yaml.platforms` read that scopes them, and the
+//! the fail-closed `project.yaml.platforms` scope resolution, and the
 //! per-shell write-leg runner.
 
 use std::path::Path;
 
 use adapter::seam::{Context, Error};
 use adapter::{Model, phase};
-use serde_json::Value;
 
 use super::{BINDING_NOTE, REFERENCES_POINTER, assemble};
 
@@ -29,21 +28,19 @@ const SHELL_LEGS: [ShellLeg; 2] = [
     },
 ];
 
-// Absent / unreadable `project.yaml.platforms` → both shells; `web` /
-// `desktop` have no prompt and never match.
-pub(super) fn declared_shell_legs(project_root: &Path) -> Vec<&'static ShellLeg> {
-    let declared = declared_platforms(project_root);
-    SHELL_LEGS
-        .iter()
-        .filter(|leg| declared.as_ref().is_none_or(|set| set.iter().any(|p| p == leg.name)))
-        .collect()
-}
-
-fn declared_platforms(project_root: &Path) -> Option<Vec<String>> {
-    let source = std::fs::read_to_string(project_root.join(".emery/project.yaml")).ok()?;
-    let doc: Value = serde_saphyr::from_str(&source).ok()?;
-    let platforms = doc.get("platforms")?.as_array()?;
-    Some(platforms.iter().filter_map(Value::as_str).map(str::to_string).collect())
+/// The shell legs the project's declared platform set puts in scope.
+/// `web` / `desktop` have no prompt and never match.
+///
+/// Fails closed (A15): a missing or unreadable
+/// `project.yaml.platforms` declaration is an error the build surfaces
+/// as a blocking finding — never a guessed both-shells set.
+///
+/// # Errors
+///
+/// The loader's detail line when the declaration cannot be resolved.
+pub(super) fn declared_shell_legs(project_root: &Path) -> Result<Vec<&'static ShellLeg>, String> {
+    let declared = crate::validate::engine::load_shell_platforms(project_root)?;
+    Ok(SHELL_LEGS.iter().filter(|leg| declared.iter().any(|p| p == leg.name)).collect())
 }
 
 /// Run the write leg for every declared shell, in table order.
@@ -52,10 +49,10 @@ fn declared_platforms(project_root: &Path) -> Option<Vec<String>> {
 /// substitution; the guest does not re-render them from embedded
 /// templates (sibling checkout is outside the project mount).
 pub(super) async fn run_write_legs<P: Model>(
-    model: &P, ctx: &Context<'_>, slice: &str, change_root: &Path, scaffold_block: &str,
+    model: &P, ctx: &Context<'_>, slice: &str, legs: &[&'static ShellLeg], scaffold_block: &str,
 ) -> Result<Vec<(&'static str, phase::PhaseAnswer)>, Error> {
     let mut outcomes = Vec::new();
-    for shell in declared_shell_legs(change_root) {
+    for shell in legs {
         let system = assemble(&["prompts/build.md", shell.write_prompt]);
         let user = format!(
             "Run the {name} shell write phase of the vectis build for slice `{slice}`: \

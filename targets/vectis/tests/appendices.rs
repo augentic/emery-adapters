@@ -26,6 +26,15 @@ fn write_assets_project(yaml: &str, files: &[&str]) -> (TempDir, PathBuf) {
     let assets_path = design.join("assets.yaml");
     std::fs::create_dir_all(&design).expect("mkdir design-system");
     std::fs::write(&assets_path, yaml).expect("write assets.yaml");
+    // The platform declaration is mandatory (A15): the validator fails
+    // closed instead of assuming a both-shells set.
+    let emery = tmp.path().join(".emery");
+    std::fs::create_dir_all(&emery).expect("mkdir .emery");
+    std::fs::write(
+        emery.join("project.yaml"),
+        "name: test-app\nadapter: vectis\nplatforms:\n  - core\n  - ios\n  - android\n",
+    )
+    .expect("write project.yaml");
     for rel in files {
         let path = design.join(rel);
         std::fs::create_dir_all(path.parent().expect("parent")).expect("mkdir parent");

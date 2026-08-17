@@ -4,23 +4,47 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
+use super::{ContractFinding, RULE_TREE_READABLE, RULE_YAML_WELL_FORMED};
+
 pub struct TopLevelDoc {
     pub(super) path: PathBuf,
     pub(super) value: Value,
 }
 
-// Parse errors are swallowed; the format verifier owns malformed YAML.
-pub fn collect_top_level_docs(contracts_dir: &Path) -> Vec<TopLevelDoc> {
+/// Walk `contracts_dir` into the top-level contract set, failing closed
+/// (A4): traversal failures and unreadable or unparseable YAML become
+/// blocking findings instead of silently shrinking the document set. A
+/// parsed document without a root `openapi:` / `asyncapi:` marker is a
+/// fragment (shared components, JSON Schema), not a contract — skipped
+/// by identification, not by error.
+pub fn collect_top_level_docs(contracts_dir: &Path) -> (Vec<TopLevelDoc>, Vec<ContractFinding>) {
     let mut paths = Vec::new();
-    collect_yaml_paths(contracts_dir, &mut paths);
+    let mut findings = Vec::new();
+    collect_yaml_paths(contracts_dir, &mut paths, &mut findings);
     paths.sort();
     let mut out: Vec<TopLevelDoc> = Vec::new();
     for entry in paths {
-        let Ok(content) = std::fs::read_to_string(&entry) else {
-            continue;
+        let content = match std::fs::read_to_string(&entry) {
+            Ok(content) => content,
+            Err(err) => {
+                findings.push(ContractFinding {
+                    path: entry,
+                    rule_id: RULE_YAML_WELL_FORMED,
+                    detail: format!("contract file is unreadable: {err}"),
+                });
+                continue;
+            }
         };
-        let Ok(value) = serde_saphyr::from_str::<Value>(&content) else {
-            continue;
+        let value = match serde_saphyr::from_str::<Value>(&content) {
+            Ok(value) => value,
+            Err(err) => {
+                findings.push(ContractFinding {
+                    path: entry,
+                    rule_id: RULE_YAML_WELL_FORMED,
+                    detail: format!("contract file is not valid YAML: {err}"),
+                });
+                continue;
+            }
         };
         if !is_top_level(&value) {
             continue;
@@ -29,20 +53,47 @@ pub fn collect_top_level_docs(contracts_dir: &Path) -> Vec<TopLevelDoc> {
     }
 
     out.sort_by(|a, b| a.path.cmp(&b.path));
-    out
+    (out, findings)
 }
 
-fn collect_yaml_paths(dir: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
+fn collect_yaml_paths(dir: &Path, out: &mut Vec<PathBuf>, findings: &mut Vec<ContractFinding>) {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(err) => {
+            findings.push(ContractFinding {
+                path: dir.to_path_buf(),
+                rule_id: RULE_TREE_READABLE,
+                detail: format!("contracts directory is unreadable: {err}"),
+            });
+            return;
+        }
     };
-    for entry in entries.flatten() {
+    for entry in entries {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(err) => {
+                findings.push(ContractFinding {
+                    path: dir.to_path_buf(),
+                    rule_id: RULE_TREE_READABLE,
+                    detail: format!("directory entry is unreadable: {err}"),
+                });
+                continue;
+            }
+        };
         let path = entry.path();
-        let Ok(file_type) = entry.file_type() else {
-            continue;
+        let file_type = match entry.file_type() {
+            Ok(file_type) => file_type,
+            Err(err) => {
+                findings.push(ContractFinding {
+                    path,
+                    rule_id: RULE_TREE_READABLE,
+                    detail: format!("entry metadata is unreadable: {err}"),
+                });
+                continue;
+            }
         };
         if file_type.is_dir() {
-            collect_yaml_paths(&path, out);
+            collect_yaml_paths(&path, out, findings);
         } else if file_type.is_file() && path.extension().is_some_and(|ext| ext == "yaml") {
             out.push(path);
         }

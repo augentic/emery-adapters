@@ -6,18 +6,36 @@ use serde_json::Value;
 
 const ASSET_SHELL_PLATFORMS: &[&str] = &["ios", "android"];
 
-/// Load `ios` / `android` entries declared in `project.yaml.platforms`.
-pub fn load_shell_platforms(project_root: &Path) -> Vec<String> {
+/// Load the `ios` / `android` entries declared in
+/// `project.yaml.platforms`.
+///
+/// Fails closed (A15): a missing or unreadable declaration is an error
+/// the caller surfaces as a blocking finding — never a guessed
+/// both-shells set. A declared set with no shell members (core-only)
+/// is the legal empty scope.
+///
+/// # Errors
+///
+/// One human-readable detail line when `project.yaml` is unreadable,
+/// unparseable, or declares no `platforms` array.
+pub fn load_shell_platforms(project_root: &Path) -> Result<Vec<String>, String> {
     let config_path = project_root.join(".emery").join("project.yaml");
-    let Ok(source) = std::fs::read_to_string(&config_path) else {
-        return fallback_platforms();
-    };
-    let doc: Value = match serde_saphyr::from_str(&source) {
-        Ok(doc) => doc,
-        Err(_) => return fallback_platforms(),
-    };
+    let source = std::fs::read_to_string(&config_path).map_err(|err| {
+        format!(
+            "platform declaration unreadable at {}: {err}; declare the project platform set \
+             with `emery init --upgrade --platforms <csv>`",
+            config_path.display()
+        )
+    })?;
+    let doc: Value = serde_saphyr::from_str(&source).map_err(|err| {
+        format!("project.yaml at {} is not parseable YAML: {err}", config_path.display())
+    })?;
     let Some(platforms) = doc.get("platforms").and_then(Value::as_array) else {
-        return fallback_platforms();
+        return Err(format!(
+            "project.yaml at {} declares no `platforms` array; vectis requires a declared \
+             platform set — run `emery init --upgrade --platforms <csv>`",
+            config_path.display()
+        ));
     };
 
     let mut shell: Vec<String> = Vec::new();
@@ -29,9 +47,5 @@ pub fn load_shell_platforms(project_root: &Path) -> Vec<String> {
             shell.push(name.to_string());
         }
     }
-    if shell.is_empty() { fallback_platforms() } else { shell }
-}
-
-fn fallback_platforms() -> Vec<String> {
-    vec!["ios".to_string(), "android".to_string()]
+    Ok(shell)
 }
