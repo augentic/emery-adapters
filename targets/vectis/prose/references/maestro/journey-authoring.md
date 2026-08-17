@@ -30,9 +30,9 @@ Never during slice **build / verify / repair / merge / finalize**. Per-slice CLI
 requirements + design + composition test_id + ui-contract/ui-strings.yaml
   → add composition test_id + contract string keys + cargo make generate-bindings
   → wire MaestroTestIds / UiStrings into shell UI
-  → author .maestro/journeys/ and wire runFlow steps in platform entries
+  → author .maestro/journeys/example/ and list in journeys/example/index.yaml
   → commit YAML
-  → cargo make maestro-<platform>   # deterministic CLI gate
+  → cargo make maestro-<platform>   # deterministic CLI gate (SUITE=example)
   → fail → repair shell UI or YAML → re-run
 ```
 
@@ -49,7 +49,7 @@ Do **not** drop failing steps to chase green runs. Use `# GAP: …` only when Ma
 
 ## Authoring conventions
 
-**One entry per platform.** Do not add feature-named entry files — add journeys under `.maestro/journeys/` and wire them from the platform entry via `runFlow`.
+**One entry per platform.** Do not add feature-named entry files. Author regression journeys under `.maestro/journeys/example/` and list them in `journeys/example/index.yaml`. Keep the template's `SUITE == 'example'` / `SUITE == 'mcp-inspect'` `when` blocks in `maestro.mobile.yaml` / `maestro.web.yaml` — those already `runFlow` the suite indexes.
 
 Mobile entry must start with:
 
@@ -73,11 +73,11 @@ During slice **build**, agents MAY:
 - Edit `ui-contract/*.yaml` (strings/errors; product apps must not hand-edit projected `test-ids.yaml` — see [`canonical-ui-bindings.md`](../canonical-ui-bindings.md))
 - Run `cargo make generate-bindings`
 
-Journey authoring is **required, not optional, whenever the regenerated `composition.yaml` declares ≥1 `test_id`** (the slice has an interactive UI surface): author one `.maestro/journeys/` flow per `spec.md` scenario and wire each into `maestro.mobile.yaml` / `maestro.web.yaml` via `runFlow`. The trigger is the composition's `test_id` / `event` / screen map — **not** a prose call-out in `design.md` / `tasks.md`. Mobile journeys are shared by iOS + Android; extend the shared entry idempotently rather than authoring twice. Core-only slices (no composition, no `test_id`) have no journeys.
+Journey authoring is **required, not optional, whenever the regenerated `composition.yaml` declares ≥1 `test_id`** (the slice has an interactive UI surface): author one `.maestro/journeys/example/` flow per `spec.md` scenario and list it in `journeys/example/index.yaml`. The trigger is the composition's `test_id` / `event` / screen map — **not** a prose call-out in `design.md` / `tasks.md`. Mobile journeys are shared by iOS + Android; extend the shared example index idempotently rather than authoring twice. Core-only slices (no composition, no `test_id`) have no journeys.
 
 Agents MUST NOT run `maestro test` inside the Android/iOS verify loop — host device state is not guaranteed mid-build.
 
-Agents MUST NOT drive Maestro MCP during build / verify / repair / merge / finalize. MUST NOT wire `journeys/mcp-inspect/` into platform entries.
+Agents MUST NOT drive Maestro MCP during build / verify / repair / merge / finalize. MUST NOT add **ungated** `runFlow`s of `journeys/mcp-inspect/` in platform entries (that double-runs them with regression).
 
 ## See also
 
