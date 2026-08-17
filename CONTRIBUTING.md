@@ -75,7 +75,7 @@ cargo make check                 # fmt + clippy + nextest + doctests + doc
 cargo make ci                    # full gate — adds cargo-vet + cargo-deny
 cargo make adapter <name>        # fast one-component build → target/wasm32-wasip2/release/<name>.wasm
 cargo make release               # release-build every adapter
-cargo make lab -- ARGS       # any emery verb through the native lab shim
+cargo make eval ARGS             # any emery verb through the native lab shim (a leading case id binds that case's retained sandbox)
 ```
 
 The `fmt` arm uses nightly `rustfmt`. Eval runs **natively** and proves prompt quality; WASM/WIT conformance stays with the wasm examples (`cargo make wasm-contracts` / `cargo make wasm-omnia-r9k`). See [docs/testing.md](docs/testing.md) for the five-rung map and the [repo README](README.md) for the live eval repair loop.

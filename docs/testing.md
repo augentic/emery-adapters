@@ -42,7 +42,8 @@ cargo make eval                              # list the cases
 cargo make eval orders-contracts --restart   # a workflow case (rung 2)
 cargo make eval omnia-health --restart       # a build case (rung 3)
 cargo make eval vectis-open-gap-fab --restart  # Vectis open-GAP inventiveness (sandbox inspection)
-cargo make lab -- --project-dir <dir> slice list
+cargo make eval orders-contracts             # resume an existing workflow sandbox at its parked stage
+cargo make eval -- --project-dir <dir> slice list   # any emery verb through the native lab shim
 ```
 
 Vectis open-GAP inventiveness quality is not asserted by probe — inspect `sandbox/vectis-open-gap-fab/` against the case [pass criteria](../examples/eval/cases/vectis-open-gap-fab/README.md) (stub-faithful or honest B′ closure).

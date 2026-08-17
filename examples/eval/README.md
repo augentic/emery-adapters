@@ -30,10 +30,10 @@ Each case owns its own sandbox at `sandbox/<case>/` which allows for review and 
 
  Build reports (`.emery/change/slices/<slice>/build/report.yaml`) are available for review on build success. To correct input or output, edit the adapter prose and re-run the case using `--restart`.
 
-Continue or debug a run explicitly using the CLI:
+Inspect or debug a retained run with a bound native verb:
 
 ```bash
-cargo make lab -- --change-dir sandbox/orders-contracts plan execute
+cargo make eval orders-contracts plan status
 ```
 
 ## Catalog
@@ -54,22 +54,23 @@ cargo make lab -- --change-dir sandbox/orders-contracts plan execute
 
 ## Continuing a run
 
-Each case owns one stable retained sandbox at the repository-root `sandbox/<id>/` (composition-owned; beside the wasm examples' `sandbox/wasm-*/` trees), kept on success and failure alike. `--restart` is the only runner-owned reset; an existing sandbox without it refuses before mutation. The runner never infers workflow progress — continue or debug a retained sandbox explicitly through the native verbs:
+Each case owns one stable retained sandbox at the repository-root `sandbox/<id>/` (composition-owned; beside the wasm examples' `sandbox/wasm-*/` trees), kept on success and failure alike. A failed or stopped **workflow** run is continued — graded — by re-running the same command: a sandbox holding an authored plan resumes at `plan refine` (the engine's own re-run contract) and still reaches the graded tail. `--restart` is the only runner-owned reset; build sandboxes and author-incomplete workflow sandboxes refuse without it (a single build phase has no resume semantics — build-case repair is `--restart`). Inspect a retained sandbox with a bound native verb — a leading case id binds that case's sandbox-local stores:
 
 ```bash
-cargo make lab -- --change-dir sandbox/orders-contracts plan execute
+cargo make eval orders-contracts           # resume the parked run, graded
+cargo make eval orders-contracts plan status   # inspect it
 ```
 
 ## Manual native verbs
 
-For maximum control (skip the case runner, keep a project across sessions), drive the catalog yourself:
+For maximum control (skip the case runner, keep a project across sessions), drive the catalog yourself. cargo-make needs `--` only when the first token is a cargo-make flag:
 
 ```bash
-cargo make lab -- --project-dir /path/to/product init omnia --name <name>
-cargo make lab -- --change-dir /path/to/change plan author <change> \
-  --from /path/to/definition --wave deliver
-cargo make lab -- --change-dir /path/to/change plan refine
-cargo make lab -- --change-dir /path/to/change plan execute
+cargo make eval -- --project-dir /path/to/product init omnia --name <name>
+cargo make eval plan author <change> \
+  --from /path/to/definition --wave deliver --change-dir /path/to/change
+cargo make eval plan refine --change-dir /path/to/change
+cargo make eval plan execute --change-dir /path/to/change
 ```
 
 This is the same native seam as the case runner; you own lifecycle and grading.
@@ -126,7 +127,7 @@ Linked adapters need only the directory. A third-party adapter also needs a Carg
 
 `vectis-single-screen`, `vectis-open-gap-fab`, and any live Vectis build that materializes shells need a local [`vectis-exemplar`](https://github.com/augentic/vectis-exemplar) checkout.
 
-`cargo make eval` / `cargo make lab` auto-set `VECTIS_EXEMPLAR_DIR` to the workspace-sibling `../vectis-exemplar` when that checkout exists and the env var is unset. That matters because the eval sandbox is `sandbox/<case>/`: without the export, the build prelude's default `../vectis-exemplar` would resolve to `sandbox/vectis-exemplar`. For non-sibling layouts, export `VECTIS_EXEMPLAR_DIR` yourself to an absolute path before invoking make.
+`cargo make eval` auto-sets `VECTIS_EXEMPLAR_DIR` to the workspace-sibling `../vectis-exemplar` when that checkout exists and the env var is unset. That matters because the eval sandbox is `sandbox/<case>/`: without the export, the build prelude's default `../vectis-exemplar` would resolve to `sandbox/vectis-exemplar`. For non-sibling layouts, export `VECTIS_EXEMPLAR_DIR` yourself to an absolute path before invoking make.
 
 After materialize the agent strips `VECTIS-OPTIONAL` / `cap=demo` per `$TEMPLATE_DIR/AGENTS.md`, regenerates the iOS Xcode project (`make -C iOS generate-project`), runs `make build`, and stamps `iOS/.vectis/verify.ok` / `Android/.vectis/verify.ok` (adapter-owned; not in the template).
 
