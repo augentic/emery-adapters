@@ -19,7 +19,7 @@ The same trait implementation runs on two hosts:
 
 | Host | How it links | Used by |
 | ---- | ------------ | ------- |
-| **Native** | The crate is `rlib`; the engine's `native` catalog links it directly | `cargo nextest`, `cargo make eval`, `cargo make lab` |
+| **Native** | The crate is `rlib`; the engine's `native` catalog links it directly | `cargo nextest`, `cargo make eval` |
 | **Wasm** | The crate is `cdylib`; the `wasm32-wasip2` build exports the WIT world | The shipped `emery` CLI, `cargo make wasm-contracts` / `wasm-omnia-r9k` |
 
 This split is why the day-to-day loop is fast: prose and Rust changes are picked up by native tests and live eval with no component build.

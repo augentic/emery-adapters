@@ -83,7 +83,7 @@ Prefer a **build case** when iterating on one target adapter's build (minutes). 
 
 | | Build case | Workflow case |
 | --- | --- | --- |
-| Command | `cargo make eval <id> --restart` | `cargo make eval <id> --restart [--until plan]` |
+| Command | `cargo make eval <id> --restart` | `cargo make eval <id> [--until plan]` (an existing sandbox resumes; `--restart` reruns from fresh state) |
 | Fixture | committed refined slice | source trees + intent, plan authored live |
 | Gates | `built` metadata, `build/report.yaml`, `expect` paths | authored plan awaiting review, drained plan, provenance |
 
@@ -109,10 +109,10 @@ sandbox/<id>/
 
 Grading checks lifecycle, the report, `expect` paths, and (workflow) provenance; target quality is still a human look — see [eval README § Grading](examples/eval/README.md#grading). Per-leg repair counts are reported, not asserted; drift toward the repair budget is an early signal that prose or answer-schema changes degraded the first answer.
 
-An existing sandbox refuses to rerun without `--restart`. Continue or debug it explicitly through the native verbs instead:
+A failed or stopped workflow run is continued — graded — by re-running the same command: an existing sandbox holding an authored plan resumes at `plan refine`; a bound-not-authored sandbox re-runs `plan author`, which resumes its open and parked domains. Build sandboxes and unbound workflow sandboxes refuse without `--restart` (build-case repair is `--restart`). Inspect a retained sandbox with a bound native verb:
 
 ```bash
-cargo make lab -- --change-dir sandbox/orders-contracts plan execute
+cargo make eval orders-contracts plan status
 ```
 
 ## Repair loop
@@ -133,7 +133,7 @@ Do not burn a workflow case for a prompt typo — use a build case, or [add one]
 | `cargo make wasm-contracts` / `wasm-omnia-r9k` fails immediately | Needs sibling [`augentic/emery`](https://github.com/augentic/emery) at `../emery` |
 | Patch-resolution errors after editing root `Cargo.toml` | `[patch."https://github.com/augentic/emery.git"]` needs `../emery`; re-comment if not co-developing |
 | Case fails with a green-looking report | Check `expect` paths in `case.toml` — missing files fail the gate |
-| `sandbox … already exists` | Rerun with `--restart`, or continue it via `cargo make lab -- --project-dir <sandbox> …` |
+| `sandbox … already exists` (build case) | Rerun with `--restart`; a workflow sandbox with an authored plan resumes via `cargo make eval <id>` instead |
 
 More first-run tips: [CONTRIBUTING.md](CONTRIBUTING.md#troubleshooting-first-runs). Bugs and questions: [GitHub Issues](https://github.com/augentic/emery-adapters/issues).
 
@@ -148,7 +148,7 @@ More first-run tips: [CONTRIBUTING.md](CONTRIBUTING.md#troubleshooting-first-run
 | Wasm / WIT seam | [examples/wasm/README.md](examples/wasm/README.md) |
 | Agent / contract rules | [AGENTS.md](AGENTS.md) |
 | Operator docs (engine) | [Emery README](https://github.com/augentic/emery#readme) · [hosted guide](https://emery.augentic.io/) |
-| Lab CLI (native catalog; not the shipped CLI) | `cargo make lab -- --project-dir <dir> slice list` |
+| Lab CLI (native catalog; not the shipped CLI) | `cargo make eval -- --project-dir <dir> slice list` |
 
 ## License
 

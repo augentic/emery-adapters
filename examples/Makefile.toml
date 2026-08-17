@@ -3,25 +3,26 @@
 # -------------------------------------
 
 [env]
-CURSOR_MODEL = "cursor-grok-4.6-high-fast"
+CURSOR_MODEL = "claude-opus-5-high"
 CURSOR_TIMEOUT_SECS = 1200
+CURSOR_INACTIVITY_SECS = 600
 VECTIS_EXEMPLAR_DIR = "${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/../vectis-exemplar"
 
-# The eval loop wants backend visibility 
-# (`--debug` selects `info,omnia_cursor=debug,omnia_wasi_http=debug`); 
-# `lab` stays flagless
+# The one lab entry, shaped like the emery CLI plus the case runner:
+# bare `cargo make eval` lists the cases, `cargo make eval <id>` runs
+# one (an existing sandbox resumes; `--restart` reruns from fresh
+# state), any emery verb passes through (`cargo make eval <id> plan
+# status` binds the case's retained sandbox). The probe client owns
+# the log presets (case runs default to the debug preset, passthrough
+# to `info`); cargo-make needs `--` only when the first token is a
+# cargo-make flag.
 [tasks.eval]
-env_files = [".env"]
-command = "cargo"
-args = ["run", "-p", "eval", "--", "--debug", "eval", "${@}"]
-
-[tasks.lab]
 env_files = [".env"]
 command = "cargo"
 args = ["run", "-p", "eval", "--", "${@}"]
 
 # -------------------------------------
-# Wasm examples (component seam)
+# Wasm examples
 # -------------------------------------
 
 [tasks.wasm-clean]

@@ -47,7 +47,7 @@ Testing is integration-first:
 - Do not widen public APIs solely for tests.
 - Use `cargo nextest`, not bare `cargo test`, for native workspace tests; process isolation is required by CWD- and environment-mutating suites.
 - Adapter native tests own operation behavior; the eval composition example (over engine `probe`) owns cross-phase integration and prompt quality; the operator-invoked wasm examples own WASM/WIT conformance. Do not duplicate the same assertion across rungs.
-- The live rungs are operator-invoked, never CI: `cargo make eval <id> --restart` (one eval case over its retained `sandbox/<id>/` tree — build cases like `contracts-design` for fast prompt iteration, workflow cases like `orders-contracts` and `omnia-r9k` for the full source-to-target rhythm; bare `cargo make eval` lists them) and `cargo make wasm-contracts` / `cargo make wasm-omnia-r9k` (sibling `emery` binary plus built adapter components over the real component seam). The `omnia-r9k` case (and `wasm-omnia-r9k`) shallow-clones its `UNLICENSED` upstream into the case's gitignored `fixture/` cache on first run. Day-to-day eval loop: [`README.md`](README.md); eval case catalog: [`examples/eval/`](examples/eval/).
+- The live rungs are operator-invoked, never CI: `cargo make eval <id>` (one eval case over its retained `sandbox/<id>/` tree — build cases like `contracts-design` for fast prompt iteration, workflow cases like `orders-contracts` and `omnia-r9k` for the full source-to-target rhythm; an existing workflow sandbox resumes, `--restart` reruns from fresh state; bare `cargo make eval` lists them) and `cargo make wasm-contracts` / `cargo make wasm-omnia-r9k` (sibling `emery` binary plus built adapter components over the real component seam). The `omnia-r9k` case (and `wasm-omnia-r9k`) shallow-clones its `UNLICENSED` upstream into the case's gitignored `fixture/` cache on first run. Day-to-day eval loop: [`README.md`](README.md); eval case catalog: [`examples/eval/`](examples/eval/).
 
 Read [`docs/testing.md`](docs/testing.md) before adding, deleting, or relocating tests.
 
@@ -62,8 +62,8 @@ cargo nextest run -p NAME # focused adapter tests
 cargo make adapter NAME   # fast development component build
 cargo make release        # release-build every component
 cargo make publish NAME   # push one built component to its exact GHCR tag (Publish Release / local breakout)
-cargo make lab -- ARGS # any emery verb through the native lab shim
-cargo make eval [id] [--restart] [--until RUNG]  # one live eval case; bare lists them (operator-invoked)
+cargo make eval [id] [--restart] [--until RUNG]  # one live eval case; an existing sandbox resumes; bare lists them (operator-invoked)
+cargo make eval ARGS      # any emery verb through the native lab shim; a leading case id binds that case's retained sandbox
 cargo make wasm-contracts     # contracts wasm example (operator-invoked)
 cargo make wasm-omnia-r9k     # omnia-r9k wasm example (operator-invoked)
 ```

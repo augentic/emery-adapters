@@ -1,12 +1,13 @@
-//! The adapters repository's live composition example: native command
-//! passthrough over the first-party catalog by default, the live eval
-//! client under the `eval` subcommand.
+//! The adapters repository's live composition example, shaped like the
+//! `emery` CLI plus the case runner: native command passthrough over
+//! the first-party catalog, the live eval client under `eval` or a
+//! leading case id.
 //!
 //! The composition root owns what the shared client (`probe::client`)
 //! refuses to: the Tokio runtime, `std::env::args` collection, and
 //! the first-party catalog, cases, and sandbox declarations. It is a
 //! development tool, never an install or release artifact. Driven by
-//! `cargo make lab` and `cargo make eval`.
+//! `cargo make eval`.
 
 #[cfg(target_arch = "wasm32")]
 fn main() {}
