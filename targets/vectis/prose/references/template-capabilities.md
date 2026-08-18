@@ -15,9 +15,9 @@ Greenfield trees come from a local [`vectis-exemplar`](https://github.com/augent
 | `Android/Makefile` + Gradle wrapper + `gradle/libs.versions.toml` | BoltFFI pack + assemble DX (`make build` / `doctor`) |
 | `shared/boltffi.toml`, `shared/src/bin/codegen/` | FFI + ui-contract → shell/Rust binding codegen |
 | `ui-contract/test-ids.yaml` (optional demo seed), `ui-contract/ui-strings.yaml`, `ui-contract/ui-errors.yaml`, `ui-contract/seed.yaml` | Canonical UI bindings — test ids from composition; strings/errors from ui-contract; seed fixture (app-defined shape, core serde test) |
-| `.maestro/config.yaml`, `.maestro/entries/maestro.{mobile,web}.yaml`, `.maestro/scripts/run-maestro.sh`, `.maestro/scripts/load-{test-ids,strings,errors}.sh`, `.maestro/scripts/maestro-env.sh` | Maestro infra (not demo journeys) |
+| `.maestro/config.yaml`, `.maestro/entries/maestro.{mobile,web}.yaml`, `.maestro/scripts/run-maestro.sh`, `.maestro/scripts/load-{test-ids,strings,errors}.sh`, `.maestro/scripts/maestro-env.sh`, `.maestro/mcp-inspection.md` | Maestro infra (not demo journeys) |
 
-Strip demo Maestro journeys (everything under `.maestro/journeys/`) and `cap=demo` blocks inside `ui-contract/*.yaml` per `$TEMPLATE_DIR/AGENTS.md` and `$TEMPLATE_DIR/.maestro/README.md`. Do **not** delete platform entries (`maestro.mobile.yaml`, `maestro.web.yaml`), `run-maestro.sh`, or the load scripts above. README demo (`cap=demo` doc) blocks may be trimmed; keep the file.
+Strip demo Maestro journeys (`journeys/example/`, demo YAML under `journeys/mcp-inspect/`, and other `cap=demo scope=test` files under `.maestro/`) and `cap=demo` blocks inside `ui-contract/*.yaml` per `$TEMPLATE_DIR/AGENTS.md` and `$TEMPLATE_DIR/.maestro/README.md`. Keep `journeys/mcp-inspect/` for non-demo inspect flows. Do **not** delete platform entries (`maestro.mobile.yaml`, `maestro.web.yaml`), `run-maestro.sh`, the load scripts, or `.maestro/mcp-inspection.md`. README demo (`cap=demo` doc) blocks may be trimmed; keep the file.
 
 `web/` is never materialized (out of scope). Regenerate `iOS/*.xcodeproj` via `make -C iOS generate-project` after materialize.
 

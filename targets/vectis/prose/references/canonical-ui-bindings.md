@@ -69,5 +69,6 @@ Do not fold Maestro test ids into `component-bindings.yaml` — names collide wi
 
 ## References
 
-- `$TEMPLATE_DIR/.maestro/README.md` — operator runbook
-- [`maestro/journey-authoring.md`](maestro/journey-authoring.md) — journey YAML after drain
+- `$TEMPLATE_DIR/.maestro/README.md` — Maestro CLI
+- `$TEMPLATE_DIR/.maestro/mcp-inspection.md` — MCP inspection
+- [`maestro/journey-authoring.md`](maestro/journey-authoring.md) — journey YAML during build; when to run CLI / inspection
