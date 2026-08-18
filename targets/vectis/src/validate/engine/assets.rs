@@ -47,7 +47,19 @@ pub(super) fn validate(path: Option<&Path>) -> Result<Value, VectisError> {
         let assets_dir = target.parent().unwrap_or_else(|| Path::new("."));
         let project_root = find_project_root(&target)
             .unwrap_or_else(|| assets_dir.parent().unwrap_or(assets_dir).to_path_buf());
-        let shell_platforms = load_shell_platforms(&project_root);
+        // A15: an unresolvable platform declaration is a blocking
+        // finding — never a guessed both-shells set. Per-platform
+        // coverage checks are skipped; every other check still runs.
+        let shell_platforms = match load_shell_platforms(&project_root) {
+            Ok(platforms) => Some(platforms),
+            Err(detail) => {
+                errors.push(json!({
+                    "path": "",
+                    "message": format!("assets-platforms-unresolved: {detail}"),
+                }));
+                None
+            }
+        };
 
         if let Some(assets) = instance.get("assets").and_then(Value::as_object) {
             for (id, entry) in assets {
@@ -84,14 +96,16 @@ pub(super) fn validate(path: Option<&Path>) -> Result<Value, VectisError> {
                 let Some(entry) = entry else {
                     continue;
                 };
-                check_platform_coverage(
-                    &asset_ref.id,
-                    entry,
-                    assets_dir,
-                    &shell_platforms,
-                    &mut errors,
-                    &mut warnings,
-                );
+                if let Some(shell_platforms) = shell_platforms.as_deref() {
+                    check_platform_coverage(
+                        &asset_ref.id,
+                        entry,
+                        assets_dir,
+                        shell_platforms,
+                        &mut errors,
+                        &mut warnings,
+                    );
+                }
             }
         }
     }

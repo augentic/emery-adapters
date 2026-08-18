@@ -6,7 +6,7 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use super::shells::declared_shell_legs;
+use super::shells::ShellLeg;
 use crate::{android_scaffold, infer, ios_scaffold, scaffold, shell};
 
 pub(super) fn render_prelude(summary: &Value) -> String {
@@ -40,12 +40,14 @@ pub(super) fn render_infer_report(change_root: &Path) -> String {
     format!("### component-identity cluster report (already run in-guest)\n\n{report}")
 }
 
-pub(super) fn scaffold_missing_trees(change_root: &Path, code_root: &Path) -> String {
+pub(super) fn scaffold_missing_trees(
+    change_root: &Path, code_root: &Path, legs: &[&'static ShellLeg],
+) -> String {
     let mut targets: Vec<&'static str> = Vec::new();
     if !shell::shell_present(code_root, "core") {
         targets.push("core");
     }
-    for leg in declared_shell_legs(change_root) {
+    for leg in legs {
         if !shell::shell_present(code_root, leg.name) {
             targets.push(leg.name);
         }

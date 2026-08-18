@@ -53,6 +53,29 @@ fn staged_workspace(root: &Path, stage: &Path) -> Workspace {
     }
 }
 
+/// Declare all three build platforms and satisfy the bootstrap
+/// app-icon gate — the declaration is mandatory (A15); builds fail
+/// closed instead of assuming a both-shells set.
+fn write_ui_project(root: &Path) {
+    const SQUARE: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <path fill="#336699" d="M2 2h20v20H2z"/>
+</svg>"##;
+    fs::create_dir_all(root.join(".emery")).unwrap();
+    fs::write(
+        root.join(".emery/project.yaml"),
+        "name: demo-app\nplatforms:\n  - core\n  - ios\n  - android\n",
+    )
+    .unwrap();
+    fs::create_dir_all(root.join("design-system/assets")).unwrap();
+    fs::write(root.join("design-system/assets/launcher.svg"), SQUARE).unwrap();
+    fs::write(
+        root.join("design-system/assets.yaml"),
+        "version: 1\napp-icon: launcher\nassets:\n  launcher:\n    alt: Launcher\n    kind: \
+         vector\n    role: app-icon\n    source: assets/launcher.svg\n",
+    )
+    .unwrap();
+}
+
 fn schema_format(request: &Request) -> (&str, &str) {
     match &request.format {
         Format::Schema(schema) => (&schema.name, &schema.schema),
@@ -128,6 +151,7 @@ fn metadata_grants() {
 async fn build_phase_legs() {
     let tmp = TempDir::new().unwrap();
     let stage = TempDir::new().unwrap();
+    write_ui_project(tmp.path());
     let model = Harness::answering([
         PHASE_DONE,    // composition
         PHASE_DONE,    // core
@@ -158,8 +182,8 @@ async fn build_phase_legs() {
     assert_eq!(report.outcome, PhaseOutcome::Completed);
     assert_eq!(
         report.source,
-        PhaseSource::ModelAssisted,
-        "no project.yaml and no staged composition — no in-guest check contributed"
+        PhaseSource::Hybrid,
+        "the deterministic bootstrap gate ran alongside the model legs"
     );
     assert_eq!(report.outputs.len(), 1, "build carries the per-platform outputs");
     assert_eq!(report.ui_surface.map(|surface| surface.screens), Some(1));
@@ -359,6 +383,9 @@ async fn guest_does_not_embed_scaffold() {
 async fn build_blocks_on_invalid_composition() {
     let tmp = TempDir::new().unwrap();
     let stage = TempDir::new().unwrap();
+    fs::create_dir_all(tmp.path().join(".emery")).unwrap();
+    fs::write(tmp.path().join(".emery/project.yaml"), "name: demo-app\nplatforms:\n  - core\n")
+        .unwrap();
     // The composition leg leaves an unparseable staged composition; the
     // in-guest validator blocks generation and its findings ride the
     // build report — no repair loop runs inside build.
@@ -393,6 +420,60 @@ async fn build_blocks_on_invalid_composition() {
 
     let requests = model.requests();
     assert_eq!(requests.len(), 1, "the composition leg only — repair routing is engine policy");
+}
+
+// A15 regression: an absent platform declaration blocks the build with
+// a deterministic finding before any model leg — the adapter never
+// guesses a both-shells scope.
+#[tokio::test]
+async fn build_blocks_on_missing_platforms() {
+    let tmp = TempDir::new().unwrap();
+    let stage = TempDir::new().unwrap();
+    let model = Harness::answering::<&str>([]);
+
+    let report = Adapter::build(
+        &model,
+        &ctx(tmp.path(), None),
+        "demo",
+        &[],
+        &BuildContext::default(),
+        &staged_workspace(tmp.path(), stage.path()),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(report.outcome, PhaseOutcome::Completed);
+    assert_eq!(report.source, PhaseSource::Deterministic);
+    assert_eq!(report.findings.len(), 1);
+    assert!(
+        report.findings[0].title.contains("[platforms]"),
+        "finding names the platform gate: {:?}",
+        report.findings[0]
+    );
+    assert!(report.findings[0].severity.blocking(), "the platform gate blocks");
+    assert!(model.requests().is_empty(), "no model leg runs on a blocked platform read");
+}
+
+/// The review pass shares the fail-closed platform read.
+#[tokio::test]
+async fn review_blocks_on_missing_platforms() {
+    let tmp = TempDir::new().unwrap();
+    let stage = TempDir::new().unwrap();
+    let model = Harness::answering::<&str>([]);
+
+    let report = Adapter::review(
+        &model,
+        &ctx(tmp.path(), None),
+        "demo",
+        None,
+        &staged_workspace(tmp.path(), stage.path()),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(report.findings.len(), 1);
+    assert!(report.findings[0].title.contains("[platforms]"), "{:?}", report.findings[0]);
+    assert!(model.requests().is_empty(), "no review leg runs on a blocked platform read");
 }
 
 // RFC-90 grants: a slice-local `assets.yaml` staged by the engine is
@@ -728,6 +809,7 @@ async fn build_with_composition(
 ) -> PhaseReport {
     let tmp = TempDir::new().unwrap();
     let stage = TempDir::new().unwrap();
+    write_ui_project(tmp.path());
     if let Some(body) = composition {
         fs::write(stage.path().join("composition.yaml"), body).unwrap();
     }

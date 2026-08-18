@@ -33,6 +33,13 @@ fn assets_project(assets_yaml: &str, composition_yaml: &str) -> (TempDir, PathBu
     let assets_path = design.join("assets.yaml");
     std::fs::write(&assets_path, assets_yaml).expect("write assets.yaml");
     write_rel(tmp.path(), ".emery/specs/composition.yaml", composition_yaml.as_bytes());
+    // The platform declaration is mandatory (A15): the validator fails
+    // closed instead of assuming a both-shells set.
+    write_rel(
+        tmp.path(),
+        ".emery/project.yaml",
+        b"name: test-app\nadapter: vectis\nplatforms:\n  - core\n  - ios\n  - android\n",
+    );
     (tmp, assets_path)
 }
 
@@ -118,6 +125,26 @@ fn conventional_export_matrix() {
     assert!(
         errors_array(&envelope).is_empty(),
         "committed exports should satisfy coverage: {envelope}"
+    );
+}
+
+// A15 regression: an unresolvable `project.yaml.platforms` declaration
+// is a blocking finding — the validator never assumes a both-shells
+// set and skips only the per-platform coverage checks.
+#[test]
+fn assets_missing_platforms_is_blocking() {
+    let (tmp, assets_path) = assets_project(ASSETS_YAML, COMPOSITION_YAML);
+    std::fs::remove_file(tmp.path().join(".emery/project.yaml")).expect("remove declaration");
+
+    let envelope = run(ValidateMode::Assets, Some(&assets_path)).expect("run succeeds");
+    let messages = error_messages(&envelope);
+    assert!(
+        messages.iter().any(|m| m.contains("assets-platforms-unresolved")),
+        "expected the unresolved-platforms finding: {messages:?}"
+    );
+    assert!(
+        !messages.iter().any(|m| m.contains("assets-materialization-missing")),
+        "per-platform coverage must not run over a guessed platform set: {messages:?}"
     );
 }
 

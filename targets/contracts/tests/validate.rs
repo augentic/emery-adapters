@@ -4,7 +4,8 @@ use std::fs;
 use std::path::PathBuf;
 
 use contracts::validate::{
-    ContractFinding, RULE_ID_FORMAT, RULE_ID_UNIQUE, RULE_VERSION_IS_SEMVER, validate_baseline,
+    ContractFinding, RULE_ID_FORMAT, RULE_ID_UNIQUE, RULE_TREE_READABLE, RULE_VERSION_IS_SEMVER,
+    RULE_YAML_WELL_FORMED, validate_baseline,
 };
 use tempfile::TempDir;
 
@@ -195,11 +196,21 @@ fn skip_and_directory_matrix() {
             detail_contains: vec![],
         },
         Case {
-            name: "unparseable yaml is skipped",
+            name: "unparseable yaml blocks (A4)",
             create_dir: true,
             files: vec![("http/broken.yaml", ":this is not yaml: [\n".to_string())],
-            expect: vec![],
-            detail_contains: vec![],
+            expect: vec![RULE_YAML_WELL_FORMED],
+            detail_contains: vec!["not valid YAML"],
+        },
+        Case {
+            name: "an unparseable sibling never hides a valid contract's findings",
+            create_dir: true,
+            files: vec![
+                ("http/broken.yaml", ":this is not yaml: [\n".to_string()),
+                ("http/user-api.yaml", body_version("2024-01-15")),
+            ],
+            expect: vec![RULE_YAML_WELL_FORMED, RULE_VERSION_IS_SEMVER],
+            detail_contains: vec!["not valid YAML", "2024-01-15"],
         },
         Case {
             name: "two docs without ids are not duplicates",
@@ -218,6 +229,35 @@ fn skip_and_directory_matrix() {
     for case in &cases {
         check(case);
     }
+}
+
+// A4: traversal failures block instead of silently emptying the
+// document set — a file squatting on the `contracts/` path defeats
+// `read_dir` on every platform.
+#[test]
+fn unreadable_tree_blocks() {
+    let tmp = TempDir::new().unwrap();
+    fs::write(contracts_dir(&tmp), "not a directory").unwrap();
+    let findings = validate_baseline(&contracts_dir(&tmp));
+    assert_eq!(finding_kinds(&findings), vec![RULE_TREE_READABLE]);
+    assert!(findings[0].detail.contains("unreadable"), "{}", findings[0].detail);
+}
+
+// A4: an unreadable contract file blocks — it must not vanish from the
+// document set.
+#[cfg(unix)]
+#[test]
+fn unreadable_file_blocks() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let tmp = TempDir::new().unwrap();
+    let path = write_contract(&tmp, "http/user-api.yaml", &body_version("1.0.0"));
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o000)).unwrap();
+    let findings = validate_baseline(&contracts_dir(&tmp));
+    // Restore so the tempdir sweeps cleanly.
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+    assert_eq!(finding_kinds(&findings), vec![RULE_YAML_WELL_FORMED]);
+    assert!(findings[0].detail.contains("unreadable"), "{}", findings[0].detail);
 }
 
 #[test]

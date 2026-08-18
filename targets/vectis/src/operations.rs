@@ -128,10 +128,16 @@ impl Target for Adapter {
         // read as the shell legs, so a core-only project materializes
         // nothing for shells it will not build. Exports land beside the
         // workspace's design-system baseline, so capture records them.
-        let shell_platforms: Vec<String> = shells::declared_shell_legs(change_root)
-            .iter()
-            .map(|leg| leg.name.to_string())
-            .collect();
+        // An unresolvable declaration blocks the build (A15) — the
+        // adapter never guesses a both-shells set.
+        let shell_legs = match shells::declared_shell_legs(change_root) {
+            Ok(legs) => legs,
+            Err(detail) => {
+                return Ok(deterministic_blocked(vec![format!("[platforms] {detail}")]));
+            }
+        };
+        let shell_platforms: Vec<String> =
+            shell_legs.iter().map(|leg| leg.name.to_string()).collect();
         let prepared = prepare::materialize_step(&stage.fs, code_root, &shell_platforms)
             .map_err(error_from_vectis)?;
         let prelude_block = prelude::render_prelude(&prepared);
@@ -159,7 +165,7 @@ impl Target for Adapter {
             return Ok(report);
         }
 
-        let scaffold_block = prelude::scaffold_missing_trees(change_root, code_root);
+        let scaffold_block = prelude::scaffold_missing_trees(change_root, code_root, &shell_legs);
         let core = core_leg(model, ctx, slice, &scaffold_block, &inputs_block).await?;
 
         if let Err(err) = crate::projections::test_id_registry::write_generated(
@@ -171,7 +177,7 @@ impl Target for Adapter {
         }
 
         let shell_outcomes =
-            shells::run_write_legs(model, ctx, slice, change_root, &scaffold_block).await?;
+            shells::run_write_legs(model, ctx, slice, &shell_legs, &scaffold_block).await?;
 
         let mut outcomes = vec![("composition", &composition), ("core", &core)];
         outcomes.extend(shell_outcomes.iter().map(|(name, answer)| (*name, answer)));
@@ -290,10 +296,16 @@ impl Target for Adapter {
     ) -> Result<PhaseReport, Error> {
         let change_root = ctx.project_root;
         let stage = slice_stage(workspace, ctx, slice);
+        // Same fail-closed platform read as the build (A15): review
+        // never guesses a shell scope over an unresolvable declaration.
+        let shell_legs = match shells::declared_shell_legs(change_root) {
+            Ok(legs) => legs,
+            Err(detail) => {
+                return Ok(deterministic_blocked(vec![format!("[platforms] {detail}")]));
+            }
+        };
         let mut review_prompts = vec!["prompts/review.md", "prompts/build/core/review.md"];
-        review_prompts.extend(
-            shells::declared_shell_legs(change_root).iter().map(|shell| shell.review_prompt),
-        );
+        review_prompts.extend(shell_legs.iter().map(|shell| shell.review_prompt));
         let system = assemble(&review_prompts);
         let user = format!(
             "Run one engineering-standards review pass for slice `{slice}` (adapter `{}`): \

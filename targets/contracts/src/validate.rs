@@ -23,19 +23,35 @@ pub const RULE_VERSION_IS_SEMVER: &str = "contract.version-is-semver";
 pub const RULE_ID_FORMAT: &str = "contract.id-format";
 /// Rule id: every `info.x-emery-id` must be unique across the tree.
 pub const RULE_ID_UNIQUE: &str = "contract.id-unique";
+/// Rule id: every directory and entry under `contracts/` must be
+/// traversable — an unreadable subtree could hide contracts (A4).
+pub const RULE_TREE_READABLE: &str = "contract.tree-readable";
+/// Rule id: every `.yaml` file under `contracts/` must read and parse —
+/// a malformed contract must not vanish from the document set (A4).
+pub const RULE_YAML_WELL_FORMED: &str = "contract.yaml-well-formed";
 
 /// Run baseline-contract validation across `contracts_dir`.
 ///
-/// Returns an empty vector when the directory is missing or every file is well-formed.
+/// Returns an empty vector when the directory does not exist (a project
+/// without contracts) or every file is well-formed. Fails closed on
+/// everything else (A4): an unreadable directory, entry, or file and
+/// unparseable YAML are blocking findings, never silent skips.
 #[must_use]
 pub fn validate_baseline(contracts_dir: &Path) -> Vec<ContractFinding> {
-    if std::fs::read_dir(contracts_dir).is_err() {
-        return Vec::new();
+    match std::fs::metadata(contracts_dir) {
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
+        Err(err) => {
+            return vec![ContractFinding {
+                path: contracts_dir.to_path_buf(),
+                rule_id: RULE_TREE_READABLE,
+                detail: format!("contracts directory is unreadable: {err}"),
+            }];
+        }
+        Ok(_) => {}
     }
 
-    let docs = parse::collect_top_level_docs(contracts_dir);
+    let (docs, mut findings) = parse::collect_top_level_docs(contracts_dir);
 
-    let mut findings: Vec<ContractFinding> = Vec::new();
     let mut id_to_paths: BTreeMap<String, Vec<PathBuf>> = BTreeMap::new();
 
     for doc in &docs {
