@@ -21,7 +21,7 @@ Each case stages its fixture into a fresh retained sandbox (`sandbox/<case>/`), 
 
 ## What is measured
 
-Against [product.md](https://github.com/augentic/emery/blob/main/rfcs/product.md)'s measured qualities:
+Against the measured qualities (time to first reviewable specification; per-operation success):
 
 - **Time to first reviewable specification** — wall clock from `init` to the committed generation pointer, per case; the scorecard reports the worst case against the ≤30-minute target.
 - **Per-operation success rate** — one extract per source binding plus one synthesis per case, from typed outcomes only; target ≥95%. A typed nonzero exit is recorded as the outcome, never bypassed.
@@ -30,4 +30,4 @@ Against [product.md](https://github.com/augentic/emery/blob/main/rfcs/product.md
 
 ## The scorecard
 
-Every run writes `sandbox/scorecard.md`: dated, naming the `emery` and `emery-adapters` commit shas (plus each cloned fixture's head sha) and the product.md numbers, with `status: green` only when the **complete** case catalog ran, every case passed, and both measured numbers meet their targets — a filtered single-case run is an iteration aid and is never green. The release gate in the `emery` repository verifies a committed green scorecard names the release-tip sha (CONSTITUTION invariant 6) — CI verifies the record, it never runs the live eval. To publish a run, copy the scorecard into `emery/rfcs/scorecards/<date>.md`.
+Every run writes `sandbox/scorecard.md`: dated, naming the `emery` and `emery-adapters` commit shas (plus each cloned fixture's head sha) and the measured numbers, with `status: green` only when the **complete** case catalog ran, every case passed, and both measured numbers meet their targets — a filtered single-case run is an iteration aid and is never green. The release gate in the `emery` repository verifies a committed green scorecard names the release-tip sha (CONSTITUTION invariant 6) — CI verifies the record, it never runs the live eval. To publish a run, copy the scorecard into `emery/scorecards/<date>.md`.
