@@ -93,14 +93,6 @@ command = "cargo"
 args = ["doc", "--no-deps", "--workspace", "--all-features", "--locked"]
 env = { RUSTDOCFLAGS = "-Dwarnings" }
 
-# Coverage brake for unit-test reductions (docs/testing.md).
-# Usage: CRATE=vectis cargo make cov
-# Operator-invoked, never part of `ci`.
-[tasks.cov]
-workspace = false
-script = "cargo llvm-cov nextest -p ${CRATE} --summary-only"
-install_crate = "cargo-llvm-cov"
-
 # Miri
 [tasks.miri]
 script = '''
@@ -111,11 +103,6 @@ cargo +nightly miri nextest run --no-tests=pass
 # Vet — read-only gate: verification must never rewrite the audit
 # inputs it verifies. Regeneration is the explicit maintenance act.
 [tasks.vet]
-command = "cargo"
-args = ["vet", "--locked"]
-install_crate = "cargo-vet"
-
-[tasks.vet-regenerate]
 script = '''
 cargo vet regenerate imports
 cargo vet regenerate exemptions
