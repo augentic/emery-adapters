@@ -6,9 +6,15 @@ use adapter::registry::{body, find};
 use documentation::Adapter;
 
 #[test]
-fn embeds_prompts() {
-    assert!(body(Adapter::docs(), "prompts/survey.md").starts_with("# `documentation.survey`"));
+fn embeds_extract_prompt() {
     assert!(body(Adapter::docs(), "prompts/extract.md").starts_with("# `documentation.extract`"));
+}
+
+/// Survey is deleted from the seam (ADR-0008); no survey prose may
+/// ride in the component.
+#[test]
+fn no_survey_prose() {
+    assert!(find(Adapter::docs(), "prompts/survey.md").is_none(), "survey prose is deleted");
 }
 
 /// The `rules/` overlay pack travels inside the component.

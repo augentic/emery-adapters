@@ -1,8 +1,0 @@
-# The orders-cap-* pair's shared blind acceptance set (RFC-96 D11).
-# Never copied into the sandbox — workflow model calls cannot read it;
-# graded only against the accepted baseline specs after execute.
-accept = [
-    "ID: REQ-",
-    "orders",
-    "health",
-]

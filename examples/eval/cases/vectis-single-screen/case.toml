@@ -1,8 +1,0 @@
-# The vectis single-screen build: stage the composition for a one-view
-# Daily Quote feature over the committed design-system catalog.
-kind = "build"
-slice = "daily-quote"
-
-# Deterministic artifact-exists gate: a success report must leave the
-# slice composition staged.
-expect = [".emery/change/slices/daily-quote/composition.yaml"]

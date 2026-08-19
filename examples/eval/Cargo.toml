@@ -1,29 +1,20 @@
 [package]
 name = "eval"
-description = "Native first-party catalog composition: emery passthrough and live eval"
+description = "Graded live eval: a public-contract client of the shipped emery binary"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 publish.workspace = true
-autolib = false
 
-# Binary is native-only; wasm32 builds an empty stub so
-# `cargo build --workspace --target wasm32-wasip2` stays clean.
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-anyhow.workspace = true
-captures.workspace = true
-contracts.workspace = true
-documentation.workspace = true
-emery-native = { workspace = true, features = ["cli"] }
-emery-probe = { workspace = true, features = ["client"] }
-intent.workspace = true
-omnia-target.workspace = true
-screenshots.workspace = true
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
-typescript.workspace = true
-vectis.workspace = true
+# A client of the public contract only (architecture-review T6): the
+# runner spawns the shipped `emery` binary and observes argv, exit
+# codes, the JSON envelope, and the committed spec set. It never
+# depends on engine crates or adapter internals.
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true

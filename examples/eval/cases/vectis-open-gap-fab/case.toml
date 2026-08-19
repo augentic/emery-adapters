@@ -1,8 +1,0 @@
-# Open-GAP FAB inventiveness: My Lists–shaped FAB with unspecified
-# activation, design TBD, composition `# GAP` pressure, and an already
-# grounded `Page::NewList`. Lifecycle/`expect` grading only — quality
-# is sandbox inspection per README.md.
-kind = "build"
-slice = "open-gap-fab"
-
-expect = [".emery/change/slices/open-gap-fab/composition.yaml"]

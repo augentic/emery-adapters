@@ -1,25 +1,13 @@
 # `documentation.extract`
 
-For one terminal `Lead`, walk `$SOURCE_DIR` (read-only CID view) and return a single `Evidence` document of structured claims. The caller persists the result; this prompt returns the YAML body only. Core synthesis later reconciles this Evidence with every other bound source's into the slice's `spec.md` — see [From sources to slices](../references/emery-runtime/reconciliation.md#slice-time-evidence-becomes-a-spec).
+Walk the whole bound documentation source and return one `Evidence` document of structured claims. The caller persists the result; this answer is the JSON body only. The engine deterministically reconciles this Evidence with every other bound source's into the specification — see [From sources to a spec](../references/emery-runtime/reconciliation.md).
 
 ## Inputs
 
-- `$SOURCE_DIR` — read-only CID view of the bound docs path. Absent when the binding is an inline `value`.
-- **Source key** — the plan source-binding key the engine passed on the wire.
-- **Terminal lead** — the catalog lead the engine passed on `input.focus` (id, synopsis, optional parent/focus). Do not look it up in `leads.md`, or `slices/`. Child extraction inherits parent context from that record.
-- `$SCRATCH_DIR` — write-only scratch space; use only for unavoidable intermediate state.
+- `$SOURCE_DIR` — read-only view of the bound documentation tree. Absent when the binding is an inline `value` (the material is then in the message).
+- **Source key** — the authored binding key the engine passed on the wire.
 
-The change home and `$PROJECT_DIR` are unreachable. Do not read `plan.yaml`, `leads.md`, or `slices/`.
-
-## Locate the lead's docs
-
-The lead id was produced by `documentation.survey` from a top-heading (or a logical section in a monolithic file). Resolve it back:
-
-1. Prefer the file whose top H1 slugs to `<lead>`.
-2. Fall back to the file whose kebab-cased stem equals `<lead>`.
-3. In a monolithic file, anchor to the section whose H1 (or top-most heading) slugs to `<lead>`.
-
-If no doc resolves, return Evidence with `claims: []` rather than fabricating content. The CLI treats empty `claims:` as valid; an unresolvable lead becomes a `Status: unknown` requirement during synthesis.
+Nothing outside the bound source is reachable. Extract mines this source completely in one pass: every document in the tree, top to bottom.
 
 ## Claim kinds
 
@@ -32,40 +20,44 @@ Closed for this adapter:
 | `decision` | `decision` | A design or product decision the docs record (often "Decision:" lines or paragraphs). |
 | `section` | (free-form) | A bounded prose section worth carrying into synthesis verbatim when no finer-grained claim fits. |
 
-`id` is **required** on `requirement` and `criterion` kinds (deterministic reconciliation at synthesis time keys off it). `id` is **optional** on `decision` and `section`. Other claim kinds in `schemas/evidence.schema.json` are out of scope for this adapter.
+The engine's load gate is fail-closed: a `requirement` claim without a `statement` field, or a `criterion` claim without a `criterion` field, fails the whole run with the typed error `claim-extras-missing`. There is no fallback to `synopsis`. Other claim kinds are out of scope for this adapter.
+
+`id` is **required** on `requirement` and `criterion` kinds; deterministic reconciliation keys off it. `id` is **optional** on `decision` and `section`.
+
+## `id` derivation
+
+Ids are the cross-source join key: the engine connects claims across sources only when their ids are byte-equal, so two independent sources describing the same behaviour must converge on the same id.
+
+- Dotted-kebab grammar: `password-reset.expiry`, `session.timeout`.
+- Derive from the domain concept using the docs' own noun phrases (`password-reset.expiry`, not `req-007`) — never from file names, heading positions, or invented counters.
+- A `criterion` id must equal its requirement's id or extend it with a dotted suffix (`password-reset.expiry` or `password-reset.expiry.window`). The engine flags any requirement without such a criterion as an `[unknown]` acceptance gap; a criterion with an unrelated id leaves its requirement uncovered.
 
 ## `path` grammar
 
-Every claim carries a `path` rooted relative to `$SOURCE_DIR`. The grammar matches GitHub-style anchors:
+Every claim from a `$SOURCE_DIR` tree carries a `path` rooted relative to `$SOURCE_DIR`. The grammar matches GitHub-style anchors:
 
 - `<path>` — whole-file claim.
 - `<path>#L<n>` — single line.
 - `<path>#L<start>-L<end>` — line range.
 
-Line numbers are 1-indexed against the file at extract time. Choose the tightest anchor that bounds the cited text.
+Line numbers are 1-indexed against the file at extract time. Choose the tightest anchor that bounds the cited text. Claims from an inline value omit `path`.
 
 ## Output
 
-Return one Evidence document matching `schemas/evidence.schema.json`. Field order is fixed (`authority`, `lead`, `claims`).
+Return one JSON object matching the gated schema — the Evidence body:
 
-```yaml
-authority: documentation
-lead: <lead>
-claims:
-  - kind: requirement
-    id: <kebab-or-dotted-id>
-    path: <relative-path>#L<n>
-    statement: "..."
-  - kind: criterion
-    id: <kebab-or-dotted-id>
-    path: <relative-path>#L<n>
-    criterion: "..."
-  - kind: decision
-    path: <relative-path>#L<n>
-    decision: "..."
+```json
+{
+  "authority": "documentation",
+  "claims": [
+    { "kind": "requirement", "id": "<dotted-kebab-id>", "path": "<relative-path>#L<n>", "statement": "..." },
+    { "kind": "criterion", "id": "<requirement-id>.<suffix>", "path": "<relative-path>#L<n>", "criterion": "..." },
+    { "kind": "decision", "path": "<relative-path>#L<n>", "decision": "..." }
+  ]
+}
 ```
 
-`authority` is always the literal `documentation` (operator-provided written product/technical intent; the authority precedence `intent > documentation > behaviour` is defined in [`authority.md`](../references/emery-runtime/synthesis/authority.md)). `lead` is the supplied terminal lead id. The document's `(slice, source)` identity is path-borne — the caller persists it and stamps the source from the binding — so neither is written in-document.
+`authority` is always the literal `documentation` (operator-provided written product/technical intent; the precedence `intent > documentation > behaviour` is defined in [`authority.md`](../references/emery-runtime/synthesis/authority.md)). The document's source identity is stamped by the engine from the binding — it is not written in-document.
 
 ## Worked example
 
@@ -83,41 +75,30 @@ Acceptance:
 Decision: use the existing transactional email provider rather than introducing a new notification service.
 ```
 
-Output (Evidence for `lead: password-reset`, bound under `source: product-notes`, persisted at `evidence/product-notes.yaml`):
+Output:
 
-```yaml
-authority: documentation
-lead: password-reset
-claims:
-  - kind: requirement
-    id: password-reset.request
-    path: password-reset.md#L3
-    statement: "The account service should let a registered user request a password reset link by email."
-  - kind: criterion
-    id: password-reset.response-privacy
-    path: password-reset.md#L6
-    criterion: "Unknown email addresses receive the same outward response as known users."
-  - kind: criterion
-    id: password-reset.expiry
-    path: password-reset.md#L7
-    criterion: "Reset links expire after 30 minutes."
-  - kind: decision
-    path: password-reset.md#L9
-    decision: "Use the existing transactional email provider rather than introducing a new notification service."
+```json
+{
+  "authority": "documentation",
+  "claims": [
+    { "kind": "requirement", "id": "password-reset.request", "path": "password-reset.md#L3", "statement": "The account service should let a registered user request a password reset link by email." },
+    { "kind": "criterion", "id": "password-reset.request.response-privacy", "path": "password-reset.md#L6", "criterion": "Unknown email addresses receive the same outward response as known users." },
+    { "kind": "criterion", "id": "password-reset.request.expiry", "path": "password-reset.md#L7", "criterion": "Reset links expire after 30 minutes." },
+    { "kind": "decision", "path": "password-reset.md#L9", "decision": "Use the existing transactional email provider rather than introducing a new notification service." }
+  ]
+}
 ```
-
-A full input/output fixture for this example lives at [`quality/fixtures/reference/sources/documentation/`](https://github.com/augentic/emery/tree/main/quality/fixtures/reference/sources/documentation/) in the repo.
 
 ## Determinism
 
-- Emit claims in source order (top of file to bottom). Stable order keeps synthesis golden runs reproducible.
-- Quote statements / criteria / decisions verbatim from the docs where possible. Light grammatical normalisation (capitalisation, terminal punctuation) is allowed; rephrasing is not.
-- Do not invent `id`s. Derive them from the lead id plus a short noun phrase the docs use (`password-reset.expiry`, not `req-007`).
+- Emit claims in source order (file by file in lexicographic path order, top of file to bottom). Stable order keeps re-runs byte-stable.
+- Quote statements / criteria / decisions verbatim from the docs where possible. Light grammatical normalisation (capitalisation, terminal punctuation) is allowed; rephrasing is not — the `statement` value is what reconciliation compares across sources, so paraphrase drift manufactures false conflicts.
+- Do not invent `id`s. Derive them from the docs' own noun phrases.
 
 ## Guardrails
 
-- `$SOURCE_DIR` is read-only. Reads outside it surface as `source-extract-path-denied`; never attempt to widen the preopen.
-- Never write Evidence to disk yourself — return the YAML body; the caller persists it.
-- Never emit closed-enum kinds outside `{requirement, criterion, decision, section}` from this adapter. Spatial kinds (`region`/`container`/`leaf`) belong to `screenshots`; behaviour kinds (`excerpt`/`type`/`call`) belong to code source adapters.
-- Never omit `id` on `requirement` or `criterion`. The CLI validates Evidence against `schemas/evidence.schema.json` before synthesis; a missing `id` fails the slice in `refining`.
-- Empty `claims: []` is valid output when a lead cannot be resolved to any doc content. Do not pad with speculative claims.
+- `$SOURCE_DIR` is read-only; never attempt to read or write outside it.
+- Never write Evidence to disk yourself — return the JSON body; the caller persists it.
+- Never emit claim kinds outside `{requirement, criterion, decision, section}` from this adapter. Behaviour kinds (`excerpt`/`type`/`call`) belong to code source adapters.
+- Never omit `id` on `requirement` or `criterion`, and never omit the kind's required body field — the engine fails the run closed (`claim-extras-missing`) rather than accepting the claim.
+- Empty `claims: []` is valid output when the source genuinely contains no extractable claims. Do not pad with speculative claims; the engine preserves gaps as `[unknown]` rather than guessing.

@@ -1,11 +1,12 @@
-//! Intent survey / extract operation behavior.
+//! Intent extract operation behavior over the extract-only seam.
 
 use std::path::Path;
 
-use adapter::Source as _;
+use adapter::answers::EVIDENCE_ANSWER_SCHEMA;
 use adapter::seam::{
-    Authority, ClaimKind, Context, Error, Lead, SourceContent, SourceInput, SourceWorkspace,
+    Authority, ClaimKind, Context, Error, SourceContent, SourceInput, SourceWorkspace,
 };
+use adapter::{Format, Request, Source as _};
 use intent::Adapter;
 use omnia_testkit::model::Harness;
 
@@ -29,129 +30,109 @@ fn workspace_input(root: &Path) -> SourceInput {
             id: "view-1".to_string(),
             root: root.display().to_string(),
         }),
-        focus: None,
     }
 }
 
-fn extract_input(lead: Lead) -> SourceInput {
-    let mut input = value_input();
-    input.focus = Some(lead);
-    input
+fn schema_format(request: &Request) -> (&str, &str) {
+    match &request.format {
+        Format::Schema(schema) => (&schema.name, &schema.schema),
+        other => panic!("expected schema format, got {other:?}"),
+    }
 }
 
 #[tokio::test]
-async fn survey_inline_binding() {
-    let model = Harness::answering([
-        r#"{"leads":[{"lead":"password-reset","synopsis":"Let users reset passwords by email."}]}"#,
-    ]);
+async fn extract_inline_value() {
+    let model = Harness::answering([r#"{"authority":"intent","claims":[
+            {"kind":"intent","id":"intent","statement":"Let users reset passwords by email."},
+            {"kind":"requirement","id":"password-reset.request","statement":"Users reset passwords by email."}
+        ]}"#]);
 
-    let result = Adapter::survey(&model, &ctx(), &value_input()).await.unwrap();
+    let evidence = Adapter::extract(&model, &ctx(), &value_input()).await.unwrap();
 
-    assert_eq!(result.leads.len(), 1);
-    assert!(result.children.is_empty(), "unfocused returns leads only");
-    let request = &model.requests()[0];
-    assert!(request.system.as_deref().unwrap().starts_with("# intent.survey"));
+    assert_eq!(evidence.authority, Authority::Intent);
+    assert_eq!(evidence.claims.len(), 2);
+    assert_eq!(evidence.claims[0].kind, ClaimKind::Intent);
+    assert_eq!(evidence.claims[0].id.as_deref(), Some("intent"));
+    // The verbatim echo lands on the open claim record's `statement`
+    // extra — the value synthesis reads.
+    assert_eq!(
+        evidence.claims[0].extras.get("statement").and_then(|value| value.as_str()),
+        Some("Let users reset passwords by email."),
+    );
+    // The directive is lifted into a requirement claim so deterministic
+    // reconciliation can join it against other sources (only
+    // `requirement` claims form spec rows).
+    assert_eq!(evidence.claims[1].kind, ClaimKind::Requirement);
+    assert_eq!(evidence.claims[1].id.as_deref(), Some("password-reset.request"));
+    assert_eq!(
+        evidence.claims[1].extras.get("statement").and_then(|value| value.as_str()),
+        Some("Users reset passwords by email."),
+    );
+
+    let requests = model.requests();
+    assert_eq!(requests.len(), 1, "extract is a single judgment leg");
+    let request = &requests[0];
+    assert!(request.system.as_deref().unwrap().starts_with("# intent.extract"));
     let user = &request.messages[0].content;
+    assert!(user.contains("source key `intent`"), "passed source key is named");
     assert!(user.contains("inline value"), "prompt names the inline binding");
-    assert!(user.contains("no `$SOURCE_DIR`"), "prompt says no source tree is bound");
-    assert!(user.contains("exactly one lead"), "prompt carries the degenerate cardinality");
+    assert!(user.contains("no `$SOURCE_DIR` is lent"), "prompt says no source tree is bound");
     assert!(user.contains("Let users reset passwords by email."), "value is on the wire");
-    assert!(user.contains("Do not read `plan.yaml`"), "adapters never parse the plan");
+    assert!(user.contains("verbatim"), "the echo contract is stated");
+    assert!(
+        user.contains("one `kind: \"requirement\"` claim per distinct behavioural directive"),
+        "the reconciliation-join contract is stated"
+    );
+    let (name, schema) = schema_format(request);
+    assert_eq!(name, "evidence");
+    assert_eq!(schema, EVIDENCE_ANSWER_SCHEMA);
     assert!(request.workspace.is_none(), "inline value lends no workspace");
 }
 
 #[tokio::test]
-async fn survey_focused_children() {
+async fn extract_single_file_workspace() {
     let model = Harness::answering([
-        r#"{"children":[{"lead":"reset-expiry","synopsis":"Reset links expire after 30 minutes.","parent":"password-reset","focus":"password-reset"}]}"#,
-    ]);
-    let mut input = value_input();
-    input.focus = Some(Lead::new("password-reset", "Let users reset passwords by email."));
-
-    let result = Adapter::survey(&model, &ctx(), &input).await.unwrap();
-
-    assert!(result.leads.is_empty(), "focused returns children only");
-    assert_eq!(result.children.len(), 1);
-    assert_eq!(result.children[0].lead, "reset-expiry");
-    assert_eq!(result.children[0].parent.as_deref(), Some("password-reset"));
-    let user = &model.requests()[0].messages[0].content;
-    assert!(user.contains("focused survey"), "user message names the focused path");
-    assert!(user.contains("- lead: password-reset"), "parent lead is rendered");
-    assert!(user.contains("`children` array"), "answer shape is children");
-}
-
-#[tokio::test]
-async fn survey_single_file_workspace() {
-    let model = Harness::answering([
-        r#"{"leads":[{"lead":"password-reset","synopsis":"Let users reset passwords by email."}]}"#,
+        r#"{"authority":"intent","claims":[{"kind":"intent","id":"intent","statement":"Let users reset passwords by email."}]}"#,
     ]);
     let root = tempfile::tempdir().unwrap();
     let nested = root.path().join("nested");
     std::fs::create_dir(&nested).unwrap();
     std::fs::write(nested.join("intent.md"), "Let users reset passwords by email.").unwrap();
 
-    let result = Adapter::survey(&model, &ctx(), &workspace_input(root.path())).await.unwrap();
+    let evidence = Adapter::extract(&model, &ctx(), &workspace_input(root.path())).await.unwrap();
 
-    assert_eq!(result.leads.len(), 1);
+    assert_eq!(evidence.claims.len(), 1);
     let user = &model.requests()[0].messages[0].content;
     assert!(
         user.contains("Let users reset passwords by email."),
         "the located file's contents are interpolated as the intent string"
     );
+    assert!(user.contains("one-file tree"), "prompt names the tree binding");
 }
 
+// An unreadable source fails closed before any judgment leg (A14): a
+// tree that is not the one-file encoding is a typed refusal, never an
+// empty success.
 #[tokio::test]
-async fn survey_rejects_multi_file_workspace() {
-    let model = Harness::answering([r#"{"leads":[]}"#]);
+async fn extract_rejects_multi_file_workspace() {
+    let model = Harness::answering([r#"{"authority":"intent","claims":[]}"#]);
     let root = tempfile::tempdir().unwrap();
     std::fs::write(root.path().join("one.md"), "first").unwrap();
     std::fs::write(root.path().join("two.md"), "second").unwrap();
 
-    let result = Adapter::survey(&model, &ctx(), &workspace_input(root.path())).await;
+    let result = Adapter::extract(&model, &ctx(), &workspace_input(root.path())).await;
 
     assert!(matches!(result, Err(Error::InvalidRequest(_))), "got {result:?}");
     assert!(model.requests().is_empty(), "no judgment leg runs on a malformed input");
 }
 
 #[tokio::test]
-async fn survey_rejects_empty_workspace() {
-    let model = Harness::answering([r#"{"leads":[]}"#]);
+async fn extract_rejects_empty_workspace() {
+    let model = Harness::answering([r#"{"authority":"intent","claims":[]}"#]);
     let root = tempfile::tempdir().unwrap();
 
-    let result = Adapter::survey(&model, &ctx(), &workspace_input(root.path())).await;
+    let result = Adapter::extract(&model, &ctx(), &workspace_input(root.path())).await;
 
     assert!(matches!(result, Err(Error::InvalidRequest(_))), "got {result:?}");
     assert!(model.requests().is_empty(), "no judgment leg runs on a malformed input");
-}
-
-#[tokio::test]
-async fn extract_intent_claim() {
-    let model = Harness::answering([
-        r#"{"authority":"intent","claims":[{"kind":"intent","id":"password-reset","statement":"Let users reset passwords by email."}]}"#,
-    ]);
-    let lead = Lead::new("password-reset", "Let users reset passwords by email.");
-
-    let evidence = Adapter::extract(&model, &ctx(), &extract_input(lead)).await.unwrap();
-
-    assert_eq!(evidence.authority, Authority::Intent);
-    assert_eq!(evidence.claims.len(), 1);
-    assert_eq!(evidence.claims[0].kind, ClaimKind::Intent);
-    assert_eq!(evidence.claims[0].id.as_deref(), Some("password-reset"));
-    let request = &model.requests()[0];
-    assert!(request.system.as_deref().unwrap().starts_with("# intent.extract"));
-}
-
-#[tokio::test]
-async fn extract_requires_focus() {
-    let model = Harness::answering::<&str>([]);
-
-    let result = Adapter::extract(&model, &ctx(), &value_input()).await;
-
-    match result {
-        Err(Error::InvalidRequest(detail)) => {
-            assert!(detail.contains("input.focus"), "detail: {detail}");
-        }
-        other => panic!("expected InvalidRequest, got {other:?}"),
-    }
-    assert!(model.requests().is_empty(), "missing focus never reaches the model");
 }

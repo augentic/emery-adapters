@@ -1,6 +1,6 @@
 # Business-logic extraction (Step 2)
 
-Step 2 extracts behaviour from the source's domain code. When `$INCLUDE` / `$EXCLUDE` / `$MANIFEST` are set, restrict the read set for this step and every subsequent step accordingly. Files outside the scoped read set are not analyzed here — business-logic extraction, external-surface documentation, and type capture operate only on the filtered tree. Sentinel files ([scope-filters.md](scope-filters.md) §"Sentinels always read") remain available to Step 1 but do not feed Step 2's business-logic pass unless they also match the scope filter.
+Step 2 extracts behaviour from the source's domain code. The read set is the whole bound source tree under `$SOURCE_DIR`, minus the skip roots and test files the extract prompt excludes.
 
 ## Semantic discovery (optional but recommended)
 

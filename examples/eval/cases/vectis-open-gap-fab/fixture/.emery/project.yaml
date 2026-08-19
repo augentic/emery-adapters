@@ -1,6 +1,0 @@
-name: open-gap-fab-eval
-adapter: vectis
-emery: 0.37.0
-platforms:
-  - core
-  - ios

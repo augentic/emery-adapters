@@ -39,10 +39,10 @@ Read the source at `$SOURCE_PATH` and identify:
    status mapping, body injection/transformation, parameter sourcing, and any
    validation performed before the domain handler.
 
-Scope filters never hide manifest files from this step — see
-[scope-filters.md](scope-filters.md) §"Sentinels always read". Language
-detection and dependency extraction always run against the full set of
-sentinel files regardless of `$INCLUDE` / `$EXCLUDE` / `$MANIFEST`.
+Language detection and dependency extraction always run against the full
+set of sentinel manifest files (`package.json`, lock files, and their
+per-stack equivalents), regardless of which subtrees the behavioural
+passes focus on.
 
 ## Dependency version pinning
 

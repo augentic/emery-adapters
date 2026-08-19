@@ -7,9 +7,15 @@ use adapter::registry::{body, find};
 use intent::Adapter;
 
 #[test]
-fn embeds_prompts() {
-    assert!(body(Adapter::docs(), "prompts/survey.md").starts_with("# intent.survey"));
+fn embeds_extract_prompt() {
     assert!(body(Adapter::docs(), "prompts/extract.md").starts_with("# intent.extract"));
+}
+
+/// Survey is deleted from the seam (ADR-0008); no survey prose may
+/// ride in the component.
+#[test]
+fn no_survey_prose() {
+    assert!(find(Adapter::docs(), "prompts/survey.md").is_none(), "survey prose is deleted");
 }
 
 /// Intent ships no references of its own — its `references/` tree holds
