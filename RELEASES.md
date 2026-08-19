@@ -1,31 +1,16 @@
-## 0.12.0
+## 0.13.0
 
 Unreleased
 
-### Added
-
-- Vectis: canonical UI bindings — composition inline `test_id` projects to `ui-contract/test-ids.yaml` during `emery build`; display strings / fixed errors / seed live under `ui-contract/`; deterministic in-guest verify gates (`canonical-ui-literal-hardcoded`, `canonical-test-id-raw`, `canonical-test-tag-resource-id`, `canonical-test-id-projection-stale`, `canonical-seed-version`). See [`targets/vectis/prose/references/canonical-ui-bindings.md`](targets/vectis/prose/references/canonical-ui-bindings.md).
-- Vectis: platform-scoped template materialize — `iOS/` / `Android/` copy only when listed in `project.yaml.platforms`; allowlist also covers `ui-contract/`.
-- Vectis: open-GAP inventiveness contract — default stub-faithful for unspecified scenarios; same-build B′ closure of build-editable surfaces (`spec.md` scenario body, `design.md` TBD, composition `# GAP`) only when a grounded destination exists; LOG-010 review check (`important`, default `code-fix`).
-- Eval: `vectis-open-gap-fab` build case — My Lists–shaped FAB with unspecified activation + grounded `Page::NewList` pressure; pass criteria and consumer Wasm desk-check in the [case README](examples/eval/cases/vectis-open-gap-fab/README.md).
-
 ### Changed
 
-- Vectis: LOG-007 scoped to input-validation / adversarial gaps on otherwise specified actions (not navigation inventiveness); core review Logic specialist and non-mechanical set cover LOG-001..010; UNI-004 dedupe range bumped accordingly.
+- Extract-only re-seam (ADR-0008 / ADR-0009): each source adapter exports `extract` + `metadata` only. Survey prompts, the target axis (`vectis`, `omnia`, `contracts`), and the extra extract sources (`captures`, `screenshots`) are deleted from the live tree — retrieve them at tag `v1`.
+- Engine crates import under their package names (`emery_adapter::`, `emery_prose::`). Until an engine release tag carries the extract-only SDK, `[patch.crates-io]` fetches `augentic/emery` by git (path patches stay commented for sibling co-development).
+- The graded live eval is a public-contract client of the shipped `emery` binary: `init` + `specify` over the built components, mechanical CC-05 / CC-06 grading, dated scorecard. Operator-invoked, never CI. Catalog: `orders-docs`, `omnia-r9k`.
 
 ### Requires
 
-- Matching [`augentic/vectis-exemplar`](https://github.com/augentic/vectis-exemplar) checkout that includes `ui-contract/`. An older exemplar (`main` before that landed) fails materialize with an actionable missing-shape error — update the sibling clone (or `VECTIS_EXEMPLAR_DIR`) before greenfield builds.
-- Sibling [`augentic/emery`](https://github.com/augentic/emery) checkout at `../emery` that includes the local `emery-composition` crate (path workspace dep until emery tags `v0.38.0` and this repo switches the pin to that tag).
-
-### Desk-check (unreleased Wasm)
-
-```bash
-cargo build -p vectis --target wasm32-wasip2 --release   # or: cargo make release
-emery adapter add target/wasm32-wasip2/release/vectis.wasm
-# then: emery plan execute  (todo-app — drives the build phase)  and/or
-#       cargo make eval vectis-open-gap-fab --restart
-```
+- Engine revision that exports the extract-only `emery-adapter` / `emery-prose` crates under those import names (the git pin in the root `Cargo.toml`, currently emery `main`). The first adapter train publish waits on an engine release tag.
 
 ---
 

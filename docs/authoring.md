@@ -13,7 +13,7 @@ Toolchain setup, layout conventions, and publishing mechanics live in [CONTRIBUT
 
 An adapter is one Rust crate that ships as one Wasm component exporting the `source-adapter` world from the `emery:adapter` WIT package (owned by [`augentic/emery`](https://github.com/augentic/emery)). There is no manifest file: identity is the crate's `name` + `version`, and resolve-time metadata comes from the component's own `metadata` export.
 
-You never touch WIT directly. The `adapter` SDK hides the bindings behind the `emery_adapter::Source` trait, implemented on a unit struct; a one-line macro (`emery_adapter::source!`) wires that implementor into the component exports.
+You never touch WIT directly. The `emery-adapter` SDK hides the bindings behind the `emery_adapter::Source` trait, implemented on a unit struct; a one-line macro (`emery_adapter::source!`) wires that implementor into the component exports.
 
 What the engine calls:
 

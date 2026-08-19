@@ -853,6 +853,7 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 [[package]]
 name = "emery-adapter"
 version = "0.38.0"
+source = "git+https://github.com/augentic/emery#a191a935acb2f541b36271cae803cf97007f7d08"
 dependencies = [
  "omnia-guest",
  "omnia-wasi-http",
@@ -866,6 +867,7 @@ dependencies = [
 [[package]]
 name = "emery-prose"
 version = "0.38.0"
+source = "git+https://github.com/augentic/emery#a191a935acb2f541b36271cae803cf97007f7d08"
 
 [[package]]
 name = "encoding_rs"

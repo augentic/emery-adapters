@@ -4,7 +4,7 @@ Human-facing contributor guide (toolchain, layout, prompts, pin, publishing). Cr
 
 ## Getting started
 
-1. Clone this repository **and the sibling engine checkout at `../emery`** — until an engine release carries the extract-only SDK, the engine crates (`emery-adapter`, `emery-prose`) resolve through the active `[patch.crates-io]` path patches in the root `Cargo.toml` (see [Engine pin and sibling co-development](#engine-pin-and-sibling-co-development)); once that release exists the pin moves to its tag (`tag = "vX.Y.Z"`, RFC-77 D13) and the sibling is needed only for co-development and the live eval (it drives that repo's built `emery` binary).
+1. Clone this repository. Until an engine release carries the extract-only SDK, the engine crates (`emery-adapter`, `emery-prose`) resolve through the `[patch.crates-io]` git patches in the root `Cargo.toml` (see [Engine pin and sibling co-development](#engine-pin-and-sibling-co-development)); once that release exists the pin moves to its tag (`tag = "vX.Y.Z"`, RFC-77 D13). A sibling `../emery` checkout is needed only for co-development (uncomment the path patches) and the live eval (it drives that repo's built `emery` binary).
 2. `rustup` picks up the pinned **stable** toolchain from `rust-toolchain.toml` (including the `wasm32-wasip2` target); a nightly toolchain is additionally needed for the `fmt` arm (`cargo +nightly fmt`). Install `cargo-make`, `cargo-nextest`, `cargo-deny`, and `cargo-vet`. Publishing also uses `wkg`.
 3. Run `cargo make check` from the repo root. Before opening a PR, run `cargo make ci`.
 
@@ -16,7 +16,7 @@ Unless you are fixing a known bug, discuss larger changes in a GitHub issue firs
 
 - **`cargo make fmt` fails** — the fmt arm shells out to `cargo +nightly fmt`; install any nightly toolchain (`rustup toolchain install nightly --component rustfmt`).
 - **`cargo make eval` refuses immediately** — it needs the sibling shipped binary (`cargo build --release --bin emery` in `../emery`, or `EMERY_BIN`) and the built components (`cargo make release`); the live model backend is the binary's own (the Cursor client).
-- **Patch-resolution errors after editing the root `Cargo.toml`** — the path patches in `[patch.crates-io]` only resolve when `../emery` exists; they stay active until an engine release carries the extract-only SDK, so a sibling checkout is currently required.
+- **Patch-resolution errors after editing the root `Cargo.toml`** — the committed `[patch.crates-io]` git patches fetch `augentic/emery`; the commented path patches only resolve when `../emery` exists. Do not commit active path patches: CI has no sibling checkout.
 
 ## Layout
 
@@ -51,10 +51,10 @@ Adapter prompts are markdown documents compiled into the guest and driven by the
 
 Two compatibility choices are independent:
 
-1. **WIT contract version** — the `emery:adapter` WIT package, embedded in the `adapter` SDK and published from `augentic/emery`'s `wit/emery.wit`.
+1. **WIT contract version** — the `emery:adapter` WIT package, embedded in the `emery-adapter` SDK and published from `augentic/emery`'s `wit/emery.wit`.
 2. **Engine revision** — the workspace resolves `emery-adapter` and `emery-prose` on `augentic/emery`, pinned by **release tag** (`tag = "vX.Y.Z"` in the root `Cargo.toml`; RFC-77 D13) plus the committed `Cargo.lock`. Advancing the pin is deliberate: bump the tag on both dependencies, run `cargo update -p emery-adapter -p emery-prose`, and commit both files — never resolve a floating branch.
 
-For sibling co-development against uncommitted engine changes, use the path patches in the root `Cargo.toml` `[patch.crates-io]` block (they point at `../emery`); they must never be active at publish time. **Current state**: the patches are active — the extract-only SDK is not yet on a tagged engine release, so the tag pin (and with it the first adapter train publish) waits on that release cut.
+For sibling co-development against uncommitted engine changes, uncomment the path patches in the root `Cargo.toml` `[patch.crates-io]` block (they point at `../emery`); they must never be active on the committed tree or at publish time. **Current state**: git patches are active — the extract-only SDK is not yet on a tagged engine release, so the tag pin (and with it the first adapter train publish) waits on that release cut.
 
 ## Local development loops
 

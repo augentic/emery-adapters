@@ -16,7 +16,7 @@ Fastest feedback first. **Every behavior is asserted on exactly one rung** — d
 
 Ownership boundaries: `omnia-testkit` owns reusable model test mechanics; adapter `tests/` own extract behavior; the eval runner owns grading and the scorecard, and stays a client of the shipped `emery` binary's public contract (architecture-review T6) — it never links engine crates, and CI never runs the live rung. WASM/WIT conformance of the seam itself is the engine repository's journey rung.
 
-Sibling co-development: the path patches in the root `Cargo.toml` `[patch.crates-io]` block resolve engine crates from `../emery`.
+Sibling co-development: uncomment the path patches in the root `Cargo.toml` `[patch.crates-io]` block to resolve engine crates from `../emery`. The committed tree uses git patches so CI can fetch the engine without a sibling checkout.
 
 Testing a brand-new adapter: [authoring.md](authoring.md).
 
