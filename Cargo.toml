@@ -24,14 +24,11 @@ omnia-testkit = "0.35.0"
 emery-adapter = "0.38.0"
 emery-prose = "0.38.0"
 
-# The sibling co-development patches (uncomment the git lines and drop
-# the path lines once an engine release carries the extract-only SDK;
-# the pin then moves to `tag = "vX.Y.Z"` per RFC-77 D13).
 [patch.crates-io]
-# emery-adapter = { git = "https://github.com/augentic/emery" }
-# emery-prose = { git = "https://github.com/augentic/emery" }
-emery-adapter = { path = "../emery/crates/adapter" }
-emery-prose = { path = "../emery/crates/prose" }
+emery-adapter = { git = "https://github.com/augentic/emery" }
+emery-prose = { git = "https://github.com/augentic/emery" }
+# emery-adapter = { path = "../emery/crates/adapter" }
+# emery-prose = { path = "../emery/crates/prose" }
 
 omnia = { git = "https://github.com/augentic/omnia" }
 omnia-guest = { git = "https://github.com/augentic/omnia" }
