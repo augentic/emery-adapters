@@ -1,9 +1,0 @@
-# The omnia create-mode build: scaffold a fresh guest crate for a
-# single liveness endpoint from a refined slice.
-kind = "build"
-slice = "health"
-
-# Deterministic artifact-exists gate: a success report must leave the
-# create-mode crate in the product tree (kebab slice → snake crate
-# path per the omnia build prompt).
-expect = ["crates/health/Cargo.toml", "crates/health/src/lib.rs"]

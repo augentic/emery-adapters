@@ -1,8 +1,0 @@
-# The contracts `import` sub-flow: normalise a vendor-supplied OpenAPI
-# document (authorship mode: import existing contracts).
-kind = "build"
-slice = "import-ticket-api-contract"
-
-# Deterministic artifact-exists gate: a success report must leave the
-# slice contracts delta non-empty.
-expect = [".emery/change/slices/import-ticket-api-contract/contracts"]

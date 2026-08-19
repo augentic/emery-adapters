@@ -1,7 +1,0 @@
-# TypeScript → omnia. The sibling definition/ is a reviewed handoff;
-# `clone` populates the gitignored fixture cache the locator names.
-kind = "workflow"
-change = "at-r9k-position-adapter"
-wave = "deliver"
-definition = "definition"
-clone = { url = "https://bitbucket.org/Propellerhead/at_r9k_position_adapter.git", dest = "legacy/at_r9k_position_adapter" }

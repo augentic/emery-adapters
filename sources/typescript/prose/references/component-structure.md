@@ -24,7 +24,7 @@ Before analyzing code, reason through these questions:
 
 ## ANALYZE
 
-Read the source at `$SOURCE_PATH` and identify:
+Read the source at `$SOURCE_DIR` and identify:
 
 1. **Source language** — detect from file extensions.
 2. Entry points (`main.*`, `index.*`, handler exports, `func main()`,
@@ -39,10 +39,10 @@ Read the source at `$SOURCE_PATH` and identify:
    status mapping, body injection/transformation, parameter sourcing, and any
    validation performed before the domain handler.
 
-Scope filters never hide manifest files from this step — see
-[scope-filters.md](scope-filters.md) §"Sentinels always read". Language
-detection and dependency extraction always run against the full set of
-sentinel files regardless of `$INCLUDE` / `$EXCLUDE` / `$MANIFEST`.
+Language detection and dependency extraction always run against the full
+set of sentinel manifest files (`package.json`, lock files, and their
+per-stack equivalents), regardless of which subtrees the behavioural
+passes focus on.
 
 ## Dependency version pinning
 
@@ -63,8 +63,8 @@ For each dependency, record: package name, **exact version** from lock file
 (e.g., `1.4.0`, not `^1.4`), whether it is direct or transitive, and any
 feature flags / optional features enabled.
 
-In the design.md Dependencies section, list the **manifest version
-specifier** (e.g., `"1.0.100"` from Cargo.toml, `"^2.3.0"` from package.json)
+In your dependency claims, record the **manifest version specifier**
+(e.g., `"1.0.100"` from Cargo.toml, `"^2.3.0"` from package.json)
 as the primary version — this is what goes into the generated project's
 dependency declaration. Also note the lock file resolved version for API
 compatibility reference.

@@ -3,153 +3,72 @@
 [![CI](https://github.com/augentic/emery-adapters/actions/workflows/ci.yaml/badge.svg)](https://github.com/augentic/emery-adapters/actions/workflows/ci.yaml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
-First-party **source** and **target** Wasm components for [Emery](https://github.com/augentic/emery).
+First-party **source** Wasm components for [Emery](https://github.com/augentic/emery)'s specification generator: `documentation`, `intent`, and `typescript`.
 
-**Using Emery in a project?** You do not need this repository. Install adapters with a pin from the engine CLI — for example `emery init contracts@0.5.0` — and follow the [Emery README](https://github.com/augentic/emery#readme).
+**Using Emery in a project?** You do not need this repository. The first-party sources ship embedded in the `emery` binary; follow the [Emery README](https://github.com/augentic/emery#readme).
 
-**Authoring or debugging an adapter?** This repo is your home. Edit prose or Rust, then re-run a live eval case until it passes.
+**Authoring or debugging an adapter?** This repo is your home. Edit prose or Rust, run the crate tests, then run a graded live eval case.
 
-The pin you pass to `emery` (`contracts@0.5.0`) is this workspace’s shared SemVer (`[workspace.package].version`). Operators consume published GHCR artifacts; authors iterate here natively without a Wasm rebuild for prose changes.
-
-## Choose your path
-
-| I want to… | Go to |
-| --- | --- |
-| Fix or tune adapter prompts / references | [Quick start](#quick-start) → [Repair loop](#repair-loop) |
-| Fix Rust adapter logic | [Rust-only loop](#rust-only-loop) · [docs/testing.md](docs/testing.md) |
-| Create a new adapter (source or target) | [docs/authoring.md](docs/authoring.md) |
-| Set up the toolchain, publish, or bump the engine pin | [CONTRIBUTING.md](CONTRIBUTING.md) |
-| Use Emery as an operator | [Emery README](https://github.com/augentic/emery#readme) — leave this repo |
-
-The root `Makefile` forwards goals to [cargo-make](Makefile.toml); docs use `cargo make …` so flags like `--restart` are not eaten by GNU Make.
+The version operators pin (`documentation@0.13.0`) is this workspace's shared SemVer (`[workspace.package].version`); published components live on GHCR.
 
 ## What an adapter is
 
-An adapter is one Rust crate that ships as one Wasm component. The engine calls its operations; you never hand-edit lifecycle or `plan.yaml` from adapter code.
+An adapter is one Rust crate that ships as one Wasm component exporting the `source-adapter` world (`extract` + `metadata`). The engine binds sources at `emery init`, dispatches one `extract` per binding during `emery specify`, and reconciles the returned Evidence documents into `spec.md` / `design.md`. Adapters never orchestrate lifecycle.
 
-| Role | Operations | Examples |
+| Adapter | Authority | Extracts |
 | --- | --- | --- |
-| **Source** | `survey`, `extract` | intent, documentation, typescript, screenshots, captures |
-| **Target** | `guidance`, `build`, `merge` | contracts, omnia, vectis |
-
-How adapters show up for operators: pinned package (`contracts@0.5.0` / `emery:contracts@0.5.0`) pulls from GHCR on first use; bare names resolve only a project component cache seeded by `emery adapter add` or a local `.wasm` at init. Details: [Emery adapter install notes](https://github.com/augentic/emery/blob/main/docs/reference/cli/init.md) and [CONTRIBUTING.md § Publishing](CONTRIBUTING.md#publishing).
+| `sources/documentation` | documentation | written specs, guides, ADRs — requirement / criterion / decision claims |
+| `sources/intent` | intent | the operator's brief, verbatim plus its directives as requirement claims |
+| `sources/typescript` | behaviour | TS/JS estates — requirement claims backed by excerpt / type / call detail |
 
 ## Rust-only loop
 
-Native crate tests do **not** need `cursor-agent` or model credentials:
+Native crate tests need no model credentials:
 
 ```bash
 cargo make check
-cargo nextest run -p contracts    # or any adapter crate name
+cargo nextest run -p documentation   # or intent, typescript
 ```
 
-Use this path for Rust logic, validators, and deterministic behavior. Live eval (below) is for prompt quality.
+## Graded live eval
 
-## Prerequisites (live eval)
-
-Needed only for `cargo make eval …`:
-
-1. Authenticated [`cursor-agent`](https://cursor.com/docs/cli) on `PATH` — `cursor-agent login`, or `CURSOR_API_KEY` in a repo-root `.env` (the `eval` task loads it).
-2. Optional: `CURSOR_MODEL=<model-id>`, `CURSOR_TIMEOUT_SECS=<secs>` (unset → Cursor backend default of 600s).
-
-If eval hangs or fails authenticating, check `cursor-agent` login / `.env` — see [CONTRIBUTING.md § Troubleshooting](CONTRIBUTING.md#troubleshooting-first-runs). Grading is **deterministic** (not a model): the eval binary links every first-party adapter into a native catalog and drives production verbs through the shared cursor backend.
-
-## Quick start
-
-From the repository root, run one build case (~2–5 minutes; needs cursor auth):
+The live rung is a **public-contract client**: it spawns the sibling shipped `emery` binary over the built components, drives `init` + `specify` across the component seam, grades the committed spec set, and writes the dated scorecard the emery release gate verifies. Operator-invoked, never CI.
 
 ```bash
-cargo make eval contracts-design --restart
+cargo make release                   # build the components
+# build the sibling binary: cargo build --release --bin emery (in ../emery)
+cargo make eval                      # every case
+cargo make eval orders-docs          # one case
 ```
 
-A passing run prints the retained sandbox and the authoritative report path — `.emery/change/slices/returns-api/contracts/` in that sandbox carries the generated contract delta. A success report that wrote nothing still fails the case's `expect` gate.
-
-To start developing, edit the contracts adapter’s prompts or references under `targets/contracts/prose/`, then run the same command again and compare the sandbox with the previous run (`--restart` replaces it). Native runs pick up prose changes automatically — no Wasm build is required.
-
-```bash
-cargo make eval    # list the cases
-```
-
-| Target | Smoke case |
-| --- | --- |
-| contracts | `cargo make eval contracts-design --restart` |
-| omnia | `cargo make eval omnia-health --restart` |
-| vectis | `cargo make eval vectis-single-screen --restart` |
-| vectis (open-GAP) | `cargo make eval vectis-open-gap-fab --restart` — [pass criteria](examples/eval/cases/vectis-open-gap-fab/README.md) |
-
-## Build vs workflow cases
-
-Prefer a **build case** when iterating on one target adapter's build (minutes). Use a **workflow case** only when you need `plan → refine → execute → finalize` or real source trees (tens of minutes). Catalog: [examples/eval/README.md](examples/eval/README.md).
-
-| | Build case | Workflow case |
-| --- | --- | --- |
-| Command | `cargo make eval <id> --restart` | `cargo make eval <id> [--until plan]` (an existing sandbox resumes; `--restart` reruns from fresh state) |
-| Fixture | committed refined slice | source trees + intent, plan authored live |
-| Gates | `built` metadata, `build/report.yaml`, `expect` paths | authored plan awaiting review, drained plan, provenance |
-
-Omnia has a stock migration workflow case; the `UNLICENSED` Propellerhead upstream is shallow-cloned into the case's gitignored `fixture/` cache on first run and reused offline after that:
-
-```bash
-cargo make eval omnia-r9k --restart      # typescript at_r9k_position_adapter → omnia
-```
-
-Depth: [eval README § Omnia legacy migration](examples/eval/README.md#omnia-legacy-migration-r9k).
-
-## After a run
-
-Every case keeps one stable sandbox at `sandbox/<id>/` (beside the wasm examples' `sandbox/wasm-*/` trees), on success and failure alike:
-
-```text
-sandbox/<id>/
-  plan.yaml / change.md / discovery.yaml / leads.md   # workflow cases
-  .emery/change/slices/<slice>/               # proposal, specs, design, tasks, evidence
-  .emery/change/slices/<slice>/build/report.yaml   # the authoritative build report
-  …target outputs (contracts, crates/, shells, …)
-```
-
-Grading checks lifecycle, the report, `expect` paths, and (workflow) provenance; target quality is still a human look — see [eval README § Grading](examples/eval/README.md#grading). Per-leg repair counts are reported, not asserted; drift toward the repair budget is an early signal that prose or answer-schema changes degraded the first answer.
-
-A failed or stopped workflow run is continued — graded — by re-running the same command: an existing sandbox holding an authored plan resumes at `plan refine`; a bound-not-authored sandbox re-runs `plan author`, which resumes its open and parked domains. Build sandboxes and unbound workflow sandboxes refuse without `--restart` (build-case repair is `--restart`). Inspect a retained sandbox with a bound native verb:
-
-```bash
-cargo make eval orders-contracts plan status
-```
+Prerequisites, cases, measurements, and the scorecard schema: [`examples/eval/README.md`](examples/eval/README.md). The `omnia-r9k` case shallow-clones its `UNLICENSED` upstream into a gitignored fixture cache on first run.
 
 ## Repair loop
 
-1. Edit `{targets,sources}/<name>/prose/**` (prompts, references, rules). Cases load prose from the linked crates — no Wasm rebuild.
-2. Re-run the same case (e.g. `cargo make eval contracts-design --restart`).
-3. Compare the sandbox tree and report to the previous run.
-4. Repeat until the case passes and the artifacts look right.
+1. Edit `sources/<name>/prose/**` (the extract prompt, references, rules).
+2. `cargo make adapter <name>` to rebuild the component, then re-run the eval case.
+3. Compare the retained sandbox (`sandbox/<case>/`) and scorecard with the previous run.
 
-Do not burn a workflow case for a prompt typo — use a build case, or [add one](examples/eval/README.md#case-shapes). Native crate tests (`cargo nextest run -p <adapter>`) stay the Rust inner loop; live eval is for prompt quality. See [docs/testing.md](docs/testing.md).
+Native crate tests stay the Rust inner loop; live eval is for prompt quality. See [docs/testing.md](docs/testing.md).
 
 ## Stuck?
 
 | Symptom | What to check |
 | --- | --- |
-| Eval hangs / auth errors | `cursor-agent login` or `CURSOR_API_KEY` in repo-root `.env` |
 | `cargo make fmt` fails | Install nightly rustfmt: `rustup toolchain install nightly --component rustfmt` |
-| `cargo make wasm-contracts` / `wasm-omnia-r9k` fails immediately | Needs sibling [`augentic/emery`](https://github.com/augentic/emery) at `../emery` |
-| Patch-resolution errors after editing root `Cargo.toml` | `[patch."https://github.com/augentic/emery.git"]` needs `../emery`; re-comment if not co-developing |
-| Case fails with a green-looking report | Check `expect` paths in `case.toml` — missing files fail the gate |
-| `sandbox … already exists` (build case) | Rerun with `--restart`; a workflow sandbox with an authored plan resumes via `cargo make eval <id>` instead |
+| Eval refuses: binary missing | Build the sibling [`augentic/emery`](https://github.com/augentic/emery) release binary, or set `EMERY_BIN` |
+| Eval refuses: component missing | `cargo make release` |
+| Patch-resolution errors after editing root `Cargo.toml` | The `[patch.crates-io]` path patches need `../emery`; pin to a release tag if not co-developing |
 
-More first-run tips: [CONTRIBUTING.md](CONTRIBUTING.md#troubleshooting-first-runs). Bugs and questions: [GitHub Issues](https://github.com/augentic/emery-adapters/issues).
+Bugs and questions: [GitHub Issues](https://github.com/augentic/emery-adapters/issues).
 
 ## Further reading
 
-| Topic | Doc |
-| --- | --- |
-| Creating an adapter | [docs/authoring.md](docs/authoring.md) |
-| Eval case catalog (build + workflow) | [examples/eval/README.md](examples/eval/README.md) |
-| Toolchain, layout, publishing | [CONTRIBUTING.md](CONTRIBUTING.md) |
-| Test rungs | [docs/testing.md](docs/testing.md) |
-| Wasm / WIT seam | [examples/wasm/README.md](examples/wasm/README.md) |
-| Agent / contract rules | [AGENTS.md](AGENTS.md) |
-| Operator docs (engine) | [Emery README](https://github.com/augentic/emery#readme) · [hosted guide](https://emery.augentic.io/) |
-| Lab CLI (native catalog; not the shipped CLI) | `cargo make eval -- --project-dir <dir> slice list` |
+- Contributor setup, engine pin, publishing: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Creating an adapter: [docs/authoring.md](docs/authoring.md)
+- Test ownership: [docs/testing.md](docs/testing.md)
+- Agent instructions: [AGENTS.md](AGENTS.md)
 
 ## License
 
-Dual-licensed under [MIT](LICENSE-MIT) or [Apache 2.0](LICENSE-APACHE), at your option. Contribution norms (including DCO) match the engine repo — see [emery CONTRIBUTING](https://github.com/augentic/emery/blob/main/CONTRIBUTING.md). [Code of Conduct](CODE-OF-CONDUCT.md).
+MIT OR Apache-2.0.

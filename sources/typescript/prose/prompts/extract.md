@@ -1,25 +1,23 @@
 # TypeScript / JavaScript source extract
 
-The engine invokes this prompt once per terminal `(source, lead)` pair whose adapter is `typescript`. Your job: locate the matching TypeScript module(s) under `$SOURCE_DIR`, read the surrounding code, and emit one Evidence YAML document. The caller persists it; this prompt returns the body only.
+The engine invokes this prompt once per bound `typescript` source. Your job: walk the whole source tree under `$SOURCE_DIR`, read the code, and emit one Evidence document covering the behaviour the estate actually exhibits. The caller persists it; this answer is the JSON body only. The engine deterministically reconciles it with every other bound source's Evidence into the specification — see [From sources to a spec](../references/emery-runtime/reconciliation.md).
 
 ## Inputs
 
-- **`$SOURCE_DIR`** — read-only CID view of the bound source root (same path the survey prompt walked). Walk it; resolve `tsconfig.json` `paths` mappings relative to it. Absent when the binding is an inline `value`.
-- **Terminal lead** — the catalog lead the engine passed on `input.focus` (id, synopsis, optional parent/focus). That record tells you which surface(s) to extract. Do not look it up in `leads.md`, or `slices/`. Child extraction inherits parent context from the passed record.
-- **Source key** — the kebab-case source key the engine passed on the wire.
+- **`$SOURCE_DIR`** — read-only view of the bound source root. Walk it; resolve `tsconfig.json` `paths` mappings relative to it. Absent when the binding is an inline `value` (the material is then in the message).
+- **Source key** — the kebab-case binding key the engine passed on the wire.
 
-The change home and `$PROJECT_DIR` are unreachable; do not attempt to read project lifecycle state. Do not read `plan.yaml`, `leads.md`, or `slices/`. Writes back into `$SOURCE_DIR` are denied. Use `$SCRATCH_DIR` for any internal staging.
+Nothing outside the bound source is reachable; writes back into `$SOURCE_DIR` are denied. Extract mines the entire estate in one pass: every entry point, handler, and domain module in scope.
 
 ## References
 
-Load on demand when the lead's surface needs deeper analysis. The bodies carry TypeScript-specific extraction depth.
+Load on demand when a surface needs deeper analysis. The bodies carry TypeScript-specific extraction depth.
 
 - [`references/business-logic.md`](../references/business-logic.md) — depth-first domain extraction by handler / module.
 - [`references/component-structure.md`](../references/component-structure.md) — language detection, entry points, module organisation, async patterns.
 - [`references/dependencies.md`](../references/dependencies.md) — external service classification (database, message broker, cache, identity provider, API, WebSocket).
 - [`references/external-api.md`](../references/external-api.md) — tracing deserialization code for HTTP/API calls; URLs, headers, request/response shapes, auth, retries, timeouts.
 - [`references/observability.md`](../references/observability.md) — metric and trace capture: names, types, emission points, labels.
-- [`references/scope-filters.md`](../references/scope-filters.md) — include / exclude / manifest filter semantics.
 - [`references/verification.md`](../references/verification.md) — final validation checklist before emitting evidence.
 - [`references/design-template.md`](../references/design-template.md) — the design surface downstream synthesis fills; the claim-coverage checklist extraction must satisfy.
 - [`references/language-mapping.md`](../references/language-mapping.md) — TypeScript → Rust mapping cheatsheet (idioms, error handling, async, serialization).
@@ -28,98 +26,80 @@ Load on demand when the lead's surface needs deeper analysis. The bodies carry T
 - [`references/semantic-search.md`](../references/semantic-search.md) — codebase search strategies for finding behaviour.
 - [`references/examples/`](../references/examples/) — worked examples: outbound HTTP, branching/caching, parallel execution.
 
-## Output: Evidence YAML
-
-Return one Evidence document matching `schemas/evidence.schema.json`. The CLI atomically writes it to `evidence/<source>.yaml`; you produce the body. Top-level fields are required:
-
-```yaml
-authority: behaviour
-lead: <lead>
-claims:
-  - kind: excerpt
-    path: <ts-path>#L<start>-L<end>
-    excerpt: "<short context — see Anchors and excerpts>"
-  - kind: type
-    path: <ts-path>#L<line>
-    signature: "<type alias / interface / class signature>"
-  - kind: call
-    path: <ts-path>#L<line>
-    callee: "<module>:<symbol>"
-```
-
-`authority` is fixed at `behaviour` for this adapter. `lead` is kebab-case (validated by `evidence.schema.json` against `^[a-z0-9]+(-[a-z0-9]+)*$`). The document's `(slice, source)` identity is path-borne — the caller persists it and stamps the source from the binding — so neither is written in-document. `claims: []` is valid when the lead has no in-scope code under `$SOURCE_DIR` — failure surfaces as a host-runner error, not as an empty file.
-
 ## Claim kinds
 
-This adapter emits three kinds from the closed enum (`evidence.schema.json#/$defs/claimKind`):
+This adapter emits from the closed enum:
 
-- **`excerpt`** — a behavioural code span. Use this for handler bodies, validation logic, error paths, and other behaviour the requirement / criterion synthesis will reconcile on. One claim per span; spans should be focused (typically 5–80 lines of source) and accompanied by a short `excerpt:` field carrying enough context for the reader to understand the behaviour. **Do not dump raw file contents.** The `path:` anchor is the source of truth; the `excerpt:` field is short context, not a verbatim file paste.
-- **`type`** — a declared interface, type alias, class declaration, or DTO. Use this when synthesis will need the shape of an input / output (e.g. `CreateUserDto`, `RegistrationResult`). The body field is `signature:` — the declaration's source spelling (one line preferred; multi-line acceptable for short class headers).
-- **`call`** — an observed cross-module call that contributes to the lead's behaviour. Use this when synthesis must know that a handler delegates to another module (the call is the wire). The body field is `callee:` — `<module>:<symbol>` matching the `handler` resolution rules from the survey prompt (named export, `<ClassName>.<method>`, framework-suffixed inline arrow, etc.).
+| Kind | Required body field | When to emit |
+|---|---|---|
+| `requirement` | `statement` | A behavioural fact the code exhibits, stated as one present-tense sentence about the system. These are the claims deterministic reconciliation joins against documentation and intent. |
+| `excerpt` | `excerpt` (free-form) | A behavioural code span backing a requirement: handler bodies, validation logic, error paths. |
+| `type` | `signature` (free-form) | A declared interface, type alias, class declaration, or DTO whose shape synthesis will need. |
+| `call` | `callee` (free-form) | An observed cross-module call that contributes to behaviour (the call is the wire). |
 
-`id` is optional on `excerpt` / `type` / `call` (per `evidence.schema.json` — required only on `requirement` and `criterion`). You MAY carry it for deterministic cross-source reconciliation when the claim corresponds to a stable concept; otherwise omit it.
+**`requirement` claims are the reconciliation currency.** Only `kind: requirement` claims form spec requirement rows; `excerpt` / `type` / `call` claims reach synthesis as supporting context but can never agree, diverge, or conflict with another source. Every behavioural fact worth a spec block — a timeout value, a validation rule, an error response, a side effect — must be lifted into a `requirement` claim with a `statement`, anchored by its `path` and backed by detail claims. The engine's load gate is fail-closed: a `requirement` claim without a `statement` field fails the whole run with the typed error `claim-extras-missing`; there is no fallback to `synopsis`.
 
-**Cover what the surface actually does.** Extract of one surface must emit the calls, contracts, types, and excerpts that surface actually has: a `POST /orders` handler that writes an orders store must carry that write as a `call` claim; a handler that invokes an external service must carry that call site. Downstream correlation evidences invocation, read/write, and ownership relationships from these structured claims — do not bury them in `excerpt` prose, and do not write a second behavioural spec in prose instead of emitting the structured claims.
+`id` is **required** on `requirement` claims (dotted-kebab, e.g. `session.timeout`). Derive ids from the domain concept per the shared rules in [reconciliation.md](../references/emery-runtime/reconciliation.md) — never from file paths or positions — so a documentation source describing the same behaviour converges on the same id and the authority precedence (`intent > documentation > behaviour`, defined in [`authority.md`](../references/emery-runtime/synthesis/authority.md)) can resolve any disagreement. `id` is optional on `excerpt` / `type` / `call`; you MAY carry it when the claim backs a specific requirement.
+
+Code states behaviour, not acceptance: emit `criterion` claims only when the source itself encodes an explicit acceptance boundary (a documented threshold constant, a schema constraint). Requirements without criteria surface as `[unknown]` acceptance gaps in the spec — that is honest output, not a failure to fix by inventing criteria.
 
 ## Anchors and excerpts
 
-Every claim's `path:` carries a `<path>` or `<path>#L<n>` or `<path>#L<start>-L<end>` anchor matching the `evidence.schema.json` claim-path grammar (`^[^\s][^\s]*(#L[1-9][0-9]*(-L[1-9][0-9]*)?)?$`). Paths are relative under `$SOURCE_DIR` (no leading `/`, no `..`, not under a skip-root). The anchor IS the citation; the body field carries short context.
+Every claim from the tree carries a `path` anchor: `<path>`, `<path>#L<n>`, or `<path>#L<start>-L<end>`, relative under `$SOURCE_DIR` (no leading `/`, no `..`, not under a skip root). Line numbers are 1-indexed at extract time. The anchor IS the citation; the body field carries short context.
 
 Rules for the body fields:
 
-- **No raw file dumps.** Anchors point at the source; the YAML must not paraphrase or restate large spans. Keep `excerpt:` to a paragraph or so of focused context (the validation rule, the error response, the side effect) — never tens of lines of `"\n"`-separated source.
+- **No raw file dumps.** Anchors point at the source; the JSON must not paraphrase or restate large spans. Keep `excerpt:` to a paragraph or so of focused context (the validation rule, the error response, the side effect) — never tens of lines of `"\n"`-separated source.
 - **One claim per concept.** Two overlapping excerpts of the same handler are noise; pick the smallest range that captures the behaviour.
 - **Stable spans across reruns.** Choose anchors at named-function or block boundaries when possible so re-extraction produces byte-stable Evidence even when surrounding lines shift slightly.
-- **Symbols, not phrasing.** `call.callee` is `<file>:<symbol>` matching the survey prompt's handler resolution; not free-form prose. `type.signature` is the declaration's source spelling.
+- **Symbols, not phrasing.** `call.callee` is `<file>:<symbol>` — a named export (`src/users/repository.ts:insertUser`), a class method (`src/mail/mailer.ts:Mailer.send`), or a framework-suffixed inline arrow (`src/server.ts:post-/users`). `type.signature` is the declaration's source spelling (one line preferred; multi-line acceptable for short class headers).
 
 ## Worked example
 
-Bound lead `user-registration` against a small Express service at `$SOURCE_DIR` (the source tree from the survey prompt's worked example, source key `legacy-monolith`).
-
-Source files in scope (per the lead's surface in the staged JSON):
+A small Express service bound under source key `legacy-monolith`:
 
 - `src/server.ts` — `app.post("/users", registerUser)` at L5.
 - `src/users/register.ts` — `registerUser` handler with email validation at L12–L34 and a delegation to `insertUser`.
 - `src/users/repository.ts` — `insertUser` declaration plus the `User` interface.
 
-Resulting Evidence YAML:
+Resulting Evidence body:
 
-```yaml
-authority: behaviour
-lead: user-registration
-claims:
-  - kind: excerpt
-    path: src/users/register.ts#L12-L34
-    excerpt: "Handler validates email against RFC-5322 regex, returns 400 with `{ error: \"invalid-email\" }` on failure, otherwise inserts the user and returns 201 with the persisted record."
-  - kind: type
-    path: src/users/repository.ts#L1-L4
-    signature: "interface User { id: string; email: string; createdAt: Date }"
-  - kind: call
-    path: src/users/register.ts#L31
-    callee: "src/users/repository.ts:insertUser"
+```json
+{
+  "authority": "behaviour",
+  "claims": [
+    { "kind": "requirement", "id": "user-registration.email-validation", "path": "src/users/register.ts#L12-L34", "statement": "Registration rejects an email that is not RFC-5322 valid with a 400 response." },
+    { "kind": "requirement", "id": "user-registration.persistence", "path": "src/users/register.ts#L31", "statement": "A valid registration inserts the user and returns 201 with the persisted record." },
+    { "kind": "excerpt", "path": "src/users/register.ts#L12-L34", "excerpt": "Handler validates email against RFC-5322 regex, returns 400 with { error: \"invalid-email\" } on failure, otherwise inserts the user and returns 201 with the persisted record." },
+    { "kind": "type", "path": "src/users/repository.ts#L1-L4", "signature": "interface User { id: string; email: string; createdAt: Date }" },
+    { "kind": "call", "path": "src/users/register.ts#L31", "callee": "src/users/repository.ts:insertUser" }
+  ]
+}
 ```
 
-Three claims, three anchors, no raw source bodies. Synthesis reconciles these into `Status: agreed` requirements with `Sources: [legacy-monolith]` when no other source contributes; when documentation or intent also contributes, the authority precedence (`intent > documentation > behaviour`) defined in [`authority.md`](../references/emery-runtime/synthesis/authority.md) decides.
+Two requirement rows for the spec, three detail claims backing them. `authority` is fixed at `behaviour` for this adapter. The document's source identity is stamped by the engine from the binding — it is not written in-document.
+
+**Cover what the estate actually does.** A `POST /orders` handler that writes an orders store must carry that write as a `call` claim and its behaviour as a `requirement`; a handler that invokes an external service must carry that call site. Downstream correlation evidences invocation, read/write, and ownership relationships from these structured claims — do not bury them in `excerpt` prose, and do not write a second behavioural spec in prose instead of emitting the structured claims.
 
 ## Path rules
 
-Same skip-root and traversal rules as the survey prompt: relative paths only, no `..`, no leading `/`, never under `node_modules`, `vendor`, `target`, `.venv`, `dist`, `build`, no `*.d.ts` files. A symlink inside `$SOURCE_DIR` pointing outside is denied at canonicalization; the host runner returns `source-extract-path-denied` and the slice stays `refining` per workflow §Extraction reliability.
+Relative paths only, no `..`, no leading `/`, never under `node_modules`, `vendor`, `target`, `.venv`, `dist`, `build`, no `*.d.ts` files. A symlink inside `$SOURCE_DIR` pointing outside is denied at canonicalization by the host — a typed error, never silent narrowing.
 
 ## Anti-patterns
 
 - **Raw file dumps in `excerpt:`.** Anchors point at lines; the body field is short context, not a verbatim paste. A 200-line `excerpt:` field is wrong even when the underlying span is 200 lines.
-- **Speculative claims.** Do not infer behaviour the code does not exhibit. If the handler does not enforce uniqueness, do not emit a uniqueness `excerpt`. Synthesis tags unknowns; you do not.
+- **Speculative claims.** Do not infer behaviour the code does not exhibit. If the handler does not enforce uniqueness, do not emit a uniqueness claim. The engine tags gaps `[unknown]`; you do not fill them.
+- **Detail without a requirement.** An estate mined into fifty excerpts and zero `requirement` claims contributes nothing to reconciliation. Lift every spec-worthy behaviour into a `requirement` first; excerpts back it.
 - **Tests-as-evidence.** Skip `*.test.*`, `*.spec.*`, `tests/`, `__tests__/`. Test files document expected behaviour; this adapter extracts observed behaviour from production source.
 - **Type-only `.d.ts` files.** A `.d.ts` declares ambient types, not behaviour. Use the originating `.ts` file when possible; emit no claim when only a `.d.ts` is reachable.
-- **Cross-source synthesis.** Do not reconcile this lead's claims with another source's Evidence — that is core synthesis's job in the refinement stage after every `extract` returns (see [From sources to slices](../references/emery-runtime/reconciliation.md#slice-time-evidence-becomes-a-spec)). Emit Evidence purely from `$SOURCE_DIR`.
-- **Whole-file paths without anchors.** A `path: src/users/register.ts` claim is legal under the schema but useless for synthesis. Always anchor to the smallest meaningful range.
+- **Cross-source synthesis.** Do not reconcile this source's claims with another source's Evidence — that is the engine's job after every extract returns. Emit Evidence purely from `$SOURCE_DIR`.
+- **Whole-file paths without anchors.** A `path: src/users/register.ts` claim is legal under the schema but useless for review. Always anchor to the smallest meaningful range.
 
 ## Failure modes
 
-| Condition                                                | Action                                                                                                                          |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Terminal lead missing on the extract input          | The runner refuses to invoke the prompt; not a prompt-level failure mode.                                                       |
-| Lead maps to no file under `$SOURCE_DIR`            | Return `claims: []`. Core synthesis surfaces `[unknown]` on every affected requirement.                                         |
-| Read denied outside `$SOURCE_DIR` / `$CAPABILITY_DIR`    | Host runner returns `source-extract-path-denied`; slice stays `refining` and no Evidence is written.                            |
-| Production source uses an out-of-scope framework only    | Emit any in-scope `excerpt` / `type` / `call` claims; the gap surfaces as `[unknown]` requirements at synthesis.                |
-| `evidence.schema.json` validation fails on emit          | CLI rejects the Evidence; slice stays `refining`. Re-emit with the missing `id` / `kind` / `path` corrected.              |
+| Condition | Action |
+| --------- | ------ |
+| The tree holds no in-scope production source | Return `claims: []`; the engine preserves the gap rather than guessing. |
+| Read denied outside `$SOURCE_DIR` | The host returns a typed path-denied error; no Evidence is written. |
+| Production source uses an out-of-scope framework only | Emit any in-scope claims; the gap surfaces as `[unknown]` requirements in the spec. |
+| The answer fails the gated schema or id grammar | The caller rejects it and asks for a repaired answer with the findings; correct the named claims. |

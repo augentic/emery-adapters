@@ -1,7 +1,0 @@
-# Docs → contracts. The sibling definition/ is a reviewed handoff;
-# the runner inits `product/` and drives author --from/--wave.
-kind = "workflow"
-change = "orders"
-wave = "deliver"
-definition = "definition"
-fixture = "../../../wasm/fixture"

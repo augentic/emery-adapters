@@ -4,14 +4,10 @@
 
 Service with multiple conditional branches, cache-or-fetch pattern, and early returns.
 
-## Input Parameters
+## Input
 
-```bash
-extract ./src/data-service.ts $SLICE_DIR
-```
-
-- **TypeScript Source**: `./src/data-service.ts`
-- **Emery Output**: `$SLICE_DIR` (specs/ + design.md)
+- **Bound source**: `src/data-service.ts` under `$SOURCE_DIR`
+- **Output**: Evidence claims whose payloads carry the analysis content below
 
 ## TypeScript Source Code
 
@@ -67,7 +63,9 @@ export async function validateAndProcess(data: InputData): Promise<Result> {
 }
 ```
 
-## Generated Emery Artifacts
+## The analysis your claims must carry
+
+You emit Evidence claims, never these documents — downstream synthesis authors `spec.md` / `design.md` from every source's Evidence. The rendering below shows the analysis content a complete claim set makes derivable:
 
 ```markdown
 ### Component

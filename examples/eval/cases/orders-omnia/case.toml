@@ -1,7 +1,0 @@
-# Two-target live case: documentation → contracts, then intent → omnia.
-# Exercises D7 across targets with real adapters.
-kind = "workflow"
-change = "orders-and-health"
-wave = "deliver"
-definition = "definition"
-fixture = "../../../wasm/fixture"

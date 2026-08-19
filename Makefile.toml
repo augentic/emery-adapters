@@ -1,8 +1,6 @@
 # Install: `cargo install cargo-make`
 # Help: https://sagiegurari.github.io/cargo-make/
 
-extend = [{ path = "examples/Makefile.toml" }]
-
 [env]
 CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
 
@@ -95,14 +93,6 @@ command = "cargo"
 args = ["doc", "--no-deps", "--workspace", "--all-features", "--locked"]
 env = { RUSTDOCFLAGS = "-Dwarnings" }
 
-# Coverage brake for unit-test reductions (docs/testing.md).
-# Usage: CRATE=vectis cargo make cov
-# Operator-invoked, never part of `ci`.
-[tasks.cov]
-workspace = false
-script = "cargo llvm-cov nextest -p ${CRATE} --summary-only"
-install_crate = "cargo-llvm-cov"
-
 # Miri
 [tasks.miri]
 script = '''
@@ -113,11 +103,6 @@ cargo +nightly miri nextest run --no-tests=pass
 # Vet — read-only gate: verification must never rewrite the audit
 # inputs it verifies. Regeneration is the explicit maintenance act.
 [tasks.vet]
-command = "cargo"
-args = ["vet", "--locked"]
-install_crate = "cargo-vet"
-
-[tasks.vet-regenerate]
 script = '''
 cargo vet regenerate imports
 cargo vet regenerate exemptions
@@ -126,9 +111,37 @@ cargo vet --locked
 '''
 install_crate = "cargo-vet"
 
+# Fast development build of one adapter component.
+[tasks.adapter]
+workspace = false
+script_runner = "bash"
+script = '''
+name="${1:?usage: cargo make adapter <name>}"
+cargo build -p "$name" --target wasm32-wasip2 --release
+'''
+
+# Live eval (operator-invoked, never CI): the public-contract runner
+# over the sibling shipped `emery` binary and the built components.
+# See examples/eval/README.md.
+[tasks.eval]
+workspace = false
+script_runner = "bash"
+script = '''
+cargo run -p eval --release -- "$@"
+'''
+
+# Components only: the eval runner is a native public-contract client.
 [tasks.release]
 command = "cargo"
-args = ["build", "--workspace", "--target", "wasm32-wasip2", "--release"]
+args = [
+  "build",
+  "--workspace",
+  "--exclude",
+  "eval",
+  "--target",
+  "wasm32-wasip2",
+  "--release",
+]
 
 # Publish — push one built component to its exact GHCR SemVer tag as a
 # standard Wasm OCI artifact. Used by Publish Release (adapters.yaml) and

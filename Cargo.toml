@@ -1,5 +1,5 @@
 [workspace]
-members = ["sources/*", "targets/*", "examples/eval"]
+members = ["examples/eval", "sources/*"]
 resolver = "3"
 
 [workspace.package]
@@ -9,62 +9,34 @@ homepage = "https://augentic.io"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/augentic/emery-adapters"
 rust-version = "1.97"
-version = "0.12.0"
+version = "0.13.0"
 publish = false
 
 [workspace.dependencies]
-anyhow = "1.0.104"
-image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
-jsonschema = { version = "0.49.9", default-features = false }
-resvg = { version = "0.48.1", default-features = false }
-semver = "1"
-serde = { version = "1.0.229", features = ["derive"] }
-serde-saphyr = "1.0.1"
-serde_json = "1.0.151"
-sha2 = "0.11"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
 tempfile = "3.27.0"
-thiserror = "2"
-tiny-skia = { version = "0.12.0", default-features = false }
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
-toml = "1.1.4"
-usvg = { version = "0.48", default-features = false }
 
 omnia-guest = "0.35.0"
 omnia-testkit = "0.35.0"
 
 emery-adapter = "0.38.0"
-emery-native = "0.38.0"
-emery-probe = "0.38.0"
 emery-prose = "0.38.0"
-
-captures = { path = "sources/captures" }
-contracts = { path = "targets/contracts" }
-documentation = { path = "sources/documentation" }
-intent = { path = "sources/intent" }
-omnia-target = { package = "omnia", path = "targets/omnia" }
-screenshots = { path = "sources/screenshots" }
-typescript = { path = "sources/typescript" }
-vectis = { path = "targets/vectis" }
 
 [patch.crates-io]
 emery-adapter = { git = "https://github.com/augentic/emery" }
-emery-probe = { git = "https://github.com/augentic/emery" }
-emery-native = { git = "https://github.com/augentic/emery" }
 emery-prose = { git = "https://github.com/augentic/emery" }
 # emery-adapter = { path = "../emery/crates/adapter" }
-# emery-probe = { path = "../emery/crates/probe" }
-# emery-native = { path = "../emery/crates/native" }
 # emery-prose = { path = "../emery/crates/prose" }
 
 omnia = { git = "https://github.com/augentic/omnia" }
-omnia-cursor = { git = "https://github.com/augentic/omnia-backends" }
 omnia-guest = { git = "https://github.com/augentic/omnia" }
 omnia-testkit = { git = "https://github.com/augentic/omnia" }
 omnia-wasi-http = { git = "https://github.com/augentic/omnia" }
 omnia-wasi-model = { git = "https://github.com/augentic/omnia" }
 omnia-wasi-otel = { git = "https://github.com/augentic/omnia" }
 # omnia = { path = "../omnia/crates/omnia" }
-# omnia-cursor = { path = "../omnia-backends/crates/cursor" }
 # omnia-guest = { path = "../omnia/crates/omnia-guest" }
 # omnia-testkit = { path = "../omnia/crates/testkit" }
 # omnia-wasi-http = { path = "../omnia/crates/wasi-http" }
@@ -104,9 +76,8 @@ pedantic = { level = "warn", priority = -1 }
 
 # The `cargo` group's `multiple_crate_versions` lint is the wrong signal in a
 # workspace this size: transitive duplicates accrete from upstream crates we do
-# not control (the resvg / usvg / image rasterisation graph), and a ratchet
-# allowlist only ever grows. A periodic `cargo tree --duplicates` audit is the
-# cheaper signal.
+# not control, and a ratchet allowlist only ever grows. A periodic
+# `cargo tree --duplicates` audit is the cheaper signal.
 multiple_crate_versions = "allow"
 
 # Cherry-picked lints are from the `restriction` lint group in order to drive up

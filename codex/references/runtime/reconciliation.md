@@ -1,72 +1,19 @@
-# From sources to slices
+# From sources to a spec
 
-Emery turns raw inputs — operator intent, written documentation, legacy code, screenshots, runtime captures — into behavioral specs. This page explains the two moments where that transformation happens, and how Emery keeps a clear trail back to where every requirement came from.
+How one `emery specify` run turns bound sources into a reviewable specification, and where an extract prompt's output lands in that pipeline.
 
-There are two distinct reconciliation moments, and they answer different questions:
+## The pipeline
 
-- **Plan time — what work exists?** `/emery:plan` surveys each bound source for *leads* and reconciles them into the *slices* that make up the change.
-- **Slice time — what must each domain do?** The `emery plan refine` stage extracts *evidence* from each source and synthesizes it into the domain's `specs/<domain>/spec.md`, recording exactly which source contributed each requirement.
+1. **Extract** — the engine dispatches one `extract` per authored source binding. Each call receives the whole bound source (a read-only workspace view, or an inline value) and returns one Evidence document: a document-level `authority` class and a flat list of typed claims. There is no survey step and no lead catalog; extraction mines the entire source in one pass.
+2. **Gate** — the engine validates every claim against the closed required-extras table before anything else runs: a `requirement` claim must carry a `statement` extra, a `criterion` claim a `criterion` extra, an `example` claim a `replay-digest` extra. A claim missing its required extra fails the whole run with the typed error `claim-extras-missing` naming the source, claim, and missing key. There is no partial acceptance and no fallback to `synopsis`.
+3. **Reconcile** — deterministic engine code (no model) groups `requirement` claims by their dotted-kebab `id` across all sources. Within a group it compares the `statement` extras: matching statements are `agreed`; disagreeing statements resolve by authority precedence (a unique highest-authority contributor wins as `divergence`; a tie at the top authority is a `conflict`). A requirement with no `criterion` claim whose id equals it or extends it (`<requirement-id>.<suffix>`) gets an appended `[unknown]` acceptance gap row.
+4. **Synthesise** — a model renders `spec.md` around the reconciliation rows (which it must reproduce verbatim — a fail-closed AST and row gate refuses drift) and `design.md` from the full claim set.
+5. **Commit** — the engine writes the generation atomically and swaps the `current` pointer. Adapters never write artifacts; the returned Evidence is the entire contribution.
 
-## Plan time: leads become slices
+## What this means for extract prompts
 
-### A lead is a unit of work a source can see
-
-When you run `/emery:plan`, each bound source runs its `survey` operation and emits **leads** — one block per slice-sized unit of work it can identify, written under `## Lead inventory` in `leads.md`. A lead is identified by its `(source, lead)` pair, because the same lead name can appear in more than one source.
-
-For example, a legacy-code source and a design-notes source might each surface a `user-registration` lead. They are describing the same feature, but `survey` does not yet know that — it only reports what each source sees on its own.
-
-### Propose reconciles leads across sources
-
-The cross-source matching happens in the **propose** sub-step of `/emery:plan`. The agent reads every lead, judges which ones describe the same piece of work, and emits the `slices[]` rows directly — each row naming its matched leads, *at most one per source*.
-
-Three rules keep this predictable:
-
-- **One lead per source, per slice.** A slice never fuses two leads from the *same* source. Re-sizing same-source work is an operator action during plan review, not something the agent does silently.
-- **Coverage is at-least-once, not exactly-once.** Every surveyed lead must be referenced by at least one slice, and a lead may appear in more than one. Work that lands in more than one project becomes multiple slices joined by `depends-on`; a cross-cutting lead — say a conventions document that informs several features surfaced by another source — is bound into every slice it informs (the one-lead-per-source rule still applies inside each slice), with no `depends-on` implied. Multi-homed leads are listed in `change.md` under `## Cross-cutting leads` for plan review.
-- **Uncertain matches are surfaced, not hidden.** When the agent is unsure whether two leads are the same work, it records the pair under `## Tentative merges` in `change.md` so you can confirm or split them. When two matched leads materially disagree, the slice is flagged `divergence: likely`.
-
-This is why a one-source, one-lead change and a twelve-slice migration use exactly the same machinery — the only difference is how many leads `survey` produced.
-
-You review and adjust the proposed slices before running `emery plan refine`; running `emery plan execute` afterwards is your approval.
-
-## Slice time: evidence becomes a spec
-
-### Extract gathers evidence per source
-
-When the refinement stage runs for a slice, each bound source runs its `extract` operation against its matched lead and returns an **Evidence** document, persisted to `.emery/change/slices/<slice>/evidence/<source>.yaml`. Evidence is structured: a list of `claims` (requirements, criteria, decisions, code excerpts, and so on) plus a top-level `authority` that records how much weight the source carries.
-
-### Synthesize reconciles evidence into one spec
-
-The slice then runs **synthesize**, which reconciles every source's Evidence into a single set of requirements. Two artifacts come out of this step:
-
-- `specs/<domain>/spec.md` — the human-readable behavioral spec, one file per domain.
-- `model.yaml` — a structured, machine-readable record of the same requirements, carrying provenance inline.
-
-Each requirement in the spec carries three provenance lines:
-
-```markdown
-ID: REQ-001
-Sources: [identity-design-notes, legacy-monolith]
-Status: agreed
-```
-
-- **`ID:`** is a stable `REQ-XXX` identifier — the merge key that survives renames and lets later slices modify this requirement precisely.
-- **`Sources:`** is the **provenance**: which sources contributed the requirement, highest authority first.
-- **`Status:`** is a closed enum — `agreed`, `unknown`, `conflict`, or `divergence`.
-
-## How disagreements are resolved
-
-Two sources can disagree about the same requirement. Emery resolves this with **authority** — a closed ranking declared per source (`intent` > `documentation` > `behaviour`), sharpened by an optional per-slice override the operator records during plan review. The winner's value becomes the operative requirement and the loser survives as inline commentary (`[divergence]`); a tie at the top authority class has no winner (`[conflict]`). The canonical hierarchy, override surface, and step-by-step resolution order live in [Authority hierarchy](./synthesis/authority.md#resolution-order).
-
-Tags never park the slice. Synthesis tags the requirement and proceeds. The operator reconciles a `[conflict]` or `[divergence]` by recording a per-slice authority override (`emery plan amend --authority-override`) or amending the plan's sources, then re-running `emery plan refine` (the stale slice re-refines) before `emery plan execute` — never by hand-editing the kernel-rendered `spec.md` provenance lines.
-
-## model.yaml and the provenance trail
-
-`model.yaml` (at `.emery/change/slices/<slice>/model.yaml`) is the single structured record of a refined slice. It holds the requirement set with **inline provenance** — for each requirement, which claims contributed and which one won — plus the task list and a small header. It is the artifact `emery slice validate` checks for drift, and it is what later steps read instead of re-parsing the markdown.
-
-There is no separate `provenance.yaml` on disk. The full audit view is *projected on demand* from `model.yaml` and the Evidence files by `emery slice provenance`, so the trail can never drift out of sync with the spec.
-
-## See also
-
-- [Authority precedence](./synthesis/authority.md) — resolution order for skill authors
-- [Anatomy of an adapter](https://emery.augentic.io/explanation/adapter-anatomy.html) — how sources emit leads and evidence
+- **Claim ids are the cross-source join key.** Reconciliation only ever connects claims whose ids are byte-equal. Derive ids from the domain concept the claim describes (`session.timeout`, `password-reset.expiry`), never from file layout, position, or invented counters — two independent sources describing the same behaviour must converge on the same id.
+- **`requirement` claims are the reconciliation currency.** Only `kind: requirement` claims form spec requirement blocks and can agree, diverge, or conflict. Detail kinds (`section`, `excerpt`, `type`, `call`, …) reach synthesis as supporting context but never form rows.
+- **`criterion` ids must extend their requirement's id.** The acceptance-coverage rule keys on the prefix: a criterion for `session.timeout` must carry id `session.timeout` or `session.timeout.<suffix>`. A criterion with an unrelated id leaves its requirement flagged `[unknown]`.
+- **Statements are compared, so quote precisely.** The `statement` extra is the value reconciliation compares (whitespace-normalised, nothing else). Paraphrase drift between sources manufactures false conflicts; verbatim quoting where the source is prose, and precise present-tense observation where it is code, keeps agreement honest.
+- **Gaps are preserved, never guessed.** When the source does not answer something, emit nothing for it. The engine renders missing coverage as `[unknown]`; a fabricated claim corrupts the spec silently, an absent one is surfaced to the reviewer.
