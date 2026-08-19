@@ -22,7 +22,7 @@ Testing a brand-new adapter: [authoring.md](authoring.md).
 
 ### 1. Native crate tests — the inner loop
 
-Each adapter crate is `cdylib` + `rlib`, so its wasm-free logic links natively and tests through `sources/<name>/tests/<area>.rs`. Judgment legs use `omnia_testkit::model::Harness` to assert "did my prompt edit land in the assembled text" and that the answered Evidence carries the required per-kind extras verbatim; adapter crates must not duplicate that model machinery. The wasm32-only guest shims (inline `mod guest` in each `src/lib.rs`) are single `adapter::source!` invocations and carry no native tests.
+Each adapter crate is `cdylib` + `rlib`, so its wasm-free logic links natively and tests through `sources/<name>/tests/<area>.rs`. Judgment legs use `omnia_testkit::model::Harness` to assert "did my prompt edit land in the assembled text" and that the answered Evidence carries the required per-kind extras verbatim; adapter crates must not duplicate that model machinery. The wasm32-only guest shims (inline `mod guest` in each `src/lib.rs`) are single `emery_adapter::source!` invocations and carry no native tests.
 
 ```bash
 cargo nextest run -p documentation   # one adapter

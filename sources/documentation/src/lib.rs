@@ -2,12 +2,12 @@
 
 #[cfg(target_arch = "wasm32")]
 mod guest {
-    adapter::source!(crate::Adapter);
+    emery_adapter::source!(crate::Adapter);
 }
 
 mod operations;
 mod registry {
-    adapter::registry!();
+    emery_adapter::registry!();
 }
 
 pub use operations::Adapter;

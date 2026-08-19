@@ -2,11 +2,11 @@
 
 use std::path::Path;
 
-use adapter::answers::EVIDENCE_ANSWER_SCHEMA;
-use adapter::seam::{
+use emery_adapter::answers::EVIDENCE_ANSWER_SCHEMA;
+use emery_adapter::seam::{
     Authority, ClaimKind, Context, Error, SourceContent, SourceInput, SourceWorkspace,
 };
-use adapter::{Format, MAX_REPAIRS, Request, Source as _};
+use emery_adapter::{Format, MAX_REPAIRS, Request, Source as _};
 use omnia_testkit::model::{Harness, mcp_grants};
 use typescript::Adapter;
 

@@ -25,10 +25,10 @@ emery-adapter = "0.38.0"
 emery-prose = "0.38.0"
 
 [patch.crates-io]
-emery-adapter = { git = "https://github.com/augentic/emery" }
-emery-prose = { git = "https://github.com/augentic/emery" }
-# emery-adapter = { path = "../emery/crates/adapter" }
-# emery-prose = { path = "../emery/crates/prose" }
+# emery-adapter = { git = "https://github.com/augentic/emery" }
+# emery-prose = { git = "https://github.com/augentic/emery" }
+emery-adapter = { path = "../emery/crates/adapter" }
+emery-prose = { path = "../emery/crates/prose" }
 
 omnia = { git = "https://github.com/augentic/omnia" }
 omnia-guest = { git = "https://github.com/augentic/omnia" }

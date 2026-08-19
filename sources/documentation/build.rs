@@ -6,5 +6,5 @@
 //! overlay pack, pinned to the adapter version.
 
 fn main() {
-    prose::emit("prose");
+    emery_prose::emit("prose");
 }

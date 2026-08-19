@@ -13,7 +13,7 @@ Toolchain setup, layout conventions, and publishing mechanics live in [CONTRIBUT
 
 An adapter is one Rust crate that ships as one Wasm component exporting the `source-adapter` world from the `emery:adapter` WIT package (owned by [`augentic/emery`](https://github.com/augentic/emery)). There is no manifest file: identity is the crate's `name` + `version`, and resolve-time metadata comes from the component's own `metadata` export.
 
-You never touch WIT directly. The `adapter` SDK hides the bindings behind the `adapter::Source` trait, implemented on a unit struct; a one-line macro (`adapter::source!`) wires that implementor into the component exports.
+You never touch WIT directly. The `adapter` SDK hides the bindings behind the `emery_adapter::Source` trait, implemented on a unit struct; a one-line macro (`emery_adapter::source!`) wires that implementor into the component exports.
 
 What the engine calls:
 
@@ -24,9 +24,9 @@ What the engine calls:
 
 Three ideas carry the operation:
 
-- **The model is a parameter.** `extract` is generic over `adapter::Model`. On wasm the macro binds `WasiModel`; native tests bind `omnia_testkit::model::Harness` with scripted answers. Your code never constructs a backend.
-- **Prose is embedded at build time.** `build.rs` calls `prose::emit("prose")`, which walks the adapter's `prose/` tree into a sorted `DOCS` table; `adapter::registry!()` exposes it as `registry::docs()` / `registry::body("prompts/extract.md")`. A dangling relative link in any prose document fails the build. The export macro also serves `prose/references/**` over MCP, so prompts cite references by relative link instead of inlining them.
-- **Answers are schema-gated and repaired.** `adapter::repaired(model, ctx, system, user, kind, SCHEMA, tail)` sends the prompt, parses the reply against a generated JSON schema, and re-prompts with the parse error up to `adapter::MAX_REPAIRS` times before failing.
+- **The model is a parameter.** `extract` is generic over `emery_adapter::Model`. On wasm the macro binds `WasiModel`; native tests bind `omnia_testkit::model::Harness` with scripted answers. Your code never constructs a backend.
+- **Prose is embedded at build time.** `build.rs` calls `emery_prose::emit("prose")`, which walks the adapter's `prose/` tree into a sorted `DOCS` table; `emery_adapter::registry!()` exposes it as `registry::docs()` / `registry::body("prompts/extract.md")`. A dangling relative link in any prose document fails the build. The export macro also serves `prose/references/**` over MCP, so prompts cite references by relative link instead of inlining them.
+- **Answers are schema-gated and repaired.** `emery_adapter::repaired(model, ctx, system, user, kind, SCHEMA, tail)` sends the prompt, parses the reply against a generated JSON schema, and re-prompts with the parse error up to `emery_adapter::MAX_REPAIRS` times before failing.
 
 For the type-level contract — `Context`, `SourceInput`, `Evidence`, the answer schemas — generate the SDK docs locally with `cargo doc -p emery-adapter --open`.
 
@@ -91,7 +91,7 @@ tokio.workspace = true
 
 ```rust
 fn main() {
-    prose::emit("prose");
+    emery_prose::emit("prose");
 }
 ```
 
@@ -104,12 +104,12 @@ fn main() {
 
 #[cfg(target_arch = "wasm32")]
 mod guest {
-    adapter::source!(crate::Adapter);
+    emery_adapter::source!(crate::Adapter);
 }
 
 mod operations;
 mod registry {
-    adapter::registry!();
+    emery_adapter::registry!();
 }
 
 pub use operations::Adapter;
@@ -117,13 +117,13 @@ pub use operations::Adapter;
 
 ### 4. Implement the operations trait
 
-`src/operations.rs` implements `adapter::Source` on a unit struct. Condensed — the real `intent` and `documentation` files are worth reading in full:
+`src/operations.rs` implements `emery_adapter::Source` on a unit struct. Condensed — the real `intent` and `documentation` files are worth reading in full:
 
 ```rust
-use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, evidence_tail};
-use adapter::registry::Doc;
-use adapter::seam::{Context, Error, Evidence, SourceContent, SourceInput, SourceMetadata};
-use adapter::{AdapterIdentity, Model, Source, repaired};
+use emery_adapter::answers::{EVIDENCE_ANSWER_SCHEMA, evidence_tail};
+use emery_adapter::registry::Doc;
+use emery_adapter::seam::{Context, Error, Evidence, SourceContent, SourceInput, SourceMetadata};
+use emery_adapter::{AdapterIdentity, Model, Source, repaired};
 
 use crate::registry;
 
