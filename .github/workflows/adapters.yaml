@@ -53,7 +53,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          for dir in sources/*/ targets/*/; do
+          for dir in sources/*/; do
             name="$(basename "$dir")"
             cargo make publish "$name"
           done

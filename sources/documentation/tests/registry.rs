@@ -1,9 +1,9 @@
 //! The embedded prose registry: prompt and rule coverage plus symlink
 //! resolution.
 
-use adapter::Source as _;
-use adapter::registry::{body, find};
 use documentation::Adapter;
+use emery_adapter::Source as _;
+use emery_adapter::registry::{body, find};
 
 #[test]
 fn embeds_extract_prompt() {

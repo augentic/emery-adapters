@@ -16,13 +16,13 @@ Fastest feedback first. **Every behavior is asserted on exactly one rung** — d
 
 Ownership boundaries: `omnia-testkit` owns reusable model test mechanics; adapter `tests/` own extract behavior; the eval runner owns grading and the scorecard, and stays a client of the shipped `emery` binary's public contract (architecture-review T6) — it never links engine crates, and CI never runs the live rung. WASM/WIT conformance of the seam itself is the engine repository's journey rung.
 
-Sibling co-development: the path patches in the root `Cargo.toml` `[patch.crates-io]` block resolve engine crates from `../emery`.
+Sibling co-development: uncomment the path patches in the root `Cargo.toml` `[patch.crates-io]` block to resolve engine crates from `../emery`. The committed tree uses git patches so CI can fetch the engine without a sibling checkout.
 
 Testing a brand-new adapter: [authoring.md](authoring.md).
 
 ### 1. Native crate tests — the inner loop
 
-Each adapter crate is `cdylib` + `rlib`, so its wasm-free logic links natively and tests through `sources/<name>/tests/<area>.rs`. Judgment legs use `omnia_testkit::model::Harness` to assert "did my prompt edit land in the assembled text" and that the answered Evidence carries the required per-kind extras verbatim; adapter crates must not duplicate that model machinery. The wasm32-only guest shims (inline `mod guest` in each `src/lib.rs`) are single `adapter::source!` invocations and carry no native tests.
+Each adapter crate is `cdylib` + `rlib`, so its wasm-free logic links natively and tests through `sources/<name>/tests/<area>.rs`. Judgment legs use `omnia_testkit::model::Harness` to assert "did my prompt edit land in the assembled text" and that the answered Evidence carries the required per-kind extras verbatim; adapter crates must not duplicate that model machinery. The wasm32-only guest shims (inline `mod guest` in each `src/lib.rs`) are single `emery_adapter::source!` invocations and carry no native tests.
 
 ```bash
 cargo nextest run -p documentation   # one adapter

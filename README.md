@@ -58,7 +58,7 @@ Native crate tests stay the Rust inner loop; live eval is for prompt quality. Se
 | `cargo make fmt` fails | Install nightly rustfmt: `rustup toolchain install nightly --component rustfmt` |
 | Eval refuses: binary missing | Build the sibling [`augentic/emery`](https://github.com/augentic/emery) release binary, or set `EMERY_BIN` |
 | Eval refuses: component missing | `cargo make release` |
-| Patch-resolution errors after editing root `Cargo.toml` | The `[patch.crates-io]` path patches need `../emery`; pin to a release tag if not co-developing |
+| Patch-resolution errors after editing root `Cargo.toml` | The committed `[patch.crates-io]` git patches fetch `augentic/emery`; uncomment the path patches only when co-developing against `../emery` |
 
 Bugs and questions: [GitHub Issues](https://github.com/augentic/emery-adapters/issues).
 

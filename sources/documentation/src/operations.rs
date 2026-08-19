@@ -1,7 +1,7 @@
-use adapter::answers::{EVIDENCE_ANSWER_SCHEMA, evidence_tail};
-use adapter::registry::Doc;
-use adapter::seam::{Context, Error, Evidence, SourceContent, SourceInput, SourceMetadata};
-use adapter::{AdapterIdentity, Model, Source, repaired};
+use emery_adapter::answers::{EVIDENCE_ANSWER_SCHEMA, evidence_tail};
+use emery_adapter::registry::Doc;
+use emery_adapter::seam::{Context, Error, Evidence, SourceContent, SourceInput, SourceMetadata};
+use emery_adapter::{AdapterIdentity, Model, Source, repaired};
 
 use crate::registry;
 
