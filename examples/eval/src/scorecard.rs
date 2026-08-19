@@ -28,6 +28,9 @@ pub struct CaseResult {
     pub ops_succeeded: u32,
     /// Operations that failed typed.
     pub ops_failed: u32,
+    /// Head sha of the case's cloned fixture, when one exists —
+    /// recorded so the graded estate is reproducible.
+    pub fixture_sha: Option<String>,
 }
 
 /// How a case ended: every branch is a typed record (T6).
@@ -61,6 +64,9 @@ pub struct Scorecard {
     pub adapters_sha: String,
     /// Every case's result.
     pub cases: Vec<CaseResult>,
+    /// True when the run covered the whole case catalog. A filtered
+    /// run is an iteration aid and can never produce a green record.
+    pub complete: bool,
 }
 
 impl Scorecard {
@@ -79,11 +85,12 @@ impl Scorecard {
         if total == 0 { 0.0 } else { f64::from(succeeded) / f64::from(total) }
     }
 
-    /// Green exactly when every case passed and both measured
-    /// product.md numbers meet their targets.
+    /// Green exactly when the whole catalog ran, every case passed,
+    /// and both measured product.md numbers meet their targets.
     #[must_use]
     pub fn green(&self) -> bool {
-        !self.cases.is_empty()
+        self.complete
+            && !self.cases.is_empty()
             && self.cases.iter().all(|case| matches!(case.outcome, Outcome::Pass { .. }))
             && self.worst_secs() <= TIME_TARGET_SECS
             && self.op_rate() >= OP_TARGET
@@ -98,6 +105,11 @@ impl Scorecard {
         let _ = writeln!(out, "- status: {status}");
         let _ = writeln!(out, "- emery-sha: {}", self.emery_sha);
         let _ = writeln!(out, "- adapters-sha: {}", self.adapters_sha);
+        let _ = writeln!(
+            out,
+            "- catalog: {}",
+            if self.complete { "complete" } else { "filtered (never green)" }
+        );
         out.push_str("\n## product.md numbers\n\n");
         let _ = writeln!(
             out,
@@ -118,9 +130,14 @@ impl Scorecard {
         for case in &self.cases {
             match &case.outcome {
                 Outcome::Pass { generation } => {
+                    let fixture = case
+                        .fixture_sha
+                        .as_deref()
+                        .map(|sha| format!(", fixture {sha}"))
+                        .unwrap_or_default();
                     let _ = writeln!(
                         out,
-                        "- {}: pass — generation `{generation}`, {:.0}s, ops {}/{}",
+                        "- {}: pass — generation `{generation}`, {:.0}s, ops {}/{}{fixture}",
                         case.id,
                         case.secs,
                         case.ops_succeeded,

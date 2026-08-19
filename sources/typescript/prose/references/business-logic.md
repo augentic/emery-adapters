@@ -7,9 +7,9 @@ Step 2 extracts behaviour from the source's domain code. The read set is the who
 If a semantic search tool is available (grepai, CocoIndex), use it to discover business logic patterns:
 
 ```bash
-semantic-search "business logic and validation rules" $SOURCE_PATH
-semantic-search "error handling and edge cases" $SOURCE_PATH
-semantic-search "HTTP API calls and external services" $SOURCE_PATH
+semantic-search "business logic and validation rules" $SOURCE_DIR
+semantic-search "error handling and edge cases" $SOURCE_DIR
+semantic-search "HTTP API calls and external services" $SOURCE_DIR
 ```
 
 Use semantic results to:
@@ -67,7 +67,7 @@ Fall back to step-by-step (all types, then all handlers, etc.) for simpler or si
   **Active subset identification process**:
   1. **Identify the full table**: Count total entries, note any "unmapped" or sentinel values
   2. **Identify the runtime filter**: What config/constant limits the active entries? Default value if config is absent?
-  3. **Document BOTH in design.md Constants section**:
+  3. **Document BOTH in your constants claims**:
 
      ```markdown
      - `ACTIVE_STATIONS` — source: env var `STATIONS`, default: `"0,19,40"`; semantics: Station IDs to process
@@ -119,7 +119,7 @@ Fall back to step-by-step (all types, then all handlers, etc.) for simpler or si
     - Is it bidirectional or one-way?
     - Example: `BooleanConverter: deserializes string "true"/"false" → boolean`
   - Document XML root element names and array-wrapping configuration
-  - Add to design.md type tables with a `Wire Name` column and `Converter` column:
+  - Record in your type claims a `Wire Name` and `Converter` per field:
 
     ```markdown
     | Field        | Type      | Wire Name   | Converter                       | Optional? |

@@ -136,3 +136,20 @@ async fn extract_rejects_empty_workspace() {
     assert!(matches!(result, Err(Error::InvalidRequest(_))), "got {result:?}");
     assert!(model.requests().is_empty(), "no judgment leg runs on a malformed input");
 }
+
+// The intent binding is never legitimately empty (the prompt's own
+// contract): an empty brief is a typed refusal, never an empty success.
+#[tokio::test]
+async fn extract_rejects_empty_brief() {
+    let model = Harness::answering([r#"{"authority":"intent","claims":[]}"#]);
+
+    let inline = Adapter::extract(&model, &ctx(), &SourceInput::value("intent", "  \n")).await;
+    assert!(matches!(inline, Err(Error::InvalidRequest(_))), "got {inline:?}");
+
+    let root = tempfile::tempdir().unwrap();
+    std::fs::write(root.path().join("intent.md"), "\n\t \n").unwrap();
+    let tree = Adapter::extract(&model, &ctx(), &workspace_input(root.path())).await;
+    assert!(matches!(tree, Err(Error::InvalidRequest(_))), "got {tree:?}");
+
+    assert!(model.requests().is_empty(), "no judgment leg runs on an empty brief");
+}

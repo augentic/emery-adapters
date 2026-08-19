@@ -147,7 +147,7 @@ In one case, a cryptographic library's v0.10 release moved a core type (`BigUint
 Dependency versions feel like infrastructure details, not business logic. The natural instinct is to record package names and let the build tool resolve "latest." But external package APIs ARE part of the codebase's contract — they determine which import paths, type names, method signatures, and trait implementations are valid.
 
 ### How We Prevent It
-Phase 1.1b mandates reading the project's **lock file** (not just the manifest) and recording exact pinned versions for every dependency. The design.md Dependencies section must include version pins. The validation procedure's V6 dimension verifies that documented API usage patterns are compatible with the documented versions.
+Phase 1.1b mandates reading the project's **lock file** (not just the manifest) and recording exact pinned versions for every dependency. Your dependency claims must include version pins. The validation procedure's V6 dimension verifies that documented API usage patterns are compatible with the documented versions.
 
 This applies to every ecosystem:
 - A Rust crate renaming a re-export between minor versions

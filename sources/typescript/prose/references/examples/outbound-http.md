@@ -4,14 +4,10 @@
 
 Analyze a simple TypeScript service that receives messages and makes HTTP calls to an external API.
 
-## Input Parameters
+## Input
 
-```bash
-extract ./src/handler.ts $SLICE_DIR
-```
-
-- **TypeScript Source**: `./src/handler.ts`
-- **Emery Output**: `$SLICE_DIR` (specs/ + design.md)
+- **Bound source**: `src/handler.ts` under `$SOURCE_DIR`
+- **Output**: Evidence claims whose payloads carry the analysis content below
 
 ## TypeScript Source Code
 
@@ -42,7 +38,9 @@ export async function processMessage(message: Message): Promise<Output> {
 }
 ```
 
-## Generated Emery Artifacts
+## The analysis your claims must carry
+
+You emit Evidence claims, never these documents — downstream synthesis authors `spec.md` / `design.md` from every source's Evidence. The rendering below shows the analysis content a complete claim set makes derivable:
 
 ```markdown
 ### Component

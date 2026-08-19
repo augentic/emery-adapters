@@ -85,12 +85,16 @@ impl Source for Adapter {
 
 fn content_note(input: &SourceInput) -> Result<String, Error> {
     match &input.content {
-        SourceContent::Value(value) => Ok(format!(
-            "The bound material is this inline value; no `$SOURCE_DIR` is lent:\n\n{value}\n\n\
-             Nothing else is reachable; extract works only from this value."
-        )),
+        SourceContent::Value(value) => {
+            require_brief(value)?;
+            Ok(format!(
+                "The bound material is this inline value; no `$SOURCE_DIR` is lent:\n\n{value}\n\n\
+                 Nothing else is reachable; extract works only from this value."
+            ))
+        }
         SourceContent::Workspace(view) => {
             let intent = single_file_intent(Path::new(&view.root))?;
+            require_brief(&intent)?;
             Ok(format!(
                 "The bound material is a one-file tree at `{}`; the operator's intent \
                  string is:\n\n{intent}\n\n\
@@ -99,4 +103,15 @@ fn content_note(input: &SourceInput) -> Result<String, Error> {
             ))
         }
     }
+}
+
+/// An intent binding is never legitimately empty: fail closed before
+/// spending a model call, never answer an empty success.
+fn require_brief(brief: &str) -> Result<(), Error> {
+    if brief.trim().is_empty() {
+        return Err(Error::InvalidRequest(
+            "the bound intent brief is empty; intent extract fails closed".to_string(),
+        ));
+    }
+    Ok(())
 }

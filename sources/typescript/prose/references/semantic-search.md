@@ -82,9 +82,9 @@ grepai --query "HTTP requests to external services" ./typescript-repo
 **Integration in extract:**
 ```bash
 # Step 2.1: Semantic Analysis (before AST parsing)
-grepai --query "business logic and domain rules" $SOURCE_PATH > semantic-business-logic.txt
-grepai --query "input validation" $SOURCE_PATH > semantic-validation.txt
-grepai --query "external API calls" $SOURCE_PATH > semantic-apis.txt
+grepai --query "business logic and domain rules" $SOURCE_DIR > semantic-business-logic.txt
+grepai --query "input validation" $SOURCE_DIR > semantic-validation.txt
+grepai --query "external API calls" $SOURCE_DIR > semantic-apis.txt
 
 # Use results to guide AST analysis
 ```
@@ -166,22 +166,22 @@ Before analyzing individual functions, use semantic search to identify:
 
 1. **Business logic patterns**:
    ```bash
-   semantic-search "business rules and domain logic" $SOURCE_PATH
+   semantic-search "business rules and domain logic" $SOURCE_DIR
    ``` Results guide which functions contain core business logic.
 
 2. **Validation patterns**:
    ```bash
-   semantic-search "input validation and data checks" $SOURCE_PATH
+   semantic-search "input validation and data checks" $SOURCE_DIR
    ``` Helps identify [domain] vs [mechanical] validation.
 
 3. **External dependencies**:
    ```bash
-   semantic-search "HTTP API calls and external services" $SOURCE_PATH
+   semantic-search "HTTP API calls and external services" $SOURCE_DIR
    ``` Reveals all external I/O for provider mapping.
 
 4. **Error handling**:
    ```bash
-   semantic-search "error handling and exception patterns" $SOURCE_PATH
+   semantic-search "error handling and exception patterns" $SOURCE_DIR
    ``` Ensures comprehensive error capture.
 
 **ANALYZE** (Existing - Enhanced with Semantic Context):
@@ -254,7 +254,7 @@ Add to extract SKILL.md Step 2:
 If semantic search tool available (grepai or CocoIndex):
 
 ```bash
-# Discover business logic hotspots semantic-search "business logic and validation" $SOURCE_PATH > semantic-results.txt
+# Discover business logic hotspots semantic-search "business logic and validation" $SOURCE_DIR > semantic-results.txt
 
 # Review results to prioritize analysis cat semantic-results.txt
 ```

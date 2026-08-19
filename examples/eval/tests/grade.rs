@@ -76,16 +76,24 @@ fn scorecard_green_line() {
         secs: 120.0,
         ops_succeeded: 3,
         ops_failed: 0,
+        fixture_sha: None,
     };
     let card = |cases: Vec<CaseResult>| Scorecard {
         date: "2026-08-19".to_string(),
         emery_sha: "e".to_string(),
         adapters_sha: "a".to_string(),
         cases,
+        complete: true,
     };
 
     assert!(card(vec![pass.clone()]).green());
     assert!(!card(Vec::new()).green(), "an empty run proves nothing");
+
+    let filtered = Scorecard {
+        complete: false,
+        ..card(vec![pass.clone()])
+    };
+    assert!(!filtered.green(), "a filtered run can never produce a green record");
 
     let slow = CaseResult {
         secs: eval::scorecard::TIME_TARGET_SECS + 1.0,

@@ -24,7 +24,7 @@ Before analyzing code, reason through these questions:
 
 ## ANALYZE
 
-Read the source at `$SOURCE_PATH` and identify:
+Read the source at `$SOURCE_DIR` and identify:
 
 1. **Source language** — detect from file extensions.
 2. Entry points (`main.*`, `index.*`, handler exports, `func main()`,
@@ -63,8 +63,8 @@ For each dependency, record: package name, **exact version** from lock file
 (e.g., `1.4.0`, not `^1.4`), whether it is direct or transitive, and any
 feature flags / optional features enabled.
 
-In the design.md Dependencies section, list the **manifest version
-specifier** (e.g., `"1.0.100"` from Cargo.toml, `"^2.3.0"` from package.json)
+In your dependency claims, record the **manifest version specifier**
+(e.g., `"1.0.100"` from Cargo.toml, `"^2.3.0"` from package.json)
 as the primary version — this is what goes into the generated project's
 dependency declaration. Also note the lock file resolved version for API
 compatibility reference.

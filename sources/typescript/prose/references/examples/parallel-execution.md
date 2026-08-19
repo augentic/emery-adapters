@@ -4,14 +4,10 @@
 
 Service with concurrent operations, authentication, error recovery, and message publishing.
 
-## Input Parameters
+## Input
 
-```bash
-extract ./services/event-processor $SLICE_DIR
-```
-
-- **TypeScript Source**: `./services/event-processor`
-- **Emery Output**: `$SLICE_DIR` (specs/ + design.md)
+- **Bound source**: `services/event-processor/` under `$SOURCE_DIR`
+- **Output**: Evidence claims whose payloads carry the analysis content below
 
 ## TypeScript Source Code
 
@@ -80,7 +76,9 @@ export class EventProcessor {
 }
 ```
 
-## Generated Emery Artifacts (Excerpt)
+## The analysis your claims must carry (excerpt)
+
+You emit Evidence claims, never these documents — downstream synthesis authors `spec.md` / `design.md` from every source's Evidence. The rendering below shows the analysis content a complete claim set makes derivable:
 
 ```markdown
 ### Component

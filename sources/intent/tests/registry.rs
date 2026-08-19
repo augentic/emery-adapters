@@ -18,6 +18,16 @@ fn no_survey_prose() {
     assert!(find(Adapter::docs(), "prompts/survey.md").is_none(), "survey prose is deleted");
 }
 
+/// The prose budget over the ported corpus: no embedded document may
+/// exceed the 800 non-blank-line hard cap (AGENTS prompt-shape rule).
+#[test]
+fn prose_caps() {
+    for doc in Adapter::docs() {
+        let lines = doc.body.lines().filter(|line| !line.trim().is_empty()).count();
+        assert!(lines <= 800, "{} carries {lines} non-blank lines (cap 800)", doc.path);
+    }
+}
+
 /// Intent ships no references of its own — its `references/` tree holds
 /// only the `emery-runtime` symlink, which resolves inline at build time.
 #[test]

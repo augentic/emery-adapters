@@ -87,6 +87,7 @@ fn main() {
         emery_sha: capture("git", &["rev-parse", "HEAD"], Some(&paths.emery_repo)),
         adapters_sha: capture("git", &["rev-parse", "HEAD"], Some(&paths.root)),
         cases,
+        complete: filter.is_none(),
     };
     let rendered = scorecard.render();
     print!("{rendered}");
@@ -153,9 +154,11 @@ impl Paths {
 fn run_case(case: &Case, paths: &Paths) -> CaseResult {
     println!("== case {}", case.id);
     let fixture = paths.root.join(format!("examples/eval/cases/{}/fixture", case.id));
-    if let Some((url, dest)) = case.clone {
-        ensure_clone(url, &fixture.join(dest));
-    }
+    let fixture_sha = case.clone.map(|(url, dest)| {
+        let clone = fixture.join(dest);
+        ensure_clone(url, &clone);
+        capture("git", &["rev-parse", "HEAD"], Some(&clone))
+    });
 
     // A fresh retained sandbox per run: the project directory the
     // operator can inspect after grading.
@@ -189,13 +192,13 @@ fn run_case(case: &Case, paths: &Paths) -> CaseResult {
     init.push(format!("intent.wasm={}", case.intent));
     let output = emery(paths, &project, &init);
     if !output.status.success() {
-        return failed(case, started, &output);
+        return failed(case, started, &output, fixture_sha);
     }
 
     let output = emery(paths, &project, &["--format".into(), "json".into(), "specify".into()]);
     let secs = started.elapsed().as_secs_f64();
     if !output.status.success() {
-        return failed(case, started, &output);
+        return failed(case, started, &output, fixture_sha);
     }
 
     let outcome = match envelope::success(&output.stdout) {
@@ -210,6 +213,7 @@ fn run_case(case: &Case, paths: &Paths) -> CaseResult {
         ops_failed: 0,
         outcome,
         secs,
+        fixture_sha,
     }
 }
 
@@ -237,7 +241,9 @@ fn graded(case: &Case, project: &Path, body: &envelope::Success) -> Outcome {
 /// never something to grade around (T6). The failed operation counts
 /// against the per-operation rate; operations the run never reached
 /// stay unrecorded.
-fn failed(case: &Case, started: Instant, output: &Output) -> CaseResult {
+fn failed(
+    case: &Case, started: Instant, output: &Output, fixture_sha: Option<String>,
+) -> CaseResult {
     let (error, exit_code) = match envelope::failure(&output.stderr) {
         Ok(body) => (body.error, body.exit_code),
         Err(_) => (
@@ -251,6 +257,7 @@ fn failed(case: &Case, started: Instant, output: &Output) -> CaseResult {
         secs: started.elapsed().as_secs_f64(),
         ops_succeeded: 0,
         ops_failed: 1,
+        fixture_sha,
     }
 }
 
