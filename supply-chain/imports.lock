@@ -283,15 +283,15 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.ref-cast]]
-version = "1.0.26"
-when = "2026-07-18"
+version = "1.0.27"
+when = "2026-08-19"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.ref-cast-impl]]
-version = "1.0.26"
-when = "2026-07-18"
+version = "1.0.27"
+when = "2026-08-19"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"

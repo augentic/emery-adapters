@@ -353,7 +353,7 @@ version = "0.33.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.h2]]
-version = "0.4.16"
+version = "0.4.17"
 criteria = "safe-to-deploy"
 
 [[exemptions.hashbrown]]
@@ -1073,7 +1073,7 @@ version = "0.2.5"
 criteria = "safe-to-deploy"
 
 [[exemptions.zerovec]]
-version = "0.11.7"
+version = "0.11.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.zerovec-derive]]
