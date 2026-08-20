@@ -5,7 +5,7 @@
 
 First-party **source** Wasm components for [Emery](https://github.com/augentic/emery)'s specification generator: `documentation`, `intent`, and `typescript`.
 
-**Using Emery in a project?** You do not need this repository. The first-party sources ship embedded in the `emery` binary; follow the [Emery README](https://github.com/augentic/emery#readme).
+**Using Emery in a project?** You do not need this repository. Bind a built `.wasm` or declare it as a static guest in the host runtime; follow the [Emery README](https://github.com/augentic/emery#readme).
 
 **Authoring or debugging an adapter?** This repo is your home. Edit prose or Rust, run the crate tests, then run a graded live eval case.
 
@@ -32,7 +32,7 @@ cargo nextest run -p documentation   # or intent, typescript
 
 ## Graded live eval
 
-The live rung is a **public-contract client**: it spawns the sibling shipped `emery` binary over the built components, drives `init` + `specify` across the component seam, grades the committed spec set, and writes the dated scorecard the emery release gate verifies. Operator-invoked, never CI.
+The live rung is a **public-contract client**: it spawns the sibling shipped `emery` binary over the built components, drives `init` + `specify` across the component seam, grades the committed spec set, and writes the dated scorecard. Operator-invoked, never CI.
 
 ```bash
 cargo make release                   # build the components

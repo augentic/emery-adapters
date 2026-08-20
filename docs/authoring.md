@@ -206,7 +206,7 @@ Bind it in any Emery project by local path — init seeds the project's componen
 emery init path/to/changelog.wasm
 ```
 
-To exercise it through the graded live eval, add a case to `examples/eval/src/main.rs` (a fixture under `examples/eval/cases/<id>/fixture/` plus its graded expectations) — see [examples/eval/README.md](../examples/eval/README.md). Publishing a pinned version to GHCR (`emery:changelog@<version>`) is the operator flow in [CONTRIBUTING.md § Publishing](../CONTRIBUTING.md#publishing); a first-party adapter also joins the engine's embedded registry via `emery/scripts/first-party.txt`.
+To exercise it through the graded live eval, add a case to `examples/eval/src/main.rs` (a fixture under `examples/eval/cases/<id>/fixture/` plus its graded expectations) — see [examples/eval/README.md](../examples/eval/README.md). Publishing a pinned version to GHCR (`emery:changelog@<version>`) is the operator flow in [CONTRIBUTING.md § Publishing](../CONTRIBUTING.md#publishing). To load it as a static guest, build the component and declare it in the host runtime the same way emery's journey host declares its mock source (`examples/runtime.rs`).
 
 ## Definition of done
 

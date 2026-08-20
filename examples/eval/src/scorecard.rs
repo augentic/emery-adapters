@@ -97,7 +97,7 @@ impl Scorecard {
     }
 
     /// The scorecard document. The `status:` / `emery-sha:` lines are
-    /// the machine-readable record the release gate greps.
+    /// the machine-readable record of the run.
     #[must_use]
     pub fn render(&self) -> String {
         let mut out = format!("# Emery eval scorecard — {}\n\n", self.date);
