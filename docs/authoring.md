@@ -123,7 +123,7 @@ pub use operations::Adapter;
 use emery_adapter::answers::{EVIDENCE_ANSWER_SCHEMA, evidence_tail};
 use emery_adapter::registry::Doc;
 use emery_adapter::seam::{Context, Error, Evidence, SourceContent, SourceInput, SourceMetadata};
-use emery_adapter::{AdapterIdentity, Model, Source, repaired};
+use emery_adapter::{Model, Source, repaired};
 
 use crate::registry;
 
@@ -132,10 +132,7 @@ use crate::registry;
 pub struct Adapter;
 
 impl Source for Adapter {
-    const IDENTITY: AdapterIdentity = AdapterIdentity {
-        name: "changelog",
-        version: env!("CARGO_PKG_VERSION"),
-    };
+    const IDENTITY: &str = concat!("changelog@", env!("CARGO_PKG_VERSION"));
 
     fn metadata() -> SourceMetadata {
         SourceMetadata { emery_floor: Some("0.38.0".to_string()) }
