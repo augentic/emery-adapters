@@ -30,4 +30,4 @@ Against the measured qualities (time to first reviewable specification; per-oper
 
 ## The scorecard
 
-Every run writes `sandbox/scorecard.md`: dated, naming the `emery` and `emery-adapters` commit shas (plus each cloned fixture's head sha) and the measured numbers, with `status: green` only when the **complete** case catalog ran, every case passed, and both measured numbers meet their targets — a filtered single-case run is an iteration aid and is never green. The release gate in the `emery` repository verifies a committed green scorecard names the release-tip sha (CONSTITUTION invariant 6) — CI verifies the record, it never runs the live eval. To publish a run, copy the scorecard into `emery/scorecards/<date>.md`.
+Every run writes `sandbox/scorecard.md`: dated, naming the `emery` and `emery-adapters` commit shas (plus each cloned fixture's head sha) and the measured numbers, with `status: green` only when the **complete** case catalog ran, every case passed, and both measured numbers meet their targets — a filtered single-case run is an iteration aid and is never green.

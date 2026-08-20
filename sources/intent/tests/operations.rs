@@ -1,4 +1,4 @@
-//! Intent extract operation behavior over the extract-only seam.
+//! Intent extract operation behavior over the source seam.
 
 use std::path::Path;
 
@@ -53,15 +53,12 @@ async fn extract_inline_value() {
     assert_eq!(evidence.claims.len(), 2);
     assert_eq!(evidence.claims[0].kind, ClaimKind::Intent);
     assert_eq!(evidence.claims[0].id.as_deref(), Some("intent"));
-    // The verbatim echo lands on the open claim record's `statement`
-    // extra — the value synthesis reads.
     assert_eq!(
         evidence.claims[0].extras.get("statement").and_then(|value| value.as_str()),
         Some("Let users reset passwords by email."),
     );
-    // The directive is lifted into a requirement claim so deterministic
-    // reconciliation can join it against other sources (only
-    // `requirement` claims form spec rows).
+    // Only `requirement` claims form spec rows, so the directive is
+    // lifted into one for reconciliation to join against other sources.
     assert_eq!(evidence.claims[1].kind, ClaimKind::Requirement);
     assert_eq!(evidence.claims[1].id.as_deref(), Some("password-reset.request"));
     assert_eq!(
@@ -110,9 +107,8 @@ async fn extract_single_file_workspace() {
     assert!(user.contains("one-file tree"), "prompt names the tree binding");
 }
 
-// An unreadable source fails closed before any judgment leg (A14): a
-// tree that is not the one-file encoding is a typed refusal, never an
-// empty success.
+// An unreadable source fails closed before any judgment leg: a tree
+// that is not the one-file encoding is a typed refusal.
 #[tokio::test]
 async fn extract_rejects_multi_file_workspace() {
     let model = Harness::answering([r#"{"authority":"intent","claims":[]}"#]);

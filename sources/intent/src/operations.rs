@@ -1,6 +1,5 @@
 //! Intent bindings carry the operator's free-form brief — inline
-//! (`value:` bindings) or as a single-file locator the engine
-//! materialized as a one-file tree. Extract preserves the brief
+//! (`value:`) or as a one-file tree. Extract preserves the brief
 //! verbatim and lifts its directives into requirement claims.
 
 use std::path::{Path, PathBuf};
@@ -12,7 +11,7 @@ use emery_adapter::{Model, Source, repaired};
 
 use crate::registry;
 
-/// Read the one regular file in the prepared tree as the intent string.
+// Read the one regular file in the prepared tree as the intent string.
 fn single_file_intent(root: &Path) -> Result<String, Error> {
     let mut files = Vec::new();
     collect_files(root, &mut files)?;
@@ -26,8 +25,8 @@ fn single_file_intent(root: &Path) -> Result<String, Error> {
     }
 }
 
-/// Collect every regular file beneath `dir` (the one-file tree encoding
-/// may nest).
+// Collect every regular file beneath `dir` (the one-file tree encoding
+// may nest).
 fn collect_files(dir: &Path, files: &mut Vec<PathBuf>) -> Result<(), Error> {
     for entry in std::fs::read_dir(dir).map_err(|err| Error::Io(err.to_string()))? {
         let entry = entry.map_err(|err| Error::Io(err.to_string()))?;
@@ -102,8 +101,8 @@ fn content_note(input: &SourceInput) -> Result<String, Error> {
     }
 }
 
-/// An intent binding is never legitimately empty: fail closed before
-/// spending a model call, never answer an empty success.
+// An intent binding is never legitimately empty: fail closed before
+// spending a model call, never answer an empty success.
 fn require_brief(brief: &str) -> Result<(), Error> {
     if brief.trim().is_empty() {
         return Err(Error::InvalidRequest(

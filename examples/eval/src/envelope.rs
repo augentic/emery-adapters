@@ -1,8 +1,6 @@
-//! The wire envelopes of the `emery` CLI contract.
-//!
-//! The `specify` success body on stdout and the failure envelope on
-//! stderr, both `--format json`. Typed nonzero exits are typed
-//! outcomes — the runner records them, never grades around them (T6).
+//! The wire envelopes of the `emery` CLI contract: the `specify`
+//! success body on stdout and the failure envelope on stderr, both
+//! `--format json`.
 
 use serde::Deserialize;
 

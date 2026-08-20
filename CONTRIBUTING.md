@@ -66,7 +66,7 @@ cargo make release               # release-build every adapter
 cargo make eval [id]             # graded live eval over the public contract (operator-invoked)
 ```
 
-The `fmt` arm uses nightly `rustfmt`. Native crate tests are the Rust inner loop; the live eval proves prompt quality end to end and writes the scorecard the emery release gate verifies.
+The `fmt` arm uses nightly `rustfmt`. Native crate tests are the Rust inner loop; the live eval proves prompt quality end to end and writes the dated scorecard.
 
 ## Publishing
 
@@ -79,7 +79,7 @@ Before a train publishes, these gates must hold:
 3. Every adapter's `emery-floor` names the minimum host that can run this train.
 4. Releasing a new SemVer: the GHCR version tag must not already exist for a first-time push of that train.
 
-**Publish Release** runs CI, tags and creates the GitHub Release, then release-builds every adapter and pushes each as a Wasm OCI artifact to `ghcr.io/augentic/emery-adapters/<name>:<version>` via the same `cargo make release` / `cargo make publish <name>` path used locally. The helper derives `<version>` from the workspace manifest. The engine's Publish Release pulls these exact pins into its embedded first-party registry (`emery/scripts/first-party.txt`), so bump that file in step with a train.
+**Publish Release** runs CI, tags and creates the GitHub Release, then release-builds every adapter and pushes each as a Wasm OCI artifact to `ghcr.io/augentic/emery-adapters/<name>:<version>` via the same `cargo make release` / `cargo make publish <name>` path used locally. The helper derives `<version>` from the workspace manifest.
 
 A brand-new package is created **private**: flip it to public in the GHCR package settings (`https://github.com/orgs/augentic/packages/container/emery-adapters%2F<name>/settings`) so anonymous consumers can pull, then confirm the round-trip:
 

@@ -1,4 +1,4 @@
-//! TypeScript extract operation behavior over the extract-only seam.
+//! TypeScript extract operation behavior over the source seam.
 
 use std::path::Path;
 
@@ -57,8 +57,7 @@ async fn extract_leg() {
     assert_eq!(evidence.claims.len(), 4);
 
     // The behavioural requirement is the reconciliation currency: its
-    // required `statement` extra arrives verbatim on the open claim
-    // record (A8).
+    // required `statement` extra arrives verbatim.
     assert_eq!(evidence.claims[0].kind, ClaimKind::Requirement);
     assert_eq!(evidence.claims[0].id.as_deref(), Some("user-registration.email-validation"));
     assert_eq!(
@@ -66,7 +65,6 @@ async fn extract_leg() {
         Some("Registration rejects an email that is not RFC-5322 valid with a 400 response."),
     );
 
-    // The detail kinds carry their body fields as extras, verbatim.
     assert_eq!(evidence.claims[1].kind, ClaimKind::Excerpt);
     assert_eq!(
         evidence.claims[1].extras.get("excerpt").and_then(|value| value.as_str()),
@@ -129,9 +127,8 @@ async fn extract_repaired() {
     assert!(repair.contains("## Previous answer"), "and the rejected answer");
 }
 
-// An extract answer that never passes the tail exhausts the repair
-// budget and surfaces the last failure — a typed error, never an
-// empty success (A14).
+// Exhausting the repair budget surfaces the last failure — a typed
+// error, never an empty success.
 #[tokio::test]
 async fn extract_budget_exhausted() {
     let model = Harness::answering(
