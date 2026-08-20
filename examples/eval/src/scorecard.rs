@@ -1,9 +1,6 @@
-//! The dated scorecard over one full eval run.
-//!
-//! Records the measured product.md numbers and both repos' shas. The
-//! document is the release-gate *record* — the emery release workflow
-//! verifies a green scorecard names the release-tip sha (CONSTITUTION
-//! invariant 6); it never runs the live eval.
+//! The dated scorecard over one full eval run: the measured
+//! product.md numbers and both repos' shas. The release workflow
+//! verifies a green scorecard; it never runs the live eval.
 
 use std::fmt::Write as _;
 
@@ -28,12 +25,11 @@ pub struct CaseResult {
     pub ops_succeeded: u32,
     /// Operations that failed typed.
     pub ops_failed: u32,
-    /// Head sha of the case's cloned fixture, when one exists —
-    /// recorded so the graded estate is reproducible.
+    /// Head sha of the cloned fixture, recorded for reproducibility.
     pub fixture_sha: Option<String>,
 }
 
-/// How a case ended: every branch is a typed record (T6).
+/// How a case ended: every branch is a typed record.
 #[derive(Debug, Clone)]
 pub enum Outcome {
     /// A committed generation with no graded findings.

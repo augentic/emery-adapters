@@ -1,4 +1,4 @@
-//! Documentation extract operation behavior over the extract-only seam.
+//! Documentation extract operation behavior over the source seam.
 
 use std::path::Path;
 
@@ -57,9 +57,8 @@ async fn extract_leg() {
     assert_eq!(evidence.claims[0].kind, ClaimKind::Requirement);
     assert_eq!(evidence.claims[0].id.as_deref(), Some("password-reset.request"));
 
-    // Required extras arrive verbatim on the open claim record (A8):
-    // the engine's fail-closed load gate and synthesis both read them
-    // from exactly these keys.
+    // Required extras arrive verbatim: the engine's fail-closed load
+    // gate and synthesis both read exactly these keys.
     assert_eq!(
         evidence.claims[0].extras.get("statement").and_then(|value| value.as_str()),
         Some(
@@ -135,9 +134,8 @@ async fn extract_repaired() {
     assert!(repair.contains("## Previous answer"), "and the rejected answer");
 }
 
-// An extract answer that never passes the tail exhausts the repair
-// budget and surfaces the last failure — a typed error, never an
-// empty success (A14).
+// Exhausting the repair budget surfaces the last failure — a typed
+// error, never an empty success.
 #[tokio::test]
 async fn extract_budget_exhausted() {
     let model = Harness::answering(

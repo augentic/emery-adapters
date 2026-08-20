@@ -1,11 +1,6 @@
-//! Mechanical grading of a committed `spec.md`.
-//!
-//! The CC-05 / CC-06 acceptance properties: disagreement and gaps
-//! inline, and provenance one gesture away. Checks operate on the
-//! published document format only — no engine parser is linked (T6).
-//!
-//! Reviewability beyond these mechanical properties is model-graded
-//! territory and stays `unconfirmed` on the scorecard until wired.
+//! Mechanical grading of a committed `spec.md`: disagreement and gaps
+//! inline, provenance one gesture away. Checks operate on the
+//! published document format only — no engine parser is linked.
 
 /// Graded expectations one case declares over its committed spec.
 #[derive(Debug, Clone, Copy)]
@@ -15,7 +10,7 @@ pub struct Expect {
     pub subject_fragment: &'static str,
 }
 
-/// The requirement-heading prefix of the published spec format.
+// The requirement-heading prefix of the published spec format.
 const HEADING: &str = "### Requirement:";
 
 /// Grade `spec` mechanically; each finding is one failed property.
@@ -41,7 +36,7 @@ pub fn spec(text: &str, expect: &Expect) -> Vec<String> {
     findings
 }
 
-/// Every requirement block as `(heading line, body)`.
+// Every requirement block as `(heading line, body)`.
 fn blocks(text: &str) -> Vec<(&str, &str)> {
     let mut blocks = Vec::new();
     let mut remaining = text;
@@ -56,8 +51,8 @@ fn blocks(text: &str) -> Vec<(&str, &str)> {
     blocks
 }
 
-/// CC-06: provenance one gesture away — every block carries its `ID:`,
-/// `Sources:`, and `Status:` lines.
+// Provenance one gesture away: every block carries its `ID:`,
+// `Sources:`, and `Status:` lines.
 fn provenance(heading: &str, body: &str, findings: &mut Vec<String>) {
     for line in ["ID:", "Sources:", "Status:"] {
         if !body.lines().any(|candidate| candidate.trim_start().starts_with(line)) {
@@ -66,8 +61,8 @@ fn provenance(heading: &str, body: &str, findings: &mut Vec<String>) {
     }
 }
 
-/// CC-05: disagreement and gaps are inline — a non-`agreed` status
-/// must surface as the matching heading tag, and vice versa.
+// Disagreement and gaps are inline: a non-`agreed` status must
+// surface as the matching heading tag, and vice versa.
 fn inline_tags(heading: &str, body: &str, findings: &mut Vec<String>) {
     let status = body
         .lines()

@@ -1,5 +1,5 @@
-//! The grading kernel at its public surface: the CC-05 / CC-06
-//! mechanical properties over published spec-format text.
+//! The grading kernel at its public surface: the mechanical
+//! properties over published spec-format text.
 
 use eval::grade::{self, Expect};
 use eval::scorecard::{CaseResult, Outcome, Scorecard};
@@ -8,7 +8,7 @@ const EXPECT: Expect = Expect {
     subject_fragment: "order",
 };
 
-/// A well-formed two-block spec: one agreed row, one inline gap.
+// A well-formed two-block spec: one agreed row, one inline gap.
 const GOOD: &str = "# Specification\n\n\
 ### Requirement: order.placement\n\n\
 ID: REQ-001\nSources: [documentation]\nStatus: agreed\n\n\
@@ -49,8 +49,8 @@ fn missing_provenance_is_a_finding() {
     assert!(findings.iter().any(|finding| finding.contains("`Sources:`")), "{findings:?}");
 }
 
-/// CC-05: a gap or disagreement hidden from the heading is a finding,
-/// in both directions.
+// A gap or disagreement hidden from the heading is a finding, in
+// both directions.
 #[test]
 fn tag_status_mismatch_is_a_finding() {
     let hidden = "### Requirement: order.state\n\n\
@@ -64,8 +64,8 @@ fn tag_status_mismatch_is_a_finding() {
     assert!(findings.iter().any(|finding| finding.contains("[conflict]")), "{findings:?}");
 }
 
-/// The scorecard's green line: every case passed and both measured
-/// numbers meet their product.md targets; anything else is red.
+// The scorecard's green line: every case passed and both measured
+// numbers meet their product.md targets; anything else is red.
 #[test]
 fn scorecard_green_line() {
     let pass = CaseResult {

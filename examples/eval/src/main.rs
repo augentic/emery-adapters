@@ -1,12 +1,7 @@
 //! The live eval runner (operator-invoked, never CI): spawns the
-//! sibling shipped `emery` binary over the built first-party
-//! components, times init → committed generation pointer, records
-//! per-operation outcomes from the typed contract, grades the
-//! committed spec set, and writes the dated scorecard.
-//!
-//! Usage: `cargo make eval [case-id]` after `cargo make release`
-//! (components) and a `cargo build --release` of the sibling
-//! `../emery` checkout (override with `EMERY_BIN` / `EMERY_REPO`).
+//! sibling shipped `emery` binary over the built components, grades
+//! the committed spec set, and writes the dated scorecard.
+//! Usage: `cargo make eval [case-id]`; see `examples/eval/README.md`.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -16,25 +11,25 @@ use eval::envelope;
 use eval::grade::{self, Expect};
 use eval::scorecard::{CaseResult, Outcome, Scorecard};
 
-/// One graded spec-generation case: bounded source fixtures in, one
-/// committed and graded spec set out.
+// One graded spec-generation case: bounded source fixtures in, one
+// committed and graded spec set out.
 struct Case {
     id: &'static str,
-    /// Workspace-backed source components, by crate name under
-    /// `sources/` (built to `target/wasm32-wasip2/release/<name>.wasm`).
+    // Workspace-backed source components, by crate name under
+    // `sources/` (built to `target/wasm32-wasip2/release/<name>.wasm`).
     components: &'static [&'static str],
-    /// The operator brief, bound as the inline `intent` value.
+    // The operator brief, bound as the inline `intent` value.
     intent: &'static str,
-    /// Optional first-run shallow clone into the case fixture:
-    /// `(url, fixture-relative destination)`.
+    // Optional first-run shallow clone into the case fixture:
+    // `(url, fixture-relative destination)`.
     clone: Option<(&'static str, &'static str)>,
-    /// Graded expectations over the committed spec.
+    // Graded expectations over the committed spec.
     expect: Expect,
 }
 
-/// The graded case catalog. Both estates are bounded on purpose: the
-/// orders docs fixture is one written specification; omnia-r9k is one
-/// shallow-cloned legacy adapter.
+// The graded case catalog. Both estates are bounded on purpose: the
+// orders docs fixture is one written specification; omnia-r9k is one
+// shallow-cloned legacy adapter.
 const CASES: &[Case] = &[
     Case {
         id: "orders-docs",
@@ -100,14 +95,14 @@ fn main() {
     }
 }
 
-/// The resolved on-disk layout of one runner invocation.
+// The resolved on-disk layout of one runner invocation.
 struct Paths {
-    /// The emery-adapters repository root.
+    // The emery-adapters repository root.
     root: PathBuf,
-    /// The sibling `augentic/emery` checkout the exercised binary was
-    /// built from.
+    // The sibling `augentic/emery` checkout the exercised binary was
+    // built from.
     emery_repo: PathBuf,
-    /// The shipped `emery` binary.
+    // The shipped `emery` binary.
     emery_bin: PathBuf,
 }
 
@@ -136,7 +131,7 @@ impl Paths {
         }
     }
 
-    /// The built component for one adapter crate name.
+    // The built component for one adapter crate name.
     fn component(&self, name: &str) -> PathBuf {
         let target = std::env::var_os("CARGO_TARGET_DIR")
             .map_or_else(|| self.root.join("target"), PathBuf::from);
@@ -150,7 +145,7 @@ impl Paths {
     }
 }
 
-/// Run one case end to end and record its typed result.
+// Run one case end to end and record its typed result.
 fn run_case(case: &Case, paths: &Paths) -> CaseResult {
     println!("== case {}", case.id);
     let fixture = paths.root.join(format!("examples/eval/cases/{}/fixture", case.id));
@@ -217,7 +212,7 @@ fn run_case(case: &Case, paths: &Paths) -> CaseResult {
     }
 }
 
-/// Grade the committed spec set behind the generation pointer.
+// Grade the committed spec set behind the generation pointer.
 fn graded(case: &Case, project: &Path, body: &envelope::Success) -> Outcome {
     let spec = project.join(format!(".emery/spec/generations/{}/spec.md", body.generation));
     let Ok(text) = std::fs::read_to_string(&spec) else {
@@ -237,10 +232,9 @@ fn graded(case: &Case, project: &Path, body: &envelope::Success) -> Outcome {
     }
 }
 
-/// Record a typed nonzero exit: the failure envelope is the outcome,
-/// never something to grade around (T6). The failed operation counts
-/// against the per-operation rate; operations the run never reached
-/// stay unrecorded.
+// Record a typed nonzero exit: the failure envelope is the outcome,
+// never something to grade around. The failed operation counts against
+// the per-operation rate; operations never reached stay unrecorded.
 fn failed(
     case: &Case, started: Instant, output: &Output, fixture_sha: Option<String>,
 ) -> CaseResult {
@@ -261,8 +255,8 @@ fn failed(
     }
 }
 
-/// Spawn one `emery` invocation in the case project, isolated under
-/// the sandbox `EMERY_HOME`.
+// Spawn one `emery` invocation in the case project, isolated under
+// the sandbox `EMERY_HOME`.
 fn emery(paths: &Paths, project: &Path, args: &[String]) -> Output {
     Command::new(&paths.emery_bin)
         .current_dir(project)
@@ -272,8 +266,8 @@ fn emery(paths: &Paths, project: &Path, args: &[String]) -> Output {
         .expect("spawn the emery binary")
 }
 
-/// Shallow-clone `url` into `dest` once; an existing clone is the
-/// cached fixture.
+// Shallow-clone `url` into `dest` once; an existing clone is the
+// cached fixture.
 fn ensure_clone(url: &str, dest: &Path) {
     if dest.is_dir() {
         return;
@@ -287,7 +281,7 @@ fn ensure_clone(url: &str, dest: &Path) {
     assert!(status.success(), "shallow clone of {url} failed");
 }
 
-/// Copy `from`'s tree into `to` (which exists).
+// Copy `from`'s tree into `to` (which exists).
 fn copy_tree(from: &Path, to: &Path) {
     for entry in std::fs::read_dir(from).expect("read fixture dir") {
         let entry = entry.expect("fixture entry");
@@ -301,8 +295,8 @@ fn copy_tree(from: &Path, to: &Path) {
     }
 }
 
-/// One captured line of a helper command (`git rev-parse`, `date`);
-/// `[unknown]` when the command is unavailable — recorded, not guessed.
+// One captured line of a helper command (`git rev-parse`, `date`);
+// `[unknown]` when the command is unavailable — recorded, not guessed.
 fn capture(program: &str, args: &[&str], dir: Option<&Path>) -> String {
     let mut command = Command::new(program);
     command.args(args);

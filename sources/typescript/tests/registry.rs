@@ -13,15 +13,12 @@ fn embeds_extract_prompt() {
     );
 }
 
-/// Survey is deleted from the seam (ADR-0008); no survey prose may
-/// ride in the component.
 #[test]
 fn no_survey_prose() {
     assert!(find(Adapter::docs(), "prompts/survey.md").is_none(), "survey prose is deleted");
 }
 
-/// The prose budget over the ported corpus: no embedded document may
-/// exceed the 800 non-blank-line hard cap (AGENTS prompt-shape rule).
+// No embedded document may exceed the 800 non-blank-line hard cap.
 #[test]
 fn prose_caps() {
     for doc in Adapter::docs() {
@@ -30,8 +27,6 @@ fn prose_caps() {
     }
 }
 
-/// The extraction references the extract prompt loads on demand are
-/// embedded alongside the resolved `emery-runtime` symlink content.
 #[test]
 fn embeds_references() {
     for path in [
