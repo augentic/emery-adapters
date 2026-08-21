@@ -51,8 +51,13 @@ install_crate = "cargo-udeps"
 [tasks.fmt]
 script = "cargo +nightly fmt --all"
 
-# Lint
+# Lint — three legs: stock clippy on stable, the house Dylint libraries
+# (augentic/lints), and the wasm32 guest deny-list (clippy-wasm/).
 [tasks.lint]
+workspace = false
+dependencies = ["lint-stock", "lint-house", "lint-wasm"]
+
+[tasks.lint-stock]
 command = "cargo"
 args = [
   "clippy",
@@ -63,6 +68,36 @@ args = [
   "-D",
   "warnings",
 ]
+install_crate = { rustup_component_name = "clippy" }
+
+[tasks.install-dylint-link]
+install_crate = { crate_name = "dylint-link", binary = "dylint-link", test_arg = "--version" }
+
+[tasks.lint-house]
+command = "cargo"
+args = ["dylint", "--all", "--workspace", "--", "--all-targets"]
+dependencies = ["install-dylint-link"]
+install_crate = { crate_name = "cargo-dylint", binary = "cargo-dylint", test_arg = "--version" }
+
+# `--no-deps` keeps the deny-list off host-side units; `eval` is the
+# native public-contract runner and never reaches the guest target.
+[tasks.lint-wasm]
+command = "cargo"
+args = [
+  "clippy",
+  "--locked",
+  "--no-deps",
+  "--workspace",
+  "--exclude",
+  "eval",
+  "--lib",
+  "--target",
+  "wasm32-wasip2",
+  "--",
+  "-D",
+  "warnings",
+]
+env = { CLIPPY_CONF_DIR = "${CARGO_MAKE_WORKING_DIRECTORY}/clippy-wasm" }
 install_crate = { rustup_component_name = "clippy" }
 
 # Outdated (advisory — never part of `ci`: any upstream release would

@@ -1,7 +1,6 @@
 //! The live eval runner (operator-invoked, never CI): spawns the
-//! sibling shipped `emery` binary over the built components, grades
-//! the committed spec set, and writes the dated scorecard.
-//! Usage: `cargo make eval [case-id]`; see `examples/eval/README.md`.
+//! sibling shipped `emery` binary over the built components, grades the
+//! committed spec set, and writes the dated scorecard (`cargo make eval [case-id]`).
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
