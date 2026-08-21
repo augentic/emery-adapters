@@ -31,7 +31,7 @@ Adapter `prose/` trees are compiled into their components:
 
 ## Rust and testing
 
-The external Rust baseline is the [Pragmatic Rust Guidelines](https://microsoft.github.io/rust-guidelines/guidelines/index.html), layered under the engine repo's [docs/standards/](https://github.com/augentic/emery/tree/main/docs/standards) house deltas (deltas win). Follow the workspace lint configuration in `Cargo.toml`; the house prose budgets are the `style` Dylint lints ([augentic/lints](https://github.com/augentic/lints), caps in the root `dylint.toml`), enforced by `cargo make lint` alongside stock clippy and the wasm32 guest deny-list (`clippy-wasm/clippy.toml`). `omnia` is enabled but silent — no `Handler` impls live here.
+The external Rust baseline is the [Pragmatic Rust Guidelines](https://microsoft.github.io/rust-guidelines/guidelines/index.html), layered under the engine repo's [docs/standards/](https://github.com/augentic/emery/tree/main/docs/standards) house deltas (deltas win). Follow the workspace lint configuration in `Cargo.toml`. Identifier and comment density caps live in the engine [coding-standards.md](https://github.com/augentic/emery/blob/main/docs/standards/coding-standards.md) and are review-only. `cargo make lint` runs clippy (`clippy.toml` carries the guest deny-list).
 
 Testing is integration-first:
 
@@ -46,7 +46,7 @@ Read [`docs/testing.md`](docs/testing.md) before adding, deleting, or relocating
 Run from the repository root:
 
 ```bash
-cargo make check          # fmt, lint (stock clippy + house Dylint lints + wasm deny-list), nextest, doctests, docs
+cargo make check          # fmt, lint (clippy), nextest, doctests, docs
 cargo make ci             # full gate, including vet and deny
 cargo nextest run -p NAME # focused adapter tests
 cargo make adapter NAME   # fast development component build
