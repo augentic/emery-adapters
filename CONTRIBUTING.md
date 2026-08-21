@@ -66,7 +66,7 @@ cargo make release               # release-build every adapter
 cargo make eval [id]             # graded live eval over the public contract (operator-invoked)
 ```
 
-The `fmt` arm uses nightly `rustfmt`. `cargo make lint` runs three legs: stock clippy, the house Dylint lints ([augentic/lints](https://github.com/augentic/lints); caps in the root `dylint.toml`), and the wasm32 guest deny-list (`clippy-wasm/clippy.toml` over `--target wasm32-wasip2`, excluding the native `eval` runner). The `augentic_omnia` library is silent here — no `Handler` impls. Native crate tests are the Rust inner loop; the live eval proves prompt quality end to end and writes the dated scorecard.
+The `fmt` arm uses nightly `rustfmt`. `cargo make lint` runs three legs: stock clippy, the house Dylint lints ([augentic/lints](https://github.com/augentic/lints); caps in the root `dylint.toml`), and the wasm32 guest deny-list (`clippy-wasm/clippy.toml` over `--target wasm32-wasip2`, excluding the native `eval` runner). The `omnia` library is silent here — no `Handler` impls. Native crate tests are the Rust inner loop; the live eval proves prompt quality end to end and writes the dated scorecard.
 
 Optional IDE integration: rust-analyzer can run the house lints on save via `"rust-analyzer.check.overrideCommand": ["cargo", "dylint", "--all", "--workspace", "--", "--all-targets", "--message-format=json"]`. It is slower than stock clippy-on-save and entirely opt-in — CI remains the gate.
 

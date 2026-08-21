@@ -31,7 +31,7 @@ Adapter `prose/` trees are compiled into their components:
 
 ## Rust and testing
 
-The external Rust baseline is the [Pragmatic Rust Guidelines](https://microsoft.github.io/rust-guidelines/guidelines/index.html), layered under the engine repo's [docs/standards/](https://github.com/augentic/emery/tree/main/docs/standards) house deltas (deltas win). Follow the workspace lint configuration in `Cargo.toml`; the house prose budgets are the `augentic_style` Dylint lints ([augentic/lints](https://github.com/augentic/lints), caps in the root `dylint.toml`), enforced by `cargo make lint` alongside stock clippy and the wasm32 guest deny-list (`clippy-wasm/clippy.toml`). `augentic_omnia` is enabled but silent — no `Handler` impls live here.
+The external Rust baseline is the [Pragmatic Rust Guidelines](https://microsoft.github.io/rust-guidelines/guidelines/index.html), layered under the engine repo's [docs/standards/](https://github.com/augentic/emery/tree/main/docs/standards) house deltas (deltas win). Follow the workspace lint configuration in `Cargo.toml`; the house prose budgets are the `style` Dylint lints ([augentic/lints](https://github.com/augentic/lints), caps in the root `dylint.toml`), enforced by `cargo make lint` alongside stock clippy and the wasm32 guest deny-list (`clippy-wasm/clippy.toml`). `omnia` is enabled but silent — no `Handler` impls live here.
 
 Testing is integration-first:
 
