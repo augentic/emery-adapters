@@ -8,7 +8,7 @@ edition = "2024"
 homepage = "https://augentic.io"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/augentic/emery-adapters"
-rust-version = "1.97"
+rust-version = "1.98"
 version = "0.13.0"
 publish = false
 

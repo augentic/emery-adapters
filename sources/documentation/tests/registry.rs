@@ -2,7 +2,7 @@
 //! resolution.
 
 use documentation::Adapter;
-use emery_adapter::Source as _;
+use emery_adapter::SourceAdapter as _;
 use emery_adapter::registry::{body, find};
 
 #[test]

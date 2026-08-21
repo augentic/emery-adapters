@@ -15,7 +15,7 @@ Emery's **engine** owns lifecycle, artifact schemas, reconciliation, and synthes
 
 - Each adapter ships as one component exporting the `source-adapter` world from the `emery:adapter` WIT package (owned and published by `augentic/emery`; the `emery-adapter` SDK embeds it).
 - Identity comes from the guest crate's version and published `emery:<name>@<semver>` package. Resolve-time metadata comes from the component's `metadata` operation; there is no adapter manifest.
-- Keep reusable adapter logic wasm-free in library modules. Each adapter implements `emery_adapter::Source` on a unit type; the `wasm32` guest module is a single `emery_adapter::source!` export-macro invocation over that implementor.
+- Keep reusable adapter logic wasm-free in library modules. Each adapter implements `emery_adapter::SourceAdapter` on a unit type; the `wasm32` guest module is a single `emery_adapter::source!` export-macro invocation over that implementor.
 - Do not commit built `.wasm` artifacts.
 
 The root is a virtual workspace of `sources/*` (documentation, intent, typescript) plus `examples/eval`, the graded live-eval runner. The adapter SDK (`emery-adapter`) and prose walker (`emery-prose`) are dependencies on `augentic/emery` — published under `emery-*` names, so Rust paths are `emery_adapter::` / `emery_prose::` — pinned by engine git (until a release tag, RFC-77 D13) and the committed `Cargo.lock`; for sibling co-development, uncomment the path patches in the root `Cargo.toml` `[patch.crates-io]` block. The eval runner is a **public-contract client** (architecture-review T6): it spawns the sibling shipped `emery` binary over built components and never links engine crates.

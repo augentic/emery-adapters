@@ -1,7 +1,7 @@
 use emery_adapter::answers::{EVIDENCE_ANSWER_SCHEMA, evidence_tail};
 use emery_adapter::registry::Doc;
 use emery_adapter::seam::{Context, Error, Evidence, SourceContent, SourceInput, SourceMetadata};
-use emery_adapter::{Model, Source, repaired};
+use emery_adapter::{Model, SourceAdapter, repaired};
 
 use crate::registry;
 
@@ -9,7 +9,7 @@ use crate::registry;
 #[derive(Clone, Copy, Debug)]
 pub struct Adapter;
 
-impl Source for Adapter {
+impl SourceAdapter for Adapter {
     const IDENTITY: &str = concat!("documentation@", env!("CARGO_PKG_VERSION"));
 
     fn metadata() -> SourceMetadata {
