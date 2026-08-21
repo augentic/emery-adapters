@@ -23,14 +23,14 @@ fn well_formed_spec_passes() {
 }
 
 #[test]
-fn empty_spec_is_unreviewable() {
+fn empty_spec_unreviewable() {
     let findings = grade::spec("# Specification\n", &EXPECT);
     assert_eq!(findings.len(), 1);
     assert!(findings[0].contains("no requirement blocks"), "{findings:?}");
 }
 
 #[test]
-fn missing_subject_is_a_finding() {
+fn missing_subject_flagged() {
     let expect = Expect {
         subject_fragment: "position",
     };
@@ -42,7 +42,7 @@ fn missing_subject_is_a_finding() {
 }
 
 #[test]
-fn missing_provenance_is_a_finding() {
+fn no_provenance_flagged() {
     let spec = "### Requirement: order.placement\n\nStatus: agreed\n\nBody.\n";
     let findings = grade::spec(spec, &EXPECT);
     assert!(findings.iter().any(|finding| finding.contains("`ID:`")), "{findings:?}");
@@ -52,7 +52,7 @@ fn missing_provenance_is_a_finding() {
 // A gap or disagreement hidden from the heading is a finding, in
 // both directions.
 #[test]
-fn tag_status_mismatch_is_a_finding() {
+fn tag_mismatch_flagged() {
     let hidden = "### Requirement: order.state\n\n\
                   ID: REQ-001\nSources: []\nStatus: unknown\n\nBody.\n";
     let findings = grade::spec(hidden, &EXPECT);

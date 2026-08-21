@@ -27,7 +27,7 @@ fn prose_caps() {
 
 // Intent's `references/` tree holds only the `emery-runtime` symlink.
 #[test]
-fn references_emery_runtime_only() {
+fn runtime_references_only() {
     assert!(find(Adapter::docs(), "references/emery-runtime/reconciliation.md").is_some());
     assert!(
         Adapter::docs()

@@ -5,7 +5,7 @@ Human-facing contributor guide (toolchain, layout, prompts, pin, publishing). Cr
 ## Getting started
 
 1. Clone this repository. Until an engine release carries the extract-only SDK, the engine crates (`emery-adapter`, `emery-prose`) resolve through the `[patch.crates-io]` git patches in the root `Cargo.toml` (see [Engine pin and sibling co-development](#engine-pin-and-sibling-co-development)); once that release exists the pin moves to its tag (`tag = "vX.Y.Z"`, RFC-77 D13). A sibling `../emery` checkout is needed only for co-development (uncomment the path patches) and the live eval (it drives that repo's built `emery` binary).
-2. `rustup` picks up the pinned **stable** toolchain from `rust-toolchain.toml` (including the `wasm32-wasip2` target); a nightly toolchain is additionally needed for the `fmt` arm (`cargo +nightly fmt`). Install `cargo-make`, `cargo-nextest`, `cargo-deny`, and `cargo-vet`. Publishing also uses `wkg`.
+2. `rustup` picks up the pinned **stable** toolchain from `rust-toolchain.toml` (including the `wasm32-wasip2` target); a nightly toolchain is additionally needed for the `fmt` arm (`cargo +nightly fmt`). Install `cargo-make`, `cargo-nextest`, `cargo-deny`, and `cargo-vet`, plus `cargo-dylint` and `dylint-link` for the house-lint leg (`cargo make lint` installs them on first run; Dylint fetches its own pinned nightly from [augentic/lints](https://github.com/augentic/lints)). Publishing also uses `wkg`.
 3. Run `cargo make check` from the repo root. Before opening a PR, run `cargo make ci`.
 
 For the adapter SDK's type-level contract (the `Source` trait, seam DTOs, answer schemas), generate the docs locally: `cargo doc -p emery-adapter --open`.
@@ -59,14 +59,16 @@ For sibling co-development against uncommitted engine changes, uncomment the pat
 ## Local development loops
 
 ```bash
-cargo make check                 # fmt + clippy + nextest + doctests + doc
+cargo make check                 # fmt + lint (three legs) + nextest + doctests + doc
 cargo make ci                    # full gate — adds cargo-vet + cargo-deny
 cargo make adapter <name>        # fast one-component build → target/wasm32-wasip2/release/<name>.wasm
 cargo make release               # release-build every adapter
 cargo make eval [id]             # graded live eval over the public contract (operator-invoked)
 ```
 
-The `fmt` arm uses nightly `rustfmt`. Native crate tests are the Rust inner loop; the live eval proves prompt quality end to end and writes the dated scorecard.
+The `fmt` arm uses nightly `rustfmt`. `cargo make lint` runs three legs: stock clippy, the house Dylint lints ([augentic/lints](https://github.com/augentic/lints); caps in the root `dylint.toml`), and the wasm32 guest deny-list (`clippy-wasm/clippy.toml` over `--target wasm32-wasip2`, excluding the native `eval` runner). The `omnia` library is silent here — no `Handler` impls. Native crate tests are the Rust inner loop; the live eval proves prompt quality end to end and writes the dated scorecard.
+
+Optional IDE integration: rust-analyzer can run the house lints on save via `"rust-analyzer.check.overrideCommand": ["cargo", "dylint", "--all", "--workspace", "--", "--all-targets", "--message-format=json"]`. It is slower than stock clippy-on-save and entirely opt-in — CI remains the gate.
 
 ## Publishing
 

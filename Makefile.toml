@@ -51,32 +51,23 @@ install_crate = "cargo-udeps"
 [tasks.fmt]
 script = "cargo +nightly fmt --all"
 
-# Lint
 [tasks.lint]
+dependencies = ["lint-custom"]
 command = "cargo"
-args = [
-  "clippy",
-  "--workspace",
-  "--all-targets",
-  "--all-features",
-  "--",
-  "-D",
-  "warnings",
-]
+args = ["clippy", "--workspace", "--all-targets", "--all-features", "--", "-D", "warnings"]
 install_crate = { rustup_component_name = "clippy" }
 
-# Outdated (advisory — never part of `ci`: any upstream release would
-# fail the gate for unrelated changes; run it on demand or scheduled)
+[tasks.lint-custom]
+command = "cargo"
+args = ["dylint", "--all", "--workspace", "--", "--all-targets"]
+install_crate = { crate_name = "cargo-dylint", binary = "cargo-dylint", test_arg = "--version" }
+
 [tasks.outdated]
 script = '''
 cargo outdated --workspace --depth 1
 '''
 install_crate = "cargo-outdated"
 
-# Test
-#
-# `clean` is not necessary as the `RUSTFLAGS=-Dwarnings` override differs
-# from the default profile, so cargo rebuilds the workspace.
 [tasks.test]
 command = "cargo"
 args = ["nextest", "run", "--all", "--all-features", "--no-tests=pass"]
@@ -93,9 +84,6 @@ command = "cargo"
 args = ["doc", "--no-deps", "--workspace", "--all-features", "--locked"]
 env = { RUSTDOCFLAGS = "-Dwarnings" }
 
-# Coverage brake for unit-test reductions (docs/testing.md).
-# Usage: CRATE=documentation cargo make cov
-# Operator-invoked, never part of `ci`.
 [tasks.cov]
 workspace = false
 script = "cargo llvm-cov nextest -p ${CRATE} --summary-only"

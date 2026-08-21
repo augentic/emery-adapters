@@ -1,7 +1,6 @@
 //! The live eval runner (operator-invoked, never CI): spawns the
-//! sibling shipped `emery` binary over the built components, grades
-//! the committed spec set, and writes the dated scorecard.
-//! Usage: `cargo make eval [case-id]`; see `examples/eval/README.md`.
+//! sibling shipped `emery` binary over the built components, grades the
+//! committed spec set, and writes the dated scorecard (`cargo make eval [case-id]`).
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -107,6 +106,10 @@ struct Paths {
 }
 
 impl Paths {
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "host eval runner; EMERY_REPO / CARGO_TARGET_DIR / EMERY_BIN are operator layout overrides"
+    )]
     fn locate() -> Self {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let root = root.canonicalize().expect("adapters root");
@@ -132,6 +135,10 @@ impl Paths {
     }
 
     // The built component for one adapter crate name.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "host eval runner; CARGO_TARGET_DIR is the cargo layout the runner must follow"
+    )]
     fn component(&self, name: &str) -> PathBuf {
         let target = std::env::var_os("CARGO_TARGET_DIR")
             .map_or_else(|| self.root.join("target"), PathBuf::from);
@@ -146,6 +153,10 @@ impl Paths {
 }
 
 // Run one case end to end and record its typed result.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "host eval runner; wall-clock duration is scorecard telemetry, not guest time"
+)]
 fn run_case(case: &Case, paths: &Paths) -> CaseResult {
     println!("== case {}", case.id);
     let fixture = paths.root.join(format!("examples/eval/cases/{}/fixture", case.id));

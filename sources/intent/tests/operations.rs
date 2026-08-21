@@ -87,7 +87,7 @@ async fn extract_inline_value() {
 }
 
 #[tokio::test]
-async fn extract_single_file_workspace() {
+async fn single_file_workspace() {
     let model = Harness::answering([
         r#"{"authority":"intent","claims":[{"kind":"intent","id":"intent","statement":"Let users reset passwords by email."}]}"#,
     ]);
@@ -110,7 +110,7 @@ async fn extract_single_file_workspace() {
 // An unreadable source fails closed before any judgment leg: a tree
 // that is not the one-file encoding is a typed refusal.
 #[tokio::test]
-async fn extract_rejects_multi_file_workspace() {
+async fn multi_file_rejected() {
     let model = Harness::answering([r#"{"authority":"intent","claims":[]}"#]);
     let root = tempfile::tempdir().unwrap();
     std::fs::write(root.path().join("one.md"), "first").unwrap();
@@ -123,7 +123,7 @@ async fn extract_rejects_multi_file_workspace() {
 }
 
 #[tokio::test]
-async fn extract_rejects_empty_workspace() {
+async fn empty_workspace_rejected() {
     let model = Harness::answering([r#"{"authority":"intent","claims":[]}"#]);
     let root = tempfile::tempdir().unwrap();
 
@@ -136,7 +136,7 @@ async fn extract_rejects_empty_workspace() {
 // The intent binding is never legitimately empty (the prompt's own
 // contract): an empty brief is a typed refusal, never an empty success.
 #[tokio::test]
-async fn extract_rejects_empty_brief() {
+async fn empty_brief_rejected() {
     let model = Harness::answering([r#"{"authority":"intent","claims":[]}"#]);
 
     let inline = Adapter::extract(&model, &ctx(), &SourceInput::value("intent", "  \n")).await;
