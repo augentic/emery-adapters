@@ -15,7 +15,7 @@ Emery's **engine** owns lifecycle, artifact schemas, reconciliation, and synthes
 
 - Each adapter ships as one component exporting the `source-adapter` world from the `emery:adapter` WIT package (owned and published by `augentic/emery`; the `emery-adapter` SDK embeds it).
 - Identity comes from the guest crate's version and published `emery:<name>@<semver>` package. Resolve-time metadata comes from the component's `metadata` operation; there is no adapter manifest.
-- Keep reusable adapter logic wasm-free in library modules. Each adapter implements `emery_adapter::Source` on a unit type; the `wasm32` guest module is a single `emery_adapter::source!` export-macro invocation over that implementor.
+- Keep reusable adapter logic wasm-free in library modules. Each adapter implements `emery_adapter::SourceAdapter` on a unit type; the `wasm32` guest module is a single `emery_adapter::source!` export-macro invocation over that implementor.
 - Do not commit built `.wasm` artifacts.
 
 The root is a virtual workspace of `sources/*` (documentation, intent, typescript) plus `examples/eval`, the graded live-eval runner. The adapter SDK (`emery-adapter`) and prose walker (`emery-prose`) are dependencies on `augentic/emery` — published under `emery-*` names, so Rust paths are `emery_adapter::` / `emery_prose::` — pinned by engine git (until a release tag, RFC-77 D13) and the committed `Cargo.lock`; for sibling co-development, uncomment the path patches in the root `Cargo.toml` `[patch.crates-io]` block. The eval runner is a **public-contract client** (architecture-review T6): it spawns the sibling shipped `emery` binary over built components and never links engine crates.
@@ -31,7 +31,7 @@ Adapter `prose/` trees are compiled into their components:
 
 ## Rust and testing
 
-The external Rust baseline is the [Pragmatic Rust Guidelines](https://microsoft.github.io/rust-guidelines/guidelines/index.html), layered under the engine repo's [docs/standards/](https://github.com/augentic/emery/tree/main/docs/standards) house deltas (deltas win). Follow the workspace lint configuration in `Cargo.toml`; the house prose budgets are the `style` Dylint lints ([augentic/lints](https://github.com/augentic/lints), caps in the root `dylint.toml`), enforced by `cargo make lint` alongside stock clippy and the wasm32 guest deny-list (`clippy-wasm/clippy.toml`). `omnia` is enabled but silent — no `Handler` impls live here.
+The external Rust baseline is the [Pragmatic Rust Guidelines](https://microsoft.github.io/rust-guidelines/guidelines/index.html), layered under the engine repo's [docs/standards/](https://github.com/augentic/emery/tree/main/docs/standards) house deltas (deltas win). Follow the workspace lint configuration in `Cargo.toml`. Identifier and comment density caps live in the engine [coding-standards.md](https://github.com/augentic/emery/blob/main/docs/standards/coding-standards.md) and are review-only. `cargo make lint` runs clippy (`clippy.toml` carries the guest deny-list).
 
 Testing is integration-first:
 
@@ -46,7 +46,7 @@ Read [`docs/testing.md`](docs/testing.md) before adding, deleting, or relocating
 Run from the repository root:
 
 ```bash
-cargo make check          # fmt, lint (stock clippy + house Dylint lints + wasm deny-list), nextest, doctests, docs
+cargo make check          # fmt, lint (clippy), nextest, doctests, docs
 cargo make ci             # full gate, including vet and deny
 cargo nextest run -p NAME # focused adapter tests
 cargo make adapter NAME   # fast development component build

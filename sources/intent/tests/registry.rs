@@ -2,7 +2,7 @@
 //! adapter's bare `references/` tree (only the `emery-runtime` symlink)
 //! still resolves.
 
-use emery_adapter::Source as _;
+use emery_adapter::SourceAdapter as _;
 use emery_adapter::registry::{body, find};
 use intent::Adapter;
 
