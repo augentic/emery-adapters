@@ -145,7 +145,7 @@ version = "4.0.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.cc]]
-version = "1.4.3"
+version = "1.4.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.chacha20]]
@@ -421,7 +421,7 @@ version = "2.3.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.icu_provider]]
-version = "2.3.0"
+version = "2.3.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.id-arena]]
@@ -749,7 +749,7 @@ version = "0.1.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.rustls-webpki]]
-version = "0.103.14"
+version = "0.103.15"
 criteria = "safe-to-deploy"
 
 [[exemptions.same-file]]
@@ -1077,7 +1077,7 @@ version = "0.11.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.zerovec-derive]]
-version = "0.11.5"
+version = "0.11.6"
 criteria = "safe-to-deploy"
 
 [[exemptions.zmij]]
