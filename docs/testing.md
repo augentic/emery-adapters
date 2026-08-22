@@ -37,7 +37,7 @@ The runner's grading kernels (CC-05/CC-06 mechanical checks, envelope parsing, t
 
 ### 3. Graded live eval
 
-Operator-invoked, never CI: the runner spawns the sibling shipped `emery` binary over the built components, drives `init` + `specify`, records typed outcomes, grades the committed spec set, and writes the dated scorecard. How to run: [`examples/eval/README.md`](../examples/eval/README.md).
+Operator-invoked, never CI: the runner spawns the sibling shipped `emery` binary over the built components, drives one `specify` per case, records typed outcomes, grades the committed spec via `emery show spec`, and writes the dated scorecard. How to run: [`examples/eval/README.md`](../examples/eval/README.md).
 
 ```bash
 cargo make eval               # every case

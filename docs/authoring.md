@@ -200,10 +200,10 @@ Run with `cargo nextest run -p changelog` (never bare `cargo test` — see [test
 cargo make adapter changelog     # fast dev build → target/wasm32-wasip2/release/changelog.wasm
 ```
 
-Bind it in any Emery project by local path — init seeds the project's component cache:
+Bind it in any Emery project by local path — the first `specify` naming it seeds the project's component cache:
 
 ```bash
-emery init path/to/changelog.wasm
+emery specify path/to/changelog.wasm
 ```
 
 To exercise it through the graded live eval, add a case to `examples/eval/src/main.rs` (a fixture under `examples/eval/cases/<id>/fixture/` plus its graded expectations) — see [examples/eval/README.md](../examples/eval/README.md). Publishing a pinned version to GHCR (`emery:changelog@<version>`) is the operator flow in [CONTRIBUTING.md § Publishing](../CONTRIBUTING.md#publishing). To load it as a static guest, build the component and declare it in the host runtime the same way emery's journey host declares its mock source (`examples/runtime.rs`).

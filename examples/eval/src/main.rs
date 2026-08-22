@@ -190,25 +190,22 @@ fn run_case(case: &Case, paths: &Paths) -> CaseResult {
     let extracts = u32::try_from(case.components.len()).expect("case size") + 1;
     let started = Instant::now();
 
-    let mut init: Vec<String> = vec!["--format".into(), "json".into(), "init".into()];
+    // One `specify` run carries the whole binding list — nothing about
+    // it persists between runs.
+    let mut specify: Vec<String> = vec!["--format".into(), "json".into(), "specify".into()];
     for component in case.components {
-        init.push(format!("{component}.wasm"));
+        specify.push(format!("{component}.wasm"));
     }
-    init.push("--value".into());
-    init.push(format!("intent.wasm={}", case.intent));
-    let output = emery(paths, &project, &init);
-    if !output.status.success() {
-        return failed(case, started, &output, fixture_sha);
-    }
-
-    let output = emery(paths, &project, &["--format".into(), "json".into(), "specify".into()]);
+    specify.push("--value".into());
+    specify.push(format!("intent.wasm={}", case.intent));
+    let output = emery(paths, &project, &specify);
     let secs = started.elapsed().as_secs_f64();
     if !output.status.success() {
         return failed(case, started, &output, fixture_sha);
     }
 
     let outcome = match envelope::success(&output.stdout) {
-        Ok(body) => graded(case, &project, &body),
+        Ok(body) => graded(case, paths, &project, &body),
         Err(finding) => Outcome::Findings(vec![finding]),
     };
     CaseResult {
@@ -223,17 +220,33 @@ fn run_case(case: &Case, paths: &Paths) -> CaseResult {
     }
 }
 
-// Grade the committed spec set behind the generation pointer.
-fn graded(case: &Case, project: &Path, body: &envelope::Success) -> Outcome {
-    let spec = project.join(format!(".emery/spec/generations/{}/spec.md", body.generation));
-    let Ok(text) = std::fs::read_to_string(&spec) else {
-        return Outcome::Findings(vec![format!(
-            "the envelope names generation `{}` but {} is unreadable",
-            body.generation,
-            spec.display()
-        )]);
+// Grade the committed spec through the public contract: `emery show
+// spec` renders it; the runner never reads engine storage directly.
+fn graded(case: &Case, paths: &Paths, project: &Path, body: &envelope::Success) -> Outcome {
+    let show: Vec<String> =
+        vec!["--format".into(), "json".into(), "show".into(), "spec".into()];
+    let output = emery(paths, project, &show);
+    if !output.status.success() {
+        let finding = match envelope::failure(&output.stderr) {
+            Ok(failure) => format!(
+                "`emery show spec` failed typed after a committed generation: `{}` (exit {})",
+                failure.error, failure.exit_code
+            ),
+            Err(finding) => finding,
+        };
+        return Outcome::Findings(vec![finding]);
+    }
+    let shown = match envelope::shown(&output.stdout) {
+        Ok(shown) => shown,
+        Err(finding) => return Outcome::Findings(vec![finding]),
     };
-    let findings = grade::spec(&text, &case.expect);
+    if shown.generation != body.generation {
+        return Outcome::Findings(vec![format!(
+            "`emery show spec` renders generation `{}` but the specify envelope committed `{}`",
+            shown.generation, body.generation
+        )]);
+    }
+    let findings = grade::spec(&shown.body, &case.expect);
     if findings.is_empty() {
         Outcome::Pass {
             generation: body.generation.clone(),

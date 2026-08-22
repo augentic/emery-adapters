@@ -1,6 +1,6 @@
-//! The wire envelopes of the `emery` CLI contract: the `specify`
-//! success body on stdout and the failure envelope on stderr, both
-//! `--format json`.
+//! The wire envelopes of the `emery` CLI contract: the `specify` and
+//! `show` success bodies on stdout and the failure envelope on
+//! stderr, all `--format json`.
 
 use serde::Deserialize;
 
@@ -14,6 +14,16 @@ pub struct Success {
     pub requirements: usize,
     /// Sources extracted this run.
     pub sources: usize,
+}
+
+/// The `emery show` success body.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct Shown {
+    /// The current generation id.
+    pub generation: String,
+    /// The rendered document bytes.
+    pub body: String,
 }
 
 /// The failure envelope every verb emits on stderr.
@@ -36,6 +46,15 @@ pub struct Failure {
 /// itself a graded finding, since the wire contract is the product.
 pub fn success(stdout: &[u8]) -> Result<Success, String> {
     serde_json::from_slice(stdout).map_err(|err| format!("success envelope did not parse: {err}"))
+}
+
+/// Parse the success body from `show` stdout bytes.
+///
+/// # Errors
+///
+/// The serde failure text when stdout is not the published envelope.
+pub fn shown(stdout: &[u8]) -> Result<Shown, String> {
+    serde_json::from_slice(stdout).map_err(|err| format!("show envelope did not parse: {err}"))
 }
 
 /// Parse the failure envelope from stderr bytes. Host log lines share
