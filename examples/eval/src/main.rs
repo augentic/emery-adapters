@@ -223,8 +223,7 @@ fn run_case(case: &Case, paths: &Paths) -> CaseResult {
 // Grade the committed spec through the public contract: `emery show
 // spec` renders it; the runner never reads engine storage directly.
 fn graded(case: &Case, paths: &Paths, project: &Path, body: &envelope::Success) -> Outcome {
-    let show: Vec<String> =
-        vec!["--format".into(), "json".into(), "show".into(), "spec".into()];
+    let show: Vec<String> = vec!["--format".into(), "json".into(), "show".into(), "spec".into()];
     let output = emery(paths, project, &show);
     if !output.status.success() {
         let finding = match envelope::failure(&output.stderr) {
