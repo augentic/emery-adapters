@@ -1,4 +1,4 @@
-use emery_adapter::answers::{EVIDENCE_ANSWER_SCHEMA, evidence_tail};
+use emery_adapter::answers::{evidence_schema, evidence_tail};
 use emery_adapter::registry::Doc;
 use emery_adapter::seam::{Context, Error, Evidence, SourceContent, SourceInput, SourceMetadata};
 use emery_adapter::{Model, SourceAdapter, repaired};
@@ -37,7 +37,8 @@ impl SourceAdapter for Adapter {
             key = input.key,
             content = content_note(input),
         );
-        repaired(model, ctx, system, user, "evidence", EVIDENCE_ANSWER_SCHEMA, evidence_tail).await
+        let schema = evidence_schema();
+        repaired(model, ctx, system, user, "evidence", &schema, evidence_tail).await
     }
 }
 

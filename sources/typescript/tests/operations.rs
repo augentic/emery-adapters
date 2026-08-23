@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use emery_adapter::answers::EVIDENCE_ANSWER_SCHEMA;
+use emery_adapter::answers::evidence_schema;
 use emery_adapter::seam::{
     Authority, ClaimKind, Context, Error, SourceContent, SourceInput, SourceWorkspace,
 };
@@ -100,7 +100,7 @@ async fn extract_leg() {
     );
     let (name, schema) = schema_format(request);
     assert_eq!(name, "evidence");
-    assert_eq!(schema, EVIDENCE_ANSWER_SCHEMA);
+    assert_eq!(schema, evidence_schema());
     assert_eq!(request.workspace.as_deref(), Some("."), "the source view is lent");
     let grants = mcp_grants(request);
     assert_eq!(grants[0].url, "http://references/mcp");
