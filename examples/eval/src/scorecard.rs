@@ -17,8 +17,8 @@ pub struct CaseResult {
     pub id: String,
     /// The typed outcome.
     pub outcome: Outcome,
-    /// Wall-clock seconds, `init` through the committed generation
-    /// pointer.
+    /// Wall-clock seconds, one `specify` invocation through the
+    /// committed generation pointer.
     pub secs: f64,
     /// Operations that succeeded (one extract per source, one
     /// synthesis).

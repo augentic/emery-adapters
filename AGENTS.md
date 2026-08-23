@@ -37,7 +37,7 @@ Testing is integration-first:
 
 - Publicly reachable adapter behavior belongs in each adapter crate's `tests/` suite (scripted models; no credentials). Do not widen public APIs solely for tests.
 - Use `cargo nextest`, not bare `cargo test`; process isolation is required by environment-mutating suites.
-- The live rung is operator-invoked, never CI: `cargo make eval [id]` spawns the shipped `emery` binary over the built components, wall-clocks init → committed generation, records typed outcomes, grades the committed spec set, and writes the dated scorecard (`sandbox/scorecard.md`). The `omnia-r9k` case shallow-clones its `UNLICENSED` upstream into the gitignored `cases/omnia-r9k/fixture/` cache on first run. See [`examples/eval/README.md`](examples/eval/README.md).
+- The live rung is operator-invoked, never CI: `cargo make eval [id]` spawns the shipped `emery` binary over the built components, wall-clocks one `specify` → committed generation, records typed outcomes, grades the committed spec via `emery show spec`, and writes the dated scorecard (`sandbox/scorecard.md`). The `omnia-r9k` case shallow-clones its `UNLICENSED` upstream into the gitignored `cases/omnia-r9k/fixture/` cache on first run. See [`examples/eval/README.md`](examples/eval/README.md).
 
 Read [`docs/testing.md`](docs/testing.md) before adding, deleting, or relocating tests.
 
