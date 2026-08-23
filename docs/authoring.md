@@ -120,7 +120,7 @@ pub use operations::Adapter;
 `src/operations.rs` implements `emery_adapter::SourceAdapter` on a unit struct. Condensed — the real `intent` and `documentation` files are worth reading in full:
 
 ```rust
-use emery_adapter::answers::{EVIDENCE_ANSWER_SCHEMA, evidence_tail};
+use emery_adapter::answers::{evidence_schema, evidence_tail};
 use emery_adapter::registry::Doc;
 use emery_adapter::seam::{Context, Error, Evidence, SourceContent, SourceInput, SourceMetadata};
 use emery_adapter::{Model, SourceAdapter, repaired};
@@ -164,7 +164,8 @@ impl SourceAdapter for Adapter {
             id = ctx.adapter_id,
             key = input.key,
         );
-        repaired(model, ctx, system, user, "evidence", EVIDENCE_ANSWER_SCHEMA, evidence_tail).await
+        let schema = evidence_schema();
+        repaired(model, ctx, system, user, "evidence", &schema, evidence_tail).await
     }
 }
 ```

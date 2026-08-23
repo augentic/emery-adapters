@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use documentation::Adapter;
-use emery_adapter::answers::EVIDENCE_ANSWER_SCHEMA;
+use emery_adapter::answers::evidence_schema;
 use emery_adapter::seam::{
     Authority, ClaimKind, Context, Error, SourceContent, SourceInput, SourceWorkspace,
 };
@@ -90,7 +90,7 @@ async fn extract_leg() {
     assert!(user.contains("extract mines only this source"), "nothing else is reachable");
     let (name, schema) = schema_format(request);
     assert_eq!(name, "evidence");
-    assert_eq!(schema, EVIDENCE_ANSWER_SCHEMA);
+    assert_eq!(schema, evidence_schema());
     assert_eq!(request.workspace.as_deref(), Some("."), "the source view is lent");
     assert_eq!(mcp_grants(request)[0].url, "http://references/mcp");
     assert_eq!(mcp_grants(request)[0].name, "documentation-references");
