@@ -28,12 +28,10 @@ emery-prose = "0.38.0"
 emery-testkit = { git = "https://github.com/augentic/emery" }
 
 [patch.crates-io]
-# Sibling co-development: path patches until the tool-closure SDK cut
-# merges, then these revert to the emery git pin.
-emery-adapter = { path = "../emery/crates/adapter" }
-emery-prose = { path = "../emery/crates/prose" }
-# emery-adapter = { git = "https://github.com/augentic/emery" }
-# emery-prose = { git = "https://github.com/augentic/emery" }
+emery-adapter = { git = "https://github.com/augentic/emery" }
+emery-prose = { git = "https://github.com/augentic/emery" }
+# emery-adapter = { path = "../emery/crates/adapter" }
+# emery-prose = { path = "../emery/crates/prose" }
 
 omnia = { git = "https://github.com/augentic/omnia" }
 omnia-guest = { git = "https://github.com/augentic/omnia" }
