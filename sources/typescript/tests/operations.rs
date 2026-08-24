@@ -1,9 +1,9 @@
-//! TypeScript extract operation behavior over the source seam.
+//! TypeScript extract operation behavior over the `Source` capability.
 
 use std::path::Path;
 
 use emery_adapter::answers::evidence_schema;
-use emery_adapter::seam::{
+use emery_adapter::types::{
     Authority, ClaimKind, Context, Error, SourceContent, SourceInput, SourceWorkspace,
 };
 use emery_adapter::{Format, MAX_REPAIRS, Request, SourceAdapter as _};

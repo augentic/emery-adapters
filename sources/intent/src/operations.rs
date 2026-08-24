@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use emery_adapter::answers::{evidence_schema, evidence_tail};
 use emery_adapter::registry::Doc;
-use emery_adapter::seam::{Context, Error, Evidence, SourceContent, SourceInput, SourceMetadata};
+use emery_adapter::types::{Context, Error, Evidence, SourceContent, SourceInput, SourceMetadata};
 use emery_adapter::{Model, SourceAdapter, repaired};
 
 use crate::registry;

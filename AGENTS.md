@@ -6,7 +6,7 @@ This repository owns Emery's first-party **source adapters**. Each adapter is an
 
 Use these roles verbatim:
 
-- **source adapter** — input role exporting the WIT `source-adapter` world: `extract` + `metadata`. `extract` takes a typed `SourceInput` (`key`, workspace-or-value) and returns one Evidence document of typed claims — the spec IR. Required per-kind extras (`requirement`→`statement`, `criterion`→`criterion`, `example`→`replay-digest`) are enforced fail-closed engine-side (A8, ADR-0009 §3); a claim missing its extra fails the whole run typed. Survey, leads, and the target axis are deleted from the seam (ADR-0008; archived at `v1`).
+- **source adapter** — input role exporting the WIT `source-adapter` world: `extract` + `metadata`. `extract` takes a typed `SourceInput` (`key`, workspace-or-value) and returns one Evidence document of typed claims — the spec IR. Required per-kind extras (`requirement`→`statement`, `criterion`→`criterion`, `example`→`replay-digest`) are enforced fail-closed engine-side (A8, ADR-0009 §3); a claim missing its extra fails the whole run typed. Survey, leads, and the target axis are deleted from the WIT contract (ADR-0008; archived at `v1`).
 - **Cursor plugin** — operator-facing skills distributed by the Emery repository. Adapters are not Cursor plugins.
 
 Emery's **engine** owns lifecycle, artifact schemas, reconciliation, and synthesis. Adapters contribute extraction behavior through their WIT operations and embedded prose; they never acquire lifecycle authority or read the output home. Preserve missing information as `[unknown]` rather than guessing; keep extracted claims platform-neutral.

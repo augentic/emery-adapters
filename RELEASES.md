@@ -4,7 +4,7 @@ Unreleased
 
 ### Changed
 
-- Extract-only re-seam (ADR-0008 / ADR-0009): each source adapter exports `extract` + `metadata` only. Survey prompts, the target axis (`vectis`, `omnia`, `contracts`), and the extra extract sources (`captures`, `screenshots`) are deleted from the live tree — retrieve them at tag `v1`.
+- Cut to extract-only (ADR-0008 / ADR-0009): each source adapter exports `extract` + `metadata` only. Survey prompts, the target axis (`vectis`, `omnia`, `contracts`), and the extra extract sources (`captures`, `screenshots`) are deleted from the live tree — retrieve them at tag `v1`.
 - Engine crates import under their package names (`emery_adapter::`, `emery_prose::`). Until an engine release tag carries the extract-only SDK, `[patch.crates-io]` fetches `augentic/emery` by git (path patches stay commented for sibling co-development).
 - The graded live eval is a public-contract client of the shipped `emery` binary: one `specify` per case over the built components, `emery show spec` for grading, mechanical CC-05 / CC-06 grading, dated scorecard. Operator-invoked, never CI. Catalog: `orders-docs`, `omnia-r9k`.
 
