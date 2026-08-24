@@ -4,15 +4,15 @@ Integration-first test posture for `emery-adapters`: integration owns every publ
 
 ## The rungs
 
-Every rung runs from this repository with its own `cargo make` tasks; the engine repository tests itself independently. There is no cross-repo command surface.
+Every rung runs from this repository with its own `make` tasks; the engine repository tests itself independently. There is no cross-repo command surface.
 
 Fastest feedback first. **Every behavior is asserted on exactly one rung** — duplicating an assertion across rungs is a defect, not extra safety.
 
 | #   | Rung               | Owns                                                     | Entry                                                |
 | --- | ------------------ | -------------------------------------------------------- | ---------------------------------------------------- |
-| 1   | Native crate tests | Extract behavior, prompt assembly (scripted model)       | `cargo nextest run -p <adapter>` / `cargo make test` |
+| 1   | Native crate tests | Extract behavior, prompt assembly (scripted model)       | `cargo nextest run -p <adapter>` / `make test` |
 | 2   | Eval runner tests  | Grading kernels, envelope parsing, scorecard green line  | `cargo nextest run -p eval`                          |
-| 3   | Graded live eval   | End-to-end spec generation over the adapter contract: prompt quality, the product.md numbers, the scorecard | `cargo make eval [id]` (operator-invoked, never CI) |
+| 3   | Graded live eval   | End-to-end spec generation over the adapter contract: prompt quality, the product.md numbers, the scorecard | `make eval [id]` (operator-invoked, never CI) |
 
 Ownership boundaries: the engine's unpublished `emery-testkit` (a dev-only git dependency, like the SDK pin) owns reusable model test mechanics; adapter `tests/` own extract behavior; the eval runner owns grading and the scorecard, and stays a client of the shipped `emery` binary's public contract (architecture-review T6) — it never links engine crates, and CI never runs the live rung. WASM/WIT conformance of the adapter contract is the engine repository's journey rung.
 
@@ -26,7 +26,7 @@ Each adapter crate is `cdylib` + `rlib`, so its wasm-free logic links natively a
 
 ```bash
 cargo nextest run -p documentation   # one adapter
-cargo make test                      # the whole workspace, matching CI
+make test                            # the whole workspace, matching CI
 ```
 
 `nextest` is mandatory: each test runs in its own process, which is what lets environment-mutating suites pass. Never use bare `cargo test`.
@@ -40,8 +40,8 @@ The runner's grading kernels (CC-05/CC-06 mechanical checks, envelope parsing, t
 Operator-invoked, never CI: the runner spawns the sibling shipped `emery` binary over the built components, drives one `specify` per case, records typed outcomes, grades the committed spec via `emery show spec`, and writes the dated scorecard. How to run: [`examples/eval/README.md`](../examples/eval/README.md).
 
 ```bash
-cargo make eval               # every case
-cargo make eval orders-docs   # one case
+make eval               # every case
+make eval orders-docs   # one case
 ```
 
 ## The two layers — minimize the unit layer
@@ -66,10 +66,10 @@ Applied to every existing `#[cfg(test)]` / `tests.rs`:
 
 ## Coverage is the brake on deletion
 
-`cargo llvm-cov` line/region coverage on still-live code is the safety net. Run the `cov` task in [`Makefile.toml`](../Makefile.toml), per crate, before and after a reduction:
+`cargo llvm-cov` line/region coverage on still-live code is the safety net. Run the `cov-crate` task, per crate, before and after a reduction:
 
 ```bash
-CRATE=documentation cargo make cov   # cargo llvm-cov nextest -p documentation --summary-only
+CRATE=documentation make cov-crate   # cargo llvm-cov nextest -p documentation --summary-only
 ```
 
 A `TOTAL` line/region drop on still-live code means real coverage was lost: backfill with an integration assertion (preferred) or revert that specific deletion. A pure collapse of redundant cases is coverage-neutral.
@@ -82,5 +82,5 @@ Test function names are identifiers, not sentences. The enclosing `tests/<area>.
 
 - Every surviving unit test has a clear reason an agent cannot get the same signal from integration.
 - `cargo llvm-cov nextest --summary-only` `TOTAL` holds on live code for every touched crate.
-- `cargo make ci` is green.
+- `make ci` is green.
 - No `pub` / `pub(crate)` widening solely for tests, and no test-only trait pairs.

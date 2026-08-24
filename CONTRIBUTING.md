@@ -5,8 +5,8 @@ Human-facing contributor guide (toolchain, layout, prompts, pin, publishing). Cr
 ## Getting started
 
 1. Clone this repository. Until an engine release carries the extract-only SDK, the engine crates (`emery-adapter`, `emery-prose`) resolve through the `[patch.crates-io]` git patches in the root `Cargo.toml` (see [Engine pin and sibling co-development](#engine-pin-and-sibling-co-development)); once that release exists the pin moves to its tag (`tag = "vX.Y.Z"`, RFC-77 D13). A sibling `../emery` checkout is needed only for co-development (uncomment the path patches) and the live eval (it drives that repo's built `emery` binary).
-2. `rustup` picks up the pinned **stable** toolchain from `rust-toolchain.toml` (including the `wasm32-wasip2` target); a nightly toolchain is additionally needed for the `fmt` arm (`cargo +nightly fmt`). Install `cargo-make`, `cargo-nextest`, `cargo-deny`, and `cargo-vet`. Publishing also uses `wkg`.
-3. Run `cargo make check` from the repo root. Before opening a PR, run `cargo make ci`.
+2. `rustup` picks up the pinned **stable** toolchain from `rust-toolchain.toml` (including the `wasm32-wasip2` target); a nightly toolchain is additionally needed for the `fmt` arm (`cargo +nightly fmt`). The first `make` installs [mise](https://mise.jdx.dev) if it is missing. Also install `cargo-nextest`, `cargo-deny`, and `cargo-vet`. Publishing also uses `wkg`.
+3. Run `make check` from the repo root. Before opening a PR, run `make ci`.
 
 For the adapter SDK's type-level contract (the `SourceAdapter` trait, WIT types, answer schemas), generate the docs locally: `cargo doc -p emery-adapter --open`.
 
@@ -14,8 +14,8 @@ Unless you are fixing a known bug, discuss larger changes in a GitHub issue firs
 
 ### Troubleshooting first runs
 
-- **`cargo make fmt` fails** — the fmt arm shells out to `cargo +nightly fmt`; install any nightly toolchain (`rustup toolchain install nightly --component rustfmt`).
-- **`cargo make eval` refuses immediately** — it needs the sibling shipped binary (`cargo build --release --bin emery` in `../emery`, or `EMERY_BIN`), the built components (`cargo make release`), `cursor-sdk-bridge` on `PATH` (or `CURSOR_SDK_BRIDGE_BIN`), and `CURSOR_API_KEY`. See [`examples/eval/README.md`](examples/eval/README.md).
+- **`make fmt` fails** — the fmt arm shells out to `cargo +nightly fmt`; install any nightly toolchain (`rustup toolchain install nightly --component rustfmt`).
+- **`make eval` refuses immediately** — it needs the sibling shipped binary (`cargo build --release --bin emery` in `../emery`, or `EMERY_BIN`), the built components (`make release`), `cursor-sdk-bridge` on `PATH` (or `CURSOR_SDK_BRIDGE_BIN`), and `CURSOR_API_KEY`. See [`examples/eval/README.md`](examples/eval/README.md).
 - **Patch-resolution errors after editing the root `Cargo.toml`** — the committed `[patch.crates-io]` git patches fetch `augentic/emery`; the commented path patches only resolve when `../emery` exists. Do not commit active path patches: CI has no sibling checkout.
 
 ## Layout
@@ -59,14 +59,14 @@ For sibling co-development against uncommitted engine changes, uncomment the pat
 ## Local development loops
 
 ```bash
-cargo make check                 # fmt + lint + nextest + doctests + doc
-cargo make ci                    # full gate — adds cargo-vet + cargo-deny
-cargo make adapter <name>        # fast one-component build → target/wasm32-wasip2/release/<name>.wasm
-cargo make release               # release-build every adapter
-cargo make eval [id]             # graded live eval over the public contract (operator-invoked)
+make check                 # fmt + lint + nextest + doctests + doc
+make ci                    # full gate — adds cargo-vet + cargo-deny
+make adapter <name>        # fast one-component build → target/wasm32-wasip2/release/<name>.wasm
+make release               # release-build every adapter
+make eval [id]             # graded live eval over the public contract (operator-invoked)
 ```
 
-The `fmt` arm uses nightly `rustfmt`. `cargo make lint` runs clippy under `-D warnings` (`clippy.toml` carries the guest deny-list). Native crate tests are the Rust inner loop; the live eval proves prompt quality end to end and writes the dated scorecard.
+The `fmt` arm uses nightly `rustfmt`. `make lint` runs clippy under `-D warnings` (`clippy.toml` carries the guest deny-list). `make vet` is check-only; regenerate audit inputs with `make vetgen`. Native crate tests are the Rust inner loop; the live eval proves prompt quality end to end and writes the dated scorecard.
 
 ## Publishing
 
@@ -79,7 +79,7 @@ Before a train publishes, these gates must hold:
 3. Every adapter's `emery-floor` names the minimum host that can run this train.
 4. Releasing a new SemVer: the GHCR version tag must not already exist for a first-time push of that train.
 
-**Publish Release** runs CI, tags and creates the GitHub Release, then release-builds every adapter and pushes each as a Wasm OCI artifact to `ghcr.io/augentic/emery-adapters/<name>:<version>` via the same `cargo make release` / `cargo make publish <name>` path used locally. The helper derives `<version>` from the workspace manifest.
+**Publish Release** runs CI, tags and creates the GitHub Release, then release-builds every adapter and pushes each as a Wasm OCI artifact to `ghcr.io/augentic/emery-adapters/<name>:<version>` via the same `make release` / `make publish <name>` path used locally. The helper derives `<version>` from the workspace manifest.
 
 A brand-new package is created **private**: flip it to public in the GHCR package settings (`https://github.com/orgs/augentic/packages/container/emery-adapters%2F<name>/settings`) so anonymous consumers can pull, then confirm the round-trip:
 
@@ -91,15 +91,15 @@ Local breakout (retry a single adapter after GHCR login):
 
 ```bash
 gh auth token | docker login ghcr.io -u <github-user> --password-stdin
-cargo make release
-cargo make publish <name>
+make release
+make publish <name>
 ```
 
 ## Before you open a PR
 
 1. Branch off `main`.
-2. Run `cargo make ci` (or say exactly which narrower checks ran and why the full gate was unavailable).
-3. Read [docs/testing.md](docs/testing.md) before adding, deleting, or relocating tests. New tests default to the adapter's `tests/` suite; do not add a `src` `#[cfg(test)]` module without a one-line Keep or Collapse reason from that document, and never widen `pub` surface solely for a test. When deleting unit coverage, run the coverage brake (`CRATE=<adapter> cargo make cov`) before and after.
+2. Run `make ci` (or say exactly which narrower checks ran and why the full gate was unavailable).
+3. Read [docs/testing.md](docs/testing.md) before adding, deleting, or relocating tests. New tests default to the adapter's `tests/` suite; do not add a `src` `#[cfg(test)]` module without a one-line Keep or Collapse reason from that document, and never widen `pub` surface solely for a test. When deleting unit coverage, run the coverage brake (`CRATE=<adapter> make cov-crate`) before and after.
 4. Do not commit built `.wasm` artifacts.
 
 ## See also

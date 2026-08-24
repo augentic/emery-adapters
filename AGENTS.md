@@ -31,31 +31,31 @@ Adapter `prose/` trees are compiled into their components:
 
 ## Rust and testing
 
-The external Rust baseline is the [Pragmatic Rust Guidelines](https://microsoft.github.io/rust-guidelines/guidelines/index.html), layered under the engine repo's [docs/standards/](https://github.com/augentic/emery/tree/main/docs/standards) house deltas (deltas win). Follow the workspace lint configuration in `Cargo.toml`. Identifier and comment density caps live in the engine [coding-standards.md](https://github.com/augentic/emery/blob/main/docs/standards/coding-standards.md) and are review-only. `cargo make lint` runs clippy (`clippy.toml` carries the guest deny-list).
+The external Rust baseline is the [Pragmatic Rust Guidelines](https://microsoft.github.io/rust-guidelines/guidelines/index.html), layered under the engine repo's [docs/standards/](https://github.com/augentic/emery/tree/main/docs/standards) house deltas (deltas win). Follow the workspace lint configuration in `Cargo.toml`. Identifier and comment density caps live in the engine [coding-standards.md](https://github.com/augentic/emery/blob/main/docs/standards/coding-standards.md) and are review-only. `make lint` runs clippy (`clippy.toml` carries the guest deny-list).
 
 Testing is integration-first:
 
 - Publicly reachable adapter behavior belongs in each adapter crate's `tests/` suite (scripted models; no credentials). Do not widen public APIs solely for tests.
 - Use `cargo nextest`, not bare `cargo test`; process isolation is required by environment-mutating suites.
-- The live rung is operator-invoked, never CI: `cargo make eval [id]` spawns the shipped `emery` binary over the built components, wall-clocks one `specify` → committed generation, records typed outcomes, grades the committed spec via `emery show spec`, and writes the dated scorecard (`sandbox/scorecard.md`). The `omnia-r9k` case shallow-clones its `UNLICENSED` upstream into the gitignored `cases/omnia-r9k/fixture/` cache on first run. See [`examples/eval/README.md`](examples/eval/README.md).
+- The live rung is operator-invoked, never CI: `make eval [id]` spawns the shipped `emery` binary over the built components, wall-clocks one `specify` → committed generation, records typed outcomes, grades the committed spec via `emery show spec`, and writes the dated scorecard (`sandbox/scorecard.md`). The `omnia-r9k` case shallow-clones its `UNLICENSED` upstream into the gitignored `cases/omnia-r9k/fixture/` cache on first run. See [`examples/eval/README.md`](examples/eval/README.md).
 
 Read [`docs/testing.md`](docs/testing.md) before adding, deleting, or relocating tests.
 
 ## Commands
 
-Run from the repository root:
+Run from the repository root, driven by `make` ([`Makefile`](./Makefile) → mise):
 
 ```bash
-cargo make check          # fmt, lint (clippy), nextest, doctests, docs
-cargo make ci             # full gate, including vet and deny
+make check                # fmt, lint (clippy), nextest, doctests, docs
+make ci                   # full gate, including vet and deny
 cargo nextest run -p NAME # focused adapter tests
-cargo make adapter NAME   # fast development component build
-cargo make release        # release-build every component
-cargo make publish NAME   # push one built component to its exact GHCR tag (Publish Release / local breakout)
-cargo make eval [id]      # graded live eval over the public contract (operator-invoked, never CI)
+make adapter NAME         # fast development component build
+make release              # release-build every component
+make publish NAME         # push one built component to its exact GHCR tag (Publish Release / local breakout)
+make eval [id]            # graded live eval over the public contract (operator-invoked, never CI)
 ```
 
-Run `cargo make ci` before committing. If it cannot run, report exactly which narrower checks ran and why the full gate was unavailable.
+Run `make ci` before committing. If it cannot run, report exactly which narrower checks ran and why the full gate was unavailable.
 
 ## Area-specific guidance
 
