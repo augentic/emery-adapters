@@ -104,7 +104,7 @@ fn scorecard_green_line() {
     let failed = CaseResult {
         outcome: Outcome::TypedFailure {
             error: "source-extract-failed".to_string(),
-            exit_code: 1,
+            exit_code: 4,
         },
         ops_succeeded: 0,
         ops_failed: 1,
