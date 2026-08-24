@@ -877,6 +877,7 @@ source = "git+https://github.com/augentic/emery#926087ca34db7c22eeac6f694f42d895
 [[package]]
 name = "emery-testkit"
 version = "0.38.0"
+source = "git+https://github.com/augentic/emery#926087ca34db7c22eeac6f694f42d895d37d91d4"
 dependencies = [
  "anyhow",
  "omnia-guest",

@@ -25,13 +25,15 @@ omnia-wasi-otel = "0.35.0"
 
 emery-adapter = "0.38.0"
 emery-prose = "0.38.0"
-emery-testkit = { git = "https://github.com/augentic/emery" }
+emery-testkit = "0.38.0"
 
 [patch.crates-io]
 emery-adapter = { git = "https://github.com/augentic/emery" }
 emery-prose = { git = "https://github.com/augentic/emery" }
+emery-testkit = { git = "https://github.com/augentic/emery" }
 # emery-adapter = { path = "../emery/crates/adapter" }
 # emery-prose = { path = "../emery/crates/prose" }
+# emery-testkit = { path = "../emery/crates/testkit" }
 
 omnia = { git = "https://github.com/augentic/omnia" }
 omnia-guest = { git = "https://github.com/augentic/omnia" }
@@ -44,11 +46,6 @@ omnia-wasi-otel = { git = "https://github.com/augentic/omnia" }
 
 wrpc-transport = { git = "https://github.com/bytecodealliance/wrpc" }
 wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }
-
-# emery-testkit is a git dependency (never published), so sibling
-# co-development patches its git source rather than crates-io:
-[patch."https://github.com/augentic/emery"]
-emery-testkit = { path = "../emery/crates/testkit" }
 
 [workspace.lints.rust]
 # https://dirname.github.io/rust-std-doc/rustc/lints/listing/allowed-by-default.html
