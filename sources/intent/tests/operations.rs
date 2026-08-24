@@ -7,14 +7,14 @@ use emery_adapter::types::{
     Authority, ClaimKind, Context, Error, SourceContent, SourceInput, SourceWorkspace,
 };
 use emery_adapter::{Format, Request, SourceAdapter as _};
-use emery_testkit::Scripted;
+use emery_testkit::{Scripted, function_tools};
 use intent::Adapter;
 
 fn ctx() -> Context<'static> {
     Context {
         adapter_id: "source:intent",
         project_root: Path::new("."),
-        mcp_url: None,
+        docs: Adapter::docs(),
         lend: None,
     }
 }
@@ -84,6 +84,9 @@ async fn extract_inline_value() {
     assert_eq!(name, "evidence");
     assert_eq!(schema, evidence_schema());
     assert!(request.workspace.is_none(), "inline value lends no workspace");
+    let tools: Vec<&str> =
+        function_tools(request).into_iter().map(|tool| tool.name.as_str()).collect();
+    assert_eq!(tools, ["list_docs", "read_doc"], "the reference tools are declared");
 }
 
 #[tokio::test]

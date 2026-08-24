@@ -40,9 +40,6 @@ audit-as-crates-io = false
 [policy.omnia-wasi-config]
 audit-as-crates-io = false
 
-[policy.omnia-wasi-http]
-audit-as-crates-io = false
-
 [policy.omnia-wasi-identity]
 audit-as-crates-io = false
 

@@ -859,27 +859,22 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 [[package]]
 name = "emery-adapter"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#a4b7f9aecc89ec77fe1a8df972a7a5f143ddd252"
 dependencies = [
  "omnia-guest",
- "omnia-wasi-http",
  "schemars",
  "serde",
  "serde_json",
  "thiserror 2.0.20",
- "wasip3",
  "wit-bindgen 0.60.0",
 ]
 
 [[package]]
 name = "emery-prose"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#a4b7f9aecc89ec77fe1a8df972a7a5f143ddd252"
 
 [[package]]
 name = "emery-testkit"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#a4b7f9aecc89ec77fe1a8df972a7a5f143ddd252"
 dependencies = [
  "anyhow",
  "omnia-guest",
@@ -3891,6 +3886,7 @@ dependencies = [
  "emery-adapter",
  "emery-prose",
  "emery-testkit",
+ "serde_json",
  "tokio",
 ]
 

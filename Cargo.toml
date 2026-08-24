@@ -20,7 +20,6 @@ tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
 
 omnia = "0.35.0"
 omnia-guest = "0.35.0"
-omnia-wasi-http = "0.35.0"
 omnia-wasi-model = "0.35.0"
 omnia-wasi-otel = "0.35.0"
 
@@ -29,19 +28,19 @@ emery-prose = "0.38.0"
 emery-testkit = { git = "https://github.com/augentic/emery" }
 
 [patch.crates-io]
-emery-adapter = { git = "https://github.com/augentic/emery" }
-emery-prose = { git = "https://github.com/augentic/emery" }
-# emery-adapter = { path = "../emery/crates/adapter" }
-# emery-prose = { path = "../emery/crates/prose" }
+# Sibling co-development: path patches until the tool-closure SDK cut
+# merges, then these revert to the emery git pin.
+emery-adapter = { path = "../emery/crates/adapter" }
+emery-prose = { path = "../emery/crates/prose" }
+# emery-adapter = { git = "https://github.com/augentic/emery" }
+# emery-prose = { git = "https://github.com/augentic/emery" }
 
 omnia = { git = "https://github.com/augentic/omnia" }
 omnia-guest = { git = "https://github.com/augentic/omnia" }
-omnia-wasi-http = { git = "https://github.com/augentic/omnia" }
 omnia-wasi-model = { git = "https://github.com/augentic/omnia" }
 omnia-wasi-otel = { git = "https://github.com/augentic/omnia" }
 # omnia = { path = "../omnia/crates/omnia" }
 # omnia-guest = { path = "../omnia/crates/omnia-guest" }
-# omnia-wasi-http = { path = "../omnia/crates/wasi-http" }
 # omnia-wasi-model = { path = "../omnia/crates/wasi-model" }
 # omnia-wasi-otel = { path = "../omnia/crates/wasi-otel" }
 
@@ -50,8 +49,8 @@ wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }
 
 # emery-testkit is a git dependency (never published), so sibling
 # co-development patches its git source rather than crates-io:
-# [patch."https://github.com/augentic/emery"]
-# emery-testkit = { path = "../emery/crates/testkit" }
+[patch."https://github.com/augentic/emery"]
+emery-testkit = { path = "../emery/crates/testkit" }
 
 [workspace.lints.rust]
 # https://dirname.github.io/rust-std-doc/rustc/lints/listing/allowed-by-default.html

@@ -3,18 +3,19 @@
 use std::path::Path;
 
 use emery_adapter::answers::evidence_schema;
+use emery_adapter::registry::Doc;
 use emery_adapter::types::{
     Authority, ClaimKind, Context, Error, SourceContent, SourceInput, SourceWorkspace,
 };
-use emery_adapter::{Format, MAX_REPAIRS, Request, SourceAdapter as _};
-use emery_testkit::{Scripted, mcp_grants};
+use emery_adapter::{Format, MAX_REPAIRS, Request, SourceAdapter as _, ToolCall};
+use emery_testkit::{Scripted, function_tools};
 use typescript::Adapter;
 
-fn ctx(mcp_url: Option<&str>) -> Context<'static> {
+fn ctx(docs: &'static [Doc]) -> Context<'static> {
     Context {
         adapter_id: "source:typescript",
         project_root: Path::new("."),
-        mcp_url: mcp_url.map(str::to_owned),
+        docs,
         lend: Some(".".to_string()),
     }
 }
@@ -49,9 +50,7 @@ async fn extract_leg() {
         }"#]);
 
     let evidence =
-        Adapter::extract(&model, &ctx(Some("http://references/mcp")), &workspace_input())
-            .await
-            .unwrap();
+        Adapter::extract(&model, &ctx(Adapter::docs()), &workspace_input()).await.unwrap();
 
     assert_eq!(evidence.authority, Authority::Behaviour);
     assert_eq!(evidence.claims.len(), 4);
@@ -94,6 +93,7 @@ async fn extract_leg() {
     assert!(user.contains("source key `legacy-monolith`"), "passed source key is named");
     assert!(user.contains("$SOURCE_DIR"), "binding is mapped onto the prompt's vocabulary");
     assert!(user.contains("extract mines only this source"), "nothing else is reachable");
+    assert!(user.contains("`read_doc` tool"), "the reference pull affordance is named");
     assert!(
         user.contains("every spec-worthy behaviour lifted into a `requirement` claim"),
         "the reconciliation-join contract is stated"
@@ -102,9 +102,37 @@ async fn extract_leg() {
     assert_eq!(name, "evidence");
     assert_eq!(schema, evidence_schema());
     assert_eq!(request.workspace.as_deref(), Some("."), "the source view is lent");
-    let grants = mcp_grants(request);
-    assert_eq!(grants[0].url, "http://references/mcp");
-    assert_eq!(grants[0].name, "typescript-references");
+    let tools: Vec<&str> =
+        function_tools(request).into_iter().map(|tool| tool.name.as_str()).collect();
+    assert_eq!(tools, ["list_docs", "read_doc"], "the reference tools are declared");
+}
+
+// A scripted `read_doc` call round-trips through the judgment's tool
+// closure: the answer is the embedded reference body as a JSON object.
+#[tokio::test]
+async fn closure_reference_pull() {
+    let docs = Adapter::docs();
+    let doc = docs
+        .iter()
+        .find(|doc| doc.path.starts_with("references/"))
+        .expect("typescript embeds reference documents");
+    let model = Scripted::answering([r#"{"authority":"behaviour","claims":[]}"#]).calling(
+        0,
+        [ToolCall {
+            id: "call-1".to_string(),
+            name: "read_doc".to_string(),
+            arguments: serde_json::json!({ "path": doc.path }).to_string(),
+        }],
+    );
+
+    Adapter::extract(&model, &ctx(docs), &workspace_input()).await.unwrap();
+
+    let exchanges = model.exchanges();
+    assert_eq!(exchanges.len(), 1, "the closure answered the scripted call");
+    let body = exchanges[0].1.as_ref().expect("read_doc resolves an embedded path");
+    let value: serde_json::Value = serde_json::from_str(body).expect("a JSON-object result");
+    assert_eq!(value["path"], doc.path);
+    assert_eq!(value["body"], doc.body);
 }
 
 // A tail-invalid extract answer is repaired: the second leg carries
@@ -117,7 +145,7 @@ async fn extract_repaired() {
     ]);
 
     let evidence =
-        Adapter::extract(&model, &ctx(None), &workspace_input()).await.expect("repaired extract");
+        Adapter::extract(&model, &ctx(&[]), &workspace_input()).await.expect("repaired extract");
 
     assert_eq!(evidence.claims[0].id.as_deref(), Some("session.timeout"));
     let requests = model.requests();
@@ -136,7 +164,7 @@ async fn extract_budget_exhausted() {
             1 + MAX_REPAIRS],
     );
 
-    let result = Adapter::extract(&model, &ctx(None), &workspace_input()).await;
+    let result = Adapter::extract(&model, &ctx(&[]), &workspace_input()).await;
 
     match result {
         Err(Error::Internal(detail)) => {
