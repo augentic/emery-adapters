@@ -135,11 +135,7 @@ impl Paths {
         let target = std::env::var_os("CARGO_TARGET_DIR")
             .map_or_else(|| self.root.join("target"), PathBuf::from);
         let built = target.join(format!("wasm32-wasip2/release/{name}.wasm"));
-        assert!(
-            built.is_file(),
-            "component missing at {}; run `make release`",
-            built.display()
-        );
+        assert!(built.is_file(), "component missing at {}; run `make release`", built.display());
         built
     }
 }
