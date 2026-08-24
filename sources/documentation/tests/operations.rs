@@ -8,7 +8,7 @@ use emery_adapter::types::{
     Authority, ClaimKind, Context, Error, SourceContent, SourceInput, SourceWorkspace,
 };
 use emery_adapter::{Format, MAX_REPAIRS, Request, SourceAdapter as _};
-use omnia_testkit::model::{Harness, mcp_grants};
+use emery_testkit::{Scripted, mcp_grants};
 
 fn ctx(mcp_url: Option<&str>) -> Context<'static> {
     Context {
@@ -38,7 +38,7 @@ fn schema_format(request: &Request) -> (&str, &str) {
 
 #[tokio::test]
 async fn extract_leg() {
-    let model = Harness::answering([r#"{
+    let model = Scripted::answering([r#"{
             "authority": "documentation",
             "claims": [
                 {"kind": "requirement", "id": "password-reset.request", "path": "password-reset.md#L3", "statement": "The account service should let a registered user request a password reset link by email."},
@@ -100,7 +100,7 @@ async fn extract_leg() {
 // the user message and the judgment leg gets no filesystem grant.
 #[tokio::test]
 async fn extract_value_no_lend() {
-    let model = Harness::answering([r#"{"authority":"documentation","claims":[]}"#]);
+    let model = Scripted::answering([r#"{"authority":"documentation","claims":[]}"#]);
     let input = SourceInput::value("notes", "Reset links expire after 30 minutes.");
 
     let evidence = Adapter::extract(&model, &ctx(None).without_lend(), &input).await.unwrap();
@@ -118,7 +118,7 @@ async fn extract_value_no_lend() {
 // the findings and its clean answer is the result.
 #[tokio::test]
 async fn extract_repaired() {
-    let model = Harness::answering([
+    let model = Scripted::answering([
         r#"{"authority":"documentation","claims":[{"kind":"requirement"}]}"#,
         r#"{"authority":"documentation","claims":[{"kind":"requirement","id":"password-reset.request","statement":"..."}]}"#,
     ]);
@@ -138,7 +138,7 @@ async fn extract_repaired() {
 // error, never an empty success.
 #[tokio::test]
 async fn extract_budget_exhausted() {
-    let model = Harness::answering(
+    let model = Scripted::answering(
         [r#"{"authority":"documentation","claims":[{"kind":"criterion","id":"Not.Valid"}]}"#;
             1 + MAX_REPAIRS],
     );
@@ -156,7 +156,7 @@ async fn extract_budget_exhausted() {
 
 #[tokio::test]
 async fn extract_no_mcp_no_grant() {
-    let model = Harness::answering([r#"{"authority":"documentation","claims":[]}"#]);
+    let model = Scripted::answering([r#"{"authority":"documentation","claims":[]}"#]);
 
     Adapter::extract(&model, &ctx(None), &workspace_input()).await.unwrap();
 

@@ -24,7 +24,7 @@ What the engine calls:
 
 Three ideas carry the operation:
 
-- **The model is a parameter.** `extract` is generic over `emery_adapter::Model`. On wasm the macro binds `WasiModel`; native tests bind `omnia_testkit::model::Harness` with scripted answers. Your code never constructs a backend.
+- **The model is a parameter.** `extract` is generic over `emery_adapter::Model`. On wasm the macro binds `WasiModel`; native tests bind `emery_testkit::Scripted` with scripted answers. Your code never constructs a backend.
 - **Prose is embedded at build time.** `build.rs` calls `emery_prose::emit("prose")`, which walks the adapter's `prose/` tree into a sorted `DOCS` table; `emery_adapter::registry!()` exposes it as `registry::docs()` / `registry::body("prompts/extract.md")`. A dangling relative link in any prose document fails the build. The export macro also serves `prose/references/**` over MCP, so prompts cite references by relative link instead of inlining them.
 - **Answers are schema-gated and repaired.** `emery_adapter::repaired(model, ctx, system, user, kind, SCHEMA, tail)` sends the prompt, parses the reply against a generated JSON schema, and re-prompts with the parse error up to `emery_adapter::MAX_REPAIRS` times before failing.
 
@@ -79,7 +79,7 @@ emery-adapter.workspace = true
 emery-prose.workspace = true
 
 [dev-dependencies]
-omnia-testkit.workspace = true
+emery-testkit.workspace = true
 tokio.workspace = true
 ```
 
@@ -214,6 +214,6 @@ To exercise it through the graded live eval, add a case to `examples/eval/src/ma
 - [ ] `src/lib.rs` carries no logic beyond the export macro, `registry!`, and re-exports; reusable logic is wasm-free library code.
 - [ ] Every prompt path loaded by `operations.rs` exists under `prose/` (pinned by `tests/registry.rs`); no survey prose.
 - [ ] Required per-kind extras are demanded by the prompt and asserted in the native tests.
-- [ ] Native `tests/` cover extract with a scripted `Harness`, including fail-closed paths; `cargo nextest run -p <name>` is green.
+- [ ] Native `tests/` cover extract with a scripted model (`emery_testkit::Scripted`), including fail-closed paths; `cargo nextest run -p <name>` is green.
 - [ ] `cargo make adapter <name>` builds the component; no `.wasm` artifacts committed.
 - [ ] `cargo make ci` is green.

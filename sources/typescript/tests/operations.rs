@@ -7,7 +7,7 @@ use emery_adapter::types::{
     Authority, ClaimKind, Context, Error, SourceContent, SourceInput, SourceWorkspace,
 };
 use emery_adapter::{Format, MAX_REPAIRS, Request, SourceAdapter as _};
-use omnia_testkit::model::{Harness, mcp_grants};
+use emery_testkit::{Scripted, mcp_grants};
 use typescript::Adapter;
 
 fn ctx(mcp_url: Option<&str>) -> Context<'static> {
@@ -38,7 +38,7 @@ fn schema_format(request: &Request) -> (&str, &str) {
 
 #[tokio::test]
 async fn extract_leg() {
-    let model = Harness::answering([r#"{
+    let model = Scripted::answering([r#"{
             "authority": "behaviour",
             "claims": [
                 {"kind": "requirement", "id": "user-registration.email-validation", "path": "src/users/register.ts#L12-L34", "statement": "Registration rejects an email that is not RFC-5322 valid with a 400 response."},
@@ -111,7 +111,7 @@ async fn extract_leg() {
 // the findings and its clean answer is the result.
 #[tokio::test]
 async fn extract_repaired() {
-    let model = Harness::answering([
+    let model = Scripted::answering([
         r#"{"authority":"behaviour","claims":[{"kind":"requirement"}]}"#,
         r#"{"authority":"behaviour","claims":[{"kind":"requirement","id":"session.timeout","statement":"Sessions expire after 15 minutes."}]}"#,
     ]);
@@ -131,7 +131,7 @@ async fn extract_repaired() {
 // error, never an empty success.
 #[tokio::test]
 async fn extract_budget_exhausted() {
-    let model = Harness::answering(
+    let model = Scripted::answering(
         [r#"{"authority":"behaviour","claims":[{"kind":"requirement","id":"Not.Valid"}]}"#;
             1 + MAX_REPAIRS],
     );
