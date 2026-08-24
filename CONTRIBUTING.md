@@ -15,7 +15,7 @@ Unless you are fixing a known bug, discuss larger changes in a GitHub issue firs
 ### Troubleshooting first runs
 
 - **`cargo make fmt` fails** — the fmt arm shells out to `cargo +nightly fmt`; install any nightly toolchain (`rustup toolchain install nightly --component rustfmt`).
-- **`cargo make eval` refuses immediately** — it needs the sibling shipped binary (`cargo build --release --bin emery` in `../emery`, or `EMERY_BIN`) and the built components (`cargo make release`); the live model backend is the binary's own (the Cursor client).
+- **`cargo make eval` refuses immediately** — it needs the sibling shipped binary (`cargo build --release --bin emery` in `../emery`, or `EMERY_BIN`), the built components (`cargo make release`), `cursor-sdk-bridge` on `PATH` (or `CURSOR_SDK_BRIDGE_BIN`), and `CURSOR_API_KEY`. See [`examples/eval/README.md`](examples/eval/README.md).
 - **Patch-resolution errors after editing the root `Cargo.toml`** — the committed `[patch.crates-io]` git patches fetch `augentic/emery`; the commented path patches only resolve when `../emery` exists. Do not commit active path patches: CI has no sibling checkout.
 
 ## Layout

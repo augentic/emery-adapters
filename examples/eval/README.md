@@ -8,7 +8,7 @@ Operator-invoked, never CI. CI compiles this package and runs its grading-kernel
 
 1. Built components: `cargo make release` (or `cargo build -p <name> --target wasm32-wasip2 --release` per adapter).
 2. The sibling shipped binary: `cargo build --release --bin emery` in the `../emery` checkout. Override the checkout with `EMERY_REPO` or the binary with `EMERY_BIN`.
-3. A live model backend for the binary's `wasi:model` host (the Cursor client).
+3. A live Cursor model backend for the shipped binary (`omnia-cursor`): `cursor-sdk-bridge` on `PATH` (or `CURSOR_SDK_BRIDGE_BIN`) and `CURSOR_API_KEY`. Install the bridge from the [sdk-bridge releases](https://github.com/cursor/sdk-bridge/releases). A prior `cursor-agent login` is not enough.
 
 ## Running
 
