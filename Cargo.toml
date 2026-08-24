@@ -20,8 +20,8 @@ tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
 
 omnia = "0.35.0"
 omnia-guest = "0.35.0"
-omnia-wasi-model = "0.35.0"
-omnia-wasi-otel = "0.35.0"
+# omnia-wasi-model = "0.35.0"
+# omnia-wasi-otel = "0.35.0"
 
 emery-adapter = "0.38.0"
 emery-prose = "0.38.0"
@@ -37,8 +37,8 @@ emery-testkit = { git = "https://github.com/augentic/emery" }
 
 omnia = { git = "https://github.com/augentic/omnia" }
 omnia-guest = { git = "https://github.com/augentic/omnia" }
-omnia-wasi-model = { git = "https://github.com/augentic/omnia" }
-omnia-wasi-otel = { git = "https://github.com/augentic/omnia" }
+# omnia-wasi-model = { git = "https://github.com/augentic/omnia" }
+# omnia-wasi-otel = { git = "https://github.com/augentic/omnia" }
 # omnia = { path = "../omnia/crates/omnia" }
 # omnia-guest = { path = "../omnia/crates/omnia-guest" }
 # omnia-wasi-model = { path = "../omnia/crates/wasi-model" }
