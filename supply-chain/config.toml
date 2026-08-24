@@ -34,16 +34,10 @@ audit-as-crates-io = false
 [policy.omnia-host-macros]
 audit-as-crates-io = false
 
-[policy.omnia-testkit]
-audit-as-crates-io = false
-
 [policy.omnia-wasi-blobstore]
 audit-as-crates-io = false
 
 [policy.omnia-wasi-config]
-audit-as-crates-io = false
-
-[policy.omnia-wasi-http]
 audit-as-crates-io = false
 
 [policy.omnia-wasi-identity]

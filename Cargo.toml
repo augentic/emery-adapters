@@ -18,28 +18,29 @@ serde_json = "1.0.145"
 tempfile = "3.27.0"
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
 
+omnia = "0.35.0"
 omnia-guest = "0.35.0"
-omnia-testkit = "0.35.0"
+omnia-wasi-model = "0.35.0"
+omnia-wasi-otel = "0.35.0"
 
 emery-adapter = "0.38.0"
 emery-prose = "0.38.0"
+emery-testkit = "0.38.0"
 
 [patch.crates-io]
 emery-adapter = { git = "https://github.com/augentic/emery" }
 emery-prose = { git = "https://github.com/augentic/emery" }
+emery-testkit = { git = "https://github.com/augentic/emery" }
 # emery-adapter = { path = "../emery/crates/adapter" }
 # emery-prose = { path = "../emery/crates/prose" }
+# emery-testkit = { path = "../emery/crates/testkit" }
 
 omnia = { git = "https://github.com/augentic/omnia" }
 omnia-guest = { git = "https://github.com/augentic/omnia" }
-omnia-testkit = { git = "https://github.com/augentic/omnia" }
-omnia-wasi-http = { git = "https://github.com/augentic/omnia" }
 omnia-wasi-model = { git = "https://github.com/augentic/omnia" }
 omnia-wasi-otel = { git = "https://github.com/augentic/omnia" }
 # omnia = { path = "../omnia/crates/omnia" }
 # omnia-guest = { path = "../omnia/crates/omnia-guest" }
-# omnia-testkit = { path = "../omnia/crates/testkit" }
-# omnia-wasi-http = { path = "../omnia/crates/wasi-http" }
 # omnia-wasi-model = { path = "../omnia/crates/wasi-model" }
 # omnia-wasi-otel = { path = "../omnia/crates/wasi-otel" }
 

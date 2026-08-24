@@ -4,17 +4,18 @@ use std::path::Path;
 
 use documentation::Adapter;
 use emery_adapter::answers::evidence_schema;
+use emery_adapter::registry::Doc;
 use emery_adapter::types::{
     Authority, ClaimKind, Context, Error, SourceContent, SourceInput, SourceWorkspace,
 };
 use emery_adapter::{Format, MAX_REPAIRS, Request, SourceAdapter as _};
-use omnia_testkit::model::{Harness, mcp_grants};
+use emery_testkit::{Scripted, function_tools};
 
-fn ctx(mcp_url: Option<&str>) -> Context<'static> {
+fn ctx(docs: &'static [Doc]) -> Context<'static> {
     Context {
         adapter_id: "source:documentation",
         project_root: Path::new("."),
-        mcp_url: mcp_url.map(str::to_owned),
+        docs,
         lend: Some(".".to_string()),
     }
 }
@@ -38,7 +39,7 @@ fn schema_format(request: &Request) -> (&str, &str) {
 
 #[tokio::test]
 async fn extract_leg() {
-    let model = Harness::answering([r#"{
+    let model = Scripted::answering([r#"{
             "authority": "documentation",
             "claims": [
                 {"kind": "requirement", "id": "password-reset.request", "path": "password-reset.md#L3", "statement": "The account service should let a registered user request a password reset link by email."},
@@ -48,9 +49,7 @@ async fn extract_leg() {
         }"#]);
 
     let evidence =
-        Adapter::extract(&model, &ctx(Some("http://references/mcp")), &workspace_input())
-            .await
-            .unwrap();
+        Adapter::extract(&model, &ctx(Adapter::docs()), &workspace_input()).await.unwrap();
 
     assert_eq!(evidence.authority, Authority::Documentation);
     assert_eq!(evidence.claims.len(), 3);
@@ -92,18 +91,19 @@ async fn extract_leg() {
     assert_eq!(name, "evidence");
     assert_eq!(schema, evidence_schema());
     assert_eq!(request.workspace.as_deref(), Some("."), "the source view is lent");
-    assert_eq!(mcp_grants(request)[0].url, "http://references/mcp");
-    assert_eq!(mcp_grants(request)[0].name, "documentation-references");
+    let tools: Vec<&str> =
+        function_tools(request).into_iter().map(|tool| tool.name.as_str()).collect();
+    assert_eq!(tools, ["list_docs", "read_doc"], "the reference tools are declared");
 }
 
 // An inline `value:` binding lends no workspace: the material rides in
 // the user message and the judgment leg gets no filesystem grant.
 #[tokio::test]
 async fn extract_value_no_lend() {
-    let model = Harness::answering([r#"{"authority":"documentation","claims":[]}"#]);
+    let model = Scripted::answering([r#"{"authority":"documentation","claims":[]}"#]);
     let input = SourceInput::value("notes", "Reset links expire after 30 minutes.");
 
-    let evidence = Adapter::extract(&model, &ctx(None).without_lend(), &input).await.unwrap();
+    let evidence = Adapter::extract(&model, &ctx(&[]).without_lend(), &input).await.unwrap();
 
     assert!(evidence.claims.is_empty());
     let requests = model.requests();
@@ -118,13 +118,13 @@ async fn extract_value_no_lend() {
 // the findings and its clean answer is the result.
 #[tokio::test]
 async fn extract_repaired() {
-    let model = Harness::answering([
+    let model = Scripted::answering([
         r#"{"authority":"documentation","claims":[{"kind":"requirement"}]}"#,
         r#"{"authority":"documentation","claims":[{"kind":"requirement","id":"password-reset.request","statement":"..."}]}"#,
     ]);
 
     let evidence =
-        Adapter::extract(&model, &ctx(None), &workspace_input()).await.expect("repaired extract");
+        Adapter::extract(&model, &ctx(&[]), &workspace_input()).await.expect("repaired extract");
 
     assert_eq!(evidence.claims[0].id.as_deref(), Some("password-reset.request"));
     let requests = model.requests();
@@ -138,12 +138,12 @@ async fn extract_repaired() {
 // error, never an empty success.
 #[tokio::test]
 async fn extract_budget_exhausted() {
-    let model = Harness::answering(
+    let model = Scripted::answering(
         [r#"{"authority":"documentation","claims":[{"kind":"criterion","id":"Not.Valid"}]}"#;
             1 + MAX_REPAIRS],
     );
 
-    let result = Adapter::extract(&model, &ctx(None), &workspace_input()).await;
+    let result = Adapter::extract(&model, &ctx(&[]), &workspace_input()).await;
 
     match result {
         Err(Error::Internal(detail)) => {
@@ -154,11 +154,12 @@ async fn extract_budget_exhausted() {
     assert_eq!(model.requests().len(), 1 + MAX_REPAIRS, "initial answer plus the repair budget");
 }
 
+// A docs-free context declares no tools: the judgment stays single-shot.
 #[tokio::test]
-async fn extract_no_mcp_no_grant() {
-    let model = Harness::answering([r#"{"authority":"documentation","claims":[]}"#]);
+async fn extract_no_docs_no_tools() {
+    let model = Scripted::answering([r#"{"authority":"documentation","claims":[]}"#]);
 
-    Adapter::extract(&model, &ctx(None), &workspace_input()).await.unwrap();
+    Adapter::extract(&model, &ctx(&[]), &workspace_input()).await.unwrap();
 
-    assert!(model.requests()[0].tools.is_empty(), "no URL means no reference grant");
+    assert!(model.requests()[0].tools.is_empty(), "no docs means no reference tools");
 }

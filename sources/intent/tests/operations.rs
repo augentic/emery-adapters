@@ -7,14 +7,14 @@ use emery_adapter::types::{
     Authority, ClaimKind, Context, Error, SourceContent, SourceInput, SourceWorkspace,
 };
 use emery_adapter::{Format, Request, SourceAdapter as _};
+use emery_testkit::{Scripted, function_tools};
 use intent::Adapter;
-use omnia_testkit::model::Harness;
 
 fn ctx() -> Context<'static> {
     Context {
         adapter_id: "source:intent",
         project_root: Path::new("."),
-        mcp_url: None,
+        docs: Adapter::docs(),
         lend: None,
     }
 }
@@ -42,7 +42,7 @@ fn schema_format(request: &Request) -> (&str, &str) {
 
 #[tokio::test]
 async fn extract_inline_value() {
-    let model = Harness::answering([r#"{"authority":"intent","claims":[
+    let model = Scripted::answering([r#"{"authority":"intent","claims":[
             {"kind":"intent","id":"intent","statement":"Let users reset passwords by email."},
             {"kind":"requirement","id":"password-reset.request","statement":"Users reset passwords by email."}
         ]}"#]);
@@ -84,11 +84,14 @@ async fn extract_inline_value() {
     assert_eq!(name, "evidence");
     assert_eq!(schema, evidence_schema());
     assert!(request.workspace.is_none(), "inline value lends no workspace");
+    let tools: Vec<&str> =
+        function_tools(request).into_iter().map(|tool| tool.name.as_str()).collect();
+    assert_eq!(tools, ["list_docs", "read_doc"], "the reference tools are declared");
 }
 
 #[tokio::test]
 async fn single_file_workspace() {
-    let model = Harness::answering([
+    let model = Scripted::answering([
         r#"{"authority":"intent","claims":[{"kind":"intent","id":"intent","statement":"Let users reset passwords by email."}]}"#,
     ]);
     let root = tempfile::tempdir().unwrap();
@@ -111,7 +114,7 @@ async fn single_file_workspace() {
 // that is not the one-file encoding is a typed refusal.
 #[tokio::test]
 async fn multi_file_rejected() {
-    let model = Harness::answering([r#"{"authority":"intent","claims":[]}"#]);
+    let model = Scripted::answering([r#"{"authority":"intent","claims":[]}"#]);
     let root = tempfile::tempdir().unwrap();
     std::fs::write(root.path().join("one.md"), "first").unwrap();
     std::fs::write(root.path().join("two.md"), "second").unwrap();
@@ -124,7 +127,7 @@ async fn multi_file_rejected() {
 
 #[tokio::test]
 async fn empty_workspace_rejected() {
-    let model = Harness::answering([r#"{"authority":"intent","claims":[]}"#]);
+    let model = Scripted::answering([r#"{"authority":"intent","claims":[]}"#]);
     let root = tempfile::tempdir().unwrap();
 
     let result = Adapter::extract(&model, &ctx(), &workspace_input(root.path())).await;
@@ -137,7 +140,7 @@ async fn empty_workspace_rejected() {
 // contract): an empty brief is a typed refusal, never an empty success.
 #[tokio::test]
 async fn empty_brief_rejected() {
-    let model = Harness::answering([r#"{"authority":"intent","claims":[]}"#]);
+    let model = Scripted::answering([r#"{"authority":"intent","claims":[]}"#]);
 
     let inline = Adapter::extract(&model, &ctx(), &SourceInput::value("intent", "  \n")).await;
     assert!(matches!(inline, Err(Error::InvalidRequest(_))), "got {inline:?}");
