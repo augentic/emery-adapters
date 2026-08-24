@@ -8,7 +8,7 @@ Human-facing contributor guide (toolchain, layout, prompts, pin, publishing). Cr
 2. `rustup` picks up the pinned **stable** toolchain from `rust-toolchain.toml` (including the `wasm32-wasip2` target); a nightly toolchain is additionally needed for the `fmt` arm (`cargo +nightly fmt`). Install `cargo-make`, `cargo-nextest`, `cargo-deny`, and `cargo-vet`. Publishing also uses `wkg`.
 3. Run `cargo make check` from the repo root. Before opening a PR, run `cargo make ci`.
 
-For the adapter SDK's type-level contract (the `SourceAdapter` trait, seam DTOs, answer schemas), generate the docs locally: `cargo doc -p emery-adapter --open`.
+For the adapter SDK's type-level contract (the `SourceAdapter` trait, WIT types, answer schemas), generate the docs locally: `cargo doc -p emery-adapter --open`.
 
 Unless you are fixing a known bug, discuss larger changes in a GitHub issue first. Legal / DCO expectations match the engine repo — see [emery CONTRIBUTING](https://github.com/augentic/emery/blob/main/CONTRIBUTING.md).
 

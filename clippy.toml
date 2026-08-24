@@ -12,9 +12,9 @@ doc-valid-idents = [
 ]
 
 disallowed-methods = [
-  { path = "std::env::var", reason = "adapters receive configuration through the source seam" },
-  { path = "std::env::vars", reason = "adapters receive configuration through the source seam" },
-  { path = "std::env::var_os", reason = "adapters receive configuration through the source seam" },
+  { path = "std::env::var", reason = "adapters receive configuration through the Source capability" },
+  { path = "std::env::vars", reason = "adapters receive configuration through the Source capability" },
+  { path = "std::env::var_os", reason = "adapters receive configuration through the Source capability" },
   { path = "std::time::SystemTime::now", reason = "wall-clock time is a host capability" },
   { path = "std::time::Instant::now", reason = "monotonic time is a host capability" },
 ]

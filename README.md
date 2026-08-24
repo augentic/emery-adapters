@@ -32,7 +32,7 @@ cargo nextest run -p documentation   # or intent, typescript
 
 ## Graded live eval
 
-The live rung is a **public-contract client**: it spawns the sibling shipped `emery` binary over the built components, drives one `specify` per case across the component seam, grades the committed spec via `emery show spec`, and writes the dated scorecard. Operator-invoked, never CI.
+The live rung is a **public-contract client**: it spawns the sibling shipped `emery` binary over the built components, drives one `specify` per case across the adapter contract, grades the committed spec via `emery show spec`, and writes the dated scorecard. Operator-invoked, never CI.
 
 ```bash
 cargo make release                   # build the components

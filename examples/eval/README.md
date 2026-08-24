@@ -1,6 +1,6 @@
 # Live eval — the graded spec-generation rung
 
-A client of the public contract only (architecture-review T6): the runner spawns the sibling shipped `emery` binary over the built first-party components, drives one `specify` per case across the component seam, and grades what the contract exposes — typed exit codes, the JSON envelope, and the committed spec rendered by `emery show spec`. It never links engine crates, never reads engine storage directly, and grading never reads telemetry (ADR-0001).
+A client of the public contract only (architecture-review T6): the runner spawns the sibling shipped `emery` binary over the built first-party components, drives one `specify` per case across the adapter contract, and grades what the contract exposes — typed exit codes, the JSON envelope, and the committed spec rendered by `emery show spec`. It never links engine crates, never reads engine storage directly, and grading never reads telemetry (ADR-0001).
 
 Operator-invoked, never CI. CI compiles this package and runs its grading-kernel tests; the live rung needs a model backend and runs from a workstation.
 

@@ -12,9 +12,9 @@ Fastest feedback first. **Every behavior is asserted on exactly one rung** — d
 | --- | ------------------ | -------------------------------------------------------- | ---------------------------------------------------- |
 | 1   | Native crate tests | Extract behavior, prompt assembly (scripted `Harness`)   | `cargo nextest run -p <adapter>` / `cargo make test` |
 | 2   | Eval runner tests  | Grading kernels, envelope parsing, scorecard green line  | `cargo nextest run -p eval`                          |
-| 3   | Graded live eval   | End-to-end spec generation over the component seam: prompt quality, the product.md numbers, the scorecard | `cargo make eval [id]` (operator-invoked, never CI) |
+| 3   | Graded live eval   | End-to-end spec generation over the adapter contract: prompt quality, the product.md numbers, the scorecard | `cargo make eval [id]` (operator-invoked, never CI) |
 
-Ownership boundaries: `omnia-testkit` owns reusable model test mechanics; adapter `tests/` own extract behavior; the eval runner owns grading and the scorecard, and stays a client of the shipped `emery` binary's public contract (architecture-review T6) — it never links engine crates, and CI never runs the live rung. WASM/WIT conformance of the seam itself is the engine repository's journey rung.
+Ownership boundaries: `omnia-testkit` owns reusable model test mechanics; adapter `tests/` own extract behavior; the eval runner owns grading and the scorecard, and stays a client of the shipped `emery` binary's public contract (architecture-review T6) — it never links engine crates, and CI never runs the live rung. WASM/WIT conformance of the adapter contract is the engine repository's journey rung.
 
 Sibling co-development: uncomment the path patches in the root `Cargo.toml` `[patch.crates-io]` block to resolve engine crates from `../emery`. The committed tree uses git patches so CI can fetch the engine without a sibling checkout.
 
