@@ -2,8 +2,8 @@ name: Publish adapters
 
 # First-party Wasm OCI packages for GHCR. Called from publish.yaml after
 # the shared publish workflow has tagged and created the GitHub Release.
-# Uses the same `cargo make release` / `cargo make publish` path as a
-# local maintainer (RFC-76 Phase E).
+# Uses the same cargo / wkg commands as `make release` / `make publish`
+# locally (RFC-76 Phase E).
 
 on:
   workflow_call:
@@ -36,7 +36,7 @@ jobs:
 
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-make
+          tool: wkg
 
       - name: Login to GHCR
         uses: docker/login-action@v3
@@ -46,14 +46,15 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build components
-        run: cargo make release
+        run: cargo build --workspace --exclude eval --target wasm32-wasip2 --release
 
       - name: Publish components
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          version="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version *= *"\(.*\)"/\1/p' Cargo.toml)"
           for dir in sources/*/; do
             name="$(basename "$dir")"
-            cargo make publish "$name"
+            wkg oci push "ghcr.io/augentic/emery-adapters/$name:$version" "target/wasm32-wasip2/release/$name.wasm"
           done

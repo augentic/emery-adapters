@@ -26,7 +26,7 @@ An adapter is one Rust crate that ships as one Wasm component exporting the `sou
 Native crate tests need no model credentials:
 
 ```bash
-cargo make check
+make check
 cargo nextest run -p documentation   # or intent, typescript
 ```
 
@@ -35,10 +35,10 @@ cargo nextest run -p documentation   # or intent, typescript
 The live rung is a **public-contract client**: it spawns the sibling shipped `emery` binary over the built components, drives one `specify` per case across the adapter contract, grades the committed spec via `emery show spec`, and writes the dated scorecard. Operator-invoked, never CI.
 
 ```bash
-cargo make release                   # build the components
+make release                         # build the components
 # build the sibling binary: cargo build --release --bin emery (in ../emery)
-cargo make eval                      # every case
-cargo make eval orders-docs          # one case
+make eval                            # every case
+make eval orders-docs                # one case
 ```
 
 Prerequisites, cases, measurements, and the scorecard schema: [`examples/eval/README.md`](examples/eval/README.md). The `omnia-r9k` case shallow-clones its `UNLICENSED` upstream into a gitignored fixture cache on first run.
@@ -46,7 +46,7 @@ Prerequisites, cases, measurements, and the scorecard schema: [`examples/eval/RE
 ## Repair loop
 
 1. Edit `sources/<name>/prose/**` (the extract prompt, references, rules).
-2. `cargo make adapter <name>` to rebuild the component, then re-run the eval case.
+2. `make adapter <name>` to rebuild the component, then re-run the eval case.
 3. Compare the retained sandbox (`sandbox/<case>/`) and scorecard with the previous run.
 
 Native crate tests stay the Rust inner loop; live eval is for prompt quality. See [docs/testing.md](docs/testing.md).
@@ -55,9 +55,9 @@ Native crate tests stay the Rust inner loop; live eval is for prompt quality. Se
 
 | Symptom | What to check |
 | --- | --- |
-| `cargo make fmt` fails | Install nightly rustfmt: `rustup toolchain install nightly --component rustfmt` |
+| `make fmt` fails | Install nightly rustfmt: `rustup toolchain install nightly --component rustfmt` |
 | Eval refuses: binary missing | Build the sibling [`augentic/emery`](https://github.com/augentic/emery) release binary, or set `EMERY_BIN` |
-| Eval refuses: component missing | `cargo make release` |
+| Eval refuses: component missing | `make release` |
 | Patch-resolution errors after editing root `Cargo.toml` | The committed `[patch.crates-io]` git patches fetch `augentic/emery`; uncomment the path patches only when co-developing against `../emery` |
 
 Bugs and questions: [GitHub Issues](https://github.com/augentic/emery-adapters/issues).

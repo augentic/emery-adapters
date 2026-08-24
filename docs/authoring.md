@@ -198,7 +198,7 @@ Run with `cargo nextest run -p changelog` (never bare `cargo test` — see [test
 ## Build the component and use it in a project
 
 ```bash
-cargo make adapter changelog     # fast dev build → target/wasm32-wasip2/release/changelog.wasm
+make adapter changelog     # fast dev build → target/wasm32-wasip2/release/changelog.wasm
 ```
 
 Bind it in any Emery project by local path — the first `specify` naming it seeds the project's component cache:
@@ -215,5 +215,5 @@ To exercise it through the graded live eval, add a case to `examples/eval/src/ma
 - [ ] Every prompt path loaded by `operations.rs` exists under `prose/` (pinned by `tests/registry.rs`); no survey prose.
 - [ ] Required per-kind extras are demanded by the prompt and asserted in the native tests.
 - [ ] Native `tests/` cover extract with a scripted model (`emery_testkit::Scripted`), including fail-closed paths; `cargo nextest run -p <name>` is green.
-- [ ] `cargo make adapter <name>` builds the component; no `.wasm` artifacts committed.
-- [ ] `cargo make ci` is green.
+- [ ] `make adapter <name>` builds the component; no `.wasm` artifacts committed.
+- [ ] `make ci` is green.

@@ -1,0 +1,38 @@
+# Install: first `make <task>` installs mise if missing (https://mise.run)
+# Run: `mise run <task>` (the root Makefile forwards `make <task>` here)
+
+# Satellite tools stay operator-installed until [tools] is version-pinned.
+# rustc stays on rust-toolchain.toml.
+
+[task_config]
+includes = ["mise-rust.toml"]
+# includes = ["git::https://github.com/augentic/.github.git//mise/rust.toml?ref=v0.1.0"]
+
+# -------------------------------------
+# Adapter overrides
+# -------------------------------------
+
+[tasks.adapter]
+description = "Fast one-component wasm32-wasip2 release build"
+run = '''
+name="${1:?usage: make adapter <name>}"
+cargo build -p "$name" --target wasm32-wasip2 --release
+'''
+
+[tasks.eval]
+description = "Graded live eval (operator-invoked, never CI)"
+run = '''
+cargo run -p eval --release -- "$@"
+'''
+
+[tasks.release]
+description = "Release-build every adapter component (exclude eval)"
+run = "cargo build --workspace --exclude eval --target wasm32-wasip2 --release"
+
+[tasks.publish]
+description = "Push one built component to its GHCR SemVer tag"
+run = '''
+name="${1:?usage: make publish <name>}"
+version="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version *= *"\(.*\)"/\1/p' Cargo.toml)"
+wkg oci push "ghcr.io/augentic/emery-adapters/$name:$version" "target/wasm32-wasip2/release/$name.wasm"
+'''

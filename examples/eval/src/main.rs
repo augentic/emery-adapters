@@ -1,6 +1,6 @@
 //! The live eval runner (operator-invoked, never CI): spawns the
 //! sibling shipped `emery` binary over the built components, grades the
-//! committed spec set, and writes the dated scorecard (`cargo make eval [case-id]`).
+//! committed spec set, and writes the dated scorecard (`make eval [case-id]`).
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -145,7 +145,7 @@ impl Paths {
         let built = target.join(format!("wasm32-wasip2/release/{name}.wasm"));
         assert!(
             built.is_file(),
-            "component missing at {}; run `cargo make release`",
+            "component missing at {}; run `make release`",
             built.display()
         );
         built
