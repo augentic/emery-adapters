@@ -88,7 +88,7 @@ async fn extract_leg() {
         system.starts_with("# TypeScript / JavaScript source extract"),
         "extract prompt is the system channel"
     );
-    assert!(system.contains("claim-extras-missing"), "prompt names the fail-closed gate");
+    assert!(system.contains("bad_request"), "prompt names the fail-closed gate");
     let user = &request.messages[0].content;
     assert!(user.contains("source key `legacy-monolith`"), "passed source key is named");
     assert!(user.contains("$SOURCE_DIR"), "binding is mapped onto the prompt's vocabulary");

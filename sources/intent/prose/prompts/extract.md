@@ -70,4 +70,4 @@ Output — the Evidence body:
 ## Notes
 
 - Empty `claims: []` is schema-valid for sources with nothing to say, but the intent adapter is never legitimately empty — the binding exists because the operator supplied a brief. Treat an empty value as an extract failure, never an empty success.
-- The engine's load gate is fail-closed: a `requirement` claim without a `statement` field fails the whole run with the typed error `claim-extras-missing`. There is no fallback to `synopsis`.
+- The engine's load gate is fail-closed: a `requirement` claim without a `statement` field fails the whole run closed (typed `bad_request`). There is no fallback to `synopsis`.

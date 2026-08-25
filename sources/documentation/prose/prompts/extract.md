@@ -20,7 +20,7 @@ Closed for this adapter:
 | `decision` | `decision` | A design or product decision the docs record (often "Decision:" lines or paragraphs). |
 | `section` | (free-form) | A bounded prose section worth carrying into synthesis verbatim when no finer-grained claim fits. |
 
-The engine's load gate is fail-closed: a `requirement` claim without a `statement` field, or a `criterion` claim without a `criterion` field, fails the whole run with the typed error `claim-extras-missing`. There is no fallback to `synopsis`. Other claim kinds are out of scope for this adapter.
+The engine's load gate is fail-closed: a `requirement` claim without a `statement` field, or a `criterion` claim without a `criterion` field, fails the whole run closed (typed `bad_request`). There is no fallback to `synopsis`. Other claim kinds are out of scope for this adapter.
 
 `id` is **required** on `requirement` and `criterion` kinds; deterministic reconciliation keys off it. `id` is **optional** on `decision` and `section`.
 
@@ -100,5 +100,5 @@ Output:
 - `$SOURCE_DIR` is read-only; never attempt to read or write outside it.
 - Never write Evidence to disk yourself — return the JSON body; the caller persists it.
 - Never emit claim kinds outside `{requirement, criterion, decision, section}` from this adapter. Behaviour kinds (`excerpt`/`type`/`call`) belong to code source adapters.
-- Never omit `id` on `requirement` or `criterion`, and never omit the kind's required body field — the engine fails the run closed (`claim-extras-missing`) rather than accepting the claim.
+- Never omit `id` on `requirement` or `criterion`, and never omit the kind's required body field — the engine fails the run closed (typed `bad_request`) rather than accepting the claim.
 - Empty `claims: []` is valid output when the source genuinely contains no extractable claims. Do not pad with speculative claims; the engine preserves gaps as `[unknown]` rather than guessing.
