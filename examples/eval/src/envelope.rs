@@ -30,7 +30,7 @@ pub struct Shown {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Failure {
-    /// The error-variant discriminant (e.g. `source-extract-failed`).
+    /// The error-variant discriminant (e.g. `bad_gateway`).
     pub error: String,
     /// The rendered detail.
     pub message: String,

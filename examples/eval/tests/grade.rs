@@ -103,7 +103,7 @@ fn scorecard_green_line() {
 
     let failed = CaseResult {
         outcome: Outcome::TypedFailure {
-            error: "source-extract-failed".to_string(),
+            error: "bad_gateway".to_string(),
             exit_code: 4,
         },
         ops_succeeded: 0,
@@ -114,6 +114,6 @@ fn scorecard_green_line() {
     assert!(!red.green(), "a typed failure is a red scorecard, never graded around");
     let rendered = red.render();
     assert!(rendered.contains("- status: red"), "{rendered}");
-    assert!(rendered.contains("source-extract-failed"), "{rendered}");
+    assert!(rendered.contains("bad_gateway"), "{rendered}");
     assert!(rendered.contains("unconfirmed"), "unmeasured stays unconfirmed: {rendered}");
 }

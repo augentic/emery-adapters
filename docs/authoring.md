@@ -174,7 +174,7 @@ Points that generalize:
 
 - **Extract writes no artifacts.** The engine persists the Evidence; your job is to return a well-formed value. Say so explicitly in the prompt ("the caller persists…; do not write it yourself") because the model has workspace access.
 - **One pass, whole source.** There is no survey step and no lead focus: extract mines the whole bound source in one call. The binding arrives prepared — a tree as `SourceContent::Workspace` (lent as `$SOURCE_DIR`), an inline binding as `SourceContent::Value`.
-- **Required extras are fail-closed.** A `requirement` claim without a `statement` extra (or a `criterion` without `criterion`) fails the whole run engine-side with `claim-extras-missing` — never a synopsis fallback. Put the per-kind table and the id-derivation rules in the prompt; reconciliation joins claims across sources by their dotted-kebab ids.
+- **Required extras are fail-closed.** A `requirement` claim without a `statement` extra (or a `criterion` without `criterion`) fails the whole run engine-side closed (typed `bad_request`) — never a synopsis fallback. Put the per-kind table and the id-derivation rules in the prompt; reconciliation joins claims across sources by their dotted-kebab ids.
 - **`repaired` owns the parse-and-retry loop.** Pick the schema constant and tail matching the operation.
 
 ### 5. Author the prose
