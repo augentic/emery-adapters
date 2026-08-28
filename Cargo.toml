@@ -13,8 +13,8 @@ version = "0.13.0"
 publish = false
 
 [workspace.dependencies]
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.145"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
 tempfile = "3.27.0"
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
 
@@ -37,12 +37,8 @@ emery-testkit = { git = "https://github.com/augentic/emery" }
 
 omnia = { git = "https://github.com/augentic/omnia" }
 omnia-guest = { git = "https://github.com/augentic/omnia" }
-# omnia-wasi-model = { git = "https://github.com/augentic/omnia" }
-# omnia-wasi-otel = { git = "https://github.com/augentic/omnia" }
 # omnia = { path = "../omnia/crates/omnia" }
 # omnia-guest = { path = "../omnia/crates/omnia-guest" }
-# omnia-wasi-model = { path = "../omnia/crates/wasi-model" }
-# omnia-wasi-otel = { path = "../omnia/crates/wasi-otel" }
 
 wrpc-transport = { git = "https://github.com/bytecodealliance/wrpc" }
 wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }
