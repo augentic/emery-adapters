@@ -8,26 +8,12 @@ user-id = 189
 user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
-[[publisher.anstyle]]
-version = "1.0.14"
-when = "2026-03-13"
-user-id = 6743
-user-login = "epage"
-user-name = "Ed Page"
-
 [[publisher.anyhow]]
 version = "1.0.104"
 when = "2026-07-18"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
-
-[[publisher.arbitrary]]
-version = "1.4.2"
-when = "2025-08-14"
-user-id = 696
-user-login = "fitzgen"
-user-name = "Nick Fitzgerald"
 
 [[publisher.async-trait]]
 version = "0.1.92"
@@ -50,50 +36,12 @@ user-id = 6741
 user-login = "Darksonn"
 user-name = "Alice Ryhl"
 
-[[publisher.clap]]
-version = "4.6.6"
-when = "2026-08-06"
-user-id = 6743
-user-login = "epage"
-user-name = "Ed Page"
-
-[[publisher.clap_builder]]
-version = "4.6.6"
-when = "2026-08-06"
-user-id = 6743
-user-login = "epage"
-user-name = "Ed Page"
-
-[[publisher.clap_derive]]
-version = "4.6.4"
-when = "2026-07-21"
-user-id = 6743
-user-login = "epage"
-user-name = "Ed Page"
-
-[[publisher.clap_lex]]
-version = "1.1.0"
-when = "2026-03-12"
-user-id = 6743
-user-login = "epage"
-user-name = "Ed Page"
-
 [[publisher.core-foundation]]
 version = "0.9.3"
 when = "2022-02-07"
 user-id = 5946
 user-login = "jrmuizel"
 user-name = "Jeff Muizelaar"
-
-[[publisher.cranelift-assembler-x64]]
-version = "0.135.1"
-when = "2026-08-24"
-trusted-publisher = "github:bytecodealliance/wasmtime"
-
-[[publisher.cranelift-assembler-x64-meta]]
-version = "0.135.1"
-when = "2026-08-24"
-trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-bforest]]
 version = "0.135.1"
@@ -105,47 +53,7 @@ version = "0.135.1"
 when = "2026-08-24"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
-[[publisher.cranelift-codegen]]
-version = "0.135.1"
-when = "2026-08-24"
-trusted-publisher = "github:bytecodealliance/wasmtime"
-
-[[publisher.cranelift-codegen-meta]]
-version = "0.135.1"
-when = "2026-08-24"
-trusted-publisher = "github:bytecodealliance/wasmtime"
-
-[[publisher.cranelift-codegen-shared]]
-version = "0.135.1"
-when = "2026-08-24"
-trusted-publisher = "github:bytecodealliance/wasmtime"
-
-[[publisher.cranelift-control]]
-version = "0.135.1"
-when = "2026-08-24"
-trusted-publisher = "github:bytecodealliance/wasmtime"
-
 [[publisher.cranelift-entity]]
-version = "0.135.1"
-when = "2026-08-24"
-trusted-publisher = "github:bytecodealliance/wasmtime"
-
-[[publisher.cranelift-frontend]]
-version = "0.135.1"
-when = "2026-08-24"
-trusted-publisher = "github:bytecodealliance/wasmtime"
-
-[[publisher.cranelift-isle]]
-version = "0.135.1"
-when = "2026-08-24"
-trusted-publisher = "github:bytecodealliance/wasmtime"
-
-[[publisher.cranelift-native]]
-version = "0.135.1"
-when = "2026-08-24"
-trusted-publisher = "github:bytecodealliance/wasmtime"
-
-[[publisher.cranelift-srcgen]]
 version = "0.135.1"
 when = "2026-08-24"
 trusted-publisher = "github:bytecodealliance/wasmtime"
@@ -205,8 +113,8 @@ user-login = "Manishearth"
 user-name = "Manish Goregaokar"
 
 [[publisher.indexmap]]
-version = "2.14.0"
-when = "2026-04-09"
+version = "2.14.1"
+when = "2026-08-28"
 user-id = 539
 user-login = "cuviper"
 user-name = "Josh Stone"
@@ -310,13 +218,6 @@ user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
 
-[[publisher.regalloc2]]
-version = "0.15.2"
-when = "2026-07-20"
-user-id = 3726
-user-login = "cfallin"
-user-name = "Chris Fallin"
-
 [[publisher.regex]]
 version = "1.13.1"
 when = "2026-07-15"
@@ -413,13 +314,6 @@ when = "2026-08-24"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
-
-[[publisher.termcolor]]
-version = "1.4.1"
-when = "2024-01-10"
-user-id = 189
-user-login = "BurntSushi"
-user-name = "Andrew Gallant"
 
 [[publisher.thiserror]]
 version = "1.0.69"
@@ -535,11 +429,6 @@ version = "0.258.0"
 when = "2026-08-24"
 trusted-publisher = "github:bytecodealliance/wasm-tools"
 
-[[publisher.wasmprinter]]
-version = "0.254.0"
-when = "2026-07-20"
-trusted-publisher = "github:bytecodealliance/wasm-tools"
-
 [[publisher.wasmtime]]
 version = "48.0.1"
 when = "2026-08-24"
@@ -561,11 +450,6 @@ when = "2026-08-24"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-core]]
-version = "48.0.1"
-when = "2026-08-24"
-trusted-publisher = "github:bytecodealliance/wasmtime"
-
-[[publisher.wasmtime-internal-cranelift]]
 version = "48.0.1"
 when = "2026-08-24"
 trusted-publisher = "github:bytecodealliance/wasmtime"
@@ -858,18 +742,8 @@ when = "2026-04-17"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen]]
-version = "0.60.0"
-when = "2026-07-22"
-trusted-publisher = "github:bytecodealliance/wit-bindgen"
-
-[[publisher.wit-bindgen]]
 version = "0.61.1"
 when = "2026-08-25"
-trusted-publisher = "github:bytecodealliance/wit-bindgen"
-
-[[publisher.wit-bindgen-core]]
-version = "0.60.0"
-when = "2026-07-22"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-core]]
@@ -878,18 +752,8 @@ when = "2026-08-25"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-rust]]
-version = "0.60.0"
-when = "2026-07-22"
-trusted-publisher = "github:bytecodealliance/wit-bindgen"
-
-[[publisher.wit-bindgen-rust]]
 version = "0.61.1"
 when = "2026-08-25"
-trusted-publisher = "github:bytecodealliance/wit-bindgen"
-
-[[publisher.wit-bindgen-rust-macro]]
-version = "0.60.0"
-when = "2026-07-22"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-rust-macro]]
@@ -922,36 +786,12 @@ version = "0.258.0"
 when = "2026-08-24"
 trusted-publisher = "github:bytecodealliance/wasm-tools"
 
-[[audits.bytecode-alliance.wildcard-audits.arbitrary]]
-who = "Nick Fitzgerald <fitzgen@gmail.com>"
-criteria = "safe-to-deploy"
-user-id = 696 # Nick Fitzgerald (fitzgen)
-start = "2020-01-14"
-end = "2026-08-21"
-notes = "I am an author of this crate."
-
 [[audits.bytecode-alliance.wildcard-audits.bumpalo]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
 user-id = 696 # Nick Fitzgerald (fitzgen)
 start = "2019-03-16"
 end = "2026-08-21"
-
-[[audits.bytecode-alliance.wildcard-audits.cranelift-assembler-x64]]
-who = "Alex Crichton <alex@alexcrichton.com>"
-criteria = "safe-to-deploy"
-trusted-publisher = "github:bytecodealliance/wasmtime"
-start = "2026-01-07"
-end = "2027-01-08"
-notes = "The Bytecode Alliance is the author of this crate"
-
-[[audits.bytecode-alliance.wildcard-audits.cranelift-assembler-x64-meta]]
-who = "Alex Crichton <alex@alexcrichton.com>"
-criteria = "safe-to-deploy"
-trusted-publisher = "github:bytecodealliance/wasmtime"
-start = "2026-01-07"
-end = "2027-01-08"
-notes = "The Bytecode Alliance is the author of this crate"
 
 [[audits.bytecode-alliance.wildcard-audits.cranelift-bforest]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -969,71 +809,7 @@ start = "2026-01-07"
 end = "2027-01-08"
 notes = "The Bytecode Alliance is the author of this crate"
 
-[[audits.bytecode-alliance.wildcard-audits.cranelift-codegen]]
-who = "Alex Crichton <alex@alexcrichton.com>"
-criteria = "safe-to-deploy"
-trusted-publisher = "github:bytecodealliance/wasmtime"
-start = "2026-01-07"
-end = "2027-01-08"
-notes = "The Bytecode Alliance is the author of this crate"
-
-[[audits.bytecode-alliance.wildcard-audits.cranelift-codegen-meta]]
-who = "Alex Crichton <alex@alexcrichton.com>"
-criteria = "safe-to-deploy"
-trusted-publisher = "github:bytecodealliance/wasmtime"
-start = "2026-01-07"
-end = "2027-01-08"
-notes = "The Bytecode Alliance is the author of this crate"
-
-[[audits.bytecode-alliance.wildcard-audits.cranelift-codegen-shared]]
-who = "Alex Crichton <alex@alexcrichton.com>"
-criteria = "safe-to-deploy"
-trusted-publisher = "github:bytecodealliance/wasmtime"
-start = "2026-01-07"
-end = "2027-01-08"
-notes = "The Bytecode Alliance is the author of this crate"
-
-[[audits.bytecode-alliance.wildcard-audits.cranelift-control]]
-who = "Alex Crichton <alex@alexcrichton.com>"
-criteria = "safe-to-deploy"
-trusted-publisher = "github:bytecodealliance/wasmtime"
-start = "2026-01-07"
-end = "2027-01-08"
-notes = "The Bytecode Alliance is the author of this crate"
-
 [[audits.bytecode-alliance.wildcard-audits.cranelift-entity]]
-who = "Alex Crichton <alex@alexcrichton.com>"
-criteria = "safe-to-deploy"
-trusted-publisher = "github:bytecodealliance/wasmtime"
-start = "2026-01-07"
-end = "2027-01-08"
-notes = "The Bytecode Alliance is the author of this crate"
-
-[[audits.bytecode-alliance.wildcard-audits.cranelift-frontend]]
-who = "Alex Crichton <alex@alexcrichton.com>"
-criteria = "safe-to-deploy"
-trusted-publisher = "github:bytecodealliance/wasmtime"
-start = "2026-01-07"
-end = "2027-01-08"
-notes = "The Bytecode Alliance is the author of this crate"
-
-[[audits.bytecode-alliance.wildcard-audits.cranelift-isle]]
-who = "Alex Crichton <alex@alexcrichton.com>"
-criteria = "safe-to-deploy"
-trusted-publisher = "github:bytecodealliance/wasmtime"
-start = "2026-01-07"
-end = "2027-01-08"
-notes = "The Bytecode Alliance is the author of this crate"
-
-[[audits.bytecode-alliance.wildcard-audits.cranelift-native]]
-who = "Alex Crichton <alex@alexcrichton.com>"
-criteria = "safe-to-deploy"
-trusted-publisher = "github:bytecodealliance/wasmtime"
-start = "2026-01-07"
-end = "2027-01-08"
-notes = "The Bytecode Alliance is the author of this crate"
-
-[[audits.bytecode-alliance.wildcard-audits.cranelift-srcgen]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 trusted-publisher = "github:bytecodealliance/wasmtime"
@@ -1056,14 +832,6 @@ trusted-publisher = "github:bytecodealliance/wasmtime"
 start = "2026-01-07"
 end = "2027-01-08"
 notes = "The Bytecode Alliance is the author of this crate"
-
-[[audits.bytecode-alliance.wildcard-audits.regalloc2]]
-who = "Chris Fallin <chris@cfallin.org>"
-criteria = "safe-to-deploy"
-user-id = 3726 # Chris Fallin (cfallin)
-start = "2021-12-03"
-end = "2026-08-21"
-notes = "We (Bytecode Alliance) are the primary authors of regalloc2 and co-develop it with Cranelift/Wasmtime, with the same code-review, testing/fuzzing, and security standards."
 
 [[audits.bytecode-alliance.wildcard-audits.wasi]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -1109,14 +877,6 @@ start = "2025-08-14"
 end = "2027-01-08"
 notes = "The Bytecode Alliance is the author of this crate"
 
-[[audits.bytecode-alliance.wildcard-audits.wasmprinter]]
-who = "Alex Crichton <alex@alexcrichton.com>"
-criteria = "safe-to-deploy"
-trusted-publisher = "github:bytecodealliance/wasm-tools"
-start = "2025-08-14"
-end = "2027-01-08"
-notes = "The Bytecode Alliance is the author of this crate"
-
 [[audits.bytecode-alliance.wildcard-audits.wasmtime]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -1150,14 +910,6 @@ end = "2027-01-08"
 notes = "The Bytecode Alliance is the author of this crate"
 
 [[audits.bytecode-alliance.wildcard-audits.wasmtime-internal-core]]
-who = "Alex Crichton <alex@alexcrichton.com>"
-criteria = "safe-to-deploy"
-trusted-publisher = "github:bytecodealliance/wasmtime"
-start = "2026-01-07"
-end = "2027-01-08"
-notes = "The Bytecode Alliance is the author of this crate"
-
-[[audits.bytecode-alliance.wildcard-audits.wasmtime-internal-cranelift]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 trusted-publisher = "github:bytecodealliance/wasmtime"
@@ -2309,6 +2061,13 @@ aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-ch
 who = "Mark Hammond <mhammond@skippinet.com.au>"
 criteria = "safe-to-deploy"
 delta = "0.1.4 -> 0.1.7"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.simdutf8]]
+who = "Henri Sivonen <hsivonen@hsivonen.fi>"
+criteria = "safe-to-deploy"
+version = "0.1.5"
+notes = "Confidence in correctness of the algorithm is based on fuzzing the SSE 4.2 and AVX2 implementations rather than working through the logic of the code. Audit of aarch64 and Wasm is by comparing the code with the SSE 4.2 case."
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.smallvec]]

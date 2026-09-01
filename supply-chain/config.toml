@@ -174,10 +174,6 @@ criteria = "safe-to-deploy"
 version = "0.3.1"
 criteria = "safe-to-deploy"
 
-[[exemptions.crc32fast]]
-version = "1.5.1"
-criteria = "safe-to-deploy"
-
 [[exemptions.crossbeam-channel]]
 version = "0.5.16"
 criteria = "safe-to-deploy"
@@ -367,7 +363,7 @@ version = "0.4.14"
 criteria = "safe-to-deploy"
 
 [[exemptions.hyper]]
-version = "1.11.0"
+version = "1.11.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.hyper-rustls]]
@@ -467,15 +463,15 @@ version = "0.3.104"
 criteria = "safe-to-deploy"
 
 [[exemptions.jsonschema]]
-version = "0.52.0"
+version = "0.52.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.jsonschema-regex]]
-version = "0.52.0"
+version = "0.52.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.jsonschema-value]]
-version = "0.52.0"
+version = "0.52.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.leb128]]
@@ -578,10 +574,6 @@ criteria = "safe-to-deploy"
 version = "0.32.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.opentelemetry-otlp]]
-version = "0.32.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.opentelemetry-proto]]
 version = "0.32.0"
 criteria = "safe-to-deploy"
@@ -638,10 +630,6 @@ criteria = "safe-to-deploy"
 version = "0.14.4"
 criteria = "safe-to-deploy"
 
-[[exemptions.prost-types]]
-version = "0.14.4"
-criteria = "safe-to-deploy"
-
 [[exemptions.quinn]]
 version = "0.11.11"
 criteria = "safe-to-deploy"
@@ -691,7 +679,7 @@ version = "0.5.18"
 criteria = "safe-to-deploy"
 
 [[exemptions.referencing]]
-version = "0.52.0"
+version = "0.52.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.reqwest]]
@@ -802,10 +790,6 @@ criteria = "safe-to-deploy"
 version = "1.2.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.simdutf8]]
-version = "0.1.5"
-criteria = "safe-to-deploy"
-
 [[exemptions.slab]]
 version = "0.4.12"
 criteria = "safe-to-deploy"
@@ -899,10 +883,6 @@ version = "0.14.6"
 criteria = "safe-to-deploy"
 
 [[exemptions.tonic-prost]]
-version = "0.14.6"
-criteria = "safe-to-deploy"
-
-[[exemptions.tonic-types]]
 version = "0.14.6"
 criteria = "safe-to-deploy"
 
