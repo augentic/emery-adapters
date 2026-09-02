@@ -1,1 +1,47 @@
+# https://doc.rust-lang.org/stable/clippy/index.html
+
 doc-valid-idents = []
+
+# Transitive duplicates we do not control (pulled in via emery-adapter).
+# Clippy's cargo group stays on; drop a name when `cargo tree --duplicates`
+# is clean.
+allowed-duplicate-crates = [
+  "block-buffer",
+  "core-foundation",
+  "cpufeatures",
+  "crypto-common",
+  "darling",
+  "darling_core",
+  "darling_macro",
+  "digest",
+  "embedded-io",
+  "getrandom",
+  "hashbrown",
+  "io-lifetimes",
+  "prettyplease",
+  "r-efi",
+  "rand",
+  "rand_chacha",
+  "rand_core",
+  "reqwest",
+  "syn",
+  "thiserror",
+  "thiserror-impl",
+  "wasi",
+  "wasm-encoder",
+  "wasm-metadata",
+  "wasmparser",
+  "windows-sys",
+  "windows-targets",
+  "windows_aarch64_gnullvm",
+  "windows_aarch64_msvc",
+  "windows_i686_gnu",
+  "windows_i686_gnullvm",
+  "windows_i686_msvc",
+  "windows_x86_64_gnu",
+  "windows_x86_64_gnullvm",
+  "windows_x86_64_msvc",
+  "wit-bindgen",
+  "wit-component",
+  "wit-parser",
+]
