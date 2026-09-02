@@ -195,6 +195,10 @@ The embed walker follows symlinks and fails the build on any dangling relative l
 
 Run with `cargo nextest run -p changelog` (never bare `cargo test` — see [testing.md](testing.md)).
 
+### 7. Add the conformance test
+
+`examples/conformance/tests/conformance.rs` runs every `sources/*` component under the omnia runtime; its `foreach_source!()` is generated from the `sources/` directory, so the workspace fails to compile until a `#[tokio::test] async fn changelog()` exists there. Add a `Case` (the routed id `source:changelog`, the generated `SOURCE_CHANGELOG` constant, a minimal fixture tree, and `include_str!` of your `prose/prompts/extract.md`) and a test calling the shared `conforms` body — see [testing.md § Component conformance](testing.md#2-component-conformance).
+
 ## Build the component and use it in a project
 
 ```bash
@@ -215,5 +219,6 @@ To exercise it through the graded live eval, add a case to `examples/eval/src/ma
 - [ ] Every prompt path loaded by `operations.rs` exists under `prose/` (pinned by `tests/registry.rs`); no survey prose.
 - [ ] Required per-kind extras are demanded by the prompt and asserted in the native tests.
 - [ ] Native `tests/` cover extract with a scripted model (`emery_testkit::Scripted`), including fail-closed paths; `cargo nextest run -p <name>` is green.
+- [ ] `examples/conformance/tests/conformance.rs` carries the adapter's conformance test; `cargo nextest run -p conformance` is green.
 - [ ] `make adapter <name>` builds the component; no `.wasm` artifacts committed.
 - [ ] `make ci` is green.

@@ -18,7 +18,7 @@ Emery's **engine** owns lifecycle, artifact schemas, reconciliation, and synthes
 - Keep reusable adapter logic wasm-free in library modules. Each adapter implements `emery_adapter::SourceAdapter` on a unit type; the `wasm32` guest module is a single `emery_adapter::source!` export-macro invocation over that implementor.
 - Do not commit built `.wasm` artifacts.
 
-The root is a virtual workspace of `sources/*` (documentation, intent, typescript) plus `examples/eval`, the graded live-eval runner. The adapter SDK (`emery-adapter`) and prose walker (`emery-prose`) are dependencies on `augentic/emery` — published under `emery-*` names, so Rust paths are `emery_adapter::` / `emery_prose::` — pinned by engine git (until a release tag, RFC-77 D13) and the committed `Cargo.lock`; for sibling co-development, uncomment the path patches in the root `Cargo.toml` `[patch.crates-io]` block. The eval runner is a **public-contract client** (architecture-review T6): it spawns the sibling shipped `emery` binary over built components and never links engine crates.
+The root is a virtual workspace of `sources/*` (documentation, intent, typescript) plus `examples/eval` (the graded live-eval runner), `examples/caller` (the guest-only conformance caller), and `examples/conformance` (the native component-conformance harness and suite). The adapter SDK (`emery-adapter`) and prose walker (`emery-prose`) are dependencies on `augentic/emery` — published under `emery-*` names, so Rust paths are `emery_adapter::` / `emery_prose::` — pinned by engine git (until a release tag, RFC-77 D13) and the committed `Cargo.lock`; for sibling co-development, uncomment the path patches in the root `Cargo.toml` `[patch.crates-io]` block. The eval runner is a **public-contract client** (architecture-review T6): it spawns the sibling shipped `emery` binary over built components and never links engine crates.
 
 ## Prose and rules
 
@@ -36,6 +36,7 @@ The external Rust baseline is the [Pragmatic Rust Guidelines](https://microsoft.
 Testing is integration-first:
 
 - Publicly reachable adapter behavior belongs in each adapter crate's `tests/` suite (scripted models; no credentials). Do not widen public APIs solely for tests.
+- The component rung (`examples/conformance`, inside `make test`) instantiates every `sources/*` component under the omnia runtime with a scripted host-side model, driven by the `examples/caller` guest over the `emery:adapter/source` seam; its build script nested-builds the components to `wasm32-wasip2` and generates `foreach_source!`, so a new `sources/<name>` fails to compile until it has a conformance test. It owns the boundary only — instantiation, effect-free `metadata`, the reference-tool round-trip, wire lowering — never prompt text or quality.
 - Use `cargo nextest`, not bare `cargo test`; process isolation is required by environment-mutating suites.
 - The live rung is operator-invoked, never CI: `make eval [id]` spawns the shipped `emery` binary over the built components, wall-clocks one `specify` → committed generation, records typed outcomes, grades the committed spec via `emery show spec`, and writes the dated scorecard (`sandbox/scorecard.md`). The `omnia-r9k` case shallow-clones its `UNLICENSED` upstream into the gitignored `cases/omnia-r9k/fixture/` cache on first run. See [`examples/eval/README.md`](examples/eval/README.md).
 
@@ -49,8 +50,9 @@ Run from the repository root, driven by `make` ([`Makefile`](./Makefile) → mis
 make check                # fmt, lint (clippy), nextest, doctests, docs
 make ci                   # full gate, including vet and deny
 cargo nextest run -p NAME # focused adapter tests
+cargo nextest run -p conformance # the component rung alone
 make adapter NAME         # fast development component build
-make release              # release-build every component
+make release              # release-build every adapter component (excludes eval, caller, conformance)
 make publish NAME         # push one built component to its exact GHCR tag (Publish Release / local breakout)
 make eval [id]            # graded live eval over the public contract (operator-invoked, never CI)
 ```

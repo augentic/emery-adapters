@@ -2,10 +2,11 @@
 
 doc-valid-idents = ["TypeScript", "JavaScript"]
 
-# Transitive duplicates we do not control (pulled in via emery-adapter).
-# Clippy's cargo group stays on; drop a name when `cargo tree --duplicates`
-# is clean.
+# Transitive duplicates we do not control (pulled in via emery-adapter and,
+# for the conformance harness, the omnia host stack). Clippy's cargo group
+# stays on; drop a name when `cargo tree --duplicates` is clean.
 allowed-duplicate-crates = [
+  "base64",
   "block-buffer",
   "core-foundation",
   "cpufeatures",
@@ -15,6 +16,7 @@ allowed-duplicate-crates = [
   "darling_macro",
   "digest",
   "embedded-io",
+  "foldhash",
   "getrandom",
   "hashbrown",
   "io-lifetimes",
@@ -24,13 +26,18 @@ allowed-duplicate-crates = [
   "rand_chacha",
   "rand_core",
   "reqwest",
+  "sha2",
+  "strum",
+  "strum_macros",
   "syn",
   "thiserror",
   "thiserror-impl",
+  "untrusted",
   "wasi",
   "wasm-encoder",
   "wasm-metadata",
   "wasmparser",
+  "wast",
   "windows-sys",
   "windows-targets",
   "windows_aarch64_gnullvm",
