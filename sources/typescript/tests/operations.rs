@@ -8,7 +8,7 @@ use emery_adapter::types::{
     Authority, ClaimKind, Context, Error, SourceContent, SourceInput, SourceWorkspace,
 };
 use emery_adapter::{Format, MAX_REPAIRS, Request, SourceAdapter as _, ToolCall};
-use emery_testkit::{Scripted, function_tools};
+use testkit::{Scripted, function_tools};
 use typescript::Adapter;
 
 fn ctx(docs: &'static [Doc]) -> Context<'static> {

@@ -15,7 +15,7 @@ Fastest feedback first. **Every behavior is asserted on exactly one rung** — d
 | 3   | Eval runner tests     | Grading kernels, envelope parsing, scorecard green line  | `cargo nextest run -p eval`                          |
 | 4   | Graded live eval      | End-to-end spec generation over the adapter contract: prompt quality, the product.md numbers, the scorecard | `make eval [id]` (operator-invoked, never CI) |
 
-Ownership boundaries: the engine's unpublished `emery-testkit` (a dev-only git dependency, like the SDK pin) owns reusable model test mechanics; adapter `tests/` own extract behavior; the conformance crate owns the component boundary and links the omnia host stack (never an engine crate); the eval runner owns grading and the scorecard, and stays a client of the shipped `emery` binary's public contract (architecture-review T6) — it never links engine crates, and CI never runs the live rung. The engine repository proves its own side of the seam with its mock adapter; this repository proves every published component against the same runtime.
+Ownership boundaries: the unpublished `examples/testkit` crate owns the reusable model double (`testkit::Scripted`, over the `omnia_guest::model::Model` trait — an omnia contract, not an emery one, so it is a workspace copy rather than a dependency on the engine repository's unpublished `emery-testkit`); adapter `tests/` own extract behavior; the conformance crate owns the component boundary and links the omnia host stack (never an engine crate); the eval runner owns grading and the scorecard, and stays a client of the shipped `emery` binary's public contract (architecture-review T6) — it never links engine crates, and CI never runs the live rung. The engine repository proves its own side of the seam with its mock adapter; this repository proves every published component against the same runtime.
 
 Sibling co-development: uncomment the path patches in the root `Cargo.toml` patch blocks to resolve engine crates from `../emery`. The committed tree uses git sources so CI can fetch the engine without a sibling checkout.
 
@@ -23,7 +23,7 @@ Testing a brand-new adapter: [authoring.md](authoring.md).
 
 ### 1. Native crate tests — the inner loop
 
-Each adapter crate is `cdylib` + `rlib`, so its wasm-free logic links natively and tests through `sources/<name>/tests/<area>.rs`. Judgment legs use `emery_testkit::Scripted` (a FIFO model script that records every request) to assert "did my prompt edit land in the assembled text" and that the answered Evidence carries the required per-kind extras verbatim; adapter crates must not duplicate that model machinery. The wasm32-only guest shims (inline `mod guest` in each `src/lib.rs`) are single `emery_adapter::source!` invocations and carry no native tests.
+Each adapter crate is `cdylib` + `rlib`, so its wasm-free logic links natively and tests through `sources/<name>/tests/<area>.rs`. Judgment legs use `testkit::Scripted` (a FIFO model script that records every request) to assert "did my prompt edit land in the assembled text" and that the answered Evidence carries the required per-kind extras verbatim; adapter crates must not duplicate that model machinery. The wasm32-only guest shims (inline `mod guest` in each `src/lib.rs`) are single `emery_adapter::source!` invocations and carry no native tests.
 
 ```bash
 cargo nextest run -p documentation   # one adapter

@@ -36,6 +36,7 @@ codex/references/runtime/   # shared runtime references (reconciliation, authori
 examples/caller/      # guest-only conformance caller (wasi:cli/run over the source seam)
 examples/conformance/ # component conformance: nested wasm32 build + harness + suite
 examples/eval/        # the graded live-eval runner and its cases
+examples/testkit/     # scripted omnia-guest Model double shared by the adapter test suites
 Cargo.toml            # virtual workspace: examples/* + sources/*
 ```
 

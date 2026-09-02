@@ -26,8 +26,8 @@ cargo run -p eval --release -- "$@"
 '''
 
 [tasks.release]
-description = "Release-build every adapter component (exclude the native eval + conformance crates and the caller guest)"
-run = "cargo build --workspace --exclude eval --exclude caller --exclude conformance --target wasm32-wasip2 --release"
+description = "Release-build every adapter component (exclude the test-only crates: eval, caller, conformance, testkit)"
+run = "cargo build --workspace --exclude eval --exclude caller --exclude conformance --exclude testkit --target wasm32-wasip2 --release"
 
 [tasks.publish]
 description = "Push one built component to its GHCR SemVer tag"

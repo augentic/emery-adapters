@@ -7,8 +7,8 @@ use emery_adapter::types::{
     Authority, ClaimKind, Context, Error, SourceContent, SourceInput, SourceWorkspace,
 };
 use emery_adapter::{Format, Request, SourceAdapter as _};
-use emery_testkit::{Scripted, function_tools};
 use intent::Adapter;
+use testkit::{Scripted, function_tools};
 
 fn ctx() -> Context<'static> {
     Context {

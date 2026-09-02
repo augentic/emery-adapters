@@ -21,5 +21,5 @@ emery-adapter.workspace = true
 emery-prose.workspace = true
 
 [dev-dependencies]
-emery-testkit.workspace = true
+testkit.workspace = true
 tokio.workspace = true

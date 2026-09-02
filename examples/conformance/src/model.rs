@@ -1,6 +1,6 @@
 //! A FIFO-scripted `WasiModelCtx` double recording every request.
 //!
-//! The host-side counterpart of `emery_testkit::Scripted` (a guest `Model`
+//! The host-side counterpart of `testkit::Scripted` (a guest `Model`
 //! double): answers are `serde_json::Value`s the wasi-model host projects to
 //! the guest through its format gate, and a turn may drive declared tools
 //! through the session's [`ToolHost`] before answering.

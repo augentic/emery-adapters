@@ -934,7 +934,7 @@ version = "0.13.0"
 dependencies = [
  "emery-adapter",
  "emery-prose",
- "emery-testkit",
+ "testkit",
  "tokio",
 ]
 
@@ -994,15 +994,6 @@ dependencies = [
 name = "emery-prose"
 version = "0.38.0"
 source = "git+https://github.com/augentic/emery#410f7903447278661677abf1e7da2be345df2450"
-
-[[package]]
-name = "emery-testkit"
-version = "0.38.0"
-source = "git+https://github.com/augentic/emery#410f7903447278661677abf1e7da2be345df2450"
-dependencies = [
- "anyhow",
- "omnia-guest",
-]
 
 [[package]]
 name = "encoding_rs"
@@ -1721,8 +1712,8 @@ version = "0.13.0"
 dependencies = [
  "emery-adapter",
  "emery-prose",
- "emery-testkit",
  "tempfile",
+ "testkit",
  "tokio",
 ]
 
@@ -3890,6 +3881,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "testkit"
+version = "0.13.0"
+dependencies = [
+ "omnia-guest",
+]
+
+[[package]]
 name = "thiserror"
 version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4281,8 +4279,8 @@ version = "0.13.0"
 dependencies = [
  "emery-adapter",
  "emery-prose",
- "emery-testkit",
  "serde_json",
+ "testkit",
  "tokio",
 ]
 
