@@ -2,6 +2,12 @@
 //! sibling shipped `emery` binary over the built components, grades the
 //! committed spec set, and writes the dated scorecard (`make eval [case-id]`).
 
+#![allow(
+    clippy::disallowed_methods,
+    clippy::disallowed_types,
+    reason = "eval is a native host that spawns the shipped emery binary"
+)]
+
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::time::Instant;
