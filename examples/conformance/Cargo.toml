@@ -8,14 +8,19 @@ repository.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
-# Native only: the build script compiles the caller and every `sources/*`
-# adapter to `wasm32-wasip2`; the harness embeds the omnia runtime.
+# The build script compiles the caller and every `sources/*` adapter to
+# `wasm32-wasip2` through omnia-test's fixture pipeline (`std`-only).
+[build-dependencies]
+omnia-test = { workspace = true, features = ["build"] }
+
+# Native only: the harness drives omnia-test's deployment overlay over the
+# omnia runtime.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 anyhow.workspace = true
 omnia.workspace = true
+omnia-test = { workspace = true, features = ["host"] }
 omnia-wasi-model.workspace = true
 serde_json.workspace = true
-tempfile.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true

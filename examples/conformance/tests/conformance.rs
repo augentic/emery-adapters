@@ -84,7 +84,7 @@ async fn conforms(case: Case) {
     }
     let model = ScriptedModel::answering([evidence(case.authority)])
         .calling(0, [("read_doc", r#"{"path":"prompts/extract.md"}"#)]);
-    let backends = Backends::scripted(model);
+    let backends = Backends::defaults().await.model(model);
 
     // --------------------------------------------------
     // Act.
@@ -106,7 +106,7 @@ async fn conforms(case: Case) {
     // --------------------------------------------------
     assert_eq!(status, ExitStatus::SUCCESS, "the caller's assertions held");
     backends.model.assert_exhausted();
-    let requests = backends.model.requests();
+    let requests = backends.model.seen();
     assert_eq!(requests.len(), 1, "metadata is effect-free; extract is one judgment");
     let request = &requests[0];
     assert_eq!(
@@ -149,7 +149,7 @@ async fn typed_error() {
     let project = scratch();
     project.write("a.md", "one\n");
     project.write("b.md", "two\n");
-    let backends = Backends::scripted(ScriptedModel::answering([]));
+    let backends = Backends::defaults().await.model(ScriptedModel::answering([]));
 
     let status = conformance::run(
         Call {
@@ -164,5 +164,5 @@ async fn typed_error() {
     .expect("deployment runs");
 
     assert_eq!(status, ExitStatus::SUCCESS, "the caller saw `invalid-request`");
-    assert!(backends.model.requests().is_empty(), "no model call precedes the refusal");
+    assert!(backends.model.seen().is_empty(), "no model call precedes the refusal");
 }

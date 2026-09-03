@@ -62,6 +62,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "anstyle"
+version = "1.0.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "940b3a0ca603d1eade50a4846a2afffd5ef57a9feac2c0e2ec2e14f9ead76000"
+
+[[package]]
 name = "anyhow"
 version = "1.0.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -391,6 +397,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "clap"
+version = "4.6.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "473c7e07f409a8d772161724aa8db6a765a2532a70f9667eeb7b49d3d02fbdca"
+dependencies = [
+ "clap_builder",
+ "clap_derive",
+]
+
+[[package]]
+name = "clap_builder"
+version = "4.6.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b48fea5a88e9ae728a2dcbedbfc0e730f7d60da42e1cb049a83c9fb8b789889"
+dependencies = [
+ "anstyle",
+ "clap_lex",
+]
+
+[[package]]
+name = "clap_derive"
+version = "4.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d012d2b9d65aca7f18f4d9878a045bc17899bba951561ba5ec3c2ba1eed9a061"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn 3.0.4",
+]
+
+[[package]]
+name = "clap_lex"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
+
+[[package]]
 name = "cmake"
 version = "0.1.58"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -424,9 +468,9 @@ version = "0.13.0"
 dependencies = [
  "anyhow",
  "omnia",
+ "omnia-test",
  "omnia-wasi-model",
  "serde_json",
- "tempfile",
  "tokio",
 ]
 
@@ -934,7 +978,7 @@ version = "0.13.0"
 dependencies = [
  "emery-adapter",
  "emery-prose",
- "testkit",
+ "omnia-test",
  "tokio",
 ]
 
@@ -1712,8 +1756,8 @@ version = "0.13.0"
 dependencies = [
  "emery-adapter",
  "emery-prose",
+ "omnia-test",
  "tempfile",
- "testkit",
  "tokio",
 ]
 
@@ -2295,8 +2339,10 @@ dependencies = [
 [[package]]
 name = "omnia"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#ef7ed6e4dc65a4d5c32ffb12a5d03c7093406acf"
+source = "git+https://github.com/augentic/omnia#0b79dfaa22ecbeecaf53d8443306a273e7f3bfaf"
 dependencies = [
+ "anyhow",
+ "futures",
  "omnia-core",
  "omnia-host-macros",
  "omnia-plugin",
@@ -2305,17 +2351,19 @@ dependencies = [
 [[package]]
 name = "omnia-core"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#ef7ed6e4dc65a4d5c32ffb12a5d03c7093406acf"
+source = "git+https://github.com/augentic/omnia#0b79dfaa22ecbeecaf53d8443306a273e7f3bfaf"
 dependencies = [
  "anyhow",
  "bytes",
  "cap-fs-ext",
  "cap-std",
  "cfg-if",
+ "clap",
  "fromenv",
  "futures",
  "http",
  "opentelemetry",
+ "opentelemetry-otlp",
  "opentelemetry_sdk",
  "pastey",
  "serde",
@@ -2324,6 +2372,7 @@ dependencies = [
  "tokio-util",
  "toml",
  "tracing",
+ "tracing-opentelemetry",
  "tracing-subscriber",
  "wasm-tokio",
  "wasmtime",
@@ -2336,7 +2385,7 @@ dependencies = [
 [[package]]
 name = "omnia-guest"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#ef7ed6e4dc65a4d5c32ffb12a5d03c7093406acf"
+source = "git+https://github.com/augentic/omnia#0b79dfaa22ecbeecaf53d8443306a273e7f3bfaf"
 dependencies = [
  "anyhow",
  "axum",
@@ -2371,7 +2420,7 @@ dependencies = [
 [[package]]
 name = "omnia-guest-macros"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#ef7ed6e4dc65a4d5c32ffb12a5d03c7093406acf"
+source = "git+https://github.com/augentic/omnia#0b79dfaa22ecbeecaf53d8443306a273e7f3bfaf"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2381,7 +2430,7 @@ dependencies = [
 [[package]]
 name = "omnia-host-macros"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#ef7ed6e4dc65a4d5c32ffb12a5d03c7093406acf"
+source = "git+https://github.com/augentic/omnia#0b79dfaa22ecbeecaf53d8443306a273e7f3bfaf"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2391,7 +2440,7 @@ dependencies = [
 [[package]]
 name = "omnia-plugin"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#ef7ed6e4dc65a4d5c32ffb12a5d03c7093406acf"
+source = "git+https://github.com/augentic/omnia#0b79dfaa22ecbeecaf53d8443306a273e7f3bfaf"
 dependencies = [
  "anyhow",
  "cap-std",
@@ -2404,9 +2453,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "omnia-test"
+version = "0.36.0"
+source = "git+https://github.com/augentic/omnia#0b79dfaa22ecbeecaf53d8443306a273e7f3bfaf"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "futures",
+ "http",
+ "http-body",
+ "http-body-util",
+ "omnia",
+ "omnia-guest",
+ "omnia-wasi-blobstore",
+ "omnia-wasi-config",
+ "omnia-wasi-docstore",
+ "omnia-wasi-http",
+ "omnia-wasi-identity",
+ "omnia-wasi-keyvalue",
+ "omnia-wasi-messaging",
+ "omnia-wasi-model",
+ "omnia-wasi-otel",
+ "omnia-wasi-sql",
+ "omnia-wasi-vault",
+ "omnia-wasi-websocket",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "omnia-wasi-blobstore"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#ef7ed6e4dc65a4d5c32ffb12a5d03c7093406acf"
+source = "git+https://github.com/augentic/omnia#0b79dfaa22ecbeecaf53d8443306a273e7f3bfaf"
 dependencies = [
  "anyhow",
  "bytes",
@@ -2422,7 +2500,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-config"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#ef7ed6e4dc65a4d5c32ffb12a5d03c7093406acf"
+source = "git+https://github.com/augentic/omnia#0b79dfaa22ecbeecaf53d8443306a273e7f3bfaf"
 dependencies = [
  "anyhow",
  "omnia-core",
@@ -2435,7 +2513,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-docstore"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#ef7ed6e4dc65a4d5c32ffb12a5d03c7093406acf"
+source = "git+https://github.com/augentic/omnia#0b79dfaa22ecbeecaf53d8443306a273e7f3bfaf"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2451,7 +2529,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-http"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#ef7ed6e4dc65a4d5c32ffb12a5d03c7093406acf"
+source = "git+https://github.com/augentic/omnia#0b79dfaa22ecbeecaf53d8443306a273e7f3bfaf"
 dependencies = [
  "anyhow",
  "axum",
@@ -2481,7 +2559,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-identity"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#ef7ed6e4dc65a4d5c32ffb12a5d03c7093406acf"
+source = "git+https://github.com/augentic/omnia#0b79dfaa22ecbeecaf53d8443306a273e7f3bfaf"
 dependencies = [
  "anyhow",
  "fromenv",
@@ -2498,7 +2576,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-keyvalue"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#ef7ed6e4dc65a4d5c32ffb12a5d03c7093406acf"
+source = "git+https://github.com/augentic/omnia#0b79dfaa22ecbeecaf53d8443306a273e7f3bfaf"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2516,7 +2594,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-messaging"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#ef7ed6e4dc65a4d5c32ffb12a5d03c7093406acf"
+source = "git+https://github.com/augentic/omnia#0b79dfaa22ecbeecaf53d8443306a273e7f3bfaf"
 dependencies = [
  "anyhow",
  "futures",
@@ -2532,7 +2610,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-model"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#ef7ed6e4dc65a4d5c32ffb12a5d03c7093406acf"
+source = "git+https://github.com/augentic/omnia#0b79dfaa22ecbeecaf53d8443306a273e7f3bfaf"
 dependencies = [
  "anyhow",
  "cap-std",
@@ -2552,7 +2630,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-otel"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#ef7ed6e4dc65a4d5c32ffb12a5d03c7093406acf"
+source = "git+https://github.com/augentic/omnia#0b79dfaa22ecbeecaf53d8443306a273e7f3bfaf"
 dependencies = [
  "anyhow",
  "futures",
@@ -2573,7 +2651,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-sql"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#ef7ed6e4dc65a4d5c32ffb12a5d03c7093406acf"
+source = "git+https://github.com/augentic/omnia#0b79dfaa22ecbeecaf53d8443306a273e7f3bfaf"
 dependencies = [
  "anyhow",
  "fromenv",
@@ -2589,9 +2667,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "omnia-wasi-vault"
+version = "0.36.0"
+source = "git+https://github.com/augentic/omnia#0b79dfaa22ecbeecaf53d8443306a273e7f3bfaf"
+dependencies = [
+ "anyhow",
+ "futures",
+ "omnia-core",
+ "parking_lot",
+ "tracing",
+ "wasmtime",
+ "wasmtime-wasi",
+ "wit-bindgen 0.61.1",
+]
+
+[[package]]
 name = "omnia-wasi-websocket"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#ef7ed6e4dc65a4d5c32ffb12a5d03c7093406acf"
+source = "git+https://github.com/augentic/omnia#0b79dfaa22ecbeecaf53d8443306a273e7f3bfaf"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -2632,6 +2725,23 @@ dependencies = [
  "pin-project-lite",
  "thiserror 2.0.20",
  "tracing",
+]
+
+[[package]]
+name = "opentelemetry-otlp"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9966929966d17620d7c316c643ba62631826e10021409357772d5eea84f62c35"
+dependencies = [
+ "http",
+ "opentelemetry",
+ "opentelemetry-proto",
+ "opentelemetry_sdk",
+ "prost",
+ "thiserror 2.0.20",
+ "tokio",
+ "tonic",
+ "tonic-types",
 ]
 
 [[package]]
@@ -2854,6 +2964,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "prost-types"
+version = "0.14.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f94967dc7688f3054c7fac87473ffae4cc4c3904800e2d9f5b857246d8963b0a"
+dependencies = [
+ "prost",
 ]
 
 [[package]]
@@ -3881,13 +4000,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "testkit"
-version = "0.13.0"
-dependencies = [
- "omnia-guest",
-]
-
-[[package]]
 name = "thiserror"
 version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4113,6 +4225,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tonic-types"
+version = "0.14.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73ab1b02061f83d519bba3caa167f88f261ef05720ab8ebc954ade70de3348e8"
+dependencies = [
+ "prost",
+ "prost-types",
+ "tonic",
+]
+
+[[package]]
 name = "topological-sort"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4279,8 +4402,8 @@ version = "0.13.0"
 dependencies = [
  "emery-adapter",
  "emery-prose",
+ "omnia-test",
  "serde_json",
- "testkit",
  "tokio",
 ]
 

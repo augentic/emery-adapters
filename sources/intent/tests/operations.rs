@@ -8,7 +8,7 @@ use emery_adapter::types::{
 };
 use emery_adapter::{Format, Request, SourceAdapter as _};
 use intent::Adapter;
-use testkit::{Scripted, function_tools};
+use omnia_test::guest::{Scripted, function_tools};
 
 fn ctx() -> Context<'static> {
     Context {
@@ -114,7 +114,8 @@ async fn single_file_workspace() {
 // that is not the one-file encoding is a typed refusal.
 #[tokio::test]
 async fn multi_file_rejected() {
-    let model = Scripted::answering([r#"{"authority":"intent","claims":[]}"#]);
+    // The refusal precedes the model, so nothing is scripted.
+    let model = Scripted::default();
     let root = tempfile::tempdir().unwrap();
     std::fs::write(root.path().join("one.md"), "first").unwrap();
     std::fs::write(root.path().join("two.md"), "second").unwrap();
@@ -127,7 +128,7 @@ async fn multi_file_rejected() {
 
 #[tokio::test]
 async fn empty_workspace_rejected() {
-    let model = Scripted::answering([r#"{"authority":"intent","claims":[]}"#]);
+    let model = Scripted::default();
     let root = tempfile::tempdir().unwrap();
 
     let result = Adapter::extract(&model, &ctx(), &workspace_input(root.path())).await;
@@ -140,7 +141,7 @@ async fn empty_workspace_rejected() {
 // contract): an empty brief is a typed refusal, never an empty success.
 #[tokio::test]
 async fn empty_brief_rejected() {
-    let model = Scripted::answering([r#"{"authority":"intent","claims":[]}"#]);
+    let model = Scripted::default();
 
     let inline = Adapter::extract(&model, &ctx(), &SourceInput::value("intent", "  \n")).await;
     assert!(matches!(inline, Err(Error::InvalidRequest(_))), "got {inline:?}");

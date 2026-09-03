@@ -21,6 +21,8 @@ emery-adapter.workspace = true
 emery-prose.workspace = true
 
 [dev-dependencies]
-testkit.workspace = true
 tempfile.workspace = true
 tokio.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+omnia-test = { workspace = true, features = ["guest"] }

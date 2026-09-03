@@ -24,7 +24,7 @@ What the engine calls:
 
 Three ideas carry the operation:
 
-- **The model is a parameter.** `extract` is generic over `emery_adapter::Model`. On wasm the macro binds `WasiModel`; native tests bind `testkit::Scripted` with scripted answers. Your code never constructs a backend.
+- **The model is a parameter.** `extract` is generic over `emery_adapter::Model`. On wasm the macro binds `WasiModel`; native tests bind `omnia_test::guest::Scripted` with scripted answers. Your code never constructs a backend.
 - **Prose is embedded at build time.** `build.rs` calls `emery_prose::emit("prose")`, which walks the adapter's `prose/` tree into a sorted `DOCS` table; `emery_adapter::registry!()` exposes it as `registry::docs()` / `registry::body("prompts/extract.md")`. A dangling relative link in any prose document fails the build. Each judgment declares `list_docs` / `read_doc` function tools and answers the model's calls in-process from that embedded corpus, so prompts cite references by relative link instead of inlining them.
 - **Answers are schema-gated and repaired.** `emery_adapter::repaired(model, ctx, system, user, kind, SCHEMA, tail)` sends the prompt, parses the reply against a generated JSON schema, and re-prompts with the parse error up to `emery_adapter::MAX_REPAIRS` times before failing.
 
@@ -79,8 +79,10 @@ emery-adapter.workspace = true
 emery-prose.workspace = true
 
 [dev-dependencies]
-testkit.workspace = true
 tokio.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+omnia-test = { workspace = true, features = ["guest"] }
 ```
 
 `cdylib` is the Wasm component; `rlib` is what native tests link. The identity SemVer is the shared `[workspace.package] version` — adapters version together.
@@ -218,7 +220,7 @@ To exercise it through the graded live eval, add a case to `examples/eval/src/ma
 - [ ] `src/lib.rs` carries no logic beyond the export macro, `registry!`, and re-exports; reusable logic is wasm-free library code.
 - [ ] Every prompt path loaded by `operations.rs` exists under `prose/` (pinned by `tests/registry.rs`); no survey prose.
 - [ ] Required per-kind extras are demanded by the prompt and asserted in the native tests.
-- [ ] Native `tests/` cover extract with a scripted model (`testkit::Scripted`), including fail-closed paths; `cargo nextest run -p <name>` is green.
+- [ ] Native `tests/` cover extract with a scripted model (`omnia_test::guest::Scripted`), including fail-closed paths; `cargo nextest run -p <name>` is green.
 - [ ] `examples/conformance/tests/conformance.rs` carries the adapter's conformance test; `cargo nextest run -p conformance` is green.
 - [ ] `make adapter <name>` builds the component; no `.wasm` artifacts committed.
 - [ ] `make ci` is green.

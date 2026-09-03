@@ -686,6 +686,10 @@ criteria = "safe-to-deploy"
 version = "0.32.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.opentelemetry-otlp]]
+version = "0.32.0"
+criteria = "safe-to-deploy"
+
 [[exemptions.opentelemetry-proto]]
 version = "0.32.0"
 criteria = "safe-to-deploy"
@@ -743,6 +747,10 @@ version = "0.14.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.prost-derive]]
+version = "0.14.4"
+criteria = "safe-to-deploy"
+
+[[exemptions.prost-types]]
 version = "0.14.4"
 criteria = "safe-to-deploy"
 
@@ -1019,6 +1027,10 @@ version = "0.14.6"
 criteria = "safe-to-deploy"
 
 [[exemptions.tonic-prost]]
+version = "0.14.6"
+criteria = "safe-to-deploy"
+
+[[exemptions.tonic-types]]
 version = "0.14.6"
 criteria = "safe-to-deploy"
 
