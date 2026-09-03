@@ -9,7 +9,7 @@ use emery_adapter::types::{
     Authority, ClaimKind, Context, Error, SourceContent, SourceInput, SourceWorkspace,
 };
 use emery_adapter::{Format, MAX_REPAIRS, Request, SourceAdapter as _};
-use emery_testkit::{Scripted, function_tools};
+use omnia_test::guest::{Scripted, function_tools};
 
 fn ctx(docs: &'static [Doc]) -> Context<'static> {
     Context {

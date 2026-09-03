@@ -1,5 +1,5 @@
 [workspace]
-members = ["examples/eval", "sources/*"]
+members = ["examples/caller", "examples/conformance", "examples/eval", "sources/*"]
 resolver = "3"
 
 [workspace.package]
@@ -13,32 +13,37 @@ version = "0.13.0"
 publish = false
 
 [workspace.dependencies]
+anyhow = "1.0.102"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 tempfile = "3.27.0"
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
+wasip3 = "0.8.0"
 
-omnia = "0.36.0"
+omnia = { version = "0.36.0", default-features = false, features = ["jit"] }
 omnia-guest = "0.36.0"
-# omnia-wasi-model = "0.36.0"
-# omnia-wasi-otel = "0.36.0"
+omnia-test = { version = "0.36.0", default-features = false }
+omnia-wasi-model = "0.36.0"
 
 emery-adapter = "0.38.0"
 emery-prose = "0.38.0"
-emery-testkit = "0.38.0"
 
 [patch.crates-io]
 emery-adapter = { git = "https://github.com/augentic/emery" }
 emery-prose = { git = "https://github.com/augentic/emery" }
-emery-testkit = { git = "https://github.com/augentic/emery" }
 # emery-adapter = { path = "../emery/crates/adapter" }
 # emery-prose = { path = "../emery/crates/prose" }
-# emery-testkit = { path = "../emery/crates/testkit" }
 
+# Pinned to omnia `main` until omnia-test's first publish; every omnia crate
+# rides one git source so the workspace sees one revision.
 omnia = { git = "https://github.com/augentic/omnia" }
 omnia-guest = { git = "https://github.com/augentic/omnia" }
+omnia-test = { git = "https://github.com/augentic/omnia" }
+omnia-wasi-model = { git = "https://github.com/augentic/omnia" }
 # omnia = { path = "../omnia/crates/omnia" }
 # omnia-guest = { path = "../omnia/crates/omnia-guest" }
+# omnia-test = { path = "../omnia/crates/omnia-test" }
+# omnia-wasi-model = { path = "../omnia/crates/wasi-model" }
 
 wrpc-transport = { git = "https://github.com/bytecodealliance/wrpc" }
 wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }

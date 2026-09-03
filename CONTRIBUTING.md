@@ -33,8 +33,10 @@ sources/
     src/              # wasm-free adapter logic + wasm32-only `guest` shim
     tests/            # native integration suite
 codex/references/runtime/   # shared runtime references (reconciliation, authority)
+examples/caller/      # guest-only conformance caller (wasi:cli/run over the source seam)
+examples/conformance/ # component conformance: nested wasm32 build + harness + suite
 examples/eval/        # the graded live-eval runner and its cases
-Cargo.toml            # virtual workspace: examples/eval + sources/*
+Cargo.toml            # virtual workspace: examples/* + sources/*
 ```
 
 Identity lives in the guest crate's `Cargo.toml` `version` (the shared `[workspace.package]` SemVer) and the package reference it publishes under (`emery:<name>@<semver>`). The compatibility floor is compiled into the `metadata` operation's record.

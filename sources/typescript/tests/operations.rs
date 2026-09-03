@@ -8,7 +8,7 @@ use emery_adapter::types::{
     Authority, ClaimKind, Context, Error, SourceContent, SourceInput, SourceWorkspace,
 };
 use emery_adapter::{Format, MAX_REPAIRS, Request, SourceAdapter as _, ToolCall};
-use emery_testkit::{Scripted, function_tools};
+use omnia_test::guest::{Scripted, function_tools};
 use typescript::Adapter;
 
 fn ctx(docs: &'static [Doc]) -> Context<'static> {
@@ -129,7 +129,7 @@ async fn closure_reference_pull() {
 
     let exchanges = model.exchanges();
     assert_eq!(exchanges.len(), 1, "the closure answered the scripted call");
-    let body = exchanges[0].1.as_ref().expect("read_doc resolves an embedded path");
+    let body = exchanges[0].outcome.as_ref().expect("read_doc resolves an embedded path");
     let value: serde_json::Value = serde_json::from_str(body).expect("a JSON-object result");
     assert_eq!(value["path"], doc.path);
     assert_eq!(value["body"], doc.body);
