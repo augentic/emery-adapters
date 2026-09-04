@@ -4,11 +4,11 @@ use std::path::Path;
 
 use documentation::Adapter;
 use emery_adapter::answers::evidence_schema;
-use emery_prose::registry::Doc;
 use emery_adapter::types::{
     Authority, ClaimKind, Context, Error, SourceContent, SourceInput, SourceWorkspace,
 };
 use emery_adapter::{Format, MAX_REPAIRS, Request, SourceAdapter as _};
+use emery_prose::registry::Doc;
 use omnia_test::guest::{Scripted, function_tools};
 
 fn ctx(docs: &'static [Doc]) -> Context<'static> {

@@ -13,7 +13,7 @@ Emery's **engine** owns lifecycle, artifact schemas, reconciliation, and synthes
 
 ## Component contract
 
-- Each adapter ships as one component exporting the `source-adapter` world from the `emery:adapter` WIT package (owned and published by `augentic/emery`; the `emery-adapter` SDK embeds it).
+- Each adapter ships as one component exporting the `source-adapter` world from the `emery:adapter` WIT package (owned and published by `augentic/emery`; the `emery-source` contract crate embeds it and the `emery-adapter` SDK re-exports it).
 - Identity comes from the guest crate's version and published `emery:<name>@<semver>` package. Resolve-time metadata comes from the component's `metadata` operation; there is no adapter manifest.
 - Keep reusable adapter logic wasm-free in library modules. Each adapter implements `emery_adapter::SourceAdapter` on a unit type; the `wasm32` guest module is a single `emery_adapter::source!` export-macro invocation over that implementor.
 - Do not commit built `.wasm` artifacts.
