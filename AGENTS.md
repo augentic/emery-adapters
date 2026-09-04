@@ -55,6 +55,7 @@ make adapter NAME         # fast development component build
 make release              # release-build every adapter component (excludes eval, caller, conformance)
 make publish NAME         # push one built component to its exact GHCR tag (Publish Release / local breakout)
 make eval [id]            # graded live eval over the public contract (operator-invoked, never CI)
+make sweep                # drop target/ artifacts untouched for a week (cargo-sweep); cargo never collects them itself
 ```
 
 Run `make ci` before committing. If it cannot run, report exactly which narrower checks ran and why the full gate was unavailable.

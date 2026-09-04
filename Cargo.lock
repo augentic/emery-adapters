@@ -300,7 +300,7 @@ checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 name = "caller"
 version = "0.13.0"
 dependencies = [
- "emery-source",
+ "emery-adapter",
  "serde_json",
  "wasip3",
 ]
@@ -1024,25 +1024,7 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 [[package]]
 name = "emery-adapter"
 version = "0.38.0"
-dependencies = [
- "emery-prose",
- "emery-source",
- "omnia-guest",
- "schemars",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "emery-prose"
-version = "0.38.0"
-dependencies = [
- "anyhow",
-]
-
-[[package]]
-name = "emery-source"
-version = "0.38.0"
+source = "git+https://github.com/augentic/emery#322bc3bec73cb6ab941a388a782d0dba303887a9"
 dependencies = [
  "omnia-guest",
  "schemars",
@@ -1051,6 +1033,11 @@ dependencies = [
  "thiserror 2.0.20",
  "wit-bindgen 0.61.1",
 ]
+
+[[package]]
+name = "emery-prose"
+version = "0.38.0"
+source = "git+https://github.com/augentic/emery#322bc3bec73cb6ab941a388a782d0dba303887a9"
 
 [[package]]
 name = "encoding_rs"
