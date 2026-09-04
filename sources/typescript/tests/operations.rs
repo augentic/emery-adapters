@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use emery_adapter::answers::evidence_schema;
-use emery_adapter::registry::Doc;
+use emery_prose::registry::Doc;
 use emery_adapter::types::{
     Authority, ClaimKind, Context, Error, SourceContent, SourceInput, SourceWorkspace,
 };

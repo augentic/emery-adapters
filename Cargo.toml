@@ -27,12 +27,15 @@ omnia-wasi-model = "0.36.0"
 
 emery-adapter = "0.38.0"
 emery-prose = "0.38.0"
+emery-source = "0.38.0"
 
 [patch.crates-io]
 emery-adapter = { git = "https://github.com/augentic/emery" }
 emery-prose = { git = "https://github.com/augentic/emery" }
+emery-source = { git = "https://github.com/augentic/emery" }
 # emery-adapter = { path = "../emery/crates/adapter" }
 # emery-prose = { path = "../emery/crates/prose" }
+# emery-source = { path = "../emery/crates/source" }
 
 # Pinned to omnia `main` until omnia-test's first publish; every omnia crate
 # rides one git source so the workspace sees one revision.

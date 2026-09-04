@@ -17,9 +17,10 @@ workspace = true
 
 [dependencies]
 emery-adapter.workspace = true
+emery-prose.workspace = true
 
 [build-dependencies]
-emery-prose.workspace = true
+emery-prose = { workspace = true, features = ["emit"] }
 
 [dev-dependencies]
 serde_json.workspace = true
