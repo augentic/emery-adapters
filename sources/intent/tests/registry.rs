@@ -3,7 +3,7 @@
 //! still resolves.
 
 use emery_adapter::SourceAdapter as _;
-use emery_adapter::registry::{body, find};
+use emery_prose::registry::{body, find};
 use intent::Adapter;
 
 #[test]

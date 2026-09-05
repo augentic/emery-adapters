@@ -13,12 +13,12 @@ Emery's **engine** owns lifecycle, artifact schemas, reconciliation, and synthes
 
 ## Component contract
 
-- Each adapter ships as one component exporting the `source-adapter` world from the `emery:adapter` WIT package (owned and published by `augentic/emery`; the `emery-adapter` SDK embeds it).
+- Each adapter ships as one component exporting the `source-adapter` world from the `emery:adapter` WIT package (owned and published by `augentic/emery`; the `emery-source` contract crate embeds it and the `emery-adapter` SDK re-exports it).
 - Identity comes from the guest crate's version and published `emery:<name>@<semver>` package. Resolve-time metadata comes from the component's `metadata` operation; there is no adapter manifest.
 - Keep reusable adapter logic wasm-free in library modules. Each adapter implements `emery_adapter::SourceAdapter` on a unit type; the `wasm32` guest module is a single `emery_adapter::source!` export-macro invocation over that implementor.
 - Do not commit built `.wasm` artifacts.
 
-The root is a virtual workspace of `sources/*` (documentation, intent, typescript) plus `examples/eval` (the graded live-eval runner), `examples/caller` (the guest-only conformance caller), and `examples/conformance` (the native component-conformance harness and suite). Scripted doubles come from omnia's `omnia-test` crate — `guest::Scripted` for the adapter suites, `host::{ScriptedModel, Backends, Deployment}` for the conformance harness — a native-only dev-dependency, never an engine dependency. The adapter SDK (`emery-adapter`) and prose walker (`emery-prose`) are dependencies on `augentic/emery` — published under `emery-*` names, so Rust paths are `emery_adapter::` / `emery_prose::` — pinned by engine git (until a release tag, RFC-77 D13) and the committed `Cargo.lock`; for sibling co-development, uncomment the path patches in the root `Cargo.toml` `[patch.crates-io]` block. The eval runner is a **public-contract client** (architecture-review T6): it spawns the sibling shipped `emery` binary over built components and never links engine crates.
+The root is a virtual workspace of `sources/*` (documentation, intent, typescript) plus `examples/eval` (the graded live-eval runner), `examples/caller` (the guest-only conformance caller), and `examples/conformance` (the native component-conformance harness and suite). Scripted doubles come from omnia's `omnia-test` crate — `guest::Scripted` for the adapter suites, `host::{ScriptedModel, Backends, Deployment}` for the conformance harness — a native-only dev-dependency, never an engine dependency. The adapter SDK (`emery-adapter`), the prose registry + walker (`emery-prose`; the `emit` feature is a build-dependency concern), and the source contract (`emery-source`, re-exported by the SDK; only `examples/caller` names it directly) are dependencies on `augentic/emery` — published under `emery-*` names, so Rust paths are `emery_adapter::` / `emery_prose::` / `emery_source::` — pinned by engine git (until a release tag, RFC-77 D13) and the committed `Cargo.lock`; for sibling co-development, uncomment the path patches in the root `Cargo.toml` `[patch.crates-io]` block. The eval runner is a **public-contract client** (architecture-review T6): it spawns the sibling shipped `emery` binary over built components and never links engine crates.
 
 ## Prose and rules
 
@@ -55,6 +55,7 @@ make adapter NAME         # fast development component build
 make release              # release-build every adapter component (excludes eval, caller, conformance)
 make publish NAME         # push one built component to its exact GHCR tag (Publish Release / local breakout)
 make eval [id]            # graded live eval over the public contract (operator-invoked, never CI)
+make sweep                # drop target/ artifacts untouched for a week (cargo-sweep); cargo never collects them itself
 ```
 
 Run `make ci` before committing. If it cannot run, report exactly which narrower checks ran and why the full gate was unavailable.

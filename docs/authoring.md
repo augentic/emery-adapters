@@ -25,10 +25,10 @@ What the engine calls:
 Three ideas carry the operation:
 
 - **The model is a parameter.** `extract` is generic over `emery_adapter::Model`. On wasm the macro binds `WasiModel`; native tests bind `omnia_test::guest::Scripted` with scripted answers. Your code never constructs a backend.
-- **Prose is embedded at build time.** `build.rs` calls `emery_prose::emit("prose")`, which walks the adapter's `prose/` tree into a sorted `DOCS` table; `emery_adapter::registry!()` exposes it as `registry::docs()` / `registry::body("prompts/extract.md")`. A dangling relative link in any prose document fails the build. Each judgment declares `list_docs` / `read_doc` function tools and answers the model's calls in-process from that embedded corpus, so prompts cite references by relative link instead of inlining them.
+- **Prose is embedded at build time.** `build.rs` calls `emery_prose::emit("prose")` (the `emit` feature, enabled on the build-dependency only), which walks the adapter's `prose/` tree into a sorted `DOCS` table; `emery_prose::registry!()` exposes it as `registry::docs()` / `registry::body("prompts/extract.md")`. A dangling relative link in any prose document fails the build. Each judgment declares `list_docs` / `read_doc` function tools and answers the model's calls in-process from that embedded corpus, so prompts cite references by relative link instead of inlining them.
 - **Answers are schema-gated and repaired.** `emery_adapter::repaired(model, ctx, system, user, kind, SCHEMA, tail)` sends the prompt, parses the reply against a generated JSON schema, and re-prompts with the parse error up to `emery_adapter::MAX_REPAIRS` times before failing.
 
-For the type-level contract — `Context`, `SourceInput`, `Evidence`, the answer schemas — generate the SDK docs locally with `cargo doc -p emery-adapter --open`.
+For the type-level contract — `Context`, `SourceInput`, `Evidence`, the answer schemas — generate the SDK docs locally with `cargo doc -p emery-adapter --open`. The wire DTOs and the import-side `Source` capability are defined in `emery-source` and re-exported by the SDK, so an adapter names `emery_adapter::types::…` and never depends on `emery-source` directly.
 
 ## Walkthrough
 
@@ -74,9 +74,10 @@ workspace = true
 
 [dependencies]
 emery-adapter.workspace = true
+emery-prose.workspace = true
 
 [build-dependencies]
-emery-prose.workspace = true
+emery-prose = { workspace = true, features = ["emit"] }
 
 [dev-dependencies]
 tokio.workspace = true
@@ -85,7 +86,7 @@ tokio.workspace = true
 omnia-test = { workspace = true, features = ["guest"] }
 ```
 
-`cdylib` is the Wasm component; `rlib` is what native tests link. The identity SemVer is the shared `[workspace.package] version` — adapters version together.
+`emery-prose` appears twice on purpose: the runtime dependency carries only the `Doc` registry, the build dependency turns on the `emit` walker. `cdylib` is the Wasm component; `rlib` is what native tests link. The identity SemVer is the shared `[workspace.package] version` — adapters version together.
 
 ### 2. Embed the prose
 
@@ -111,7 +112,7 @@ mod guest {
 
 mod operations;
 mod registry {
-    emery_adapter::registry!();
+    emery_prose::registry!();
 }
 
 pub use operations::Adapter;
@@ -123,9 +124,9 @@ pub use operations::Adapter;
 
 ```rust
 use emery_adapter::answers::{evidence_schema, evidence_tail};
-use emery_adapter::registry::Doc;
 use emery_adapter::types::{Context, Error, Evidence, SourceContent, SourceInput, SourceMetadata};
 use emery_adapter::{Model, SourceAdapter, repaired};
+use emery_prose::registry::Doc;
 
 use crate::registry;
 

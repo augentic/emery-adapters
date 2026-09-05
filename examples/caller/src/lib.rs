@@ -1,8 +1,9 @@
 //! The conformance caller: a `wasi:cli/run` guest that drives one adapter
 //! component over the `emery:adapter/source` seam the way the engine
 //! does — `metadata`, then `extract` — and asserts the shape that comes
-//! back across the wire. It links the SDK's import-side `Source` defaults
-//! only, never an engine crate.
+//! back across the wire. It links the contract crate's import-side
+//! `Source` defaults only (`emery-source`), never the SDK or an engine
+//! crate.
 //!
 //! ```text
 //! caller <adapter-id> <key> <workspace|value:TEXT> [expect-error:<variant>]
@@ -13,10 +14,10 @@
 
 #![cfg(target_arch = "wasm32")]
 
-use emery_adapter::types::{
+use emery_source::types::{
     ClaimKind, Error, Evidence, SourceContent, SourceInput, SourceWorkspace,
 };
-use emery_adapter::{DispatchError, Source};
+use emery_source::{DispatchError, Source};
 
 struct Caller;
 

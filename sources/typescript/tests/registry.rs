@@ -2,7 +2,7 @@
 //! references ride inside.
 
 use emery_adapter::SourceAdapter as _;
-use emery_adapter::registry::{body, find};
+use emery_prose::registry::{body, find};
 use typescript::Adapter;
 
 #[test]

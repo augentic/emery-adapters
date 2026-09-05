@@ -1,7 +1,7 @@
 use emery_adapter::answers::{evidence_schema, evidence_tail};
-use emery_adapter::registry::Doc;
 use emery_adapter::types::{Context, Error, Evidence, SourceContent, SourceInput, SourceMetadata};
 use emery_adapter::{Model, SourceAdapter, repaired};
+use emery_prose::registry::Doc;
 
 use crate::registry;
 

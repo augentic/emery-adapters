@@ -7,7 +7,7 @@ mod guest {
 
 mod operations;
 mod registry {
-    emery_adapter::registry!();
+    emery_prose::registry!();
 }
 
 pub use operations::Adapter;

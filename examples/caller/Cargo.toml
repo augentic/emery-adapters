@@ -14,7 +14,7 @@ publish.workspace = true
 crate-type = ["cdylib"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-emery-adapter.workspace = true
+emery-source.workspace = true
 serde_json.workspace = true
 wasip3.workspace = true
 
