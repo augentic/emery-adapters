@@ -13,14 +13,14 @@ version = "0.13.0"
 publish = false
 
 [workspace.dependencies]
-anyhow = "1.0.102"
+anyhow = "1.0.104"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 tempfile = "3.27.0"
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
 wasip3 = "0.8.0"
 
-omnia = { version = "0.36.0", default-features = false, features = ["jit"] }
+omnia = { version = "0.34.0", default-features = false, features = ["jit"] }
 omnia-guest = "0.36.0"
 omnia-test = { version = "0.36.0", default-features = false }
 omnia-wasi-model = "0.36.0"
