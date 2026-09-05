@@ -32,7 +32,7 @@ sources/
     Cargo.toml        # `<name>` — adapter identity semver is its `version`
     src/              # wasm-free adapter logic + wasm32-only `guest` shim
     tests/            # native integration suite
-codex/references/runtime/   # shared runtime references (reconciliation, authority)
+codex/references/runtime/   # shared runtime references (reconciliation)
 examples/caller/      # guest-only conformance caller (wasi:cli/run over the source seam)
 examples/conformance/ # component conformance: nested wasm32 build + harness + suite
 examples/eval/        # the graded live-eval runner and its cases

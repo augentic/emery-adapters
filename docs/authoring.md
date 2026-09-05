@@ -184,7 +184,7 @@ Points that generalize:
 
 One prompt: `prose/prompts/extract.md` — the claim-kind table with each kind's required body field, the id-derivation rules, the JSON output contract, and a worked example. Shape rules are in [CONTRIBUTING.md § Prompt authoring](../CONTRIBUTING.md#prompt-authoring); depth goes in `prose/references/`, cited by relative link.
 
-Add the shared runtime references symlink so your prompt can cite the cross-adapter corpus (reconciliation, authority precedence):
+Add the shared runtime references symlink so your prompt can cite the cross-adapter corpus ([reconciliation.md](../codex/references/runtime/reconciliation.md)):
 
 ```bash
 ln -s ../../../../codex/references/runtime sources/changelog/prose/references/emery-runtime

@@ -6,10 +6,9 @@ This directory is the single **emery-runtime bundle**: the canonical copy of the
 
 The bundle:
 
-| Document                 | What adapters consume it for                                          |
-| ------------------------ | --------------------------------------------------------------------- |
-| `reconciliation.md`      | The specify pipeline and the claim-id / extras rules extraction feeds |
-| `synthesis/authority.md` | The authority hierarchy source adapters declare Evidence against      |
+| Document            | What adapters consume it for                                          |
+| ------------------- | --------------------------------------------------------------------- |
+| `reconciliation.md` | The specify pipeline and the claim-id / extras rules extraction feeds |
 
 ## Editing rules
 
