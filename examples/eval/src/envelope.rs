@@ -4,40 +4,6 @@
 
 use serde::Deserialize;
 
-/// The `emery specify` success body.
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub struct Success {
-    /// The committed generation id the pointer names.
-    pub generation: String,
-    /// Requirement blocks in the committed `spec.md`.
-    pub requirements: usize,
-    /// Sources extracted this run.
-    pub sources: usize,
-}
-
-/// The `emery show` success body.
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub struct Shown {
-    /// The current generation id.
-    pub generation: String,
-    /// The rendered document bytes.
-    pub body: String,
-}
-
-/// The failure envelope every verb emits on stderr.
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub struct Failure {
-    /// The error-variant discriminant (e.g. `bad_gateway`).
-    pub error: String,
-    /// The rendered detail.
-    pub message: String,
-    /// The numeric exit code of the typed contract.
-    pub exit_code: u8,
-}
-
 /// Parse the success body from `specify` stdout bytes.
 ///
 /// # Errors
@@ -70,4 +36,38 @@ pub fn failure(stderr: &[u8]) -> Result<Failure, String> {
         .map(|at| &text[at..])
         .ok_or_else(|| format!("no failure envelope on stderr: {}", text.trim()))?;
     serde_json::from_str(json).map_err(|err| format!("failure envelope did not parse: {err}"))
+}
+
+/// The `emery specify` success body.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct Success {
+    /// The committed generation id the pointer names.
+    pub generation: String,
+    /// Requirement blocks in the committed `spec.md`.
+    pub requirements: usize,
+    /// Sources extracted this run.
+    pub sources: usize,
+}
+
+/// The `emery show` success body.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct Shown {
+    /// The current generation id.
+    pub generation: String,
+    /// The rendered document bytes.
+    pub body: String,
+}
+
+/// The failure envelope every verb emits on stderr.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct Failure {
+    /// The error-variant discriminant (e.g. `bad_gateway`).
+    pub error: String,
+    /// The rendered detail.
+    pub message: String,
+    /// The numeric exit code of the typed contract.
+    pub exit_code: u8,
 }

@@ -2,14 +2,6 @@
 //! inline, provenance one gesture away. Checks operate on the
 //! published document format only — no engine parser is linked.
 
-/// Graded expectations one case declares over its committed spec.
-#[derive(Debug, Clone, Copy)]
-pub struct Expect {
-    /// A fragment at least one requirement heading must contain —
-    /// the cheap "the spec is about the bound estate" check.
-    pub subject_fragment: &'static str,
-}
-
 // The requirement-heading prefix of the published spec format.
 const HEADING: &str = "### Requirement:";
 
@@ -23,6 +15,7 @@ pub fn spec(text: &str, expect: &Expect) -> Vec<String> {
         findings.push("no requirement blocks: the spec is not reviewable".to_string());
         return findings;
     }
+
     if !blocks.iter().any(|(heading, _)| heading.contains(expect.subject_fragment)) {
         findings.push(format!(
             "no requirement heading mentions `{}`: the spec misses the bound estate",
@@ -33,7 +26,16 @@ pub fn spec(text: &str, expect: &Expect) -> Vec<String> {
         provenance(heading, body, &mut findings);
         inline_tags(heading, body, &mut findings);
     }
+
     findings
+}
+
+/// Graded expectations one case declares over its committed spec.
+#[derive(Debug, Clone, Copy)]
+pub struct Expect {
+    /// A fragment at least one requirement heading must contain —
+    /// the cheap "the spec is about the bound estate" check.
+    pub subject_fragment: &'static str,
 }
 
 // Every requirement block as `(heading line, body)`.

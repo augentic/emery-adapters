@@ -1,16 +1,10 @@
 //! The conformance caller: a `wasi:cli/run` guest that drives one adapter
-//! component over the `emery:adapter/source` seam the way the engine
-//! does — `metadata`, then `extract` — and asserts the shape that comes
-//! back across the wire. It links the contract crate's import-side
-//! `Source` defaults only (`emery-source`), never the SDK or an engine
-//! crate.
+//! over the `emery:adapter/source` seam (`metadata`, then `extract`) and
+//! asserts the wire shape. Exit `0` means every assertion held.
 //!
 //! ```text
 //! caller <adapter-id> <key> <workspace|value:TEXT> [expect-error:<variant>]
 //! ```
-//!
-//! Exit `0` means every assertion held; a failed assertion prints its
-//! reason on stderr and exits non-zero.
 
 #![cfg(target_arch = "wasm32")]
 
@@ -60,16 +54,15 @@ async fn drive(args: &[String]) -> Result<String, String> {
         content: parse_content(key, content)?,
     };
 
-    // Resolve-time metadata is a synchronous export; a declared floor is
-    // an exact semver.
-    let metadata = Caller.metadata(id);
+    // A declared floor is an exact semver.
+    let metadata = Source::metadata(&Caller, id);
     if let Some(floor) = &metadata.emery_floor
         && floor.split('.').count() != 3
     {
         return Err(format!("`emery-floor` is not an exact semver: {floor}"));
     }
 
-    match (Caller.extract(id, &input).await, expected) {
+    match (Source::extract(&Caller, id, &input).await, expected) {
         (Ok(evidence), None) => {
             check_evidence(&evidence)?;
             Ok(format!(

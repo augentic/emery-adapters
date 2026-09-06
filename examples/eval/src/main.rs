@@ -32,52 +32,6 @@ struct Case {
     expect: Expect,
 }
 
-// The resolved on-disk layout of one runner invocation.
-struct Paths {
-    // The emery-adapters repository root.
-    root: PathBuf,
-    // The sibling `augentic/emery` checkout the exercised binary was
-    // built from.
-    emery_repo: PathBuf,
-    // The shipped `emery` binary.
-    emery_bin: PathBuf,
-}
-
-impl Paths {
-    fn locate() -> Self {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let root = root.canonicalize().expect("adapters root");
-        let emery_repo =
-            std::env::var_os("EMERY_REPO").map_or_else(|| root.join("../emery"), PathBuf::from);
-        // A redirected CARGO_TARGET_DIR is shared by both checkouts —
-        // the same redirect this runner was built under.
-        let emery_target = std::env::var_os("CARGO_TARGET_DIR")
-            .map_or_else(|| emery_repo.join("target"), PathBuf::from);
-        let emery_bin = std::env::var_os("EMERY_BIN")
-            .map_or_else(|| emery_target.join("release/emery"), PathBuf::from);
-        assert!(
-            emery_bin.is_file(),
-            "shipped binary missing at {}; run `cargo build --release --bin emery` in the \
-             sibling emery checkout (or set EMERY_BIN)",
-            emery_bin.display()
-        );
-        Self {
-            root,
-            emery_repo,
-            emery_bin,
-        }
-    }
-
-    // The built component for one adapter crate name.
-    fn component(&self, name: &str) -> PathBuf {
-        let target = std::env::var_os("CARGO_TARGET_DIR")
-            .map_or_else(|| self.root.join("target"), PathBuf::from);
-        let built = target.join(format!("wasm32-wasip2/release/{name}.wasm"));
-        assert!(built.is_file(), "component missing at {}; run `make release`", built.display());
-        built
-    }
-}
-
 // The graded case catalog. Both estates are bounded on purpose: the
 // orders docs fixture is one written specification; omnia-r9k is one
 // shallow-cloned legacy adapter.
@@ -146,7 +100,54 @@ fn main() {
     }
 }
 
-// Run one case end to end and record its typed result.
+// The resolved on-disk layout of one runner invocation.
+struct Paths {
+    // The emery-adapters repository root.
+    root: PathBuf,
+    // The sibling `augentic/emery` checkout the exercised binary was
+    // built from.
+    emery_repo: PathBuf,
+    // The shipped `emery` binary.
+    emery_bin: PathBuf,
+}
+
+impl Paths {
+    fn locate() -> Self {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let root = root.canonicalize().expect("adapters root");
+        let emery_repo =
+            std::env::var_os("EMERY_REPO").map_or_else(|| root.join("../emery"), PathBuf::from);
+
+        // A redirected CARGO_TARGET_DIR is shared by both checkouts —
+        // the same redirect this runner was built under.
+        let emery_target = std::env::var_os("CARGO_TARGET_DIR")
+            .map_or_else(|| emery_repo.join("target"), PathBuf::from);
+        let emery_bin = std::env::var_os("EMERY_BIN")
+            .map_or_else(|| emery_target.join("release/emery"), PathBuf::from);
+        assert!(
+            emery_bin.is_file(),
+            "shipped binary missing at {}; run `cargo build --release --bin emery` in the \
+             sibling emery checkout (or set EMERY_BIN)",
+            emery_bin.display()
+        );
+
+        Self {
+            root,
+            emery_repo,
+            emery_bin,
+        }
+    }
+
+    // The built component for one adapter crate name.
+    fn component(&self, name: &str) -> PathBuf {
+        let target = std::env::var_os("CARGO_TARGET_DIR")
+            .map_or_else(|| self.root.join("target"), PathBuf::from);
+        let built = target.join(format!("wasm32-wasip2/release/{name}.wasm"));
+        assert!(built.is_file(), "component missing at {}; run `make release`", built.display());
+        built
+    }
+}
+
 fn run_case(case: &Case, paths: &Paths) -> CaseResult {
     println!("== case {}", case.id);
     let fixture = paths.root.join(format!("examples/eval/cases/{}/fixture", case.id));
@@ -198,6 +199,7 @@ fn run_case(case: &Case, paths: &Paths) -> CaseResult {
         Ok(body) => graded(case, paths, &project, &body),
         Err(finding) => Outcome::Findings(vec![finding]),
     };
+
     CaseResult {
         id: case.id.to_string(),
         // Every operation behind a success envelope completed; graded
@@ -235,6 +237,7 @@ fn graded(case: &Case, paths: &Paths, project: &Path, body: &envelope::Success) 
             shown.generation, body.generation
         )]);
     }
+
     let findings = grade::spec(&shown.body, &case.expect);
     if findings.is_empty() {
         Outcome::Pass {
@@ -268,8 +271,7 @@ fn failed(
     }
 }
 
-// Spawn one `emery` invocation in the case project, isolated under
-// the sandbox `EMERY_HOME`.
+// Isolated under the sandbox `EMERY_HOME` so no operator state is touched.
 fn emery(paths: &Paths, project: &Path, args: &[String]) -> Output {
     Command::new(&paths.emery_bin)
         .current_dir(project)
@@ -279,8 +281,7 @@ fn emery(paths: &Paths, project: &Path, args: &[String]) -> Output {
         .expect("spawn the emery binary")
 }
 
-// Shallow-clone `url` into `dest` once; an existing clone is the
-// cached fixture.
+// An existing clone is the cached fixture; only the first run clones.
 fn ensure_clone(url: &str, dest: &Path) {
     if dest.is_dir() {
         return;
@@ -294,7 +295,6 @@ fn ensure_clone(url: &str, dest: &Path) {
     assert!(status.success(), "shallow clone of {url} failed");
 }
 
-// Copy `from`'s tree into `to` (which exists).
 fn copy_tree(from: &Path, to: &Path) {
     for entry in std::fs::read_dir(from).expect("read fixture dir") {
         let entry = entry.expect("fixture entry");

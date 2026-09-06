@@ -84,7 +84,6 @@ fn require_brief(brief: &str) -> Result<(), Error> {
     Ok(())
 }
 
-// Read the one regular file in the prepared tree as the intent string.
 fn single_file_intent(root: &Path) -> Result<String, Error> {
     let mut files = Vec::new();
     collect_files(root, &mut files)?;
@@ -98,8 +97,7 @@ fn single_file_intent(root: &Path) -> Result<String, Error> {
     }
 }
 
-// Collect every regular file beneath `dir` (the one-file tree encoding
-// may nest).
+// The one-file tree encoding may nest, so the walk is recursive.
 fn collect_files(dir: &Path, files: &mut Vec<PathBuf>) -> Result<(), Error> {
     for entry in std::fs::read_dir(dir).map_err(|err| Error::Io(err.to_string()))? {
         let entry = entry.map_err(|err| Error::Io(err.to_string()))?;
