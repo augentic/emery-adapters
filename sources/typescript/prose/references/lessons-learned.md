@@ -341,7 +341,7 @@ All external API calls — including best-effort, secondary, and audit calls —
 ## 27. Transport Projection Ownership
 
 ### What Happened
-Several operations returned the same response type, but transport status, headers, and serialization policy were mixed into domain modules. Generation duplicated policy and coupled the domain type to one transport.
+Several operations returned the same response type, but transport status, headers, and serialization policy were mixed into domain modules. Store duplicated policy and coupled the domain type to one transport.
 
 ### Why It Happened
 The design captured domain outputs but did not identify which transport projector owns their wire representation.

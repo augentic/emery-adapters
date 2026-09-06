@@ -206,7 +206,7 @@ These artifacts demonstrate:
 - **Timing dependency**: 5s delay creates temporal coupling between publishes
 - **Partial mutations**: State changes may be incomplete if errors occur mid-flow
 
-## Code Generation Implications
+## Code Store Implications
 
 A code generator needs to:
 
