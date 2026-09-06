@@ -10,6 +10,23 @@ pub const TIME_TARGET_SECS: f64 = 30.0 * 60.0;
 /// product.md target: per-operation success rate.
 pub const OP_TARGET: f64 = 0.95;
 
+/// The dated scorecard over one full eval run.
+#[derive(Debug, Clone)]
+pub struct Scorecard {
+    /// `YYYY-MM-DD` of the run.
+    pub date: String,
+    /// The `augentic/emery` commit the exercised binary was built from.
+    pub emery_sha: String,
+    /// The `augentic/emery-adapters` commit the components were built
+    /// from.
+    pub adapters_sha: String,
+    /// Every case's result.
+    pub cases: Vec<CaseResult>,
+    /// True when the run covered the whole case catalog. A filtered
+    /// run is an iteration aid and can never produce a green record.
+    pub complete: bool,
+}
+
 /// One case's recorded outcome.
 #[derive(Debug, Clone)]
 pub struct CaseResult {
@@ -46,23 +63,6 @@ pub enum Outcome {
     },
     /// A committed generation with graded findings.
     Findings(Vec<String>),
-}
-
-/// The dated scorecard over one full eval run.
-#[derive(Debug, Clone)]
-pub struct Scorecard {
-    /// `YYYY-MM-DD` of the run.
-    pub date: String,
-    /// The `augentic/emery` commit the exercised binary was built from.
-    pub emery_sha: String,
-    /// The `augentic/emery-adapters` commit the components were built
-    /// from.
-    pub adapters_sha: String,
-    /// Every case's result.
-    pub cases: Vec<CaseResult>,
-    /// True when the run covered the whole case catalog. A filtered
-    /// run is an iteration aid and can never produce a green record.
-    pub complete: bool,
 }
 
 impl Scorecard {

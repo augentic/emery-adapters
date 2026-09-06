@@ -32,6 +32,52 @@ struct Case {
     expect: Expect,
 }
 
+// The resolved on-disk layout of one runner invocation.
+struct Paths {
+    // The emery-adapters repository root.
+    root: PathBuf,
+    // The sibling `augentic/emery` checkout the exercised binary was
+    // built from.
+    emery_repo: PathBuf,
+    // The shipped `emery` binary.
+    emery_bin: PathBuf,
+}
+
+impl Paths {
+    fn locate() -> Self {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let root = root.canonicalize().expect("adapters root");
+        let emery_repo =
+            std::env::var_os("EMERY_REPO").map_or_else(|| root.join("../emery"), PathBuf::from);
+        // A redirected CARGO_TARGET_DIR is shared by both checkouts —
+        // the same redirect this runner was built under.
+        let emery_target = std::env::var_os("CARGO_TARGET_DIR")
+            .map_or_else(|| emery_repo.join("target"), PathBuf::from);
+        let emery_bin = std::env::var_os("EMERY_BIN")
+            .map_or_else(|| emery_target.join("release/emery"), PathBuf::from);
+        assert!(
+            emery_bin.is_file(),
+            "shipped binary missing at {}; run `cargo build --release --bin emery` in the \
+             sibling emery checkout (or set EMERY_BIN)",
+            emery_bin.display()
+        );
+        Self {
+            root,
+            emery_repo,
+            emery_bin,
+        }
+    }
+
+    // The built component for one adapter crate name.
+    fn component(&self, name: &str) -> PathBuf {
+        let target = std::env::var_os("CARGO_TARGET_DIR")
+            .map_or_else(|| self.root.join("target"), PathBuf::from);
+        let built = target.join(format!("wasm32-wasip2/release/{name}.wasm"));
+        assert!(built.is_file(), "component missing at {}; run `make release`", built.display());
+        built
+    }
+}
+
 // The graded case catalog. Both estates are bounded on purpose: the
 // orders docs fixture is one written specification; omnia-r9k is one
 // shallow-cloned legacy adapter.
@@ -97,52 +143,6 @@ fn main() {
     println!("\nscorecard written to {}", out.display());
     if !scorecard.green() {
         std::process::exit(1);
-    }
-}
-
-// The resolved on-disk layout of one runner invocation.
-struct Paths {
-    // The emery-adapters repository root.
-    root: PathBuf,
-    // The sibling `augentic/emery` checkout the exercised binary was
-    // built from.
-    emery_repo: PathBuf,
-    // The shipped `emery` binary.
-    emery_bin: PathBuf,
-}
-
-impl Paths {
-    fn locate() -> Self {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let root = root.canonicalize().expect("adapters root");
-        let emery_repo =
-            std::env::var_os("EMERY_REPO").map_or_else(|| root.join("../emery"), PathBuf::from);
-        // A redirected CARGO_TARGET_DIR is shared by both checkouts —
-        // the same redirect this runner was built under.
-        let emery_target = std::env::var_os("CARGO_TARGET_DIR")
-            .map_or_else(|| emery_repo.join("target"), PathBuf::from);
-        let emery_bin = std::env::var_os("EMERY_BIN")
-            .map_or_else(|| emery_target.join("release/emery"), PathBuf::from);
-        assert!(
-            emery_bin.is_file(),
-            "shipped binary missing at {}; run `cargo build --release --bin emery` in the \
-             sibling emery checkout (or set EMERY_BIN)",
-            emery_bin.display()
-        );
-        Self {
-            root,
-            emery_repo,
-            emery_bin,
-        }
-    }
-
-    // The built component for one adapter crate name.
-    fn component(&self, name: &str) -> PathBuf {
-        let target = std::env::var_os("CARGO_TARGET_DIR")
-            .map_or_else(|| self.root.join("target"), PathBuf::from);
-        let built = target.join(format!("wasm32-wasip2/release/{name}.wasm"));
-        assert!(built.is_file(), "component missing at {}; run `make release`", built.display());
-        built
     }
 }
 

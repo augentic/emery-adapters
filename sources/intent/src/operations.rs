@@ -11,35 +11,6 @@ use emery_prose::registry::Doc;
 
 use crate::registry;
 
-// Read the one regular file in the prepared tree as the intent string.
-fn single_file_intent(root: &Path) -> Result<String, Error> {
-    let mut files = Vec::new();
-    collect_files(root, &mut files)?;
-    match files.as_slice() {
-        [file] => std::fs::read_to_string(file).map_err(|err| Error::Io(err.to_string())),
-        _ => Err(Error::InvalidRequest(format!(
-            "intent reads an inline `value:` binding or a single-file location; the \
-             prepared tree holds {} files",
-            files.len()
-        ))),
-    }
-}
-
-// Collect every regular file beneath `dir` (the one-file tree encoding
-// may nest).
-fn collect_files(dir: &Path, files: &mut Vec<PathBuf>) -> Result<(), Error> {
-    for entry in std::fs::read_dir(dir).map_err(|err| Error::Io(err.to_string()))? {
-        let entry = entry.map_err(|err| Error::Io(err.to_string()))?;
-        let file_type = entry.file_type().map_err(|err| Error::Io(err.to_string()))?;
-        if file_type.is_dir() {
-            collect_files(&entry.path(), files)?;
-        } else if file_type.is_file() {
-            files.push(entry.path());
-        }
-    }
-    Ok(())
-}
-
 /// Intent binding → one Evidence document with one `kind: intent` claim.
 #[derive(Clone, Copy, Debug)]
 pub struct Adapter;
@@ -109,6 +80,35 @@ fn require_brief(brief: &str) -> Result<(), Error> {
         return Err(Error::InvalidRequest(
             "the bound intent brief is empty; intent extract fails closed".to_string(),
         ));
+    }
+    Ok(())
+}
+
+// Read the one regular file in the prepared tree as the intent string.
+fn single_file_intent(root: &Path) -> Result<String, Error> {
+    let mut files = Vec::new();
+    collect_files(root, &mut files)?;
+    match files.as_slice() {
+        [file] => std::fs::read_to_string(file).map_err(|err| Error::Io(err.to_string())),
+        _ => Err(Error::InvalidRequest(format!(
+            "intent reads an inline `value:` binding or a single-file location; the \
+             prepared tree holds {} files",
+            files.len()
+        ))),
+    }
+}
+
+// Collect every regular file beneath `dir` (the one-file tree encoding
+// may nest).
+fn collect_files(dir: &Path, files: &mut Vec<PathBuf>) -> Result<(), Error> {
+    for entry in std::fs::read_dir(dir).map_err(|err| Error::Io(err.to_string()))? {
+        let entry = entry.map_err(|err| Error::Io(err.to_string()))?;
+        let file_type = entry.file_type().map_err(|err| Error::Io(err.to_string()))?;
+        if file_type.is_dir() {
+            collect_files(&entry.path(), files)?;
+        } else if file_type.is_file() {
+            files.push(entry.path());
+        }
     }
     Ok(())
 }
