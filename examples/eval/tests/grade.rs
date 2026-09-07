@@ -71,7 +71,7 @@ fn scorecard_green_line() {
     let pass = CaseResult {
         id: "orders-docs".to_string(),
         outcome: Outcome::Pass {
-            generation: "cafe".to_string(),
+            revision: "cafe".to_string(),
         },
         secs: 120.0,
         ops_succeeded: 3,

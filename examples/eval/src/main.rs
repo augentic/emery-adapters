@@ -220,7 +220,7 @@ fn graded(case: &Case, paths: &Paths, project: &Path, body: &envelope::Success) 
     if !output.status.success() {
         let finding = match envelope::failure(&output.stderr) {
             Ok(failure) => format!(
-                "`emery show spec` failed typed after a committed generation: `{}` (exit {})",
+                "`emery show spec` failed typed after a committed revision: `{}` (exit {})",
                 failure.error, failure.exit_code
             ),
             Err(finding) => finding,
@@ -231,17 +231,17 @@ fn graded(case: &Case, paths: &Paths, project: &Path, body: &envelope::Success) 
         Ok(shown) => shown,
         Err(finding) => return Outcome::Findings(vec![finding]),
     };
-    if shown.generation != body.generation {
+    if shown.revision != body.revision {
         return Outcome::Findings(vec![format!(
-            "`emery show spec` renders generation `{}` but the specify envelope committed `{}`",
-            shown.generation, body.generation
+            "`emery show spec` renders revision `{}` but the specify envelope committed `{}`",
+            shown.revision, body.revision
         )]);
     }
 
     let findings = grade::spec(&shown.body, &case.expect);
     if findings.is_empty() {
         Outcome::Pass {
-            generation: body.generation.clone(),
+            revision: body.revision.clone(),
         }
     } else {
         Outcome::Findings(findings)

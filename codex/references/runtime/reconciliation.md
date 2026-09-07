@@ -8,7 +8,7 @@ How one `emery specify` run turns bound sources into a reviewable specification,
 2. **Gate** — the engine validates every claim against the closed required-extras table before anything else runs: a `requirement` claim must carry a `statement` extra, a `criterion` claim a `criterion` extra, an `example` claim a `replay-digest` extra. A claim missing its required extra fails the whole run closed (typed `bad_request`) naming the source, claim, and missing key. There is no partial acceptance and no fallback to `synopsis`.
 3. **Reconcile** — deterministic engine code (no model) groups `requirement` claims by their dotted-kebab `id` across all sources. Within a group it compares the `statement` extras: matching statements are `agreed`; disagreeing statements resolve by authority precedence (a unique highest-authority contributor wins as `divergence`; a tie at the top authority is a `conflict`). A requirement with no `criterion` claim whose id equals it or extends it (`<requirement-id>.<suffix>`) gets an appended `[unknown]` acceptance gap row.
 4. **Synthesise** — a model renders `spec.md` around the reconciliation rows (which it must reproduce verbatim — a fail-closed AST and row gate refuses drift) and `design.md` from the full claim set.
-5. **Commit** — the engine writes the generation atomically and swaps the `current` pointer. Adapters never write artifacts; the returned Evidence is the entire contribution.
+5. **Commit** — the engine writes the revision atomically and swaps the current revision id. Adapters never write artifacts; the returned Evidence is the entire contribution.
 
 ## What this means for extract prompts
 

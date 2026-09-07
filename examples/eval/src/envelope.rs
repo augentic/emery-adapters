@@ -42,8 +42,8 @@ pub fn failure(stderr: &[u8]) -> Result<Failure, String> {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Success {
-    /// The committed generation id the pointer names.
-    pub generation: String,
+    /// The committed revision id, now current.
+    pub revision: String,
     /// Requirement blocks in the committed `spec.md`.
     pub requirements: usize,
     /// Sources extracted this run.
@@ -54,8 +54,8 @@ pub struct Success {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Shown {
-    /// The current generation id.
-    pub generation: String,
+    /// The current revision id.
+    pub revision: String,
     /// The rendered document bytes.
     pub body: String,
 }

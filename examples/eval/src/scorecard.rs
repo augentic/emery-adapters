@@ -35,7 +35,7 @@ pub struct CaseResult {
     /// The typed outcome.
     pub outcome: Outcome,
     /// Wall-clock seconds, one `specify` invocation through the
-    /// committed generation pointer.
+    /// committed revision.
     pub secs: f64,
     /// Operations that succeeded (one extract per source, one
     /// synthesis).
@@ -49,10 +49,10 @@ pub struct CaseResult {
 /// How a case ended: every branch is a typed record.
 #[derive(Debug, Clone)]
 pub enum Outcome {
-    /// A committed generation with no graded findings.
+    /// A committed revision with no graded findings.
     Pass {
-        /// The committed generation id.
-        generation: String,
+        /// The committed revision id.
+        revision: String,
     },
     /// A typed nonzero exit from the published contract.
     TypedFailure {
@@ -61,7 +61,7 @@ pub enum Outcome {
         /// The typed exit code.
         exit_code: u8,
     },
-    /// A committed generation with graded findings.
+    /// A committed revision with graded findings.
     Findings(Vec<String>),
 }
 
@@ -125,7 +125,7 @@ impl Scorecard {
         out.push_str("\n## cases\n\n");
         for case in &self.cases {
             match &case.outcome {
-                Outcome::Pass { generation } => {
+                Outcome::Pass { revision } => {
                     let fixture = case
                         .fixture_sha
                         .as_deref()
@@ -133,7 +133,7 @@ impl Scorecard {
                         .unwrap_or_default();
                     let _ = writeln!(
                         out,
-                        "- {}: pass — generation `{generation}`, {:.0}s, ops {}/{}{fixture}",
+                        "- {}: pass — revision `{revision}`, {:.0}s, ops {}/{}{fixture}",
                         case.id,
                         case.secs,
                         case.ops_succeeded,
