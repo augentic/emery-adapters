@@ -206,7 +206,7 @@ This function has **5 possible execution paths**:
 
 The artifacts document all 5 paths with explicit branching.
 
-## Code Generation Implications
+## Code Store Implications
 
 A code generator needs to:
 

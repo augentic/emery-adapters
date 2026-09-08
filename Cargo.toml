@@ -30,9 +30,10 @@ emery-prose = "0.38.0"
 emery-source = "0.38.0"
 
 [patch.crates-io]
-emery-adapter = { git = "https://github.com/augentic/emery" }
-emery-prose = { git = "https://github.com/augentic/emery" }
-emery-source = { git = "https://github.com/augentic/emery" }
+# Paired with emery#303; drop `rev` when that lands on main.
+emery-adapter = { git = "https://github.com/augentic/emery", rev = "409e803462e1ef3950fca576f6f846fec28371b8" }
+emery-prose = { git = "https://github.com/augentic/emery", rev = "409e803462e1ef3950fca576f6f846fec28371b8" }
+emery-source = { git = "https://github.com/augentic/emery", rev = "409e803462e1ef3950fca576f6f846fec28371b8" }
 # emery-adapter = { path = "../emery/crates/adapter" }
 # emery-prose = { path = "../emery/crates/prose" }
 # emery-source = { path = "../emery/crates/source" }

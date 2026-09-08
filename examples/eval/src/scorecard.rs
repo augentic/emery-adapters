@@ -7,46 +7,8 @@ use std::fmt::Write as _;
 /// product.md target: time to first reviewable specification.
 pub const TIME_TARGET_SECS: f64 = 30.0 * 60.0;
 
-/// product.md target: per-operation success rate.
-pub const OP_TARGET: f64 = 0.95;
-
-/// One case's recorded outcome.
-#[derive(Debug, Clone)]
-pub struct CaseResult {
-    /// The case id.
-    pub id: String,
-    /// The typed outcome.
-    pub outcome: Outcome,
-    /// Wall-clock seconds, one `specify` invocation through the
-    /// committed generation pointer.
-    pub secs: f64,
-    /// Operations that succeeded (one extract per source, one
-    /// synthesis).
-    pub ops_succeeded: u32,
-    /// Operations that failed typed.
-    pub ops_failed: u32,
-    /// Head sha of the cloned fixture, recorded for reproducibility.
-    pub fixture_sha: Option<String>,
-}
-
-/// How a case ended: every branch is a typed record.
-#[derive(Debug, Clone)]
-pub enum Outcome {
-    /// A committed generation with no graded findings.
-    Pass {
-        /// The committed generation id.
-        generation: String,
-    },
-    /// A typed nonzero exit from the published contract.
-    TypedFailure {
-        /// The `error` discriminant of the failure envelope.
-        error: String,
-        /// The typed exit code.
-        exit_code: u8,
-    },
-    /// A committed generation with graded findings.
-    Findings(Vec<String>),
-}
+// product.md target: per-operation success rate.
+const OP_TARGET: f64 = 0.95;
 
 /// The dated scorecard over one full eval run.
 #[derive(Debug, Clone)]
@@ -65,16 +27,52 @@ pub struct Scorecard {
     pub complete: bool,
 }
 
+/// One case's recorded outcome.
+#[derive(Debug, Clone)]
+pub struct CaseResult {
+    /// The case id.
+    pub id: String,
+    /// The typed outcome.
+    pub outcome: Outcome,
+    /// Wall-clock seconds, one `specify` invocation through the
+    /// committed revision.
+    pub secs: f64,
+    /// Operations that succeeded (one extract per source, one
+    /// synthesis).
+    pub ops_succeeded: u32,
+    /// Operations that failed typed.
+    pub ops_failed: u32,
+    /// Head sha of the cloned fixture, recorded for reproducibility.
+    pub fixture_sha: Option<String>,
+}
+
+/// How a case ended: every branch is a typed record.
+#[derive(Debug, Clone)]
+pub enum Outcome {
+    /// A committed revision with no graded findings.
+    Pass {
+        /// The committed revision id.
+        revision: String,
+    },
+    /// A typed nonzero exit from the published contract.
+    TypedFailure {
+        /// The `error` discriminant of the failure envelope.
+        error: String,
+        /// The typed exit code.
+        exit_code: u8,
+    },
+    /// A committed revision with graded findings.
+    Findings(Vec<String>),
+}
+
 impl Scorecard {
-    /// Worst wall-clock over the cases, seconds.
     #[must_use]
-    pub fn worst_secs(&self) -> f64 {
+    fn worst_secs(&self) -> f64 {
         self.cases.iter().map(|case| case.secs).fold(0.0, f64::max)
     }
 
-    /// Per-operation success rate over every recorded operation.
     #[must_use]
-    pub fn op_rate(&self) -> f64 {
+    fn op_rate(&self) -> f64 {
         let succeeded: u32 = self.cases.iter().map(|case| case.ops_succeeded).sum();
         let failed: u32 = self.cases.iter().map(|case| case.ops_failed).sum();
         let total = succeeded + failed;
@@ -125,7 +123,7 @@ impl Scorecard {
         out.push_str("\n## cases\n\n");
         for case in &self.cases {
             match &case.outcome {
-                Outcome::Pass { generation } => {
+                Outcome::Pass { revision } => {
                     let fixture = case
                         .fixture_sha
                         .as_deref()
@@ -133,7 +131,7 @@ impl Scorecard {
                         .unwrap_or_default();
                     let _ = writeln!(
                         out,
-                        "- {}: pass — generation `{generation}`, {:.0}s, ops {}/{}{fixture}",
+                        "- {}: pass — revision `{revision}`, {:.0}s, ops {}/{}{fixture}",
                         case.id,
                         case.secs,
                         case.ops_succeeded,

@@ -32,7 +32,7 @@ sources/
     Cargo.toml        # `<name>` — adapter identity semver is its `version`
     src/              # wasm-free adapter logic + wasm32-only `guest` shim
     tests/            # native integration suite
-codex/references/runtime/   # shared runtime references (reconciliation, authority)
+codex/references/runtime/   # shared runtime references (reconciliation)
 examples/caller/      # guest-only conformance caller (wasi:cli/run over the source seam)
 examples/conformance/ # component conformance: nested wasm32 build + harness + suite
 examples/eval/        # the graded live-eval runner and its cases
@@ -45,7 +45,7 @@ Identity lives in the guest crate's `Cargo.toml` `version` (the shared `[workspa
 
 Adapter prompts are markdown documents compiled into the guest and driven by the engine's `extract` dispatch. They are not skills: no YAML frontmatter, no discovery metadata.
 
-- **`prose/prompts/extract.md`** carries the whole extraction pass: the claim-kind table with each kind's required body field (fail-closed engine-side, A8), the id-derivation rules reconciliation joins on, and the JSON output contract. Soft cap ~500 non-blank lines, hard cap 800 — above that, move material to `prose/references/`.
+- **`prose/prompts/extract.md`** carries the whole extraction pass: the claim-kind table with each kind's required body field (the `emery_source::claims` gate, repaired in the SDK tail and fail-closed engine-side, A8), the id-derivation rules reconciliation joins on, and the JSON output contract. Soft cap ~500 non-blank lines, hard cap 800 — above that, move material to `prose/references/`.
 - **References are cited via relative markdown links, never inlined** — the `prose` crate's build-time embed includes Markdown documents and follows symlinks, so keep every relative reference resolvable.
 - Survey prompts are deleted, never ported (ADR-0008).
 
@@ -78,7 +78,7 @@ Before a train publishes, these gates must hold:
 
 1. The tree builds against a **published** `emery:adapter` WIT pin.
 2. CI is green against a **released (or RC)** engine revision — the engine dependencies are tag-pinned (`tag = "vX.Y.Z"`), with no active sibling `[patch]` block.
-3. Every adapter's `emery-floor` names the minimum host that can run this train.
+3. Every adapter's `emery-version` names the minimum host that can run this train.
 4. Releasing a new SemVer: the GHCR version tag must not already exist for a first-time push of that train.
 
 **Publish Release** runs CI, tags and creates the GitHub Release, then release-builds every adapter and pushes each as a Wasm OCI artifact to `ghcr.io/augentic/emery-adapters/<name>:<version>` via the same `make release` / `make publish <name>` path used locally. The helper derives `<version>` from the workspace manifest.

@@ -57,7 +57,7 @@ Return one JSON object matching the gated schema — the Evidence body:
 }
 ```
 
-`authority` is always the literal `documentation` (operator-provided written product/technical intent; the precedence `intent > documentation > behaviour` is defined in [`authority.md`](../references/emery-runtime/synthesis/authority.md)). The document's source identity is stamped by the engine from the binding — it is not written in-document.
+`authority` is always the literal `documentation` (operator-provided written product/technical intent). The document's source identity is stamped by the engine from the binding — it is not written in-document.
 
 ## Worked example
 

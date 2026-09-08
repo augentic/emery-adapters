@@ -117,6 +117,7 @@ impl Paths {
         let root = root.canonicalize().expect("adapters root");
         let emery_repo =
             std::env::var_os("EMERY_REPO").map_or_else(|| root.join("../emery"), PathBuf::from);
+
         // A redirected CARGO_TARGET_DIR is shared by both checkouts —
         // the same redirect this runner was built under.
         let emery_target = std::env::var_os("CARGO_TARGET_DIR")
@@ -129,6 +130,7 @@ impl Paths {
              sibling emery checkout (or set EMERY_BIN)",
             emery_bin.display()
         );
+
         Self {
             root,
             emery_repo,
@@ -146,7 +148,6 @@ impl Paths {
     }
 }
 
-// Run one case end to end and record its typed result.
 fn run_case(case: &Case, paths: &Paths) -> CaseResult {
     println!("== case {}", case.id);
     let fixture = paths.root.join(format!("examples/eval/cases/{}/fixture", case.id));
@@ -198,6 +199,7 @@ fn run_case(case: &Case, paths: &Paths) -> CaseResult {
         Ok(body) => graded(case, paths, &project, &body),
         Err(finding) => Outcome::Findings(vec![finding]),
     };
+
     CaseResult {
         id: case.id.to_string(),
         // Every operation behind a success envelope completed; graded
@@ -218,7 +220,7 @@ fn graded(case: &Case, paths: &Paths, project: &Path, body: &envelope::Success) 
     if !output.status.success() {
         let finding = match envelope::failure(&output.stderr) {
             Ok(failure) => format!(
-                "`emery show spec` failed typed after a committed generation: `{}` (exit {})",
+                "`emery show spec` failed typed after a committed revision: `{}` (exit {})",
                 failure.error, failure.exit_code
             ),
             Err(finding) => finding,
@@ -229,16 +231,17 @@ fn graded(case: &Case, paths: &Paths, project: &Path, body: &envelope::Success) 
         Ok(shown) => shown,
         Err(finding) => return Outcome::Findings(vec![finding]),
     };
-    if shown.generation != body.generation {
+    if shown.revision != body.revision {
         return Outcome::Findings(vec![format!(
-            "`emery show spec` renders generation `{}` but the specify envelope committed `{}`",
-            shown.generation, body.generation
+            "`emery show spec` renders revision `{}` but the specify envelope committed `{}`",
+            shown.revision, body.revision
         )]);
     }
+
     let findings = grade::spec(&shown.body, &case.expect);
     if findings.is_empty() {
         Outcome::Pass {
-            generation: body.generation.clone(),
+            revision: body.revision.clone(),
         }
     } else {
         Outcome::Findings(findings)
@@ -268,8 +271,7 @@ fn failed(
     }
 }
 
-// Spawn one `emery` invocation in the case project, isolated under
-// the sandbox `EMERY_HOME`.
+// Isolated under the sandbox `EMERY_HOME` so no operator state is touched.
 fn emery(paths: &Paths, project: &Path, args: &[String]) -> Output {
     Command::new(&paths.emery_bin)
         .current_dir(project)
@@ -279,8 +281,7 @@ fn emery(paths: &Paths, project: &Path, args: &[String]) -> Output {
         .expect("spawn the emery binary")
 }
 
-// Shallow-clone `url` into `dest` once; an existing clone is the
-// cached fixture.
+// An existing clone is the cached fixture; only the first run clones.
 fn ensure_clone(url: &str, dest: &Path) {
     if dest.is_dir() {
         return;
@@ -294,7 +295,6 @@ fn ensure_clone(url: &str, dest: &Path) {
     assert!(status.success(), "shallow clone of {url} failed");
 }
 
-// Copy `from`'s tree into `to` (which exists).
 fn copy_tree(from: &Path, to: &Path) {
     for entry in std::fs::read_dir(from).expect("read fixture dir") {
         let entry = entry.expect("fixture entry");

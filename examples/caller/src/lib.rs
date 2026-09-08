@@ -1,22 +1,14 @@
 //! The conformance caller: a `wasi:cli/run` guest that drives one adapter
-//! component over the `emery:adapter/source` seam the way the engine
-//! does — `metadata`, then `extract` — and asserts the shape that comes
-//! back across the wire. It links the contract crate's import-side
-//! `Source` defaults only (`emery-source`), never the SDK or an engine
-//! crate.
+//! over the `emery:adapter/source` seam (`metadata`, then `extract`) and
+//! asserts the wire shape. Exit `0` means every assertion held.
 //!
 //! ```text
 //! caller <adapter-id> <key> <workspace|value:TEXT> [expect-error:<variant>]
 //! ```
-//!
-//! Exit `0` means every assertion held; a failed assertion prints its
-//! reason on stderr and exits non-zero.
 
 #![cfg(target_arch = "wasm32")]
 
-use emery_source::types::{
-    ClaimKind, Error, Evidence, SourceContent, SourceInput, SourceWorkspace,
-};
+use emery_source::types::{Error, Evidence, SourceContent, SourceInput, SourceWorkspace};
 use emery_source::{DispatchError, Source};
 
 struct Caller;
@@ -62,16 +54,15 @@ async fn drive(args: &[String]) -> Result<String, String> {
         content: parse_content(key, content)?,
     };
 
-    // Resolve-time metadata is a synchronous export; a declared floor is
-    // an exact semver.
-    let metadata = Caller.metadata(id);
-    if let Some(floor) = &metadata.emery_floor
-        && floor.split('.').count() != 3
+    // A declared version is an exact semver.
+    let metadata = Source::metadata(&Caller, id);
+    if let Some(version) = &metadata.emery_version
+        && version.split('.').count() != 3
     {
-        return Err(format!("`emery-floor` is not an exact semver: {floor}"));
+        return Err(format!("`emery-version` is not an exact semver: {version}"));
     }
 
-    match (Caller.extract(id, &input).await, expected) {
+    match (Source::extract(&Caller, id, &input).await, expected) {
         (Ok(evidence), None) => {
             check_evidence(&evidence)?;
             Ok(format!(
@@ -115,25 +106,22 @@ fn variant_of(err: &DispatchError) -> &'static str {
     }
 }
 
-// The engine's fail-closed extras gate: every claim of a kind with a
-// required extra carries it as a string, intact across the wire.
+// The contract's fail-closed gate holds across the wire, and every
+// required extra lowers as a string rather than a re-encoded value.
 fn check_evidence(evidence: &Evidence) -> Result<(), String> {
     if evidence.claims.is_empty() {
         return Err("evidence carries no claims".to_string());
     }
+    evidence.validate().map_err(|err| err.to_string())?;
     for claim in &evidence.claims {
-        let required = match claim.kind {
-            ClaimKind::Requirement => "statement",
-            ClaimKind::Criterion => "criterion",
-            ClaimKind::Example => "replay-digest",
-            _ => continue,
-        };
-        if !claim.extras.get(required).is_some_and(serde_json::Value::is_string) {
-            return Err(format!(
-                "claim `{}` ({:?}) lacks its required `{required}` extra",
-                claim.id.as_deref().unwrap_or("<unnamed>"),
-                claim.kind
-            ));
+        for key in claim.kind.required_extras() {
+            if !claim.extras.get(*key).is_some_and(serde_json::Value::is_string) {
+                return Err(format!(
+                    "claim `{}` ({}) carries a non-string `{key}` extra",
+                    claim.id.as_deref().unwrap_or("<unnamed>"),
+                    claim.kind
+                ));
+            }
         }
     }
     Ok(())

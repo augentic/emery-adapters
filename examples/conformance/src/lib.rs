@@ -1,14 +1,6 @@
-//! Harness for the component conformance suite (`tests/conformance.rs`).
-//!
-//! The build script compiles the conformance caller and every `sources/*`
-//! adapter to `wasm32-wasip2` and generates one `pub const` path per
-//! component plus `foreach_source!`. [`run`] describes a command-mode
-//! deployment the way the engine's runtime does — the caller as the
-//! `wasi:cli/run` guest, one adapter declared under its routed id, the
-//! `emery:adapter/source` seam, a read-only `.` mount over the scratch
-//! project — through `omnia_test::host::Deployment`, over omnia-test's
-//! scripted host-side model, so a scenario observes the caller's exit
-//! status and the recorded model traffic.
+//! Harness for the component conformance suite: [`run`] drives the built
+//! caller against one built adapter under a command-mode deployment over
+//! omnia-test's scripted host-side model.
 
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -21,9 +13,9 @@ use omnia_wasi_model::WasiModel;
 
 include!(concat!(env!("OUT_DIR"), "/gen.rs"));
 
-/// The versioned `source` interface the deployment declares as its plugin
-/// seam; tracks the `emery:adapter` WIT package the SDK embeds.
-pub const SOURCE_INTERFACE: &str = "emery:adapter/source@0.1.0";
+// The versioned `source` interface the deployment declares as its plugin
+// seam; tracks the `emery:adapter` WIT package the SDK embeds.
+const SOURCE_INTERFACE: &str = "emery:adapter/source@0.1.0";
 
 /// One caller run against one adapter component.
 #[derive(Clone, Copy, Debug)]

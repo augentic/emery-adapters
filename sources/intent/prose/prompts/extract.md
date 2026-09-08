@@ -1,6 +1,6 @@
 # intent.extract
 
-Emit one `Evidence` document from the operator's free-form brief, with `authority: intent` so the engine treats it as the highest-priority signal under the authority precedence (`intent > documentation > behaviour`) defined in [`authority.md`](../references/emery-runtime/synthesis/authority.md). The engine reconciles it with every other bound source's Evidence into the specification — see [From sources to a spec](../references/emery-runtime/reconciliation.md).
+Emit one `Evidence` document from the operator's free-form brief, with `authority: intent`. The engine reconciles it with every other bound source's Evidence into the specification — see [From sources to a spec](../references/emery-runtime/reconciliation.md).
 
 ## Inputs
 
