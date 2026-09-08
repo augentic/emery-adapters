@@ -13,9 +13,9 @@ use omnia_wasi_model::WasiModel;
 
 include!(concat!(env!("OUT_DIR"), "/gen.rs"));
 
-/// The versioned `source` interface the deployment declares as its plugin
-/// seam; tracks the `emery:adapter` WIT package the SDK embeds.
-pub const SOURCE_INTERFACE: &str = "emery:adapter/source@0.1.0";
+// The versioned `source` interface the deployment declares as its plugin
+// seam; tracks the `emery:adapter` WIT package the SDK embeds.
+const SOURCE_INTERFACE: &str = "emery:adapter/source@0.1.0";
 
 /// One caller run against one adapter component.
 #[derive(Clone, Copy, Debug)]

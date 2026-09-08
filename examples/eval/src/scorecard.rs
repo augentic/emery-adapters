@@ -7,8 +7,8 @@ use std::fmt::Write as _;
 /// product.md target: time to first reviewable specification.
 pub const TIME_TARGET_SECS: f64 = 30.0 * 60.0;
 
-/// product.md target: per-operation success rate.
-pub const OP_TARGET: f64 = 0.95;
+// product.md target: per-operation success rate.
+const OP_TARGET: f64 = 0.95;
 
 /// The dated scorecard over one full eval run.
 #[derive(Debug, Clone)]
@@ -66,15 +66,13 @@ pub enum Outcome {
 }
 
 impl Scorecard {
-    /// Worst wall-clock over the cases, seconds.
     #[must_use]
-    pub fn worst_secs(&self) -> f64 {
+    fn worst_secs(&self) -> f64 {
         self.cases.iter().map(|case| case.secs).fold(0.0, f64::max)
     }
 
-    /// Per-operation success rate over every recorded operation.
     #[must_use]
-    pub fn op_rate(&self) -> f64 {
+    fn op_rate(&self) -> f64 {
         let succeeded: u32 = self.cases.iter().map(|case| case.ops_succeeded).sum();
         let failed: u32 = self.cases.iter().map(|case| case.ops_failed).sum();
         let total = succeeded + failed;
