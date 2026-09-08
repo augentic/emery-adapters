@@ -78,7 +78,7 @@ Before a train publishes, these gates must hold:
 
 1. The tree builds against a **published** `emery:adapter` WIT pin.
 2. CI is green against a **released (or RC)** engine revision — the engine dependencies are tag-pinned (`tag = "vX.Y.Z"`), with no active sibling `[patch]` block.
-3. Every adapter's `emery-floor` names the minimum host that can run this train.
+3. Every adapter's `emery-version` names the minimum host that can run this train.
 4. Releasing a new SemVer: the GHCR version tag must not already exist for a first-time push of that train.
 
 **Publish Release** runs CI, tags and creates the GitHub Release, then release-builds every adapter and pushes each as a Wasm OCI artifact to `ghcr.io/augentic/emery-adapters/<name>:<version>` via the same `make release` / `make publish <name>` path used locally. The helper derives `<version>` from the workspace manifest.

@@ -19,7 +19,7 @@ What the engine calls:
 
 | Operation | Engine passes | You return | The engine does with it |
 | --------- | ------------- | ---------- | ----------------------- |
-| `metadata` | — | `SourceMetadata` | resolve-time record (compatibility floor) |
+| `metadata` | — | `SourceMetadata` | resolve-time record (`emery-version` gate) |
 | `extract` | `Context`, typed `SourceInput` (`key`, workspace-or-value) | `Evidence` | validates fail-closed (id grammar, required per-kind extras — A8), reconciles across sources, synthesises `spec.md` / `design.md` |
 
 Three ideas carry the operation:
@@ -138,7 +138,7 @@ impl SourceAdapter for Adapter {
     const IDENTITY: &str = concat!("changelog@", env!("CARGO_PKG_VERSION"));
 
     fn metadata() -> SourceMetadata {
-        SourceMetadata { emery_floor: Some("0.38.0".to_string()) }
+        SourceMetadata { emery_version: Some("0.38.0".to_string()) }
     }
 
     fn docs() -> &'static [Doc] {

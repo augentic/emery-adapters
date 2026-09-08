@@ -54,12 +54,12 @@ async fn drive(args: &[String]) -> Result<String, String> {
         content: parse_content(key, content)?,
     };
 
-    // A declared floor is an exact semver.
+    // A declared version is an exact semver.
     let metadata = Source::metadata(&Caller, id);
-    if let Some(floor) = &metadata.emery_floor
-        && floor.split('.').count() != 3
+    if let Some(version) = &metadata.emery_version
+        && version.split('.').count() != 3
     {
-        return Err(format!("`emery-floor` is not an exact semver: {floor}"));
+        return Err(format!("`emery-version` is not an exact semver: {version}"));
     }
 
     match (Source::extract(&Caller, id, &input).await, expected) {
