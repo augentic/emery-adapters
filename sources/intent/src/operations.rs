@@ -4,9 +4,8 @@
 
 use std::path::{Path, PathBuf};
 
-use emery_adapter::answers::{evidence_schema, evidence_tail};
-use emery_adapter::types::{Context, Error, Evidence, SourceContent, SourceInput, SourceMetadata};
-use emery_adapter::{Model, SourceAdapter, repaired};
+use emery_adapter::types::{Context, Error, Evidence, SourceContent, SourceInput};
+use emery_adapter::{Model, SourceAdapter, evidence};
 use emery_prose::registry::Doc;
 
 use crate::registry;
@@ -17,12 +16,6 @@ pub struct Adapter;
 
 impl SourceAdapter for Adapter {
     const IDENTITY: &str = concat!("intent@", env!("CARGO_PKG_VERSION"));
-
-    fn metadata() -> SourceMetadata {
-        SourceMetadata {
-            emery_version: Some("0.38.0".to_string()),
-        }
-    }
 
     fn docs() -> &'static [Doc] {
         registry::docs()
@@ -46,28 +39,24 @@ impl SourceAdapter for Adapter {
             key = input.key,
             content = content_note(input)?,
         );
-        let schema = evidence_schema();
-        repaired(model, ctx, system, user, "evidence", &schema, evidence_tail).await
+        evidence(model, ctx, system, user).await
     }
 }
 
+// The shared inline-value note; a one-file tree is read into the same shape.
 fn content_note(input: &SourceInput) -> Result<String, Error> {
     match &input.content {
         SourceContent::Value(value) => {
             require_brief(value)?;
-            Ok(format!(
-                "The bound material is this inline value; no `$SOURCE_DIR` is lent:\n\n{value}\n\n\
-                 Nothing else is reachable; extract works only from this value."
-            ))
+            Ok(emery_adapter::content_note(input, ""))
         }
-        SourceContent::Workspace(view) => {
-            let intent = single_file_intent(Path::new(&view.root))?;
+        SourceContent::Workspace(root) => {
+            let intent = single_file_intent(Path::new(root))?;
             require_brief(&intent)?;
             Ok(format!(
-                "The bound material is a one-file tree at `{}`; the operator's intent \
+                "The bound material is a one-file tree at `{root}`; the operator's intent \
                  string is:\n\n{intent}\n\n\
-                 Nothing else is reachable; extract works only from this value.",
-                view.root
+                 Nothing else is reachable; extract mines only this source."
             ))
         }
     }

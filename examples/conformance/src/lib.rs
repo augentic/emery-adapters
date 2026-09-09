@@ -13,10 +13,6 @@ use omnia_wasi_model::WasiModel;
 
 include!(concat!(env!("OUT_DIR"), "/gen.rs"));
 
-// The versioned `source` interface the deployment declares as its plugin
-// seam; tracks the `emery:adapter` WIT package the SDK embeds.
-const SOURCE_INTERFACE: &str = "emery:adapter/source@0.1.0";
-
 /// One caller run against one adapter component.
 #[derive(Clone, Copy, Debug)]
 pub struct Call<'a> {
@@ -40,7 +36,7 @@ pub struct Call<'a> {
 pub async fn run(call: Call<'_>, backends: Backends<ScriptedModel>) -> Result<ExitStatus> {
     // The runtime supplies argv[0]; the adapter id leads the caller's own.
     Deployment::new()
-        .plugins([SOURCE_INTERFACE])
+        .link(["emery:adapter/source@0.1.0"])
         .guest("caller", CALLER)
         .guest(call.id, call.wasm)
         .command("caller")

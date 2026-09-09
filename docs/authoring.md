@@ -26,7 +26,7 @@ Three ideas carry the operation:
 
 - **The model is a parameter.** `extract` is generic over `emery_adapter::Model`. On wasm the macro binds `WasiModel`; native tests bind `omnia_test::guest::Scripted` with scripted answers. Your code never constructs a backend.
 - **Prose is embedded at build time.** `build.rs` calls `emery_prose::emit("prose")` (the `emit` feature, enabled on the build-dependency only), which walks the adapter's `prose/` tree into a sorted `DOCS` table; `emery_prose::registry!()` exposes it as `registry::docs()` / `registry::body("prompts/extract.md")`. A dangling relative link in any prose document fails the build. Each judgment declares `list_docs` / `read_doc` function tools and answers the model's calls in-process from that embedded corpus, so prompts cite references by relative link instead of inlining them.
-- **Answers are schema-gated and repaired.** `emery_adapter::repaired(model, ctx, system, user, kind, SCHEMA, tail)` sends the prompt, parses the reply against a generated JSON schema, and re-prompts with the parse error up to `emery_adapter::MAX_REPAIRS` times before failing.
+- **Answers are steered by schema and judged by the gate.** `emery_adapter::evidence(model, ctx, system, user)` asks one `omnia_guest::model::Question<Evidence>`: the derived `Evidence` schema rides the request as a steering hint (the claim-id grammar as its `pattern`), and the claim gate is the request's `check` — run over every candidate the backend proposes, with a miss handed back as the correction (`## Previous answer (rejected)` / `## Findings`) so the backend asks again within its own round budget. The adapter never sees the reply text; it gets the accepted `Evidence`, or `Error::Internal` carrying the last findings once the rounds are spent. `emery_adapter::content_note(input, tree)` is the shared prompt fragment describing the bound workspace or inline value.
 
 For the type-level contract — `Context`, `SourceInput`, `Evidence`, the answer schemas — generate the SDK docs locally with `cargo doc -p emery-adapter --open`. The wire DTOs and the import-side `Source` capability are defined in `emery-source` and re-exported by the SDK, so an adapter names `emery_adapter::types::…` and never depends on `emery-source` directly.
 
@@ -123,9 +123,8 @@ pub use operations::Adapter;
 `src/operations.rs` implements `emery_adapter::SourceAdapter` on a unit struct. Condensed — the real `intent` and `documentation` files are worth reading in full:
 
 ```rust
-use emery_adapter::answers::{evidence_schema, evidence_tail};
-use emery_adapter::types::{Context, Error, Evidence, SourceContent, SourceInput, SourceMetadata};
-use emery_adapter::{Model, SourceAdapter, repaired};
+use emery_adapter::types::{Context, Error, Evidence, SourceInput};
+use emery_adapter::{Model, SourceAdapter, content_note, evidence};
 use emery_prose::registry::Doc;
 
 use crate::registry;
@@ -137,10 +136,6 @@ pub struct Adapter;
 impl SourceAdapter for Adapter {
     const IDENTITY: &str = concat!("changelog@", env!("CARGO_PKG_VERSION"));
 
-    fn metadata() -> SourceMetadata {
-        SourceMetadata { emery_version: Some("0.38.0".to_string()) }
-    }
-
     fn docs() -> &'static [Doc] {
         registry::docs()
     }
@@ -149,15 +144,6 @@ impl SourceAdapter for Adapter {
         model: &P, ctx: &Context<'_>, input: &SourceInput,
     ) -> Result<Evidence, Error> {
         let system = registry::body("prompts/extract.md").to_string();
-        let content = match &input.content {
-            SourceContent::Workspace(view) => format!(
-                "`$SOURCE_DIR` is the read-only view at `{}`; nothing outside it is reachable.",
-                view.root
-            ),
-            SourceContent::Value(value) => format!(
-                "The bound material is this inline value; no `$SOURCE_DIR` is lent:\n\n{value}"
-            ),
-        };
         let user = format!(
             "Extract the claim set of the changelog source bound to adapter `{id}` \
              (source key `{key}`).\n\n{content}\n\n\
@@ -166,25 +152,27 @@ impl SourceAdapter for Adapter {
              yourself.",
             id = ctx.adapter_id,
             key = input.key,
+            content = content_note(input, "the changelog tree"),
         );
-        let schema = evidence_schema();
-        repaired(model, ctx, system, user, "evidence", &schema, evidence_tail).await
+        evidence(model, ctx, system, user).await
     }
 }
 ```
+
+`metadata` is inherited: the SDK's default reports its own version as the exact `emery-version` pin, so an adapter overrides it only to loosen or tighten that pin.
 
 Points that generalize:
 
 - **Extract writes no artifacts.** The engine persists the Evidence; your job is to return a well-formed value. Say so explicitly in the prompt ("the caller persists…; do not write it yourself") because the model has workspace access.
 - **One pass, whole source.** There is no survey step and no lead focus: extract mines the whole bound source in one call. The binding arrives prepared — a tree as `SourceContent::Workspace` (lent as `$SOURCE_DIR`), an inline binding as `SourceContent::Value`.
-- **Required extras are fail-closed.** A `requirement` claim without a `statement` extra (or a `criterion` without `criterion`, an `example` without `replay-digest`) fails the SDK's answer tail, so the model gets a bounded repair; an answer still missing one after repair fails the whole run engine-side closed (typed `bad_request`) — never a synopsis fallback. Put the per-kind table and the id-derivation rules in the prompt; reconciliation joins claims across sources by their dotted-kebab ids.
-- **`repaired` owns the parse-and-retry loop.** Pick the schema constant and tail matching the operation.
+- **Required extras are fail-closed.** A `requirement` claim without a `statement` extra (or a `criterion` without `criterion`, an `example` without `replay-digest`) fails the SDK's `check`, so the backend corrects the candidate in place; an answer still missing one when the backend's rounds are spent fails the whole run engine-side closed (typed `bad_request`) — never a synopsis fallback. Put the per-kind table and the id-derivation rules in the prompt; reconciliation joins claims across sources by their dotted-kebab ids.
+- **`evidence` owns the question.** An adapter builds the prompt and nothing else; the schema, the gate, and the correction text are the SDK's and omnia's, and the round budget is the backend's.
 
 ### 5. Author the prose
 
 One prompt: `prose/prompts/extract.md` — the claim-kind table with each kind's required body field, the id-derivation rules, the JSON output contract, and a worked example. Shape rules are in [CONTRIBUTING.md § Prompt authoring](../CONTRIBUTING.md#prompt-authoring); depth goes in `prose/references/`, cited by relative link.
 
-Add the shared runtime references symlink so your prompt can cite the cross-adapter corpus ([reconciliation.md](../codex/references/runtime/reconciliation.md)):
+Add the shared runtime references symlink so your prompt can cite the cross-adapter corpus ([reconciliation.md](../codex/references/runtime/reconciliation.md) for the pipeline, [claims.md](../codex/references/runtime/claims.md) for the id grammar, `path` anchors, and the fail-closed gate — link it rather than restating those rules in your prompt):
 
 ```bash
 ln -s ../../../../codex/references/runtime sources/changelog/prose/references/emery-runtime

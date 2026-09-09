@@ -13,24 +13,20 @@ includes = ["mise-rust.toml"]
 # -------------------------------------
 
 [tasks.adapter]
-description = "Fast one-component wasm32-wasip2 release build"
 run = '''
 name="${1:?usage: make adapter <name>}"
 cargo build -p "$name" --target wasm32-wasip2 --release
 '''
 
 [tasks.eval]
-description = "Graded live eval (operator-invoked, never CI)"
 run = '''
 cargo run -p eval --release -- "$@"
 '''
 
 [tasks.release]
-description = "Release-build every adapter component (exclude the test-only crates: eval, caller, conformance)"
 run = "cargo build --workspace --exclude eval --exclude caller --exclude conformance --target wasm32-wasip2 --release"
 
 [tasks.publish]
-description = "Push one built component to its GHCR SemVer tag"
 run = '''
 name="${1:?usage: make publish <name>}"
 version="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version *= *"\(.*\)"/\1/p' Cargo.toml)"

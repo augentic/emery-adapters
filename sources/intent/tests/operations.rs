@@ -2,10 +2,7 @@
 
 use std::path::Path;
 
-use emery_adapter::answers::evidence_schema;
-use emery_adapter::types::{
-    Authority, ClaimKind, Context, Error, SourceContent, SourceInput, SourceWorkspace,
-};
+use emery_adapter::types::{Authority, ClaimKind, Context, Error, SourceInput};
 use emery_adapter::{Format, Request, SourceAdapter as _};
 use intent::Adapter;
 use omnia_test::guest::{Scripted, function_tools};
@@ -24,13 +21,7 @@ fn value_input() -> SourceInput {
 }
 
 fn workspace_input(root: &Path) -> SourceInput {
-    SourceInput {
-        key: "intent".to_string(),
-        content: SourceContent::Workspace(SourceWorkspace {
-            id: "view-1".to_string(),
-            root: root.display().to_string(),
-        }),
-    }
+    SourceInput::workspace("intent", root.display().to_string())
 }
 
 fn schema_format(request: &Request) -> (&str, &str) {
@@ -82,7 +73,12 @@ async fn extract_inline_value() {
     );
     let (name, schema) = schema_format(request);
     assert_eq!(name, "evidence");
-    assert_eq!(schema, evidence_schema());
+    let schema: serde_json::Value = serde_json::from_str(schema).expect("the schema is JSON");
+    assert!(
+        schema.pointer("/$defs/Claim/properties/id/pattern").is_some(),
+        "the claim-id grammar steers the answer"
+    );
+    assert!(request.check, "acceptance is the SDK's claim gate, not the reply text");
     assert!(request.workspace.is_none(), "inline value lends no workspace");
     let tools: Vec<&str> =
         function_tools(request).into_iter().map(|tool| tool.name.as_str()).collect();

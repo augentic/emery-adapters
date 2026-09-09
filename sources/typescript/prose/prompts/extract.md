@@ -37,21 +37,20 @@ This adapter emits from the closed enum:
 | `type` | `signature` (free-form) | A declared interface, type alias, class declaration, or DTO whose shape synthesis will need. |
 | `call` | `callee` (free-form) | An observed cross-module call that contributes to behaviour (the call is the wire). |
 
-**`requirement` claims are the reconciliation currency.** Only `kind: requirement` claims form spec requirement rows; `excerpt` / `type` / `call` claims reach synthesis as supporting context but can never agree, diverge, or conflict with another source. Every behavioural fact worth a spec block — a timeout value, a validation rule, an error response, a side effect — must be lifted into a `requirement` claim with a `statement`, anchored by its `path` and backed by detail claims. The engine's load gate is fail-closed: a `requirement` claim without a `statement` field fails the whole run closed (typed `bad_request`); there is no fallback to `synopsis`.
+**`requirement` claims are the reconciliation currency.** Only `kind: requirement` claims form spec requirement rows; `excerpt` / `type` / `call` claims reach synthesis as supporting context but can never agree, diverge, or conflict with another source. Every behavioural fact worth a spec block — a timeout value, a validation rule, an error response, a side effect — must be lifted into a `requirement` claim with a `statement`, anchored by its `path` and backed by detail claims. The gate is fail-closed ([claims.md](../references/emery-runtime/claims.md)): a `requirement` claim without a `statement` field fails the whole run closed (typed `bad_request`).
 
-`id` is **required** on `requirement` claims (dotted-kebab, e.g. `session.timeout`). Derive ids from the domain concept per the shared rules in [reconciliation.md](../references/emery-runtime/reconciliation.md) — never from file paths or positions — so a documentation source describing the same behaviour converges on the same id and the engine can reconcile any disagreement. `id` is optional on `excerpt` / `type` / `call`; you MAY carry it when the claim backs a specific requirement.
+`id` is **required** on `requirement` claims and follows the dotted-kebab grammar in claims.md (`session.timeout`). Derive ids from the domain concept — never from file paths or positions — so a documentation source describing the same behaviour converges on the same id and the engine can reconcile any disagreement. `id` is optional on `excerpt` / `type` / `call`; you MAY carry it when the claim backs a specific requirement.
 
 Code states behaviour, not acceptance: emit `criterion` claims only when the source itself encodes an explicit acceptance boundary (a documented threshold constant, a schema constraint). Requirements without criteria surface as `[unknown]` acceptance gaps in the spec — that is honest output, not a failure to fix by inventing criteria.
 
 ## Anchors and excerpts
 
-Every claim from the tree carries a `path` anchor: `<path>`, `<path>#L<n>`, or `<path>#L<start>-L<end>`, relative under `$SOURCE_DIR` (no leading `/`, no `..`, not under a skip root). Line numbers are 1-indexed at extract time. The anchor IS the citation; the body field carries short context.
+Every claim from the tree carries a `path` anchor in the grammar of [claims.md](../references/emery-runtime/claims.md) — `<path>#L<n>` or `<path>#L<start>-L<end>`, relative under `$SOURCE_DIR`, not under a skip root. The anchor IS the citation; the body field carries short context.
 
 Rules for the body fields:
 
 - **No raw file dumps.** Anchors point at the source; the JSON must not paraphrase or restate large spans. Keep `excerpt:` to a paragraph or so of focused context (the validation rule, the error response, the side effect) — never tens of lines of `"\n"`-separated source.
 - **One claim per concept.** Two overlapping excerpts of the same handler are noise; pick the smallest range that captures the behaviour.
-- **Stable spans across reruns.** Choose anchors at named-function or block boundaries when possible so re-extraction produces byte-stable Evidence even when surrounding lines shift slightly.
 - **Symbols, not phrasing.** `call.callee` is `<file>:<symbol>` — a named export (`src/users/repository.ts:insertUser`), a class method (`src/mail/mailer.ts:Mailer.send`), or a framework-suffixed inline arrow (`src/server.ts:post-/users`). `type.signature` is the declaration's source spelling (one line preferred; multi-line acceptable for short class headers).
 
 ## Worked example
@@ -102,4 +101,4 @@ Relative paths only, no `..`, no leading `/`, never under `node_modules`, `vendo
 | The tree holds no in-scope production source | Return `claims: []`; the engine preserves the gap rather than guessing. |
 | Read denied outside `$SOURCE_DIR` | The host returns a typed path-denied error; no Evidence is written. |
 | Production source uses an out-of-scope framework only | Emit any in-scope claims; the gap surfaces as `[unknown]` requirements in the spec. |
-| The answer fails the gated schema or id grammar | The caller rejects it and asks for a repaired answer with the findings; correct the named claims. |
+| The answer fails the claim gate (id grammar, or a claim missing its required field such as a `requirement`'s `statement`) | The caller rejects it and asks for a corrected answer with the findings; correct the named claims. |

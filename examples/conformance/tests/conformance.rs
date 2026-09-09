@@ -8,6 +8,7 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
+use caller::protocol;
 use conformance::{
     Backends, Call, SOURCE_DOCUMENTATION, SOURCE_INTENT, SOURCE_TYPESCRIPT, ScriptedModel, scratch,
 };
@@ -71,9 +72,11 @@ fn evidence(authority: &str) -> Value {
 // The shared happy path: the component instantiates under the runtime;
 // `metadata` answers without touching the model; `extract` opens exactly
 // one completion whose system prompt is the embedded `prompts/extract.md`,
-// whose declared tools are the reference tools, and whose `read_doc` call
-// comes back across the tool streams with that same embedded body; the
-// evidence lowers back to the caller with its required extras intact.
+// whose declared tools are the reference tools, whose `read_doc` call
+// comes back across the tool streams with that same embedded body, and
+// whose candidate is accepted by the guest's `check` over the same
+// streams; the evidence lowers back to the caller with its required
+// extras intact.
 async fn conforms(case: Case) {
     // --------------------------------------------------
     // Arrange.
@@ -82,7 +85,7 @@ async fn conforms(case: Case) {
     for (path, body) in case.files {
         project.write(path, body);
     }
-    let model = ScriptedModel::answering([evidence(case.authority)])
+    let model = ScriptedModel::answering([evidence(case.authority).to_string()])
         .calling(0, [("read_doc", r#"{"path":"prompts/extract.md"}"#)]);
     let backends = Backends::defaults().await.model(model);
 
@@ -93,7 +96,7 @@ async fn conforms(case: Case) {
         Call {
             id: case.id,
             wasm: case.wasm,
-            argv: &["source", "workspace"],
+            argv: &["source", protocol::WORKSPACE],
             project: &project,
         },
         backends.clone(),
@@ -115,15 +118,19 @@ async fn conforms(case: Case) {
         "the compiled-in extract prompt is the system prompt"
     );
     assert_eq!(request.tools, ["list_docs", "read_doc"], "the reference tools are declared");
+    assert!(request.check, "the guest judges each candidate over the check tool");
     assert!(request.messages[0].contains("source key `source`"), "{:?}", request.messages);
 
     let exchanges = backends.model.exchanges();
-    assert_eq!(exchanges.len(), 1, "one driven tool call");
+    assert_eq!(exchanges.len(), 2, "one driven tool call, then the check");
+    assert_eq!(exchanges[0].tool, "read_doc");
     let answer: Value =
         serde_json::from_str(exchanges[0].outcome.as_ref().expect("read_doc answered"))
             .expect("a JSON answer");
     assert_eq!(answer["path"], "prompts/extract.md");
     assert_eq!(answer["body"], case.prompt, "the embedded document body crosses the seam");
+    assert_eq!(exchanges[1].tool, "check");
+    assert_eq!(exchanges[1].outcome, Ok(String::new()), "the candidate passed the claim gate");
 }
 
 #[tokio::test]
@@ -149,13 +156,14 @@ async fn typed_error() {
     let project = scratch();
     project.write("a.md", "one\n");
     project.write("b.md", "two\n");
-    let backends = Backends::defaults().await.model(ScriptedModel::answering([]));
+    let backends = Backends::defaults().await.model(ScriptedModel::answering::<String>([]));
+    let refusal = protocol::expect_error("invalid-request");
 
     let status = conformance::run(
         Call {
             id: INTENT.id,
             wasm: INTENT.wasm,
-            argv: &["source", "workspace", "expect-error:invalid-request"],
+            argv: &["source", protocol::WORKSPACE, &refusal],
             project: &project,
         },
         backends.clone(),

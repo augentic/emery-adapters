@@ -22,12 +22,11 @@ The verbatim `intent` claim preserves the operator's words for the reviewer. The
 ## `id` derivation
 
 - The `intent` claim's `id` is the source key, keeping the document deterministic and idempotent — re-running the same `(key, value)` pair yields a byte-identical Evidence document.
-- `requirement` ids follow the shared cross-source rules ([reconciliation.md](../references/emery-runtime/reconciliation.md)): dotted-kebab, derived from the domain concept the directive governs (`session.timeout`, `search.filter`), never positional. When the brief overrides something the docs or code also describe, converging on the same id is what lets intent win the group.
-- A `criterion` id must equal its requirement's id or extend it with a dotted suffix.
+- `requirement` and `criterion` ids follow [claims.md](../references/emery-runtime/claims.md): dotted-kebab, derived from the domain concept the directive governs (`session.timeout`, `search.filter`), never positional. When the brief overrides something the docs or code also describe, converging on the same id is what lets intent win the group.
 
 ## Output contract
 
-Return one JSON object matching the gated schema — the Evidence body:
+Return one JSON object matching the Evidence schema the request carries — the Evidence body:
 
 ```json
 {
@@ -70,4 +69,4 @@ Output — the Evidence body:
 ## Notes
 
 - Empty `claims: []` is schema-valid for sources with nothing to say, but the intent adapter is never legitimately empty — the binding exists because the operator supplied a brief. Treat an empty value as an extract failure, never an empty success.
-- The engine's load gate is fail-closed: a `requirement` claim without a `statement` field fails the whole run closed (typed `bad_request`). There is no fallback to `synopsis`.
+- The gate is fail-closed ([claims.md](../references/emery-runtime/claims.md)): a `requirement` claim without a `statement` field fails the whole run closed (typed `bad_request`).

@@ -22,6 +22,7 @@ emery-prose.workspace = true
 emery-prose = { workspace = true, features = ["emit"] }
 
 [dev-dependencies]
+serde_json.workspace = true
 tempfile.workspace = true
 tokio.workspace = true
 
