@@ -2,8 +2,8 @@
 
 use std::path::Path;
 
-use emery_adapter::types::{Authority, ClaimKind, Context, Error, SourceInput};
-use emery_adapter::{Format, Request, SourceAdapter as _};
+use emery_adapter::types::{Authority, ClaimKind, Context, SourceInput};
+use emery_adapter::{Error, Format, Request, SourceAdapter as _};
 use intent::Adapter;
 use omnia_test::guest::{Scripted, function_tools};
 
@@ -118,7 +118,7 @@ async fn multi_file_rejected() {
 
     let result = Adapter::extract(&model, &ctx(), &workspace_input(root.path())).await;
 
-    assert!(matches!(result, Err(Error::InvalidRequest(_))), "got {result:?}");
+    assert!(matches!(result, Err(Error::BadRequest { .. })), "got {result:?}");
     assert!(model.requests().is_empty(), "no judgment leg runs on a malformed input");
 }
 
@@ -129,7 +129,7 @@ async fn empty_workspace_rejected() {
 
     let result = Adapter::extract(&model, &ctx(), &workspace_input(root.path())).await;
 
-    assert!(matches!(result, Err(Error::InvalidRequest(_))), "got {result:?}");
+    assert!(matches!(result, Err(Error::BadRequest { .. })), "got {result:?}");
     assert!(model.requests().is_empty(), "no judgment leg runs on a malformed input");
 }
 
@@ -140,12 +140,12 @@ async fn empty_brief_rejected() {
     let model = Scripted::default();
 
     let inline = Adapter::extract(&model, &ctx(), &SourceInput::value("intent", "  \n")).await;
-    assert!(matches!(inline, Err(Error::InvalidRequest(_))), "got {inline:?}");
+    assert!(matches!(inline, Err(Error::BadRequest { .. })), "got {inline:?}");
 
     let root = tempfile::tempdir().unwrap();
     std::fs::write(root.path().join("intent.md"), "\n\t \n").unwrap();
     let tree = Adapter::extract(&model, &ctx(), &workspace_input(root.path())).await;
-    assert!(matches!(tree, Err(Error::InvalidRequest(_))), "got {tree:?}");
+    assert!(matches!(tree, Err(Error::BadRequest { .. })), "got {tree:?}");
 
     assert!(model.requests().is_empty(), "no judgment leg runs on an empty brief");
 }

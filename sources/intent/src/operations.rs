@@ -4,8 +4,8 @@
 
 use std::path::{Path, PathBuf};
 
-use emery_adapter::types::{Context, Error, Evidence, SourceContent, SourceInput};
-use emery_adapter::{Model, SourceAdapter, evidence};
+use emery_adapter::types::{Context, Evidence, SourceContent, SourceInput};
+use emery_adapter::{Error, Model, SourceAdapter, bad_request, evidence, server_error};
 use emery_prose::registry::Doc;
 
 use crate::registry;
@@ -66,7 +66,7 @@ fn content_note(input: &SourceInput) -> Result<String, Error> {
 // spending a model call, never answer an empty success.
 fn require_brief(brief: &str) -> Result<(), Error> {
     if brief.trim().is_empty() {
-        return Err(Error::InvalidRequest("intent brief is empty".to_string()));
+        return Err(bad_request!("intent brief is empty"));
     }
     Ok(())
 }
@@ -75,16 +75,18 @@ fn single_file_intent(root: &Path) -> Result<String, Error> {
     let mut files = Vec::new();
     collect_files(root, &mut files)?;
     match files.as_slice() {
-        [file] => std::fs::read_to_string(file).map_err(|err| Error::Io(err.to_string())),
-        _ => Err(Error::InvalidRequest(format!("intent expects one file, found {}", files.len()))),
+        [file] => std::fs::read_to_string(file)
+            .map_err(|err| server_error!("reading `{}`: {err}", file.display())),
+        _ => Err(bad_request!("intent expects one file, found {}", files.len())),
     }
 }
 
 // The one-file tree encoding may nest, so the walk is recursive.
 fn collect_files(dir: &Path, files: &mut Vec<PathBuf>) -> Result<(), Error> {
-    for entry in std::fs::read_dir(dir).map_err(|err| Error::Io(err.to_string()))? {
-        let entry = entry.map_err(|err| Error::Io(err.to_string()))?;
-        let file_type = entry.file_type().map_err(|err| Error::Io(err.to_string()))?;
+    let unreadable = |err: std::io::Error| server_error!("reading `{}`: {err}", dir.display());
+    for entry in std::fs::read_dir(dir).map_err(unreadable)? {
+        let entry = entry.map_err(unreadable)?;
+        let file_type = entry.file_type().map_err(unreadable)?;
         if file_type.is_dir() {
             collect_files(&entry.path(), files)?;
         } else if file_type.is_file() {

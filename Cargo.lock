@@ -991,7 +991,6 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 [[package]]
 name = "emery-adapter"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#638c084ee4fbfb999dcf83a1ceeac33d0cadadf1"
 dependencies = [
  "emery-prose",
  "emery-source",
@@ -1002,7 +1001,6 @@ dependencies = [
 [[package]]
 name = "emery-prose"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#638c084ee4fbfb999dcf83a1ceeac33d0cadadf1"
 dependencies = [
  "anyhow",
 ]
@@ -1010,14 +1008,12 @@ dependencies = [
 [[package]]
 name = "emery-source"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#638c084ee4fbfb999dcf83a1ceeac33d0cadadf1"
 dependencies = [
  "omnia-guest",
  "schemars",
  "serde",
  "serde_json",
  "strum 0.28.0",
- "thiserror 2.0.20",
  "wit-bindgen 0.61.1",
 ]
 

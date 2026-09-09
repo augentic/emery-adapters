@@ -1,5 +1,5 @@
-use emery_adapter::types::{Context, Error, Evidence, SourceInput};
-use emery_adapter::{Model, SourceAdapter, content_note, evidence};
+use emery_adapter::types::{Context, Evidence, SourceInput};
+use emery_adapter::{Error, Model, SourceAdapter, content_note, evidence};
 use emery_prose::registry::Doc;
 
 use crate::registry;

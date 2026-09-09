@@ -2,8 +2,8 @@
 
 use std::path::Path;
 
-use emery_adapter::types::{Authority, ClaimKind, Context, Error, SourceInput};
-use emery_adapter::{Format, Request, SourceAdapter as _, ToolCall};
+use emery_adapter::types::{Authority, ClaimKind, Context, SourceInput};
+use emery_adapter::{Error, Format, Request, SourceAdapter as _, ToolCall};
 use emery_prose::registry::Doc;
 use omnia_test::guest::{Scripted, function_tools};
 use typescript::Adapter;
@@ -158,7 +158,7 @@ async fn extract_repaired() {
     assert_eq!(exchanges[1].outcome, Ok(String::new()));
 }
 
-// A backend out of rounds surfaces the last failure — a typed error
+// A backend out of rounds surfaces the last failure — a `bad_request`
 // carrying the findings, never an empty success.
 #[tokio::test]
 async fn extract_budget_exhausted() {
@@ -169,8 +169,8 @@ async fn extract_budget_exhausted() {
     let result = Adapter::extract(&model, &ctx(&[]), &workspace_input()).await;
 
     match result {
-        Err(Error::Internal(detail)) => {
-            assert!(detail.contains("`Not.Valid`"), "detail: {detail}");
+        Err(Error::BadRequest { description, .. }) => {
+            assert!(description.contains("`Not.Valid`"), "description: {description}");
         }
         other => panic!("expected the last gate failure, got {other:?}"),
     }

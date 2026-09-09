@@ -26,7 +26,8 @@ Three ideas carry the operation:
 
 - **The model is a parameter.** `extract` is generic over `emery_adapter::Model`. On wasm the macro binds `WasiModel`; native tests bind `omnia_test::guest::Scripted` with scripted answers. Your code never constructs a backend.
 - **Prose is embedded at build time.** `build.rs` calls `emery_prose::emit("prose")` (the `emit` feature, enabled on the build-dependency only), which walks the adapter's `prose/` tree into a sorted `DOCS` table; `emery_prose::registry!()` exposes it as `registry::docs()` / `registry::body("prompts/extract.md")`. A dangling relative link in any prose document fails the build. Each judgment declares `list_docs` / `read_doc` function tools and answers the model's calls in-process from that embedded corpus, so prompts cite references by relative link instead of inlining them.
-- **Answers are steered by schema and judged by the gate.** `emery_adapter::evidence(model, ctx, system, user)` asks one `omnia_guest::model::Question<Evidence>`: the derived `Evidence` schema rides the request as a steering hint (the claim-id grammar as its `pattern`), and the claim gate is the request's `check` — run over every candidate the backend proposes, with a miss handed back as the correction (`## Previous answer (rejected)` / `## Findings`) so the backend asks again within its own round budget. The adapter never sees the reply text; it gets the accepted `Evidence`, or `Error::Internal` carrying the last findings once the rounds are spent. `emery_adapter::content_note(input, tree)` is the shared prompt fragment describing the bound workspace or inline value.
+- **Answers are steered by schema and judged by the gate.** `emery_adapter::evidence(model, ctx, system, user)` asks one `omnia_guest::model::Question<Evidence>`: the derived `Evidence` schema rides the request as a steering hint (the claim-id grammar as its `pattern`), and the claim gate is the request's `check` — run over every candidate the backend proposes, with a miss handed back as the correction (`## Previous answer (rejected)` / `## Findings`) so the backend asks again within its own round budget. The adapter never sees the reply text; it gets the accepted `Evidence`, or a `bad_request` carrying the last findings once the rounds are spent. `emery_adapter::content_note(input, tree)` is the shared prompt fragment describing the bound workspace or inline value.
+- **Failures are Omnia errors.** Every operation fails with `emery_adapter::Error` (omnia's `omnia_guest::Error`), built with the re-exported `bad_request!` / `server_error!` / `bad_gateway!` macros — there is no adapter error type. Classify by who acts: a source the adapter cannot accept (an empty brief, a tree that is not the expected shape) is `bad_request!`; an unreadable file or a failed upstream is `server_error!` / `bad_gateway!`. The SDK lowers the class to the WIT `error` variant at the export, the engine lifts it back, and it surfaces to the operator as the matching exit code.
 
 For the type-level contract — `Context`, `SourceInput`, `Evidence`, the answer schemas — generate the SDK docs locally with `cargo doc -p emery-adapter --open`. The wire DTOs and the import-side `Source` capability are defined in `emery-source` and re-exported by the SDK, so an adapter names `emery_adapter::types::…` and never depends on `emery-source` directly.
 
@@ -123,8 +124,8 @@ pub use operations::Adapter;
 `src/operations.rs` implements `emery_adapter::SourceAdapter` on a unit struct. Condensed — the real `intent` and `documentation` files are worth reading in full:
 
 ```rust
-use emery_adapter::types::{Context, Error, Evidence, SourceInput};
-use emery_adapter::{Model, SourceAdapter, content_note, evidence};
+use emery_adapter::types::{Context, Evidence, SourceInput};
+use emery_adapter::{Error, Model, SourceAdapter, content_note, evidence};
 use emery_prose::registry::Doc;
 
 use crate::registry;
@@ -182,7 +183,7 @@ The embed walker follows symlinks and fails the build on any dangling relative l
 
 ### 6. Test natively
 
-`tests/operations.rs` drives the trait with a scripted model — no wasm, no network. The assertions worth making: "did my prompt content land in the assembled request", "does the parsed answer round-trip", and "do required extras arrive verbatim in `Evidence`". Mirror the existing adapters' suites, including their fail-closed cases (an unreadable source is a typed error, never empty success). Also add a `tests/registry.rs` pinning that every prompt path your operations load is actually embedded — and that no survey prose exists.
+`tests/operations.rs` drives the trait with a scripted model — no wasm, no network. The assertions worth making: "did my prompt content land in the assembled request", "does the parsed answer round-trip", and "do required extras arrive verbatim in `Evidence`". Mirror the existing adapters' suites, including their fail-closed cases (a source the adapter cannot accept is a `bad_request`, never empty success — match on `Error::BadRequest { .. }`). Also add a `tests/registry.rs` pinning that every prompt path your operations load is actually embedded — and that no survey prose exists.
 
 Run with `cargo nextest run -p changelog` (never bare `cargo test` — see [testing.md](testing.md)).
 

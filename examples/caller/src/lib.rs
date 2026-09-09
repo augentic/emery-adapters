@@ -3,7 +3,7 @@
 //! asserts the wire shape. Exit `0` means every assertion held.
 //!
 //! ```text
-//! caller <adapter-id> <key> <workspace|value:TEXT> [expect-error:<variant>]
+//! caller <adapter-id> <key> <workspace|value:TEXT> [expect-error:<code>]
 //! ```
 
 /// The caller's argv vocabulary, shared with the native conformance suite
@@ -13,20 +13,21 @@ pub mod protocol {
     pub const WORKSPACE: &str = "workspace";
     /// Content prefix carrying an inline value: `value:TEXT`.
     pub const VALUE: &str = "value:";
-    /// Flag prefix naming the typed error the run must refuse with.
+    /// Flag prefix naming the Omnia error code (`bad_request`,
+    /// `bad_gateway`) the run must refuse with, as lifted from the wire.
     pub const EXPECT_ERROR: &str = "expect-error:";
 
-    /// The `expect-error:<variant>` flag for `variant`.
+    /// The `expect-error:<code>` flag for `code`.
     #[must_use]
-    pub fn expect_error(variant: &str) -> String {
-        format!("{EXPECT_ERROR}{variant}")
+    pub fn expect_error(code: &str) -> String {
+        format!("{EXPECT_ERROR}{code}")
     }
 }
 
 #[cfg(target_arch = "wasm32")]
 mod guest {
-    use emery_source::types::{Error, Evidence, SourceContent, SourceInput};
-    use emery_source::{DispatchError, Source};
+    use emery_source::Source;
+    use emery_source::types::{Evidence, SourceContent, SourceInput};
 
     use crate::protocol;
 
@@ -57,7 +58,7 @@ mod guest {
     async fn drive(args: &[String]) -> Result<String, String> {
         let [_, id, key, content, rest @ ..] = args else {
             return Err(format!(
-                "usage: caller <adapter-id> <key> <workspace|value:TEXT> [expect-error:<variant>]; \
+                "usage: caller <adapter-id> <key> <workspace|value:TEXT> [expect-error:<code>]; \
                  got {args:?}"
             ));
         };
@@ -91,16 +92,16 @@ mod guest {
                     evidence.claims.len()
                 ))
             }
-            (Err(err), Some(variant)) => {
-                let got = variant_of(&err);
-                if got == variant {
-                    Ok(format!("{id}: extract refused `{variant}`: {err}"))
+            (Err(err), Some(code)) => {
+                let (got, detail) = (err.code(), err.description());
+                if got == code {
+                    Ok(format!("{id}: extract refused `{code}`: {detail}"))
                 } else {
-                    Err(format!("expected error `{variant}`, got `{got}`: {err}"))
+                    Err(format!("expected error `{code}`, got `{got}`: {detail}"))
                 }
             }
-            (Ok(_), Some(variant)) => Err(format!("expected error `{variant}`, extract succeeded")),
-            (Err(err), None) => Err(format!("extract failed: {err}")),
+            (Ok(_), Some(code)) => Err(format!("expected error `{code}`, extract succeeded")),
+            (Err(err), None) => Err(format!("extract failed: {}", err.description())),
         }
     }
 
@@ -120,22 +121,16 @@ mod guest {
             })
     }
 
-    fn variant_of(err: &DispatchError) -> &'static str {
-        match err {
-            DispatchError::Call(Error::InvalidRequest(_)) => "invalid-request",
-            DispatchError::Call(Error::Io(_)) => "io",
-            DispatchError::Call(Error::Internal(_)) => "internal",
-            DispatchError::Extras { .. } => "extras",
-        }
-    }
-
     // The contract's fail-closed gate holds across the wire, and every
     // required extra lowers as a string rather than a re-encoded value.
     fn check_evidence(evidence: &Evidence) -> Result<(), String> {
         if evidence.claims.is_empty() {
             return Err("evidence carries no claims".to_string());
         }
-        evidence.validate().map_err(|err| err.to_string())?;
+        let findings = evidence.findings();
+        if !findings.is_empty() {
+            return Err(findings.join("; "));
+        }
         for claim in &evidence.claims {
             for key in claim.kind.required_extras() {
                 if !claim.extras.get(*key).is_some_and(serde_json::Value::is_string) {
