@@ -1,4 +1,4 @@
-//! Intent bindings carry the operator's free-form brief — inline
+//! Intent sources carry the operator's free-form brief — inline
 //! (`value:`) or as a one-file tree. Extract preserves the brief
 //! verbatim and lifts its directives into requirement claims.
 
@@ -10,7 +10,7 @@ use emery_prose::registry::Doc;
 
 use crate::registry;
 
-/// Intent binding → one Evidence document with one `kind: intent` claim.
+/// Intent source → one Evidence document with one `kind: intent` claim.
 #[derive(Clone, Copy, Debug)]
 pub struct Adapter;
 
@@ -62,7 +62,7 @@ fn content_note(input: &SourceInput) -> Result<String, Error> {
     }
 }
 
-// An intent binding is never legitimately empty: fail closed before
+// An intent source is never legitimately empty: fail closed before
 // spending a model call, never answer an empty success.
 fn require_brief(brief: &str) -> Result<(), Error> {
     if brief.trim().is_empty() {

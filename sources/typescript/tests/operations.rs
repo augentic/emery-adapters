@@ -82,7 +82,7 @@ async fn extract_leg() {
     assert!(system.contains("bad_request"), "prompt names the fail-closed gate");
     let user = &request.messages[0].content;
     assert!(user.contains("source key `legacy-monolith`"), "passed source key is named");
-    assert!(user.contains("$SOURCE_DIR"), "binding is mapped onto the prompt's vocabulary");
+    assert!(user.contains("$SOURCE_DIR"), "source is mapped onto the prompt's vocabulary");
     assert!(user.contains("extract mines only this source"), "nothing else is reachable");
     assert!(user.contains("`read_doc` tool"), "the reference pull affordance is named");
     assert!(

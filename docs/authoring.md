@@ -164,7 +164,7 @@ impl SourceAdapter for Adapter {
 Points that generalize:
 
 - **Extract writes no artifacts.** The engine persists the Evidence; your job is to return a well-formed value. Say so explicitly in the prompt ("the caller persists…; do not write it yourself") because the model has workspace access.
-- **One pass, whole source.** There is no survey step and no lead focus: extract mines the whole bound source in one call. The binding arrives prepared — a tree as `SourceContent::Workspace` (lent as `$SOURCE_DIR`), an inline binding as `SourceContent::Value`.
+- **One pass, whole source.** There is no survey step and no lead focus: extract mines the whole bound source in one call. The source arrives prepared — a tree as `SourceContent::Workspace` (lent as `$SOURCE_DIR`), an inline source as `SourceContent::Value`.
 - **Required extras are fail-closed.** A `requirement` claim without a `statement` extra (or a `criterion` without `criterion`, an `example` without `replay-digest`) fails the SDK's `check`, so the backend corrects the candidate in place; an answer still missing one when the backend's rounds are spent fails the whole run engine-side closed (typed `bad_request`) — never a synopsis fallback. Put the per-kind table and the id-derivation rules in the prompt; reconciliation joins claims across sources by their dotted-kebab ids.
 - **`evidence` owns the question.** An adapter builds the prompt and nothing else; the schema, the gate, and the correction text are the SDK's and omnia's, and the round budget is the backend's.
 
@@ -182,7 +182,7 @@ The embed walker follows symlinks and fails the build on any dangling relative l
 
 ### 6. Test natively
 
-`tests/operations.rs` drives the trait with a scripted model — no wasm, no network. The assertions worth making: "did my prompt content land in the assembled request", "does the parsed answer round-trip", and "do required extras arrive verbatim in `Evidence`". Mirror the existing adapters' suites, including their fail-closed cases (an unreadable binding is a typed error, never empty success). Also add a `tests/registry.rs` pinning that every prompt path your operations load is actually embedded — and that no survey prose exists.
+`tests/operations.rs` drives the trait with a scripted model — no wasm, no network. The assertions worth making: "did my prompt content land in the assembled request", "does the parsed answer round-trip", and "do required extras arrive verbatim in `Evidence`". Mirror the existing adapters' suites, including their fail-closed cases (an unreadable source is a typed error, never empty success). Also add a `tests/registry.rs` pinning that every prompt path your operations load is actually embedded — and that no survey prose exists.
 
 Run with `cargo nextest run -p changelog` (never bare `cargo test` — see [testing.md](testing.md)).
 

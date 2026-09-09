@@ -4,8 +4,8 @@ The engine invokes this prompt once per bound `typescript` source. Your job: wal
 
 ## Inputs
 
-- **`$SOURCE_DIR`** — read-only view of the bound source root. Walk it; resolve `tsconfig.json` `paths` mappings relative to it. Absent when the binding is an inline `value` (the material is then in the message).
-- **Source key** — the kebab-case binding key the engine passed on the wire.
+- **`$SOURCE_DIR`** — read-only view of the bound source root. Walk it; resolve `tsconfig.json` `paths` mappings relative to it. Absent when the source is an inline `value` (the material is then in the message).
+- **Source key** — the kebab-case source key the engine passed on the wire.
 
 Nothing outside the bound source is reachable; writes back into `$SOURCE_DIR` are denied. Extract mines the entire estate in one pass: every entry point, handler, and domain module in scope.
 
@@ -76,7 +76,7 @@ Resulting Evidence body:
 }
 ```
 
-Two requirement rows for the spec, three detail claims backing them. `authority` is fixed at `behaviour` for this adapter. The document's source identity is stamped by the engine from the binding — it is not written in-document.
+Two requirement rows for the spec, three detail claims backing them. `authority` is fixed at `behaviour` for this adapter. The document's source identity is stamped by the engine from the source — it is not written in-document.
 
 **Cover what the estate actually does.** A `POST /orders` handler that writes an orders store must carry that write as a `call` claim and its behaviour as a `requirement`; a handler that invokes an external service must carry that call site. Downstream correlation evidences invocation, read/write, and ownership relationships from these structured claims — do not bury them in `excerpt` prose, and do not write a second behavioural spec in prose instead of emitting the structured claims.
 

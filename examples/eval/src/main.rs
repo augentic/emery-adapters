@@ -176,12 +176,12 @@ fn run_case(case: &Case, paths: &Paths) -> CaseResult {
         std::fs::copy(paths.component(component), &staged).expect("stage component");
     }
 
-    // One extract per source binding (workspace components plus the
+    // One extract per source (workspace components plus the
     // inline intent) and one synthesis.
     let extracts = u32::try_from(case.components.len()).expect("case size") + 1;
     let started = Instant::now();
 
-    // One `specify` run carries the whole binding list — nothing about
+    // One `specify` run carries the whole source list — nothing about
     // it persists between runs.
     let mut specify: Vec<String> = vec!["--format".into(), "json".into(), "specify".into()];
     for component in case.components {

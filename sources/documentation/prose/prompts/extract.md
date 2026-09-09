@@ -4,8 +4,8 @@ Walk the whole bound documentation source and return one `Evidence` document of 
 
 ## Inputs
 
-- `$SOURCE_DIR` — read-only view of the bound documentation tree. Absent when the binding is an inline `value` (the material is then in the message).
-- **Source key** — the authored binding key the engine passed on the wire.
+- `$SOURCE_DIR` — read-only view of the bound documentation tree. Absent when the source is an inline `value` (the material is then in the message).
+- **Source key** — the authored source key the engine passed on the wire.
 
 Nothing outside the bound source is reachable. Extract mines this source completely in one pass: every document in the tree, top to bottom.
 
@@ -37,7 +37,7 @@ Return one JSON object matching the Evidence schema the request carries — the 
 }
 ```
 
-`authority` is always the literal `documentation` (operator-provided written product/technical intent). The document's source identity is stamped by the engine from the binding — it is not written in-document.
+`authority` is always the literal `documentation` (operator-provided written product/technical intent). The document's source identity is stamped by the engine from the source — it is not written in-document.
 
 ## Worked example
 

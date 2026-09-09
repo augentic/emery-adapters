@@ -76,7 +76,7 @@ async fn extract_leg() {
     assert!(system.contains("bad_request"), "prompt names the fail-closed gate");
     let user = &request.messages[0].content;
     assert!(user.contains("source key `docs`"), "passed source key is named");
-    assert!(user.contains("$SOURCE_DIR"), "binding is mapped onto the prompt's vocabulary");
+    assert!(user.contains("$SOURCE_DIR"), "source is mapped onto the prompt's vocabulary");
     assert!(user.contains("extract mines only this source"), "nothing else is reachable");
     let (name, schema) = schema_format(request);
     assert_eq!(name, "evidence");
@@ -92,7 +92,7 @@ async fn extract_leg() {
     assert_eq!(tools, ["list_docs", "read_doc"], "the reference tools are declared");
 }
 
-// An inline `value:` binding lends no workspace: the material rides in
+// An inline `value:` source lends no workspace: the material rides in
 // the user message and the judgment leg gets no filesystem grant.
 #[tokio::test]
 async fn extract_value_no_lend() {

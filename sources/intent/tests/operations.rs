@@ -63,7 +63,7 @@ async fn extract_inline_value() {
     assert!(request.system.as_deref().unwrap().starts_with("# intent.extract"));
     let user = &request.messages[0].content;
     assert!(user.contains("source key `intent`"), "passed source key is named");
-    assert!(user.contains("inline value"), "prompt names the inline binding");
+    assert!(user.contains("inline value"), "prompt names the inline source");
     assert!(user.contains("no `$SOURCE_DIR` is lent"), "prompt says no source tree is bound");
     assert!(user.contains("Let users reset passwords by email."), "value is on the wire");
     assert!(user.contains("verbatim"), "the echo contract is stated");
@@ -103,7 +103,7 @@ async fn single_file_workspace() {
         user.contains("Let users reset passwords by email."),
         "the located file's contents are interpolated as the intent string"
     );
-    assert!(user.contains("one-file tree"), "prompt names the tree binding");
+    assert!(user.contains("one-file tree"), "prompt names the tree source");
 }
 
 // An unreadable source fails closed before any judgment leg: a tree
@@ -133,7 +133,7 @@ async fn empty_workspace_rejected() {
     assert!(model.requests().is_empty(), "no judgment leg runs on a malformed input");
 }
 
-// The intent binding is never legitimately empty (the prompt's own
+// The intent source is never legitimately empty (the prompt's own
 // contract): an empty brief is a typed refusal, never an empty success.
 #[tokio::test]
 async fn empty_brief_rejected() {
