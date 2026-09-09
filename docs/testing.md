@@ -88,7 +88,7 @@ A `TOTAL` line/region drop on still-live code means real coverage was lost: back
 
 ## Test naming
 
-Test function names are identifiers, not sentences. The enclosing `tests/<area>.rs` module already names the subject — don't restate it in every `fn`. Push the narrative into the test body or a `//` comment above the `fn`.
+Test function names are identifiers, not sentences — name the *scenario* (`well_formed`, `empty_workspace`), never the outcome (`well_formed_spec_passes`, `empty_workspace_rejected`). The enclosing `tests/<area>.rs` module already names the subject — don't restate it in every `fn`. Push the narrative into the `//` comment above the `fn`. The identifier cap is ≤ 25 characters (review-only; same rule as the engine).
 
 ## Definition of done for a reduction
 

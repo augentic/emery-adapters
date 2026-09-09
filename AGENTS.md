@@ -31,7 +31,7 @@ Adapter `prose/` trees are compiled into their components:
 
 ## Rust and testing
 
-The external Rust baseline is the [Pragmatic Rust Guidelines](https://microsoft.github.io/rust-guidelines/guidelines/index.html), layered under the engine repo's [docs/standards/](https://github.com/augentic/emery/tree/main/docs/standards) house deltas (deltas win). Follow the workspace lint configuration in `Cargo.toml`. Identifier and comment density caps live in the engine [coding-standards.md](https://github.com/augentic/emery/blob/main/docs/standards/coding-standards.md) and are review-only. `make lint` runs clippy (`clippy.toml` carries the guest deny-list).
+The external Rust baseline is the [Pragmatic Rust Guidelines](https://microsoft.github.io/rust-guidelines/guidelines/index.html), layered under the engine repo's [docs/standards/](https://github.com/augentic/emery/tree/main/docs/standards) house deltas (deltas win). Follow the workspace lint configuration in `Cargo.toml`. Identifier and comment density caps live in the engine [coding-standards.md](https://github.com/augentic/emery/blob/main/docs/standards/coding-standards.md) and are review-only. A test `fn` names the scenario (`well_formed`), never the outcome (`well_formed_spec_passes`). `make lint` runs clippy (`clippy.toml` carries the guest deny-list).
 
 Testing is integration-first:
 

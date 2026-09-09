@@ -106,7 +106,7 @@ async fn extract_leg() {
 // A scripted `read_doc` call round-trips through the judgment's tool
 // closure: the answer is the embedded reference body as a JSON object.
 #[tokio::test]
-async fn closure_reference_pull() {
+async fn ref_pull() {
     let docs = Adapter::docs();
     let doc = docs
         .iter()
@@ -161,7 +161,7 @@ async fn extract_repaired() {
 // A backend out of rounds surfaces the last failure — a `bad_request`
 // carrying the findings, never an empty success.
 #[tokio::test]
-async fn extract_budget_exhausted() {
+async fn spent_budget() {
     let model = Scripted::answering([
         r#"{"authority":"behaviour","claims":[{"kind":"requirement","id":"Not.Valid"}]}"#,
     ]);

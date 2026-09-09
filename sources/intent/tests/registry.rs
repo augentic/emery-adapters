@@ -7,7 +7,7 @@ use emery_prose::registry::{body, find};
 use intent::Adapter;
 
 #[test]
-fn embeds_extract_prompt() {
+fn extract_prompt() {
     assert!(body(Adapter::docs(), "prompts/extract.md").starts_with("# intent.extract"));
 }
 
@@ -27,7 +27,7 @@ fn prose_caps() {
 
 // Intent's `references/` tree holds only the `emery-runtime` symlink.
 #[test]
-fn runtime_references_only() {
+fn runtime_refs() {
     assert!(find(Adapter::docs(), "references/emery-runtime/reconciliation.md").is_some());
     assert!(
         Adapter::docs()

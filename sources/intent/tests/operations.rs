@@ -32,7 +32,7 @@ fn schema_format(request: &Request) -> (&str, &str) {
 }
 
 #[tokio::test]
-async fn extract_inline_value() {
+async fn inline_value() {
     let model = Scripted::answering([r#"{"authority":"intent","claims":[
             {"kind":"intent","id":"intent","statement":"Let users reset passwords by email."},
             {"kind":"requirement","id":"password-reset.request","statement":"Users reset passwords by email."}
@@ -86,7 +86,7 @@ async fn extract_inline_value() {
 }
 
 #[tokio::test]
-async fn single_file_workspace() {
+async fn one_file() {
     let model = Scripted::answering([
         r#"{"authority":"intent","claims":[{"kind":"intent","id":"intent","statement":"Let users reset passwords by email."}]}"#,
     ]);
@@ -109,7 +109,7 @@ async fn single_file_workspace() {
 // An unreadable source fails closed before any judgment leg: a tree
 // that is not the one-file encoding is a typed refusal.
 #[tokio::test]
-async fn multi_file_rejected() {
+async fn multi_file() {
     // The refusal precedes the model, so nothing is scripted.
     let model = Scripted::default();
     let root = tempfile::tempdir().unwrap();
@@ -123,7 +123,7 @@ async fn multi_file_rejected() {
 }
 
 #[tokio::test]
-async fn empty_workspace_rejected() {
+async fn empty_workspace() {
     let model = Scripted::default();
     let root = tempfile::tempdir().unwrap();
 
@@ -136,7 +136,7 @@ async fn empty_workspace_rejected() {
 // The intent source is never legitimately empty (the prompt's own
 // contract): an empty brief is a typed refusal, never an empty success.
 #[tokio::test]
-async fn empty_brief_rejected() {
+async fn empty_brief() {
     let model = Scripted::default();
 
     let inline = Adapter::extract(&model, &ctx(), &SourceInput::value("intent", "  \n")).await;

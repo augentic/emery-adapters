@@ -6,7 +6,7 @@ use emery_adapter::SourceAdapter as _;
 use emery_prose::registry::{body, find};
 
 #[test]
-fn embeds_extract_prompt() {
+fn extract_prompt() {
     assert!(body(Adapter::docs(), "prompts/extract.md").starts_with("# `documentation.extract`"));
 }
 
@@ -34,7 +34,7 @@ fn prose_caps() {
 // The `references/emery-runtime` symlink resolves at build time with
 // the shared content inlined under the symlink-name paths.
 #[test]
-fn symlink_resolved_inline() {
+fn symlink() {
     let doc = find(Adapter::docs(), "references/emery-runtime/reconciliation.md")
         .expect("symlinked runtime reference is embedded");
     assert!(!doc.body.is_empty(), "resolved symlink content is inlined");

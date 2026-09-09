@@ -18,19 +18,19 @@ ID: REQ-002\nSources: []\nStatus: unknown\n\n\
 No source contributed an acceptance criterion.\n";
 
 #[test]
-fn well_formed_spec_passes() {
+fn well_formed() {
     assert_eq!(grade::spec(GOOD, &EXPECT), Vec::<String>::new());
 }
 
 #[test]
-fn empty_spec_unreviewable() {
+fn empty_spec() {
     let findings = grade::spec("# Specification\n", &EXPECT);
     assert_eq!(findings.len(), 1);
     assert!(findings[0].contains("no requirement blocks"), "{findings:?}");
 }
 
 #[test]
-fn missing_subject_flagged() {
+fn missing_subject() {
     let expect = Expect {
         subject_fragment: "position",
     };
@@ -42,7 +42,7 @@ fn missing_subject_flagged() {
 }
 
 #[test]
-fn no_provenance_flagged() {
+fn no_provenance() {
     let spec = "### Requirement: order.placement\n\nStatus: agreed\n\nBody.\n";
     let findings = grade::spec(spec, &EXPECT);
     assert!(findings.iter().any(|finding| finding.contains("`ID:`")), "{findings:?}");
@@ -52,7 +52,7 @@ fn no_provenance_flagged() {
 // A gap or disagreement hidden from the heading is a finding, in
 // both directions.
 #[test]
-fn tag_mismatch_flagged() {
+fn tag_mismatch() {
     let hidden = "### Requirement: order.state\n\n\
                   ID: REQ-001\nSources: []\nStatus: unknown\n\nBody.\n";
     let findings = grade::spec(hidden, &EXPECT);
@@ -67,7 +67,7 @@ fn tag_mismatch_flagged() {
 // The scorecard's green line: every case passed and both measured
 // numbers meet their product.md targets; anything else is red.
 #[test]
-fn scorecard_green_line() {
+fn green_line() {
     let pass = CaseResult {
         id: "orders-docs".to_string(),
         outcome: Outcome::Pass {

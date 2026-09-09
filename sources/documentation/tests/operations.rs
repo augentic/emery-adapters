@@ -95,7 +95,7 @@ async fn extract_leg() {
 // An inline `value:` source lends no workspace: the material rides in
 // the user message and the judgment leg gets no filesystem grant.
 #[tokio::test]
-async fn extract_value_no_lend() {
+async fn no_lend() {
     let model = Scripted::answering([r#"{"authority":"documentation","claims":[]}"#]);
     let input = SourceInput::value("notes", "Reset links expire after 30 minutes.");
 
@@ -137,7 +137,7 @@ async fn extract_repaired() {
 // A backend out of rounds surfaces the last failure — a `bad_request`
 // carrying the findings, never an empty success.
 #[tokio::test]
-async fn extract_budget_exhausted() {
+async fn spent_budget() {
     let model = Scripted::answering([
         r#"{"authority":"documentation","claims":[{"kind":"criterion","id":"Not.Valid"}]}"#,
     ]);
@@ -158,7 +158,7 @@ async fn extract_budget_exhausted() {
 
 // A docs-free context declares no tools: the judgment stays single-shot.
 #[tokio::test]
-async fn extract_no_docs_no_tools() {
+async fn no_docs() {
     let model = Scripted::answering([r#"{"authority":"documentation","claims":[]}"#]);
 
     Adapter::extract(&model, &ctx(&[]), &workspace_input()).await.unwrap();
