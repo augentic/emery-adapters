@@ -36,7 +36,7 @@ pub struct Call<'a> {
 pub async fn run(call: Call<'_>, backends: Backends<ScriptedModel>) -> Result<ExitStatus> {
     // The runtime supplies argv[0]; the adapter id leads the caller's own.
     Deployment::new()
-        .plugins(["emery:adapter/source@0.1.0"])
+        .link(["emery:adapter/source@0.1.0"])
         .guest("caller", CALLER)
         .guest(call.id, call.wasm)
         .command("caller")
