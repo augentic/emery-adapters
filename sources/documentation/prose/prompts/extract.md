@@ -24,7 +24,7 @@ Other claim kinds are out of scope for this adapter. Ids, `path` anchors, and th
 
 ## Output
 
-Return one JSON object matching the gated schema — the Evidence body:
+Return one JSON object matching the Evidence schema the request carries — the Evidence body:
 
 ```json
 {

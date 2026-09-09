@@ -129,11 +129,11 @@ version = "0.12.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.bon]]
-version = "3.10.0"
+version = "3.10.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.bon-macros]]
-version = "3.10.0"
+version = "3.10.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.cap-fs-ext]]
@@ -405,7 +405,7 @@ version = "0.14.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.hashlink]]
-version = "0.12.1"
+version = "0.12.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.http-auth]]
@@ -854,10 +854,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.sha2]]
 version = "0.11.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.shlex]]
-version = "2.0.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.simd-adler32]]

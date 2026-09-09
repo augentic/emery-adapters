@@ -101,4 +101,4 @@ Relative paths only, no `..`, no leading `/`, never under `node_modules`, `vendo
 | The tree holds no in-scope production source | Return `claims: []`; the engine preserves the gap rather than guessing. |
 | Read denied outside `$SOURCE_DIR` | The host returns a typed path-denied error; no Evidence is written. |
 | Production source uses an out-of-scope framework only | Emit any in-scope claims; the gap surfaces as `[unknown]` requirements in the spec. |
-| The answer fails the gated schema or id grammar | The caller rejects it and asks for a repaired answer with the findings; correct the named claims. |
+| The answer fails the claim gate (id grammar, or a claim missing its required field such as a `requirement`'s `statement`) | The caller rejects it and asks for a corrected answer with the findings; correct the named claims. |

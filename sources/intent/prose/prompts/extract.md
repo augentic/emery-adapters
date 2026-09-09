@@ -26,7 +26,7 @@ The verbatim `intent` claim preserves the operator's words for the reviewer. The
 
 ## Output contract
 
-Return one JSON object matching the gated schema — the Evidence body:
+Return one JSON object matching the Evidence schema the request carries — the Evidence body:
 
 ```json
 {
