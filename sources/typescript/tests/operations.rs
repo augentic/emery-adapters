@@ -2,9 +2,8 @@
 
 use std::path::Path;
 
-use emery_adapter::answers::evidence_schema;
 use emery_adapter::types::{Authority, ClaimKind, Context, Error, SourceInput};
-use emery_adapter::{Format, MAX_REPAIRS, Request, SourceAdapter as _, ToolCall};
+use emery_adapter::{Format, Request, SourceAdapter as _, ToolCall};
 use emery_prose::registry::Doc;
 use omnia_test::guest::{Scripted, function_tools};
 use typescript::Adapter;
@@ -92,7 +91,12 @@ async fn extract_leg() {
     );
     let (name, schema) = schema_format(request);
     assert_eq!(name, "evidence");
-    assert_eq!(schema, evidence_schema());
+    let schema: serde_json::Value = serde_json::from_str(schema).expect("the schema is JSON");
+    assert!(
+        schema.pointer("/$defs/Claim/properties/id/pattern").is_some(),
+        "the claim-id grammar steers the answer"
+    );
+    assert!(request.check, "acceptance is the SDK's claim gate, not the reply text");
     assert_eq!(request.workspace.as_deref(), Some("."), "the source view is lent");
     let tools: Vec<&str> =
         function_tools(request).into_iter().map(|tool| tool.name.as_str()).collect();
@@ -120,15 +124,19 @@ async fn closure_reference_pull() {
     Adapter::extract(&model, &ctx(docs), &workspace_input()).await.unwrap();
 
     let exchanges = model.exchanges();
-    assert_eq!(exchanges.len(), 1, "the closure answered the scripted call");
+    assert_eq!(exchanges.len(), 2, "the closure answered the scripted call, then the check ran");
+    assert_eq!(exchanges[0].tool, "read_doc");
     let body = exchanges[0].outcome.as_ref().expect("read_doc resolves an embedded path");
     let value: serde_json::Value = serde_json::from_str(body).expect("a JSON-object result");
     assert_eq!(value["path"], doc.path);
     assert_eq!(value["body"], doc.body);
+    assert_eq!(exchanges[1].tool, "check");
+    assert_eq!(exchanges[1].outcome, Ok(String::new()), "the empty claim set passes the gate");
 }
 
-// A tail-invalid extract answer is repaired: the second leg carries
-// the findings and its clean answer is the result.
+// A candidate the claim gate rejects is corrected in place: the check
+// hands the findings back with the rejected answer, and the next
+// candidate's clean answer is the result.
 #[tokio::test]
 async fn extract_repaired() {
     let model = Scripted::answering([
@@ -140,21 +148,23 @@ async fn extract_repaired() {
         Adapter::extract(&model, &ctx(&[]), &workspace_input()).await.expect("repaired extract");
 
     assert_eq!(evidence.claims[0].id.as_deref(), Some("session.timeout"));
-    let requests = model.requests();
-    assert_eq!(requests.len(), 2, "one repair after the failed tail");
-    let repair = &requests[1].messages[0].content;
-    assert!(repair.contains("claims require an id"), "repair prompt carries the findings");
-    assert!(repair.contains("## Previous answer"), "and the rejected answer");
+    assert_eq!(model.requests().len(), 2, "one scripted answer per attempt");
+    let exchanges = model.exchanges();
+    assert_eq!(exchanges.len(), 2, "one rejected check, one accepted");
+    assert_eq!(exchanges[0].tool, "check");
+    let correction = exchanges[0].outcome.as_ref().expect_err("the first candidate is rejected");
+    assert!(correction.contains("claims require an id"), "the correction carries the findings");
+    assert!(correction.contains("## Previous answer (rejected)"), "and the rejected answer");
+    assert_eq!(exchanges[1].outcome, Ok(String::new()));
 }
 
-// Exhausting the repair budget surfaces the last failure — a typed
-// error, never an empty success.
+// A backend out of rounds surfaces the last failure — a typed error
+// carrying the findings, never an empty success.
 #[tokio::test]
 async fn extract_budget_exhausted() {
-    let model = Scripted::answering(
-        [r#"{"authority":"behaviour","claims":[{"kind":"requirement","id":"Not.Valid"}]}"#;
-            1 + MAX_REPAIRS],
-    );
+    let model = Scripted::answering([
+        r#"{"authority":"behaviour","claims":[{"kind":"requirement","id":"Not.Valid"}]}"#,
+    ]);
 
     let result = Adapter::extract(&model, &ctx(&[]), &workspace_input()).await;
 
@@ -162,7 +172,10 @@ async fn extract_budget_exhausted() {
         Err(Error::Internal(detail)) => {
             assert!(detail.contains("`Not.Valid`"), "detail: {detail}");
         }
-        other => panic!("expected the last tail failure, got {other:?}"),
+        other => panic!("expected the last gate failure, got {other:?}"),
     }
-    assert_eq!(model.requests().len(), 1 + MAX_REPAIRS, "initial answer plus the repair budget");
+    let exchanges = model.exchanges();
+    assert_eq!(exchanges.len(), 1, "one check, rejected");
+    let correction = exchanges[0].outcome.as_ref().expect_err("the only candidate is rejected");
+    assert!(correction.contains("`Not.Valid`"), "{correction}");
 }

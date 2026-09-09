@@ -72,9 +72,11 @@ fn evidence(authority: &str) -> Value {
 // The shared happy path: the component instantiates under the runtime;
 // `metadata` answers without touching the model; `extract` opens exactly
 // one completion whose system prompt is the embedded `prompts/extract.md`,
-// whose declared tools are the reference tools, and whose `read_doc` call
-// comes back across the tool streams with that same embedded body; the
-// evidence lowers back to the caller with its required extras intact.
+// whose declared tools are the reference tools, whose `read_doc` call
+// comes back across the tool streams with that same embedded body, and
+// whose candidate is accepted by the guest's `check` over the same
+// streams; the evidence lowers back to the caller with its required
+// extras intact.
 async fn conforms(case: Case) {
     // --------------------------------------------------
     // Arrange.
@@ -116,15 +118,19 @@ async fn conforms(case: Case) {
         "the compiled-in extract prompt is the system prompt"
     );
     assert_eq!(request.tools, ["list_docs", "read_doc"], "the reference tools are declared");
+    assert!(request.check, "the guest judges each candidate over the check tool");
     assert!(request.messages[0].contains("source key `source`"), "{:?}", request.messages);
 
     let exchanges = backends.model.exchanges();
-    assert_eq!(exchanges.len(), 1, "one driven tool call");
+    assert_eq!(exchanges.len(), 2, "one driven tool call, then the check");
+    assert_eq!(exchanges[0].tool, "read_doc");
     let answer: Value =
         serde_json::from_str(exchanges[0].outcome.as_ref().expect("read_doc answered"))
             .expect("a JSON answer");
     assert_eq!(answer["path"], "prompts/extract.md");
     assert_eq!(answer["body"], case.prompt, "the embedded document body crosses the seam");
+    assert_eq!(exchanges[1].tool, "check");
+    assert_eq!(exchanges[1].outcome, Ok(String::new()), "the candidate passed the claim gate");
 }
 
 #[tokio::test]

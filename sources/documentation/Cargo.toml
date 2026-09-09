@@ -22,6 +22,7 @@ emery-prose.workspace = true
 emery-prose = { workspace = true, features = ["emit"] }
 
 [dev-dependencies]
+serde_json.workspace = true
 tokio.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
