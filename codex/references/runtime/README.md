@@ -8,7 +8,8 @@ The bundle:
 
 | Document            | What adapters consume it for                                          |
 | ------------------- | --------------------------------------------------------------------- |
-| `reconciliation.md` | The specify pipeline and the claim-id / extras rules extraction feeds |
+| `reconciliation.md` | The specify pipeline and how grouping consumes what extraction emits  |
+| `claims.md`         | The `id` grammar, `path` anchor grammar, and the fail-closed gate      |
 
 ## Editing rules
 

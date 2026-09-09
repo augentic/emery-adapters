@@ -1,6 +1,5 @@
-use emery_adapter::answers::{evidence_schema, evidence_tail};
-use emery_adapter::types::{Context, Error, Evidence, SourceContent, SourceInput, SourceMetadata};
-use emery_adapter::{Model, SourceAdapter, repaired};
+use emery_adapter::types::{Context, Error, Evidence, SourceInput};
+use emery_adapter::{Model, SourceAdapter, content_note, evidence};
 use emery_prose::registry::Doc;
 
 use crate::registry;
@@ -11,12 +10,6 @@ pub struct Adapter;
 
 impl SourceAdapter for Adapter {
     const IDENTITY: &str = concat!("typescript@", env!("CARGO_PKG_VERSION"));
-
-    fn metadata() -> SourceMetadata {
-        SourceMetadata {
-            emery_version: Some("0.38.0".to_string()),
-        }
-    }
 
     fn docs() -> &'static [Doc] {
         registry::docs()
@@ -40,24 +33,8 @@ impl SourceAdapter for Adapter {
              the document; do not write it yourself.",
             id = ctx.adapter_id,
             key = input.key,
-            content = content_note(input),
+            content = content_note(input, "the TypeScript / JavaScript source tree"),
         );
-        let schema = evidence_schema();
-        repaired(model, ctx, system, user, "evidence", &schema, evidence_tail).await
-    }
-}
-
-fn content_note(input: &SourceInput) -> String {
-    match &input.content {
-        SourceContent::Workspace(root) => format!(
-            "`$SOURCE_DIR` is the read-only view at `{root}` — the TypeScript / JavaScript \
-             source tree the prompt walks. Treat that tree as read-only. Nothing \
-             outside it is reachable; extract mines only this source."
-        ),
-        SourceContent::Value(value) => format!(
-            "The bound material is this inline value; no `$SOURCE_DIR` is \
-             lent:\n\n{value}\n\n\
-             Nothing else is reachable; extract mines only this source."
-        ),
+        evidence(model, ctx, system, user).await
     }
 }

@@ -23,6 +23,7 @@ omnia-wasi-model.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
+caller = { path = "../caller" }
 tokio.workspace = true
 
 [lints]

@@ -6,120 +6,147 @@
 //! caller <adapter-id> <key> <workspace|value:TEXT> [expect-error:<variant>]
 //! ```
 
-#![cfg(target_arch = "wasm32")]
+/// The caller's argv vocabulary, shared with the native conformance suite
+/// so the two sides never drift.
+pub mod protocol {
+    /// Content word lending the mounted project root as the workspace.
+    pub const WORKSPACE: &str = "workspace";
+    /// Content prefix carrying an inline value: `value:TEXT`.
+    pub const VALUE: &str = "value:";
+    /// Flag prefix naming the typed error the run must refuse with.
+    pub const EXPECT_ERROR: &str = "expect-error:";
 
-use emery_source::types::{Error, Evidence, SourceContent, SourceInput};
-use emery_source::{DispatchError, Source};
-
-struct Caller;
-
-impl Source for Caller {}
-
-struct Cli;
-
-wasip3::cli::command::export!(Cli);
-
-impl wasip3::exports::cli::run::Guest for Cli {
-    async fn run() -> Result<(), ()> {
-        let args = wasip3::cli::environment::get_arguments();
-        match drive(&args).await {
-            Ok(summary) => {
-                println!("{summary}");
-                Ok(())
-            }
-            Err(reason) => {
-                eprintln!("conformance: {reason}");
-                Err(())
-            }
-        }
+    /// The `expect-error:<variant>` flag for `variant`.
+    #[must_use]
+    pub fn expect_error(variant: &str) -> String {
+        format!("{EXPECT_ERROR}{variant}")
     }
 }
 
-async fn drive(args: &[String]) -> Result<String, String> {
-    let [_, id, key, content, rest @ ..] = args else {
-        return Err(format!(
-            "usage: caller <adapter-id> <key> <workspace|value:TEXT> [expect-error:<variant>]; \
-             got {args:?}"
-        ));
-    };
-    let expected = match rest {
-        [] => None,
-        [flag] => Some(
-            flag.strip_prefix("expect-error:").ok_or_else(|| format!("unknown flag `{flag}`"))?,
-        ),
-        _ => return Err(format!("too many arguments: {rest:?}")),
-    };
-    let input = SourceInput {
-        key: key.clone(),
-        content: parse_content(content)?,
-    };
+#[cfg(target_arch = "wasm32")]
+mod guest {
+    use emery_source::types::{Error, Evidence, SourceContent, SourceInput};
+    use emery_source::{DispatchError, Source};
 
-    // A declared version is an exact semver.
-    let metadata = Source::metadata(&Caller, id);
-    if let Some(version) = &metadata.emery_version
-        && version.split('.').count() != 3
-    {
-        return Err(format!("`emery-version` is not an exact semver: {version}"));
-    }
+    use crate::protocol;
 
-    match (Source::extract(&Caller, id, &input).await, expected) {
-        (Ok(evidence), None) => {
-            check_evidence(&evidence)?;
-            Ok(format!(
-                "{id}: authority {}, {} claim(s)",
-                evidence.authority,
-                evidence.claims.len()
-            ))
-        }
-        (Err(err), Some(variant)) => {
-            let got = variant_of(&err);
-            if got == variant {
-                Ok(format!("{id}: extract refused `{variant}`: {err}"))
-            } else {
-                Err(format!("expected error `{variant}`, got `{got}`: {err}"))
-            }
-        }
-        (Ok(_), Some(variant)) => Err(format!("expected error `{variant}`, extract succeeded")),
-        (Err(err), None) => Err(format!("extract failed: {err}")),
-    }
-}
+    struct Caller;
 
-fn parse_content(content: &str) -> Result<SourceContent, String> {
-    if content == "workspace" {
-        return Ok(SourceContent::Workspace(".".to_string()));
-    }
-    content
-        .strip_prefix("value:")
-        .map(|value| SourceContent::Value(value.to_string()))
-        .ok_or_else(|| format!("content is `workspace` or `value:TEXT`, got `{content}`"))
-}
+    impl Source for Caller {}
 
-fn variant_of(err: &DispatchError) -> &'static str {
-    match err {
-        DispatchError::Call(Error::InvalidRequest(_)) => "invalid-request",
-        DispatchError::Call(Error::Io(_)) => "io",
-        DispatchError::Call(Error::Internal(_)) => "internal",
-        DispatchError::Extras { .. } => "extras",
-    }
-}
+    struct Cli;
 
-// The contract's fail-closed gate holds across the wire, and every
-// required extra lowers as a string rather than a re-encoded value.
-fn check_evidence(evidence: &Evidence) -> Result<(), String> {
-    if evidence.claims.is_empty() {
-        return Err("evidence carries no claims".to_string());
-    }
-    evidence.validate().map_err(|err| err.to_string())?;
-    for claim in &evidence.claims {
-        for key in claim.kind.required_extras() {
-            if !claim.extras.get(*key).is_some_and(serde_json::Value::is_string) {
-                return Err(format!(
-                    "claim `{}` ({}) carries a non-string `{key}` extra",
-                    claim.id.as_deref().unwrap_or("<unnamed>"),
-                    claim.kind
-                ));
+    wasip3::cli::command::export!(Cli);
+
+    impl wasip3::exports::cli::run::Guest for Cli {
+        async fn run() -> Result<(), ()> {
+            let args = wasip3::cli::environment::get_arguments();
+            match drive(&args).await {
+                Ok(summary) => {
+                    println!("{summary}");
+                    Ok(())
+                }
+                Err(reason) => {
+                    eprintln!("conformance: {reason}");
+                    Err(())
+                }
             }
         }
     }
-    Ok(())
+
+    async fn drive(args: &[String]) -> Result<String, String> {
+        let [_, id, key, content, rest @ ..] = args else {
+            return Err(format!(
+                "usage: caller <adapter-id> <key> <workspace|value:TEXT> [expect-error:<variant>]; \
+                 got {args:?}"
+            ));
+        };
+        let expected = match rest {
+            [] => None,
+            [flag] => Some(
+                flag.strip_prefix(protocol::EXPECT_ERROR)
+                    .ok_or_else(|| format!("unknown flag `{flag}`"))?,
+            ),
+            _ => return Err(format!("too many arguments: {rest:?}")),
+        };
+        let input = SourceInput {
+            key: key.clone(),
+            content: parse_content(content)?,
+        };
+
+        // A declared version is an exact semver.
+        let metadata = Source::metadata(&Caller, id);
+        if let Some(version) = &metadata.emery_version
+            && version.split('.').count() != 3
+        {
+            return Err(format!("`emery-version` is not an exact semver: {version}"));
+        }
+
+        match (Source::extract(&Caller, id, &input).await, expected) {
+            (Ok(evidence), None) => {
+                check_evidence(&evidence)?;
+                Ok(format!(
+                    "{id}: authority {}, {} claim(s)",
+                    evidence.authority,
+                    evidence.claims.len()
+                ))
+            }
+            (Err(err), Some(variant)) => {
+                let got = variant_of(&err);
+                if got == variant {
+                    Ok(format!("{id}: extract refused `{variant}`: {err}"))
+                } else {
+                    Err(format!("expected error `{variant}`, got `{got}`: {err}"))
+                }
+            }
+            (Ok(_), Some(variant)) => Err(format!("expected error `{variant}`, extract succeeded")),
+            (Err(err), None) => Err(format!("extract failed: {err}")),
+        }
+    }
+
+    fn parse_content(content: &str) -> Result<SourceContent, String> {
+        if content == protocol::WORKSPACE {
+            return Ok(SourceContent::Workspace(".".to_string()));
+        }
+        content
+            .strip_prefix(protocol::VALUE)
+            .map(|value| SourceContent::Value(value.to_string()))
+            .ok_or_else(|| {
+                format!(
+                    "content is `{}` or `{}TEXT`, got `{content}`",
+                    protocol::WORKSPACE,
+                    protocol::VALUE
+                )
+            })
+    }
+
+    fn variant_of(err: &DispatchError) -> &'static str {
+        match err {
+            DispatchError::Call(Error::InvalidRequest(_)) => "invalid-request",
+            DispatchError::Call(Error::Io(_)) => "io",
+            DispatchError::Call(Error::Internal(_)) => "internal",
+            DispatchError::Extras { .. } => "extras",
+        }
+    }
+
+    // The contract's fail-closed gate holds across the wire, and every
+    // required extra lowers as a string rather than a re-encoded value.
+    fn check_evidence(evidence: &Evidence) -> Result<(), String> {
+        if evidence.claims.is_empty() {
+            return Err("evidence carries no claims".to_string());
+        }
+        evidence.validate().map_err(|err| err.to_string())?;
+        for claim in &evidence.claims {
+            for key in claim.kind.required_extras() {
+                if !claim.extras.get(*key).is_some_and(serde_json::Value::is_string) {
+                    return Err(format!(
+                        "claim `{}` ({}) carries a non-string `{key}` extra",
+                        claim.id.as_deref().unwrap_or("<unnamed>"),
+                        claim.kind
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
 }

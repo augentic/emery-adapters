@@ -20,27 +20,7 @@ Closed for this adapter:
 | `decision` | `decision` | A design or product decision the docs record (often "Decision:" lines or paragraphs). |
 | `section` | (free-form) | A bounded prose section worth carrying into synthesis verbatim when no finer-grained claim fits. |
 
-The engine's load gate is fail-closed: a `requirement` claim without a `statement` field, or a `criterion` claim without a `criterion` field, fails the whole run closed (typed `bad_request`). There is no fallback to `synopsis`. Other claim kinds are out of scope for this adapter.
-
-`id` is **required** on `requirement` and `criterion` kinds; deterministic reconciliation keys off it. `id` is **optional** on `decision` and `section`.
-
-## `id` derivation
-
-Ids are the cross-source join key: the engine connects claims across sources only when their ids are byte-equal, so two independent sources describing the same behaviour must converge on the same id.
-
-- Dotted-kebab grammar: `password-reset.expiry`, `session.timeout`.
-- Derive from the domain concept using the docs' own noun phrases (`password-reset.expiry`, not `req-007`) — never from file names, heading positions, or invented counters.
-- A `criterion` id must equal its requirement's id or extend it with a dotted suffix (`password-reset.expiry` or `password-reset.expiry.window`). The engine flags any requirement without such a criterion as an `[unknown]` acceptance gap; a criterion with an unrelated id leaves its requirement uncovered.
-
-## `path` grammar
-
-Every claim from a `$SOURCE_DIR` tree carries a `path` rooted relative to `$SOURCE_DIR`. The grammar matches GitHub-style anchors:
-
-- `<path>` — whole-file claim.
-- `<path>#L<n>` — single line.
-- `<path>#L<start>-L<end>` — line range.
-
-Line numbers are 1-indexed against the file at extract time. Choose the tightest anchor that bounds the cited text. Claims from an inline value omit `path`.
+Other claim kinds are out of scope for this adapter. Ids, `path` anchors, and the fail-closed gate follow [claims.md](../references/emery-runtime/claims.md): `id` is required on `requirement` and `criterion` (dotted-kebab, derived from the docs' own noun phrases — `password-reset.expiry`, not `req-007`), a `criterion` id extends its requirement's id, every claim from the tree carries a `<path>#L<n>` anchor, and a claim missing its required body field fails the whole run closed (typed `bad_request`).
 
 ## Output
 
@@ -93,12 +73,8 @@ Output:
 
 - Emit claims in source order (file by file in lexicographic path order, top of file to bottom). Stable order keeps re-runs byte-stable.
 - Quote statements / criteria / decisions verbatim from the docs where possible. Light grammatical normalisation (capitalisation, terminal punctuation) is allowed; rephrasing is not — the `statement` value is what reconciliation compares across sources, so paraphrase drift manufactures false conflicts.
-- Do not invent `id`s. Derive them from the docs' own noun phrases.
 
 ## Guardrails
 
 - `$SOURCE_DIR` is read-only; never attempt to read or write outside it.
-- Never write Evidence to disk yourself — return the JSON body; the caller persists it.
 - Never emit claim kinds outside `{requirement, criterion, decision, section}` from this adapter. Behaviour kinds (`excerpt`/`type`/`call`) belong to code source adapters.
-- Never omit `id` on `requirement` or `criterion`, and never omit the kind's required body field — the engine fails the run closed (typed `bad_request`) rather than accepting the claim.
-- Empty `claims: []` is valid output when the source genuinely contains no extractable claims. Do not pad with speculative claims; the engine preserves gaps as `[unknown]` rather than guessing.

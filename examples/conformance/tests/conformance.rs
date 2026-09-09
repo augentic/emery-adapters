@@ -8,6 +8,7 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
+use caller::protocol;
 use conformance::{
     Backends, Call, SOURCE_DOCUMENTATION, SOURCE_INTENT, SOURCE_TYPESCRIPT, ScriptedModel, scratch,
 };
@@ -82,7 +83,7 @@ async fn conforms(case: Case) {
     for (path, body) in case.files {
         project.write(path, body);
     }
-    let model = ScriptedModel::answering([evidence(case.authority)])
+    let model = ScriptedModel::answering([evidence(case.authority).to_string()])
         .calling(0, [("read_doc", r#"{"path":"prompts/extract.md"}"#)]);
     let backends = Backends::defaults().await.model(model);
 
@@ -93,7 +94,7 @@ async fn conforms(case: Case) {
         Call {
             id: case.id,
             wasm: case.wasm,
-            argv: &["source", "workspace"],
+            argv: &["source", protocol::WORKSPACE],
             project: &project,
         },
         backends.clone(),
@@ -149,13 +150,14 @@ async fn typed_error() {
     let project = scratch();
     project.write("a.md", "one\n");
     project.write("b.md", "two\n");
-    let backends = Backends::defaults().await.model(ScriptedModel::answering([]));
+    let backends = Backends::defaults().await.model(ScriptedModel::answering::<String>([]));
+    let refusal = protocol::expect_error("invalid-request");
 
     let status = conformance::run(
         Call {
             id: INTENT.id,
             wasm: INTENT.wasm,
-            argv: &["source", "workspace", "expect-error:invalid-request"],
+            argv: &["source", protocol::WORKSPACE, &refusal],
             project: &project,
         },
         backends.clone(),
