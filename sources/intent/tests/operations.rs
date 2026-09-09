@@ -3,9 +3,7 @@
 use std::path::Path;
 
 use emery_adapter::answers::evidence_schema;
-use emery_adapter::types::{
-    Authority, ClaimKind, Context, Error, SourceContent, SourceInput, SourceWorkspace,
-};
+use emery_adapter::types::{Authority, ClaimKind, Context, Error, SourceInput};
 use emery_adapter::{Format, Request, SourceAdapter as _};
 use intent::Adapter;
 use omnia_test::guest::{Scripted, function_tools};
@@ -24,13 +22,7 @@ fn value_input() -> SourceInput {
 }
 
 fn workspace_input(root: &Path) -> SourceInput {
-    SourceInput {
-        key: "intent".to_string(),
-        content: SourceContent::Workspace(SourceWorkspace {
-            id: "view-1".to_string(),
-            root: root.display().to_string(),
-        }),
-    }
+    SourceInput::workspace("intent", root.display().to_string())
 }
 
 fn schema_format(request: &Request) -> (&str, &str) {

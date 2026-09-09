@@ -8,7 +8,7 @@
 
 #![cfg(target_arch = "wasm32")]
 
-use emery_source::types::{Error, Evidence, SourceContent, SourceInput, SourceWorkspace};
+use emery_source::types::{Error, Evidence, SourceContent, SourceInput};
 use emery_source::{DispatchError, Source};
 
 struct Caller;
@@ -51,7 +51,7 @@ async fn drive(args: &[String]) -> Result<String, String> {
     };
     let input = SourceInput {
         key: key.clone(),
-        content: parse_content(key, content)?,
+        content: parse_content(content)?,
     };
 
     // A declared version is an exact semver.
@@ -84,12 +84,9 @@ async fn drive(args: &[String]) -> Result<String, String> {
     }
 }
 
-fn parse_content(key: &str, content: &str) -> Result<SourceContent, String> {
+fn parse_content(content: &str) -> Result<SourceContent, String> {
     if content == "workspace" {
-        return Ok(SourceContent::Workspace(SourceWorkspace {
-            id: key.to_string(),
-            root: ".".to_string(),
-        }));
+        return Ok(SourceContent::Workspace(".".to_string()));
     }
     content
         .strip_prefix("value:")

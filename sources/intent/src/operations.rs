@@ -60,14 +60,13 @@ fn content_note(input: &SourceInput) -> Result<String, Error> {
                  Nothing else is reachable; extract works only from this value."
             ))
         }
-        SourceContent::Workspace(view) => {
-            let intent = single_file_intent(Path::new(&view.root))?;
+        SourceContent::Workspace(root) => {
+            let intent = single_file_intent(Path::new(root))?;
             require_brief(&intent)?;
             Ok(format!(
-                "The bound material is a one-file tree at `{}`; the operator's intent \
+                "The bound material is a one-file tree at `{root}`; the operator's intent \
                  string is:\n\n{intent}\n\n\
-                 Nothing else is reachable; extract works only from this value.",
-                view.root
+                 Nothing else is reachable; extract works only from this value."
             ))
         }
     }

@@ -3,9 +3,7 @@
 use std::path::Path;
 
 use emery_adapter::answers::evidence_schema;
-use emery_adapter::types::{
-    Authority, ClaimKind, Context, Error, SourceContent, SourceInput, SourceWorkspace,
-};
+use emery_adapter::types::{Authority, ClaimKind, Context, Error, SourceInput};
 use emery_adapter::{Format, MAX_REPAIRS, Request, SourceAdapter as _, ToolCall};
 use emery_prose::registry::Doc;
 use omnia_test::guest::{Scripted, function_tools};
@@ -21,13 +19,7 @@ fn ctx(docs: &'static [Doc]) -> Context<'static> {
 }
 
 fn workspace_input() -> SourceInput {
-    SourceInput {
-        key: "legacy-monolith".to_string(),
-        content: SourceContent::Workspace(SourceWorkspace {
-            id: "view-1".to_string(),
-            root: ".".to_string(),
-        }),
-    }
+    SourceInput::workspace("legacy-monolith", ".")
 }
 
 fn schema_format(request: &Request) -> (&str, &str) {

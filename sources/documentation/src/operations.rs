@@ -44,11 +44,10 @@ impl SourceAdapter for Adapter {
 
 fn content_note(input: &SourceInput) -> String {
     match &input.content {
-        SourceContent::Workspace(view) => format!(
-            "`$SOURCE_DIR` is the read-only view at `{}` — the documentation tree the \
+        SourceContent::Workspace(root) => format!(
+            "`$SOURCE_DIR` is the read-only view at `{root}` — the documentation tree the \
              prompt walks. Nothing outside it is reachable; extract mines only this \
-             source.",
-            view.root
+             source."
         ),
         SourceContent::Value(value) => format!(
             "The bound material is this inline value; no `$SOURCE_DIR` is \

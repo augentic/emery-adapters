@@ -150,9 +150,8 @@ impl SourceAdapter for Adapter {
     ) -> Result<Evidence, Error> {
         let system = registry::body("prompts/extract.md").to_string();
         let content = match &input.content {
-            SourceContent::Workspace(view) => format!(
-                "`$SOURCE_DIR` is the read-only view at `{}`; nothing outside it is reachable.",
-                view.root
+            SourceContent::Workspace(root) => format!(
+                "`$SOURCE_DIR` is the read-only view at `{root}`; nothing outside it is reachable."
             ),
             SourceContent::Value(value) => format!(
                 "The bound material is this inline value; no `$SOURCE_DIR` is lent:\n\n{value}"

@@ -49,11 +49,10 @@ impl SourceAdapter for Adapter {
 
 fn content_note(input: &SourceInput) -> String {
     match &input.content {
-        SourceContent::Workspace(view) => format!(
-            "`$SOURCE_DIR` is the read-only view at `{}` — the TypeScript / JavaScript \
+        SourceContent::Workspace(root) => format!(
+            "`$SOURCE_DIR` is the read-only view at `{root}` — the TypeScript / JavaScript \
              source tree the prompt walks. Treat that tree as read-only. Nothing \
-             outside it is reachable; extract mines only this source.",
-            view.root
+             outside it is reachable; extract mines only this source."
         ),
         SourceContent::Value(value) => format!(
             "The bound material is this inline value; no `$SOURCE_DIR` is \
