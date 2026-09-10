@@ -17,7 +17,7 @@ Nothing outside the bound material is reachable; extract works only from this va
 | `requirement` | `statement` | One per distinct behavioural directive the brief states about the system. |
 | `criterion` | `criterion` | Only when the brief itself states an acceptance criterion. |
 
-The verbatim `intent` claim preserves the operator's words for the reviewer. The `requirement` claims are what deterministic reconciliation joins against other sources: only `requirement` claims form spec requirement rows, so a directive left solely inside the `intent` echo can never override a documentation or code claim — the authority precedence acts through matching `requirement` ids.
+The verbatim `intent` claim preserves the operator's words for the reviewer. The `requirement` claims are what deterministic reconciliation joins against other sources: only `requirement` claims form the spec's requirements, so a directive left solely inside the `intent` echo can never override a documentation or code claim — the authority precedence acts through matching `requirement` ids.
 
 ## `id` derivation
 
