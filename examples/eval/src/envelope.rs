@@ -44,10 +44,6 @@ pub fn failure(stderr: &[u8]) -> Result<Failure, String> {
 pub struct Success {
     /// The committed revision id, now current.
     pub revision: String,
-    /// Requirement blocks in the committed `spec.md`.
-    pub requirements: usize,
-    /// Sources extracted this run.
-    pub sources: usize,
 }
 
 /// The `emery show` success body.
