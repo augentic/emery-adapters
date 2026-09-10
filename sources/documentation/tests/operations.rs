@@ -1,7 +1,5 @@
 //! Documentation extract operation behavior over the `Source` capability.
 
-use std::path::Path;
-
 use documentation::Adapter;
 use emery_adapter::types::{Authority, ClaimKind, Context, SourceInput};
 use emery_adapter::{Error, Format, Request, SourceAdapter as _};
@@ -11,7 +9,6 @@ use omnia_test::guest::{Scripted, function_tools};
 fn ctx(docs: &'static [Doc]) -> Context<'static> {
     Context {
         adapter_id: "source:documentation",
-        project_root: Path::new("."),
         docs,
         lend: Some(".".to_string()),
     }
@@ -99,7 +96,11 @@ async fn no_lend() {
     let model = Scripted::answering([r#"{"authority":"documentation","claims":[]}"#]);
     let input = SourceInput::value("notes", "Reset links expire after 30 minutes.");
 
-    let evidence = Adapter::extract(&model, &ctx(&[]).without_lend(), &input).await.unwrap();
+    let ctx = Context {
+        lend: None,
+        ..ctx(&[])
+    };
+    let evidence = Adapter::extract(&model, &ctx, &input).await.unwrap();
 
     assert!(evidence.claims.is_empty());
     let requests = model.requests();

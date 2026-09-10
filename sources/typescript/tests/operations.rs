@@ -1,7 +1,5 @@
 //! TypeScript extract operation behavior over the `Source` capability.
 
-use std::path::Path;
-
 use emery_adapter::types::{Authority, ClaimKind, Context, SourceInput};
 use emery_adapter::{Error, Format, Request, SourceAdapter as _, ToolCall};
 use emery_prose::registry::Doc;
@@ -11,7 +9,6 @@ use typescript::Adapter;
 fn ctx(docs: &'static [Doc]) -> Context<'static> {
     Context {
         adapter_id: "source:typescript",
-        project_root: Path::new("."),
         docs,
         lend: Some(".".to_string()),
     }

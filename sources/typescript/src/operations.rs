@@ -9,8 +9,6 @@ use crate::registry;
 pub struct Adapter;
 
 impl SourceAdapter for Adapter {
-    const IDENTITY: &str = concat!("typescript@", env!("CARGO_PKG_VERSION"));
-
     fn docs() -> &'static [Doc] {
         registry::docs()
     }

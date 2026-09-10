@@ -15,8 +15,6 @@ use crate::registry;
 pub struct Adapter;
 
 impl SourceAdapter for Adapter {
-    const IDENTITY: &str = concat!("intent@", env!("CARGO_PKG_VERSION"));
-
     fn docs() -> &'static [Doc] {
         registry::docs()
     }
@@ -37,14 +35,15 @@ impl SourceAdapter for Adapter {
              document; do not write it yourself.",
             id = ctx.adapter_id,
             key = input.key,
-            content = content_note(input)?,
+            content = brief_note(input)?,
         );
         evidence(model, ctx, system, user).await
     }
 }
 
-// The shared inline-value note; a one-file tree is read into the same shape.
-fn content_note(input: &SourceInput) -> Result<String, Error> {
+// The prompt's note on the operator's brief: the SDK's content note for an
+// inline value; a one-file tree is read into the same shape.
+fn brief_note(input: &SourceInput) -> Result<String, Error> {
     match &input.content {
         SourceContent::Value(value) => {
             require_brief(value)?;

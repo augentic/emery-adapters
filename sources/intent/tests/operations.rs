@@ -10,7 +10,6 @@ use omnia_test::guest::{Scripted, function_tools};
 fn ctx() -> Context<'static> {
     Context {
         adapter_id: "source:intent",
-        project_root: Path::new("."),
         docs: Adapter::docs(),
         lend: None,
     }
