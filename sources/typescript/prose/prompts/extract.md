@@ -82,7 +82,7 @@ Two requirements for the spec, three detail claims backing them. `authority` is 
 
 ## Path rules
 
-Relative paths only, no `..`, no leading `/`, never under `node_modules`, `vendor`, `target`, `.venv`, `dist`, `build`, no `*.d.ts` files. A symlink inside `$SOURCE_DIR` pointing outside is denied at canonicalization by the host — a typed error, never silent narrowing.
+Relative paths only, no `..`, no leading `/`, never under `node_modules`, `vendor`, `target`, `.venv`, `dist`, `build`, no `*.d.ts` files, and never in the engine's own files — `spec.md`, `design.md`, `.emery/`, `.omnia/`, the [skip roots](../references/emery-runtime/claims.md#skip-roots) every adapter shares. A symlink inside `$SOURCE_DIR` pointing outside is denied at canonicalization by the host — a typed error, never silent narrowing.
 
 ## Anti-patterns
 

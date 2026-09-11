@@ -20,7 +20,7 @@ What the engine calls:
 | Operation | Engine passes | You return | The engine does with it |
 | --------- | ------------- | ---------- | ----------------------- |
 | `metadata` | — | `AdapterMetadata` | resolve-time record (`emery-version` gate) |
-| `extract` | `Context`, typed `SourceInput` (`key`, workspace-or-value) | `Evidence` | validates fail-closed (id grammar, required per-kind extras — A8), reconciles across sources, synthesises `spec.md` / `design.md` |
+| `extract` | `Context`, typed `SourceInput` (`key`, workspace-or-value) | `Evidence` | validates fail-closed (id grammar, required per-kind extras — A8), reconciles across sources, synthesises the typed spec and design masters (`emery show` projects them as `spec.md` / `design.md`) |
 
 Three ideas carry the operation:
 

@@ -213,7 +213,8 @@ fn run_case(case: &Case, paths: &Paths) -> CaseResult {
 }
 
 // Grade the committed spec through the public contract: `emery show
-// spec` renders it; the runner never reads engine storage directly.
+// spec --format json` carries the typed master beside its projection;
+// the runner never reads engine storage directly.
 fn graded(case: &Case, paths: &Paths, project: &Path, body: &envelope::Success) -> Outcome {
     let show: Vec<String> = vec!["--format".into(), "json".into(), "show".into(), "spec".into()];
     let output = emery(paths, project, &show);
@@ -238,7 +239,15 @@ fn graded(case: &Case, paths: &Paths, project: &Path, body: &envelope::Success) 
         )]);
     }
 
-    let findings = grade::spec(&shown.body, &case.expect);
+    let spec: grade::Spec = match serde_json::from_value(shown.document) {
+        Ok(spec) => spec,
+        Err(err) => {
+            return Outcome::Findings(vec![format!(
+                "`emery show spec` carries no typed specification as `document`: {err}"
+            )]);
+        }
+    };
+    let findings = grade::spec(&spec, &shown.body, &case.expect);
     if findings.is_empty() {
         Outcome::Pass {
             revision: body.revision.clone(),

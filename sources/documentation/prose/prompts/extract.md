@@ -77,4 +77,5 @@ Output:
 ## Guardrails
 
 - `$SOURCE_DIR` is read-only; never attempt to read or write outside it.
+- Skip the engine's own files wherever they appear in the tree — `spec.md`, `design.md`, `.emery/`, `.omnia/` — the [skip roots](../references/emery-runtime/claims.md#skip-roots) every adapter shares. A projection of the current revision is output, not documentation to mine.
 - Never emit claim kinds outside `{requirement, criterion, decision, section}` from this adapter. Behaviour kinds (`excerpt`/`type`/`call`) belong to code source adapters.
