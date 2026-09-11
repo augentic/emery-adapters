@@ -53,17 +53,18 @@ async fn inline_value() {
     let seen = model.seen();
     assert_eq!(seen.len(), 1, "extract is a single judgment leg");
     let request = &seen[0];
-    assert!(request.system.as_deref().unwrap().starts_with("# intent.extract"));
+    let system = request.system.as_deref().unwrap();
+    assert!(system.starts_with("# intent.extract"));
+    assert!(system.contains("whole brief, verbatim"), "the echo contract is stated");
+    assert!(
+        system.contains("One per distinct behavioural directive"),
+        "the reconciliation-join contract is stated"
+    );
     let user = &request.messages[0];
     assert!(user.contains("source key `intent`"), "passed source key is named");
     assert!(user.contains("inline value"), "prompt names the inline source");
     assert!(user.contains("no `$SOURCE_DIR` is lent"), "prompt says no source tree is bound");
     assert!(user.contains("Let users reset passwords by email."), "value is on the wire");
-    assert!(user.contains("verbatim"), "the echo contract is stated");
-    assert!(
-        user.contains("one `kind: \"requirement\"` claim per distinct behavioural directive"),
-        "the reconciliation-join contract is stated"
-    );
     let SeenFormat::Schema { name, schema } = &request.format else {
         panic!("expected schema format, got {:?}", request.format)
     };

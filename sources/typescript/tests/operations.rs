@@ -7,11 +7,11 @@ use omnia_test::SeenFormat;
 use omnia_test::guest::Scripted;
 use typescript::Adapter;
 
-fn ctx(docs: &'static [Doc]) -> Context<'static> {
+const fn ctx(docs: &'static [Doc]) -> Context<'static> {
     Context {
         adapter_id: "source:typescript",
         docs,
-        lend: Some(".".to_string()),
+        lend: Some("."),
     }
 }
 
@@ -71,15 +71,15 @@ async fn extract_leg() {
         "extract prompt is the system channel"
     );
     assert!(system.contains("bad_request"), "prompt names the fail-closed gate");
+    assert!(
+        system.contains("Every behavioural fact worth a spec block"),
+        "the reconciliation-join contract is stated"
+    );
     let user = &request.messages[0];
     assert!(user.contains("source key `legacy-monolith`"), "passed source key is named");
     assert!(user.contains("$SOURCE_DIR"), "source is mapped onto the prompt's vocabulary");
     assert!(user.contains("extract mines only this source"), "nothing else is reachable");
     assert!(user.contains("`read_doc` tool"), "the reference pull affordance is named");
-    assert!(
-        user.contains("every spec-worthy behaviour lifted into a `requirement` claim"),
-        "the reconciliation-join contract is stated"
-    );
     let SeenFormat::Schema { name, schema } = &request.format else {
         panic!("expected schema format, got {:?}", request.format)
     };

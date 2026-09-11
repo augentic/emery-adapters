@@ -26,7 +26,7 @@ Three ideas carry the operation:
 
 - **The model is a parameter.** `extract` is generic over `emery_adapter::Model`. On wasm the macro binds `WasiModel`; native tests bind `omnia_test::guest::Scripted` with scripted answers. Your code never constructs a backend.
 - **Prose is embedded at build time.** `build.rs` calls `emery_prose::emit("prose")` (the `emit` feature, enabled on the build-dependency only), which walks the adapter's `prose/` tree into a sorted `DOCS` table; `emery_prose::registry!()` exposes it as `registry::docs()` / `registry::body("prompts/extract.md")`. A dangling relative link in any prose document fails the build. The engine repository's mock adapter ([`examples/adapter/lib.rs`](https://github.com/augentic/emery/blob/main/examples/adapter/lib.rs)) embeds its prose the same way and is the smallest complete example of the shape. Each judgment declares `list_docs` / `read_doc` function tools and answers the model's calls in-process from that embedded corpus, so prompts cite references by relative link instead of inlining them.
-- **Answers are steered by schema and judged by the gate.** `emery_adapter::evidence(model, ctx, system, user)` asks one `omnia_guest::model::Question<Evidence>`: the derived `Evidence` schema rides the request as a steering hint (the claim-id grammar as its `pattern`), and the claim gate is the request's `check` — run over every candidate the backend proposes, with a miss handed back as the correction (`## Previous answer (rejected)` / `## Findings`) so the backend asks again within its own round budget. The adapter never sees the reply text; it gets the accepted `Evidence`, or a `bad_request` carrying the last findings once the rounds are spent. `emery_adapter::content_note(input, tree)` is the shared prompt fragment describing the bound workspace or inline value.
+- **Answers are steered by schema and judged by the gate.** `emery_adapter::evidence(model, ctx, input, system, turn)` asks one `omnia_guest::model::Question<Evidence>`: the derived `Evidence` schema rides the request as a steering hint (the claim-id grammar as its `pattern`), and the claim gate is the request's `check` — run over every candidate the backend proposes, with a miss handed back as the correction (`## Previous answer (rejected)` / `## Findings`) so the backend asks again within its own round budget. The adapter never sees the reply text; it gets the accepted `Evidence`, or a `bad_request` carrying the last findings once the rounds are spent. `EvidenceTurn::bound(source, tree)` wraps an ordinary workspace or inline value; `EvidenceTurn::prepared(source, note)` admits a source-specific material note after the adapter validates or reads its input.
 - **Failures are Omnia errors.** Every operation fails with `emery_adapter::Error` (omnia's `omnia_guest::Error`), built with the re-exported `bad_request!` / `server_error!` / `bad_gateway!` macros — there is no adapter error type. Classify by who acts: a source the adapter cannot accept (an empty brief, a tree that is not the expected shape) is `bad_request!`; an unreadable file or a failed upstream is `server_error!` / `bad_gateway!`. The SDK lowers the class to the WIT `error` variant at the export, the engine lifts it back, and it surfaces to the operator as the matching exit code.
 
 For the type-level contract — `Context`, `SourceInput`, `Evidence`, the answer schemas — generate the SDK docs locally with `cargo doc -p emery-adapter --open`. The wire DTOs and the import-side `Source` capability are defined in `emery-source` and re-exported by the SDK, so an adapter names `emery_adapter::types::…` and never depends on `emery-source` directly.
@@ -101,15 +101,12 @@ fn main() {
 
 ### 3. The library skeleton
 
-`src/lib.rs` is the whole wasm story — the guest shim is one macro invocation, gated to `wasm32`, and carries no logic:
+`src/lib.rs` is the whole wasm story — the guest shim is one macro invocation at the crate root, which declares the `wasm32`-only guest module itself and carries no logic:
 
 ```rust
 //! Changelog source adapter.
 
-#[cfg(target_arch = "wasm32")]
-mod guest {
-    emery_adapter::source!(crate::Adapter);
-}
+emery_adapter::source!(crate::Adapter);
 
 mod operations;
 mod registry {
@@ -125,7 +122,7 @@ pub use operations::Adapter;
 
 ```rust
 use emery_adapter::types::{Context, Evidence, SourceInput};
-use emery_adapter::{Error, Model, SourceAdapter, content_note, evidence};
+use emery_adapter::{Error, EvidenceTurn, Model, SourceAdapter, evidence};
 use emery_prose::registry::Doc;
 
 use crate::registry;
@@ -142,18 +139,9 @@ impl SourceAdapter for Adapter {
     async fn extract<P: Model>(
         model: &P, ctx: &Context<'_>, input: &SourceInput,
     ) -> Result<Evidence, Error> {
-        let system = registry::body("prompts/extract.md").to_string();
-        let user = format!(
-            "Extract the claim set of the changelog source bound to adapter `{id}` \
-             (source key `{key}`).\n\n{content}\n\n\
-             Answer with one JSON object matching the gated schema: the Evidence body \
-             (`authority`, `claims`). The caller persists the document; do not write it \
-             yourself.",
-            id = ctx.adapter_id,
-            key = input.key,
-            content = content_note(input, "the changelog tree"),
-        );
-        evidence(model, ctx, system, user).await
+        let system = registry::body("prompts/extract.md");
+        let turn = EvidenceTurn::bound("changelog", "the changelog tree");
+        evidence(model, ctx, input, system, turn).await
     }
 }
 ```
@@ -162,10 +150,11 @@ impl SourceAdapter for Adapter {
 
 Points that generalize:
 
-- **Extract writes no artifacts.** The engine persists the Evidence; your job is to return a well-formed value. Say so explicitly in the prompt ("the caller persists…; do not write it yourself") because the model has workspace access.
+- **The SDK owns the user turn.** `EvidenceTurn::bound` selects the ordinary source-input rendering. Use `EvidenceTurn::prepared` when a source needs validation or preparation first — `intent`, for example, reads its one-file tree into the material note. The envelope always names the adapter and source key, advertises reference tools when the corpus is nonempty, and closes with the Evidence request.
+- **Extract writes no artifacts.** The engine persists the Evidence; your job is to return a well-formed value. The fixed turn closing says so ("the caller persists…; do not write it yourself") because the model has workspace access.
 - **One pass, whole source.** There is no survey step and no lead focus: extract mines the whole bound source in one call. The source arrives prepared — a tree as `SourceContent::Workspace` (lent as `$SOURCE_DIR`), an inline source as `SourceContent::Value`.
 - **Required extras are fail-closed.** A `requirement` claim without a `statement` extra (or a `criterion` without `criterion`, an `example` without `replay-digest`) fails the SDK's `check`, so the backend corrects the candidate in place; an answer still missing one when the backend's rounds are spent fails the whole run engine-side closed (typed `bad_request`) — never a synopsis fallback. Put the per-kind table and the id-derivation rules in the prompt; reconciliation joins claims across sources by their dotted-kebab ids.
-- **`evidence` owns the question.** An adapter builds the prompt and nothing else; the schema, the gate, and the correction text are the SDK's and omnia's, and the round budget is the backend's.
+- **`evidence` owns the question.** An adapter selects the system prose and turn material; the user-turn envelope, schema, gate, and correction text are the SDK's and omnia's, and the round budget is the backend's.
 
 ### 5. Author the prose
 

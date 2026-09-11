@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::time::Instant;
 
-use eval::envelope;
+use eval::envelope::{Failure, Shown, Success};
 use eval::grade::{self, Expect};
 use eval::scorecard::{CaseResult, Outcome, Scorecard};
 
@@ -89,7 +89,7 @@ fn main() {
         cases,
         complete: filter.is_none(),
     };
-    let rendered = scorecard.render();
+    let rendered = scorecard.to_string();
     print!("{rendered}");
     let out = paths.root.join("sandbox/scorecard.md");
     std::fs::create_dir_all(out.parent().expect("sandbox parent")).expect("mkdir sandbox");
@@ -195,7 +195,7 @@ fn run_case(case: &Case, paths: &Paths) -> CaseResult {
         return failed(case, started, &output, fixture_sha);
     }
 
-    let outcome = match envelope::success(&output.stdout) {
+    let outcome = match Success::try_from(output.stdout.as_slice()) {
         Ok(body) => graded(case, paths, &project, &body),
         Err(finding) => Outcome::Findings(vec![finding]),
     };
@@ -215,11 +215,11 @@ fn run_case(case: &Case, paths: &Paths) -> CaseResult {
 // Grade the committed spec through the public contract: `emery show
 // spec --format json` carries the typed specification beside its projection;
 // the runner never reads engine storage directly.
-fn graded(case: &Case, paths: &Paths, project: &Path, body: &envelope::Success) -> Outcome {
+fn graded(case: &Case, paths: &Paths, project: &Path, body: &Success) -> Outcome {
     let show: Vec<String> = vec!["--format".into(), "json".into(), "show".into(), "spec".into()];
     let output = emery(paths, project, &show);
     if !output.status.success() {
-        let finding = match envelope::failure(&output.stderr) {
+        let finding = match Failure::try_from(output.stderr.as_slice()) {
             Ok(failure) => format!(
                 "`emery show spec` failed typed after a committed revision: `{}` (exit {})",
                 failure.error, failure.exit_code
@@ -228,7 +228,7 @@ fn graded(case: &Case, paths: &Paths, project: &Path, body: &envelope::Success) 
         };
         return Outcome::Findings(vec![finding]);
     }
-    let shown = match envelope::shown(&output.stdout) {
+    let shown = match Shown::try_from(output.stdout.as_slice()) {
         Ok(shown) => shown,
         Err(finding) => return Outcome::Findings(vec![finding]),
     };
@@ -263,7 +263,7 @@ fn graded(case: &Case, paths: &Paths, project: &Path, body: &envelope::Success) 
 fn failed(
     case: &Case, started: Instant, output: &Output, fixture_sha: Option<String>,
 ) -> CaseResult {
-    let (error, exit_code) = match envelope::failure(&output.stderr) {
+    let (error, exit_code) = match Failure::try_from(output.stderr.as_slice()) {
         Ok(body) => (body.error, body.exit_code),
         Err(_) => (
             format!("unparseable failure: {}", String::from_utf8_lossy(&output.stderr).trim()),

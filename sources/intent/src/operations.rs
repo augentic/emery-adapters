@@ -5,7 +5,9 @@
 use std::path::{Path, PathBuf};
 
 use emery_adapter::types::{Context, Evidence, SourceContent, SourceInput};
-use emery_adapter::{Error, Model, SourceAdapter, bad_request, evidence, server_error};
+use emery_adapter::{
+    Error, EvidenceTurn, Model, SourceAdapter, bad_request, evidence, server_error,
+};
 use emery_prose::registry::Doc;
 
 use crate::registry;
@@ -23,21 +25,8 @@ impl SourceAdapter for Adapter {
         model: &P, ctx: &Context<'_>, input: &SourceInput,
     ) -> Result<Evidence, Error> {
         let system = registry::body("prompts/extract.md");
-        let user = format!(
-            "Extract the claim set of the intent source bound to adapter `{id}` \
-             (source key `{key}`).\n\n\
-             {content}\n\n\
-             Answer with one JSON object matching the gated schema: the Evidence body \
-             (`authority: \"intent\"`; first one `kind: \"intent\"` claim whose `id` \
-             equals the source key and whose `statement` carries the operator's brief \
-             verbatim, then one `kind: \"requirement\"` claim per distinct behavioural \
-             directive the brief states, per the prompt). The caller persists the \
-             document; do not write it yourself.",
-            id = ctx.adapter_id,
-            key = input.key,
-            content = brief_note(input)?,
-        );
-        evidence(model, ctx, system, user).await
+        let turn = EvidenceTurn::prepared("intent", brief_note(input)?);
+        evidence(model, ctx, input, system, turn).await
     }
 }
 

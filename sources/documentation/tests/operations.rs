@@ -7,11 +7,11 @@ use emery_prose::registry::Doc;
 use omnia_test::SeenFormat;
 use omnia_test::guest::Scripted;
 
-fn ctx(docs: &'static [Doc]) -> Context<'static> {
+const fn ctx(docs: &'static [Doc]) -> Context<'static> {
     Context {
         adapter_id: "source:documentation",
         docs,
-        lend: Some(".".to_string()),
+        lend: Some("."),
     }
 }
 

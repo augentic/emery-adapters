@@ -2,7 +2,7 @@
 //! product.md numbers and both repos' shas. The release workflow
 //! verifies a green scorecard; it never runs the live eval.
 
-use std::fmt::Write as _;
+use std::fmt;
 
 /// product.md target: time to first reviewable specification.
 pub const TIME_TARGET_SECS: f64 = 30.0 * 60.0;
@@ -87,67 +87,66 @@ impl Scorecard {
             && self.worst_secs() <= TIME_TARGET_SECS
             && self.op_rate() >= OP_TARGET
     }
+}
 
-    /// The scorecard document. The `status:` / `emery-sha:` lines are
-    /// the machine-readable record of the run.
-    #[must_use]
-    pub fn render(&self) -> String {
-        let mut out = format!("# Emery eval scorecard — {}\n\n", self.date);
-        let status = if self.green() { "green" } else { "red" };
-        let _ = writeln!(out, "- status: {status}");
-        let _ = writeln!(out, "- emery-sha: {}", self.emery_sha);
-        let _ = writeln!(out, "- adapters-sha: {}", self.adapters_sha);
-        let _ = writeln!(
-            out,
-            "- catalog: {}",
-            if self.complete { "complete" } else { "filtered (never green)" }
-        );
-        out.push_str("\n## product.md numbers\n\n");
-        let _ = writeln!(
-            out,
+/// The scorecard document. The `status:` / `emery-sha:` lines are the
+/// machine-readable record of the run.
+impl fmt::Display for Scorecard {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "# Emery eval scorecard — {}\n", self.date)?;
+        writeln!(f, "- status: {}", if self.green() { "green" } else { "red" })?;
+        writeln!(f, "- emery-sha: {}", self.emery_sha)?;
+        writeln!(f, "- adapters-sha: {}", self.adapters_sha)?;
+        let catalog = if self.complete { "complete" } else { "filtered (never green)" };
+        writeln!(f, "- catalog: {catalog}")?;
+        writeln!(f, "\n## product.md numbers\n")?;
+        writeln!(
+            f,
             "- time-to-first-reviewable-spec: {:.0}s (target ≤{:.0}s)",
             self.worst_secs(),
             TIME_TARGET_SECS
-        );
-        let _ = writeln!(
-            out,
+        )?;
+        writeln!(
+            f,
             "- per-operation-success: {:.1}% (target ≥{:.0}%)",
             self.op_rate() * 100.0,
             OP_TARGET * 100.0
-        );
-        out.push_str(
-            "- reviewability-beyond-mechanical: unconfirmed (model grading not yet wired)\n",
-        );
-        out.push_str("\n## cases\n\n");
-        for case in &self.cases {
-            match &case.outcome {
-                Outcome::Pass { revision } => {
-                    let fixture = case
-                        .fixture_sha
-                        .as_deref()
-                        .map(|sha| format!(", fixture {sha}"))
-                        .unwrap_or_default();
-                    let _ = writeln!(
-                        out,
-                        "- {}: pass — revision `{revision}`, {:.0}s, ops {}/{}{fixture}",
-                        case.id,
-                        case.secs,
-                        case.ops_succeeded,
-                        case.ops_succeeded + case.ops_failed
-                    );
-                }
-                Outcome::TypedFailure { error, exit_code } => {
-                    let _ =
-                        writeln!(out, "- {}: typed failure `{error}` (exit {exit_code})", case.id);
-                }
-                Outcome::Findings(findings) => {
-                    let _ = writeln!(out, "- {}: graded findings", case.id);
-                    for finding in findings {
-                        let _ = writeln!(out, "  - {finding}");
-                    }
-                }
+        )?;
+        writeln!(
+            f,
+            "- reviewability-beyond-mechanical: unconfirmed (model grading not yet wired)"
+        )?;
+        writeln!(f, "\n## cases\n")?;
+        self.cases.iter().try_for_each(|case| write!(f, "{case}"))
+    }
+}
+
+/// One case's bullet under the scorecard's `## cases`.
+impl fmt::Display for CaseResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.outcome {
+            Outcome::Pass { revision } => {
+                let fixture = self
+                    .fixture_sha
+                    .as_deref()
+                    .map(|sha| format!(", fixture {sha}"))
+                    .unwrap_or_default();
+                writeln!(
+                    f,
+                    "- {}: pass — revision `{revision}`, {:.0}s, ops {}/{}{fixture}",
+                    self.id,
+                    self.secs,
+                    self.ops_succeeded,
+                    self.ops_succeeded + self.ops_failed
+                )
+            }
+            Outcome::TypedFailure { error, exit_code } => {
+                writeln!(f, "- {}: typed failure `{error}` (exit {exit_code})", self.id)
+            }
+            Outcome::Findings(findings) => {
+                writeln!(f, "- {}: graded findings", self.id)?;
+                findings.iter().try_for_each(|finding| writeln!(f, "  - {finding}"))
             }
         }
-        out
     }
 }

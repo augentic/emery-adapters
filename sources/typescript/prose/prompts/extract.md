@@ -1,6 +1,6 @@
 # TypeScript / JavaScript source extract
 
-The engine invokes this prompt once per bound `typescript` source. Your job: walk the whole source tree under `$SOURCE_DIR`, read the code, and emit one Evidence document covering the behaviour the estate actually exhibits. The caller persists it; this answer is the JSON body only. The engine deterministically reconciles it with every other bound source's Evidence into the specification — see [From sources to a spec](../references/emery-runtime/reconciliation.md).
+The engine invokes this prompt once per bound `typescript` source. Your job: walk the whole source tree under `$SOURCE_DIR`, read the code, and emit one Evidence document covering the behaviour the estate actually exhibits. The engine deterministically reconciles it with every other bound source's Evidence into the specification — see [From sources to a spec](../references/emery-runtime/reconciliation.md).
 
 ## Inputs
 

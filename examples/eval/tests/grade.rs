@@ -169,7 +169,7 @@ fn green_line() {
     };
     let red = card(vec![pass, failed]);
     assert!(!red.green(), "a typed failure is a red scorecard, never graded around");
-    let rendered = red.render();
+    let rendered = red.to_string();
     assert!(rendered.contains("- status: red"), "{rendered}");
     assert!(rendered.contains("bad_gateway"), "{rendered}");
     assert!(rendered.contains("unconfirmed"), "unmeasured stays unconfirmed: {rendered}");

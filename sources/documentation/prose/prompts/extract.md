@@ -1,6 +1,6 @@
 # `documentation.extract`
 
-Walk the whole bound documentation source and return one `Evidence` document of structured claims. The caller persists the result; this answer is the JSON body only. The engine deterministically reconciles this Evidence with every other bound source's into the specification — see [From sources to a spec](../references/emery-runtime/reconciliation.md).
+Walk the whole bound documentation source and return one `Evidence` document of structured claims. The engine deterministically reconciles this Evidence with every other bound source's into the specification — see [From sources to a spec](../references/emery-runtime/reconciliation.md).
 
 ## Inputs
 
