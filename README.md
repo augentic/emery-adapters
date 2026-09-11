@@ -13,7 +13,7 @@ The version operators pin (`documentation@0.13.0`) is this workspace's shared Se
 
 ## What an adapter is
 
-An adapter is one Rust crate that ships as one Wasm component exporting the `source-adapter` world (`extract` + `metadata`). The engine names the sources on each `emery specify` invocation, dispatches one `extract` per source, and reconciles the returned Evidence documents into the typed specification and design masters that `emery show` projects as `spec.md` / `design.md`. Adapters never orchestrate lifecycle.
+An adapter is one Rust crate that ships as one Wasm component exporting the `source-adapter` world (`extract` + `metadata`). The engine names the sources on each `emery specify` invocation, dispatches one `extract` per source, and reconciles the returned Evidence documents into the typed specification and design that `emery show` projects as `spec.md` / `design.md`. Adapters never orchestrate lifecycle.
 
 | Adapter | Authority | Extracts |
 | --- | --- | --- |

@@ -213,7 +213,7 @@ fn run_case(case: &Case, paths: &Paths) -> CaseResult {
 }
 
 // Grade the committed spec through the public contract: `emery show
-// spec --format json` carries the typed master beside its projection;
+// spec --format json` carries the typed specification beside its projection;
 // the runner never reads engine storage directly.
 fn graded(case: &Case, paths: &Paths, project: &Path, body: &envelope::Success) -> Outcome {
     let show: Vec<String> = vec!["--format".into(), "json".into(), "show".into(), "spec".into()];

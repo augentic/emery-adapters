@@ -54,7 +54,7 @@ pub struct Shown {
     pub revision: String,
     /// The Markdown projection of the document.
     pub body: String,
-    /// The typed master the projection was rendered from; the spec
+    /// The typed document the projection was rendered from; the spec
     /// grades through [`grade::Spec`](crate::grade::Spec).
     pub document: serde_json::Value,
 }

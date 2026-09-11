@@ -17,7 +17,7 @@ make eval             # every case
 make eval orders-docs # one case
 ```
 
-Each case stages its fixture into a fresh retained sandbox (`sandbox/<case>/`), runs one `emery --format json specify` naming the built components (workspace-backed sources plus the case's inline `intent` value — the source list never persists), and grades the committed revision through `emery --format json show spec` — the typed specification master the envelope carries as `document`, checked against the Markdown projection it carries as `body`. The `omnia-r9k` case shallow-clones its UNLICENSED upstream into the gitignored `cases/omnia-r9k/fixture/` cache on first run.
+Each case stages its fixture into a fresh retained sandbox (`sandbox/<case>/`), runs one `emery --format json specify` naming the built components (workspace-backed sources plus the case's inline `intent` value — the source list never persists), and grades the committed revision through `emery --format json show spec` — the typed specification the envelope carries as `document`, checked against the Markdown projection it carries as `body`. The `omnia-r9k` case shallow-clones its UNLICENSED upstream into the gitignored `cases/omnia-r9k/fixture/` cache on first run.
 
 ## What is measured
 
@@ -25,7 +25,7 @@ Against the measured qualities (time to first reviewable specification; per-oper
 
 - **Time to first reviewable specification** — wall clock over the one `specify` invocation to the committed revision, per case; the scorecard reports the worst case against the ≤30-minute target.
 - **Per-operation success rate** — one extract per source plus one synthesis per case, from typed outcomes only; target ≥95%. A typed nonzero exit is recorded as the outcome, never bypassed.
-- **CC-05 / CC-06 mechanical properties** — read from the typed master and its projection: disagreement and gaps inline (a `[unknown]` / `[conflict]` / `[divergence]` heading tag in the projection coherent with each requirement's `status`), identity stored (every requirement carries a unique `REQ-NNN` id), provenance one gesture away (every requirement cites at least one complete `(source, claim)` pair), and the spec covering the bound estate (a requirement subject naming it).
+- **CC-05 / CC-06 mechanical properties** — read from the typed specification and its projection: disagreement and gaps inline (a `[unknown]` / `[conflict]` / `[divergence]` heading tag in the projection coherent with each requirement's `status`), identity stored (every requirement carries a unique `REQ-NNN` id), provenance one gesture away (every requirement cites at least one complete `(source, claim)` pair), and the spec covering the bound estate (a requirement subject naming it).
 - **Reviewability beyond the mechanical checks** — model-graded territory, recorded `unconfirmed` until wired; unmeasured never silently passes.
 
 ## The scorecard

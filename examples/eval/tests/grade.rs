@@ -1,5 +1,5 @@
 //! The grading kernel at its public surface: the mechanical
-//! properties over the published wire shapes — the typed master and
+//! properties over the published wire shapes — the typed specification and
 //! its Markdown projection as `emery show --format json` carries them.
 
 use eval::grade::{self, Expect, Spec};
@@ -9,7 +9,7 @@ const EXPECT: Expect = Expect {
     subject_fragment: "order",
 };
 
-// A well-formed two-requirement master: one agreed row, one gap.
+// A well-formed two-requirement specification: one agreed row, one gap.
 const GOOD: &str = r#"{
   "emery": 2,
   "next_id": 3,
@@ -33,7 +33,7 @@ An order carries at least one line item.\n\n\
 ID: REQ-002\nSources: [documentation:order.state]\nStatus: unknown\n\n\
 An order is open, fulfilled, or cancelled.\n\nNote: acceptance criteria not evidenced.\n";
 
-fn master(json: &str) -> Spec {
+fn spec_of(json: &str) -> Spec {
     serde_json::from_str(json).expect("a typed spec fixture")
 }
 
@@ -46,12 +46,12 @@ fn requirement(id: &str, subject: &str, status: &str, sources: &str) -> String {
 
 #[test]
 fn well_formed() {
-    assert_eq!(grade::spec(&master(GOOD), GOOD_BODY, &EXPECT), Vec::<String>::new());
+    assert_eq!(grade::spec(&spec_of(GOOD), GOOD_BODY, &EXPECT), Vec::<String>::new());
 }
 
 #[test]
 fn empty_spec() {
-    let findings = grade::spec(&master(r#"{"requirements": []}"#), "# Specification\n", &EXPECT);
+    let findings = grade::spec(&spec_of(r#"{"requirements": []}"#), "# Specification\n", &EXPECT);
     assert_eq!(findings.len(), 1);
     assert!(findings[0].contains("no requirements"), "{findings:?}");
 }
@@ -61,7 +61,7 @@ fn missing_subject() {
     let expect = Expect {
         subject_fragment: "position",
     };
-    let findings = grade::spec(&master(GOOD), GOOD_BODY, &expect);
+    let findings = grade::spec(&spec_of(GOOD), GOOD_BODY, &expect);
     assert!(
         findings.iter().any(|finding| finding.contains("position")),
         "the missed estate is named: {findings:?}"
@@ -71,7 +71,7 @@ fn missing_subject() {
 #[test]
 fn no_provenance() {
     let spec = requirement("REQ-001", "order.placement", "agreed", "[]");
-    let findings = grade::spec(&master(&spec), GOOD_BODY, &EXPECT);
+    let findings = grade::spec(&spec_of(&spec), GOOD_BODY, &EXPECT);
     assert!(findings.iter().any(|finding| finding.contains("cites no source")), "{findings:?}");
 
     let half = requirement(
@@ -80,7 +80,7 @@ fn no_provenance() {
         "agreed",
         r#"[{"source": "documentation", "claim": ""}]"#,
     );
-    let findings = grade::spec(&master(&half), GOOD_BODY, &EXPECT);
+    let findings = grade::spec(&spec_of(&half), GOOD_BODY, &EXPECT);
     assert!(findings.iter().any(|finding| finding.contains("incomplete pair")), "{findings:?}");
 }
 
@@ -89,11 +89,11 @@ fn no_provenance() {
 #[test]
 fn identity() {
     let unnumbered = requirement("", "order.placement", "agreed", "[]");
-    let findings = grade::spec(&master(&unnumbered), GOOD_BODY, &EXPECT);
+    let findings = grade::spec(&spec_of(&unnumbered), GOOD_BODY, &EXPECT);
     assert!(findings.iter().any(|finding| finding.contains("not a `REQ-NNN` id")), "{findings:?}");
 
     let duplicated = GOOD.replace("REQ-002", "REQ-001");
-    let findings = grade::spec(&master(&duplicated), GOOD_BODY, &EXPECT);
+    let findings = grade::spec(&spec_of(&duplicated), GOOD_BODY, &EXPECT);
     assert!(
         findings.iter().any(|finding| finding.contains("more than one requirement")),
         "{findings:?}"
@@ -106,15 +106,15 @@ fn identity() {
 #[test]
 fn tag_mismatch() {
     let hidden = GOOD_BODY.replace(" [unknown]", "");
-    let findings = grade::spec(&master(GOOD), &hidden, &EXPECT);
+    let findings = grade::spec(&spec_of(GOOD), &hidden, &EXPECT);
     assert!(findings.iter().any(|finding| finding.contains("[unknown]")), "{findings:?}");
 
     let untagged_status = GOOD.replace(r#""status": "unknown""#, r#""status": "agreed""#);
-    let findings = grade::spec(&master(&untagged_status), GOOD_BODY, &EXPECT);
+    let findings = grade::spec(&spec_of(&untagged_status), GOOD_BODY, &EXPECT);
     assert!(findings.iter().any(|finding| finding.contains("[unknown]")), "{findings:?}");
 
     let unprojected = GOOD_BODY.replace("order.state", "order.status");
-    let findings = grade::spec(&master(GOOD), &unprojected, &EXPECT);
+    let findings = grade::spec(&spec_of(GOOD), &unprojected, &EXPECT);
     assert!(
         findings.iter().any(|finding| finding.contains("no heading in the projection")),
         "{findings:?}"

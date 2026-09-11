@@ -1,8 +1,8 @@
 //! Mechanical grading of a committed specification: disagreement and
 //! gaps inline, provenance one gesture away.
 //!
-//! Checks operate on the published wire shapes only — the typed master
-//! `emery show --format json` carries as `document` and the Markdown
+//! Checks operate on the published wire shapes only — the typed
+//! specification `emery show --format json` carries as `document` and the Markdown
 //! projection it carries as `body` — no engine parser is linked.
 
 use serde::Deserialize;
@@ -46,7 +46,7 @@ pub struct Expect {
     pub subject_fragment: &'static str,
 }
 
-/// The graded slice of the typed specification master: the fields the
+/// The graded slice of the typed specification: the fields the
 /// mechanical properties read. Unknown fields are ignored, so the
 /// grader survives additive engine changes.
 #[derive(Debug, Clone, Deserialize)]
@@ -55,7 +55,7 @@ pub struct Spec {
     pub requirements: Vec<Requirement>,
 }
 
-/// One requirement of the typed master.
+/// One requirement of the typed specification.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Requirement {
     /// The stored `REQ-NNN` identity.
