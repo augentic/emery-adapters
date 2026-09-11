@@ -38,10 +38,16 @@ fn spec_of(json: &str) -> Spec {
 }
 
 // One requirement whose graded fields are chosen by the scenario.
-fn requirement(id: &str, subject: &str, status: &str, sources: &str) -> String {
-    format!(
-        r#"{{"requirements": [{{"id": "{id}", "subject": "{subject}", "status": "{status}", "sources": {sources}}}]}}"#
-    )
+fn requirement(id: &str, subject: &str, status: &str, sources: &serde_json::Value) -> String {
+    serde_json::json!({
+        "requirements": [{
+            "id": id,
+            "subject": subject,
+            "status": status,
+            "sources": sources,
+        }],
+    })
+    .to_string()
 }
 
 #[test]
@@ -70,7 +76,7 @@ fn missing_subject() {
 
 #[test]
 fn no_provenance() {
-    let spec = requirement("REQ-001", "order.placement", "agreed", "[]");
+    let spec = requirement("REQ-001", "order.placement", "agreed", &serde_json::json!([]));
     let findings = grade::spec(&spec_of(&spec), GOOD_BODY, &EXPECT);
     assert!(findings.iter().any(|finding| finding.contains("cites no source")), "{findings:?}");
 
@@ -78,19 +84,23 @@ fn no_provenance() {
         "REQ-001",
         "order.placement",
         "agreed",
-        r#"[{"source": "documentation", "claim": ""}]"#,
+        &serde_json::json!([{"source": "documentation", "claim": ""}]),
     );
     let findings = grade::spec(&spec_of(&half), GOOD_BODY, &EXPECT);
     assert!(findings.iter().any(|finding| finding.contains("incomplete pair")), "{findings:?}");
 }
 
-// Identity is stored: a requirement without a `REQ-NNN` id, or two
-// sharing one, is a finding.
+// Identity is stored: malformed or duplicate `REQ-NNN` ids are findings.
 #[test]
 fn identity() {
-    let unnumbered = requirement("", "order.placement", "agreed", "[]");
-    let findings = grade::spec(&spec_of(&unnumbered), GOOD_BODY, &EXPECT);
-    assert!(findings.iter().any(|finding| finding.contains("not a `REQ-NNN` id")), "{findings:?}");
+    for malformed in ["", "REQ- 001", "REQ-000", "REQ-0001"] {
+        let spec = requirement(malformed, "order.placement", "agreed", &serde_json::json!([]));
+        let findings = grade::spec(&spec_of(&spec), GOOD_BODY, &EXPECT);
+        assert!(
+            findings.iter().any(|finding| finding.contains("not a `REQ-NNN` id")),
+            "`{malformed}` was accepted: {findings:?}"
+        );
+    }
 
     let duplicated = GOOD.replace("REQ-002", "REQ-001");
     let findings = grade::spec(&spec_of(&duplicated), GOOD_BODY, &EXPECT);

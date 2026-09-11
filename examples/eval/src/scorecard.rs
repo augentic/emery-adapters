@@ -126,19 +126,18 @@ impl fmt::Display for CaseResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.outcome {
             Outcome::Pass { revision } => {
-                let fixture = self
-                    .fixture_sha
-                    .as_deref()
-                    .map(|sha| format!(", fixture {sha}"))
-                    .unwrap_or_default();
-                writeln!(
+                write!(
                     f,
-                    "- {}: pass — revision `{revision}`, {:.0}s, ops {}/{}{fixture}",
+                    "- {}: pass — revision `{revision}`, {:.0}s, ops {}/{}",
                     self.id,
                     self.secs,
                     self.ops_succeeded,
                     self.ops_succeeded + self.ops_failed
-                )
+                )?;
+                if let Some(sha) = &self.fixture_sha {
+                    write!(f, ", fixture {sha}")?;
+                }
+                writeln!(f)
             }
             Outcome::TypedFailure { error, exit_code } => {
                 writeln!(f, "- {}: typed failure `{error}` (exit {exit_code})", self.id)

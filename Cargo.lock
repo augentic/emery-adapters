@@ -260,6 +260,7 @@ name = "caller"
 version = "0.13.0"
 dependencies = [
  "emery-source",
+ "semver",
  "serde_json",
  "wasip3",
 ]

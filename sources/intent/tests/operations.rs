@@ -16,10 +16,6 @@ fn ctx() -> Context<'static> {
     }
 }
 
-fn value_input() -> SourceInput {
-    SourceInput::value("intent", "Let users reset passwords by email.")
-}
-
 fn workspace_input(root: &Path) -> SourceInput {
     SourceInput::workspace("intent", root.display().to_string())
 }
@@ -31,7 +27,13 @@ async fn inline_value() {
             {"kind":"requirement","id":"password-reset.request","statement":"Users reset passwords by email."}
         ]}"#]);
 
-    let evidence = Adapter::extract(&model, &ctx(), &value_input()).await.unwrap();
+    let evidence = Adapter::extract(
+        &model,
+        &ctx(),
+        &SourceInput::value("intent", "Let users reset passwords by email."),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(evidence.authority, Authority::Intent);
     assert_eq!(evidence.claims.len(), 2);

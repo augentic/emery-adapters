@@ -192,11 +192,11 @@ fn run_case(case: &Case, paths: &Paths) -> CaseResult {
     let output = emery(paths, &project, &specify);
     let secs = started.elapsed().as_secs_f64();
     if !output.status.success() {
-        return failed(case, started, &output, fixture_sha);
+        return failed(case, secs, &output, fixture_sha);
     }
 
     let outcome = match Success::try_from(output.stdout.as_slice()) {
-        Ok(body) => graded(case, paths, &project, &body),
+        Ok(body) => graded(case, paths, &project, body),
         Err(finding) => Outcome::Findings(vec![finding]),
     };
 
@@ -215,7 +215,7 @@ fn run_case(case: &Case, paths: &Paths) -> CaseResult {
 // Grade the committed spec through the public contract: `emery show
 // spec --format json` carries the typed specification beside its projection;
 // the runner never reads engine storage directly.
-fn graded(case: &Case, paths: &Paths, project: &Path, body: &Success) -> Outcome {
+fn graded(case: &Case, paths: &Paths, project: &Path, body: Success) -> Outcome {
     let show: Vec<String> = vec!["--format".into(), "json".into(), "show".into(), "spec".into()];
     let output = emery(paths, project, &show);
     if !output.status.success() {
@@ -250,7 +250,7 @@ fn graded(case: &Case, paths: &Paths, project: &Path, body: &Success) -> Outcome
     let findings = grade::spec(&spec, &shown.body, &case.expect);
     if findings.is_empty() {
         Outcome::Pass {
-            revision: body.revision.clone(),
+            revision: body.revision,
         }
     } else {
         Outcome::Findings(findings)
@@ -260,20 +260,17 @@ fn graded(case: &Case, paths: &Paths, project: &Path, body: &Success) -> Outcome
 // Record a typed nonzero exit: the failure envelope is the outcome,
 // never something to grade around. The failed operation counts against
 // the per-operation rate; operations never reached stay unrecorded.
-fn failed(
-    case: &Case, started: Instant, output: &Output, fixture_sha: Option<String>,
-) -> CaseResult {
+fn failed(case: &Case, secs: f64, output: &Output, fixture_sha: Option<String>) -> CaseResult {
     let (error, exit_code) = match Failure::try_from(output.stderr.as_slice()) {
         Ok(body) => (body.error, body.exit_code),
-        Err(_) => (
-            format!("unparseable failure: {}", String::from_utf8_lossy(&output.stderr).trim()),
-            output.status.code().and_then(|code| u8::try_from(code).ok()).unwrap_or(1),
-        ),
+        Err(error) => {
+            (error, output.status.code().and_then(|code| u8::try_from(code).ok()).unwrap_or(1))
+        }
     };
     CaseResult {
         id: case.id.to_string(),
         outcome: Outcome::TypedFailure { error, exit_code },
-        secs: started.elapsed().as_secs_f64(),
+        secs,
         ops_succeeded: 0,
         ops_failed: 1,
         fixture_sha,

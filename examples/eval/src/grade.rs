@@ -82,8 +82,12 @@ pub struct Cited {
 fn identity(requirements: &[Requirement], findings: &mut Vec<String>) {
     let mut seen = std::collections::BTreeSet::new();
     for req in requirements {
-        let digits = req.id.strip_prefix("REQ-").map_or("", str::trim);
-        if digits.len() < 3 || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+        let canonical = req
+            .id
+            .strip_prefix("REQ-")
+            .and_then(|digits| digits.parse::<u32>().ok())
+            .is_some_and(|number| number > 0 && format!("REQ-{number:03}") == req.id);
+        if !canonical {
             findings.push(format!("`{}` (`{}`) is not a `REQ-NNN` id", req.subject, req.id));
         }
         if !seen.insert(req.id.as_str()) {

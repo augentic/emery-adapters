@@ -78,7 +78,7 @@ mod guest {
         // A declared version is an exact semver.
         let metadata = Source::metadata(&Caller, id);
         if let Some(version) = &metadata.emery_version
-            && version.split('.').count() != 3
+            && semver::Version::parse(version).is_err()
         {
             return Err(format!("`emery-version` is not an exact semver: {version}"));
         }
