@@ -66,12 +66,10 @@ pub enum Outcome {
 }
 
 impl Scorecard {
-    #[must_use]
     fn worst_secs(&self) -> f64 {
         self.cases.iter().map(|case| case.secs).fold(0.0, f64::max)
     }
 
-    #[must_use]
     fn op_rate(&self) -> f64 {
         let succeeded: u32 = self.cases.iter().map(|case| case.ops_succeeded).sum();
         let failed: u32 = self.cases.iter().map(|case| case.ops_failed).sum();

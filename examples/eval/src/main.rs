@@ -187,7 +187,7 @@ fn run_case(case: &Case, paths: &Paths) -> CaseResult {
     for component in case.components {
         specify.push(format!("{component}.wasm"));
     }
-    specify.push("--value".into());
+    specify.push("--description".into());
     specify.push(format!("intent.wasm={}", case.intent));
     let output = emery(paths, &project, &specify);
     let secs = started.elapsed().as_secs_f64();
@@ -280,11 +280,12 @@ fn failed(
     }
 }
 
-// Isolated under the sandbox `EMERY_HOME` so no operator state is touched.
+// The runtime roots every effect at the invocation directory — the revision
+// store lands under the sandbox project's `.omnia/storage` — so running from
+// the project isolates the case and touches no operator state.
 fn emery(paths: &Paths, project: &Path, args: &[String]) -> Output {
     Command::new(&paths.emery_bin)
         .current_dir(project)
-        .env("EMERY_HOME", paths.root.join("sandbox/emery-home"))
         .args(args)
         .output()
         .expect("spawn the emery binary")

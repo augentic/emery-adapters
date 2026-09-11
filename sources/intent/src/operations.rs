@@ -22,7 +22,7 @@ impl SourceAdapter for Adapter {
     async fn extract<P: Model>(
         model: &P, ctx: &Context<'_>, input: &SourceInput,
     ) -> Result<Evidence, Error> {
-        let system = registry::body("prompts/extract.md").to_string();
+        let system = registry::body("prompts/extract.md");
         let user = format!(
             "Extract the claim set of the intent source bound to adapter `{id}` \
              (source key `{key}`).\n\n\
