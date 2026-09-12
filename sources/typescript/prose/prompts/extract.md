@@ -1,11 +1,11 @@
 # TypeScript / JavaScript source extract
 
-The engine invokes this prompt once per bound `typescript` source. Your job: walk the whole source tree under `$SOURCE_DIR`, read the code, and emit one Evidence document covering the behaviour the estate actually exhibits. The caller persists it; this answer is the JSON body only. The engine deterministically reconciles it with every other bound source's Evidence into the specification — see [From sources to a spec](../references/emery-runtime/reconciliation.md).
+The engine invokes this prompt once per bound `typescript` source. Your job: walk the whole source tree under `$SOURCE_DIR`, read the code, and emit one Evidence document covering the behaviour the estate actually exhibits. The engine deterministically reconciles it with every other bound source's Evidence into the specification — see [From sources to a spec](../references/emery-runtime/reconciliation.md).
 
 ## Inputs
 
-- **`$SOURCE_DIR`** — read-only view of the bound source root. Walk it; resolve `tsconfig.json` `paths` mappings relative to it. Absent when the binding is an inline `value` (the material is then in the message).
-- **Source key** — the kebab-case binding key the engine passed on the wire.
+- **`$SOURCE_DIR`** — read-only view of the bound source root. Walk it; resolve `tsconfig.json` `paths` mappings relative to it. Absent when the source is an inline `value` (the material is then in the message).
+- **Source key** — the kebab-case source key the engine passed on the wire.
 
 Nothing outside the bound source is reachable; writes back into `$SOURCE_DIR` are denied. Extract mines the entire estate in one pass: every entry point, handler, and domain module in scope.
 
@@ -37,7 +37,7 @@ This adapter emits from the closed enum:
 | `type` | `signature` (free-form) | A declared interface, type alias, class declaration, or DTO whose shape synthesis will need. |
 | `call` | `callee` (free-form) | An observed cross-module call that contributes to behaviour (the call is the wire). |
 
-**`requirement` claims are the reconciliation currency.** Only `kind: requirement` claims form spec requirement rows; `excerpt` / `type` / `call` claims reach synthesis as supporting context but can never agree, diverge, or conflict with another source. Every behavioural fact worth a spec block — a timeout value, a validation rule, an error response, a side effect — must be lifted into a `requirement` claim with a `statement`, anchored by its `path` and backed by detail claims. The gate is fail-closed ([claims.md](../references/emery-runtime/claims.md)): a `requirement` claim without a `statement` field fails the whole run closed (typed `bad_request`).
+**`requirement` claims are the reconciliation currency.** Only `kind: requirement` claims form the spec's requirements; `excerpt` / `type` / `call` claims reach synthesis as supporting context but can never agree, diverge, or conflict with another source. Every behavioural fact worth a spec block — a timeout value, a validation rule, an error response, a side effect — must be lifted into a `requirement` claim with a `statement`, anchored by its `path` and backed by detail claims. The gate is fail-closed ([claims.md](../references/emery-runtime/claims.md)): a `requirement` claim without a `statement` field fails the whole run closed (typed `bad_request`).
 
 `id` is **required** on `requirement` claims and follows the dotted-kebab grammar in claims.md (`session.timeout`). Derive ids from the domain concept — never from file paths or positions — so a documentation source describing the same behaviour converges on the same id and the engine can reconcile any disagreement. `id` is optional on `excerpt` / `type` / `call`; you MAY carry it when the claim backs a specific requirement.
 
@@ -76,13 +76,13 @@ Resulting Evidence body:
 }
 ```
 
-Two requirement rows for the spec, three detail claims backing them. `authority` is fixed at `behaviour` for this adapter. The document's source identity is stamped by the engine from the binding — it is not written in-document.
+Two requirements for the spec, three detail claims backing them. `authority` is fixed at `behaviour` for this adapter. The document's source identity is stamped by the engine from the source — it is not written in-document.
 
 **Cover what the estate actually does.** A `POST /orders` handler that writes an orders store must carry that write as a `call` claim and its behaviour as a `requirement`; a handler that invokes an external service must carry that call site. Downstream correlation evidences invocation, read/write, and ownership relationships from these structured claims — do not bury them in `excerpt` prose, and do not write a second behavioural spec in prose instead of emitting the structured claims.
 
 ## Path rules
 
-Relative paths only, no `..`, no leading `/`, never under `node_modules`, `vendor`, `target`, `.venv`, `dist`, `build`, no `*.d.ts` files. A symlink inside `$SOURCE_DIR` pointing outside is denied at canonicalization by the host — a typed error, never silent narrowing.
+Relative paths only, no `..`, no leading `/`, never under `node_modules`, `vendor`, `target`, `.venv`, `dist`, `build`, no `*.d.ts` files, and never in the engine's own files — `spec.md`, `design.md`, `.emery/`, `.omnia/`, the [skip roots](../references/emery-runtime/claims.md#skip-roots) every adapter shares. A symlink inside `$SOURCE_DIR` pointing outside is denied at canonicalization by the host — a typed error, never silent narrowing.
 
 ## Anti-patterns
 

@@ -25,6 +25,16 @@ Every claim mined from a `$SOURCE_DIR` tree carries a `path` rooted relative to 
 
 Line numbers are 1-indexed against the file at extract time. The path is relative (no leading `/`, no `..`) and never under a skip root. Choose the tightest anchor that bounds the cited text: the anchor is the citation, the body field carries short context, and stable spans at named boundaries keep re-runs byte-stable.
 
+## Skip roots
+
+The engine's own files live in the project the sources are bound from, and they are output, never input. Every adapter skips them wherever they appear under `$SOURCE_DIR` — never read them, never anchor a claim in them:
+
+- `spec.md` and `design.md` — the Markdown projections of the current revision, rendered by `emery show`.
+- `.emery/` — the carried revision pair (`spec.json`, `design.json`) the next `emery specify` continues from.
+- `.omnia/` — the runtime's storage root (the revision store) and any cache trees under it.
+
+Mining a projection back into claims would make the engine's last answer look like evidence for its next one, and every requirement it re-derived that way would read as `agreed` with itself. Adapter prompts add their own language- or format-specific skip roots (`node_modules`, `target`, test trees, …) beside this list, never instead of it.
+
 ## The fail-closed gate
 
 - Required body fields are a closed table: `requirement` → `statement`, `criterion` → `criterion`, `example` → `replay-digest`. A claim missing its required field, or carrying an `id` outside the grammar, fails the **whole run** closed as a typed `bad_request` naming the source, claim, and key. There is no partial acceptance and no fallback to `synopsis`.

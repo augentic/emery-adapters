@@ -5,7 +5,7 @@ Emit one `Evidence` document from the operator's free-form brief, with `authorit
 ## Inputs
 
 - **Inline value** — the operator's brief, verbatim (no `$SOURCE_DIR` is lent), **or** a one-file tree whose single file's contents are the brief; the message names which and carries the string either way.
-- **Source key** — the authored binding key the engine passed on the wire (typically `intent`).
+- **Source key** — the authored source key the engine passed on the wire (typically `intent`).
 
 Nothing outside the bound material is reachable; extract works only from this value.
 
@@ -17,7 +17,7 @@ Nothing outside the bound material is reachable; extract works only from this va
 | `requirement` | `statement` | One per distinct behavioural directive the brief states about the system. |
 | `criterion` | `criterion` | Only when the brief itself states an acceptance criterion. |
 
-The verbatim `intent` claim preserves the operator's words for the reviewer. The `requirement` claims are what deterministic reconciliation joins against other sources: only `requirement` claims form spec requirement rows, so a directive left solely inside the `intent` echo can never override a documentation or code claim — the authority precedence acts through matching `requirement` ids.
+The verbatim `intent` claim preserves the operator's words for the reviewer. The `requirement` claims are what deterministic reconciliation joins against other sources: only `requirement` claims form the spec's requirements, so a directive left solely inside the `intent` echo can never override a documentation or code claim — the authority precedence acts through matching `requirement` ids.
 
 ## `id` derivation
 
@@ -44,7 +44,7 @@ Rules:
 - Exactly one `kind: intent` claim, first, carrying the brief verbatim in `statement` — no summarising, no splitting, no grammatical cleanup. The reviewer must see exactly what the operator wrote.
 - One `requirement` claim per distinct behavioural directive, in brief order. Quote the operator's wording as one present-tense sentence; do not merge directives or invent ones the brief does not state. A brief that is pure context with no directive yields the `intent` echo claim alone.
 - Do not emit a `path:` on any claim. The intent source has no filesystem locus.
-- Operators who want to express independent briefs supply more than one intent string, each its own binding.
+- Operators who want to express independent briefs supply more than one intent string, each its own source.
 
 ## Worked example
 
@@ -68,5 +68,5 @@ Output — the Evidence body:
 
 ## Notes
 
-- Empty `claims: []` is schema-valid for sources with nothing to say, but the intent adapter is never legitimately empty — the binding exists because the operator supplied a brief. Treat an empty value as an extract failure, never an empty success.
+- Empty `claims: []` is schema-valid for sources with nothing to say, but the intent adapter is never legitimately empty — the source exists because the operator supplied a brief. Treat an empty value as an extract failure, never an empty success.
 - The gate is fail-closed ([claims.md](../references/emery-runtime/claims.md)): a `requirement` claim without a `statement` field fails the whole run closed (typed `bad_request`).

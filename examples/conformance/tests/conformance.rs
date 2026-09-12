@@ -150,14 +150,15 @@ async fn typescript() {
 
 // A fail-closed refusal crosses the seam as the typed WIT `error`
 // variant, before any model call: the intent adapter reads a one-file
-// tree, so a two-file tree is `invalid-request` on the wire.
+// tree, so a two-file tree is its `bad_request`, lowered to
+// `invalid-request` on the wire and lifted back as `bad_request`.
 #[tokio::test]
 async fn typed_error() {
     let project = scratch();
     project.write("a.md", "one\n");
     project.write("b.md", "two\n");
     let backends = Backends::defaults().await.model(ScriptedModel::answering::<String>([]));
-    let refusal = protocol::expect_error("invalid-request");
+    let refusal = protocol::expect_error("bad_request");
 
     let status = conformance::run(
         Call {
@@ -171,6 +172,6 @@ async fn typed_error() {
     .await
     .expect("deployment runs");
 
-    assert_eq!(status, ExitStatus::SUCCESS, "the caller saw `invalid-request`");
+    assert_eq!(status, ExitStatus::SUCCESS, "the caller saw `bad_request`");
     assert!(backends.model.seen().is_empty(), "no model call precedes the refusal");
 }

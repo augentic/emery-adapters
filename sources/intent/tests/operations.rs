@@ -2,43 +2,38 @@
 
 use std::path::Path;
 
-use emery_adapter::types::{Authority, ClaimKind, Context, Error, SourceInput};
-use emery_adapter::{Format, Request, SourceAdapter as _};
+use emery_adapter::types::{Authority, ClaimKind, Context, SourceInput};
+use emery_adapter::{Error, SourceAdapter as _};
 use intent::Adapter;
-use omnia_test::guest::{Scripted, function_tools};
+use omnia_test::SeenFormat;
+use omnia_test::guest::Scripted;
 
 fn ctx() -> Context<'static> {
     Context {
         adapter_id: "source:intent",
-        project_root: Path::new("."),
         docs: Adapter::docs(),
         lend: None,
     }
-}
-
-fn value_input() -> SourceInput {
-    SourceInput::value("intent", "Let users reset passwords by email.")
 }
 
 fn workspace_input(root: &Path) -> SourceInput {
     SourceInput::workspace("intent", root.display().to_string())
 }
 
-fn schema_format(request: &Request) -> (&str, &str) {
-    match &request.format {
-        Format::Schema(schema) => (&schema.name, &schema.schema),
-        other => panic!("expected schema format, got {other:?}"),
-    }
-}
-
 #[tokio::test]
-async fn extract_inline_value() {
+async fn inline_value() {
     let model = Scripted::answering([r#"{"authority":"intent","claims":[
             {"kind":"intent","id":"intent","statement":"Let users reset passwords by email."},
             {"kind":"requirement","id":"password-reset.request","statement":"Users reset passwords by email."}
         ]}"#]);
 
-    let evidence = Adapter::extract(&model, &ctx(), &value_input()).await.unwrap();
+    let evidence = Adapter::extract(
+        &model,
+        &ctx(),
+        &SourceInput::value("intent", "Let users reset passwords by email."),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(evidence.authority, Authority::Intent);
     assert_eq!(evidence.claims.len(), 2);
@@ -57,21 +52,24 @@ async fn extract_inline_value() {
         Some("Users reset passwords by email."),
     );
 
-    let requests = model.requests();
-    assert_eq!(requests.len(), 1, "extract is a single judgment leg");
-    let request = &requests[0];
-    assert!(request.system.as_deref().unwrap().starts_with("# intent.extract"));
-    let user = &request.messages[0].content;
-    assert!(user.contains("source key `intent`"), "passed source key is named");
-    assert!(user.contains("inline value"), "prompt names the inline binding");
-    assert!(user.contains("no `$SOURCE_DIR` is lent"), "prompt says no source tree is bound");
-    assert!(user.contains("Let users reset passwords by email."), "value is on the wire");
-    assert!(user.contains("verbatim"), "the echo contract is stated");
+    let seen = model.seen();
+    assert_eq!(seen.len(), 1, "extract is a single judgment leg");
+    let request = &seen[0];
+    let system = request.system.as_deref().unwrap();
+    assert!(system.starts_with("# intent.extract"));
+    assert!(system.contains("whole brief, verbatim"), "the echo contract is stated");
     assert!(
-        user.contains("one `kind: \"requirement\"` claim per distinct behavioural directive"),
+        system.contains("One per distinct behavioural directive"),
         "the reconciliation-join contract is stated"
     );
-    let (name, schema) = schema_format(request);
+    let user = &request.messages[0];
+    assert!(user.contains("source key `intent`"), "passed source key is named");
+    assert!(user.contains("inline value"), "prompt names the inline source");
+    assert!(user.contains("no `$SOURCE_DIR` is lent"), "prompt says no source tree is bound");
+    assert!(user.contains("Let users reset passwords by email."), "value is on the wire");
+    let SeenFormat::Schema { name, schema } = &request.format else {
+        panic!("expected schema format, got {:?}", request.format)
+    };
     assert_eq!(name, "evidence");
     let schema: serde_json::Value = serde_json::from_str(schema).expect("the schema is JSON");
     assert!(
@@ -80,13 +78,11 @@ async fn extract_inline_value() {
     );
     assert!(request.check, "acceptance is the SDK's claim gate, not the reply text");
     assert!(request.workspace.is_none(), "inline value lends no workspace");
-    let tools: Vec<&str> =
-        function_tools(request).into_iter().map(|tool| tool.name.as_str()).collect();
-    assert_eq!(tools, ["list_docs", "read_doc"], "the reference tools are declared");
+    assert_eq!(request.tools, ["list_docs", "read_doc"], "the reference tools are declared");
 }
 
 #[tokio::test]
-async fn single_file_workspace() {
+async fn one_file() {
     let model = Scripted::answering([
         r#"{"authority":"intent","claims":[{"kind":"intent","id":"intent","statement":"Let users reset passwords by email."}]}"#,
     ]);
@@ -98,18 +94,18 @@ async fn single_file_workspace() {
     let evidence = Adapter::extract(&model, &ctx(), &workspace_input(root.path())).await.unwrap();
 
     assert_eq!(evidence.claims.len(), 1);
-    let user = &model.requests()[0].messages[0].content;
+    let user = &model.seen()[0].messages[0];
     assert!(
         user.contains("Let users reset passwords by email."),
         "the located file's contents are interpolated as the intent string"
     );
-    assert!(user.contains("one-file tree"), "prompt names the tree binding");
+    assert!(user.contains("one-file tree"), "prompt names the tree source");
 }
 
 // An unreadable source fails closed before any judgment leg: a tree
 // that is not the one-file encoding is a typed refusal.
 #[tokio::test]
-async fn multi_file_rejected() {
+async fn multi_file() {
     // The refusal precedes the model, so nothing is scripted.
     let model = Scripted::default();
     let root = tempfile::tempdir().unwrap();
@@ -118,34 +114,34 @@ async fn multi_file_rejected() {
 
     let result = Adapter::extract(&model, &ctx(), &workspace_input(root.path())).await;
 
-    assert!(matches!(result, Err(Error::InvalidRequest(_))), "got {result:?}");
-    assert!(model.requests().is_empty(), "no judgment leg runs on a malformed input");
+    assert!(matches!(result, Err(Error::BadRequest { .. })), "got {result:?}");
+    assert!(model.seen().is_empty(), "no judgment leg runs on a malformed input");
 }
 
 #[tokio::test]
-async fn empty_workspace_rejected() {
+async fn empty_workspace() {
     let model = Scripted::default();
     let root = tempfile::tempdir().unwrap();
 
     let result = Adapter::extract(&model, &ctx(), &workspace_input(root.path())).await;
 
-    assert!(matches!(result, Err(Error::InvalidRequest(_))), "got {result:?}");
-    assert!(model.requests().is_empty(), "no judgment leg runs on a malformed input");
+    assert!(matches!(result, Err(Error::BadRequest { .. })), "got {result:?}");
+    assert!(model.seen().is_empty(), "no judgment leg runs on a malformed input");
 }
 
-// The intent binding is never legitimately empty (the prompt's own
+// The intent source is never legitimately empty (the prompt's own
 // contract): an empty brief is a typed refusal, never an empty success.
 #[tokio::test]
-async fn empty_brief_rejected() {
+async fn empty_brief() {
     let model = Scripted::default();
 
     let inline = Adapter::extract(&model, &ctx(), &SourceInput::value("intent", "  \n")).await;
-    assert!(matches!(inline, Err(Error::InvalidRequest(_))), "got {inline:?}");
+    assert!(matches!(inline, Err(Error::BadRequest { .. })), "got {inline:?}");
 
     let root = tempfile::tempdir().unwrap();
     std::fs::write(root.path().join("intent.md"), "\n\t \n").unwrap();
     let tree = Adapter::extract(&model, &ctx(), &workspace_input(root.path())).await;
-    assert!(matches!(tree, Err(Error::InvalidRequest(_))), "got {tree:?}");
+    assert!(matches!(tree, Err(Error::BadRequest { .. })), "got {tree:?}");
 
-    assert!(model.requests().is_empty(), "no judgment leg runs on an empty brief");
+    assert!(model.seen().is_empty(), "no judgment leg runs on an empty brief");
 }

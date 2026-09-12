@@ -1,40 +1,73 @@
 //! The grading kernel at its public surface: the mechanical
-//! properties over published spec-format text.
+//! properties over the published wire shapes — the typed specification and
+//! its Markdown projection as `emery show --format json` carries them.
 
-use eval::grade::{self, Expect};
+use eval::grade::{self, Expect, Spec};
 use eval::scorecard::{CaseResult, Outcome, Scorecard};
 
 const EXPECT: Expect = Expect {
     subject_fragment: "order",
 };
 
-// A well-formed two-block spec: one agreed row, one inline gap.
-const GOOD: &str = "# Specification\n\n\
+// A well-formed two-requirement specification: one agreed row, one gap.
+const GOOD: &str = r#"{
+  "emery": 2,
+  "next_id": 3,
+  "preamble": [],
+  "requirements": [
+    {"id": "REQ-001", "subject": "order.placement", "status": "agreed", "covered": true,
+     "sources": [{"source": "documentation", "claim": "order.placement"}],
+     "body": ["An order carries at least one line item."], "losers": [], "scenarios": []},
+    {"id": "REQ-002", "subject": "order.state", "status": "unknown", "covered": false,
+     "sources": [{"source": "documentation", "claim": "order.state"}],
+     "body": ["An order is open, fulfilled, or cancelled."], "losers": [], "scenarios": []}
+  ]
+}"#;
+
+// The projection of `GOOD`: the gap is tagged in place.
+const GOOD_BODY: &str = "---\nemery: 2\nrevision: cafe\n---\n\n# Specification\n\n\
 ### Requirement: order.placement\n\n\
-ID: REQ-001\nSources: [documentation]\nStatus: agreed\n\n\
+ID: REQ-001\nSources: [documentation:order.placement]\nStatus: agreed\n\n\
 An order carries at least one line item.\n\n\
-### Requirement: order.placement acceptance criteria [unknown]\n\n\
-ID: REQ-002\nSources: []\nStatus: unknown\n\n\
-No source contributed an acceptance criterion.\n";
+### Requirement: order.state [unknown]\n\n\
+ID: REQ-002\nSources: [documentation:order.state]\nStatus: unknown\n\n\
+An order is open, fulfilled, or cancelled.\n\nNote: acceptance criteria not evidenced.\n";
 
-#[test]
-fn well_formed_spec_passes() {
-    assert_eq!(grade::spec(GOOD, &EXPECT), Vec::<String>::new());
+fn spec_of(json: &str) -> Spec {
+    serde_json::from_str(json).expect("a typed spec fixture")
+}
+
+// One requirement whose graded fields are chosen by the scenario.
+fn requirement(id: &str, subject: &str, status: &str, sources: &serde_json::Value) -> String {
+    serde_json::json!({
+        "requirements": [{
+            "id": id,
+            "subject": subject,
+            "status": status,
+            "sources": sources,
+        }],
+    })
+    .to_string()
 }
 
 #[test]
-fn empty_spec_unreviewable() {
-    let findings = grade::spec("# Specification\n", &EXPECT);
+fn well_formed() {
+    assert_eq!(grade::spec(&spec_of(GOOD), GOOD_BODY, &EXPECT), Vec::<String>::new());
+}
+
+#[test]
+fn empty_spec() {
+    let findings = grade::spec(&spec_of(r#"{"requirements": []}"#), "# Specification\n", &EXPECT);
     assert_eq!(findings.len(), 1);
-    assert!(findings[0].contains("no requirement blocks"), "{findings:?}");
+    assert!(findings[0].contains("no requirements"), "{findings:?}");
 }
 
 #[test]
-fn missing_subject_flagged() {
+fn missing_subject() {
     let expect = Expect {
         subject_fragment: "position",
     };
-    let findings = grade::spec(GOOD, &expect);
+    let findings = grade::spec(&spec_of(GOOD), GOOD_BODY, &expect);
     assert!(
         findings.iter().any(|finding| finding.contains("position")),
         "the missed estate is named: {findings:?}"
@@ -42,32 +75,66 @@ fn missing_subject_flagged() {
 }
 
 #[test]
-fn no_provenance_flagged() {
-    let spec = "### Requirement: order.placement\n\nStatus: agreed\n\nBody.\n";
-    let findings = grade::spec(spec, &EXPECT);
-    assert!(findings.iter().any(|finding| finding.contains("`ID:`")), "{findings:?}");
-    assert!(findings.iter().any(|finding| finding.contains("`Sources:`")), "{findings:?}");
+fn no_provenance() {
+    let spec = requirement("REQ-001", "order.placement", "agreed", &serde_json::json!([]));
+    let findings = grade::spec(&spec_of(&spec), GOOD_BODY, &EXPECT);
+    assert!(findings.iter().any(|finding| finding.contains("cites no source")), "{findings:?}");
+
+    let half = requirement(
+        "REQ-001",
+        "order.placement",
+        "agreed",
+        &serde_json::json!([{"source": "documentation", "claim": ""}]),
+    );
+    let findings = grade::spec(&spec_of(&half), GOOD_BODY, &EXPECT);
+    assert!(findings.iter().any(|finding| finding.contains("incomplete pair")), "{findings:?}");
 }
 
-// A gap or disagreement hidden from the heading is a finding, in
-// both directions.
+// Identity is stored: malformed or duplicate `REQ-NNN` ids are findings.
 #[test]
-fn tag_mismatch_flagged() {
-    let hidden = "### Requirement: order.state\n\n\
-                  ID: REQ-001\nSources: []\nStatus: unknown\n\nBody.\n";
-    let findings = grade::spec(hidden, &EXPECT);
+fn identity() {
+    for malformed in ["", "REQ- 001", "REQ-000", "REQ-0001"] {
+        let spec = requirement(malformed, "order.placement", "agreed", &serde_json::json!([]));
+        let findings = grade::spec(&spec_of(&spec), GOOD_BODY, &EXPECT);
+        assert!(
+            findings.iter().any(|finding| finding.contains("not a `REQ-NNN` id")),
+            "`{malformed}` was accepted: {findings:?}"
+        );
+    }
+
+    let duplicated = GOOD.replace("REQ-002", "REQ-001");
+    let findings = grade::spec(&spec_of(&duplicated), GOOD_BODY, &EXPECT);
+    assert!(
+        findings.iter().any(|finding| finding.contains("more than one requirement")),
+        "{findings:?}"
+    );
+}
+
+// A gap or disagreement hidden from the projected heading is a
+// finding, in both directions; a requirement the projection never
+// heads is one too.
+#[test]
+fn tag_mismatch() {
+    let hidden = GOOD_BODY.replace(" [unknown]", "");
+    let findings = grade::spec(&spec_of(GOOD), &hidden, &EXPECT);
     assert!(findings.iter().any(|finding| finding.contains("[unknown]")), "{findings:?}");
 
-    let untagged_status = "### Requirement: order.state [conflict]\n\n\
-                           ID: REQ-001\nSources: [documentation]\nStatus: agreed\n\nBody.\n";
-    let findings = grade::spec(untagged_status, &EXPECT);
-    assert!(findings.iter().any(|finding| finding.contains("[conflict]")), "{findings:?}");
+    let untagged_status = GOOD.replace(r#""status": "unknown""#, r#""status": "agreed""#);
+    let findings = grade::spec(&spec_of(&untagged_status), GOOD_BODY, &EXPECT);
+    assert!(findings.iter().any(|finding| finding.contains("[unknown]")), "{findings:?}");
+
+    let unprojected = GOOD_BODY.replace("order.state", "order.status");
+    let findings = grade::spec(&spec_of(GOOD), &unprojected, &EXPECT);
+    assert!(
+        findings.iter().any(|finding| finding.contains("no heading in the projection")),
+        "{findings:?}"
+    );
 }
 
 // The scorecard's green line: every case passed and both measured
 // numbers meet their product.md targets; anything else is red.
 #[test]
-fn scorecard_green_line() {
+fn green_line() {
     let pass = CaseResult {
         id: "orders-docs".to_string(),
         outcome: Outcome::Pass {
@@ -112,7 +179,7 @@ fn scorecard_green_line() {
     };
     let red = card(vec![pass, failed]);
     assert!(!red.green(), "a typed failure is a red scorecard, never graded around");
-    let rendered = red.render();
+    let rendered = red.to_string();
     assert!(rendered.contains("- status: red"), "{rendered}");
     assert!(rendered.contains("bad_gateway"), "{rendered}");
     assert!(rendered.contains("unconfirmed"), "unmeasured stays unconfirmed: {rendered}");

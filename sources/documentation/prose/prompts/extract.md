@@ -1,11 +1,11 @@
 # `documentation.extract`
 
-Walk the whole bound documentation source and return one `Evidence` document of structured claims. The caller persists the result; this answer is the JSON body only. The engine deterministically reconciles this Evidence with every other bound source's into the specification — see [From sources to a spec](../references/emery-runtime/reconciliation.md).
+Walk the whole bound documentation source and return one `Evidence` document of structured claims. The engine deterministically reconciles this Evidence with every other bound source's into the specification — see [From sources to a spec](../references/emery-runtime/reconciliation.md).
 
 ## Inputs
 
-- `$SOURCE_DIR` — read-only view of the bound documentation tree. Absent when the binding is an inline `value` (the material is then in the message).
-- **Source key** — the authored binding key the engine passed on the wire.
+- `$SOURCE_DIR` — read-only view of the bound documentation tree. Absent when the source is an inline `value` (the material is then in the message).
+- **Source key** — the authored source key the engine passed on the wire.
 
 Nothing outside the bound source is reachable. Extract mines this source completely in one pass: every document in the tree, top to bottom.
 
@@ -37,7 +37,7 @@ Return one JSON object matching the Evidence schema the request carries — the 
 }
 ```
 
-`authority` is always the literal `documentation` (operator-provided written product/technical intent). The document's source identity is stamped by the engine from the binding — it is not written in-document.
+`authority` is always the literal `documentation` (operator-provided written product/technical intent). The document's source identity is stamped by the engine from the source — it is not written in-document.
 
 ## Worked example
 
@@ -77,4 +77,5 @@ Output:
 ## Guardrails
 
 - `$SOURCE_DIR` is read-only; never attempt to read or write outside it.
+- Skip the engine's own files wherever they appear in the tree — `spec.md`, `design.md`, `.emery/`, `.omnia/` — the [skip roots](../references/emery-runtime/claims.md#skip-roots) every adapter shares. A projection of the current revision is output, not documentation to mine.
 - Never emit claim kinds outside `{requirement, criterion, decision, section}` from this adapter. Behaviour kinds (`excerpt`/`type`/`call`) belong to code source adapters.

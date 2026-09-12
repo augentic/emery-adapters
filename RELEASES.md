@@ -8,6 +8,7 @@ Unreleased
 - Engine crates import under their package names (`emery_adapter::`, `emery_prose::`, `emery_source::`). Until an engine release tag carries the extract-only SDK, `[patch.crates-io]` fetches `augentic/emery` by git (path patches stay commented for sibling co-development).
 - The embedded prose registry moved to `emery-prose`: adapters call `emery_prose::registry!()` and name `emery_prose::registry::Doc`, with `emery-prose` declared twice (runtime for the registry, build-time with the `emit` feature for the walker). The wire contract moved to `emery-source`; the SDK re-exports it, and the conformance `caller` depends on it directly.
 - The graded live eval is a public-contract client of the shipped `emery` binary: one `specify` per case over the built components, `emery show spec` for grading, mechanical CC-05 / CC-06 grading, dated scorecard. Operator-invoked, never CI. Catalog: `orders-docs`, `omnia-r9k`.
+- `registry::body` returns `Option<&'static str>` (engine `emery-prose`): each adapter maps a prompt the build did not embed to `server_error!` instead of trapping the guest.
 
 ### Requires
 

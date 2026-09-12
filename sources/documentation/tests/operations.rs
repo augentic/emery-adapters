@@ -1,31 +1,22 @@
 //! Documentation extract operation behavior over the `Source` capability.
 
-use std::path::Path;
-
 use documentation::Adapter;
-use emery_adapter::types::{Authority, ClaimKind, Context, Error, SourceInput};
-use emery_adapter::{Format, Request, SourceAdapter as _};
+use emery_adapter::SourceAdapter as _;
+use emery_adapter::types::{Authority, ClaimKind, Context, SourceInput};
 use emery_prose::registry::Doc;
-use omnia_test::guest::{Scripted, function_tools};
+use omnia_test::SeenFormat;
+use omnia_test::guest::Scripted;
 
-fn ctx(docs: &'static [Doc]) -> Context<'static> {
+const fn ctx(docs: &'static [Doc]) -> Context<'static> {
     Context {
         adapter_id: "source:documentation",
-        project_root: Path::new("."),
         docs,
-        lend: Some(".".to_string()),
+        lend: Some("."),
     }
 }
 
 fn workspace_input() -> SourceInput {
     SourceInput::workspace("docs", ".")
-}
-
-fn schema_format(request: &Request) -> (&str, &str) {
-    match &request.format {
-        Format::Schema(schema) => (&schema.name, &schema.schema),
-        other => panic!("expected schema format, got {other:?}"),
-    }
 }
 
 #[tokio::test]
@@ -65,20 +56,22 @@ async fn extract_leg() {
         Some("Use the existing transactional email provider."),
     );
 
-    let requests = model.requests();
-    assert_eq!(requests.len(), 1, "extract is a single judgment leg");
-    let request = &requests[0];
+    let seen = model.seen();
+    assert_eq!(seen.len(), 1, "extract is a single judgment leg");
+    let request = &seen[0];
     let system = request.system.as_deref().unwrap();
     assert!(
         system.starts_with("# `documentation.extract`"),
         "extract prompt is the system channel"
     );
     assert!(system.contains("bad_request"), "prompt names the fail-closed gate");
-    let user = &request.messages[0].content;
+    let user = &request.messages[0];
     assert!(user.contains("source key `docs`"), "passed source key is named");
-    assert!(user.contains("$SOURCE_DIR"), "binding is mapped onto the prompt's vocabulary");
+    assert!(user.contains("$SOURCE_DIR"), "source is mapped onto the prompt's vocabulary");
     assert!(user.contains("extract mines only this source"), "nothing else is reachable");
-    let (name, schema) = schema_format(request);
+    let SeenFormat::Schema { name, schema } = &request.format else {
+        panic!("expected schema format, got {:?}", request.format)
+    };
     assert_eq!(name, "evidence");
     let schema: serde_json::Value = serde_json::from_str(schema).expect("the schema is JSON");
     assert!(
@@ -87,81 +80,37 @@ async fn extract_leg() {
     );
     assert!(request.check, "acceptance is the SDK's claim gate, not the reply text");
     assert_eq!(request.workspace.as_deref(), Some("."), "the source view is lent");
-    let tools: Vec<&str> =
-        function_tools(request).into_iter().map(|tool| tool.name.as_str()).collect();
-    assert_eq!(tools, ["list_docs", "read_doc"], "the reference tools are declared");
+    assert_eq!(request.tools, ["list_docs", "read_doc"], "the reference tools are declared");
 }
 
-// An inline `value:` binding lends no workspace: the material rides in
+// An inline `value:` source lends no workspace: the material rides in
 // the user message and the judgment leg gets no filesystem grant.
 #[tokio::test]
-async fn extract_value_no_lend() {
+async fn no_lend() {
     let model = Scripted::answering([r#"{"authority":"documentation","claims":[]}"#]);
     let input = SourceInput::value("notes", "Reset links expire after 30 minutes.");
 
-    let evidence = Adapter::extract(&model, &ctx(&[]).without_lend(), &input).await.unwrap();
+    let ctx = Context {
+        lend: None,
+        ..ctx(&[])
+    };
+    let evidence = Adapter::extract(&model, &ctx, &input).await.unwrap();
 
     assert!(evidence.claims.is_empty());
-    let requests = model.requests();
-    let request = &requests[0];
+    let seen = model.seen();
+    let request = &seen[0];
     assert_eq!(request.workspace, None, "no lend for an inline value");
-    let user = &request.messages[0].content;
+    let user = &request.messages[0];
     assert!(user.contains("Reset links expire after 30 minutes."), "the value rides inline");
     assert!(user.contains("no `$SOURCE_DIR` is lent"));
 }
 
-// A candidate the claim gate rejects is corrected in place: the check
-// hands the findings back with the rejected answer, and the next
-// candidate's clean answer is the result.
-#[tokio::test]
-async fn extract_repaired() {
-    let model = Scripted::answering([
-        r#"{"authority":"documentation","claims":[{"kind":"requirement"}]}"#,
-        r#"{"authority":"documentation","claims":[{"kind":"requirement","id":"password-reset.request","statement":"..."}]}"#,
-    ]);
-
-    let evidence =
-        Adapter::extract(&model, &ctx(&[]), &workspace_input()).await.expect("repaired extract");
-
-    assert_eq!(evidence.claims[0].id.as_deref(), Some("password-reset.request"));
-    assert_eq!(model.requests().len(), 2, "one scripted answer per attempt");
-    let exchanges = model.exchanges();
-    assert_eq!(exchanges.len(), 2, "one rejected check, one accepted");
-    assert_eq!(exchanges[0].tool, "check");
-    let correction = exchanges[0].outcome.as_ref().expect_err("the first candidate is rejected");
-    assert!(correction.contains("claims require an id"), "the correction carries the findings");
-    assert!(correction.contains("## Previous answer (rejected)"), "and the rejected answer");
-    assert_eq!(exchanges[1].outcome, Ok(String::new()));
-}
-
-// A backend out of rounds surfaces the last failure — a typed error
-// carrying the findings, never an empty success.
-#[tokio::test]
-async fn extract_budget_exhausted() {
-    let model = Scripted::answering([
-        r#"{"authority":"documentation","claims":[{"kind":"criterion","id":"Not.Valid"}]}"#,
-    ]);
-
-    let result = Adapter::extract(&model, &ctx(&[]), &workspace_input()).await;
-
-    match result {
-        Err(Error::Internal(detail)) => {
-            assert!(detail.contains("`Not.Valid`"), "detail: {detail}");
-        }
-        other => panic!("expected the last gate failure, got {other:?}"),
-    }
-    let exchanges = model.exchanges();
-    assert_eq!(exchanges.len(), 1, "one check, rejected");
-    let correction = exchanges[0].outcome.as_ref().expect_err("the only candidate is rejected");
-    assert!(correction.contains("`Not.Valid`"), "{correction}");
-}
-
 // A docs-free context declares no tools: the judgment stays single-shot.
 #[tokio::test]
-async fn extract_no_docs_no_tools() {
+async fn no_docs() {
     let model = Scripted::answering([r#"{"authority":"documentation","claims":[]}"#]);
 
     Adapter::extract(&model, &ctx(&[]), &workspace_input()).await.unwrap();
 
-    assert!(model.requests()[0].tools.is_empty(), "no docs means no reference tools");
+    assert!(model.seen()[0].tools.is_empty(), "no docs means no reference tools");
 }

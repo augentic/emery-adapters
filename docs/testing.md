@@ -23,7 +23,7 @@ Testing a brand-new adapter: [authoring.md](authoring.md).
 
 ### 1. Native crate tests — the inner loop
 
-Each adapter crate is `cdylib` + `rlib`, so its wasm-free logic links natively and tests through `sources/<name>/tests/<area>.rs`. Judgment legs use `omnia_test::guest::Scripted` (a FIFO model script that records every request) to assert "did my prompt edit land in the assembled text" and that the answered Evidence carries the required per-kind extras verbatim; adapter crates must not duplicate that model machinery. The script is strict: a run past its end panics and a dropped script with unconsumed turns fails the test, so a scenario scripts exactly what its run consumes — a refusal that precedes the model uses `Scripted::default()`. The wasm32-only guest shims (inline `mod guest` in each `src/lib.rs`) are single `emery_adapter::source!` invocations and carry no native tests.
+Each adapter crate is `cdylib` + `rlib`, so its wasm-free logic links natively and tests through `sources/<name>/tests/<area>.rs`. Judgment legs use `omnia_test::guest::Scripted` (a FIFO model script that records every request; `seen()` is the record to assert on — system prompt, message bodies, schema, tool names, lent workspace, `check`) to assert "did my prompt edit land in the assembled text" and that the answered Evidence carries the required per-kind extras verbatim; adapter crates must not duplicate that model machinery, and the claim gate's in-place repair and spent-rounds refusal are the SDK's own suite's to prove (`emery-adapter`'s `evidence` tests), not re-asserted per adapter. The script is strict: a run past its end panics and a dropped script with unconsumed turns fails the test, so a scenario scripts exactly what its run consumes — a refusal that precedes the model uses `Scripted::default()`. The wasm32-only guest shims (the one `emery_adapter::source!` invocation at the root of each `src/lib.rs`, which declares the guest module itself) carry no native tests.
 
 ```bash
 cargo nextest run -p documentation   # one adapter
@@ -88,7 +88,7 @@ A `TOTAL` line/region drop on still-live code means real coverage was lost: back
 
 ## Test naming
 
-Test function names are identifiers, not sentences. The enclosing `tests/<area>.rs` module already names the subject — don't restate it in every `fn`. Push the narrative into the test body or a `//` comment above the `fn`.
+Test function names are identifiers, not sentences — name the *scenario* (`well_formed`, `empty_workspace`), never the outcome (`well_formed_spec_passes`, `empty_workspace_rejected`). The enclosing `tests/<area>.rs` module already names the subject — don't restate it in every `fn`. Push the narrative into the `//` comment above the `fn`. The identifier cap is ≤ 25 characters (review-only; same rule as the engine).
 
 ## Definition of done for a reduction
 

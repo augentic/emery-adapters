@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::time::Instant;
 
-use eval::envelope;
+use eval::envelope::{Failure, Shown, Success};
 use eval::grade::{self, Expect};
 use eval::scorecard::{CaseResult, Outcome, Scorecard};
 
@@ -89,7 +89,7 @@ fn main() {
         cases,
         complete: filter.is_none(),
     };
-    let rendered = scorecard.render();
+    let rendered = scorecard.to_string();
     print!("{rendered}");
     let out = paths.root.join("sandbox/scorecard.md");
     std::fs::create_dir_all(out.parent().expect("sandbox parent")).expect("mkdir sandbox");
@@ -176,27 +176,27 @@ fn run_case(case: &Case, paths: &Paths) -> CaseResult {
         std::fs::copy(paths.component(component), &staged).expect("stage component");
     }
 
-    // One extract per source binding (workspace components plus the
+    // One extract per source (workspace components plus the
     // inline intent) and one synthesis.
     let extracts = u32::try_from(case.components.len()).expect("case size") + 1;
     let started = Instant::now();
 
-    // One `specify` run carries the whole binding list — nothing about
+    // One `specify` run carries the whole source list — nothing about
     // it persists between runs.
     let mut specify: Vec<String> = vec!["--format".into(), "json".into(), "specify".into()];
     for component in case.components {
         specify.push(format!("{component}.wasm"));
     }
-    specify.push("--value".into());
+    specify.push("--description".into());
     specify.push(format!("intent.wasm={}", case.intent));
     let output = emery(paths, &project, &specify);
     let secs = started.elapsed().as_secs_f64();
     if !output.status.success() {
-        return failed(case, started, &output, fixture_sha);
+        return failed(case, secs, &output, fixture_sha);
     }
 
-    let outcome = match envelope::success(&output.stdout) {
-        Ok(body) => graded(case, paths, &project, &body),
+    let outcome = match Success::try_from(output.stdout.as_slice()) {
+        Ok(body) => graded(case, paths, &project, body),
         Err(finding) => Outcome::Findings(vec![finding]),
     };
 
@@ -213,12 +213,13 @@ fn run_case(case: &Case, paths: &Paths) -> CaseResult {
 }
 
 // Grade the committed spec through the public contract: `emery show
-// spec` renders it; the runner never reads engine storage directly.
-fn graded(case: &Case, paths: &Paths, project: &Path, body: &envelope::Success) -> Outcome {
+// spec --format json` carries the typed specification beside its projection;
+// the runner never reads engine storage directly.
+fn graded(case: &Case, paths: &Paths, project: &Path, body: Success) -> Outcome {
     let show: Vec<String> = vec!["--format".into(), "json".into(), "show".into(), "spec".into()];
     let output = emery(paths, project, &show);
     if !output.status.success() {
-        let finding = match envelope::failure(&output.stderr) {
+        let finding = match Failure::try_from(output.stderr.as_slice()) {
             Ok(failure) => format!(
                 "`emery show spec` failed typed after a committed revision: `{}` (exit {})",
                 failure.error, failure.exit_code
@@ -227,7 +228,7 @@ fn graded(case: &Case, paths: &Paths, project: &Path, body: &envelope::Success) 
         };
         return Outcome::Findings(vec![finding]);
     }
-    let shown = match envelope::shown(&output.stdout) {
+    let shown = match Shown::try_from(output.stdout.as_slice()) {
         Ok(shown) => shown,
         Err(finding) => return Outcome::Findings(vec![finding]),
     };
@@ -238,10 +239,18 @@ fn graded(case: &Case, paths: &Paths, project: &Path, body: &envelope::Success) 
         )]);
     }
 
-    let findings = grade::spec(&shown.body, &case.expect);
+    let spec: grade::Spec = match serde_json::from_value(shown.document) {
+        Ok(spec) => spec,
+        Err(err) => {
+            return Outcome::Findings(vec![format!(
+                "`emery show spec` carries no typed specification as `document`: {err}"
+            )]);
+        }
+    };
+    let findings = grade::spec(&spec, &shown.body, &case.expect);
     if findings.is_empty() {
         Outcome::Pass {
-            revision: body.revision.clone(),
+            revision: body.revision,
         }
     } else {
         Outcome::Findings(findings)
@@ -251,31 +260,29 @@ fn graded(case: &Case, paths: &Paths, project: &Path, body: &envelope::Success) 
 // Record a typed nonzero exit: the failure envelope is the outcome,
 // never something to grade around. The failed operation counts against
 // the per-operation rate; operations never reached stay unrecorded.
-fn failed(
-    case: &Case, started: Instant, output: &Output, fixture_sha: Option<String>,
-) -> CaseResult {
-    let (error, exit_code) = match envelope::failure(&output.stderr) {
+fn failed(case: &Case, secs: f64, output: &Output, fixture_sha: Option<String>) -> CaseResult {
+    let (error, exit_code) = match Failure::try_from(output.stderr.as_slice()) {
         Ok(body) => (body.error, body.exit_code),
-        Err(_) => (
-            format!("unparseable failure: {}", String::from_utf8_lossy(&output.stderr).trim()),
-            output.status.code().and_then(|code| u8::try_from(code).ok()).unwrap_or(1),
-        ),
+        Err(error) => {
+            (error, output.status.code().and_then(|code| u8::try_from(code).ok()).unwrap_or(1))
+        }
     };
     CaseResult {
         id: case.id.to_string(),
         outcome: Outcome::TypedFailure { error, exit_code },
-        secs: started.elapsed().as_secs_f64(),
+        secs,
         ops_succeeded: 0,
         ops_failed: 1,
         fixture_sha,
     }
 }
 
-// Isolated under the sandbox `EMERY_HOME` so no operator state is touched.
+// The runtime roots every effect at the invocation directory — the revision
+// store lands under the sandbox project's `.omnia/storage` — so running from
+// the project isolates the case and touches no operator state.
 fn emery(paths: &Paths, project: &Path, args: &[String]) -> Output {
     Command::new(&paths.emery_bin)
         .current_dir(project)
-        .env("EMERY_HOME", paths.root.join("sandbox/emery-home"))
         .args(args)
         .output()
         .expect("spawn the emery binary")

@@ -2,7 +2,7 @@
 
 Before answering with the Evidence document, verify the coverage self-check in [design-template.md](design-template.md) and the extraction-specific checklist below. This adapter emits Evidence claims only — downstream synthesis (which owns `spec.md` and `design.md`) can only be as good as the claims it receives, so verify against the source, not against artifacts.
 
-## Extraction verification checklist
+## Extract verification checklist
 
 ### Evidence completeness
 
