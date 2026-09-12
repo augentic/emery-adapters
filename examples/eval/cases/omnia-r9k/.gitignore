@@ -1,3 +1,0 @@
-# The shallow-cloned UNLICENSED upstream fixture cache; the runner
-# populates it on first run and never commits it.
-fixture/
