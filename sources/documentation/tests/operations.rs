@@ -1,22 +1,24 @@
 //! Documentation extract operation behavior over the `Source` capability.
 
 use documentation::Adapter;
-use emery_adapter::SourceAdapter as _;
-use emery_adapter::types::{Authority, ClaimKind, Context, SourceInput};
-use emery_prose::registry::Doc;
+use emery_adapter::{
+    Authority, ClaimKind, Context, SourceAdapter as _, SourceContent, SourceInput,
+};
 use omnia_test::SeenFormat;
 use omnia_test::guest::Scripted;
 
-const fn ctx(docs: &'static [Doc]) -> Context<'static> {
+const fn ctx(input: &SourceInput) -> Context<'_> {
     Context {
         adapter_id: "source:documentation",
-        docs,
-        lend: Some("."),
+        input,
     }
 }
 
 fn workspace_input() -> SourceInput {
-    SourceInput::workspace("docs", ".")
+    SourceInput {
+        key: "docs".to_string(),
+        content: SourceContent::Workspace(".".to_string()),
+    }
 }
 
 #[tokio::test]
@@ -30,8 +32,8 @@ async fn extract_leg() {
             ]
         }"#]);
 
-    let evidence =
-        Adapter::extract(&model, &ctx(Adapter::docs()), &workspace_input()).await.unwrap();
+    let input = workspace_input();
+    let evidence = Adapter::extract(&model, &ctx(&input)).await.unwrap();
 
     assert_eq!(evidence.authority, Authority::Documentation);
     assert_eq!(evidence.claims.len(), 3);
@@ -68,6 +70,7 @@ async fn extract_leg() {
     let user = &request.messages[0];
     assert!(user.contains("source key `docs`"), "passed source key is named");
     assert!(user.contains("$SOURCE_DIR"), "source is mapped onto the prompt's vocabulary");
+    assert!(user.contains("the documentation source tree"), "the tree is named by its source");
     assert!(user.contains("extract mines only this source"), "nothing else is reachable");
     let SeenFormat::Schema { name, schema } = &request.format else {
         panic!("expected schema format, got {:?}", request.format)
@@ -88,13 +91,12 @@ async fn extract_leg() {
 #[tokio::test]
 async fn no_lend() {
     let model = Scripted::answering([r#"{"authority":"documentation","claims":[]}"#]);
-    let input = SourceInput::value("notes", "Reset links expire after 30 minutes.");
-
-    let ctx = Context {
-        lend: None,
-        ..ctx(&[])
+    let input = SourceInput {
+        key: "notes".to_string(),
+        content: SourceContent::Value("Reset links expire after 30 minutes.".to_string()),
     };
-    let evidence = Adapter::extract(&model, &ctx, &input).await.unwrap();
+
+    let evidence = Adapter::extract(&model, &ctx(&input)).await.unwrap();
 
     assert!(evidence.claims.is_empty());
     let seen = model.seen();
@@ -103,14 +105,4 @@ async fn no_lend() {
     let user = &request.messages[0];
     assert!(user.contains("Reset links expire after 30 minutes."), "the value rides inline");
     assert!(user.contains("no `$SOURCE_DIR` is lent"));
-}
-
-// A docs-free context declares no tools: the judgment stays single-shot.
-#[tokio::test]
-async fn no_docs() {
-    let model = Scripted::answering([r#"{"authority":"documentation","claims":[]}"#]);
-
-    Adapter::extract(&model, &ctx(&[]), &workspace_input()).await.unwrap();
-
-    assert!(model.seen()[0].tools.is_empty(), "no docs means no reference tools");
 }

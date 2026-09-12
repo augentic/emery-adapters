@@ -26,8 +26,7 @@ pub mod protocol {
 
 #[cfg(target_arch = "wasm32")]
 mod guest {
-    use emery_source::Source;
-    use emery_source::types::{Evidence, SourceContent, SourceInput};
+    use emery_source::{Evidence, Source, SourceContent, SourceInput};
 
     use crate::protocol;
 

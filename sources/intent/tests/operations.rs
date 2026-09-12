@@ -2,22 +2,32 @@
 
 use std::path::Path;
 
-use emery_adapter::types::{Authority, ClaimKind, Context, SourceInput};
-use emery_adapter::{Error, SourceAdapter as _};
+use emery_adapter::{
+    Authority, ClaimKind, Context, Error, SourceAdapter as _, SourceContent, SourceInput,
+};
 use intent::Adapter;
 use omnia_test::SeenFormat;
 use omnia_test::guest::Scripted;
 
-fn ctx() -> Context<'static> {
+const fn ctx(input: &SourceInput) -> Context<'_> {
     Context {
         adapter_id: "source:intent",
-        docs: Adapter::docs(),
-        lend: None,
+        input,
     }
 }
 
 fn workspace_input(root: &Path) -> SourceInput {
-    SourceInput::workspace("intent", root.display().to_string())
+    SourceInput {
+        key: "intent".to_string(),
+        content: SourceContent::Workspace(root.display().to_string()),
+    }
+}
+
+fn value_input(brief: &str) -> SourceInput {
+    SourceInput {
+        key: "intent".to_string(),
+        content: SourceContent::Value(brief.to_string()),
+    }
 }
 
 #[tokio::test]
@@ -27,13 +37,8 @@ async fn inline_value() {
             {"kind":"requirement","id":"password-reset.request","statement":"Users reset passwords by email."}
         ]}"#]);
 
-    let evidence = Adapter::extract(
-        &model,
-        &ctx(),
-        &SourceInput::value("intent", "Let users reset passwords by email."),
-    )
-    .await
-    .unwrap();
+    let input = value_input("Let users reset passwords by email.");
+    let evidence = Adapter::extract(&model, &ctx(&input)).await.unwrap();
 
     assert_eq!(evidence.authority, Authority::Intent);
     assert_eq!(evidence.claims.len(), 2);
@@ -91,7 +96,8 @@ async fn one_file() {
     std::fs::create_dir(&nested).unwrap();
     std::fs::write(nested.join("intent.md"), "Let users reset passwords by email.").unwrap();
 
-    let evidence = Adapter::extract(&model, &ctx(), &workspace_input(root.path())).await.unwrap();
+    let input = workspace_input(root.path());
+    let evidence = Adapter::extract(&model, &ctx(&input)).await.unwrap();
 
     assert_eq!(evidence.claims.len(), 1);
     let user = &model.seen()[0].messages[0];
@@ -112,7 +118,8 @@ async fn multi_file() {
     std::fs::write(root.path().join("one.md"), "first").unwrap();
     std::fs::write(root.path().join("two.md"), "second").unwrap();
 
-    let result = Adapter::extract(&model, &ctx(), &workspace_input(root.path())).await;
+    let input = workspace_input(root.path());
+    let result = Adapter::extract(&model, &ctx(&input)).await;
 
     assert!(matches!(result, Err(Error::BadRequest { .. })), "got {result:?}");
     assert!(model.seen().is_empty(), "no judgment leg runs on a malformed input");
@@ -123,7 +130,8 @@ async fn empty_workspace() {
     let model = Scripted::default();
     let root = tempfile::tempdir().unwrap();
 
-    let result = Adapter::extract(&model, &ctx(), &workspace_input(root.path())).await;
+    let input = workspace_input(root.path());
+    let result = Adapter::extract(&model, &ctx(&input)).await;
 
     assert!(matches!(result, Err(Error::BadRequest { .. })), "got {result:?}");
     assert!(model.seen().is_empty(), "no judgment leg runs on a malformed input");
@@ -135,12 +143,14 @@ async fn empty_workspace() {
 async fn empty_brief() {
     let model = Scripted::default();
 
-    let inline = Adapter::extract(&model, &ctx(), &SourceInput::value("intent", "  \n")).await;
+    let blank = value_input("  \n");
+    let inline = Adapter::extract(&model, &ctx(&blank)).await;
     assert!(matches!(inline, Err(Error::BadRequest { .. })), "got {inline:?}");
 
     let root = tempfile::tempdir().unwrap();
     std::fs::write(root.path().join("intent.md"), "\n\t \n").unwrap();
-    let tree = Adapter::extract(&model, &ctx(), &workspace_input(root.path())).await;
+    let input = workspace_input(root.path());
+    let tree = Adapter::extract(&model, &ctx(&input)).await;
     assert!(matches!(tree, Err(Error::BadRequest { .. })), "got {tree:?}");
 
     assert!(model.seen().is_empty(), "no judgment leg runs on an empty brief");

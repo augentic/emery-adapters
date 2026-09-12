@@ -1,22 +1,25 @@
 //! TypeScript extract operation behavior over the `Source` capability.
 
-use emery_adapter::types::{Authority, ClaimKind, Context, SourceInput};
-use emery_adapter::{SourceAdapter as _, ToolCall};
-use emery_prose::registry::Doc;
+use emery_adapter::model::ToolCall;
+use emery_adapter::{
+    Authority, ClaimKind, Context, SourceAdapter as _, SourceContent, SourceInput,
+};
 use omnia_test::SeenFormat;
 use omnia_test::guest::Scripted;
 use typescript::Adapter;
 
-const fn ctx(docs: &'static [Doc]) -> Context<'static> {
+const fn ctx(input: &SourceInput) -> Context<'_> {
     Context {
         adapter_id: "source:typescript",
-        docs,
-        lend: Some("."),
+        input,
     }
 }
 
 fn workspace_input() -> SourceInput {
-    SourceInput::workspace("legacy-monolith", ".")
+    SourceInput {
+        key: "legacy-monolith".to_string(),
+        content: SourceContent::Workspace(".".to_string()),
+    }
 }
 
 #[tokio::test]
@@ -31,8 +34,8 @@ async fn extract_leg() {
             ]
         }"#]);
 
-    let evidence =
-        Adapter::extract(&model, &ctx(Adapter::docs()), &workspace_input()).await.unwrap();
+    let input = workspace_input();
+    let evidence = Adapter::extract(&model, &ctx(&input)).await.unwrap();
 
     assert_eq!(evidence.authority, Authority::Behaviour);
     assert_eq!(evidence.claims.len(), 4);
@@ -78,6 +81,10 @@ async fn extract_leg() {
     let user = &request.messages[0];
     assert!(user.contains("source key `legacy-monolith`"), "passed source key is named");
     assert!(user.contains("$SOURCE_DIR"), "source is mapped onto the prompt's vocabulary");
+    assert!(
+        user.contains("the TypeScript / JavaScript source tree"),
+        "the tree is named by its source"
+    );
     assert!(user.contains("extract mines only this source"), "nothing else is reachable");
     assert!(user.contains("`read_doc` tool"), "the reference pull affordance is named");
     let SeenFormat::Schema { name, schema } = &request.format else {
@@ -112,7 +119,8 @@ async fn ref_pull() {
         }],
     );
 
-    Adapter::extract(&model, &ctx(docs), &workspace_input()).await.unwrap();
+    let input = workspace_input();
+    Adapter::extract(&model, &ctx(&input)).await.unwrap();
 
     let exchanges = model.exchanges();
     assert_eq!(exchanges.len(), 2, "the closure answered the scripted call, then the check ran");

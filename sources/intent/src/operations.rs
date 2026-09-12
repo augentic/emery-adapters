@@ -5,49 +5,45 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
-use emery_adapter::types::{Context, Evidence, SourceContent, SourceInput};
 use emery_adapter::{
-    Error, EvidenceTurn, Model, SourceAdapter, bad_request, evidence, server_error,
+    Context, Error, Evidence, Material, Model, SourceAdapter, SourceContent, bad_request,
 };
 use emery_prose::registry::Doc;
 
 use crate::registry;
 
 /// Intent source → one Evidence document with one `kind: intent` claim.
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
 pub struct Adapter;
 
 impl SourceAdapter for Adapter {
+    const SOURCE: &'static str = "intent";
+
     fn docs() -> &'static [Doc] {
         registry::docs()
     }
 
-    async fn extract<P: Model>(
-        model: &P, ctx: &Context<'_>, input: &SourceInput,
-    ) -> Result<Evidence, Error> {
-        let system = registry::body("prompts/extract.md")
-            .ok_or_else(|| server_error!("`prompts/extract.md` is not embedded"))?;
-        let turn = EvidenceTurn::prepared("intent", brief_note(input)?);
-        evidence(model, ctx, input, system, turn).await
+    async fn extract<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Evidence, Error> {
+        Self::evidence(model, ctx, brief(&ctx.input.content)?).await
     }
 }
 
-// The prompt's note on the operator's brief: the SDK's content note for an
-// inline value; a one-file tree is read into the same shape.
-fn brief_note(input: &SourceInput) -> Result<String, Error> {
-    match &input.content {
+// The operator's brief as the turn's material: an inline value rides as the
+// SDK renders it; a one-file tree is read into a note of the same shape.
+fn brief(content: &SourceContent) -> Result<Material, Error> {
+    match content {
         SourceContent::Value(value) => {
             require_brief(value)?;
-            Ok(emery_adapter::content_note(input, ""))
+            Ok(Material::Bound)
         }
         SourceContent::Workspace(root) => {
             let intent = single_file_intent(Path::new(root))?;
             require_brief(&intent)?;
-            Ok(format!(
+            Ok(Material::Prepared(format!(
                 "The bound material is a one-file tree at `{root}`; the operator's intent \
                  string is:\n\n{intent}\n\n\
                  Nothing else is reachable; extract mines only this source."
-            ))
+            )))
         }
     }
 }
