@@ -4,6 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
+use anyhow::Context as _;
 use emery_adapter::types::{Context, Evidence, SourceContent, SourceInput};
 use emery_adapter::{
     Error, EvidenceTurn, Model, SourceAdapter, bad_request, evidence, server_error,
@@ -24,7 +25,8 @@ impl SourceAdapter for Adapter {
     async fn extract<P: Model>(
         model: &P, ctx: &Context<'_>, input: &SourceInput,
     ) -> Result<Evidence, Error> {
-        let system = registry::body("prompts/extract.md");
+        let system = registry::body("prompts/extract.md")
+            .ok_or_else(|| server_error!("`prompts/extract.md` is not embedded"))?;
         let turn = EvidenceTurn::prepared("intent", brief_note(input)?);
         evidence(model, ctx, input, system, turn).await
     }
@@ -63,18 +65,18 @@ fn single_file_intent(root: &Path) -> Result<String, Error> {
     let mut files = Vec::new();
     collect_files(root, &mut files)?;
     match files.as_slice() {
-        [file] => std::fs::read_to_string(file)
-            .map_err(|err| server_error!("reading `{}`: {err}", file.display())),
+        [file] => Ok(std::fs::read_to_string(file)
+            .with_context(|| format!("reading `{}`", file.display()))?),
         _ => Err(bad_request!("intent expects one file, found {}", files.len())),
     }
 }
 
 // The one-file tree encoding may nest, so the walk is recursive.
 fn collect_files(dir: &Path, files: &mut Vec<PathBuf>) -> Result<(), Error> {
-    let unreadable = |err: std::io::Error| server_error!("reading `{}`: {err}", dir.display());
-    for entry in std::fs::read_dir(dir).map_err(unreadable)? {
-        let entry = entry.map_err(unreadable)?;
-        let file_type = entry.file_type().map_err(unreadable)?;
+    for entry in std::fs::read_dir(dir).with_context(|| format!("reading `{}`", dir.display()))? {
+        let entry = entry.with_context(|| format!("reading `{}`", dir.display()))?;
+        let file_type =
+            entry.file_type().with_context(|| format!("reading `{}`", dir.display()))?;
         if file_type.is_dir() {
             collect_files(&entry.path(), files)?;
         } else if file_type.is_file() {

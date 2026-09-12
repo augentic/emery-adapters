@@ -9,7 +9,7 @@ use typescript::Adapter;
 fn extract_prompt() {
     assert!(
         body(Adapter::docs(), "prompts/extract.md")
-            .starts_with("# TypeScript / JavaScript source extract")
+            .is_some_and(|prompt| prompt.starts_with("# TypeScript / JavaScript source extract"))
     );
 }
 

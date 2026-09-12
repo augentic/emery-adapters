@@ -7,7 +7,10 @@ use emery_prose::registry::{body, find};
 
 #[test]
 fn extract_prompt() {
-    assert!(body(Adapter::docs(), "prompts/extract.md").starts_with("# `documentation.extract`"));
+    assert!(
+        body(Adapter::docs(), "prompts/extract.md")
+            .is_some_and(|prompt| prompt.starts_with("# `documentation.extract`"))
+    );
 }
 
 #[test]

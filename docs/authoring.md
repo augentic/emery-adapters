@@ -122,7 +122,7 @@ pub use operations::Adapter;
 
 ```rust
 use emery_adapter::types::{Context, Evidence, SourceInput};
-use emery_adapter::{Error, EvidenceTurn, Model, SourceAdapter, evidence};
+use emery_adapter::{Error, EvidenceTurn, Model, SourceAdapter, evidence, server_error};
 use emery_prose::registry::Doc;
 
 use crate::registry;
@@ -139,7 +139,8 @@ impl SourceAdapter for Adapter {
     async fn extract<P: Model>(
         model: &P, ctx: &Context<'_>, input: &SourceInput,
     ) -> Result<Evidence, Error> {
-        let system = registry::body("prompts/extract.md");
+        let system = registry::body("prompts/extract.md")
+            .ok_or_else(|| server_error!("`prompts/extract.md` is not embedded"))?;
         let turn = EvidenceTurn::bound("changelog", "the changelog tree");
         evidence(model, ctx, input, system, turn).await
     }

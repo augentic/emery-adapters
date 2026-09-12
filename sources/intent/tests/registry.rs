@@ -8,7 +8,10 @@ use intent::Adapter;
 
 #[test]
 fn extract_prompt() {
-    assert!(body(Adapter::docs(), "prompts/extract.md").starts_with("# intent.extract"));
+    assert!(
+        body(Adapter::docs(), "prompts/extract.md")
+            .is_some_and(|prompt| prompt.starts_with("# intent.extract"))
+    );
 }
 
 #[test]
