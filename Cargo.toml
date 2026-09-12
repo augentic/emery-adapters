@@ -31,12 +31,12 @@ emery-prose = "0.38.0"
 emery-source = "0.38.0"
 
 [patch.crates-io]
-emery-adapter = { git = "https://github.com/augentic/emery" }
-emery-prose = { git = "https://github.com/augentic/emery"}
-emery-source = { git = "https://github.com/augentic/emery"}
-# emery-adapter = { path = "../emery/crates/adapter" }
-# emery-prose = { path = "../emery/crates/prose" }
-# emery-source = { path = "../emery/crates/source" }
+# emery-adapter = { git = "https://github.com/augentic/emery" }
+# emery-prose = { git = "https://github.com/augentic/emery"}
+# emery-source = { git = "https://github.com/augentic/emery"}
+emery-adapter = { path = "../emery/crates/adapter" }
+emery-prose = { path = "../emery/crates/prose" }
+emery-source = { path = "../emery/crates/source" }
 
 omnia = { git = "https://github.com/augentic/omnia" }
 omnia-guest = { git = "https://github.com/augentic/omnia" }
@@ -49,7 +49,6 @@ omnia-wasi-model = { git = "https://github.com/augentic/omnia" }
 
 wrpc-transport = { git = "https://github.com/bytecodealliance/wrpc" }
 wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }
-
 
 [workspace.lints.rust]
 # https://dirname.github.io/rust-std-doc/rustc/lints/listing/allowed-by-default.html

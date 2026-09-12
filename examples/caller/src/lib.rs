@@ -1,6 +1,6 @@
 //! The conformance caller: a `wasi:cli/run` guest that drives one adapter
 //! over the `emery:adapter/source` seam (`metadata`, then `extract`) and
-//! asserts the wire shape. Exit `0` means every assertion held.
+//! asserts the WIT bindings shape. Exit `0` means every assertion held.
 //!
 //! ```text
 //! caller <adapter-id> <key> <workspace|value:TEXT> [expect-error:<code>]
@@ -14,7 +14,7 @@ pub mod protocol {
     /// Content prefix carrying an inline value: `value:TEXT`.
     pub const VALUE: &str = "value:";
     /// Flag prefix naming the Omnia error code (`bad_request`,
-    /// `bad_gateway`) the run must refuse with, as lifted from the wire.
+    /// `bad_gateway`) the run must refuse with, as lifted from the WIT bindings.
     pub const EXPECT_ERROR: &str = "expect-error:";
 
     /// The `expect-error:<code>` flag for `code`.
@@ -120,7 +120,7 @@ mod guest {
             })
     }
 
-    // The contract's fail-closed gate holds across the wire, and every
+    // The contract's fail-closed gate holds across the WIT bindings, and every
     // required extra lowers as a string rather than a re-encoded value.
     fn check_evidence(evidence: &Evidence) -> Result<(), String> {
         if evidence.claims.is_empty() {
