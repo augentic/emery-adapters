@@ -121,7 +121,7 @@ version = "1.8.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.bitflags]]
-version = "2.13.1"
+version = "2.13.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.block-buffer]]
@@ -146,10 +146,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.cap-std]]
 version = "4.0.3"
-criteria = "safe-to-deploy"
-
-[[exemptions.cc]]
-version = "1.4.5"
 criteria = "safe-to-deploy"
 
 [[exemptions.chacha20]]
@@ -300,20 +296,12 @@ criteria = "safe-to-deploy"
 version = "1.18.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.encoding_rs]]
-version = "0.8.40"
-criteria = "safe-to-deploy"
-
 [[exemptions.etcetera]]
 version = "0.11.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.fastrand]]
 version = "2.5.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.find-msvc-tools]]
-version = "0.1.12"
 criteria = "safe-to-deploy"
 
 [[exemptions.fixedbitset]]
@@ -572,6 +560,10 @@ criteria = "safe-to-deploy"
 version = "0.2.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.macro-string]]
+version = "0.3.0"
+criteria = "safe-to-deploy"
+
 [[exemptions.matchit]]
 version = "0.8.4"
 criteria = "safe-to-deploy"
@@ -598,6 +590,14 @@ criteria = "safe-to-deploy"
 
 [[exemptions.moka]]
 version = "0.12.16"
+criteria = "safe-to-deploy"
+
+[[exemptions.multiversion]]
+version = "0.9.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.multiversion-macros]]
+version = "0.9.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.oauth2]]
@@ -869,7 +869,7 @@ version = "0.4.12"
 criteria = "safe-to-deploy"
 
 [[exemptions.smallvec]]
-version = "1.16.0"
+version = "1.16.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.socket2]]
@@ -957,7 +957,7 @@ version = "0.7.19"
 criteria = "safe-to-deploy"
 
 [[exemptions.toml]]
-version = "1.1.5+spec-1.1.0"
+version = "1.1.6+spec-1.1.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.toml_writer]]
@@ -1033,7 +1033,7 @@ version = "0.2.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.uuid]]
-version = "1.26.0"
+version = "1.26.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.version_check]]
