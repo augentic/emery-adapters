@@ -15,7 +15,7 @@ crate-type = ["cdylib", "rlib"]
 workspace = true
 
 [dependencies]
-emery-adapter.workspace = true
+emery-sdk.workspace = true
 emery-prose.workspace = true
 
 [build-dependencies]

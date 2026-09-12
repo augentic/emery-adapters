@@ -1,8 +1,8 @@
 //! The embedded prose registry: typescript's own prompt and its deep
 //! references ride inside.
 
-use emery_adapter::SourceAdapter as _;
 use emery_prose::registry::{body, find};
+use emery_sdk::SourceAdapter as _;
 use typescript::Adapter;
 
 #[test]

@@ -13,7 +13,7 @@ Toolchain setup, layout conventions, and publishing mechanics live in [CONTRIBUT
 
 An adapter is one Rust crate that ships as one Wasm component exporting the `source-adapter` world from the `emery:adapter` WIT package (owned by [`augentic/emery`](https://github.com/augentic/emery)). There is no manifest file: identity is the crate's `name` + `version`, and resolve-time metadata comes from the component's own `metadata` export.
 
-You never touch WIT directly. The `emery-adapter` SDK hides the bindings behind the `emery_adapter::SourceAdapter` trait, implemented on a unit struct; a one-line macro (`emery_adapter::source!`) wires that implementor into the component exports.
+You never touch WIT directly. The `emery-sdk` SDK hides the bindings behind the `emery_sdk::SourceAdapter` trait, implemented on a unit struct; a one-line macro (`emery_sdk::source!`) wires that implementor into the component exports.
 
 What the engine calls:
 
@@ -24,12 +24,12 @@ What the engine calls:
 
 Three ideas carry the operation:
 
-- **The model is a parameter.** `extract` is generic over `emery_adapter::Model`. On wasm the macro binds `WasiModel`; native tests bind `omnia_test::guest::Scripted` with scripted answers. Your code never constructs a backend.
+- **The model is a parameter.** `extract` is generic over `emery_sdk::Model`. On wasm the macro binds `WasiModel`; native tests bind `omnia_test::guest::Scripted` with scripted answers. Your code never constructs a backend.
 - **Prose is embedded at build time.** `build.rs` calls `emery_prose::emit("prose")` (the `emit` feature, enabled on the build-dependency only), which walks the adapter's `prose/` tree into a sorted `DOCS` table; `emery_prose::registry!()` exposes it as `registry::docs()`, and the SDK's `SourceAdapter::prompt` reads `prompts/extract.md` from it. A dangling relative link in any prose document fails the build. The engine repository's mock adapter ([`examples/adapter/lib.rs`](https://github.com/augentic/emery/blob/main/examples/adapter/lib.rs)) embeds its prose the same way and is the smallest complete example of the shape. Each judgment declares `list_docs` / `read_doc` function tools and answers the model's calls in-process from that embedded corpus, so prompts cite references by relative link instead of inlining them.
 - **Answers are steered by schema and judged by the gate.** The provided `Self::evidence(model, ctx, material)` asks one `omnia_guest::model::Question<Evidence>`: the embedded `prompts/extract.md` is the system prompt, the derived `Evidence` schema rides the request as a steering hint (the claim-id grammar as its `pattern`), and the claim gate is the request's `check` — run over every candidate the backend proposes, with a miss handed back as the correction (`## Previous answer (rejected)` / `## Findings`) so the backend asks again within its own round budget. The adapter never sees the reply text; it gets the accepted `Evidence`, or a `bad_request` carrying the last findings once the rounds are spent. `Material::Bound` renders the ordinary workspace or inline value (a workspace as "the `SOURCE` source tree"); `Material::Prepared(note)` admits a source-specific material note after the adapter validates or reads its input.
-- **Failures are Omnia errors.** Every operation fails with `emery_adapter::Error` (omnia's `omnia_guest::Error`), built with the re-exported `bad_request!` / `server_error!` / `bad_gateway!` macros — there is no adapter error type. Classify by who acts: a source the adapter cannot accept (an empty brief, a tree that is not the expected shape) is `bad_request!`; an unreadable file or a failed upstream is `server_error!` / `bad_gateway!`. The SDK lowers the class to the WIT `error` variant at the export, the engine lifts it back, and it surfaces to the operator as the matching exit code.
+- **Failures are Omnia errors.** Every operation fails with `emery_sdk::Error` (omnia's `omnia_guest::Error`), built with the re-exported `bad_request!` / `server_error!` / `bad_gateway!` macros — there is no adapter error type. Classify by who acts: a source the adapter cannot accept (an empty brief, a tree that is not the expected shape) is `bad_request!`; an unreadable file or a failed upstream is `server_error!` / `bad_gateway!`. The SDK lowers the class to the WIT `error` variant at the export, the engine lifts it back, and it surfaces to the operator as the matching exit code.
 
-For the type-level contract — `Context`, `SourceInput`, `Evidence`, the answer schemas — generate the SDK docs locally with `cargo doc -p emery-adapter --open`. The WIT bindings types are defined in `emery-source` and re-exported at the SDK's root, so an adapter names `emery_adapter::{Context, Evidence, SourceContent, …}` and never depends on `emery-source` directly.
+For the type-level contract — `Context`, `SourceInput`, `Evidence`, the answer schemas — generate the SDK docs locally with `cargo doc -p emery-sdk --open`. The WIT bindings types are defined in the `emery-adapter` contract crate (its `source` axis module) and re-exported at the SDK's root, so an adapter names `emery_sdk::{Context, Evidence, SourceContent, …}` and never depends on `emery-adapter` directly.
 
 ## Walkthrough
 
@@ -74,8 +74,8 @@ crate-type = ["cdylib", "rlib"]
 workspace = true
 
 [dependencies]
-emery-adapter.workspace = true
 emery-prose.workspace = true
+emery-sdk.workspace = true
 
 [build-dependencies]
 emery-prose = { workspace = true, features = ["emit"] }
@@ -106,7 +106,7 @@ fn main() {
 ```rust
 //! Changelog source adapter.
 
-emery_adapter::source!(crate::Adapter);
+emery_sdk::source!(crate::Adapter);
 
 mod operations;
 mod registry {
@@ -118,10 +118,10 @@ pub use operations::Adapter;
 
 ### 4. Implement the operations trait
 
-`src/operations.rs` implements `emery_adapter::SourceAdapter` on a unit struct. Condensed — the real `intent` and `documentation` files are worth reading in full:
+`src/operations.rs` implements `emery_sdk::SourceAdapter` on a unit struct. Condensed — the real `intent` and `documentation` files are worth reading in full:
 
 ```rust
-use emery_adapter::{Context, Error, Evidence, Material, Model, SourceAdapter};
+use emery_sdk::{Context, Error, Evidence, Material, Model, SourceAdapter};
 use emery_prose::registry::Doc;
 
 use crate::registry;

@@ -4,11 +4,11 @@ Human-facing contributor guide (toolchain, layout, prompts, pin, publishing). Cr
 
 ## Getting started
 
-1. Clone this repository. Until an engine release carries the extract-only SDK, the engine crates (`emery-adapter`, `emery-prose`, `emery-source`) resolve through the `[patch.crates-io]` git patches in the root `Cargo.toml` (see [Engine pin and sibling co-development](#engine-pin-and-sibling-co-development)); once that release exists the pin moves to its tag (`tag = "vX.Y.Z"`, RFC-77 D13). A sibling `../emery` checkout is needed only for co-development (uncomment the path patches) and the live eval (it drives that repo's built `emery` binary).
+1. Clone this repository. Until an engine release carries the extract-only SDK, the engine crates (`emery-adapter`, `emery-prose`, `emery-sdk`) resolve through the `[patch.crates-io]` git patches in the root `Cargo.toml` (see [Engine pin and sibling co-development](#engine-pin-and-sibling-co-development)); once that release exists the pin moves to its tag (`tag = "vX.Y.Z"`, RFC-77 D13). A sibling `../emery` checkout is needed only for co-development (uncomment the path patches) and the live eval (it drives that repo's built `emery` binary).
 2. `rustup` picks up the pinned **stable** toolchain from `rust-toolchain.toml` (including the `wasm32-wasip2` target); a nightly toolchain is additionally needed for the `fmt` arm (`cargo +nightly fmt`). The first `make` installs [mise](https://mise.jdx.dev) if it is missing. Also install `cargo-nextest`, `cargo-deny`, and `cargo-vet`. Publishing also uses `wkg`.
 3. Run `make check` from the repo root. Before opening a PR, run `make ci`.
 
-For the adapter SDK's type-level contract (the `SourceAdapter` trait, WIT types, answer schemas), generate the docs locally: `cargo doc -p emery-adapter --open`.
+For the adapter SDK's type-level contract (the `SourceAdapter` trait, WIT types, answer schemas), generate the docs locally: `cargo doc -p emery-sdk --open`.
 
 Unless you are fixing a known bug, discuss larger changes in a GitHub issue first. Legal / DCO expectations match the engine repo — see [emery CONTRIBUTING](https://github.com/augentic/emery/blob/main/CONTRIBUTING.md).
 
@@ -45,7 +45,7 @@ Identity lives in the guest crate's `Cargo.toml` `version` (the shared `[workspa
 
 Adapter prompts are markdown documents compiled into the guest and driven by the engine's `extract` dispatch. They are not skills: no YAML frontmatter, no discovery metadata.
 
-- **`prose/prompts/extract.md`** carries the whole extraction pass: the claim-kind table with each kind's required body field (the `emery_source::Evidence::findings` gate, run as the SDK's `SourceAdapter::evidence` check so the backend corrects a miss in place, and fail-closed engine-side, A8), the id-derivation rules reconciliation joins on, and the JSON output contract. Soft cap ~500 non-blank lines, hard cap 800 — above that, move material to `prose/references/`.
+- **`prose/prompts/extract.md`** carries the whole extraction pass: the claim-kind table with each kind's required body field (the `emery_adapter::source::Evidence::findings` gate, run as the SDK's `SourceAdapter::evidence` check so the backend corrects a miss in place, and fail-closed engine-side, A8), the id-derivation rules reconciliation joins on, and the JSON output contract. Soft cap ~500 non-blank lines, hard cap 800 — above that, move material to `prose/references/`.
 - **References are cited via relative markdown links, never inlined** — the `prose` crate's build-time embed includes Markdown documents and follows symlinks, so keep every relative reference resolvable.
 - Survey prompts are deleted, never ported (ADR-0008).
 
@@ -53,8 +53,8 @@ Adapter prompts are markdown documents compiled into the guest and driven by the
 
 Two compatibility choices are independent:
 
-1. **WIT contract version** — the `emery:adapter` WIT package, embedded in the `emery-source` contract crate (which the `emery-adapter` SDK re-exports) and published from `augentic/emery`'s `wit/emery.wit`.
-2. **Engine revision** — the workspace resolves `emery-adapter`, `emery-prose`, and `emery-source` on `augentic/emery`, pinned by **release tag** (`tag = "vX.Y.Z"` in the root `Cargo.toml`; RFC-77 D13) plus the committed `Cargo.lock`. Advancing the pin is deliberate: bump the tag on all three dependencies, run `cargo update -p emery-adapter -p emery-prose -p emery-source`, and commit both files — never resolve a floating branch.
+1. **WIT contract version** — the `emery:adapter` WIT package, embedded in the `emery-adapter` contract crate (which the `emery-sdk` SDK re-exports) and published from `augentic/emery`'s `wit/emery.wit`.
+2. **Engine revision** — the workspace resolves `emery-adapter`, `emery-prose`, and `emery-sdk` on `augentic/emery`, pinned by **release tag** (`tag = "vX.Y.Z"` in the root `Cargo.toml`; RFC-77 D13) plus the committed `Cargo.lock`. Advancing the pin is deliberate: bump the tag on all three dependencies, run `cargo update -p emery-adapter -p emery-prose -p emery-sdk`, and commit both files — never resolve a floating branch.
 
 For sibling co-development against uncommitted engine changes, uncomment the path patches in the root `Cargo.toml` `[patch.crates-io]` block (they point at `../emery`); they must never be active on the committed tree or at publish time. **Current state**: git patches are active — the extract-only SDK is not yet on a tagged engine release, so the tag pin (and with it the first adapter train publish) waits on that release cut.
 

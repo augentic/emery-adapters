@@ -1,9 +1,7 @@
 //! TypeScript extract operation behavior over the `Source` capability.
 
-use emery_adapter::model::ToolCall;
-use emery_adapter::{
-    Authority, ClaimKind, Context, SourceAdapter as _, SourceContent, SourceInput,
-};
+use emery_sdk::model::ToolCall;
+use emery_sdk::{Authority, ClaimKind, Context, SourceAdapter as _, SourceContent, SourceInput};
 use omnia_test::SeenFormat;
 use omnia_test::guest::Scripted;
 use typescript::Adapter;

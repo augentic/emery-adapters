@@ -259,7 +259,7 @@ checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 name = "caller"
 version = "0.13.0"
 dependencies = [
- "emery-source",
+ "emery-adapter",
  "semver",
  "serde_json",
  "wasip3",
@@ -952,8 +952,8 @@ dependencies = [
 name = "documentation"
 version = "0.13.0"
 dependencies = [
- "emery-adapter",
  "emery-prose",
+ "emery-sdk",
  "omnia-test",
  "serde_json",
  "tokio",
@@ -993,12 +993,12 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 name = "emery-adapter"
 version = "0.38.0"
 dependencies = [
- "emery-prose",
- "emery-source",
  "omnia-guest",
  "schemars",
  "serde",
  "serde_json",
+ "strum 0.28.0",
+ "wit-bindgen 0.62.0",
 ]
 
 [[package]]
@@ -1009,15 +1009,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "emery-source"
+name = "emery-sdk"
 version = "0.38.0"
 dependencies = [
+ "emery-adapter",
+ "emery-prose",
  "omnia-guest",
  "schemars",
  "serde",
  "serde_json",
- "strum 0.28.0",
- "wit-bindgen 0.62.0",
 ]
 
 [[package]]
@@ -1706,8 +1706,8 @@ name = "intent"
 version = "0.13.0"
 dependencies = [
  "anyhow",
- "emery-adapter",
  "emery-prose",
+ "emery-sdk",
  "omnia-test",
  "serde_json",
  "tempfile",
@@ -4269,8 +4269,8 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 name = "typescript"
 version = "0.13.0"
 dependencies = [
- "emery-adapter",
  "emery-prose",
+ "emery-sdk",
  "omnia-test",
  "serde_json",
  "tokio",

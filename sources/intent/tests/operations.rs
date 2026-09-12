@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use emery_adapter::{
+use emery_sdk::{
     Authority, ClaimKind, Context, Error, SourceAdapter as _, SourceContent, SourceInput,
 };
 use intent::Adapter;

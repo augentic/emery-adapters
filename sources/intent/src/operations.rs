@@ -5,10 +5,10 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
-use emery_adapter::{
+use emery_prose::registry::Doc;
+use emery_sdk::{
     Context, Error, Evidence, Material, Model, SourceAdapter, SourceContent, bad_request,
 };
-use emery_prose::registry::Doc;
 
 use crate::registry;
 

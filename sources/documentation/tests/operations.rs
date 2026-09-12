@@ -1,9 +1,7 @@
 //! Documentation extract operation behavior over the `Source` capability.
 
 use documentation::Adapter;
-use emery_adapter::{
-    Authority, ClaimKind, Context, SourceAdapter as _, SourceContent, SourceInput,
-};
+use emery_sdk::{Authority, ClaimKind, Context, SourceAdapter as _, SourceContent, SourceInput};
 use omnia_test::SeenFormat;
 use omnia_test::guest::Scripted;
 

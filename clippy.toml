@@ -2,7 +2,7 @@
 
 doc-valid-idents = ["TypeScript", "JavaScript"]
 
-# Transitive duplicates we do not control (pulled in via emery-adapter and,
+# Transitive duplicates we do not control (pulled in via emery-sdk and,
 # for the conformance harness, the omnia host stack). Clippy's cargo group
 # stays on; drop a name when `cargo tree --duplicates` is clean.
 allowed-duplicate-crates = [
