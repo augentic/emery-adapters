@@ -5,7 +5,7 @@ The engine invokes this prompt once per bound `typescript` source. Your job: wal
 ## Inputs
 
 - **`$SOURCE_DIR`** — read-only view of the bound source root. Walk it; resolve `tsconfig.json` `paths` mappings relative to it. Absent when the source is an inline `value` (the material is then in the message).
-- **Source key** — the kebab-case source key the engine passed on the wire.
+- **Source key** — the kebab-case source key the engine passed on the WIT bindings.
 
 Nothing outside the bound source is reachable; writes back into `$SOURCE_DIR` are denied. Extract mines the entire estate in one pass: every entry point, handler, and domain module in scope.
 

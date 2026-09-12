@@ -259,7 +259,7 @@ checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 name = "caller"
 version = "0.13.0"
 dependencies = [
- "emery-source",
+ "emery-adapter",
  "semver",
  "serde_json",
  "wasip3",
@@ -690,9 +690,9 @@ checksum = "56caa8a7f1e0f2c61400996cc1567fb06dd417c49d5e673131a149cb9628625f"
 
 [[package]]
 name = "crc32fast"
-version = "1.5.1"
+version = "1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8498c871161e1742aaa9d52551b2d6ebdd4c3d45a3be423e3728f33b955be550"
+checksum = "01a7799fd6b852db0e61728dde9a204c423b44d689dbd432522543614b490e78"
 dependencies = [
  "cfg-if",
 ]
@@ -952,8 +952,8 @@ dependencies = [
 name = "documentation"
 version = "0.13.0"
 dependencies = [
- "emery-adapter",
  "emery-prose",
+ "emery-sdk",
  "omnia-test",
  "serde_json",
  "tokio",
@@ -992,28 +992,7 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 [[package]]
 name = "emery-adapter"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#f9c77cdf5d30485014bb3cfdbcf7c6a3254c8567"
-dependencies = [
- "emery-prose",
- "emery-source",
- "omnia-guest",
- "schemars",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "emery-prose"
-version = "0.38.0"
-source = "git+https://github.com/augentic/emery#f9c77cdf5d30485014bb3cfdbcf7c6a3254c8567"
-dependencies = [
- "anyhow",
-]
-
-[[package]]
-name = "emery-source"
-version = "0.38.0"
-source = "git+https://github.com/augentic/emery#f9c77cdf5d30485014bb3cfdbcf7c6a3254c8567"
+source = "git+https://github.com/augentic/emery#a07cb91477ffaace99189d6485e7b057b3db7acb"
 dependencies = [
  "omnia-guest",
  "schemars",
@@ -1021,6 +1000,27 @@ dependencies = [
  "serde_json",
  "strum 0.28.0",
  "wit-bindgen 0.62.0",
+]
+
+[[package]]
+name = "emery-prose"
+version = "0.38.0"
+source = "git+https://github.com/augentic/emery#a07cb91477ffaace99189d6485e7b057b3db7acb"
+dependencies = [
+ "anyhow",
+]
+
+[[package]]
+name = "emery-sdk"
+version = "0.38.0"
+source = "git+https://github.com/augentic/emery#a07cb91477ffaace99189d6485e7b057b3db7acb"
+dependencies = [
+ "emery-adapter",
+ "emery-prose",
+ "omnia-guest",
+ "schemars",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1709,8 +1709,8 @@ name = "intent"
 version = "0.13.0"
 dependencies = [
  "anyhow",
- "emery-adapter",
  "emery-prose",
+ "emery-sdk",
  "omnia-test",
  "serde_json",
  "tempfile",
@@ -4272,8 +4272,8 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 name = "typescript"
 version = "0.13.0"
 dependencies = [
- "emery-adapter",
  "emery-prose",
+ "emery-sdk",
  "omnia-test",
  "serde_json",
  "tokio",

@@ -5,7 +5,7 @@ Walk the whole bound documentation source and return one `Evidence` document of 
 ## Inputs
 
 - `$SOURCE_DIR` — read-only view of the bound documentation tree. Absent when the source is an inline `value` (the material is then in the message).
-- **Source key** — the authored source key the engine passed on the wire.
+- **Source key** — the authored source key the engine passed on the WIT bindings.
 
 Nothing outside the bound source is reachable. Extract mines this source completely in one pass: every document in the tree, top to bottom.
 

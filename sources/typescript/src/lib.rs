@@ -1,6 +1,6 @@
 //! TypeScript source adapter.
 
-emery_adapter::source!(crate::Adapter);
+emery_sdk::source!(crate::Adapter);
 
 mod operations;
 mod registry {

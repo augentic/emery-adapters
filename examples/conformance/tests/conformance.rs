@@ -2,7 +2,7 @@
 //! under the omnia runtime with a scripted model, driven by the caller
 //! guest over the `emery:adapter/source` seam. This rung owns
 //! instantiation, an effect-free `metadata`, the reference-tool
-//! round-trip across real wasi-model streams, the wire lowering of
+//! round-trip across real wasi-model streams, the WIT bindings lowering of
 //! evidence and of the typed `error` — never prompt text or extraction
 //! quality, which the native suites and the live eval own.
 
@@ -151,7 +151,7 @@ async fn typescript() {
 // A fail-closed refusal crosses the seam as the typed WIT `error`
 // variant, before any model call: the intent adapter reads a one-file
 // tree, so a two-file tree is its `bad_request`, lowered to
-// `invalid-request` on the wire and lifted back as `bad_request`.
+// `invalid-request` on the WIT bindings and lifted back as `bad_request`.
 #[tokio::test]
 async fn typed_error() {
     let project = scratch();
