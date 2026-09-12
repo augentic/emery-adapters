@@ -1,8 +1,11 @@
-//! TypeScript extract operation behavior over the `Source` capability.
+//! TypeScript's own extract behaviour, natively over a scripted model: the
+//! material the adapter puts for a tree, the prompt it lands, the evidence it
+//! hands back with its extras verbatim, and a reference pulled from its deep
+//! corpus. The seam suite (`tests/source.rs`) owns what crosses the component
+//! boundary; the SDK's suite owns the request shape every adapter shares.
 
 use emery_sdk::model::ToolCall;
 use emery_sdk::{Authority, ClaimKind, Context, SourceAdapter as _, SourceContent, SourceInput};
-use omnia_test::SeenFormat;
 use omnia_test::guest::Scripted;
 use typescript::Adapter;
 
@@ -63,9 +66,7 @@ async fn extract_leg() {
         Some("src/users/repository.ts:insertUser"),
     );
 
-    let seen = model.seen();
-    assert_eq!(seen.len(), 1, "extract is a single judgment leg");
-    let request = &seen[0];
+    let request = &model.seen()[0];
     let system = request.system.as_deref().unwrap();
     assert!(
         system.starts_with("# TypeScript / JavaScript source extract"),
@@ -85,22 +86,10 @@ async fn extract_leg() {
     );
     assert!(user.contains("extract mines only this source"), "nothing else is reachable");
     assert!(user.contains("`read_doc` tool"), "the reference pull affordance is named");
-    let SeenFormat::Schema { name, schema } = &request.format else {
-        panic!("expected schema format, got {:?}", request.format)
-    };
-    assert_eq!(name, "evidence");
-    let schema: serde_json::Value = serde_json::from_str(schema).expect("the schema is JSON");
-    assert!(
-        schema.pointer("/$defs/Claim/properties/id/pattern").is_some(),
-        "the claim-id grammar steers the answer"
-    );
-    assert!(request.check, "acceptance is the SDK's claim gate, not the reply text");
-    assert_eq!(request.workspace.as_deref(), Some("."), "the source view is lent");
-    assert_eq!(request.tools, ["list_docs", "read_doc"], "the reference tools are declared");
 }
 
-// A scripted `read_doc` call round-trips through the judgment's tool
-// closure: the answer is the embedded reference body as a JSON object.
+// A scripted `read_doc` over one of typescript's deep references answers
+// from its embedded corpus: the body comes back as a JSON object.
 #[tokio::test]
 async fn ref_pull() {
     let docs = Adapter::docs();

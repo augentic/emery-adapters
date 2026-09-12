@@ -1,8 +1,11 @@
-//! Documentation extract operation behavior over the `Source` capability.
+//! Documentation's own extract behaviour, natively over a scripted model:
+//! the material the adapter puts for a tree and for an inline value, the
+//! prompt it lands, and the evidence it hands back with its extras verbatim.
+//! The seam suite (`tests/source.rs`) owns what crosses the component
+//! boundary; the SDK's suite owns the request shape every adapter shares.
 
 use documentation::Adapter;
 use emery_sdk::{Authority, ClaimKind, Context, SourceAdapter as _, SourceContent, SourceInput};
-use omnia_test::SeenFormat;
 use omnia_test::guest::Scripted;
 
 const fn ctx(input: &SourceInput) -> Context<'_> {
@@ -56,9 +59,7 @@ async fn extract_leg() {
         Some("Use the existing transactional email provider."),
     );
 
-    let seen = model.seen();
-    assert_eq!(seen.len(), 1, "extract is a single judgment leg");
-    let request = &seen[0];
+    let request = &model.seen()[0];
     let system = request.system.as_deref().unwrap();
     assert!(
         system.starts_with("# `documentation.extract`"),
@@ -70,24 +71,12 @@ async fn extract_leg() {
     assert!(user.contains("$SOURCE_DIR"), "source is mapped onto the prompt's vocabulary");
     assert!(user.contains("the documentation source tree"), "the tree is named by its source");
     assert!(user.contains("extract mines only this source"), "nothing else is reachable");
-    let SeenFormat::Schema { name, schema } = &request.format else {
-        panic!("expected schema format, got {:?}", request.format)
-    };
-    assert_eq!(name, "evidence");
-    let schema: serde_json::Value = serde_json::from_str(schema).expect("the schema is JSON");
-    assert!(
-        schema.pointer("/$defs/Claim/properties/id/pattern").is_some(),
-        "the claim-id grammar steers the answer"
-    );
-    assert!(request.check, "acceptance is the SDK's claim gate, not the reply text");
-    assert_eq!(request.workspace.as_deref(), Some("."), "the source view is lent");
-    assert_eq!(request.tools, ["list_docs", "read_doc"], "the reference tools are declared");
 }
 
-// An inline `value:` source lends no workspace: the material rides in
-// the user message and the judgment leg gets no filesystem grant.
+// An inline `value:` source is material in the user turn: the value rides
+// inline and the brief says no source tree is bound.
 #[tokio::test]
-async fn no_lend() {
+async fn inline_value() {
     let model = Scripted::answering([r#"{"authority":"documentation","claims":[]}"#]);
     let input = SourceInput {
         key: "notes".to_string(),
@@ -97,10 +86,7 @@ async fn no_lend() {
     let evidence = Adapter::extract(&model, &ctx(&input)).await.unwrap();
 
     assert!(evidence.claims.is_empty());
-    let seen = model.seen();
-    let request = &seen[0];
-    assert_eq!(request.workspace, None, "no lend for an inline value");
-    let user = &request.messages[0];
+    let user = &model.seen()[0].messages[0];
     assert!(user.contains("Reset links expire after 30 minutes."), "the value rides inline");
     assert!(user.contains("no `$SOURCE_DIR` is lent"));
 }

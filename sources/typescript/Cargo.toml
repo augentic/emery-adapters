@@ -26,5 +26,10 @@ emery-prose = { workspace = true, features = ["emit"] }
 serde_json.workspace = true
 tokio.workspace = true
 
+# The seam suite (`tests/source.rs`) runs the built component under the
+# omnia runtime, driven by `crates/test-programs`.
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-omnia-test = { workspace = true, features = ["guest"] }
+omnia.workspace = true
+omnia-test = { workspace = true, features = ["guest", "host"] }
+omnia-wasi-model.workspace = true
+test-programs.workspace = true

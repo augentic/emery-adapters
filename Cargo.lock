@@ -256,16 +256,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
-name = "caller"
-version = "0.13.0"
-dependencies = [
- "emery-adapter",
- "semver",
- "serde_json",
- "wasip3",
-]
-
-[[package]]
 name = "cap-fs-ext"
 version = "4.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -429,19 +419,6 @@ checksum = "cfc320937d09e6de266b31b9afb480f197d7a861be86be7cb2ea7e5d1bfffc5e"
 dependencies = [
  "bytes",
  "memchr",
-]
-
-[[package]]
-name = "conformance"
-version = "0.13.0"
-dependencies = [
- "anyhow",
- "caller",
- "omnia",
- "omnia-test",
- "omnia-wasi-model",
- "serde_json",
- "tokio",
 ]
 
 [[package]]
@@ -954,8 +931,11 @@ version = "0.13.0"
 dependencies = [
  "emery-prose",
  "emery-sdk",
+ "omnia",
  "omnia-test",
+ "omnia-wasi-model",
  "serde_json",
+ "test-programs",
  "tokio",
 ]
 
@@ -1000,6 +980,23 @@ dependencies = [
  "serde_json",
  "strum 0.28.0",
  "wit-bindgen 0.62.0",
+]
+
+[[package]]
+name = "emery-adapters"
+version = "0.13.0"
+dependencies = [
+ "documentation",
+ "emery-prose",
+ "emery-sdk",
+ "intent",
+ "omnia",
+ "omnia-test",
+ "omnia-wasi-model",
+ "serde_json",
+ "test-programs",
+ "tokio",
+ "typescript",
 ]
 
 [[package]]
@@ -1062,14 +1059,6 @@ checksum = "de48cc4d1c1d97a20fd819def54b890cadde72ed3ad0c614822a0a433361be96"
 dependencies = [
  "cfg-if",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "eval"
-version = "0.13.0"
-dependencies = [
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -1711,9 +1700,12 @@ dependencies = [
  "anyhow",
  "emery-prose",
  "emery-sdk",
+ "omnia",
  "omnia-test",
+ "omnia-wasi-model",
  "serde_json",
  "tempfile",
+ "test-programs",
  "tokio",
 ]
 
@@ -3872,6 +3864,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "test-programs"
+version = "0.13.0"
+dependencies = [
+ "emery-adapter",
+ "emery-prose",
+ "emery-sdk",
+ "omnia-guest",
+ "omnia-test",
+ "semver",
+ "serde_json",
+ "wasip3",
+]
+
+[[package]]
 name = "thiserror"
 version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4274,8 +4280,11 @@ version = "0.13.0"
 dependencies = [
  "emery-prose",
  "emery-sdk",
+ "omnia",
  "omnia-test",
+ "omnia-wasi-model",
  "serde_json",
+ "test-programs",
  "tokio",
 ]
 

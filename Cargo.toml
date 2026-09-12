@@ -1,5 +1,33 @@
+[package]
+name = "emery-adapters"
+description = "The host side of the adapter workspace: the seam and corpus suites over every shipped component"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+# A tests-only package: `tests/` drives the components `crates/test-programs`
+# builds, and the root carries no library or binary of its own.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+documentation.workspace = true
+emery-prose.workspace = true
+emery-sdk.workspace = true
+intent.workspace = true
+omnia.workspace = true
+omnia-test = { workspace = true, features = ["host"] }
+omnia-wasi-model.workspace = true
+serde_json.workspace = true
+test-programs.workspace = true
+tokio.workspace = true
+typescript.workspace = true
+
+[lints]
+workspace = true
+
 [workspace]
-members = ["examples/caller", "examples/conformance", "examples/eval", "sources/*"]
+members = ["crates/*", "sources/*"]
 resolver = "3"
 
 [workspace.package]
@@ -22,13 +50,19 @@ tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
 wasip3 = "0.8.0"
 
 omnia = { version = "0.36.0", default-features = false, features = ["jit"] }
-omnia-guest = "0.36.0"
+omnia-guest = { version = "0.36.0", default-features = false }
 omnia-test = { version = "0.36.0", default-features = false }
 omnia-wasi-model = "0.36.0"
 
 emery-adapter = "0.38.0"
 emery-prose = "0.38.0"
 emery-sdk = "0.38.0"
+
+# Workspace crates: the fixture pipeline and the shipped adapters' rlibs.
+test-programs = { path = "crates/test-programs" }
+documentation = { path = "sources/documentation" }
+intent = { path = "sources/intent" }
+typescript = { path = "sources/typescript" }
 
 [patch.crates-io]
 emery-adapter = { git = "https://github.com/augentic/emery" }
@@ -101,6 +135,6 @@ opt-level = 2
 strip = true
 
 # Dependencies keep line tables only (workspace crates are unaffected): the
-# conformance rung's wasmtime with full debuginfo dominates `target/`.
+# seam suites' wasmtime with full debuginfo dominates `target/`.
 [profile.dev.package]
 "*" = { debug = "line-tables-only" }

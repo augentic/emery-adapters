@@ -8,8 +8,8 @@ targets = [
   "x86_64-unknown-linux-gnu",
   "aarch64-unknown-linux-gnu",
   "x86_64-pc-windows-msvc",
-  # Adapters and the conformance caller compile for the WASI component target;
-  # include it so their target-gated dependencies are graphed and vetted.
+  # Adapters and the test-programs guests compile for the WASI component
+  # target; include it so their target-gated dependencies are graphed and vetted.
   "wasm32-wasip2",
 ]
 
@@ -20,8 +20,8 @@ feature-depth = 1
 unmaintained = 'workspace'
 ignore = []
 
-# Mirrors the emery engine's allowlist: the omnia host graph the
-# probe / eval driver pulls in (rustls / aws-lc-rs / opentelemetry) carries the
+# Mirrors the emery engine's allowlist: the omnia host graph the seam
+# suites pull in (rustls / aws-lc-rs / opentelemetry) carries the
 # ISC / LLVM-exception / CDLA / CC0 entries beyond this repo's original
 # extension-only set.
 [licenses]

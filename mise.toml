@@ -18,13 +18,8 @@ name="${1:?usage: make adapter <name>}"
 cargo build -p "$name" --target wasm32-wasip2 --release
 '''
 
-[tasks.eval]
-run = '''
-cargo run -p eval --release -- "$@"
-'''
-
 [tasks.release]
-run = "cargo build --workspace --exclude eval --exclude caller --exclude conformance --target wasm32-wasip2 --release"
+run = "cargo build --workspace --exclude emery-adapters --exclude test-programs --target wasm32-wasip2 --release"
 
 [tasks.publish]
 run = '''

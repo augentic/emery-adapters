@@ -1,4 +1,8 @@
-//! Intent extract operation behavior over the `Source` capability.
+//! Intent's own extract behaviour, natively over a scripted model: what the
+//! adapter makes of its input before the one model call — the material it
+//! puts, the refusals it fails closed with — and the evidence it hands back.
+//! The seam suite (`tests/source.rs`) owns what crosses the component
+//! boundary; the SDK's suite owns the request shape every adapter shares.
 
 use std::path::Path;
 
@@ -6,7 +10,6 @@ use emery_sdk::{
     Authority, ClaimKind, Context, Error, SourceAdapter as _, SourceContent, SourceInput,
 };
 use intent::Adapter;
-use omnia_test::SeenFormat;
 use omnia_test::guest::Scripted;
 
 const fn ctx(input: &SourceInput) -> Context<'_> {
@@ -57,9 +60,7 @@ async fn inline_value() {
         Some("Users reset passwords by email."),
     );
 
-    let seen = model.seen();
-    assert_eq!(seen.len(), 1, "extract is a single judgment leg");
-    let request = &seen[0];
+    let request = &model.seen()[0];
     let system = request.system.as_deref().unwrap();
     assert!(system.starts_with("# intent.extract"));
     assert!(system.contains("whole brief, verbatim"), "the echo contract is stated");
@@ -72,18 +73,6 @@ async fn inline_value() {
     assert!(user.contains("inline value"), "prompt names the inline source");
     assert!(user.contains("no `$SOURCE_DIR` is lent"), "prompt says no source tree is bound");
     assert!(user.contains("Let users reset passwords by email."), "value is on the wire");
-    let SeenFormat::Schema { name, schema } = &request.format else {
-        panic!("expected schema format, got {:?}", request.format)
-    };
-    assert_eq!(name, "evidence");
-    let schema: serde_json::Value = serde_json::from_str(schema).expect("the schema is JSON");
-    assert!(
-        schema.pointer("/$defs/Claim/properties/id/pattern").is_some(),
-        "the claim-id grammar steers the answer"
-    );
-    assert!(request.check, "acceptance is the SDK's claim gate, not the reply text");
-    assert!(request.workspace.is_none(), "inline value lends no workspace");
-    assert_eq!(request.tools, ["list_docs", "read_doc"], "the reference tools are declared");
 }
 
 #[tokio::test]
