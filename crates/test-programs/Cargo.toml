@@ -41,11 +41,6 @@ path = "programs/probe/upstream.rs"
 crate-type = ["cdylib"]
 
 [[example]]
-name = "source_refused"
-path = "programs/source/refused.rs"
-crate-type = ["cdylib"]
-
-[[example]]
-name = "source_roundtrip"
-path = "programs/source/roundtrip.rs"
+name = "source_extract"
+path = "programs/source/extract.rs"
 crate-type = ["cdylib"]

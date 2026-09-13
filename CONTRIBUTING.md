@@ -34,10 +34,10 @@ sources/
     tests/            # extract.rs — native extract suite; source.rs — seam suite over the built component
 codex/references/runtime/   # shared runtime references (reconciliation)
 crates/test-programs/ # omnia's test-programs pattern: guest programs + the nested wasm32 build of every component
-  programs/<group>/   # one scenario per file: source/ drives the seam, probe/ are fixture adapters
-  src/                # lib.rs: generated artifact tables (native) / helpers.rs (wasm32)
-  build.rs            # two omnia_test::build::Components builds → adapters.rs + programs.rs
-tests/                # root seam suites: probe.rs (the WIT error arms), prose.rs (every adapter's corpus)
+  programs/<group>/   # one scenario per file: source/extract.rs drives the seam, probe/ are fixture adapters
+  src/                # lib.rs: the generated artifact table (native) / helpers.rs (wasm32)
+  build.rs            # one omnia_test::build::Components build → gen.rs (every adapter + every program)
+tests/                # root seam suites: probe.rs (the WIT error arms), prose.rs (every adapter's corpus cap)
 Cargo.toml            # the tests-only `emery-adapters` root package over crates/* + sources/*
 ```
 

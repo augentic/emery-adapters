@@ -179,8 +179,8 @@ Run with `cargo nextest run -p changelog` (never bare `cargo test` — see [test
 
 Two files complete the component rung ([testing.md § Seam suites](testing.md#2-seam-suites--cratestest-programs)):
 
-- `tests/source.rs` — copy an existing adapter's, changing the component constant (`test_programs::ADAPTER_CHANGELOG`, generated from the `sources/` directory), the minimal fixture tree, and the scripted evidence. Its `test_programs::foreach_source!()` requires a same-named test for every driver under `crates/test-programs/programs/source/`, so the suite fails to compile until `source_roundtrip` and `source_refused` exist.
-- Root `tests/prose.rs` — its `test_programs::foreach_adapter!()` fails to compile until a `#[test] fn changelog()` exists; add one calling the shared `corpus(docs, heading)` body with your prompt's heading, then any registry fact of your own (a rule overlay, a deep reference).
+- `tests/source.rs` — copy an existing adapter's, changing the component constant (`test_programs::ADAPTER_CHANGELOG`, generated from the `sources/` directory), the minimal fixture tree, and the scripted evidence. Its `test_programs::foreach_source!()` requires a same-named test for every driver under `crates/test-programs/programs/source/`, so the suite fails to compile until `source_extract` exists. Assert only what your component alone shows the host (intent asserts the brief it read through the mount is the turn's material); the adapter's own behaviour stays in `tests/extract.rs`.
+- Root `tests/prose.rs` — its `test_programs::foreach_adapter!()` fails to compile until a `#[test] fn changelog()` exists; add one calling `capped(changelog::Adapter::docs())`.
 
 ## Build the component and use it in a project
 
@@ -199,7 +199,7 @@ Publishing a pinned version to GHCR (`emery:changelog@<version>`) is the operato
 ## Definition of done
 
 - [ ] `src/lib.rs` carries no logic beyond the export macro, `registry!`, and re-exports; reusable logic is wasm-free library code.
-- [ ] The extraction prompt is embedded under `prose/` (pinned by the root `tests/prose.rs`); no survey prose.
+- [ ] The extraction prompt is embedded under `prose/` and every document stays under the 800 non-blank-line cap (the root `tests/prose.rs`); no survey prose.
 - [ ] Required per-kind extras are demanded by the prompt and asserted in the native tests.
 - [ ] `tests/extract.rs` covers extract with a scripted model (`omnia_test::guest::Scripted`), including fail-closed paths; `cargo nextest run -p <name>` is green.
 - [ ] `tests/source.rs` carries the adapter's seam suite and the root `tests/prose.rs` names the adapter; `cargo nextest run -p <name> --test source` and `cargo nextest run -p emery-adapters` are green.

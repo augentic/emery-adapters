@@ -8,8 +8,8 @@
 //! adapter, and generates one `pub const <NAME>: &str` path per component
 //! plus a `foreach_<group>!` macro a suite invokes to prove every program
 //! (`foreach_source!`, `foreach_probe!`) or every adapter
-//! (`foreach_adapter!`) has a matching test. A suite runs an artifact through
-//! `omnia_test::host`.
+//! (`foreach_adapter!`) has a matching test — one `gen.rs` for both. A suite
+//! runs an artifact through `omnia_test::host`.
 
 /// The guest id every suite registers the adapter under test as, and the id
 /// every driver program dispatches to over `emery:adapter/source`.
@@ -22,7 +22,4 @@ mod helpers;
 pub use helpers::*;
 
 #[cfg(not(target_arch = "wasm32"))]
-include!(concat!(env!("OUT_DIR"), "/adapters.rs"));
-
-#[cfg(not(target_arch = "wasm32"))]
-include!(concat!(env!("OUT_DIR"), "/programs.rs"));
+include!(concat!(env!("OUT_DIR"), "/gen.rs"));

@@ -1,9 +1,10 @@
 //! The seam's own failure lowering, proved with the fixture adapters under
 //! `crates/test-programs/programs/probe/` in place of a shipped one: each
-//! probe fails `extract` with one WIT `error` arm, and the `source_refused`
-//! driver sees it lifted back to the Omnia error class on the caller's side
-//! of `emery:adapter/source`, with no model turn consumed. Every scenario
-//! runs the real components through the omnia runtime.
+//! probe fails `extract` with one WIT `error` arm, and the `source_extract`
+//! driver, told which class to expect, sees it lifted back to that Omnia
+//! error class on the caller's side of `emery:adapter/source`, with no model
+//! turn consumed. Every scenario runs the real components through the omnia
+//! runtime.
 
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -15,7 +16,7 @@ use omnia_wasi_model::WasiModel;
 // here; a new probe without one fails to compile.
 test_programs::foreach_probe!();
 
-/// Runs the `source_refused` driver against `probe` as the adapter under
+/// Runs the `source_extract` driver against `probe` as the adapter under
 /// test, requiring the refusal to cross the seam as `code`; the driver traps
 /// on any other class, and nothing is scripted because a probe never reaches
 /// the model.
@@ -25,7 +26,7 @@ async fn refused_by(probe: &str, code: &str) {
     let backends = Backends::defaults().await.model(model.clone());
     let status = Deployment::new()
         .link(["emery:adapter/source@0.1.0"])
-        .guest("caller", test_programs::SOURCE_REFUSED)
+        .guest("caller", test_programs::SOURCE_EXTRACT)
         .guest(test_programs::ADAPTER, probe)
         .command("caller")
         .mount(project.mount(false))
