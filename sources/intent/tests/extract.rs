@@ -45,7 +45,8 @@ async fn inline_value() {
     let model = Scripted::answering([ANSWER]);
 
     let input = value_input(BRIEF);
-    let evidence = Adapter::extract(&model, &ctx(&input)).await.unwrap();
+    let evidence =
+        Adapter::extract(&model, &ctx(&input)).await.expect("the scripted answer is accepted");
 
     assert_eq!(evidence.claims.len(), 1);
     let turn = &model.seen()[0].messages[0];
@@ -57,13 +58,14 @@ async fn inline_value() {
 #[tokio::test]
 async fn one_file() {
     let model = Scripted::answering([ANSWER]);
-    let root = tempfile::tempdir().unwrap();
+    let root = tempfile::tempdir().expect("a scratch tree");
     let nested = root.path().join("nested");
-    std::fs::create_dir(&nested).unwrap();
-    std::fs::write(nested.join("intent.md"), BRIEF).unwrap();
+    std::fs::create_dir(&nested).expect("the nested directory is created");
+    std::fs::write(nested.join("intent.md"), BRIEF).expect("the brief is written");
 
     let input = workspace_input(root.path());
-    let evidence = Adapter::extract(&model, &ctx(&input)).await.unwrap();
+    let evidence =
+        Adapter::extract(&model, &ctx(&input)).await.expect("the scripted answer is accepted");
 
     assert_eq!(evidence.claims.len(), 1);
     let turn = &model.seen()[0].messages[0];
@@ -71,32 +73,25 @@ async fn one_file() {
     assert!(turn.contains("one-file tree"), "the material names the tree source: {turn}");
 }
 
-// A tree that is not the one-file encoding is a typed refusal before any
-// model call.
+// A tree that is not the one-file encoding — no file, or several — is a
+// typed refusal before any model call.
 #[tokio::test]
-async fn multi_file() {
+async fn not_one_file() {
     // The refusal precedes the model, so nothing is scripted.
     let model = Scripted::default();
-    let root = tempfile::tempdir().unwrap();
-    std::fs::write(root.path().join("one.md"), "first").unwrap();
-    std::fs::write(root.path().join("two.md"), "second").unwrap();
 
-    let input = workspace_input(root.path());
-    let result = Adapter::extract(&model, &ctx(&input)).await;
+    let empty = tempfile::tempdir().expect("a scratch tree");
+    let input = workspace_input(empty.path());
+    let none = Adapter::extract(&model, &ctx(&input)).await;
+    assert!(matches!(none, Err(Error::BadRequest { .. })), "got {none:?}");
 
-    assert!(matches!(result, Err(Error::BadRequest { .. })), "got {result:?}");
-    assert!(model.seen().is_empty(), "no judgment leg runs on a malformed input");
-}
+    let several = tempfile::tempdir().expect("a scratch tree");
+    std::fs::write(several.path().join("one.md"), "first").expect("the first file is written");
+    std::fs::write(several.path().join("two.md"), "second").expect("the second file is written");
+    let input = workspace_input(several.path());
+    let many = Adapter::extract(&model, &ctx(&input)).await;
+    assert!(matches!(many, Err(Error::BadRequest { .. })), "got {many:?}");
 
-#[tokio::test]
-async fn empty_workspace() {
-    let model = Scripted::default();
-    let root = tempfile::tempdir().unwrap();
-
-    let input = workspace_input(root.path());
-    let result = Adapter::extract(&model, &ctx(&input)).await;
-
-    assert!(matches!(result, Err(Error::BadRequest { .. })), "got {result:?}");
     assert!(model.seen().is_empty(), "no judgment leg runs on a malformed input");
 }
 
@@ -110,8 +105,8 @@ async fn empty_brief() {
     let inline = Adapter::extract(&model, &ctx(&blank)).await;
     assert!(matches!(inline, Err(Error::BadRequest { .. })), "got {inline:?}");
 
-    let root = tempfile::tempdir().unwrap();
-    std::fs::write(root.path().join("intent.md"), "\n\t \n").unwrap();
+    let root = tempfile::tempdir().expect("a scratch tree");
+    std::fs::write(root.path().join("intent.md"), "\n\t \n").expect("the blank brief is written");
     let input = workspace_input(root.path());
     let tree = Adapter::extract(&model, &ctx(&input)).await;
     assert!(matches!(tree, Err(Error::BadRequest { .. })), "got {tree:?}");

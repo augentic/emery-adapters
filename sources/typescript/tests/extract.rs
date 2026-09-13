@@ -22,7 +22,7 @@ async fn bound_tree() {
         input: &input,
     };
 
-    Adapter::extract(&model, &ctx).await.unwrap();
+    Adapter::extract(&model, &ctx).await.expect("the scripted answer is accepted");
 
     let turn = &model.seen()[0].messages[0];
     assert!(turn.contains("the TypeScript / JavaScript source tree"), "{turn}");

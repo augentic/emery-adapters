@@ -174,8 +174,8 @@ Run with `cargo nextest run -p changelog` (never bare `cargo test` — see [test
 
 Two root tests complete the component rung ([testing.md § Seam suites](testing.md#2-seam-suites--cratestest-programs)); each `test_programs::foreach_adapter!()` fails to compile until a `#[tokio::test]` / `#[test]` `fn changelog()` exists:
 
-- `tests/source.rs` — stage the minimal fixture tree on a `scratch()` project, run `extract(test_programs::ADAPTER_CHANGELOG, &project)` (the constant is generated from the `sources/` directory), and pass the record to `prompted(&model, include_str!("../sources/changelog/prose/prompts/extract.md"))`. Add only what your component alone shows the host (intent asserts the brief it read through the mount is the turn's material); the adapter's own behaviour stays in `tests/extract.rs`, and the SDK's side of the seam is proved over the `gated` probe.
-- `tests/prose.rs` — call `corpus(changelog::Adapter::docs(), Authority::<Class>)` with the authority your prompt's `## Worked example` declares, then assert any registry fact of your own (a rule overlay, a deep reference).
+- `tests/source.rs` — stage the minimal fixture tree on a `scratch()` project, run `extract(test_programs::ADAPTER_CHANGELOG, Authority::<Class>, &project)` (the constant is generated from the `sources/` directory; the authority is the class your prompt declares), and pass the record to `prompted(&model, include_str!("../sources/changelog/prose/prompts/extract.md"))`. Add only what your component alone shows the host (intent asserts the brief it read through the mount is the turn's material); the adapter's own behaviour stays in `tests/extract.rs`, and the SDK's side of the seam is proved over the `gated` probe.
+- `tests/prose.rs` — call `corpus(changelog::Adapter::docs(), Authority::<Class>)` with the authority your prompt's `## Worked example` declares. Nothing more: reference presence is the embed-time walker's, and the prompt your component embeds is proved by `tests/source.rs`.
 
 ## Build the component and use it in a project
 
@@ -183,13 +183,13 @@ Two root tests complete the component rung ([testing.md § Seam suites](testing.
 make adapter changelog     # fast dev build → target/wasm32-wasip2/release/changelog.wasm
 ```
 
-Bind it in any Emery project by local path — the first `specify` naming it seeds the project's component cache:
+Bind it in any Emery project by local path — every `specify` naming it loads the file fresh (nothing is cached), so a rebuild is picked up by the next run:
 
 ```bash
 emery specify path/to/changelog.wasm
 ```
 
-Publishing a pinned version to GHCR (`emery:changelog@<version>`) is the operator flow in [CONTRIBUTING.md § Publishing](../CONTRIBUTING.md#publishing). To load it as a static guest, build the component and declare it in the host runtime the same way emery's journey host declares its mock source ([`examples/runtime.rs`](https://github.com/augentic/emery/blob/main/examples/runtime.rs) in the engine repository).
+Publishing a pinned version to GHCR (`emery:changelog@<version>`) is the operator flow in [CONTRIBUTING.md § Publishing](../CONTRIBUTING.md#publishing); a project then names it by package reference (`emery:changelog@<version>`, or the first-party shorthand `changelog@<version>`) and `emery` fetches it fresh on every run that names it. Those are the two ways in: the shipped `emery` deployment declares no adapter guests, so a bare name dispatches nothing — emery's own journey host ([`examples/runtime.rs`](https://github.com/augentic/emery/blob/main/examples/runtime.rs) in the engine repository) loads its mock adapter by path the same way.
 
 To watch it become a specification before wiring it into a project, give it an example: `examples/changelog/emery.toml` (copy a sibling's config; one `[[source]]` naming the built component by path relative to the file and the input it reads — a `path` to a fixture tree beside the config, or a `description`), the fixture if it lends one, and a row in [`examples/README.md`](../examples/README.md); then, from the repository root, `emery specify --config examples/changelog/emery.toml` and `emery show spec`. Nothing is compiled for an example — the config is data the shipped `emery` binary runs.
 

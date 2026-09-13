@@ -11,10 +11,11 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use omnia::ExitStatus;
-use omnia_test::host::{Backends, Deployment, Scratch, ScriptedModel, scratch};
-use omnia_wasi_model::WasiModel;
+mod support;
+
+use omnia_test::host::{ScriptedModel, scratch};
 use serde_json::Value;
+use support::run;
 
 // Every probe program in `crates/test-programs` must have a matching test
 // here; a new probe without one fails to compile.
@@ -28,27 +29,6 @@ const EVIDENCE: &str = r#"{"authority":"documentation","claims":[
 /// A requirement without its `statement`: the one extra the gate demands.
 const UNSTATED: &str =
     r#"{"authority":"documentation","claims":[{"kind":"requirement","id":"orders.create"}]}"#;
-
-/// Runs the driver in the mode `args` names against `probe` as the adapter
-/// under test, `project` mounted read-only as `.`; requires a clean exit —
-/// the driver traps on any check that fails — and the script exactly
-/// consumed, and returns the model's record.
-async fn run(probe: &str, project: &Scratch, args: &[&str], model: ScriptedModel) -> ScriptedModel {
-    let backends = Backends::defaults().await.model(model.clone());
-    let status = Deployment::new()
-        .link(["emery:adapter/source@0.1.0"])
-        .guest("caller", test_programs::SOURCE_EXTRACT)
-        .guest(test_programs::ADAPTER, probe)
-        .command("caller")
-        .mount(project.mount(false))
-        .args(args.iter().copied())
-        .run_host::<WasiModel, _>(backends)
-        .await
-        .expect("the caller runs");
-    assert_eq!(status, ExitStatus::SUCCESS, "the driver's checks failed against `{probe}`");
-    model.assert_exhausted();
-    model
-}
 
 /// Runs the driver's `refused` mode against `probe`, requiring the failure
 /// to cross the seam as `code`; nothing is scripted because the probe never

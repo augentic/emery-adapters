@@ -49,6 +49,10 @@ pub fn value(text: &str) -> SourceInput {
 
 /// An adapter that pins an emery version pins an exact semver — the version
 /// gate the engine runs parses it as one.
+///
+/// # Panics
+///
+/// Traps when the pin is not an exact semver.
 pub fn check_metadata(metadata: &AdapterMetadata) {
     if let Some(version) = &metadata.emery_version {
         assert!(
@@ -60,6 +64,10 @@ pub fn check_metadata(metadata: &AdapterMetadata) {
 
 /// Evidence that crossed the seam still passes the contract's claim gate —
 /// the fail-closed rule the engine re-runs on receipt.
+///
+/// # Panics
+///
+/// Traps on an empty claim set, or naming every finding the gate reports.
 pub fn check_evidence(evidence: &Evidence) {
     assert!(!evidence.claims.is_empty(), "evidence carries no claims");
 
@@ -70,6 +78,10 @@ pub fn check_evidence(evidence: &Evidence) {
 /// `actual` is `expected` field for field. The contract's records derive no
 /// `PartialEq`, so the comparison is spelled out where a difference is named
 /// by claim and field.
+///
+/// # Panics
+///
+/// Traps on the first field that differs, naming the claim and the field.
 pub fn check_same(expected: &Evidence, actual: &Evidence) {
     assert_eq!(actual.authority, expected.authority, "authority");
     assert_eq!(actual.claims.len(), expected.claims.len(), "claim count");
@@ -83,8 +95,9 @@ pub fn check_same(expected: &Evidence, actual: &Evidence) {
     }
 }
 
-/// Evidence with every field of the contract's records populated — one
-/// claim per kind, every `path` anchor form, both `backing` arms, a
+/// Evidence with every field of the contract's records populated.
+///
+/// One claim per kind, every `path` anchor form, both `backing` arms, a
 /// `synopsis`, and extras beyond strings (an object, a number, a list, a
 /// boolean, `null`) — the shape whose every branch the WIT bindings must
 /// conserve: extras ride as canonical JSON text and are parsed back on the

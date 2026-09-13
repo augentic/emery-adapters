@@ -12,7 +12,11 @@ use emery_sdk::{
 
 use crate::registry;
 
-/// Intent source → one Evidence document with one `kind: intent` claim.
+/// Intent source → one Evidence document under `authority: intent`.
+///
+/// One `kind: intent` claim carries the brief verbatim; then one
+/// `requirement` claim per directive the brief states — the claims
+/// reconciliation joins against the other sources'.
 #[derive(Debug)]
 pub struct Adapter;
 
@@ -36,6 +40,10 @@ fn brief(content: &SourceContent) -> Result<Material, Error> {
             require_brief(value)?;
             Ok(Material::Bound)
         }
+        // The SDK still lends the tree to the model, as it does for every
+        // workspace input; the note is what puts the brief in the turn, so
+        // the model reads it without a tool round, and reads the one file
+        // the same either way.
         SourceContent::Workspace(root) => {
             let intent = single_file_intent(Path::new(root))?;
             require_brief(&intent)?;
@@ -69,10 +77,10 @@ fn single_file_intent(root: &Path) -> Result<String, Error> {
 
 // The one-file tree encoding may nest, so the walk is recursive.
 fn collect_files(dir: &Path, files: &mut Vec<PathBuf>) -> Result<(), Error> {
-    for entry in std::fs::read_dir(dir).with_context(|| format!("reading `{}`", dir.display()))? {
-        let entry = entry.with_context(|| format!("reading `{}`", dir.display()))?;
-        let file_type =
-            entry.file_type().with_context(|| format!("reading `{}`", dir.display()))?;
+    let reading = || format!("reading `{}`", dir.display());
+    for entry in std::fs::read_dir(dir).with_context(reading)? {
+        let entry = entry.with_context(reading)?;
+        let file_type = entry.file_type().with_context(reading)?;
         if file_type.is_dir() {
             collect_files(&entry.path(), files)?;
         } else if file_type.is_file() {

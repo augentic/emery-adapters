@@ -8,6 +8,8 @@
 
 emery_sdk::source!(crate::Adapter);
 
+use std::future::{Future, ready};
+
 use emery_prose::registry::Doc;
 use emery_sdk::{Context, Error, Evidence, Model, SourceAdapter, bad_request};
 
@@ -22,7 +24,10 @@ impl SourceAdapter for Adapter {
         &[]
     }
 
-    async fn extract<P: Model>(_model: &P, ctx: &Context<'_>) -> Result<Evidence, Error> {
-        Err(bad_request!("the probe refuses source `{}`", ctx.input.key))
+    // Nothing to await: the refusal is ready before the model is asked.
+    fn extract<P: Model>(
+        _model: &P, ctx: &Context<'_>,
+    ) -> impl Future<Output = Result<Evidence, Error>> + Send {
+        ready(Err(bad_request!("the probe refuses source `{}`", ctx.input.key)))
     }
 }

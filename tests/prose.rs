@@ -1,29 +1,30 @@
-//! The embedded corpus of every shipped adapter: `prompts/extract.md` is
-//! present (the SDK's `prompt` answers `server_error` otherwise) and under
-//! the 800 non-blank-line cap, and its worked example — the JSON fence under
-//! `## Worked example` — is an Evidence document the claim gate accepts
-//! under the adapter's own authority class, so a prompt edit cannot teach
-//! the model a shape the adapter itself would refuse. Each adapter then
-//! asserts the registry facts of its own: the rule overlay or the deep
-//! references its prompt links. Reference presence in general is the
-//! embed-time walker's — a dangling link or symlink fails the build.
+//! The one machine-checkable part of every shipped prompt: the worked
+//! example. `prompts/extract.md` is the behaviour the model executes, and
+//! the JSON fence under its `## Worked example` is the shape it teaches —
+//! here it must parse as an Evidence document the claim gate accepts under
+//! the adapter's own authority class, so a prompt edit cannot teach the
+//! model a shape the adapter itself would refuse, and an engine pin that
+//! moves the contract (the required extras, the id grammar, an authority)
+//! fails here rather than in the live eval's repair rounds. The prompt is
+//! also held under the 800 non-blank-line cap, which nothing else enforces.
 //!
-//! `foreach_adapter!` is the orphan guard for the adapter set: a new
-//! `sources/<name>` component fails to compile here until a test of that
-//! name exists.
+//! Nothing else about the corpus is asserted: the walker fails the build on
+//! a dangling link, and `tests/source.rs` proves under the runtime that the
+//! prompt each component embeds is the one on disk. `foreach_adapter!`
+//! keeps the set complete: a new `sources/<name>` fails to compile here
+//! until its corpus is checked.
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use emery_prose::registry::{Doc, body, find};
+use emery_prose::registry::{Doc, body};
 use emery_sdk::{Authority, Evidence, SourceAdapter as _};
 
 // Every `sources/*` component `crates/test-programs` builds must have a
 // matching test here; a new adapter without one fails to compile.
 test_programs::foreach_adapter!();
 
-/// What every adapter's corpus satisfies: the extraction prompt is embedded,
-/// stays under the cap, and its worked example passes the claim gate under
-/// `authority`.
+/// The prompt stays under the cap and its worked example passes the claim
+/// gate under `authority`.
 fn corpus(docs: &[Doc], authority: Authority) {
     let prompt = body(docs, "prompts/extract.md").expect("`prompts/extract.md` is embedded");
 
@@ -47,26 +48,16 @@ fn worked_example(prompt: &str) -> &str {
 }
 
 #[test]
+fn documentation() {
+    corpus(documentation::Adapter::docs(), Authority::Documentation);
+}
+
+#[test]
 fn intent() {
     corpus(intent::Adapter::docs(), Authority::Intent);
 }
 
-// Documentation embeds its SRC-001 rule overlay beside the prompt.
-#[test]
-fn documentation() {
-    let docs = documentation::Adapter::docs();
-    corpus(docs, Authority::Documentation);
-    let rule = find(docs, "rules/documentation-verbatim-preservation.md")
-        .expect("SRC-001 rule overlay is embedded");
-    assert!(rule.body.contains("id: SRC-001"), "rule frontmatter carries its id");
-}
-
-// TypeScript's prompt links its deep references; they ride inside.
 #[test]
 fn typescript() {
-    let docs = typescript::Adapter::docs();
-    corpus(docs, Authority::Behaviour);
-    for path in ["references/business-logic.md", "references/language-mapping.md"] {
-        assert!(find(docs, path).is_some(), "registry embeds `{path}`");
-    }
+    corpus(typescript::Adapter::docs(), Authority::Behaviour);
 }

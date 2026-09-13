@@ -38,6 +38,7 @@ crates/test-programs/ # omnia's test-programs pattern: guest programs + the nest
   src/                # lib.rs: the generated artifact table (native) / helpers.rs (wasm32)
   build.rs            # one omnia_test::build::Components build → gen.rs (every adapter + every program)
 tests/                # root seam suites: source.rs (every shipped component), probe.rs (the error arms, the lowering, the SDK's seam), prose.rs (every adapter's corpus)
+  support/            # mod.rs — the one runner source.rs and probe.rs share (the deployment under the omnia runtime)
 examples/             # live walks: one emery.toml per adapter (plus one over all three) the shipped `emery` binary runs, and the fixtures they lend
 Cargo.toml            # the tests `emery-adapters` root package over crates/* + sources/*
 ```
@@ -64,13 +65,14 @@ For sibling co-development against uncommitted engine changes, uncomment the pat
 ## Local development loops
 
 ```bash
-make check                 # fmt + lint + nextest + doctests + doc
+make check                 # fmt + lint + wasm + nextest + doctests + doc
 make ci                    # full gate — adds cargo-vet + cargo-deny
-make adapter <name>        # fast one-component build → target/wasm32-wasip2/release/<name>.wasm
+make wasm                  # clippy of every program and adapter component for wasm32-wasip2
+make adapter <name>        # release-build one adapter → target/wasm32-wasip2/release/<name>.wasm (the path the examples bind)
 make release               # release-build every adapter (excludes the root package and test-programs)
 ```
 
-The `fmt` arm uses nightly `rustfmt`. `make lint` runs clippy under `-D warnings` (`clippy.toml` carries the guest deny-list). `make vet` is check-only; regenerate audit inputs with `make vetgen`. Native crate tests are the Rust inner loop; the seam suites prove every built component under the omnia runtime; `emery specify --config examples/<name>/emery.toml` walks one adapter live through the shipped `emery` binary and the Cursor backend ([examples/README.md](examples/README.md)); the graded live eval — being recreated as a root example beside the live examples — proves prompt quality end to end and writes the dated scorecard.
+The `fmt` arm uses nightly `rustfmt`. `make lint` runs clippy under `-D warnings` over the native side; the guest side — the programs under `crates/test-programs/programs/` and the adapters' export shims — is `cfg(target_arch = "wasm32")`, so `make wasm` lints it for the target it ships on, where `clippy.toml`'s guest deny-list applies. `make vet` is check-only; regenerate audit inputs with `make vetgen`. Native crate tests are the Rust inner loop; the seam suites prove every built component under the omnia runtime; `emery specify --config examples/<name>/emery.toml` walks one adapter live through the shipped `emery` binary and the Cursor backend ([examples/README.md](examples/README.md)); the graded live eval — being recreated as a root example beside the live examples — proves prompt quality end to end and writes the dated scorecard.
 
 ## Publishing
 

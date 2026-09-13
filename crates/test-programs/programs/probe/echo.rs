@@ -9,6 +9,8 @@
 
 emery_sdk::source!(crate::Adapter);
 
+use std::future::{Future, ready};
+
 use emery_prose::registry::Doc;
 use emery_sdk::{Context, Error, Evidence, Model, SourceAdapter};
 use test_programs::maximal;
@@ -24,7 +26,10 @@ impl SourceAdapter for Adapter {
         &[]
     }
 
-    async fn extract<P: Model>(_model: &P, _ctx: &Context<'_>) -> Result<Evidence, Error> {
-        Ok(maximal())
+    // Nothing to await: the answer is ready before the model is asked.
+    fn extract<P: Model>(
+        _model: &P, _ctx: &Context<'_>,
+    ) -> impl Future<Output = Result<Evidence, Error>> + Send {
+        ready(Ok(maximal()))
     }
 }

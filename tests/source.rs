@@ -16,38 +16,37 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use omnia::ExitStatus;
-use omnia_test::host::{Backends, Deployment, Scratch, ScriptedModel, scratch};
-use omnia_wasi_model::WasiModel;
+mod support;
+
+use emery_sdk::Authority;
+use omnia_test::host::{Scratch, ScriptedModel, scratch};
 
 // Every `sources/*` component `crates/test-programs` builds must have a
 // matching test here; a new adapter without one fails to compile.
 test_programs::foreach_adapter!();
 
-/// An answer the claim gate accepts; the gate reads no adapter's authority.
-const EVIDENCE: &str = r#"{"authority":"documentation","claims":[
-    {"kind":"requirement","id":"orders.create","path":"docs/orders.md#L3","statement":"POST /orders creates an order."}
-]}"#;
+/// An answer the claim gate accepts, stamped with `authority` — the class
+/// the adapter under test emits, so the walk reads as the engine would see
+/// it, though the gate itself reads no authority.
+fn evidence(authority: Authority) -> String {
+    serde_json::json!({
+        "authority": authority,
+        "claims": [{
+            "kind": "requirement",
+            "id": "orders.create",
+            "path": "docs/orders.md#L3",
+            "statement": "POST /orders creates an order."
+        }]
+    })
+    .to_string()
+}
 
 /// Runs the driver's answered legs against `component` with `project`
-/// mounted read-only as `.`, one scripted answer per `extract`; requires a
-/// clean exit and the script exactly consumed, and returns the model's
-/// record.
-async fn extract(component: &str, project: &Scratch) -> ScriptedModel {
-    let model = ScriptedModel::answering([EVIDENCE, EVIDENCE]);
-    let backends = Backends::defaults().await.model(model.clone());
-    let status = Deployment::new()
-        .link(["emery:adapter/source@0.1.0"])
-        .guest("caller", test_programs::SOURCE_EXTRACT)
-        .guest(test_programs::ADAPTER, component)
-        .command("caller")
-        .mount(project.mount(false))
-        .run_host::<WasiModel, _>(backends)
-        .await
-        .expect("the caller runs");
-    assert_eq!(status, ExitStatus::SUCCESS, "the driver's checks failed");
-    model.assert_exhausted();
-    model
+/// mounted read-only as `.`, one answer under `authority` per `extract`, and
+/// returns the model's record.
+async fn extract(component: &str, authority: Authority, project: &Scratch) -> ScriptedModel {
+    let answer = evidence(authority);
+    support::run(component, project, &[], ScriptedModel::answering([&answer, &answer])).await
 }
 
 /// What the host sees of every component: `metadata` opened no completion,
@@ -65,7 +64,8 @@ async fn documentation() {
     let project = scratch();
     project.write("docs/orders.md", "# Orders\n\nPOST /orders creates an order.\n");
 
-    let model = extract(test_programs::ADAPTER_DOCUMENTATION, &project).await;
+    let model =
+        extract(test_programs::ADAPTER_DOCUMENTATION, Authority::Documentation, &project).await;
 
     prompted(&model, include_str!("../sources/documentation/prose/prompts/extract.md"));
 }
@@ -78,7 +78,7 @@ async fn intent() {
     let project = scratch();
     project.write("brief.md", BRIEF);
 
-    let model = extract(test_programs::ADAPTER_INTENT, &project).await;
+    let model = extract(test_programs::ADAPTER_INTENT, Authority::Intent, &project).await;
 
     prompted(&model, include_str!("../sources/intent/prose/prompts/extract.md"));
     let turn = &model.seen()[0].messages[0];
@@ -90,7 +90,7 @@ async fn typescript() {
     let project = scratch();
     project.write("src/index.ts", "export function greet(): string { return 'hello'; }\n");
 
-    let model = extract(test_programs::ADAPTER_TYPESCRIPT, &project).await;
+    let model = extract(test_programs::ADAPTER_TYPESCRIPT, Authority::Behaviour, &project).await;
 
     prompted(&model, include_str!("../sources/typescript/prose/prompts/extract.md"));
 }
