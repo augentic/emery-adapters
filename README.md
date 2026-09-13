@@ -48,7 +48,7 @@ The live rung is a **public-contract client**: it spawns the sibling shipped `em
 ## Repair loop
 
 1. Edit `sources/<name>/prose/**` (the extract prompt, references, rules).
-2. `cargo nextest run -p <name>` to re-run its extract suite and `cargo nextest run -p emery-adapters` for its seam and corpus; `make adapter <name>` to rebuild the shipped component; `emery specify --config examples/<name>/emery.toml` to watch it become a spec.
+2. `cargo nextest run -p <name>` to re-run its extract suite and `cargo nextest run -p emery-adapters` for its seam and corpus; `cargo build -p <name> --target wasm32-wasip2 --release` to rebuild the shipped component; `emery specify --config examples/<name>/emery.toml` to watch it become a spec.
 
 Native crate tests stay the Rust inner loop; the seam suites prove the component boundary; the live examples show one adapter's claims becoming a specification; live eval is for prompt quality. See [docs/testing.md](docs/testing.md).
 

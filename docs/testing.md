@@ -35,7 +35,7 @@ make test                            # the whole workspace, matching CI
 
 The root is a package, so a `cargo nextest run` from the root without `--workspace` selects the root alone and never executes an adapter's suite; `make test` and the shared CI workflow pass `--workspace`, and so must any invocation meant to match them.
 
-The guest side — every program under `crates/test-programs/programs/` and the adapters' export shims — is `cfg(target_arch = "wasm32")`, so `make lint` compiles it to nothing. `make wasm` (inside `make check`, and a CI job of its own) runs clippy over it for `wasm32-wasip2`, where `clippy.toml`'s guest deny-list applies; the root package, native tests alone, is excluded.
+The guest side — every program under `crates/test-programs/programs/` and the adapters' export shims — is `cfg(target_arch = "wasm32")`, so `make lint` compiles it to nothing. Lint it for `wasm32-wasip2`, where `clippy.toml`'s guest deny-list applies, with `cargo clippy --workspace --exclude emery-adapters --lib --examples --target wasm32-wasip2 -- -D warnings` (the root package, native tests alone, is excluded); no gate runs it today.
 
 ### 2. Seam suites — `crates/test-programs`
 
@@ -81,4 +81,4 @@ Coverage is advisory here, not a gate: adapter code is a few lines per crate, an
 
 ## Test naming
 
-Test function names are identifiers, not sentences — name the *scenario* (`bound_tree`, `not_one_file`), never the outcome (`bound_tree_named`, `not_one_file_rejected`). The enclosing `tests/<area>.rs` module already names the subject — don't restate it in every `fn`. A test a `foreach_<group>!` macro guards is the exception by construction: it carries its program's full `<group>_<scenario>` name (`probe_echo`) or its adapter's (`intent`). Push the narrative into the `//` comment above the `fn`. The identifier cap is ≤ 25 characters (review-only; same rule as the engine).
+Test function names are identifiers, not sentences — name the *scenario* (`bound_tree`, `not_one_file`), never the outcome (`bound_tree_named`, `not_one_file_rejected`). The enclosing `tests/<area>.rs` module already names the subject — don't restate it in every `fn`. A test a `foreach_<group>!` macro guards is the exception by construction: it carries its program's full `<group>_<scenario>` name (`probe_echo`) or its adapter's (`intent`). Push the narrative into the `//` comment above the `fn`.

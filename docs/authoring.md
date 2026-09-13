@@ -180,7 +180,7 @@ Two root tests complete the component rung ([testing.md § Seam suites](testing.
 ## Build the component and use it in a project
 
 ```bash
-make adapter changelog     # fast dev build → target/wasm32-wasip2/release/changelog.wasm
+cargo build -p changelog --target wasm32-wasip2 --release   # → target/wasm32-wasip2/release/changelog.wasm
 ```
 
 Bind it in any Emery project by local path — every `specify` naming it loads the file fresh (nothing is cached), so a rebuild is picked up by the next run:
@@ -200,5 +200,5 @@ To watch it become a specification before wiring it into a project, give it an e
 - [ ] Required per-kind extras are demanded by the prompt — the worked example carries them.
 - [ ] `tests/extract.rs` covers what the adapter itself decides with a scripted model (`omnia_test::guest::Scripted`): the `SOURCE` noun landing and, where the adapter prepares its input, its fail-closed paths; `cargo nextest run -p <name>` is green.
 - [ ] The root `tests/source.rs` and `tests/prose.rs` name the adapter; `cargo nextest run -p emery-adapters` is green.
-- [ ] `make adapter <name>` builds the component; no `.wasm` artifacts committed.
+- [ ] `cargo build -p <name> --target wasm32-wasip2 --release` builds the component; no `.wasm` artifacts committed.
 - [ ] `make ci` is green.
