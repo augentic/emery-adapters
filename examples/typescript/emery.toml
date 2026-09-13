@@ -1,0 +1,13 @@
+# TypeScript example. Run from the repository root:
+#
+#   emery specify --config examples/typescript/emery.toml
+#
+# `adapter` and `path` resolve relative to this file and must land inside the
+# invocation directory, which emery mounts as the project.
+
+# The built component, loaded fresh on every run, over the orders service
+# behaviour it reads.
+[[source]]
+name = "api"
+adapter = "../../target/wasm32-wasip2/release/typescript.wasm"
+path = "src/"

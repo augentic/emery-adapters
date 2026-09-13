@@ -191,7 +191,7 @@ emery specify path/to/changelog.wasm
 
 Publishing a pinned version to GHCR (`emery:changelog@<version>`) is the operator flow in [CONTRIBUTING.md § Publishing](../CONTRIBUTING.md#publishing). To load it as a static guest, build the component and declare it in the host runtime the same way emery's journey host declares its mock source ([`examples/runtime.rs`](https://github.com/augentic/emery/blob/main/examples/runtime.rs) in the engine repository).
 
-To watch it extract live before wiring it into a project, give it an example: `examples/changelog/guest.rs` (copy a sibling's driver, change the adapter id, key, and input), `examples/changelog/omnia.toml` (the driver and the built component by path, the `emery:adapter/source` link, the tree it lends), a `[[example]]` stanza in the root `Cargo.toml`, and a row in [`examples/README.md`](../examples/README.md); then `make example changelog`.
+To watch it become a specification before wiring it into a project, give it an example: `examples/changelog/emery.toml` (copy a sibling's config; one `[[source]]` naming the built component by path relative to the file and the input it reads — a `path` to a fixture tree beside the config, or a `description`), the fixture if it lends one, and a row in [`examples/README.md`](../examples/README.md); then, from the repository root, `emery specify --config examples/changelog/emery.toml` and `emery show spec`. Nothing is compiled for an example — the config is data the shipped `emery` binary runs.
 
 ## Definition of done
 

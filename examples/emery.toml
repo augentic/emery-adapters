@@ -1,0 +1,28 @@
+# Every first-party adapter over the one orders service. Run from the
+# repository root:
+#
+#   emery specify --config examples/emery.toml
+#
+# Three sources put the grouping judgment: claims about the same subject
+# from the specification, the behaviour, and the brief are reconciled
+# under authority precedence into one requirement each. `adapter` and
+# `path` resolve relative to this file and must land inside the invocation
+# directory, which emery mounts as the project.
+
+# The orders service specification.
+[[source]]
+name = "docs"
+adapter = "../target/wasm32-wasip2/release/documentation.wasm"
+path = "documentation/docs/"
+
+# The orders service behaviour.
+[[source]]
+name = "api"
+adapter = "../target/wasm32-wasip2/release/typescript.wasm"
+path = "typescript/src/"
+
+# The operator's brief, inline.
+[[source]]
+name = "intent"
+adapter = "../target/wasm32-wasip2/release/intent.wasm"
+description = "Ship the orders service: place, read, and cancel orders over HTTP. Every order carries at least one line item; a shipped order can no longer be cancelled. Keep the API platform-neutral."

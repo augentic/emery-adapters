@@ -982,23 +982,17 @@ dependencies = [
 name = "emery-adapters"
 version = "0.13.0"
 dependencies = [
- "cfg-if",
  "documentation",
- "emery-adapter",
  "emery-prose",
  "emery-sdk",
  "intent",
  "omnia",
- "omnia-cursor",
- "omnia-guest",
  "omnia-test",
  "omnia-wasi-model",
- "omnia-wasi-otel",
  "serde_json",
  "test-programs",
  "tokio",
  "typescript",
- "wasip3 0.9.0+wasi-0.3.0",
 ]
 
 [[package]]
@@ -2248,31 +2242,6 @@ dependencies = [
  "wasmtime-wasi-http",
  "wrpc-transport",
  "wrpc-wasmtime",
-]
-
-[[package]]
-name = "omnia-cursor"
-version = "0.29.0"
-source = "git+https://github.com/augentic/omnia-backends#3b4577ee6696da1038ae15d83896724238f830c6"
-dependencies = [
- "anyhow",
- "bytes",
- "fromenv",
- "getrandom 0.4.3",
- "http",
- "http-body-util",
- "hyper",
- "hyper-util",
- "omnia",
- "omnia-wasi-model",
- "prost",
- "prost-types",
- "serde",
- "serde_json",
- "serde_repr",
- "tempfile",
- "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -3587,17 +3556,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_repr"
-version = "0.1.21"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d3b1629de253c70a0508c3899572da79ca359fdab27c7920ff00406df418906"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 3.0.5",
-]
-
-[[package]]
 name = "serde_spanned"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3665,16 +3623,6 @@ name = "shlex"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
-
-[[package]]
-name = "signal-hook-registry"
-version = "1.4.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4db69cba1110affc0e9f7bcd48bbf87b3f4fc7c61fc9155afd4c469eb3d6c1b"
-dependencies = [
- "errno",
- "libc",
-]
 
 [[package]]
 name = "signature"
@@ -4005,7 +3953,6 @@ dependencies = [
  "libc",
  "mio",
  "pin-project-lite",
- "signal-hook-registry",
  "socket2",
  "tokio-macros",
  "windows-sys 0.61.2",

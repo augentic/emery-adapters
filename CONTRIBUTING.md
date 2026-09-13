@@ -38,7 +38,8 @@ crates/test-programs/ # omnia's test-programs pattern: guest programs + the nest
   src/                # lib.rs: the generated artifact table (native) / helpers.rs (wasm32)
   build.rs            # one omnia_test::build::Components build → gen.rs (every adapter + every program)
 tests/                # root seam suites: source.rs (every shipped component), probe.rs (the error arms, the lowering, the SDK's seam), prose.rs (every adapter's corpus)
-Cargo.toml            # the tests-and-examples `emery-adapters` root package over crates/* + sources/*
+examples/             # live walks: one emery.toml per adapter (plus one over all three) the shipped `emery` binary runs, and the fixtures they lend
+Cargo.toml            # the tests `emery-adapters` root package over crates/* + sources/*
 ```
 
 Identity lives in the guest crate's `Cargo.toml` `version` (the shared `[workspace.package]` SemVer) and the package reference it publishes under (`emery:<name>@<semver>`). The compatibility floor is compiled into the `metadata` operation's record.
@@ -69,7 +70,7 @@ make adapter <name>        # fast one-component build → target/wasm32-wasip2/r
 make release               # release-build every adapter (excludes the root package and test-programs)
 ```
 
-The `fmt` arm uses nightly `rustfmt`. `make lint` runs clippy under `-D warnings` (`clippy.toml` carries the guest deny-list). `make vet` is check-only; regenerate audit inputs with `make vetgen`. Native crate tests are the Rust inner loop; the seam suites prove every built component under the omnia runtime; `make example <name>` walks one adapter's `extract` live through the Cursor backend ([examples/README.md](examples/README.md)); the graded live eval — being recreated as a root example beside the live examples — proves prompt quality end to end and writes the dated scorecard.
+The `fmt` arm uses nightly `rustfmt`. `make lint` runs clippy under `-D warnings` (`clippy.toml` carries the guest deny-list). `make vet` is check-only; regenerate audit inputs with `make vetgen`. Native crate tests are the Rust inner loop; the seam suites prove every built component under the omnia runtime; `emery specify --config examples/<name>/emery.toml` walks one adapter live through the shipped `emery` binary and the Cursor backend ([examples/README.md](examples/README.md)); the graded live eval — being recreated as a root example beside the live examples — proves prompt quality end to end and writes the dated scorecard.
 
 ## Publishing
 

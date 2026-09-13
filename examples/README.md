@@ -1,66 +1,95 @@
 # Source Adapter Examples
 
-Live `extract` walks via [omnia-cursor](https://github.com/augentic/omnia-backends/tree/main/crates/cursor): one example per first-party adapter drives the built component over `emery:adapter/source` — the same seam the engine crosses — through the host model, and prints the claims it answers with.
+Live `specify` journeys via [omnia-cursor](https://github.com/augentic/omnia-backends/tree/main/crates/cursor): the shipped `emery` binary loads a built first-party component by path, the adapter extracts its fixture through the host model, the engine synthesises `spec.md` / `design.md`, and the revision commits — the same walk as the engine repository's [example](https://github.com/augentic/emery/tree/main/examples), over the adapters this repository ships.
 
-Each example is a directory: a wasm32 driver guest (`guest.rs`), the deployment it runs in (`omnia.toml`: the link, the driver, the adapter, the tree it lends), and — where the input is a workspace — the fixture it lends. The [runtime](runtime.rs) host is shared: command mode over the Cursor model, compiling nothing in, so one host serves every adapter.
+Each example is an `emery.toml` naming its sources — the built component and the input it reads — plus, where the input is a workspace, the fixture it lends. Nothing here is compiled: the configs are data the `emery` binary runs, so an example exercises the adapter exactly as an operator's project would.
 
+| Example                         | Input                                     | Lends                                                                                                                   | Exercises                                                                   |
+| ------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| [all three](emery.toml)         | the rows below, as one run                | both trees                                                                                                              | the grouping judgment and authority precedence over the one orders service  |
+| [documentation](documentation/) | workspace                                 | [documentation/docs/](documentation/docs/) — the orders service specification                                           | the `Workspace` arm over prose                                              |
+| [typescript](typescript/)       | workspace                                 | [typescript/src/](typescript/src/) — the orders service behaviour                                                       | the `Workspace` arm over code                                               |
+| [intent](intent/)               | inline value — the brief in `description` | nothing                                                                                                                 | the `Value` arm; claims anchor to `[unknown]`, an inline brief has no path  |
 
-| Example                         | Input                                                    | Lends                                                                         |
-| ------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| [documentation](documentation/) | workspace                                                | [documentation/docs/](documentation/docs/) — the orders service specification |
-| [intent](intent/)               | inline value — the brief after `--`, or the built-in one | nothing                                                                       |
-| [typescript](typescript/)       | workspace                                                | [typescript/src/](typescript/src/) — the orders service behaviour             |
-
-
-These are walks of the seam, not the graded live eval: nothing is scored, and the `emery` binary is not involved.
+These are walks, not the graded live eval: nothing is scored. They are also, by construction, the cases the eval runner will drive once it is recreated.
 
 ## Prerequisites
+
+- The `emery` binary on `PATH`. There is no published binary; build it from source (the `wasm32-wasip2` target this repository already needs):
+
+  ```bash
+  # track the engine repository's main
+  cargo install --git https://github.com/augentic/emery --locked
+
+  # or a sibling checkout, matching the path patches in Cargo.toml
+  cargo install --path ../emery --locked
+  ```
+
+  Adapters pin the `emery-sdk` version they were built against as their `emery-version`; an `emery` older than that pin refuses `unsupported-version` (exit `1`) naming the version it needs. Reinstall after the `emery-*` pin in [`Cargo.lock`](../Cargo.lock) moves. Without installing, `cargo run --manifest-path ../emery/Cargo.toml --release -- specify …` runs a sibling checkout and keeps the working directory.
 
 - [cursor-sdk-bridge](https://github.com/cursor/sdk-bridge). See [below](#installing-cursor-sdk-bridge) for installation.
 - `CURSOR_API_KEY`
 
-
-
 ## Build and run
 
+Run from the repository root. `emery` mounts the invocation directory as the project, so every path an `emery.toml` names — the built component under `target/`, the fixture under `examples/` — must sit inside it; from any other directory the config is refused as escaping the project.
+
 ```bash
-# build the adapter component and its driver guest
-cargo build --example documentation --target wasm32-wasip2 --release
+# build every adapter component (or one: cargo build -p documentation --target wasm32-wasip2 --release)
+make release
 
-# run the example
+# run one example
 export CURSOR_API_KEY=<Cursor API key>
-cargo run --example runtime -- --debug specify --config examples/documentation/omnia.toml
+emery specify --debug --config examples/documentation/emery.toml
 
-# the intent example takes its brief after `--`; without one it puts the built-in brief
-cargo run --example runtime -- run --config examples/intent/omnia.toml -- \
-  "Ship the orders API with idempotent retries."
-
-# review the committed spec
-cargo run --example runtime -- --debug show spec
+# review the committed revision
+emery show spec
+emery show design
 ```
 
-`make example <name>` runs the three steps for one adapter; anything after the name is the driver's argv.
+The config binds the built component by path relative to itself and names the tree it lends the same way; the component is read fresh on every run and carries no `digest` pin, since a development build changes. Host tracing is stderr and is selected by the reserved log flags, peeled before the engine sees argv: bare invocations print INFO progress, `--debug` adds backend tracing, `--quiet` turns it off. The semantic result stays on stdout.
 
-The `omnia.toml` binds the built component and the driver by path relative to itself and marks the driver as the command guest; the driver dispatches to the adapter by its guest id. Host logging is `RUST_LOG` (for example `RUST_LOG=info,omnia_cursor=debug,opentelemetry_sdk=off`); the `run` grammar has no `--debug`.
+Revision state lives under `.omnia/storage` in the invocation directory (ignored by git), one revision per directory: each run replaces the last, and the success line reports the re-mine diff against the revision it displaced. Run the combined [`emery.toml`](emery.toml) to see all three adapters contribute to one specification.
+
+*Extract* and *synthesis* both complete through the Cursor backend: one extraction turn per source, then the spec and design turns, plus a grouping turn when two or more sources are named, and a bounded correction round for any candidate the engine's checks reject.
 
 ## What to expect
 
-The driver reports the adapter's `emery-version` pin on stderr, then prints the evidence on stdout: the document's authority and one entry per claim — kind, id, source anchor, and the statement (or the extra its kind carries instead). Any claim-gate finding is listed after the claims; the SDK already corrects candidates against the gate guest-side, so an empty list is the norm.
+`specify` prints the committed revision id and, on a re-run, the diff against the revision it displaced:
 
 ```text
-documentation: emery-version 0.38.0
-authority: documentation
-- requirement order.place @ orders-api.md#L10-L13
-  A client places an order by submitting the customer id, the line items (product id plus quantity, at least one line), and an optional courier note. The service validates the submission, assigns an order id, and answers with the created order.
-- criterion order.place.no-line-items @ orders-api.md#L15
-  An order with no line items is rejected.
-- criterion order.cancel.shipped-conflict @ orders-api.md#L32-L33
-  Cancelling a `shipped` order is refused with a conflict answer that names the current state.
+committed revision 3f9c…
+  diff vs 8a12…:
+    spec.md + REQ-004 order.cancel
+    design.md ~ preamble
 ```
 
-The intent example's claims anchor to `[unknown]`: an inline brief has no path.
+`show spec` prints the Markdown projection of the current revision — the `emery:` / `revision:` front matter, then the specification: a preamble, and one requirement per reconciled subject carrying its id, sources, status, the winning statement as its body, and the scenarios the model drafted for it:
 
-An adapter refusing its input (an empty brief, an unreadable tree) prints the refusal's code and description and exits `1`.
+```text
+---
+emery: 2
+revision: 3f9c…
+---
+
+# Specification
+
+…
+
+### Requirement: order.place
+
+ID: REQ-001
+Sources: [docs:order.place, api:order.place]
+Status: …
+
+A client places an order by submitting the customer id, the line items (product id plus quantity, at least one line), and an optional courier note. The service validates the submission, assigns an order id, and answers with the created order.
+
+#### Scenario: Order placed
+
+- **GIVEN** …
+```
+
+Failures are typed and exit non-zero: an adapter refusing its input (an empty brief, an unreadable tree) or a claim still missing its required extra after the backend's correction rounds is `bad_request` (exit `1`); a model or component-acquisition failure is `bad_gateway` (exit `4`); `show` before any run is `spec-not-generated` (exit `2`).
 
 ## Host-to-guest tool calls
 

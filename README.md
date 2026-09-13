@@ -33,22 +33,24 @@ cargo nextest run -p emery-adapters  # the root seam suites: every component, th
 
 ## Live examples
 
-`examples/<name>/` walks one adapter live through the Cursor model backend: a driver guest binds an adapter-shaped input, calls `extract` over `emery:adapter/source` — the seam the engine crosses — and prints the claims. One shared runtime serves every adapter; each example's `omnia.toml` declares the deployment. Needs `cursor-sdk-bridge` and `CURSOR_API_KEY`; see [examples/README.md](examples/README.md).
+`examples/<name>/emery.toml` runs one adapter live through the shipped `emery` binary: the config binds the built component by path and the fixture it reads, `emery specify` extracts through the Cursor model backend and commits the revision, and `emery show spec` reviews it — the same journey an operator's project takes. Nothing is compiled here; the configs are data. Needs an `emery` binary, `cursor-sdk-bridge`, and `CURSOR_API_KEY`; see [examples/README.md](examples/README.md).
 
 ```bash
-make example documentation   # or intent, typescript
+make release                                              # every component → target/wasm32-wasip2/release/
+emery specify --config examples/documentation/emery.toml  # or intent, typescript; examples/emery.toml runs all three
+emery show spec
 ```
 
 ## Graded live eval
 
-The live rung is a **public-contract client**: it spawns the sibling shipped `emery` binary over the built components, drives one `specify` per case across the adapter contract, grades the committed spec via `emery show spec`, and writes the dated scorecard. Operator-invoked, never CI. It is being recreated as a root example beside the live examples.
+The live rung is a **public-contract client**: it spawns the sibling shipped `emery` binary over the built components, drives one `specify` per case across the adapter contract, grades the committed spec via `emery show spec`, and writes the dated scorecard. Operator-invoked, never CI. It is being recreated as a root example beside the live examples, whose `emery.toml` files are its cases.
 
 ## Repair loop
 
 1. Edit `sources/<name>/prose/**` (the extract prompt, references, rules).
-2. `cargo nextest run -p <name>` to re-run its extract suite and `cargo nextest run -p emery-adapters` for its seam and corpus; `make adapter <name>` to rebuild the shipped component; `make example <name>` to watch it extract live.
+2. `cargo nextest run -p <name>` to re-run its extract suite and `cargo nextest run -p emery-adapters` for its seam and corpus; `make adapter <name>` to rebuild the shipped component; `emery specify --config examples/<name>/emery.toml` to watch it become a spec.
 
-Native crate tests stay the Rust inner loop; the seam suites prove the component boundary; the live examples show one extraction; live eval is for prompt quality. See [docs/testing.md](docs/testing.md).
+Native crate tests stay the Rust inner loop; the seam suites prove the component boundary; the live examples show one adapter's claims becoming a specification; live eval is for prompt quality. See [docs/testing.md](docs/testing.md).
 
 ## Stuck?
 

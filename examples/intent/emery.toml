@@ -1,0 +1,13 @@
+# Intent example. Run from the repository root:
+#
+#   emery specify --config examples/intent/emery.toml
+#
+# `adapter` resolves relative to this file and must land inside the invocation
+# directory, which emery mounts as the project. Nothing is lent: the brief
+# rides inline, the file form of `--description`.
+
+# The built component, loaded fresh on every run, over the operator's brief.
+[[source]]
+name = "intent"
+adapter = "../../target/wasm32-wasip2/release/intent.wasm"
+description = "Ship the orders service: place, read, and cancel orders over HTTP. Every order carries at least one line item; a shipped order can no longer be cancelled. Keep the API platform-neutral."
