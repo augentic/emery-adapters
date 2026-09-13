@@ -931,11 +931,7 @@ version = "0.13.0"
 dependencies = [
  "emery-prose",
  "emery-sdk",
- "omnia",
  "omnia-test",
- "omnia-wasi-model",
- "serde_json",
- "test-programs",
  "tokio",
 ]
 
@@ -1002,7 +998,7 @@ dependencies = [
  "test-programs",
  "tokio",
  "typescript",
- "wasip3",
+ "wasip3 0.9.0+wasi-0.3.0",
 ]
 
 [[package]]
@@ -1706,12 +1702,8 @@ dependencies = [
  "anyhow",
  "emery-prose",
  "emery-sdk",
- "omnia",
  "omnia-test",
- "omnia-wasi-model",
- "serde_json",
  "tempfile",
- "test-programs",
  "tokio",
 ]
 
@@ -2204,7 +2196,7 @@ dependencies = [
 [[package]]
 name = "omnia"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#07dcc6666f16e2be37e6d35087e6a8fd6a217d1a"
+source = "git+https://github.com/augentic/omnia#83f0273937ec3aff1a087f100b4a222968492211"
 dependencies = [
  "anyhow",
  "futures",
@@ -2223,7 +2215,7 @@ dependencies = [
 [[package]]
 name = "omnia-cli"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#07dcc6666f16e2be37e6d35087e6a8fd6a217d1a"
+source = "git+https://github.com/augentic/omnia#83f0273937ec3aff1a087f100b4a222968492211"
 dependencies = [
  "anyhow",
  "clap",
@@ -2232,7 +2224,7 @@ dependencies = [
 [[package]]
 name = "omnia-core"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#07dcc6666f16e2be37e6d35087e6a8fd6a217d1a"
+source = "git+https://github.com/augentic/omnia#83f0273937ec3aff1a087f100b4a222968492211"
 dependencies = [
  "anyhow",
  "cap-fs-ext",
@@ -2286,7 +2278,7 @@ dependencies = [
 [[package]]
 name = "omnia-guest"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#07dcc6666f16e2be37e6d35087e6a8fd6a217d1a"
+source = "git+https://github.com/augentic/omnia#83f0273937ec3aff1a087f100b4a222968492211"
 dependencies = [
  "anyhow",
  "bon",
@@ -2314,14 +2306,14 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.20",
  "tracing",
- "wasip3",
+ "wasip3 0.8.0+wasi-0.3.0",
  "wit-bindgen 0.61.1",
 ]
 
 [[package]]
 name = "omnia-guest-macros"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#07dcc6666f16e2be37e6d35087e6a8fd6a217d1a"
+source = "git+https://github.com/augentic/omnia#83f0273937ec3aff1a087f100b4a222968492211"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2331,7 +2323,7 @@ dependencies = [
 [[package]]
 name = "omnia-host-macros"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#07dcc6666f16e2be37e6d35087e6a8fd6a217d1a"
+source = "git+https://github.com/augentic/omnia#83f0273937ec3aff1a087f100b4a222968492211"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2341,7 +2333,7 @@ dependencies = [
 [[package]]
 name = "omnia-link"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#07dcc6666f16e2be37e6d35087e6a8fd6a217d1a"
+source = "git+https://github.com/augentic/omnia#83f0273937ec3aff1a087f100b4a222968492211"
 dependencies = [
  "anyhow",
  "bytes",
@@ -2360,7 +2352,7 @@ dependencies = [
 [[package]]
 name = "omnia-plugin"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#07dcc6666f16e2be37e6d35087e6a8fd6a217d1a"
+source = "git+https://github.com/augentic/omnia#83f0273937ec3aff1a087f100b4a222968492211"
 dependencies = [
  "anyhow",
  "cap-std",
@@ -2375,7 +2367,7 @@ dependencies = [
 [[package]]
 name = "omnia-test"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#07dcc6666f16e2be37e6d35087e6a8fd6a217d1a"
+source = "git+https://github.com/augentic/omnia#83f0273937ec3aff1a087f100b4a222968492211"
 dependencies = [
  "anyhow",
  "bytes",
@@ -2403,7 +2395,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-blobstore"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#07dcc6666f16e2be37e6d35087e6a8fd6a217d1a"
+source = "git+https://github.com/augentic/omnia#83f0273937ec3aff1a087f100b4a222968492211"
 dependencies = [
  "anyhow",
  "bytes",
@@ -2419,7 +2411,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-config"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#07dcc6666f16e2be37e6d35087e6a8fd6a217d1a"
+source = "git+https://github.com/augentic/omnia#83f0273937ec3aff1a087f100b4a222968492211"
 dependencies = [
  "anyhow",
  "omnia-core",
@@ -2432,7 +2424,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-docstore"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#07dcc6666f16e2be37e6d35087e6a8fd6a217d1a"
+source = "git+https://github.com/augentic/omnia#83f0273937ec3aff1a087f100b4a222968492211"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2448,7 +2440,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-http"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#07dcc6666f16e2be37e6d35087e6a8fd6a217d1a"
+source = "git+https://github.com/augentic/omnia#83f0273937ec3aff1a087f100b4a222968492211"
 dependencies = [
  "anyhow",
  "axum",
@@ -2469,7 +2461,7 @@ dependencies = [
  "tokio",
  "tower",
  "tracing",
- "wasip3",
+ "wasip3 0.8.0+wasi-0.3.0",
  "wasmtime",
  "wasmtime-wasi",
  "wasmtime-wasi-http",
@@ -2478,7 +2470,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-identity"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#07dcc6666f16e2be37e6d35087e6a8fd6a217d1a"
+source = "git+https://github.com/augentic/omnia#83f0273937ec3aff1a087f100b4a222968492211"
 dependencies = [
  "anyhow",
  "fromenv",
@@ -2495,7 +2487,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-keyvalue"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#07dcc6666f16e2be37e6d35087e6a8fd6a217d1a"
+source = "git+https://github.com/augentic/omnia#83f0273937ec3aff1a087f100b4a222968492211"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2513,7 +2505,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-messaging"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#07dcc6666f16e2be37e6d35087e6a8fd6a217d1a"
+source = "git+https://github.com/augentic/omnia#83f0273937ec3aff1a087f100b4a222968492211"
 dependencies = [
  "anyhow",
  "futures",
@@ -2529,7 +2521,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-model"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#07dcc6666f16e2be37e6d35087e6a8fd6a217d1a"
+source = "git+https://github.com/augentic/omnia#83f0273937ec3aff1a087f100b4a222968492211"
 dependencies = [
  "anyhow",
  "cap-std",
@@ -2539,7 +2531,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
- "wasip3",
+ "wasip3 0.8.0+wasi-0.3.0",
  "wasmtime",
  "wasmtime-wasi",
  "wit-bindgen 0.61.1",
@@ -2548,7 +2540,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-otel"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#07dcc6666f16e2be37e6d35087e6a8fd6a217d1a"
+source = "git+https://github.com/augentic/omnia#83f0273937ec3aff1a087f100b4a222968492211"
 dependencies = [
  "anyhow",
  "futures",
@@ -2569,7 +2561,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-sql"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#07dcc6666f16e2be37e6d35087e6a8fd6a217d1a"
+source = "git+https://github.com/augentic/omnia#83f0273937ec3aff1a087f100b4a222968492211"
 dependencies = [
  "anyhow",
  "fromenv",
@@ -2587,7 +2579,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-vault"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#07dcc6666f16e2be37e6d35087e6a8fd6a217d1a"
+source = "git+https://github.com/augentic/omnia#83f0273937ec3aff1a087f100b4a222968492211"
 dependencies = [
  "anyhow",
  "futures",
@@ -2602,7 +2594,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-websocket"
 version = "0.36.0"
-source = "git+https://github.com/augentic/omnia#07dcc6666f16e2be37e6d35087e6a8fd6a217d1a"
+source = "git+https://github.com/augentic/omnia#83f0273937ec3aff1a087f100b4a222968492211"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -3926,7 +3918,7 @@ dependencies = [
  "omnia-test",
  "semver",
  "serde_json",
- "wasip3",
+ "wasip3 0.9.0+wasi-0.3.0",
 ]
 
 [[package]]
@@ -4333,11 +4325,7 @@ version = "0.13.0"
 dependencies = [
  "emery-prose",
  "emery-sdk",
- "omnia",
  "omnia-test",
- "omnia-wasi-model",
- "serde_json",
- "test-programs",
  "tokio",
 ]
 
@@ -4504,6 +4492,15 @@ dependencies = [
  "http-body",
  "thiserror 2.0.20",
  "wit-bindgen 0.61.1",
+]
+
+[[package]]
+name = "wasip3"
+version = "0.9.0+wasi-0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1d5749fdf69bb9400562eba50f8f25f5cd800ef4b74300038b6f99ae7409674"
+dependencies = [
+ "wit-bindgen 0.62.0",
 ]
 
 [[package]]

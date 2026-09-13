@@ -6,10 +6,12 @@
 //! component. Natively it is the compiled artifacts: `build.rs` runs that
 //! `wasm32-wasip2` build over the programs and over every `sources/*`
 //! adapter, and generates one `pub const <NAME>: &str` path per component
-//! plus a `foreach_<group>!` macro a suite invokes to prove every program
-//! (`foreach_source!`, `foreach_probe!`) or every adapter
-//! (`foreach_adapter!`) has a matching test — one `gen.rs` for both. A suite
-//! runs an artifact through `omnia_test::host`.
+//! plus a `foreach_<group>!` macro a suite invokes to prove every program or
+//! every adapter has a matching test — one `gen.rs` for both. The root
+//! `tests/source.rs` and `tests/prose.rs` invoke `foreach_adapter!`, and
+//! `tests/probe.rs` `foreach_probe!`; `foreach_source!` goes uninvoked, the
+//! one `source` program being the driver both seam suites name directly.
+//! A suite runs an artifact through `omnia_test::host`.
 
 /// The guest id every suite registers the adapter under test as, and the id
 /// every driver program dispatches to over `emery:adapter/source`.

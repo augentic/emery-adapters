@@ -4,11 +4,13 @@ Live `extract` walks via [omnia-cursor](https://github.com/augentic/omnia-backen
 
 Each example is a directory: a wasm32 driver guest (`guest.rs`), the deployment it runs in (`omnia.toml`: the link, the driver, the adapter, the tree it lends), and — where the input is a workspace — the fixture it lends. The [runtime](runtime.rs) host is shared: command mode over the Cursor model, compiling nothing in, so one host serves every adapter.
 
-| Example | Input | Lends |
-| --- | --- | --- |
-| [documentation](documentation/) | workspace | [documentation/docs/](documentation/docs/) — the orders service specification |
-| [intent](intent/) | inline value — the brief after `--`, or the built-in one | nothing |
-| [typescript](typescript/) | workspace | [typescript/src/](typescript/src/) — the orders service behaviour |
+
+| Example                         | Input                                                    | Lends                                                                         |
+| ------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| [documentation](documentation/) | workspace                                                | [documentation/docs/](documentation/docs/) — the orders service specification |
+| [intent](intent/)               | inline value — the brief after `--`, or the built-in one | nothing                                                                       |
+| [typescript](typescript/)       | workspace                                                | [typescript/src/](typescript/src/) — the orders service behaviour             |
+
 
 These are walks of the seam, not the graded live eval: nothing is scored, and the `emery` binary is not involved.
 
@@ -17,20 +19,24 @@ These are walks of the seam, not the graded live eval: nothing is scored, and th
 - [cursor-sdk-bridge](https://github.com/cursor/sdk-bridge). See [below](#installing-cursor-sdk-bridge) for installation.
 - `CURSOR_API_KEY`
 
+
+
 ## Build and run
 
 ```bash
 # build the adapter component and its driver guest
-make adapter documentation
-cargo build -p emery-adapters --example documentation --target wasm32-wasip2 --release
+cargo build --example documentation --target wasm32-wasip2 --release
 
 # run the example
 export CURSOR_API_KEY=<Cursor API key>
-cargo run -p emery-adapters --example runtime -- run --config examples/documentation/omnia.toml
+cargo run --example runtime -- --debug specify --config examples/documentation/omnia.toml
 
 # the intent example takes its brief after `--`; without one it puts the built-in brief
-cargo run -p emery-adapters --example runtime -- run --config examples/intent/omnia.toml -- \
+cargo run --example runtime -- run --config examples/intent/omnia.toml -- \
   "Ship the orders API with idempotent retries."
+
+# review the committed spec
+cargo run --example runtime -- --debug show spec
 ```
 
 `make example <name>` runs the three steps for one adapter; anything after the name is the driver's argv.

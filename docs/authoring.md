@@ -51,10 +51,9 @@ sources/changelog/
       emery-runtime -> ../../../../codex/references/runtime
   tests/
     extract.rs
-    source.rs
 ```
 
-The root workspace globs `sources/*`, so the directory joins the workspace with no manifest edit — and `crates/test-programs` compiles it as a component on the next build, so the root `tests/prose.rs` fails to compile until it names the adapter (step 7). The minimal `Cargo.toml`:
+The root workspace globs `sources/*`, so the directory joins the workspace with no manifest edit — and `crates/test-programs` compiles it as a component on the next build, so the root `tests/source.rs` and `tests/prose.rs` fail to compile until they name the adapter (step 7). The minimal `Cargo.toml`:
 
 ```toml
 [package]
@@ -81,17 +80,13 @@ emery-sdk.workspace = true
 emery-prose = { workspace = true, features = ["emit"] }
 
 [dev-dependencies]
-serde_json.workspace = true
 tokio.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-omnia.workspace = true
-omnia-test = { workspace = true, features = ["guest", "host"] }
-omnia-wasi-model.workspace = true
-test-programs.workspace = true
+omnia-test = { workspace = true, features = ["guest"] }
 ```
 
-`emery-prose` appears twice on purpose: the runtime dependency carries only the `Doc` registry, the build dependency turns on the `emit` walker. `cdylib` is the Wasm component; `rlib` is what native tests link. The native-only dev-dependencies split the same way: `omnia-test`'s `guest` feature is the scripted model the native suite binds, and `omnia`, `omnia-wasi-model`, `test-programs`, and the `host` feature are the runtime the seam suite runs the built component under. The identity SemVer is the shared `[workspace.package] version` — adapters version together.
+`emery-prose` appears twice on purpose: the runtime dependency carries only the `Doc` registry, the build dependency turns on the `emit` walker. `cdylib` is the Wasm component; `rlib` is what native tests link. The one native-only dev-dependency is `omnia-test`'s `guest` feature, the scripted model the native suite binds; the runtime the built component runs under is the root package's, not the adapter's. The identity SemVer is the shared `[workspace.package] version` — adapters version together.
 
 ### 2. Embed the prose
 
@@ -171,16 +166,16 @@ The embed walker follows symlinks and fails the build on any dangling relative l
 
 ### 6. Test natively
 
-`tests/extract.rs` drives the trait with a scripted model — no wasm, no network. The assertions worth making: "did my prompt content land in the assembled request", "does the material read as intended for a tree and for an inline value", and "do required extras arrive verbatim in `Evidence`". Mirror the existing adapters' suites, including their fail-closed cases (a source the adapter cannot accept is a `bad_request`, never empty success — match on `Error::BadRequest { .. }`). Leave out what every adapter shares — the declared tools, the schema format, the `check` flag, the lend — the SDK's own suite asserts it once.
+`tests/extract.rs` drives the trait with a scripted model — no wasm, no network — and asserts only what the adapter itself decides. For an adapter that hands `Material::Bound` straight to the SDK, that is one test: the `SOURCE` noun names the bound tree in the turn (`turn.contains("the changelog source tree")`). An adapter that validates or prepares its input adds its fail-closed cases (a source it cannot accept is a `bad_request`, never empty success — match on `Error::BadRequest { .. }` with `Scripted::default()`, since no model turn runs) and its `Prepared` note reading as intended — `intent`'s suite is the model. Do not pin prompt phrases or the SDK's brief text: a wording edit is not a behavior change, and what every adapter shares — the declared tools, the schema format, the `check` flag, the lend, the gate's repair loop — the SDK's own suite asserts once.
 
 Run with `cargo nextest run -p changelog` (never bare `cargo test` — see [testing.md](testing.md)).
 
-### 7. Add the seam suite and name the adapter
+### 7. Name the adapter in the root suites
 
-Two files complete the component rung ([testing.md § Seam suites](testing.md#2-seam-suites--cratestest-programs)):
+Two root tests complete the component rung ([testing.md § Seam suites](testing.md#2-seam-suites--cratestest-programs)); each `test_programs::foreach_adapter!()` fails to compile until a `#[tokio::test]` / `#[test]` `fn changelog()` exists:
 
-- `tests/source.rs` — copy an existing adapter's, changing the component constant (`test_programs::ADAPTER_CHANGELOG`, generated from the `sources/` directory), the minimal fixture tree, and the scripted evidence. Its `test_programs::foreach_source!()` requires a same-named test for every driver under `crates/test-programs/programs/source/`, so the suite fails to compile until `source_extract` exists. Assert only what your component alone shows the host (intent asserts the brief it read through the mount is the turn's material); the adapter's own behaviour stays in `tests/extract.rs`.
-- Root `tests/prose.rs` — its `test_programs::foreach_adapter!()` fails to compile until a `#[test] fn changelog()` exists; add one calling `capped(changelog::Adapter::docs())`.
+- `tests/source.rs` — stage the minimal fixture tree on a `scratch()` project, run `extract(test_programs::ADAPTER_CHANGELOG, &project)` (the constant is generated from the `sources/` directory), and pass the record to `prompted(&model, include_str!("../sources/changelog/prose/prompts/extract.md"))`. Add only what your component alone shows the host (intent asserts the brief it read through the mount is the turn's material); the adapter's own behaviour stays in `tests/extract.rs`, and the SDK's side of the seam is proved over the `gated` probe.
+- `tests/prose.rs` — call `corpus(changelog::Adapter::docs(), Authority::<Class>)` with the authority your prompt's `## Worked example` declares, then assert any registry fact of your own (a rule overlay, a deep reference).
 
 ## Build the component and use it in a project
 
@@ -201,9 +196,9 @@ To watch it extract live before wiring it into a project, give it an example: `e
 ## Definition of done
 
 - [ ] `src/lib.rs` carries no logic beyond the export macro, `registry!`, and re-exports; reusable logic is wasm-free library code.
-- [ ] The extraction prompt is embedded under `prose/` and every document stays under the 800 non-blank-line cap (the root `tests/prose.rs`); no survey prose.
-- [ ] Required per-kind extras are demanded by the prompt and asserted in the native tests.
-- [ ] `tests/extract.rs` covers extract with a scripted model (`omnia_test::guest::Scripted`), including fail-closed paths; `cargo nextest run -p <name>` is green.
-- [ ] `tests/source.rs` carries the adapter's seam suite and the root `tests/prose.rs` names the adapter; `cargo nextest run -p <name> --test source` and `cargo nextest run -p emery-adapters` are green.
+- [ ] The extraction prompt is embedded under `prose/`, stays under the 800 non-blank-line cap, and its `## Worked example` JSON fence passes the claim gate under the adapter's authority (the root `tests/prose.rs`); no survey prose.
+- [ ] Required per-kind extras are demanded by the prompt — the worked example carries them.
+- [ ] `tests/extract.rs` covers what the adapter itself decides with a scripted model (`omnia_test::guest::Scripted`): the `SOURCE` noun landing and, where the adapter prepares its input, its fail-closed paths; `cargo nextest run -p <name>` is green.
+- [ ] The root `tests/source.rs` and `tests/prose.rs` name the adapter; `cargo nextest run -p emery-adapters` is green.
 - [ ] `make adapter <name>` builds the component; no `.wasm` artifacts committed.
 - [ ] `make ci` is green.

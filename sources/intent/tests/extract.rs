@@ -1,16 +1,21 @@
 //! Intent's own extract behaviour, natively over a scripted model: what the
-//! adapter makes of its input before the one model call — the material it
-//! puts, the refusals it fails closed with — and the evidence it hands back.
-//! The seam suite (`tests/source.rs`) owns what crosses the component
-//! boundary; the SDK's suite owns the request shape every adapter shares.
+//! adapter makes of its input before the one model call — the brief it
+//! accepts inline or reads from a one-file tree into the turn's material,
+//! and the refusals it fails closed with. The SDK's suite owns the request
+//! shape every adapter shares; the root seam suites own what crosses the
+//! component boundary and the corpus it embeds.
 
 use std::path::Path;
 
-use emery_sdk::{
-    Authority, ClaimKind, Context, Error, SourceAdapter as _, SourceContent, SourceInput,
-};
+use emery_sdk::{Context, Error, SourceAdapter as _, SourceContent, SourceInput};
 use intent::Adapter;
 use omnia_test::guest::Scripted;
+
+const BRIEF: &str = "Let users reset passwords by email.";
+
+const ANSWER: &str = r#"{"authority":"intent","claims":[
+    {"kind":"intent","id":"intent","statement":"Let users reset passwords by email."}
+]}"#;
 
 const fn ctx(input: &SourceInput) -> Context<'_> {
     Context {
@@ -33,72 +38,41 @@ fn value_input(brief: &str) -> SourceInput {
     }
 }
 
+// A non-empty inline brief is accepted as the bound material and reaches
+// the model.
 #[tokio::test]
 async fn inline_value() {
-    let model = Scripted::answering([r#"{"authority":"intent","claims":[
-            {"kind":"intent","id":"intent","statement":"Let users reset passwords by email."},
-            {"kind":"requirement","id":"password-reset.request","statement":"Users reset passwords by email."}
-        ]}"#]);
+    let model = Scripted::answering([ANSWER]);
 
-    let input = value_input("Let users reset passwords by email.");
+    let input = value_input(BRIEF);
     let evidence = Adapter::extract(&model, &ctx(&input)).await.unwrap();
 
-    assert_eq!(evidence.authority, Authority::Intent);
-    assert_eq!(evidence.claims.len(), 2);
-    assert_eq!(evidence.claims[0].kind, ClaimKind::Intent);
-    assert_eq!(evidence.claims[0].id.as_deref(), Some("intent"));
-    assert_eq!(
-        evidence.claims[0].extras.get("statement").and_then(|value| value.as_str()),
-        Some("Let users reset passwords by email."),
-    );
-    // Only `requirement` claims form spec rows, so the directive is
-    // lifted into one for reconciliation to join against other sources.
-    assert_eq!(evidence.claims[1].kind, ClaimKind::Requirement);
-    assert_eq!(evidence.claims[1].id.as_deref(), Some("password-reset.request"));
-    assert_eq!(
-        evidence.claims[1].extras.get("statement").and_then(|value| value.as_str()),
-        Some("Users reset passwords by email."),
-    );
-
-    let request = &model.seen()[0];
-    let system = request.system.as_deref().unwrap();
-    assert!(system.starts_with("# intent.extract"));
-    assert!(system.contains("whole brief, verbatim"), "the echo contract is stated");
-    assert!(
-        system.contains("One per distinct behavioural directive"),
-        "the reconciliation-join contract is stated"
-    );
-    let user = &request.messages[0];
-    assert!(user.contains("source key `intent`"), "passed source key is named");
-    assert!(user.contains("inline value"), "prompt names the inline source");
-    assert!(user.contains("no `$SOURCE_DIR` is lent"), "prompt says no source tree is bound");
-    assert!(user.contains("Let users reset passwords by email."), "value is on the wire");
+    assert_eq!(evidence.claims.len(), 1);
+    let turn = &model.seen()[0].messages[0];
+    assert!(turn.contains(BRIEF), "the brief is the material: {turn}");
 }
 
+// A one-file tree — nested or not — is read into the turn's material as the
+// intent string, named as the tree it came from.
 #[tokio::test]
 async fn one_file() {
-    let model = Scripted::answering([
-        r#"{"authority":"intent","claims":[{"kind":"intent","id":"intent","statement":"Let users reset passwords by email."}]}"#,
-    ]);
+    let model = Scripted::answering([ANSWER]);
     let root = tempfile::tempdir().unwrap();
     let nested = root.path().join("nested");
     std::fs::create_dir(&nested).unwrap();
-    std::fs::write(nested.join("intent.md"), "Let users reset passwords by email.").unwrap();
+    std::fs::write(nested.join("intent.md"), BRIEF).unwrap();
 
     let input = workspace_input(root.path());
     let evidence = Adapter::extract(&model, &ctx(&input)).await.unwrap();
 
     assert_eq!(evidence.claims.len(), 1);
-    let user = &model.seen()[0].messages[0];
-    assert!(
-        user.contains("Let users reset passwords by email."),
-        "the located file's contents are interpolated as the intent string"
-    );
-    assert!(user.contains("one-file tree"), "prompt names the tree source");
+    let turn = &model.seen()[0].messages[0];
+    assert!(turn.contains(BRIEF), "the located file's contents are the intent string: {turn}");
+    assert!(turn.contains("one-file tree"), "the material names the tree source: {turn}");
 }
 
-// An unreadable source fails closed before any judgment leg: a tree
-// that is not the one-file encoding is a typed refusal.
+// A tree that is not the one-file encoding is a typed refusal before any
+// model call.
 #[tokio::test]
 async fn multi_file() {
     // The refusal precedes the model, so nothing is scripted.

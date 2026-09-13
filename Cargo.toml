@@ -33,7 +33,6 @@ test-programs.workspace = true
 tokio.workspace = true
 typescript.workspace = true
 
-# The example guests: wasm32 only, like `crates/test-programs`' programs.
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 emery-adapter.workspace = true
 omnia-guest.workspace = true
@@ -83,7 +82,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 tempfile = "3.27.0"
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
-wasip3 = "0.8.0"
+wasip3 = "0.9.0"
 
 omnia = { version = "0.36.0", default-features = false, features = ["jit"] }
 omnia-guest = { version = "0.36.0", default-features = false }
@@ -98,15 +97,15 @@ emery-prose = "0.38.0"
 emery-sdk = "0.38.0"
 
 # Workspace crates: the fixture pipeline and the shipped adapters' rlibs.
-test-programs = { path = "crates/test-programs" }
 documentation = { path = "sources/documentation" }
 intent = { path = "sources/intent" }
+test-programs = { path = "crates/test-programs" }
 typescript = { path = "sources/typescript" }
 
 [patch.crates-io]
 emery-adapter = { git = "https://github.com/augentic/emery" }
-emery-prose = { git = "https://github.com/augentic/emery"}
-emery-sdk = { git = "https://github.com/augentic/emery"}
+emery-prose = { git = "https://github.com/augentic/emery" }
+emery-sdk = { git = "https://github.com/augentic/emery" }
 # emery-adapter = { path = "../emery/crates/adapter" }
 # emery-prose = { path = "../emery/crates/prose" }
 # emery-sdk = { path = "../emery/crates/sdk" }

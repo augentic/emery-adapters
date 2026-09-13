@@ -23,12 +23,12 @@ An adapter is one Rust crate that ships as one Wasm component exporting the `sou
 
 ## Rust-only loop
 
-Native tests need no model credentials. Each adapter carries its own extract suite and a seam suite that runs its built component under the omnia runtime (the components are built by `crates/test-programs` on the first `make test`); the root package carries the seam's probes and every adapter's corpus:
+Native tests need no model credentials. Each adapter carries its own extract suite; the root package carries the seam suites that run every built component under the omnia runtime (the components are built by `crates/test-programs` on the first `make test`), the seam's probes, and every adapter's corpus:
 
 ```bash
 make check
-cargo nextest run -p documentation   # or intent, typescript: extract + seam suites
-cargo nextest run -p emery-adapters  # the root seam suites
+cargo nextest run -p documentation   # or intent, typescript: the native extract suite
+cargo nextest run -p emery-adapters  # the root seam suites: every component, the probes, the corpora
 ```
 
 ## Live examples
@@ -46,7 +46,7 @@ The live rung is a **public-contract client**: it spawns the sibling shipped `em
 ## Repair loop
 
 1. Edit `sources/<name>/prose/**` (the extract prompt, references, rules).
-2. `cargo nextest run -p <name>` to re-run its extract and seam suites; `make adapter <name>` to rebuild the shipped component; `make example <name>` to watch it extract live.
+2. `cargo nextest run -p <name>` to re-run its extract suite and `cargo nextest run -p emery-adapters` for its seam and corpus; `make adapter <name>` to rebuild the shipped component; `make example <name>` to watch it extract live.
 
 Native crate tests stay the Rust inner loop; the seam suites prove the component boundary; the live examples show one extraction; live eval is for prompt quality. See [docs/testing.md](docs/testing.md).
 

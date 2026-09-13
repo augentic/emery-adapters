@@ -31,14 +31,14 @@ sources/
       rules/          # adapter-local engineering rules
     Cargo.toml        # `<name>` — adapter identity semver is its `version`
     src/              # wasm-free adapter logic + wasm32-only `guest` shim
-    tests/            # extract.rs — native extract suite; source.rs — seam suite over the built component
+    tests/            # extract.rs — native extract suite (what the adapter itself decides)
 codex/references/runtime/   # shared runtime references (reconciliation)
 crates/test-programs/ # omnia's test-programs pattern: guest programs + the nested wasm32 build of every component
   programs/<group>/   # one scenario per file: source/extract.rs drives the seam, probe/ are fixture adapters
   src/                # lib.rs: the generated artifact table (native) / helpers.rs (wasm32)
   build.rs            # one omnia_test::build::Components build → gen.rs (every adapter + every program)
-tests/                # root seam suites: probe.rs (the WIT error arms), prose.rs (every adapter's corpus cap)
-Cargo.toml            # the tests-only `emery-adapters` root package over crates/* + sources/*
+tests/                # root seam suites: source.rs (every shipped component), probe.rs (the error arms, the lowering, the SDK's seam), prose.rs (every adapter's corpus)
+Cargo.toml            # the tests-and-examples `emery-adapters` root package over crates/* + sources/*
 ```
 
 Identity lives in the guest crate's `Cargo.toml` `version` (the shared `[workspace.package]` SemVer) and the package reference it publishes under (`emery:<name>@<semver>`). The compatibility floor is compiled into the `metadata` operation's record.
@@ -102,7 +102,7 @@ make publish <name>
 
 1. Branch off `main`.
 2. Run `make ci` (or say exactly which narrower checks ran and why the full gate was unavailable).
-3. Read [docs/testing.md](docs/testing.md) before adding, deleting, or relocating tests. New tests default to the adapter's `tests/` suite; do not add a `src` `#[cfg(test)]` module without a one-line Keep or Collapse reason from that document, and never widen `pub` surface solely for a test. When deleting unit coverage, run the coverage brake (`CRATE=<adapter> make cov-crate`) before and after.
+3. Read [docs/testing.md](docs/testing.md) before adding, deleting, or relocating tests. A behavior the adapter itself decides goes in its `tests/extract.rs`; the component boundary is the root seam suites'; do not add a `src` `#[cfg(test)]` module without a one-line reason from that document, never pin a prompt phrase, and never widen `pub` surface solely for a test.
 4. Do not commit built `.wasm` artifacts.
 
 ## See also
