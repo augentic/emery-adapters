@@ -1,67 +1,56 @@
-# Emery Adapters - Agent Instructions
+# Emery Adapters — Agent Instructions
 
-This repository owns Emery's first-party **source adapters**. Each adapter is an independently versioned WebAssembly component consumed by the `emery` runtime. The contract and canonical vocabulary live in [`augentic/emery`](https://github.com/augentic/emery/blob/main/AGENTS.md); this repository owns adapter-specific extraction behavior, prose, and the graded live eval. The v1 tree (survey + extract sources, target adapters, the composition eval, the wasm examples) is archived at git tag `v1` — retrieve with `git worktree add ../emery-adapters-v1 v1`; deletion means deletion on the live branch.
+Emery's first-party **source adapters**. Each `sources/<name>` is one crate shipping as one WebAssembly component that exports the `source-adapter` world of the `emery:adapter` WIT package: `metadata`, and `extract(SourceInput) -> Evidence` — a typed `SourceInput` (a key and a workspace or inline value) in, one Evidence document of typed claims out. The contract, vocabulary, and coding standards are the engine repository's ([`augentic/emery`](https://github.com/augentic/emery/blob/main/AGENTS.md), [`docs/standards/`](https://github.com/augentic/emery/tree/main/docs/standards)); this repository owns extraction behaviour and prose. The v1 tree is archived at git tag `v1`.
 
-## Vocabulary and boundaries
+## Map
 
-Use these roles verbatim:
+| Path | Role |
+| --- | --- |
+| `sources/<name>/` | One adapter: `Cargo.toml` (`cdylib` + `rlib`); `build.rs` = `emery_prose::emit("prose")`; `src/lib.rs` = `emery_sdk::source!(crate::Adapter)` + `registry!`; `src/operations.rs` = `impl SourceAdapter`; `prose/{prompts/extract.md, references/, rules/}`; `tests/extract.rs` |
+| `codex/references/runtime/` | Shared references, reached through each adapter's `prose/references/emery-runtime` symlink |
+| `crates/test-programs/` | omnia's `test-programs` pattern: guest programs (`programs/source/extract.rs` drives the seam; `programs/probe/*` are fixture adapters) and the generated table of every built component |
+| `tests/` | Root seam suites over the built components under the omnia runtime: `source.rs`, `probe.rs`, `prose.rs`; the runner in `support/mod.rs` |
+| `examples/` | `emery.toml` configs the shipped `emery` binary runs; data, compiled by nothing ([examples/README.md](examples/README.md)) |
 
-- **source adapter** — input role exporting the WIT `source-adapter` world: `extract` + `metadata`. `extract` takes a typed `SourceInput` (`key`, workspace-or-value) and returns one Evidence document of typed claims — the spec IR. Required per-kind extras (`requirement`→`statement`, `criterion`→`criterion`, `example`→`replay-digest`) are one closed table, `emery_adapter::source::ClaimKind::required_extras` (A8, ADR-0009 §3): the SDK's provided `SourceAdapter::evidence` enforces it as the `check` on every candidate the backend proposes, so a miss is corrected in place, and the engine re-runs the same gate fail-closed over the WIT bindings — a claim that still lacks its extra fails the whole run typed (`bad_request`). Adapter operations fail with `emery_sdk::Error` — omnia's `omnia_guest::Error`, built with the re-exported `bad_request!` / `server_error!` / `bad_gateway!` macros; there is no adapter error type, and the WIT `error` variant is lowered and lifted inside the contract crate alone. Survey, leads, and the target axis are deleted from the WIT contract (ADR-0008; archived at `v1`).
-- **Cursor plugin** — operator-facing skills distributed by the Emery repository. Adapters are not Cursor plugins.
+The root `emery-adapters` package is tests only. Engine crates (`emery-adapter`, `emery-prose`, `emery-sdk`) are git-pinned in `[patch.crates-io]`; uncomment the path patches for sibling co-development and never commit them.
 
-Emery's **engine** owns lifecycle, artifact schemas, reconciliation, and synthesis. Adapters contribute extraction behavior through their WIT operations and embedded prose; they never acquire lifecycle authority or read the revision store. Preserve missing information as `[unknown]` rather than guessing; keep extracted claims platform-neutral.
+## Invariants
 
-## Component contract
-
-- Each adapter ships as one component exporting the `source-adapter` world from the `emery:adapter` WIT package (owned and published by `augentic/emery`; the `emery-adapter` contract crate — named for the package — embeds it as its `source` axis module and the `emery-sdk` SDK re-exports it).
-- Identity comes from the guest crate's version and published `emery:<name>@<semver>` package. Resolve-time metadata comes from the component's `metadata` operation; there is no adapter manifest.
-- Keep reusable adapter logic wasm-free in library modules. Each adapter implements `emery_sdk::SourceAdapter` on a unit type; one `emery_sdk::source!` export-macro invocation at the crate root over that implementor declares the `wasm32` guest module (the adapter carries no `cfg` of its own).
+- An adapter implements `emery_sdk::SourceAdapter` on a unit type and makes exactly one model call, through `Self::evidence(model, ctx, material)`. It chooses the material (`Material::Bound`, or `Prepared(note)` after reading or validating its input) and refuses unusable input with `bad_request!` before the model is reached. There is no adapter error type: `emery_sdk::Error` is omnia's, and the WIT `error` variant is lowered and lifted inside the contract crate alone.
+- Identity is the crate's version and its `emery:<name>@<semver>` package; resolve-time metadata is the component's `metadata` export. There is no manifest file.
+- Adapters never read the revision store or take lifecycle authority. Preserve gaps as `[unknown]`; keep claims platform-neutral.
+- `prose/prompts/extract.md` is the one extraction pass: at most 800 non-blank lines, with a `## Worked example` JSON fence that passes the claim gate under the adapter's authority — `tests/prose.rs` enforces both. References are linked, never inlined; a dangling relative link fails the build. Contributor guidance never goes in the embedded corpus.
 - Do not commit built `.wasm` artifacts.
 
-The root is a virtual workspace of `sources/*` (documentation, intent, typescript) plus `examples/eval` (the graded live-eval runner), `examples/caller` (the guest-only conformance caller), and `examples/conformance` (the native component-conformance harness and suite). Scripted doubles come from omnia's `omnia-test` crate — `guest::Scripted` for the adapter suites, `host::{ScriptedModel, Backends, Deployment}` for the conformance harness — a native-only dev-dependency, never an engine dependency. The adapter SDK (`emery-sdk`), the prose registry + walker (`emery-prose`; the `emit` feature is a build-dependency concern), and the `emery:adapter` contract (`emery-adapter`, re-exported by the SDK; only `examples/caller` names it directly, as `emery_adapter::source::{Source, …}`) are dependencies on `augentic/emery` — published under `emery-*` names, so Rust paths are `emery_sdk::` / `emery_prose::` / `emery_adapter::` — pinned by engine git (until a release tag, RFC-77 D13) and the committed `Cargo.lock`; for sibling co-development, uncomment the path patches in the root `Cargo.toml` `[patch.crates-io]` block. The eval runner is a **public-contract client** (architecture-review T6): it spawns the sibling shipped `emery` binary over built components and never links engine crates.
+## Code style
 
-## Prose and rules
+The engine repository's [style.md](https://github.com/augentic/emery/blob/main/docs/standards/style.md) and [coding-standards.md](https://github.com/augentic/emery/blob/main/docs/standards/coding-standards.md), under the shared `[workspace.lints]` in `Cargo.toml` and the guest deny-list in `clippy.toml`. Short names that lean on the module path; comments say what and why, never how; a test fn names the scenario (`one_file`, `empty_brief`), never the outcome, and the `//` comment above it carries the why. Formatting is nightly rustfmt (`make fmt`).
 
-Adapter `prose/` trees are compiled into their components:
+## Testing
 
-- `prose/prompts/extract.md` carries the one extraction pass; keep it below the 800-line hard cap and move depth into references.
-- References are linked, not inlined. The embed-time walker (engine `prose` crate) includes Markdown documents, follows symlinks, and fails the build on a dangling relative link.
-- Shared runtime references live under `codex/references/runtime/` and reach adapters through their `prose/references/emery-runtime` symlinks; adapter-local rules live under `prose/rules/`.
-- Contributor guidance belongs in `AGENTS.md`, never in the embedded corpus. Survey prompts are deleted, not ported (ADR-0008).
+- `sources/<name>/tests/extract.rs`: what the adapter itself decides — its material, its refusals — natively over `omnia_test::guest::Scripted`. Never pin prompt phrases; prompt quality is the live eval's.
+- Root `tests/`: the component boundary only, for every shipped component. `foreach_adapter!` and `foreach_probe!` make a new adapter or probe a compile error until `source.rs`, `prose.rs`, or `probe.rs` names it; such a test carries its adapter's or program's name (`intent`, `probe_echo`).
+- What the SDK does for every adapter (the request shape, the reference tools, the lend, the claim gate's repair and spent-rounds refusal) is asserted once in the SDK's own suite and once under the runtime over the `gated` probe — never per adapter.
+- Always `cargo nextest`, and always `--workspace` from the root: a bare root run selects the root package alone and skips every adapter's suite.
+- The guest side (`crates/test-programs/programs/`, the adapters' export shims) is `cfg(target_arch = "wasm32")`, so `make lint` does not see it; lint it with the clippy command below.
 
-## Rust and testing
-
-The external Rust baseline is the [Pragmatic Rust Guidelines](https://microsoft.github.io/rust-guidelines/guidelines/index.html), layered under the engine repo's [docs/standards/](https://github.com/augentic/emery/tree/main/docs/standards) house deltas (deltas win). Follow the workspace lint configuration in `Cargo.toml`. Identifier and comment density caps live in the engine [coding-standards.md](https://github.com/augentic/emery/blob/main/docs/standards/coding-standards.md) and are review-only. A test `fn` names the scenario (`well_formed`), never the outcome (`well_formed_spec_passes`). `make lint` runs clippy (`clippy.toml` carries the guest deny-list).
-
-Testing is integration-first:
-
-- Publicly reachable adapter behavior belongs in each adapter crate's `tests/` suite (scripted models; no credentials). Do not widen public APIs solely for tests.
-- The component rung (`examples/conformance`, inside `make test`) instantiates every `sources/*` component under the omnia runtime with a scripted host-side model, driven by the `examples/caller` guest over the `emery:adapter/source` seam; its build script is one `omnia_test::build::Components` call (`scan_packages("sources")` + `extra_package("caller")`) that nested-builds the components to `wasm32-wasip2` and generates `foreach_source!`, so a new `sources/<name>` fails to compile until it has a conformance test. It owns the boundary only — instantiation, effect-free `metadata`, the reference-tool round-trip, WIT bindings lowering — never prompt text or quality.
-- Use `cargo nextest`, not bare `cargo test`; process isolation is required by environment-mutating suites.
-- The live rung is operator-invoked, never CI: `make eval [id]` spawns the shipped `emery` binary over the built components, wall-clocks one `specify` → committed revision, records typed outcomes, grades the committed spec via `emery show spec`, and writes the dated scorecard (`sandbox/scorecard.md`). The `omnia-r9k` case shallow-clones its `UNLICENSED` upstream into the gitignored `cases/omnia-r9k/fixture/` cache on first run. See [`examples/eval/README.md`](examples/eval/README.md).
-
-Read [`docs/testing.md`](docs/testing.md) before adding, deleting, or relocating tests.
+Placement rules: [docs/testing.md](docs/testing.md). Creating an adapter: [docs/authoring.md](docs/authoring.md). Toolchain and publishing: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Commands
 
-Run from the repository root, driven by `make` ([`Makefile`](./Makefile) → mise):
+All from the repository root through `make` ([`Makefile`](Makefile) → mise):
 
 ```bash
-make check                # fmt, lint (clippy), nextest, doctests, docs
-make ci                   # full gate, including vet and deny
-cargo nextest run -p NAME # focused adapter tests
-cargo nextest run -p conformance # the component rung alone
-make adapter NAME         # fast development component build
-make release              # release-build every adapter component (excludes eval, caller, conformance)
-make publish NAME         # push one built component to its exact GHCR tag (Publish Release / local breakout)
-make eval [id]            # graded live eval over the public contract (operator-invoked, never CI)
-make sweep                # drop target/ artifacts untouched for a week (cargo-sweep); cargo never collects them itself
+make ci                              # check + vet + deny — run before committing
+make check                           # fmt + lint + test + test-docs + doc
+make test                            # cargo nextest run --locked --workspace --all-features
+cargo nextest run -p <name>          # one adapter's extract suite
+cargo nextest run -p emery-adapters  # the root seam suites
+cargo clippy --workspace --exclude emery-adapters --lib --examples --target wasm32-wasip2 -- -D warnings   # the guest side
+cargo build -p <name> --target wasm32-wasip2 --release   # one component
+make release                         # every component → target/wasm32-wasip2/release/
+make publish <name>                  # push one built component to its GHCR tag
+make sweep                           # drop target/ artifacts untouched for a week
 ```
 
-Run `make ci` before committing. If it cannot run, report exactly which narrower checks ran and why the full gate was unavailable.
-
-## Area-specific guidance
-
-- Human contributor setup (toolchain, layout, pin, publishing): [`CONTRIBUTING.md`](CONTRIBUTING.md)
-- Creating a source adapter (anatomy, walkthrough): [`docs/authoring.md`](docs/authoring.md)
-- Test ownership: [`docs/testing.md`](docs/testing.md); live eval how-to: [`examples/eval/README.md`](examples/eval/README.md)
+If `make ci` cannot run, say exactly which narrower checks ran and why.

@@ -1,5 +1,35 @@
+[package]
+name = "emery-adapters"
+description = "The host side of the adapter workspace: the seam and corpus suites over every shipped component"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+# A tests package: `tests/` drives the components `crates/test-programs`
+# builds, and the root carries no library, binary, or example target of its
+# own. `examples/` holds the `emery.toml` source configs the shipped `emery`
+# binary runs — data, compiled by nothing here.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+documentation.workspace = true
+emery-prose.workspace = true
+emery-sdk.workspace = true
+intent.workspace = true
+omnia.workspace = true
+omnia-test = { workspace = true, features = ["host"] }
+omnia-wasi-model.workspace = true
+serde_json.workspace = true
+test-programs.workspace = true
+tokio.workspace = true
+typescript.workspace = true
+
+[lints]
+workspace = true
+
 [workspace]
-members = ["examples/caller", "examples/conformance", "examples/eval", "sources/*"]
+members = ["crates/*", "sources/*"]
 resolver = "3"
 
 [workspace.package]
@@ -19,10 +49,10 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 tempfile = "3.27.0"
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
-wasip3 = "0.8.0"
+wasip3 = "0.9.0"
 
 omnia = { version = "0.36.0", default-features = false, features = ["jit"] }
-omnia-guest = "0.36.0"
+omnia-guest = { version = "0.36.0", default-features = false }
 omnia-test = { version = "0.36.0", default-features = false }
 omnia-wasi-model = "0.36.0"
 
@@ -30,10 +60,16 @@ emery-adapter = "0.38.0"
 emery-prose = "0.38.0"
 emery-sdk = "0.38.0"
 
+# Workspace crates: the fixture pipeline and the shipped adapters' rlibs.
+documentation = { path = "sources/documentation" }
+intent = { path = "sources/intent" }
+test-programs = { path = "crates/test-programs" }
+typescript = { path = "sources/typescript" }
+
 [patch.crates-io]
 emery-adapter = { git = "https://github.com/augentic/emery" }
-emery-prose = { git = "https://github.com/augentic/emery"}
-emery-sdk = { git = "https://github.com/augentic/emery"}
+emery-prose = { git = "https://github.com/augentic/emery" }
+emery-sdk = { git = "https://github.com/augentic/emery" }
 # emery-adapter = { path = "../emery/crates/adapter" }
 # emery-prose = { path = "../emery/crates/prose" }
 # emery-sdk = { path = "../emery/crates/sdk" }
@@ -100,7 +136,21 @@ lto = true
 opt-level = 2
 strip = true
 
-# Dependencies keep line tables only (workspace crates are unaffected): the
-# conformance rung's wasmtime with full debuginfo dominates `target/`.
+# Optimise the JIT in debug builds: the seam suites run every component
+# through Cranelift at test time, and unoptimised codegen is ~10x slower.
+# Dependencies keep line tables only (workspace crates are unaffected):
+# wasmtime and Cranelift with full debuginfo dominate `target/`.
 [profile.dev.package]
 "*" = { debug = "line-tables-only" }
+cranelift-assembler-x64 = { opt-level = 2 }
+cranelift-bforest = { opt-level = 2 }
+cranelift-bitset = { opt-level = 2 }
+cranelift-codegen = { opt-level = 2 }
+cranelift-control = { opt-level = 2 }
+cranelift-entity = { opt-level = 2 }
+cranelift-frontend = { opt-level = 2 }
+cranelift-native = { opt-level = 2 }
+regalloc2 = { opt-level = 2 }
+wasmparser = { opt-level = 2 }
+wasmtime-environ = { opt-level = 2 }
+wasmtime-internal-cranelift = { opt-level = 2 }

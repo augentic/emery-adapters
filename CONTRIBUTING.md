@@ -1,6 +1,6 @@
 # Contributing to emery-adapters
 
-Human-facing contributor guide (toolchain, layout, prompts, pin, publishing). Creating an adapter end-to-end is [`docs/authoring.md`](docs/authoring.md); agent and contract rules live in [`AGENTS.md`](AGENTS.md); test ownership in [`docs/testing.md`](docs/testing.md); the graded live eval in [`examples/eval/README.md`](examples/eval/README.md).
+Human-facing contributor guide (toolchain, layout, prompts, pin, publishing). Creating an adapter end-to-end is [`docs/authoring.md`](docs/authoring.md); agent and contract rules live in [`AGENTS.md`](AGENTS.md); test ownership in [`docs/testing.md`](docs/testing.md).
 
 ## Getting started
 
@@ -15,7 +15,7 @@ Unless you are fixing a known bug, discuss larger changes in a GitHub issue firs
 ### Troubleshooting first runs
 
 - **`make fmt` fails** — the fmt arm shells out to `cargo +nightly fmt`; install any nightly toolchain (`rustup toolchain install nightly --component rustfmt`).
-- **`make eval` refuses immediately** — it needs the sibling shipped binary (`cargo build --release --bin emery` in `../emery`, or `EMERY_BIN`), the built components (`make release`), `cursor-sdk-bridge` on `PATH` (or `CURSOR_SDK_BRIDGE_BIN`), and `CURSOR_API_KEY`. See [`examples/eval/README.md`](examples/eval/README.md).
+- **The first `make test` is slow** — `crates/test-programs/build.rs` nested-builds every adapter component and every guest program for `wasm32-wasip2` under `OUT_DIR` before the native suites compile; later builds are incremental.
 - **Patch-resolution errors after editing the root `Cargo.toml`** — the committed `[patch.crates-io]` git patches fetch `augentic/emery`; the commented path patches only resolve when `../emery` exists. Do not commit active path patches: CI has no sibling checkout.
 
 ## Layout
@@ -31,12 +31,16 @@ sources/
       rules/          # adapter-local engineering rules
     Cargo.toml        # `<name>` — adapter identity semver is its `version`
     src/              # wasm-free adapter logic + wasm32-only `guest` shim
-    tests/            # native integration suite
+    tests/            # extract.rs — native extract suite (what the adapter itself decides)
 codex/references/runtime/   # shared runtime references (reconciliation)
-examples/caller/      # guest-only conformance caller (wasi:cli/run over the source seam)
-examples/conformance/ # component conformance: nested wasm32 build + harness + suite
-examples/eval/        # the graded live-eval runner and its cases
-Cargo.toml            # virtual workspace: examples/* + sources/*
+crates/test-programs/ # omnia's test-programs pattern: guest programs + the nested wasm32 build of every component
+  programs/<group>/   # one scenario per file: source/extract.rs drives the seam, probe/ are fixture adapters
+  src/                # lib.rs: the generated artifact table (native) / helpers.rs (wasm32)
+  build.rs            # one omnia_test::build::Components build → gen.rs (every adapter + every program)
+tests/                # root seam suites: source.rs (every shipped component), probe.rs (the error arms, the lowering, the SDK's seam), prose.rs (every adapter's corpus)
+  support/            # mod.rs — the one runner source.rs and probe.rs share (the deployment under the omnia runtime)
+examples/             # live walks: one emery.toml per adapter (plus one over all three) the shipped `emery` binary runs, and the fixtures they lend
+Cargo.toml            # the tests `emery-adapters` root package over crates/* + sources/*
 ```
 
 Identity lives in the guest crate's `Cargo.toml` `version` (the shared `[workspace.package]` SemVer) and the package reference it publishes under (`emery:<name>@<semver>`). The compatibility floor is compiled into the `metadata` operation's record.
@@ -63,12 +67,12 @@ For sibling co-development against uncommitted engine changes, uncomment the pat
 ```bash
 make check                 # fmt + lint + nextest + doctests + doc
 make ci                    # full gate — adds cargo-vet + cargo-deny
-make adapter <name>        # fast one-component build → target/wasm32-wasip2/release/<name>.wasm
+cargo clippy --workspace --exclude emery-adapters --lib --examples --target wasm32-wasip2 -- -D warnings   # the guest side
+cargo build -p <name> --target wasm32-wasip2 --release   # one adapter → target/wasm32-wasip2/release/<name>.wasm (the path the examples bind)
 make release               # release-build every adapter
-make eval [id]             # graded live eval over the public contract (operator-invoked)
 ```
 
-The `fmt` arm uses nightly `rustfmt`. `make lint` runs clippy under `-D warnings` (`clippy.toml` carries the guest deny-list). `make vet` is check-only; regenerate audit inputs with `make vetgen`. Native crate tests are the Rust inner loop; the live eval proves prompt quality end to end and writes the dated scorecard.
+The `fmt` arm uses nightly `rustfmt`. `make lint` runs clippy under `-D warnings` over the native side; the guest side — the programs under `crates/test-programs/programs/` and the adapters' export shims — is `cfg(target_arch = "wasm32")`, so lint it for the target it ships on with the clippy command above, where `clippy.toml`'s guest deny-list applies. `make vet` is check-only; regenerate audit inputs with `make vetgen`. Native crate tests are the Rust inner loop; the seam suites prove every built component under the omnia runtime; `emery specify --config examples/<name>/emery.toml` walks one adapter live through the shipped `emery` binary and the Cursor backend ([examples/README.md](examples/README.md)); the graded live eval — being recreated as a root example beside the live examples — proves prompt quality end to end and writes the dated scorecard.
 
 ## Publishing
 
@@ -101,7 +105,7 @@ make publish <name>
 
 1. Branch off `main`.
 2. Run `make ci` (or say exactly which narrower checks ran and why the full gate was unavailable).
-3. Read [docs/testing.md](docs/testing.md) before adding, deleting, or relocating tests. New tests default to the adapter's `tests/` suite; do not add a `src` `#[cfg(test)]` module without a one-line Keep or Collapse reason from that document, and never widen `pub` surface solely for a test. When deleting unit coverage, run the coverage brake (`CRATE=<adapter> make cov-crate`) before and after.
+3. Read [docs/testing.md](docs/testing.md) before adding, deleting, or relocating tests. A behavior the adapter itself decides goes in its `tests/extract.rs`; the component boundary is the root seam suites'; do not add a `src` `#[cfg(test)]` module without a one-line reason from that document, never pin a prompt phrase, and never widen `pub` surface solely for a test.
 4. Do not commit built `.wasm` artifacts.
 
 ## See also
@@ -109,5 +113,4 @@ make publish <name>
 - [docs/authoring.md](docs/authoring.md) — creating a source adapter
 - [AGENTS.md](AGENTS.md) — vocabulary, component contract, agent commands
 - [docs/testing.md](docs/testing.md) — test ownership
-- [examples/eval/README.md](examples/eval/README.md) — the graded live eval
 - [emery CONTRIBUTING](https://github.com/augentic/emery/blob/main/CONTRIBUTING.md) — DCO and org contribution norms

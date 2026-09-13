@@ -1,7 +1,8 @@
 .env
 target/
-sandbox/
-sandbox.lock
+
+# Emery project state: the revision store the examples commit under
+.omnia/
 
 **/*.rs.bk
 rustc-ice-*

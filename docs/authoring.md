@@ -50,11 +50,10 @@ sources/changelog/
     references/
       emery-runtime -> ../../../../codex/references/runtime
   tests/
-    operations.rs
-    registry.rs
+    extract.rs
 ```
 
-The root workspace globs `sources/*`, so the directory joins the workspace with no manifest edit. The minimal `Cargo.toml`:
+The root workspace globs `sources/*`, so the directory joins the workspace with no manifest edit — and `crates/test-programs` compiles it as a component on the next build, so the root `tests/source.rs` and `tests/prose.rs` fail to compile until they name the adapter (step 7). The minimal `Cargo.toml`:
 
 ```toml
 [package]
@@ -87,7 +86,7 @@ tokio.workspace = true
 omnia-test = { workspace = true, features = ["guest"] }
 ```
 
-`emery-prose` appears twice on purpose: the runtime dependency carries only the `Doc` registry, the build dependency turns on the `emit` walker. `cdylib` is the Wasm component; `rlib` is what native tests link. The identity SemVer is the shared `[workspace.package] version` — adapters version together.
+`emery-prose` appears twice on purpose: the runtime dependency carries only the `Doc` registry, the build dependency turns on the `emit` walker. `cdylib` is the Wasm component; `rlib` is what native tests link. The one native-only dev-dependency is `omnia-test`'s `guest` feature, the scripted model the native suite binds; the runtime the built component runs under is the root package's, not the adapter's. The identity SemVer is the shared `[workspace.package] version` — adapters version together.
 
 ### 2. Embed the prose
 
@@ -167,34 +166,39 @@ The embed walker follows symlinks and fails the build on any dangling relative l
 
 ### 6. Test natively
 
-`tests/operations.rs` drives the trait with a scripted model — no wasm, no network. The assertions worth making: "did my prompt content land in the assembled request", "does the parsed answer round-trip", and "do required extras arrive verbatim in `Evidence`". Mirror the existing adapters' suites, including their fail-closed cases (a source the adapter cannot accept is a `bad_request`, never empty success — match on `Error::BadRequest { .. }`). Also add a `tests/registry.rs` pinning that every prompt path your operations load is actually embedded — and that no survey prose exists.
+`tests/extract.rs` drives the trait with a scripted model — no wasm, no network — and asserts only what the adapter itself decides. For an adapter that hands `Material::Bound` straight to the SDK, that is one test: the `SOURCE` noun names the bound tree in the turn (`turn.contains("the changelog source tree")`). An adapter that validates or prepares its input adds its fail-closed cases (a source it cannot accept is a `bad_request`, never empty success — match on `Error::BadRequest { .. }` with `Scripted::default()`, since no model turn runs) and its `Prepared` note reading as intended — `intent`'s suite is the model. Do not pin prompt phrases or the SDK's brief text: a wording edit is not a behavior change, and what every adapter shares — the declared tools, the schema format, the `check` flag, the lend, the gate's repair loop — the SDK's own suite asserts once.
 
 Run with `cargo nextest run -p changelog` (never bare `cargo test` — see [testing.md](testing.md)).
 
-### 7. Add the conformance test
+### 7. Name the adapter in the root suites
 
-`examples/conformance/tests/conformance.rs` runs every `sources/*` component under the omnia runtime; its `foreach_source!()` is generated from the `sources/` directory, so the workspace fails to compile until a `#[tokio::test] async fn changelog()` exists there. Add a `Case` (the adapter id `source:changelog`, the generated `SOURCE_CHANGELOG` constant, a minimal fixture tree, and `include_str!` of your `prose/prompts/extract.md`) and a test calling the shared `conforms` body — see [testing.md § Component conformance](testing.md#2-component-conformance).
+Two root tests complete the component rung ([testing.md § Seam suites](testing.md#2-seam-suites--cratestest-programs)); each `test_programs::foreach_adapter!()` fails to compile until a `#[tokio::test]` / `#[test]` `fn changelog()` exists:
+
+- `tests/source.rs` — stage the minimal fixture tree on a `scratch()` project, run `extract(test_programs::ADAPTER_CHANGELOG, Authority::<Class>, &project)` (the constant is generated from the `sources/` directory; the authority is the class your prompt declares), and pass the record to `prompted(&model, include_str!("../sources/changelog/prose/prompts/extract.md"))`. Add only what your component alone shows the host (intent asserts the brief it read through the mount is the turn's material); the adapter's own behaviour stays in `tests/extract.rs`, and the SDK's side of the seam is proved over the `gated` probe.
+- `tests/prose.rs` — call `corpus(changelog::Adapter::docs(), Authority::<Class>)` with the authority your prompt's `## Worked example` declares. Nothing more: reference presence is the embed-time walker's, and the prompt your component embeds is proved by `tests/source.rs`.
 
 ## Build the component and use it in a project
 
 ```bash
-make adapter changelog     # fast dev build → target/wasm32-wasip2/release/changelog.wasm
+cargo build -p changelog --target wasm32-wasip2 --release   # → target/wasm32-wasip2/release/changelog.wasm
 ```
 
-Bind it in any Emery project by local path — the first `specify` naming it seeds the project's component cache:
+Bind it in any Emery project by local path — every `specify` naming it loads the file fresh (nothing is cached), so a rebuild is picked up by the next run:
 
 ```bash
 emery specify path/to/changelog.wasm
 ```
 
-To exercise it through the graded live eval, add a case to `examples/eval/src/main.rs` (a fixture under `examples/eval/cases/<id>/fixture/` plus its graded expectations) — see [examples/eval/README.md](../examples/eval/README.md). Publishing a pinned version to GHCR (`emery:changelog@<version>`) is the operator flow in [CONTRIBUTING.md § Publishing](../CONTRIBUTING.md#publishing). To load it as a static guest, build the component and declare it in the host runtime the same way emery's journey host declares its mock source (`examples/runtime.rs`).
+Publishing a pinned version to GHCR (`emery:changelog@<version>`) is the operator flow in [CONTRIBUTING.md § Publishing](../CONTRIBUTING.md#publishing); a project then names it by package reference (`emery:changelog@<version>`, or the first-party shorthand `changelog@<version>`) and `emery` fetches it fresh on every run that names it. Those are the two ways in: the shipped `emery` deployment declares no adapter guests, so a bare name dispatches nothing — emery's own journey host ([`examples/runtime.rs`](https://github.com/augentic/emery/blob/main/examples/runtime.rs) in the engine repository) loads its mock adapter by path the same way.
+
+To watch it become a specification before wiring it into a project, give it an example: `examples/changelog/emery.toml` (copy a sibling's config; one `[[source]]` naming the built component by path relative to the file and the input it reads — a `path` to a fixture tree beside the config, or a `description`), the fixture if it lends one, and a row in [`examples/README.md`](../examples/README.md); then, from the repository root, `emery specify --config examples/changelog/emery.toml` and `emery show spec`. Nothing is compiled for an example — the config is data the shipped `emery` binary runs.
 
 ## Definition of done
 
 - [ ] `src/lib.rs` carries no logic beyond the export macro, `registry!`, and re-exports; reusable logic is wasm-free library code.
-- [ ] Every prompt path loaded by `operations.rs` exists under `prose/` (pinned by `tests/registry.rs`); no survey prose.
-- [ ] Required per-kind extras are demanded by the prompt and asserted in the native tests.
-- [ ] Native `tests/` cover extract with a scripted model (`omnia_test::guest::Scripted`), including fail-closed paths; `cargo nextest run -p <name>` is green.
-- [ ] `examples/conformance/tests/conformance.rs` carries the adapter's conformance test; `cargo nextest run -p conformance` is green.
-- [ ] `make adapter <name>` builds the component; no `.wasm` artifacts committed.
+- [ ] The extraction prompt is embedded under `prose/`, stays under the 800 non-blank-line cap, and its `## Worked example` JSON fence passes the claim gate under the adapter's authority (the root `tests/prose.rs`); no survey prose.
+- [ ] Required per-kind extras are demanded by the prompt — the worked example carries them.
+- [ ] `tests/extract.rs` covers what the adapter itself decides with a scripted model (`omnia_test::guest::Scripted`): the `SOURCE` noun landing and, where the adapter prepares its input, its fail-closed paths; `cargo nextest run -p <name>` is green.
+- [ ] The root `tests/source.rs` and `tests/prose.rs` name the adapter; `cargo nextest run -p emery-adapters` is green.
+- [ ] `cargo build -p <name> --target wasm32-wasip2 --release` builds the component; no `.wasm` artifacts committed.
 - [ ] `make ci` is green.

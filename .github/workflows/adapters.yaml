@@ -46,7 +46,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build components
-        run: cargo build --workspace --exclude eval --target wasm32-wasip2 --release
+        run: cargo build --workspace --exclude emery-adapters --exclude test-programs --target wasm32-wasip2 --release
 
       - name: Publish components
         env:
