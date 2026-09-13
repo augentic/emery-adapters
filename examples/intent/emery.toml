@@ -9,5 +9,5 @@
 # The built component, loaded fresh on every run, over the operator's brief.
 [[source]]
 name = "intent"
-adapter = "../../target/wasm32-wasip2/release/intent.wasm"
+adapter = "../../target/wasm32-wasip2/release/examples/intent.wasm"
 description = "Ship the orders service: place, read, and cancel orders over HTTP. Every order carries at least one line item; a shipped order can no longer be cancelled. Keep the API platform-neutral."

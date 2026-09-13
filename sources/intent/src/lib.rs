@@ -1,5 +1,6 @@
 //! Intent source adapter.
 
+#[cfg(feature = "export")]
 emery_sdk::source!(crate::Adapter);
 
 mod operations;

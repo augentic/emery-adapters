@@ -8,10 +8,9 @@ repository.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
-# A tests package: `tests/` drives the components `crates/test-programs`
-# builds, and the root carries no library, binary, or example target of its
-# own. `examples/` holds the `emery.toml` source configs the shipped `emery`
-# binary runs — data, compiled by nothing here.
+# A tests-and-examples package: `tests/` drives the components
+# `crates/test-programs` builds, and `examples/` walks each adapter live.
+# The shipped `emery` binary is the host — there is no runtime example.
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 documentation.workspace = true
 emery-prose.workspace = true
@@ -24,6 +23,29 @@ serde_json.workspace = true
 test-programs.workspace = true
 tokio.workspace = true
 typescript.workspace = true
+
+# The example cdylibs re-export each adapter through `source!` so
+# `cargo build --example <name> --target wasm32-wasip2` matches emery.
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+documentation.workspace = true
+emery-sdk.workspace = true
+intent.workspace = true
+typescript.workspace = true
+
+[[example]]
+name = "documentation"
+path = "examples/documentation/lib.rs"
+crate-type = ["cdylib"]
+
+[[example]]
+name = "intent"
+path = "examples/intent/lib.rs"
+crate-type = ["cdylib"]
+
+[[example]]
+name = "typescript"
+path = "examples/typescript/lib.rs"
+crate-type = ["cdylib"]
 
 [lints]
 workspace = true
@@ -61,10 +83,13 @@ emery-prose = "0.38.0"
 emery-sdk = "0.38.0"
 
 # Workspace crates: the fixture pipeline and the shipped adapters' rlibs.
-documentation = { path = "sources/documentation" }
-intent = { path = "sources/intent" }
+# Default features off: a dependent rlib must not emit the adapter's WIT
+# export (the root-package examples call `source!` themselves). `cargo
+# build -p <name>` still uses the package's own default, which includes it.
+documentation = { path = "sources/documentation", default-features = false }
+intent = { path = "sources/intent", default-features = false }
 test-programs = { path = "crates/test-programs" }
-typescript = { path = "sources/typescript" }
+typescript = { path = "sources/typescript", default-features = false }
 
 [patch.crates-io]
 emery-adapter = { git = "https://github.com/augentic/emery" }

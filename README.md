@@ -33,7 +33,7 @@ cargo nextest run -p emery-adapters  # the root seam suites: every component, th
 
 ## Live examples
 
-`examples/<name>/emery.toml` runs one adapter live through the shipped `emery` binary: the config binds the built component by path and the fixture it reads, `emery specify` extracts through the Cursor model backend and commits the revision, and `emery show spec` reviews it — the same journey an operator's project takes. Nothing is compiled here; the configs are data. Needs an `emery` binary, `cursor-sdk-bridge`, and `CURSOR_API_KEY`; see [examples/README.md](examples/README.md).
+`examples/<name>/` is a root-package example cdylib plus an `emery.toml` that binds the built component by path and the fixture it reads. `cargo build --example <name> --target wasm32-wasip2 --release` produces the wasm; `emery specify` extracts through the Cursor model backend and commits the revision; `emery show spec` reviews it — the same journey an operator's project takes. Needs an `emery` binary, `cursor-sdk-bridge`, and `CURSOR_API_KEY`; see [examples/README.md](examples/README.md).
 
 ```bash
 make release                                              # every component → target/wasm32-wasip2/release/

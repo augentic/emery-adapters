@@ -11,6 +11,12 @@ publish.workspace = true
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+# Default on so `cargo build -p intent` still exports the component.
+# The root-package example turns this off and calls `source!` itself.
+[features]
+default = ["export"]
+export = []
+
 [lints]
 workspace = true
 
