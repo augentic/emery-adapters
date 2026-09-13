@@ -10,7 +10,7 @@ Emery's first-party **source adapters**. Each `sources/<name>` is one crate ship
 | `codex/references/runtime/` | Shared references, reached through each adapter's `prose/references/emery-runtime` symlink |
 | `crates/test-programs/` | omnia's `test-programs` pattern: guest programs (`programs/source/extract.rs` drives the seam; `programs/probe/*` are fixture adapters) and the generated table of every built component |
 | `tests/` | Root seam suites over the built components under the omnia runtime: `source.rs`, `probe.rs`, `prose.rs`; the runner in `support/mod.rs` |
-| `examples/` | `emery.toml` configs the shipped `emery` binary runs; data, compiled by nothing ([examples/README.md](examples/README.md)) |
+| `examples/` | Root-package `[[example]]` cdylibs (`documentation`, `intent`, `typescript`) plus the `emery.toml` configs the shipped `emery` binary runs ([examples/README.md](examples/README.md)) |
 
 The root `emery-adapters` package is tests only. Engine crates (`emery-adapter`, `emery-prose`, `emery-sdk`) are git-pinned in `[patch.crates-io]`; uncomment the path patches for sibling co-development and never commit them.
 

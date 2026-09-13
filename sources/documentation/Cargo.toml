@@ -11,6 +11,13 @@ publish.workspace = true
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+# Default on so `cargo build -p documentation` still exports the
+# component. The root-package example turns this off and calls `source!`
+# itself, otherwise the two guests define the same WIT symbols.
+[features]
+default = ["export"]
+export = []
+
 [lints]
 workspace = true
 

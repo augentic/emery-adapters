@@ -12,17 +12,17 @@
 # The orders service specification.
 [[source]]
 name = "docs"
-adapter = "../target/wasm32-wasip2/release/documentation.wasm"
+adapter = "../target/wasm32-wasip2/release/examples/documentation.wasm"
 path = "documentation/docs/"
 
 # The orders service behaviour.
 [[source]]
 name = "api"
-adapter = "../target/wasm32-wasip2/release/typescript.wasm"
+adapter = "../target/wasm32-wasip2/release/examples/typescript.wasm"
 path = "typescript/src/"
 
 # The operator's brief, inline.
 [[source]]
 name = "intent"
-adapter = "../target/wasm32-wasip2/release/intent.wasm"
+adapter = "../target/wasm32-wasip2/release/examples/intent.wasm"
 description = "Ship the orders service: place, read, and cancel orders over HTTP. Every order carries at least one line item; a shipped order can no longer be cancelled. Keep the API platform-neutral."
