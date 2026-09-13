@@ -7,7 +7,7 @@ First-party **source** Wasm components for [Emery](https://github.com/augentic/e
 
 **Using Emery in a project?** You do not need this repository. Bind a built `.wasm` or declare it as a static guest in the host runtime; follow the [Emery README](https://github.com/augentic/emery#readme).
 
-**Authoring or debugging an adapter?** This repo is your home. Edit prose or Rust, run the crate and seam tests, then run a graded live eval case.
+**Authoring or debugging an adapter?** This repo is your home. Edit prose or Rust, run the crate and seam tests, then walk the adapter live with its example.
 
 The version operators pin (`documentation@0.13.0`) is this workspace's shared SemVer (`[workspace.package].version`); published components live on GHCR.
 
@@ -31,16 +31,24 @@ cargo nextest run -p documentation   # or intent, typescript: extract + seam sui
 cargo nextest run -p emery-adapters  # the root seam suites
 ```
 
+## Live examples
+
+`examples/<name>/` walks one adapter live through the Cursor model backend: a driver guest binds an adapter-shaped input, calls `extract` over `emery:adapter/source` — the seam the engine crosses — and prints the claims. One shared runtime serves every adapter; each example's `omnia.toml` declares the deployment. Needs `cursor-sdk-bridge` and `CURSOR_API_KEY`; see [examples/README.md](examples/README.md).
+
+```bash
+make example documentation   # or intent, typescript
+```
+
 ## Graded live eval
 
-The live rung is a **public-contract client**: it spawns the sibling shipped `emery` binary over the built components, drives one `specify` per case across the adapter contract, grades the committed spec via `emery show spec`, and writes the dated scorecard. Operator-invoked, never CI. It is being recreated as a root example under `examples/`.
+The live rung is a **public-contract client**: it spawns the sibling shipped `emery` binary over the built components, drives one `specify` per case across the adapter contract, grades the committed spec via `emery show spec`, and writes the dated scorecard. Operator-invoked, never CI. It is being recreated as a root example beside the live examples.
 
 ## Repair loop
 
 1. Edit `sources/<name>/prose/**` (the extract prompt, references, rules).
-2. `cargo nextest run -p <name>` to re-run its extract and seam suites; `make adapter <name>` to rebuild the shipped component.
+2. `cargo nextest run -p <name>` to re-run its extract and seam suites; `make adapter <name>` to rebuild the shipped component; `make example <name>` to watch it extract live.
 
-Native crate tests stay the Rust inner loop; the seam suites prove the component boundary; live eval is for prompt quality. See [docs/testing.md](docs/testing.md).
+Native crate tests stay the Rust inner loop; the seam suites prove the component boundary; the live examples show one extraction; live eval is for prompt quality. See [docs/testing.md](docs/testing.md).
 
 ## Stuck?
 

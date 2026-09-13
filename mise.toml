@@ -12,11 +12,11 @@ includes = ["mise-rust.toml"]
 # Adapter overrides
 # -------------------------------------
 
-[tasks.adapter]
-run = '''
-name="${1:?usage: make adapter <name>}"
-cargo build -p "$name" --target wasm32-wasip2 --release
-'''
+# [tasks.adapter]
+# run = '''
+# name="${1:?usage: make adapter <name>}"
+# cargo build -p "$name" --target wasm32-wasip2 --release
+# '''
 
 [tasks.release]
 run = "cargo build --workspace --exclude emery-adapters --exclude test-programs --target wasm32-wasip2 --release"

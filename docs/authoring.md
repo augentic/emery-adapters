@@ -194,7 +194,9 @@ Bind it in any Emery project by local path — the first `specify` naming it see
 emery specify path/to/changelog.wasm
 ```
 
-Publishing a pinned version to GHCR (`emery:changelog@<version>`) is the operator flow in [CONTRIBUTING.md § Publishing](../CONTRIBUTING.md#publishing). To load it as a static guest, build the component and declare it in the host runtime the same way emery's journey host declares its mock source (`examples/runtime.rs`).
+Publishing a pinned version to GHCR (`emery:changelog@<version>`) is the operator flow in [CONTRIBUTING.md § Publishing](../CONTRIBUTING.md#publishing). To load it as a static guest, build the component and declare it in the host runtime the same way emery's journey host declares its mock source ([`examples/runtime.rs`](https://github.com/augentic/emery/blob/main/examples/runtime.rs) in the engine repository).
+
+To watch it extract live before wiring it into a project, give it an example: `examples/changelog/guest.rs` (copy a sibling's driver, change the adapter id, key, and input), `examples/changelog/omnia.toml` (the driver and the built component by path, the `emery:adapter/source` link, the tree it lends), a `[[example]]` stanza in the root `Cargo.toml`, and a row in [`examples/README.md`](../examples/README.md); then `make example changelog`.
 
 ## Definition of done
 

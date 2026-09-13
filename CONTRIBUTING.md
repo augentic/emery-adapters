@@ -69,7 +69,7 @@ make adapter <name>        # fast one-component build → target/wasm32-wasip2/r
 make release               # release-build every adapter (excludes the root package and test-programs)
 ```
 
-The `fmt` arm uses nightly `rustfmt`. `make lint` runs clippy under `-D warnings` (`clippy.toml` carries the guest deny-list). `make vet` is check-only; regenerate audit inputs with `make vetgen`. Native crate tests are the Rust inner loop; the seam suites prove every built component under the omnia runtime; the graded live eval — being recreated under `examples/` — proves prompt quality end to end and writes the dated scorecard.
+The `fmt` arm uses nightly `rustfmt`. `make lint` runs clippy under `-D warnings` (`clippy.toml` carries the guest deny-list). `make vet` is check-only; regenerate audit inputs with `make vetgen`. Native crate tests are the Rust inner loop; the seam suites prove every built component under the omnia runtime; `make example <name>` walks one adapter's `extract` live through the Cursor backend ([examples/README.md](examples/README.md)); the graded live eval — being recreated as a root example beside the live examples — proves prompt quality end to end and writes the dated scorecard.
 
 ## Publishing
 
