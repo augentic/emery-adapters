@@ -2,25 +2,25 @@
 
 Live `specify` journeys via [omnia-cursor](https://github.com/augentic/omnia-backends/tree/main/crates/cursor): the shipped `emery` binary loads a built first-party adapter by path, the adapter extracts claims from its fixture through the host model, the engine synthesises `spec.md` / `design.md`, and the revision commits.
 
-| Example                         | Source input                                       | Exercises                                        |
-| ------------------------------- | -------------------------------------------------- | ------------------------------------------------ |
-| [documentation](documentation/) | [documentation/docs/](documentation/docs/)         | the `Workspace` arm over prose                   |
-| [typescript](typescript/)       | [typescript/src/](typescript/src/)                 | the `Workspace` arm over code                    |
-| [intent](intent/)               | an inline `description`; claims anchor `[unknown]` | the `Value` arm                                  |
-| [emery.toml](emery.toml)        | all three, as one run                              | grouping and authority precedence                |
+| Example                                   | Input                                          | Exercises                                                     |
+| ----------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------- |
+| [documentation](documentation/emery.toml) | [docs/](documentation/docs/) — specification   | `Workspace` over prose                                        |
+| [typescript](typescript/emery.toml)       | [src/](typescript/src/) — behaviour            | `Workspace` over code                                         |
+| [intent](intent/emery.toml)                | inline `description`; nothing lent             | `Value`; claims anchor `[unknown]`                            |
+| [all three](emery.toml)                   | the three sources above                        | grouping and authority (`intent > documentation > behaviour`) |
+
 
 ## Prerequisites
 
-- The `emery` binary on `PATH`. There is no published binary:
+1. The `emery` binary on `PATH`. There is no published binary:
 
   ```bash
   cargo install --git https://github.com/augentic/emery --locked
   ```
 
-  An `emery` older than the `emery-sdk` an adapter was built against refuses `unsupported-version`; reinstall after the `emery-*` pin in [Cargo.lock](../Cargo.lock) moves.
+2. [cursor-sdk-bridge](https://github.com/cursor/sdk-bridge). See [below](#installing-cursor-sdk-bridge) for installation.
 
-- [cursor-sdk-bridge](https://github.com/cursor/sdk-bridge). See [below](#installing-cursor-sdk-bridge) for installation.
-- `CURSOR_API_KEY`
+3. `CURSOR_API_KEY`
 
 ## Build and run
 
