@@ -14,9 +14,8 @@ use crate::registry;
 
 /// Intent source → one Evidence document under `authority: intent`.
 ///
-/// One `kind: intent` claim carries the brief verbatim; then one
-/// `requirement` claim per directive the brief states — the claims
-/// reconciliation joins against the other sources'.
+/// One `kind: intent` claim carries the brief verbatim, then one
+/// `requirement` claim per directive it states.
 #[derive(Debug)]
 pub struct Adapter;
 
@@ -40,10 +39,8 @@ fn brief(content: &SourceContent) -> Result<Material, Error> {
             require_brief(value)?;
             Ok(Material::Bound)
         }
-        // The SDK still lends the tree to the model, as it does for every
-        // workspace input; the note is what puts the brief in the turn, so
-        // the model reads it without a tool round, and reads the one file
-        // the same either way.
+        // The SDK lends the tree as for any workspace input; the note puts
+        // the brief in the turn without a tool round.
         SourceContent::Workspace(root) => {
             let intent = single_file_intent(Path::new(root))?;
             require_brief(&intent)?;

@@ -1,15 +1,12 @@
-//! TypeScript's own extract behaviour, natively over a scripted model: the
-//! one thing the adapter states itself — the noun its bound tree goes by in
-//! the turn. The SDK's suite owns the request shape every adapter shares;
-//! the root seam suites own what crosses the component boundary and the
-//! corpus it embeds.
+//! TypeScript's own extract behaviour
+//!
+//! The one thing the adapter states itself: the noun its bound tree goes by
+//! in the turn.
 
 use emery_sdk::{Context, SourceAdapter as _, SourceContent, SourceInput};
 use omnia_test::guest::Scripted;
 use typescript::Adapter;
 
-// A bound tree is put to the model as the TypeScript / JavaScript source
-// tree.
 #[tokio::test]
 async fn bound_tree() {
     let model = Scripted::answering([r#"{"authority":"behaviour","claims":[]}"#]);

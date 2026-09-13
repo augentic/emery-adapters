@@ -1,18 +1,8 @@
-//! The `emery:adapter/source` calls the engine makes: `metadata` answers
-//! with a pin the version gate parses, then `extract` crosses the seam in
-//! the mode the host names as the program's arguments.
-//!
-//! - none — the adapter answers, over the lent workspace then over an inline
-//!   value, with evidence that still passes the contract's claim gate on the
-//!   caller's side of the bindings; the host scripts one model answer per
-//!   `extract`.
-//! - `refused <code>` — `extract` over the lent workspace fails and lifts to
-//!   the Omnia error class `<code>`: `bad_request` for an adapter refusing
-//!   its input (or evidence the SDK's gate never let through), `bad_gateway`
-//!   for its own failure.
-//! - `echoed` — `extract` over an inline value answers the maximal evidence
-//!   the `echo` probe returns, every field as it left the adapter: what the
-//!   WIT bindings' lowering and lift conserve.
+//! The driver over `emery:adapter/source`: `metadata`, then `extract` in
+//! the mode the host names as arguments — none (both `SourceInput` arms,
+//! each answer re-checked against the claim gate), `refused <code>` (the
+//! failure lifts to that Omnia class), or `echoed` (the answer is
+//! `maximal()` field for field).
 
 #![cfg(target_arch = "wasm32")]
 

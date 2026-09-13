@@ -1,30 +1,22 @@
-//! The one machine-checkable part of every shipped prompt: the worked
-//! example. `prompts/extract.md` is the behaviour the model executes, and
-//! the JSON fence under its `## Worked example` is the shape it teaches —
-//! here it must parse as an Evidence document the claim gate accepts under
-//! the adapter's own authority class, so a prompt edit cannot teach the
-//! model a shape the adapter itself would refuse, and an engine pin that
-//! moves the contract (the required extras, the id grammar, an authority)
-//! fails here rather than in the live eval's repair rounds. The prompt is
-//! also held under the 800 non-blank-line cap, which nothing else enforces.
+//! Prompt corpora
 //!
-//! Nothing else about the corpus is asserted: the walker fails the build on
-//! a dangling link, and `tests/source.rs` proves under the runtime that the
-//! prompt each component embeds is the one on disk. `foreach_adapter!`
-//! keeps the set complete: a new `sources/<name>` fails to compile here
-//! until its corpus is checked.
+//! Every shipped adapter's `prompts/extract.md` stays under the 800
+//! non-blank-line cap, and its `## Worked example` passes the claim gate
+//! under the adapter's authority — the one machine-checkable part of a
+//! prompt, and where a contract change in the engine pin fails first.
+//! Reference presence is the embed-time walker's; the embedded prompt is
+//! `source.rs`'s.
 
 #![cfg(not(target_arch = "wasm32"))]
 
 use emery_prose::registry::{Doc, body};
 use emery_sdk::{Authority, Evidence, SourceAdapter as _};
 
-// Every `sources/*` component `crates/test-programs` builds must have a
-// matching test here; a new adapter without one fails to compile.
+// Every `sources/*` component must have a matching test here.
 test_programs::foreach_adapter!();
 
-/// The prompt stays under the cap and its worked example passes the claim
-/// gate under `authority`.
+/// The prompt stays under the cap and its worked example passes the gate
+/// under `authority`.
 fn corpus(docs: &[Doc], authority: Authority) {
     let prompt = body(docs, "prompts/extract.md").expect("`prompts/extract.md` is embedded");
 
@@ -38,7 +30,7 @@ fn corpus(docs: &[Doc], authority: Authority) {
     assert_eq!(evidence.authority, authority, "the worked example carries the adapter's authority");
 }
 
-/// The first JSON fence under the prompt's `## Worked example` heading.
+/// The first JSON fence under `## Worked example`.
 fn worked_example(prompt: &str) -> &str {
     let (_, section) =
         prompt.split_once("\n## Worked example").expect("the prompt carries a worked example");

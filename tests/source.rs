@@ -1,18 +1,12 @@
-//! Every shipped component over `emery:adapter/source`: each `sources/*`
-//! adapter runs through the omnia runtime, driven by the `source_extract`
-//! program from `crates/test-programs` over the same seam the engine uses,
-//! against a scripted host-side model. The driver asserts what crosses the
-//! boundary (and traps on failure); this side asserts what the host alone
-//! sees of *this* component: its `metadata` opened no completion, and the
-//! system prompt of each `extract` is the `prompts/extract.md` this build
-//! embedded. What every component shares over the seam — the SDK's request
-//! shape, the reference tools, the lend, the claim gate's refusal — is
-//! proved once over the `gated` probe in `tests/probe.rs`; an adapter's own
-//! behaviour is its `tests/extract.rs`'s.
+//! Every shipped component over `emery:adapter/source`
 //!
-//! `foreach_adapter!` is the orphan guard for the adapter set: a new
-//! `sources/<name>` component fails to compile here until a test of that
-//! name exists.
+//! Each `sources/*` adapter runs under the omnia runtime, driven by the
+//! `source_extract` program against a scripted host model. The driver
+//! asserts what crosses the seam; this side asserts what the host alone
+//! sees of the component: `metadata` opened no completion, and each
+//! `extract`'s system prompt is the `prompts/extract.md` this build
+//! embedded. The SDK's side of the seam is `probe.rs`'s; an adapter's own
+//! behaviour is its `tests/extract.rs`'s.
 
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -21,13 +15,11 @@ mod support;
 use emery_sdk::Authority;
 use omnia_test::host::{Scratch, ScriptedModel, scratch};
 
-// Every `sources/*` component `crates/test-programs` builds must have a
-// matching test here; a new adapter without one fails to compile.
+// Every `sources/*` component must have a matching test here.
 test_programs::foreach_adapter!();
 
-/// An answer the claim gate accepts, stamped with `authority` — the class
-/// the adapter under test emits, so the walk reads as the engine would see
-/// it, though the gate itself reads no authority.
+/// A gate-valid answer under `authority` — the adapter's own class, though
+/// the gate reads none.
 fn evidence(authority: Authority) -> String {
     serde_json::json!({
         "authority": authority,
@@ -41,16 +33,14 @@ fn evidence(authority: Authority) -> String {
     .to_string()
 }
 
-/// Runs the driver's answered legs against `component` with `project`
-/// mounted read-only as `.`, one answer under `authority` per `extract`, and
-/// returns the model's record.
+/// The driver's answered legs against `component`, one answer per `extract`.
 async fn extract(component: &str, authority: Authority, project: &Scratch) -> ScriptedModel {
     let answer = evidence(authority);
     support::run(component, project, &[], ScriptedModel::answering([&answer, &answer])).await
 }
 
-/// What the host sees of every component: `metadata` opened no completion,
-/// each `extract` opened one, and its system prompt is `prompt`.
+/// `metadata` opened no completion; each `extract` opened one with `prompt`
+/// as its system.
 fn prompted(model: &ScriptedModel, prompt: &str) {
     let seen = model.seen();
     assert_eq!(seen.len(), 2, "metadata opens no completion; each extract opens one");
@@ -70,8 +60,7 @@ async fn documentation() {
     prompted(&model, include_str!("../sources/documentation/prose/prompts/extract.md"));
 }
 
-// The one adapter that reads its source inside the guest: the brief reaches
-// the turn through the mounted tree, not the lend.
+// The one adapter that reads its source inside the guest, through the mount.
 #[tokio::test]
 async fn intent() {
     const BRIEF: &str = "Let users reset passwords by email.";

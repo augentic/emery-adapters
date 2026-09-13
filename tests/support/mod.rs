@@ -1,18 +1,15 @@
-//! Scenario support shared by the seam suites: the one runner that puts a
-//! component under the omnia runtime behind the `source_extract` driver, so
-//! `tests/source.rs` and `tests/probe.rs` build the deployment the same way
-//! and differ only in the component under test, the mode the driver runs,
-//! and what each asserts of the model's record afterwards.
+//! Scenario support
+//!
+//! The one runner the seam suites share: a component under the omnia
+//! runtime behind the `source_extract` driver, over a scripted host model.
 
 use omnia::ExitStatus;
 use omnia_test::host::{Backends, Deployment, Scratch, ScriptedModel};
 use omnia_wasi_model::WasiModel;
 
-/// Runs the driver in the mode `args` names against `adapter` as the
-/// component under test, `project` mounted read-only as `.` and `model`
-/// answering the host side; requires a clean exit — the driver traps on any
-/// check that fails — and the script exactly consumed, and returns the
-/// model's record.
+/// Runs the driver in the mode `args` names against `adapter`, `project`
+/// mounted read-only as `.`; requires a clean exit and the script exactly
+/// consumed, and returns the model's record.
 pub async fn run(
     adapter: &str, project: &Scratch, args: &[&str], model: ScriptedModel,
 ) -> ScriptedModel {

@@ -1,9 +1,8 @@
-//! Intent's own extract behaviour, natively over a scripted model: what the
-//! adapter makes of its input before the one model call — the brief it
-//! accepts inline or reads from a one-file tree into the turn's material,
-//! and the refusals it fails closed with. The SDK's suite owns the request
-//! shape every adapter shares; the root seam suites own what crosses the
-//! component boundary and the corpus it embeds.
+//! Intent's own extract behaviour
+//!
+//! What the adapter makes of its input before the one model call: the brief
+//! it accepts inline or reads from a one-file tree, and the refusals it
+//! fails closed with.
 
 use std::path::Path;
 
@@ -38,8 +37,6 @@ fn value_input(brief: &str) -> SourceInput {
     }
 }
 
-// A non-empty inline brief is accepted as the bound material and reaches
-// the model.
 #[tokio::test]
 async fn inline_value() {
     let model = Scripted::answering([ANSWER]);
@@ -53,8 +50,7 @@ async fn inline_value() {
     assert!(turn.contains(BRIEF), "the brief is the material: {turn}");
 }
 
-// A one-file tree — nested or not — is read into the turn's material as the
-// intent string, named as the tree it came from.
+// Nested or not, the one file is read into the turn's material.
 #[tokio::test]
 async fn one_file() {
     let model = Scripted::answering([ANSWER]);
@@ -73,11 +69,9 @@ async fn one_file() {
     assert!(turn.contains("one-file tree"), "the material names the tree source: {turn}");
 }
 
-// A tree that is not the one-file encoding — no file, or several — is a
-// typed refusal before any model call.
+// No file, or several: a typed refusal before any model call.
 #[tokio::test]
 async fn not_one_file() {
-    // The refusal precedes the model, so nothing is scripted.
     let model = Scripted::default();
 
     let empty = tempfile::tempdir().expect("a scratch tree");
@@ -95,8 +89,8 @@ async fn not_one_file() {
     assert!(model.seen().is_empty(), "no judgment leg runs on a malformed input");
 }
 
-// The intent source is never legitimately empty (the prompt's own
-// contract): an empty brief is a typed refusal, never an empty success.
+// An intent source is never legitimately empty: a typed refusal, never an
+// empty success.
 #[tokio::test]
 async fn empty_brief() {
     let model = Scripted::default();

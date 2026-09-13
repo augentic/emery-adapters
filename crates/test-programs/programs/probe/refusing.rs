@@ -1,8 +1,5 @@
-//! A source adapter that refuses its input before touching the model: the
-//! SDK lowers its `bad_request!` onto the WIT `invalid-request` arm, and the
-//! caller side lifts it back to `bad_request` with no model call recorded.
-//! Stands in for the adapter under test when a suite proves the refusal
-//! path of the seam itself.
+//! Refuses its input with `bad_request!` before touching the model — the
+//! WIT `invalid-request` arm.
 
 #![cfg(target_arch = "wasm32")]
 
@@ -19,12 +16,11 @@ struct Adapter;
 impl SourceAdapter for Adapter {
     const SOURCE: &'static str = "refusing probe";
 
-    // No corpus: the probe never reaches the model.
     fn docs() -> &'static [Doc] {
         &[]
     }
 
-    // Nothing to await: the refusal is ready before the model is asked.
+    // Nothing to await.
     fn extract<P: Model>(
         _model: &P, ctx: &Context<'_>,
     ) -> impl Future<Output = Result<Evidence, Error>> + Send {

@@ -1,20 +1,11 @@
-//! The guest scenario programs the seam suites drive, from both sides of the
-//! boundary.
+//! The guest scenario programs the seam suites drive.
 //!
-//! On `wasm32` the crate is the programs' shared helpers; each program under
-//! `programs/<group>/<scenario>.rs` is an `[[example]]` compiled to a
-//! component. Natively it is the compiled artifacts: `build.rs` runs that
-//! `wasm32-wasip2` build over the programs and over every `sources/*`
-//! adapter, and generates one `pub const <NAME>: &str` path per component
-//! plus a `foreach_<group>!` macro a suite invokes to prove every program or
-//! every adapter has a matching test — one `gen.rs` for both. The root
-//! `tests/source.rs` and `tests/prose.rs` invoke `foreach_adapter!`, and
-//! `tests/probe.rs` `foreach_probe!`; `foreach_source!` goes uninvoked, the
-//! one `source` program being the driver both seam suites name directly.
-//! A suite runs an artifact through `omnia_test::host`.
+//! On `wasm32`, the programs' shared helpers. Natively, the artifact table
+//! `build.rs` generates: one path constant per compiled component and a
+//! `foreach_<group>!` macro per group, so every program and every
+//! `sources/*` adapter has a matching root test.
 
-/// The guest id every suite registers the adapter under test as, and the id
-/// every driver program dispatches to over `emery:adapter/source`.
+/// The guest id the adapter under test is registered as and dispatched to.
 pub const ADAPTER: &str = "adapter";
 
 #[cfg(target_arch = "wasm32")]

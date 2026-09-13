@@ -1,11 +1,6 @@
-//! Helpers the programs under `programs/<group>/` share: the caller side of
-//! the `emery:adapter/source` seam, the checks a driver program runs over
-//! what crosses it, and the maximal evidence the `echo` probe answers for
-//! the driver to compare against.
-//!
-//! Compiled only for `wasm32`; the native side of the crate is the generated
-//! artifact table. A program traps on the first check that fails — the
-//! failure the host suite sees is the panic message.
+//! What the programs share: the caller side of `emery:adapter/source`, the
+//! checks a driver runs over what crosses it, and the maximal evidence the
+//! `echo` probe answers. A program traps on the first check that fails.
 
 use emery_adapter::source::{
     AdapterMetadata, Authority, Backing, Claim, ClaimKind, Evidence, Source, SourceContent,
@@ -13,23 +8,22 @@ use emery_adapter::source::{
 };
 use serde_json::json;
 
-/// The source key a program binds its input under; an adapter's user turn
-/// names it.
+/// The source key a program binds its input under.
 pub const KEY: &str = "source";
 
-/// The caller side of the seam: the contract's import-side dispatch with no
-/// override, so every call crosses the WIT bindings the engine uses.
+/// The contract's import-side dispatch, so every call crosses the WIT
+/// bindings the engine uses.
 pub struct Caller;
 
 impl Source for Caller {}
 
-/// Reads the arguments the host passed the program, the guest id stripped.
+/// The host's arguments, the guest id stripped.
 #[must_use]
 pub fn arguments() -> Vec<String> {
     wasip3::cli::environment::get_arguments().into_iter().skip(1).collect()
 }
 
-/// A source input lending the mounted project root as a workspace.
+/// An input lending the mounted project root.
 #[must_use]
 pub fn workspace() -> SourceInput {
     SourceInput {
@@ -38,7 +32,7 @@ pub fn workspace() -> SourceInput {
     }
 }
 
-/// A source input carrying `text` inline, with no filesystem lend.
+/// An input carrying `text` inline, lending nothing.
 #[must_use]
 pub fn value(text: &str) -> SourceInput {
     SourceInput {
@@ -47,8 +41,7 @@ pub fn value(text: &str) -> SourceInput {
     }
 }
 
-/// An adapter that pins an emery version pins an exact semver — the version
-/// gate the engine runs parses it as one.
+/// An `emery-version` pin parses as the exact semver the engine's gate reads.
 ///
 /// # Panics
 ///
@@ -62,8 +55,8 @@ pub fn check_metadata(metadata: &AdapterMetadata) {
     }
 }
 
-/// Evidence that crossed the seam still passes the contract's claim gate —
-/// the fail-closed rule the engine re-runs on receipt.
+/// Evidence that crossed the seam still passes the claim gate the engine
+/// re-runs on receipt.
 ///
 /// # Panics
 ///
@@ -75,9 +68,7 @@ pub fn check_evidence(evidence: &Evidence) {
     assert!(findings.is_empty(), "claim gate findings:\n{}", findings.join("\n"));
 }
 
-/// `actual` is `expected` field for field. The contract's records derive no
-/// `PartialEq`, so the comparison is spelled out where a difference is named
-/// by claim and field.
+/// `actual` is `expected` field for field (the records derive no `PartialEq`).
 ///
 /// # Panics
 ///
@@ -95,15 +86,11 @@ pub fn check_same(expected: &Evidence, actual: &Evidence) {
     }
 }
 
-/// Evidence with every field of the contract's records populated.
+/// Gate-valid evidence with every record field populated.
 ///
 /// One claim per kind, every `path` anchor form, both `backing` arms, a
-/// `synopsis`, and extras beyond strings (an object, a number, a list, a
-/// boolean, `null`) — the shape whose every branch the WIT bindings must
-/// conserve: extras ride as canonical JSON text and are parsed back on the
-/// caller's side. The `echo` probe answers it and the driver's `echoed`
-/// mode compares what it lifted against it. Gate-valid, so the same
-/// document passes `check_evidence`.
+/// `synopsis`, and extras beyond strings — every branch the WIT bindings
+/// must conserve.
 #[must_use]
 pub fn maximal() -> Evidence {
     Evidence {
@@ -189,8 +176,7 @@ pub fn maximal() -> Evidence {
     }
 }
 
-// A claim of `kind` with the open `extras` object and nothing else set;
-// callers fill `synopsis` and `backing` by struct update.
+// A claim of `kind` with `extras` and nothing else set.
 fn claim(
     kind: ClaimKind, id: Option<&str>, path: Option<&str>, extras: serde_json::Value,
 ) -> Claim {

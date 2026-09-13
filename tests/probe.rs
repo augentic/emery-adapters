@@ -1,13 +1,11 @@
-//! The seam proved over the fixture adapters under
-//! `crates/test-programs/programs/probe/`, each in place of a shipped one
-//! and driven by the `source_extract` program on the caller's side of
-//! `emery:adapter/source`: the WIT `error` arms lifting back to their Omnia
-//! classes (`refusing`, `upstream`); every field of the contract's records
-//! surviving the bindings' lowering and lift (`echo`); and what the SDK does
-//! for every adapter under the runtime — the request it opens, the reference
-//! tools, the lend, the claim gate's refusal once the backend's budget is
-//! spent (`gated`) — asserted here once rather than per shipped component.
-//! Every scenario runs the real components through the omnia runtime.
+//! The seam over the fixture adapters
+//!
+//! Each probe under `crates/test-programs/programs/probe/` stands in for a
+//! shipped adapter under the omnia runtime: the WIT `error` arms lifting to
+//! their Omnia classes (`refusing`, `upstream`), every record field
+//! surviving the bindings (`echo`), and what the SDK does for every adapter
+//! — the request, the reference tools, the lend, the spent-budget refusal —
+//! proved once over `gated` rather than per component.
 
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -17,45 +15,40 @@ use omnia_test::host::{ScriptedModel, scratch};
 use serde_json::Value;
 use support::run;
 
-// Every probe program in `crates/test-programs` must have a matching test
-// here; a new probe without one fails to compile.
+// Every probe program must have a matching test here.
 test_programs::foreach_probe!();
 
-/// An answer the gated probe's claim gate accepts.
+/// An answer the claim gate accepts.
 const EVIDENCE: &str = r#"{"authority":"documentation","claims":[
     {"kind":"requirement","id":"orders.create","statement":"POST /orders creates an order."}
 ]}"#;
 
-/// A requirement without its `statement`: the one extra the gate demands.
+/// A requirement without its `statement`.
 const UNSTATED: &str =
     r#"{"authority":"documentation","claims":[{"kind":"requirement","id":"orders.create"}]}"#;
 
-/// Runs the driver's `refused` mode against `probe`, requiring the failure
-/// to cross the seam as `code`; nothing is scripted because the probe never
-/// reaches the model.
+/// The driver's `refused` mode against `probe`, expecting `code`; the probe
+/// never reaches the model.
 async fn refused_by(probe: &str, code: &str) {
     let model = run(probe, &scratch(), &["refused", code], ScriptedModel::default()).await;
     assert!(model.seen().is_empty(), "a probe never reaches the model");
 }
 
-// `bad_request!` lowers onto the WIT `invalid-request` arm and lifts back as
-// `bad_request`: the class the engine reads as an adapter refusing its input.
+// `bad_request!` lowers onto `invalid-request` and lifts back as `bad_request`.
 #[tokio::test]
 async fn probe_refusing() {
     refused_by(test_programs::PROBE_REFUSING, "bad_request").await;
 }
 
-// `bad_gateway!` lowers onto the `internal` arm — every class but a refusal
-// shares it — and lifts back as `bad_gateway`: an adapter's own failure.
+// `bad_gateway!` lowers onto `internal` — every class but a refusal — and
+// lifts back as `bad_gateway`.
 #[tokio::test]
 async fn probe_upstream() {
     refused_by(test_programs::PROBE_UPSTREAM, "bad_gateway").await;
 }
 
-// Every field of the contract's records — each claim kind, both `backing`
-// arms, every anchor form, extras that are objects, numbers, lists, and
-// null — crosses the bindings as it left the adapter: the driver compares
-// what it lifted against the same `maximal()` the probe answered.
+// The driver compares what it lifted against the `maximal()` the probe
+// answered, field for field.
 #[tokio::test]
 async fn probe_echo() {
     let model =
@@ -63,14 +56,9 @@ async fn probe_echo() {
     assert!(model.seen().is_empty(), "a probe never reaches the model");
 }
 
-// What the SDK does for every adapter, proved once under the runtime: each
-// `extract` opens one completion (`metadata` none) whose system is the
-// embedded `prompts/extract.md`, whose tools are the reference tools, whose
-// `check` the backend loops on, and whose turn names the source and key; the
-// workspace leg lends the tree and the inline leg lends nothing, its value
-// riding the turn; `list_docs` and `read_doc` answer from the embedded corpus
-// across the tool streams; and each candidate is offered to the guest's
-// `check` before it is accepted.
+// The SDK's side of the seam, once under the runtime: the request, the
+// reference tools answered from the corpus, the lend following the input,
+// each candidate offered to the guest's `check`.
 #[tokio::test]
 async fn probe_gated() {
     let model = ScriptedModel::answering([EVIDENCE, EVIDENCE])
@@ -118,9 +106,8 @@ async fn probe_gated() {
     }
 }
 
-// The claim gate rejects the only candidate and the backend's budget is
-// spent on it: the correction carries the finding, and the failure crosses
-// the seam as `bad_request` — the class the engine reads as a refusal.
+// The gate rejects the only candidate and the budget is spent: the
+// correction names the finding and the failure crosses as `bad_request`.
 #[tokio::test]
 async fn gated_spent() {
     let model = ScriptedModel::answering([UNSTATED]);
