@@ -7,7 +7,7 @@
 emery_sdk::source!(crate::Adapter);
 
 use emery_prose::registry::Doc;
-use emery_sdk::{Context, Error, Evidence, Material, Model, SourceAdapter};
+use emery_sdk::{Context, Error, Evidence, Material, Model, SourceAdapter, SourceKind};
 
 /// Sorted by path, as the walker emits them.
 const DOCS: &[Doc] = &[
@@ -25,6 +25,7 @@ const DOCS: &[Doc] = &[
 struct Adapter;
 
 impl SourceAdapter for Adapter {
+    const KIND: SourceKind = SourceKind::Documentation;
     const SOURCE: &'static str = "gated probe";
 
     fn docs() -> &'static [Doc] {

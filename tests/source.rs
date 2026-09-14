@@ -12,17 +12,14 @@
 
 mod support;
 
-use emery_sdk::Authority;
 use omnia_test::host::{Scratch, ScriptedModel, scratch};
 
 // Every `sources/*` component must have a matching test here.
 test_programs::foreach_adapter!();
 
-/// A gate-valid answer under `authority` — the adapter's own class, though
-/// the gate reads none.
-fn evidence(authority: Authority) -> String {
+/// A gate-valid claims-only answer — the adapter stamps its own class.
+fn answer() -> String {
     serde_json::json!({
-        "authority": authority,
         "claims": [{
             "kind": "requirement",
             "id": "orders.create",
@@ -34,8 +31,8 @@ fn evidence(authority: Authority) -> String {
 }
 
 /// The driver's answered legs against `component`, one answer per `extract`.
-async fn extract(component: &str, authority: Authority, project: &Scratch) -> ScriptedModel {
-    let answer = evidence(authority);
+async fn extract(component: &str, project: &Scratch) -> ScriptedModel {
+    let answer = answer();
     support::run(component, project, &[], ScriptedModel::answering([&answer, &answer])).await
 }
 
@@ -54,8 +51,7 @@ async fn documentation() {
     let project = scratch();
     project.write("docs/orders.md", "# Orders\n\nPOST /orders creates an order.\n");
 
-    let model =
-        extract(test_programs::ADAPTER_DOCUMENTATION, Authority::Documentation, &project).await;
+    let model = extract(test_programs::ADAPTER_DOCUMENTATION, &project).await;
 
     prompted(&model, include_str!("../sources/documentation/prose/prompts/extract.md"));
 }
@@ -67,7 +63,7 @@ async fn intent() {
     let project = scratch();
     project.write("brief.md", BRIEF);
 
-    let model = extract(test_programs::ADAPTER_INTENT, Authority::Intent, &project).await;
+    let model = extract(test_programs::ADAPTER_INTENT, &project).await;
 
     prompted(&model, include_str!("../sources/intent/prose/prompts/extract.md"));
     let turn = &model.seen()[0].messages[0];
@@ -79,7 +75,7 @@ async fn typescript() {
     let project = scratch();
     project.write("src/index.ts", "export function greet(): string { return 'hello'; }\n");
 
-    let model = extract(test_programs::ADAPTER_TYPESCRIPT, Authority::Behaviour, &project).await;
+    let model = extract(test_programs::ADAPTER_TYPESCRIPT, &project).await;
 
     prompted(&model, include_str!("../sources/typescript/prose/prompts/extract.md"));
 }

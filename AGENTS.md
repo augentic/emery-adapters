@@ -16,10 +16,10 @@ The root `emery-adapters` package is tests only. Engine crates (`emery-adapter`,
 
 ## Invariants
 
-- An adapter implements `emery_sdk::SourceAdapter` on a unit type and makes exactly one model call, through `Self::evidence(model, ctx, material)`. It chooses the material (`Material::Bound`, or `Prepared(note)` after reading or validating its input) and refuses unusable input with `bad_request!` before the model is reached. There is no adapter error type: `emery_sdk::Error` is omnia's, and the WIT `error` variant is lowered and lifted inside the contract crate alone.
+- An adapter implements `emery_sdk::SourceAdapter` on a unit type, states `const KIND`, and makes exactly one model call, through `Self::evidence(model, ctx, material)`. It chooses the material (`Material::Bound`, or `Prepared(note)` after reading or validating its input) and refuses unusable input with `bad_request!` before the model is reached. There is no adapter error type: `emery_sdk::Error` is omnia's, and the WIT `error` variant is lowered and lifted inside the contract crate alone.
 - Identity is the crate's version and its `emery:<name>@<semver>` package; resolve-time metadata is the component's `metadata` export. There is no manifest file.
 - Adapters never read the revision store or take lifecycle authority. Preserve gaps as `[unknown]`; keep claims platform-neutral.
-- `prose/prompts/extract.md` is the one extraction pass: at most 800 non-blank lines, with a `## Worked example` JSON fence that passes the claim gate under the adapter's authority — `tests/prose.rs` enforces both. References are linked, never inlined; a dangling relative link fails the build. Contributor guidance never goes in the embedded corpus.
+- `prose/prompts/extract.md` is the one extraction pass: at most 800 non-blank lines, with a `## Worked example` JSON fence that parses as the SDK's `Answer` and passes the claim gate under the adapter's constant — `tests/prose.rs` enforces both. References are linked, never inlined; a dangling relative link fails the build. Contributor guidance never goes in the embedded corpus.
 - Do not commit built `.wasm` artifacts.
 
 ## Code style

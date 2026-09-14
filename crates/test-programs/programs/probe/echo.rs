@@ -8,13 +8,14 @@ emery_sdk::source!(crate::Adapter);
 use std::future::{Future, ready};
 
 use emery_prose::registry::Doc;
-use emery_sdk::{Context, Error, Evidence, Model, SourceAdapter};
+use emery_sdk::{Context, Error, Evidence, Model, SourceAdapter, SourceKind};
 use test_programs::maximal;
 
 #[derive(Debug)]
 struct Adapter;
 
 impl SourceAdapter for Adapter {
+    const KIND: SourceKind = SourceKind::Behaviour;
     const SOURCE: &'static str = "echo probe";
 
     fn docs() -> &'static [Doc] {

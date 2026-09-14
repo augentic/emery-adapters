@@ -1,5 +1,5 @@
 use emery_prose::registry::Doc;
-use emery_sdk::{Context, Error, Evidence, Material, Model, SourceAdapter};
+use emery_sdk::{Context, Error, Evidence, Material, Model, SourceAdapter, SourceKind};
 
 use crate::registry;
 
@@ -8,6 +8,7 @@ use crate::registry;
 pub struct Adapter;
 
 impl SourceAdapter for Adapter {
+    const KIND: SourceKind = SourceKind::Documentation;
     const SOURCE: &'static str = "documentation";
 
     fn docs() -> &'static [Doc] {

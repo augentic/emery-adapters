@@ -19,13 +19,12 @@ use support::run;
 test_programs::foreach_probe!();
 
 /// An answer the claim gate accepts.
-const EVIDENCE: &str = r#"{"authority":"documentation","claims":[
+const EVIDENCE: &str = r#"{"claims":[
     {"kind":"requirement","id":"orders.create","statement":"POST /orders creates an order."}
 ]}"#;
 
 /// A requirement without its `statement`.
-const UNSTATED: &str =
-    r#"{"authority":"documentation","claims":[{"kind":"requirement","id":"orders.create"}]}"#;
+const UNSTATED: &str = r#"{"claims":[{"kind":"requirement","id":"orders.create"}]}"#;
 
 /// The driver's `refused` mode against `probe`, expecting `code`; the probe
 /// never reaches the model.

@@ -24,11 +24,10 @@ Other claim kinds are out of scope for this adapter. Ids, `path` anchors, and th
 
 ## Output
 
-Return one JSON object matching the Evidence schema the request carries — the Evidence body:
+Return one JSON object matching the claims schema the request carries:
 
 ```json
 {
-  "authority": "documentation",
   "claims": [
     { "kind": "requirement", "id": "<dotted-kebab-id>", "path": "<relative-path>#L<n>", "statement": "..." },
     { "kind": "criterion", "id": "<requirement-id>.<suffix>", "path": "<relative-path>#L<n>", "criterion": "..." },
@@ -37,7 +36,7 @@ Return one JSON object matching the Evidence schema the request carries — the 
 }
 ```
 
-`authority` is always the literal `documentation` (operator-provided written product/technical intent). The document's source identity is stamped by the engine from the source — it is not written in-document.
+The document's source identity is stamped by the engine from the source — it is not written in-document.
 
 ## Worked example
 
@@ -59,7 +58,6 @@ Output:
 
 ```json
 {
-  "authority": "documentation",
   "claims": [
     { "kind": "requirement", "id": "password-reset.request", "path": "password-reset.md#L3", "statement": "The account service should let a registered user request a password reset link by email." },
     { "kind": "criterion", "id": "password-reset.request.response-privacy", "path": "password-reset.md#L6", "criterion": "Unknown email addresses receive the same outward response as known users." },

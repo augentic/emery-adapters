@@ -7,12 +7,13 @@ use std::path::{Path, PathBuf};
 use anyhow::Context as _;
 use emery_prose::registry::Doc;
 use emery_sdk::{
-    Context, Error, Evidence, Material, Model, SourceAdapter, SourceContent, bad_request,
+    Context, Error, Evidence, Material, Model, SourceAdapter, SourceContent, SourceKind,
+    bad_request,
 };
 
 use crate::registry;
 
-/// Intent source → one Evidence document under `authority: intent`.
+/// Intent source → one Evidence document.
 ///
 /// One `kind: intent` claim carries the brief verbatim, then one
 /// `requirement` claim per directive it states.
@@ -20,6 +21,7 @@ use crate::registry;
 pub struct Adapter;
 
 impl SourceAdapter for Adapter {
+    const KIND: SourceKind = SourceKind::Intent;
     const SOURCE: &'static str = "intent";
 
     fn docs() -> &'static [Doc] {

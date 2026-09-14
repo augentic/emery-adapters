@@ -1,6 +1,6 @@
 # intent.extract
 
-Emit one `Evidence` document from the operator's free-form brief, with `authority: intent`. The engine reconciles it with every other bound source's Evidence into the specification — see [From sources to a spec](../references/emery-runtime/reconciliation.md).
+Emit one `Evidence` document from the operator's free-form brief. The engine reconciles it with every other bound source's Evidence into the specification — see [From sources to a spec](../references/emery-runtime/reconciliation.md).
 
 ## Inputs
 
@@ -26,11 +26,10 @@ The verbatim `intent` claim preserves the operator's words for the reviewer. The
 
 ## Output contract
 
-Return one JSON object matching the Evidence schema the request carries — the Evidence body:
+Return one JSON object matching the claims schema the request carries:
 
 ```json
 {
-  "authority": "intent",
   "claims": [
     { "kind": "intent", "id": "<source-key>", "statement": "<brief, verbatim>" },
     { "kind": "requirement", "id": "<dotted-kebab-id>", "statement": "<one directive, present tense>" }
@@ -40,7 +39,6 @@ Return one JSON object matching the Evidence schema the request carries — the 
 
 Rules:
 
-- `authority` MUST be the literal string `intent`. The `intent` adapter is the only first-party source that emits this authority class.
 - Exactly one `kind: intent` claim, first, carrying the brief verbatim in `statement` — no summarising, no splitting, no grammatical cleanup. The reviewer must see exactly what the operator wrote.
 - One `requirement` claim per distinct behavioural directive, in brief order. Quote the operator's wording as one present-tense sentence; do not merge directives or invent ones the brief does not state. A brief that is pure context with no directive yields the `intent` echo claim alone.
 - Do not emit a `path:` on any claim. The intent source has no filesystem locus.
@@ -53,11 +51,10 @@ Input:
 - Source key = `intent`
 - Inline value = `Sessions must expire after 30 minutes of inactivity. Add a search filter to the user list.`
 
-Output — the Evidence body:
+Output:
 
 ```json
 {
-  "authority": "intent",
   "claims": [
     { "kind": "intent", "id": "intent", "statement": "Sessions must expire after 30 minutes of inactivity. Add a search filter to the user list." },
     { "kind": "requirement", "id": "session.timeout", "statement": "Sessions must expire after 30 minutes of inactivity." },

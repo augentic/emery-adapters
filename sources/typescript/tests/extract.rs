@@ -9,7 +9,7 @@ use typescript::Adapter;
 
 #[tokio::test]
 async fn bound_tree() {
-    let model = Scripted::answering([r#"{"authority":"behaviour","claims":[]}"#]);
+    let model = Scripted::answering([r#"{"claims":[]}"#]);
     let input = SourceInput {
         key: "legacy-monolith".to_string(),
         content: SourceContent::Workspace(".".to_string()),
@@ -19,7 +19,8 @@ async fn bound_tree() {
         input: &input,
     };
 
-    Adapter::extract(&model, &ctx).await.expect("the scripted answer is accepted");
+    let evidence = Adapter::extract(&model, &ctx).await.expect("the scripted answer is accepted");
+    assert_eq!(evidence.kind, Adapter::KIND);
 
     let turn = &model.seen()[0].messages[0];
     assert!(turn.contains("the TypeScript / JavaScript source tree"), "{turn}");

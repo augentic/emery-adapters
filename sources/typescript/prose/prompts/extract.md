@@ -65,7 +65,6 @@ Resulting Evidence body:
 
 ```json
 {
-  "authority": "behaviour",
   "claims": [
     { "kind": "requirement", "id": "user-registration.email-validation", "path": "src/users/register.ts#L12-L34", "statement": "Registration rejects an email that is not RFC-5322 valid with a 400 response." },
     { "kind": "requirement", "id": "user-registration.persistence", "path": "src/users/register.ts#L31", "statement": "A valid registration inserts the user and returns 201 with the persisted record." },
@@ -76,7 +75,7 @@ Resulting Evidence body:
 }
 ```
 
-Two requirements for the spec, three detail claims backing them. `authority` is fixed at `behaviour` for this adapter. The document's source identity is stamped by the engine from the source — it is not written in-document.
+Two requirements for the spec, three detail claims backing them. The document's source identity is stamped by the engine from the source — it is not written in-document.
 
 **Cover what the estate actually does.** A `POST /orders` handler that writes an orders store must carry that write as a `call` claim and its behaviour as a `requirement`; a handler that invokes an external service must carry that call site. Downstream correlation evidences invocation, read/write, and ownership relationships from these structured claims — do not bury them in `excerpt` prose, and do not write a second behavioural spec in prose instead of emitting the structured claims.
 

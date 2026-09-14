@@ -2,7 +2,7 @@
 id: SRC-001
 title: Documentation Evidence Preserves Verbatim Source Text
 severity: important
-trigger: A documentation-authority claim's statement, criterion, or decision text is paraphrased or summarised rather than quoted from the cited source path.
+trigger: A documentation source's claim statement, criterion, or decision text is paraphrased or summarised rather than quoted from the cited source path.
 applicability:
   adapters: [documentation]
 references:
@@ -12,7 +12,7 @@ references:
 
 ## Rule
 
-Operator-provided documentation is the highest-fidelity input for `authority: documentation` Evidence; rephrasing it inside a claim breaks reconciliation audit at synthesis time, because `spec.md` requirement bodies cite the claim text but reviewers verify it against the path anchor. `requirement.statement`, `criterion.criterion`, and `decision.decision` MUST quote the text at the cited `path` anchor. Light grammatical normalisation — capitalisation of the leading character, terminal punctuation, trimming surrounding whitespace — is permitted; reordering clauses, substituting vocabulary, collapsing bullet lists, or summarising prose is not. When a span of source text cannot be carried as a single behavioural claim, emit a `section` claim that preserves the bounded prose rather than paraphrasing it into a `requirement` or `criterion`.
+Operator-provided documentation is the highest-fidelity input for `kind: documentation` Evidence; rephrasing it inside a claim breaks reconciliation audit at synthesis time, because `spec.md` requirement bodies cite the claim text but reviewers verify it against the path anchor. `requirement.statement`, `criterion.criterion`, and `decision.decision` MUST quote the text at the cited `path` anchor. Light grammatical normalisation — capitalisation of the leading character, terminal punctuation, trimming surrounding whitespace — is permitted; reordering clauses, substituting vocabulary, collapsing bullet lists, or summarising prose is not. When a span of source text cannot be carried as a single behavioural claim, emit a `section` claim that preserves the bounded prose rather than paraphrasing it into a `requirement` or `criterion`.
 
 ## Look For
 

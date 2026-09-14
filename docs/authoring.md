@@ -120,7 +120,7 @@ pub use operations::Adapter;
 `src/operations.rs` implements `emery_sdk::SourceAdapter` on a unit struct. Condensed — the real `intent` and `documentation` files are worth reading in full:
 
 ```rust
-use emery_sdk::{Context, Error, Evidence, Material, Model, SourceAdapter};
+use emery_sdk::{Context, Error, Evidence, Material, Model, SourceAdapter, SourceKind};
 use emery_prose::registry::Doc;
 
 use crate::registry;
@@ -131,6 +131,7 @@ pub struct Adapter;
 
 impl SourceAdapter for Adapter {
     const SOURCE: &'static str = "changelog";
+    const KIND: SourceKind = SourceKind::Documentation;
 
     fn docs() -> &'static [Doc] {
         registry::docs()
@@ -142,11 +143,11 @@ impl SourceAdapter for Adapter {
 }
 ```
 
-`SOURCE` is the noun the user turn calls the source ("the changelog source tree"). `metadata` and `prompt` are inherited: the SDK's default `metadata` reports its own version as the exact `emery-version` pin, so an adapter overrides it only to loosen or tighten that pin, and `prompt` reads `prompts/extract.md` from `docs()`.
+`SOURCE` is the noun the user turn calls the source ("the changelog source tree"). `KIND` is the kind of source the adapter reads (`intent`, `documentation`, or `behaviour` — the precedence a cross-source disagreement resolves under), stamped by the SDK on every document this adapter returns — a fact about its input, never answered by the model. `metadata` and `prompt` are inherited: the SDK's default `metadata` reports its own version as the exact `emery-version` pin, so an adapter overrides it only to loosen or tighten that pin, and `prompt` reads `prompts/extract.md` from `docs()`.
 
 Points that generalize:
 
-- **The SDK owns the user turn.** `Material::Bound` selects the ordinary source-input rendering over `ctx.input`. Use `Material::Prepared(note)` when a source needs validation or preparation first — `intent`, for example, reads its one-file tree into the material note. The envelope always names the adapter and source key, offers the reference tools, and closes with the Evidence request.
+- **The SDK owns the user turn.** `Material::Bound` selects the ordinary source-input rendering over `ctx.input`. Use `Material::Prepared(note)` when a source needs validation or preparation first — `intent`, for example, reads its one-file tree into the material note. The envelope always names the adapter and source key, offers the reference tools, and closes with the claims-only request. The SDK stamps `KIND`.
 - **Extract writes no artifacts.** The engine persists the Evidence; your job is to return a well-formed value. The fixed turn closing says so ("the caller persists…; do not write it yourself") because the model has workspace access.
 - **One pass, whole source.** There is no survey step and no lead focus: extract mines the whole bound source in one call. The source arrives prepared — a tree as `SourceContent::Workspace` (lent as `$SOURCE_DIR`), an inline source as `SourceContent::Value`.
 - **Required extras are fail-closed.** A `requirement` claim without a `statement` extra (or a `criterion` without `criterion`, an `example` without `replay-digest`) fails the SDK's `check`, so the backend corrects the candidate in place; an answer still missing one when the backend's rounds are spent fails the whole run engine-side closed (typed `bad_request`) — never a synopsis fallback. Put the per-kind table and the id-derivation rules in the prompt; reconciliation joins claims across sources by their dotted-kebab ids.
@@ -174,8 +175,8 @@ Run with `cargo nextest run -p changelog` (never bare `cargo test` — see [test
 
 Two root tests complete the component rung ([testing.md § Seam suites](testing.md#2-seam-suites--cratestest-programs)); each `test_programs::foreach_adapter!()` fails to compile until a `#[tokio::test]` / `#[test]` `fn changelog()` exists:
 
-- `tests/source.rs` — stage the minimal fixture tree on a `scratch()` project, run `extract(test_programs::ADAPTER_CHANGELOG, Authority::<Class>, &project)` (the constant is generated from the `sources/` directory; the authority is the class your prompt declares), and pass the record to `prompted(&model, include_str!("../sources/changelog/prose/prompts/extract.md"))`. Add only what your component alone shows the host (intent asserts the brief it read through the mount is the turn's material); the adapter's own behaviour stays in `tests/extract.rs`, and the SDK's side of the seam is proved over the `gated` probe.
-- `tests/prose.rs` — call `corpus(changelog::Adapter::docs(), Authority::<Class>)` with the authority your prompt's `## Worked example` declares. Nothing more: reference presence is the embed-time walker's, and the prompt your component embeds is proved by `tests/source.rs`.
+- `tests/source.rs` — stage the minimal fixture tree on a `scratch()` project, run `extract(test_programs::ADAPTER_CHANGELOG, &project)` (the constant is generated from the `sources/` directory), and pass the record to `prompted(&model, include_str!("../sources/changelog/prose/prompts/extract.md"))`. Add only what your component alone shows the host (intent asserts the brief it read through the mount is the turn's material); the adapter's own behaviour stays in `tests/extract.rs`, and the SDK's side of the seam is proved over the `gated` probe.
+- `tests/prose.rs` — call `corpus::<changelog::Adapter>(changelog::Adapter::docs())`. Nothing more: reference presence is the embed-time walker's, and the prompt your component embeds is proved by `tests/source.rs`.
 
 ## Build the component and use it in a project
 
@@ -196,7 +197,7 @@ To watch it become a specification before wiring it into a project, give it an e
 ## Definition of done
 
 - [ ] `src/lib.rs` carries no logic beyond the export macro, `registry!`, and re-exports; reusable logic is wasm-free library code.
-- [ ] The extraction prompt is embedded under `prose/`, stays under the 800 non-blank-line cap, and its `## Worked example` JSON fence passes the claim gate under the adapter's authority (the root `tests/prose.rs`); no survey prose.
+- [ ] The extraction prompt is embedded under `prose/`, stays under the 800 non-blank-line cap, and its `## Worked example` JSON fence parses as the SDK's `Answer` and passes the claim gate under the adapter's constant (the root `tests/prose.rs`); no survey prose.
 - [ ] Required per-kind extras are demanded by the prompt — the worked example carries them.
 - [ ] `tests/extract.rs` covers what the adapter itself decides with a scripted model (`omnia_test::guest::Scripted`): the `SOURCE` noun landing and, where the adapter prepares its input, its fail-closed paths; `cargo nextest run -p <name>` is green.
 - [ ] The root `tests/source.rs` and `tests/prose.rs` name the adapter; `cargo nextest run -p emery-adapters` is green.

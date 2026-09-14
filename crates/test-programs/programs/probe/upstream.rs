@@ -8,12 +8,13 @@ emery_sdk::source!(crate::Adapter);
 use std::future::{Future, ready};
 
 use emery_prose::registry::Doc;
-use emery_sdk::{Context, Error, Evidence, Model, SourceAdapter, bad_gateway};
+use emery_sdk::{Context, Error, Evidence, Model, SourceAdapter, SourceKind, bad_gateway};
 
 #[derive(Debug)]
 struct Adapter;
 
 impl SourceAdapter for Adapter {
+    const KIND: SourceKind = SourceKind::Documentation;
     const SOURCE: &'static str = "upstream probe";
 
     fn docs() -> &'static [Doc] {

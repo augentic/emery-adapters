@@ -82,22 +82,18 @@ emery-adapter = "0.38.0"
 emery-prose = "0.38.0"
 emery-sdk = "0.38.0"
 
-# Workspace crates: the fixture pipeline and the shipped adapters' rlibs.
-# Default features off: a dependent rlib must not emit the adapter's WIT
-# export (the root-package examples call `source!` themselves). `cargo
-# build -p <name>` still uses the package's own default, which includes it.
 documentation = { path = "sources/documentation", default-features = false }
 intent = { path = "sources/intent", default-features = false }
 test-programs = { path = "crates/test-programs" }
 typescript = { path = "sources/typescript", default-features = false }
 
 [patch.crates-io]
-emery-adapter = { git = "https://github.com/augentic/emery" }
-emery-prose = { git = "https://github.com/augentic/emery" }
-emery-sdk = { git = "https://github.com/augentic/emery" }
-# emery-adapter = { path = "../emery/crates/adapter" }
-# emery-prose = { path = "../emery/crates/prose" }
-# emery-sdk = { path = "../emery/crates/sdk" }
+# emery-adapter = { git = "https://github.com/augentic/emery" }
+# emery-prose = { git = "https://github.com/augentic/emery" }
+# emery-sdk = { git = "https://github.com/augentic/emery" }
+emery-adapter = { path = "../emery/crates/adapter" }
+emery-prose = { path = "../emery/crates/prose" }
+emery-sdk = { path = "../emery/crates/sdk" }
 
 omnia = { git = "https://github.com/augentic/omnia" }
 omnia-guest = { git = "https://github.com/augentic/omnia" }
