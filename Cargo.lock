@@ -368,9 +368,9 @@ dependencies = [
 
 [[package]]
 name = "clap_complete"
-version = "4.6.10"
+version = "4.6.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78ab9a1a7094014a0d0813f8e7c5a0058ad8fe6cf7475b9151364259f5a35d0f"
+checksum = "037e2a1a92236d0aff7e845093f64661d6df4c02c9fcc61a60e9e1d736fa392f"
 dependencies = [
  "clap",
 ]
@@ -423,9 +423,9 @@ dependencies = [
 
 [[package]]
 name = "const-hex"
-version = "1.19.1"
+version = "1.19.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33e2a781ebdf4467d1428dc4593067825fb646f6871475098d8577421af73558"
+checksum = "188c2337969e01e04cca32b92011b72db2b43a8b7fc2ae60741db78f7873724e"
 dependencies = [
  "cfg-if",
  "cpufeatures 0.2.17",
@@ -969,6 +969,7 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 [[package]]
 name = "emery-adapter"
 version = "0.38.0"
+source = "git+https://github.com/augentic/emery#774c24114260c66ccc44f5e3d93031797f8d5bdf"
 dependencies = [
  "omnia-guest",
  "schemars",
@@ -998,6 +999,7 @@ dependencies = [
 [[package]]
 name = "emery-prose"
 version = "0.38.0"
+source = "git+https://github.com/augentic/emery#774c24114260c66ccc44f5e3d93031797f8d5bdf"
 dependencies = [
  "anyhow",
 ]
@@ -1005,6 +1007,7 @@ dependencies = [
 [[package]]
 name = "emery-sdk"
 version = "0.38.0"
+source = "git+https://github.com/augentic/emery#774c24114260c66ccc44f5e3d93031797f8d5bdf"
 dependencies = [
  "anyhow",
  "emery-adapter",
@@ -5842,9 +5845,9 @@ dependencies = [
 
 [[package]]
 name = "zlib-rs"
-version = "0.6.7"
+version = "0.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34b31d188d9d685a4f9c7b46d6e36631b07058d2cfe190267adce54dc230bf12"
+checksum = "b268e58e7c693d7c271f93ffc4ba3b380412554231c85bf61ca7af91042a4112"
 
 [[package]]
 name = "zmij"

@@ -169,7 +169,7 @@ version = "4.6.7"
 criteria = "safe-to-deploy"
 
 [[exemptions.clap_complete]]
-version = "4.6.10"
+version = "4.6.11"
 criteria = "safe-to-deploy"
 
 [[exemptions.clap_derive]]
@@ -185,7 +185,7 @@ version = "4.6.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.const-hex]]
-version = "1.19.1"
+version = "1.19.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.const-oid]]
@@ -1185,7 +1185,7 @@ version = "0.11.6"
 criteria = "safe-to-deploy"
 
 [[exemptions.zlib-rs]]
-version = "0.6.7"
+version = "0.6.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.zmij]]
