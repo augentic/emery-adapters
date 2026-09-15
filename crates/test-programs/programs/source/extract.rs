@@ -1,8 +1,12 @@
-//! The driver over `emery:adapter/source`: `metadata`, then `extract` in
-//! the mode the host names as arguments — none (both `SourceInput` arms,
-//! each answer re-checked against the claim gate), `refused <code>` (the
-//! failure lifts to that Omnia class), or `echoed` (the answer is
-//! `maximal()` field for field, and the metadata carries the probe's kind).
+//! Drives one adapter over `emery:adapter/source`: `metadata`, then `extract`.
+//!
+//! The host names the mode as arguments:
+//!
+//! - none: `extract` over both `SourceInput` arms, each answer re-checked
+//!   against the claim gate;
+//! - `refused <code>`: the failure lifts to that omnia class;
+//! - `echoed`: the answer is `maximal()` field for field, and the metadata
+//!   carries the probe's kind.
 
 #![cfg(target_arch = "wasm32")]
 

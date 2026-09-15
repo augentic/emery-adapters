@@ -1,13 +1,15 @@
-//! TypeScript's own extract behaviour
+//! Asserts what the TypeScript adapter decides before the SDK's fan-out.
 //!
-//! What the adapter decides before the SDK's fan-out: which entries are
-//! production source and so the candidates its one survey turn offers; how
-//! the model's partition becomes materials — one note per group that meets
-//! the floor, the remainder as one more, each naming its files and lent the
-//! root; and when no survey turn is spent at all — a tree no directory cut
-//! would split, or an inline value, is the bound input whole. What the
-//! survey call itself does for every adapter — the request shape, the check,
-//! the fold — is the SDK's suite's.
+//! - Which entries are production source, and so the candidates its one
+//!   survey turn offers.
+//! - How the model's partition becomes materials: one note per group that
+//!   meets the floor, the remainder as one more, each naming its files and
+//!   lent the root.
+//! - When no survey turn is spent at all: a tree no directory cut would
+//!   split, or an inline value, is the bound input whole.
+//!
+//! What the survey call itself does for every adapter — the request shape,
+//! the check, the fold — is the SDK's suite's.
 
 use std::path::Path;
 

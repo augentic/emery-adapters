@@ -1,6 +1,7 @@
-//! An adapter with nothing of its own — an inline two-document corpus over
-//! `Material::Bound` — so a suite can prove what the SDK does for every
-//! adapter under the runtime without riding a shipped prompt.
+//! A probe with nothing of its own: a two-document corpus over `Material::Bound`.
+//!
+//! A suite proves over it, under the runtime, what the SDK does for every
+//! adapter, without riding a shipped prompt.
 
 #![cfg(target_arch = "wasm32")]
 

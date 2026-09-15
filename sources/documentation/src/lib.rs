@@ -1,4 +1,4 @@
-//! Documentation source adapter.
+//! Extracts claims from a tree of written documentation.
 
 #[cfg(feature = "export")]
 emery_sdk::source!(crate::Adapter);

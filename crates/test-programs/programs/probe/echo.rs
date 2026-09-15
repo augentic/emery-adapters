@@ -1,5 +1,7 @@
-//! Answers `maximal()` without a model call, so a suite can prove every
-//! record field survives the bindings' lowering and lift.
+//! A probe answering `maximal()` without a model call.
+//!
+//! A suite proves over it that every record field survives the bindings'
+//! lowering and lift.
 
 #![cfg(target_arch = "wasm32")]
 

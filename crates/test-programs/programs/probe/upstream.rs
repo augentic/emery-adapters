@@ -1,5 +1,7 @@
-//! Fails with `bad_gateway!` before touching the model — the WIT `internal`
-//! arm every class but a refusal shares.
+//! A probe failing with `bad_gateway!` before touching the model.
+//!
+//! Its failure crosses the WIT `internal` arm, which every class but a
+//! refusal shares.
 
 #![cfg(target_arch = "wasm32")]
 

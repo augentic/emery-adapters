@@ -1,13 +1,12 @@
-//! Prompt corpora
+//! Checks every shipped adapter's prompt corpus.
 //!
-//! Every shipped adapter's `prompts/extract.md` stays under the 800
-//! non-blank-line cap, and its `## Worked example` parses as the SDK's
-//! `Evidence` and passes the claim gate — the one machine-checkable part of
-//! a prompt, and where a contract change in the engine pin fails first. An
-//! adapter that surveys by model embeds `prompts/survey.md` too, under the
-//! same cap, with a worked example that parses as the SDK's `Partition`.
-//! Reference presence is the embed-time walker's; the embedded prompt is
-//! `source.rs`'s.
+//! Each `prompts/extract.md` stays under the 800 non-blank-line cap, and its
+//! `## Worked example` parses as the SDK's `Evidence` and passes the claim
+//! gate — the one machine-checkable part of a prompt, and where a contract
+//! change in the engine pin fails first. An adapter that surveys by model
+//! embeds `prompts/survey.md` too, under the same cap, with a worked example
+//! that parses as the SDK's `Partition`. Reference presence is the embed-time
+//! walker's; the embedded prompt is `source.rs`'s.
 
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -18,9 +17,10 @@ use emery_sdk::{Evidence, SourceAdapter as _};
 // Every `sources/*` component must have a matching test here.
 test_programs::foreach_adapter!();
 
-/// The extraction prompt stays under the cap and its worked example passes
-/// the gate; a survey prompt, when embedded, stays under the cap and its
-/// worked example is a partition.
+/// Checks one adapter's corpus: the extraction prompt, and the survey prompt when embedded.
+///
+/// Each stays under the cap; the extraction example passes the gate and the
+/// survey example is a partition.
 fn corpus(docs: &[Doc]) {
     let prompt = body(docs, "prompts/extract.md").expect("`prompts/extract.md` is embedded");
     capped("prompts/extract.md", prompt);
@@ -37,8 +37,7 @@ fn corpus(docs: &[Doc]) {
     }
 }
 
-/// The survey prompt stays under the cap and its worked example parses as
-/// the SDK's `Partition`.
+/// Checks a survey prompt: under the cap, with a worked example that is a `Partition`.
 fn survey(prompt: &str) {
     capped("prompts/survey.md", prompt);
     let partition: Partition = serde_json::from_str(worked_example(prompt))
@@ -54,7 +53,7 @@ fn capped(path: &str, prompt: &str) {
     assert!(lines <= 800, "`{path}` carries {lines} non-blank lines (cap 800)");
 }
 
-/// The first JSON fence under `## Worked example`.
+/// Returns the first JSON fence under `## Worked example`.
 fn worked_example(prompt: &str) -> &str {
     let (_, section) =
         prompt.split_once("\n## Worked example").expect("the prompt carries a worked example");

@@ -1,9 +1,9 @@
-//! Scenario support
+//! Provides the one runner the seam suites share.
 //!
-//! The one runner the seam suites share: a component under the omnia
-//! runtime behind the `source_extract` driver, over a scripted host model —
-//! or a [`Barrier`] around one, which holds each completion until the rest
-//! of its party is pending too.
+//! The runner puts a component under the omnia runtime behind the
+//! `source_extract` driver, over a scripted host model — or a [`Barrier`]
+//! around one, which holds each completion until the rest of its party is
+//! pending too.
 
 // Compiled into every seam suite; each uses a subset.
 #![allow(dead_code, reason = "shared by suites that each use a subset")]
@@ -17,13 +17,15 @@ use omnia_wasi_model::{
     Answer, Error, FutureResult, Limits, Request, ToolHost, WasiModel, WasiModelCtx,
 };
 
-/// How long a held completion waits for the rest of its party before the
-/// barrier fails it: generous on a loaded CI box, paid only when the host
-/// serialises what the guest issued together.
+/// How long a held completion waits for the rest of its party.
+///
+/// Generous on a loaded CI box; paid only when the host serialises what the
+/// guest issued together.
 const HOLD: Duration = Duration::from_secs(5);
 
-/// A host model the runner holds to its script: every scripted turn
-/// consumed, none requested past it.
+/// A host model the runner holds to its script.
+///
+/// Every scripted turn is consumed, and none is requested past it.
 pub trait Strict: WasiModelCtx + Clone {
     /// The script and its record.
     fn script(&self) -> &ScriptedModel;
@@ -35,14 +37,13 @@ impl Strict for ScriptedModel {
     }
 }
 
-/// A [`ScriptedModel`] that answers a completion only once `parties` of
-/// them are pending at once.
+/// A [`ScriptedModel`] that answers a completion only once `parties` are pending.
 ///
-/// The property the SDK's fan-out rests on, made observable: a guest that
-/// issues its completions together sees them all answered, while a host
-/// that serialised them would hold the first alone until [`HOLD`] elapsed
-/// and fail it, naming the party that never arrived. The gate is reusable,
-/// so one barrier serves every `extract` a run makes.
+/// This makes the property the SDK's fan-out rests on observable. A guest
+/// that issues its completions together sees them all answered; a host that
+/// serialised them would hold the first alone until [`HOLD`] elapsed and fail
+/// it, naming the party that never arrived. The gate is reusable, so one
+/// barrier serves every `extract` a run makes.
 #[derive(Clone, Debug)]
 pub struct Barrier {
     inner: ScriptedModel,
@@ -91,9 +92,10 @@ impl WasiModelCtx for Barrier {
     }
 }
 
-/// Runs the driver in the mode `args` names against `adapter`, `project`
-/// mounted read-only as `.`; requires a clean exit and the script exactly
-/// consumed, and returns the model's record.
+/// Runs the driver in the mode `args` names against `adapter`.
+///
+/// `project` is mounted read-only as `.`. A clean exit and an exactly
+/// consumed script are required; the model's record is returned.
 pub async fn run<M: Strict>(adapter: &str, project: &Scratch, args: &[&str], model: M) -> M {
     let backends = Backends::defaults().await.model(model.clone());
     let status = Deployment::new()

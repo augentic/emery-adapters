@@ -108,7 +108,7 @@ fn main() {
 `src/lib.rs` is the whole wasm story — the guest shim is one macro invocation at the crate root, which declares the `wasm32`-only guest module itself and carries no logic:
 
 ```rust
-//! Changelog source adapter.
+//! Extracts claims from a tree of changelog entries.
 
 emery_sdk::source!(crate::Adapter);
 
@@ -134,7 +134,7 @@ use emery_sdk::{Context, Error, Material, Model, SourceAdapter, SourceContent, S
 
 use crate::registry;
 
-/// Extracts a bound changelog tree into structured claims.
+/// The adapter over a tree of changelog entries.
 #[derive(Debug)]
 pub struct Adapter;
 

@@ -1,4 +1,4 @@
-//! Every shipped component over `emery:adapter/source`
+//! Runs every shipped component over `emery:adapter/source` under the runtime.
 //!
 //! Each `sources/*` adapter runs under the omnia runtime, driven by the
 //! `source_extract` program against a scripted host model. The driver
@@ -17,8 +17,9 @@ use omnia_test::host::{Scratch, ScriptedModel, scratch};
 // Every `sources/*` component must have a matching test here.
 test_programs::foreach_adapter!();
 
-/// A gate-valid claims-only answer — the kind of source rides `metadata`,
-/// never the document.
+/// A gate-valid answer of claims alone.
+///
+/// The kind of source rides `metadata`, never the document.
 fn answer() -> String {
     serde_json::json!({
         "claims": [{
@@ -31,14 +32,15 @@ fn answer() -> String {
     .to_string()
 }
 
-/// The driver's answered legs against `component`, one answer per `extract`.
+/// Runs the driver's answered legs against `component`, one answer per `extract`.
 async fn extract(component: &str, project: &Scratch) -> ScriptedModel {
     let answer = answer();
     support::run(component, project, &[], ScriptedModel::answering([&answer, &answer])).await
 }
 
-/// `metadata` opened no completion; each `extract` opened one with `prompt`
-/// as its system.
+/// Asserts the completions the host saw: none from `metadata`, one per `extract`.
+///
+/// Each `extract`'s completion carries `prompt` as its system.
 fn prompted(model: &ScriptedModel, prompt: &str) {
     let seen = model.seen();
     assert_eq!(seen.len(), 2, "metadata opens no completion; each extract opens one");

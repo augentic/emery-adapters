@@ -1,6 +1,8 @@
-//! Intent sources carry the operator's free-form brief — inline
-//! (`value:`) or as a one-file tree. Extract preserves the brief
-//! verbatim and lifts its directives into requirement claims.
+//! The intent adapter: one material carrying the operator's brief verbatim.
+//!
+//! An intent source is the operator's free-form brief, given inline or as a
+//! one-file tree. It is never split: the brief is preserved verbatim and its
+//! directives are lifted into requirement claims.
 
 use std::future::{Future, ready};
 use std::path::{Path, PathBuf};
@@ -13,10 +15,10 @@ use emery_sdk::{
 
 use crate::registry;
 
-/// Intent source → one Evidence document.
+/// The adapter over an operator's brief.
 ///
-/// One `kind: intent` claim carries the brief verbatim, then one
-/// `requirement` claim per directive it states.
+/// Its document carries one `intent` claim with the brief verbatim, then one
+/// `requirement` claim per directive the brief states.
 #[derive(Debug)]
 pub struct Adapter;
 

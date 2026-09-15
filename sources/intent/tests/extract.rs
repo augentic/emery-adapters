@@ -1,8 +1,7 @@
-//! Intent's own extract behaviour
+//! Asserts what the intent adapter makes of its input before the one model call.
 //!
-//! What the adapter makes of its input before the one model call: the brief
-//! it accepts inline or reads from a one-file tree, and the refusals it
-//! fails closed with.
+//! The brief it accepts inline or reads from a one-file tree, and the
+//! refusals it fails closed with.
 
 use std::path::Path;
 

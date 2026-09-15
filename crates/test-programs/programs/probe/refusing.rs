@@ -1,5 +1,6 @@
-//! Refuses its input with `bad_request!` before touching the model — the
-//! WIT `invalid-request` arm.
+//! A probe refusing its input with `bad_request!` before touching the model.
+//!
+//! Its failure crosses the WIT `invalid-request` arm.
 
 #![cfg(target_arch = "wasm32")]
 

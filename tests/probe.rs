@@ -1,13 +1,16 @@
-//! The seam over the fixture adapters
+//! Proves the seam over the fixture adapters under the omnia runtime.
 //!
 //! Each probe under `crates/test-programs/programs/probe/` stands in for a
-//! shipped adapter under the omnia runtime: the WIT `error` arms lifting to
-//! their Omnia classes (`refusing`, `upstream`), every record field
-//! surviving the bindings (`echo`), what the SDK does for every adapter —
-//! the request, the reference tools, the lend, the spent-budget refusal —
-//! proved once over `gated` rather than per component, and the host
-//! property the SDK's fan-out rests on — the completions one guest issues
-//! together are pending together — guarded over `fanout`.
+//! shipped adapter:
+//!
+//! - `refusing` and `upstream`: the WIT `error` arms lift to their omnia
+//!   classes;
+//! - `echo`: every record field survives the bindings;
+//! - `gated`: what the SDK does for every adapter — the request, the
+//!   reference tools, the lend, the spent-budget refusal — proved once rather
+//!   than per component;
+//! - `fanout`: the host property the SDK's fan-out rests on — the completions
+//!   one guest issues together are pending together.
 
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -28,8 +31,9 @@ const EVIDENCE: &str = r#"{"claims":[
 /// A requirement without its `statement`.
 const UNSTATED: &str = r#"{"claims":[{"kind":"requirement","id":"orders.create"}]}"#;
 
-/// The driver's `refused` mode against `probe`, expecting `code`; the probe
-/// never reaches the model.
+/// Runs the driver's `refused` mode against `probe`, expecting `code`.
+///
+/// The probe never reaches the model.
 async fn refused_by(probe: &str, code: &str) {
     let model = run(probe, &scratch(), &["refused", code], ScriptedModel::default()).await;
     assert!(model.seen().is_empty(), "a probe never reaches the model");

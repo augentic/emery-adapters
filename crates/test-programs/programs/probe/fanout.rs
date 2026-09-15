@@ -1,6 +1,7 @@
-//! An adapter whose survey is two `Prepared` notes over a one-document
-//! corpus, so a suite can prove under the runtime that the host runs the
-//! completions one guest issues together — the property the SDK's fan-out
+//! A probe whose survey is two `Prepared` notes over a one-document corpus.
+//!
+//! A suite proves over it, under the runtime, that the host runs the
+//! completions one guest issues together: the property the SDK's fan-out
 //! rests on.
 
 #![cfg(target_arch = "wasm32")]

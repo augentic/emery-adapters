@@ -1,6 +1,9 @@
-//! What the programs share: the caller side of `emery:adapter/source`, the
-//! checks a driver runs over what crosses it, and the maximal evidence the
-//! `echo` probe answers. A program traps on the first check that fails.
+//! What the programs share: the caller side, the checks, and the maximal evidence.
+//!
+//! [`Caller`] is the import side of `emery:adapter/source`; the `check_*`
+//! functions are what a driver runs over what crosses it; [`maximal`] is the
+//! evidence the `echo` probe answers. A program traps on the first check that
+//! fails.
 
 use emery_adapter::source::{
     AdapterMetadata, Backing, Claim, ClaimKind, Evidence, Source, SourceContent, SourceInput,
@@ -10,19 +13,19 @@ use serde_json::json;
 /// The source key a program binds its input under.
 pub const KEY: &str = "source";
 
-/// The contract's import-side dispatch, so every call crosses the WIT
-/// bindings the engine uses.
+/// The import side of the contract, so every call crosses the bindings the
+/// engine uses.
 pub struct Caller;
 
 impl Source for Caller {}
 
-/// The host's arguments, the guest id stripped.
+/// Returns the host's arguments with the guest id stripped.
 #[must_use]
 pub fn arguments() -> Vec<String> {
     wasip3::cli::environment::get_arguments().into_iter().skip(1).collect()
 }
 
-/// An input lending the mounted project root.
+/// Returns an input lending the mounted project root.
 #[must_use]
 pub fn workspace() -> SourceInput {
     SourceInput {
@@ -31,7 +34,7 @@ pub fn workspace() -> SourceInput {
     }
 }
 
-/// An input carrying `text` inline, lending nothing.
+/// Returns an input carrying `text` inline, lending nothing.
 #[must_use]
 pub fn value(text: &str) -> SourceInput {
     SourceInput {
@@ -40,7 +43,7 @@ pub fn value(text: &str) -> SourceInput {
     }
 }
 
-/// An `emery-version` pin parses as the exact semver the engine's gate reads.
+/// Checks that an `emery-version` pin is the exact semver the engine's gate reads.
 ///
 /// # Panics
 ///
@@ -54,8 +57,7 @@ pub fn check_metadata(metadata: &AdapterMetadata) {
     }
 }
 
-/// Evidence that crossed the seam still passes the claim gate the engine
-/// re-runs on receipt.
+/// Checks that `evidence` still passes the claim gate the engine re-runs on receipt.
 ///
 /// # Panics
 ///
@@ -67,7 +69,9 @@ pub fn check_evidence(evidence: &Evidence) {
     assert!(findings.is_empty(), "claim gate findings:\n{}", findings.join("\n"));
 }
 
-/// `actual` is `expected` field for field (the records derive no `PartialEq`).
+/// Checks that `actual` is `expected` field for field.
+///
+/// The records derive no `PartialEq`, so the comparison is spelled out.
 ///
 /// # Panics
 ///
@@ -84,11 +88,11 @@ pub fn check_same(expected: &Evidence, actual: &Evidence) {
     }
 }
 
-/// Gate-valid evidence with every record field populated.
+/// Returns gate-valid evidence with every record field populated.
 ///
 /// One claim per kind, every `path` anchor form, both `backing` arms, a
-/// `synopsis`, and extras beyond strings — every branch the WIT bindings
-/// must conserve.
+/// `synopsis`, and extras beyond strings: every branch the WIT bindings must
+/// conserve.
 #[must_use]
 pub fn maximal() -> Evidence {
     Evidence {

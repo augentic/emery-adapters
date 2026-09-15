@@ -1,6 +1,9 @@
-//! Documentation sources are written trees — specifications, guides,
-//! decision records. Extract mines them one top-level directory at a time,
-//! each directory lent on its own, and joins the claims into one document.
+//! The documentation adapter and its survey by directory.
+//!
+//! A documentation source is a written tree — specifications, guides,
+//! decision records. The survey cuts it one top-level directory at a time,
+//! each mined under a lend no wider than itself, and the SDK joins the claims
+//! into one document.
 
 use std::future::{Future, ready};
 use std::path::Path;
@@ -12,7 +15,7 @@ use emery_sdk::{
 
 use crate::registry;
 
-/// Written specifications / documentation trees → one Evidence document.
+/// The adapter over a tree of written documentation.
 #[derive(Debug)]
 pub struct Adapter;
 

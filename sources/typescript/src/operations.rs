@@ -1,10 +1,11 @@
-//! TypeScript / JavaScript sources are code trees. Extract mines them one
-//! externally visible surface at a time — a route, a command, a job, an
-//! exported API — with the whole tree in view: which modules serve one
-//! surface is no directory layout's to state, so the survey asks the model
-//! once under `prompts/survey.md`; and a handler's behaviour runs through
-//! its imports and `tsconfig.json`, so each material is lent the root and
-//! told which files are its own.
+//! The TypeScript / JavaScript adapter and its survey by model.
+//!
+//! A code tree is mined one externally visible surface at a time — a route, a
+//! command, a job, an exported API — with the whole tree in view. Which
+//! modules serve one surface is no directory layout's to state, so the survey
+//! asks the model once under `prompts/survey.md`; and a handler's behaviour
+//! runs through its imports and `tsconfig.json`, so each material is lent the
+//! root and told which files are its own.
 
 use std::fmt::Write as _;
 use std::path::Path;
@@ -15,7 +16,7 @@ use emery_sdk::{Context, Error, Material, Model, SourceAdapter, SourceContent, S
 
 use crate::registry;
 
-/// TypeScript / JavaScript source trees → one code Evidence document.
+/// The adapter over a TypeScript or JavaScript source tree.
 #[derive(Debug)]
 pub struct Adapter;
 

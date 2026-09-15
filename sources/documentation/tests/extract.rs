@@ -1,9 +1,8 @@
-//! Documentation's own extract behaviour
+//! Asserts what the documentation adapter decides before the SDK's fan-out.
 //!
-//! What the adapter decides before the SDK's fan-out: how a tree cuts into
-//! materials — one `Within` per top-level directory that meets the floor,
-//! the rest of the tree as one more, and no cut at all when the tree is no
-//! finer than itself — with no model asked.
+//! How a tree cuts into materials — one `Within` per top-level directory that
+//! meets the floor, the rest of the tree as one more, and no cut at all when
+//! the tree is no finer than itself — with no model asked.
 
 use std::path::Path;
 

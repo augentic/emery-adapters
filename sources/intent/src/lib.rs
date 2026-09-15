@@ -1,4 +1,4 @@
-//! Intent source adapter.
+//! Extracts claims from an operator's written brief.
 
 #[cfg(feature = "export")]
 emery_sdk::source!(crate::Adapter);
