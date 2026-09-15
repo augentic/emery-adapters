@@ -30,7 +30,7 @@ The engine repository's [style.md](https://github.com/augentic/emery/blob/main/d
 
 - `sources/<name>/tests/extract.rs`: what the adapter itself decides — its material, its refusals — natively over `omnia_test::guest::Scripted`. Never pin prompt phrases; prompt quality is the live eval's.
 - Root `tests/`: the component boundary only, for every shipped component. `foreach_adapter!` and `foreach_probe!` make a new adapter or probe a compile error until `source.rs`, `prose.rs`, or `probe.rs` names it; such a test carries its adapter's or program's name (`intent`, `probe_echo`).
-- What the SDK does for every adapter (the request shape, the reference tools, the lend, the claim gate's repair and spent-rounds refusal) is asserted once in the SDK's own suite and once under the runtime over the `gated` probe — never per adapter.
+- What the SDK does for every adapter (the request shape, the reference tools, the lend, the claim gate's repair and spent-rounds refusal) is asserted once in the SDK's own suite and once under the runtime over the `gated` probe — never per adapter. The host property the SDK's fan-out rests on — the completions one guest issues together are pending together — is guarded once, over the `fanout` probe behind the support's `Barrier` model.
 - Always `cargo nextest`, and always `--workspace` from the root: a bare root run selects the root package alone and skips every adapter's suite.
 - The guest side (`crates/test-programs/programs/`, the adapters' export shims) is `cfg(target_arch = "wasm32")`, so `make lint` does not see it; lint it with the clippy command below.
 

@@ -1,0 +1,37 @@
+//! An adapter whose survey is two `Prepared` notes over a one-document
+//! corpus, so a suite can prove under the runtime that the host runs the
+//! completions one guest issues together — the property the SDK's fan-out
+//! rests on.
+
+#![cfg(target_arch = "wasm32")]
+
+emery_sdk::source!(crate::Adapter);
+
+use emery_prose::registry::Doc;
+use emery_sdk::{Context, Error, Material, SourceAdapter, SourceKind};
+
+const DOCS: &[Doc] = &[Doc {
+    path: "prompts/extract.md",
+    body: "SYSTEM",
+}];
+
+#[derive(Debug)]
+struct Adapter;
+
+impl SourceAdapter for Adapter {
+    const KIND: SourceKind = SourceKind::Documentation;
+    const SOURCE: &'static str = "fanout probe";
+
+    fn docs() -> &'static [Doc] {
+        DOCS
+    }
+
+    // Two materials whatever the input arm, so the provided `extract` holds
+    // two completions pending at once over a workspace and over a value.
+    fn survey(_ctx: &Context<'_>) -> Result<Vec<Material>, Error> {
+        Ok(vec![
+            Material::Prepared("The first half of the source.".to_owned()),
+            Material::Prepared("The second half of the source.".to_owned()),
+        ])
+    }
+}

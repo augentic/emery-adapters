@@ -4,6 +4,7 @@ Unreleased
 
 ### Changed
 
+- The seam suites gain the `fanout` probe and `probe_fanout`: a fixture adapter whose survey is two `Material::Prepared` notes, run over the support's `Barrier` — a `ScriptedModel` that answers a completion only once a party of them is pending and fails it after a bounded hold otherwise. It guards the host property the SDK's fan-out rests on, that the completions one guest issues together are pending together; `support::run` now takes any `Strict` host model rather than `ScriptedModel` alone.
 - Adapters declare `const KIND: SourceKind` (`emery_sdk::SourceKind`, formerly `Authority`) — the kind of source they read — and the Evidence they return carries it as `kind`; "authority" now names only the precedence those kinds rank by.
 - Cut to extract-only (ADR-0008 / ADR-0009): each source adapter exports `extract` + `metadata` only. Survey prompts, the target axis (`vectis`, `omnia`, `contracts`), and the extra extract sources (`captures`, `screenshots`) are deleted from the live tree — retrieve them at tag `v1`.
 - Engine crates import under their package names (`emery_sdk::`, `emery_prose::`, `emery_adapter::`). Until an engine release tag carries the extract-only SDK, `[patch.crates-io]` fetches `augentic/emery` by git (path patches stay commented for sibling co-development).
