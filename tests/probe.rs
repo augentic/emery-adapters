@@ -1,11 +1,16 @@
-//! The seam over the fixture adapters
+//! Proves the seam over the fixture adapters under the omnia runtime.
 //!
 //! Each probe under `crates/test-programs/programs/probe/` stands in for a
-//! shipped adapter under the omnia runtime: the WIT `error` arms lifting to
-//! their Omnia classes (`refusing`, `upstream`), every record field
-//! surviving the bindings (`echo`), and what the SDK does for every adapter
-//! — the request, the reference tools, the lend, the spent-budget refusal —
-//! proved once over `gated` rather than per component.
+//! shipped adapter:
+//!
+//! - `refusing` and `upstream`: the WIT `error` arms lift to their omnia
+//!   classes;
+//! - `echo`: every record field survives the bindings;
+//! - `gated`: what the SDK does for every adapter — the request, the
+//!   reference tools, the lend, the spent-budget refusal — proved once rather
+//!   than per component;
+//! - `fanout`: the host property the SDK's fan-out rests on — the completions
+//!   one guest issues together are pending together.
 
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -13,22 +18,22 @@ mod support;
 
 use omnia_test::host::{ScriptedModel, scratch};
 use serde_json::Value;
-use support::run;
+use support::{Barrier, Strict as _, run};
 
 // Every probe program must have a matching test here.
 test_programs::foreach_probe!();
 
 /// An answer the claim gate accepts.
-const EVIDENCE: &str = r#"{"authority":"documentation","claims":[
+const EVIDENCE: &str = r#"{"claims":[
     {"kind":"requirement","id":"orders.create","statement":"POST /orders creates an order."}
 ]}"#;
 
 /// A requirement without its `statement`.
-const UNSTATED: &str =
-    r#"{"authority":"documentation","claims":[{"kind":"requirement","id":"orders.create"}]}"#;
+const UNSTATED: &str = r#"{"claims":[{"kind":"requirement","id":"orders.create"}]}"#;
 
-/// The driver's `refused` mode against `probe`, expecting `code`; the probe
-/// never reaches the model.
+/// Runs the driver's `refused` mode against `probe`, expecting `code`.
+///
+/// The probe never reaches the model.
 async fn refused_by(probe: &str, code: &str) {
     let model = run(probe, &scratch(), &["refused", code], ScriptedModel::default()).await;
     assert!(model.seen().is_empty(), "a probe never reaches the model");
@@ -72,7 +77,10 @@ async fn probe_gated() {
         assert_eq!(request.tools, ["list_docs", "read_doc"], "the reference tools are declared");
         assert!(request.check, "each candidate is offered to the guest's check");
         let turn = &request.messages[0];
-        assert!(turn.contains("the gated probe source"), "the source noun names the turn: {turn}");
+        assert!(
+            turn.contains("bound to adapter `adapter`"),
+            "the adapter id names the turn: {turn}"
+        );
         assert!(turn.contains("(source key `source`)"), "the key names the turn: {turn}");
     }
     assert!(
@@ -104,6 +112,24 @@ async fn probe_gated() {
         assert_eq!(check.tool, "check");
         assert_eq!(check.outcome, Ok(String::new()), "the candidate passed the claim gate");
     }
+}
+
+// The property the SDK's fan-out rests on, under the runtime: the two
+// completions one `extract` issues together are both pending before either
+// is answered. The barrier holds each until the other arrives, so a host
+// that serialised a guest's completions fails inside its hold; the guard is
+// permanent, and pins neither the brief nor which turn served which
+// material.
+#[tokio::test]
+async fn probe_fanout() {
+    let model = Barrier::new(ScriptedModel::answering([EVIDENCE; 4]), 2);
+    let model = run(test_programs::PROBE_FANOUT, &scratch(), &[], model).await;
+
+    assert_eq!(
+        model.script().seen().len(),
+        4,
+        "each extract opens one completion per material, both pending at once"
+    );
 }
 
 // The gate rejects the only candidate and the budget is spent: the

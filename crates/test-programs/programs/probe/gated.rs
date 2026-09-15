@@ -1,13 +1,14 @@
-//! An adapter with nothing of its own — an inline two-document corpus over
-//! `Material::Bound` — so a suite can prove what the SDK does for every
-//! adapter under the runtime without riding a shipped prompt.
+//! A probe with nothing of its own: a two-document corpus over `Material::Bound`.
+//!
+//! A suite proves over it, under the runtime, what the SDK does for every
+//! adapter, without riding a shipped prompt.
 
 #![cfg(target_arch = "wasm32")]
 
 emery_sdk::source!(crate::Adapter);
 
 use emery_prose::registry::Doc;
-use emery_sdk::{Context, Error, Evidence, Material, Model, SourceAdapter};
+use emery_sdk::{Context, Error, Evidence, Material, Model, SourceAdapter, SourceKind};
 
 /// Sorted by path, as the walker emits them.
 const DOCS: &[Doc] = &[
@@ -25,7 +26,7 @@ const DOCS: &[Doc] = &[
 struct Adapter;
 
 impl SourceAdapter for Adapter {
-    const SOURCE: &'static str = "gated probe";
+    const KIND: SourceKind = SourceKind::Documentation;
 
     fn docs() -> &'static [Doc] {
         DOCS

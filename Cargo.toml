@@ -70,7 +70,7 @@ semver = "1.0.28"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 tempfile = "3.27.0"
-tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread", "sync", "time"] }
 wasip3 = "0.9.0"
 
 omnia = { version = "0.36.0", default-features = false, features = ["jit"] }
@@ -82,10 +82,6 @@ emery-adapter = "0.38.0"
 emery-prose = "0.38.0"
 emery-sdk = "0.38.0"
 
-# Workspace crates: the fixture pipeline and the shipped adapters' rlibs.
-# Default features off: a dependent rlib must not emit the adapter's WIT
-# export (the root-package examples call `source!` themselves). `cargo
-# build -p <name>` still uses the package's own default, which includes it.
 documentation = { path = "sources/documentation", default-features = false }
 intent = { path = "sources/intent", default-features = false }
 test-programs = { path = "crates/test-programs" }

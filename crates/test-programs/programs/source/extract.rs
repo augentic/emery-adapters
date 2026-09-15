@@ -1,12 +1,16 @@
-//! The driver over `emery:adapter/source`: `metadata`, then `extract` in
-//! the mode the host names as arguments — none (both `SourceInput` arms,
-//! each answer re-checked against the claim gate), `refused <code>` (the
-//! failure lifts to that Omnia class), or `echoed` (the answer is
-//! `maximal()` field for field).
+//! Drives one adapter over `emery:adapter/source`: `metadata`, then `extract`.
+//!
+//! The host names the mode as arguments:
+//!
+//! - none: `extract` over both `SourceInput` arms, each answer re-checked
+//!   against the claim gate;
+//! - `refused <code>`: the failure lifts to that omnia class;
+//! - `echoed`: the answer is `maximal()` field for field, and the metadata
+//!   carries the probe's kind.
 
 #![cfg(target_arch = "wasm32")]
 
-use emery_adapter::source::Source;
+use emery_adapter::source::{Source, SourceKind};
 use test_programs::{
     ADAPTER, Caller, arguments, check_evidence, check_metadata, check_same, maximal, value,
     workspace,
@@ -15,7 +19,8 @@ use test_programs::{
 omnia_guest::command!(scenario);
 
 async fn scenario() {
-    check_metadata(&Caller.metadata(ADAPTER));
+    let metadata = Caller.metadata(ADAPTER);
+    check_metadata(&metadata);
 
     let arguments = arguments();
     match arguments.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
@@ -45,6 +50,9 @@ async fn scenario() {
             );
         }
         ["echoed"] => {
+            // The kind crosses the bindings once, on `metadata`: the echo
+            // probe's constant is `Behaviour`.
+            assert_eq!(metadata.kind, SourceKind::Behaviour, "metadata carries the probe's kind");
             let evidence =
                 Caller.extract(ADAPTER, &value("")).await.expect("extract over an inline value");
             check_same(&maximal(), &evidence);

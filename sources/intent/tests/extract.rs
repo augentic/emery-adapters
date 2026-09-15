@@ -1,8 +1,7 @@
-//! Intent's own extract behaviour
+//! Asserts what the intent adapter makes of its input before the one model call.
 //!
-//! What the adapter makes of its input before the one model call: the brief
-//! it accepts inline or reads from a one-file tree, and the refusals it
-//! fails closed with.
+//! The brief it accepts inline or reads from a one-file tree, and the
+//! refusals it fails closed with.
 
 use std::path::Path;
 
@@ -12,7 +11,7 @@ use omnia_test::guest::Scripted;
 
 const BRIEF: &str = "Let users reset passwords by email.";
 
-const ANSWER: &str = r#"{"authority":"intent","claims":[
+const ANSWER: &str = r#"{"claims":[
     {"kind":"intent","id":"intent","statement":"Let users reset passwords by email."}
 ]}"#;
 

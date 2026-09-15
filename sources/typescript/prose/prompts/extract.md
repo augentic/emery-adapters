@@ -1,13 +1,14 @@
 # TypeScript / JavaScript source extract
 
-The engine invokes this prompt once per bound `typescript` source. Your job: walk the whole source tree under `$SOURCE_DIR`, read the code, and emit one Evidence document covering the behaviour the estate actually exhibits. The engine deterministically reconciles it with every other bound source's Evidence into the specification — see [From sources to a spec](../references/emery-runtime/reconciliation.md).
+This prompt runs once per material of a bound `typescript` source: the whole tree under `$SOURCE_DIR`, or — on a large estate, which is mined one surface per call, the modules that serve one route, command, job, or exported API, with what serves none in particular mined together last — the modules the message lists beneath it. Your job: read the code, and emit one Evidence document covering the behaviour those modules actually exhibit. The caller joins the calls' answers into the source's one document, and the engine deterministically reconciles it with every other bound source's Evidence into the specification — see [From sources to a spec](../references/emery-runtime/reconciliation.md).
 
 ## Inputs
 
-- **`$SOURCE_DIR`** — read-only view of the bound source root. Walk it; resolve `tsconfig.json` `paths` mappings relative to it. Absent when the source is an inline `value` (the material is then in the message).
+- **`$SOURCE_DIR`** — read-only view of the bound source root, always the whole tree. Resolve imports and `tsconfig.json` `paths` mappings relative to it. Absent when the source is an inline `value` (the material is then in the message).
+- **The modules to mine** — when the message lists them, those modules and no others; otherwise every module under `$SOURCE_DIR`. Follow an import out of the list to understand what a handler reaches — the repository it writes, the type it returns — but claim only what the listed modules exhibit: the rest of the tree is another call's material.
 - **Source key** — the kebab-case source key the engine passed on the WIT bindings.
 
-Nothing outside the bound source is reachable; writes back into `$SOURCE_DIR` are denied. Extract mines the entire estate in one pass: every entry point, handler, and domain module in scope.
+Nothing outside the bound source is reachable; writes back into `$SOURCE_DIR` are denied. Extract mines its material completely in one pass: every entry point, handler, and domain module among the listed ones.
 
 ## References
 
@@ -39,7 +40,7 @@ This adapter emits from the closed enum:
 
 **`requirement` claims are the reconciliation currency.** Only `kind: requirement` claims form the spec's requirements; `excerpt` / `type` / `call` claims reach synthesis as supporting context but can never agree, diverge, or conflict with another source. Every behavioural fact worth a spec block — a timeout value, a validation rule, an error response, a side effect — must be lifted into a `requirement` claim with a `statement`, anchored by its `path` and backed by detail claims. The gate is fail-closed ([claims.md](../references/emery-runtime/claims.md)): a `requirement` claim without a `statement` field fails the whole run closed (typed `bad_request`).
 
-`id` is **required** on `requirement` claims and follows the dotted-kebab grammar in claims.md (`session.timeout`). Derive ids from the domain concept — never from file paths or positions — so a documentation source describing the same behaviour converges on the same id and the engine can reconcile any disagreement. `id` is optional on `excerpt` / `type` / `call`; you MAY carry it when the claim backs a specific requirement.
+`id` is **required** on `requirement` claims and follows the dotted-kebab grammar in claims.md (`session.timeout`). Derive ids from the domain concept — never from file paths or positions — so a documentation source describing the same behaviour converges on the same id and the engine can reconcile any disagreement. Lead each id with the domain noun of the surface the listed modules implement (`orders.…`, `user-registration.…`): the other surfaces of the estate are mined by other calls and joined with this one, and two calls that name one requirement with reworded statements manufacture a conflict, so state a behaviour once, in the call that mines the module exhibiting it. `id` is optional on `excerpt` / `type` / `call`; you MAY carry it when the claim backs a specific requirement.
 
 Code states behaviour, not acceptance: emit `criterion` claims only when the source itself encodes an explicit acceptance boundary (a documented threshold constant, a schema constraint). Requirements without criteria surface as `[unknown]` acceptance gaps in the spec — that is honest output, not a failure to fix by inventing criteria.
 
@@ -65,7 +66,6 @@ Resulting Evidence body:
 
 ```json
 {
-  "authority": "behaviour",
   "claims": [
     { "kind": "requirement", "id": "user-registration.email-validation", "path": "src/users/register.ts#L12-L34", "statement": "Registration rejects an email that is not RFC-5322 valid with a 400 response." },
     { "kind": "requirement", "id": "user-registration.persistence", "path": "src/users/register.ts#L31", "statement": "A valid registration inserts the user and returns 201 with the persisted record." },
@@ -76,7 +76,7 @@ Resulting Evidence body:
 }
 ```
 
-Two requirements for the spec, three detail claims backing them. `authority` is fixed at `behaviour` for this adapter. The document's source identity is stamped by the engine from the source — it is not written in-document.
+Two requirements for the spec, three detail claims backing them. The document's source identity is stamped by the engine from the source — it is not written in-document.
 
 **Cover what the estate actually does.** A `POST /orders` handler that writes an orders store must carry that write as a `call` claim and its behaviour as a `requirement`; a handler that invokes an external service must carry that call site. Downstream correlation evidences invocation, read/write, and ownership relationships from these structured claims — do not bury them in `excerpt` prose, and do not write a second behavioural spec in prose instead of emitting the structured claims.
 
@@ -92,13 +92,14 @@ Relative paths only, no `..`, no leading `/`, never under `node_modules`, `vendo
 - **Tests-as-evidence.** Skip `*.test.*`, `*.spec.*`, `tests/`, `__tests__/`. Test files document expected behaviour; this adapter extracts observed behaviour from production source.
 - **Type-only `.d.ts` files.** A `.d.ts` declares ambient types, not behaviour. Use the originating `.ts` file when possible; emit no claim when only a `.d.ts` is reachable.
 - **Cross-source synthesis.** Do not reconcile this source's claims with another source's Evidence — that is the engine's job after every extract returns. Emit Evidence purely from `$SOURCE_DIR`.
+- **Claims from another call's modules.** When the message lists the modules to mine, a module outside the list is read to resolve what a listed one reaches, never claimed: its behaviour is another call's material, and claiming it twice manufactures conflicts.
 - **Whole-file paths without anchors.** A `path: src/users/register.ts` claim is legal under the schema but useless for review. Always anchor to the smallest meaningful range.
 
 ## Failure modes
 
 | Condition | Action |
 | --------- | ------ |
-| The tree holds no in-scope production source | Return `claims: []`; the engine preserves the gap rather than guessing. |
+| The material holds no in-scope production source | Return `claims: []`; the engine preserves the gap rather than guessing. |
 | Read denied outside `$SOURCE_DIR` | The host returns a typed path-denied error; no Evidence is written. |
 | Production source uses an out-of-scope framework only | Emit any in-scope claims; the gap surfaces as `[unknown]` requirements in the spec. |
 | The answer fails the claim gate (id grammar, or a claim missing its required field such as a `requirement`'s `statement`) | The caller rejects it and asks for a corrected answer with the findings; correct the named claims. |

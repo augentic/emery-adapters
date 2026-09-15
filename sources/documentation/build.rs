@@ -1,6 +1,6 @@
-//! Embeds every markdown document under `prose/` (rules included) as
-//! the sorted `DOCS` table `src/registry.rs` includes; symlinks
-//! resolve at build time.
+//! Embeds every Markdown document under `prose/` as the table `registry!` includes.
+//!
+//! Symlinks resolve at build time, so the shared runtime references ride along.
 
 fn main() {
     emery_prose::emit("prose");

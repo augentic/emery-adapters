@@ -1,5 +1,7 @@
-//! Fails with `bad_gateway!` before touching the model — the WIT `internal`
-//! arm every class but a refusal shares.
+//! A probe failing with `bad_gateway!` before touching the model.
+//!
+//! Its failure crosses the WIT `internal` arm, which every class but a
+//! refusal shares.
 
 #![cfg(target_arch = "wasm32")]
 
@@ -8,13 +10,13 @@ emery_sdk::source!(crate::Adapter);
 use std::future::{Future, ready};
 
 use emery_prose::registry::Doc;
-use emery_sdk::{Context, Error, Evidence, Model, SourceAdapter, bad_gateway};
+use emery_sdk::{Context, Error, Evidence, Model, SourceAdapter, SourceKind, bad_gateway};
 
 #[derive(Debug)]
 struct Adapter;
 
 impl SourceAdapter for Adapter {
-    const SOURCE: &'static str = "upstream probe";
+    const KIND: SourceKind = SourceKind::Documentation;
 
     fn docs() -> &'static [Doc] {
         &[]

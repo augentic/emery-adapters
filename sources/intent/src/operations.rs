@@ -1,33 +1,40 @@
-//! Intent sources carry the operator's free-form brief — inline
-//! (`value:`) or as a one-file tree. Extract preserves the brief
-//! verbatim and lifts its directives into requirement claims.
+//! The intent adapter: one material carrying the operator's brief verbatim.
+//!
+//! An intent source is the operator's free-form brief, given inline or as a
+//! one-file tree. It is never split: the brief is preserved verbatim and its
+//! directives are lifted into requirement claims.
 
+use std::future::{Future, ready};
 use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
 use emery_prose::registry::Doc;
 use emery_sdk::{
-    Context, Error, Evidence, Material, Model, SourceAdapter, SourceContent, bad_request,
+    Context, Error, Material, Model, SourceAdapter, SourceContent, SourceKind, bad_request,
 };
 
 use crate::registry;
 
-/// Intent source → one Evidence document under `authority: intent`.
+/// The adapter over an operator's brief.
 ///
-/// One `kind: intent` claim carries the brief verbatim, then one
-/// `requirement` claim per directive it states.
+/// Its document carries one `intent` claim with the brief verbatim, then one
+/// `requirement` claim per directive the brief states.
 #[derive(Debug)]
 pub struct Adapter;
 
 impl SourceAdapter for Adapter {
-    const SOURCE: &'static str = "intent";
+    const KIND: SourceKind = SourceKind::Intent;
 
     fn docs() -> &'static [Doc] {
         registry::docs()
     }
 
-    async fn extract<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Evidence, Error> {
-        Self::evidence(model, ctx, brief(&ctx.input.content)?).await
+    // A brief is never split: one material, whichever arm carries it, chosen
+    // without the model.
+    fn survey<P: Model>(
+        _model: &P, ctx: &Context<'_>,
+    ) -> impl Future<Output = Result<Vec<Material>, Error>> + Send {
+        ready(brief(&ctx.input.content).map(|material| vec![material]))
     }
 }
 

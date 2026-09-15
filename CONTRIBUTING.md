@@ -50,8 +50,9 @@ Identity lives in the guest crate's `Cargo.toml` `version` (the shared `[workspa
 Adapter prompts are markdown documents compiled into the guest and driven by the engine's `extract` dispatch. They are not skills: no YAML frontmatter, no discovery metadata.
 
 - **`prose/prompts/extract.md`** carries the whole extraction pass: the claim-kind table with each kind's required body field (the `emery_adapter::source::Evidence::findings` gate, run as the SDK's `SourceAdapter::evidence` check so the backend corrects a miss in place, and fail-closed engine-side, A8), the id-derivation rules reconciliation joins on, and the JSON output contract. Soft cap ~500 non-blank lines, hard cap 800 — above that, move material to `prose/references/`.
+- **`prose/prompts/survey.md`**, for an adapter that surveys by model, is the system prompt of its one survey call: what one group is for this source, how a module several groups reach is placed, and the `groups` answer — never a claim. Same caps; its `## Worked example` must parse as `emery_sdk::survey::Partition`.
 - **References are cited via relative markdown links, never inlined** — the `prose` crate's build-time embed includes Markdown documents and follows symlinks, so keep every relative reference resolvable.
-- Survey prompts are deleted, never ported (ADR-0008).
+- The v1 survey prompts were deleted, never ported (ADR-0008); the survey a model makes today chooses a cut and mines nothing.
 
 ## Engine pin and sibling co-development
 

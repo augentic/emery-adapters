@@ -29,6 +29,7 @@ emery-prose.workspace = true
 emery-prose = { workspace = true, features = ["emit"] }
 
 [dev-dependencies]
+tempfile.workspace = true
 tokio.workspace = true
 
 # The scripted model `tests/extract.rs` binds; the built component's seam

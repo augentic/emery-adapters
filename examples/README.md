@@ -41,7 +41,7 @@ emery show design
 
 Swap the config for [intent](intent/emery.toml), [typescript](typescript/emery.toml), or — with all three built — the combined [emery.toml](emery.toml).
 
-The config binds the built component by path relative to itself, read fresh on every run with no `digest` pin. A bare name still only dispatches guests declared in the runtime invocation, and the shipped `emery` binary declares none. Revision state lives under `.omnia/storage` in the invocation directory; each run replaces the last and reports the diff against it.
+The config binds the built component by path relative to itself, read fresh on every run. A bare name still only dispatches guests declared in the runtime invocation, and the shipped `emery` binary declares none. Revision state lives under `.omnia/storage` in the invocation directory; each run replaces the last and reports the diff against it.
 
 *Extract* and *synthesis* both complete through the Cursor backend. Each adapter answers reference-tool calls in-process the same way the [omnia-cursor example](https://github.com/augentic/omnia-backends/tree/main/examples/cursor) does.
 
