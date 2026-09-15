@@ -1,4 +1,4 @@
-//! The intent adapter: one material carrying the operator's brief verbatim.
+//! The intent adapter: one seam carrying the operator's brief verbatim.
 //!
 //! An intent source is the operator's free-form brief, given inline or as a
 //! one-file tree. It is never split: the brief is preserved verbatim and its
@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
 use emery_sdk::{
-    Context, Doc, Error, Material, Model, SourceAdapter, SourceContent, SourceKind, bad_request,
+    Context, Doc, Error, Model, Seam, SourceAdapter, SourceContent, SourceKind, bad_request,
 };
 
 use crate::registry;
@@ -28,30 +28,30 @@ impl SourceAdapter for Adapter {
         registry::docs()
     }
 
-    // A brief is never split: one material, whichever arm carries it, chosen
+    // A brief is never split: one seam, whichever arm carries it, chosen
     // without the model.
     fn survey<P: Model>(
         _model: &P, ctx: &Context<'_>,
-    ) -> impl Future<Output = Result<Vec<Material>, Error>> + Send {
-        ready(brief(&ctx.input.content).map(|material| vec![material]))
+    ) -> impl Future<Output = Result<Vec<Seam>, Error>> + Send {
+        ready(brief(&ctx.input.content).map(|seam| vec![seam]))
     }
 }
 
-// The operator's brief as the turn's material: an inline value rides as the
+// The operator's brief as the turn's seam: an inline value rides as the
 // SDK renders it; a one-file tree is read into a note of the same shape.
-fn brief(content: &SourceContent) -> Result<Material, Error> {
+fn brief(content: &SourceContent) -> Result<Seam, Error> {
     match content {
         SourceContent::Value(value) => {
             require_brief(value)?;
-            Ok(Material::Bound)
+            Ok(Seam::Whole)
         }
         // The SDK lends the tree as for any workspace input; the note puts
         // the brief in the turn without a tool round.
         SourceContent::Workspace(root) => {
             let intent = single_file_intent(Path::new(root))?;
             require_brief(&intent)?;
-            Ok(Material::Prepared(format!(
-                "The bound material is a one-file tree at `{root}`; the operator's intent \
+            Ok(Seam::Note(format!(
+                "The bound seam is a one-file tree at `{root}`; the operator's intent \
                  string is:\n\n{intent}\n\n\
                  Nothing else is reachable; extract mines only this source."
             )))

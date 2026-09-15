@@ -1,6 +1,6 @@
 [package]
 name = "test-programs"
-description = "Guest scenario programs driven by the seam suites, and the compiled artifacts they run — the shipped adapters among them"
+description = "Guest scenario programs driven by the component suites, and the compiled artifacts they run — the shipped adapters among them"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

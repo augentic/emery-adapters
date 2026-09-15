@@ -1,4 +1,4 @@
-//! Proves the seam over the fixture adapters under the omnia runtime.
+//! Proves the component boundary over the fixture adapters under the omnia runtime.
 //!
 //! Each probe under `crates/test-programs/programs/probe/` stands in for a
 //! shipped adapter:
@@ -61,7 +61,7 @@ async fn probe_echo() {
     assert!(model.seen().is_empty(), "a probe never reaches the model");
 }
 
-// The SDK's side of the seam, once under the runtime: the request, the
+// The SDK's side of the boundary, once under the runtime: the request, the
 // reference tools answered from the corpus, the lend following the input,
 // each candidate offered to the guest's `check`.
 #[tokio::test]
@@ -119,7 +119,7 @@ async fn probe_gated() {
 // is answered. The barrier holds each until the other arrives, so a host
 // that serialised a guest's completions fails inside its hold; the guard is
 // permanent, and pins neither the brief nor which turn served which
-// material.
+// seam.
 #[tokio::test]
 async fn probe_fanout() {
     let model = Barrier::new(ScriptedModel::answering([EVIDENCE; 4]), 2);
@@ -128,7 +128,7 @@ async fn probe_fanout() {
     assert_eq!(
         model.script().seen().len(),
         4,
-        "each extract opens one completion per material, both pending at once"
+        "each extract opens one completion per seam, both pending at once"
     );
 }
 

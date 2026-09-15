@@ -1,6 +1,6 @@
 [package]
 name = "emery-adapters"
-description = "The host side of the adapter workspace: the seam and corpus suites over every shipped component"
+description = "The host side of the adapter workspace: the component and corpus suites over every shipped component"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,9 +8,6 @@ repository.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
-# A tests-and-examples package: `tests/` drives the components
-# `crates/test-programs` builds, and `examples/` walks each adapter live.
-# The shipped `emery` binary is the host — there is no runtime example.
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 documentation.workspace = true
 emery-sdk.workspace = true
@@ -23,8 +20,6 @@ test-programs.workspace = true
 tokio.workspace = true
 typescript.workspace = true
 
-# The example cdylibs re-export each adapter through `source!` so
-# `cargo build --example <name> --target wasm32-wasip2` matches emery.
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 documentation.workspace = true
 emery-sdk.workspace = true
@@ -153,7 +148,7 @@ lto = true
 opt-level = 2
 strip = true
 
-# Optimise the JIT in debug builds: the seam suites run every component
+# Optimise the JIT in debug builds: the component suites run every component
 # through Cranelift at test time, and unoptimised codegen is ~10x slower.
 # Dependencies keep line tables only (workspace crates are unaffected):
 # wasmtime and Cranelift with full debuginfo dominate `target/`.

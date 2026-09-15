@@ -1,14 +1,14 @@
 # `documentation.extract`
 
-Mine the material this call is given — the whole bound documentation tree, or the documents the message lists beneath `$SOURCE_DIR` — and return one `Evidence` document of structured claims. A large tree is mined one directory per call; the caller joins the answers into the source's one document, so each call covers its material completely and nothing else. The engine deterministically reconciles the result with every other bound source's into the specification — see [From sources to a spec](../references/emery-runtime/reconciliation.md).
+Mine the seam this call is given — the whole bound documentation tree, or the documents the message lists beneath `$SOURCE_DIR` — and return one `Evidence` document of structured claims. A large tree is mined one directory per call; the caller joins the answers into the source's one document, so each call covers its seam completely and nothing else. The engine deterministically reconciles the result with every other bound source's into the specification — see [From sources to a spec](../references/emery-runtime/reconciliation.md).
 
 ## Inputs
 
-- `$SOURCE_DIR` — read-only view of the bound documentation tree, or of the one directory this call mines. Absent when the source is an inline `value` (the material is then in the message).
+- `$SOURCE_DIR` — read-only view of the bound documentation tree, or of the one directory this call mines. Absent when the source is an inline `value` (the seam is then in the message).
 - **The documents to mine** — when the message lists them, those documents and no others; otherwise every document under `$SOURCE_DIR`.
 - **Source key** — the authored source key the engine passed on the WIT bindings.
 
-Nothing outside `$SOURCE_DIR` is reachable. Extract mines its material completely in one pass: every listed document, top to bottom.
+Nothing outside `$SOURCE_DIR` is reachable. Extract mines its seam completely in one pass: every listed document, top to bottom.
 
 ## Claim kinds
 
@@ -23,7 +23,7 @@ Closed for this adapter:
 
 Other claim kinds are out of scope for this adapter. Ids, `path` anchors, and the fail-closed gate follow [claims.md](../references/emery-runtime/claims.md): `id` is required on `requirement` and `criterion` (dotted-kebab, derived from the docs' own noun phrases — `password-reset.expiry`, not `req-007`), a `criterion` id extends its requirement's id, every claim from the tree carries a `<path>#L<n>` anchor, and a claim missing its required body field fails the whole run closed (typed `bad_request`).
 
-Lead every id with the domain noun of the subject this material documents (`password-reset.…`, `orders.…`), never with a file or directory name. Other directories of the same tree are mined by other calls and joined with this one; two calls that name one requirement with reworded statements manufacture a conflict, so scope ids to the subject at hand and state each requirement once, where the docs state it.
+Lead every id with the domain noun of the subject this seam documents (`password-reset.…`, `orders.…`), never with a file or directory name. Other directories of the same tree are mined by other calls and joined with this one; two calls that name one requirement with reworded statements manufacture a conflict, so scope ids to the subject at hand and state each requirement once, where the docs state it.
 
 ## Output
 

@@ -3,7 +3,7 @@
 doc-valid-idents = ["TypeScript", "JavaScript"]
 
 # Transitive duplicates we do not control (pulled in via emery-sdk and,
-# for the seam suites, the omnia host stack). Clippy's cargo group
+# for the component suites, the omnia host stack). Clippy's cargo group
 # stays on; drop a name when `cargo tree --duplicates` is clean.
 allowed-duplicate-crates = [
   "base64",

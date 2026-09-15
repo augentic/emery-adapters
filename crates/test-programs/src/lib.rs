@@ -1,4 +1,4 @@
-//! Provides the guest programs the seam suites drive and the table of built components.
+//! Provides the guest programs the component suites drive and the table of built components.
 //!
 //! On `wasm32`, this crate is the programs' shared helpers. Natively, it is
 //! the artifact table `build.rs` generates: one path constant per compiled

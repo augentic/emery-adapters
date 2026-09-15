@@ -1,6 +1,6 @@
 # TypeScript / JavaScript source survey
 
-This prompt runs once per bound `typescript` source, before anything is extracted. The caller has listed the production modules under `$SOURCE_DIR` and asks how to cut them into materials: the groups of modules each extract call will mine as one. Your job: read the tree and group the listed modules by the externally visible surface they serve. You extract nothing. The caller mines each group under the [extract prompt](extract.md), lending the whole tree and naming the group's modules, then joins the calls' answers into the source's one Evidence document — see [From sources to a spec](../references/emery-runtime/reconciliation.md).
+This prompt runs once per bound `typescript` source, before anything is extracted. The caller has listed the production modules under `$SOURCE_DIR` and asks how to cut them into seams: the groups of modules each extract call will mine as one. Your job: read the tree and group the listed modules by the externally visible surface they serve. You extract nothing. The caller mines each group under the [extract prompt](extract.md), lending the whole tree and naming the group's modules, then joins the calls' answers into the source's one Evidence document — see [From sources to a spec](../references/emery-runtime/reconciliation.md).
 
 ## Inputs
 
@@ -62,7 +62,7 @@ Resulting survey answer:
 }
 ```
 
-Three surfaces. `src/index.ts`, `src/lib/db.ts`, and `src/lib/logger.ts` serve every surface and none in particular, so they are left out and the remainder mines them; under a floor of two, the one-module job folds into that remainder too, and the caller mines three materials: the users surface, the orders surface, and the rest.
+Three surfaces. `src/index.ts`, `src/lib/db.ts`, and `src/lib/logger.ts` serve every surface and none in particular, so they are left out and the remainder mines them; under a floor of two, the one-module job folds into that remainder too, and the caller mines three seams: the users surface, the orders surface, and the rest.
 
 ## Anti-patterns
 

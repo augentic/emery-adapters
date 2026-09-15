@@ -2,7 +2,7 @@
 //!
 //! - Which entries are production source, and so the candidates its one
 //!   survey turn offers.
-//! - How the model's partition becomes materials: one note per group that
+//! - How the model's partition becomes seams: one note per group that
 //!   meets the floor, the remainder as one more, each naming its files and
 //!   lent the root.
 //! - When no survey turn is spent at all: a tree no directory cut would
@@ -13,7 +13,7 @@
 
 use std::path::Path;
 
-use emery_sdk::{Context, Material, SourceAdapter as _, SourceContent, SourceInput, registry};
+use emery_sdk::{Context, Seam, SourceAdapter as _, SourceContent, SourceInput, registry};
 use omnia_test::guest::Scripted;
 use typescript::Adapter;
 
@@ -41,13 +41,13 @@ fn tree<const N: usize>(root: &Path, files: [&str; N]) {
     }
 }
 
-// Each material's note; anything else is not this adapter's survey.
-fn notes(materials: &[Material]) -> Vec<&str> {
-    materials
+// Each seam's note; anything else is not this adapter's survey.
+fn notes(seams: &[Seam]) -> Vec<&str> {
+    seams
         .iter()
-        .map(|material| match material {
-            Material::Prepared(note) => note.as_str(),
-            other => panic!("a typescript material is a prepared note, got {other:?}"),
+        .map(|seam| match seam {
+            Seam::Note(note) => note.as_str(),
+            other => panic!("a typescript seam is a note, got {other:?}"),
         })
         .collect()
 }
@@ -66,9 +66,9 @@ async fn bound_tree() {
     tree(root.path(), ["src/index.ts", "src/server.ts"]);
 
     let input = workspace(root.path());
-    let materials = Adapter::survey(&model, &ctx(&input)).await.expect("the tree is surveyed");
+    let seams = Adapter::survey(&model, &ctx(&input)).await.expect("the tree is surveyed");
 
-    assert_eq!(materials, [Material::Bound]);
+    assert_eq!(seams, [Seam::Whole]);
     assert!(model.seen().is_empty(), "no turn was spent");
 }
 
@@ -97,7 +97,7 @@ async fn two_directories() {
     );
 
     let input = workspace(root.path());
-    let materials = Adapter::survey(&model, &ctx(&input)).await.expect("the partition is accepted");
+    let seams = Adapter::survey(&model, &ctx(&input)).await.expect("the partition is accepted");
 
     let seen = model.seen();
     assert_eq!(seen.len(), 1, "one survey turn");
@@ -119,7 +119,7 @@ async fn two_directories() {
         "every production module is a candidate"
     );
 
-    let notes = notes(&materials);
+    let notes = notes(&seams);
     let named: Vec<_> = notes.iter().map(|note| named(note)).collect();
     assert_eq!(
         named,
@@ -163,12 +163,12 @@ async fn non_production() {
     );
 
     let input = workspace(root.path());
-    let materials = Adapter::survey(&model, &ctx(&input)).await.expect("the partition is accepted");
+    let seams = Adapter::survey(&model, &ctx(&input)).await.expect("the partition is accepted");
 
     let production =
         ["routes/orders.ts", "routes/users.ts", "services/index.ts", "services/mail.ts"];
     assert_eq!(named(&model.seen()[0].messages[0]), production, "the candidates offered");
-    let named: Vec<_> = notes(&materials).into_iter().map(named).collect();
+    let named: Vec<_> = notes(&seams).into_iter().map(named).collect();
     assert_eq!(named, [production]);
 }
 
@@ -185,10 +185,10 @@ async fn corrected_partition() {
     tree(root.path(), ["routes/orders.ts", "routes/users.ts", "services/orders.ts"]);
 
     let input = workspace(root.path());
-    let materials =
+    let seams =
         Adapter::survey(&model, &ctx(&input)).await.expect("the second partition is accepted");
 
-    let named: Vec<_> = notes(&materials).into_iter().map(named).collect();
+    let named: Vec<_> = notes(&seams).into_iter().map(named).collect();
     assert_eq!(named, [vec!["routes/orders.ts", "services/orders.ts"], vec!["routes/users.ts"]]);
     let exchanges = model.exchanges();
     assert_eq!(exchanges.len(), 2, "one rejection, one acceptance");
@@ -207,8 +207,8 @@ async fn inline_value() {
         content: SourceContent::Value("export const port = 8080;".to_string()),
     };
 
-    let materials = Adapter::survey(&model, &ctx(&input)).await.expect("a value is surveyed");
+    let seams = Adapter::survey(&model, &ctx(&input)).await.expect("a value is surveyed");
 
-    assert_eq!(materials, [Material::Bound]);
+    assert_eq!(seams, [Seam::Whole]);
     assert!(model.seen().is_empty(), "no turn was spent");
 }

@@ -46,10 +46,10 @@ async fn inline_value() {
 
     assert_eq!(evidence.claims.len(), 1);
     let turn = &model.seen()[0].messages[0];
-    assert!(turn.contains(BRIEF), "the brief is the material: {turn}");
+    assert!(turn.contains(BRIEF), "the brief is the seam: {turn}");
 }
 
-// Nested or not, the one file is read into the turn's material.
+// Nested or not, the one file is read into the turn's seam.
 #[tokio::test]
 async fn one_file() {
     let model = Scripted::answering([ANSWER]);
@@ -65,7 +65,7 @@ async fn one_file() {
     assert_eq!(evidence.claims.len(), 1);
     let turn = &model.seen()[0].messages[0];
     assert!(turn.contains(BRIEF), "the located file's contents are the intent string: {turn}");
-    assert!(turn.contains("one-file tree"), "the material names the tree source: {turn}");
+    assert!(turn.contains("one-file tree"), "the seam names the tree source: {turn}");
 }
 
 // No file, or several: a typed refusal before any model call.

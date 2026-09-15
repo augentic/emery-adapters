@@ -1,14 +1,14 @@
 # TypeScript / JavaScript source extract
 
-This prompt runs once per material of a bound `typescript` source: the whole tree under `$SOURCE_DIR`, or — on a large estate, which is mined one surface per call, the modules that serve one route, command, job, or exported API, with what serves none in particular mined together last — the modules the message lists beneath it. Your job: read the code, and emit one Evidence document covering the behaviour those modules actually exhibit. The caller joins the calls' answers into the source's one document, and the engine deterministically reconciles it with every other bound source's Evidence into the specification — see [From sources to a spec](../references/emery-runtime/reconciliation.md).
+This prompt runs once per seam of a bound `typescript` source: the whole tree under `$SOURCE_DIR`, or — on a large estate, which is mined one surface per call, the modules that serve one route, command, job, or exported API, with what serves none in particular mined together last — the modules the message lists beneath it. Your job: read the code, and emit one Evidence document covering the behaviour those modules actually exhibit. The caller joins the calls' answers into the source's one document, and the engine deterministically reconciles it with every other bound source's Evidence into the specification — see [From sources to a spec](../references/emery-runtime/reconciliation.md).
 
 ## Inputs
 
-- **`$SOURCE_DIR`** — read-only view of the bound source root, always the whole tree. Resolve imports and `tsconfig.json` `paths` mappings relative to it. Absent when the source is an inline `value` (the material is then in the message).
-- **The modules to mine** — when the message lists them, those modules and no others; otherwise every module under `$SOURCE_DIR`. Follow an import out of the list to understand what a handler reaches — the repository it writes, the type it returns — but claim only what the listed modules exhibit: the rest of the tree is another call's material.
+- **`$SOURCE_DIR`** — read-only view of the bound source root, always the whole tree. Resolve imports and `tsconfig.json` `paths` mappings relative to it. Absent when the source is an inline `value` (the seam is then in the message).
+- **The modules to mine** — when the message lists them, those modules and no others; otherwise every module under `$SOURCE_DIR`. Follow an import out of the list to understand what a handler reaches — the repository it writes, the type it returns — but claim only what the listed modules exhibit: the rest of the tree is another call's seam.
 - **Source key** — the kebab-case source key the engine passed on the WIT bindings.
 
-Nothing outside the bound source is reachable; writes back into `$SOURCE_DIR` are denied. Extract mines its material completely in one pass: every entry point, handler, and domain module among the listed ones.
+Nothing outside the bound source is reachable; writes back into `$SOURCE_DIR` are denied. Extract mines its seam completely in one pass: every entry point, handler, and domain module among the listed ones.
 
 ## References
 
@@ -92,14 +92,14 @@ Relative paths only, no `..`, no leading `/`, never under `node_modules`, `vendo
 - **Tests-as-evidence.** Skip `*.test.*`, `*.spec.*`, `tests/`, `__tests__/`. Test files document expected behaviour; this adapter extracts observed behaviour from production source.
 - **Type-only `.d.ts` files.** A `.d.ts` declares ambient types, not behaviour. Use the originating `.ts` file when possible; emit no claim when only a `.d.ts` is reachable.
 - **Cross-source synthesis.** Do not reconcile this source's claims with another source's Evidence — that is the engine's job after every extract returns. Emit Evidence purely from `$SOURCE_DIR`.
-- **Claims from another call's modules.** When the message lists the modules to mine, a module outside the list is read to resolve what a listed one reaches, never claimed: its behaviour is another call's material, and claiming it twice manufactures conflicts.
+- **Claims from another call's modules.** When the message lists the modules to mine, a module outside the list is read to resolve what a listed one reaches, never claimed: its behaviour is another call's seam, and claiming it twice manufactures conflicts.
 - **Whole-file paths without anchors.** A `path: src/users/register.ts` claim is legal under the schema but useless for review. Always anchor to the smallest meaningful range.
 
 ## Failure modes
 
 | Condition | Action |
 | --------- | ------ |
-| The material holds no in-scope production source | Return `claims: []`; the engine preserves the gap rather than guessing. |
+| The seam holds no in-scope production source | Return `claims: []`; the engine preserves the gap rather than guessing. |
 | Read denied outside `$SOURCE_DIR` | The host returns a typed path-denied error; no Evidence is written. |
 | Production source uses an out-of-scope framework only | Emit any in-scope claims; the gap surfaces as `[unknown]` requirements in the spec. |
 | The answer fails the claim gate (id grammar, or a claim missing its required field such as a `requirement`'s `statement`) | The caller rejects it and asks for a corrected answer with the findings; correct the named claims. |

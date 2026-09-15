@@ -2,10 +2,10 @@
 //!
 //! Each `sources/*` adapter runs under the omnia runtime, driven by the
 //! `source_extract` program against a scripted host model. The driver
-//! asserts what crosses the seam; this side asserts what the host alone
+//! asserts what crosses the boundary; this side asserts what the host alone
 //! sees of the component: `metadata` opened no completion, and each
 //! `extract`'s system prompt is the `prompts/extract.md` this build
-//! embedded. The SDK's side of the seam is `probe.rs`'s; an adapter's own
+//! embedded. The SDK's side of the boundary is `probe.rs`'s; an adapter's own
 //! behaviour is its `tests/extract.rs`'s.
 
 #![cfg(not(target_arch = "wasm32"))]
@@ -70,7 +70,7 @@ async fn intent() {
 
     prompted(&model, include_str!("../sources/intent/prose/prompts/extract.md"));
     let turn = &model.seen()[0].messages[0];
-    assert!(turn.contains(BRIEF), "the brief read through the mount is the material: {turn}");
+    assert!(turn.contains(BRIEF), "the brief read through the mount is the seam: {turn}");
 }
 
 #[tokio::test]

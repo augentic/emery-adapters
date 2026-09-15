@@ -1,13 +1,13 @@
 //! Asserts what the documentation adapter decides before the SDK's fan-out.
 //!
-//! How a tree cuts into materials — one `Within` per top-level directory that
+//! How a tree cuts into seams — one `Files` seam per top-level directory that
 //! meets the floor, the rest of the tree as one more, and no cut at all when
 //! the tree is no finer than itself — with no model asked.
 
 use std::path::Path;
 
 use documentation::Adapter;
-use emery_sdk::{Context, Material, SourceAdapter as _, SourceContent, SourceInput};
+use emery_sdk::{Context, Seam, SourceAdapter as _, SourceContent, SourceInput};
 use omnia_test::guest::Scripted;
 
 const fn ctx(input: &SourceInput) -> Context<'_> {
@@ -34,8 +34,8 @@ fn tree<const N: usize>(root: &Path, files: [&str; N]) {
     }
 }
 
-fn within<const N: usize>(files: [&str; N]) -> Material {
-    Material::Within(files.into_iter().map(str::to_string).collect())
+fn files<const N: usize>(paths: [&str; N]) -> Seam {
+    Seam::Files(paths.into_iter().map(str::to_string).collect())
 }
 
 // A tree of one directory cuts no finer than itself: the bound tree, whole,
@@ -47,13 +47,13 @@ async fn bound_tree() {
     tree(root.path(), ["guide/intro.md", "guide/setup.md"]);
 
     let input = workspace(root.path());
-    let materials = Adapter::survey(&model, &ctx(&input)).await.expect("the tree is surveyed");
+    let seams = Adapter::survey(&model, &ctx(&input)).await.expect("the tree is surveyed");
 
-    assert_eq!(materials, [Material::Bound]);
+    assert_eq!(seams, [Seam::Whole]);
     assert!(model.seen().is_empty(), "no turn was spent");
 }
 
-// Two directories that meet the floor are two materials, each its own
+// Two directories that meet the floor are two seams, each its own
 // documents; a one-document directory and the root's own files are the
 // third, so no document is left out of the survey. The cut is by directory:
 // the model is never asked.
@@ -74,21 +74,21 @@ async fn two_directories() {
     );
 
     let input = workspace(root.path());
-    let materials = Adapter::survey(&model, &ctx(&input)).await.expect("the tree is surveyed");
+    let seams = Adapter::survey(&model, &ctx(&input)).await.expect("the tree is surveyed");
 
     assert_eq!(
-        materials,
+        seams,
         [
-            within(["api/orders.md", "api/users.md"]),
-            within(["guide/intro.md", "guide/setup.md"]),
-            within(["README.md", "notes/todo.md"]),
+            files(["api/orders.md", "api/users.md"]),
+            files(["guide/intro.md", "guide/setup.md"]),
+            files(["README.md", "notes/todo.md"]),
         ]
     );
     assert!(model.seen().is_empty(), "no turn was spent");
 }
 
 // The engine's own files, wherever they sit, and dot entries are not
-// documentation: no material names them.
+// documentation: no seam names them.
 #[tokio::test]
 async fn engine_files() {
     let model = Scripted::default();
@@ -109,11 +109,11 @@ async fn engine_files() {
     );
 
     let input = workspace(root.path());
-    let materials = Adapter::survey(&model, &ctx(&input)).await.expect("the tree is surveyed");
+    let seams = Adapter::survey(&model, &ctx(&input)).await.expect("the tree is surveyed");
 
     assert_eq!(
-        materials,
-        [within(["api/orders.md", "api/users.md"]), within(["guide/intro.md", "guide/setup.md"]),]
+        seams,
+        [files(["api/orders.md", "api/users.md"]), files(["guide/intro.md", "guide/setup.md"]),]
     );
 }
 
@@ -126,7 +126,7 @@ async fn inline_value() {
         content: SourceContent::Value("Orders are placed over HTTP.".to_string()),
     };
 
-    let materials = Adapter::survey(&model, &ctx(&input)).await.expect("a value is surveyed");
+    let seams = Adapter::survey(&model, &ctx(&input)).await.expect("a value is surveyed");
 
-    assert_eq!(materials, [Material::Bound]);
+    assert_eq!(seams, [Seam::Whole]);
 }

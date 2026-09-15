@@ -1,11 +1,11 @@
-//! Provides the one runner the seam suites share.
+//! Provides the one runner the component suites share.
 //!
 //! The runner puts a component under the omnia runtime behind the
 //! `source_extract` driver, over a scripted host model — or a [`Barrier`]
 //! around one, which holds each completion until the rest of its party is
 //! pending too.
 
-// Compiled into every seam suite; each uses a subset.
+// Compiled into every component suite; each uses a subset.
 #![allow(dead_code, reason = "shared by suites that each use a subset")]
 
 use std::sync::Arc;

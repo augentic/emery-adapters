@@ -7,7 +7,7 @@ Emit one `Evidence` document from the operator's free-form brief. The engine rec
 - **Inline value** — the operator's brief, verbatim (no `$SOURCE_DIR` is lent), **or** a one-file tree whose single file's contents are the brief; the message names which and carries the string either way.
 - **Source key** — the authored source key the engine passed on the WIT bindings (typically `intent`).
 
-Nothing outside the bound material is reachable; extract works only from this value.
+Nothing outside the bound seam is reachable; extract works only from this value.
 
 ## Claim kinds
 
