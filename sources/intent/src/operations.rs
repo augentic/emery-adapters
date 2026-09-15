@@ -2,11 +2,14 @@
 //! (`value:`) or as a one-file tree. Extract preserves the brief
 //! verbatim and lifts its directives into requirement claims.
 
+use std::future::{Future, ready};
 use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
 use emery_prose::registry::Doc;
-use emery_sdk::{Context, Error, Material, SourceAdapter, SourceContent, SourceKind, bad_request};
+use emery_sdk::{
+    Context, Error, Material, Model, SourceAdapter, SourceContent, SourceKind, bad_request,
+};
 
 use crate::registry;
 
@@ -25,9 +28,12 @@ impl SourceAdapter for Adapter {
         registry::docs()
     }
 
-    // A brief is never split: one material, whichever arm carries it.
-    fn survey(ctx: &Context<'_>) -> Result<Vec<Material>, Error> {
-        Ok(vec![brief(&ctx.input.content)?])
+    // A brief is never split: one material, whichever arm carries it, chosen
+    // without the model.
+    fn survey<P: Model>(
+        _model: &P, ctx: &Context<'_>,
+    ) -> impl Future<Output = Result<Vec<Material>, Error>> + Send {
+        ready(brief(&ctx.input.content).map(|material| vec![material]))
     }
 }
 

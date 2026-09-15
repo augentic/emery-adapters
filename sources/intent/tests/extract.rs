@@ -45,7 +45,6 @@ async fn inline_value() {
     let evidence =
         Adapter::extract(&model, &ctx(&input)).await.expect("the scripted answer is accepted");
 
-    assert_eq!(evidence.kind, Adapter::KIND);
     assert_eq!(evidence.claims.len(), 1);
     let turn = &model.seen()[0].messages[0];
     assert!(turn.contains(BRIEF), "the brief is the material: {turn}");
@@ -64,7 +63,6 @@ async fn one_file() {
     let evidence =
         Adapter::extract(&model, &ctx(&input)).await.expect("the scripted answer is accepted");
 
-    assert_eq!(evidence.kind, Adapter::KIND);
     assert_eq!(evidence.claims.len(), 1);
     let turn = &model.seen()[0].messages[0];
     assert!(turn.contains(BRIEF), "the located file's contents are the intent string: {turn}");

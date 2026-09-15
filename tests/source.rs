@@ -17,7 +17,8 @@ use omnia_test::host::{Scratch, ScriptedModel, scratch};
 // Every `sources/*` component must have a matching test here.
 test_programs::foreach_adapter!();
 
-/// A gate-valid claims-only answer — the adapter stamps its own class.
+/// A gate-valid claims-only answer — the kind of source rides `metadata`,
+/// never the document.
 fn answer() -> String {
     serde_json::json!({
         "claims": [{

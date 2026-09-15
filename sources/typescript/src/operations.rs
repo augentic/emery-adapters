@@ -1,14 +1,17 @@
 //! TypeScript / JavaScript sources are code trees. Extract mines them one
-//! top-level directory at a time with the whole tree in view: a handler's
-//! behaviour runs through its imports and `tsconfig.json`, so each material
-//! is lent the root and told which files are its own.
+//! externally visible surface at a time — a route, a command, a job, an
+//! exported API — with the whole tree in view: which modules serve one
+//! surface is no directory layout's to state, so the survey asks the model
+//! once under `prompts/survey.md`; and a handler's behaviour runs through
+//! its imports and `tsconfig.json`, so each material is lent the root and
+//! told which files are its own.
 
 use std::fmt::Write as _;
 use std::path::Path;
 
 use emery_prose::registry::Doc;
 use emery_sdk::survey::{self, Entry};
-use emery_sdk::{Context, Error, Material, SourceAdapter, SourceContent, SourceKind};
+use emery_sdk::{Context, Error, Material, Model, SourceAdapter, SourceContent, SourceKind};
 
 use crate::registry;
 
@@ -16,9 +19,9 @@ use crate::registry;
 #[derive(Debug)]
 pub struct Adapter;
 
-// Source files a directory holds before it is mined on its own; a smaller
-// one folds into the root's material. A model call costs an agent start, so
-// a directory of one module is not worth one.
+// Source files a group holds before it is mined on its own; a smaller one
+// folds into the remainder's material. A model call costs an agent start, so
+// a surface of one module is not worth one.
 const FLOOR: usize = 2;
 
 // Directories holding no production source of the estate's own: dependencies,
@@ -41,11 +44,12 @@ impl SourceAdapter for Adapter {
         registry::docs()
     }
 
-    // One `Prepared` note per top-level directory of at least `FLOOR` source
-    // files and one for the rest of the tree, each lent the whole root and
-    // naming the files it mines. A tree that cuts no finer than itself, or an
-    // inline value, is the bound input whole — a single call, as before.
-    fn survey(ctx: &Context<'_>) -> Result<Vec<Material>, Error> {
+    // One `Prepared` note per group the model's survey cuts — the modules of
+    // one surface, of at least `FLOOR` files — and one for the rest of the
+    // tree, each lent the whole root and naming the files it mines. A tree
+    // no directory cut would split, or an inline value, is the bound input
+    // whole — a single call, with no survey turn spent on it.
+    async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Material>, Error> {
         let SourceContent::Workspace(root) = &ctx.input.content else {
             return Ok(vec![Material::Bound]);
         };
@@ -54,20 +58,24 @@ impl SourceAdapter for Adapter {
             Entry::Dir => !hidden(path) && !SKIP_DIRS.contains(&name(path)),
             Entry::File => production(path),
         })?;
-        let groups = survey::by_directory(files, FLOOR);
-        if groups.len() < 2 {
+        // A tree of one directory is too small to be worth a survey turn.
+        if survey::by_directory(files.clone(), FLOOR).len() < 2 {
             return Ok(vec![Material::Bound]);
         }
+
+        let groups = survey::by_model(model, ctx, registry::docs(), &files, FLOOR).await?;
         Ok(groups.into_iter().map(|group| Material::Prepared(note(root, &group))).collect())
     }
 }
 
 // The turn's material: the root is lent whole, so imports and `tsconfig.json`
-// resolve, and the files this call mines are named.
+// resolve, and the files this call mines — one surface's modules, or the rest
+// of the tree — are named.
 fn note(root: &str, files: &[String]) -> String {
     let mut note = format!(
         "`$SOURCE_DIR` is the read-only view at `{root}` — the TypeScript / JavaScript source \
-         tree. This call mines these files beneath it, and emits claims for them alone:"
+         tree. This call mines these files beneath it — the modules that serve one surface of \
+         the estate, or what serves none in particular — and emits claims for them alone:"
     );
     for file in files {
         // Writing to a `String` cannot fail.

@@ -1,13 +1,18 @@
 //! TypeScript's own extract behaviour
 //!
-//! What the adapter decides before the SDK's fan-out: how a tree cuts into
-//! materials — one note per top-level directory that meets the floor, the
-//! rest of the tree as one more, each naming its files and lent the root; no
-//! cut at all when the tree is no finer than itself; and which entries are
-//! not production source — and the noun its bound tree goes by in the turn.
+//! What the adapter decides before the SDK's fan-out: which entries are
+//! production source and so the candidates its one survey turn offers; how
+//! the model's partition becomes materials — one note per group that meets
+//! the floor, the remainder as one more, each naming its files and lent the
+//! root; when no survey turn is spent at all — a tree no directory cut would
+//! split, or an inline value, is the bound input whole; and the noun its
+//! bound tree goes by in the turn. What the survey call itself does for
+//! every adapter — the request shape, the check, the fold — is the SDK's
+//! suite's.
 
 use std::path::Path;
 
+use emery_prose::registry;
 use emery_sdk::{Context, Material, SourceAdapter as _, SourceContent, SourceInput};
 use omnia_test::guest::Scripted;
 use typescript::Adapter;
@@ -47,13 +52,14 @@ fn notes(materials: &[Material]) -> Vec<&str> {
         .collect()
 }
 
-// The files a note names to mine, in order.
-fn named(note: &str) -> Vec<&str> {
-    note.lines().filter_map(|line| line.strip_prefix("- `")?.strip_suffix('`')).collect()
+// The files a note names to mine, or a survey turn offers, in order.
+fn named(text: &str) -> Vec<&str> {
+    text.lines().filter_map(|line| line.strip_prefix("- `")?.strip_suffix('`')).collect()
 }
 
 // A tree of one directory cuts no finer than itself: the bound tree, whole,
-// in one turn that names the source by the adapter's noun.
+// in one turn that names the source by the adapter's noun — and no survey
+// turn before it.
 #[tokio::test]
 async fn bound_tree() {
     let model = Scripted::answering([r#"{"claims":[]}"#]);
@@ -64,16 +70,24 @@ async fn bound_tree() {
     let evidence =
         Adapter::extract(&model, &ctx(&input)).await.expect("the scripted answer is accepted");
 
-    assert_eq!(evidence.kind, Adapter::KIND);
-    let turn = &model.seen()[0].messages[0];
+    assert!(evidence.claims.is_empty(), "the scripted answer is returned as is");
+    let seen = model.seen();
+    assert_eq!(seen.len(), 1, "the extract turn alone; the tree is not surveyed");
+    let turn = &seen[0].messages[0];
     assert!(turn.contains("the TypeScript / JavaScript source tree"), "{turn}");
 }
 
-// Two directories that meet the floor are two notes, each naming its own
-// modules; a one-module directory and the root's own files are the third.
-// Every note lends the root, so an import into a sibling directory resolves.
-#[test]
-fn two_directories() {
+// A tree of several directories is surveyed once, under the embedded survey
+// prompt with the root lent and every production module offered. The
+// model's groups become notes in answer order; a group under the floor
+// folds, with every module the model left out, into the remainder's note,
+// last. Every note lends the root, so an import into a sibling resolves.
+#[tokio::test]
+async fn two_directories() {
+    let model = Scripted::answering([r#"{"groups":[
+        {"name":"/orders routes","files":["services/orders.ts","routes/orders.ts"]},
+        {"name":"/users routes","files":["routes/users.ts"]}
+    ]}"#]);
     let root = tempfile::tempdir().expect("a scratch tree");
     tree(
         root.path(),
@@ -88,29 +102,52 @@ fn two_directories() {
     );
 
     let input = workspace(root.path());
-    let materials = Adapter::survey(&ctx(&input)).expect("the tree is surveyed");
+    let materials = Adapter::survey(&model, &ctx(&input)).await.expect("the partition is accepted");
+
+    let seen = model.seen();
+    assert_eq!(seen.len(), 1, "one survey turn");
+    let request = &seen[0];
+    let prompt = registry::body(Adapter::docs(), "prompts/survey.md").expect("embedded");
+    assert_eq!(request.system.as_deref(), Some(prompt), "the survey prompt is the system");
+    let lend = root.path().display().to_string();
+    assert_eq!(request.workspace.as_deref(), Some(lend.as_str()), "the root is lent");
+    assert_eq!(
+        named(&request.messages[0]),
+        [
+            "index.ts",
+            "models/order.ts",
+            "routes/orders.ts",
+            "routes/users.ts",
+            "services/mail.ts",
+            "services/orders.ts",
+        ],
+        "every production module is a candidate"
+    );
 
     let notes = notes(&materials);
     let named: Vec<_> = notes.iter().map(|note| named(note)).collect();
     assert_eq!(
         named,
         [
-            vec!["routes/orders.ts", "routes/users.ts"],
-            vec!["services/mail.ts", "services/orders.ts"],
-            vec!["index.ts", "models/order.ts"],
+            vec!["routes/orders.ts", "services/orders.ts"],
+            vec!["index.ts", "models/order.ts", "routes/users.ts", "services/mail.ts"],
         ]
     );
-    let lend = format!("read-only view at `{}`", root.path().display());
+    let lend = format!("read-only view at `{lend}`");
     for note in notes {
         assert!(note.contains(&lend), "the root is lent: {note}");
     }
+    model.assert_exhausted();
 }
 
 // Dependencies, build output, tests, declaration files, and dot entries are
 // not production source, and a file this adapter does not read is not a
-// module: no note names them.
-#[test]
-fn non_production() {
+// module: the survey never offers them, so no group can name them. A model
+// that discerns no surface answers no groups, and the remainder mines the
+// tree whole.
+#[tokio::test]
+async fn non_production() {
+    let model = Scripted::answering([r#"{"groups":[]}"#]);
     let root = tempfile::tempdir().expect("a scratch tree");
     tree(
         root.path(),
@@ -131,27 +168,52 @@ fn non_production() {
     );
 
     let input = workspace(root.path());
-    let materials = Adapter::survey(&ctx(&input)).expect("the tree is surveyed");
+    let materials = Adapter::survey(&model, &ctx(&input)).await.expect("the partition is accepted");
 
+    let production =
+        ["routes/orders.ts", "routes/users.ts", "services/index.ts", "services/mail.ts"];
+    assert_eq!(named(&model.seen()[0].messages[0]), production, "the candidates offered");
     let named: Vec<_> = notes(&materials).into_iter().map(named).collect();
-    assert_eq!(
-        named,
-        [
-            vec!["routes/orders.ts", "routes/users.ts"],
-            vec!["services/index.ts", "services/mail.ts"],
-        ]
-    );
+    assert_eq!(named, [production]);
 }
 
-// An inline value has no tree to cut: the bound value, whole.
-#[test]
-fn inline_value() {
+// A partition the SDK's check refuses — here a module never offered — goes
+// back to the model, and the adapter's notes are cut from the partition
+// finally accepted, never the refused one.
+#[tokio::test]
+async fn corrected_partition() {
+    let model = Scripted::answering([
+        r#"{"groups":[{"name":"/orders routes","files":["routes/orders.ts","routes/ghost.ts"]}]}"#,
+        r#"{"groups":[{"name":"/orders routes","files":["routes/orders.ts","services/orders.ts"]}]}"#,
+    ]);
+    let root = tempfile::tempdir().expect("a scratch tree");
+    tree(root.path(), ["routes/orders.ts", "routes/users.ts", "services/orders.ts"]);
+
+    let input = workspace(root.path());
+    let materials =
+        Adapter::survey(&model, &ctx(&input)).await.expect("the second partition is accepted");
+
+    let named: Vec<_> = notes(&materials).into_iter().map(named).collect();
+    assert_eq!(named, [vec!["routes/orders.ts", "services/orders.ts"], vec!["routes/users.ts"]]);
+    let exchanges = model.exchanges();
+    assert_eq!(exchanges.len(), 2, "one rejection, one acceptance");
+    let correction = exchanges[0].outcome.as_ref().expect_err("the first partition is refused");
+    assert!(correction.contains("`routes/ghost.ts`"), "{correction}");
+    model.assert_exhausted();
+}
+
+// An inline value has no tree to cut: the bound value, whole, and no survey
+// turn spent on it.
+#[tokio::test]
+async fn inline_value() {
+    let model = Scripted::default();
     let input = SourceInput {
         key: "legacy-monolith".to_string(),
         content: SourceContent::Value("export const port = 8080;".to_string()),
     };
 
-    let materials = Adapter::survey(&ctx(&input)).expect("a value is surveyed");
+    let materials = Adapter::survey(&model, &ctx(&input)).await.expect("a value is surveyed");
 
     assert_eq!(materials, [Material::Bound]);
+    assert!(model.seen().is_empty(), "no turn was spent");
 }

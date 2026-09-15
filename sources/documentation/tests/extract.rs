@@ -3,7 +3,8 @@
 //! What the adapter decides before the SDK's fan-out: how a tree cuts into
 //! materials — one `Within` per top-level directory that meets the floor,
 //! the rest of the tree as one more, and no cut at all when the tree is no
-//! finer than itself — and the noun its bound tree goes by in the turn.
+//! finer than itself — with no model asked, and the noun its bound tree goes
+//! by in the turn.
 
 use std::path::Path;
 
@@ -51,16 +52,18 @@ async fn bound_tree() {
     let evidence =
         Adapter::extract(&model, &ctx(&input)).await.expect("the scripted answer is accepted");
 
-    assert_eq!(evidence.kind, Adapter::KIND);
+    assert!(evidence.claims.is_empty(), "the scripted answer is returned as is");
     let turn = &model.seen()[0].messages[0];
     assert!(turn.contains("the documentation source tree"), "{turn}");
 }
 
 // Two directories that meet the floor are two materials, each its own
 // documents; a one-document directory and the root's own files are the
-// third, so no document is left out of the survey.
-#[test]
-fn two_directories() {
+// third, so no document is left out of the survey. The cut is by directory:
+// the model is never asked.
+#[tokio::test]
+async fn two_directories() {
+    let model = Scripted::default();
     let root = tempfile::tempdir().expect("a scratch tree");
     tree(
         root.path(),
@@ -75,7 +78,7 @@ fn two_directories() {
     );
 
     let input = workspace(root.path());
-    let materials = Adapter::survey(&ctx(&input)).expect("the tree is surveyed");
+    let materials = Adapter::survey(&model, &ctx(&input)).await.expect("the tree is surveyed");
 
     assert_eq!(
         materials,
@@ -85,12 +88,14 @@ fn two_directories() {
             within(["README.md", "notes/todo.md"]),
         ]
     );
+    assert!(model.seen().is_empty(), "no turn was spent");
 }
 
 // The engine's own files, wherever they sit, and dot entries are not
 // documentation: no material names them.
-#[test]
-fn engine_files() {
+#[tokio::test]
+async fn engine_files() {
+    let model = Scripted::default();
     let root = tempfile::tempdir().expect("a scratch tree");
     tree(
         root.path(),
@@ -108,7 +113,7 @@ fn engine_files() {
     );
 
     let input = workspace(root.path());
-    let materials = Adapter::survey(&ctx(&input)).expect("the tree is surveyed");
+    let materials = Adapter::survey(&model, &ctx(&input)).await.expect("the tree is surveyed");
 
     assert_eq!(
         materials,
@@ -117,14 +122,15 @@ fn engine_files() {
 }
 
 // An inline value has no tree to cut: the bound value, whole.
-#[test]
-fn inline_value() {
+#[tokio::test]
+async fn inline_value() {
+    let model = Scripted::default();
     let input = SourceInput {
         key: "docs".to_string(),
         content: SourceContent::Value("Orders are placed over HTTP.".to_string()),
     };
 
-    let materials = Adapter::survey(&ctx(&input)).expect("a value is surveyed");
+    let materials = Adapter::survey(&model, &ctx(&input)).await.expect("a value is surveyed");
 
     assert_eq!(materials, [Material::Bound]);
 }

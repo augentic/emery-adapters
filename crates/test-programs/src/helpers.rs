@@ -4,7 +4,6 @@
 
 use emery_adapter::source::{
     AdapterMetadata, Backing, Claim, ClaimKind, Evidence, Source, SourceContent, SourceInput,
-    SourceKind,
 };
 use serde_json::json;
 
@@ -74,7 +73,6 @@ pub fn check_evidence(evidence: &Evidence) {
 ///
 /// Traps on the first field that differs, naming the claim and the field.
 pub fn check_same(expected: &Evidence, actual: &Evidence) {
-    assert_eq!(actual.kind, expected.kind, "kind");
     assert_eq!(actual.claims.len(), expected.claims.len(), "claim count");
     for (index, (want, got)) in expected.claims.iter().zip(&actual.claims).enumerate() {
         assert_eq!(got.kind, want.kind, "claim {index}: kind");
@@ -94,7 +92,6 @@ pub fn check_same(expected: &Evidence, actual: &Evidence) {
 #[must_use]
 pub fn maximal() -> Evidence {
     Evidence {
-        kind: SourceKind::Behaviour,
         claims: vec![
             claim(ClaimKind::Intent, Some("intent"), None, json!({ "statement": "Ship orders." })),
             Claim {
