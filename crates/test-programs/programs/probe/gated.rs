@@ -26,7 +26,6 @@ struct Adapter;
 
 impl SourceAdapter for Adapter {
     const KIND: SourceKind = SourceKind::Documentation;
-    const SOURCE: &'static str = "gated probe";
 
     fn docs() -> &'static [Doc] {
         DOCS

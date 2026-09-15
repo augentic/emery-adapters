@@ -16,7 +16,6 @@ struct Adapter;
 
 impl SourceAdapter for Adapter {
     const KIND: SourceKind = SourceKind::Behaviour;
-    const SOURCE: &'static str = "echo probe";
 
     fn docs() -> &'static [Doc] {
         &[]

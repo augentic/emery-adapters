@@ -4,11 +4,10 @@
 //! production source and so the candidates its one survey turn offers; how
 //! the model's partition becomes materials — one note per group that meets
 //! the floor, the remainder as one more, each naming its files and lent the
-//! root; when no survey turn is spent at all — a tree no directory cut would
-//! split, or an inline value, is the bound input whole; and the noun its
-//! bound tree goes by in the turn. What the survey call itself does for
-//! every adapter — the request shape, the check, the fold — is the SDK's
-//! suite's.
+//! root; and when no survey turn is spent at all — a tree no directory cut
+//! would split, or an inline value, is the bound input whole. What the
+//! survey call itself does for every adapter — the request shape, the check,
+//! the fold — is the SDK's suite's.
 
 use std::path::Path;
 
@@ -58,23 +57,18 @@ fn named(text: &str) -> Vec<&str> {
 }
 
 // A tree of one directory cuts no finer than itself: the bound tree, whole,
-// in one turn that names the source by the adapter's noun — and no survey
-// turn before it.
+// and no survey turn spent deciding so.
 #[tokio::test]
 async fn bound_tree() {
-    let model = Scripted::answering([r#"{"claims":[]}"#]);
+    let model = Scripted::default();
     let root = tempfile::tempdir().expect("a scratch tree");
     tree(root.path(), ["src/index.ts", "src/server.ts"]);
 
     let input = workspace(root.path());
-    let evidence =
-        Adapter::extract(&model, &ctx(&input)).await.expect("the scripted answer is accepted");
+    let materials = Adapter::survey(&model, &ctx(&input)).await.expect("the tree is surveyed");
 
-    assert!(evidence.claims.is_empty(), "the scripted answer is returned as is");
-    let seen = model.seen();
-    assert_eq!(seen.len(), 1, "the extract turn alone; the tree is not surveyed");
-    let turn = &seen[0].messages[0];
-    assert!(turn.contains("the TypeScript / JavaScript source tree"), "{turn}");
+    assert_eq!(materials, [Material::Bound]);
+    assert!(model.seen().is_empty(), "no turn was spent");
 }
 
 // A tree of several directories is surveyed once, under the embedded survey

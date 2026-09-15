@@ -73,7 +73,10 @@ async fn probe_gated() {
         assert_eq!(request.tools, ["list_docs", "read_doc"], "the reference tools are declared");
         assert!(request.check, "each candidate is offered to the guest's check");
         let turn = &request.messages[0];
-        assert!(turn.contains("the gated probe source"), "the source noun names the turn: {turn}");
+        assert!(
+            turn.contains("bound to adapter `adapter`"),
+            "the adapter id names the turn: {turn}"
+        );
         assert!(turn.contains("(source key `source`)"), "the key names the turn: {turn}");
     }
     assert!(

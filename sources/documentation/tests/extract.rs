@@ -3,8 +3,7 @@
 //! What the adapter decides before the SDK's fan-out: how a tree cuts into
 //! materials — one `Within` per top-level directory that meets the floor,
 //! the rest of the tree as one more, and no cut at all when the tree is no
-//! finer than itself — with no model asked, and the noun its bound tree goes
-//! by in the turn.
+//! finer than itself — with no model asked.
 
 use std::path::Path;
 
@@ -41,20 +40,18 @@ fn within<const N: usize>(files: [&str; N]) -> Material {
 }
 
 // A tree of one directory cuts no finer than itself: the bound tree, whole,
-// in one turn that names the source by the adapter's noun.
+// with no turn spent deciding so.
 #[tokio::test]
 async fn bound_tree() {
-    let model = Scripted::answering([r#"{"claims":[]}"#]);
+    let model = Scripted::default();
     let root = tempfile::tempdir().expect("a scratch tree");
     tree(root.path(), ["guide/intro.md", "guide/setup.md"]);
 
     let input = workspace(root.path());
-    let evidence =
-        Adapter::extract(&model, &ctx(&input)).await.expect("the scripted answer is accepted");
+    let materials = Adapter::survey(&model, &ctx(&input)).await.expect("the tree is surveyed");
 
-    assert!(evidence.claims.is_empty(), "the scripted answer is returned as is");
-    let turn = &model.seen()[0].messages[0];
-    assert!(turn.contains("the documentation source tree"), "{turn}");
+    assert_eq!(materials, [Material::Bound]);
+    assert!(model.seen().is_empty(), "no turn was spent");
 }
 
 // Two directories that meet the floor are two materials, each its own

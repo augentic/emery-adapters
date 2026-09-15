@@ -23,7 +23,6 @@ const FLOOR: usize = 2;
 
 impl SourceAdapter for Adapter {
     const KIND: SourceKind = SourceKind::Documentation;
-    const SOURCE: &'static str = "documentation";
 
     fn docs() -> &'static [Doc] {
         registry::docs()

@@ -38,7 +38,6 @@ const MARKERS: &[&str] = &["d", "test", "spec"];
 
 impl SourceAdapter for Adapter {
     const KIND: SourceKind = SourceKind::Behaviour;
-    const SOURCE: &'static str = "TypeScript / JavaScript";
 
     fn docs() -> &'static [Doc] {
         registry::docs()

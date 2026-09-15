@@ -22,7 +22,6 @@ pub struct Adapter;
 
 impl SourceAdapter for Adapter {
     const KIND: SourceKind = SourceKind::Intent;
-    const SOURCE: &'static str = "intent";
 
     fn docs() -> &'static [Doc] {
         registry::docs()
