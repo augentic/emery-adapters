@@ -17,7 +17,6 @@ workspace = true
 # `wasm32-wasip2`, beside every `sources/*` adapter component. The native side
 # has no dependencies: it is the generated artifact paths alone.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-emery-adapter.workspace = true
 emery-prose.workspace = true
 emery-sdk.workspace = true
 omnia-guest.workspace = true

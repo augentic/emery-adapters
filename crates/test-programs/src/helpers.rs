@@ -5,7 +5,7 @@
 //! evidence the `echo` probe answers. A program traps on the first check that
 //! fails.
 
-use emery_adapter::source::{
+use emery_sdk::{
     AdapterMetadata, Backing, Claim, ClaimKind, Evidence, Source, SourceContent, SourceInput,
 };
 use serde_json::json;

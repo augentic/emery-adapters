@@ -10,7 +10,7 @@
 
 #![cfg(target_arch = "wasm32")]
 
-use emery_adapter::source::{Source, SourceKind};
+use emery_sdk::{Source, SourceKind};
 use test_programs::{
     ADAPTER, Caller, arguments, check_evidence, check_metadata, check_same, maximal, value,
     workspace,
