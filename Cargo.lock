@@ -932,6 +932,7 @@ dependencies = [
  "emery-prose",
  "emery-sdk",
  "omnia-test",
+ "tempfile",
  "tokio",
 ]
 
@@ -1005,6 +1006,7 @@ dependencies = [
 name = "emery-sdk"
 version = "0.38.0"
 dependencies = [
+ "anyhow",
  "emery-adapter",
  "emery-prose",
  "futures",
@@ -4262,6 +4264,7 @@ dependencies = [
  "emery-prose",
  "emery-sdk",
  "omnia-test",
+ "tempfile",
  "tokio",
 ]
 

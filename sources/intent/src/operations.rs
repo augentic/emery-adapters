@@ -6,10 +6,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
 use emery_prose::registry::Doc;
-use emery_sdk::{
-    Context, Error, Evidence, Material, Model, SourceAdapter, SourceContent, SourceKind,
-    bad_request,
-};
+use emery_sdk::{Context, Error, Material, SourceAdapter, SourceContent, SourceKind, bad_request};
 
 use crate::registry;
 
@@ -28,8 +25,9 @@ impl SourceAdapter for Adapter {
         registry::docs()
     }
 
-    async fn extract<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Evidence, Error> {
-        Self::evidence(model, ctx, brief(&ctx.input.content)?).await
+    // A brief is never split: one material, whichever arm carries it.
+    fn survey(ctx: &Context<'_>) -> Result<Vec<Material>, Error> {
+        Ok(vec![brief(&ctx.input.content)?])
     }
 }
 
