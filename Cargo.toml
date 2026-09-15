@@ -13,7 +13,6 @@ publish.workspace = true
 # The shipped `emery` binary is the host — there is no runtime example.
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 documentation.workspace = true
-emery-prose.workspace = true
 emery-sdk.workspace = true
 intent.workspace = true
 omnia.workspace = true

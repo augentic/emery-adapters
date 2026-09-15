@@ -29,11 +29,11 @@ Four ideas carry the operation:
 
 - **The model is a parameter.** `extract` is generic over `emery_sdk::Model`. On wasm the macro binds `WasiModel`; native tests bind `omnia_test::guest::Scripted` with scripted answers. Your code never constructs a backend.
 - **The survey chooses the cut, and never mines.** `survey<P: Model>(model, ctx) -> impl Future<Output = Result<Vec<Material>, Error>> + Send` lists or reads the input and states the materials; it spends at most one model call, and only to decide the cut. A tree adapter lists its files with `emery_sdk::survey::files(root, keep)` — the engine's own `spec.md`, `design.md`, and `.omnia/` are pruned for it, everything else is its `keep` predicate's — and cuts them one of two ways. `survey::by_directory(files, floor)` is mechanical: one group per top-level directory holding at least `floor` files, the root's own files and every smaller directory folded into one remainder. `survey::by_model(model, ctx, docs, &files, floor).await` asks the model once, under the adapter's embedded `prompts/survey.md`, to group the files by what they serve — a route, a command, an exported API — which no directory layout states; the SDK lists the candidates in the turn, lends the root, checks the answer (a file never offered, a file in two groups, or an empty group goes back as findings), and folds every group under the floor with every file the model left out into one remainder, so coverage is total however the model grouped. Each group becomes the material its source kind calls for: `Material::Within(files)` lends the group's directory alone, so a documentation directory is mined under a grant no wider than itself; `Material::Prepared(note)` lends the whole root and tells the model which files are its own, which code needs — a handler's behaviour runs through its imports. A tree that cuts into fewer than two groups, and an inline value, are one `Material::Bound` with no survey turn spent: today's single call, unchanged. The default `survey` is that one `Bound` material. A survey that asks nothing is not an `async fn`; it returns `std::future::ready(..)` over the materials it computed.
-- **Prose is embedded at build time.** `build.rs` calls `emery_prose::emit("prose")` (the `emit` feature, enabled on the build-dependency only), which walks the adapter's `prose/` tree into a sorted `DOCS` table; `emery_prose::registry!()` exposes it as `registry::docs()`, and the SDK's `SourceAdapter::prompt` reads `prompts/extract.md` from it. A dangling relative link in any prose document fails the build. The engine repository's mock adapter ([`examples/adapter/lib.rs`](https://github.com/augentic/emery/blob/main/examples/adapter/lib.rs)) embeds its prose the same way and is the smallest complete example of the shape. Each judgment declares `list_docs` / `read_doc` function tools and answers the model's calls in-process from that embedded corpus, so prompts cite references by relative link instead of inlining them.
+- **Prose is embedded at build time.** `build.rs` calls `emery_prose::emit("prose")` (the `emit` feature, enabled on the build-dependency only), which walks the adapter's `prose/` tree into a sorted `DOCS` table; `emery_sdk::registry!()` exposes it as `registry::docs()`, and the SDK's `SourceAdapter::prompt` reads `prompts/extract.md` from it. A dangling relative link in any prose document fails the build. The engine repository's mock adapter ([`examples/adapter/lib.rs`](https://github.com/augentic/emery/blob/main/examples/adapter/lib.rs)) embeds its prose the same way and is the smallest complete example of the shape. Each judgment declares `list_docs` / `read_doc` function tools and answers the model's calls in-process from that embedded corpus, so prompts cite references by relative link instead of inlining them.
 - **Answers are steered by schema and judged by the gate.** For each material, the SDK's `Self::evidence(model, ctx, material)` asks one `omnia_guest::model::Question<Evidence>`: the embedded `prompts/extract.md` is the system prompt, the contract's claims-only `Evidence` schema rides the request as a steering hint (the claim-id grammar as its `pattern`; a document-level `kind` is an unknown field the backend corrects), and the claim gate is the request's `check` — run over every candidate the backend proposes, with a miss handed back as the correction (`## Previous answer (rejected)` / `## Findings`) so the backend asks again within its own round budget. The adapter never sees the reply text; the SDK gets the accepted claims, or a `bad_request` carrying the last findings once the rounds are spent. `Material::Bound` renders the ordinary workspace or inline value (a workspace as "the source tree the prompt walks"); `Material::Within(files)` renders the lent directory and the files to mine beneath it; `Material::Prepared(note)` admits a source-specific material note after the adapter validates or reads its input.
 - **Failures are Omnia errors.** Every operation fails with `emery_sdk::Error` (omnia's `omnia_guest::Error`), built with the re-exported `bad_request!` / `server_error!` / `bad_gateway!` macros — there is no adapter error type. Classify by who acts: a source the adapter cannot accept (an empty brief, a tree that is not the expected shape) is `bad_request!`; an unreadable file or a failed upstream is `server_error!` / `bad_gateway!`. The SDK lowers the class to the WIT `error` variant at the export, the engine lifts it back, and it surfaces to the operator as the matching exit code.
 
-For the type-level contract — `Context`, `SourceInput`, `Evidence`, the answer schemas — generate the SDK docs locally with `cargo doc -p emery-sdk --open`. The WIT bindings types are defined in the `emery-adapter` contract crate (its `source` axis module) and re-exported at the SDK's root, so an adapter names `emery_sdk::{Context, Evidence, SourceContent, …}` and never depends on `emery-adapter` directly.
+For the type-level contract — `Context`, `SourceInput`, `Evidence`, the answer schemas — generate the SDK docs locally with `cargo doc -p emery-sdk --open`. The WIT bindings types are defined in the `emery-adapter` contract crate (its `source` axis module) and re-exported at the SDK's root, so an adapter names `emery_sdk::{Context, Evidence, SourceContent, …}` and never depends on `emery-adapter` directly. The prose registry is re-exported the same way — `emery_sdk::Doc`, `emery_sdk::registry`, `emery_sdk::registry!` — so an adapter's `[dependencies]` is `emery-sdk` alone; `emery-prose` is only the build dependency that runs `emit`.
 
 ## Walkthrough
 
@@ -77,7 +77,6 @@ crate-type = ["cdylib", "rlib"]
 workspace = true
 
 [dependencies]
-emery-prose.workspace = true
 emery-sdk.workspace = true
 
 [build-dependencies]
@@ -91,7 +90,7 @@ tokio.workspace = true
 omnia-test = { workspace = true, features = ["guest"] }
 ```
 
-`emery-prose` appears twice on purpose: the runtime dependency carries only the `Doc` registry, the build dependency turns on the `emit` walker. `cdylib` is the Wasm component; `rlib` is what native tests link. `tempfile` stages the trees the survey tests cut. The one native-only dev-dependency is `omnia-test`'s `guest` feature, the scripted model the native suite binds; the runtime the built component runs under is the root package's, not the adapter's. The identity SemVer is the shared `[workspace.package] version` — adapters version together.
+`emery-prose` is a build dependency alone: it turns on the `emit` walker, and the `Doc` registry over the table it writes reaches the adapter through `emery_sdk::registry!` and `emery_sdk::Doc`. `cdylib` is the Wasm component; `rlib` is what native tests link. `tempfile` stages the trees the survey tests cut. The one native-only dev-dependency is `omnia-test`'s `guest` feature, the scripted model the native suite binds; the runtime the built component runs under is the root package's, not the adapter's. The identity SemVer is the shared `[workspace.package] version` — adapters version together.
 
 ### 2. Embed the prose
 
@@ -114,7 +113,7 @@ emery_sdk::source!(crate::Adapter);
 
 mod operations;
 mod registry {
-    emery_prose::registry!();
+    emery_sdk::registry!();
 }
 
 pub use operations::Adapter;
@@ -128,9 +127,8 @@ pub use operations::Adapter;
 use std::future::{Future, ready};
 use std::path::Path;
 
-use emery_prose::registry::Doc;
 use emery_sdk::survey;
-use emery_sdk::{Context, Error, Material, Model, SourceAdapter, SourceContent, SourceKind};
+use emery_sdk::{Context, Doc, Error, Material, Model, SourceAdapter, SourceContent, SourceKind};
 
 use crate::registry;
 

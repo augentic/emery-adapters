@@ -9,8 +9,7 @@ emery_sdk::source!(crate::Adapter);
 
 use std::future::{Future, ready};
 
-use emery_prose::registry::Doc;
-use emery_sdk::{Context, Error, Evidence, Model, SourceAdapter, SourceKind, bad_gateway};
+use emery_sdk::{Context, Doc, Error, Evidence, Model, SourceAdapter, SourceKind, bad_gateway};
 
 #[derive(Debug)]
 struct Adapter;

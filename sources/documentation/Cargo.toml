@@ -23,7 +23,6 @@ workspace = true
 
 [dependencies]
 emery-sdk.workspace = true
-emery-prose.workspace = true
 
 [build-dependencies]
 emery-prose = { workspace = true, features = ["emit"] }

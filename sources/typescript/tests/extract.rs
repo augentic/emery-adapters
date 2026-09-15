@@ -13,8 +13,7 @@
 
 use std::path::Path;
 
-use emery_prose::registry;
-use emery_sdk::{Context, Material, SourceAdapter as _, SourceContent, SourceInput};
+use emery_sdk::{Context, Material, SourceAdapter as _, SourceContent, SourceInput, registry};
 use omnia_test::guest::Scripted;
 use typescript::Adapter;
 

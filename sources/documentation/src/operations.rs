@@ -8,9 +8,8 @@
 use std::future::{Future, ready};
 use std::path::Path;
 
-use emery_prose::registry::Doc;
 use emery_sdk::{
-    Context, Error, Material, Model, SourceAdapter, SourceContent, SourceKind, survey,
+    Context, Doc, Error, Material, Model, SourceAdapter, SourceContent, SourceKind, survey,
 };
 
 use crate::registry;

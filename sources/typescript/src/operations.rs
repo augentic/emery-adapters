@@ -10,9 +10,8 @@
 use std::fmt::Write as _;
 use std::path::Path;
 
-use emery_prose::registry::Doc;
 use emery_sdk::survey::{self, Entry};
-use emery_sdk::{Context, Error, Material, Model, SourceAdapter, SourceContent, SourceKind};
+use emery_sdk::{Context, Doc, Error, Material, Model, SourceAdapter, SourceContent, SourceKind};
 
 use crate::registry;
 

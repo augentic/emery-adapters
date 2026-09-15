@@ -8,9 +8,8 @@ use std::future::{Future, ready};
 use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
-use emery_prose::registry::Doc;
 use emery_sdk::{
-    Context, Error, Material, Model, SourceAdapter, SourceContent, SourceKind, bad_request,
+    Context, Doc, Error, Material, Model, SourceAdapter, SourceContent, SourceKind, bad_request,
 };
 
 use crate::registry;

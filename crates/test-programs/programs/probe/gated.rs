@@ -7,8 +7,7 @@
 
 emery_sdk::source!(crate::Adapter);
 
-use emery_prose::registry::Doc;
-use emery_sdk::{Context, Error, Evidence, Material, Model, SourceAdapter, SourceKind};
+use emery_sdk::{Context, Doc, Error, Evidence, Material, Model, SourceAdapter, SourceKind};
 
 /// Sorted by path, as the walker emits them.
 const DOCS: &[Doc] = &[

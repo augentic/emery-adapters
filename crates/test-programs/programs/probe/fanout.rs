@@ -10,8 +10,7 @@ emery_sdk::source!(crate::Adapter);
 
 use std::future::{Future, ready};
 
-use emery_prose::registry::Doc;
-use emery_sdk::{Context, Error, Material, Model, SourceAdapter, SourceKind};
+use emery_sdk::{Context, Doc, Error, Material, Model, SourceAdapter, SourceKind};
 
 const DOCS: &[Doc] = &[Doc {
     path: "prompts/extract.md",

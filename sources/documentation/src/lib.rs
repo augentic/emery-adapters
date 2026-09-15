@@ -5,7 +5,7 @@ emery_sdk::source!(crate::Adapter);
 
 mod operations;
 mod registry {
-    emery_prose::registry!();
+    emery_sdk::registry!();
 }
 
 pub use operations::Adapter;

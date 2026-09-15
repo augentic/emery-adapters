@@ -983,7 +983,6 @@ name = "emery-adapters"
 version = "0.13.0"
 dependencies = [
  "documentation",
- "emery-prose",
  "emery-sdk",
  "intent",
  "omnia",
@@ -3859,7 +3858,6 @@ dependencies = [
 name = "test-programs"
 version = "0.13.0"
 dependencies = [
- "emery-prose",
  "emery-sdk",
  "omnia-guest",
  "omnia-test",

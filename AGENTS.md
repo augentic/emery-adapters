@@ -6,13 +6,13 @@ Emery's first-party **source adapters**. Each `sources/<name>` is one crate ship
 
 | Path | Role |
 | --- | --- |
-| `sources/<name>/` | One adapter: `Cargo.toml` (`cdylib` + `rlib`); `build.rs` = `emery_prose::emit("prose")`; `src/lib.rs` = `emery_sdk::source!(crate::Adapter)` + `registry!`; `src/operations.rs` = `impl SourceAdapter`; `prose/{prompts/extract.md, references/, rules/}`; `tests/extract.rs` |
+| `sources/<name>/` | One adapter: `Cargo.toml` (`cdylib` + `rlib`; `[dependencies]` is `emery-sdk` alone, `emery-prose` the `emit` build dependency); `build.rs` = `emery_prose::emit("prose")`; `src/lib.rs` = `emery_sdk::source!(crate::Adapter)` + `emery_sdk::registry!()`; `src/operations.rs` = `impl SourceAdapter`; `prose/{prompts/extract.md, references/, rules/}`; `tests/extract.rs` |
 | `codex/references/runtime/` | Shared references, reached through each adapter's `prose/references/emery-runtime` symlink |
 | `crates/test-programs/` | omnia's `test-programs` pattern: guest programs (`programs/source/extract.rs` drives the seam; `programs/probe/*` are fixture adapters) and the generated table of every built component |
 | `tests/` | Root seam suites over the built components under the omnia runtime: `source.rs`, `probe.rs`, `prose.rs`; the runner in `support/mod.rs` |
 | `examples/` | Root-package `[[example]]` cdylibs (`documentation`, `intent`, `typescript`) plus the `emery.toml` configs the shipped `emery` binary runs ([examples/README.md](examples/README.md)) |
 
-The root `emery-adapters` package is tests only. Engine crates (`emery-adapter`, `emery-prose`, `emery-sdk`) are git-pinned in `[patch.crates-io]`; uncomment the path patches for sibling co-development and never commit them.
+The root `emery-adapters` package is tests only. The engine crates this workspace depends on — `emery-sdk`, and `emery-prose` for the build-time `emit` walker — are git-pinned in `[patch.crates-io]`; the contract crate `emery-adapter` arrives beneath `emery-sdk` and is never named here. Uncomment the path patches for sibling co-development and never commit them.
 
 ## Invariants
 

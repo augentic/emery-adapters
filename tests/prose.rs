@@ -10,9 +10,9 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use emery_prose::registry::{Doc, body};
+use emery_sdk::registry::body;
 use emery_sdk::survey::Partition;
-use emery_sdk::{Evidence, SourceAdapter as _};
+use emery_sdk::{Doc, Evidence, SourceAdapter as _};
 
 // Every `sources/*` component must have a matching test here.
 test_programs::foreach_adapter!();
