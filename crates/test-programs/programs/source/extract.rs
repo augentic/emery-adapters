@@ -16,7 +16,7 @@ use test_programs::{
     workspace,
 };
 
-omnia_guest::command!(scenario);
+omnia_sdk::command!(scenario);
 
 async fn scenario() {
     let metadata = Caller.metadata(ADAPTER);

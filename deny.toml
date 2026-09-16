@@ -2,8 +2,7 @@
 
 [graph]
 all-features = true
-# Only what is built: the CI and dev hosts the native suites run on, and the
-# WASI component target the adapters and the test-programs guests ship as.
+
 targets = [
   "aarch64-apple-darwin",
   "x86_64-unknown-linux-gnu",
@@ -56,6 +55,5 @@ unused = "warn"
 [sources]
 allow-git = [
   "https://github.com/augentic/emery.git",
-  "https://github.com/augentic/omnia.git",
-  "https://github.com/bytecodealliance/wrpc"
+  "https://github.com/augentic/omnia.git"
 ]

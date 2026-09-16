@@ -25,13 +25,13 @@ url = "https://raw.githubusercontent.com/zcash/rust-ecosystem/main/supply-chain/
 [policy.omnia]
 audit-as-crates-io = false
 
-[policy.omnia-guest]
-audit-as-crates-io = false
-
 [policy.omnia-guest-macros]
 audit-as-crates-io = false
 
 [policy.omnia-host-macros]
+audit-as-crates-io = false
+
+[policy.omnia-sdk]
 audit-as-crates-io = false
 
 [policy.omnia-wasi-blobstore]
@@ -552,10 +552,6 @@ criteria = "safe-to-deploy"
 version = "0.2.7"
 criteria = "safe-to-deploy"
 
-[[exemptions.leb128-tokio]]
-version = "0.1.7"
-criteria = "safe-to-deploy"
-
 [[exemptions.libsqlite3-sys]]
 version = "0.38.2"
 criteria = "safe-to-deploy"
@@ -1048,10 +1044,6 @@ criteria = "safe-to-deploy"
 version = "0.9.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.utf8-tokio]]
-version = "0.2.1"
-criteria = "safe-to-deploy"
-
 [[exemptions.uuid]]
 version = "1.26.1"
 criteria = "safe-to-deploy"
@@ -1106,10 +1098,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.wasm-streams]]
 version = "0.5.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.wasm-tokio]]
-version = "0.6.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.web-sys]]
