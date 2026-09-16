@@ -13,9 +13,8 @@
 
 use std::path::Path;
 
-use emery_sdk::{Context, Seam, SourceAdapter as _, SourceContent, SourceInput, registry};
+use emery_sdk::{Context, Seam, SourceContent, SourceInput, registry};
 use omnia_test::guest::Scripted;
-use typescript::Adapter;
 
 const fn ctx(input: &SourceInput) -> Context<'_> {
     Context {
@@ -66,7 +65,7 @@ async fn bound_tree() {
     tree(root.path(), ["src/index.ts", "src/server.ts"]);
 
     let input = workspace(root.path());
-    let seams = Adapter::survey(&model, &ctx(&input)).await.expect("the tree is surveyed");
+    let seams = typescript::survey(&model, &ctx(&input)).await.expect("the tree is surveyed");
 
     assert_eq!(seams, [Seam::Whole]);
     assert!(model.seen().is_empty(), "no turn was spent");
@@ -97,12 +96,12 @@ async fn two_directories() {
     );
 
     let input = workspace(root.path());
-    let seams = Adapter::survey(&model, &ctx(&input)).await.expect("the partition is accepted");
+    let seams = typescript::survey(&model, &ctx(&input)).await.expect("the partition is accepted");
 
     let seen = model.seen();
     assert_eq!(seen.len(), 1, "one survey turn");
     let request = &seen[0];
-    let prompt = registry::body(Adapter::docs(), "prompts/survey.md").expect("embedded");
+    let prompt = registry::body(typescript::docs(), "prompts/survey.md").expect("embedded");
     assert_eq!(request.system.as_deref(), Some(prompt), "the survey prompt is the system");
     let lend = root.path().display().to_string();
     assert_eq!(request.workspace.as_deref(), Some(lend.as_str()), "the root is lent");
@@ -163,7 +162,7 @@ async fn non_production() {
     );
 
     let input = workspace(root.path());
-    let seams = Adapter::survey(&model, &ctx(&input)).await.expect("the partition is accepted");
+    let seams = typescript::survey(&model, &ctx(&input)).await.expect("the partition is accepted");
 
     let production =
         ["routes/orders.ts", "routes/users.ts", "services/index.ts", "services/mail.ts"];
@@ -186,7 +185,7 @@ async fn corrected_partition() {
 
     let input = workspace(root.path());
     let seams =
-        Adapter::survey(&model, &ctx(&input)).await.expect("the second partition is accepted");
+        typescript::survey(&model, &ctx(&input)).await.expect("the second partition is accepted");
 
     let named: Vec<_> = notes(&seams).into_iter().map(named).collect();
     assert_eq!(named, [vec!["routes/orders.ts", "services/orders.ts"], vec!["routes/users.ts"]]);
@@ -207,7 +206,7 @@ async fn inline_value() {
         content: SourceContent::Value("export const port = 8080;".to_string()),
     };
 
-    let seams = Adapter::survey(&model, &ctx(&input)).await.expect("a value is surveyed");
+    let seams = typescript::survey(&model, &ctx(&input)).await.expect("a value is surveyed");
 
     assert_eq!(seams, [Seam::Whole]);
     assert!(model.seen().is_empty(), "no turn was spent");

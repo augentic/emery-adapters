@@ -12,7 +12,7 @@
 
 use emery_sdk::registry::body;
 use emery_sdk::survey::Partition;
-use emery_sdk::{Doc, Evidence, SourceAdapter as _};
+use emery_sdk::{Doc, Evidence};
 
 // Every `sources/*` component must have a matching test here.
 test_programs::foreach_adapter!();
@@ -64,19 +64,19 @@ fn worked_example(prompt: &str) -> &str {
 
 #[test]
 fn documentation() {
-    corpus(documentation::Adapter::docs());
+    corpus(documentation::docs());
 }
 
 #[test]
 fn intent() {
-    corpus(intent::Adapter::docs());
+    corpus(intent::docs());
 }
 
 // The typescript survey asks the model, so its survey prompt must be
 // embedded; a missing one is `server_error` on every multi-directory tree.
 #[test]
 fn typescript() {
-    let docs = typescript::Adapter::docs();
+    let docs = typescript::docs();
     corpus(docs);
     assert!(body(docs, "prompts/survey.md").is_some(), "`prompts/survey.md` is embedded");
 }

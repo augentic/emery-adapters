@@ -8,7 +8,7 @@ Human-facing contributor guide (toolchain, layout, prompts, pin, publishing). Cr
 2. `rustup` picks up the pinned **stable** toolchain from `rust-toolchain.toml` (including the `wasm32-wasip2` target); a nightly toolchain is additionally needed for the `fmt` arm (`cargo +nightly fmt`). The first `make` installs [mise](https://mise.jdx.dev) if it is missing. Also install `cargo-nextest`, `cargo-deny`, and `cargo-vet`. Publishing also uses `wkg`.
 3. Run `make check` from the repo root. Before opening a PR, run `make ci`.
 
-For the adapter SDK's type-level contract (the `SourceAdapter` trait, WIT types, answer schemas), generate the docs locally: `cargo doc -p emery-sdk --open`.
+For the adapter SDK's type-level contract (`mine`, the `survey` helpers, the contract types, the answer schemas), generate the docs locally: `cargo doc -p emery-sdk --open`; the `export` module — the world an adapter's guest implements — documents under `--target wasm32-wasip2`.
 
 Unless you are fixing a known bug, discuss larger changes in a GitHub issue first. Legal / DCO expectations match the engine repo — see [emery CONTRIBUTING](https://github.com/augentic/emery/blob/main/CONTRIBUTING.md).
 
@@ -30,8 +30,8 @@ sources/
       references/     # lazy reference corpus + the emery-runtime symlink
       rules/          # adapter-local engineering rules
     Cargo.toml        # `<name>` — adapter identity semver is its `version`
-    src/              # wasm-free adapter logic + wasm32-only `guest` shim
-    tests/            # extract.rs — native extract suite (what the adapter itself decides)
+    src/              # lib.rs (KIND, docs, survey) + survey.rs, wasm-free; guest.rs, the wasm32-only `Guest` impl
+    tests/            # survey.rs — native survey suite (what the adapter itself decides)
 codex/references/runtime/   # shared runtime references (reconciliation)
 crates/test-programs/ # omnia's test-programs pattern: guest programs + the nested wasm32 build of every component
   programs/<group>/   # one scenario per file: source/extract.rs drives the component boundary, probe/ are fixture adapters
@@ -73,7 +73,7 @@ cargo build -p <name> --target wasm32-wasip2 --release   # one adapter → targe
 make release               # release-build every adapter
 ```
 
-The `fmt` arm uses nightly `rustfmt`. `make lint` runs clippy under `-D warnings` over the native side; the guest side — the programs under `crates/test-programs/programs/` and the adapters' export shims — is `cfg(target_arch = "wasm32")`, so lint it for the target it ships on with the clippy command above, where `clippy.toml`'s guest deny-list applies. `make vet` is check-only; regenerate audit inputs with `make vetgen`. Native crate tests are the Rust inner loop; the component suites prove every built component under the omnia runtime; `emery specify --config examples/<name>/emery.toml` walks one adapter live through the shipped `emery` binary and the Cursor backend ([examples/README.md](examples/README.md)); the graded live eval — being recreated as a root example beside the live examples — proves prompt quality end to end and writes the dated scorecard.
+The `fmt` arm uses nightly `rustfmt`. `make lint` runs clippy under `-D warnings` over the native side; the guest side — the programs under `crates/test-programs/programs/` and the adapters' `guest` modules — is `cfg(target_arch = "wasm32")`, so lint it for the target it ships on with the clippy command above, where `clippy.toml`'s guest deny-list applies. `make vet` is check-only; regenerate audit inputs with `make vetgen`. Native crate tests are the Rust inner loop; the component suites prove every built component under the omnia runtime; `emery specify --config examples/<name>/emery.toml` walks one adapter live through the shipped `emery` binary and the Cursor backend ([examples/README.md](examples/README.md)); the graded live eval — being recreated as a root example beside the live examples — proves prompt quality end to end and writes the dated scorecard.
 
 ## Publishing
 
@@ -106,7 +106,7 @@ make publish <name>
 
 1. Branch off `main`.
 2. Run `make ci` (or say exactly which narrower checks ran and why the full gate was unavailable).
-3. Read [docs/testing.md](docs/testing.md) before adding, deleting, or relocating tests. A behavior the adapter itself decides goes in its `tests/extract.rs`; the component boundary is the root component suites'; do not add a `src` `#[cfg(test)]` module without a one-line reason from that document, never pin a prompt phrase, and never widen `pub` surface solely for a test.
+3. Read [docs/testing.md](docs/testing.md) before adding, deleting, or relocating tests. A behavior the adapter itself decides goes in its `tests/survey.rs`; the component boundary is the root component suites'; do not add a `src` `#[cfg(test)]` module without a one-line reason from that document, never pin a prompt phrase, and never widen `pub` surface solely for a test.
 4. Do not commit built `.wasm` artifacts.
 
 ## See also

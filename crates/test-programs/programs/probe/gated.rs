@@ -1,13 +1,13 @@
-//! A probe with nothing of its own: a two-document corpus over the default survey.
+//! A probe with nothing of its own: a two-document corpus mined whole.
 //!
 //! A suite proves over it, under the runtime, what the SDK does for every
 //! adapter, without riding a shipped prompt.
 
 #![cfg(target_arch = "wasm32")]
 
-emery_sdk::source!(crate::Adapter);
-
-use emery_sdk::{Doc, SourceAdapter, SourceKind};
+use emery_sdk::export::{self, AdapterId, AdapterMetadata, Error, Evidence, Guest, Input};
+use emery_sdk::model::WasiModel;
+use emery_sdk::{Context, Doc, Seam, SourceInput, SourceKind};
 
 /// Sorted by path, as the walker emits them.
 const DOCS: &[Doc] = &[
@@ -21,13 +21,20 @@ const DOCS: &[Doc] = &[
     },
 ];
 
-#[derive(Debug)]
 struct Adapter;
+export::export!(Adapter with_types_in export);
 
-impl SourceAdapter for Adapter {
-    const KIND: SourceKind = SourceKind::Documentation;
+impl Guest for Adapter {
+    fn metadata(_id: AdapterId) -> AdapterMetadata {
+        export::metadata(SourceKind::Documentation)
+    }
 
-    fn docs() -> &'static [Doc] {
-        DOCS
+    async fn extract(id: AdapterId, input: Input) -> Result<Evidence, Error> {
+        let input = SourceInput::from(input);
+        let ctx = Context {
+            adapter_id: &id,
+            input: &input,
+        };
+        Ok(emery_sdk::mine(&WasiModel, &ctx, DOCS, &[Seam::Whole]).await?.into())
     }
 }

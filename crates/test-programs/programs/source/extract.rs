@@ -51,7 +51,7 @@ async fn scenario() {
         }
         ["echoed"] => {
             // The kind crosses the bindings once, on `metadata`: the echo
-            // probe's constant is `Behaviour`.
+            // probe declares `Behaviour`.
             assert_eq!(metadata.kind, SourceKind::Behaviour, "metadata carries the probe's kind");
             let evidence =
                 Caller.extract(ADAPTER, &value("")).await.expect("extract over an inline value");

@@ -23,17 +23,17 @@ An adapter is one Rust crate that ships as one Wasm component exporting the `sou
 
 ## Rust-only loop
 
-Native tests need no model credentials. Each adapter carries its own extract suite; the root package carries the component suites that run every built component under the omnia runtime (the components are built by `crates/test-programs` on the first `make test`), the fixture probes, and every adapter's corpus:
+Native tests need no model credentials. Each adapter carries its own survey suite; the root package carries the component suites that run every built component under the omnia runtime (the components are built by `crates/test-programs` on the first `make test`), the fixture probes, and every adapter's corpus:
 
 ```bash
 make check
-cargo nextest run -p documentation   # or intent, typescript: the native extract suite
+cargo nextest run -p documentation   # or intent, typescript: the native survey suite
 cargo nextest run -p emery-adapters  # the root component suites: every component, the probes, the corpora
 ```
 
 ## Live examples
 
-`examples/<name>/` is a root-package example cdylib plus an `emery.toml` that binds the built component by path and the fixture it reads. `cargo build --example <name> --target wasm32-wasip2 --release` produces the wasm; `emery specify` extracts through the Cursor model backend and commits the revision; `emery show spec` reviews it — the same journey an operator's project takes. Needs an `emery` binary, `cursor-sdk-bridge`, and `CURSOR_API_KEY`; see [examples/README.md](examples/README.md).
+`examples/<name>/` is an `emery.toml` that binds the shipped component by path — `make release` builds every one — and the fixture it reads. `emery specify` extracts through the Cursor model backend and commits the revision; `emery show spec` reviews it — the same journey an operator's project takes. Needs an `emery` binary, `cursor-sdk-bridge`, and `CURSOR_API_KEY`; see [examples/README.md](examples/README.md).
 
 ```bash
 make release                                              # every component → target/wasm32-wasip2/release/
@@ -48,7 +48,7 @@ The live rung is a **public-contract client**: it spawns the sibling shipped `em
 ## Repair loop
 
 1. Edit `sources/<name>/prose/**` (the extract prompt, references, rules).
-2. `cargo nextest run -p <name>` to re-run its extract suite and `cargo nextest run -p emery-adapters` for its component and corpus suites; `cargo build -p <name> --target wasm32-wasip2 --release` to rebuild the shipped component; `emery specify --config examples/<name>/emery.toml` to watch it become a spec.
+2. `cargo nextest run -p <name>` to re-run its survey suite and `cargo nextest run -p emery-adapters` for its component and corpus suites; `cargo build -p <name> --target wasm32-wasip2 --release` to rebuild the shipped component; `emery specify --config examples/<name>/emery.toml` to watch it become a spec.
 
 Native crate tests stay the Rust inner loop; the component suites prove the component boundary; the live examples show one adapter's claims becoming a specification; live eval is for prompt quality. See [docs/testing.md](docs/testing.md).
 

@@ -1,66 +1,42 @@
-//! The intent adapter: one seam carrying the operator's brief verbatim.
-//!
-//! An intent source is the operator's free-form brief, given inline or as a
-//! one-file tree. It is never split: the brief is preserved verbatim and its
-//! directives are lifted into requirement claims.
+//! The survey of an operator's brief: one seam, the brief verbatim.
 
-use std::future::{Future, ready};
 use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
-use emery_sdk::{
-    Context, Doc, Error, Model, Seam, SourceAdapter, SourceContent, SourceKind, bad_request,
-};
+use emery_sdk::{Error, Seam, SourceContent, bad_request};
 
-use crate::registry;
-
-/// The adapter over an operator's brief.
+/// Returns the one seam to mine: the brief, whichever arm carries it, never split.
 ///
-/// Its document carries one `intent` claim with the brief verbatim, then one
-/// `requirement` claim per directive the brief states.
-#[derive(Debug)]
-pub struct Adapter;
-
-impl SourceAdapter for Adapter {
-    const KIND: SourceKind = SourceKind::Intent;
-
-    fn docs() -> &'static [Doc] {
-        registry::docs()
-    }
-
-    // A brief is never split: one seam, whichever arm carries it, chosen
-    // without the model.
-    fn survey<P: Model>(
-        _model: &P, ctx: &Context<'_>,
-    ) -> impl Future<Output = Result<Vec<Seam>, Error>> + Send {
-        ready(brief(&ctx.input.content).map(|seam| vec![seam]))
-    }
-}
-
-// The operator's brief as the turn's seam: an inline value rides as the
-// SDK renders it; a one-file tree is read into a note of the same shape.
-fn brief(content: &SourceContent) -> Result<Seam, Error> {
-    match content {
+/// An inline value rides as the SDK renders it, a [`Seam::Whole`]. A one-file
+/// tree, nested or not, is read into a [`Seam::Note`] of the same shape, so
+/// the brief is in the turn without a tool round; the SDK lends the tree as
+/// for any workspace input. The model is never asked.
+///
+/// # Errors
+///
+/// - [`Error::BadRequest`] for an empty brief — an intent source is never
+///   legitimately empty, so it fails closed before a model call is spent —
+///   and for a tree holding no file or several.
+/// - [`Error::ServerError`] when the tree cannot be read.
+pub fn survey(content: &SourceContent) -> Result<Vec<Seam>, Error> {
+    let seam = match content {
         SourceContent::Value(value) => {
             require_brief(value)?;
-            Ok(Seam::Whole)
+            Seam::Whole
         }
-        // The SDK lends the tree as for any workspace input; the note puts
-        // the brief in the turn without a tool round.
         SourceContent::Workspace(root) => {
             let intent = single_file_intent(Path::new(root))?;
             require_brief(&intent)?;
-            Ok(Seam::Note(format!(
-                "The bound seam is a one-file tree at `{root}`; the operator's intent \
-                 string is:\n\n{intent}\n\n\
+            Seam::Note(format!(
+                "The bound seam is a one-file tree at `{root}`; the operator's intent string \
+                 is:\n\n{intent}\n\n\
                  Nothing else is reachable; extract mines only this source."
-            )))
+            ))
         }
-    }
+    };
+    Ok(vec![seam])
 }
 
-// An intent source is never legitimately empty: fail closed before
-// spending a model call, never answer an empty success.
 fn require_brief(brief: &str) -> Result<(), Error> {
     if brief.trim().is_empty() {
         return Err(bad_request!("intent brief is empty"));
@@ -69,8 +45,7 @@ fn require_brief(brief: &str) -> Result<(), Error> {
 }
 
 fn single_file_intent(root: &Path) -> Result<String, Error> {
-    let mut files = Vec::new();
-    collect_files(root, &mut files)?;
+    let files = collect_files(root)?;
     match files.as_slice() {
         [file] => Ok(std::fs::read_to_string(file)
             .with_context(|| format!("reading `{}`", file.display()))?),
@@ -79,16 +54,17 @@ fn single_file_intent(root: &Path) -> Result<String, Error> {
 }
 
 // The one-file tree encoding may nest, so the walk is recursive.
-fn collect_files(dir: &Path, files: &mut Vec<PathBuf>) -> Result<(), Error> {
+fn collect_files(dir: &Path) -> Result<Vec<PathBuf>, Error> {
     let reading = || format!("reading `{}`", dir.display());
+    let mut files = Vec::new();
     for entry in std::fs::read_dir(dir).with_context(reading)? {
         let entry = entry.with_context(reading)?;
         let file_type = entry.file_type().with_context(reading)?;
         if file_type.is_dir() {
-            collect_files(&entry.path(), files)?;
+            files.extend(collect_files(&entry.path())?);
         } else if file_type.is_file() {
             files.push(entry.path());
         }
     }
-    Ok(())
+    Ok(files)
 }

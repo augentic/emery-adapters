@@ -6,7 +6,7 @@
 //! sees of the component: `metadata` opened no completion, and each
 //! `extract`'s system prompt is the `prompts/extract.md` this build
 //! embedded. The SDK's side of the boundary is `probe.rs`'s; an adapter's own
-//! behaviour is its `tests/extract.rs`'s.
+//! behaviour is its `tests/survey.rs`'s.
 
 #![cfg(not(target_arch = "wasm32"))]
 

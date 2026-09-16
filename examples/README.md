@@ -27,8 +27,8 @@ Live `specify` journeys via [omnia-cursor](https://github.com/augentic/omnia-bac
 Run from the repository root: `emery` mounts the invocation directory as the project, and every path an `emery.toml` names must sit inside it.
 
 ```bash
-# build the source adapter
-cargo build --example documentation --target wasm32-wasip2 --release
+# build every source adapter into target/wasm32-wasip2/release/<name>.wasm
+make release
 
 # run the example
 export CURSOR_API_KEY=<Cursor API key>
@@ -39,9 +39,9 @@ emery show spec
 emery show design
 ```
 
-Swap the config for [intent](intent/emery.toml), [typescript](typescript/emery.toml), or — with all three built — the combined [emery.toml](emery.toml).
+Swap the config for [intent](intent/emery.toml), [typescript](typescript/emery.toml), or the combined [emery.toml](emery.toml). One adapter alone builds with `cargo build -p <name> --target wasm32-wasip2 --release`, to the same path.
 
-The config binds the built component by path relative to itself, read fresh on every run. A bare name still only dispatches guests declared in the runtime invocation, and the shipped `emery` binary declares none. Revision state lives under `.omnia/storage` in the invocation directory; each run replaces the last and reports the diff against it.
+The config binds the shipped component by path relative to itself, read fresh on every run. A bare name still only dispatches guests declared in the runtime invocation, and the shipped `emery` binary declares none. Revision state lives under `.omnia/storage` in the invocation directory; each run replaces the last and reports the diff against it.
 
 *Extract* and *synthesis* both complete through the Cursor backend. Each adapter answers reference-tool calls in-process the same way the [omnia-cursor example](https://github.com/augentic/omnia-backends/tree/main/examples/cursor) does.
 

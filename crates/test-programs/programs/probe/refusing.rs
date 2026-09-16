@@ -4,26 +4,20 @@
 
 #![cfg(target_arch = "wasm32")]
 
-emery_sdk::source!(crate::Adapter);
-
 use std::future::{Future, ready};
 
-use emery_sdk::{Context, Doc, Error, Evidence, Model, SourceAdapter, SourceKind, bad_request};
+use emery_sdk::export::{self, AdapterId, AdapterMetadata, Error, Evidence, Guest, Input};
+use emery_sdk::{SourceKind, bad_request};
 
-#[derive(Debug)]
 struct Adapter;
+export::export!(Adapter with_types_in export);
 
-impl SourceAdapter for Adapter {
-    const KIND: SourceKind = SourceKind::Documentation;
-
-    fn docs() -> &'static [Doc] {
-        &[]
+impl Guest for Adapter {
+    fn metadata(_id: AdapterId) -> AdapterMetadata {
+        export::metadata(SourceKind::Documentation)
     }
 
-    // Nothing to await.
-    fn extract<P: Model>(
-        _model: &P, ctx: &Context<'_>,
-    ) -> impl Future<Output = Result<Evidence, Error>> + Send {
-        ready(Err(bad_request!("the probe refuses source `{}`", ctx.input.key)))
+    fn extract(_id: AdapterId, input: Input) -> impl Future<Output = Result<Evidence, Error>> {
+        ready(Err(bad_request!("the probe refuses source `{}`", input.key).into()))
     }
 }

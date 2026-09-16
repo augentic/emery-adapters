@@ -11,12 +11,6 @@ publish.workspace = true
 [lib]
 crate-type = ["cdylib", "rlib"]
 
-# Default on so `cargo build -p intent` still exports the component.
-# The root-package example turns this off and calls `source!` itself.
-[features]
-default = ["export"]
-export = []
-
 [lints]
 workspace = true
 
@@ -27,11 +21,7 @@ emery-sdk.workspace = true
 [build-dependencies]
 emery-prose = { workspace = true, features = ["emit"] }
 
+# The scratch trees `tests/survey.rs` reads; the built component's own suite
+# is the root package's.
 [dev-dependencies]
 tempfile.workspace = true
-tokio.workspace = true
-
-# The scripted model `tests/extract.rs` binds; the built component's own
-# suite is the root package's.
-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-omnia-test = { workspace = true, features = ["guest"] }

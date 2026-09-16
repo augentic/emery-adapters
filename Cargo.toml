@@ -20,27 +20,6 @@ test-programs.workspace = true
 tokio.workspace = true
 typescript.workspace = true
 
-[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-documentation.workspace = true
-emery-sdk.workspace = true
-intent.workspace = true
-typescript.workspace = true
-
-[[example]]
-name = "documentation"
-path = "examples/documentation/lib.rs"
-crate-type = ["cdylib"]
-
-[[example]]
-name = "intent"
-path = "examples/intent/lib.rs"
-crate-type = ["cdylib"]
-
-[[example]]
-name = "typescript"
-path = "examples/typescript/lib.rs"
-crate-type = ["cdylib"]
-
 [lints]
 workspace = true
 
@@ -75,10 +54,10 @@ omnia-wasi-model = "0.36.0"
 emery-prose = "0.38.0"
 emery-sdk = "0.38.0"
 
-documentation = { path = "sources/documentation", default-features = false }
-intent = { path = "sources/intent", default-features = false }
+documentation = { path = "sources/documentation" }
+intent = { path = "sources/intent" }
 test-programs = { path = "crates/test-programs" }
-typescript = { path = "sources/typescript", default-features = false }
+typescript = { path = "sources/typescript" }
 
 [patch.crates-io]
 # emery-prose = { git = "https://github.com/augentic/emery" }

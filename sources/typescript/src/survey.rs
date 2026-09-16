@@ -1,23 +1,10 @@
-//! The TypeScript / JavaScript adapter and its survey by model.
-//!
-//! A code tree is mined one externally visible surface at a time — a route, a
-//! command, a job, an exported API — with the whole tree in view. Which
-//! modules serve one surface is no directory layout's to state, so the survey
-//! asks the model once under `prompts/survey.md`; and a handler's behaviour
-//! runs through its imports and `tsconfig.json`, so each seam is lent the
-//! root and told which files are its own.
+//! The survey of a code tree: the model groups the modules by the surface they serve.
 
 use std::fmt::Write as _;
 use std::path::Path;
 
-use emery_sdk::survey::{self, Entry};
-use emery_sdk::{Context, Doc, Error, Model, Seam, SourceAdapter, SourceContent, SourceKind};
-
-use crate::registry;
-
-/// The adapter over a TypeScript or JavaScript source tree.
-#[derive(Debug)]
-pub struct Adapter;
+use emery_sdk::survey::Entry;
+use emery_sdk::{Context, Error, Model, Seam, SourceContent};
 
 // Source files a group holds before it is mined on its own; a smaller one
 // folds into the remainder's seam. A model call costs an agent start, so
@@ -36,35 +23,39 @@ const EXTENSIONS: &[&str] = &["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cj
 // source: a declaration file, or a test.
 const MARKERS: &[&str] = &["d", "test", "spec"];
 
-impl SourceAdapter for Adapter {
-    const KIND: SourceKind = SourceKind::Behaviour;
+/// Returns the seams to mine: one per surface the model discerns, or the input whole.
+///
+/// One [`Seam::Note`] per group the model's survey cuts — the modules of one
+/// surface, of at least two files — and one for the rest of the tree, each
+/// lent the whole root and naming the files it mines. Dependencies, build
+/// output, tests, declaration files, and dot entries are not production
+/// source and are never offered. A tree no directory cut would split, or an
+/// inline value, is the bound input whole — a single call, with no survey
+/// turn spent on it.
+///
+/// # Errors
+///
+/// - [`Error::BadRequest`] when the model's grouping could not be brought
+///   within its rounds, or for an entry whose name is not UTF-8.
+/// - [`Error::ServerError`] when a directory cannot be read, or the build
+///   did not embed `prompts/survey.md`.
+/// - [`Error::BadGateway`] for a tool or transport failure.
+pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Seam>, Error> {
+    let SourceContent::Workspace(root) = &ctx.input.content else {
+        return Ok(vec![Seam::Whole]);
+    };
 
-    fn docs() -> &'static [Doc] {
-        registry::docs()
+    let files = emery_sdk::survey::files(Path::new(root), |path, entry| match entry {
+        Entry::Dir => !hidden(path) && !SKIP_DIRS.contains(&name(path)),
+        Entry::File => production(path),
+    })?;
+    // A tree of one directory is too small to be worth a survey turn.
+    if emery_sdk::survey::by_directory(files.clone(), FLOOR).len() < 2 {
+        return Ok(vec![Seam::Whole]);
     }
 
-    // One `Note` per group the model's survey cuts — the modules of
-    // one surface, of at least `FLOOR` files — and one for the rest of the
-    // tree, each lent the whole root and naming the files it mines. A tree
-    // no directory cut would split, or an inline value, is the bound input
-    // whole — a single call, with no survey turn spent on it.
-    async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Seam>, Error> {
-        let SourceContent::Workspace(root) = &ctx.input.content else {
-            return Ok(vec![Seam::Whole]);
-        };
-
-        let files = survey::files(Path::new(root), |path, entry| match entry {
-            Entry::Dir => !hidden(path) && !SKIP_DIRS.contains(&name(path)),
-            Entry::File => production(path),
-        })?;
-        // A tree of one directory is too small to be worth a survey turn.
-        if survey::by_directory(files.clone(), FLOOR).len() < 2 {
-            return Ok(vec![Seam::Whole]);
-        }
-
-        let groups = survey::by_model(model, ctx, registry::docs(), &files, FLOOR).await?;
-        Ok(groups.into_iter().map(|group| Seam::Note(note(root, &group))).collect())
-    }
+    let groups = emery_sdk::survey::by_model(model, ctx, crate::docs(), &files, FLOOR).await?;
+    Ok(groups.into_iter().map(|group| Seam::Note(note(root, &group))).collect())
 }
 
 // The turn's seam: the root is lent whole, so imports and `tsconfig.json`

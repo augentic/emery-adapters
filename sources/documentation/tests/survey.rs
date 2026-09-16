@@ -2,26 +2,15 @@
 //!
 //! How a tree cuts into seams — one `Files` seam per top-level directory that
 //! meets the floor, the rest of the tree as one more, and no cut at all when
-//! the tree is no finer than itself — with no model asked.
+//! the tree is no finer than itself. The survey is a plain fn over the input:
+//! it has no model to ask, so no test needs one.
 
 use std::path::Path;
 
-use documentation::Adapter;
-use emery_sdk::{Context, Seam, SourceAdapter as _, SourceContent, SourceInput};
-use omnia_test::guest::Scripted;
+use emery_sdk::{Seam, SourceContent};
 
-const fn ctx(input: &SourceInput) -> Context<'_> {
-    Context {
-        adapter_id: "source:documentation",
-        input,
-    }
-}
-
-fn workspace(root: &Path) -> SourceInput {
-    SourceInput {
-        key: "docs".to_string(),
-        content: SourceContent::Workspace(root.display().to_string()),
-    }
+fn workspace(root: &Path) -> SourceContent {
+    SourceContent::Workspace(root.display().to_string())
 }
 
 // An empty document at each relative path, directories made on the way.
@@ -38,28 +27,22 @@ fn files<const N: usize>(paths: [&str; N]) -> Seam {
     Seam::Files(paths.into_iter().map(str::to_string).collect())
 }
 
-// A tree of one directory cuts no finer than itself: the bound tree, whole,
-// with no turn spent deciding so.
-#[tokio::test]
-async fn bound_tree() {
-    let model = Scripted::default();
+// A tree of one directory cuts no finer than itself: the bound tree, whole.
+#[test]
+fn bound_tree() {
     let root = tempfile::tempdir().expect("a scratch tree");
     tree(root.path(), ["guide/intro.md", "guide/setup.md"]);
 
-    let input = workspace(root.path());
-    let seams = Adapter::survey(&model, &ctx(&input)).await.expect("the tree is surveyed");
+    let seams = documentation::survey(&workspace(root.path())).expect("the tree is surveyed");
 
     assert_eq!(seams, [Seam::Whole]);
-    assert!(model.seen().is_empty(), "no turn was spent");
 }
 
 // Two directories that meet the floor are two seams, each its own
 // documents; a one-document directory and the root's own files are the
-// third, so no document is left out of the survey. The cut is by directory:
-// the model is never asked.
-#[tokio::test]
-async fn two_directories() {
-    let model = Scripted::default();
+// third, so no document is left out of the survey.
+#[test]
+fn two_directories() {
     let root = tempfile::tempdir().expect("a scratch tree");
     tree(
         root.path(),
@@ -73,8 +56,7 @@ async fn two_directories() {
         ],
     );
 
-    let input = workspace(root.path());
-    let seams = Adapter::survey(&model, &ctx(&input)).await.expect("the tree is surveyed");
+    let seams = documentation::survey(&workspace(root.path())).expect("the tree is surveyed");
 
     assert_eq!(
         seams,
@@ -84,14 +66,12 @@ async fn two_directories() {
             files(["README.md", "notes/todo.md"]),
         ]
     );
-    assert!(model.seen().is_empty(), "no turn was spent");
 }
 
 // The engine's own files, wherever they sit, and dot entries are not
 // documentation: no seam names them.
-#[tokio::test]
-async fn engine_files() {
-    let model = Scripted::default();
+#[test]
+fn engine_files() {
     let root = tempfile::tempdir().expect("a scratch tree");
     tree(
         root.path(),
@@ -108,8 +88,7 @@ async fn engine_files() {
         ],
     );
 
-    let input = workspace(root.path());
-    let seams = Adapter::survey(&model, &ctx(&input)).await.expect("the tree is surveyed");
+    let seams = documentation::survey(&workspace(root.path())).expect("the tree is surveyed");
 
     assert_eq!(
         seams,
@@ -118,15 +97,11 @@ async fn engine_files() {
 }
 
 // An inline value has no tree to cut: the bound value, whole.
-#[tokio::test]
-async fn inline_value() {
-    let model = Scripted::default();
-    let input = SourceInput {
-        key: "docs".to_string(),
-        content: SourceContent::Value("Orders are placed over HTTP.".to_string()),
-    };
+#[test]
+fn inline_value() {
+    let content = SourceContent::Value("Orders are placed over HTTP.".to_string());
 
-    let seams = Adapter::survey(&model, &ctx(&input)).await.expect("a value is surveyed");
+    let seams = documentation::survey(&content).expect("a value is surveyed");
 
     assert_eq!(seams, [Seam::Whole]);
 }

@@ -931,9 +931,7 @@ version = "0.13.0"
 dependencies = [
  "emery-prose",
  "emery-sdk",
- "omnia-test",
  "tempfile",
- "tokio",
 ]
 
 [[package]]
@@ -1695,9 +1693,7 @@ dependencies = [
  "anyhow",
  "emery-prose",
  "emery-sdk",
- "omnia-test",
  "tempfile",
- "tokio",
 ]
 
 [[package]]
