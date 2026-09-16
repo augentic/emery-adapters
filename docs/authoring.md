@@ -14,7 +14,7 @@ Toolchain setup, layout conventions, and publishing mechanics live in [CONTRIBUT
 
 An adapter is one Rust crate that ships as one Wasm component exporting the `source-adapter` world from the `emery:adapter` WIT package (owned by [`augentic/emery`](https://github.com/augentic/emery)). There is no manifest file: identity is the crate's `name` + `version`, and resolve-time metadata comes from the component's own `metadata` export.
 
-An adapter is a guest of that world, the way every omnia guest is: it implements the world's `Guest` — two methods, `metadata` and `extract` — on a unit struct in a `wasm32`-only module, over the bindings `emery-sdk` re-exports as `emery_sdk::export`. Everything the two methods need is the SDK's: `export::metadata(SourceKind::..)` answers the first, and `emery_sdk::mine` does the whole of the second once the adapter has chosen its seams.
+An adapter is a guest of that world, the way every omnia guest is: it implements the world's `Guest` — two methods, `metadata` and `extract` — on a unit struct in a `wasm32`-only module, over the bindings `emery-sdk` re-exports as `emery_sdk::export`. Everything the two methods need is the SDK's: `emery_sdk::metadata(SourceKind::..)` answers the first, and `emery_sdk::extract` does the whole of the second once the adapter has chosen its seams.
 
 What the engine calls:
 
@@ -27,7 +27,7 @@ Your `extract` is three lines: lift the input, ask your `survey` for the seams t
 
 Four ideas carry the operation:
 
-- **The model is a parameter.** `mine`, and a survey that asks the model, are generic over `emery_sdk::Model`. The guest binds `WasiModel`; native tests bind `omnia_test::guest::Scripted` with scripted answers. Your code never constructs a backend.
+- **The model is a parameter.** `mine`, and a survey that asks the model, are generic over `emery_sdk::Model`. `emery_sdk::extract` binds `WasiModel` for `mine`, and a guest whose survey asks the model binds it for that call too; native tests bind `omnia_test::guest::Scripted` with scripted answers. Your code never constructs a backend.
 - **The survey chooses the cut, and never mines.** `survey(content: &SourceContent) -> Result<Vec<Seam>, Error>` — or `async fn survey<P: Model>(model: &P, ctx: &Context<'_>, docs: &'static [Doc]) -> Result<Vec<Seam>, Error>` when it asks the model, `docs` being the guest's embedded corpus — lists or reads the input and states the seams; it spends at most one model call, and only to decide the cut. A tree adapter lists its files with `emery_sdk::survey::files(root, keep)` — the engine's own `spec.md`, `design.md`, and `.omnia/` are pruned for it, everything else is its `keep` predicate's — and cuts them one of two ways. `survey::by_directory(files, floor)` is mechanical: one group per top-level directory holding at least `floor` files, the root's own files and every smaller directory folded into one remainder. `survey::by_model(model, ctx, docs, &files, floor).await` asks the model once, under the adapter's embedded `prompts/survey.md`, to group the files by what they serve — a route, a command, an exported API — which no directory layout states; the SDK lists the candidates in the turn, lends the root, checks the answer (a file never offered, a file in two groups, or an empty group goes back as findings), and folds every group under the floor with every file the model left out into one remainder, so coverage is total however the model grouped. Each group becomes the seam its source kind calls for: `Seam::Files(files)` lends the group's directory alone, so a documentation directory is mined under a grant no wider than itself; `Seam::Note(note)` lends the whole root and tells the model which files are its own, which code needs — a handler's behaviour runs through its imports. A tree that cuts into fewer than two groups, and an inline value, are one `Seam::Whole` with no survey turn spent: a single call. A survey that asks nothing is a plain fn over the `SourceContent`, tested with no model at all.
 - **Prose is embedded at compile time.** `static DOCS: &[Doc] = emery_sdk::include_prose!("../prose");` in the guest embeds the adapter's `prose/` tree — named relative to `src/lib.rs`, the way `include_str!` names one file — as a sorted table of `Doc`s; the guest hands it to `mine`, and the SDK reads `prompts/extract.md` from it for each seam's turn. A dangling relative link in any prose document fails the build, at the `include_prose!` line. The engine repository's mock adapter ([`examples/adapter/lib.rs`](https://github.com/augentic/emery/blob/main/examples/adapter/lib.rs)) embeds its prose the same way and is the smallest complete example of the shape. Each judgment declares `list_docs` / `read_doc` function tools and answers the model's calls in-process from that embedded corpus, so prompts cite references by relative link instead of inlining them.
 - **Answers are steered by schema and judged by the gate.** For each seam, `mine` asks one `omnia_sdk::model::Question<Evidence>` — the turn is the SDK's, not the adapter's to shape beyond its seam: the embedded `prompts/extract.md` is the system prompt, the contract's claims-only `Evidence` schema rides the request as a steering hint (the claim-id grammar as its `pattern`; a document-level `kind` is an unknown field the backend corrects), and the claim gate is the request's `check` — run over every candidate the backend proposes, with a miss handed back as the correction (`## Previous answer (rejected)` / `## Findings`) so the backend asks again within its own round budget. The adapter never sees the reply text; the SDK gets the accepted claims, or a `bad_request` carrying the last findings once the rounds are spent. `Seam::Whole` renders the ordinary workspace or inline value (a workspace as "the source tree the prompt walks"); `Seam::Files(files)` renders the lent directory and the files to mine beneath it; `Seam::Note(note)` admits a source-specific seam note after the adapter validates or reads its input.
@@ -160,8 +160,7 @@ The `mod guest` in `src/lib.rs` is the component, and identical in every adapter
 #[cfg(target_arch = "wasm32")]
 mod guest {
     use emery_sdk::export::{self, AdapterId, AdapterMetadata, Error, Evidence, Guest, Input};
-    use emery_sdk::model::WasiModel;
-    use emery_sdk::{Context, Doc, SourceInput, SourceKind};
+    use emery_sdk::{Doc, SourceKind};
 
     use crate::survey;
 
@@ -173,23 +172,17 @@ mod guest {
 
     impl Guest for Adapter {
         fn metadata(_id: AdapterId) -> AdapterMetadata {
-            export::metadata(SourceKind::Documentation)
+            emery_sdk::metadata(SourceKind::Documentation)
         }
 
         async fn extract(id: AdapterId, input: Input) -> Result<Evidence, Error> {
-            let input = SourceInput::from(input);
-            let ctx = Context {
-                adapter_id: &id,
-                input: &input,
-            };
-            let seams = survey::survey(&input.content)?;
-            Ok(emery_sdk::mine(&WasiModel, &ctx, DOCS, &seams).await?.into())
+            emery_sdk::extract(id, input, DOCS, async |ctx| survey::survey(&ctx.input.content)).await
         }
     }
 }
 ```
 
-The `SourceKind` is the kind of source the adapter reads (`Intent`, `Documentation`, or `Behaviour` — the precedence a cross-source disagreement resolves under), reported here so the engine ranks every document this adapter returns before any is asked for — a fact about its input, never answered by the model and never carried in an answer. `export::metadata` reports the SDK's own version as the exact `emery-version` pin beside it; an adapter builds the `AdapterMetadata` itself only to loosen or tighten that pin. `extract` lifts the WIT input, surveys it, and hands the seams to `mine`; `?` lowers an `emery_sdk::Error` onto the WIT `error` and `.into()` lowers the `Evidence`. A survey that asks the model is awaited over the same `WasiModel` and handed the same table: `survey::survey(&WasiModel, &ctx, DOCS).await?`. `DOCS` is the whole `prose/` tree — `include_prose!` names it relative to this file, so `"../prose"` from `src/lib.rs` — sorted by tree-relative path, every relative link checked at compile time; it lives inside the guest because nothing native reads it.
+The `SourceKind` is the kind of source the adapter reads (`Intent`, `Documentation`, or `Behaviour` — the precedence a cross-source disagreement resolves under), reported here so the engine ranks every document this adapter returns before any is asked for — a fact about its input, never answered by the model and never carried in an answer. `emery_sdk::metadata` reports the SDK's own version as the exact `emery-version` pin beside it; an adapter builds the `AdapterMetadata` itself only to loosen or tighten that pin. `emery_sdk::extract` lifts the WIT input into a `SourceInput`, builds the call's `Context`, awaits the survey you hand it for the seams, mines them over the host's `WasiModel` under `DOCS`, and lowers the outcome onto the WIT `evidence` and `error`; the survey is an async closure over `&Context`, so a mechanical one is `async |ctx| survey::survey(&ctx.input.content)` and one that asks the model is `async |ctx| survey::survey(&WasiModel, ctx, DOCS).await`, binding `emery_sdk::model::WasiModel` itself. `DOCS` is the whole `prose/` tree — `include_prose!` names it relative to this file, so `"../prose"` from `src/lib.rs` — sorted by tree-relative path, every relative link checked at compile time; it lives inside the guest because nothing native reads it.
 
 Points that generalize:
 
@@ -245,7 +238,7 @@ To watch it become a specification before wiring it into a project, give it an e
 ## Definition of done
 
 - [ ] `src/lib.rs` carries no logic beyond the `wasm32`-only `mod guest` — its `static DOCS: &[Doc] = emery_sdk::include_prose!("../prose");` and the `Guest` impl — and `pub mod survey`; reusable logic is wasm-free library code.
-- [ ] The guest's `extract` lifts the input, calls `survey`, and hands the seams to `emery_sdk::mine` — nothing else: the adapter states its seams through `survey` — mechanically, or with one model call through `survey::by_model` — and every model call goes through the SDK.
+- [ ] The guest's `extract` is one `emery_sdk::extract(id, input, DOCS, async |ctx| …)` whose closure calls `survey` — nothing else: the adapter states its seams through `survey` — mechanically, or with one model call through `survey::by_model` — and every model call goes through the SDK.
 - [ ] The extraction prompt is embedded under `prose/`, stays under the 800 non-blank-line cap, and its `## Worked example` JSON fence parses as the SDK's `Evidence` — claims alone, no document-level `kind` — and passes the claim gate (the root `tests/prose.rs`). It tells the model that a call may be given part of the tree and must claim that part alone. A survey by model embeds `prose/prompts/survey.md` under the same cap, its worked example parsing as `survey::Partition`.
 - [ ] Required per-kind extras are demanded by the prompt — the worked example carries them.
 - [ ] `tests/survey.rs` covers what the adapter itself decides: its survey (how a tree cuts, what it leaves out, when it stays whole; for a survey by model, over `omnia_test::guest::Scripted`, the candidates offered, the notes cut from a scripted partition, and the bound tree that spends no turn) and, where the adapter prepares its input, its fail-closed paths; `cargo nextest run -p <name>` is green.

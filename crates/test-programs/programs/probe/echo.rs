@@ -16,7 +16,7 @@ export::export!(Adapter with_types_in export);
 
 impl Guest for Adapter {
     fn metadata(_id: AdapterId) -> AdapterMetadata {
-        export::metadata(SourceKind::Behaviour)
+        emery_sdk::metadata(SourceKind::Behaviour)
     }
 
     fn extract(_id: AdapterId, _input: Input) -> impl Future<Output = Result<Evidence, Error>> {

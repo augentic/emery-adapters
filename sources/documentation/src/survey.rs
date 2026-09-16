@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use emery_sdk::{Error, Seam, SourceContent};
+use emery_sdk::{Context, Error, Seam, SourceContent};
 
 // Documents a directory holds before it is mined on its own; a smaller one
 // folds into the root's seam. A model call costs an agent start, so a
@@ -22,8 +22,8 @@ const FLOOR: usize = 2;
 ///
 /// Returns [`Error::ServerError`] when a directory cannot be read, and
 /// [`Error::BadRequest`] for an entry whose name is not UTF-8.
-pub fn survey(content: &SourceContent) -> Result<Vec<Seam>, Error> {
-    let SourceContent::Workspace(root) = content else {
+pub async fn survey(ctx: &Context<'_>) -> Result<Vec<Seam>, Error> {
+    let SourceContent::Workspace(root) = &ctx.input.content else {
         return Ok(vec![Seam::Whole]);
     };
 

@@ -8,10 +8,27 @@
 use std::path::Path;
 
 use documentation::survey::survey;
-use emery_sdk::{Seam, SourceContent};
+use emery_sdk::{Context, Seam, SourceContent, SourceInput};
 
-fn workspace(root: &Path) -> SourceContent {
-    SourceContent::Workspace(root.display().to_string())
+const fn ctx(input: &SourceInput) -> Context<'_> {
+    Context {
+        adapter_id: "source:documentation",
+        input,
+    }
+}
+
+fn workspace(root: &Path) -> SourceInput {
+    SourceInput {
+        key: "docs".to_string(),
+        content: SourceContent::Workspace(root.display().to_string()),
+    }
+}
+
+fn value(text: &str) -> SourceInput {
+    SourceInput {
+        key: "docs".to_string(),
+        content: SourceContent::Value(text.to_string()),
+    }
 }
 
 // An empty document at each relative path, directories made on the way.
@@ -34,7 +51,8 @@ fn bound_tree() {
     let root = tempfile::tempdir().expect("a scratch tree");
     tree(root.path(), ["guide/intro.md", "guide/setup.md"]);
 
-    let seams = survey(&workspace(root.path())).expect("the tree is surveyed");
+    let input = workspace(root.path());
+    let seams = survey(&ctx(&input)).expect("the tree is surveyed");
 
     assert_eq!(seams, [Seam::Whole]);
 }
@@ -57,7 +75,8 @@ fn two_directories() {
         ],
     );
 
-    let seams = survey(&workspace(root.path())).expect("the tree is surveyed");
+    let input = workspace(root.path());
+    let seams = survey(&ctx(&input)).expect("the tree is surveyed");
 
     assert_eq!(
         seams,
@@ -89,7 +108,8 @@ fn engine_files() {
         ],
     );
 
-    let seams = survey(&workspace(root.path())).expect("the tree is surveyed");
+    let input = workspace(root.path());
+    let seams = survey(&ctx(&input)).expect("the tree is surveyed");
 
     assert_eq!(
         seams,
@@ -100,9 +120,9 @@ fn engine_files() {
 // An inline value has no tree to cut: the bound value, whole.
 #[test]
 fn inline_value() {
-    let content = SourceContent::Value("Orders are placed over HTTP.".to_string());
+    let input = value("Orders are placed over HTTP.");
 
-    let seams = survey(&content).expect("a value is surveyed");
+    let seams = survey(&ctx(&input)).expect("a value is surveyed");
 
     assert_eq!(seams, [Seam::Whole]);
 }
