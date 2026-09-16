@@ -54,7 +54,8 @@ pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Seam>,
         return Ok(vec![Seam::Whole]);
     }
 
-    let groups = emery_sdk::survey::by_model(model, ctx, crate::docs(), &files, FLOOR).await?;
+    let groups =
+        emery_sdk::survey::by_model(model, ctx, crate::prose::docs(), &files, FLOOR).await?;
     Ok(groups.into_iter().map(|group| Seam::Note(note(root, &group))).collect())
 }
 

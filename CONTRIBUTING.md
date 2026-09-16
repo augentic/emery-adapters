@@ -30,7 +30,7 @@ sources/
       references/     # lazy reference corpus + the emery-runtime symlink
       rules/          # adapter-local engineering rules
     Cargo.toml        # `<name>` — adapter identity semver is its `version`
-    src/              # lib.rs (KIND, docs, survey) + survey.rs, wasm-free; guest.rs, the wasm32-only `Guest` impl
+    src/              # lib.rs (the wasm32-only `mod guest`, docs, survey) + survey.rs, wasm-free
     tests/            # survey.rs — native survey suite (what the adapter itself decides)
 codex/references/runtime/   # shared runtime references (reconciliation)
 crates/test-programs/ # omnia's test-programs pattern: guest programs + the nested wasm32 build of every component
@@ -70,7 +70,7 @@ make check                 # fmt + lint + nextest + doctests + doc
 make ci                    # full gate — adds cargo-vet + cargo-deny
 cargo clippy --workspace --exclude emery-adapters --lib --examples --target wasm32-wasip2 -- -D warnings   # the guest side
 cargo build -p <name> --target wasm32-wasip2 --release   # one adapter → target/wasm32-wasip2/release/<name>.wasm (the path the examples bind)
-make release               # release-build every adapter
+cargo build --workspace --target wasm32-wasip2 --release   # every adapter
 ```
 
 The `fmt` arm uses nightly `rustfmt`. `make lint` runs clippy under `-D warnings` over the native side; the guest side — the programs under `crates/test-programs/programs/` and the adapters' `guest` modules — is `cfg(target_arch = "wasm32")`, so lint it for the target it ships on with the clippy command above, where `clippy.toml`'s guest deny-list applies. `make vet` is check-only; regenerate audit inputs with `make vetgen`. Native crate tests are the Rust inner loop; the component suites prove every built component under the omnia runtime; `emery specify --config examples/<name>/emery.toml` walks one adapter live through the shipped `emery` binary and the Cursor backend ([examples/README.md](examples/README.md)); the graded live eval — being recreated as a root example beside the live examples — proves prompt quality end to end and writes the dated scorecard.
@@ -86,7 +86,7 @@ Before a train publishes, these gates must hold:
 3. Every adapter's `emery-version` names the minimum host that can run this train.
 4. Releasing a new SemVer: the GHCR version tag must not already exist for a first-time push of that train.
 
-**Publish Release** runs CI, tags and creates the GitHub Release, then release-builds every adapter and pushes each as a Wasm OCI artifact to `ghcr.io/augentic/emery-adapters/<name>:<version>` via the same `make release` / `make publish <name>` path used locally. The helper derives `<version>` from the workspace manifest.
+**Publish Release** runs CI, tags and creates the GitHub Release, then release-builds every adapter and pushes each as a Wasm OCI artifact to `ghcr.io/augentic/emery-adapters/<name>:<version>` via the same build and `make publish <name>` path used locally. The helper derives `<version>` from the workspace manifest.
 
 A brand-new package is created **private**: flip it to public in the GHCR package settings (`https://github.com/orgs/augentic/packages/container/emery-adapters%2F<name>/settings`) so anonymous consumers can pull, then confirm the round-trip:
 
@@ -98,7 +98,7 @@ Local breakout (retry a single adapter after GHCR login):
 
 ```bash
 gh auth token | docker login ghcr.io -u <github-user> --password-stdin
-make release
+cargo build --workspace --target wasm32-wasip2 --release
 make publish <name>
 ```
 

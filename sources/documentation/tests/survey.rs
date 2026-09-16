@@ -7,6 +7,7 @@
 
 use std::path::Path;
 
+use documentation::survey::survey;
 use emery_sdk::{Seam, SourceContent};
 
 fn workspace(root: &Path) -> SourceContent {
@@ -33,7 +34,7 @@ fn bound_tree() {
     let root = tempfile::tempdir().expect("a scratch tree");
     tree(root.path(), ["guide/intro.md", "guide/setup.md"]);
 
-    let seams = documentation::survey(&workspace(root.path())).expect("the tree is surveyed");
+    let seams = survey(&workspace(root.path())).expect("the tree is surveyed");
 
     assert_eq!(seams, [Seam::Whole]);
 }
@@ -56,7 +57,7 @@ fn two_directories() {
         ],
     );
 
-    let seams = documentation::survey(&workspace(root.path())).expect("the tree is surveyed");
+    let seams = survey(&workspace(root.path())).expect("the tree is surveyed");
 
     assert_eq!(
         seams,
@@ -88,7 +89,7 @@ fn engine_files() {
         ],
     );
 
-    let seams = documentation::survey(&workspace(root.path())).expect("the tree is surveyed");
+    let seams = survey(&workspace(root.path())).expect("the tree is surveyed");
 
     assert_eq!(
         seams,
@@ -101,7 +102,7 @@ fn engine_files() {
 fn inline_value() {
     let content = SourceContent::Value("Orders are placed over HTTP.".to_string());
 
-    let seams = documentation::survey(&content).expect("a value is surveyed");
+    let seams = survey(&content).expect("a value is surveyed");
 
     assert_eq!(seams, [Seam::Whole]);
 }

@@ -2,25 +2,27 @@
 
 Live `specify` journeys via [omnia-cursor](https://github.com/augentic/omnia-backends/tree/main/crates/cursor): the shipped `emery` binary loads a built first-party adapter by path, the adapter extracts claims from its fixture through the host model, the engine synthesises `spec.md` / `design.md`, and the revision commits.
 
-| Example                                   | Input                                          | Exercises                                                     |
-| ----------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------- |
-| [documentation](documentation/emery.toml) | [docs/](documentation/docs/) — specification   | `Workspace` over prose                                        |
-| [typescript](typescript/emery.toml)       | [src/](typescript/src/) — behaviour            | `Workspace` over code                                         |
-| [intent](intent/emery.toml)                | inline `description`; nothing lent             | `Value`; claims anchor `[unknown]`                            |
-| [all three](emery.toml)                   | the three sources above                        | grouping and authority (`intent > documentation > behaviour`) |
+
+| Example                                   | Input                                        | Exercises                                                     |
+| ----------------------------------------- | -------------------------------------------- | ------------------------------------------------------------- |
+| [documentation](documentation/emery.toml) | [docs/](documentation/docs/) — specification | `Workspace` over prose                                        |
+| [typescript](typescript/emery.toml)       | [src/](typescript/src/) — behaviour          | `Workspace` over code                                         |
+| [intent](intent/emery.toml)               | inline `description`; nothing lent           | `Value`; claims anchor `[unknown]`                            |
+| [all three](emery.toml)                   | the three sources above                      | grouping and authority (`intent > documentation > behaviour`) |
+
+
 
 
 ## Prerequisites
 
 1. The `emery` binary on `PATH`. There is no published binary:
-
   ```bash
   cargo install --git https://github.com/augentic/emery --locked
   ```
-
 2. [cursor-sdk-bridge](https://github.com/cursor/sdk-bridge). See [below](#installing-cursor-sdk-bridge) for installation.
-
 3. `CURSOR_API_KEY`
+
+
 
 ## Build and run
 
@@ -28,7 +30,7 @@ Run from the repository root: `emery` mounts the invocation directory as the pro
 
 ```bash
 # build every source adapter into target/wasm32-wasip2/release/<name>.wasm
-make release
+cargo build --workspace --target wasm32-wasip2 --release
 
 # run the example
 export CURSOR_API_KEY=<Cursor API key>

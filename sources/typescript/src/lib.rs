@@ -10,16 +10,35 @@
 //! `wasm32` alone, so the survey is tested natively.
 
 #[cfg(target_arch = "wasm32")]
-mod guest;
-mod registry {
-    emery_sdk::registry!();
+mod guest {
+    use emery_sdk::export::{self, AdapterId, AdapterMetadata, Error, Evidence, Guest, Input};
+    use emery_sdk::model::WasiModel;
+    use emery_sdk::{Context, SourceInput, SourceKind};
+
+    use crate::{prose, survey};
+
+    struct Adapter;
+    export::export!(Adapter with_types_in export);
+
+    impl Guest for Adapter {
+        fn metadata(_id: AdapterId) -> AdapterMetadata {
+            export::metadata(SourceKind::Behaviour)
+        }
+
+        async fn extract(id: AdapterId, input: Input) -> Result<Evidence, Error> {
+            let input = SourceInput::from(input);
+            let ctx = Context {
+                adapter_id: &id,
+                input: &input,
+            };
+            let seams = survey::survey(&WasiModel, &ctx).await?;
+            Ok(emery_sdk::mine(&WasiModel, &ctx, prose::docs(), &seams).await?.into())
+        }
+    }
 }
-mod survey;
 
-use emery_sdk::SourceKind;
-
-pub use self::registry::docs;
-pub use self::survey::survey;
-
-/// The kind of source the adapter reads.
-pub const KIND: SourceKind = SourceKind::Behaviour;
+/// The prose corpus for the adapter.
+pub mod prose {
+    emery_sdk::include_prose!();
+}
+pub mod survey;

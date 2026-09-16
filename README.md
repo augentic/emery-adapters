@@ -33,10 +33,10 @@ cargo nextest run -p emery-adapters  # the root component suites: every componen
 
 ## Live examples
 
-`examples/<name>/` is an `emery.toml` that binds the shipped component by path — `make release` builds every one — and the fixture it reads. `emery specify` extracts through the Cursor model backend and commits the revision; `emery show spec` reviews it — the same journey an operator's project takes. Needs an `emery` binary, `cursor-sdk-bridge`, and `CURSOR_API_KEY`; see [examples/README.md](examples/README.md).
+`examples/<name>/` is an `emery.toml` that binds the shipped component by path — `cargo build --workspace --target wasm32-wasip2 --release` builds every one — and the fixture it reads. `emery specify` extracts through the Cursor model backend and commits the revision; `emery show spec` reviews it — the same journey an operator's project takes. Needs an `emery` binary, `cursor-sdk-bridge`, and `CURSOR_API_KEY`; see [examples/README.md](examples/README.md).
 
 ```bash
-make release                                              # every component → target/wasm32-wasip2/release/
+cargo build --workspace --target wasm32-wasip2 --release   # every component
 emery specify --config examples/documentation/emery.toml  # or intent, typescript; examples/emery.toml runs all three
 emery show spec
 ```

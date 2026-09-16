@@ -10,7 +10,7 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use emery_sdk::registry::body;
+use emery_sdk::prose::body;
 use emery_sdk::survey::Partition;
 use emery_sdk::{Doc, Evidence};
 
@@ -64,19 +64,19 @@ fn worked_example(prompt: &str) -> &str {
 
 #[test]
 fn documentation() {
-    corpus(documentation::docs());
+    corpus(documentation::prose::docs());
 }
 
 #[test]
 fn intent() {
-    corpus(intent::docs());
+    corpus(intent::prose::docs());
 }
 
 // The typescript survey asks the model, so its survey prompt must be
 // embedded; a missing one is `server_error` on every multi-directory tree.
 #[test]
 fn typescript() {
-    let docs = typescript::docs();
+    let docs = typescript::prose::docs();
     corpus(docs);
     assert!(body(docs, "prompts/survey.md").is_some(), "`prompts/survey.md` is embedded");
 }

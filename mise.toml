@@ -12,21 +12,6 @@ includes = ["mise-rust.toml"]
 # Adapter overrides
 # -------------------------------------
 
-# [tasks.wasm]
-# run = "cargo clippy --workspace --exclude emery-adapters --lib --examples --target wasm32-wasip2 -- -D warnings"
-
-# [tasks.check]
-# depends = ["fmt", "lint", "wasm", "test", "test-docs", "doc"]
-
-# [tasks.adapter]
-# run = '''
-# name="${1:?usage: make adapter <name>}"
-# cargo build -p "$name" --target wasm32-wasip2 --release
-# '''
-
-[tasks.release]
-run = "cargo build --workspace --target wasm32-wasip2 --release"
-
 [tasks.publish]
 run = '''
 name="${1:?usage: make publish <name>}"

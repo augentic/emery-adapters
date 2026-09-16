@@ -8,6 +8,7 @@
 use std::path::Path;
 
 use emery_sdk::{Error, Seam, SourceContent};
+use intent::survey::survey;
 
 const BRIEF: &str = "Let users reset passwords by email.";
 
@@ -23,7 +24,7 @@ fn value(brief: &str) -> SourceContent {
 // whole.
 #[test]
 fn inline_value() {
-    let seams = intent::survey(&value(BRIEF)).expect("the brief is surveyed");
+    let seams = survey(&value(BRIEF)).expect("the brief is surveyed");
 
     assert_eq!(seams, [Seam::Whole]);
 }
@@ -37,7 +38,7 @@ fn one_file() {
     std::fs::create_dir(&nested).expect("the nested directory is created");
     std::fs::write(nested.join("intent.md"), BRIEF).expect("the brief is written");
 
-    let seams = intent::survey(&workspace(root.path())).expect("the tree is surveyed");
+    let seams = survey(&workspace(root.path())).expect("the tree is surveyed");
 
     let [Seam::Note(note)] = seams.as_slice() else {
         panic!("a one-file tree is one note, got {seams:?}");
@@ -50,13 +51,13 @@ fn one_file() {
 #[test]
 fn not_one_file() {
     let empty = tempfile::tempdir().expect("a scratch tree");
-    let none = intent::survey(&workspace(empty.path()));
+    let none = survey(&workspace(empty.path()));
     assert!(matches!(none, Err(Error::BadRequest { .. })), "got {none:?}");
 
     let several = tempfile::tempdir().expect("a scratch tree");
     std::fs::write(several.path().join("one.md"), "first").expect("the first file is written");
     std::fs::write(several.path().join("two.md"), "second").expect("the second file is written");
-    let many = intent::survey(&workspace(several.path()));
+    let many = survey(&workspace(several.path()));
     assert!(matches!(many, Err(Error::BadRequest { .. })), "got {many:?}");
 }
 
@@ -64,11 +65,11 @@ fn not_one_file() {
 // empty success.
 #[test]
 fn empty_brief() {
-    let inline = intent::survey(&value("  \n"));
+    let inline = survey(&value("  \n"));
     assert!(matches!(inline, Err(Error::BadRequest { .. })), "got {inline:?}");
 
     let root = tempfile::tempdir().expect("a scratch tree");
     std::fs::write(root.path().join("intent.md"), "\n\t \n").expect("the blank brief is written");
-    let tree = intent::survey(&workspace(root.path()));
+    let tree = survey(&workspace(root.path()));
     assert!(matches!(tree, Err(Error::BadRequest { .. })), "got {tree:?}");
 }
