@@ -22,7 +22,7 @@ const FLOOR: usize = 2;
 ///
 /// Returns [`Error::ServerError`] when a directory cannot be read, and
 /// [`Error::BadRequest`] for an entry whose name is not UTF-8.
-pub async fn survey(ctx: &Context<'_>) -> Result<Vec<Seam>, Error> {
+pub fn survey(ctx: &Context<'_>) -> Result<Vec<Seam>, Error> {
     let SourceContent::Workspace(root) = &ctx.input.content else {
         return Ok(vec![Seam::Whole]);
     };
@@ -32,6 +32,7 @@ pub async fn survey(ctx: &Context<'_>) -> Result<Vec<Seam>, Error> {
     if groups.len() < 2 {
         return Ok(vec![Seam::Whole]);
     }
+    
     Ok(groups.into_iter().map(Seam::Files).collect())
 }
 

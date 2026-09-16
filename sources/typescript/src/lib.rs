@@ -14,14 +14,13 @@ pub mod survey;
 #[cfg(target_arch = "wasm32")]
 mod guest {
     use emery_sdk::export::{self, AdapterId, AdapterMetadata, Error, Evidence, Guest, Input};
-    use emery_sdk::model::WasiModel;
     use emery_sdk::{Doc, SourceKind};
 
     use crate::survey;
 
     // The extraction and survey prompts and their references, from the tree
     // beside `src/`.
-    static DOCS: &[Doc] = emery_sdk::include_prose!("../prose");
+    pub static DOCS: &[Doc] = emery_sdk::include_prose!("../prose");
 
     struct Adapter;
     export::export!(Adapter with_types_in export);
@@ -32,10 +31,7 @@ mod guest {
         }
 
         async fn extract(id: AdapterId, input: Input) -> Result<Evidence, Error> {
-            emery_sdk::extract(id, input, DOCS, async |ctx| {
-                survey::survey(&WasiModel, ctx, DOCS).await
-            })
-            .await
+            emery_sdk::extract(id, input, DOCS, survey::survey).await
         }
     }
 }

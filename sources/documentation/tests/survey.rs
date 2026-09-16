@@ -2,8 +2,8 @@
 //!
 //! How a tree cuts into seams — one `Files` seam per top-level directory that
 //! meets the floor, the rest of the tree as one more, and no cut at all when
-//! the tree is no finer than itself. The survey is a plain fn over the input:
-//! it has no model to ask, so no test needs one.
+//! the tree is no finer than itself. The survey is a plain fn over the call's
+//! context: it has no model to ask, so no test needs one.
 
 use std::path::Path;
 

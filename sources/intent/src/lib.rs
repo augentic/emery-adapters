@@ -28,8 +28,7 @@ mod guest {
         }
 
         async fn extract(id: AdapterId, input: Input) -> Result<Evidence, Error> {
-            emery_sdk::extract(id, input, DOCS, async |ctx| survey::survey(&ctx.input.content))
-                .await
+            emery_sdk::extract(id, input, DOCS, async |ctx| survey::survey(ctx)).await
         }
     }
 }
