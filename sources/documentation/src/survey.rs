@@ -1,13 +1,7 @@
 //! The survey of a documentation tree: one seam per top-level directory.
 
-use std::path::Path;
-
+use emery_sdk::survey::Tree;
 use emery_sdk::{Context, Error, Seam, SourceContent};
-
-// Documents a directory holds before it is mined on its own; a smaller one
-// folds into the root's seam. A model call costs an agent start, so a
-// directory of one document is not worth one.
-const FLOOR: usize = 2;
 
 /// Returns the seams to mine: the tree cut by directory, or the input whole.
 ///
@@ -27,15 +21,10 @@ pub fn survey(ctx: &Context<'_>) -> Result<Vec<Seam>, Error> {
         return Ok(vec![Seam::Whole]);
     };
 
-    let files = emery_sdk::survey::files(Path::new(root), |path, _| !hidden(path))?;
-    let groups = emery_sdk::survey::by_directory(files, FLOOR);
+    let groups = Tree::list(root, |entry| !entry.hidden())?.by_directory(2);
     if groups.len() < 2 {
         return Ok(vec![Seam::Whole]);
     }
-    
-    Ok(groups.into_iter().map(Seam::Files).collect())
-}
 
-fn hidden(path: &Path) -> bool {
-    path.file_name().and_then(|name| name.to_str()).is_some_and(|name| name.starts_with('.'))
+    Ok(groups.into_iter().map(Seam::Files).collect())
 }

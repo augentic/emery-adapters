@@ -1,9 +1,8 @@
 //! The survey of a code tree: the model groups the modules by the surface they serve.
 
 use std::fmt::Write as _;
-use std::path::Path;
 
-use emery_sdk::survey::Entry;
+use emery_sdk::survey::{Entry, Tree};
 use emery_sdk::{Context, Doc, Error, Model, Seam, SourceContent};
 
 // Source files a group holds before it is mined on its own; a smaller one
@@ -48,17 +47,20 @@ pub async fn survey<P: Model>(
         return Ok(vec![Seam::Whole]);
     };
 
-    let files = emery_sdk::survey::files(Path::new(root), |path, entry| match entry {
-        Entry::Dir => !hidden(path) && !SKIP_DIRS.contains(&name(path)),
-        Entry::File => production(path),
+    let tree = Tree::list(root, |entry| {
+        !entry.hidden()
+            && match entry {
+                Entry::Dir(_) => !SKIP_DIRS.contains(&entry.name()),
+                Entry::File(_) => production(entry.name()),
+            }
     })?;
-    
+
     // A tree of one directory is too small to be worth a survey turn.
-    if emery_sdk::survey::by_directory(files.clone(), FLOOR).len() < 2 {
+    if tree.by_directory(FLOOR).len() < 2 {
         return Ok(vec![Seam::Whole]);
     }
 
-    let groups = emery_sdk::survey::by_model(model, ctx, docs, &files, FLOOR).await?;
+    let groups = tree.by_model(model, ctx, docs, FLOOR).await?;
     Ok(groups.into_iter().map(|group| Seam::Note(note(root, &group))).collect())
 }
 
@@ -86,24 +88,11 @@ fn note(root: &str, files: &[String]) -> String {
 
 // A production source file: a mined extension on a stem that is not marked
 // as a declaration file or a test (`types.d.ts`, `mail.test.ts`).
-fn production(path: &Path) -> bool {
-    let name = name(path);
-    if name.starts_with('.') {
-        return false;
-    }
+fn production(name: &str) -> bool {
     let mut segments = name.rsplit('.');
     let (Some(extension), Some(before)) = (segments.next(), segments.next()) else {
         return false;
     };
     let marked = segments.next().is_some() && MARKERS.contains(&before);
     EXTENSIONS.contains(&extension) && !marked
-}
-
-fn hidden(path: &Path) -> bool {
-    name(path).starts_with('.')
-}
-
-// The entry's own name; `survey::files` offers UTF-8 paths alone.
-fn name(path: &Path) -> &str {
-    path.file_name().and_then(|name| name.to_str()).unwrap_or_default()
 }
