@@ -17,18 +17,19 @@ const MARKERS: &[&str] = &["d", "test", "spec"];
 
 /// Returns the seams to mine: one per surface the source exposes, or an inline value whole.
 ///
-/// The survey turn is put to `model` under the `prompts/survey.md` among
-/// `docs`, the adapter's embedded corpus, with the root lent so the model
-/// reads the tree itself. A surface's entry must be a production module of
-/// the tree — dependencies, build output, tests, declaration files, and dot
-/// entries are not production source, and an entry named there goes back to
-/// the model as a finding. Each surface the model finds — a route, a command,
-/// a job, an exported API — is one [`Seam::Note`] lent the whole root and
-/// told the surface's name and entry, so the extract call starts there,
-/// follows what the surface reaches through the tree, and claims what a
-/// caller observes through it. A module is mined through the surfaces that
-/// reach it, never on its own: there is no remainder. An inline value is the
-/// bound input whole, with no survey turn spent.
+/// The survey turn is put to the model `ctx` carries under the
+/// `prompts/survey.md` among `docs`, the adapter's embedded corpus, with the
+/// root lent so the model reads the tree itself. A surface's entry must be a
+/// production module of the tree — dependencies, build output, tests,
+/// declaration files, and dot entries are not production source, and an
+/// entry named there goes back to the model as a finding. Each surface the
+/// model finds — a route, a command, a job, an exported API — is one
+/// [`Seam::Note`] lent the whole root and told the surface's name and entry,
+/// so the extract call starts there, follows what the surface reaches
+/// through the tree, and claims what a caller observes through it. A module
+/// is mined through the surfaces that reach it, never on its own: there is
+/// no remainder. An inline value is the bound input whole, with no survey
+/// turn spent.
 ///
 /// # Errors
 ///
@@ -39,13 +40,13 @@ const MARKERS: &[&str] = &["d", "test", "spec"];
 /// - [`Error::ServerError`] when `docs` holds no `prompts/survey.md`.
 /// - [`Error::BadGateway`] for a tool or transport failure.
 pub async fn survey<P: Model>(
-    model: &P, ctx: &Context<'_>, docs: &'static [Doc],
+    ctx: &Context<'_, P>, docs: &'static [Doc],
 ) -> Result<Vec<Seam>, Error> {
     let SourceContent::Workspace(root) = &ctx.input.content else {
         return Ok(vec![Seam::Whole]);
     };
 
-    let surfaces = emery_sdk::survey::surfaces(model, ctx, docs, keep).await?;
+    let surfaces = emery_sdk::survey::surfaces(ctx, docs, keep).await?;
     if surfaces.is_empty() {
         return Err(bad_request!(
             "`{key}`: the source exposes no surface — nothing under the root registers a route, \

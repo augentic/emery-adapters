@@ -8,16 +8,9 @@
 use std::path::Path;
 
 use documentation::survey::survey;
-use emery_sdk::{Context, Seam, SourceInput};
+use emery_sdk::{Seam, SourceInput};
 
 const KEY: &str = "docs";
-
-const fn ctx(input: &SourceInput) -> Context<'_> {
-    Context {
-        adapter_id: "source:documentation",
-        input,
-    }
-}
 
 // An empty document at each relative path, directories made on the way; the
 // root as the engine lends it.
@@ -42,7 +35,7 @@ fn bound_tree() {
     let root = tree(scratch.path(), ["guide/intro.md", "guide/setup.md"]);
 
     let input = SourceInput::workspace(KEY, root);
-    let seams = survey(&ctx(&input)).expect("the tree is surveyed");
+    let seams = survey(&input).expect("the tree is surveyed");
 
     assert_eq!(seams, [Seam::Whole]);
 }
@@ -66,7 +59,7 @@ fn two_directories() {
     );
 
     let input = SourceInput::workspace(KEY, root);
-    let seams = survey(&ctx(&input)).expect("the tree is surveyed");
+    let seams = survey(&input).expect("the tree is surveyed");
 
     assert_eq!(
         seams,
@@ -99,7 +92,7 @@ fn engine_files() {
     );
 
     let input = SourceInput::workspace(KEY, root);
-    let seams = survey(&ctx(&input)).expect("the tree is surveyed");
+    let seams = survey(&input).expect("the tree is surveyed");
 
     assert_eq!(
         seams,
@@ -112,7 +105,7 @@ fn engine_files() {
 fn inline_value() {
     let input = SourceInput::value(KEY, "Orders are placed over HTTP.");
 
-    let seams = survey(&ctx(&input)).expect("a value is surveyed");
+    let seams = survey(&input).expect("a value is surveyed");
 
     assert_eq!(seams, [Seam::Whole]);
 }

@@ -16,6 +16,6 @@ fn metadata() -> AdapterMetadata {
     emery_sdk::metadata(SourceKind::Behaviour)
 }
 
-fn extract(_ctx: &Context<'_>) -> impl Future<Output = Result<Evidence, Error>> {
+fn extract<P>(_ctx: &Context<'_, P>) -> impl Future<Output = Result<Evidence, Error>> {
     ready(Ok(maximal()))
 }

@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use anyhow::Context as _;
-use emery_sdk::{Context, Error, Seam, SourceContent, bad_request};
+use emery_sdk::{Error, Seam, SourceContent, SourceInput, bad_request};
 
 /// Returns the one seam to mine: the brief, whichever arm carries it, never split.
 ///
@@ -20,8 +20,8 @@ use emery_sdk::{Context, Error, Seam, SourceContent, bad_request};
 ///   legitimately empty, so it fails closed before a model call is spent —
 ///   and for a tree holding no file or several.
 /// - [`Error::ServerError`] when the tree cannot be read.
-pub fn survey(ctx: &Context<'_>) -> Result<Vec<Seam>, Error> {
-    let seam = match &ctx.input.content {
+pub fn survey(input: &SourceInput) -> Result<Vec<Seam>, Error> {
+    let seam = match &input.content {
         SourceContent::Value(value) => {
             require_brief(value)?;
             Seam::Whole

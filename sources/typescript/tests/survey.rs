@@ -23,10 +23,13 @@ static DOCS: &[Doc] = emery_sdk::include_prose!("../prose");
 
 const KEY: &str = "legacy-monolith";
 
-const fn ctx(input: &SourceInput) -> Context<'_> {
+// The call as the guest's lift builds it, with the scripted model in the
+// host's slot.
+const fn ctx<'a>(input: &'a SourceInput, model: &'a Scripted) -> Context<'a, Scripted> {
     Context {
         adapter_id: "source:typescript",
         input,
+        model,
     }
 }
 
@@ -84,7 +87,7 @@ async fn single_directory() {
     );
 
     let input = SourceInput::workspace(KEY, root);
-    let seams = survey(&model, &ctx(&input), DOCS).await.expect("the inventory is accepted");
+    let seams = survey(&ctx(&input, &model), DOCS).await.expect("the inventory is accepted");
 
     let seen = model.seen();
     assert_eq!(seen.len(), 1, "one survey turn");
@@ -120,7 +123,7 @@ async fn shared_entry() {
         tree(scratch.path(), ["src/index.ts", "src/users/router.ts", "src/users/repository.ts"]);
 
     let input = SourceInput::workspace(KEY, root);
-    let seams = survey(&model, &ctx(&input), DOCS).await.expect("the inventory is accepted");
+    let seams = survey(&ctx(&input, &model), DOCS).await.expect("the inventory is accepted");
 
     let surfaces: Vec<_> = notes(&seams).into_iter().map(surface).collect();
     assert_eq!(
@@ -170,7 +173,7 @@ async fn non_production() {
     );
 
     let input = SourceInput::workspace(KEY, root);
-    let seams = survey(&model, &ctx(&input), DOCS).await.expect("the second inventory is accepted");
+    let seams = survey(&ctx(&input, &model), DOCS).await.expect("the second inventory is accepted");
 
     let surfaces: Vec<_> = notes(&seams).into_iter().map(surface).collect();
     assert_eq!(surfaces, [("POST /orders", "routes/orders.ts")]);
@@ -208,7 +211,7 @@ async fn corrected_inventory() {
     let root = tree(scratch.path(), ["routes/orders.ts", "routes/users.ts", "services/orders.ts"]);
 
     let input = SourceInput::workspace(KEY, root);
-    let seams = survey(&model, &ctx(&input), DOCS).await.expect("the second inventory is accepted");
+    let seams = survey(&ctx(&input, &model), DOCS).await.expect("the second inventory is accepted");
 
     let surfaces: Vec<_> = notes(&seams).into_iter().map(surface).collect();
     assert_eq!(surfaces, [("POST /orders", "routes/orders.ts")]);
@@ -230,7 +233,7 @@ async fn no_surface() {
     let internals = tempfile::tempdir().expect("a scratch tree");
     let root = tree(internals.path(), ["src/lib/db.ts", "src/lib/logger.ts", "src/lib/format.ts"]);
     let input = SourceInput::workspace(KEY, root);
-    let error = survey(&model, &ctx(&input), DOCS).await.expect_err("no surface, nothing to mine");
+    let error = survey(&ctx(&input, &model), DOCS).await.expect_err("no surface, nothing to mine");
     assert!(matches!(error, Error::BadRequest { .. }), "{error}");
     assert!(error.description().contains("exposes no surface"), "{error}");
 
@@ -240,7 +243,7 @@ async fn no_surface() {
         ["README.md", "dist/bundle.js", "tests/orders.e2e.ts", "src/types.d.ts"],
     );
     let input = SourceInput::workspace(KEY, root);
-    let error = survey(&model, &ctx(&input), DOCS).await.expect_err("no module to enter at");
+    let error = survey(&ctx(&input, &model), DOCS).await.expect_err("no module to enter at");
     assert!(matches!(error, Error::BadRequest { .. }), "{error}");
     assert!(error.description().contains("exposes no surface"), "{error}");
     model.assert_exhausted();
@@ -253,7 +256,7 @@ async fn inline_value() {
     let model = Scripted::default();
     let input = SourceInput::value(KEY, "export const port = 8080;");
 
-    let seams = survey(&model, &ctx(&input), DOCS).await.expect("a value is surveyed");
+    let seams = survey(&ctx(&input, &model), DOCS).await.expect("a value is surveyed");
 
     assert_eq!(seams, [Seam::Whole]);
     assert!(model.seen().is_empty(), "no turn was spent");

@@ -15,6 +15,6 @@ fn metadata() -> AdapterMetadata {
     emery_sdk::metadata(SourceKind::Documentation)
 }
 
-fn extract(ctx: &Context<'_>) -> impl Future<Output = Result<Evidence, Error>> {
+fn extract<P>(ctx: &Context<'_, P>) -> impl Future<Output = Result<Evidence, Error>> {
     ready(Err(bad_gateway!("the probe's upstream failed for source `{}`", ctx.input.key)))
 }

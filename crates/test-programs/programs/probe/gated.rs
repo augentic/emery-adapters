@@ -5,7 +5,7 @@
 
 #![cfg(target_arch = "wasm32")]
 
-use emery_sdk::{AdapterMetadata, Context, Doc, Error, Evidence, Provider, Seam, SourceKind};
+use emery_sdk::{AdapterMetadata, Context, Doc, Error, Evidence, Model, Seam, SourceKind};
 
 /// Sorted by path, as the walker emits them.
 const DOCS: &[Doc] = &[
@@ -25,6 +25,6 @@ fn metadata() -> AdapterMetadata {
     emery_sdk::metadata(SourceKind::Documentation)
 }
 
-async fn extract(ctx: &Context<'_>) -> Result<Evidence, Error> {
-    emery_sdk::mine(&Provider, ctx, DOCS, &[Seam::Whole]).await
+async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {
+    emery_sdk::mine(ctx, DOCS, &[Seam::Whole]).await
 }

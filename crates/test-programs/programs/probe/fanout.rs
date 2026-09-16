@@ -6,7 +6,7 @@
 
 #![cfg(target_arch = "wasm32")]
 
-use emery_sdk::{AdapterMetadata, Context, Doc, Error, Evidence, Provider, Seam, SourceKind};
+use emery_sdk::{AdapterMetadata, Context, Doc, Error, Evidence, Model, Seam, SourceKind};
 
 const DOCS: &[Doc] = &[Doc {
     path: "prompts/extract.md",
@@ -22,10 +22,10 @@ fn metadata() -> AdapterMetadata {
 // Two seams whatever the input arm, so `mine` holds two completions pending
 // at once over a workspace and over a value; no survey turn is spent
 // choosing them.
-async fn extract(ctx: &Context<'_>) -> Result<Evidence, Error> {
+async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {
     let seams = [
         Seam::Note("The first half of the source.".to_owned()),
         Seam::Note("The second half of the source.".to_owned()),
     ];
-    emery_sdk::mine(&Provider, ctx, DOCS, &seams).await
+    emery_sdk::mine(ctx, DOCS, &seams).await
 }

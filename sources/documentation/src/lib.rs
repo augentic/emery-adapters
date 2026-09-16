@@ -12,7 +12,7 @@ pub mod survey;
 
 #[cfg(target_arch = "wasm32")]
 mod guest {
-    use emery_sdk::{AdapterMetadata, Context, Doc, Error, Evidence, Provider, SourceKind};
+    use emery_sdk::{AdapterMetadata, Context, Doc, Error, Evidence, Model, SourceKind};
 
     use crate::survey;
 
@@ -24,8 +24,8 @@ mod guest {
         emery_sdk::metadata(SourceKind::Documentation)
     }
 
-    async fn extract(ctx: &Context<'_>) -> Result<Evidence, Error> {
-        let seams = survey::survey(ctx)?;
-        emery_sdk::mine(&Provider, ctx, DOCS, &seams).await
+    async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {
+        let seams = survey::survey(ctx.input)?;
+        emery_sdk::mine(ctx, DOCS, &seams).await
     }
 }
