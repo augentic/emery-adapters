@@ -4,7 +4,7 @@ Human-facing contributor guide (toolchain, layout, prompts, pin, publishing). Cr
 
 ## Getting started
 
-1. Clone this repository. Until an engine release carries the extract-only SDK, the engine crates (`emery-sdk`, and `emery-prose` for the build-time `emit` walker) resolve through the `[patch.crates-io]` git patches in the root `Cargo.toml` (see [Engine pin and sibling co-development](#engine-pin-and-sibling-co-development)); once that release exists the pin moves to its tag (`tag = "vX.Y.Z"`, RFC-77 D13). A sibling `../emery` checkout is needed only for co-development (uncomment the path patches) and the live eval (it drives that repo's built `emery` binary).
+1. Clone this repository. Until an engine release carries the extract-only SDK, the engine crates (`emery-sdk`, and `emery-prose` beneath it) resolve through the `[patch.crates-io]` git patches in the root `Cargo.toml` (see [Engine pin and sibling co-development](#engine-pin-and-sibling-co-development)); once that release exists the pin moves to its tag (`tag = "vX.Y.Z"`, RFC-77 D13). A sibling `../emery` checkout is needed only for co-development (uncomment the path patches) and the live eval (it drives that repo's built `emery` binary).
 2. `rustup` picks up the pinned **stable** toolchain from `rust-toolchain.toml` (including the `wasm32-wasip2` target); a nightly toolchain is additionally needed for the `fmt` arm (`cargo +nightly fmt`). The first `make` installs [mise](https://mise.jdx.dev) if it is missing. Also install `cargo-nextest`, `cargo-deny`, and `cargo-vet`. Publishing also uses `wkg`.
 3. Run `make check` from the repo root. Before opening a PR, run `make ci`.
 

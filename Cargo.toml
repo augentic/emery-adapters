@@ -9,16 +9,13 @@ rust-version.workspace = true
 publish.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-documentation.workspace = true
 emery-sdk.workspace = true
-intent.workspace = true
 omnia.workspace = true
 omnia-test = { workspace = true, features = ["host"] }
 omnia-wasi-model.workspace = true
 serde_json.workspace = true
 test-programs.workspace = true
 tokio.workspace = true
-typescript.workspace = true
 
 [lints]
 workspace = true
@@ -51,13 +48,9 @@ omnia-sdk = { version = "0.36.0", default-features = false }
 omnia-test = { version = "0.36.0", default-features = false }
 omnia-wasi-model = "0.36.0"
 
-emery-prose = "0.38.0"
 emery-sdk = "0.38.0"
 
-documentation = { path = "sources/documentation" }
-intent = { path = "sources/intent" }
 test-programs = { path = "crates/test-programs" }
-typescript = { path = "sources/typescript" }
 
 [patch.crates-io]
 # emery-prose = { git = "https://github.com/augentic/emery" }

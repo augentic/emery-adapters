@@ -4,25 +4,21 @@
 //! `## Worked example` parses as the SDK's `Evidence` and passes the claim
 //! gate — the one machine-checkable part of a prompt, and where a contract
 //! change in the engine pin fails first. An adapter that surveys by model
-//! embeds `prompts/survey.md` too, under the same cap, with a worked example
-//! that parses as the SDK's `Partition`. Reference presence is the embed-time
-//! walker's; the embedded prompt is `source.rs`'s.
+//! carries `prompts/survey.md` too, under the same cap, with a worked example
+//! that parses as the SDK's `Partition`. The prompts are read from the
+//! `prose/` tree the embed-time walker copies verbatim; reference presence is
+//! that walker's, and the prompt each component embeds is `source.rs`'s.
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use emery_sdk::prose::body;
+use emery_sdk::Evidence;
 use emery_sdk::survey::Partition;
-use emery_sdk::{Doc, Evidence};
 
 // Every `sources/*` component must have a matching test here.
 test_programs::foreach_adapter!();
 
-/// Checks one adapter's corpus: the extraction prompt, and the survey prompt when embedded.
-///
-/// Each stays under the cap; the extraction example passes the gate and the
-/// survey example is a partition.
-fn corpus(docs: &[Doc]) {
-    let prompt = body(docs, "prompts/extract.md").expect("`prompts/extract.md` is embedded");
+/// Checks an extraction prompt: under the cap, with a worked example that passes the gate.
+fn corpus(prompt: &str) {
     capped("prompts/extract.md", prompt);
 
     // The example is claims alone: a document-level kind would be refused
@@ -31,10 +27,6 @@ fn corpus(docs: &[Doc]) {
         .expect("the worked example is the SDK's Evidence");
     let findings = evidence.findings();
     assert!(findings.is_empty(), "the worked example fails the gate:\n{}", findings.join("\n"));
-
-    if let Some(prompt) = body(docs, "prompts/survey.md") {
-        survey(prompt);
-    }
 }
 
 /// Checks a survey prompt: under the cap, with a worked example that is a `Partition`.
@@ -64,19 +56,19 @@ fn worked_example(prompt: &str) -> &str {
 
 #[test]
 fn documentation() {
-    corpus(documentation::prose::docs());
+    corpus(include_str!("../sources/documentation/prose/prompts/extract.md"));
 }
 
 #[test]
 fn intent() {
-    corpus(intent::prose::docs());
+    corpus(include_str!("../sources/intent/prose/prompts/extract.md"));
 }
 
-// The typescript survey asks the model, so its survey prompt must be
-// embedded; a missing one is `server_error` on every multi-directory tree.
+// The typescript survey asks the model, so its survey prompt must exist —
+// `include_str!` fails the build without it; a missing one would be
+// `server_error` on every multi-directory tree.
 #[test]
 fn typescript() {
-    let docs = typescript::prose::docs();
-    corpus(docs);
-    assert!(body(docs, "prompts/survey.md").is_some(), "`prompts/survey.md` is embedded");
+    corpus(include_str!("../sources/typescript/prose/prompts/extract.md"));
+    survey(include_str!("../sources/typescript/prose/prompts/survey.md"));
 }

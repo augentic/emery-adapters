@@ -18,9 +18,6 @@ workspace = true
 anyhow.workspace = true
 emery-sdk.workspace = true
 
-[build-dependencies]
-emery-prose = { workspace = true, features = ["emit"] }
-
 # The scratch trees `tests/survey.rs` reads; the built component's own suite
 # is the root package's.
 [dev-dependencies]

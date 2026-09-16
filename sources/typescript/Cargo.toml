@@ -18,9 +18,6 @@ workspace = true
 [dependencies]
 emery-sdk.workspace = true
 
-[build-dependencies]
-emery-prose = { workspace = true, features = ["emit"] }
-
 [dev-dependencies]
 tempfile.workspace = true
 tokio.workspace = true

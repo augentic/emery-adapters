@@ -7,13 +7,18 @@
 //! the `source-adapter` world on `wasm32` alone, so the survey is tested
 //! natively.
 
+pub mod survey;
+
 #[cfg(target_arch = "wasm32")]
 mod guest {
     use emery_sdk::export::{self, AdapterId, AdapterMetadata, Error, Evidence, Guest, Input};
     use emery_sdk::model::WasiModel;
-    use emery_sdk::{Context, SourceInput, SourceKind};
+    use emery_sdk::{Context, Doc, SourceInput, SourceKind};
 
-    use crate::{prose, survey};
+    use crate::survey;
+
+    // The extraction prompt and its references, from the tree beside `src/`.
+    static DOCS: &[Doc] = emery_sdk::include_prose!("../prose");
 
     struct Adapter;
     export::export!(Adapter with_types_in export);
@@ -30,13 +35,7 @@ mod guest {
                 input: &input,
             };
             let seams = survey::survey(&input.content)?;
-            Ok(emery_sdk::mine(&WasiModel, &ctx, prose::docs(), &seams).await?.into())
+            Ok(emery_sdk::mine(&WasiModel, &ctx, DOCS, &seams).await?.into())
         }
     }
 }
-
-/// The prose corpus for the adapter.
-pub mod prose {
-    emery_sdk::include_prose!();
-}
-pub mod survey;

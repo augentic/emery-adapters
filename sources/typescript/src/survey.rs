@@ -4,7 +4,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use emery_sdk::survey::Entry;
-use emery_sdk::{Context, Error, Model, Seam, SourceContent};
+use emery_sdk::{Context, Doc, Error, Model, Seam, SourceContent};
 
 // Source files a group holds before it is mined on its own; a smaller one
 // folds into the remainder's seam. A model call costs an agent start, so
@@ -27,20 +27,23 @@ const MARKERS: &[&str] = &["d", "test", "spec"];
 ///
 /// One [`Seam::Note`] per group the model's survey cuts — the modules of one
 /// surface, of at least two files — and one for the rest of the tree, each
-/// lent the whole root and naming the files it mines. Dependencies, build
-/// output, tests, declaration files, and dot entries are not production
-/// source and are never offered. A tree no directory cut would split, or an
-/// inline value, is the bound input whole — a single call, with no survey
-/// turn spent on it.
+/// lent the whole root and naming the files it mines. The survey turn runs
+/// under the `prompts/survey.md` among `docs`, the adapter's embedded
+/// corpus. Dependencies, build output, tests, declaration files, and dot
+/// entries are not production source and are never offered. A tree no
+/// directory cut would split, or an inline value, is the bound input whole —
+/// a single call, with no survey turn spent on it.
 ///
 /// # Errors
 ///
 /// - [`Error::BadRequest`] when the model's grouping could not be brought
 ///   within its rounds, or for an entry whose name is not UTF-8.
-/// - [`Error::ServerError`] when a directory cannot be read, or the build
-///   did not embed `prompts/survey.md`.
+/// - [`Error::ServerError`] when a directory cannot be read, or `docs`
+///   holds no `prompts/survey.md`.
 /// - [`Error::BadGateway`] for a tool or transport failure.
-pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Seam>, Error> {
+pub async fn survey<P: Model>(
+    model: &P, ctx: &Context<'_>, docs: &'static [Doc],
+) -> Result<Vec<Seam>, Error> {
     let SourceContent::Workspace(root) = &ctx.input.content else {
         return Ok(vec![Seam::Whole]);
     };
@@ -54,8 +57,7 @@ pub async fn survey<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Vec<Seam>,
         return Ok(vec![Seam::Whole]);
     }
 
-    let groups =
-        emery_sdk::survey::by_model(model, ctx, crate::prose::docs(), &files, FLOOR).await?;
+    let groups = emery_sdk::survey::by_model(model, ctx, docs, &files, FLOOR).await?;
     Ok(groups.into_iter().map(|group| Seam::Note(note(root, &group))).collect())
 }
 

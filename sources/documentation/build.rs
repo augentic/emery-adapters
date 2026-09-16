@@ -1,7 +1,8 @@
-//! Embeds every Markdown document under `prose/` as the table `include_prose!` includes.
+//! Rebuilds the adapter when a document is added to or removed from `prose/`.
 //!
-//! Symlinks resolve at build time, so the shared runtime references ride along.
+//! `include_prose!` embeds every document under `prose/` by content, so an
+//! edit rebuilds on its own; only a new or deleted file needs the tree watched.
 
 fn main() {
-    emery_prose::emit("prose");
+    println!("cargo::rerun-if-changed=prose");
 }
