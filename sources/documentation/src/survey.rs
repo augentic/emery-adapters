@@ -26,23 +26,13 @@ pub fn survey(ctx: &Context<'_>) -> Result<Vec<Seam>, Error> {
         return Ok(vec![Seam::Whole]);
     };
 
+    // list the tree
     let files = emery_sdk::survey::list(root, |entry| !entry.hidden())?;
-    let groups = by_directory(&files, FLOOR);
-    if groups.len() < 2 {
-        return Ok(vec![Seam::Whole]);
-    }
 
-    Ok(groups.into_iter().map(Seam::Files).collect())
-}
-
-// The sorted files grouped by top-level directory: each directory holding at
-// least `floor` files is one group, in directory order; the root's own files
-// and every smaller directory's fold into one sorted remainder, last, and an
-// empty remainder is dropped.
-fn by_directory(files: &[String], floor: usize) -> Vec<Vec<String>> {
+    // group by top-level directory
     let mut directories: BTreeMap<&str, Vec<String>> = BTreeMap::new();
     let mut remainder = Vec::new();
-    for file in files {
+    for file in &files {
         match file.split_once('/') {
             Some((directory, _)) => {
                 directories.entry(directory).or_default().push(file.clone());
@@ -51,17 +41,26 @@ fn by_directory(files: &[String], floor: usize) -> Vec<Vec<String>> {
         }
     }
 
+    // fold the directories beneath the floor into the remainder
     let mut groups = Vec::with_capacity(directories.len() + 1);
     for group in directories.into_values() {
-        if group.len() >= floor {
+        if group.len() >= FLOOR {
             groups.push(group);
         } else {
             remainder.extend(group);
         }
     }
+
+    // the remainder is the last seam
     if !remainder.is_empty() {
         remainder.sort();
         groups.push(remainder);
     }
-    groups
+
+    // a lone group cuts no finer than the tree
+    if groups.len() < 2 {
+        return Ok(vec![Seam::Whole]);
+    }
+
+    Ok(groups.into_iter().map(Seam::Files).collect())
 }

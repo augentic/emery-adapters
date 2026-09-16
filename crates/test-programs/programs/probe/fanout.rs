@@ -6,16 +6,12 @@
 
 #![cfg(target_arch = "wasm32")]
 
-use emery_sdk::{AdapterMetadata, Context, Doc, Error, Evidence, Model, Seam, SourceKind};
+use emery_sdk::{AdapterMetadata, Context, Doc, Error, Evidence, Provider, Seam, SourceKind};
 
 const DOCS: &[Doc] = &[Doc {
     path: "prompts/extract.md",
     body: "SYSTEM",
 }];
-
-// The probe's capabilities on the WASI defaults: the model alone.
-struct Provider;
-impl Model for Provider {}
 
 emery_sdk::source_adapter!(metadata, extract);
 

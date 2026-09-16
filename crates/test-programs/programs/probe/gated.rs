@@ -5,7 +5,7 @@
 
 #![cfg(target_arch = "wasm32")]
 
-use emery_sdk::{AdapterMetadata, Context, Doc, Error, Evidence, Model, Seam, SourceKind};
+use emery_sdk::{AdapterMetadata, Context, Doc, Error, Evidence, Provider, Seam, SourceKind};
 
 /// Sorted by path, as the walker emits them.
 const DOCS: &[Doc] = &[
@@ -18,10 +18,6 @@ const DOCS: &[Doc] = &[
         body: "Greet warmly.",
     },
 ];
-
-// The probe's capabilities on the WASI defaults: the model alone.
-struct Provider;
-impl Model for Provider {}
 
 emery_sdk::source_adapter!(metadata, extract);
 

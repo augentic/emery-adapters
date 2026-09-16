@@ -8,7 +8,9 @@
 use std::path::Path;
 
 use documentation::survey::survey;
-use emery_sdk::{Context, Seam, SourceContent, SourceInput};
+use emery_sdk::{Context, Seam, SourceInput};
+
+const KEY: &str = "docs";
 
 const fn ctx(input: &SourceInput) -> Context<'_> {
     Context {
@@ -17,28 +19,16 @@ const fn ctx(input: &SourceInput) -> Context<'_> {
     }
 }
 
-fn workspace(root: &Path) -> SourceInput {
-    SourceInput {
-        key: "docs".to_string(),
-        content: SourceContent::Workspace(root.display().to_string()),
-    }
-}
-
-fn value(text: &str) -> SourceInput {
-    SourceInput {
-        key: "docs".to_string(),
-        content: SourceContent::Value(text.to_string()),
-    }
-}
-
-// An empty document at each relative path, directories made on the way.
-fn tree<const N: usize>(root: &Path, files: [&str; N]) {
+// An empty document at each relative path, directories made on the way; the
+// root as the engine lends it.
+fn tree<'a, const N: usize>(root: &'a Path, files: [&str; N]) -> &'a str {
     for file in files {
         let path = root.join(file);
         std::fs::create_dir_all(path.parent().expect("a file has a parent"))
             .expect("the directory is created");
         std::fs::write(path, "").expect("the document is written");
     }
+    root.to_str().expect("a UTF-8 scratch root")
 }
 
 fn files<const N: usize>(paths: [&str; N]) -> Seam {
@@ -48,10 +38,10 @@ fn files<const N: usize>(paths: [&str; N]) -> Seam {
 // A tree of one directory cuts no finer than itself: the bound tree, whole.
 #[test]
 fn bound_tree() {
-    let root = tempfile::tempdir().expect("a scratch tree");
-    tree(root.path(), ["guide/intro.md", "guide/setup.md"]);
+    let scratch = tempfile::tempdir().expect("a scratch tree");
+    let root = tree(scratch.path(), ["guide/intro.md", "guide/setup.md"]);
 
-    let input = workspace(root.path());
+    let input = SourceInput::workspace(KEY, root);
     let seams = survey(&ctx(&input)).expect("the tree is surveyed");
 
     assert_eq!(seams, [Seam::Whole]);
@@ -62,9 +52,9 @@ fn bound_tree() {
 // third, so no document is left out of the survey.
 #[test]
 fn two_directories() {
-    let root = tempfile::tempdir().expect("a scratch tree");
-    tree(
-        root.path(),
+    let scratch = tempfile::tempdir().expect("a scratch tree");
+    let root = tree(
+        scratch.path(),
         [
             "api/orders.md",
             "api/users.md",
@@ -75,7 +65,7 @@ fn two_directories() {
         ],
     );
 
-    let input = workspace(root.path());
+    let input = SourceInput::workspace(KEY, root);
     let seams = survey(&ctx(&input)).expect("the tree is surveyed");
 
     assert_eq!(
@@ -92,9 +82,9 @@ fn two_directories() {
 // documentation: no seam names them.
 #[test]
 fn engine_files() {
-    let root = tempfile::tempdir().expect("a scratch tree");
-    tree(
-        root.path(),
+    let scratch = tempfile::tempdir().expect("a scratch tree");
+    let root = tree(
+        scratch.path(),
         [
             "api/orders.md",
             "api/users.md",
@@ -108,7 +98,7 @@ fn engine_files() {
         ],
     );
 
-    let input = workspace(root.path());
+    let input = SourceInput::workspace(KEY, root);
     let seams = survey(&ctx(&input)).expect("the tree is surveyed");
 
     assert_eq!(
@@ -120,7 +110,7 @@ fn engine_files() {
 // An inline value has no tree to cut: the bound value, whole.
 #[test]
 fn inline_value() {
-    let input = value("Orders are placed over HTTP.");
+    let input = SourceInput::value(KEY, "Orders are placed over HTTP.");
 
     let seams = survey(&ctx(&input)).expect("a value is surveyed");
 

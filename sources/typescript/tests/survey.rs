@@ -14,12 +14,14 @@
 
 use std::path::Path;
 
-use emery_sdk::{Context, Doc, Error, Seam, SourceContent, SourceInput};
+use emery_sdk::{Context, Doc, Error, Seam, SourceInput};
 use omnia_test::guest::Scripted;
 use typescript::survey::survey;
 
 // The adapter's own corpus, so the turn runs under its `prompts/survey.md`.
 static DOCS: &[Doc] = emery_sdk::include_prose!("../prose");
+
+const KEY: &str = "legacy-monolith";
 
 const fn ctx(input: &SourceInput) -> Context<'_> {
     Context {
@@ -28,21 +30,16 @@ const fn ctx(input: &SourceInput) -> Context<'_> {
     }
 }
 
-fn workspace(root: &Path) -> SourceInput {
-    SourceInput {
-        key: "legacy-monolith".to_string(),
-        content: SourceContent::Workspace(root.display().to_string()),
-    }
-}
-
-// An empty module at each relative path, directories made on the way.
-fn tree<const N: usize>(root: &Path, files: [&str; N]) {
+// An empty module at each relative path, directories made on the way; the
+// root as the engine lends it.
+fn tree<'a, const N: usize>(root: &'a Path, files: [&str; N]) -> &'a str {
     for file in files {
         let path = root.join(file);
         std::fs::create_dir_all(path.parent().expect("a file has a parent"))
             .expect("the directory is created");
         std::fs::write(path, "").expect("the module is written");
     }
+    root.to_str().expect("a UTF-8 scratch root")
 }
 
 // Each seam's note; anything else is not this adapter's survey.
@@ -80,13 +77,13 @@ async fn single_directory() {
         {"name":"POST /orders","entry":"src/routes.ts"},
         {"name":"nightly reconciliation job","entry":"src/jobs.ts"}
     ]}"#]);
-    let root = tempfile::tempdir().expect("a scratch tree");
-    tree(
-        root.path(),
+    let scratch = tempfile::tempdir().expect("a scratch tree");
+    let root = tree(
+        scratch.path(),
         ["src/index.ts", "src/routes.ts", "src/orders.ts", "src/jobs.ts", "src/db.ts"],
     );
 
-    let input = workspace(root.path());
+    let input = SourceInput::workspace(KEY, root);
     let seams = survey(&model, &ctx(&input), DOCS).await.expect("the inventory is accepted");
 
     let seen = model.seen();
@@ -94,8 +91,7 @@ async fn single_directory() {
     let request = &seen[0];
     let prompt = emery_sdk::prose::body(DOCS, "prompts/survey.md").expect("embedded");
     assert_eq!(request.system.as_deref(), Some(prompt), "the survey prompt is the system");
-    let lend = root.path().display().to_string();
-    assert_eq!(request.workspace.as_deref(), Some(lend.as_str()), "the root is lent");
+    assert_eq!(request.workspace.as_deref(), Some(root), "the root is lent");
 
     let notes = notes(&seams);
     let surfaces: Vec<_> = notes.iter().map(|note| surface(note)).collect();
@@ -103,7 +99,7 @@ async fn single_directory() {
         surfaces,
         [("POST /orders", "src/routes.ts"), ("nightly reconciliation job", "src/jobs.ts")]
     );
-    let lend = format!("read-only view at `{lend}`");
+    let lend = format!("read-only view at `{root}`");
     for note in notes {
         assert!(note.contains(&lend), "the root is lent: {note}");
     }
@@ -119,10 +115,11 @@ async fn shared_entry() {
         {"name":"POST /users","entry":"src/users/router.ts"},
         {"name":"GET /users/:id","entry":"src/users/router.ts"}
     ]}"#]);
-    let root = tempfile::tempdir().expect("a scratch tree");
-    tree(root.path(), ["src/index.ts", "src/users/router.ts", "src/users/repository.ts"]);
+    let scratch = tempfile::tempdir().expect("a scratch tree");
+    let root =
+        tree(scratch.path(), ["src/index.ts", "src/users/router.ts", "src/users/repository.ts"]);
 
-    let input = workspace(root.path());
+    let input = SourceInput::workspace(KEY, root);
     let seams = survey(&model, &ctx(&input), DOCS).await.expect("the inventory is accepted");
 
     let surfaces: Vec<_> = notes(&seams).into_iter().map(surface).collect();
@@ -153,9 +150,9 @@ async fn non_production() {
         ]}"#,
         r#"{"surfaces":[{"name":"POST /orders","entry":"routes/orders.ts"}]}"#,
     ]);
-    let root = tempfile::tempdir().expect("a scratch tree");
-    tree(
-        root.path(),
+    let scratch = tempfile::tempdir().expect("a scratch tree");
+    let root = tree(
+        scratch.path(),
         [
             "routes/orders.ts",
             "routes/users.ts",
@@ -172,7 +169,7 @@ async fn non_production() {
         ],
     );
 
-    let input = workspace(root.path());
+    let input = SourceInput::workspace(KEY, root);
     let seams = survey(&model, &ctx(&input), DOCS).await.expect("the second inventory is accepted");
 
     let surfaces: Vec<_> = notes(&seams).into_iter().map(surface).collect();
@@ -207,10 +204,10 @@ async fn corrected_inventory() {
         r#"{"surfaces":[{"name":"POST /orders","entry":"routes/ghost.ts"}]}"#,
         r#"{"surfaces":[{"name":"POST /orders","entry":"routes/orders.ts"}]}"#,
     ]);
-    let root = tempfile::tempdir().expect("a scratch tree");
-    tree(root.path(), ["routes/orders.ts", "routes/users.ts", "services/orders.ts"]);
+    let scratch = tempfile::tempdir().expect("a scratch tree");
+    let root = tree(scratch.path(), ["routes/orders.ts", "routes/users.ts", "services/orders.ts"]);
 
-    let input = workspace(root.path());
+    let input = SourceInput::workspace(KEY, root);
     let seams = survey(&model, &ctx(&input), DOCS).await.expect("the second inventory is accepted");
 
     let surfaces: Vec<_> = notes(&seams).into_iter().map(surface).collect();
@@ -231,18 +228,18 @@ async fn corrected_inventory() {
 async fn no_surface() {
     let model = Scripted::answering([r#"{"surfaces":[]}"#, r#"{"surfaces":[]}"#]);
     let internals = tempfile::tempdir().expect("a scratch tree");
-    tree(internals.path(), ["src/lib/db.ts", "src/lib/logger.ts", "src/lib/format.ts"]);
-    let input = workspace(internals.path());
+    let root = tree(internals.path(), ["src/lib/db.ts", "src/lib/logger.ts", "src/lib/format.ts"]);
+    let input = SourceInput::workspace(KEY, root);
     let error = survey(&model, &ctx(&input), DOCS).await.expect_err("no surface, nothing to mine");
     assert!(matches!(error, Error::BadRequest { .. }), "{error}");
     assert!(error.description().contains("exposes no surface"), "{error}");
 
     let unproductive = tempfile::tempdir().expect("a scratch tree");
-    tree(
+    let root = tree(
         unproductive.path(),
         ["README.md", "dist/bundle.js", "tests/orders.e2e.ts", "src/types.d.ts"],
     );
-    let input = workspace(unproductive.path());
+    let input = SourceInput::workspace(KEY, root);
     let error = survey(&model, &ctx(&input), DOCS).await.expect_err("no module to enter at");
     assert!(matches!(error, Error::BadRequest { .. }), "{error}");
     assert!(error.description().contains("exposes no surface"), "{error}");
@@ -254,10 +251,7 @@ async fn no_surface() {
 #[tokio::test]
 async fn inline_value() {
     let model = Scripted::default();
-    let input = SourceInput {
-        key: "legacy-monolith".to_string(),
-        content: SourceContent::Value("export const port = 8080;".to_string()),
-    };
+    let input = SourceInput::value(KEY, "export const port = 8080;");
 
     let seams = survey(&model, &ctx(&input), DOCS).await.expect("a value is surveyed");
 

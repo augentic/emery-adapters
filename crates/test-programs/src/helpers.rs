@@ -5,9 +5,7 @@
 //! evidence the `echo` probe answers. A program traps on the first check that
 //! fails.
 
-use emery_sdk::{
-    AdapterMetadata, Backing, Claim, ClaimKind, Evidence, Source, SourceContent, SourceInput,
-};
+use emery_sdk::{AdapterMetadata, Backing, Claim, ClaimKind, Evidence, Source, SourceInput};
 use serde_json::json;
 
 /// The source key a program binds its input under.
@@ -28,19 +26,13 @@ pub fn arguments() -> Vec<String> {
 /// Returns an input lending the mounted project root.
 #[must_use]
 pub fn workspace() -> SourceInput {
-    SourceInput {
-        key: KEY.to_owned(),
-        content: SourceContent::Workspace(".".to_owned()),
-    }
+    SourceInput::workspace(KEY, ".")
 }
 
 /// Returns an input carrying `text` inline, lending nothing.
 #[must_use]
 pub fn value(text: &str) -> SourceInput {
-    SourceInput {
-        key: KEY.to_owned(),
-        content: SourceContent::Value(text.to_owned()),
-    }
+    SourceInput::value(KEY, text)
 }
 
 /// Checks that an `emery-version` pin is the exact semver the engine's gate reads.

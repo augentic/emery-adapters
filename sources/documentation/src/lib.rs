@@ -12,15 +12,11 @@ pub mod survey;
 
 #[cfg(target_arch = "wasm32")]
 mod guest {
-    use emery_sdk::{AdapterMetadata, Context, Doc, Error, Evidence, Model, SourceKind};
+    use emery_sdk::{AdapterMetadata, Context, Doc, Error, Evidence, Provider, SourceKind};
 
     use crate::survey;
 
     static DOCS: &[Doc] = emery_sdk::include_prose!("../prose");
-
-    // The adapter's capabilities on the WASI defaults: the model alone.
-    struct Provider;
-    impl Model for Provider {}
 
     emery_sdk::source_adapter!(metadata, extract);
 

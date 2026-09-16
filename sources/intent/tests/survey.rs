@@ -7,9 +7,10 @@
 
 use std::path::Path;
 
-use emery_sdk::{Context, Error, Seam, SourceContent, SourceInput};
+use emery_sdk::{Context, Error, Seam, SourceInput};
 use intent::survey::survey;
 
+const KEY: &str = "intent";
 const BRIEF: &str = "Let users reset passwords by email.";
 
 const fn ctx(input: &SourceInput) -> Context<'_> {
@@ -19,25 +20,16 @@ const fn ctx(input: &SourceInput) -> Context<'_> {
     }
 }
 
-fn workspace(root: &Path) -> SourceInput {
-    SourceInput {
-        key: "intent".to_string(),
-        content: SourceContent::Workspace(root.display().to_string()),
-    }
-}
-
-fn value(brief: &str) -> SourceInput {
-    SourceInput {
-        key: "intent".to_string(),
-        content: SourceContent::Value(brief.to_string()),
-    }
+// The scratch root as the engine lends one: a string.
+fn utf8(root: &Path) -> &str {
+    root.to_str().expect("a UTF-8 scratch root")
 }
 
 // An inline brief rides the turn as the SDK renders it: the bound value,
 // whole.
 #[test]
 fn inline_value() {
-    let input = value(BRIEF);
+    let input = SourceInput::value(KEY, BRIEF);
     let seams = survey(&ctx(&input)).expect("the brief is surveyed");
 
     assert_eq!(seams, [Seam::Whole]);
@@ -52,7 +44,7 @@ fn one_file() {
     std::fs::create_dir(&nested).expect("the nested directory is created");
     std::fs::write(nested.join("intent.md"), BRIEF).expect("the brief is written");
 
-    let input = workspace(root.path());
+    let input = SourceInput::workspace(KEY, utf8(root.path()));
     let seams = survey(&ctx(&input)).expect("the tree is surveyed");
 
     let [Seam::Note(note)] = seams.as_slice() else {
@@ -74,7 +66,7 @@ fn engine_files() {
     std::fs::create_dir(root.path().join(".omnia")).expect("the store is created");
     std::fs::write(root.path().join(".omnia/store.json"), "{}").expect("the store is written");
 
-    let input = workspace(root.path());
+    let input = SourceInput::workspace(KEY, utf8(root.path()));
     let seams = survey(&ctx(&input)).expect("the tree is surveyed");
 
     let [Seam::Note(note)] = seams.as_slice() else {
@@ -88,14 +80,14 @@ fn engine_files() {
 #[test]
 fn not_one_file() {
     let empty = tempfile::tempdir().expect("a scratch tree");
-    let input = workspace(empty.path());
+    let input = SourceInput::workspace(KEY, utf8(empty.path()));
     let none = survey(&ctx(&input));
     assert!(matches!(none, Err(Error::BadRequest { .. })), "got {none:?}");
 
     let several = tempfile::tempdir().expect("a scratch tree");
     std::fs::write(several.path().join("one.md"), "first").expect("the first file is written");
     std::fs::write(several.path().join("two.md"), "second").expect("the second file is written");
-    let input = workspace(several.path());
+    let input = SourceInput::workspace(KEY, utf8(several.path()));
     let many = survey(&ctx(&input));
     assert!(matches!(many, Err(Error::BadRequest { .. })), "got {many:?}");
 }
@@ -104,13 +96,13 @@ fn not_one_file() {
 // empty success.
 #[test]
 fn empty_brief() {
-    let input = value("  \n");
+    let input = SourceInput::value(KEY, "  \n");
     let inline = survey(&ctx(&input));
     assert!(matches!(inline, Err(Error::BadRequest { .. })), "got {inline:?}");
 
     let root = tempfile::tempdir().expect("a scratch tree");
     std::fs::write(root.path().join("intent.md"), "\n\t \n").expect("the blank brief is written");
-    let input = workspace(root.path());
+    let input = SourceInput::workspace(KEY, utf8(root.path()));
     let tree = survey(&ctx(&input));
     assert!(matches!(tree, Err(Error::BadRequest { .. })), "got {tree:?}");
 }
