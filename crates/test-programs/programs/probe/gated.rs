@@ -1,4 +1,4 @@
-//! A probe with nothing of its own: a two-document corpus over `Seam::Whole`.
+//! A probe with nothing of its own: a two-document corpus over the default survey.
 //!
 //! A suite proves over it, under the runtime, what the SDK does for every
 //! adapter, without riding a shipped prompt.
@@ -7,7 +7,7 @@
 
 emery_sdk::source!(crate::Adapter);
 
-use emery_sdk::{Context, Doc, Error, Evidence, Model, Seam, SourceAdapter, SourceKind};
+use emery_sdk::{Doc, SourceAdapter, SourceKind};
 
 /// Sorted by path, as the walker emits them.
 const DOCS: &[Doc] = &[
@@ -29,9 +29,5 @@ impl SourceAdapter for Adapter {
 
     fn docs() -> &'static [Doc] {
         DOCS
-    }
-
-    async fn extract<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Evidence, Error> {
-        Self::evidence(model, ctx, Seam::Whole).await
     }
 }
