@@ -5,8 +5,7 @@
 
 #![cfg(target_arch = "wasm32")]
 
-use emery_sdk::export::{self, AdapterId, AdapterMetadata, Error, Evidence, Guest, Input};
-use emery_sdk::{Doc, Model, Seam, SourceKind};
+use emery_sdk::{AdapterMetadata, Context, Doc, Error, Evidence, Model, Seam, SourceKind};
 
 /// Sorted by path, as the walker emits them.
 const DOCS: &[Doc] = &[
@@ -24,15 +23,12 @@ const DOCS: &[Doc] = &[
 struct Provider;
 impl Model for Provider {}
 
-struct Adapter;
-export::export!(Adapter with_types_in export);
+emery_sdk::source_adapter!(metadata, extract);
 
-impl Guest for Adapter {
-    fn metadata(_id: AdapterId) -> AdapterMetadata {
-        emery_sdk::metadata(SourceKind::Documentation)
-    }
+fn metadata() -> AdapterMetadata {
+    emery_sdk::metadata(SourceKind::Documentation)
+}
 
-    async fn extract(id: AdapterId, input: Input) -> Result<Evidence, Error> {
-        emery_sdk::extract(&Provider, id, input, DOCS, async |_, _| Ok(vec![Seam::Whole])).await
-    }
+async fn extract(ctx: &Context<'_>) -> Result<Evidence, Error> {
+    emery_sdk::mine(&Provider, ctx, DOCS, &[Seam::Whole]).await
 }

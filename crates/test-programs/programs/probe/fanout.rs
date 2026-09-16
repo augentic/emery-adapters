@@ -6,8 +6,7 @@
 
 #![cfg(target_arch = "wasm32")]
 
-use emery_sdk::export::{self, AdapterId, AdapterMetadata, Error, Evidence, Guest, Input};
-use emery_sdk::{Doc, Model, Seam, SourceKind};
+use emery_sdk::{AdapterMetadata, Context, Doc, Error, Evidence, Model, Seam, SourceKind};
 
 const DOCS: &[Doc] = &[Doc {
     path: "prompts/extract.md",
@@ -18,24 +17,19 @@ const DOCS: &[Doc] = &[Doc {
 struct Provider;
 impl Model for Provider {}
 
-struct Adapter;
-export::export!(Adapter with_types_in export);
+emery_sdk::source_adapter!(metadata, extract);
 
-impl Guest for Adapter {
-    fn metadata(_id: AdapterId) -> AdapterMetadata {
-        emery_sdk::metadata(SourceKind::Documentation)
-    }
+fn metadata() -> AdapterMetadata {
+    emery_sdk::metadata(SourceKind::Documentation)
+}
 
-    // Two seams whatever the input arm, so `mine` holds two completions
-    // pending at once over a workspace and over a value; no survey turn is
-    // spent choosing them.
-    async fn extract(id: AdapterId, input: Input) -> Result<Evidence, Error> {
-        emery_sdk::extract(&Provider, id, input, DOCS, async |_, _| {
-            Ok(vec![
-                Seam::Note("The first half of the source.".to_owned()),
-                Seam::Note("The second half of the source.".to_owned()),
-            ])
-        })
-        .await
-    }
+// Two seams whatever the input arm, so `mine` holds two completions pending
+// at once over a workspace and over a value; no survey turn is spent
+// choosing them.
+async fn extract(ctx: &Context<'_>) -> Result<Evidence, Error> {
+    let seams = [
+        Seam::Note("The first half of the source.".to_owned()),
+        Seam::Note("The second half of the source.".to_owned()),
+    ];
+    emery_sdk::mine(&Provider, ctx, DOCS, &seams).await
 }

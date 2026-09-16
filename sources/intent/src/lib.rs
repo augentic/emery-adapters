@@ -2,17 +2,17 @@
 //!
 //! An intent source is the operator's free-form brief, given inline or as a
 //! one-file tree. It is never split: [`survey`] carries the brief verbatim
-//! as one seam, and the guest hands it to `emery_sdk::mine`, whose document
-//! carries one `intent` claim with the brief and one `requirement` claim per
-//! directive it states. The guest exports the `source-adapter` world on
-//! `wasm32` alone, so the survey is tested natively.
+//! as one seam, and the guest's `extract` hands it to `emery_sdk::mine`,
+//! whose document carries one `intent` claim with the brief and one
+//! `requirement` claim per directive it states. The guest exports the
+//! `source-adapter` world on `wasm32` alone, so the survey is tested
+//! natively.
 
 pub mod survey;
 
 #[cfg(target_arch = "wasm32")]
 mod guest {
-    use emery_sdk::export::{self, AdapterId, AdapterMetadata, Error, Evidence, Guest, Input};
-    use emery_sdk::{Doc, Model, SourceKind};
+    use emery_sdk::{AdapterMetadata, Context, Doc, Error, Evidence, Model, SourceKind};
 
     use crate::survey;
 
@@ -23,16 +23,14 @@ mod guest {
     struct Provider;
     impl Model for Provider {}
 
-    struct Adapter;
-    export::export!(Adapter with_types_in export);
+    emery_sdk::source_adapter!(metadata, extract);
 
-    impl Guest for Adapter {
-        fn metadata(_id: AdapterId) -> AdapterMetadata {
-            emery_sdk::metadata(SourceKind::Intent)
-        }
+    fn metadata() -> AdapterMetadata {
+        emery_sdk::metadata(SourceKind::Intent)
+    }
 
-        async fn extract(id: AdapterId, input: Input) -> Result<Evidence, Error> {
-            emery_sdk::extract(&Provider, id, input, DOCS, async |_, ctx| survey::survey(ctx)).await
-        }
+    async fn extract(ctx: &Context<'_>) -> Result<Evidence, Error> {
+        let seams = survey::survey(ctx)?;
+        emery_sdk::mine(&Provider, ctx, DOCS, &seams).await
     }
 }

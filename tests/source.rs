@@ -73,12 +73,47 @@ async fn intent() {
     assert!(turn.contains(BRIEF), "the brief read through the mount is the seam: {turn}");
 }
 
+// The one adapter that surveys by model: its workspace `extract` opens a
+// survey completion first, under the embedded survey prompt, then one extract
+// completion per surface the inventory names — here one — before the inline
+// arm's own; the surface and its entry cross the boundary into the extract
+// turn. The inventory enters at the fixture's one module, so the check
+// accepts it and the run keeps to the script.
 #[tokio::test]
 async fn typescript() {
     let project = scratch();
     project.write("src/index.ts", "export function greet(): string { return 'hello'; }\n");
+    let inventory = r#"{"surfaces":[{"name":"greet export","entry":"src/index.ts"}]}"#;
+    let answer = answer();
 
-    let model = extract(test_programs::ADAPTER_TYPESCRIPT, &project).await;
+    let model = support::run(
+        test_programs::ADAPTER_TYPESCRIPT,
+        &project,
+        &[],
+        ScriptedModel::answering([inventory, answer.as_str(), answer.as_str()]),
+    )
+    .await;
 
-    prompted(&model, include_str!("../sources/typescript/prose/prompts/extract.md"));
+    let seen = model.seen();
+    assert_eq!(seen.len(), 3, "one survey, one extract per surface, one for the inline value");
+    let survey = include_str!("../sources/typescript/prose/prompts/survey.md");
+    let extract = include_str!("../sources/typescript/prose/prompts/extract.md");
+    assert_eq!(
+        seen[0].system.as_deref(),
+        Some(survey),
+        "the compiled-in survey prompt is the system"
+    );
+    for request in &seen[1..] {
+        assert_eq!(
+            request.system.as_deref(),
+            Some(extract),
+            "the compiled-in prompt is the system"
+        );
+    }
+    let turn = &seen[1].messages[0];
+    assert!(
+        turn.contains("- surface: greet export"),
+        "the surface reaches its extract turn: {turn}"
+    );
+    assert!(turn.contains("- entry: `src/index.ts`"), "with its entry: {turn}");
 }

@@ -5,14 +5,14 @@
 //! gate — the one machine-checkable part of a prompt, and where a contract
 //! change in the engine pin fails first. An adapter that surveys by model
 //! carries `prompts/survey.md` too, under the same cap, with a worked example
-//! that parses as the SDK's `Partition`. The prompts are read from the
+//! that parses as the SDK's `Inventory`. The prompts are read from the
 //! `prose/` tree the embed-time walker copies verbatim; reference presence is
 //! that walker's, and the prompt each component embeds is `source.rs`'s.
 
 #![cfg(not(target_arch = "wasm32"))]
 
 use emery_sdk::Evidence;
-use emery_sdk::survey::Partition;
+use emery_sdk::survey::Inventory;
 
 // Every `sources/*` component must have a matching test here.
 test_programs::foreach_adapter!();
@@ -29,15 +29,21 @@ fn corpus(prompt: &str) {
     assert!(findings.is_empty(), "the worked example fails the gate:\n{}", findings.join("\n"));
 }
 
-/// Checks a survey prompt: under the cap, with a worked example that is a `Partition`.
+/// Checks a survey prompt: under the cap, with a worked example that is an `Inventory`.
+///
+/// The example teaches the shape the check accepts: every surface named,
+/// once, and entered somewhere.
 fn survey(prompt: &str) {
     capped("prompts/survey.md", prompt);
-    let partition: Partition = serde_json::from_str(worked_example(prompt))
-        .expect("the worked example is the SDK's Partition");
-    assert!(
-        partition.groups.iter().all(|group| !group.files.is_empty()),
-        "the worked example names an empty group"
-    );
+    let inventory: Inventory = serde_json::from_str(worked_example(prompt))
+        .expect("the worked example is the SDK's Inventory");
+    assert!(!inventory.surfaces.is_empty(), "the worked example exposes no surface");
+    let mut names = std::collections::BTreeSet::new();
+    for surface in &inventory.surfaces {
+        assert!(!surface.name.trim().is_empty(), "a surface at `{}` has no name", surface.entry);
+        assert!(!surface.entry.is_empty(), "surface `{}` has no entry", surface.name);
+        assert!(names.insert(&surface.name), "surface `{}` is listed twice", surface.name);
+    }
 }
 
 fn capped(path: &str, prompt: &str) {
@@ -66,7 +72,7 @@ fn intent() {
 
 // The typescript survey asks the model, so its survey prompt must exist —
 // `include_str!` fails the build without it; a missing one would be
-// `server_error` on every multi-directory tree.
+// `server_error` on every tree.
 #[test]
 fn typescript() {
     corpus(include_str!("../sources/typescript/prose/prompts/extract.md"));

@@ -62,6 +62,28 @@ fn one_file() {
     assert!(note.contains("one-file tree"), "the seam names the tree source: {note}");
 }
 
+// The engine's own files beside the brief — a projection of the last
+// revision, its store — are output, not input: the tree is still one file,
+// and the brief is the one read.
+#[test]
+fn engine_files() {
+    let root = tempfile::tempdir().expect("a scratch tree");
+    std::fs::write(root.path().join("intent.md"), BRIEF).expect("the brief is written");
+    std::fs::write(root.path().join("spec.md"), "# Spec").expect("the projection is written");
+    std::fs::write(root.path().join("design.md"), "# Design").expect("the projection is written");
+    std::fs::create_dir(root.path().join(".omnia")).expect("the store is created");
+    std::fs::write(root.path().join(".omnia/store.json"), "{}").expect("the store is written");
+
+    let input = workspace(root.path());
+    let seams = survey(&ctx(&input)).expect("the tree is surveyed");
+
+    let [Seam::Note(note)] = seams.as_slice() else {
+        panic!("a one-file tree is one note, got {seams:?}");
+    };
+    assert!(note.contains(BRIEF), "the brief is the one file read: {note}");
+    assert!(!note.contains("# Spec"), "the projection is not the brief: {note}");
+}
+
 // No file, or several: a typed refusal before any model call.
 #[test]
 fn not_one_file() {

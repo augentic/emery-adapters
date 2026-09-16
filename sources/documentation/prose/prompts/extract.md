@@ -4,8 +4,8 @@ Mine the seam this call is given — the whole bound documentation tree, or the 
 
 ## Inputs
 
-- `$SOURCE_DIR` — read-only view of the bound documentation tree, or of the one directory this call mines. Absent when the source is an inline `value` (the seam is then in the message).
-- **The documents to mine** — when the message lists them, those documents and no others; otherwise every document under `$SOURCE_DIR`.
+- `$SOURCE_DIR` — read-only view of the bound documentation tree, whole, whichever part of it this call mines. Absent when the source is an inline `value` (the seam is then in the message).
+- **The documents to mine** — when the message lists them, those documents and no others, each named relative to `$SOURCE_DIR`; otherwise every document under `$SOURCE_DIR`.
 - **Source key** — the authored source key the engine passed on the WIT bindings.
 
 Nothing outside `$SOURCE_DIR` is reachable. Extract mines its seam completely in one pass: every listed document, top to bottom.
