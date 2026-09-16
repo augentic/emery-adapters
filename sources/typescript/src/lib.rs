@@ -5,22 +5,24 @@
 //! modules serve one surface is no directory layout's to state, so
 //! [`survey`] asks the model once under the `prompts/survey.md` it is handed; and a handler's
 //! behaviour runs through its imports and `tsconfig.json`, so each seam is
-//! lent the root and told which files are its own. The guest hands the
-//! seams to `emery_sdk::mine` and exports the `source-adapter` world on
-//! `wasm32` alone, so the survey is tested natively.
+//! lent the root and told which files are its own. The guest binds the
+//! host's model once, hands the seams to `emery_sdk::mine`, and exports the
+//! `source-adapter` world on `wasm32` alone, so the survey is tested natively.
 
 pub mod survey;
 
 #[cfg(target_arch = "wasm32")]
 mod guest {
     use emery_sdk::export::{self, AdapterId, AdapterMetadata, Error, Evidence, Guest, Input};
-    use emery_sdk::{Doc, SourceKind};
+    use emery_sdk::{Doc, Model, SourceKind};
 
     use crate::survey;
 
-    // The extraction and survey prompts and their references, from the tree
-    // beside `src/`.
-    pub static DOCS: &[Doc] = emery_sdk::include_prose!("../prose");
+    static DOCS: &[Doc] = emery_sdk::include_prose!("../prose");
+
+    // The adapter's capabilities on the WASI defaults: the model alone.
+    struct Provider;
+    impl Model for Provider {}
 
     struct Adapter;
     export::export!(Adapter with_types_in export);
@@ -31,7 +33,10 @@ mod guest {
         }
 
         async fn extract(id: AdapterId, input: Input) -> Result<Evidence, Error> {
-            emery_sdk::extract(id, input, DOCS, survey::survey).await
+            emery_sdk::extract(&Provider, id, input, DOCS, async |model, ctx| {
+                survey::survey(model, ctx, DOCS).await
+            })
+            .await
         }
     }
 }

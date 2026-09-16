@@ -7,12 +7,16 @@
 #![cfg(target_arch = "wasm32")]
 
 use emery_sdk::export::{self, AdapterId, AdapterMetadata, Error, Evidence, Guest, Input};
-use emery_sdk::{Doc, Seam, SourceKind};
+use emery_sdk::{Doc, Model, Seam, SourceKind};
 
 const DOCS: &[Doc] = &[Doc {
     path: "prompts/extract.md",
     body: "SYSTEM",
 }];
+
+// The probe's capabilities on the WASI defaults: the model alone.
+struct Provider;
+impl Model for Provider {}
 
 struct Adapter;
 export::export!(Adapter with_types_in export);
@@ -26,7 +30,7 @@ impl Guest for Adapter {
     // pending at once over a workspace and over a value; no survey turn is
     // spent choosing them.
     async fn extract(id: AdapterId, input: Input) -> Result<Evidence, Error> {
-        emery_sdk::extract(id, input, DOCS, async |_| {
+        emery_sdk::extract(&Provider, id, input, DOCS, async |_, _| {
             Ok(vec![
                 Seam::Note("The first half of the source.".to_owned()),
                 Seam::Note("The second half of the source.".to_owned()),

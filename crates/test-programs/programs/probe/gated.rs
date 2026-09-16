@@ -6,7 +6,7 @@
 #![cfg(target_arch = "wasm32")]
 
 use emery_sdk::export::{self, AdapterId, AdapterMetadata, Error, Evidence, Guest, Input};
-use emery_sdk::{Doc, Seam, SourceKind};
+use emery_sdk::{Doc, Model, Seam, SourceKind};
 
 /// Sorted by path, as the walker emits them.
 const DOCS: &[Doc] = &[
@@ -20,6 +20,10 @@ const DOCS: &[Doc] = &[
     },
 ];
 
+// The probe's capabilities on the WASI defaults: the model alone.
+struct Provider;
+impl Model for Provider {}
+
 struct Adapter;
 export::export!(Adapter with_types_in export);
 
@@ -29,6 +33,6 @@ impl Guest for Adapter {
     }
 
     async fn extract(id: AdapterId, input: Input) -> Result<Evidence, Error> {
-        emery_sdk::extract(id, input, DOCS, async |_| Ok(vec![Seam::Whole])).await
+        emery_sdk::extract(&Provider, id, input, DOCS, async |_, _| Ok(vec![Seam::Whole])).await
     }
 }

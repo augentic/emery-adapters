@@ -27,10 +27,10 @@ const MARKERS: &[&str] = &["d", "test", "spec"];
 ///
 /// One [`Seam::Note`] per group the model's survey cuts — the modules of one
 /// surface, of at least two files — and one for the rest of the tree, each
-/// lent the whole root and naming the files it mines. The survey turn runs
-/// under the `prompts/survey.md` among `docs`, the adapter's embedded
-/// corpus. Dependencies, build output, tests, declaration files, and dot
-/// entries are not production source and are never offered. A tree no
+/// lent the whole root and naming the files it mines. The survey turn is put
+/// to `model` under the `prompts/survey.md` among `docs`, the adapter's
+/// embedded corpus. Dependencies, build output, tests, declaration files, and
+/// dot entries are not production source and are never offered. A tree no
 /// directory cut would split, or an inline value, is the bound input whole —
 /// a single call, with no survey turn spent on it.
 ///
@@ -41,37 +41,7 @@ const MARKERS: &[&str] = &["d", "test", "spec"];
 /// - [`Error::ServerError`] when a directory cannot be read, or `docs`
 ///   holds no `prompts/survey.md`.
 /// - [`Error::BadGateway`] for a tool or transport failure.
-#[cfg(target_arch = "wasm32")]
-pub async fn survey(ctx: &Context<'_>) -> Result<Vec<Seam>, Error> {
-    cut(&emery_sdk::model::WasiModel, ctx, crate::guest::DOCS).await
-}
-
-/// Returns the seams to mine: one per surface the model discerns, or the input whole.
-///
-/// One [`Seam::Note`] per group the model's survey cuts — the modules of one
-/// surface, of at least two files — and one for the rest of the tree, each
-/// lent the whole root and naming the files it mines. The survey turn runs
-/// under the `prompts/survey.md` among `docs`, the adapter's embedded
-/// corpus. Dependencies, build output, tests, declaration files, and dot
-/// entries are not production source and are never offered. A tree no
-/// directory cut would split, or an inline value, is the bound input whole —
-/// a single call, with no survey turn spent on it.
-///
-/// # Errors
-///
-/// - [`Error::BadRequest`] when the model's grouping could not be brought
-///   within its rounds, or for an entry whose name is not UTF-8.
-/// - [`Error::ServerError`] when a directory cannot be read, or `docs`
-///   holds no `prompts/survey.md`.
-/// - [`Error::BadGateway`] for a tool or transport failure.
-#[cfg(not(target_arch = "wasm32"))]
 pub async fn survey<P: Model>(
-    model: &P, ctx: &Context<'_>, docs: &'static [Doc],
-) -> Result<Vec<Seam>, Error> {
-    cut(model, ctx, docs).await
-}
-
-async fn cut<P: Model>(
     model: &P, ctx: &Context<'_>, docs: &'static [Doc],
 ) -> Result<Vec<Seam>, Error> {
     let SourceContent::Workspace(root) = &ctx.input.content else {
@@ -82,6 +52,7 @@ async fn cut<P: Model>(
         Entry::Dir => !hidden(path) && !SKIP_DIRS.contains(&name(path)),
         Entry::File => production(path),
     })?;
+    
     // A tree of one directory is too small to be worth a survey turn.
     if emery_sdk::survey::by_directory(files.clone(), FLOOR).len() < 2 {
         return Ok(vec![Seam::Whole]);

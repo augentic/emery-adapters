@@ -12,11 +12,15 @@ pub mod survey;
 #[cfg(target_arch = "wasm32")]
 mod guest {
     use emery_sdk::export::{self, AdapterId, AdapterMetadata, Error, Evidence, Guest, Input};
-    use emery_sdk::{Doc, SourceKind};
+    use emery_sdk::{Doc, Model, SourceKind};
 
     use crate::survey;
 
     static DOCS: &[Doc] = emery_sdk::include_prose!("../prose");
+
+    // The adapter's capabilities on the WASI defaults: the model alone.
+    struct Provider;
+    impl Model for Provider {}
 
     struct Adapter;
     export::export!(Adapter with_types_in export);
@@ -27,7 +31,7 @@ mod guest {
         }
 
         async fn extract(id: AdapterId, input: Input) -> Result<Evidence, Error> {
-            emery_sdk::extract(id, input, DOCS, async |ctx| survey::survey(ctx)).await
+            emery_sdk::extract(&Provider, id, input, DOCS, async |_, ctx| survey::survey(ctx)).await
         }
     }
 }
