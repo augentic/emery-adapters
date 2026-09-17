@@ -25,5 +25,5 @@ fn metadata() -> AdapterMetadata {
 }
 
 async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {
-    emery_sdk::mine(ctx, DOCS, &[Seam::Whole]).await
+    emery_sdk::extract(ctx, DOCS, &[Seam::Whole]).await
 }

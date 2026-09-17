@@ -26,7 +26,7 @@ mod guest {
 
     async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {
         let seams = survey::survey(ctx, DOCS).await?;
-        emery_sdk::mine(ctx, DOCS, &seams).await
+        emery_sdk::extract(ctx, DOCS, &seams).await
     }
 }
 

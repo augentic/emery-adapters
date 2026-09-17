@@ -55,10 +55,10 @@ emery-sdk = "0.38.0"
 test-programs = { path = "crates/test-programs" }
 
 [patch.crates-io]
-emery-prose = { git = "https://github.com/augentic/emery" }
-emery-sdk = { git = "https://github.com/augentic/emery" }
-# emery-prose = { path = "../emery/crates/prose" }
-# emery-sdk = { path = "../emery/crates/sdk" }
+# emery-prose = { git = "https://github.com/augentic/emery" }
+# emery-sdk = { git = "https://github.com/augentic/emery" }
+emery-prose = { path = "../emery/crates/prose" }
+emery-sdk = { path = "../emery/crates/sdk" }
 
 omnia = { git = "https://github.com/augentic/omnia" }
 omnia-sdk = { git = "https://github.com/augentic/omnia" }
