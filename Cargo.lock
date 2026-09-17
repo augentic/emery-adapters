@@ -979,28 +979,21 @@ dependencies = [
 name = "emery-adapters"
 version = "0.13.0"
 dependencies = [
+ "documentation",
  "emery-sdk",
+ "intent",
  "omnia",
  "omnia-test",
  "omnia-wasi-model",
  "serde_json",
  "test-programs",
  "tokio",
+ "typescript",
 ]
 
 [[package]]
 name = "emery-prose"
 version = "0.38.0"
-dependencies = [
- "emery-prose-macros",
-]
-
-[[package]]
-name = "emery-prose-macros"
-version = "0.38.0"
-dependencies = [
- "anyhow",
-]
 
 [[package]]
 name = "emery-sdk"

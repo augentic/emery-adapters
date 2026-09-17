@@ -6,17 +6,29 @@
 //! whose document carries one `intent` claim with the brief and one
 //! `requirement` claim per directive it states. The guest exports the
 //! `source-adapter` world on `wasm32` alone, so the survey is tested
-//! natively.
+//! natively, and [`DOCS`] lists the prose it embeds, so the root suite holds
+//! the list to the `prose/` tree.
 
 pub mod survey;
 
+use emery_sdk::Doc;
+
+/// The prose the guest embeds: the extraction prompt and the references it links.
+pub static DOCS: &[Doc] = emery_sdk::prose!(
+    "../prose",
+    [
+        "prompts/extract.md",
+        "references/emery-runtime/README.md",
+        "references/emery-runtime/claims.md",
+        "references/emery-runtime/reconciliation.md",
+    ]
+);
+
 #[cfg(target_arch = "wasm32")]
 mod guest {
-    use emery_sdk::{AdapterMetadata, Context, Doc, Error, Evidence, Model, SourceKind};
+    use emery_sdk::{AdapterMetadata, Context, Error, Evidence, Model, SourceKind};
 
-    use crate::survey;
-
-    static DOCS: &[Doc] = emery_sdk::include_prose!("../prose");
+    use crate::{DOCS, survey};
 
     emery_sdk::source_adapter!(metadata, extract);
 

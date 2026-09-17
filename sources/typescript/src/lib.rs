@@ -11,17 +11,46 @@
 //! surface is refused rather than mined. The survey and `emery_sdk::mine`
 //! alike ask the model the call's context carries, and the guest exports the
 //! `source-adapter` world on `wasm32` alone, so the survey is tested natively
-//! over a scripted model.
+//! over a scripted model. [`DOCS`] lists the prose the guest embeds, so the
+//! root suite holds the list to the `prose/` tree and the survey suite runs
+//! under the same `prompts/survey.md`.
 
 pub mod survey;
 
+use emery_sdk::Doc;
+
+/// The prose the guest embeds: both prompts and the references they link.
+pub static DOCS: &[Doc] = emery_sdk::prose!(
+    "../prose",
+    [
+        "prompts/extract.md",
+        "prompts/survey.md",
+        "references/business-logic.md",
+        "references/component-structure.md",
+        "references/context-gaps.md",
+        "references/dependencies.md",
+        "references/design-template.md",
+        "references/emery-runtime/README.md",
+        "references/emery-runtime/claims.md",
+        "references/emery-runtime/reconciliation.md",
+        "references/examples/README.md",
+        "references/examples/branching-caching.md",
+        "references/examples/outbound-http.md",
+        "references/examples/parallel-execution.md",
+        "references/external-api.md",
+        "references/language-mapping.md",
+        "references/lessons-learned.md",
+        "references/observability.md",
+        "references/semantic-search.md",
+        "references/verification.md",
+    ]
+);
+
 #[cfg(target_arch = "wasm32")]
 mod guest {
-    use emery_sdk::{AdapterMetadata, Context, Doc, Error, Evidence, Model, SourceKind};
+    use emery_sdk::{AdapterMetadata, Context, Error, Evidence, Model, SourceKind};
 
-    use crate::survey;
-
-    static DOCS: &[Doc] = emery_sdk::include_prose!("../prose");
+    use crate::{DOCS, survey};
 
     emery_sdk::source_adapter!(metadata, extract);
 

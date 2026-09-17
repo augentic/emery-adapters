@@ -4,10 +4,6 @@ use std::collections::BTreeMap;
 
 use emery_sdk::{Error, Seam, SourceContent, SourceInput};
 
-// Documents a top-level directory holds before it is a seam of its own: a
-// model call costs an agent start, so a directory of one is folded in.
-const FLOOR: usize = 2;
-
 /// Returns the seams to mine: the tree cut by directory, or the input whole.
 ///
 /// One [`Seam::Files`] per top-level directory of at least two documents and
@@ -26,42 +22,48 @@ pub fn survey(input: &SourceInput) -> Result<Vec<Seam>, Error> {
         return Ok(vec![Seam::Whole]);
     };
 
-    // list the tree
     let files = emery_sdk::survey::list(root, |entry| !entry.hidden())?;
+    Ok(Seams::from(files).fold().into_seams())
+}
 
-    // group files by top-level directory
-    let mut dir_files: BTreeMap<&str, Vec<String>> = BTreeMap::new();
-    let mut root_files = Vec::new();
+struct Seams(BTreeMap<String, Vec<String>>);
 
-    for file in &files {
-        match file.split_once('/') {
-            Some((directory, _)) => {
-                dir_files.entry(directory).or_default().push(file.clone());
-            }
-            None => root_files.push(file.clone()),
+impl From<Vec<String>> for Seams {
+    fn from(files: Vec<String>) -> Self {
+        let mut seams: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        for file in files {
+            let dir = file.split_once('/').map_or(".", |(dir, _)| dir).to_owned();
+            seams.entry(dir).or_default().push(file);
         }
+        Self(seams)
     }
+}
 
-    // fold the dir_files beneath the floor into the remainder
-    let mut groups = Vec::with_capacity(dir_files.len() + 1);
-    for files in dir_files.into_values() {
-        if files.len() >= FLOOR {
-            groups.push(files);
-        } else {
-            root_files.extend(files);
+impl From<Seams> for Vec<Seam> {
+    fn from(seams: Seams) -> Self {
+        seams.into_seams()
+    }
+}
+
+// Documents a top-level directory holds before it is a seam of its own: a
+// model call costs an agent start, so a directory of one is folded in.
+const SEAM_SIZE: usize = 2;
+
+impl Seams {
+    fn fold(mut self) -> Self {
+        let folded: Vec<String> = self
+            .0
+            .extract_if(.., |dir, files| dir != "." && files.len() < SEAM_SIZE)
+            .flat_map(|(_, files)| files)
+            .collect();
+        if !folded.is_empty() {
+            self.0.entry(".".into()).or_default().extend(folded);
         }
+        self
     }
 
-    // the remaining seam
-    if !root_files.is_empty() {
-        root_files.sort();
-        groups.push(root_files);
+    fn into_seams(self) -> Vec<Seam> {
+        let seams: Vec<_> = self.0.into_values().map(Seam::Files).collect();
+        if seams.len() < 2 { vec![Seam::Whole] } else { seams }
     }
-
-    // a lone group cuts no finer than the tree
-    if groups.len() < 2 {
-        return Ok(vec![Seam::Whole]);
-    }
-
-    Ok(groups.into_iter().map(Seam::Files).collect())
 }

@@ -14,12 +14,10 @@
 
 use std::path::Path;
 
-use emery_sdk::{Context, Doc, Error, Seam, SourceInput};
+use emery_sdk::{Context, Error, Seam, SourceInput};
 use omnia_test::guest::Scripted;
+use typescript::DOCS;
 use typescript::survey::survey;
-
-// The adapter's own corpus, so the turn runs under its `prompts/survey.md`.
-static DOCS: &[Doc] = emery_sdk::include_prose!("../prose");
 
 const KEY: &str = "legacy-monolith";
 

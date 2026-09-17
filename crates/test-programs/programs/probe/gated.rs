@@ -7,7 +7,6 @@
 
 use emery_sdk::{AdapterMetadata, Context, Doc, Error, Evidence, Model, Seam, SourceKind};
 
-/// Sorted by path, as the walker emits them.
 const DOCS: &[Doc] = &[
     Doc {
         path: "prompts/extract.md",

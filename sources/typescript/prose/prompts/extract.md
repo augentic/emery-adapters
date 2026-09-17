@@ -25,7 +25,7 @@ Load on demand when a surface needs deeper analysis. The bodies carry TypeScript
 - [`references/context-gaps.md`](../references/context-gaps.md) — strategies for inferring missing context when source is incomplete.
 - [`references/lessons-learned.md`](../references/lessons-learned.md) — empirical wisdom from past extraction passes.
 - [`references/semantic-search.md`](../references/semantic-search.md) — codebase search strategies for finding behaviour.
-- [`references/examples/`](../references/examples/) — worked examples: outbound HTTP, branching/caching, parallel execution.
+- [`references/examples/README.md`](../references/examples/README.md) — the index of worked examples: outbound HTTP, branching/caching, parallel execution.
 
 ## Claim kinds
 

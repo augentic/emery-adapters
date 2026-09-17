@@ -1,24 +1,37 @@
 //! Checks every shipped adapter's prompt corpus.
 //!
-//! Each `prompts/extract.md` stays under the 800 non-blank-line cap, and its
-//! `## Worked example` parses as the SDK's `Evidence` and passes the claim
-//! gate — the one machine-checkable part of a prompt, and where a contract
-//! change in the engine pin fails first. An adapter that surveys by model
-//! carries `prompts/survey.md` too, under the same cap, with a worked example
-//! that parses as the SDK's `Inventory`. The prompts are read from the
-//! `prose/` tree the embed-time walker copies verbatim; reference presence is
-//! that walker's, and the prompt each component embeds is `source.rs`'s.
+//! Each adapter's `DOCS` is held to its `prose/` tree — every document listed
+//! once, every relative link a document in the table — so nothing under
+//! `prose/` ships unlisted and nothing a prompt tells the model to read is
+//! missing from `read_doc`. Each `prompts/extract.md` stays under the 800
+//! non-blank-line cap, and its `## Worked example` parses as the SDK's
+//! `Evidence` and passes the claim gate — the one machine-checkable part of a
+//! prompt, and where a contract change in the engine pin fails first. An
+//! adapter that surveys by model carries `prompts/survey.md` too, under the
+//! same cap, with a worked example that parses as the SDK's `Inventory`. The
+//! prompt each component embeds is `source.rs`'s.
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use emery_sdk::Evidence;
+use std::path::Path;
+
 use emery_sdk::survey::Inventory;
+use emery_sdk::{Doc, Evidence, prose};
 
 // Every `sources/*` component must have a matching test here.
 test_programs::foreach_adapter!();
 
-/// Checks an extraction prompt: under the cap, with a worked example that passes the gate.
-fn corpus(prompt: &str) {
+/// Checks an adapter's corpus: listed in step with its tree, its extraction prompt under the cap with a worked example that passes the gate.
+fn corpus(docs: &[Doc], name: &str) {
+    let tree = Path::new(env!("CARGO_MANIFEST_DIR")).join("sources").join(name).join("prose");
+    let findings = prose::check(docs, &tree);
+    assert!(
+        findings.is_empty(),
+        "`{name}`'s DOCS disagree with its tree:\n{}",
+        findings.join("\n")
+    );
+
+    let prompt = prose::body(docs, "prompts/extract.md").expect("the extraction prompt is listed");
     capped("prompts/extract.md", prompt);
 
     // The example is claims alone: a document-level kind would be refused
@@ -33,7 +46,8 @@ fn corpus(prompt: &str) {
 ///
 /// The example teaches the shape the check accepts: every surface named,
 /// once, and entered somewhere.
-fn survey(prompt: &str) {
+fn survey(docs: &[Doc]) {
+    let prompt = prose::body(docs, "prompts/survey.md").expect("the survey prompt is listed");
     capped("prompts/survey.md", prompt);
     let inventory: Inventory = serde_json::from_str(worked_example(prompt))
         .expect("the worked example is the SDK's Inventory");
@@ -62,19 +76,18 @@ fn worked_example(prompt: &str) -> &str {
 
 #[test]
 fn documentation() {
-    corpus(include_str!("../sources/documentation/prose/prompts/extract.md"));
+    corpus(documentation::DOCS, "documentation");
 }
 
 #[test]
 fn intent() {
-    corpus(include_str!("../sources/intent/prose/prompts/extract.md"));
+    corpus(intent::DOCS, "intent");
 }
 
-// The typescript survey asks the model, so its survey prompt must exist —
-// `include_str!` fails the build without it; a missing one would be
-// `server_error` on every tree.
+// The typescript survey asks the model, so its survey prompt must be listed;
+// a missing one would be `server_error` on every tree.
 #[test]
 fn typescript() {
-    corpus(include_str!("../sources/typescript/prose/prompts/extract.md"));
-    survey(include_str!("../sources/typescript/prose/prompts/survey.md"));
+    corpus(typescript::DOCS, "typescript");
+    survey(typescript::DOCS);
 }

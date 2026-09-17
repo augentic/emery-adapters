@@ -25,7 +25,7 @@ Every source adapter shares the same guest anatomy:
 ```text
 sources/
   <name>/             # documentation, intent, typescript
-    prose/            # agent-facing markdown (embedded into the component)
+    prose/            # agent-facing markdown (listed in src/lib.rs, embedded into the component)
       prompts/        # extract.md — the one extraction pass
       references/     # lazy reference corpus + the emery-runtime symlink
       rules/          # adapter-local engineering rules
@@ -51,7 +51,7 @@ Adapter prompts are markdown documents compiled into the guest and driven by the
 
 - **`prose/prompts/extract.md`** carries the whole extraction pass: the claim-kind table with each kind's required body field (the `emery_sdk::Evidence::findings` gate, run as the check on each seam's turn inside the SDK's `extract` so the backend corrects a miss in place, and fail-closed engine-side, A8), the id-derivation rules reconciliation joins on, and the JSON output contract. Soft cap ~500 non-blank lines, hard cap 800 — above that, move material to `prose/references/`.
 - **`prose/prompts/survey.md`**, for an adapter that surveys by model, is the system prompt of its one survey call: what a surface is for this source and where a caller enters it, what is not one — the modules behind a surface, which the extract call follows — and the `surfaces` answer, each a `name` and its `entry` — never a claim, and never a grouping. Same caps; its `## Worked example` must parse as `emery_sdk::survey::Inventory`.
-- **References are cited via relative markdown links, never inlined** — the `prose` crate's build-time embed includes Markdown documents and follows symlinks, so keep every relative reference resolvable.
+- **References are cited via relative markdown links, never inlined** — the model reads a reference through `read_doc`, which answers from the adapter's `DOCS` alone, so every relative link must name a document listed there (the root `tests/prose.rs` holds the list to the `prose/` tree, symlinks included, and refuses a link to a directory, an unlisted file, or a path outside the tree).
 - The v1 survey prompts were deleted, never ported (ADR-0008); the survey a model makes today chooses a cut and mines nothing.
 
 ## Engine pin and sibling co-development

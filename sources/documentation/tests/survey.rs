@@ -1,9 +1,10 @@
 //! Asserts what the documentation adapter decides before the SDK's fan-out.
 //!
 //! How a tree cuts into seams — one `Files` seam per top-level directory that
-//! meets the floor, the rest of the tree as one more, and no cut at all when
-//! the tree is no finer than itself. The survey is a plain fn over the call's
-//! context: it has no model to ask, so no test needs one.
+//! meets the floor, nested documents staying with that directory, leftovers
+//! under `.`, and no cut at all when the tree is no finer than itself. The
+//! survey is a plain fn over the call's context: it has no model to ask, so
+//! no test needs one.
 
 use std::path::Path;
 
@@ -41,8 +42,8 @@ fn bound_tree() {
 }
 
 // Two directories that meet the floor are two seams, each its own
-// documents; a one-document directory and the root's own files are the
-// third, so no document is left out of the survey.
+// documents; a one-document directory and the root's own files fold into
+// `.`, so no document is left out of the survey.
 #[test]
 fn two_directories() {
     let scratch = tempfile::tempdir().expect("a scratch tree");
@@ -64,9 +65,41 @@ fn two_directories() {
     assert_eq!(
         seams,
         [
+            files(["README.md", "notes/todo.md"]),
             files(["api/orders.md", "api/users.md"]),
             files(["guide/intro.md", "guide/setup.md"]),
-            files(["README.md", "notes/todo.md"]),
+        ]
+    );
+}
+
+// Nested documents belong to the top-level directory: the cut is the
+// first path segment, never a nested folder. `guide/advanced/` meets the
+// floor on its own but is not a seam; the three guide documents stay
+// one group, and a root file folds into `.`.
+#[test]
+fn nested_directory() {
+    let scratch = tempfile::tempdir().expect("a scratch tree");
+    let root = tree(
+        scratch.path(),
+        [
+            "api/orders.md",
+            "api/users.md",
+            "guide/intro.md",
+            "guide/advanced/setup.md",
+            "guide/advanced/topics.md",
+            "README.md",
+        ],
+    );
+
+    let input = SourceInput::workspace(KEY, root);
+    let seams = survey(&input).expect("the tree is surveyed");
+
+    assert_eq!(
+        seams,
+        [
+            files(["README.md"]),
+            files(["api/orders.md", "api/users.md"]),
+            files(["guide/advanced/setup.md", "guide/advanced/topics.md", "guide/intro.md"]),
         ]
     );
 }
