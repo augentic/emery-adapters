@@ -152,6 +152,10 @@ criteria = "safe-to-deploy"
 version = "1.4.6"
 criteria = "safe-to-deploy"
 
+[[exemptions.cfg-if]]
+version = "1.0.5"
+criteria = "safe-to-deploy"
+
 [[exemptions.chacha20]]
 version = "0.10.2"
 criteria = "safe-to-deploy"
@@ -185,7 +189,7 @@ version = "4.6.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.const-hex]]
-version = "1.19.2"
+version = "1.19.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.const-oid]]
@@ -788,6 +792,10 @@ criteria = "safe-to-deploy"
 version = "2.1.3"
 criteria = "safe-to-deploy"
 
+[[exemptions.rustix]]
+version = "1.1.5"
+criteria = "safe-to-deploy"
+
 [[exemptions.rustls]]
 version = "0.23.45"
 criteria = "safe-to-deploy"
@@ -826,10 +834,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.schemars_derive]]
 version = "1.2.2"
-criteria = "safe-to-deploy"
-
-[[exemptions.sea-query]]
-version = "1.0.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.secrecy]]
@@ -910,6 +914,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.strum_macros]]
 version = "0.28.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.syn]]
+version = "3.0.6"
 criteria = "safe-to-deploy"
 
 [[exemptions.sync_wrapper]]
@@ -1042,6 +1050,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.unicase]]
 version = "2.9.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.unicode-ident]]
+version = "1.0.25"
 criteria = "safe-to-deploy"
 
 [[exemptions.untrusted]]
