@@ -7,7 +7,7 @@
 
 use emery_sdk::{AdapterMetadata, Context, Doc, Error, Evidence, Model, Seam, SourceKind};
 
-const DOCS: &[Doc] = &[Doc {
+const PROSE: &[Doc] = &[Doc {
     path: "prompts/extract.md",
     body: "SYSTEM",
 }];
@@ -26,5 +26,5 @@ async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {
         Seam::Note("The first half of the source.".to_owned()),
         Seam::Note("The second half of the source.".to_owned()),
     ];
-    emery_sdk::extract(ctx, DOCS, &seams).await
+    emery_sdk::extract(ctx, PROSE, &seams).await
 }

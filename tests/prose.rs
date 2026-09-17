@@ -31,7 +31,7 @@ fn corpus(docs: &[Doc], name: &str, prompts: &[&str]) {
     let findings = prose::check(docs, &tree, prompts);
     assert!(
         findings.is_empty(),
-        "`{name}`'s DOCS disagree with its tree:\n{}",
+        "`{name}`'s PROSE disagree with its tree:\n{}",
         findings.join("\n")
     );
 
@@ -98,18 +98,18 @@ fn fenced_json<'d>(doc: &'d str, heading: &str) -> &'d str {
 
 #[test]
 fn documentation() {
-    corpus(documentation::DOCS, "documentation", &["prompts/extract.md"]);
+    corpus(documentation::PROSE, "documentation", &["prompts/extract.md"]);
 }
 
 #[test]
 fn intent() {
-    corpus(intent::DOCS, "intent", &["prompts/extract.md"]);
+    corpus(intent::PROSE, "intent", &["prompts/extract.md"]);
 }
 
 // The typescript survey asks the model, so its survey prompt must be listed;
 // a missing one would be `server_error` on every tree.
 #[test]
 fn typescript() {
-    corpus(typescript::DOCS, "typescript", &["prompts/extract.md", "prompts/survey.md"]);
-    survey(typescript::DOCS);
+    corpus(typescript::PROSE, "typescript", &["prompts/extract.md", "prompts/survey.md"]);
+    survey(typescript::PROSE);
 }

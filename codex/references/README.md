@@ -8,13 +8,13 @@ This README sits beside the bundle, not in it: it is contributor guidance, which
 
 The bundle:
 
-| Document            | What adapters consume it for                                          |
-| ------------------- | --------------------------------------------------------------------- |
-| `reconciliation.md` | The specify pipeline and how grouping consumes what extraction emits  |
-| `claims.md`         | The `id` grammar, `path` anchor grammar, and the fail-closed gate      |
+| Document            | What adapters consume it for                                         |
+| ------------------- | -------------------------------------------------------------------- |
+| `reconciliation.md` | The specify pipeline and how grouping consumes what extraction emits |
+| `claims.md`         | The `id` grammar, `path` anchor grammar, and the fail-closed gate    |
 
 ## Editing rules
 
 - Edit the file under `runtime/` — that tree is the canonical bundle for adapters. Never replace an adapter's `references/emery-runtime` symlink with a directory of copies.
-- Adding a new shared reference: drop the file under `runtime/`. Every adapter inherits it through its directory symlink, so every adapter must list it in its `DOCS` and reach it from a prompt by relative link, or the root `tests/prose.rs` fails. Add a reference here only when at least two adapters consume it; single-adapter material belongs in that adapter's own `references/`.
+- Adding a new shared reference: drop the file under `runtime/`. Every adapter inherits it through its directory symlink, so every adapter must list it in its `PROSE` and reach it from a prompt by relative link, or the root `tests/prose.rs` fails. Add a reference here only when at least two adapters consume it; single-adapter material belongs in that adapter's own `references/`.
 - Keep agent-critical prose in this bundle (or the adapter's own `references/`); do not make prompts depend on the emery repo's `docs/` tree at runtime.
