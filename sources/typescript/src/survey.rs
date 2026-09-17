@@ -47,9 +47,8 @@ pub async fn survey<P: Model>(
     let surfaces = emery_sdk::survey::surfaces(ctx, docs, keep).await?;
     if surfaces.is_empty() {
         return Err(bad_request!(
-            "`{key}`: the source exposes no surface — nothing under the root registers a route, \
-             a command, a job, or an exported API, so no caller reaches it; bind the tree that \
-             declares its entry points",
+            "`{key}`: the source exposes no surface. Nothing under the root registers a route, \
+             a command, a job, or an exported API.",
             key = ctx.input.key,
         ));
     }
