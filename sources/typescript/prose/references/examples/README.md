@@ -1,9 +1,9 @@
-# TypeScript Extract Examples
+# Worked examples
 
-Index of worked extraction examples for the TypeScript source adapter. Pick the one whose scenario matches the service under analysis.
+Each example is one surface as the survey names it, the source the extract call reads, and the Evidence the call answers with — claims alone, in the shape of the prompt's worked example. Read the one nearest the surface in hand.
 
-| File                                           | Read when the service has                                                                                       |
-| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| [outbound-http.md](outbound-http.md)           | Message handling with outbound HTTP calls to an external API — the simplest end-to-end walkthrough; start here. |
-| [branching-caching.md](branching-caching.md)   | Conditional branches, a cache-or-fetch pattern, and early returns.                                              |
-| [parallel-execution.md](parallel-execution.md) | Concurrent operations, authentication, error recovery, and message publishing.                                  |
+| File                                           | Read when the surface has                                                                                                                      |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| [outbound-http.md](outbound-http.md)           | A handler forwarding over `fetch`: the URL as constructed, the config key verbatim, a response the code never reads left unclaimed. Start here. |
+| [branching-caching.md](branching-caching.md)   | Validation guards, a cache-aside flow with early returns, one explicit boundary as a `criterion`, a `try` whose extent decides what a failure becomes. |
+| [parallel-execution.md](parallel-execution.md) | A token, two parallel lookups, two publishes 5 seconds apart, and a `catch` that rethrows one error code and swallows the rest.                 |

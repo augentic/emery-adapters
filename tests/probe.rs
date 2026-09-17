@@ -1,16 +1,12 @@
-//! Proves the component boundary over the fixture adapters under the omnia runtime.
+//! Verifies shared SDK behaviour and component conversion with fixture adapters.
 //!
-//! Each probe under `crates/test-programs/programs/probe/` stands in for a
-//! shipped adapter:
+//! Each probe isolates one contract property:
 //!
-//! - `refusing` and `upstream`: the WIT `error` arms lift to their omnia
-//!   classes;
-//! - `echo`: every record field survives the bindings;
-//! - `gated`: what the SDK does for every adapter — the request, the
-//!   reference tools, the lend, the spent-budget refusal — proved once rather
-//!   than per component;
-//! - `fanout`: the host property the SDK's fan-out rests on — the completions
-//!   one guest issues together are pending together.
+//! - `refusing` and `upstream` verify WIT error classification.
+//! - `echo` verifies every record field survives conversion.
+//! - `gated` verifies model requests, reference tools, workspace grants, and
+//!   exhausted correction rounds.
+//! - `fanout` verifies concurrent guest requests are pending together.
 
 #![cfg(not(target_arch = "wasm32"))]
 

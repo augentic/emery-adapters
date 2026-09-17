@@ -23,12 +23,12 @@ An adapter is one Rust crate that ships as one Wasm component exporting the `sou
 
 ## Rust-only loop
 
-Native tests need no model credentials. Each adapter carries its own survey suite; the root package carries the component suites that run every built component under the omnia runtime (the components are built by `crates/test-programs` on the first `make test`), the fixture probes, and every adapter's corpus:
+The suites need no model credentials. Every test is the root package's: the component suites run every built component under the omnia runtime over a scripted model (the components are built by `crates/test-programs` on the first `make test`) and assert what each adapter decides through what the host sees of it, the fixture probes prove the boundary, and every adapter's corpus is checked natively:
 
 ```bash
 make check
-cargo nextest run -p documentation   # or intent, typescript: the native survey suite
-cargo nextest run -p emery-adapters  # the root component suites: every component, the probes, the corpora
+cargo nextest run -p emery-adapters                 # the root suites: every component, the probes, the corpora
+cargo nextest run -p emery-adapters --test source   # the shipped components alone
 ```
 
 ## Live examples
@@ -48,9 +48,9 @@ The live rung is a **public-contract client**: it spawns the sibling shipped `em
 ## Repair loop
 
 1. Edit `sources/<name>/prose/**` (the extract prompt, references, rules).
-2. `cargo nextest run -p <name>` to re-run its survey suite and `cargo nextest run -p emery-adapters` for its component and corpus suites; `cargo build -p <name> --target wasm32-wasip2 --release` to rebuild the shipped component; `emery specify --config examples/<name>/emery.toml` to watch it become a spec.
+2. `cargo nextest run -p emery-adapters` to re-run its component and corpus suites; `cargo build -p <name> --target wasm32-wasip2 --release` to rebuild the shipped component; `emery specify --config examples/<name>/emery.toml` to watch it become a spec.
 
-Native crate tests stay the Rust inner loop; the component suites prove the component boundary; the live examples show one adapter's claims becoming a specification; live eval is for prompt quality. See [docs/testing.md](docs/testing.md).
+The component suites are the Rust inner loop and prove every component, the adapter's own decisions included; the live examples show one adapter's claims becoming a specification; live eval is for prompt quality. See [docs/testing.md](docs/testing.md).
 
 ## Stuck?
 

@@ -12,20 +12,16 @@ Nothing outside the bound source is reachable; writes back into `$SOURCE_DIR` ar
 
 ## References
 
-Load on demand when a surface needs deeper analysis. The bodies carry TypeScript-specific extraction depth.
+Load on demand when a surface needs deeper analysis. Each carries TypeScript-specific depth and names the claims it feeds.
 
-- [`references/business-logic.md`](../references/business-logic.md) — depth-first domain extraction by handler / module.
-- [`references/component-structure.md`](../references/component-structure.md) — language detection, entry points, module organisation, async patterns.
-- [`references/dependencies.md`](../references/dependencies.md) — external service classification (database, message broker, cache, identity provider, API, WebSocket).
-- [`references/external-api.md`](../references/external-api.md) — tracing deserialization code for HTTP/API calls; URLs, headers, request/response shapes, auth, retries, timeouts.
-- [`references/observability.md`](../references/observability.md) — metric and trace capture: names, types, emission points, labels.
-- [`references/verification.md`](../references/verification.md) — final validation checklist before emitting evidence.
-- [`references/design-template.md`](../references/design-template.md) — the design surface downstream synthesis fills; the claim-coverage checklist extraction must satisfy.
-- [`references/language-mapping.md`](../references/language-mapping.md) — TypeScript → Rust mapping cheatsheet (idioms, error handling, async, serialization).
-- [`references/context-gaps.md`](../references/context-gaps.md) — strategies for inferring missing context when source is incomplete.
-- [`references/lessons-learned.md`](../references/lessons-learned.md) — empirical wisdom from past extraction passes.
-- [`references/semantic-search.md`](../references/semantic-search.md) — codebase search strategies for finding behaviour.
-- [`references/examples/README.md`](../references/examples/README.md) — the index of worked examples: outbound HTTP, branching/caching, parallel execution.
+- [`references/component-structure.md`](../references/component-structure.md) — the manifest and `tsconfig.json`, where each kind of surface enters, the entry layer, async boundaries.
+- [`references/business-logic.md`](../references/business-logic.md) — what a `requirement` captures from a handler: validation, branches, errors, side effects, sequencing, timing, configuration, data access.
+- [`references/types.md`](../references/types.md) — `type` claims: declarations verbatim, nesting, optionality, unions, wire names and converters, what a response actually is.
+- [`references/external-api.md`](../references/external-api.md) — outbound HTTP as `call` and `requirement` claims: URL as constructed, headers, bodies, response as deserialised, auth, retries, timeouts.
+- [`references/services.md`](../references/services.md) — stores, caches, brokers, and identity providers by kind, and publications: topic, count, delay placement, payload, metadata.
+- [`references/observability.md`](../references/observability.md) — metric, trace, and log emissions as claims.
+- [`references/verification.md`](../references/verification.md) — the checklist before answering.
+- [`references/examples/README.md`](../references/examples/README.md) — worked examples with their Evidence: outbound HTTP, branching and caching, parallel execution and publishing.
 
 ## Claim kinds
 
@@ -52,7 +48,7 @@ Rules for the body fields:
 
 - **No raw file dumps.** Anchors point at the source; the JSON must not paraphrase or restate large spans. Keep `excerpt:` to a paragraph or so of focused context (the validation rule, the error response, the side effect) — never tens of lines of `"\n"`-separated source.
 - **One claim per concept.** Two overlapping excerpts of the same handler are noise; pick the smallest range that captures the behaviour.
-- **Symbols, not phrasing.** `call.callee` is `<file>:<symbol>` — a named export (`src/users/repository.ts:insertUser`), a class method (`src/mail/mailer.ts:Mailer.send`), or a framework-suffixed inline arrow (`src/server.ts:post-/users`). `type.signature` is the declaration's source spelling (one line preferred; multi-line acceptable for short class headers).
+- **Symbols, not phrasing.** `call.callee` is `<file>:<symbol>` for a symbol of the tree — a named export (`src/users/repository.ts:insertUser`), a class method (`src/mail/mailer.ts:Mailer.send`), or a framework-suffixed inline arrow (`src/server.ts:post-/users`); `<package>:<symbol>` for a package import (`@azure/identity:getAzureToken`); bare for a global (`fetch`). `type.signature` is the declaration's source spelling (one line preferred; multi-line acceptable for short class headers).
 
 ## Worked example
 

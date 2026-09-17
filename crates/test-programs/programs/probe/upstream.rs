@@ -1,7 +1,4 @@
-//! A probe failing with `bad_gateway!` before touching the model.
-//!
-//! Its failure crosses the WIT `internal` arm, which every class but a
-//! refusal shares.
+//! Exercises an [`Error::BadGateway`] returned before any model request.
 
 #![cfg(target_arch = "wasm32")]
 

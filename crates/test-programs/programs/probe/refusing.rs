@@ -1,6 +1,4 @@
-//! A probe refusing its input with `bad_request!` before touching the model.
-//!
-//! Its failure crosses the WIT `invalid-request` arm.
+//! Exercises an [`Error::BadRequest`] returned before any model request.
 
 #![cfg(target_arch = "wasm32")]
 

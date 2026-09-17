@@ -1,50 +1,16 @@
-//! Extracts claims from a TypeScript or JavaScript code tree.
+//! Extracts behavioural claims from TypeScript and JavaScript source.
 //!
-//! A code tree is mined one exposed surface at a time — a route, a command, a
-//! job, an exported API — with the whole tree in view. Where the source's
-//! boundary lies is no directory layout's to state, so [`survey`] asks the
-//! model once, under the `prompts/survey.md` it is handed, for the surfaces
-//! and the module a caller enters each at, and nothing behind them; a
-//! surface's behaviour runs from its entry through imports and
-//! `tsconfig.json`, so each seam is lent the root and told its surface and
-//! entry, and the extract call follows the rest. A tree that exposes no
-//! surface is refused rather than mined. The survey and `emery_sdk::mine`
-//! alike ask the model the call's context carries, and the guest exports the
-//! `source-adapter` world on `wasm32` alone, so the survey is tested natively
-//! over a scripted model. [`DOCS`] lists the prose the guest embeds, so the
-//! root suite holds the list to the `prose/` tree and the survey suite runs
-//! under the same `prompts/survey.md`.
+//! Workspace inputs are divided into exposed surfaces, such as routes,
+//! commands, jobs, and exported APIs. Each surface is mined independently
+//! from its entry module, with the full source tree available.
+//!
+//! Surface discovery is model-assisted and runs before any surface is mined.
+//!
+//! Inline inputs are mined as a whole. Workspaces with no exposed surfaces
+//! are rejected.
 
-pub mod survey;
-
-use emery_sdk::Doc;
-
-/// The prose the guest embeds: both prompts and the references they link.
-pub static DOCS: &[Doc] = emery_sdk::prose!(
-    "../prose",
-    [
-        "prompts/extract.md",
-        "prompts/survey.md",
-        "references/business-logic.md",
-        "references/component-structure.md",
-        "references/context-gaps.md",
-        "references/dependencies.md",
-        "references/design-template.md",
-        "references/emery-runtime/README.md",
-        "references/emery-runtime/claims.md",
-        "references/emery-runtime/reconciliation.md",
-        "references/examples/README.md",
-        "references/examples/branching-caching.md",
-        "references/examples/outbound-http.md",
-        "references/examples/parallel-execution.md",
-        "references/external-api.md",
-        "references/language-mapping.md",
-        "references/lessons-learned.md",
-        "references/observability.md",
-        "references/semantic-search.md",
-        "references/verification.md",
-    ]
-);
+#[cfg(target_arch = "wasm32")]
+mod survey;
 
 #[cfg(target_arch = "wasm32")]
 mod guest {
@@ -63,3 +29,25 @@ mod guest {
         emery_sdk::mine(ctx, DOCS, &seams).await
     }
 }
+
+/// The prompts and reference documents embedded in the adapter.
+pub static DOCS: &[emery_sdk::Doc] = emery_sdk::prose!(
+    "../prose",
+    [
+        "prompts/extract.md",
+        "prompts/survey.md",
+        "references/business-logic.md",
+        "references/component-structure.md",
+        "references/emery-runtime/claims.md",
+        "references/emery-runtime/reconciliation.md",
+        "references/examples/README.md",
+        "references/examples/branching-caching.md",
+        "references/examples/outbound-http.md",
+        "references/examples/parallel-execution.md",
+        "references/external-api.md",
+        "references/observability.md",
+        "references/services.md",
+        "references/types.md",
+        "references/verification.md",
+    ]
+);

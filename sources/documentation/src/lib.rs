@@ -1,29 +1,13 @@
 //! Extracts claims from a tree of written documentation.
 //!
-//! A documentation source is a written tree — specifications, guides,
-//! decision records. [`survey`] cuts it one top-level directory at a time,
-//! and the guest's `extract` hands the seams to `emery_sdk::mine`, which
-//! lends each call the root, tells it the directory's files to mine, and
-//! joins the claims into one document. The guest exports the
-//! `source-adapter` world on `wasm32` alone, so the survey is tested
-//! natively, and [`DOCS`] lists the prose it embeds, so the root suite holds
-//! the list to the `prose/` tree.
+//! Workspace inputs are grouped by top-level directory. Directories containing
+//! fewer than two documents are combined. If fewer than two groups remain,
+//! the entire input is mined as a whole.
+//!
+//! Inline inputs are always mined as a whole.
 
-pub mod survey;
-
-use emery_sdk::Doc;
-
-/// The prose the guest embeds: the extraction prompt, the rule it applies, and the references it links.
-pub static DOCS: &[Doc] = emery_sdk::prose!(
-    "../prose",
-    [
-        "prompts/extract.md",
-        "references/emery-runtime/README.md",
-        "references/emery-runtime/claims.md",
-        "references/emery-runtime/reconciliation.md",
-        "rules/documentation-verbatim-preservation.md",
-    ]
-);
+#[cfg(target_arch = "wasm32")]
+mod survey;
 
 #[cfg(target_arch = "wasm32")]
 mod guest {
@@ -42,3 +26,13 @@ mod guest {
         emery_sdk::mine(ctx, DOCS, &seams).await
     }
 }
+
+/// The prompt and reference documents embedded in the adapter.
+pub static DOCS: &[emery_sdk::Doc] = emery_sdk::prose!(
+    "../prose",
+    [
+        "prompts/extract.md",
+        "references/emery-runtime/claims.md",
+        "references/emery-runtime/reconciliation.md",
+    ]
+);

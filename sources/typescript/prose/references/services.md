@@ -1,49 +1,32 @@
-# External dependencies and publication patterns (Steps 4–5)
+# External services and publications
 
-Step 4 captures every external service or system dependency by type. Step 5 captures publication and timing patterns with exact counts and metadata.
+The stores, brokers, caches, and identity providers a surface reaches, and what it publishes. Each is reached through a client; each use is a `call` claim at the call site, and what is written, published, or read, and when, is a `requirement`.
 
-## Step 4 — External service dependencies
+## Classify the service
 
-For each external service or system dependency, document thoroughly:
+Name the technology and the kind of service, from the client the source uses:
 
-- Service name and type — use one of: `database`, `managed table store`, `message broker`, `cache`, `identity provider`, `API`, `WebSocket`
-- Technology (e.g., PostgreSQL, Azure Table Storage, Redis, Kafka, Azure AD)
-- Connection details visible in source
-- Operations performed (read, write, publish, subscribe, query, token acquisition)
-- Data formats (if different from internal types)
-- Authentication method
+- **database** — SQL through an ORM, a query builder, or raw SQL (`pg`, `mysql2`, `typeorm`, `prisma`, `knex`).
+- **managed table store** — a cloud table store through its SDK (`@azure/data-tables` `TableClient`, DynamoDB `DocumentClient`, Cosmos DB's table API). A store reached over HTTP by its SDK is a store, not an outbound API.
+- **document store** — a document database through its client (`mongodb` `MongoClient`, Cosmos DB's document API: `find`, `insertOne`, `updateOne`).
+- **blob store** — object storage through its client (`@azure/storage-blob` `BlobServiceClient` / `ContainerClient`, `@aws-sdk/client-s3` `S3Client` with `PutObject` / `GetObject`); record the container or bucket and the key pattern as constructed.
+- **cache** — Redis, Memcached, an in-memory cache with a TTL.
+- **message broker** — Kafka, RabbitMQ, Azure Service Bus, SQS, a pub/sub client.
+- **identity provider** — Azure AD, Auth0, an OAuth token endpoint.
+- **API** — another service over HTTP; see [Outbound HTTP calls](external-api.md).
+- **WebSocket** — a socket the surface opens or serves.
 
-### Service type classification
+Record what the source shows and no more: connection configuration by its exact key (`DATABASE_URL`, `KAFKA_BROKER`), the operations performed (select, insert, update, delete; get, set, delete; publish, subscribe; token acquisition), the entity or table and its key columns, the key pattern, the topic.
 
-- **database**: SQL databases accessed via ORM, raw SQL, or repository patterns (PostgreSQL, MySQL, SQL Server, etc.)
-- **managed table store**: Cloud-managed NoSQL/table storage services accessed via SDK or REST API (Azure Table Storage via `@azure/data-tables`/`TableClient`, Azure Cosmos DB, DynamoDB, etc.). Do NOT classify these as `API` — they are managed data stores, not external HTTP APIs.
-- **cache**: Key-value stores used for caching or ephemeral state (Redis, Memcached, in-memory cache libraries)
-- **message broker**: Message queues and event streaming (Kafka, RabbitMQ, Azure Service Bus, SQS)
-- **identity provider**: Authentication/token services (Azure AD, OAuth providers, Auth0)
-- **API**: External HTTP/REST/GraphQL APIs
-- **WebSocket**: WebSocket connections for real-time messaging
+## Publications
 
-## Step 5 — Publication & timing patterns
+For each publish, read from the code:
 
-Document exactly:
+- **Topic or queue** as constructed — `${env}-${TOPIC}` is not `TOPIC`.
+- **Count** — from the loop bounds: `for (let i = 0; i < 2; i++)` publishes 2 times.
+- **Delay placement** — `sleep(5s); publish all`, repeated, is not `publish; sleep(5s); publish`.
+- **Payload** — its type (a `type` claim), and whether it is identical each round or changes (a timestamp, a sequence number).
+- **Metadata** — the partition or routing key (`message.key = externalId`), headers, content type.
+- **Ordering with the response** — whether the caller's response waits for the publish.
 
-- **Publication count**: The exact number of times each event is published (e.g., "2 times", NOT "twice with delays" which is ambiguous). Count by reading the loop bounds in the source code (e.g., `for _ in 0..2` means 2 publications).
-- **Delay placement**: Whether the delay occurs BEFORE or AFTER each publication round. Document the exact loop structure: "sleep 5s then publish all events, repeated 2 times" is different from "publish, then sleep 5s, then publish again".
-- **Payload identity**: Whether the published payload is IDENTICAL across rounds or modified between rounds (e.g., timestamps incremented). Most patterns publish identical payloads -- document explicitly if the source modifies the payload between iterations.
-- Timing/delay operations with exact durations
-- Retry patterns with counts and backoff
-- Batch vs individual publication
-- **Concurrent operations** (parallel vs sequential)
-- **Message metadata**: For each published message, document all metadata beyond the payload:
-  - Partition/routing key (e.g., `message.key = externalId`)
-  - Custom headers (e.g., `message.headers["key"] = value`)
-  - Topic construction pattern (e.g., `${env}-${TOPIC_CONSTANT}` vs full topic from config)
-
-### Publication pattern example
-
-```markdown
-- **Publication pattern**: Publish all events 2 times with 5-second delay before each round
-- **Loop structure**: `for round in 0..2 { sleep(5s); for each event { publish(event) } }`
-- **Payload modification**: None -- identical event published each round
-- **Purpose**: Signal departure from station for schedule adherence
-```
+Each fact a consumer or an operator observes is a requirement: `After enrichment the processor publishes the enriched event to events-topic, waits 5 seconds, and publishes an audit record carrying the metadata to audit-topic.`

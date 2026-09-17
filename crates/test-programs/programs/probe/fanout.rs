@@ -1,8 +1,7 @@
-//! A probe mining two `Note` seams over a one-document corpus.
+//! Exercises concurrent mining across two note seams.
 //!
-//! A suite proves over it, under the runtime, that the host runs the
-//! completions one guest issues together: the property the SDK's fan-out
-//! rests on.
+//! Both model requests must be pending together, which verifies the host
+//! behaviour required by the SDK's bounded fan-out.
 
 #![cfg(target_arch = "wasm32")]
 

@@ -1,22 +1,24 @@
-//! The survey of a documentation tree: one seam per top-level directory.
+//! Divides a documentation tree into independently mined groups.
 
 use std::collections::BTreeMap;
 
 use emery_sdk::{Error, Seam, SourceContent, SourceInput};
 
-/// Returns the seams to mine: the tree cut by directory, or the input whole.
+/// Returns the groups of documentation to mine.
 ///
-/// One [`Seam::Files`] per top-level directory of at least two documents and
-/// one for the rest of the tree. A tree that cuts no finer than itself, or an
-/// inline value, is the bound input whole — a single call. The cut is by
-/// directory alone, so the model is never asked. A dot entry — `.git`,
-/// `.github`, an editor's scratch — is tooling, not documentation, and is
-/// left out.
+/// Workspace files are grouped by their top-level directory. A directory
+/// containing fewer than two files is folded into the root group. When at
+/// least two groups remain, each becomes a [`Seam::Files`]; otherwise the
+/// input becomes one [`Seam::Whole`].
+///
+/// Inline input is always returned as one whole seam. No model call is
+/// required. Hidden entries and Emery output do not influence workspace
+/// grouping, but remain visible when the workspace is mined whole.
 ///
 /// # Errors
 ///
-/// Returns [`Error::ServerError`] when a directory cannot be read, and
-/// [`Error::BadRequest`] for an entry whose name is not UTF-8.
+/// - Returns [`Error::BadRequest`] when an entry name is not UTF-8.
+/// - Returns [`Error::ServerError`] when a directory cannot be read.
 pub fn survey(input: &SourceInput) -> Result<Vec<Seam>, Error> {
     let SourceContent::Workspace(root) = &input.content else {
         return Ok(vec![Seam::Whole]);

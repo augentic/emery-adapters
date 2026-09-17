@@ -1,6 +1,6 @@
 # https://doc.rust-lang.org/stable/clippy/index.html
 
-doc-valid-idents = ["TypeScript", "JavaScript"]
+doc-valid-idents = ["JavaScript", "TypeScript", "WebAssembly"]
 
 # Transitive duplicates we do not control (pulled in via emery-sdk and,
 # for the component suites, the omnia host stack). Clippy's cargo group

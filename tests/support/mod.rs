@@ -1,9 +1,8 @@
-//! Provides the one runner the component suites share.
+//! Provides the runtime harness shared by component suites.
 //!
-//! The runner puts a component under the omnia runtime behind the
-//! `source_extract` driver, over a scripted host model — or a [`Barrier`]
-//! around one, which holds each completion until the rest of its party is
-//! pending too.
+//! The harness runs a component behind the `source_extract` driver with a
+//! scripted host model. [`Barrier`] can hold completions until a required
+//! number of requests are pending together.
 
 // Compiled into every component suite; each uses a subset.
 #![allow(dead_code, reason = "shared by suites that each use a subset")]
@@ -27,7 +26,7 @@ const HOLD: Duration = Duration::from_secs(5);
 ///
 /// Every scripted turn is consumed, and none is requested past it.
 pub trait Strict: WasiModelCtx + Clone {
-    /// The script and its record.
+    /// Returns the script and its consumption record.
     fn script(&self) -> &ScriptedModel;
 }
 
@@ -39,11 +38,9 @@ impl Strict for ScriptedModel {
 
 /// A [`ScriptedModel`] that answers a completion only once `parties` are pending.
 ///
-/// This makes the property the SDK's fan-out rests on observable. A guest
-/// that issues its completions together sees them all answered; a host that
-/// serialised them would hold the first alone until [`HOLD`] elapsed and fail
-/// it, naming the party that never arrived. The gate is reusable, so one
-/// barrier serves every `extract` a run makes.
+/// Concurrent requests pass the barrier together. A serial host reaches the
+/// bounded [`HOLD`] timeout instead, identifying the missing party. The
+/// barrier resets for each extraction.
 #[derive(Clone, Debug)]
 pub struct Barrier {
     inner: ScriptedModel,
@@ -96,6 +93,11 @@ impl WasiModelCtx for Barrier {
 ///
 /// `project` is mounted read-only as `.`. A clean exit and an exactly
 /// consumed script are required; the model's record is returned.
+///
+/// # Panics
+///
+/// Panics when deployment fails, the driver exits unsuccessfully, or the
+/// model script is not consumed exactly.
 pub async fn run<M: Strict>(adapter: &str, project: &Scratch, args: &[&str], model: M) -> M {
     let backends = Backends::defaults().await.model(model.clone());
     let status = Deployment::new()

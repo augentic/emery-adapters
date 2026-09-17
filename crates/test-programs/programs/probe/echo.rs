@@ -1,7 +1,7 @@
-//! A probe answering `maximal()` without a model call.
+//! Exercises round-trip conversion of a fully populated evidence document.
 //!
-//! A suite proves over it that every record field survives the bindings'
-//! lowering and lift.
+//! The probe returns `maximal()` without a model request, allowing every field
+//! to be checked after conversion through the component interface.
 
 #![cfg(target_arch = "wasm32")]
 

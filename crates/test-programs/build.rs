@@ -1,9 +1,9 @@
-//! Compiles every adapter and program to a component and writes the artifact table.
+//! Builds adapter and probe components used by integration tests.
 //!
-//! Each `sources/*` adapter and each `programs/<group>/<scenario>.rs` becomes a
-//! `wasm32-wasip2` component, and `gen.rs` is the table the native side
-//! `include!`s. The nested build compiles this package for `wasm32` too, where
-//! `Components` is a no-op, so the recursion stops.
+//! Every source adapter and program becomes a `wasm32-wasip2` component.
+//! `gen.rs` exposes their artifact paths to native tests. The component build
+//! is a no-op when this package is itself compiled for WebAssembly, preventing
+//! recursion.
 
 fn main() {
     omnia_test::build::Components::in_workspace("../..")

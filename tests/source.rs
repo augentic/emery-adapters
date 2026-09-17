@@ -1,12 +1,11 @@
-//! Runs every shipped component over `emery:adapter/source` under the runtime.
+//! Verifies every shipped adapter through the component interface.
 //!
-//! Each `sources/*` adapter runs under the omnia runtime, driven by the
-//! `source_extract` program against a scripted host model. The driver
-//! asserts what crosses the boundary; this side asserts what the host alone
-//! sees of the component: `metadata` opened no completion, and each
-//! `extract`'s system prompt is the `prompts/extract.md` this build
-//! embedded. The SDK's side of the boundary is `probe.rs`'s; an adapter's own
-//! behaviour is its `tests/survey.rs`'s.
+//! Each adapter runs under the omnia runtime against a strict model script.
+//! The scenarios verify metadata, survey-selected seam counts and content,
+//! embedded extraction prompts, and caller-visible refusals.
+//!
+//! Assertions use adapter-owned source data rather than SDK prompt wording.
+//! Shared SDK and component-boundary behaviour is covered by `probe.rs`.
 
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -16,6 +15,18 @@ use omnia_test::host::{Scratch, ScriptedModel, scratch};
 
 // Every `sources/*` component must have a matching test here.
 test_programs::foreach_adapter!();
+
+const BRIEF: &str = "Let users reset passwords by email.";
+
+/// The prompts each component embeds, as this build compiled them in.
+mod prompt {
+    pub const DOCUMENTATION: &str =
+        include_str!("../sources/documentation/prose/prompts/extract.md");
+    pub const INTENT: &str = include_str!("../sources/intent/prose/prompts/extract.md");
+    pub const TYPESCRIPT: &str = include_str!("../sources/typescript/prose/prompts/extract.md");
+    pub const TYPESCRIPT_SURVEY: &str =
+        include_str!("../sources/typescript/prose/prompts/survey.md");
+}
 
 /// A gate-valid answer of claims alone.
 ///
@@ -32,88 +43,314 @@ fn answer() -> String {
     .to_string()
 }
 
-/// Runs the driver's answered legs against `component`, one answer per `extract`.
-async fn extract(component: &str, project: &Scratch) -> ScriptedModel {
-    let answer = answer();
-    support::run(component, project, &[], ScriptedModel::answering([&answer, &answer])).await
-}
-
-/// Asserts the completions the host saw: none from `metadata`, one per `extract`.
-///
-/// Each `extract`'s completion carries `prompt` as its system.
-fn prompted(model: &ScriptedModel, prompt: &str) {
-    let seen = model.seen();
-    assert_eq!(seen.len(), 2, "metadata opens no completion; each extract opens one");
-    for request in &seen {
-        assert_eq!(request.system.as_deref(), Some(prompt), "the compiled-in prompt is the system");
+/// Writes an empty file at each of `files` under `project`, directories made on the way.
+fn tree(project: &Scratch, files: &[&str]) {
+    for file in files {
+        project.write(file, "");
     }
 }
 
+/// Runs workspace and inline extraction against `component`.
+///
+/// The model supplies one answer per workspace seam and one for inline input.
+async fn extract(component: &str, project: &Scratch, seams: usize) -> ScriptedModel {
+    let answer = answer();
+    let answers = std::iter::repeat_n(answer.as_str(), seams + 1);
+    support::run(component, project, &[], ScriptedModel::answering(answers)).await
+}
+
+/// Runs the driver's `refused bad_request` mode against `component`, over the workspace or `inline`.
+async fn refused(
+    component: &str, project: &Scratch, inline: Option<&str>, model: ScriptedModel,
+) -> ScriptedModel {
+    let mut args = vec!["refused", "bad_request"];
+    args.extend(inline);
+    support::run(component, project, &args, model).await
+}
+
+/// Asserts the completions the host saw and returns the workspace seams' turns.
+///
+/// `metadata` opened none; the workspace `extract` opened one per seam and
+/// the inline value's one more, each with `prompt` as its system.
+fn prompted(model: &ScriptedModel, prompt: &str, seams: usize) -> Vec<String> {
+    let seen = model.seen();
+    assert_eq!(
+        seen.len(),
+        seams + 1,
+        "metadata opens no completion; each seam opens one, the inline value one more"
+    );
+    for request in &seen {
+        assert_eq!(request.system.as_deref(), Some(prompt), "the compiled-in prompt is the system");
+    }
+    seen[..seams].iter().map(|request| request.messages[0].clone()).collect()
+}
+
+/// Asserts that `turns` preserve the partition described by `groups`.
+///
+/// Every group must appear together in exactly one turn.
+fn partitioned(turns: &[String], groups: &[&[&str]]) {
+    assert_eq!(turns.len(), groups.len(), "one turn per seam");
+    for group in groups {
+        let naming: Vec<&String> =
+            turns.iter().filter(|turn| group.iter().any(|file| turn.contains(file))).collect();
+        assert_eq!(naming.len(), 1, "{group:?} is one seam's alone, got {naming:?}");
+        assert!(
+            group.iter().all(|file| naming[0].contains(file)),
+            "{group:?} is listed together: {}",
+            naming[0]
+        );
+    }
+}
+
+/// Returns the surface a turn tells its call to mine, as `(name, entry)`.
+///
+/// The two lines are the typescript adapter's own, so they are what the
+/// call is told.
+fn surface(turn: &str) -> (&str, &str) {
+    let name = turn
+        .lines()
+        .find_map(|line| line.strip_prefix("- surface: "))
+        .expect("the turn names its surface");
+    let entry = turn
+        .lines()
+        .find_map(|line| line.strip_prefix("- entry: `")?.strip_suffix('`'))
+        .expect("the turn names its entry");
+    (name, entry)
+}
+
+// A tree of one directory cuts no finer than itself, so it is one seam, and
+// an inline value is one: two completions, both under the extraction prompt.
 #[tokio::test]
 async fn documentation() {
     let project = scratch();
     project.write("docs/orders.md", "# Orders\n\nPOST /orders creates an order.\n");
 
-    let model = extract(test_programs::ADAPTER_DOCUMENTATION, &project).await;
+    let model = extract(test_programs::ADAPTER_DOCUMENTATION, &project, 1).await;
 
-    prompted(&model, include_str!("../sources/documentation/prose/prompts/extract.md"));
+    prompted(&model, prompt::DOCUMENTATION, 1);
 }
 
-// The one adapter that reads its source inside the guest, through the mount.
+// The cut is the first path segment. Each top-level directory of two or more
+// documents is one seam listing its documents, nested ones included —
+// `guide/advanced/` has two of its own but is no seam; the root's own
+// document and a directory of one fold into one more, so every document is
+// in exactly one seam. A dot entry — a `.github/`, an editor's draft — is
+// tooling, not documentation, and is in none.
+#[tokio::test]
+async fn documentation_directories() {
+    let project = scratch();
+    tree(
+        &project,
+        &[
+            "README.md",
+            "api/orders.md",
+            "api/users.md",
+            "guide/advanced/setup.md",
+            "guide/advanced/topics.md",
+            "guide/intro.md",
+            "notes/todo.md",
+            ".github/workflows/ci.yml",
+            "guide/.draft.md",
+        ],
+    );
+
+    let model = extract(test_programs::ADAPTER_DOCUMENTATION, &project, 3).await;
+
+    let turns = prompted(&model, prompt::DOCUMENTATION, 3);
+    partitioned(
+        &turns,
+        &[
+            &["README.md", "notes/todo.md"],
+            &["api/orders.md", "api/users.md"],
+            &["guide/advanced/setup.md", "guide/advanced/topics.md", "guide/intro.md"],
+        ],
+    );
+    for turn in &turns {
+        assert!(
+            !turn.contains(".github") && !turn.contains(".draft.md"),
+            "a dot entry is in no seam: {turn}"
+        );
+    }
+}
+
+// The one adapter that reads its source inside the guest: the tree's one
+// file, nested or not, is read through the mount into the turn's seam. The
+// engine's own output beside it — a projection of the last revision, its
+// store — is not a file of the tree, so the tree is still one file and the
+// brief is the one read.
 #[tokio::test]
 async fn intent() {
-    const BRIEF: &str = "Let users reset passwords by email.";
     let project = scratch();
-    project.write("brief.md", BRIEF);
+    project.write("brief/intent.md", BRIEF);
+    project.write("spec.md", "# Spec");
+    project.write("design.md", "# Design");
+    project.write(".omnia/store.json", "{}");
 
-    let model = extract(test_programs::ADAPTER_INTENT, &project).await;
+    let model = extract(test_programs::ADAPTER_INTENT, &project, 1).await;
 
-    prompted(&model, include_str!("../sources/intent/prose/prompts/extract.md"));
-    let turn = &model.seen()[0].messages[0];
-    assert!(turn.contains(BRIEF), "the brief read through the mount is the seam: {turn}");
+    let turns = prompted(&model, prompt::INTENT, 1);
+    assert!(turns[0].contains(BRIEF), "the brief read through the mount is the seam: {}", turns[0]);
+    assert!(!turns[0].contains("# Spec"), "the projection is not the brief: {}", turns[0]);
 }
 
-// The one adapter that surveys by model: its workspace `extract` opens a
-// survey completion first, under the embedded survey prompt, then one extract
-// completion per surface the inventory names — here one — before the inline
-// arm's own; the surface and its entry cross the boundary into the extract
-// turn. The inventory enters at the fixture's one module, so the check
-// accepts it and the run keeps to the script.
+// No file, or several: a typed refusal before any model call.
+#[tokio::test]
+async fn intent_not_one_file() {
+    let empty = scratch();
+    let model =
+        refused(test_programs::ADAPTER_INTENT, &empty, None, ScriptedModel::default()).await;
+    assert!(model.seen().is_empty(), "no turn is spent on an empty tree");
+
+    let several = scratch();
+    several.write("one.md", "first");
+    several.write("two.md", "second");
+    let model =
+        refused(test_programs::ADAPTER_INTENT, &several, None, ScriptedModel::default()).await;
+    assert!(model.seen().is_empty(), "no turn is spent on a tree of several files");
+}
+
+// An intent source is never legitimately empty: a blank brief, in the one
+// file or inline, is a typed refusal, never an empty success.
+#[tokio::test]
+async fn intent_empty_brief() {
+    let project = scratch();
+    project.write("intent.md", "\n\t \n");
+    let model =
+        refused(test_programs::ADAPTER_INTENT, &project, None, ScriptedModel::default()).await;
+    assert!(model.seen().is_empty(), "no turn is spent on a blank file");
+
+    let none = scratch();
+    let model =
+        refused(test_programs::ADAPTER_INTENT, &none, Some("  \n"), ScriptedModel::default()).await;
+    assert!(model.seen().is_empty(), "no turn is spent on a blank value");
+}
+
+// The one adapter that surveys by model: a workspace `extract` opens one
+// survey completion under the embedded survey prompt, then one extract
+// completion per surface the inventory names — each telling its call the
+// surface and the module a caller enters it at, however many surfaces enter
+// at one module, since a call mines a surface and never a file — and then
+// the inline value's own, with no survey turn spent on it.
 #[tokio::test]
 async fn typescript() {
     let project = scratch();
-    project.write("src/index.ts", "export function greet(): string { return 'hello'; }\n");
-    let inventory = r#"{"surfaces":[{"name":"greet export","entry":"src/index.ts"}]}"#;
+    tree(&project, &["src/index.ts", "src/routes.ts", "src/orders.ts", "src/jobs.ts", "src/db.ts"]);
+    let inventory = r#"{"surfaces":[
+        {"name":"POST /orders","entry":"src/routes.ts"},
+        {"name":"GET /orders/:id","entry":"src/routes.ts"},
+        {"name":"nightly reconciliation job","entry":"src/jobs.ts"}
+    ]}"#;
     let answer = answer();
 
     let model = support::run(
         test_programs::ADAPTER_TYPESCRIPT,
         &project,
         &[],
-        ScriptedModel::answering([inventory, answer.as_str(), answer.as_str()]),
+        ScriptedModel::answering([inventory, &answer, &answer, &answer, &answer]),
     )
     .await;
 
     let seen = model.seen();
-    assert_eq!(seen.len(), 3, "one survey, one extract per surface, one for the inline value");
-    let survey = include_str!("../sources/typescript/prose/prompts/survey.md");
-    let extract = include_str!("../sources/typescript/prose/prompts/extract.md");
+    assert_eq!(seen.len(), 5, "one survey, one extract per surface, one for the inline value");
     assert_eq!(
         seen[0].system.as_deref(),
-        Some(survey),
+        Some(prompt::TYPESCRIPT_SURVEY),
         "the compiled-in survey prompt is the system"
     );
     for request in &seen[1..] {
         assert_eq!(
             request.system.as_deref(),
-            Some(extract),
+            Some(prompt::TYPESCRIPT),
             "the compiled-in prompt is the system"
         );
     }
-    let turn = &seen[1].messages[0];
-    assert!(
-        turn.contains("- surface: greet export"),
-        "the surface reaches its extract turn: {turn}"
+    let mut surfaces: Vec<_> =
+        seen[1..4].iter().map(|request| surface(&request.messages[0])).collect();
+    surfaces.sort_unstable();
+    assert_eq!(
+        surfaces,
+        [
+            ("GET /orders/:id", "src/routes.ts"),
+            ("POST /orders", "src/routes.ts"),
+            ("nightly reconciliation job", "src/jobs.ts"),
+        ]
     );
-    assert!(turn.contains("- entry: `src/index.ts`"), "with its entry: {turn}");
+}
+
+// Dependencies, build output, tests, declaration files, dot entries, and a
+// file this adapter does not read are not production source: an inventory
+// entered at any of them — present in the tree though they are — goes back
+// to the model as findings naming each, and the calls are cut from the
+// inventory finally accepted, never the refused one.
+#[tokio::test]
+async fn typescript_non_production() {
+    const REFUSED: [&str; 8] = [
+        "services/mail.test.ts",
+        "services/mail.spec.ts",
+        "services/types.d.ts",
+        "node_modules/left-pad/index.js",
+        "dist/bundle.js",
+        "tests/orders.e2e.ts",
+        ".git/HEAD",
+        "routes/README.md",
+    ];
+    let project = scratch();
+    tree(
+        &project,
+        &["routes/orders.ts", "routes/users.ts", "services/index.ts", "services/mail.ts"],
+    );
+    tree(&project, &REFUSED);
+    let surfaces: Vec<_> = REFUSED
+        .iter()
+        .enumerate()
+        .map(|(index, entry)| serde_json::json!({ "name": format!("surface {index}"), "entry": entry }))
+        .collect();
+    let rejected = serde_json::json!({ "surfaces": surfaces }).to_string();
+    let accepted = r#"{"surfaces":[{"name":"POST /orders","entry":"routes/orders.ts"}]}"#;
+    let answer = answer();
+
+    let model = support::run(
+        test_programs::ADAPTER_TYPESCRIPT,
+        &project,
+        &[],
+        ScriptedModel::answering([rejected.as_str(), accepted, &answer, &answer]),
+    )
+    .await;
+
+    let seen = model.seen();
+    assert_eq!(seen.len(), 4, "two survey rounds, one extract for the one surface, one inline");
+    let exchanges = model.exchanges();
+    assert_eq!(exchanges[0].tool, "check");
+    let correction = exchanges[0].outcome.as_ref().expect_err("no entry is production source");
+    for entry in REFUSED {
+        assert!(correction.contains(entry), "`{entry}` is a finding: {correction}");
+    }
+    assert_eq!(exchanges[1].outcome, Ok(String::new()), "the production module is accepted");
+    assert_eq!(surface(&seen[2].messages[0]), ("POST /orders", "routes/orders.ts"));
+}
+
+// A tree the model finds no surface in is refused after the one survey turn,
+// never mined whole: a source no caller reaches is incomplete input or a
+// failed discovery, and mining it would raise what no caller observes into
+// requirements. The empty inventory passes the survey's check, so the
+// refusal is the adapter's, not a spent budget.
+#[tokio::test]
+async fn typescript_no_surface() {
+    let project = scratch();
+    tree(&project, &["src/lib/db.ts", "src/lib/logger.ts", "src/lib/format.ts"]);
+
+    let model = refused(
+        test_programs::ADAPTER_TYPESCRIPT,
+        &project,
+        None,
+        ScriptedModel::answering([r#"{"surfaces":[]}"#]),
+    )
+    .await;
+
+    let seen = model.seen();
+    assert_eq!(seen.len(), 1, "the one survey turn, and no extract");
+    assert_eq!(seen[0].system.as_deref(), Some(prompt::TYPESCRIPT_SURVEY));
+    let exchanges = model.exchanges();
+    assert_eq!(exchanges.len(), 1, "the inventory was offered to the check once");
+    assert_eq!(exchanges[0].outcome, Ok(String::new()), "an empty inventory is a valid answer");
 }

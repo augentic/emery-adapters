@@ -1,9 +1,8 @@
-//! What the programs share: the caller side, the checks, and the maximal evidence.
+//! Provides shared input builders and assertions for probe components.
 //!
-//! [`Caller`] is the import side of `emery:adapter/source`; the `check_*`
-//! functions are what a driver runs over what crosses it; [`maximal`] is the
-//! evidence the `echo` probe answers. A program traps on the first check that
-//! fails.
+//! [`Caller`] invokes the adapter registered by the host. The assertion
+//! helpers panic on the first contract violation, causing the component to
+//! trap.
 
 use emery_sdk::{AdapterMetadata, Backing, Claim, ClaimKind, Evidence, Source, SourceInput};
 use serde_json::json;
@@ -11,35 +10,34 @@ use serde_json::json;
 /// The source key a program binds its input under.
 pub const KEY: &str = "source";
 
-/// The import side of the contract, so every call crosses the bindings the
-/// engine uses.
+/// A [`Source`] client that invokes the adapter registered by the host.
 pub struct Caller;
 
 impl Source for Caller {}
 
-/// Returns the host's arguments with the guest id stripped.
+/// Returns command-line arguments without the guest identifier.
 #[must_use]
 pub fn arguments() -> Vec<String> {
     wasip3::cli::environment::get_arguments().into_iter().skip(1).collect()
 }
 
-/// Returns an input lending the mounted project root.
+/// Returns an input backed by the mounted project root.
 #[must_use]
 pub fn workspace() -> SourceInput {
     SourceInput::workspace(KEY, ".")
 }
 
-/// Returns an input carrying `text` inline, lending nothing.
+/// Returns an input containing `text` without a workspace.
 #[must_use]
 pub fn value(text: &str) -> SourceInput {
     SourceInput::value(KEY, text)
 }
 
-/// Checks that an `emery-version` pin is the exact semver the engine's gate reads.
+/// Asserts that any `emery-version` pin is a valid semantic version.
 ///
 /// # Panics
 ///
-/// Traps when the pin is not an exact semver.
+/// Panics when the pin is not a valid semantic version.
 pub fn check_metadata(metadata: &AdapterMetadata) {
     if let Some(version) = &metadata.emery_version {
         assert!(
@@ -49,11 +47,12 @@ pub fn check_metadata(metadata: &AdapterMetadata) {
     }
 }
 
-/// Checks that `evidence` still passes the claim gate the engine re-runs on receipt.
+/// Asserts that `evidence` is nonempty and passes the claim gate.
 ///
 /// # Panics
 ///
-/// Traps on an empty claim set, or naming every finding the gate reports.
+/// Panics when the claim set is empty or [`Evidence::findings`] reports a
+/// violation.
 pub fn check_evidence(evidence: &Evidence) {
     assert!(!evidence.claims.is_empty(), "evidence carries no claims");
 
@@ -61,13 +60,11 @@ pub fn check_evidence(evidence: &Evidence) {
     assert!(findings.is_empty(), "claim gate findings:\n{}", findings.join("\n"));
 }
 
-/// Checks that `actual` is `expected` field for field.
-///
-/// The records derive no `PartialEq`, so the comparison is spelled out.
+/// Asserts that two evidence documents contain identical claim fields.
 ///
 /// # Panics
 ///
-/// Traps on the first field that differs, naming the claim and the field.
+/// Panics on the first differing field, naming its claim index and field.
 pub fn check_same(expected: &Evidence, actual: &Evidence) {
     assert_eq!(actual.claims.len(), expected.claims.len(), "claim count");
     for (index, (want, got)) in expected.claims.iter().zip(&actual.claims).enumerate() {
@@ -80,11 +77,13 @@ pub fn check_same(expected: &Evidence, actual: &Evidence) {
     }
 }
 
-/// Returns gate-valid evidence with every record field populated.
+/// Returns valid evidence that exercises every contract field and variant.
 ///
-/// One claim per kind, every `path` anchor form, both `backing` arms, a
-/// `synopsis`, and extras beyond strings: every branch the WIT bindings must
-/// conserve.
+/// The document includes:
+///
+/// - One claim of every [`ClaimKind`].
+/// - Every supported path-anchor and [`Backing`] form.
+/// - Optional fields and non-string extras.
 #[must_use]
 pub fn maximal() -> Evidence {
     Evidence {

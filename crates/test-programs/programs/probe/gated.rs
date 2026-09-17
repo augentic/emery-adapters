@@ -1,7 +1,7 @@
-//! A probe with nothing of its own: a two-document corpus mined whole.
+//! Exercises SDK mining and claim validation through a component.
 //!
-//! A suite proves over it, under the runtime, what the SDK does for every
-//! adapter, without riding a shipped prompt.
+//! The probe mines a two-document corpus as one seam, allowing shared SDK
+//! behaviour to be tested independently of a shipped adapter prompt.
 
 #![cfg(target_arch = "wasm32")]
 

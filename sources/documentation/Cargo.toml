@@ -16,8 +16,3 @@ workspace = true
 
 [dependencies]
 emery-sdk.workspace = true
-
-# The scratch trees `tests/survey.rs` cuts; the built component's own suite
-# is the root package's.
-[dev-dependencies]
-tempfile.workspace = true

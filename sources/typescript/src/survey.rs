@@ -1,4 +1,7 @@
-//! The survey of a code tree: the model finds the surfaces it exposes, one seam each.
+//! Discovers the caller-facing surfaces exposed by a source tree.
+//!
+//! Each discovered surface becomes an independent mining seam. Inline input
+//! requires no discovery and is returned as one whole seam.
 
 use emery_sdk::survey::Surface;
 use emery_sdk::workspace::Entry;
@@ -16,30 +19,24 @@ const EXTENSIONS: &[&str] = &["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cj
 // source: a declaration file, or a test.
 const MARKERS: &[&str] = &["d", "test", "spec"];
 
-/// Returns the seams to mine: one per surface the source exposes, or an inline value whole.
+/// Returns one mining seam for each surface exposed by the source.
 ///
-/// The survey turn is put to the model `ctx` carries under the
-/// `prompts/survey.md` among `docs`, the adapter's embedded corpus, with the
-/// root lent so the model reads the tree itself. A surface's entry must be a
-/// production module of the tree — dependencies, build output, tests,
-/// declaration files, and dot entries are not production source, and an
-/// entry named there goes back to the model as a finding. Each surface the
-/// model finds — a route, a command, a job, an exported API — is one
-/// [`Seam::Note`] lent the whole root and told the surface's name and entry,
-/// so the extract call starts there, follows what the surface reaches
-/// through the tree, and claims what a caller observes through it. A module
-/// is mined through the surfaces that reach it, never on its own: there is
-/// no remainder. An inline value is the bound input whole, with no survey
-/// turn spent.
+/// Inline input produces one [`Seam::Whole`] without querying the model. For
+/// workspace input, the model identifies each surface and its entry module.
+/// Entry modules must be production TypeScript or JavaScript files; hidden
+/// entries, dependencies, build output, tests, and declaration files are
+/// rejected.
+///
+/// Each surface receives the full source tree so extraction can follow its
+/// imports. A module is mined only through the surfaces that reach it.
 ///
 /// # Errors
 ///
-/// - [`Error::BadRequest`] when the model finds no surface in the tree — a
-///   source no caller reaches is incomplete input or a failed discovery, and
-///   none of it is mined — or when the model's inventory could not be
-///   brought within its rounds.
-/// - [`Error::ServerError`] when `docs` holds no `prompts/survey.md`.
-/// - [`Error::BadGateway`] for a tool or transport failure.
+/// - Returns [`Error::BadRequest`] when no surface is found or the model
+///   cannot produce a valid inventory within its available rounds.
+/// - Returns [`Error::ServerError`] when `docs` does not contain
+///   `prompts/survey.md`.
+/// - Returns [`Error::BadGateway`] when a model tool or transport fails.
 pub async fn survey<P: Model>(
     ctx: &Context<'_, P>, docs: &'static [Doc],
 ) -> Result<Vec<Seam>, Error> {

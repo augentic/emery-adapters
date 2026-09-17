@@ -27,9 +27,9 @@ Your `extract` is two lines: ask your `survey` for the seams to mine, and hand t
 
 Four ideas carry the operation:
 
-- **The call carries the model.** Every `extract` is given a `Context<'_, P>` — the adapter addressed, the input, and the model every turn is put to — and `mine`, like a survey that asks the model, is generic over that `P: Model`. The guest's lift fills the field with the host's model, `emery_sdk::Provider` (the unit struct whose empty `impl Model` picks up omnia's WASI-backed body, the provider every omnia guest would otherwise declare); native tests build the same `Context` with `omnia_test::guest::Scripted` there. Nothing in the adapter names a backend, so no survey is `cfg`-gated.
-- **The survey chooses the cut, and never mines.** `fn survey(input: &SourceInput) -> Result<Vec<Seam>, Error>` — so the guest's `extract` is `let seams = survey::survey(ctx.input)?;` then `emery_sdk::mine(ctx, DOCS, &seams).await` — inspects the source in whatever way its adapter requires and states the seams; it spends at most one model call, and only to decide the cut. A survey that asks the model is `async fn survey<P: Model>(ctx: &Context<'_, P>, docs: &'static [Doc])`, one fn on every target, so that guest's `extract` calls `survey::survey(ctx, DOCS).await?` and tests hand it a `Context` over a scripted model and their own embed of the corpus. `emery_sdk::workspace::list(root, keep)` is a physical workspace helper, not a survey shape: it returns regular files sorted and named relative to the root, pruning the engine's own `spec.md`, `design.md`, and `.omnia/`, and asks `keep` about each `workspace::Entry` (`Entry::Dir(path)` or `Entry::File(path)`, read through `entry.name()`, `entry.extension()`, and `entry.hidden()`). `documentation` cuts that listing by top-level directory under its own grain floor; `intent` uses it only to validate and read its one-file carrier. `emery_sdk::survey::surfaces(ctx, docs, keep).await` is an optional model-assisted helper for an adapter whose boundary is semantic: it asks once, under the embedded `prompts/survey.md`, for the surfaces the source exposes — a route, a command, a job, an exported API — each with the module a caller enters it at, lends the root, lists nothing, and holds every answer to the workspace under the same `workspace::Entry` policy. Each surface becomes a `Seam::Note(note)` that lends the whole root and tells the model its surface and entry, which code needs — a surface's behaviour runs from its entry through its imports, and the extract call follows it; the model groups nothing, and there is no floor, no fold, and no remainder. Neither helper defines how an adapter surveys its source. A tree a mechanical cut leaves no finer than itself, and an inline value, are one `Seam::Whole` with no survey turn spent: a single call. A tree the model finds no surface in is refused with `bad_request!`, never mined whole: a source no caller reaches is incomplete. A survey that asks nothing is tested with no model at all.
-- **Prose is listed, and embedded at compile time.** `pub static DOCS: &[Doc] = emery_sdk::prose!("../prose", ["prompts/extract.md", ..]);` at the crate root lists every document of the adapter's `prose/` tree — the tree named relative to `src/lib.rs`, the way `include_str!` names one file, each document by its tree-relative path — as a table of `Doc`s, each body the `include_str!` of its file; the guest hands it to `mine`, and the SDK reads `prompts/extract.md` from it for each seam's turn. A listed document the tree lacks fails the build at the list; a document the list leaves out, or a relative link no listed document answers, fails the root `tests/prose.rs`, which holds the list to the tree with `emery_sdk::prose::check`. The engine repository's mock adapter ([`examples/adapter/lib.rs`](https://github.com/augentic/emery/blob/main/examples/adapter/lib.rs)) lists its prose the same way and is the smallest complete example of the shape. Each judgment declares `list_docs` / `read_doc` function tools and answers the model's calls in-process from that embedded corpus, so prompts cite references by relative link instead of inlining them.
+- **The call carries the model.** Every `extract` is given a `Context<'_, P>` — the adapter addressed, the input, and the model every turn is put to — and `mine`, like a survey that asks the model, is generic over that `P: Model`. The guest's lift fills the field with the host's model, `emery_sdk::Provider` (the unit struct whose empty `impl Model` picks up omnia's WASI-backed body, the provider every omnia guest would otherwise declare); under the component suite, that model is the scripted host model the runtime is given. Nothing in the adapter names a backend: the survey is generic over the model the call carries.
+- **The survey chooses the cut, and never mines.** `fn survey(input: &SourceInput) -> Result<Vec<Seam>, Error>` — so the guest's `extract` is `let seams = survey::survey(ctx.input)?;` then `emery_sdk::mine(ctx, DOCS, &seams).await` — inspects the source in whatever way its adapter requires and states the seams; it spends at most one model call, and only to decide the cut. A survey that asks the model is `async fn survey<P: Model>(ctx: &Context<'_, P>, docs: &'static [Doc])`, so that guest's `extract` calls `survey::survey(ctx, DOCS).await?`. `emery_sdk::workspace::list(root, keep)` is a physical workspace helper, not a survey shape: it returns regular files sorted and named relative to the root, pruning the engine's own `spec.md`, `design.md`, and `.omnia/`, and asks `keep` about each `workspace::Entry` (`Entry::Dir(path)` or `Entry::File(path)`, read through `entry.name()`, `entry.extension()`, and `entry.hidden()`). `documentation` cuts that listing by top-level directory under its own grain floor; `intent` uses it only to validate and read its one-file carrier. `emery_sdk::survey::surfaces(ctx, docs, keep).await` is an optional model-assisted helper for an adapter whose boundary is semantic: it asks once, under the embedded `prompts/survey.md`, for the surfaces the source exposes — a route, a command, a job, an exported API — each with the module a caller enters it at, lends the root, lists nothing, and holds every answer to the workspace under the same `workspace::Entry` policy. Each surface becomes a `Seam::Note(note)` that lends the whole root and tells the model its surface and entry, which code needs — a surface's behaviour runs from its entry through its imports, and the extract call follows it; the model groups nothing, and there is no floor, no fold, and no remainder. Neither helper defines how an adapter surveys its source. A tree a mechanical cut leaves no finer than itself, and an inline value, are one `Seam::Whole` with no survey turn spent: a single call. A tree the model finds no surface in is refused with `bad_request!`, never mined whole: a source no caller reaches is incomplete. Every seam the survey chooses is one completion the host sees, which is how the component suite reads the survey back (step 7).
+- **Prose is listed, and embedded at compile time.** `pub static DOCS: &[Doc] = emery_sdk::prose!("../prose", ["prompts/extract.md", ..]);` at the crate root lists every document of the adapter's `prose/` tree — the tree named relative to `src/lib.rs`, the way `include_str!` names one file, each document by its tree-relative path — as a table of `Doc`s, each body the `include_str!` of its file; the guest hands it to `mine`, and the SDK reads `prompts/extract.md` from it for each seam's turn. A listed document the tree lacks fails the build at the list; a document the list leaves out, a relative link no listed document answers, or a listed document no prompt reaches through those links fails the root `tests/prose.rs`, which holds the list to the tree, and to the prompts the SDK puts to the model, with `emery_sdk::prose::check`. The engine repository's mock adapter ([`examples/adapter/lib.rs`](https://github.com/augentic/emery/blob/main/examples/adapter/lib.rs)) lists its prose the same way and is the smallest complete example of the shape. Each judgment declares `list_docs` / `read_doc` function tools and answers the model's calls in-process from that embedded corpus, so prompts cite references by relative link instead of inlining them.
 - **Answers are steered by schema and judged by the gate.** For each seam, `mine` asks one `omnia_sdk::model::Question<Evidence>` — the turn is the SDK's, not the adapter's to shape beyond its seam: the embedded `prompts/extract.md` is the system prompt, the contract's claims-only `Evidence` schema rides the request as a steering hint (the claim-id grammar as its `pattern`; a document-level `kind` is an unknown field the backend corrects), and the claim gate is the request's `check` — run over every candidate the backend proposes, with a miss handed back as the correction (`## Previous answer (rejected)` / `## Findings`) so the backend asks again within its own round budget. The adapter never sees the reply text; the SDK gets the accepted claims, or a `bad_request` carrying the last findings once the rounds are spent. `Seam::Whole` renders the ordinary workspace or inline value (a workspace as "the source tree the prompt walks"); `Seam::Files(files)` renders the lent root and the files to mine beneath it; `Seam::Note(note)` admits a source-specific seam note after the adapter validates or reads its input.
 - **Failures are Omnia errors.** Every operation fails with `emery_sdk::Error` (omnia's `omnia_sdk::Error`), built with the re-exported `bad_request!` / `server_error!` / `bad_gateway!` macros — there is no adapter error type. Classify by who acts: a source the adapter cannot accept (an empty brief, a tree that is not the expected shape) is `bad_request!`; an unreadable file or a failed upstream is `server_error!` / `bad_gateway!`. The contract lowers the class onto the WIT `error` variant when the guest's `?` returns it, the engine lifts it back, and it surfaces to the operator as the matching exit code.
 
@@ -52,11 +52,9 @@ sources/changelog/
       extract.md
     references/
       emery-runtime -> ../../../../codex/references/runtime
-  tests/
-    survey.rs
 ```
 
-The root workspace globs `sources/*`, so the directory joins the workspace with no workspace edit — and `crates/test-programs` compiles it as a component on the next build, so the root `tests/source.rs` and `tests/prose.rs` fail to compile until they name the adapter (step 8). The minimal `Cargo.toml`:
+The root workspace globs `sources/*`, so the directory joins the workspace with no workspace edit — and `crates/test-programs` compiles it as a component on the next build, so the root `tests/source.rs` and `tests/prose.rs` fail to compile until they name the adapter (steps 7 and 8). The minimal `Cargo.toml`:
 
 ```toml
 [package]
@@ -77,24 +75,20 @@ workspace = true
 
 [dependencies]
 emery-sdk.workspace = true
-
-[dev-dependencies]
-tempfile.workspace = true
 ```
 
-`emery-sdk` is the one dependency: the prose is embedded by its `prose!` and named as its `Doc`, so there is no build dependency and no `build.rs`. `cdylib` is the Wasm component; `rlib` is what native tests link. `tempfile` stages the trees the survey tests cut. A survey that asks the model adds `tokio` and — natively alone, under `[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]` — `omnia-test` with its `guest` feature, the scripted model its suite binds, as `typescript`'s manifest does; the runtime the built component runs under is the root package's, not the adapter's. The identity SemVer is the shared `[workspace.package] version` — adapters version together.
+`emery-sdk` is the one dependency: the prose is embedded by its `prose!` and named as its `Doc`, so there is no build dependency and no `build.rs`. `cdylib` is the Wasm component; `rlib` is what the root `tests/prose.rs` links to read `DOCS`. There are no dev-dependencies: the runtime the built component is tested under, and the scripted model it is tested over, are the root package's, not the adapter's. The identity SemVer is the shared `[workspace.package] version` — adapters version together.
 
 ### 2. List the prose
 
-`src/lib.rs` lists the documents the component embeds, at the crate root so the root `tests/prose.rs` can hold the list to the tree (step 8). `prose!` names the tree relative to `src/lib.rs`, the way `include_str!` names one file, and each document by its tree-relative path; every body is the `include_str!` of its file, so an edit rebuilds the crate and a listed document the tree lacks fails the build here. Nothing walks the tree at build time — a document you add to `prose/` is embedded once you list it, and the root suite tells you when you forget:
+`src/lib.rs` lists the documents the component embeds, at the crate root so the root `tests/prose.rs` can hold the list to the tree (step 8). `prose!` names the tree relative to `src/lib.rs`, the way `include_str!` names one file, and each document by its tree-relative path; every body is the `include_str!` of its file, so an edit rebuilds the crate and a listed document the tree lacks fails the build here. Nothing walks the tree at build time — a document you add to `prose/` is embedded once you list it, and the root suite tells you when you forget, or when you list one no prompt links:
 
 ```rust
 use emery_sdk::Doc;
 
-/// The prose the guest embeds: the extraction prompt and the references it links.
+/// The prompt and reference documents embedded in the adapter.
 pub static DOCS: &[Doc] = emery_sdk::prose!("../prose", [
     "prompts/extract.md",
-    "references/emery-runtime/README.md",
     "references/emery-runtime/claims.md",
     "references/emery-runtime/reconciliation.md",
 ]);
@@ -102,17 +96,21 @@ pub static DOCS: &[Doc] = emery_sdk::prose!("../prose", [
 
 ### 3. The library skeleton
 
-`src/lib.rs` is the survey's declaration, the prose list, and the component's guest. `pub mod survey;` comes first — the survey is wasm-free and public, since `tests/survey.rs` calls it — then `DOCS` (step 2), then the guest module written inline beneath them, declared for `wasm32` alone, so the crate builds natively for its tests:
+`src/lib.rs` is the prose list, the survey's declaration, and the component's guest. `DOCS` (step 2) comes first — the one item the crate exports, which the root suite reads natively — then `mod survey;` and the guest module written inline beneath it, both declared for `wasm32` alone: the survey is guest code, and natively the crate builds as `DOCS` and nothing else:
 
 ```rust
 //! Extracts claims from a tree of changelog entries.
-
-pub mod survey;
+//!
+//! Large workspaces are divided by top-level directory. Inline inputs and
+//! workspaces that cannot be divided further are mined as a whole.
 
 use emery_sdk::Doc;
 
-/// The prose the guest embeds: the extraction prompt and the references it links.
+/// The prompt and reference documents embedded in the adapter.
 pub static DOCS: &[Doc] = emery_sdk::prose!("../prose", [/* step 2 */]);
+
+#[cfg(target_arch = "wasm32")]
+mod survey;
 
 #[cfg(target_arch = "wasm32")]
 mod guest {
@@ -125,7 +123,7 @@ mod guest {
 `src/survey.rs` is the one fn with logic of its own. Condensed — the real `intent` and `documentation` files are worth reading in full:
 
 ```rust
-//! The survey of a changelog tree: one seam per top-level directory.
+//! Divides a changelog tree into independently mined groups.
 
 use std::collections::BTreeMap;
 
@@ -134,17 +132,20 @@ use emery_sdk::{Error, Seam, SourceContent, SourceInput};
 // Entries a directory holds before it is mined on its own.
 const FLOOR: usize = 2;
 
-/// Returns the seams to mine: the tree cut by directory, or the input whole.
+/// Returns the groups of changelog entries to mine.
 ///
-/// One [`Seam::Files`] per top-level directory of at least two entries and
-/// one for the rest of the tree. A tree that cuts no finer than itself, or
-/// an inline value, is the bound input whole. The cut is by directory
-/// alone, so the model is never asked.
+/// Workspace files are grouped by top-level directory. Groups containing
+/// fewer than two entries are combined. When at least two groups remain, each
+/// becomes a [`Seam::Files`]; otherwise the input becomes one
+/// [`Seam::Whole`].
+///
+/// Inline input is always returned as one whole seam. No model call is
+/// required.
 ///
 /// # Errors
 ///
-/// Returns [`Error::ServerError`] when a directory cannot be read, and
-/// [`Error::BadRequest`] for an entry whose name is not UTF-8.
+/// - Returns [`Error::BadRequest`] when an entry name is not UTF-8.
+/// - Returns [`Error::ServerError`] when a directory cannot be read.
 pub fn survey(input: &SourceInput) -> Result<Vec<Seam>, Error> {
     let SourceContent::Workspace(root) = &input.content else {
         return Ok(vec![Seam::Whole]);
@@ -173,7 +174,7 @@ pub fn survey(input: &SourceInput) -> Result<Vec<Seam>, Error> {
 }
 ```
 
-An adapter whose source is never worth splitting returns `vec![Seam::Whole]` — `intent` does, after refusing an empty brief. A survey that asks the model is `async fn survey<P: Model>(ctx: &Context<'_, P>, docs: &'static [Doc])`, one fn on every target — the guest passes it the call's `Context` and the crate's `DOCS`; tests a `Context` over a scripted model and the same `DOCS` — `typescript`'s states what a production module is as a `fn keep(entry: Entry<'_>) -> bool`, asks the model with `emery_sdk::survey::surfaces(ctx, docs, keep).await?` — the SDK lends the root and holds each answered entry to the tree under that `keep` — turns each surface it returns into one `Seam::Note` naming the surface and its entry, and refuses a tree the model finds no surface in; `tests/survey.rs` runs it under `typescript::DOCS`, so the turn is put under the `prompts/survey.md` the component embeds. The one thing that survey adds to the crate is its prompt, `prose/prompts/survey.md` (step 6).
+An adapter whose source is never worth splitting returns `vec![Seam::Whole]` — `intent` does, after refusing an empty brief. A survey that asks the model is `async fn survey<P: Model>(ctx: &Context<'_, P>, docs: &'static [Doc])` — the guest passes it the call's `Context` and the crate's `DOCS` — and `typescript`'s states what a production module is as a `fn keep(entry: Entry<'_>) -> bool`, asks the model with `emery_sdk::survey::surfaces(ctx, docs, keep).await?` — the SDK lends the root and holds each answered entry to the tree under that `keep` — turns each surface it returns into one `Seam::Note` naming the surface and its entry, and refuses a tree the model finds no surface in; under the component suite that turn is the first completion the host sees, under the `prompts/survey.md` the component embeds. The one thing that survey adds to the crate is its prompt, `prose/prompts/survey.md` (step 6).
 
 ### 5. Export the world
 
@@ -247,18 +248,22 @@ ln -s ../../../../codex/references/runtime sources/changelog/prose/references/em
 
 Then list every document the symlink brings in under `DOCS` (step 2), by the path it has beneath `prose/` — `references/emery-runtime/claims.md` — as `intent`'s list does. The root `tests/prose.rs` walks the tree through the symlink and holds the list to it, so a document you forget to list, and a link to anything the list does not embed — a directory, an unlisted file, a path outside the tree — is caught at `make test`, not when the model asks `read_doc` for it.
 
-### 7. Test natively
+### 7. Test the component
 
-`tests/survey.rs` asserts only what the adapter itself decides — natively: no wasm, no network. A mechanical survey is a plain fn over the `SourceInput`, so its tests are plain `#[test]`s with no model in sight: call `changelog::survey::survey(&input)` over a `tempfile` tree and compare the `Vec<Seam>` — two directories that meet the floor are two seams with the expected files, a tree of one directory is `[Seam::Whole]`, an inline value is `[Seam::Whole]`, and the entries the adapter leaves out are named in none (`documentation`'s suite is the model). A survey that asks the model takes a `Context` built over `omnia_test::guest::Scripted`, in the field the guest's lift fills with the host's model: script one inventory over a real `tempfile` tree and assert what the adapter decided — the root is lent under its prompt, an entry at a test, a declaration file, a dependency, or build output goes back as a finding while a production module is accepted, the notes follow the answer's order and each names its surface and entry, however many surfaces enter at one module — that an empty inventory is a typed refusal, and, over `Scripted::default()`, that its inline value spends no survey turn (`typescript`'s suite is the model). An adapter that validates or prepares its input adds its fail-closed cases (a source it cannot accept is a `bad_request`, never empty success — match on `Error::BadRequest { .. }`) and its `Note` reading as intended — `intent`'s suite is the model. Do not pin prompt phrases or the SDK's brief text: a wording edit is not a behavior change, and what every adapter shares — the declared tools, the schema format, the `check` flag, the lend, the gate's repair loop, the survey check, the fan-out and the join — the SDK's own suite asserts once.
+The adapter has no tests of its own: its one contract is the `source-adapter` world, and what it decides is asserted through the built component in the root `tests/source.rs` ([testing.md § Component suites](testing.md#1-component-suites--cratestest-programs)), which `test_programs::foreach_adapter!()` fails to compile until a `#[tokio::test] async fn changelog()` exists there. Each scenario stages a fixture tree on a `scratch()` project, runs the component under the omnia runtime over a scripted host model, and reads what the host saw:
 
-Run with `cargo nextest run -p changelog` (never bare `cargo test` — see [testing.md](testing.md)).
+- The completeness test, `changelog`: stage the minimal tree — one directory, so a mechanical survey stays whole — run `extract(test_programs::ADAPTER_CHANGELOG, &project, 1)` (the constant is generated from the `sources/` directory; the count is the seams the workspace leg opens), and pass the record to `prompted(&model, prompt::CHANGELOG, 1)` — `metadata` opened no completion, each `extract` one under the compiled-in `prompts/extract.md`, which the `prompt` module `include_str!`s.
+- The survey, as `changelog_<scenario>` tests: a tree that cuts is `extract(.., seams)` with the seam count — the strict script fails the run if the survey opened any other number — and `partitioned(&turns, &[..])` over the turns `prompted` returns asserts each directory's files share one turn and appear in no other, and an entry the adapter leaves out appears in none (`documentation_directories` is the model). Read a turn as data — a path, a brief, a line the adapter wrote — never as the SDK's phrasing.
+- A survey by model: script the inventory as the first answer, one extract answer per surface, one for the inline value, and assert the first request's system is the compiled-in `prompts/survey.md`, each extract turn names its surface and entry, and the inline leg spends no survey turn (`typescript` is the model). An inventory the adapter's `keep` refuses shows as the first `check` exchange's correction, naming each entry, with the accepted inventory alone reaching an extract turn (`typescript_non_production`).
+- Refusals: `refused(test_programs::ADAPTER_CHANGELOG, &project, None, ScriptedModel::default())` runs the driver's `refused bad_request` mode over the workspace, `Some(value)` over an inline value; assert `model.seen()` is empty, or holds the one survey turn (`intent_not_one_file`, `intent_empty_brief`, `typescript_no_surface`).
 
-### 8. Name the adapter in the root suites
+Do not pin prompt phrases or the SDK's brief text: a wording edit is not a behavior change, and what every adapter shares — the declared tools, the schema format, the `check` flag, the lend, the gate's repair loop, the survey check against the tree, the fan-out and the join — the SDK's own suite asserts once, and the `gated` probe once more under the runtime.
 
-Two root tests complete the component rung ([testing.md § Component suites](testing.md#2-component-suites--cratestest-programs)); each `test_programs::foreach_adapter!()` fails to compile until a `#[tokio::test]` / `#[test]` `fn changelog()` exists:
+Run with `cargo nextest run -p emery-adapters --test source` (never bare `cargo test` — see [testing.md](testing.md)).
 
-- `tests/source.rs` — stage the minimal fixture tree on a `scratch()` project, run `extract(test_programs::ADAPTER_CHANGELOG, &project)` (the constant is generated from the `sources/` directory), and pass the record to `prompted(&model, include_str!("../sources/changelog/prose/prompts/extract.md"))`. Add only what your component alone shows the host (intent asserts the brief it read through the mount is the turn's seam); the adapter's own behaviour stays in `tests/survey.rs`, and the SDK's side of the boundary is proved over the `gated` probe.
-- `tests/prose.rs` — add the crate as a root dev-dependency (`changelog = { path = "sources/changelog" }` under the root `Cargo.toml`'s native `[dev-dependencies]`) and call `corpus(changelog::DOCS, "changelog")`, which holds the list to the tree with `emery_sdk::prose::check` and then checks the extraction prompt; an adapter that surveys by model also calls `survey(changelog::DOCS)`, as `typescript` does, so an unlisted survey prompt fails the suite. Nothing more: the prompt your component embeds is proved by `tests/source.rs`.
+### 8. Check the corpus
+
+- `tests/prose.rs` — add the crate as a root dev-dependency (`changelog = { path = "sources/changelog" }` under the root `Cargo.toml`'s native `[dev-dependencies]`) and call `corpus(changelog::DOCS, "changelog", &["prompts/extract.md"])`, which holds the list to the tree and to the prompts named with `emery_sdk::prose::check` and then checks the extraction prompt; an adapter that surveys by model names `"prompts/survey.md"` too and also calls `survey(changelog::DOCS)`, as `typescript` does, so an unlisted survey prompt fails the suite. Nothing more: the prompt your component embeds is proved by `tests/source.rs`.
 
 ## Build the component and use it in a project
 
@@ -278,11 +283,12 @@ To watch it become a specification before wiring it into a project, give it an e
 
 ## Definition of done
 
-- [ ] `src/lib.rs` carries no logic beyond `pub mod survey`, the `pub static DOCS: &[Doc] = emery_sdk::prose!("../prose", [..]);` list, and the `wasm32`-only `mod guest` — `emery_sdk::source_adapter!(metadata, extract)` and the two fns it names; reusable logic is wasm-free library code, and none of it is `cfg`-gated.
+- [ ] `src/lib.rs` carries no logic beyond the `pub static DOCS: &[Doc] = emery_sdk::prose!("../prose", [..]);` list and, for `wasm32` alone, `mod survey;` and the `mod guest` — `emery_sdk::source_adapter!(metadata, extract)` and the two fns it names; nothing inside `src/survey.rs` names a target or a backend.
 - [ ] The guest's `extract` is its `survey` for the seams, then `emery_sdk::mine(ctx, DOCS, &seams).await` — nothing else: the adapter states its seams through `survey` — mechanically, or with one model call through `emery_sdk::survey::surfaces` — and every model call goes through the SDK.
-- [ ] Every document under `prose/` is listed in `DOCS`, and every relative link in the prose names a listed document (the root `tests/prose.rs`). The extraction prompt stays under the 800 non-blank-line cap, and its `## Worked example` JSON fence parses as the SDK's `Evidence` — claims alone, no document-level `kind` — and passes the claim gate (the root `tests/prose.rs`). It tells the model that a call may be given one seam of the tree — a directory, or a surface and its entry — and must claim that seam alone. A survey by model embeds `prose/prompts/survey.md` under the same cap, its worked example parsing as `survey::Inventory`.
+- [ ] Every document under `prose/` is listed in `DOCS`, every relative link in the prose names a listed document, and every listed document is reached from a prompt by those links (the root `tests/prose.rs`). The extraction prompt stays under the 800 non-blank-line cap, and its `## Worked example` JSON fence parses as the SDK's `Evidence` — claims alone, no document-level `kind` — and passes the claim gate (the root `tests/prose.rs`). It tells the model that a call may be given one seam of the tree — a directory, or a surface and its entry — and must claim that seam alone. A survey by model embeds `prose/prompts/survey.md` under the same cap, its worked example parsing as `survey::Inventory`. Any worked example under `prose/references/examples/` carries its Evidence under a `## Evidence` JSON fence that parses and passes the gate the same way (the root `tests/prose.rs`).
+- [ ] Every reference is written for the model in this adapter's contract — what to read in the source, which claims to emit, in the prompt's vocabulary — with nothing addressed to a contributor and nothing the prompt would contradict.
 - [ ] Required per-kind extras are demanded by the prompt — the worked example carries them.
-- [ ] `tests/survey.rs` covers what the adapter itself decides: its survey (how a tree cuts, what it leaves out, when it stays whole; for a survey by model, over a `Context` carrying `omnia_test::guest::Scripted` and a real `tempfile` tree, the entries its `keep` refuses, the notes cut from a scripted inventory, and the inline value that spends no turn) and, where the adapter prepares its input, its fail-closed paths; `cargo nextest run -p <name>` is green.
-- [ ] The root `tests/source.rs` and `tests/prose.rs` name the adapter, and the root `Cargo.toml` lists it as a native dev-dependency; `cargo nextest run -p emery-adapters` is green.
+- [ ] The root `tests/source.rs` covers what the adapter itself decides, beside its completeness test, as `<name>_<scenario>` tests over the built component: its survey (how a tree cuts, what it leaves out, when it stays whole; for a survey by model, the inventory scripted as the first turn, the entries its `keep` refuses, and the inline value that spends no turn) and, where the adapter prepares its input, its fail-closed refusals. The adapter has no `tests/` and no dev-dependencies.
+- [ ] The root `tests/prose.rs` names the adapter, and the root `Cargo.toml` lists it as a native dev-dependency; `cargo nextest run -p emery-adapters` is green.
 - [ ] `cargo build -p <name> --target wasm32-wasip2 --release` builds the component; no `.wasm` artifacts committed.
 - [ ] `make ci` is green.

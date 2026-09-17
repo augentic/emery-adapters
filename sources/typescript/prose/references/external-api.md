@@ -1,52 +1,20 @@
-# External API surface documentation (Step 3)
+# Outbound HTTP calls
 
-Document every HTTP/API call by tracing the actual deserialization code, not type declarations. The runtime response shape is determined by how the code uses the response, not by interface declarations that may be broader.
+Every HTTP call the surface makes is a `call` claim at the call site, and the behaviour a caller observes through it — the timeout, the retry, the error mapping — is a `requirement`. Best-effort and audit calls count: fire-and-forget is not unspecified.
 
-## THINK before each call
+## Read from the call site
 
-Before documenting each API call, reason through:
+- **URL** as constructed: the base (`process.env.API_URL`, a config field) and the path and query as the code builds them — the exact template, no parameter added or dropped.
+- **Method** and **headers**, each header with where its value comes from: a literal, a config key, a token.
+- **Request body** shape, from the object the code serialises; the type it is built from is a `type` claim.
+- **Response** shape, from how the code deserialises and reads it (`await response.json()` assigned to `string[]`; `body.items[0].id`), never from a broader declared interface.
+- **Authentication**: bearer, API key, basic; and where the identity comes from — a config key (`AZURE_IDENTITY`) or a literal — because renaming or hardcoding it changes behaviour.
+- **Status handling**: which statuses count as success, which are mapped to what error or default, whether a non-2xx throws or returns.
+- **Retries and timeouts**: attempt counts, backoff values, and timeout durations, as the source spells them.
 
-1. What is the complete URL? (Is it hardcoded, from config, or dynamically constructed?)
-2. What HTTP method? (GET, POST, PUT, PATCH, DELETE)
-3. What headers are sent? (Authorization, Content-Type, custom headers)
-4. What is the request body? (Full JSON/XML structure, not just described)
-5. What does the response look like? (Trace through actual deserialization code, not type declarations)
-6. How is the response parsed? (`response.json()`? XML parser? Text?)
-7. What fields are actually accessed from the response? (This reveals the true shape)
-8. What happens on errors? (Status codes, error response format, retry behavior)
-9. Are there timeouts? (Explicit timeout values)
-10. Is authentication required? (API keys, tokens, basic auth)
+## Shape the claims
 
-**Critical**: Trace actual deserialization, not type declarations. If code does `const allocated: string[] = await response.json()`, the response shape is `string[]`, not some broader interface type.
-
-## ANALYZE: per-call documentation
-
-For each external HTTP/API call:
-
-- Endpoint URL pattern (EXACT path and query parameters as constructed in source)
-- HTTP method
-- Request headers (list each, including how values are obtained -- from config, hardcoded, etc.)
-- Request body shape (exact JSON/XML structure)
-- Response body shape (CRITICAL: capture full nesting)
-- Authentication method (including where the identity/token name comes from -- config variable or hardcoded)
-- Error responses (status codes and body shapes)
-- **Retry behavior** (if present)
-- **Timeout** (if specified)
-
-**Trace actual deserialization, not type declarations.** When the source code parses an API response (e.g., `response.json()`, `JSON.parse()`), trace what the result is assigned to and how its fields are accessed. The runtime response shape is determined by how the code uses the response, not by interface declarations that may be broader. If the code does `const allocated: string[] = await response.json()`, the response shape is `string[]`, not the full interface type. Always follow the data from the HTTP response through parsing to usage to determine the true shape.
-
-**Response shape documentation**: Include a concrete JSON example showing the actual response structure. This prevents downstream code generators from fabricating wrapper types.
-
-```markdown
-- **Response shape**: `string[]` (flat JSON array)
-- **Example response**: `["NZ 1234", "NZ 5678"]`
-- **Usage**: Each string is a vehicle label; spaces are stripped before use as partition key
-```
-
-**Authentication source**: When documenting how a token or identity is obtained, capture whether the identity name is hardcoded or comes from configuration:
-
-```markdown
-- **Auth**: Bearer token from identity provider
-  - Identity name: from config `AZURE_IDENTITY` (NOT hardcoded)
-  - Token acquisition: access token requested using identity name
-```
+- `call` — `path` at the call site, `callee` the client function: a global bare (`fetch`), a package function as `<package>:<symbol>` (`axios:post`, `@azure/identity:getAzureToken`), a function or method of the tree as `<file>:<symbol>` (`src/lib/http.ts:HttpClient.post`); the synopsis names the method and the URL template.
+- `requirement` — one per observable behaviour: `Enrichment posts the message to ${API_URL}/data with a 5-second timeout and retries twice on a network error.`
+- `type` — the request and response shapes as the code declares or reads them.
+- Say what is not in the source rather than inventing it: a response shape the code never reads, an auth method behind a client the tree does not contain.

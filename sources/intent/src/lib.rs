@@ -1,28 +1,11 @@
 //! Extracts claims from an operator's written brief.
 //!
-//! An intent source is the operator's free-form brief, given inline or as a
-//! one-file tree. It is never split: [`survey`] carries the brief verbatim
-//! as one seam, and the guest's `extract` hands it to `emery_sdk::mine`,
-//! whose document carries one `intent` claim with the brief and one
-//! `requirement` claim per directive it states. The guest exports the
-//! `source-adapter` world on `wasm32` alone, so the survey is tested
-//! natively, and [`DOCS`] lists the prose it embeds, so the root suite holds
-//! the list to the `prose/` tree.
+//! The adapter accepts inline text or a workspace containing one regular
+//! file. The brief must not be empty and is always mined as a single unit.
+//! Emery's generated files are ignored when counting workspace files.
 
-pub mod survey;
-
-use emery_sdk::Doc;
-
-/// The prose the guest embeds: the extraction prompt and the references it links.
-pub static DOCS: &[Doc] = emery_sdk::prose!(
-    "../prose",
-    [
-        "prompts/extract.md",
-        "references/emery-runtime/README.md",
-        "references/emery-runtime/claims.md",
-        "references/emery-runtime/reconciliation.md",
-    ]
-);
+#[cfg(target_arch = "wasm32")]
+mod survey;
 
 #[cfg(target_arch = "wasm32")]
 mod guest {
@@ -41,3 +24,13 @@ mod guest {
         emery_sdk::mine(ctx, DOCS, &seams).await
     }
 }
+
+/// The prompt and reference documents embedded in the adapter.
+pub static DOCS: &[emery_sdk::Doc] = emery_sdk::prose!(
+    "../prose",
+    [
+        "prompts/extract.md",
+        "references/emery-runtime/claims.md",
+        "references/emery-runtime/reconciliation.md",
+    ]
+);
