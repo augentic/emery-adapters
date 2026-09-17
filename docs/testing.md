@@ -83,4 +83,4 @@ Coverage is advisory here, not a gate: adapter code is a few lines per crate, an
 
 ## Test naming
 
-Test function names are identifiers, not sentences — name the *scenario* (`bound_tree`, `not_one_file`), never the outcome (`bound_tree_named`, `not_one_file_rejected`). The enclosing `tests/<area>.rs` module already names the subject — don't restate it in every `fn`. A test a `foreach_<group>!` macro guards is the exception by construction: it carries its program's full `<group>_<scenario>` name (`probe_echo`) or its adapter's (`intent`). Push the narrative into the `//` comment above the `fn`.
+Test function names are identifiers, not sentences — name the *scenario* (`one_directory`, `not_one_file`), never the outcome (`one_directory_whole`, `not_one_file_rejected`). The enclosing `tests/<area>.rs` module already names the subject — don't restate it in every `fn`. A test a `foreach_<group>!` macro guards is the exception by construction: it carries its program's full `<group>_<scenario>` name (`probe_echo`) or its adapter's (`intent`). Push the narrative into the `//` comment above the `fn`.

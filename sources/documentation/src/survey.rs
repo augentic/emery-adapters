@@ -22,38 +22,38 @@ pub fn survey(input: &SourceInput) -> Result<Vec<Seam>, Error> {
         return Ok(vec![Seam::Whole]);
     };
 
-    let files = emery_sdk::survey::list(root, |entry| !entry.hidden())?;
-    Ok(Seams::from(files).fold().into_seams())
+    let files = emery_sdk::workspace::list(root, |entry| !entry.hidden())?;
+    Ok(Groups::from(files).fold().into())
 }
 
-struct Seams(BTreeMap<String, Vec<String>>);
+struct Groups(BTreeMap<String, Vec<String>>);
 
-impl From<Vec<String>> for Seams {
+impl From<Vec<String>> for Groups {
     fn from(files: Vec<String>) -> Self {
-        let mut seams: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        // group files by top-level directory.
+        let mut groups: BTreeMap<String, Vec<String>> = BTreeMap::new();
         for file in files {
             let dir = file.split_once('/').map_or(".", |(dir, _)| dir).to_owned();
-            seams.entry(dir).or_default().push(file);
+            groups.entry(dir).or_default().push(file);
         }
-        Self(seams)
+        Self(groups)
     }
 }
 
-impl From<Seams> for Vec<Seam> {
-    fn from(seams: Seams) -> Self {
+impl From<Groups> for Vec<Seam> {
+    fn from(seams: Groups) -> Self {
         seams.into_seams()
     }
 }
 
-// Documents a top-level directory holds before it is a seam of its own: a
-// model call costs an agent start, so a directory of one is folded in.
-const SEAM_SIZE: usize = 2;
+const MIN_MEMBERS: usize = 2;
 
-impl Seams {
+impl Groups {
     fn fold(mut self) -> Self {
+        // fold directories beneath the min members into the root
         let folded: Vec<String> = self
             .0
-            .extract_if(.., |dir, files| dir != "." && files.len() < SEAM_SIZE)
+            .extract_if(.., |dir, files| dir != "." && files.len() < MIN_MEMBERS)
             .flat_map(|(_, files)| files)
             .collect();
         if !folded.is_empty() {

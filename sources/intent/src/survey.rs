@@ -47,7 +47,7 @@ fn require_brief(brief: &str) -> Result<(), Error> {
 }
 
 fn single_file_intent(root: &str) -> Result<String, Error> {
-    let files = emery_sdk::survey::list(root, |_| true)?;
+    let files = emery_sdk::workspace::list(root, |_| true)?;
     match files.as_slice() {
         [file] => {
             let path = Path::new(root).join(file);

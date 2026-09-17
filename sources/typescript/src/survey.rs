@@ -1,6 +1,7 @@
 //! The survey of a code tree: the model finds the surfaces it exposes, one seam each.
 
-use emery_sdk::survey::{Entry, Surface};
+use emery_sdk::survey::Surface;
+use emery_sdk::workspace::Entry;
 use emery_sdk::{Context, Doc, Error, Model, Seam, SourceContent, bad_request};
 
 // Directories holding no production source of the estate's own: dependencies,
