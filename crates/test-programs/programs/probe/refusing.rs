@@ -1,30 +1,17 @@
-//! A probe refusing its input with `bad_request!` before touching the model.
-//!
-//! Its failure crosses the WIT `invalid-request` arm.
+//! Exercises an [`Error::BadRequest`] returned before any model request.
 
 #![cfg(target_arch = "wasm32")]
 
-emery_sdk::source!(crate::Adapter);
-
 use std::future::{Future, ready};
 
-use emery_prose::registry::Doc;
-use emery_sdk::{Context, Error, Evidence, Model, SourceAdapter, SourceKind, bad_request};
+use emery_sdk::{AdapterMetadata, Context, Error, Evidence, SourceKind, bad_request};
 
-#[derive(Debug)]
-struct Adapter;
+emery_sdk::source_adapter!(metadata, extract);
 
-impl SourceAdapter for Adapter {
-    const KIND: SourceKind = SourceKind::Documentation;
+fn metadata() -> AdapterMetadata {
+    emery_sdk::metadata(SourceKind::Documentation)
+}
 
-    fn docs() -> &'static [Doc] {
-        &[]
-    }
-
-    // Nothing to await.
-    fn extract<P: Model>(
-        _model: &P, ctx: &Context<'_>,
-    ) -> impl Future<Output = Result<Evidence, Error>> + Send {
-        ready(Err(bad_request!("the probe refuses source `{}`", ctx.input.key)))
-    }
+fn extract<P>(ctx: &Context<'_, P>) -> impl Future<Output = Result<Evidence, Error>> {
+    ready(Err(bad_request!("the probe refuses source `{}`", ctx.input.key)))
 }

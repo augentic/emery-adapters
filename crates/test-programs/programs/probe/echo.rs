@@ -1,32 +1,21 @@
-//! A probe answering `maximal()` without a model call.
+//! Exercises round-trip conversion of a fully populated evidence document.
 //!
-//! A suite proves over it that every record field survives the bindings'
-//! lowering and lift.
+//! The probe returns `maximal()` without a model request, allowing every field
+//! to be checked after conversion through the component interface.
 
 #![cfg(target_arch = "wasm32")]
 
-emery_sdk::source!(crate::Adapter);
-
 use std::future::{Future, ready};
 
-use emery_prose::registry::Doc;
-use emery_sdk::{Context, Error, Evidence, Model, SourceAdapter, SourceKind};
+use emery_sdk::{AdapterMetadata, Context, Error, Evidence, SourceKind};
 use test_programs::maximal;
 
-#[derive(Debug)]
-struct Adapter;
+emery_sdk::source_adapter!(metadata, extract);
 
-impl SourceAdapter for Adapter {
-    const KIND: SourceKind = SourceKind::Behaviour;
+fn metadata() -> AdapterMetadata {
+    emery_sdk::metadata(SourceKind::Behaviour)
+}
 
-    fn docs() -> &'static [Doc] {
-        &[]
-    }
-
-    // Nothing to await.
-    fn extract<P: Model>(
-        _model: &P, _ctx: &Context<'_>,
-    ) -> impl Future<Output = Result<Evidence, Error>> + Send {
-        ready(Ok(maximal()))
-    }
+fn extract<P>(_ctx: &Context<'_, P>) -> impl Future<Output = Result<Evidence, Error>> {
+    ready(Ok(maximal()))
 }

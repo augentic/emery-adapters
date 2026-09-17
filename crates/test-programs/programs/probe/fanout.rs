@@ -1,42 +1,30 @@
-//! A probe whose survey is two `Prepared` notes over a one-document corpus.
+//! Exercises concurrent mining across two note seams.
 //!
-//! A suite proves over it, under the runtime, that the host runs the
-//! completions one guest issues together: the property the SDK's fan-out
-//! rests on.
+//! Both model requests must be pending together, which verifies the host
+//! behaviour required by the SDK's bounded fan-out.
 
 #![cfg(target_arch = "wasm32")]
 
-emery_sdk::source!(crate::Adapter);
-
-use std::future::{Future, ready};
-
-use emery_prose::registry::Doc;
-use emery_sdk::{Context, Error, Material, Model, SourceAdapter, SourceKind};
+use emery_sdk::{AdapterMetadata, Context, Doc, Error, Evidence, Model, Seam, SourceKind};
 
 const DOCS: &[Doc] = &[Doc {
     path: "prompts/extract.md",
     body: "SYSTEM",
 }];
 
-#[derive(Debug)]
-struct Adapter;
+emery_sdk::source_adapter!(metadata, extract);
 
-impl SourceAdapter for Adapter {
-    const KIND: SourceKind = SourceKind::Documentation;
+fn metadata() -> AdapterMetadata {
+    emery_sdk::metadata(SourceKind::Documentation)
+}
 
-    fn docs() -> &'static [Doc] {
-        DOCS
-    }
-
-    // Two materials whatever the input arm, so the provided `extract` holds
-    // two completions pending at once over a workspace and over a value; the
-    // survey itself spends none.
-    fn survey<P: Model>(
-        _model: &P, _ctx: &Context<'_>,
-    ) -> impl Future<Output = Result<Vec<Material>, Error>> + Send {
-        ready(Ok(vec![
-            Material::Prepared("The first half of the source.".to_owned()),
-            Material::Prepared("The second half of the source.".to_owned()),
-        ]))
-    }
+// Two seams whatever the input arm, so `mine` holds two completions pending
+// at once over a workspace and over a value; no survey turn is spent
+// choosing them.
+async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {
+    let seams = [
+        Seam::Note("The first half of the source.".to_owned()),
+        Seam::Note("The second half of the source.".to_owned()),
+    ];
+    emery_sdk::mine(ctx, DOCS, &seams).await
 }

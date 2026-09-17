@@ -12,20 +12,16 @@ includes = ["mise-rust.toml"]
 # Adapter overrides
 # -------------------------------------
 
-# [tasks.wasm]
-# run = "cargo clippy --workspace --exclude emery-adapters --lib --examples --target wasm32-wasip2 -- -D warnings"
-
-# [tasks.check]
-# depends = ["fmt", "lint", "wasm", "test", "test-docs", "doc"]
-
-# [tasks.adapter]
-# run = '''
-# name="${1:?usage: make adapter <name>}"
-# cargo build -p "$name" --target wasm32-wasip2 --release
-# '''
-
-[tasks.release]
-run = "cargo build --workspace --target wasm32-wasip2 --release"
+# The guest side — every adapter's `survey` and `guest` modules, and every
+# program under `crates/test-programs/programs/` — is `cfg(target_arch =
+# "wasm32")`, which native clippy compiles to nothing: lint it for its own
+# target too, where `clippy.toml`'s guest deny-list applies. The root package
+# is native tests alone and is left out of that pass.
+[tasks.lint]
+run = [
+  "cargo clippy --workspace --all-targets --all-features -- -D warnings",
+  "cargo clippy --workspace --exclude emery-adapters --lib --examples --target wasm32-wasip2 -- -D warnings",
+]
 
 [tasks.publish]
 run = '''

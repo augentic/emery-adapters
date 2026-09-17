@@ -1,51 +1,84 @@
-//! Checks every shipped adapter's prompt corpus.
+//! Verifies every shipped adapter's embedded prompt corpus.
 //!
-//! Each `prompts/extract.md` stays under the 800 non-blank-line cap, and its
-//! `## Worked example` parses as the SDK's `Evidence` and passes the claim
-//! gate — the one machine-checkable part of a prompt, and where a contract
-//! change in the engine pin fails first. An adapter that surveys by model
-//! embeds `prompts/survey.md` too, under the same cap, with a worked example
-//! that parses as the SDK's `Partition`. Reference presence is the embed-time
-//! walker's; the embedded prompt is `source.rs`'s.
+//! Every Markdown file must be listed once, every relative link must resolve,
+//! and every reference must be reachable from a prompt. Extraction prompts
+//! and worked examples are kept within their size limit and validated against
+//! the evidence schema and claim gate.
+//!
+//! Model-assisted survey prompts receive the same checks against their
+//! inventory schema. Runtime use of each embedded prompt is covered by
+//! `source.rs`.
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use emery_prose::registry::{Doc, body};
-use emery_sdk::survey::Partition;
-use emery_sdk::{Evidence, SourceAdapter as _};
+use std::path::Path;
+
+use emery_sdk::survey::Inventory;
+use emery_sdk::{Doc, Evidence, prose};
 
 // Every `sources/*` component must have a matching test here.
 test_programs::foreach_adapter!();
 
-/// Checks one adapter's corpus: the extraction prompt, and the survey prompt when embedded.
+/// Checks an adapter's corpus against its tree, prompts, and examples.
 ///
-/// Each stays under the cap; the extraction example passes the gate and the
-/// survey example is a partition.
-fn corpus(docs: &[Doc]) {
-    let prompt = body(docs, "prompts/extract.md").expect("`prompts/extract.md` is embedded");
+/// `prompts` are the documents the SDK puts to the model by path:
+/// `prompts/extract.md` for every adapter, and `prompts/survey.md` for one
+/// that surveys by model. The worked examples are the prompt's own, under
+/// `## Worked example`, and every document under `references/examples/`
+/// other than `README.md`, under `## Evidence`.
+fn corpus(docs: &[Doc], name: &str, prompts: &[&str]) {
+    let tree = Path::new(env!("CARGO_MANIFEST_DIR")).join("sources").join(name).join("prose");
+    let findings = prose::check(docs, &tree, prompts);
+    assert!(
+        findings.is_empty(),
+        "`{name}`'s DOCS disagree with its tree:\n{}",
+        findings.join("\n")
+    );
+
+    let prompt = prose::body(docs, "prompts/extract.md").expect("the extraction prompt is listed");
     capped("prompts/extract.md", prompt);
+    gated("prompts/extract.md", fenced_json(prompt, "## Worked example"));
 
-    // The example is claims alone: a document-level kind would be refused
-    // by the schema, since the kind is the adapter's metadata.
-    let evidence: Evidence = serde_json::from_str(worked_example(prompt))
-        .expect("the worked example is the SDK's Evidence");
-    let findings = evidence.findings();
-    assert!(findings.is_empty(), "the worked example fails the gate:\n{}", findings.join("\n"));
-
-    if let Some(prompt) = body(docs, "prompts/survey.md") {
-        survey(prompt);
+    let examples = docs.iter().filter(|doc| {
+        doc.path.strip_prefix("references/examples/").is_some_and(|file| file != "README.md")
+    });
+    for example in examples {
+        gated(example.path, fenced_json(example.body, "## Evidence"));
     }
 }
 
-/// Checks a survey prompt: under the cap, with a worked example that is a `Partition`.
-fn survey(prompt: &str) {
-    capped("prompts/survey.md", prompt);
-    let partition: Partition = serde_json::from_str(worked_example(prompt))
-        .expect("the worked example is the SDK's Partition");
+/// Checks that a worked example is nonempty evidence accepted by the claim gate.
+fn gated(path: &str, json: &str) {
+    // The example is claims alone: a document-level kind would be refused
+    // by the schema, since the kind is the adapter's metadata.
+    let evidence: Evidence = serde_json::from_str(json).unwrap_or_else(|err| {
+        panic!("`{path}`: the worked example is not the SDK's Evidence: {err}")
+    });
+    assert!(!evidence.claims.is_empty(), "`{path}`: the worked example carries no claims");
+    let findings = evidence.findings();
     assert!(
-        partition.groups.iter().all(|group| !group.files.is_empty()),
-        "the worked example names an empty group"
+        findings.is_empty(),
+        "`{path}`: the worked example fails the gate:\n{}",
+        findings.join("\n")
     );
+}
+
+/// Checks a survey prompt's size and worked inventory.
+///
+/// The example teaches the shape the check accepts: every surface named,
+/// once, and entered somewhere.
+fn survey(docs: &[Doc]) {
+    let prompt = prose::body(docs, "prompts/survey.md").expect("the survey prompt is listed");
+    capped("prompts/survey.md", prompt);
+    let inventory: Inventory = serde_json::from_str(fenced_json(prompt, "## Worked example"))
+        .expect("the worked example is the SDK's Inventory");
+    assert!(!inventory.surfaces.is_empty(), "the worked example exposes no surface");
+    let mut names = std::collections::BTreeSet::new();
+    for surface in &inventory.surfaces {
+        assert!(!surface.name.trim().is_empty(), "a surface at `{}` has no name", surface.entry);
+        assert!(!surface.entry.is_empty(), "surface `{}` has no entry", surface.name);
+        assert!(names.insert(&surface.name), "surface `{}` is listed twice", surface.name);
+    }
 }
 
 fn capped(path: &str, prompt: &str) {
@@ -53,30 +86,30 @@ fn capped(path: &str, prompt: &str) {
     assert!(lines <= 800, "`{path}` carries {lines} non-blank lines (cap 800)");
 }
 
-/// Returns the first JSON fence under `## Worked example`.
-fn worked_example(prompt: &str) -> &str {
-    let (_, section) =
-        prompt.split_once("\n## Worked example").expect("the prompt carries a worked example");
-    let (_, fenced) = section.split_once("```json\n").expect("the worked example is a JSON fence");
+/// Returns the first JSON fence under `heading` in `doc`.
+fn fenced_json<'d>(doc: &'d str, heading: &str) -> &'d str {
+    let (_, section) = doc
+        .split_once(&format!("\n{heading}"))
+        .unwrap_or_else(|| panic!("the document carries no `{heading}` section"));
+    let (_, fenced) = section.split_once("```json\n").expect("the section carries a JSON fence");
     let (json, _) = fenced.split_once("\n```").expect("the JSON fence closes");
     json
 }
 
 #[test]
 fn documentation() {
-    corpus(documentation::Adapter::docs());
+    corpus(documentation::DOCS, "documentation", &["prompts/extract.md"]);
 }
 
 #[test]
 fn intent() {
-    corpus(intent::Adapter::docs());
+    corpus(intent::DOCS, "intent", &["prompts/extract.md"]);
 }
 
-// The typescript survey asks the model, so its survey prompt must be
-// embedded; a missing one is `server_error` on every multi-directory tree.
+// The typescript survey asks the model, so its survey prompt must be listed;
+// a missing one would be `server_error` on every tree.
 #[test]
 fn typescript() {
-    let docs = typescript::Adapter::docs();
-    corpus(docs);
-    assert!(body(docs, "prompts/survey.md").is_some(), "`prompts/survey.md` is embedded");
+    corpus(typescript::DOCS, "typescript", &["prompts/extract.md", "prompts/survey.md"]);
+    survey(typescript::DOCS);
 }

@@ -1,85 +1,37 @@
-# Extract Step 1 — Identify Component Structure
+# Component structure
 
-The extract SKILL.md keeps Step 1 to a one-line pointer; this file owns the
-full THINK / ANALYZE / VERIFY procedure and the dependency version-pinning
-table.
+How a TypeScript or JavaScript tree is organised, and how to follow a surface from its entry through it. The survey names the surface and the module a caller enters it at; this reference is how to read the rest of the tree from there.
 
-## THINK
+## The manifest
 
-Before analyzing code, reason through these questions:
+`package.json` says what the tree exposes and how it is built:
 
-1. What source language is this? (Check file extensions: .ts, .js, .go, .py,
-   .rs, .java, .cs)
-2. What is the entry point? (Look for: main.\*, index.\*, handler exports,
-   main functions)
-3. How is the code organized? (Monolithic file? Multiple modules? Layered
-   architecture?)
-4. What external libraries are used? (Check manifest: package.json, go.mod,
-   requirements.txt, Cargo.toml)
-5. What async patterns are present? (async/await, Promises, goroutines,
-   callbacks, futures)
-6. What types are defined? (interfaces, classes, structs, enums)
-7. Is there a guest/entry-point layer? (Middleware, CORS, error mapping, body
-   injection, parameter sourcing)
+- `bin` names the commands a caller runs, each with its entry module.
+- `main`, `module`, and `exports` name what a library makes importable; each export path's target is an entry.
+- `scripts` name what is run — `start`, `serve`, a worker — and, through the command each runs, its entry module.
+- `dependencies` name the frameworks in play (`express`, `fastify`, `@nestjs/core`, `koa`, `hono`, `commander`, `yargs`, `bullmq`, `kafkajs`, `@azure/service-bus`), which decide what a route, a command, or a consumer looks like below.
 
-## ANALYZE
+`tsconfig.json` `paths` and `baseUrl` resolve the aliases imports use (`@app/users` → `src/users`); `rootDir` and `include` bound the compiled tree. Resolve every import you follow through them, relative to `$SOURCE_DIR`.
 
-Read the source at `$SOURCE_DIR` and identify:
+## Entries and what they reach
 
-1. **Source language** — detect from file extensions.
-2. Entry points (`main.*`, `index.*`, handler exports, `func main()`,
-   `if __name__ == "__main__"`, etc.).
-3. Module organization and file structure.
-4. External dependencies from manifest files (`package.json`, `go.mod`,
-   `requirements.txt`, `Cargo.toml`, `pom.xml`, etc.).
-5. Async boundaries (async/await, Promises, goroutines, threads, futures,
-   etc.).
-6. Type definitions (interfaces, types, classes, structs, enums).
-7. **Guest/entry-point layer** — middleware (CORS, auth), error code → HTTP
-   status mapping, body injection/transformation, parameter sourcing, and any
-   validation performed before the domain handler.
+- **A route** enters where the framework registers it — `app.post("/users", handler)`, a `router.get`, a Nest `@Controller` method, a Fastify `route` call. The handler it names, or the controller method, is where behaviour starts.
+- **A command** enters at its `bin` module or the `commander` / `yargs` registration that names it; its action function is where behaviour starts.
+- **A job or consumer** enters at the registration — `cron.schedule`, a `setInterval` at module scope, a queue `Worker` or `consumer.run` handler; the callback is where behaviour starts.
+- **An exported API** enters at the module `exports` names; each exported function or class is where a surface's behaviour starts.
 
-Language detection and dependency extraction always run against the full
-set of sentinel manifest files (`package.json`, lock files, and their
-per-stack equivalents), regardless of which subtrees the behavioural
-passes focus on.
+From the entry, follow imports outward: the handler, the services it calls, the repositories and clients they use, the types they take and return. Under a dependency-injection container — Nest's `@Injectable()` providers, `inversify`, `tsyringe` — a constructor parameter names an interface or a token, and what runs is the provider the module's `providers` (or the container's `bind`) resolves it to: follow the binding, not the parameter type, and where a token is bound differently per environment, claim the binding the production module makes. Stop where the surface stops — a module the surface never reaches is another surface's, or nobody's.
 
-## Dependency version pinning
+## The entry layer
 
-Dependency version drift is a leading cause of build failures when
-regenerating from a specification. Capture dependency versions from the
-source project's **lock file**, not just the manifest.
+What sits between the caller and the handler shapes what the caller observes, so it is claimed for this surface wherever the surface passes through it:
 
-| Stack | Manifest | Lock File | Version Source |
-|-------|----------|-----------|----------------|
-| Rust | `Cargo.toml` | `Cargo.lock` | Lock file |
-| Node/TypeScript | `package.json` | `package-lock.json` / `yarn.lock` / `pnpm-lock.yaml` | Lock file |
-| Python | `pyproject.toml` / `setup.cfg` | `poetry.lock` / `requirements.txt` (pinned) | Lock file or pinned requirements |
-| C# | `.csproj` | `packages.lock.json` | Lock file |
-| Go | `go.mod` | `go.sum` | `go.mod` (already pinned) |
-| Java/Kotlin | `pom.xml` / `build.gradle` | Dependency tree output | Resolved dependency tree |
+- middleware the route mounts — authentication, CORS, rate limits, body parsing, validation (`zod`, `joi`, `class-validator` pipes);
+- error mapping — an error class or code translated to an HTTP status or an exit code;
+- parameter sourcing — which of path, query, header, and body a value comes from, and the coercion applied (`Number(req.query.limit)`).
 
-For each dependency, record: package name, **exact version** from lock file
-(e.g., `1.4.0`, not `^1.4`), whether it is direct or transitive, and any
-feature flags / optional features enabled.
+Global middleware every route passes through is claimed under this surface's noun, for what it does to this surface's requests — never as a surface of its own.
 
-In your dependency claims, record the **manifest version specifier**
-(e.g., `"1.0.100"` from Cargo.toml, `"^2.3.0"` from package.json)
-as the primary version — this is what goes into the generated project's
-dependency declaration. Also note the lock file resolved version for API
-compatibility reference.
+## Async boundaries
 
-**When the lock file is absent**: use the manifest version constraints and
-flag this in Risks / Open Questions.
-
-## VERIFY
-
-- [ ] I've identified the primary source language correctly
-- [ ] I've found all entry points (there may be multiple)
-- [ ] I've understood the module structure (not just listed files)
-- [ ] I've checked the manifest file for dependencies
-- [ ] I've noted async vs sync execution patterns
-- [ ] I've checked for a guest/entry-point layer (middleware, error mapping,
-      body injection)
-- [ ] I've read the lock file for dependency versions (or flagged its
-      absence)
+`await` in sequence is sequential; `Promise.all` and `Promise.allSettled` are parallel; `Promise.race` is first-wins; a call without `await` completes after the response. Where the difference is observable — the order of side effects, what happens on partial failure, what a caller gets back before a publish completes — the requirement statement says which.

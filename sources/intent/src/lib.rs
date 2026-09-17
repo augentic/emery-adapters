@@ -1,11 +1,36 @@
 //! Extracts claims from an operator's written brief.
+//!
+//! The adapter accepts inline text or a workspace containing one regular
+//! file. The brief must not be empty and is always mined as a single unit.
+//! Emery's generated files are ignored when counting workspace files.
 
-#[cfg(feature = "export")]
-emery_sdk::source!(crate::Adapter);
+#[cfg(target_arch = "wasm32")]
+mod survey;
 
-mod operations;
-mod registry {
-    emery_prose::registry!();
+#[cfg(target_arch = "wasm32")]
+mod guest {
+    use emery_sdk::{AdapterMetadata, Context, Error, Evidence, Model, SourceKind};
+
+    use crate::{DOCS, survey};
+
+    emery_sdk::source_adapter!(metadata, extract);
+
+    fn metadata() -> AdapterMetadata {
+        emery_sdk::metadata(SourceKind::Intent)
+    }
+
+    async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {
+        let seams = survey::survey(ctx.input)?;
+        emery_sdk::mine(ctx, DOCS, &seams).await
+    }
 }
 
-pub use operations::Adapter;
+/// The prompt and reference documents embedded in the adapter.
+pub static DOCS: &[emery_sdk::Doc] = emery_sdk::prose!(
+    "../prose",
+    [
+        "prompts/extract.md",
+        "references/emery-runtime/claims.md",
+        "references/emery-runtime/reconciliation.md",
+    ]
+);

@@ -1,17 +1,3 @@
-# Metrics and observability (Step 6)
+# Observability
 
-For each metric emission in the source code (counters, gauges, histograms, log-structured events):
-
-- Metric name and type (counter, gauge, histogram)
-- When it is emitted (which step in the algorithm)
-- Dimensions/labels attached
-- Purpose (operational visibility, alerting, debugging)
-
-Example artifacts:
-
-```markdown
-- **Metrics**:
-  - `events_published` — type: monotonic counter; emitted: after each successful publish; labels: none
-  - `irrelevant_station` — type: monotonic counter; emitted: when station is filtered out; labels: station ID
-  - `r9k_delay` — type: gauge; emitted: during validation; labels: none; value: message delay in seconds
-```
+Metrics, traces, and structured log events the surface emits are behaviour an operator observes. Claim each emission site as a `call` — `callee` the client method (`prom-client` `Counter.inc`, `src/lib/metrics.ts:gauge`, a `logger.info` carrying a structured event name) — with a synopsis naming the metric or event, its type (counter, gauge, histogram, span), the labels attached, and when in the handler it fires. Where the emission is part of the surface's contract — a counter per processed event, a span around every outbound call — state it as a `requirement`: `Every published event increments the events_published counter.` Carry names exactly as the source spells them.

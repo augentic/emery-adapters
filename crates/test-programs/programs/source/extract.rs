@@ -1,22 +1,23 @@
-//! Drives one adapter over `emery:adapter/source`: `metadata`, then `extract`.
+//! Drives one adapter through its metadata and extraction interface.
 //!
-//! The host names the mode as arguments:
+//! Command-line arguments select the verification mode:
 //!
-//! - none: `extract` over both `SourceInput` arms, each answer re-checked
-//!   against the claim gate;
-//! - `refused <code>`: the failure lifts to that omnia class;
-//! - `echoed`: the answer is `maximal()` field for field, and the metadata
-//!   carries the probe's kind.
+//! - No arguments extract workspace and inline inputs, then recheck each
+//!   response against the claim gate.
+//! - `refused <code>` expects workspace extraction to return that Omnia error
+//!   class. Adding `<value>` tests the same refusal for inline input.
+//! - `echoed` expects `maximal()` field for field and verifies the adapter's
+//!   declared source kind.
 
 #![cfg(target_arch = "wasm32")]
 
-use emery_adapter::source::{Source, SourceKind};
+use emery_sdk::{Source, SourceKind};
 use test_programs::{
     ADAPTER, Caller, arguments, check_evidence, check_metadata, check_same, maximal, value,
     workspace,
 };
 
-omnia_guest::command!(scenario);
+omnia_sdk::command!(scenario);
 
 async fn scenario() {
     let metadata = Caller.metadata(ADAPTER);
@@ -37,11 +38,13 @@ async fn scenario() {
                 .expect("extract over an inline value");
             check_evidence(&evidence);
         }
-        ["refused", expected] => {
-            let refusal = Caller
-                .extract(ADAPTER, &workspace())
-                .await
-                .expect_err("extract over the lent workspace is refused");
+        ["refused", expected, inline @ ..] => {
+            let input = match inline {
+                [] => workspace(),
+                [text] => value(text),
+                more => panic!("`refused <code>` takes one inline value at most; got {more:?}"),
+            };
+            let refusal = Caller.extract(ADAPTER, &input).await.expect_err("extract is refused");
             assert_eq!(
                 refusal.code(),
                 *expected,
@@ -51,12 +54,12 @@ async fn scenario() {
         }
         ["echoed"] => {
             // The kind crosses the bindings once, on `metadata`: the echo
-            // probe's constant is `Behaviour`.
+            // probe declares `Behaviour`.
             assert_eq!(metadata.kind, SourceKind::Behaviour, "metadata carries the probe's kind");
             let evidence =
                 Caller.extract(ADAPTER, &value("")).await.expect("extract over an inline value");
             check_same(&maximal(), &evidence);
         }
-        other => panic!("no argument, `refused <code>`, or `echoed`; got {other:?}"),
+        other => panic!("no argument, `refused <code> [<value>]`, or `echoed`; got {other:?}"),
     }
 }

@@ -9,5 +9,5 @@
 # specification it reads.
 [[source]]
 name = "docs"
-adapter = "../../target/wasm32-wasip2/release/examples/documentation.wasm"
+adapter = "../../target/wasm32-wasip2/release/documentation.wasm"
 path = "docs/"

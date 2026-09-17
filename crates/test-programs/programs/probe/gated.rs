@@ -1,16 +1,12 @@
-//! A probe with nothing of its own: a two-document corpus over `Material::Bound`.
+//! Exercises SDK mining and claim validation through a component.
 //!
-//! A suite proves over it, under the runtime, what the SDK does for every
-//! adapter, without riding a shipped prompt.
+//! The probe mines a two-document corpus as one seam, allowing shared SDK
+//! behaviour to be tested independently of a shipped adapter prompt.
 
 #![cfg(target_arch = "wasm32")]
 
-emery_sdk::source!(crate::Adapter);
+use emery_sdk::{AdapterMetadata, Context, Doc, Error, Evidence, Model, Seam, SourceKind};
 
-use emery_prose::registry::Doc;
-use emery_sdk::{Context, Error, Evidence, Material, Model, SourceAdapter, SourceKind};
-
-/// Sorted by path, as the walker emits them.
 const DOCS: &[Doc] = &[
     Doc {
         path: "prompts/extract.md",
@@ -22,17 +18,12 @@ const DOCS: &[Doc] = &[
     },
 ];
 
-#[derive(Debug)]
-struct Adapter;
+emery_sdk::source_adapter!(metadata, extract);
 
-impl SourceAdapter for Adapter {
-    const KIND: SourceKind = SourceKind::Documentation;
+fn metadata() -> AdapterMetadata {
+    emery_sdk::metadata(SourceKind::Documentation)
+}
 
-    fn docs() -> &'static [Doc] {
-        DOCS
-    }
-
-    async fn extract<P: Model>(model: &P, ctx: &Context<'_>) -> Result<Evidence, Error> {
-        Self::evidence(model, ctx, Material::Bound).await
-    }
+async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {
+    emery_sdk::mine(ctx, DOCS, &[Seam::Whole]).await
 }

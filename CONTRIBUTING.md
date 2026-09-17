@@ -4,11 +4,11 @@ Human-facing contributor guide (toolchain, layout, prompts, pin, publishing). Cr
 
 ## Getting started
 
-1. Clone this repository. Until an engine release carries the extract-only SDK, the engine crates (`emery-adapter`, `emery-prose`, `emery-sdk`) resolve through the `[patch.crates-io]` git patches in the root `Cargo.toml` (see [Engine pin and sibling co-development](#engine-pin-and-sibling-co-development)); once that release exists the pin moves to its tag (`tag = "vX.Y.Z"`, RFC-77 D13). A sibling `../emery` checkout is needed only for co-development (uncomment the path patches) and the live eval (it drives that repo's built `emery` binary).
+1. Clone this repository. Until an engine release carries the extract-only SDK, the engine crates (`emery-sdk`, and `emery-prose` beneath it) resolve through the `[patch.crates-io]` git patches in the root `Cargo.toml` (see [Engine pin and sibling co-development](#engine-pin-and-sibling-co-development)); once that release exists the pin moves to its tag (`tag = "vX.Y.Z"`, RFC-77 D13). A sibling `../emery` checkout is needed only for co-development (uncomment the path patches) and the live eval (it drives that repo's built `emery` binary).
 2. `rustup` picks up the pinned **stable** toolchain from `rust-toolchain.toml` (including the `wasm32-wasip2` target); a nightly toolchain is additionally needed for the `fmt` arm (`cargo +nightly fmt`). The first `make` installs [mise](https://mise.jdx.dev) if it is missing. Also install `cargo-nextest`, `cargo-deny`, and `cargo-vet`. Publishing also uses `wkg`.
 3. Run `make check` from the repo root. Before opening a PR, run `make ci`.
 
-For the adapter SDK's type-level contract (the `SourceAdapter` trait, WIT types, answer schemas), generate the docs locally: `cargo doc -p emery-sdk --open`.
+For the adapter SDK's type-level contract (`mine`, the `survey` helpers, the contract types, the answer schemas), generate the docs locally: `cargo doc -p emery-sdk --open`; the `export` module — the world an adapter's guest implements — documents under `--target wasm32-wasip2`.
 
 Unless you are fixing a known bug, discuss larger changes in a GitHub issue first. Legal / DCO expectations match the engine repo — see [emery CONTRIBUTING](https://github.com/augentic/emery/blob/main/CONTRIBUTING.md).
 
@@ -25,19 +25,17 @@ Every source adapter shares the same guest anatomy:
 ```text
 sources/
   <name>/             # documentation, intent, typescript
-    prose/            # agent-facing markdown (embedded into the component)
+    prose/            # agent-facing markdown (listed in src/lib.rs, embedded into the component)
       prompts/        # extract.md — the one extraction pass
       references/     # lazy reference corpus + the emery-runtime symlink
-      rules/          # adapter-local engineering rules
     Cargo.toml        # `<name>` — adapter identity semver is its `version`
-    src/              # wasm-free adapter logic + wasm32-only `guest` shim
-    tests/            # extract.rs — native extract suite (what the adapter itself decides)
-codex/references/runtime/   # shared runtime references (reconciliation)
+    src/              # lib.rs (DOCS, then the wasm32-only `mod survey` and `mod guest`) + survey.rs, the guest's survey
+codex/references/runtime/   # shared runtime references (reconciliation); the contributor README sits beside it, outside the symlinked tree
 crates/test-programs/ # omnia's test-programs pattern: guest programs + the nested wasm32 build of every component
-  programs/<group>/   # one scenario per file: source/extract.rs drives the seam, probe/ are fixture adapters
+  programs/<group>/   # one scenario per file: source/extract.rs drives the component boundary, probe/ are fixture adapters
   src/                # lib.rs: the generated artifact table (native) / helpers.rs (wasm32)
   build.rs            # one omnia_test::build::Components build → gen.rs (every adapter + every program)
-tests/                # root seam suites: source.rs (every shipped component), probe.rs (the error arms, the lowering, the SDK's seam), prose.rs (every adapter's corpus)
+tests/                # root component suites: source.rs (every shipped component, and what each adapter decides), probe.rs (the error arms, the lowering, the SDK's side of the boundary), prose.rs (every adapter's corpus)
   support/            # mod.rs — the one runner source.rs and probe.rs share (the deployment under the omnia runtime)
 examples/             # live walks: one emery.toml per adapter (plus one over all three) the shipped `emery` binary runs, and the fixtures they lend
 Cargo.toml            # the tests `emery-adapters` root package over crates/* + sources/*
@@ -49,9 +47,11 @@ Identity lives in the guest crate's `Cargo.toml` `version` (the shared `[workspa
 
 Adapter prompts are markdown documents compiled into the guest and driven by the engine's `extract` dispatch. They are not skills: no YAML frontmatter, no discovery metadata.
 
-- **`prose/prompts/extract.md`** carries the whole extraction pass: the claim-kind table with each kind's required body field (the `emery_adapter::source::Evidence::findings` gate, run as the SDK's `SourceAdapter::evidence` check so the backend corrects a miss in place, and fail-closed engine-side, A8), the id-derivation rules reconciliation joins on, and the JSON output contract. Soft cap ~500 non-blank lines, hard cap 800 — above that, move material to `prose/references/`.
-- **`prose/prompts/survey.md`**, for an adapter that surveys by model, is the system prompt of its one survey call: what one group is for this source, how a module several groups reach is placed, and the `groups` answer — never a claim. Same caps; its `## Worked example` must parse as `emery_sdk::survey::Partition`.
-- **References are cited via relative markdown links, never inlined** — the `prose` crate's build-time embed includes Markdown documents and follows symlinks, so keep every relative reference resolvable.
+- **`prose/prompts/extract.md`** carries the whole extraction pass: the claim-kind table with each kind's required body field (the `emery_sdk::Evidence::findings` gate, run as the check on each seam's turn inside the SDK's `extract` so the backend corrects a miss in place, and fail-closed engine-side, A8), the id-derivation rules reconciliation joins on, and the JSON output contract. Soft cap ~500 non-blank lines, hard cap 800 — above that, move material to `prose/references/`.
+- **`prose/prompts/survey.md`**, for an adapter that surveys by model, is the system prompt of its one survey call: what a surface is for this source and where a caller enters it, what is not one — the modules behind a surface, which the extract call follows — and the `surfaces` answer, each a `name` and its `entry` — never a claim, and never a grouping. Same caps; its `## Worked example` must parse as `emery_sdk::survey::Inventory`.
+- **References are cited via relative markdown links, never inlined** — the model reads a reference through `read_doc`, which answers from the adapter's `DOCS` alone, so every relative link must name a document listed there, and every listed document must be reached from a prompt by such a link (the root `tests/prose.rs` holds the list to the `prose/` tree, symlinks included, and refuses a link to a directory, an unlisted file, or a path outside the tree, and a listed document no prompt reaches).
+- **A reference is written for the model, in the adapter's current contract.** It says what to read in the source and which claims to emit, in the prompt's vocabulary — the surface, the entry, the claim kinds and their extras — and nothing addressed to a contributor: no retrospectives, no tooling proposals, no description of what the engine renders downstream. Prose the prompt would contradict is worse than none.
+- **Worked examples live under `prose/references/examples/`**, one document per scenario beside a `README.md` index: the surface as the survey names it, the source the extract call reads, and the Evidence the call answers with under a `## Evidence` JSON fence — claims alone, like the prompt's own worked example. The root `tests/prose.rs` parses every such fence as the SDK's `Evidence` and holds it to the claim gate, so an example cannot teach a shape the adapter would refuse.
 - The v1 survey prompts were deleted, never ported (ADR-0008); the survey a model makes today chooses a cut and mines nothing.
 
 ## Engine pin and sibling co-development
@@ -59,7 +59,7 @@ Adapter prompts are markdown documents compiled into the guest and driven by the
 Two compatibility choices are independent:
 
 1. **WIT contract version** — the `emery:adapter` WIT package, embedded in the `emery-adapter` contract crate (which the `emery-sdk` SDK re-exports) and published from `augentic/emery`'s `wit/emery.wit`.
-2. **Engine revision** — the workspace resolves `emery-adapter`, `emery-prose`, and `emery-sdk` on `augentic/emery`, pinned by **release tag** (`tag = "vX.Y.Z"` in the root `Cargo.toml`; RFC-77 D13) plus the committed `Cargo.lock`. Advancing the pin is deliberate: bump the tag on all three dependencies, run `cargo update -p emery-adapter -p emery-prose -p emery-sdk`, and commit both files — never resolve a floating branch.
+2. **Engine revision** — the workspace resolves `emery-prose` and `emery-sdk` on `augentic/emery`, pinned by **release tag** (`tag = "vX.Y.Z"` in the root `Cargo.toml`; RFC-77 D13) plus the committed `Cargo.lock`; the contract crate `emery-adapter` rides beneath `emery-sdk` at the same revision. Advancing the pin is deliberate: bump the tag on both dependencies, run `cargo update -p emery-prose -p emery-sdk`, and commit both files — never resolve a floating branch.
 
 For sibling co-development against uncommitted engine changes, uncomment the path patches in the root `Cargo.toml` `[patch.crates-io]` block (they point at `../emery`); they must never be active on the committed tree or at publish time. **Current state**: git patches are active — the extract-only SDK is not yet on a tagged engine release, so the tag pin (and with it the first adapter train publish) waits on that release cut.
 
@@ -68,12 +68,12 @@ For sibling co-development against uncommitted engine changes, uncomment the pat
 ```bash
 make check                 # fmt + lint + nextest + doctests + doc
 make ci                    # full gate — adds cargo-vet + cargo-deny
-cargo clippy --workspace --exclude emery-adapters --lib --examples --target wasm32-wasip2 -- -D warnings   # the guest side
+cargo clippy --workspace --exclude emery-adapters --lib --examples --target wasm32-wasip2 -- -D warnings   # the guest side alone
 cargo build -p <name> --target wasm32-wasip2 --release   # one adapter → target/wasm32-wasip2/release/<name>.wasm (the path the examples bind)
-make release               # release-build every adapter
+cargo build --workspace --target wasm32-wasip2 --release   # every adapter
 ```
 
-The `fmt` arm uses nightly `rustfmt`. `make lint` runs clippy under `-D warnings` over the native side; the guest side — the programs under `crates/test-programs/programs/` and the adapters' export shims — is `cfg(target_arch = "wasm32")`, so lint it for the target it ships on with the clippy command above, where `clippy.toml`'s guest deny-list applies. `make vet` is check-only; regenerate audit inputs with `make vetgen`. Native crate tests are the Rust inner loop; the seam suites prove every built component under the omnia runtime; `emery specify --config examples/<name>/emery.toml` walks one adapter live through the shipped `emery` binary and the Cursor backend ([examples/README.md](examples/README.md)); the graded live eval — being recreated as a root example beside the live examples — proves prompt quality end to end and writes the dated scorecard.
+The `fmt` arm uses nightly `rustfmt`. `make lint` runs clippy under `-D warnings` twice: over the native side, then — since the guest side, the programs under `crates/test-programs/programs/` and the adapters' `survey` and `guest` modules, is `cfg(target_arch = "wasm32")` and native clippy compiles it to nothing — for `wasm32-wasip2`, the target it ships on, where `clippy.toml`'s guest deny-list applies (the second command above on its own). `make vet` is check-only; regenerate audit inputs with `make vetgen`. The component suites are the Rust inner loop and prove every built component under the omnia runtime, each adapter's own decisions included; `emery specify --config examples/<name>/emery.toml` walks one adapter live through the shipped `emery` binary and the Cursor backend ([examples/README.md](examples/README.md)); the graded live eval — being recreated as a root example beside the live examples — proves prompt quality end to end and writes the dated scorecard.
 
 ## Publishing
 
@@ -86,7 +86,7 @@ Before a train publishes, these gates must hold:
 3. Every adapter's `emery-version` names the minimum host that can run this train.
 4. Releasing a new SemVer: the GHCR version tag must not already exist for a first-time push of that train.
 
-**Publish Release** runs CI, tags and creates the GitHub Release, then release-builds every adapter and pushes each as a Wasm OCI artifact to `ghcr.io/augentic/emery-adapters/<name>:<version>` via the same `make release` / `make publish <name>` path used locally. The helper derives `<version>` from the workspace manifest.
+**Publish Release** runs CI, tags and creates the GitHub Release, then release-builds every adapter and pushes each as a Wasm OCI artifact to `ghcr.io/augentic/emery-adapters/<name>:<version>` via the same build and `make publish <name>` path used locally. The helper derives `<version>` from the workspace manifest.
 
 A brand-new package is created **private**: flip it to public in the GHCR package settings (`https://github.com/orgs/augentic/packages/container/emery-adapters%2F<name>/settings`) so anonymous consumers can pull, then confirm the round-trip:
 
@@ -98,7 +98,7 @@ Local breakout (retry a single adapter after GHCR login):
 
 ```bash
 gh auth token | docker login ghcr.io -u <github-user> --password-stdin
-make release
+cargo build --workspace --target wasm32-wasip2 --release
 make publish <name>
 ```
 
@@ -106,7 +106,7 @@ make publish <name>
 
 1. Branch off `main`.
 2. Run `make ci` (or say exactly which narrower checks ran and why the full gate was unavailable).
-3. Read [docs/testing.md](docs/testing.md) before adding, deleting, or relocating tests. A behavior the adapter itself decides goes in its `tests/extract.rs`; the component boundary is the root seam suites'; do not add a `src` `#[cfg(test)]` module without a one-line reason from that document, never pin a prompt phrase, and never widen `pub` surface solely for a test.
+3. Read [docs/testing.md](docs/testing.md) before adding, deleting, or relocating tests. A behavior the adapter itself decides goes in the root `tests/source.rs`, asserted through the built component; the component boundary is `tests/probe.rs`'s; do not add a `src` `#[cfg(test)]` module without a one-line reason from that document, never pin a prompt phrase, and never widen `pub` surface — or compile a module natively — solely for a test.
 4. Do not commit built `.wasm` artifacts.
 
 ## See also

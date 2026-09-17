@@ -9,5 +9,5 @@
 # behaviour it reads.
 [[source]]
 name = "api"
-adapter = "../../target/wasm32-wasip2/release/examples/typescript.wasm"
+adapter = "../../target/wasm32-wasip2/release/typescript.wasm"
 path = "src/"
