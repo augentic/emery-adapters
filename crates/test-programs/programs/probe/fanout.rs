@@ -18,9 +18,9 @@ fn metadata() -> AdapterMetadata {
     emery_sdk::metadata(SourceKind::Documentation)
 }
 
-// Two seams whatever the input arm, so `mine` holds two completions pending
-// at once over a workspace and over a value; no survey turn is spent
-// choosing them.
+// Two seams whatever the input arm, so `emery_sdk::extract` holds two
+// completions pending at once over a workspace and over a value; no survey
+// turn is spent choosing them.
 async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {
     let seams = [
         Seam::Note("The first half of the source.".to_owned()),

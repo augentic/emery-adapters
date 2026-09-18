@@ -15,7 +15,7 @@
 use std::path::Path;
 
 use emery_sdk::survey::Inventory;
-use emery_sdk::{Doc, Evidence, prose};
+use emery_sdk::{Doc, Evidence, RUNTIME, body, check};
 
 // Every `sources/*` component must have a matching test here.
 test_programs::foreach_adapter!();
@@ -29,14 +29,14 @@ test_programs::foreach_adapter!();
 /// other than `README.md`, under `## Evidence`.
 fn corpus(docs: &[Doc], name: &str, prompts: &[&str]) {
     let tree = Path::new(env!("CARGO_MANIFEST_DIR")).join("sources").join(name).join("prose");
-    let findings = prose::check(docs, &tree, prompts, prose::RUNTIME);
+    let findings = check(docs, &tree, prompts, RUNTIME);
     assert!(
         findings.is_empty(),
         "`{name}`'s PROSE disagree with its tree:\n{}",
         findings.join("\n")
     );
 
-    let prompt = prose::body(docs, "extract.md").expect("the extraction prompt is listed");
+    let prompt = body(docs, "extract.md").expect("the extraction prompt is listed");
     capped("extract.md", prompt);
     gated("extract.md", fenced_json(prompt, "## Worked example"));
 
@@ -69,7 +69,7 @@ fn gated(path: &str, json: &str) {
 /// The example teaches the shape the check accepts: every surface named,
 /// once, and entered somewhere.
 fn survey(docs: &[Doc]) {
-    let prompt = prose::body(docs, "survey.md").expect("the survey prompt is listed");
+    let prompt = body(docs, "survey.md").expect("the survey prompt is listed");
     capped("survey.md", prompt);
     let inventory: Inventory = serde_json::from_str(fenced_json(prompt, "## Worked example"))
         .expect("the worked example is the SDK's Inventory");
