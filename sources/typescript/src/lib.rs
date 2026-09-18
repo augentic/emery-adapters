@@ -31,23 +31,18 @@ mod guest {
 }
 
 /// The prompts and reference documents embedded in the adapter.
-pub static PROSE: &[emery_sdk::Doc] = emery_sdk::prose!(
-    "../prose",
-    [
-        "prompts/extract.md",
-        "prompts/survey.md",
-        "references/business-logic.md",
-        "references/component-structure.md",
-        "references/emery-runtime/claims.md",
-        "references/emery-runtime/reconciliation.md",
-        "references/examples/README.md",
-        "references/examples/branching-caching.md",
-        "references/examples/outbound-http.md",
-        "references/examples/parallel-execution.md",
-        "references/external-api.md",
-        "references/observability.md",
-        "references/services.md",
-        "references/types.md",
-        "references/verification.md",
-    ]
-);
+pub static PROSE: &[emery_sdk::Doc] = emery_sdk::prose![
+    "prompts/extract.md",
+    "prompts/survey.md",
+    "references/business-logic.md",
+    "references/component-structure.md",
+    "references/examples/README.md",
+    "references/examples/branching-caching.md",
+    "references/examples/outbound-http.md",
+    "references/examples/parallel-execution.md",
+    "references/external-api.md",
+    "references/observability.md",
+    "references/services.md",
+    "references/types.md",
+    "references/verification.md",
+];

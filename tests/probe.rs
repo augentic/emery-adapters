@@ -58,8 +58,9 @@ async fn probe_echo() {
 }
 
 // The SDK's side of the boundary, once under the runtime: the request, the
-// reference tools answered from the corpus, the lend following the input,
-// each candidate offered to the guest's `check`.
+// reference tools answered from the corpus and then from the SDK's runtime
+// references, the lend following the input, each candidate offered to the
+// guest's `check`.
 #[tokio::test]
 async fn probe_gated() {
     let model = ScriptedModel::answering([EVIDENCE, EVIDENCE])
@@ -96,7 +97,13 @@ async fn probe_gated() {
             .expect("a JSON answer");
     assert_eq!(
         listed["paths"],
-        serde_json::json!(["prompts/extract.md", "references/greeting.md"])
+        serde_json::json!([
+            "prompts/extract.md",
+            "references/greeting.md",
+            "emery/claims.md",
+            "emery/reconciliation.md"
+        ]),
+        "the adapter's documents, then the SDK's, which the probe never listed"
     );
     assert_eq!(exchanges[1].tool, "read_doc");
     let read: Value =

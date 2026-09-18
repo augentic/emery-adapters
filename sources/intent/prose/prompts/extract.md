@@ -1,6 +1,6 @@
 # intent.extract
 
-Emit one `Evidence` document from the operator's free-form brief. The engine reconciles it with every other bound source's Evidence into the specification — see [From sources to a spec](../references/emery-runtime/reconciliation.md).
+Emit one `Evidence` document from the operator's free-form brief. The engine reconciles it with every other bound source's Evidence into the specification — see [From sources to a spec](../emery/reconciliation.md).
 
 ## Inputs
 
@@ -22,7 +22,7 @@ The verbatim `intent` claim preserves the operator's words for the reviewer. The
 ## `id` derivation
 
 - The `intent` claim's `id` is the source key, keeping the document deterministic and idempotent — re-running the same `(key, value)` pair yields a byte-identical Evidence document.
-- `requirement` and `criterion` ids follow [claims.md](../references/emery-runtime/claims.md): dotted-kebab, derived from the domain concept the directive governs (`session.timeout`, `search.filter`), never positional. When the brief overrides something the docs or code also describe, converging on the same id is what lets intent win the group.
+- `requirement` and `criterion` ids follow [claims.md](../emery/claims.md): dotted-kebab, derived from the domain concept the directive governs (`session.timeout`, `search.filter`), never positional. When the brief overrides something the docs or code also describe, converging on the same id is what lets intent win the group.
 
 ## Output contract
 
@@ -66,4 +66,4 @@ Output:
 ## Notes
 
 - Empty `claims: []` is schema-valid for sources with nothing to say, but the intent adapter is never legitimately empty — the source exists because the operator supplied a brief. Treat an empty value as an extract failure, never an empty success.
-- The gate is fail-closed ([claims.md](../references/emery-runtime/claims.md)): a `requirement` claim without a `statement` field fails the whole run closed (typed `bad_request`).
+- The gate is fail-closed ([claims.md](../emery/claims.md)): a `requirement` claim without a `statement` field fails the whole run closed (typed `bad_request`).

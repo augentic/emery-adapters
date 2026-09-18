@@ -1,6 +1,6 @@
 # TypeScript / JavaScript source survey
 
-This prompt runs once per bound `typescript` source, before anything is extracted. The caller lends the source tree as `$SOURCE_DIR` and asks which surfaces the source exposes: each one thing a caller outside the source reaches, and the module the caller enters it at. Your job: find the boundary, and nothing behind it. You follow no import, group no module, and extract nothing. The caller mines each surface in its own call under the [extract prompt](extract.md), lending the whole tree and naming the surface and its entry; that call starts at the entry and follows what the surface reaches. The calls' answers are joined into the source's one Evidence document — see [From sources to a spec](../references/emery-runtime/reconciliation.md).
+This prompt runs once per bound `typescript` source, before anything is extracted. The caller lends the source tree as `$SOURCE_DIR` and asks which surfaces the source exposes: each one thing a caller outside the source reaches, and the module the caller enters it at. Your job: find the boundary, and nothing behind it. You follow no import, group no module, and extract nothing. The caller mines each surface in its own call under the [extract prompt](extract.md), lending the whole tree and naming the surface and its entry; that call starts at the entry and follows what the surface reaches. The calls' answers are joined into the source's one Evidence document — see [From sources to a spec](../emery/reconciliation.md).
 
 ## Inputs
 

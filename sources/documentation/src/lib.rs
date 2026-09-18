@@ -27,12 +27,5 @@ mod guest {
     }
 }
 
-/// The prompt and reference documents embedded in the adapter.
-pub static PROSE: &[emery_sdk::Doc] = emery_sdk::prose!(
-    "../prose",
-    [
-        "prompts/extract.md",
-        "references/emery-runtime/claims.md",
-        "references/emery-runtime/reconciliation.md",
-    ]
-);
+/// The prompt embedded in the adapter.
+pub static PROSE: &[emery_sdk::Doc] = emery_sdk::prose!["prompts/extract.md"];
