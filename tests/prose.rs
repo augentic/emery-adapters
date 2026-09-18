@@ -29,7 +29,7 @@ test_programs::foreach_adapter!();
 /// other than `README.md`, under `## Evidence`.
 fn corpus(docs: &[Doc], name: &str, prompts: &[&str]) {
     let tree = Path::new(env!("CARGO_MANIFEST_DIR")).join("sources").join(name).join("prose");
-    let findings = prose::check(docs, &tree, prompts);
+    let findings = prose::check(docs, &tree, prompts, prose::RUNTIME);
     assert!(
         findings.is_empty(),
         "`{name}`'s PROSE disagree with its tree:\n{}",
