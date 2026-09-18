@@ -16,7 +16,7 @@ mod survey;
 mod guest {
     use emery_sdk::{AdapterMetadata, Context, Error, Evidence, Model, SourceKind};
 
-    use crate::{DOCS, survey};
+    use crate::{PROSE, survey};
 
     emery_sdk::source_adapter!(metadata, extract);
 
@@ -25,29 +25,24 @@ mod guest {
     }
 
     async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {
-        let seams = survey::survey(ctx, DOCS).await?;
-        emery_sdk::mine(ctx, DOCS, &seams).await
+        let seams = survey::survey(ctx, PROSE).await?;
+        emery_sdk::extract(ctx, PROSE, &seams).await
     }
 }
 
 /// The prompts and reference documents embedded in the adapter.
-pub static DOCS: &[emery_sdk::Doc] = emery_sdk::prose!(
-    "../prose",
-    [
-        "prompts/extract.md",
-        "prompts/survey.md",
-        "references/business-logic.md",
-        "references/component-structure.md",
-        "references/emery-runtime/claims.md",
-        "references/emery-runtime/reconciliation.md",
-        "references/examples/README.md",
-        "references/examples/branching-caching.md",
-        "references/examples/outbound-http.md",
-        "references/examples/parallel-execution.md",
-        "references/external-api.md",
-        "references/observability.md",
-        "references/services.md",
-        "references/types.md",
-        "references/verification.md",
-    ]
-);
+pub static PROSE: &[emery_sdk::Doc] = emery_sdk::prose![
+    "../prose/extract.md",
+    "../prose/survey.md",
+    "../prose/references/business-logic.md",
+    "../prose/references/component-structure.md",
+    "../prose/references/examples/README.md",
+    "../prose/references/examples/branching-caching.md",
+    "../prose/references/examples/outbound-http.md",
+    "../prose/references/examples/parallel-execution.md",
+    "../prose/references/external-api.md",
+    "../prose/references/observability.md",
+    "../prose/references/services.md",
+    "../prose/references/types.md",
+    "../prose/references/verification.md",
+];

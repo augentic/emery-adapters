@@ -58,8 +58,9 @@ async fn probe_echo() {
 }
 
 // The SDK's side of the boundary, once under the runtime: the request, the
-// reference tools answered from the corpus, the lend following the input,
-// each candidate offered to the guest's `check`.
+// reference tools answered from the corpus and then from the SDK's runtime
+// references, the lend following the input, each candidate offered to the
+// guest's `check`.
 #[tokio::test]
 async fn probe_gated() {
     let model = ScriptedModel::answering([EVIDENCE, EVIDENCE])
@@ -96,7 +97,13 @@ async fn probe_gated() {
             .expect("a JSON answer");
     assert_eq!(
         listed["paths"],
-        serde_json::json!(["prompts/extract.md", "references/greeting.md"])
+        serde_json::json!([
+            "extract.md",
+            "references/greeting.md",
+            "claims.md",
+            "reconciliation.md"
+        ]),
+        "the adapter's documents, then the SDK's, which the probe never listed"
     );
     assert_eq!(exchanges[1].tool, "read_doc");
     let read: Value =
@@ -125,6 +132,24 @@ async fn probe_fanout() {
         model.script().seen().len(),
         4,
         "each extract opens one completion per seam, both pending at once"
+    );
+}
+
+// The property the engine's fan-out over sources rests on, under the
+// runtime: two link dispatches one caller issues together run together, so
+// the two completions each opens — four — are all pending before any is
+// answered. A host that serialised a caller's dispatches fails inside the
+// barrier's hold with the count it reached, which is a host finding to
+// raise, not a reason to loosen the party.
+#[tokio::test]
+async fn fanout_together() {
+    let model = Barrier::new(ScriptedModel::answering([EVIDENCE; 4]), 4);
+    let model = run(test_programs::PROBE_FANOUT, &scratch(), &["together"], model).await;
+
+    assert_eq!(
+        model.script().seen().len(),
+        4,
+        "two extracts dispatched together open two completions each, all four pending at once"
     );
 }
 

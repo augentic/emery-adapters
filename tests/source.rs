@@ -20,12 +20,10 @@ const BRIEF: &str = "Let users reset passwords by email.";
 
 /// The prompts each component embeds, as this build compiled them in.
 mod prompt {
-    pub const DOCUMENTATION: &str =
-        include_str!("../sources/documentation/prose/prompts/extract.md");
-    pub const INTENT: &str = include_str!("../sources/intent/prose/prompts/extract.md");
-    pub const TYPESCRIPT: &str = include_str!("../sources/typescript/prose/prompts/extract.md");
-    pub const TYPESCRIPT_SURVEY: &str =
-        include_str!("../sources/typescript/prose/prompts/survey.md");
+    pub const DOCUMENTATION: &str = include_str!("../sources/documentation/prose/extract.md");
+    pub const INTENT: &str = include_str!("../sources/intent/prose/extract.md");
+    pub const TYPESCRIPT: &str = include_str!("../sources/typescript/prose/extract.md");
+    pub const TYPESCRIPT_SURVEY: &str = include_str!("../sources/typescript/prose/survey.md");
 }
 
 /// A gate-valid answer of claims alone.
@@ -171,6 +169,61 @@ async fn documentation_directories() {
             "a dot entry is in no seam: {turn}"
         );
     }
+}
+
+// A top-level directory of more than sixteen documents is cut once more, by
+// its subdirectories, so one directory cannot hold the run behind its one
+// turn: each subdirectory of two or more is a seam, and the directory's own
+// documents with those of a subdirectory of one are one more, adjacent — four
+// seams here. The cut is one level only, and a subdirectory cuts a directory
+// only where it can: a flat directory of twenty stays one seam beside `guide`,
+// and a remainder of one — the lone `api/misc/` document, with no document
+// directly beneath `api/` — joins the first subdirectory's seam rather than
+// standing alone.
+#[tokio::test]
+async fn documentation_large_directory() {
+    let v1: Vec<String> = (0..10).map(|i| format!("api/v1/endpoint-{i:02}.md")).collect();
+    let v2: Vec<String> = (0..8).map(|i| format!("api/v2/endpoint-{i:02}.md")).collect();
+    let v1: Vec<&str> = v1.iter().map(String::as_str).collect();
+    let v2: Vec<&str> = v2.iter().map(String::as_str).collect();
+
+    // nested: the directory's own documents and the folded subdirectory of one are a seam
+    let project = scratch();
+    let own = ["api/README.md", "api/CHANGELOG.md", "api/misc/glossary.md"];
+    tree(&project, &own);
+    tree(&project, &v1);
+    tree(&project, &v2);
+    tree(&project, &["guide/intro.md", "guide/setup.md"]);
+
+    let model = extract(test_programs::ADAPTER_DOCUMENTATION, &project, 4).await;
+
+    let turns = prompted(&model, prompt::DOCUMENTATION, 4);
+    partitioned(&turns, &[&own, &v1, &v2, &["guide/intro.md", "guide/setup.md"]]);
+
+    // flat: nothing cuts, so the directory stays one seam whatever its size
+    let flat: Vec<String> = (0..20).map(|i| format!("api/endpoint-{i:02}.md")).collect();
+    let flat: Vec<&str> = flat.iter().map(String::as_str).collect();
+    let project = scratch();
+    tree(&project, &flat);
+    tree(&project, &["guide/intro.md", "guide/setup.md"]);
+
+    let model = extract(test_programs::ADAPTER_DOCUMENTATION, &project, 2).await;
+
+    let turns = prompted(&model, prompt::DOCUMENTATION, 2);
+    partitioned(&turns, &[&flat, &["guide/intro.md", "guide/setup.md"]]);
+
+    // a remainder of one joins the first subdirectory's seam
+    let project = scratch();
+    tree(&project, &["api/misc/glossary.md"]);
+    tree(&project, &v1);
+    tree(&project, &v2);
+    tree(&project, &["guide/intro.md", "guide/setup.md"]);
+
+    let model = extract(test_programs::ADAPTER_DOCUMENTATION, &project, 3).await;
+
+    let turns = prompted(&model, prompt::DOCUMENTATION, 3);
+    let joined: Vec<&str> = v1.iter().copied().chain(["api/misc/glossary.md"]).collect();
+    partitioned(&turns, &[&joined, &v2, &["guide/intro.md", "guide/setup.md"]]);
 }
 
 // The one adapter that reads its source inside the guest: the tree's one

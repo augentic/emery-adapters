@@ -7,9 +7,9 @@
 
 use emery_sdk::{AdapterMetadata, Context, Doc, Error, Evidence, Model, Seam, SourceKind};
 
-const DOCS: &[Doc] = &[
+const PROSE: &[Doc] = &[
     Doc {
-        path: "prompts/extract.md",
+        path: "extract.md",
         body: "SYSTEM",
     },
     Doc {
@@ -25,5 +25,5 @@ fn metadata() -> AdapterMetadata {
 }
 
 async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {
-    emery_sdk::mine(ctx, DOCS, &[Seam::Whole]).await
+    emery_sdk::extract(ctx, PROSE, &[Seam::Whole]).await
 }

@@ -8,6 +8,7 @@
 #![allow(dead_code, reason = "shared by suites that each use a subset")]
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use omnia::ExitStatus;
@@ -39,13 +40,16 @@ impl Strict for ScriptedModel {
 /// A [`ScriptedModel`] that answers a completion only once `parties` are pending.
 ///
 /// Concurrent requests pass the barrier together. A serial host reaches the
-/// bounded [`HOLD`] timeout instead, identifying the missing party. The
-/// barrier resets for each extraction.
+/// bounded [`HOLD`] timeout instead, identifying the missing party, and
+/// every completion after that fails at once: a party the guest fills late —
+/// the SDK puts a seam whose turn failed upstream once more — proves nothing
+/// about what the host ran together. The barrier resets for each party.
 #[derive(Clone, Debug)]
 pub struct Barrier {
     inner: ScriptedModel,
     gate: Arc<tokio::sync::Barrier>,
     parties: usize,
+    expired: Arc<AtomicBool>,
 }
 
 impl Barrier {
@@ -56,7 +60,17 @@ impl Barrier {
             inner: model,
             gate: Arc::new(tokio::sync::Barrier::new(parties)),
             parties,
+            expired: Arc::default(),
         }
+    }
+
+    // The diagnostic a completion fails with once a hold has expired.
+    fn serialised(&self) -> Error {
+        Error::Backend(format!(
+            "completion held {HOLD:?} without {} pending at once: the host serialises one \
+             guest's completions",
+            self.parties
+        ))
     }
 }
 
@@ -70,13 +84,12 @@ impl WasiModelCtx for Barrier {
     fn complete(&self, request: Request, tool_host: Arc<dyn ToolHost>) -> FutureResult<Answer> {
         let this = self.clone();
         Box::pin(async move {
+            if this.expired.load(Ordering::SeqCst) {
+                return Err(this.serialised().into());
+            }
             if tokio::time::timeout(HOLD, this.gate.wait()).await.is_err() {
-                return Err(Error::Backend(format!(
-                    "completion held {HOLD:?} without {} pending at once: the host serialises one \
-                     guest's completions",
-                    this.parties
-                ))
-                .into());
+                this.expired.store(true, Ordering::SeqCst);
+                return Err(this.serialised().into());
             }
             this.inner.complete(request, tool_host).await
         })

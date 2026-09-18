@@ -8,6 +8,8 @@
 //!   class. Adding `<value>` tests the same refusal for inline input.
 //! - `echoed` expects `maximal()` field for field and verifies the adapter's
 //!   declared source kind.
+//! - `together` dispatches two workspace extractions at once, as the engine
+//!   dispatches one per source, and rechecks both responses.
 
 #![cfg(target_arch = "wasm32")]
 
@@ -60,6 +62,17 @@ async fn scenario() {
                 Caller.extract(ADAPTER, &value("")).await.expect("extract over an inline value");
             check_same(&maximal(), &evidence);
         }
-        other => panic!("no argument, `refused <code> [<value>]`, or `echoed`; got {other:?}"),
+        ["together"] => {
+            // Two link dispatches from one caller, in flight at once, as the
+            // engine issues one per source of a run.
+            let (one, other) = (workspace(), workspace());
+            let (first, second) =
+                futures::join!(Caller.extract(ADAPTER, &one), Caller.extract(ADAPTER, &other));
+            check_evidence(&first.expect("the first extract, dispatched beside the second"));
+            check_evidence(&second.expect("the second extract, dispatched beside the first"));
+        }
+        other => panic!(
+            "no argument, `refused <code> [<value>]`, `echoed`, or `together`; got {other:?}"
+        ),
     }
 }

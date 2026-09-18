@@ -1,6 +1,6 @@
 # TypeScript / JavaScript source survey
 
-This prompt runs once per bound `typescript` source, before anything is extracted. The caller lends the source tree as `$SOURCE_DIR` and asks which surfaces the source exposes: each one thing a caller outside the source reaches, and the module the caller enters it at. Your job: find the boundary, and nothing behind it. You follow no import, group no module, and extract nothing. The caller mines each surface in its own call under the [extract prompt](extract.md), lending the whole tree and naming the surface and its entry; that call starts at the entry and follows what the surface reaches. The calls' answers are joined into the source's one Evidence document — see [From sources to a spec](../references/emery-runtime/reconciliation.md).
+This prompt runs once per bound `typescript` source, before anything is extracted. The caller lends the source tree as `$SOURCE_DIR` and asks which surfaces the source exposes: each one thing a caller outside the source reaches, and the module the caller enters it at. Your job: find the boundary, and nothing behind it. You follow no import, group no module, and extract nothing. The caller mines each surface in its own call under the [extract prompt](extract.md), lending the whole tree and naming the surface and its entry; that call starts at the entry and follows what the surface reaches. The calls' answers are joined into the source's one Evidence document — see [From sources to a spec](reconciliation.md).
 
 ## Inputs
 
@@ -24,7 +24,7 @@ Choose the grain a reviewer would name. Each surface is mined in its own call, w
 
 ## Method
 
-1. **Read the manifest.** `package.json`: `bin` names commands; `exports` / `main` / `module` name what a library makes importable; `scripts` name what is run and its entry module. `tsconfig.json` `paths` resolve the aliases you meet on the way. [Component structure](../references/component-structure.md) is the fuller procedure.
+1. **Read the manifest.** `package.json`: `bin` names commands; `exports` / `main` / `module` name what a library makes importable; `scripts` name what is run and its entry module. `tsconfig.json` `paths` resolve the aliases you meet on the way. [Component structure](references/component-structure.md) is the fuller procedure.
 2. **Find the bootstrap.** The module the manifest or its scripts start — `src/index.ts`, `src/server.ts`, `src/main.ts`, a framework's `app.ts` — and what it mounts, registers, schedules, or subscribes. Each is a surface, entered at the module that declares it, and the bootstrap itself is the start command's entry.
 3. **Stop at the boundary.** Do not follow a handler into its services and stores — the extract call does, from the entry you name. You need only where each surface is entered.
 4. **Name each surface for what the caller does.** `POST /orders`, `/users routes`, `nightly reconciliation job`, `migrate command`, `start script`, `@acme/client` — the name is the seam's identity: the extract call leads every requirement id with its domain noun, so two surfaces never name one thing.

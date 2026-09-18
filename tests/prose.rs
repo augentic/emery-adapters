@@ -1,9 +1,10 @@
 //! Verifies every shipped adapter's embedded prompt corpus.
 //!
-//! Every Markdown file must be listed once, every relative link must resolve,
-//! and every reference must be reachable from a prompt. Extraction prompts
-//! and worked examples are kept within their size limit and validated against
-//! the evidence schema and claim gate.
+//! Every Markdown file must be listed once, every relative link must resolve
+//! to a listed document or one of the SDK's runtime references, and every
+//! reference must be reachable from a prompt. Extraction prompts and worked
+//! examples are kept within their size limit and validated against the
+//! evidence schema and claim gate.
 //!
 //! Model-assisted survey prompts receive the same checks against their
 //! inventory schema. Runtime use of each embedded prompt is covered by
@@ -14,7 +15,7 @@
 use std::path::Path;
 
 use emery_sdk::survey::Inventory;
-use emery_sdk::{Doc, Evidence, prose};
+use emery_sdk::{Doc, Evidence, RUNTIME, body, check};
 
 // Every `sources/*` component must have a matching test here.
 test_programs::foreach_adapter!();
@@ -22,22 +23,22 @@ test_programs::foreach_adapter!();
 /// Checks an adapter's corpus against its tree, prompts, and examples.
 ///
 /// `prompts` are the documents the SDK puts to the model by path:
-/// `prompts/extract.md` for every adapter, and `prompts/survey.md` for one
-/// that surveys by model. The worked examples are the prompt's own, under
+/// `extract.md` for every adapter, and `survey.md` for one that surveys by
+/// model. The worked examples are the prompt's own, under
 /// `## Worked example`, and every document under `references/examples/`
 /// other than `README.md`, under `## Evidence`.
 fn corpus(docs: &[Doc], name: &str, prompts: &[&str]) {
     let tree = Path::new(env!("CARGO_MANIFEST_DIR")).join("sources").join(name).join("prose");
-    let findings = prose::check(docs, &tree, prompts);
+    let findings = check(docs, &tree, prompts, RUNTIME);
     assert!(
         findings.is_empty(),
-        "`{name}`'s DOCS disagree with its tree:\n{}",
+        "`{name}`'s PROSE disagree with its tree:\n{}",
         findings.join("\n")
     );
 
-    let prompt = prose::body(docs, "prompts/extract.md").expect("the extraction prompt is listed");
-    capped("prompts/extract.md", prompt);
-    gated("prompts/extract.md", fenced_json(prompt, "## Worked example"));
+    let prompt = body(docs, "extract.md").expect("the extraction prompt is listed");
+    capped("extract.md", prompt);
+    gated("extract.md", fenced_json(prompt, "## Worked example"));
 
     let examples = docs.iter().filter(|doc| {
         doc.path.strip_prefix("references/examples/").is_some_and(|file| file != "README.md")
@@ -68,8 +69,8 @@ fn gated(path: &str, json: &str) {
 /// The example teaches the shape the check accepts: every surface named,
 /// once, and entered somewhere.
 fn survey(docs: &[Doc]) {
-    let prompt = prose::body(docs, "prompts/survey.md").expect("the survey prompt is listed");
-    capped("prompts/survey.md", prompt);
+    let prompt = body(docs, "survey.md").expect("the survey prompt is listed");
+    capped("survey.md", prompt);
     let inventory: Inventory = serde_json::from_str(fenced_json(prompt, "## Worked example"))
         .expect("the worked example is the SDK's Inventory");
     assert!(!inventory.surfaces.is_empty(), "the worked example exposes no surface");
@@ -98,18 +99,18 @@ fn fenced_json<'d>(doc: &'d str, heading: &str) -> &'d str {
 
 #[test]
 fn documentation() {
-    corpus(documentation::DOCS, "documentation", &["prompts/extract.md"]);
+    corpus(documentation::PROSE, "documentation", &["extract.md"]);
 }
 
 #[test]
 fn intent() {
-    corpus(intent::DOCS, "intent", &["prompts/extract.md"]);
+    corpus(intent::PROSE, "intent", &["extract.md"]);
 }
 
 // The typescript survey asks the model, so its survey prompt must be listed;
 // a missing one would be `server_error` on every tree.
 #[test]
 fn typescript() {
-    corpus(typescript::DOCS, "typescript", &["prompts/extract.md", "prompts/survey.md"]);
-    survey(typescript::DOCS);
+    corpus(typescript::PROSE, "typescript", &["extract.md", "survey.md"]);
+    survey(typescript::PROSE);
 }

@@ -11,7 +11,7 @@ mod survey;
 mod guest {
     use emery_sdk::{AdapterMetadata, Context, Error, Evidence, Model, SourceKind};
 
-    use crate::{DOCS, survey};
+    use crate::{PROSE, survey};
 
     emery_sdk::source_adapter!(metadata, extract);
 
@@ -21,16 +21,9 @@ mod guest {
 
     async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {
         let seams = survey::survey(ctx.input)?;
-        emery_sdk::mine(ctx, DOCS, &seams).await
+        emery_sdk::extract(ctx, PROSE, &seams).await
     }
 }
 
-/// The prompt and reference documents embedded in the adapter.
-pub static DOCS: &[emery_sdk::Doc] = emery_sdk::prose!(
-    "../prose",
-    [
-        "prompts/extract.md",
-        "references/emery-runtime/claims.md",
-        "references/emery-runtime/reconciliation.md",
-    ]
-);
+/// The prompt embedded in the adapter.
+pub static PROSE: &[emery_sdk::Doc] = emery_sdk::prose!["../prose/extract.md"];
