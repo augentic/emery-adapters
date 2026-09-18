@@ -14,20 +14,20 @@ const MAX_SIZE: usize = 16;
 
 /// Returns the groups of documentation to mine.
 ///
-/// Workspace files are grouped by their top-level directory. A directory
-/// containing fewer than two files is folded into the root group. A directory
-/// containing more than sixteen files is cut once more, by its
-/// subdirectories: each subdirectory of two or more files becomes a group of
-/// its own, and the directory's remaining files — those directly beneath it
-/// and those of any smaller subdirectory — one more, or join the first
-/// subdirectory's group when fewer than two remain; a directory with no
-/// subdirectory of two or more files stays one group whatever its size. When
-/// at least two groups remain, each becomes a [`Seam::Files`]; otherwise the
-/// input becomes one [`Seam::Whole`].
+/// Inline input is one [`Seam::Whole`]. Workspace input is grouped by
+/// top-level directory, leaving out hidden entries and Emery's generated
+/// files:
 ///
-/// Inline input is always returned as one whole seam. No model call is
-/// required. Hidden entries and Emery output do not influence workspace
-/// grouping, but remain visible when the workspace is mined whole.
+/// - A directory of fewer than two files joins the files directly beneath
+///   the root.
+/// - A directory of more than sixteen files is cut once more, by its
+///   subdirectories. Each subdirectory of two or more files is a group of its
+///   own; the directory's remaining files form one more, or join the first
+///   subdirectory's group when fewer than two remain. A directory with no
+///   such subdirectory stays one group whatever its size.
+///
+/// Each group becomes a [`Seam::Files`] when at least two remain; otherwise
+/// the workspace is one [`Seam::Whole`]. No model call is made.
 ///
 /// # Errors
 ///
@@ -89,10 +89,7 @@ impl Groups {
     }
 }
 
-// Cuts a directory over the cap one level finer, by its subdirectories, and
-// leaves it whole where nothing cuts: the root, whose files were folded there
-// from directories too small to stand alone; a directory within the cap; or
-// one with no subdirectory of enough files to stand alone.
+// Cuts a directory over the cap one level finer, by subdirectories.
 fn split(dir: &str, files: Vec<String>) -> Vec<Vec<String>> {
     if dir == "." || files.len() <= MAX_SIZE {
         return vec![files];
