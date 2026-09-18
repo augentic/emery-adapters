@@ -32,8 +32,8 @@ mod guest {
 
 /// The prompts and reference documents embedded in the adapter.
 pub static PROSE: &[emery_sdk::Doc] = emery_sdk::prose![
-    "../prose/prompts/extract.md",
-    "../prose/prompts/survey.md",
+    "../prose/extract.md",
+    "../prose/survey.md",
     "../prose/references/business-logic.md",
     "../prose/references/component-structure.md",
     "../prose/references/examples/README.md",

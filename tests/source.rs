@@ -20,12 +20,10 @@ const BRIEF: &str = "Let users reset passwords by email.";
 
 /// The prompts each component embeds, as this build compiled them in.
 mod prompt {
-    pub const DOCUMENTATION: &str =
-        include_str!("../sources/documentation/prose/prompts/extract.md");
-    pub const INTENT: &str = include_str!("../sources/intent/prose/prompts/extract.md");
-    pub const TYPESCRIPT: &str = include_str!("../sources/typescript/prose/prompts/extract.md");
-    pub const TYPESCRIPT_SURVEY: &str =
-        include_str!("../sources/typescript/prose/prompts/survey.md");
+    pub const DOCUMENTATION: &str = include_str!("../sources/documentation/prose/extract.md");
+    pub const INTENT: &str = include_str!("../sources/intent/prose/extract.md");
+    pub const TYPESCRIPT: &str = include_str!("../sources/typescript/prose/extract.md");
+    pub const TYPESCRIPT_SURVEY: &str = include_str!("../sources/typescript/prose/survey.md");
 }
 
 /// A gate-valid answer of claims alone.

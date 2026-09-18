@@ -98,10 +98,10 @@ async fn probe_gated() {
     assert_eq!(
         listed["paths"],
         serde_json::json!([
-            "prompts/extract.md",
+            "extract.md",
             "references/greeting.md",
-            "emery/claims.md",
-            "emery/reconciliation.md"
+            "claims.md",
+            "reconciliation.md"
         ]),
         "the adapter's documents, then the SDK's, which the probe never listed"
     );

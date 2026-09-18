@@ -34,8 +34,7 @@ const MARKERS: &[&str] = &["d", "test", "spec"];
 ///
 /// - Returns [`Error::BadRequest`] when no surface is found or the model
 ///   cannot produce a valid inventory within its available rounds.
-/// - Returns [`Error::ServerError`] when `docs` does not contain
-///   `prompts/survey.md`.
+/// - Returns [`Error::ServerError`] when `docs` does not contain `survey.md`.
 /// - Returns [`Error::BadGateway`] when a model tool or transport fails.
 pub async fn survey<P: Model>(
     ctx: &Context<'_, P>, docs: &'static [Doc],

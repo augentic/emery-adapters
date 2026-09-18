@@ -8,7 +8,7 @@
 use emery_sdk::{AdapterMetadata, Context, Doc, Error, Evidence, Model, Seam, SourceKind};
 
 const PROSE: &[Doc] = &[Doc {
-    path: "prompts/extract.md",
+    path: "extract.md",
     body: "SYSTEM",
 }];
 
