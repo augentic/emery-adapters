@@ -135,6 +135,24 @@ async fn probe_fanout() {
     );
 }
 
+// The property the engine's fan-out over sources rests on, under the
+// runtime: two link dispatches one caller issues together run together, so
+// the two completions each opens — four — are all pending before any is
+// answered. A host that serialised a caller's dispatches fails inside the
+// barrier's hold with the count it reached, which is a host finding to
+// raise, not a reason to loosen the party.
+#[tokio::test]
+async fn fanout_together() {
+    let model = Barrier::new(ScriptedModel::answering([EVIDENCE; 4]), 4);
+    let model = run(test_programs::PROBE_FANOUT, &scratch(), &["together"], model).await;
+
+    assert_eq!(
+        model.script().seen().len(),
+        4,
+        "two extracts dispatched together open two completions each, all four pending at once"
+    );
+}
+
 // The gate rejects the only candidate and the budget is spent: the
 // correction names the finding and the failure crosses as `bad_request`.
 #[tokio::test]
