@@ -1,8 +1,11 @@
 //! Extracts claims from a tree of written documentation.
 //!
 //! Workspace inputs are grouped by top-level directory. Directories containing
-//! fewer than two documents are combined. If fewer than two groups remain,
-//! the entire input is mined as a whole.
+//! fewer than two documents are combined. A directory of more than sixteen
+//! documents is cut once more, by its subdirectories of two or more, its
+//! remaining documents one group beside them; a directory no subdirectory can
+//! cut stays one group. If fewer than two groups remain, the entire input is
+//! mined as a whole.
 //!
 //! Inline inputs are always mined as a whole.
 
