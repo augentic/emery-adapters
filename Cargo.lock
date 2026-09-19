@@ -985,9 +985,12 @@ dependencies = [
  "omnia",
  "omnia-test",
  "omnia-wasi-model",
+ "omnia-wasi-otel",
+ "opentelemetry-proto",
  "serde_json",
  "test-programs",
  "tokio",
+ "tracing",
  "typescript",
 ]
 
@@ -3794,8 +3797,10 @@ dependencies = [
  "futures",
  "omnia-sdk",
  "omnia-test",
+ "omnia-wasi-otel",
  "semver",
  "serde_json",
+ "tracing",
  "wasip3",
 ]
 
