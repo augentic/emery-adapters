@@ -20,8 +20,10 @@ workspace = true
 emery-sdk.workspace = true
 futures.workspace = true
 omnia-sdk.workspace = true
+omnia-wasi-otel.workspace = true
 semver.workspace = true
 serde_json.workspace = true
+tracing.workspace = true
 wasip3.workspace = true
 
 [build-dependencies]
@@ -47,6 +49,11 @@ crate-type = ["cdylib"]
 [[example]]
 name = "probe_refusing"
 path = "programs/probe/refusing.rs"
+crate-type = ["cdylib"]
+
+[[example]]
+name = "probe_telemetry"
+path = "programs/probe/telemetry.rs"
 crate-type = ["cdylib"]
 
 [[example]]

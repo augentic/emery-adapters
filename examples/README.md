@@ -29,12 +29,12 @@ Live `specify` journeys via [omnia-cursor](https://github.com/augentic/omnia-bac
 Run from the repository root: `emery` mounts the invocation directory as the project, and every path an `emery.toml` names must sit inside it.
 
 ```bash
-# build every source adapter into target/wasm32-wasip2/release/<name>.wasm
+# build source adapters
 cargo build --workspace --target wasm32-wasip2 --release
 
 # run the example
 export CURSOR_API_KEY=<Cursor API key>
-emery specify --debug --config examples/documentation/emery.toml
+emery specify -v --config examples/documentation/emery.toml
 
 # review the committed revision
 emery show spec
@@ -43,9 +43,16 @@ emery show design
 
 Swap the config for [intent](intent/emery.toml), [typescript](typescript/emery.toml), or the combined [emery.toml](emery.toml). One adapter alone builds with `cargo build -p <name> --target wasm32-wasip2 --release`, to the same path.
 
-The config binds the shipped component by path relative to itself, read fresh on every run. A bare name still only dispatches guests declared in the runtime invocation, and the shipped `emery` binary declares none. Revision state lives under `.omnia/storage` in the invocation directory; each run replaces the last and reports the diff against it.
+### Debugging cursor backend
 
-*Extract* and *synthesis* both complete through the Cursor backend. Each adapter answers reference-tool calls in-process the same way the [omnia-cursor example](https://github.com/augentic/omnia-backends/tree/main/examples/cursor) does.
+To debug the cursor backend, set the `RUST_LOG` and, optionally, `CURSOR_SDK_BRIDGE_LOG` env vars to see more detailed trace logs.
+
+```bash
+export RUST_LOG="omnia_cursor=debug,emery_sdk=debug"
+export CURSOR_SDK_BRIDGE_LOG=1
+```
+
+`omnia_cursor` is the host's side of each completion and callback; `emery_sdk` is the adapter's — each reference-tool call as answered, each candidate the claim gate rejected with its findings, and what each turn yielded, under the source key and seam. A bare run shows the adapter's progress at INFO as each turn opens; `-v` reaches the engine alone, so `RUST_LOG` is the adapter's knob.
 
 See [#host-to-guest-tool-calls](#host-to-guest-tool-calls) for more detail.
 

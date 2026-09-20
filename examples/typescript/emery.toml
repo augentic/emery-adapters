@@ -10,4 +10,5 @@
 [[source]]
 name = "api"
 adapter = "../../target/wasm32-wasip2/release/typescript.wasm"
+# path = "src/"
 path = "r9k/"

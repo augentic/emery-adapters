@@ -1,0 +1,22 @@
+//! Emits an admitted extraction span so the SDK's guest lifecycle is observable.
+
+#![cfg(target_arch = "wasm32")]
+
+use emery_sdk::{AdapterMetadata, Context, Error, Evidence, Model, SourceKind};
+use test_programs::maximal;
+use tracing::Level;
+
+emery_sdk::source_adapter!(metadata, extract);
+
+fn metadata() -> AdapterMetadata {
+    emery_sdk::metadata(SourceKind::Documentation)
+}
+
+async fn extract<P: Model>(_ctx: &Context<'_, P>) -> Result<Evidence, Error> {
+    omnia_wasi_otel::set_filter("error").expect("adapter extraction entered telemetry");
+    traced().await;
+    Ok(maximal())
+}
+
+#[tracing::instrument(level = Level::ERROR)]
+async fn traced() {}

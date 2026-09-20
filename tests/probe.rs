@@ -14,7 +14,7 @@ mod support;
 
 use omnia_test::host::{ScriptedModel, scratch};
 use serde_json::Value;
-use support::{Barrier, Strict as _, run};
+use support::{Barrier, Strict as _, run, traced};
 
 // Every probe program must have a matching test here.
 test_programs::foreach_probe!();
@@ -55,6 +55,17 @@ async fn probe_echo() {
     let model =
         run(test_programs::PROBE_ECHO, &scratch(), &["echoed"], ScriptedModel::default()).await;
     assert!(model.seen().is_empty(), "a probe never reaches the model");
+}
+
+// The SDK owns telemetry around each fresh adapter instance, so the probe can
+// reload its filter and both extraction calls flush their admitted span.
+#[tokio::test]
+async fn probe_telemetry() {
+    let (model, recording) =
+        traced(test_programs::PROBE_TELEMETRY, &scratch(), &[], ScriptedModel::default()).await;
+
+    assert!(model.seen().is_empty(), "the probe never reaches the model");
+    assert_eq!(recording.span_names(), ["traced", "traced"]);
 }
 
 // The SDK's side of the boundary, once under the runtime: the request, the
