@@ -965,7 +965,7 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 [[package]]
 name = "emery-adapter"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#d64032e8f1b2263c000e9bf2448c22fef576cc01"
+source = "git+https://github.com/augentic/emery#ff7a29e03ac1ccd0bb272bdfb2207b43cd98aa17"
 dependencies = [
  "omnia-sdk",
  "schemars",
@@ -997,12 +997,12 @@ dependencies = [
 [[package]]
 name = "emery-prose"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#d64032e8f1b2263c000e9bf2448c22fef576cc01"
+source = "git+https://github.com/augentic/emery#ff7a29e03ac1ccd0bb272bdfb2207b43cd98aa17"
 
 [[package]]
 name = "emery-sdk"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#d64032e8f1b2263c000e9bf2448c22fef576cc01"
+source = "git+https://github.com/augentic/emery#ff7a29e03ac1ccd0bb272bdfb2207b43cd98aa17"
 dependencies = [
  "anyhow",
  "emery-adapter",
