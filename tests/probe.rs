@@ -37,17 +37,20 @@ async fn probe_echo() {
     assert!(model.seen().is_empty(), "a probe never reaches the model");
 }
 
-// Each fresh instance must flush spans admitted before the adapter narrows its filter.
+// The boundary span, admitted at the level the caller names, must survive the adapter narrowing
+// its own filter beneath it.
 #[tokio::test]
 async fn probe_telemetry() {
-    let (model, recording) =
-        traced(test_programs::PROBE_TELEMETRY, &scratch(), &[], ScriptedModel::default()).await;
+    let (model, recording) = traced(
+        test_programs::PROBE_TELEMETRY,
+        &scratch(),
+        &["tracing", "info"],
+        ScriptedModel::default(),
+    )
+    .await;
 
     assert!(model.seen().is_empty(), "the probe never reaches the model");
-    assert_eq!(
-        recording.span_names(),
-        ["traced", "source_adapter_extract", "traced", "source_adapter_extract"]
-    );
+    assert_eq!(recording.span_names(), ["traced", "source_adapter_extract"]);
 }
 
 // DEBUG admits adapter and SDK targets, but not unrelated dependencies.
@@ -82,17 +85,15 @@ async fn tracing_off() {
     assert!(recording.span_names().is_empty(), "{:?}", recording.span_names());
 }
 
-// Missing baggage retains the INFO default.
+// A caller that names no level dispatches an adapter that opens at `error`, as omnia opens any
+// guest; the engine always names one.
 #[tokio::test]
 async fn tracing_default() {
     let (model, recording) =
         traced(test_programs::PROBE_TRACING, &scratch(), &[], ScriptedModel::default()).await;
 
     assert!(model.seen().is_empty(), "the probe never reaches the model");
-    assert_eq!(
-        recording.span_names(),
-        ["progress", "source_adapter_extract", "progress", "source_adapter_extract"]
-    );
+    assert!(recording.span_names().is_empty(), "{:?}", recording.span_names());
 }
 
 #[tokio::test]

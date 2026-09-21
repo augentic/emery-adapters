@@ -211,13 +211,13 @@ const _: () = {
             id: emery_sdk::export::AdapterId,
             input: emery_sdk::export::Input,
         ) -> Result<emery_sdk::export::Evidence, emery_sdk::export::Error> {
-            emery_sdk::component::call(extract, id, input).await
+            emery_sdk::call(extract, env!("CARGO_CRATE_NAME"), id, input).await
         }
     }
 };
 ```
 
-The anonymous constant keeps the generated `Adapter` out of the module's namespace. A guest that needs to control the boundary can implement `emery_sdk::export::Guest` by hand and still answer `extract` through `emery_sdk::component::call`, the lift and lower around it.
+The anonymous constant keeps the generated `Adapter` out of the module's namespace. A guest that needs to control the boundary can implement `emery_sdk::export::Guest` by hand and still answer `extract` through `emery_sdk::call`, the lift and lower around it; the crate name it is handed is the target the adapter's own tracing is filtered under.
 
 `emery_sdk::source_adapter!(metadata, extract)` is the export, in the shape of omnia's `command!(entry)`: it implements the world's `Guest` on a private type, invokes the bindings' `export!` for it, and answers the two WIT calls with the two fns it names, in the WIT's order — so nothing in the module is a binding, and a fn of another shape is refused where the macro names it. The `SourceKind` is the kind of source the adapter reads (`Intent`, `Documentation`, or `Behaviour` — the precedence a cross-source disagreement resolves under), reported here so the engine ranks every document this adapter returns before any is asked for — a fact about its input, never answered by the model and never carried in an answer. `emery_sdk::metadata` reports the SDK's own version as the exact `emery-version` pin beside it; an adapter builds the `AdapterMetadata` itself only to loosen or tighten that pin. `extract` is given the call's `Context<'_, P>` — the adapter addressed, the input, and the model every turn is put to; the SDK's lift built it from the WIT input and the host's model, `emery_sdk::Provider` (the unit struct whose empty `impl Model` picks up omnia's `wasm32` body, the provider every omnia guest would otherwise declare), so the adapter is generic over `P: Model` and names no backend — and is the adapter's survey then `emery_sdk::extract` over that `Context` under `PROSE`, its outcome lowered onto the WIT `evidence` and `error` by the SDK; a mechanical survey is `let seams = survey::survey(ctx.input)?;`, one that asks the model is `survey::survey(ctx, PROSE).await?`. `PROSE` is the crate's list of its `prose/` tree (step 2), handed to `emery_sdk::extract` and to a survey by model; the guest names it, never declares it, because the root suite reads the same table.
 
