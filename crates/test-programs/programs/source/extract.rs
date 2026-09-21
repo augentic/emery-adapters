@@ -55,7 +55,7 @@ async fn scenario() {
             check_evidence(&second.expect("the second extract, dispatched beside the first"));
         }
         ["tracing", level] => {
-            omnia_wasi_otel::set_baggage([(emery_sdk::TRACING, *level)]);
+            omnia_wasi_otel::set_baggage([(omnia_wasi_otel::LEVEL, *level)]);
             let evidence = Caller
                 .extract(ADAPTER, &value("Ship the orders API with idempotent retries."))
                 .await
