@@ -57,6 +57,11 @@ path = "programs/probe/telemetry.rs"
 crate-type = ["cdylib"]
 
 [[example]]
+name = "probe_tracing"
+path = "programs/probe/tracing.rs"
+crate-type = ["cdylib"]
+
+[[example]]
 name = "probe_upstream"
 path = "programs/probe/upstream.rs"
 crate-type = ["cdylib"]

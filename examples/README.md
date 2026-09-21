@@ -45,14 +45,14 @@ Swap the config for [intent](intent/emery.toml), [typescript](typescript/emery.t
 
 ### Debugging cursor backend
 
-To debug the cursor backend, set the `RUST_LOG` and, optionally, `CURSOR_SDK_BRIDGE_LOG` env vars to see more detailed trace logs.
+To debug an adapter, run `emery -v specify …`: the level the flag selects reaches every adapter the run dispatches over the dispatch chain, and each opens its own tracing at it — a bare run shows the adapter's progress at INFO as each turn opens, `-v` adds the adapter's own DEBUG and its SDK's (each reference-tool call as answered, each candidate the claim gate rejected with its findings, and what each turn yielded, under the source key and seam), and `-q` silences it. To debug the cursor backend, which is the host's side of each completion and callback and outside any guest, set `RUST_LOG` and, optionally, `CURSOR_SDK_BRIDGE_LOG`:
 
 ```bash
-export RUST_LOG="omnia_cursor=debug,emery_sdk=debug"
+export RUST_LOG="omnia_cursor=debug"
 export CURSOR_SDK_BRIDGE_LOG=1
 ```
 
-`omnia_cursor` is the host's side of each completion and callback; `emery_sdk` is the adapter's — each reference-tool call as answered, each candidate the claim gate rejected with its findings, and what each turn yielded, under the source key and seam. A bare run shows the adapter's progress at INFO as each turn opens; `-v` reaches the engine alone, so `RUST_LOG` is the adapter's knob.
+The deployment's `RUST_LOG` refines every guest's filter by selector after the level the flags set (`RUST_LOG=emery_sdk=trace emery -q specify …` traces the SDK alone); the host never rewrites it.
 
 See [#host-to-guest-tool-calls](#host-to-guest-tool-calls) for more detail.
 

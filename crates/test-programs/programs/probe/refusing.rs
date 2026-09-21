@@ -1,5 +1,3 @@
-//! Exercises an [`Error::BadRequest`] returned before any model request.
-
 #![cfg(target_arch = "wasm32")]
 
 use std::future::{Future, ready};

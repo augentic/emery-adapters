@@ -1,13 +1,3 @@
-//! Verifies shared SDK behaviour and component conversion with fixture adapters.
-//!
-//! Each probe isolates one contract property:
-//!
-//! - `refusing` and `upstream` verify WIT error classification.
-//! - `echo` verifies every record field survives conversion.
-//! - `gated` verifies model requests, reference tools, workspace grants, and
-//!   exhausted correction rounds.
-//! - `fanout` verifies concurrent guest requests are pending together.
-
 #![cfg(not(target_arch = "wasm32"))]
 
 mod support;
@@ -19,37 +9,27 @@ use support::{Barrier, Strict as _, run, traced};
 // Every probe program must have a matching test here.
 test_programs::foreach_probe!();
 
-/// An answer the claim gate accepts.
 const EVIDENCE: &str = r#"{"claims":[
     {"kind":"requirement","id":"orders.create","statement":"POST /orders creates an order."}
 ]}"#;
 
-/// A requirement without its `statement`.
 const UNSTATED: &str = r#"{"claims":[{"kind":"requirement","id":"orders.create"}]}"#;
 
-/// Runs the driver's `refused` mode against `probe`, expecting `code`.
-///
-/// The probe never reaches the model.
 async fn refused_by(probe: &str, code: &str) {
     let model = run(probe, &scratch(), &["refused", code], ScriptedModel::default()).await;
     assert!(model.seen().is_empty(), "a probe never reaches the model");
 }
 
-// `bad_request!` lowers onto `invalid-request` and lifts back as `bad_request`.
 #[tokio::test]
 async fn probe_refusing() {
     refused_by(test_programs::PROBE_REFUSING, "bad_request").await;
 }
 
-// `bad_gateway!` lowers onto `internal` — every class but a refusal — and
-// lifts back as `bad_gateway`.
 #[tokio::test]
 async fn probe_upstream() {
     refused_by(test_programs::PROBE_UPSTREAM, "bad_gateway").await;
 }
 
-// The driver compares what it lifted against the `maximal()` the probe
-// answered, field for field.
 #[tokio::test]
 async fn probe_echo() {
     let model =
@@ -57,21 +37,64 @@ async fn probe_echo() {
     assert!(model.seen().is_empty(), "a probe never reaches the model");
 }
 
-// The SDK owns telemetry around each fresh adapter instance, so the probe can
-// reload its filter and both extraction calls flush their admitted span.
+// Each fresh instance must flush spans admitted before the adapter narrows its filter.
 #[tokio::test]
 async fn probe_telemetry() {
     let (model, recording) =
         traced(test_programs::PROBE_TELEMETRY, &scratch(), &[], ScriptedModel::default()).await;
 
     assert!(model.seen().is_empty(), "the probe never reaches the model");
-    assert_eq!(recording.span_names(), ["traced", "traced"]);
+    assert_eq!(
+        recording.span_names(),
+        ["traced", "source_adapter_extract", "traced", "source_adapter_extract"]
+    );
 }
 
-// The SDK's side of the boundary, once under the runtime: the request, the
-// reference tools answered from the corpus and then from the SDK's runtime
-// references, the lend following the input, each candidate offered to the
-// guest's `check`.
+// DEBUG admits adapter and SDK targets, but not unrelated dependencies.
+#[tokio::test]
+async fn probe_tracing() {
+    let (model, recording) = traced(
+        test_programs::PROBE_TRACING,
+        &scratch(),
+        &["tracing", "debug"],
+        ScriptedModel::default(),
+    )
+    .await;
+
+    assert!(model.seen().is_empty(), "the probe never reaches the model");
+    assert_eq!(
+        recording.span_names(),
+        ["progress", "detail", "sdk_detail", "source_adapter_extract"]
+    );
+}
+
+#[tokio::test]
+async fn tracing_off() {
+    let (model, recording) = traced(
+        test_programs::PROBE_TRACING,
+        &scratch(),
+        &["tracing", "off"],
+        ScriptedModel::default(),
+    )
+    .await;
+
+    assert!(model.seen().is_empty(), "the probe never reaches the model");
+    assert!(recording.span_names().is_empty(), "{:?}", recording.span_names());
+}
+
+// Missing baggage retains the INFO default.
+#[tokio::test]
+async fn tracing_default() {
+    let (model, recording) =
+        traced(test_programs::PROBE_TRACING, &scratch(), &[], ScriptedModel::default()).await;
+
+    assert!(model.seen().is_empty(), "the probe never reaches the model");
+    assert_eq!(
+        recording.span_names(),
+        ["progress", "source_adapter_extract", "progress", "source_adapter_extract"]
+    );
+}
+
 #[tokio::test]
 async fn probe_gated() {
     let model = ScriptedModel::answering([EVIDENCE, EVIDENCE])
@@ -128,12 +151,7 @@ async fn probe_gated() {
     }
 }
 
-// The property the SDK's fan-out rests on, under the runtime: the two
-// completions one `extract` issues together are both pending before either
-// is answered. The barrier holds each until the other arrives, so a host
-// that serialised a guest's completions fails inside its hold; the guard is
-// permanent, and pins neither the brief nor which turn served which
-// seam.
+// One guest's seam completions must be pending together.
 #[tokio::test]
 async fn probe_fanout() {
     let model = Barrier::new(ScriptedModel::answering([EVIDENCE; 4]), 2);
@@ -146,12 +164,7 @@ async fn probe_fanout() {
     );
 }
 
-// The property the engine's fan-out over sources rests on, under the
-// runtime: two link dispatches one caller issues together run together, so
-// the two completions each opens — four — are all pending before any is
-// answered. A host that serialised a caller's dispatches fails inside the
-// barrier's hold with the count it reached, which is a host finding to
-// raise, not a reason to loosen the party.
+// One caller's source dispatches must run together.
 #[tokio::test]
 async fn fanout_together() {
     let model = Barrier::new(ScriptedModel::answering([EVIDENCE; 4]), 4);
@@ -164,8 +177,6 @@ async fn fanout_together() {
     );
 }
 
-// The gate rejects the only candidate and the budget is spent: the
-// correction names the finding and the failure crosses as `bad_request`.
 #[tokio::test]
 async fn gated_spent() {
     let model = ScriptedModel::answering([UNSTATED]);

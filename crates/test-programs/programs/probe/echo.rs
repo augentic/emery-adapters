@@ -1,8 +1,3 @@
-//! Exercises round-trip conversion of a fully populated evidence document.
-//!
-//! The probe returns `maximal()` without a model request, allowing every field
-//! to be checked after conversion through the component interface.
-
 #![cfg(target_arch = "wasm32")]
 
 use std::future::{Future, ready};

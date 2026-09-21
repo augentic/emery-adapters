@@ -1,8 +1,3 @@
-//! Exercises SDK mining and claim validation through a component.
-//!
-//! The probe mines a two-document corpus as one seam, allowing shared SDK
-//! behaviour to be tested independently of a shipped adapter prompt.
-
 #![cfg(target_arch = "wasm32")]
 
 use emery_sdk::{AdapterMetadata, Context, Doc, Error, Evidence, Model, Seam, SourceKind};

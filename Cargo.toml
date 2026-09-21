@@ -62,25 +62,24 @@ emery-sdk = "0.38.0"
 test-programs = { path = "crates/test-programs" }
 
 [patch.crates-io]
-emery-prose = { git = "https://github.com/augentic/emery" }
-emery-sdk = { git = "https://github.com/augentic/emery" }
-# emery-prose = { path = "../emery/crates/prose" }
-# emery-sdk = { path = "../emery/crates/sdk" }
+# emery-prose = { git = "https://github.com/augentic/emery" }
+# emery-sdk = { git = "https://github.com/augentic/emery" }
+emery-prose = { path = "../emery/crates/prose" }
+emery-sdk = { path = "../emery/crates/sdk" }
 
-omnia = { git = "https://github.com/augentic/omnia" }
-omnia-sdk = { git = "https://github.com/augentic/omnia" }
-omnia-test = { git = "https://github.com/augentic/omnia" }
-omnia-wasi-model = { git = "https://github.com/augentic/omnia" }
-omnia-wasi-otel = { git = "https://github.com/augentic/omnia" }
-# omnia = { path = "../omnia/crates/omnia" }
-# omnia-sdk = { path = "../omnia/crates/omnia-sdk" }
-# omnia-test = { path = "../omnia/crates/omnia-test" }
-# omnia-wasi-model = { path = "../omnia/crates/wasi-model" }
-# omnia-wasi-otel = { path = "../omnia/crates/wasi-otel" }
+# omnia = { git = "https://github.com/augentic/omnia" }
+# omnia-sdk = { git = "https://github.com/augentic/omnia" }
+# omnia-test = { git = "https://github.com/augentic/omnia" }
+# omnia-wasi-model = { git = "https://github.com/augentic/omnia" }
+# omnia-wasi-otel = { git = "https://github.com/augentic/omnia" }
+omnia = { path = "../omnia/crates/omnia" }
+omnia-sdk = { path = "../omnia/crates/omnia-sdk" }
+omnia-test = { path = "../omnia/crates/omnia-test" }
+omnia-wasi-model = { path = "../omnia/crates/wasi-model" }
+omnia-wasi-otel = { path = "../omnia/crates/wasi-otel" }
 
 [workspace.lints.rust]
 # https://dirname.github.io/rust-std-doc/rustc/lints/listing/allowed-by-default.html
-missing_docs = "warn"
 trivial_numeric_casts = "warn"
 unsafe_code = "deny"
 unsafe_op_in_unsafe_fn = "warn"
@@ -92,6 +91,7 @@ all = { level = "warn", priority = -1 }      # correctness, suspicious, style, c
 cargo = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
+missing_errors_doc = "allow"
 
 # Cherry-picked lints are from the `restriction` lint group in order to drive up
 # consistency, quality, and brevity
