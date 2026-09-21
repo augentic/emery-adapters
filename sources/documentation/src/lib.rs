@@ -30,5 +30,4 @@ mod guest {
     }
 }
 
-/// The prompt embedded in the adapter.
 pub static PROSE: &[emery_sdk::Doc] = emery_sdk::prose!["../prose/extract.md"];

@@ -1,5 +1,3 @@
-//! Emits an admitted extraction span so the SDK's guest lifecycle is observable.
-
 #![cfg(target_arch = "wasm32")]
 
 use emery_sdk::{AdapterMetadata, Context, Error, Evidence, Model, SourceKind};

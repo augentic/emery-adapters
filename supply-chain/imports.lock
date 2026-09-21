@@ -1548,21 +1548,6 @@ No major changes, mostly CI changes in this update. A new `Default` impl
 and a new test.
 """
 
-[[audits.bytecode-alliance.audits.tracing-log]]
-who = "Alex Crichton <alex@alexcrichton.com>"
-criteria = "safe-to-deploy"
-version = "0.1.3"
-notes = """
-This is a standard adapter between the `log` ecosystem and the `tracing`
-ecosystem. There's one `unsafe` block in this crate and it's well-scoped.
-"""
-
-[[audits.bytecode-alliance.audits.tracing-log]]
-who = "Alex Crichton <alex@alexcrichton.com>"
-criteria = "safe-to-deploy"
-delta = "0.1.3 -> 0.2.0"
-notes = "Nothing out of the ordinary, a typical major version update and nothing awry."
-
 [[audits.bytecode-alliance.audits.try-lock]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
