@@ -155,6 +155,8 @@ impl<M: WasiModelCtx + Clone> Provides<WasiOtel> for Traced<M> {
     }
 }
 
+// The guest environment default mirrors the shipped `emery` runtime's, so an adapter's tracing
+// opens here as it does under the engine.
 fn deployment(adapter: &str, project: &Scratch, args: &[&str]) -> Deployment {
     Deployment::new()
         .link(["emery:adapter/source@0.1.0"])
@@ -162,6 +164,7 @@ fn deployment(adapter: &str, project: &Scratch, args: &[&str]) -> Deployment {
         .guest(test_programs::ADAPTER, adapter)
         .command("caller")
         .mount(project.mount(false))
+        .env([("RUST_LOG", "emery_sdk=info")])
         .args(args.iter().copied())
 }
 

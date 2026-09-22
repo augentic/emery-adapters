@@ -54,17 +54,10 @@ async fn scenario() {
             check_evidence(&first.expect("the first extract, dispatched beside the second"));
             check_evidence(&second.expect("the second extract, dispatched beside the first"));
         }
-        ["tracing", level] => {
-            omnia_wasi_otel::set_baggage([(omnia_wasi_otel::LEVEL, *level)]);
-            let evidence = Caller
-                .extract(ADAPTER, &value("Ship the orders API with idempotent retries."))
-                .await
-                .expect("extract over an inline value");
-            check_evidence(&evidence);
+        other => {
+            panic!(
+                "no argument, `refused <code> [<value>]`, `echoed`, or `together`; got {other:?}"
+            )
         }
-        other => panic!(
-            "no argument, `refused <code> [<value>]`, `echoed`, `together`, or `tracing \
-             <level>`; got {other:?}"
-        ),
     }
 }
