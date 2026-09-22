@@ -37,8 +37,8 @@ async fn probe_echo() {
     assert!(model.seen().is_empty(), "a probe never reaches the model");
 }
 
-// The boundary span the runtime's `RUST_LOG=emery_sdk=info` default admits must survive the
-// adapter narrowing its own filter beneath it, in each of the driver's two extracts.
+// The boundary span command mode's `info` default admits must survive the adapter narrowing
+// its own filter beneath it, in each of the driver's two extracts.
 #[tokio::test]
 async fn probe_telemetry() {
     let (model, recording) =
