@@ -37,63 +37,16 @@ async fn probe_echo() {
     assert!(model.seen().is_empty(), "a probe never reaches the model");
 }
 
-// The boundary span, admitted at the level the caller names, must survive the adapter narrowing
-// its own filter beneath it.
+// The boundary span the runtime's `RUST_LOG=emery_sdk=info` default admits must survive the
+// adapter narrowing its own filter beneath it, in each of the driver's two extracts.
 #[tokio::test]
 async fn probe_telemetry() {
-    let (model, recording) = traced(
-        test_programs::PROBE_TELEMETRY,
-        &scratch(),
-        &["tracing", "info"],
-        ScriptedModel::default(),
-    )
-    .await;
-
-    assert!(model.seen().is_empty(), "the probe never reaches the model");
-    assert_eq!(recording.span_names(), ["traced", "source_adapter_extract"]);
-}
-
-// DEBUG admits adapter and SDK targets, but not unrelated dependencies.
-#[tokio::test]
-async fn probe_tracing() {
-    let (model, recording) = traced(
-        test_programs::PROBE_TRACING,
-        &scratch(),
-        &["tracing", "debug"],
-        ScriptedModel::default(),
-    )
-    .await;
-
-    assert!(model.seen().is_empty(), "the probe never reaches the model");
-    assert_eq!(
-        recording.span_names(),
-        ["progress", "detail", "sdk_detail", "source_adapter_extract"]
-    );
-}
-
-#[tokio::test]
-async fn tracing_off() {
-    let (model, recording) = traced(
-        test_programs::PROBE_TRACING,
-        &scratch(),
-        &["tracing", "off"],
-        ScriptedModel::default(),
-    )
-    .await;
-
-    assert!(model.seen().is_empty(), "the probe never reaches the model");
-    assert!(recording.span_names().is_empty(), "{:?}", recording.span_names());
-}
-
-// A caller that names no level dispatches an adapter that opens at `error`, as omnia opens any
-// guest; the engine always names one.
-#[tokio::test]
-async fn tracing_default() {
     let (model, recording) =
-        traced(test_programs::PROBE_TRACING, &scratch(), &[], ScriptedModel::default()).await;
+        traced(test_programs::PROBE_TELEMETRY, &scratch(), &[], ScriptedModel::default()).await;
 
     assert!(model.seen().is_empty(), "the probe never reaches the model");
-    assert!(recording.span_names().is_empty(), "{:?}", recording.span_names());
+    let pair = ["traced", "source_adapter_extract"];
+    assert_eq!(recording.span_names(), [pair, pair].concat());
 }
 
 #[tokio::test]

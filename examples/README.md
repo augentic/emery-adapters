@@ -34,7 +34,7 @@ cargo build --workspace --target wasm32-wasip2 --release
 
 # run the example
 export CURSOR_API_KEY=<Cursor API key>
-emery specify -v --config examples/documentation/emery.toml
+emery specify --config examples/documentation/emery.toml
 
 # review the committed revision
 emery show spec
@@ -45,14 +45,14 @@ Swap the config for [intent](intent/emery.toml), [typescript](typescript/emery.t
 
 ### Debugging cursor backend
 
-To debug an adapter, run `emery -v specify …`: the level the flag selects reaches every adapter the run dispatches over the dispatch chain, and each opens its own tracing at it — a bare run shows the adapter's progress at INFO as each turn opens, `-v` adds the adapter's own DEBUG and its SDK's (each reference-tool call as answered, each candidate the claim gate rejected with its findings, and what each turn yielded, under the source key and seam), and `-q` silences it. To debug the cursor backend, which is the host's side of each completion and callback and outside any guest, set `RUST_LOG` and, optionally, `CURSOR_SDK_BRIDGE_LOG`:
+To debug an adapter, set `RUST_LOG` for the `emery` process. The shipped runtime defaults every guest's `RUST_LOG` to `emery_sdk=info` when the process sets none, so a bare run shows the SDK's progress at INFO as each turn opens. `RUST_LOG=emery_sdk=debug` adds the SDK's own DEBUG (each reference-tool call as answered, each candidate the claim gate rejected with its findings, and what each turn yielded, under the source key and seam) and `RUST_LOG=debug` adds the engine's detail beside it; `RUST_LOG=off` silences every guest. An operator's `RUST_LOG` replaces the default whole. To debug the cursor backend, which is the host's side of each completion and callback and outside any guest, set `RUST_LOG` and, optionally, `CURSOR_SDK_BRIDGE_LOG`:
 
 ```bash
 export RUST_LOG="omnia_cursor=debug"
 export CURSOR_SDK_BRIDGE_LOG=1
 ```
 
-The deployment's `RUST_LOG` refines every guest's filter by selector after the level the flags set (`RUST_LOG=emery_sdk=trace emery -q specify …` traces the SDK alone); the host never rewrites it.
+The same `RUST_LOG` is every guest's filter (`RUST_LOG=emery_sdk=trace emery specify …` traces the SDK alone); the host never rewrites it.
 
 See [#host-to-guest-tool-calls](#host-to-guest-tool-calls) for more detail.
 
