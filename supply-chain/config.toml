@@ -664,10 +664,6 @@ criteria = "safe-to-deploy"
 version = "0.32.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.opentelemetry]]
-version = "0.33.0"
-criteria = "safe-to-run"
-
 [[exemptions.opentelemetry-otlp]]
 version = "0.32.0"
 criteria = "safe-to-deploy"
@@ -676,17 +672,9 @@ criteria = "safe-to-deploy"
 version = "0.32.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.opentelemetry-proto]]
-version = "0.33.0"
-criteria = "safe-to-run"
-
 [[exemptions.opentelemetry_sdk]]
 version = "0.32.1"
 criteria = "safe-to-deploy"
-
-[[exemptions.opentelemetry_sdk]]
-version = "0.33.0"
-criteria = "safe-to-run"
 
 [[exemptions.pastey]]
 version = "0.2.3"
