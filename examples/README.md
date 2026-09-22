@@ -45,14 +45,14 @@ Swap the config for [intent](intent/emery.toml), [typescript](typescript/emery.t
 
 ### Debugging cursor backend
 
-To debug an adapter, set `RUST_LOG` for the `emery` process. The shipped runtime defaults every guest's `RUST_LOG` to `emery_sdk=info` when the process sets none, so a bare run shows the SDK's progress at INFO as each turn opens. `RUST_LOG=emery_sdk=debug` adds the SDK's own DEBUG (each reference-tool call as answered, each candidate the claim gate rejected with its findings, and what each turn yielded, under the source key and seam) and `RUST_LOG=debug` adds the engine's detail beside it; `RUST_LOG=off` silences every guest. An operator's `RUST_LOG` replaces the default whole. To debug the cursor backend, which is the host's side of each completion and callback and outside any guest, set `RUST_LOG` and, optionally, `CURSOR_SDK_BRIDGE_LOG`:
+To debug an adapter, raise the `emery` run's level with `-v`. One level governs the run — the host, the engine, and every adapter — and a bare run is `info`: the SDK's progress as each turn opens. `emery -v specify …` is `debug` — the SDK's own detail (each reference-tool call as answered, each candidate the claim gate rejected with its findings, and what each turn yielded, under the source key and seam) beside the engine's and the host's; `-vv` is `trace`; each `-q` lowers the level a step (`-q` warn, `-qq` error, `-qqq` off). A flag overrides a process `RUST_LOG`, while a bare run keeps one that is set, so `RUST_LOG=emery_sdk=debug emery specify …` admits the SDK's detail alone. To debug the cursor backend, which is the host's side of each completion and callback and outside any guest, set `RUST_LOG` on a bare run and, optionally, `CURSOR_SDK_BRIDGE_LOG`:
 
 ```bash
 export RUST_LOG="omnia_cursor=debug"
 export CURSOR_SDK_BRIDGE_LOG=1
 ```
 
-The same `RUST_LOG` is every guest's filter (`RUST_LOG=emery_sdk=trace emery specify …` traces the SDK alone); the host never rewrites it.
+The same `RUST_LOG` is every guest's filter on a bare run (`RUST_LOG=emery_sdk=trace emery specify …` traces the SDK alone); the host never rewrites the process environment.
 
 See [#host-to-guest-tool-calls](#host-to-guest-tool-calls) for more detail.
 
