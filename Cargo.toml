@@ -62,21 +62,21 @@ emery-sdk = "0.38.0"
 test-programs = { path = "crates/test-programs" }
 
 [patch.crates-io]
-emery-prose = { git = "https://github.com/augentic/emery" }
-emery-sdk = { git = "https://github.com/augentic/emery" }
-# emery-prose = { path = "../emery/crates/prose" }
-# emery-sdk = { path = "../emery/crates/sdk" }
+# emery-prose = { git = "https://github.com/augentic/emery" }
+# emery-sdk = { git = "https://github.com/augentic/emery" }
+emery-prose = { path = "../emery/crates/prose" }
+emery-sdk = { path = "../emery/crates/sdk" }
 
-omnia = { git = "https://github.com/augentic/omnia" }
-omnia-sdk = { git = "https://github.com/augentic/omnia" }
-omnia-test = { git = "https://github.com/augentic/omnia" }
-omnia-wasi-model = { git = "https://github.com/augentic/omnia" }
-omnia-wasi-otel = { git = "https://github.com/augentic/omnia" }
-# omnia = { path = "../omnia/crates/omnia" }
-# omnia-sdk = { path = "../omnia/crates/omnia-sdk" }
-# omnia-test = { path = "../omnia/crates/omnia-test" }
-# omnia-wasi-model = { path = "../omnia/crates/wasi-model" }
-# omnia-wasi-otel = { path = "../omnia/crates/wasi-otel" }
+# omnia = { git = "https://github.com/augentic/omnia" }
+# omnia-sdk = { git = "https://github.com/augentic/omnia" }
+# omnia-test = { git = "https://github.com/augentic/omnia" }
+# omnia-wasi-model = { git = "https://github.com/augentic/omnia" }
+# omnia-wasi-otel = { git = "https://github.com/augentic/omnia" }
+omnia = { path = "../omnia/crates/omnia" }
+omnia-sdk = { path = "../omnia/crates/omnia-sdk" }
+omnia-test = { path = "../omnia/crates/omnia-test" }
+omnia-wasi-model = { path = "../omnia/crates/wasi-model" }
+omnia-wasi-otel = { path = "../omnia/crates/wasi-otel" }
 
 [workspace.lints.rust]
 # https://dirname.github.io/rust-std-doc/rustc/lints/listing/allowed-by-default.html
