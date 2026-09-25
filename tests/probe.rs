@@ -37,8 +37,8 @@ async fn probe_echo() {
     assert!(model.seen().is_empty(), "a probe never reaches the model");
 }
 
-// The boundary span command mode's `info` default admits must survive the adapter narrowing
-// its own filter beneath it, in each of the driver's two extracts.
+// The SDK's `source_adapter_extract` boundary span and the adapter's own spans export under
+// command mode's `info` default, in each of the driver's two extracts.
 #[tokio::test]
 async fn probe_telemetry() {
     let (model, recording) =
