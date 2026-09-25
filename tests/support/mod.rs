@@ -159,7 +159,6 @@ impl<M: WasiModelCtx + Clone> Provides<WasiOtel> for Traced<M> {
 // run, so an adapter's tracing opens here as it does under the engine.
 fn deployment(adapter: &str, project: &Scratch, args: &[&str]) -> Deployment {
     Deployment::new()
-        .link(["emery:adapter/source@0.1.0"])
         .guest("caller", test_programs::SOURCE_EXTRACT)
         .guest(test_programs::ADAPTER, adapter)
         .command("caller")

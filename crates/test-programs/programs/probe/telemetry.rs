@@ -11,7 +11,6 @@ fn metadata() -> AdapterMetadata {
 }
 
 async fn extract<P: Model>(_ctx: &Context<'_, P>) -> Result<Evidence, Error> {
-    omnia_wasi_otel::set_filter("error").expect("adapter extraction entered telemetry");
     traced().await;
     Ok(maximal())
 }
