@@ -11,5 +11,5 @@ fn metadata() -> AdapterMetadata {
 }
 
 fn extract<P>(ctx: &Context<'_, P>) -> impl Future<Output = Result<Evidence, Error>> {
-    ready(Err(bad_gateway!("the probe's upstream failed for source `{}`", ctx.input.key)))
+    ready(Err(bad_gateway!("the probe's upstream failed for source `{}`", ctx.input.name)))
 }

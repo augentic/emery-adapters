@@ -5,7 +5,7 @@ Emit one `Evidence` document from the operator's free-form brief. The engine rec
 ## Inputs
 
 - **Inline value** — the operator's brief, verbatim (no `$SOURCE_DIR` is lent), **or** a one-file tree whose single file's contents are the brief; the message names which and carries the string either way.
-- **Source key** — the authored source key the engine passed on the WIT bindings (typically `intent`).
+- **Source name** — the name the engine passed on the WIT bindings, which the specification cites the source by (typically `intent`).
 
 Nothing outside the bound seam is reachable; extract works only from this value.
 
@@ -13,7 +13,7 @@ Nothing outside the bound seam is reachable; extract works only from this value.
 
 | Kind | Required body field | When to emit |
 |---|---|---|
-| `intent` | `statement` | Exactly one: the operator's whole brief, verbatim. `id` equals the source key. |
+| `intent` | `statement` | Exactly one: the operator's whole brief, verbatim. `id` equals the source name. |
 | `requirement` | `statement` | One per distinct behavioural directive the brief states about the system. |
 | `criterion` | `criterion` | Only when the brief itself states an acceptance criterion. |
 
@@ -21,7 +21,7 @@ The verbatim `intent` claim preserves the operator's words for the reviewer. The
 
 ## `id` derivation
 
-- The `intent` claim's `id` is the source key, keeping the document deterministic and idempotent — re-running the same `(key, value)` pair yields a byte-identical Evidence document.
+- The `intent` claim's `id` is the source name, keeping the document deterministic and idempotent — re-running the same `(name, value)` pair yields a byte-identical Evidence document.
 - `requirement` and `criterion` ids follow [claims.md](claims.md): dotted-kebab, derived from the domain concept the directive governs (`session.timeout`, `search.filter`), never positional. When the brief overrides something the docs or code also describe, converging on the same id is what lets intent win the group.
 
 ## Output contract
@@ -31,7 +31,7 @@ Return one JSON object matching the claims schema the request carries:
 ```json
 {
   "claims": [
-    { "kind": "intent", "id": "<source-key>", "statement": "<brief, verbatim>" },
+    { "kind": "intent", "id": "<source-name>", "statement": "<brief, verbatim>" },
     { "kind": "requirement", "id": "<dotted-kebab-id>", "statement": "<one directive, present tense>" }
   ]
 }
@@ -48,7 +48,7 @@ Rules:
 
 Input:
 
-- Source key = `intent`
+- Source name = `intent`
 - Inline value = `Sessions must expire after 30 minutes of inactivity. Add a search filter to the user list.`
 
 Output:

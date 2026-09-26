@@ -1,6 +1,6 @@
 # Emery Adapters — Agent Instructions
 
-Emery's first-party **source adapters**. Each `sources/<name>` is one crate shipping as one WebAssembly component that exports the `source-adapter` world of the `emery:adapter` WIT package: `metadata`, and `extract(SourceInput) -> Evidence` — a typed `SourceInput` (a key and a workspace or inline value) in, one Evidence document of typed claims out. The contract, vocabulary, and coding standards are the engine repository's ([`augentic/emery`](https://github.com/augentic/emery/blob/main/AGENTS.md), [`docs/standards/`](https://github.com/augentic/emery/tree/main/docs/standards)); this repository owns extraction behaviour and prose. The v1 tree is archived at git tag `v1`.
+Emery's first-party **source adapters**. Each `sources/<name>` is one crate shipping as one WebAssembly component that exports the `source-adapter` world of the `emery:adapter` WIT package: `metadata`, and `extract(SourceInput) -> Evidence` — a typed `SourceInput` (a name and a workspace or inline value) in, one Evidence document of typed claims out. The contract, vocabulary, and coding standards are the engine repository's ([`augentic/emery`](https://github.com/augentic/emery/blob/main/AGENTS.md), [`docs/standards/`](https://github.com/augentic/emery/tree/main/docs/standards)); this repository owns extraction behaviour and prose. The v1 tree is archived at git tag `v1`.
 
 ## Git
 

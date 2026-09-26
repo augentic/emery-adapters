@@ -66,7 +66,7 @@ async fn probe_gated() {
             turn.contains("bound to adapter `adapter`"),
             "the adapter id names the turn: {turn}"
         );
-        assert!(turn.contains("(source key `source`)"), "the key names the turn: {turn}");
+        assert!(turn.contains("the source `source` bound to"), "the source names the turn: {turn}");
     }
     assert!(
         seen[1].messages[0].contains("Ship the orders API"),

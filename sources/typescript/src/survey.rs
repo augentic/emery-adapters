@@ -32,7 +32,7 @@ const MARKERS: &[&str] = &["d", "test", "spec"];
 pub async fn survey<P: Model>(
     ctx: &Context<'_, P>, docs: &'static [Doc],
 ) -> Result<Vec<Seam>, Error> {
-    let source = &ctx.input.key;
+    let source = &ctx.input.name;
     let SourceContent::Workspace(root) = &ctx.input.content else {
         tracing::debug!(%source, "inline value; one whole seam");
         return Ok(vec![Seam::Whole]);
