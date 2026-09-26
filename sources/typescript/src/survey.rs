@@ -32,35 +32,24 @@ const MARKERS: &[&str] = &["d", "test", "spec"];
 pub async fn survey<P: Model>(
     ctx: &Context<'_, P>, docs: &'static [Doc],
 ) -> Result<Vec<Seam>, Error> {
-    let key = &ctx.input.key;
+    let source = &ctx.input.key;
     let SourceContent::Workspace(root) = &ctx.input.content else {
-        tracing::debug!(%key, "inline value; one whole seam");
+        tracing::debug!(%source, "inline value; one whole seam");
         return Ok(vec![Seam::Whole]);
     };
 
-    tracing::info!(%key, %root, "identifying typescript surfaces");
+    tracing::info!(%source, %root, "identifying typescript surfaces");
 
     let surfaces = emery_sdk::survey::surfaces(ctx, docs, keep).await?;
     if surfaces.is_empty() {
         return Err(bad_request!(
-            "`{key}`: the source exposes no surface. Nothing under the root registers a route, \
-             a command, a job, or an exported API.",
-            key = ctx.input.key,
+            "`{source}`: the source exposes no surface. Nothing under the root registers a route, \
+             a command, a job, or an exported API."
         ));
     }
 
     let seams: Vec<_> = surfaces.iter().map(|surface| Seam::Note(note(root, surface))).collect();
-
-    tracing::debug!(
-        %key,
-        seams = ?seams,
-        // seams = seams.len(),
-        // surfaces = ?surfaces
-        //     .iter()
-        //     .map(|surface| format!("{} @ {}", surface.name, surface.entry))
-        //     .collect::<Vec<_>>(),
-        "surfaces cut into note seams"
-    );
+    tracing::debug!(%source, seams = seams.len(), "note seams");
 
     Ok(seams)
 }
