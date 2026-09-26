@@ -9,10 +9,7 @@ use emery_sdk::{Context, Doc, Error, Model, Seam, SourceContent, bad_request};
 
 const SKIP_DIRS: &[&str] =
     &["node_modules", "vendor", "target", "dist", "build", "tests", "__tests__"];
-
 const EXTENSIONS: &[&str] = &["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"];
-
-// The segment before the extension that marks a declaration file or a test.
 const MARKERS: &[&str] = &["d", "test", "spec"];
 
 /// Returns one mining seam for each surface exposed by the source.
@@ -35,9 +32,13 @@ const MARKERS: &[&str] = &["d", "test", "spec"];
 pub async fn survey<P: Model>(
     ctx: &Context<'_, P>, docs: &'static [Doc],
 ) -> Result<Vec<Seam>, Error> {
+    let key = &ctx.input.key;
     let SourceContent::Workspace(root) = &ctx.input.content else {
+        tracing::debug!(%key, "inline value; one whole seam");
         return Ok(vec![Seam::Whole]);
     };
+
+    tracing::info!(%key, %root, "identifying typescript surfaces");
 
     let surfaces = emery_sdk::survey::surfaces(ctx, docs, keep).await?;
     if surfaces.is_empty() {
@@ -48,7 +49,20 @@ pub async fn survey<P: Model>(
         ));
     }
 
-    Ok(surfaces.iter().map(|surface| Seam::Note(note(root, surface))).collect())
+    let seams: Vec<_> = surfaces.iter().map(|surface| Seam::Note(note(root, surface))).collect();
+
+    tracing::debug!(
+        %key,
+        seams = ?seams,
+        // seams = seams.len(),
+        // surfaces = ?surfaces
+        //     .iter()
+        //     .map(|surface| format!("{} @ {}", surface.name, surface.entry))
+        //     .collect::<Vec<_>>(),
+        "surfaces cut into note seams"
+    );
+
+    Ok(seams)
 }
 
 fn keep(entry: Entry<'_>) -> bool {
