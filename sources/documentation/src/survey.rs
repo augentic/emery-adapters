@@ -4,12 +4,10 @@ use std::collections::BTreeMap;
 
 use emery_sdk::{Error, Seam, SourceContent, SourceInput};
 
-// A directory of fewer documents than this is no seam of its own.
 const MIN_SIZE: usize = 2;
 
-// A directory of more documents than this is cut one level finer, where its
-// subdirectories allow it, so one directory cannot hold a whole run behind
-// its one turn.
+// Over this, a directory is cut one level finer, so it cannot hold a run behind
+// one turn.
 const MAX_SIZE: usize = 16;
 
 /// Returns the groups of documentation to mine.
@@ -46,7 +44,6 @@ struct Groups(BTreeMap<String, Vec<String>>);
 
 impl From<Vec<String>> for Groups {
     fn from(files: Vec<String>) -> Self {
-        // group files by top-level directory.
         let mut groups: BTreeMap<String, Vec<String>> = BTreeMap::new();
         for file in files {
             let dir = file.split_once('/').map_or(".", |(dir, _)| dir).to_owned();
@@ -64,7 +61,6 @@ impl From<Groups> for Vec<Seam> {
 
 impl Groups {
     fn fold(mut self) -> Self {
-        // fold directories beneath the min members into the root
         let folded: Vec<String> = self
             .0
             .extract_if(.., |dir, files| dir != "." && files.len() < MIN_SIZE)
@@ -76,8 +72,7 @@ impl Groups {
         self
     }
 
-    // One seam per group in key order, a group over the cap cut in place so a
-    // directory's seams stay adjacent.
+    // A group over the cap is cut in place, so a directory's seams stay adjacent.
     fn into_seams(self) -> Vec<Seam> {
         let seams: Vec<_> = self
             .0
@@ -89,7 +84,6 @@ impl Groups {
     }
 }
 
-// Cuts a directory over the cap one level finer, by subdirectories.
 fn split(dir: &str, files: Vec<String>) -> Vec<Vec<String>> {
     if dir == "." || files.len() <= MAX_SIZE {
         return vec![files];

@@ -5,7 +5,7 @@ fn main() {
         .package("test-programs")
         .scan("crates/test-programs/programs")
         .sync_examples("crates/test-programs/Cargo.toml")
-        // Inputs outside the nested build's dep-info.
+        // inputs outside the nested build's dep-info
         .track(["Cargo.lock", "crates/test-programs/src", "crates/test-programs/Cargo.toml"])
         .build()
         .write_gen("gen.rs");

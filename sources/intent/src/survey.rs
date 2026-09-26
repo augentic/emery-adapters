@@ -26,7 +26,6 @@ pub fn survey(input: &SourceInput) -> Result<Vec<Seam>, Error> {
             }
             Seam::Whole
         }
-        // intent is in a file
         SourceContent::Workspace(root) => {
             let files = emery_sdk::workspace::list(root, |_| true)?;
             let [file] = files.as_slice() else {

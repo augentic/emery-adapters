@@ -25,19 +25,37 @@ url = "https://raw.githubusercontent.com/zcash/rust-ecosystem/main/supply-chain/
 [policy.omnia]
 audit-as-crates-io = false
 
+[policy.omnia-cli]
+audit-as-crates-io = false
+
+[policy.omnia-core]
+audit-as-crates-io = false
+
 [policy.omnia-guest-macros]
 audit-as-crates-io = false
 
 [policy.omnia-host-macros]
 audit-as-crates-io = false
 
+[policy.omnia-link]
+audit-as-crates-io = false
+
+[policy.omnia-plugin]
+audit-as-crates-io = false
+
 [policy.omnia-sdk]
+audit-as-crates-io = false
+
+[policy.omnia-test]
 audit-as-crates-io = false
 
 [policy.omnia-wasi-blobstore]
 audit-as-crates-io = false
 
 [policy.omnia-wasi-config]
+audit-as-crates-io = false
+
+[policy.omnia-wasi-docstore]
 audit-as-crates-io = false
 
 [policy.omnia-wasi-http]
@@ -65,15 +83,6 @@ audit-as-crates-io = false
 audit-as-crates-io = false
 
 [policy.omnia-wasi-websocket]
-audit-as-crates-io = false
-
-[policy.wrpc-introspect]
-audit-as-crates-io = false
-
-[policy.wrpc-transport]
-audit-as-crates-io = false
-
-[policy.wrpc-wasmtime]
 audit-as-crates-io = false
 
 [[exemptions.addr2line]]
@@ -149,7 +158,7 @@ version = "4.0.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.cc]]
-version = "1.4.7"
+version = "1.5.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.cfg-if]]
@@ -337,7 +346,7 @@ version = "2.5.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.find-msvc-tools]]
-version = "0.1.13"
+version = "0.1.14"
 criteria = "safe-to-deploy"
 
 [[exemptions.fixedbitset]]
@@ -553,7 +562,7 @@ version = "0.1.35"
 criteria = "safe-to-deploy"
 
 [[exemptions.js-sys]]
-version = "0.3.105"
+version = "0.3.106"
 criteria = "safe-to-deploy"
 
 [[exemptions.jsonwebtoken]]
@@ -889,7 +898,7 @@ version = "0.4.12"
 criteria = "safe-to-deploy"
 
 [[exemptions.smallvec]]
-version = "1.16.1"
+version = "1.16.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.socket2]]
@@ -1101,23 +1110,23 @@ version = "0.9.0+wasi-0.3.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasm-bindgen]]
-version = "0.2.128"
+version = "0.2.129"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasm-bindgen-futures]]
-version = "0.4.78"
+version = "0.4.79"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasm-bindgen-macro]]
-version = "0.2.128"
+version = "0.2.129"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasm-bindgen-macro-support]]
-version = "0.2.128"
+version = "0.2.129"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasm-bindgen-shared]]
-version = "0.2.128"
+version = "0.2.129"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasm-pkg-client]]
@@ -1133,7 +1142,7 @@ version = "0.5.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.web-sys]]
-version = "0.3.105"
+version = "0.3.106"
 criteria = "safe-to-deploy"
 
 [[exemptions.web-time]]
@@ -1169,11 +1178,11 @@ version = "0.8.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.zerocopy]]
-version = "0.8.58"
+version = "0.8.59"
 criteria = "safe-to-deploy"
 
 [[exemptions.zerocopy-derive]]
-version = "0.8.58"
+version = "0.8.59"
 criteria = "safe-to-deploy"
 
 [[exemptions.zerofrom]]

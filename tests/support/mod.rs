@@ -4,7 +4,6 @@
 //! scripted host model. [`Barrier`] can hold completions until a required
 //! number of requests are pending together.
 
-// Compiled into every component suite; each uses a subset.
 #![allow(dead_code, reason = "shared by suites that each use a subset")]
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -19,10 +18,8 @@ use opentelemetry_proto::tonic::collector::metrics::v1::ExportMetricsServiceRequ
 use opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest;
 use tracing::Instrument as _;
 
-/// How long a held completion waits for the rest of its party.
-///
-/// Generous on a loaded CI box; paid only when the host serialises what the
-/// guest issued together.
+// Generous on a loaded CI box; paid only when the host serialises what the
+// guest issued together.
 const HOLD: Duration = Duration::from_secs(5);
 
 /// A host model the runner holds to its script.
@@ -66,7 +63,7 @@ impl Barrier {
         }
     }
 
-    // The diagnostic a completion fails with once a hold has expired.
+    // The diagnostic once a hold has expired.
     fn serialised(&self) -> Error {
         Error::Backend(format!(
             "completion held {HOLD:?} without {} pending at once: the host serialises one \
@@ -97,9 +94,8 @@ impl WasiModelCtx for Barrier {
         })
     }
 
-    // Qualified: `ScriptedModel`'s inherent `limits(self, Limits)` builder
-    // shadows the trait method.
     fn limits(&self) -> Limits {
+        // HACK: the inherent `limits(self, Limits)` builder shadows the trait method
         WasiModelCtx::limits(&self.inner)
     }
 }
@@ -155,8 +151,7 @@ impl<M: WasiModelCtx + Clone> Provides<WasiOtel> for Traced<M> {
     }
 }
 
-// No level is named: command mode's `info` default is the shipped `emery` runtime's on a bare
-// run, so an adapter's tracing opens here as it does under the engine.
+// No level is named: command mode's `info` default is the shipped runtime's on a bare run.
 fn deployment(adapter: &str, project: &Scratch, args: &[&str]) -> Deployment {
     Deployment::new()
         .guest("caller", test_programs::SOURCE_EXTRACT)
