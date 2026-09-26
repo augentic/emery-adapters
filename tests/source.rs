@@ -18,7 +18,7 @@ test_programs::foreach_adapter!();
 
 const BRIEF: &str = "Let users reset passwords by email.";
 
-/// The prompts each component embeds, as this build compiled them in.
+// The prompts as this build compiled them in.
 mod prompt {
     pub const DOCUMENTATION: &str = include_str!("../sources/documentation/prose/extract.md");
     pub const INTENT: &str = include_str!("../sources/intent/prose/extract.md");
@@ -26,9 +26,6 @@ mod prompt {
     pub const TYPESCRIPT_SURVEY: &str = include_str!("../sources/typescript/prose/survey.md");
 }
 
-/// A gate-valid answer of claims alone.
-///
-/// The kind of source rides `metadata`, never the document.
 fn answer() -> String {
     serde_json::json!({
         "claims": [{
@@ -41,23 +38,19 @@ fn answer() -> String {
     .to_string()
 }
 
-/// Writes an empty file at each of `files` under `project`, directories made on the way.
 fn tree(project: &Scratch, files: &[&str]) {
     for file in files {
         project.write(file, "");
     }
 }
 
-/// Runs workspace and inline extraction against `component`.
-///
-/// The model supplies one answer per workspace seam and one for inline input.
+// One answer per workspace seam, and one for the inline value.
 async fn extract(component: &str, project: &Scratch, seams: usize) -> ScriptedModel {
     let answer = answer();
     let answers = std::iter::repeat_n(answer.as_str(), seams + 1);
     support::run(component, project, &[], ScriptedModel::answering(answers)).await
 }
 
-/// Runs the driver's `refused bad_request` mode against `component`, over the workspace or `inline`.
 async fn refused(
     component: &str, project: &Scratch, inline: Option<&str>, model: ScriptedModel,
 ) -> ScriptedModel {
@@ -66,10 +59,7 @@ async fn refused(
     support::run(component, project, &args, model).await
 }
 
-/// Asserts the completions the host saw and returns the workspace seams' turns.
-///
-/// `metadata` opened none; the workspace `extract` opened one per seam and
-/// the inline value's one more, each with `prompt` as its system.
+// Returns the workspace seams' turns.
 fn prompted(model: &ScriptedModel, prompt: &str, seams: usize) -> Vec<String> {
     let seen = model.seen();
     assert_eq!(
@@ -83,9 +73,7 @@ fn prompted(model: &ScriptedModel, prompt: &str, seams: usize) -> Vec<String> {
     seen[..seams].iter().map(|request| request.messages[0].clone()).collect()
 }
 
-/// Asserts that `turns` preserve the partition described by `groups`.
-///
-/// Every group must appear together in exactly one turn.
+// Every group appears together in exactly one turn.
 fn partitioned(turns: &[String], groups: &[&[&str]]) {
     assert_eq!(turns.len(), groups.len(), "one turn per seam");
     for group in groups {
@@ -100,10 +88,7 @@ fn partitioned(turns: &[String], groups: &[&[&str]]) {
     }
 }
 
-/// Returns the surface a turn tells its call to mine, as `(name, entry)`.
-///
-/// The two lines are the typescript adapter's own, so they are what the
-/// call is told.
+// The two lines are the typescript adapter's own, so they are what the call is told.
 fn surface(turn: &str) -> (&str, &str) {
     let name = turn
         .lines()
@@ -116,8 +101,7 @@ fn surface(turn: &str) -> (&str, &str) {
     (name, entry)
 }
 
-// A tree of one directory cuts no finer than itself, so it is one seam, and
-// an inline value is one: two completions, both under the extraction prompt.
+// A tree of one directory cuts no finer than itself.
 #[tokio::test]
 async fn documentation() {
     let project = scratch();
@@ -128,12 +112,8 @@ async fn documentation() {
     prompted(&model, prompt::DOCUMENTATION, 1);
 }
 
-// The cut is the first path segment. Each top-level directory of two or more
-// documents is one seam listing its documents, nested ones included —
-// `guide/advanced/` has two of its own but is no seam; the root's own
-// document and a directory of one fold into one more, so every document is
-// in exactly one seam. A dot entry — a `.github/`, an editor's draft — is
-// tooling, not documentation, and is in none.
+// The cut is the first path segment: `guide/advanced/` has two documents of its
+// own but is no seam, and the root's own document folds in with a directory of one.
 #[tokio::test]
 async fn documentation_directories() {
     let project = scratch();
@@ -171,15 +151,8 @@ async fn documentation_directories() {
     }
 }
 
-// A top-level directory of more than sixteen documents is cut once more, by
-// its subdirectories, so one directory cannot hold the run behind its one
-// turn: each subdirectory of two or more is a seam, and the directory's own
-// documents with those of a subdirectory of one are one more, adjacent — four
-// seams here. The cut is one level only, and a subdirectory cuts a directory
-// only where it can: a flat directory of twenty stays one seam beside `guide`,
-// and a remainder of one — the lone `api/misc/` document, with no document
-// directly beneath `api/` — joins the first subdirectory's seam rather than
-// standing alone.
+// A directory of more than sixteen documents is cut once more by its
+// subdirectories, one level only and only where it can.
 #[tokio::test]
 async fn documentation_large_directory() {
     let v1: Vec<String> = (0..10).map(|i| format!("api/v1/endpoint-{i:02}.md")).collect();
@@ -226,11 +199,8 @@ async fn documentation_large_directory() {
     partitioned(&turns, &[&joined, &v2, &["guide/intro.md", "guide/setup.md"]]);
 }
 
-// The one adapter that reads its source inside the guest: the tree's one
-// file, nested or not, is read through the mount into the turn's seam. The
-// engine's own output beside it — a projection of the last revision, its
-// store — is not a file of the tree, so the tree is still one file and the
-// brief is the one read.
+// The engine's own output beside the brief is not a file of the tree, so the
+// tree is still one file.
 #[tokio::test]
 async fn intent() {
     let project = scratch();
@@ -246,7 +216,6 @@ async fn intent() {
     assert!(!turns[0].contains("# Spec"), "the projection is not the brief: {}", turns[0]);
 }
 
-// No file, or several: a typed refusal before any model call.
 #[tokio::test]
 async fn intent_not_one_file() {
     let empty = scratch();
@@ -262,8 +231,7 @@ async fn intent_not_one_file() {
     assert!(model.seen().is_empty(), "no turn is spent on a tree of several files");
 }
 
-// An intent source is never legitimately empty: a blank brief, in the one
-// file or inline, is a typed refusal, never an empty success.
+// An intent source is never legitimately empty.
 #[tokio::test]
 async fn intent_empty_brief() {
     let project = scratch();
@@ -278,12 +246,8 @@ async fn intent_empty_brief() {
     assert!(model.seen().is_empty(), "no turn is spent on a blank value");
 }
 
-// The one adapter that surveys by model: a workspace `extract` opens one
-// survey completion under the embedded survey prompt, then one extract
-// completion per surface the inventory names — each telling its call the
-// surface and the module a caller enters it at, however many surfaces enter
-// at one module, since a call mines a surface and never a file — and then
-// the inline value's own, with no survey turn spent on it.
+// A call mines a surface and never a file, so two surfaces entering at one
+// module are two extracts; the inline value spends no survey turn.
 #[tokio::test]
 async fn typescript() {
     let project = scratch();
@@ -330,10 +294,7 @@ async fn typescript() {
     );
 }
 
-// Dependencies, build output, tests, declaration files, dot entries, and a
-// file this adapter does not read are not production source: an inventory
-// entered at any of them — present in the tree though they are — goes back
-// to the model as findings naming each, and the calls are cut from the
+// Every refused entry is present in the tree; the calls are cut from the
 // inventory finally accepted, never the refused one.
 #[tokio::test]
 async fn typescript_non_production() {
@@ -382,11 +343,8 @@ async fn typescript_non_production() {
     assert_eq!(surface(&seen[2].messages[0]), ("POST /orders", "routes/orders.ts"));
 }
 
-// A tree the model finds no surface in is refused after the one survey turn,
-// never mined whole: a source no caller reaches is incomplete input or a
-// failed discovery, and mining it would raise what no caller observes into
-// requirements. The empty inventory passes the survey's check, so the
-// refusal is the adapter's, not a spent budget.
+// Mining a tree no caller reaches would raise what no caller observes into
+// requirements; the empty inventory passes the check, so the refusal is the adapter's.
 #[tokio::test]
 async fn typescript_no_surface() {
     let project = scratch();

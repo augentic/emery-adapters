@@ -7,16 +7,12 @@ use emery_sdk::survey::Surface;
 use emery_sdk::workspace::Entry;
 use emery_sdk::{Context, Doc, Error, Model, Seam, SourceContent, bad_request};
 
-// Directories holding no production source of the estate's own: dependencies,
-// build output, tests. Dot directories are skipped besides.
 const SKIP_DIRS: &[&str] =
     &["node_modules", "vendor", "target", "dist", "build", "tests", "__tests__"];
 
-// The extensions this adapter mines.
 const EXTENSIONS: &[&str] = &["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"];
 
-// The segment before the extension that marks a file as no production
-// source: a declaration file, or a test.
+// The segment before the extension that marks a declaration file or a test.
 const MARKERS: &[&str] = &["d", "test", "spec"];
 
 /// Returns one mining seam for each surface exposed by the source.
@@ -55,8 +51,6 @@ pub async fn survey<P: Model>(
     Ok(surfaces.iter().map(|surface| Seam::Note(note(root, surface))).collect())
 }
 
-// What a surface may be entered at: a production module, in no dependency,
-// build, or test directory and no dot entry.
 fn keep(entry: Entry<'_>) -> bool {
     !entry.hidden()
         && match entry {
@@ -65,9 +59,7 @@ fn keep(entry: Entry<'_>) -> bool {
         }
 }
 
-// The turn's seam: the root is lent whole, so the surface can be followed
-// wherever it reaches — imports, `tsconfig.json` paths, the types it uses —
-// and the call is told which surface is its own and where a caller enters it.
+// The root is lent whole, so the call can follow the surface wherever it reaches.
 fn note(root: &str, surface: &Surface) -> String {
     format!(
         "`$SOURCE_DIR` is the read-only view at `{root}` — the TypeScript / JavaScript source \
@@ -85,8 +77,7 @@ fn note(root: &str, surface: &Surface) -> String {
     )
 }
 
-// A production source file: a mined extension on a stem that is not marked
-// as a declaration file or a test (`types.d.ts`, `mail.test.ts`).
+// A mined extension on a stem not marked as a declaration file or a test.
 fn production(name: &str) -> bool {
     let mut segments = name.rsplit('.');
     let (Some(extension), Some(before)) = (segments.next(), segments.next()) else {
