@@ -1,6 +1,6 @@
 # Types
 
-What a `type` claim carries, and how a shape is read from TypeScript. `signature` is the declaration's source spelling; the claim's `path` anchors the declaration. Emit one per interface, type alias, class, enum, or DTO the surface takes, returns, persists, or publishes.
+What a `type` claim carries, and how a shape is read from TypeScript. `signature` is the declaration's source spelling; the claim's `path` anchors the declaration; `name` is the declared identifier (`User`). Name every claim: the design block renders the signature under it. Emit one per interface, type alias, class, enum, or DTO the surface takes, returns, persists, or publishes.
 
 ## Copy, do not describe
 

@@ -112,11 +112,13 @@ export class EventProcessor {
     {
       "kind": "type",
       "path": "services/event-processor/index.ts#L4-L8",
+      "name": "EventInput",
       "signature": "interface EventInput { id: string; type: string; data: object }"
     },
     {
       "kind": "type",
       "path": "services/event-processor/index.ts#L10-L16",
+      "name": "EnrichedEvent",
       "signature": "interface EnrichedEvent { id: string; type: string; data: object; enrichedData: object; metadata: object }"
     },
     {

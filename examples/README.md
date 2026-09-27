@@ -38,7 +38,23 @@ export RUST_LOG="omnia_core=off,emery_sdk=trace"
 export CURSOR_SDK_BRIDGE_LOG=1
 ```
 
+## What to expect
 
+A run is a few model completions with long silences between log lines. The `in progress` heartbeat every 15 s is how you tell a working run from a stuck one, and each `completion` line carries the exact `input_tokens` / `output_tokens` / `reasoning_tokens` spent. As a budget, the typescript example took about 6.5 minutes and 210 K input tokens:
+
+| completion          | wall time | input tokens |
+| ------------------- | --------- | ------------ |
+| survey              | 47 s      | 97 K         |
+| evidence (one seam) | 138 s     | 83 K         |
+| spec-draft          | 119 s     | 21 K         |
+| design-draft        | 76 s      | 9 K          |
+
+Four optional environment knobs bound the wait:
+
+- `CURSOR_TIMEOUT_SECS` (600) — wall-clock cap per completion; a check's correction gets a fresh cap.
+- `CURSOR_INACTIVITY_SECS` (120) — cancels a run whose stream has gone silent while waiting on the bridge (the opening frame, a tool call). It does not apply once the model is composing its answer.
+- `CURSOR_MAX_AGENTS` (4) — bridge agents live at once; further completions queue.
+- `CURSOR_MODEL` (`auto`) — Cursor's server-side selection.
 
 ## Host-to-guest tool calls
 

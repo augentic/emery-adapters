@@ -116,11 +116,13 @@ export async function validateAndProcess(data: InputData): Promise<Result> {
     {
       "kind": "type",
       "path": "src/data-service.ts#L4-L7",
+      "name": "InputData",
       "signature": "interface InputData { id: string; forceRefresh?: boolean }"
     },
     {
       "kind": "type",
       "path": "src/data-service.ts#L9-L14",
+      "name": "Result",
       "signature": "interface Result { success: boolean; data?: object; error?: string; source?: \"cache\" | \"api\" }"
     },
     {

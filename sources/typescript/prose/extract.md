@@ -5,7 +5,7 @@ This prompt runs once per seam of a bound `typescript` source. A tree is mined o
 ## Inputs
 
 - **`$SOURCE_DIR`** — read-only view of the bound source root, always the whole tree. Resolve imports and `tsconfig.json` `paths` mappings relative to it. Absent when the source is an inline `value` (the seam is then in the message).
-- **The surface** — when the message names one, its name and its entry module. Mine from the entry outward: everything the surface reaches is yours to read, and to claim for what this surface's caller observes of it. What the tree does for another surface — another route's handler, another command's run, another job's schedule — is that surface's call to claim, even when you pass through a module the two share. Absent for an inline value, which is mined whole.
+- **The surface** — when the message names one, its name and its entry module. Mine from the entry outward: everything the surface reaches is yours to read, and to claim for what this surface's caller observes of it. What the tree does for another surface — another route's handler, another command's run, another job's schedule — is that surface's call to claim, even when you pass through a module the two share. A start surface claims what starting the process does — the port, the connections, the registrations — and stops at each registration: what a registered route, job, or command does once reached is that surface's call. Absent for an inline value, which is mined whole.
 - **Source name** — the kebab-case name the engine passed on the WIT bindings, which the specification cites the source by.
 
 Nothing outside the bound source is reachable; writes back into `$SOURCE_DIR` are denied. Extract mines its surface completely in one pass: the entry, every handler and domain module it reaches, and every store, client, and type on the way.
@@ -31,7 +31,7 @@ This adapter emits from the closed enum:
 |---|---|---|
 | `requirement` | `statement` | A behavioural fact the code exhibits, stated as one present-tense sentence about the system. These are the claims deterministic reconciliation joins against documentation and intent. |
 | `excerpt` | `excerpt` (free-form) | A behavioural code span backing a requirement: handler bodies, validation logic, error paths. |
-| `type` | `signature` (free-form) | A declared interface, type alias, class declaration, or DTO whose shape synthesis will need. |
+| `type` | `signature` (free-form), `name` | A declared interface, type alias, class declaration, or DTO whose shape synthesis will need, named by its declared identifier in `name` (`User`) — the key the design block renders it under. |
 | `call` | `callee` (free-form) | An observed cross-module call that contributes to behaviour (the call is the wire). |
 
 **`requirement` claims are the reconciliation currency.** Only `kind: requirement` claims form the spec's requirements; `excerpt` / `type` / `call` claims reach synthesis as supporting context but can never agree, diverge, or conflict with another source. Every behavioural fact worth a spec block — a timeout value, a validation rule, an error response, a side effect — must be lifted into a `requirement` claim with a `statement`, anchored by its `path` and backed by detail claims. The gate is fail-closed ([claims.md](claims.md)): a `requirement` claim without a `statement` field fails the whole run closed (typed `bad_request`).
@@ -66,7 +66,7 @@ Resulting Evidence body:
     { "kind": "requirement", "id": "user-registration.email-validation", "path": "src/users/register.ts#L12-L34", "statement": "Registration rejects an email that is not RFC-5322 valid with a 400 response." },
     { "kind": "requirement", "id": "user-registration.persistence", "path": "src/users/register.ts#L31", "statement": "A valid registration inserts the user and returns 201 with the persisted record." },
     { "kind": "excerpt", "path": "src/users/register.ts#L12-L34", "excerpt": "Handler validates email against RFC-5322 regex, returns 400 with { error: \"invalid-email\" } on failure, otherwise inserts the user and returns 201 with the persisted record." },
-    { "kind": "type", "path": "src/users/repository.ts#L1-L4", "signature": "interface User { id: string; email: string; createdAt: Date }" },
+    { "kind": "type", "path": "src/users/repository.ts#L1-L4", "name": "User", "signature": "interface User { id: string; email: string; createdAt: Date }" },
     { "kind": "call", "path": "src/users/register.ts#L31", "callee": "src/users/repository.ts:insertUser" }
   ]
 }

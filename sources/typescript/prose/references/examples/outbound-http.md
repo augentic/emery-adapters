@@ -63,11 +63,13 @@ export async function processMessage(message: Message): Promise<Output> {
     {
       "kind": "type",
       "path": "src/handler.ts#L1-L5",
+      "name": "Message",
       "signature": "interface Message { id: string; content: string; timestamp: number }"
     },
     {
       "kind": "type",
       "path": "src/handler.ts#L7-L10",
+      "name": "Output",
       "signature": "interface Output { status: string; data: unknown }"
     },
     {
