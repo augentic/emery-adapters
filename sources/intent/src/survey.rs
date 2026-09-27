@@ -10,17 +10,19 @@ use emery_sdk::{Error, Seam, SourceContent, SourceInput, bad_request};
 pub fn survey(input: &SourceInput) -> Result<Vec<Seam>, Error> {
     let seam = match &input.content {
         SourceContent::Value(value) => {
-            nonblank(value)?;
+            if value.trim().is_empty() {
+                return Err(bad_request!("intent brief is empty"));
+            }
             Seam::Whole
         }
-        SourceContent::Workspace(root) => note(root)?,
+        SourceContent::Workspace(root) => into_note(root)?,
     };
 
     Ok(vec![seam])
 }
 
 // The one file of the tree, read into the seam that carries it.
-fn note(root: &str) -> Result<Seam, Error> {
+fn into_note(root: &str) -> Result<Seam, Error> {
     let files = emery_sdk::workspace::list(root, |entry| !entry.hidden())?;
     let [file] = files.as_slice() else {
         return Err(bad_request!("intent expects one file, found {}", files.len()));
@@ -28,7 +30,9 @@ fn note(root: &str) -> Result<Seam, Error> {
     let path = Path::new(root).join(file);
     let brief =
         std::fs::read_to_string(&path).with_context(|| format!("reading `{}`", path.display()))?;
-    nonblank(&brief)?;
+    if brief.trim().is_empty() {
+        return Err(bad_request!("intent brief is empty"));
+    }
 
     Ok(Seam::Note(format!(
         "The operator's brief, `{file}` under `$SOURCE_DIR`, the one file of the bound \
@@ -37,9 +41,3 @@ fn note(root: &str) -> Result<Seam, Error> {
     )))
 }
 
-fn nonblank(brief: &str) -> Result<(), Error> {
-    if brief.trim().is_empty() {
-        return Err(bad_request!("intent brief is empty"));
-    }
-    Ok(())
-}

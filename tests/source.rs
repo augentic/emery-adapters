@@ -205,12 +205,14 @@ async fn documentation_large_directory() {
     partitioned(&turns, &[&joined, &v2, &["guide/intro.md", "guide/setup.md"]]);
 }
 
-// The engine's own output beside the brief is not a file of the tree, so the
-// tree is still one file.
+// The engine's own output and the dot entries an editor or `git` leaves
+// beside the brief are not files of the tree, so the tree is still one file.
 #[tokio::test]
 async fn intent() {
     let project = scratch();
     project.write("brief/intent.md", BRIEF);
+    project.write("brief/.gitkeep", "");
+    project.write(".DS_Store", "");
     project.write("spec.md", "# Spec");
     project.write("design.md", "# Design");
     project.write(".omnia/store.json", "{}");
