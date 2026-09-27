@@ -5,37 +5,41 @@ use std::path::Path;
 use anyhow::Context as _;
 use emery_sdk::{Error, Seam, SourceContent, SourceInput, bad_request};
 
-// Inline input is one `Whole` seam; workspace input must hold exactly one
-// file beside Emery's generated files, read into a `Note` seam. Either form
-// must hold non-whitespace text, and no model call is made. Refuses
-// `BadRequest` for an empty brief, a workspace of other than one file, or a
-// non-UTF-8 entry name, and `ServerError` when a read fails.
+// An inline brief is one `Whole` seam; the one file of a tree is read into a
+// `Note` seam. No model turn is spent.
 pub fn survey(input: &SourceInput) -> Result<Vec<Seam>, Error> {
     let seam = match &input.content {
         SourceContent::Value(value) => {
-            if value.trim().is_empty() {
-                return Err(bad_request!("intent brief is empty"));
-            }
+            nonblank(value)?;
             Seam::Whole
         }
-        SourceContent::Workspace(root) => {
-            let files = emery_sdk::workspace::list(root, |_| true)?;
-            let [file] = files.as_slice() else {
-                return Err(bad_request!("intent expects one file, found {}", files.len()));
-            };
-            let path = Path::new(root).join(file);
-            let intent = std::fs::read_to_string(&path)
-                .with_context(|| format!("reading `{}`", path.display()))?;
-            if intent.trim().is_empty() {
-                return Err(bad_request!("intent brief is empty"));
-            }
-            Seam::Note(format!(
-                "The bound seam is a one-file tree at `{root}`; the operator's intent string \
-                 is:\n\n{intent}\n\n\
-                 Nothing else is reachable; extract mines only this source."
-            ))
-        }
+        SourceContent::Workspace(root) => note(root)?,
     };
 
     Ok(vec![seam])
+}
+
+// The one file of the tree, read into the seam that carries it.
+fn note(root: &str) -> Result<Seam, Error> {
+    let files = emery_sdk::workspace::list(root, |entry| !entry.hidden())?;
+    let [file] = files.as_slice() else {
+        return Err(bad_request!("intent expects one file, found {}", files.len()));
+    };
+    let path = Path::new(root).join(file);
+    let brief =
+        std::fs::read_to_string(&path).with_context(|| format!("reading `{}`", path.display()))?;
+    nonblank(&brief)?;
+
+    Ok(Seam::Note(format!(
+        "The operator's brief, `{file}` under `$SOURCE_DIR`, the one file of the bound \
+         tree:\n\n{brief}\n\n\
+         Nothing else is reachable; extract mines only this source."
+    )))
+}
+
+fn nonblank(brief: &str) -> Result<(), Error> {
+    if brief.trim().is_empty() {
+        return Err(bad_request!("intent brief is empty"));
+    }
+    Ok(())
 }
