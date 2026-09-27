@@ -10,4 +10,3 @@
 [[source]]
 adapter = "../../target/wasm32-wasip2/release/typescript.wasm"
 path = "src/"
-# path = "r9k/" # local-only estate; r9k/ is gitignored, so a fresh clone runs src/

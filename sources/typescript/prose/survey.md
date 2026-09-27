@@ -5,7 +5,7 @@ This prompt runs once per bound `typescript` source, before anything is extracte
 ## Inputs
 
 - **`$SOURCE_DIR`** — read-only view of the bound source root, the whole tree. Read what declares the boundary: `package.json`, the bootstrap, routers, command registries, schedulers and consumers, public barrels.
-- **The module list** — every production module the caller kept, as `/`-separated paths relative to `$SOURCE_DIR`; past 200 modules, the top-level directories with their counts instead. Read the manifest and the bootstrap among them; do not glob or list the tree yourself.
+- **The module list** — every production module the caller kept, as `/`-separated paths relative to `$SOURCE_DIR`; past 200 modules, the root's own files and each top-level directory with its count instead. Read the manifest and the bootstrap among them; list a directory only when it stands for its modules, and never glob the tree yourself.
 - **An entry** — a `/`-separated path relative to `$SOURCE_DIR` to a production module: a `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, or `.cjs` file of the source's own. Tests (`*.test.*`, `*.spec.*`, `tests/`, `__tests__/`), declaration files (`*.d.ts`), dependencies (`node_modules/`, `vendor/`), build output (`dist/`, `build/`, `target/`), and dot entries are not modules and enter nothing; the caller checks every entry against the tree and refuses one named there, or at no file.
 
 Nothing outside the bound source is reachable; writes back into `$SOURCE_DIR` are denied.
@@ -83,7 +83,6 @@ Five surfaces, five extract calls. The handlers, the repositories, `src/lib/db.t
 | Condition | Action |
 | --------- | ------ |
 | The tree has one surface | Answer it alone; one extract call mines the source through it. |
-| The tree holds one production module | The caller never asks: it mines the tree whole without a survey turn. |
 | A router registers many routes | A route family per resource when its routes are one handler module's operations; a route of its own when it does one distinct thing or has its own handler. Each surface costs one call. |
 | The tree is a subtree of an app — routers without the bootstrap that mounts them — or modules with no manifest | Answer the surfaces the tree itself declares — a router's routes, a module's exports are its own boundary — and no more. |
 | The tree declares no boundary — no route, command, job, or export | Answer `surfaces: []`. The caller refuses the source; it does not mine what no caller reaches. |

@@ -14,22 +14,17 @@ const MARKERS: &[&str] = &["d", "test", "spec"];
 
 // Surveys workspace input by model: each surface becomes a note seam lent the
 // whole tree, so a module is mined only through the surfaces that reach it.
-// A tree of one production module cannot be cut, so it is one whole seam
-// with no survey turn spent. Entry modules must be production TypeScript or
-// JavaScript files; hidden entries, dependencies, build output, tests, and
-// declaration files are refused. Refuses `BadRequest` when the tree holds no
-// production module, exposes no surface, or no valid inventory arrives within
-// the model's rounds, `ServerError` when `docs` lacks `survey.md`, and
-// `BadGateway` when a model tool or transport fails.
+// An inline value, or a tree of one production module, cannot be cut and is
+// one whole seam with no survey turn spent.
 pub async fn survey<P: Model>(
     ctx: &Context<'_, P>, docs: &'static [Doc],
 ) -> Result<Vec<Seam>, Error> {
+    // a tree that cannot be cut
     let source = &ctx.input.name;
     let SourceContent::Workspace(root) = &ctx.input.content else {
         tracing::debug!(%source, "inline value; one whole seam");
         return Ok(vec![Seam::Whole]);
     };
-
     let modules = emery_sdk::workspace::list(root, keep)?;
     match modules.as_slice() {
         [] => {
@@ -39,14 +34,14 @@ pub async fn survey<P: Model>(
             ));
         }
         [only] => {
-            tracing::info!(%source, module = %only, "one production module; one whole seam");
+            tracing::debug!(%source, module = %only, "one production module; one whole seam");
             return Ok(vec![Seam::Whole]);
         }
         _ => {}
     }
 
+    // the survey turn
     tracing::info!(%source, %root, "identifying typescript surfaces");
-
     let surfaces = emery_sdk::survey::surfaces(ctx, docs, keep).await?;
     if surfaces.is_empty() {
         return Err(bad_request!(
@@ -55,9 +50,9 @@ pub async fn survey<P: Model>(
         ));
     }
 
+    // one note seam per surface
     let seams: Vec<_> = surfaces.iter().map(|surface| Seam::Note(note(root, surface))).collect();
     tracing::debug!(%source, seams = seams.len(), "note seams");
-
     Ok(seams)
 }
 
@@ -79,11 +74,9 @@ fn note(root: &str, surface: &Surface) -> String {
          surface reaches through the whole tree — its handler, the modules it imports, the \
          services and stores it calls, the types it takes and returns — and emit claims for the \
          behaviour a caller observes through this surface alone. What the tree does for another \
-         surface is that surface's call to claim, even in a module the two share. A start surface \
-         claims what starting the process does — the port, the connections, the registrations — \
-         and stops at each registration: what a registered route, job, or command does once reached \
-         is that surface's call. Anchor every `path` relative to `$SOURCE_DIR`. Nothing outside it \
-         is reachable; extract mines only this source.",
+         surface is that surface's call to claim, even in a module the two share. Anchor every \
+         `path` relative to `$SOURCE_DIR`. Nothing outside it is reachable; extract mines only \
+         this source.",
         name = surface.name,
         entry = surface.entry,
     )

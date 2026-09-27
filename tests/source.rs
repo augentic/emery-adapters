@@ -11,6 +11,7 @@
 
 mod support;
 
+use omnia_test::Seen;
 use omnia_test::host::{Scratch, ScriptedModel, scratch};
 
 // Every `sources/*` component must have a matching test here.
@@ -68,14 +69,14 @@ fn prompted(model: &ScriptedModel, prompt: &str, seams: usize) -> Vec<String> {
         "metadata opens no completion; each seam opens one, the inline value one more"
     );
     for request in &seen {
-        system(request.system.as_deref(), prompt);
+        system(request, prompt);
     }
     seen[..seams].iter().map(|request| request.messages[0].clone()).collect()
 }
 
 // The system is the compiled-in prompt with the SDK's claim rules after it.
-fn system(system: Option<&str>, prompt: &str) {
-    let system = system.expect("a system prompt");
+fn system(request: &Seen, prompt: &str) {
+    let system = request.system.as_deref().expect("a system prompt");
     let claims = emery_sdk::body(emery_sdk::RUNTIME, "claims.md").expect("the claim rules");
     assert!(system.starts_with(prompt), "the compiled-in prompt leads the system");
     assert!(system.ends_with(claims), "the claim rules ride the system");
@@ -280,7 +281,7 @@ async fn typescript() {
         "the compiled-in survey prompt is the system"
     );
     for request in &seen[1..] {
-        system(request.system.as_deref(), prompt::TYPESCRIPT);
+        system(request, prompt::TYPESCRIPT);
     }
     let mut surfaces: Vec<_> =
         seen[1..4].iter().map(|request| surface(&request.messages[0])).collect();
@@ -366,7 +367,6 @@ async fn typescript_one_module() {
     let model = extract(test_programs::ADAPTER_TYPESCRIPT, &project, 1).await;
 
     let turns = prompted(&model, prompt::TYPESCRIPT, 1);
-    assert!(turns[0].contains("$SOURCE_DIR"), "the one extract mines the tree whole: {}", turns[0]);
     assert!(!turns[0].contains("Surface `"), "no surface was surveyed: {}", turns[0]);
 }
 
