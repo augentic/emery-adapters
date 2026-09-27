@@ -10,8 +10,6 @@ Live `specify` journeys via [omnia-cursor](https://github.com/augentic/omnia-bac
 2. [cursor-sdk-bridge](https://github.com/cursor/sdk-bridge). See [below](#installing-cursor-sdk-bridge) for installation.
 3. `CURSOR_API_KEY`
 
-
-
 ## Build and run
 
 Run from the repository root: `emery` mounts the invocation directory as the project, and every path an `emery.toml` names must sit inside it.

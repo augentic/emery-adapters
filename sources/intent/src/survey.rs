@@ -5,19 +5,11 @@ use std::path::Path;
 use anyhow::Context as _;
 use emery_sdk::{Error, Seam, SourceContent, SourceInput, bad_request};
 
-/// Returns the validated brief as a single seam.
-///
-/// Inline input becomes [`Seam::Whole`]. Workspace input must contain exactly
-/// one regular file after Emery's generated files are excluded; that file is
-/// read into a [`Seam::Note`]. In either form, the brief must contain
-/// non-whitespace text. No model call is required.
-///
-/// # Errors
-///
-/// - Returns [`Error::BadRequest`] when the brief is empty, the workspace
-///   does not contain exactly one source file, or an entry name is not UTF-8.
-/// - Returns [`Error::ServerError`] when the workspace or brief file cannot
-///   be read.
+// Inline input is one `Whole` seam; workspace input must hold exactly one
+// file beside Emery's generated files, read into a `Note` seam. Either form
+// must hold non-whitespace text, and no model call is made. Refuses
+// `BadRequest` for an empty brief, a workspace of other than one file, or a
+// non-UTF-8 entry name, and `ServerError` when a read fails.
 pub fn survey(input: &SourceInput) -> Result<Vec<Seam>, Error> {
     let seam = match &input.content {
         SourceContent::Value(value) => {

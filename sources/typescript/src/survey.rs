@@ -12,23 +12,13 @@ const SKIP_DIRS: &[&str] =
 const EXTENSIONS: &[&str] = &["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"];
 const MARKERS: &[&str] = &["d", "test", "spec"];
 
-/// Returns one mining seam for each surface exposed by the source.
-///
-/// Inline input produces one [`Seam::Whole`] without querying the model. For
-/// workspace input, the model identifies each surface and its entry module.
-/// Entry modules must be production TypeScript or JavaScript files; hidden
-/// entries, dependencies, build output, tests, and declaration files are
-/// rejected.
-///
-/// Each surface receives the full source tree so extraction can follow its
-/// imports. A module is mined only through the surfaces that reach it.
-///
-/// # Errors
-///
-/// - Returns [`Error::BadRequest`] when no surface is found or the model
-///   cannot produce a valid inventory within its available rounds.
-/// - Returns [`Error::ServerError`] when `docs` does not contain `survey.md`.
-/// - Returns [`Error::BadGateway`] when a model tool or transport fails.
+// Surveys workspace input by model: each surface becomes a note seam lent the
+// whole tree, so a module is mined only through the surfaces that reach it.
+// Entry modules must be production TypeScript or JavaScript files; hidden
+// entries, dependencies, build output, tests, and declaration files are
+// refused. Refuses `BadRequest` when the tree exposes no surface or no valid
+// inventory arrives within the model's rounds, `ServerError` when `docs`
+// lacks `survey.md`, and `BadGateway` when a model tool or transport fails.
 pub async fn survey<P: Model>(
     ctx: &Context<'_, P>, docs: &'static [Doc],
 ) -> Result<Vec<Seam>, Error> {
@@ -63,18 +53,18 @@ fn keep(entry: Entry<'_>) -> bool {
 }
 
 // The root is lent whole, so the call can follow the surface wherever it reaches.
+// The first line names the surface, so it is the seam's label in the run's log.
 fn note(root: &str, surface: &Surface) -> String {
     format!(
-        "`$SOURCE_DIR` is the read-only view at `{root}` — the TypeScript / JavaScript source \
-         tree. This call mines one surface the source exposes:\n\n\
-         - surface: {name}\n\
-         - entry: `{entry}`\n\n\
-         Start at the entry and follow what the surface reaches through the whole tree — its \
-         handler, the modules it imports, the services and stores it calls, the types it takes \
-         and returns — and emit claims for the behaviour a caller observes through this surface \
-         alone. What the tree does for another surface is that surface's call to claim, even in \
-         a module the two share. Anchor every `path` relative to `$SOURCE_DIR`. Nothing outside \
-         it is reachable; extract mines only this source.",
+        "Surface `{name}` — entry `{entry}`.\n\n\
+         `$SOURCE_DIR` is the read-only view at `{root}` — the TypeScript / JavaScript source \
+         tree. This call mines that one surface alone. Start at its entry and follow what the \
+         surface reaches through the whole tree — its handler, the modules it imports, the \
+         services and stores it calls, the types it takes and returns — and emit claims for the \
+         behaviour a caller observes through this surface alone. What the tree does for another \
+         surface is that surface's call to claim, even in a module the two share. Anchor every \
+         `path` relative to `$SOURCE_DIR`. Nothing outside it is reachable; extract mines only \
+         this source.",
         name = surface.name,
         entry = surface.entry,
     )

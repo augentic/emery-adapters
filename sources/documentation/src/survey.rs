@@ -10,27 +10,15 @@ const MIN_SIZE: usize = 2;
 // one turn.
 const MAX_SIZE: usize = 16;
 
-/// Returns the groups of documentation to mine.
-///
-/// Inline input is one [`Seam::Whole`]. Workspace input is grouped by
-/// top-level directory, leaving out hidden entries and Emery's generated
-/// files:
-///
-/// - A directory of fewer than two files joins the files directly beneath
-///   the root.
-/// - A directory of more than sixteen files is cut once more, by its
-///   subdirectories. Each subdirectory of two or more files is a group of its
-///   own; the directory's remaining files form one more, or join the first
-///   subdirectory's group when fewer than two remain. A directory with no
-///   such subdirectory stays one group whatever its size.
-///
-/// Each group becomes a [`Seam::Files`] when at least two remain; otherwise
-/// the workspace is one [`Seam::Whole`]. No model call is made.
-///
-/// # Errors
-///
-/// - Returns [`Error::BadRequest`] when an entry name is not UTF-8.
-/// - Returns [`Error::ServerError`] when a directory cannot be read.
+// Groups workspace input by top-level directory, hidden entries aside. A
+// directory of fewer than two files joins the root's; one of more than
+// sixteen is cut once more by subdirectory, each subdirectory of two or more
+// files its own group and the directory's leftovers one beside them, or
+// folded into the first group when fewer than two remain. Each group becomes
+// a `Files` seam, or the workspace one `Whole` seam when fewer than two
+// remain; inline input is always one `Whole` seam. No model call is made.
+// Refuses `BadRequest` for a non-UTF-8 entry name and `ServerError` when a
+// directory cannot be read.
 pub fn survey(input: &SourceInput) -> Result<Vec<Seam>, Error> {
     let SourceContent::Workspace(root) = &input.content else {
         return Ok(vec![Seam::Whole]);

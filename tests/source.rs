@@ -88,17 +88,14 @@ fn partitioned(turns: &[String], groups: &[&[&str]]) {
     }
 }
 
-// The two lines are the typescript adapter's own, so they are what the call is told.
+// The line is the typescript adapter's own, so it is what the call is told.
 fn surface(turn: &str) -> (&str, &str) {
-    let name = turn
-        .lines()
-        .find_map(|line| line.strip_prefix("- surface: "))
-        .expect("the turn names its surface");
-    let entry = turn
-        .lines()
-        .find_map(|line| line.strip_prefix("- entry: `")?.strip_suffix('`'))
-        .expect("the turn names its entry");
-    (name, entry)
+    turn.lines()
+        .find_map(|line| {
+            let rest = line.strip_prefix("Surface `")?.strip_suffix("`.")?;
+            rest.split_once("` — entry `")
+        })
+        .expect("the turn names its surface and entry")
 }
 
 // A tree of one directory cuts no finer than itself.
