@@ -12,16 +12,16 @@ Nothing outside the bound source is reachable; writes back into `$SOURCE_DIR` ar
 
 ## References
 
-Load on demand when a surface needs deeper analysis. Each carries TypeScript-specific depth and names the claims it feeds.
+Each reference carries TypeScript-specific depth and names the claims it feeds. Read one when its trigger holds for the seam in hand, and not otherwise: a reference read for a construct the seam lacks costs a turn and teaches nothing, and this prompt with `claims.md` already says what every claim carries.
 
-- [`references/component-structure.md`](references/component-structure.md) — the manifest and `tsconfig.json`, where each kind of surface enters, the entry layer, async boundaries.
-- [`references/business-logic.md`](references/business-logic.md) — what a `requirement` captures from a handler: validation, branches, errors, side effects, sequencing, timing, configuration, data access.
-- [`references/types.md`](references/types.md) — `type` claims: declarations verbatim, nesting, optionality, unions, wire names and converters, what a response actually is.
-- [`references/external-api.md`](references/external-api.md) — outbound HTTP as `call` and `requirement` claims: URL as constructed, headers, bodies, response as deserialised, auth, retries, timeouts.
-- [`references/services.md`](references/services.md) — stores, caches, brokers, and identity providers by kind, and publications: topic, count, delay placement, payload, metadata.
-- [`references/observability.md`](references/observability.md) — metric, trace, and log emissions as claims.
-- [`references/verification.md`](references/verification.md) — the checklist before answering.
-- [`references/examples/README.md`](references/examples/README.md) — worked examples with their Evidence: outbound HTTP, branching and caching, parallel execution and publishing.
+- [`references/component-structure.md`](references/component-structure.md) — read when the message names a surface in a tree of several modules: the manifest and `tsconfig.json`, where each kind of surface enters, the entry layer, async boundaries. A tree of one module needs none of it.
+- [`references/business-logic.md`](references/business-logic.md) — read before the first `requirement` of a handler with branches, errors, side effects, timing, or configuration: what a `requirement` captures, and what commonly goes missing.
+- [`references/types.md`](references/types.md) — read when the seam declares a type with nesting, optionality, unions, decorators, or converters: `type` claims, declarations verbatim, wire names, what a response actually is. A flat interface needs only the kind table below.
+- [`references/external-api.md`](references/external-api.md) — read only when the seam performs outbound HTTP (`fetch`, `axios`, an HTTP client): URL as constructed, headers, bodies, response as deserialised, auth, retries, timeouts.
+- [`references/services.md`](references/services.md) — read only when the seam reaches a store, cache, broker, or identity provider through a client: each by kind, and publications — topic, count, delay placement, payload, metadata. An in-memory `Map` is not one.
+- [`references/observability.md`](references/observability.md) — read only when the seam emits a metric, a trace span, or a structured log.
+- [`references/verification.md`](references/verification.md) — read once, before answering: the checklist.
+- [`references/examples/README.md`](references/examples/README.md) — read only when a construct's claim shape is still unclear after the references above; its table names the one example nearest the surface, and one is enough.
 
 ## Claim kinds
 
@@ -38,7 +38,7 @@ This adapter emits from the closed enum:
 
 `id` is **required** on `requirement` claims and follows the dotted-kebab grammar in claims.md (`session.timeout`). Derive ids from the domain concept — never from file paths or positions — so a documentation source describing the same behaviour converges on the same id and the engine can reconcile any disagreement. Lead each id with the domain noun of the surface the behaviour belongs to — the one the message names, or, mined whole, the one the module exposes it through (`orders.…`, `user-registration.…`, `migrate.…`): the other surfaces of the estate are mined by other calls and joined with this one, and two calls that name one requirement with reworded statements manufacture a conflict, so claim a behaviour under the surface whose caller observes it. A module several surfaces reach — a repository, a validator, a client — is claimed for what this surface does with it, under this surface's noun, never for itself. `id` is optional on `excerpt` / `type` / `call`; you MAY carry it when the claim backs a specific requirement.
 
-Code states behaviour, not acceptance: emit `criterion` claims only when the source itself encodes an explicit acceptance boundary (a documented threshold constant, a schema constraint). Requirements without criteria surface as `[unknown]` acceptance gaps in the spec — that is honest output, not a failure to fix by inventing criteria.
+Code states behaviour, not acceptance. A `criterion` is an acceptance boundary the source spells as a value of its own — a named threshold constant, a schema or validator definition, a validation pattern such as a regex literal — one a documentation source could state verbatim; its id extends its requirement's. An inline comparison in a guard (`items.length === 0`, `quantity < 1`, `state === "shipped"`) is behaviour: state it, with its value, in the `requirement` it belongs to and emit no criterion for it. Decide once per boundary by that rule and do not revisit it. Requirements without criteria surface as `[unknown]` acceptance gaps in the spec — that is honest output, not a failure to fix by inventing criteria.
 
 ## Anchors and excerpts
 

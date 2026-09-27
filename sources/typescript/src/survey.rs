@@ -52,7 +52,7 @@ pub async fn survey<P: Model>(
     }
 
     // one note seam per surface
-    let seams: Vec<_> = surfaces.iter().map(|surface| Seam::Note(note(root, surface))).collect();
+    let seams: Vec<_> = surfaces.iter().map(|surface| Seam::Note(note(surface))).collect();
     tracing::debug!(%source, seams = seams.len(), "note seams");
     Ok(seams)
 }
@@ -65,19 +65,19 @@ fn keep(entry: Entry<'_>) -> bool {
         }
 }
 
-// The root is lent whole, so the call can follow the surface wherever it reaches.
-// The first line names the surface, so it is the seam's label in the run's log.
-fn note(root: &str, surface: &Surface) -> String {
+// The SDK's brief describes the lent tree, so the note says only what to
+// mine of it. The first line names the surface, so it is the seam's label in
+// the run's log.
+fn note(surface: &Surface) -> String {
     format!(
         "Surface `{name}` — entry `{entry}`.\n\n\
-         `$SOURCE_DIR` is the read-only view at `{root}` — the TypeScript / JavaScript source \
-         tree. This call mines that one surface alone. Start at its entry and follow what the \
-         surface reaches through the whole tree — its handler, the modules it imports, the \
-         services and stores it calls, the types it takes and returns — and emit claims for the \
-         behaviour a caller observes through this surface alone. What the tree does for another \
-         surface is that surface's call to claim, even in a module the two share. Anchor every \
-         `path` relative to `$SOURCE_DIR`. Nothing outside it is reachable; extract mines only \
-         this source.",
+         This call mines that one surface alone. Start at its entry and follow what the surface \
+         reaches through the whole TypeScript / JavaScript tree under `$SOURCE_DIR` — its \
+         handler, the modules it imports, the services and stores it calls, the types it takes \
+         and returns — and emit claims for the behaviour a caller observes through this surface \
+         alone. What the tree does for another surface is that surface's call to claim, even in \
+         a module the two share. Anchor every `path` relative to `$SOURCE_DIR`; extract mines \
+         only this source.",
         name = surface.name,
         entry = surface.entry,
     )

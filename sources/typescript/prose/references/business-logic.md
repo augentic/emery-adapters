@@ -27,4 +27,4 @@ A repository, validator, or client that several surfaces reach is claimed for wh
 - One sentence, present tense, about the system as the caller sees it: `Registration rejects an email that is not RFC-5322 valid with a 400 response.`
 - Precise values, as the source has them: the status code, the limit, the duration, the key.
 - Nothing the code does not exhibit. A handler that does not enforce uniqueness has no uniqueness requirement; the engine renders the gap, you do not fill it.
-- A `criterion` only for an explicit boundary the source encodes — a threshold constant, a schema constraint, a validation pattern — with an id that extends its requirement's.
+- A `criterion` only for an explicit boundary the source spells as a value of its own — a named threshold constant, a schema or validator definition, a validation pattern — with an id that extends its requirement's; never for an inline comparison in a guard, which the requirement states.
