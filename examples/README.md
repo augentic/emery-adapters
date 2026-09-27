@@ -44,9 +44,9 @@ A run is a few model completions with long silences between log lines. The `in p
 
 The typescript example is three completions and no survey turn — its `src/` is one production module, mined whole. Two runs under `auto` give the shape and the spread:
 
-- `evidence` (one seam) — 2.5–3.5 minutes, of which the model composing is 95%, tool calls a few seconds, and the bridge opening about 2 s. Context 140–200 K tokens, about 40% of it cache reads; output 17–22 K tokens, over 90% of it reasoning. Eight to eleven tool calls — one `glob`, one `read` of the module, `list_docs`, then `read_doc`s — all in the first half-minute, then one reasoning block of two minutes before the answer.
-- `spec-draft` — 40–50 s; 9 K context, 4–5 K output of which 80–90% is reasoning; no tool calls.
-- `design-draft` — 1–2 minutes; 8–17 K context, 6–12 K output of which 85–90% is reasoning; no tool calls.
+- `evidence` (one seam) — 155–195 s, of which the model composing is about 95%, tool calls a few seconds, and the bridge opening about 2 s. Context 140–200 K tokens, about 40% of it cache reads; output 17–22 K tokens, about 90% of it reasoning. Eight to eleven tool calls — one `glob`, one `read` of the module, `list_docs`, then `read_doc`s — all in the first half-minute, then one reasoning block of two minutes before the answer.
+- `spec-draft` — 40–50 s; 10–12 K context, 4–5 K output of which 80–90% is reasoning; no tool calls.
+- `design-draft` — 60–110 s; 10–20 K context, 6–12 K output of which about 90% is reasoning; no tool calls.
 
 What holds run to run is the shape — one completion per seam, no shell tool, no `read_doc` for the claim rules, which ride the system prompt, and none for `survey.md`, which `list_docs` never offers — and that reasoning dominates both the wall time and the bill. What does not hold is the size: the two runs differed by a third in the evidence completion's wall time and reasoning over identical input, so a change to a prompt is not measured by one run each side. To compare, pin `CURSOR_MODEL` and take several runs per side before reading a difference into the numbers.
 
