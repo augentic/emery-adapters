@@ -2,8 +2,7 @@
 
 use std::path::Path;
 
-use anyhow::Context as _;
-use emery_sdk::{Error, Seam, SourceContent, SourceInput, bad_request};
+use emery_sdk::{Error, Seam, SourceContent, SourceInput, bad_request, server_error};
 
 // An inline brief is one `Whole` seam; the one file of a tree is read into a
 // `Note` seam. No model turn is spent.
@@ -29,8 +28,8 @@ fn to_note(root: &str) -> Result<Seam, Error> {
     };
 
     let path = Path::new(root).join(file);
-    let brief =
-        std::fs::read_to_string(&path).with_context(|| format!("reading `{}`", path.display()))?;
+    let brief = std::fs::read_to_string(&path)
+        .map_err(|err| server_error!("reading `{}`: {err}", path.display()))?;
     if brief.trim().is_empty() {
         return Err(bad_request!("intent brief is empty"));
     }

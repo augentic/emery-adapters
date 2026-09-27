@@ -15,5 +15,4 @@ crate-type = ["cdylib", "rlib"]
 workspace = true
 
 [dependencies]
-anyhow.workspace = true
 emery-sdk.workspace = true

@@ -32,20 +32,18 @@ This adapter emits from the closed enum:
 | `requirement` | `statement` | A behavioural fact the code exhibits, stated as one present-tense sentence about the system. These are the claims deterministic reconciliation joins against documentation and intent. |
 | `criterion` | `criterion` (free-form) | An acceptance boundary the source spells as a value of its own, covering the requirement whose id it extends — decided by the one rule below. |
 | `excerpt` | `excerpt` (free-form) | A behavioural code span backing a requirement: handler bodies, validation logic, error paths. |
-| `type` | `signature` (free-form), `name` | A declared interface, type alias, class declaration, or DTO whose shape synthesis will need, named by its declared identifier in `name` (`User`) — the key the design block renders it under. |
+| `type` | `signature` (free-form), `name` | A declared interface, type alias, class declaration, or DTO whose shape synthesis will need, named by its declared identifier in `name` (`User`). |
 | `call` | `callee` (free-form) | An observed cross-module call that contributes to behaviour (the call is the wire). |
 
-**`requirement` claims are the reconciliation currency.** Only `kind: requirement` claims form the spec's requirements; `excerpt` / `type` / `call` claims reach synthesis as supporting context but can never agree, diverge, or conflict with another source. Every behavioural fact worth a spec block — a timeout value, a validation rule, an error response, a side effect — must be lifted into a `requirement` claim with a `statement`, anchored by its `path` and backed by detail claims. The gate is fail-closed ([claims.md](claims.md)): a `requirement` claim without a `statement` field fails the whole run closed (typed `bad_request`).
+**Lift every behavioural fact into a `requirement`.** Only `requirement` claims reach reconciliation ([reconciliation.md](reconciliation.md)); `excerpt` / `type` / `call` claims reach synthesis as supporting context. Every behavioural fact worth a spec block — a timeout value, a validation rule, an error response, a side effect — is a `requirement` claim with a `statement`, anchored by its `path` and backed by detail claims.
 
-`id` is **required** on `requirement` and `criterion` claims and follows the dotted-kebab grammar in claims.md (`session.timeout`). Derive ids from the domain concept — never from file paths or positions — so a documentation source describing the same behaviour converges on the same id and the engine can reconcile any disagreement. Lead each id with the domain noun of the surface the behaviour belongs to — the one the message names, or, mined whole, the one the module exposes it through (`orders.…`, `user-registration.…`, `migrate.…`): the other surfaces of the estate are mined by other calls and joined with this one, and two calls that name one requirement with reworded statements manufacture a conflict, so claim a behaviour under the surface whose caller observes it. A module several surfaces reach — a repository, a validator, a client — is claimed for what this surface does with it, under this surface's noun, never for itself. `id` is optional on `excerpt` / `type` / `call`; you MAY carry it when the claim backs a specific requirement.
+Ids follow [claims.md](claims.md). Lead each id with the domain noun of the surface the behaviour belongs to — the one the message names, or, mined whole, the one the module exposes it through (`orders.…`, `user-registration.…`, `migrate.…`): the other surfaces of the estate are mined by other calls and joined with this one, and two calls that name one requirement with reworded statements manufacture a conflict, so claim a behaviour under the surface whose caller observes it. A module several surfaces reach — a repository, a validator, a client — is claimed for what this surface does with it, under this surface's noun, never for itself.
 
 Code states behaviour, not acceptance. A `criterion` is an acceptance boundary the source spells as a value of its own — a named threshold constant, a schema or validator definition, a validation pattern such as a regex literal — one a documentation source could state verbatim; its id extends its requirement's. An inline comparison in a guard (`items.length === 0`, `quantity < 1`, `state === "shipped"`) is behaviour: state it, with its value, in the `requirement` it belongs to and emit no criterion for it. Decide once per boundary by that rule and do not revisit it. Requirements without criteria surface as `[unknown]` acceptance gaps in the spec — that is honest output, not a failure to fix by inventing criteria.
 
 ## Anchors and excerpts
 
-Every claim from the tree carries a `path` anchor in the grammar of [claims.md](claims.md) — `<path>#L<n>` or `<path>#L<start>-L<end>`, relative under `$SOURCE_DIR`, not under a skip root. The anchor IS the citation; the body field carries short context.
-
-Rules for the body fields:
+Every claim from the tree carries a `path` anchor in the grammar of [claims.md](claims.md). Rules for the body fields:
 
 - **No raw file dumps.** Anchors point at the source; the JSON must not paraphrase or restate large spans. Keep `excerpt:` to a paragraph or so of focused context (the validation rule, the error response, the side effect) — never tens of lines of `"\n"`-separated source.
 - **One claim per concept.** Two overlapping excerpts of the same handler are noise; pick the smallest range that captures the behaviour.
@@ -74,13 +72,13 @@ Resulting Evidence body:
 }
 ```
 
-Two requirements for the spec, one criterion covering the first, and three detail claims backing them — the handler's and the repository's behaviour, claimed for what registering a user does with them. The regex is the one boundary the handler spells as a value of its own, so it is the one criterion; the 400 and the 201 are values inside the statements. What `src/server.ts` mounts besides `POST /users` is other surfaces' calls to claim. The document's source identity is stamped by the engine from the source — it is not written in-document.
+Two requirements for the spec, one criterion covering the first, and three detail claims backing them — the handler's and the repository's behaviour, claimed for what registering a user does with them. The regex is the one boundary the handler spells as a value of its own, so it is the one criterion; the 400 and the 201 are values inside the statements. What `src/server.ts` mounts besides `POST /users` is other surfaces' calls to claim.
 
-**Cover what the estate actually does.** A `POST /orders` handler that writes an orders store must carry that write as a `call` claim and its behaviour as a `requirement`; a handler that invokes an external service must carry that call site. Downstream correlation evidences invocation, read/write, and ownership relationships from these structured claims — do not bury them in `excerpt` prose, and do not write a second behavioural spec in prose instead of emitting the structured claims.
+**Cover what the estate actually does.** A `POST /orders` handler that writes an orders store carries that write as a `call` claim and its behaviour as a `requirement`; a handler that invokes an external service carries that call site. Each is a structured claim, never a line buried in `excerpt` prose.
 
 ## Path rules
 
-Relative paths only, no `..`, no leading `/`, never under `node_modules`, `vendor`, `target`, `.venv`, `dist`, `build`, no `*.d.ts` files, and never in the engine's own files — `spec.md`, `design.md`, `.omnia/`, the [skip roots](claims.md#skip-roots) every adapter shares. A symlink inside `$SOURCE_DIR` pointing outside is denied at canonicalization by the host — a typed error, never silent narrowing.
+Anchors follow [claims.md](claims.md): relative under `$SOURCE_DIR`, never under the [skip roots](claims.md#skip-roots) every adapter shares, and never under this adapter's own — `node_modules`, `vendor`, `target`, `.venv`, `dist`, `build` — or in a `*.d.ts` file.
 
 ## Anti-patterns
 
@@ -99,6 +97,4 @@ Relative paths only, no `..`, no leading `/`, never under `node_modules`, `vendo
 | Condition | Action |
 | --------- | ------ |
 | The seam reaches no in-scope production source — a handler that is a stub, an export of types alone | Return `claims: []`; the engine preserves the gap rather than guessing. |
-| Read denied outside `$SOURCE_DIR` | The host returns a typed path-denied error; no Evidence is written. |
 | Production source uses an out-of-scope framework only | Emit any in-scope claims; the gap surfaces as `[unknown]` requirements in the spec. |
-| The answer fails the claim gate (id grammar, or a claim missing its required field such as a `requirement`'s `statement`) | The caller rejects it and asks for a corrected answer with the findings; correct the named claims. |

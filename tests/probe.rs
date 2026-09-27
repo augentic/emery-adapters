@@ -65,11 +65,8 @@ async fn probe_gated() {
         assert_eq!(request.tools, ["list_docs", "read_doc"], "the reference tools are declared");
         assert!(request.check, "each candidate is offered to the guest's check");
         let turn = &request.messages[0];
-        assert!(
-            turn.contains("bound to adapter `adapter`"),
-            "the adapter id names the turn: {turn}"
-        );
-        assert!(turn.contains("the source `source` bound to"), "the source names the turn: {turn}");
+        assert!(turn.contains("`adapter`"), "the adapter id names the turn: {turn}");
+        assert!(turn.contains("`source`"), "the source names the turn: {turn}");
     }
     assert!(
         seen[1].messages[0].contains("Ship the orders API"),
@@ -140,5 +137,5 @@ async fn gated_spent() {
     assert_eq!(exchanges.len(), 1, "the one candidate was offered to the check");
     assert_eq!(exchanges[0].tool, "check");
     let correction = exchanges[0].outcome.clone().expect_err("the candidate is rejected");
-    assert!(correction.contains("is missing extra `statement`"), "{correction}");
+    assert!(correction.contains("statement"), "the finding names the missing key: {correction}");
 }

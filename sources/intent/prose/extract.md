@@ -17,12 +17,12 @@ Nothing outside the bound seam is reachable; extract works only from this value.
 | `requirement` | `statement` | One per distinct behavioural directive the brief states about the system. |
 | `criterion` | `criterion` | Only when the brief itself states an acceptance criterion. |
 
-The verbatim `intent` claim preserves the operator's words for the reviewer. The `requirement` claims are what deterministic reconciliation joins against other sources: only `requirement` claims form the spec's requirements, so a directive left solely inside the `intent` echo can never override a documentation or code claim — the authority precedence acts through matching `requirement` ids.
+The verbatim `intent` claim preserves the operator's words for the reviewer. A directive left solely inside it never reaches reconciliation, which joins `requirement` claims alone ([reconciliation.md](reconciliation.md)), so every directive the brief states is also its own `requirement`.
 
 ## `id` derivation
 
 - The `intent` claim's `id` is the source name, keeping the document deterministic and idempotent — re-running the same `(name, value)` pair yields a byte-identical Evidence document.
-- `requirement` and `criterion` ids follow [claims.md](claims.md): dotted-kebab, derived from the domain concept the directive governs (`session.timeout`, `search.filter`), never positional. When the brief overrides something the docs or code also describe, converging on the same id is what lets intent win the group.
+- `requirement` and `criterion` ids follow [claims.md](claims.md), led by the domain concept the directive governs (`session.timeout`, `search.filter`). When the brief overrides something the docs or code also describe, converging on the same id is what lets intent win the group.
 
 ## Output contract
 
@@ -42,7 +42,6 @@ Rules:
 - Exactly one `kind: intent` claim, first, carrying the brief verbatim in `statement` — no summarising, no splitting, no grammatical cleanup. The reviewer must see exactly what the operator wrote.
 - One `requirement` claim per distinct behavioural directive, in brief order. Quote the operator's wording as one present-tense sentence; do not merge directives or invent ones the brief does not state. A brief that is pure context with no directive yields the `intent` echo claim alone.
 - Do not emit a `path:` on any claim. The intent source has no filesystem locus.
-- Operators who want to express independent briefs supply more than one intent string, each its own source.
 
 ## Worked example
 
@@ -62,8 +61,3 @@ Output:
   ]
 }
 ```
-
-## Notes
-
-- Empty `claims: []` is schema-valid for sources with nothing to say, but the intent adapter is never legitimately empty — the source exists because the operator supplied a brief. Treat an empty value as an extract failure, never an empty success.
-- The gate is fail-closed ([claims.md](claims.md)): a `requirement` claim without a `statement` field fails the whole run closed (typed `bad_request`).

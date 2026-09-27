@@ -19,22 +19,17 @@ pub async fn survey<P: Model>(
 
     // inline brief instead of a path — nothing to list or survey
     let SourceContent::Workspace(workspace) = &ctx.input.content else {
-        tracing::debug!(%source, "inline value; one whole seam");
         return Ok(vec![Seam::Whole]);
     };
 
     // count modules discovered
     match emery_sdk::workspace::list(workspace, include)?.len() {
-        1 => {
-            tracing::debug!(%source, "one module found");
-            return Ok(vec![Seam::Whole]);
-        }
+        1 => return Ok(vec![Seam::Whole]),
         0 => return Err(bad_request!("`{source}` has no public modules.")),
         _ => {}
     }
 
     // survey the workspace
-    tracing::info!(%source, %workspace, "identifying typescript surfaces");
     let surfaces = emery_sdk::survey::surfaces(ctx, docs, include).await?;
     if surfaces.is_empty() {
         return Err(bad_request!(
@@ -42,11 +37,7 @@ pub async fn survey<P: Model>(
         ));
     }
 
-    // create note seams for each surface
-    let seams: Vec<_> = surfaces.iter().map(|surface| Seam::Note(mine_note(surface))).collect();
-    tracing::debug!(%source, seams = seams.len(), "note seams");
-
-    Ok(seams)
+    Ok(surfaces.iter().map(|surface| Seam::Note(mine_note(surface))).collect())
 }
 
 const SKIP_DIRS: &[&str] =

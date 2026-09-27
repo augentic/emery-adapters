@@ -74,12 +74,11 @@ fn prompted(model: &ScriptedModel, prompt: &str, seams: usize) -> Vec<String> {
     seen[..seams].iter().map(|request| request.messages[0].clone()).collect()
 }
 
-// The system is the compiled-in prompt with the SDK's claim rules after it.
+// What the SDK appends after the prompt is the SDK's fact, asserted over the
+// `gated` probe.
 fn system(request: &Seen, prompt: &str) {
     let system = request.system.as_deref().expect("a system prompt");
-    let claims = emery_sdk::body(emery_sdk::RUNTIME, "claims.md").expect("the claim rules");
     assert!(system.starts_with(prompt), "the compiled-in prompt leads the system");
-    assert!(system.ends_with(claims), "the claim rules ride the system");
 }
 
 // Every group appears together in exactly one turn.

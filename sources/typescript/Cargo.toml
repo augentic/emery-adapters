@@ -17,4 +17,3 @@ workspace = true
 
 [dependencies]
 emery-sdk.workspace = true
-tracing.workspace = true
