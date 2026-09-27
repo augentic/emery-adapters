@@ -11,6 +11,7 @@
 
 mod support;
 
+use omnia_test::Seen;
 use omnia_test::host::{Scratch, ScriptedModel, scratch};
 
 // Every `sources/*` component must have a matching test here.
@@ -68,9 +69,17 @@ fn prompted(model: &ScriptedModel, prompt: &str, seams: usize) -> Vec<String> {
         "metadata opens no completion; each seam opens one, the inline value one more"
     );
     for request in &seen {
-        assert_eq!(request.system.as_deref(), Some(prompt), "the compiled-in prompt is the system");
+        system(request, prompt);
     }
     seen[..seams].iter().map(|request| request.messages[0].clone()).collect()
+}
+
+// The system is the compiled-in prompt with the SDK's claim rules after it.
+fn system(request: &Seen, prompt: &str) {
+    let system = request.system.as_deref().expect("a system prompt");
+    let claims = emery_sdk::body(emery_sdk::RUNTIME, "claims.md").expect("the claim rules");
+    assert!(system.starts_with(prompt), "the compiled-in prompt leads the system");
+    assert!(system.ends_with(claims), "the claim rules ride the system");
 }
 
 // Every group appears together in exactly one turn.
@@ -272,11 +281,7 @@ async fn typescript() {
         "the compiled-in survey prompt is the system"
     );
     for request in &seen[1..] {
-        assert_eq!(
-            request.system.as_deref(),
-            Some(prompt::TYPESCRIPT),
-            "the compiled-in prompt is the system"
-        );
+        system(request, prompt::TYPESCRIPT);
     }
     let mut surfaces: Vec<_> =
         seen[1..4].iter().map(|request| surface(&request.messages[0])).collect();
@@ -338,6 +343,51 @@ async fn typescript_non_production() {
     }
     assert_eq!(exchanges[1].outcome, Ok(String::new()), "the production module is accepted");
     assert_eq!(surface(&seen[2].messages[0]), ("POST /orders", "routes/orders.ts"));
+}
+
+// A tree of one production module cannot be cut, so no survey turn is spent
+// and the one extract mines the tree whole.
+#[tokio::test]
+async fn typescript_one_module() {
+    let project = scratch();
+    tree(
+        &project,
+        &[
+            "src/orders.ts",
+            "src/orders.test.ts",
+            "src/types.d.ts",
+            "dist/bundle.js",
+            "node_modules/left-pad/index.js",
+            "tests/orders.e2e.ts",
+            ".git/HEAD",
+            "README.md",
+        ],
+    );
+
+    let model = extract(test_programs::ADAPTER_TYPESCRIPT, &project, 1).await;
+
+    let turns = prompted(&model, prompt::TYPESCRIPT, 1);
+    assert!(!turns[0].contains("Surface `"), "no surface was surveyed: {}", turns[0]);
+}
+
+// A tree with no production module is refused before the model is reached.
+#[tokio::test]
+async fn typescript_no_module() {
+    let project = scratch();
+    tree(
+        &project,
+        &[
+            "src/orders.test.ts",
+            "src/types.d.ts",
+            "dist/bundle.js",
+            "node_modules/left-pad/index.js",
+            "README.md",
+        ],
+    );
+
+    let model =
+        refused(test_programs::ADAPTER_TYPESCRIPT, &project, None, ScriptedModel::default()).await;
+    assert!(model.seen().is_empty(), "no turn is spent on a tree with no module");
 }
 
 // Mining a tree no caller reaches would raise what no caller observes into

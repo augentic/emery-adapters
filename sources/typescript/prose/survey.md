@@ -5,6 +5,7 @@ This prompt runs once per bound `typescript` source, before anything is extracte
 ## Inputs
 
 - **`$SOURCE_DIR`** — read-only view of the bound source root, the whole tree. Read what declares the boundary: `package.json`, the bootstrap, routers, command registries, schedulers and consumers, public barrels.
+- **The module list** — every production module the caller kept, as `/`-separated paths relative to `$SOURCE_DIR`; past 200 modules, the root's own files and each top-level directory with its count instead. Read the manifest and the bootstrap among them; list a directory only when it stands for its modules, and never glob the tree yourself.
 - **An entry** — a `/`-separated path relative to `$SOURCE_DIR` to a production module: a `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, or `.cjs` file of the source's own. Tests (`*.test.*`, `*.spec.*`, `tests/`, `__tests__/`), declaration files (`*.d.ts`), dependencies (`node_modules/`, `vendor/`), build output (`dist/`, `build/`, `target/`), and dot entries are not modules and enter nothing; the caller checks every entry against the tree and refuses one named there, or at no file.
 
 Nothing outside the bound source is reachable; writes back into `$SOURCE_DIR` are denied.
@@ -20,7 +21,7 @@ A surface is one thing the source does for a caller outside it, reached at a bou
 
 A surface's **entry** is the production module where the caller's request first meets the source's own code: the module that registers the route and holds or names its handler, the command's module, the consumer's module, the export path's target. Several surfaces may enter at one module — a router registering four routes is four surfaces at one entry, or one route family when the routes are one resource's operations over one handler module. A module no surface enters — a service, a repository, a mapper, a logger, a config loader — is no surface: it is reached from the surfaces that use it and mined through them.
 
-Choose the grain a reviewer would name. Each surface is mined in its own call, which leads every requirement id with the surface's domain noun, so a surface should be one thing a caller does and no two surfaces should reach the same behaviour under different nouns.
+Choose the grain a reviewer would name: one surface per route family per handler module, per command, per job, per export path. Each surface is mined in its own call, which leads every requirement id with the surface's domain noun, so a surface is one thing a caller does and no two surfaces reach the same behaviour under different nouns.
 
 ## Method
 

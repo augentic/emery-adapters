@@ -1,6 +1,6 @@
 # Component structure
 
-How a TypeScript or JavaScript tree is organised, and how to follow a surface from its entry through it. The survey names the surface and the module a caller enters it at; this reference is how to read the rest of the tree from there.
+How a TypeScript or JavaScript tree is organised, and how to follow a surface from its entry through it. The survey names the surface and the module a caller enters it at; this reference is how to read the rest of the tree from there. For a tree of one production module the survey names nothing, and that module is the entry of every surface it holds.
 
 ## The manifest
 

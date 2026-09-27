@@ -57,8 +57,11 @@ async fn probe_gated() {
 
     let seen = model.seen();
     assert_eq!(seen.len(), 2, "metadata opens no completion; each extract opens one");
+    let claims = emery_sdk::body(emery_sdk::RUNTIME, "claims.md").expect("the claim rules");
     for request in &seen {
-        assert_eq!(request.system.as_deref(), Some("SYSTEM"), "the embedded prompt is the system");
+        let system = request.system.as_deref().expect("a system prompt");
+        assert!(system.starts_with("SYSTEM"), "the embedded prompt leads the system");
+        assert!(system.ends_with(claims), "the claim rules ride the system");
         assert_eq!(request.tools, ["list_docs", "read_doc"], "the reference tools are declared");
         assert!(request.check, "each candidate is offered to the guest's check");
         let turn = &request.messages[0];
@@ -85,13 +88,8 @@ async fn probe_gated() {
             .expect("a JSON answer");
     assert_eq!(
         listed["paths"],
-        serde_json::json!([
-            "extract.md",
-            "references/greeting.md",
-            "claims.md",
-            "reconciliation.md"
-        ]),
-        "the adapter's documents, then the SDK's, which the probe never listed"
+        serde_json::json!(["references/greeting.md", "reconciliation.md"]),
+        "the probe's documents besides the active prompt, then the SDK's reconciliation"
     );
     assert_eq!(exchanges[1].tool, "read_doc");
     let read: Value =

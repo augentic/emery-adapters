@@ -1,7 +1,8 @@
 //! Discovers the caller-facing surfaces exposed by a source tree.
 //!
-//! Each discovered surface becomes an independent mining seam. Inline input
-//! requires no discovery and is returned as one whole seam.
+//! Each discovered surface becomes an independent mining seam. Inline input,
+//! and a tree of one production module, require no discovery and are one
+//! whole seam.
 
 use emery_sdk::survey::Surface;
 use emery_sdk::workspace::Entry;
@@ -14,22 +15,34 @@ const MARKERS: &[&str] = &["d", "test", "spec"];
 
 // Surveys workspace input by model: each surface becomes a note seam lent the
 // whole tree, so a module is mined only through the surfaces that reach it.
-// Entry modules must be production TypeScript or JavaScript files; hidden
-// entries, dependencies, build output, tests, and declaration files are
-// refused. Refuses `BadRequest` when the tree exposes no surface or no valid
-// inventory arrives within the model's rounds, `ServerError` when `docs`
-// lacks `survey.md`, and `BadGateway` when a model tool or transport fails.
+// An inline value, or a tree of one production module, cannot be cut and is
+// one whole seam with no survey turn spent.
 pub async fn survey<P: Model>(
     ctx: &Context<'_, P>, docs: &'static [Doc],
 ) -> Result<Vec<Seam>, Error> {
+    // a tree that cannot be cut
     let source = &ctx.input.name;
     let SourceContent::Workspace(root) = &ctx.input.content else {
         tracing::debug!(%source, "inline value; one whole seam");
         return Ok(vec![Seam::Whole]);
     };
+    let modules = emery_sdk::workspace::list(root, keep)?;
+    match modules.as_slice() {
+        [] => {
+            return Err(bad_request!(
+                "`{source}`: the source holds no production module. Nothing under the root is a \
+                 TypeScript or JavaScript file this adapter mines."
+            ));
+        }
+        [only] => {
+            tracing::debug!(%source, module = %only, "one production module; one whole seam");
+            return Ok(vec![Seam::Whole]);
+        }
+        _ => {}
+    }
 
+    // the survey turn
     tracing::info!(%source, %root, "identifying typescript surfaces");
-
     let surfaces = emery_sdk::survey::surfaces(ctx, docs, keep).await?;
     if surfaces.is_empty() {
         return Err(bad_request!(
@@ -38,9 +51,9 @@ pub async fn survey<P: Model>(
         ));
     }
 
+    // one note seam per surface
     let seams: Vec<_> = surfaces.iter().map(|surface| Seam::Note(note(root, surface))).collect();
     tracing::debug!(%source, seams = seams.len(), "note seams");
-
     Ok(seams)
 }
 

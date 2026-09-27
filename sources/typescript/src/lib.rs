@@ -6,8 +6,8 @@
 //!
 //! Surface discovery is model-assisted and runs before any surface is mined.
 //!
-//! Inline inputs are mined as a whole. Workspaces with no exposed surfaces
-//! are rejected.
+//! A single-module workspace is mined whole, as inline input is. A workspace
+//! with no production module or no exposed surface is rejected.
 
 #[cfg(target_arch = "wasm32")]
 mod survey;
