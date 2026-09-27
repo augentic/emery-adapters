@@ -1,28 +1,14 @@
 # Source Adapter Examples
 
-Live `specify` journeys via [omnia-cursor](https://github.com/augentic/omnia-backends/tree/main/crates/cursor): the shipped `emery` binary loads a built first-party adapter by path, the adapter extracts claims from its fixture through the host model, the engine synthesises `spec.md` / `design.md`, and the revision commits.
+Live `specify` journeys via [omnia-cursor](https://github.com/augentic/omnia-backends/tree/main/crates/cursor). 
 
-
-| Example                                   | Input                                        | Exercises                                                     |
-| ----------------------------------------- | -------------------------------------------- | ------------------------------------------------------------- |
-| [documentation](documentation/emery.toml) | [docs/](documentation/docs/) — specification | `Workspace` over prose                                        |
-| [typescript](typescript/emery.toml)       | [src/](typescript/src/) — behaviour          | `Workspace` over code                                         |
-| [intent](intent/emery.toml)               | inline `description`; nothing lent           | `Value`; claims anchor `[unknown]`                            |
-| [all three](emery.toml)                   | the three sources above                      | grouping and authority (`intent > documentation > behaviour`) |
-
-
-
+`emery` loads the specified adapter(s) to extract claims from one or more sources. The claims are synthesised into `spec.md` / `design.md`, which are then committed to the revision store (`.omnia/storage/blobstore/`).
 
 ## Prerequisites
 
-1. The `emery` binary on `PATH`. There is no published binary:
-  ```bash
-  cargo install --git https://github.com/augentic/emery --locked
-  ```
+1. The [emery](https://github.com/augentic/emery) repository as a sibling checkout
 2. [cursor-sdk-bridge](https://github.com/cursor/sdk-bridge). See [below](#installing-cursor-sdk-bridge) for installation.
 3. `CURSOR_API_KEY`
-
-
 
 ## Build and run
 
@@ -34,27 +20,25 @@ cargo build --workspace --target wasm32-wasip2 --release
 
 # run the example
 export CURSOR_API_KEY=<Cursor API key>
-emery specify --config examples/documentation/emery.toml
+cargo run --manifest-path ../emery/Cargo.toml -- specify -v --config examples/typescript/emery.toml
 
 # review the committed revision
-emery show spec
-emery show design
+cargo run --manifest-path ../emery/Cargo.toml -- show spec
+cargo run --manifest-path ../emery/Cargo.toml -- show design
 ```
 
-Swap the config for [intent](intent/emery.toml), [typescript](typescript/emery.toml), or the combined [emery.toml](emery.toml). One adapter alone builds with `cargo build -p <name> --target wasm32-wasip2 --release`, to the same path.
+Swap the config for [intent](intent/emery.toml), [typescript](typescript/emery.toml), or the combined [emery.toml](emery.toml).
 
-### Debugging cursor backend
+### Using `RUST_LOG` to tune output
 
-To debug an adapter, raise the `emery` run's level with `-v`. One level governs the run — the host, the engine, and every adapter — and a bare run is `info`: the SDK's progress as each turn opens. `emery -v specify …` is `debug` — the SDK's own detail (each reference-tool call as answered, each candidate the claim gate rejected with its findings, and what each turn yielded, under the source key and seam) beside the engine's and the host's; `-vv` is `trace`; each `-q` lowers the level a step (`-q` warn, `-qq` error, `-qqq` off). A flag overrides a process `RUST_LOG`, while a bare run keeps one that is set, so `RUST_LOG=emery_sdk=debug emery specify …` admits the SDK's detail alone. To debug the cursor backend, which is the host's side of each completion and callback and outside any guest, set `RUST_LOG` on a bare run and, optionally, `CURSOR_SDK_BRIDGE_LOG`:
+RUST_LOG can be composed with the `-v[v]`/`[-q[q]` flags to fine-tune tracing. For example,
 
 ```bash
-export RUST_LOG="omnia_cursor=debug"
+export RUST_LOG="omnia_core=off,emery_sdk=trace"
 export CURSOR_SDK_BRIDGE_LOG=1
 ```
 
-The same `RUST_LOG` is every guest's filter on a bare run (`RUST_LOG=emery_sdk=trace emery specify …` traces the SDK alone); the host never rewrites the process environment.
 
-See [#host-to-guest-tool-calls](#host-to-guest-tool-calls) for more detail.
 
 ## Host-to-guest tool calls
 

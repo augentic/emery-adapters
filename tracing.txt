@@ -1,0 +1,105 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.34s
+     Running `/Users/andrewweston/github.com/augentic/emery/target/debug/emery specify -v --config examples/typescript/emery.toml`
+2026-09-26T21:19:59.719886Z DEBUG omnia_core::telemetry: no OTLP endpoint (`OTEL_EXPORTER_OTLP_ENDPOINT`); an unexported signal is dropped traces=false metrics=false
+2026-09-26T21:19:59.719994Z DEBUG omnia::deployment: initializing runtime
+2026-09-26T21:20:00.536492Z DEBUG omnia_core::registry: runtime initialized guests=1 declared=0
+2026-09-26T21:20:00.536799Z DEBUG omnia::lifecycle: omnia ready component="emery"
+2026-09-26T21:20:00.536816Z DEBUG omnia_core::runtime::command: running wasi:cli/run guest=emery
+2026-09-26T21:20:00.538778Z DEBUG omnia_core::runtime: component instantiated
+[2m2026-09-26T21:20:00.542007Z[0m [34mDEBUG[0m [2memery_cli::sources[0m[2m:[0m sources decoded [3mcarrier[0m[2m=[0mexamples/typescript/emery.toml [3msources[0m[2m=[0m1
+2026-09-26T21:20:00.698496Z DEBUG cli-run: omnia_core::runtime: guest registered guest=typescript
+2026-09-26T21:20:00.698551Z DEBUG cli-run: omnia_plugin::loader: guest loaded id=typescript digest=sha256:abdc297877c7981c0a6c0c5f16057a3e201b7d9cc0941e443367ce2781bcbbee
+2026-09-26T21:20:00.699544Z DEBUG cli-run: omnia_link::polyfill: dispatched host-mediated call target=typescript interface="emery:adapter/source@0.1.0" func="metadata" elapsed_us=688
+[2m2026-09-26T21:20:00.699617Z[0m [34mDEBUG[0m [2memery_engine::adapter[0m[2m:[0m adapter loaded [3madapter[0m[2m=[0mtarget/wasm32-wasip2/release/typescript.wasm [3mid[0m[2m=[0mtypescript [3mkind[0m[2m=[0mbehaviour
+[2m2026-09-26T21:20:00.699794Z[0m [32m INFO[0m [2memery_engine::specify[0m[2m:[0m extracting [3msource[0m[2m=[0mapi [3madapter[0m[2m=[0mtarget/wasm32-wasip2/release/typescript.wasm [3mkind[0m[2m=[0mbehaviour
+[2m2026-09-26T21:20:00.700598Z[0m [32m INFO[0m [2mtypescript::survey[0m[2m:[0m identifying typescript surfaces [3mkey[0m[2m=[0mapi [3mroot[0m[2m=[0m./examples/typescript/r9k
+[2m2026-09-26T21:20:00.700768Z[0m [32m INFO[0m [2memery_sdk::survey[0m[2m:[0m surveying [3mkey[0m[2m=[0mapi
+2026-09-26T21:20:00.702051Z DEBUG cli-run:complete{model="auto" format=schema}: omnia_cursor::pool: agent slot acquired wait_ms=0
+2026-09-26T21:20:00.904920Z DEBUG cli-run:complete{model="auto" format=schema}: omnia_cursor::protocol: ready version.capabilities=["agent.create", "agent.resume", "agent.send", "run.observe", "run.wait", "run.cancel", "agent.management", "cursor.catalog", "artifacts.chunked", "agent.usage"]
+2026-09-26T21:20:00.904981Z DEBUG cli-run:complete{model="auto" format=schema}: omnia_cursor::worker: cursor-sdk-bridge spawned pid=81206 spawn_ms=202
+2026-09-26T21:20:00.905014Z DEBUG cli-run:complete{model="auto" format=schema}: omnia_cursor::model::observe: completion started prompt_bytes=10999 mcp=0
+2026-09-26T21:20:13.308101Z DEBUG omnia_cursor::endpoint: custom tool callback tool=list_docs agent=e733cb0c-7dee-4c7d-ba4d-ce2eddc312ee
+[2m2026-09-26T21:20:13.308896Z[0m [34mDEBUG[0m [2memery_sdk::question[0m[2m:[0m answered [3mkey[0m[2m=[0mapi [3mtool[0m[2m=[0mlist_docs [3marguments[0m[2m=[0m{}
+2026-09-26T21:20:15.370986Z DEBUG omnia_cursor::endpoint: custom tool callback tool=read_doc agent=e733cb0c-7dee-4c7d-ba4d-ce2eddc312ee
+[2m2026-09-26T21:20:15.371508Z[0m [34mDEBUG[0m [2memery_sdk::question[0m[2m:[0m answered [3mkey[0m[2m=[0mapi [3mtool[0m[2m=[0mread_doc [3marguments[0m[2m=[0m{"path":"references/component-structure.md"}
+2026-09-26T21:20:44.511001Z DEBUG omnia_cursor::endpoint: custom tool callback tool=read_doc agent=e733cb0c-7dee-4c7d-ba4d-ce2eddc312ee
+[2m2026-09-26T21:20:44.511616Z[0m [34mDEBUG[0m [2memery_sdk::question[0m[2m:[0m answered [3mkey[0m[2m=[0mapi [3mtool[0m[2m=[0mread_doc [3marguments[0m[2m=[0m{"path":"survey.md"}
+2026-09-26T21:21:42.876393Z DEBUG cli-run:complete{model="auto" format=schema}: omnia_cursor::model::observe: send answered result_bytes=184 tool_turns=0 usage=Some(Usage { input_tokens: 222572, output_tokens: 10071, reasoning_tokens: Some(8830) })
+2026-09-26T21:21:42.886602Z  INFO cli-run:complete{model="auto" format=schema}: omnia_cursor::model::observe: completion outcome="ok" attempts=1 duration_ms=101980 input_tokens=222572 output_tokens=10071 reasoning_tokens=8830
+[2m2026-09-26T21:21:44.938501Z[0m [34mDEBUG[0m [2memery_sdk::survey[0m[2m:[0m surveyed [3mkey[0m[2m=[0mapi [3msurfaces[0m[2m=[0m["start script @ legacy/at_r9k_position_adapter/src/start.ts", "R9K position Kafka consumer @ legacy/at_r9k_position_adapter/src/main.ts"]
+[2m2026-09-26T21:21:44.938614Z[0m [34mDEBUG[0m [2mtypescript::survey[0m[2m:[0m surfaces cut into note seams [3mkey[0m[2m=[0mapi [3mseams[0m[2m=[0m[Note("`$SOURCE_DIR` is the read-only view at `./examples/typescript/r9k` — the TypeScript / JavaScript source tree. This call mines one surface the source exposes:\n\n- surface: start script\n- entry: `legacy/at_r9k_position_adapter/src/start.ts`\n\nStart at the entry and follow what the surface reaches through the whole tree — its handler, the modules it imports, the services and stores it calls, the types it takes and returns — and emit claims for the behaviour a caller observes through this surface alone. What the tree does for another surface is that surface's call to claim, even in a module the two share. Anchor every `path` relative to `$SOURCE_DIR`. Nothing outside it is reachable; extract mines only this source."), Note("`$SOURCE_DIR` is the read-only view at `./examples/typescript/r9k` — the TypeScript / JavaScript source tree. This call mines one surface the source exposes:\n\n- surface: R9K position Kafka consumer\n- entry: `legacy/at_r9k_position_adapter/src/main.ts`\n\nStart at the entry and follow what the surface reaches through the whole tree — its handler, the modules it imports, the services and stores it calls, the types it takes and returns — and emit claims for the behaviour a caller observes through this surface alone. What the tree does for another surface is that surface's call to claim, even in a module the two share. Anchor every `path` relative to `$SOURCE_DIR`. Nothing outside it is reachable; extract mines only this source.")]
+[2m2026-09-26T21:21:44.938992Z[0m [32m INFO[0m [2memery_sdk::extract[0m[2m:[0m mining [3mkey[0m[2m=[0mapi [3mseam[0m[2m=[0m0
+[2m2026-09-26T21:21:44.939783Z[0m [32m INFO[0m [2memery_sdk::extract[0m[2m:[0m mining [3mkey[0m[2m=[0mapi [3mseam[0m[2m=[0m1
+2026-09-26T21:21:44.940636Z DEBUG cli-run:complete{model="auto" format=schema}: omnia_cursor::pool: agent slot acquired wait_ms=0
+2026-09-26T21:21:44.940635Z DEBUG cli-run:complete{model="auto" format=schema}: omnia_cursor::pool: agent slot acquired wait_ms=0
+2026-09-26T21:21:45.163799Z DEBUG cli-run:complete{model="auto" format=schema}: omnia_cursor::protocol: ready version.capabilities=["agent.create", "agent.resume", "agent.send", "run.observe", "run.wait", "run.cancel", "agent.management", "cursor.catalog", "artifacts.chunked", "agent.usage"]
+2026-09-26T21:21:45.163835Z DEBUG cli-run:complete{model="auto" format=schema}: omnia_cursor::worker: cursor-sdk-bridge spawned pid=81315 spawn_ms=222
+2026-09-26T21:21:45.163866Z DEBUG cli-run:complete{model="auto" format=schema}: omnia_cursor::model::observe: completion started prompt_bytes=16900 mcp=0
+2026-09-26T21:21:45.163925Z DEBUG cli-run:complete{model="auto" format=schema}: omnia_cursor::protocol: ready version.capabilities=["agent.create", "agent.resume", "agent.send", "run.observe", "run.wait", "run.cancel", "agent.management", "cursor.catalog", "artifacts.chunked", "agent.usage"]
+2026-09-26T21:21:45.163949Z DEBUG cli-run:complete{model="auto" format=schema}: omnia_cursor::worker: cursor-sdk-bridge spawned pid=81314 spawn_ms=222
+2026-09-26T21:21:45.163977Z DEBUG cli-run:complete{model="auto" format=schema}: omnia_cursor::model::observe: completion started prompt_bytes=16914 mcp=0
+2026-09-26T21:21:57.854131Z DEBUG omnia_cursor::endpoint: custom tool callback tool=list_docs agent=e60b85c1-f8ea-42b9-b6af-1e04846455af
+[2m2026-09-26T21:21:57.854699Z[0m [34mDEBUG[0m [2memery_sdk::question[0m[2m:[0m answered [3mkey[0m[2m=[0mapi [3mseam[0m[2m=[0m0 [3mtool[0m[2m=[0mlist_docs [3marguments[0m[2m=[0m{}
+2026-09-26T21:21:58.450557Z DEBUG omnia_cursor::endpoint: custom tool callback tool=list_docs agent=d2f68054-474d-4fa3-8d6a-ca3be9d24a9a
+[2m2026-09-26T21:21:58.451092Z[0m [34mDEBUG[0m [2memery_sdk::question[0m[2m:[0m answered [3mkey[0m[2m=[0mapi [3mseam[0m[2m=[0m1 [3mtool[0m[2m=[0mlist_docs [3marguments[0m[2m=[0m{}
+2026-09-26T21:22:01.812269Z DEBUG omnia_cursor::endpoint: custom tool callback tool=read_doc agent=e60b85c1-f8ea-42b9-b6af-1e04846455af
+2026-09-26T21:22:01.812269Z DEBUG omnia_cursor::endpoint: custom tool callback tool=read_doc agent=e60b85c1-f8ea-42b9-b6af-1e04846455af
+2026-09-26T21:22:01.812276Z DEBUG omnia_cursor::endpoint: custom tool callback tool=read_doc agent=e60b85c1-f8ea-42b9-b6af-1e04846455af
+2026-09-26T21:22:01.812426Z DEBUG omnia_cursor::endpoint: custom tool callback tool=read_doc agent=e60b85c1-f8ea-42b9-b6af-1e04846455af
+[2m2026-09-26T21:22:01.812832Z[0m [34mDEBUG[0m [2memery_sdk::question[0m[2m:[0m answered [3mkey[0m[2m=[0mapi [3mseam[0m[2m=[0m0 [3mtool[0m[2m=[0mread_doc [3marguments[0m[2m=[0m{"path":"references/business-logic.md"}
+[2m2026-09-26T21:22:01.813260Z[0m [34mDEBUG[0m [2memery_sdk::question[0m[2m:[0m answered [3mkey[0m[2m=[0mapi [3mseam[0m[2m=[0m0 [3mtool[0m[2m=[0mread_doc [3marguments[0m[2m=[0m{"path":"references/verification.md"}
+[2m2026-09-26T21:22:01.813588Z[0m [34mDEBUG[0m [2memery_sdk::question[0m[2m:[0m answered [3mkey[0m[2m=[0mapi [3mseam[0m[2m=[0m0 [3mtool[0m[2m=[0mread_doc [3marguments[0m[2m=[0m{"path":"references/component-structure.md"}
+[2m2026-09-26T21:22:01.813871Z[0m [34mDEBUG[0m [2memery_sdk::question[0m[2m:[0m answered [3mkey[0m[2m=[0mapi [3mseam[0m[2m=[0m0 [3mtool[0m[2m=[0mread_doc [3marguments[0m[2m=[0m{"path":"claims.md"}
+2026-09-26T21:22:06.477199Z DEBUG omnia_cursor::endpoint: custom tool callback tool=read_doc agent=d2f68054-474d-4fa3-8d6a-ca3be9d24a9a
+2026-09-26T21:22:06.477494Z DEBUG omnia_cursor::endpoint: custom tool callback tool=read_doc agent=d2f68054-474d-4fa3-8d6a-ca3be9d24a9a
+2026-09-26T21:22:06.477494Z DEBUG omnia_cursor::endpoint: custom tool callback tool=read_doc agent=d2f68054-474d-4fa3-8d6a-ca3be9d24a9a
+2026-09-26T21:22:06.477499Z DEBUG omnia_cursor::endpoint: custom tool callback tool=read_doc agent=d2f68054-474d-4fa3-8d6a-ca3be9d24a9a
+[2m2026-09-26T21:22:06.477737Z[0m [34mDEBUG[0m [2memery_sdk::question[0m[2m:[0m answered [3mkey[0m[2m=[0mapi [3mseam[0m[2m=[0m1 [3mtool[0m[2m=[0mread_doc [3marguments[0m[2m=[0m{"path":"references/component-structure.md"}
+[2m2026-09-26T21:22:06.478262Z[0m [34mDEBUG[0m [2memery_sdk::question[0m[2m:[0m answered [3mkey[0m[2m=[0mapi [3mseam[0m[2m=[0m1 [3mtool[0m[2m=[0mread_doc [3marguments[0m[2m=[0m{"path":"references/business-logic.md"}
+[2m2026-09-26T21:22:06.478544Z[0m [34mDEBUG[0m [2memery_sdk::question[0m[2m:[0m answered [3mkey[0m[2m=[0mapi [3mseam[0m[2m=[0m1 [3mtool[0m[2m=[0mread_doc [3marguments[0m[2m=[0m{"path":"claims.md"}
+[2m2026-09-26T21:22:06.478814Z[0m [34mDEBUG[0m [2memery_sdk::question[0m[2m:[0m answered [3mkey[0m[2m=[0mapi [3mseam[0m[2m=[0m1 [3mtool[0m[2m=[0mread_doc [3marguments[0m[2m=[0m{"path":"references/services.md"}
+2026-09-26T21:22:08.073080Z DEBUG omnia_cursor::endpoint: custom tool callback tool=read_doc agent=e60b85c1-f8ea-42b9-b6af-1e04846455af
+2026-09-26T21:22:08.073080Z DEBUG omnia_cursor::endpoint: custom tool callback tool=read_doc agent=e60b85c1-f8ea-42b9-b6af-1e04846455af
+2026-09-26T21:22:08.073080Z DEBUG omnia_cursor::endpoint: custom tool callback tool=read_doc agent=e60b85c1-f8ea-42b9-b6af-1e04846455af
+[2m2026-09-26T21:22:08.073656Z[0m [34mDEBUG[0m [2memery_sdk::question[0m[2m:[0m answered [3mkey[0m[2m=[0mapi [3mseam[0m[2m=[0m0 [3mtool[0m[2m=[0mread_doc [3marguments[0m[2m=[0m{"path":"references/services.md"}
+[2m2026-09-26T21:22:08.074238Z[0m [34mDEBUG[0m [2memery_sdk::question[0m[2m:[0m answered [3mkey[0m[2m=[0mapi [3mseam[0m[2m=[0m0 [3mtool[0m[2m=[0mread_doc [3marguments[0m[2m=[0m{"path":"survey.md"}
+[2m2026-09-26T21:22:08.074577Z[0m [34mDEBUG[0m [2memery_sdk::question[0m[2m:[0m answered [3mkey[0m[2m=[0mapi [3mseam[0m[2m=[0m0 [3mtool[0m[2m=[0mread_doc [3marguments[0m[2m=[0m{"path":"references/observability.md"}
+2026-09-26T21:22:08.196299Z DEBUG omnia_cursor::endpoint: custom tool callback tool=read_doc agent=e60b85c1-f8ea-42b9-b6af-1e04846455af
+[2m2026-09-26T21:22:08.196943Z[0m [34mDEBUG[0m [2memery_sdk::question[0m[2m:[0m answered [3mkey[0m[2m=[0mapi [3mseam[0m[2m=[0m0 [3mtool[0m[2m=[0mread_doc [3marguments[0m[2m=[0m{"path":"references/types.md"}
+2026-09-26T21:22:08.519510Z DEBUG omnia_cursor::endpoint: custom tool callback tool=read_doc agent=e60b85c1-f8ea-42b9-b6af-1e04846455af
+[2m2026-09-26T21:22:08.520198Z[0m [34mDEBUG[0m [2memery_sdk::question[0m[2m:[0m answered [3mkey[0m[2m=[0mapi [3mseam[0m[2m=[0m0 [3mtool[0m[2m=[0mread_doc [3marguments[0m[2m=[0m{"path":"references/external-api.md"}
+2026-09-26T21:22:08.793338Z DEBUG omnia_cursor::endpoint: custom tool callback tool=read_doc agent=e60b85c1-f8ea-42b9-b6af-1e04846455af
+[2m2026-09-26T21:22:08.793747Z[0m [34mDEBUG[0m [2memery_sdk::question[0m[2m:[0m answered [3mkey[0m[2m=[0mapi [3mseam[0m[2m=[0m0 [3mtool[0m[2m=[0mread_doc [3marguments[0m[2m=[0m{"path":"references/examples/parallel-execution.md"}
+2026-09-26T21:22:28.204987Z DEBUG omnia_cursor::endpoint: custom tool callback tool=read_doc agent=d2f68054-474d-4fa3-8d6a-ca3be9d24a9a
+2026-09-26T21:22:28.204987Z DEBUG omnia_cursor::endpoint: custom tool callback tool=read_doc agent=d2f68054-474d-4fa3-8d6a-ca3be9d24a9a
+2026-09-26T21:22:28.204987Z DEBUG omnia_cursor::endpoint: custom tool callback tool=read_doc agent=d2f68054-474d-4fa3-8d6a-ca3be9d24a9a
+2026-09-26T21:22:28.204987Z DEBUG omnia_cursor::endpoint: custom tool callback tool=read_doc agent=d2f68054-474d-4fa3-8d6a-ca3be9d24a9a
+2026-09-26T21:22:28.205120Z DEBUG omnia_cursor::endpoint: custom tool callback tool=read_doc agent=d2f68054-474d-4fa3-8d6a-ca3be9d24a9a
+[2m2026-09-26T21:22:28.205491Z[0m [34mDEBUG[0m [2memery_sdk::question[0m[2m:[0m answered [3mkey[0m[2m=[0mapi [3mseam[0m[2m=[0m1 [3mtool[0m[2m=[0mread_doc [3marguments[0m[2m=[0m{"path":"references/external-api.md"}
+[2m2026-09-26T21:22:28.205923Z[0m [34mDEBUG[0m [2memery_sdk::question[0m[2m:[0m answered [3mkey[0m[2m=[0mapi [3mseam[0m[2m=[0m1 [3mtool[0m[2m=[0mread_doc [3marguments[0m[2m=[0m{"path":"references/types.md"}
+[2m2026-09-26T21:22:28.206196Z[0m [34mDEBUG[0m [2memery_sdk::question[0m[2m:[0m answered [3mkey[0m[2m=[0mapi [3mseam[0m[2m=[0m1 [3mtool[0m[2m=[0mread_doc [3marguments[0m[2m=[0m{"path":"references/verification.md"}
+[2m2026-09-26T21:22:28.206393Z[0m [34mDEBUG[0m [2memery_sdk::question[0m[2m:[0m answered [3mkey[0m[2m=[0mapi [3mseam[0m[2m=[0m1 [3mtool[0m[2m=[0mread_doc [3marguments[0m[2m=[0m{"path":"references/observability.md"}
+[2m2026-09-26T21:22:28.206692Z[0m [34mDEBUG[0m [2memery_sdk::question[0m[2m:[0m answered [3mkey[0m[2m=[0mapi [3mseam[0m[2m=[0m1 [3mtool[0m[2m=[0mread_doc [3marguments[0m[2m=[0m{"path":"references/examples/parallel-execution.md"}
+2026-09-26T21:22:28.443195Z DEBUG omnia_cursor::endpoint: custom tool callback tool=read_doc agent=d2f68054-474d-4fa3-8d6a-ca3be9d24a9a
+[2m2026-09-26T21:22:28.444035Z[0m [34mDEBUG[0m [2memery_sdk::question[0m[2m:[0m answered [3mkey[0m[2m=[0mapi [3mseam[0m[2m=[0m1 [3mtool[0m[2m=[0mread_doc [3marguments[0m[2m=[0m{"path":"references/examples/outbound-http.md"}
+2026-09-26T21:23:15.230924Z DEBUG omnia_cursor::endpoint: custom tool callback tool=read_doc agent=d2f68054-474d-4fa3-8d6a-ca3be9d24a9a
+[2m2026-09-26T21:23:15.231573Z[0m [34mDEBUG[0m [2memery_sdk::question[0m[2m:[0m answered [3mkey[0m[2m=[0mapi [3mseam[0m[2m=[0m1 [3mtool[0m[2m=[0mread_doc [3marguments[0m[2m=[0m{"path":"references/examples/branching-caching.md"}
+2026-09-26T21:23:24.798891Z DEBUG omnia_cursor::endpoint: custom tool callback tool=read_doc agent=e60b85c1-f8ea-42b9-b6af-1e04846455af
+[2m2026-09-26T21:23:24.799165Z[0m [34mDEBUG[0m [2memery_sdk::question[0m[2m:[0m answered [3mkey[0m[2m=[0mapi [3mseam[0m[2m=[0m0 [3mtool[0m[2m=[0mread_doc [3marguments[0m[2m=[0m{"path":"references/examples/README.md"}
+2026-09-26T21:28:05.928503Z DEBUG cli-run:complete{model="auto" format=schema}: omnia_cursor::model::observe: send answered result_bytes=21654 tool_turns=0 usage=Some(Usage { input_tokens: 314531, output_tokens: 42539, reasoning_tokens: Some(34421) })
+2026-09-26T21:28:05.929979Z  INFO cli-run:complete{model="auto" format=schema}: omnia_cursor::model::observe: completion outcome="ok" attempts=1 duration_ms=380761 input_tokens=314531 output_tokens=42539 reasoning_tokens=34421
+[2m2026-09-26T21:28:07.981711Z[0m [34mDEBUG[0m [2memery_sdk::extract[0m[2m:[0m mined [3mkey[0m[2m=[0mapi [3mseam[0m[2m=[0m0 [3mclaims[0m[2m=[0m78
+2026-09-26T21:28:21.031523Z DEBUG omnia_cursor::worker: cursor-sdk-bridge output line=shell-parser: tree-sitter natives are unavailable in this artifact; shell command analysis degrades to parsingFailed stream="stderr"
+2026-09-26T21:29:36.336797Z DEBUG cli-run:complete{model="auto" format=schema}: omnia_cursor::model::observe: send answered result_bytes=33885 tool_turns=0 usage=Some(Usage { input_tokens: 676471, output_tokens: 60710, reasoning_tokens: Some(36406) })
+2026-09-26T21:29:36.339024Z  INFO cli-run:complete{model="auto" format=schema}: omnia_cursor::model::observe: completion outcome="ok" attempts=1 duration_ms=471169 input_tokens=676471 output_tokens=60710 reasoning_tokens=36406
+[2m2026-09-26T21:29:38.406468Z[0m [34mDEBUG[0m [2memery_sdk::extract[0m[2m:[0m mined [3mkey[0m[2m=[0mapi [3mseam[0m[2m=[0m1 [3mclaims[0m[2m=[0m101
+2026-09-26T21:29:38.408307Z DEBUG cli-run: omnia_link::polyfill: dispatched host-mediated call target=typescript interface="emery:adapter/source@0.1.0" func="extract" elapsed_us=577702056
+[2m2026-09-26T21:29:38.411030Z[0m [34mDEBUG[0m [2memery_engine::specify[0m[2m:[0m extracted [3msource[0m[2m=[0mapi [3mclaims[0m[2m=[0m179
+[2m2026-09-26T21:29:38.412799Z[0m [32m INFO[0m [2memery_engine::specify::brief[0m[2m:[0m asking the model [3mquestion[0m[2m=[0m"spec-draft"
+2026-09-26T21:29:38.415874Z DEBUG cli-run:complete{model="auto" format=schema}: omnia_cursor::pool: agent slot acquired wait_ms=0
+2026-09-26T21:29:38.622127Z DEBUG cli-run:complete{model="auto" format=schema}: omnia_cursor::protocol: ready version.capabilities=["agent.create", "agent.resume", "agent.send", "run.observe", "run.wait", "run.cancel", "agent.management", "cursor.catalog", "artifacts.chunked", "agent.usage"]
+2026-09-26T21:29:38.622162Z DEBUG cli-run:complete{model="auto" format=schema}: omnia_cursor::worker: cursor-sdk-bridge spawned pid=81620 spawn_ms=205
+2026-09-26T21:29:38.622193Z DEBUG cli-run:complete{model="auto" format=schema}: omnia_cursor::model::observe: completion started prompt_bytes=83706 mcp=0
+2026-09-26T21:32:07.339901Z  INFO cli-run:complete{model="auto" format=schema}: omnia_cursor::model::observe: completion outcome="inactive" attempts=1 duration_ms=148716 input_tokens=0 output_tokens=0 reasoning_tokens=0
+error[bad_gateway]: backend failure: cursor run inactive for 120s (no stream events; inactivity limit 120s, absolute cap 600s)
+2026-09-26T21:32:07.855251Z DEBUG omnia_core::runtime::command: wasi:cli/run exited guest=emery code=4

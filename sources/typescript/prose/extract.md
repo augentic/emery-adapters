@@ -6,7 +6,7 @@ This prompt runs once per seam of a bound `typescript` source. A tree is mined o
 
 - **`$SOURCE_DIR`** — read-only view of the bound source root, always the whole tree. Resolve imports and `tsconfig.json` `paths` mappings relative to it. Absent when the source is an inline `value` (the seam is then in the message).
 - **The surface** — when the message names one, its name and its entry module. Mine from the entry outward: everything the surface reaches is yours to read, and to claim for what this surface's caller observes of it. What the tree does for another surface — another route's handler, another command's run, another job's schedule — is that surface's call to claim, even when you pass through a module the two share. Absent for an inline value, which is mined whole.
-- **Source key** — the kebab-case source key the engine passed on the WIT bindings.
+- **Source name** — the kebab-case name the engine passed on the WIT bindings, which the specification cites the source by.
 
 Nothing outside the bound source is reachable; writes back into `$SOURCE_DIR` are denied. Extract mines its surface completely in one pass: the entry, every handler and domain module it reaches, and every store, client, and type on the way.
 
@@ -52,7 +52,7 @@ Rules for the body fields:
 
 ## Worked example
 
-A small Express service bound under source key `legacy-monolith`, mined for the surface `POST /users`, entered at `src/server.ts`:
+A small Express service bound as the source `legacy-monolith`, mined for the surface `POST /users`, entered at `src/server.ts`:
 
 - `src/server.ts` — `app.post("/users", registerUser)` at L5.
 - `src/users/register.ts` — `registerUser` handler with email validation at L12–L34 and a delegation to `insertUser`.
