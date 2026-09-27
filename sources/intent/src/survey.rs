@@ -15,18 +15,19 @@ pub fn survey(input: &SourceInput) -> Result<Vec<Seam>, Error> {
             }
             Seam::Whole
         }
-        SourceContent::Workspace(root) => into_note(root)?,
+        SourceContent::Workspace(root) => to_note(root)?,
     };
 
     Ok(vec![seam])
 }
 
 // The one file of the tree, read into the seam that carries it.
-fn into_note(root: &str) -> Result<Seam, Error> {
+fn to_note(root: &str) -> Result<Seam, Error> {
     let files = emery_sdk::workspace::list(root, |entry| !entry.hidden())?;
     let [file] = files.as_slice() else {
         return Err(bad_request!("intent expects one file, found {}", files.len()));
     };
+
     let path = Path::new(root).join(file);
     let brief =
         std::fs::read_to_string(&path).with_context(|| format!("reading `{}`", path.display()))?;
@@ -40,4 +41,3 @@ fn into_note(root: &str) -> Result<Seam, Error> {
          Nothing else is reachable; extract mines only this source."
     )))
 }
-
