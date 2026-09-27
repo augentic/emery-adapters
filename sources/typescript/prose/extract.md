@@ -12,16 +12,16 @@ Nothing outside the bound source is reachable; writes back into `$SOURCE_DIR` ar
 
 ## References
 
-Load on demand when a surface needs deeper analysis. Each carries TypeScript-specific depth and names the claims it feeds.
+Each reference carries TypeScript-specific depth and names the claims it feeds. Read one when its trigger holds for the seam in hand, and not otherwise: a reference read for a construct the seam lacks costs a turn and teaches nothing, and this prompt with `claims.md` already says what every claim carries.
 
-- [`references/component-structure.md`](references/component-structure.md) — the manifest and `tsconfig.json`, where each kind of surface enters, the entry layer, async boundaries.
-- [`references/business-logic.md`](references/business-logic.md) — what a `requirement` captures from a handler: validation, branches, errors, side effects, sequencing, timing, configuration, data access.
-- [`references/types.md`](references/types.md) — `type` claims: declarations verbatim, nesting, optionality, unions, wire names and converters, what a response actually is.
-- [`references/external-api.md`](references/external-api.md) — outbound HTTP as `call` and `requirement` claims: URL as constructed, headers, bodies, response as deserialised, auth, retries, timeouts.
-- [`references/services.md`](references/services.md) — stores, caches, brokers, and identity providers by kind, and publications: topic, count, delay placement, payload, metadata.
-- [`references/observability.md`](references/observability.md) — metric, trace, and log emissions as claims.
-- [`references/verification.md`](references/verification.md) — the checklist before answering.
-- [`references/examples/README.md`](references/examples/README.md) — worked examples with their Evidence: outbound HTTP, branching and caching, parallel execution and publishing.
+- [`references/component-structure.md`](references/component-structure.md) — read when the message names a surface in a tree of several modules: the manifest and `tsconfig.json`, where each kind of surface enters, the entry layer, async boundaries. A tree of one module needs none of it.
+- [`references/business-logic.md`](references/business-logic.md) — read before the first `requirement` of a handler with branches, errors, side effects, timing, or configuration: what a `requirement` captures, and what commonly goes missing.
+- [`references/types.md`](references/types.md) — read when the seam declares a type with nesting, optionality, unions, decorators, or converters: `type` claims, declarations verbatim, wire names, what a response actually is. A flat interface needs only the kind table below.
+- [`references/external-api.md`](references/external-api.md) — read only when the seam performs outbound HTTP (`fetch`, `axios`, an HTTP client): URL as constructed, headers, bodies, response as deserialised, auth, retries, timeouts.
+- [`references/services.md`](references/services.md) — read only when the seam reaches a store, cache, broker, or identity provider through a client: each by kind, and publications — topic, count, delay placement, payload, metadata. An in-memory `Map` is not one.
+- [`references/observability.md`](references/observability.md) — read only when the seam emits a metric, a trace span, or a structured log.
+- [`references/verification.md`](references/verification.md) — read once, before answering: the checklist.
+- [`references/examples/README.md`](references/examples/README.md) — read only when a construct's claim shape is still unclear after the references above; its table names the one example nearest the surface, and one is enough.
 
 ## Claim kinds
 
@@ -30,15 +30,16 @@ This adapter emits from the closed enum:
 | Kind | Required body field | When to emit |
 |---|---|---|
 | `requirement` | `statement` | A behavioural fact the code exhibits, stated as one present-tense sentence about the system. These are the claims deterministic reconciliation joins against documentation and intent. |
+| `criterion` | `criterion` (free-form) | An acceptance boundary the source spells as a value of its own, covering the requirement whose id it extends — decided by the one rule below. |
 | `excerpt` | `excerpt` (free-form) | A behavioural code span backing a requirement: handler bodies, validation logic, error paths. |
 | `type` | `signature` (free-form), `name` | A declared interface, type alias, class declaration, or DTO whose shape synthesis will need, named by its declared identifier in `name` (`User`) — the key the design block renders it under. |
 | `call` | `callee` (free-form) | An observed cross-module call that contributes to behaviour (the call is the wire). |
 
 **`requirement` claims are the reconciliation currency.** Only `kind: requirement` claims form the spec's requirements; `excerpt` / `type` / `call` claims reach synthesis as supporting context but can never agree, diverge, or conflict with another source. Every behavioural fact worth a spec block — a timeout value, a validation rule, an error response, a side effect — must be lifted into a `requirement` claim with a `statement`, anchored by its `path` and backed by detail claims. The gate is fail-closed ([claims.md](claims.md)): a `requirement` claim without a `statement` field fails the whole run closed (typed `bad_request`).
 
-`id` is **required** on `requirement` claims and follows the dotted-kebab grammar in claims.md (`session.timeout`). Derive ids from the domain concept — never from file paths or positions — so a documentation source describing the same behaviour converges on the same id and the engine can reconcile any disagreement. Lead each id with the domain noun of the surface the behaviour belongs to — the one the message names, or, mined whole, the one the module exposes it through (`orders.…`, `user-registration.…`, `migrate.…`): the other surfaces of the estate are mined by other calls and joined with this one, and two calls that name one requirement with reworded statements manufacture a conflict, so claim a behaviour under the surface whose caller observes it. A module several surfaces reach — a repository, a validator, a client — is claimed for what this surface does with it, under this surface's noun, never for itself. `id` is optional on `excerpt` / `type` / `call`; you MAY carry it when the claim backs a specific requirement.
+`id` is **required** on `requirement` and `criterion` claims and follows the dotted-kebab grammar in claims.md (`session.timeout`). Derive ids from the domain concept — never from file paths or positions — so a documentation source describing the same behaviour converges on the same id and the engine can reconcile any disagreement. Lead each id with the domain noun of the surface the behaviour belongs to — the one the message names, or, mined whole, the one the module exposes it through (`orders.…`, `user-registration.…`, `migrate.…`): the other surfaces of the estate are mined by other calls and joined with this one, and two calls that name one requirement with reworded statements manufacture a conflict, so claim a behaviour under the surface whose caller observes it. A module several surfaces reach — a repository, a validator, a client — is claimed for what this surface does with it, under this surface's noun, never for itself. `id` is optional on `excerpt` / `type` / `call`; you MAY carry it when the claim backs a specific requirement.
 
-Code states behaviour, not acceptance: emit `criterion` claims only when the source itself encodes an explicit acceptance boundary (a documented threshold constant, a schema constraint). Requirements without criteria surface as `[unknown]` acceptance gaps in the spec — that is honest output, not a failure to fix by inventing criteria.
+Code states behaviour, not acceptance. A `criterion` is an acceptance boundary the source spells as a value of its own — a named threshold constant, a schema or validator definition, a validation pattern such as a regex literal — one a documentation source could state verbatim; its id extends its requirement's. An inline comparison in a guard (`items.length === 0`, `quantity < 1`, `state === "shipped"`) is behaviour: state it, with its value, in the `requirement` it belongs to and emit no criterion for it. Decide once per boundary by that rule and do not revisit it. Requirements without criteria surface as `[unknown]` acceptance gaps in the spec — that is honest output, not a failure to fix by inventing criteria.
 
 ## Anchors and excerpts
 
@@ -55,7 +56,7 @@ Rules for the body fields:
 A small Express service bound as the source `legacy-monolith`, mined for the surface `POST /users`, entered at `src/server.ts`:
 
 - `src/server.ts` — `app.post("/users", registerUser)` at L5.
-- `src/users/register.ts` — `registerUser` handler with email validation at L12–L34 and a delegation to `insertUser`.
+- `src/users/register.ts` — `registerUser` handler with email validation at L12–L34, the RFC-5322 regex it tests the email against at L14, and a delegation to `insertUser` at L31.
 - `src/users/repository.ts` — `insertUser` declaration plus the `User` interface.
 
 Resulting Evidence body:
@@ -64,6 +65,7 @@ Resulting Evidence body:
 {
   "claims": [
     { "kind": "requirement", "id": "user-registration.email-validation", "path": "src/users/register.ts#L12-L34", "statement": "Registration rejects an email that is not RFC-5322 valid with a 400 response." },
+    { "kind": "criterion", "id": "user-registration.email-validation.pattern", "path": "src/users/register.ts#L14", "criterion": "The email matches the handler's RFC-5322 address regex." },
     { "kind": "requirement", "id": "user-registration.persistence", "path": "src/users/register.ts#L31", "statement": "A valid registration inserts the user and returns 201 with the persisted record." },
     { "kind": "excerpt", "path": "src/users/register.ts#L12-L34", "excerpt": "Handler validates email against RFC-5322 regex, returns 400 with { error: \"invalid-email\" } on failure, otherwise inserts the user and returns 201 with the persisted record." },
     { "kind": "type", "path": "src/users/repository.ts#L1-L4", "name": "User", "signature": "interface User { id: string; email: string; createdAt: Date }" },
@@ -72,7 +74,7 @@ Resulting Evidence body:
 }
 ```
 
-Two requirements for the spec, three detail claims backing them — the handler's and the repository's behaviour, claimed for what registering a user does with them; what `src/server.ts` mounts besides `POST /users` is other surfaces' calls to claim. The document's source identity is stamped by the engine from the source — it is not written in-document.
+Two requirements for the spec, one criterion covering the first, and three detail claims backing them — the handler's and the repository's behaviour, claimed for what registering a user does with them. The regex is the one boundary the handler spells as a value of its own, so it is the one criterion; the 400 and the 201 are values inside the statements. What `src/server.ts` mounts besides `POST /users` is other surfaces' calls to claim. The document's source identity is stamped by the engine from the source — it is not written in-document.
 
 **Cover what the estate actually does.** A `POST /orders` handler that writes an orders store must carry that write as a `call` claim and its behaviour as a `requirement`; a handler that invokes an external service must carry that call site. Downstream correlation evidences invocation, read/write, and ownership relationships from these structured claims — do not bury them in `excerpt` prose, and do not write a second behavioural spec in prose instead of emitting the structured claims.
 
