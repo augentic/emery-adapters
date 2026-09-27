@@ -40,15 +40,15 @@ export CURSOR_SDK_BRIDGE_LOG=1
 
 ## What to expect
 
-A run is a few model completions with long silences between log lines. The `in progress` heartbeat every 15 s is how you tell a working run from a stuck one, and each `completion` line carries what the completion cost: `input_tokens` with the `cache_read_tokens` among them, `output_tokens` with the `reasoning_tokens` among them, and how the wall time split between `opening_ms` (the bridge and the first frame), `tool_ms` (tool calls outstanding), and `model_ms` (the model composing).
+A run is a few model completions with long silences between log lines. The `in progress` heartbeat every 15 s is how you tell a working run from a stuck one, and each `completion` line carries what the completion cost and where its time went. The token counts are the bridge's: `input_tokens` is the uncached context, `cache_read_tokens` the context served from the provider's prompt cache — the two together are what the model read — `output_tokens` what it wrote, `reasoning_tokens` the part of that spent thinking, and `total_tokens` the bridge's own sum of input, output, and cache reads. The wall time splits into `opening_ms` (the agent's creation and the bridge before each round's first frame), `tool_ms` (tool calls outstanding), `model_ms` (the model composing), and `check_ms` (the adapter's gate or the engine's `verify` on each candidate).
 
-The typescript example is three completions, about five minutes on one observed run:
+The typescript example is three completions and no survey turn — its `src/` is one production module, mined whole. Two runs under `auto` give the shape and the spread:
 
-- `evidence` (one seam) — 193 s, of which 184 s was the model composing, 4 s tool calls, and 2 s the bridge opening; 120 K input tokens, 77 K of them cache reads; 22 K output tokens, 21 K of them reasoning; 8 tool calls (one `glob`, one `read`, `list_docs`, five `read_doc`) in the first 25 s, then one reasoning block of 110 s before the answer.
-- `spec-draft` — 40 s; 9 K input, 4 K output (3.3 K reasoning); no tool calls.
-- `design-draft` — 59 s; 8 K input, 6.5 K output (5.6 K reasoning); no tool calls.
+- `evidence` (one seam) — 2.5–3.5 minutes, of which the model composing is 95%, tool calls a few seconds, and the bridge opening about 2 s. Context 140–200 K tokens, about 40% of it cache reads; output 17–22 K tokens, over 90% of it reasoning. Eight to eleven tool calls — one `glob`, one `read` of the module, `list_docs`, then `read_doc`s — all in the first half-minute, then one reasoning block of two minutes before the answer.
+- `spec-draft` — 40–50 s; 9 K context, 4–5 K output of which 80–90% is reasoning; no tool calls.
+- `design-draft` — 1–2 minutes; 8–17 K context, 6–12 K output of which 85–90% is reasoning; no tool calls.
 
-There is no survey row: the example's `src/` is one production module, so it is mined whole with no survey turn spent. Reasoning dominates both the wall time and the bill, and it varies two- to threefold run to run for the same input; what holds is the shape — one completion per seam, no shell tool, no `read_doc` for the claim rules, which ride the system prompt, and no `read_doc` for `survey.md`, which `list_docs` keeps out of a mining turn. Cache reads are billed at a fraction of fresh input, so `input_tokens` alone overstates the cost of a completion with many tool rounds.
+What holds run to run is the shape — one completion per seam, no shell tool, no `read_doc` for the claim rules, which ride the system prompt, and none for `survey.md`, which `list_docs` never offers — and that reasoning dominates both the wall time and the bill. What does not hold is the size: the two runs differed by a third in the evidence completion's wall time and reasoning over identical input, so a change to a prompt is not measured by one run each side. To compare, pin `CURSOR_MODEL` and take several runs per side before reading a difference into the numbers.
 
 Four optional environment knobs bound the wait and choose the model:
 
