@@ -1,7 +1,8 @@
 //! Discovers the caller-facing surfaces exposed by a source tree.
 //!
-//! Each discovered surface becomes an independent mining seam. Inline input
-//! requires no discovery and is returned as one whole seam.
+//! Each discovered surface becomes an independent mining seam. Inline input,
+//! and a tree of one production module, require no discovery and are one
+//! whole seam.
 
 use emery_sdk::survey::Surface;
 use emery_sdk::workspace::Entry;
