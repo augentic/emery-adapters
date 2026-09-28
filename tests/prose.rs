@@ -56,20 +56,14 @@ fn gated(path: &str, json: &str) {
     );
 }
 
-// The example teaches the shape the check accepts: every surface named, once,
-// and entered somewhere.
+// The example teaches the shape the SDK's check accepts; what that check
+// refuses is the SDK's fact, asserted in its own suite.
 fn survey(docs: &[Doc]) {
     let prompt = body(docs, "survey.md").expect("the survey prompt is listed");
     capped("survey.md", prompt);
     let inventory: Inventory = serde_json::from_str(fenced_json(prompt, "## Worked example"))
         .expect("the worked example is the SDK's Inventory");
     assert!(!inventory.surfaces.is_empty(), "the worked example exposes no surface");
-    let mut names = std::collections::BTreeSet::new();
-    for surface in &inventory.surfaces {
-        assert!(!surface.name.trim().is_empty(), "a surface at `{}` has no name", surface.entry);
-        assert!(!surface.entry.is_empty(), "surface `{}` has no entry", surface.name);
-        assert!(names.insert(&surface.name), "surface `{}` is listed twice", surface.name);
-    }
 }
 
 fn capped(path: &str, prompt: &str) {

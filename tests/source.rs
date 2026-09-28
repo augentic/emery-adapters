@@ -21,10 +21,19 @@ const BRIEF: &str = "Let users reset passwords by email.";
 
 // The prompts as this build compiled them in.
 mod prompt {
-    pub const DOCUMENTATION: &str = include_str!("../sources/documentation/prose/extract.md");
-    pub const INTENT: &str = include_str!("../sources/intent/prose/extract.md");
-    pub const TYPESCRIPT: &str = include_str!("../sources/typescript/prose/extract.md");
-    pub const TYPESCRIPT_SURVEY: &str = include_str!("../sources/typescript/prose/survey.md");
+    use emery_sdk::{Doc, body};
+
+    pub fn extract(docs: &[Doc]) -> &'static str {
+        prompt(docs, "extract.md")
+    }
+
+    pub fn survey(docs: &[Doc]) -> &'static str {
+        prompt(docs, "survey.md")
+    }
+
+    fn prompt(docs: &[Doc], path: &str) -> &'static str {
+        body(docs, path).unwrap_or_else(|| panic!("`{path}` is in the adapter's `PROSE`"))
+    }
 }
 
 fn answer() -> String {
@@ -114,7 +123,7 @@ async fn documentation() {
 
     let model = extract(test_programs::ADAPTER_DOCUMENTATION, &project, 1).await;
 
-    prompted(&model, prompt::DOCUMENTATION, 1);
+    prompted(&model, prompt::extract(documentation::PROSE), 1);
 }
 
 // The cut is the first path segment: `guide/advanced/` has two documents of its
@@ -139,7 +148,7 @@ async fn documentation_directories() {
 
     let model = extract(test_programs::ADAPTER_DOCUMENTATION, &project, 3).await;
 
-    let turns = prompted(&model, prompt::DOCUMENTATION, 3);
+    let turns = prompted(&model, prompt::extract(documentation::PROSE), 3);
     partitioned(
         &turns,
         &[
@@ -175,7 +184,7 @@ async fn documentation_large_directory() {
 
     let model = extract(test_programs::ADAPTER_DOCUMENTATION, &project, 4).await;
 
-    let turns = prompted(&model, prompt::DOCUMENTATION, 4);
+    let turns = prompted(&model, prompt::extract(documentation::PROSE), 4);
     partitioned(&turns, &[&own, &v1, &v2, &["guide/intro.md", "guide/setup.md"]]);
 
     // flat: nothing cuts, so the directory stays one seam whatever its size
@@ -187,7 +196,7 @@ async fn documentation_large_directory() {
 
     let model = extract(test_programs::ADAPTER_DOCUMENTATION, &project, 2).await;
 
-    let turns = prompted(&model, prompt::DOCUMENTATION, 2);
+    let turns = prompted(&model, prompt::extract(documentation::PROSE), 2);
     partitioned(&turns, &[&flat, &["guide/intro.md", "guide/setup.md"]]);
 
     // a remainder of one joins the first subdirectory's seam
@@ -199,7 +208,7 @@ async fn documentation_large_directory() {
 
     let model = extract(test_programs::ADAPTER_DOCUMENTATION, &project, 3).await;
 
-    let turns = prompted(&model, prompt::DOCUMENTATION, 3);
+    let turns = prompted(&model, prompt::extract(documentation::PROSE), 3);
     let joined: Vec<&str> = v1.iter().copied().chain(["api/misc/glossary.md"]).collect();
     partitioned(&turns, &[&joined, &v2, &["guide/intro.md", "guide/setup.md"]]);
 }
@@ -218,7 +227,7 @@ async fn intent() {
 
     let model = extract(test_programs::ADAPTER_INTENT, &project, 1).await;
 
-    let turns = prompted(&model, prompt::INTENT, 1);
+    let turns = prompted(&model, prompt::extract(intent::PROSE), 1);
     assert!(turns[0].contains(BRIEF), "the brief read through the mount is the seam: {}", turns[0]);
     assert!(!turns[0].contains("# Spec"), "the projection is not the brief: {}", turns[0]);
 }
@@ -278,11 +287,11 @@ async fn typescript() {
     assert_eq!(seen.len(), 5, "one survey, one extract per surface, one for the inline value");
     assert_eq!(
         seen[0].system.as_deref(),
-        Some(prompt::TYPESCRIPT_SURVEY),
+        Some(prompt::survey(typescript::PROSE)),
         "the compiled-in survey prompt is the system"
     );
     for request in &seen[1..] {
-        system(request, prompt::TYPESCRIPT);
+        system(request, prompt::extract(typescript::PROSE));
     }
     let mut surfaces: Vec<_> =
         seen[1..4].iter().map(|request| surface(&request.messages[0])).collect();
@@ -367,7 +376,7 @@ async fn typescript_one_module() {
 
     let model = extract(test_programs::ADAPTER_TYPESCRIPT, &project, 1).await;
 
-    let turns = prompted(&model, prompt::TYPESCRIPT, 1);
+    let turns = prompted(&model, prompt::extract(typescript::PROSE), 1);
     assert!(!turns[0].contains("Surface `"), "no surface was surveyed: {}", turns[0]);
 }
 
@@ -408,7 +417,7 @@ async fn typescript_no_surface() {
 
     let seen = model.seen();
     assert_eq!(seen.len(), 1, "the one survey turn, and no extract");
-    assert_eq!(seen[0].system.as_deref(), Some(prompt::TYPESCRIPT_SURVEY));
+    assert_eq!(seen[0].system.as_deref(), Some(prompt::survey(typescript::PROSE)));
     let exchanges = model.exchanges();
     assert_eq!(exchanges.len(), 1, "the inventory was offered to the check once");
     assert_eq!(exchanges[0].outcome, Ok(String::new()), "an empty inventory is a valid answer");

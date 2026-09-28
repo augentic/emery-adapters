@@ -3808,7 +3808,6 @@ dependencies = [
  "futures",
  "omnia-sdk",
  "omnia-test",
- "omnia-wasi-otel",
  "semver",
  "serde_json",
  "tracing",
