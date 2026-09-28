@@ -1,13 +1,16 @@
 //! Extracts behavioural claims from TypeScript and JavaScript source.
 //!
-//! Workspace inputs are divided into exposed surfaces, such as routes,
-//! commands, jobs, and exported APIs. Each surface is mined independently
-//! from its entry module, with the full source tree available.
+//! A workspace whose production modules fit within the SDK's inline budget is
+//! mined whole in one call over those modules, laid into the turn, as a
+//! single-module workspace is; inline input is mined whole too. A larger
+//! workspace is divided into exposed surfaces, such as routes, commands, jobs,
+//! and exported APIs. Each surface is mined independently from its entry
+//! module, with the full source tree available, and its `requirement` and
+//! `criterion` ids are held to the stem the survey gave it.
 //!
 //! Surface discovery is model-assisted and runs before any surface is mined.
 //!
-//! A single-module workspace is mined whole, as inline input is. A workspace
-//! with no production module or no exposed surface is rejected.
+//! A workspace with no production module or no exposed surface is rejected.
 
 #[cfg(target_arch = "wasm32")]
 mod survey;

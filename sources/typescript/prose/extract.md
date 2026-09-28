@@ -1,13 +1,14 @@
 # TypeScript / JavaScript source extract
 
-This prompt runs once per seam of a bound `typescript` source. A tree of several production modules is mined one surface per call: the message names the surface — a route, a command, a job, an exported API — and the module a caller enters it at, and lends the whole tree under `$SOURCE_DIR`. A tree of one production module, and an inline value, are one seam mined whole: the message names no surface, and the seam is everything the module or value holds. Your job, given a surface: start at the entry, follow what the surface reaches, and emit one Evidence document covering the behaviour a caller observes through that surface. Given the whole: read the one module or value in full and emit the same document for every behaviour a caller observes through it. The caller joins the calls' answers into the source's one document, and the engine deterministically reconciles it with every other bound source's Evidence into the specification — see [From sources to a spec](reconciliation.md).
+This prompt runs once per seam of a bound `typescript` source. A large tree is mined one surface per call: the message names the surface — a route, a command, a job, an exported API — the module a caller enters it at, and the stem its ids lead with, and lends the whole tree under `$SOURCE_DIR`. A tree small enough to fit in one message, and a tree of one production module, are one seam mined whole: the message names no surface, lists the production modules and lays them out in full with their line numbers, and the seam is everything they hold; an inline value is one seam mined whole too. Your job, given a surface: start at the entry, follow what the surface reaches, and emit one Evidence document covering the behaviour a caller observes through that surface. Given the whole: read every module or the value in full and emit the same document for every surface the tree exposes — each route, command, job, and exported API a caller outside the source reaches, from its entry through what it reaches — leading each id with the noun of the surface it belongs to, so one surface's requirements share a stem and two surfaces' never collide. The caller joins the calls' answers into the source's one document, and the engine deterministically reconciles it with every other bound source's Evidence into the specification — see [From sources to a spec](reconciliation.md).
 
 Everything this call needs is in this prompt and in `claims.md`, which the system prompt carries. The worked examples under [`references/examples/`](references/examples/README.md) are the only documents to load, and only when a claim's shape is still unclear after the worked example below: the README's table names the one nearest the surface, and one is enough.
 
 ## Inputs
 
-- **`$SOURCE_DIR`** — read-only view of the bound source root, always the whole tree. Resolve imports and `tsconfig.json` `paths` mappings relative to it. Absent when the source is an inline `value` (the seam is then in the message); present, with no surface named, when the tree is one production module.
-- **The surface** — when the message names one, its name and its entry module. Absent when the seam is mined whole.
+- **`$SOURCE_DIR`** — read-only view of the bound source root, always the whole tree. Resolve imports and `tsconfig.json` `paths` mappings relative to it. Absent when the source is an inline `value` (the seam is then in the message).
+- **The surface** — when the message names one, its name, its entry module, and its stem; the tree is lent whole, and you read what the surface reaches from `$SOURCE_DIR`. Absent when the seam is mined whole.
+- **The modules** — when the message names no surface, the production modules the caller kept, laid out in full with every line numbered, or listed by path when they are too large to lay out. Every `path` you anchor names one of them; a claim anchored elsewhere is refused. When they are laid out, cite `#L<n>` from the numbers shown and read nothing again; when they are listed, read from `$SOURCE_DIR`.
 - **Source name** — the kebab-case name the engine passed on the WIT bindings, which the specification cites the source by.
 
 Nothing outside the bound source is reachable; writes back into `$SOURCE_DIR` are denied.
@@ -29,7 +30,7 @@ Read once, then answer: the entry, then each module the surface imports on the w
 - A value the start surface establishes and the handler uses — a client, a topic, a token, a cache — is named in the handler surface's requirement by the key or field the source spells (`Config.kafka.producer.topic`, `KAFKA_DEST_VP_TOPIC`); its construction is the start surface's and is not re-claimed.
 - A module both reach — a repository, a validator, a client wrapper — is claimed for what this surface does with it, under this surface's noun, never for itself.
 
-Mined whole there is no other surface: every behaviour the module or value exhibits is this call's to claim, each under the domain noun of the surface it belongs to.
+Mined whole there is no other call: find the surfaces the tree exposes as a survey would — the routes, commands, jobs, and exports its manifest and bootstrap declare — and claim every behaviour a caller observes through each, under that surface's noun, by the same boundary rule. A boundary a dependency serves for the source — a plugin's health route, a library's metrics endpoint — has no handler of the source's own: the start surface claims that it is mounted, where, and with which options, and nothing of what it answers.
 
 ## Claim kinds
 
@@ -59,9 +60,9 @@ Read each handler for:
 
 **Stating a requirement.** One rule per statement, one sentence, present tense, about the system as the caller sees it: `Registration rejects an email that is not RFC-5322 valid with a 400 response.` A statement carries the value that is the rule — the status code, the limit, the duration, the count — and no more: a default, a hostname, a GUID, a URL template, a list of env keys is the backing `excerpt`'s to carry, named in the statement by its key. A handler that does five things is five requirements, not one sentence of five clauses. Nothing the code does not exhibit: a handler that does not enforce uniqueness has no uniqueness requirement; the engine renders the gap, you do not fill it.
 
-**Ids.** Ids follow [claims.md](claims.md): `<surface>.<behaviour>`, the first segment the domain noun of the surface the behaviour belongs to — the one the message names, or, mined whole, the one the module exposes it through (`orders.…`, `user-registration.…`, `migrate.…`) — and the second the source's own name for the behaviour: the function, branch, error type, metric, or key that exhibits it (`orders.validate-quantity`, `train-update.no-actual-update`, `start.kafka-producer`), so a second run over the same code derives the same id. Never a paraphrase, a position, or a counter. Two calls that name one requirement with reworded statements manufacture a conflict, so claim a behaviour under the surface whose caller observes it, and once.
+**Ids.** Ids follow [claims.md](claims.md): `<stem>.<behaviour>`, the first segment the stem of the surface the behaviour belongs to — the one the message names, which the caller holds every `requirement` and `criterion` id to, or, mined whole, the noun of the surface the tree exposes it through (`orders.…`, `user-registration.…`, `migrate.…`) — and the second the source's own name for the behaviour: the function, branch, error type, metric, or key that exhibits it (`orders.validate-quantity`, `train-update.no-actual-update`, `start.kafka-producer`), so a second run over the same code derives the same id. Never a paraphrase, a position, or a counter. Two calls that name one requirement with reworded statements manufacture a conflict, so claim a behaviour under the surface whose caller observes it, and once. Two ids under one stem are two requirements the engine never merges, so one behaviour is one id, however many branches state it.
 
-**Criteria.** Code states behaviour, not acceptance. A `criterion` is an acceptance boundary the source spells as a value of its own — a named threshold constant, a schema or validator definition, a validation pattern such as a regex literal — one a documentation source could state verbatim; its id extends its requirement's. An inline comparison in a guard (`items.length === 0`, `quantity < 1`, `state === "shipped"`) is behaviour: state it, with its value, in the `requirement` it belongs to and emit no criterion for it. Decide once per boundary and do not revisit it. Requirements without criteria surface as `[unknown]` acceptance gaps in the spec — that is honest output, not a failure to fix by inventing criteria.
+**Criteria.** Code states behaviour, not acceptance. A `criterion` is an acceptance boundary the source spells as a value of its own — a named threshold constant (`const MAX_ITEMS = 50`), a schema or validator definition, a validation pattern such as a regex literal, a configuration default the code falls back to (`process.env.PORT ?? 3000`, `timeout: config.timeoutMs ?? 5000`) — one a documentation source could state verbatim; its id extends its requirement's, and its `criterion` states the boundary as a checkable sentence with the value and its unit. An inline comparison in a guard (`items.length === 0`, `quantity < 1`, `state === "shipped"`) is behaviour: state it, with its value, in the `requirement` it belongs to and emit no criterion for it. The test is whether the value is declared once and referred to — a constant, a default, a schema — or written into the branch that uses it. Decide once per boundary and do not revisit it. Requirements without criteria surface as `[unknown]` acceptance gaps in the spec — that is honest output, not a failure to fix by inventing criteria.
 
 ### Calls
 
@@ -88,10 +89,10 @@ Every claim from the tree carries a `path` anchor in the grammar of [claims.md](
 
 ## Worked example
 
-A small Express service bound as the source `legacy-monolith`, mined for the surface `POST /users`, entered at `src/server.ts`:
+A small Express service bound as the source `legacy-monolith`, mined for the surface `POST /users`, entered at `src/server.ts`, under the stem `user-registration`:
 
 - `src/server.ts` — `app.post("/users", registerUser)` at L5.
-- `src/users/register.ts` — `registerUser` handler with email validation at L12–L34, the RFC-5322 regex it tests the email against at L14, and a delegation to `insertUser` at L31.
+- `src/users/register.ts` — `registerUser` handler with email validation at L12–L34, the RFC-5322 regex it tests the email against at L14, a delegation to `insertUser` at L31, and `const WELCOME_DELAY_MS = Number(process.env.WELCOME_DELAY_MS ?? 60000)` at L3 governing the welcome mail it schedules at L33.
 - `src/users/repository.ts` — the `User` interface at L1–L4 and `insertUser` at L6–L10, whose `pool.query` at L8 inserts the row.
 
 Resulting Evidence body:
@@ -102,24 +103,28 @@ Resulting Evidence body:
     { "kind": "requirement", "id": "user-registration.email-validation", "path": "src/users/register.ts#L12-L34", "statement": "Registration rejects an email that is not RFC-5322 valid with a 400 response." },
     { "kind": "criterion", "id": "user-registration.email-validation.pattern", "path": "src/users/register.ts#L14", "criterion": "The email matches the handler's RFC-5322 address regex." },
     { "kind": "requirement", "id": "user-registration.persistence", "path": "src/users/register.ts#L31", "statement": "A valid registration inserts the user and returns 201 with the persisted record." },
-    { "kind": "excerpt", "path": "src/users/register.ts#L12-L34", "excerpt": "Handler validates email against RFC-5322 regex, returns 400 with { error: \"invalid-email\" } on failure, otherwise inserts the user and returns 201 with the persisted record." },
+    { "kind": "requirement", "id": "user-registration.welcome-mail", "path": "src/users/register.ts#L33", "statement": "A valid registration schedules a welcome mail after the delay WELCOME_DELAY_MS names, once the response is sent." },
+    { "kind": "criterion", "id": "user-registration.welcome-mail.delay", "path": "src/users/register.ts#L3", "criterion": "The welcome mail is scheduled WELCOME_DELAY_MS milliseconds after registration, 60000 when the variable is unset." },
+    { "kind": "excerpt", "path": "src/users/register.ts#L12-L34", "excerpt": "Handler validates email against RFC-5322 regex, returns 400 with { error: \"invalid-email\" } on failure, otherwise inserts the user, returns 201 with the persisted record, and schedules the welcome mail WELCOME_DELAY_MS (default 60000 ms) later without awaiting it." },
     { "kind": "type", "path": "src/users/repository.ts#L1-L4", "name": "User", "signature": "interface User { id: string; email: string; createdAt: Date }" },
     { "kind": "call", "path": "src/users/repository.ts#L8", "callee": "pg:Pool.query", "synopsis": "INSERT INTO users (id, email, created_at) VALUES ($1, $2, $3) RETURNING *" }
   ]
 }
 ```
 
-Two requirements for the spec, one criterion covering the first, and three detail claims backing them. The regex is the one boundary the handler spells as a value of its own, so it is the one criterion; the 400 and the 201 are the rules' values and sit in the statements. The `call` is the store write inside the repository — the one call that leaves the process — not the handler's call to `insertUser`, which is followed to reach it. What `src/server.ts` mounts besides `POST /users` is other surfaces' calls to claim.
+Three requirements for the spec, two criteria, and three detail claims backing them. The regex and the delay default are the two boundaries the handler spells as values of their own — one a pattern literal, one a named constant with an environment default — so they are the two criteria; the 400 and the 201 are the rules' values and sit in the statements, and `persistence` stays uncovered rather than gaining an invented criterion. Every id leads with `user-registration`, the stem the message named. The `call` is the store write inside the repository — the one call that leaves the process — not the handler's call to `insertUser`, which is followed to reach it. What `src/server.ts` mounts besides `POST /users` is other surfaces' calls to claim.
 
 ## Before answering
 
 Check the Evidence against the source, not against a picture of the finished document:
 
-- Every behaviour a caller observes through this surface is a `requirement`: one rule, one present-tense sentence, an `id` led by this surface's noun and named for the code that exhibits it, a `path` at the span.
+- Every behaviour a caller observes through this surface is a `requirement`: one rule, one present-tense sentence, an `id` led by this surface's stem and named for the code that exhibits it, a `path` at the span.
 - Every branch, early return, error path, and side effect the caller can observe is stated.
+- Every named constant, schema, pattern literal, and configuration default a requirement rests on is a `criterion` extending that requirement's id, with the value and its unit; every inline comparison stays in its requirement's statement.
 - Every call that leaves the process is a `call` at its site with its target as constructed; no call between modules of the tree is one.
 - Every type the surface takes, returns, persists, or publishes is a `type`, declaration verbatim, nested types included.
 - Every key, constant, duration, count, status code, and topic is spelled as the source spells it — the rule's value in the statement, the rest in the excerpt.
+- Every `path` names a production module the tree holds — one the message laid out or listed, when it named them — with lines the file holds; nothing is anchored in a file the tree does not hold.
 - Nothing is claimed the code does not exhibit; nothing for another surface; nothing from a test, a `.d.ts`, a dependency, build output, or the engine's own files.
 - Every `requirement` has a `statement`; every `criterion` has a `criterion` and an id extending its requirement's; every id is dotted kebab-case.
 

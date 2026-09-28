@@ -33,12 +33,13 @@ mod prompt {
     }
 }
 
+// Unanchored, so one answer serves a workspace seam and the inline value alike;
+// what the SDK holds a `path` to is its own suite's.
 fn answer() -> String {
     serde_json::json!({
         "claims": [{
             "kind": "requirement",
             "id": "orders.create",
-            "path": "docs/orders.md#L3",
             "statement": "POST /orders creates an order."
         }]
     })
@@ -49,6 +50,13 @@ fn tree(project: &Scratch, files: &[&str]) {
     for file in files {
         project.write(file, "");
     }
+}
+
+// A module past the SDK's inline budget on its own, so the tree is surveyed.
+fn bulk(project: &Scratch, file: &str) {
+    let line = "export const pad = 0;\n";
+    let count = usize::try_from(emery_sdk::INLINE_BYTES).expect("fits") / line.len() + 1;
+    project.write(file, line.repeat(count));
 }
 
 // One answer per workspace seam, and one for the inline value.
@@ -103,13 +111,25 @@ fn partitioned(turns: &[String], groups: &[&[&str]]) {
 }
 
 // The line is the typescript adapter's own, so it is what the call is told.
-fn surface(turn: &str) -> (&str, &str) {
+fn surface(turn: &str) -> (&str, &str, &str) {
     turn.lines()
         .find_map(|line| {
             let rest = line.strip_prefix("Surface `")?.strip_suffix("`.")?;
-            rest.split_once("` — entry `")
+            let (name, rest) = rest.split_once("` — entry `")?;
+            let (entry, stem) = rest.split_once("` — stem `")?;
+            Some((name, entry, stem))
         })
-        .expect("the turn names its surface and entry")
+        .expect("the turn names its surface, entry, and stem")
+}
+
+// Every module is laid out in the turn, and nothing else is.
+fn laid(turn: &str, modules: &[&str], refused: &[&str]) {
+    for module in modules {
+        assert!(turn.contains(&format!("### `{module}` (")), "`{module}` is laid out: {turn}");
+    }
+    for file in refused {
+        assert!(!turn.contains(file), "`{file}` is not a module: {turn}");
+    }
 }
 
 // A tree of one directory cuts no finer than itself.
@@ -259,16 +279,39 @@ async fn intent_empty_brief() {
     assert!(model.seen().is_empty(), "no turn is spent on a blank value");
 }
 
-// A call mines a surface and never a file, so two surfaces entering at one
-// module are two extracts; the inline value spends no survey turn.
+// A tree whose modules fit within the SDK's inline budget is one extract with
+// every module laid into the turn and no survey turn spent; the inline value
+// spends none either.
 #[tokio::test]
 async fn typescript() {
+    const MODULES: [&str; 5] =
+        ["src/index.ts", "src/routes.ts", "src/orders.ts", "src/jobs.ts", "src/db.ts"];
     let project = scratch();
-    tree(&project, &["src/index.ts", "src/routes.ts", "src/orders.ts", "src/jobs.ts", "src/db.ts"]);
+    tree(&project, &MODULES);
+    project.write("src/routes.ts", "export const routes = [];\n");
+
+    let model = extract(test_programs::ADAPTER_TYPESCRIPT, &project, 1).await;
+
+    let turns = prompted(&model, prompt::extract(typescript::PROSE), 1);
+    assert!(!turns[0].contains("Surface `"), "no surface was surveyed: {}", turns[0]);
+    laid(&turns[0], &MODULES, &[]);
+    assert!(turns[0].contains("1|export const routes = [];"), "numbered: {}", turns[0]);
+}
+
+// A tree past the budget is surveyed, and a call mines a surface and never a
+// file, so two surfaces entering at one module are two extracts, each told its
+// surface, entry, and stem over the whole lent tree.
+#[tokio::test]
+async fn typescript_surfaces() {
+    const MODULES: [&str; 5] =
+        ["src/index.ts", "src/routes.ts", "src/orders.ts", "src/jobs.ts", "src/db.ts"];
+    let project = scratch();
+    tree(&project, &MODULES);
+    bulk(&project, "src/db.ts");
     let inventory = r#"{"surfaces":[
-        {"name":"POST /orders","entry":"src/routes.ts"},
-        {"name":"GET /orders/:id","entry":"src/routes.ts"},
-        {"name":"nightly reconciliation job","entry":"src/jobs.ts"}
+        {"name":"POST /orders","entry":"src/routes.ts","stem":"orders"},
+        {"name":"GET /orders/:id","entry":"src/routes.ts","stem":"orders"},
+        {"name":"nightly reconciliation job","entry":"src/jobs.ts","stem":"orders"}
     ]}"#;
     let answer = answer();
 
@@ -296,11 +339,53 @@ async fn typescript() {
     assert_eq!(
         surfaces,
         [
-            ("GET /orders/:id", "src/routes.ts"),
-            ("POST /orders", "src/routes.ts"),
-            ("nightly reconciliation job", "src/jobs.ts"),
+            ("GET /orders/:id", "src/routes.ts", "orders"),
+            ("POST /orders", "src/routes.ts", "orders"),
+            ("nightly reconciliation job", "src/jobs.ts", "orders"),
         ]
     );
+    for request in &seen[1..4] {
+        let turn = &request.messages[0];
+        assert!(!turn.contains("laid out"), "a surface reads the lent tree: {turn}");
+        assert!(!turn.contains("- `src/db.ts`"), "a surface lists no module: {turn}");
+    }
+}
+
+// The surface's stem holds the call's ids: an id under another stem is the
+// SDK's finding, and the corrected answer is the seam's.
+#[tokio::test]
+async fn typescript_stem() {
+    let project = scratch();
+    tree(&project, &["src/index.ts", "src/jobs.ts"]);
+    bulk(&project, "src/index.ts");
+    let inventory =
+        r#"{"surfaces":[{"name":"nightly job","entry":"src/jobs.ts","stem":"reconciliation"}]}"#;
+    let strayed = answer();
+    let corrected = strayed.replace("orders.create", "reconciliation.nightly");
+
+    let model = support::run(
+        test_programs::ADAPTER_TYPESCRIPT,
+        &project,
+        &[],
+        ScriptedModel::answering([
+            inventory,
+            strayed.as_str(),
+            corrected.as_str(),
+            strayed.as_str(),
+        ]),
+    )
+    .await;
+
+    let seen = model.seen();
+    assert_eq!(seen.len(), 4, "one survey, two rounds for the surface, one inline");
+    let exchanges = model.exchanges();
+    let correction = exchanges[1].outcome.as_ref().expect_err("the stray stem is refused");
+    assert!(
+        correction.contains("id `orders.create` leads with `orders`, not a stem of this seam"),
+        "{correction}"
+    );
+    assert_eq!(exchanges[2].outcome, Ok(String::new()), "the corrected answer is accepted");
+    assert_eq!(exchanges[3].outcome, Ok(String::new()), "the inline value is held to no stem");
 }
 
 // Every refused entry is present in the tree; the calls are cut from the
@@ -323,14 +408,18 @@ async fn typescript_non_production() {
         &project,
         &["routes/orders.ts", "routes/users.ts", "services/index.ts", "services/mail.ts"],
     );
+    bulk(&project, "services/mail.ts");
     tree(&project, &REFUSED);
     let surfaces: Vec<_> = REFUSED
         .iter()
         .enumerate()
-        .map(|(index, entry)| serde_json::json!({ "name": format!("surface {index}"), "entry": entry }))
+        .map(|(index, entry)| {
+            serde_json::json!({ "name": format!("surface {index}"), "entry": entry, "stem": "x" })
+        })
         .collect();
     let rejected = serde_json::json!({ "surfaces": surfaces }).to_string();
-    let accepted = r#"{"surfaces":[{"name":"POST /orders","entry":"routes/orders.ts"}]}"#;
+    let accepted =
+        r#"{"surfaces":[{"name":"POST /orders","entry":"routes/orders.ts","stem":"orders"}]}"#;
     let answer = answer();
 
     let model = support::run(
@@ -350,57 +439,51 @@ async fn typescript_non_production() {
         assert!(correction.contains(entry), "`{entry}` is a finding: {correction}");
     }
     assert_eq!(exchanges[1].outcome, Ok(String::new()), "the production module is accepted");
-    assert_eq!(surface(&seen[2].messages[0]), ("POST /orders", "routes/orders.ts"));
+    assert_eq!(surface(&seen[2].messages[0]), ("POST /orders", "routes/orders.ts", "orders"));
+    let turn = &seen[2].messages[0];
+    for entry in REFUSED {
+        assert!(!turn.contains(entry), "`{entry}` is no module of the call: {turn}");
+    }
 }
 
-// *.config.* files are production modules and count toward the survey cutoff.
+// *.config.* files are production modules: two modules are still one small
+// tree, mined whole with both laid out.
 #[tokio::test]
 async fn typescript_config_module() {
     let project = scratch();
     tree(&project, &["vite.config.ts", "src/index.ts"]);
-    let inventory = r#"{"surfaces":[{"name":"start script","entry":"src/index.ts"}]}"#;
-    let answer = answer();
 
-    let model = support::run(
-        test_programs::ADAPTER_TYPESCRIPT,
-        &project,
-        &[],
-        ScriptedModel::answering([inventory, answer.as_str(), answer.as_str()]),
-    )
-    .await;
+    let model = extract(test_programs::ADAPTER_TYPESCRIPT, &project, 1).await;
 
-    let seen = model.seen();
-    assert_eq!(seen.len(), 3, "one survey, one extract, one inline");
-    assert_eq!(
-        seen[0].system.as_deref(),
-        Some(prompt::survey(typescript::PROSE)),
-        "two production modules spend a survey turn"
-    );
+    let turns = prompted(&model, prompt::extract(typescript::PROSE), 1);
+    laid(&turns[0], &["vite.config.ts", "src/index.ts"], &[]);
 }
 
 // A tree of one production module cannot be cut, so no survey turn is spent
-// and the one extract mines the tree whole.
+// and the one extract mines the tree whole, however large the module.
 #[tokio::test]
 async fn typescript_one_module() {
+    const REFUSED: [&str; 7] = [
+        "src/orders.test.ts",
+        "src/types.d.ts",
+        "dist/bundle.js",
+        "node_modules/left-pad/index.js",
+        "tests/orders.e2e.ts",
+        ".git/HEAD",
+        "README.md",
+    ];
     let project = scratch();
-    tree(
-        &project,
-        &[
-            "src/orders.ts",
-            "src/orders.test.ts",
-            "src/types.d.ts",
-            "dist/bundle.js",
-            "node_modules/left-pad/index.js",
-            "tests/orders.e2e.ts",
-            ".git/HEAD",
-            "README.md",
-        ],
-    );
+    tree(&project, &REFUSED);
+    bulk(&project, "src/orders.ts");
 
     let model = extract(test_programs::ADAPTER_TYPESCRIPT, &project, 1).await;
 
     let turns = prompted(&model, prompt::extract(typescript::PROSE), 1);
     assert!(!turns[0].contains("Surface `"), "no surface was surveyed: {}", turns[0]);
+    assert!(turns[0].contains("- `src/orders.ts`"), "the one module is listed: {}", turns[0]);
+    for file in REFUSED {
+        assert!(!turns[0].contains(file), "`{file}` is no module: {}", turns[0]);
+    }
 }
 
 // A tree with no production module is refused before the model is reached.
@@ -429,6 +512,7 @@ async fn typescript_no_module() {
 async fn typescript_no_surface() {
     let project = scratch();
     tree(&project, &["src/lib/db.ts", "src/lib/logger.ts", "src/lib/format.ts"]);
+    bulk(&project, "src/lib/format.ts");
 
     let model = refused(
         test_programs::ADAPTER_TYPESCRIPT,
