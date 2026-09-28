@@ -34,15 +34,8 @@ mod guest {
 pub static PROSE: &[emery_sdk::Doc] = emery_sdk::prose![
     "../prose/extract.md",
     "../prose/survey.md",
-    "../prose/references/business-logic.md",
-    "../prose/references/component-structure.md",
     "../prose/references/examples/README.md",
     "../prose/references/examples/branching-caching.md",
     "../prose/references/examples/outbound-http.md",
     "../prose/references/examples/parallel-execution.md",
-    "../prose/references/external-api.md",
-    "../prose/references/observability.md",
-    "../prose/references/services.md",
-    "../prose/references/types.md",
-    "../prose/references/verification.md",
 ];

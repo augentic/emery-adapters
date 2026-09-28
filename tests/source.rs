@@ -307,12 +307,13 @@ async fn typescript() {
 // inventory finally accepted, never the refused one.
 #[tokio::test]
 async fn typescript_non_production() {
-    const REFUSED: [&str; 8] = [
+    const REFUSED: [&str; 9] = [
         "services/mail.test.ts",
         "services/mail.spec.ts",
         "services/types.d.ts",
         "node_modules/left-pad/index.js",
         "dist/bundle.js",
+        "test/cucumber/steps/orders.ts",
         "tests/orders.e2e.ts",
         ".git/HEAD",
         "routes/README.md",

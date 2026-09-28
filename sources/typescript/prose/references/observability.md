@@ -1,3 +1,0 @@
-# Observability
-
-Metrics, traces, and structured log events the surface emits are behaviour an operator observes. Claim each emission site as a `call` — `callee` the client method (`prom-client` `Counter.inc`, `src/lib/metrics.ts:gauge`, a `logger.info` carrying a structured event name) — with a synopsis naming the metric or event, its type (counter, gauge, histogram, span), the labels attached, and when in the handler it fires. Where the emission is part of the surface's contract — a counter per processed event, a span around every outbound call — state it as a `requirement`: `Every published event increments the events_published counter.` Carry names exactly as the source spells them.

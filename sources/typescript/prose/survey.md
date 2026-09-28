@@ -6,7 +6,7 @@ This prompt runs once per bound `typescript` source, before anything is extracte
 
 - **`$SOURCE_DIR`** — read-only view of the bound source root, the whole tree. Read what declares the boundary: `package.json`, the bootstrap, routers, command registries, schedulers and consumers, public barrels.
 - **The module list** — every production module the caller kept, as `/`-separated paths relative to `$SOURCE_DIR`; past 200 modules, the root's own files and each top-level directory with its count instead. Read the manifest and the bootstrap among them; list a directory only when it stands for its modules, and never glob the tree yourself.
-- **An entry** — a `/`-separated path relative to `$SOURCE_DIR` to a production module: a `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, or `.cjs` file of the source's own. Tests (`*.test.*`, `*.spec.*`, `tests/`, `__tests__/`), declaration files (`*.d.ts`), dependencies (`node_modules/`, `vendor/`), build output (`dist/`, `build/`, `target/`), and dot entries are not modules and enter nothing; the caller checks every entry against the tree and refuses one named there, or at no file.
+- **An entry** — a `/`-separated path relative to `$SOURCE_DIR` to a production module: a `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, or `.cjs` file of the source's own. Tests (`*.test.*`, `*.spec.*`, `test/`, `tests/`, `__tests__/`), declaration files (`*.d.ts`), dependencies (`node_modules/`, `vendor/`), build output (`dist/`, `build/`, `target/`), and dot entries are not modules and enter nothing; the caller checks every entry against the tree and refuses one named there, or at no file.
 
 Nothing outside the bound source is reachable; writes back into `$SOURCE_DIR` are denied.
 
@@ -25,7 +25,7 @@ Choose the grain a reviewer would name: one surface per route family per handler
 
 ## Method
 
-1. **Read the manifest.** `package.json`: `bin` names commands; `exports` / `main` / `module` name what a library makes importable; `scripts` name what is run and its entry module. `tsconfig.json` `paths` resolve the aliases you meet on the way. [Component structure](references/component-structure.md) is the fuller procedure.
+1. **Read the manifest.** `package.json`: `bin` names commands; `exports` / `main` / `module` name what a library makes importable; `scripts` name what is run and its entry module. `tsconfig.json` `paths` resolve the aliases you meet on the way, and `dependencies` name the frameworks in play (`express`, `fastify`, `@nestjs/core`, `commander`, `bullmq`, `kafkajs`), which decide what a route, a command, or a consumer registration looks like.
 2. **Find the bootstrap.** The module the manifest or its scripts start — `src/index.ts`, `src/server.ts`, `src/main.ts`, a framework's `app.ts` — and what it mounts, registers, schedules, or subscribes. Each is a surface, entered at the module that declares it, and the bootstrap itself is the start command's entry.
 3. **Stop at the boundary.** Do not follow a handler into its services and stores — the extract call does, from the entry you name. You need only where each surface is entered.
 4. **Name each surface for what the caller does.** `POST /orders`, `/users routes`, `nightly reconciliation job`, `migrate command`, `start script`, `@acme/client` — the name is the seam's identity: the extract call leads every requirement id with its domain noun, so two surfaces never name one thing.
