@@ -6,8 +6,8 @@ use emery_sdk::{Error, Seam, SourceContent, SourceInput};
 
 const MIN_SIZE: usize = 2;
 
-// Over this, a directory is cut one level finer, so it cannot hold a run behind
-// one turn.
+// Over this, a directory is partitioned one level deeper, so it cannot hold a
+// run behind one turn.
 const MAX_SIZE: usize = 16;
 
 // Refuses `BadRequest` for a non-UTF-8 entry name and `ServerError` when a
@@ -43,7 +43,6 @@ fn partition(prefix: &str, files: Vec<String>) -> Vec<Vec<String>> {
         groups.entry(None).or_default().extend(folded);
     }
 
-
     // an own group too small to stand alone joins the first segment's
     if groups.len() > 1 && groups.get(&None).is_some_and(|own| own.len() < MIN_SIZE) {
         let own = groups.remove(&None).unwrap_or_default();
@@ -52,11 +51,13 @@ fn partition(prefix: &str, files: Vec<String>) -> Vec<Vec<String>> {
         }
     }
 
-    // cut a top-level directory over the cap once more
+    // partition a top-level directory over the cap once more
     groups
         .into_iter()
         .flat_map(|(segment, files)| match segment {
-            Some(segment) if prefix.is_empty() && files.len() > MAX_SIZE => cut(&segment, files),
+            Some(segment) if prefix.is_empty() && files.len() > MAX_SIZE => {
+                partition(&segment, files)
+            }
             _ => vec![files],
         })
         .collect()
