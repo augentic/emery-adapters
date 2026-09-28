@@ -2,7 +2,7 @@
 
 Live `specify` journeys via [omnia-cursor](https://github.com/augentic/omnia-backends/tree/main/crates/cursor). 
 
-`emery` loads the specified adapter(s) to extract claims from one or more sources. The claims are synthesised into `spec.md` / `design.md`, which are then committed to the revision store (`.omnia/storage/blobstore/`).
+`emery` loads the specified adapter(s) to extract claims from one or more sources. The claims are synthesised into `spec.md` / `design.md`, the specification is sliced into `plan.md`, and the three are committed to the revision store (`.omnia/storage/blobstore/`).
 
 ## Prerequisites
 
@@ -22,9 +22,10 @@ cargo build --workspace --target wasm32-wasip2 --release
 set -a; source .env; set +a
 cargo run --manifest-path ../emery/Cargo.toml -- specify -v --config examples/typescript/emery.toml
 
-# review the committed revision
+# review the committed revision and its build plan
 cargo run --manifest-path ../emery/Cargo.toml -- show spec
 cargo run --manifest-path ../emery/Cargo.toml -- show design
+cargo run --manifest-path ../emery/Cargo.toml -- show plan
 ```
 
 Without `.env`:
@@ -48,7 +49,7 @@ export CURSOR_SDK_BRIDGE_LOG=1
 
 A run is a few model completions with long silences between log lines. The `in progress` heartbeat every 15 s is how you tell a working run from a stuck one, and each `completion` line carries what the completion cost and where its time went. The token counts are the bridge's: `input_tokens` is the uncached context, `cache_read_tokens` the context served from the provider's prompt cache — the two together are what the model read — `output_tokens` what it wrote, `reasoning_tokens` the part of that spent thinking, and `total_tokens` the bridge's own sum of input, output, and cache reads. The wall time splits into `opening_ms` (the agent's creation and the bridge before each round's first frame), `tool_ms` (tool calls outstanding), `model_ms` (the model composing), and `check_ms` (the adapter's gate or the engine's `verify` on each candidate).
 
-The typescript example is three completions and no survey turn — its `src/` is one production module, mined whole. Two runs under `auto` give the shape and the spread:
+The typescript example is three completions, no survey turn, and no slicing turn — its `src/` is one production module, mined whole, and its requirements fall under the one stem `orders`, so the build plan is one slice with no model turn spent. The combined [emery.toml](emery.toml) adds a `grouping` completion for the three sources and, when their requirements fall under more than one stem, a `slicing` completion. Two runs under `auto` give the shape and the spread:
 
 - `evidence` (one seam) — 155–195 s, of which the model composing is about 95%, tool calls a few seconds, and the bridge opening about 2 s. Context 140–200 K tokens, about 40% of it cache reads; output 17–22 K tokens, about 90% of it reasoning. Eight to eleven tool calls — one `glob`, one `read` of the module, `list_docs`, then `read_doc`s — all in the first half-minute, then one reasoning block of two minutes before the answer.
 - `spec-draft` — 40–50 s; 10–12 K context, 4–5 K output of which 80–90% is reasoning; no tool calls.
