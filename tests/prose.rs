@@ -1,14 +1,7 @@
 //! Verifies every shipped adapter's embedded prompt corpus.
 //!
-//! Every Markdown file must be listed once, every relative link must resolve
-//! to a listed document or one of the SDK's runtime references, and every
-//! reference must be reachable from a prompt. Extraction prompts and worked
-//! examples are kept within their size limit and validated against the
-//! evidence schema and claim gate.
-//!
-//! Model-assisted survey prompts receive the same checks against their
-//! inventory schema. Runtime use of each embedded prompt is covered by
-//! `source.rs`.
+//! The checks run natively over each adapter's `PROSE` and its `prose/` tree.
+//! Runtime use of each embedded prompt is covered by `source.rs`.
 
 #![cfg(not(target_arch = "wasm32"))]
 

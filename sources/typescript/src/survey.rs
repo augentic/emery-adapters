@@ -8,16 +8,14 @@ use emery_sdk::survey::Surface;
 use emery_sdk::workspace::Entry;
 use emery_sdk::{Context, Doc, Error, Model, Seam, SourceContent, bad_request};
 
-// Surveys workspace input by model: each surface becomes a note seam lent the
-// whole tree, so a module is mined only through the surfaces that reach it.
-// An inline value, or a tree of one production module, cannot be cut and is
-// one whole seam with no survey turn spent.
+// Each surface is a note seam lent the whole tree, so a module is mined only
+// through the surfaces that reach it.
 pub async fn survey<P: Model>(
     ctx: &Context<'_, P>, docs: &'static [Doc],
 ) -> Result<Vec<Seam>, Error> {
     let source = &ctx.input.name;
 
-    // inline brief instead of a path — nothing to list or survey
+    // pass an inline value through whole
     let SourceContent::Workspace(workspace) = &ctx.input.content else {
         return Ok(vec![Seam::Whole]);
     };
@@ -59,11 +57,9 @@ fn include(entry: Entry<'_>) -> bool {
         return false;
     }
 
-    // skip non-code infixes
     !matches!(stem.rsplit_once('.'), Some((_, infix)) if SKIP_INFIXES.contains(&infix))
 }
 
-// What to mine.
 fn mine_note(surface: &Surface) -> String {
     format!(
         "Surface `{name}` — entry `{entry}`.\n\n\

@@ -2,7 +2,7 @@
 //!
 //! The adapter accepts inline text or a workspace containing one regular
 //! file. The brief must not be empty and is always mined as a single unit.
-//! Emery's generated files and hidden entries — names beginning with a dot —
+//! Emery's generated files and hidden entries, names beginning with a dot,
 //! are ignored when counting workspace files.
 
 #[cfg(target_arch = "wasm32")]

@@ -4,8 +4,6 @@ use std::path::Path;
 
 use emery_sdk::{Error, Seam, SourceContent, SourceInput, bad_request, server_error};
 
-// An inline brief is one `Whole` seam; the one file of a tree is read into a
-// `Note` seam. No model turn is spent.
 pub fn survey(input: &SourceInput) -> Result<Vec<Seam>, Error> {
     let seam = match &input.content {
         SourceContent::Value(value) => {
@@ -20,7 +18,6 @@ pub fn survey(input: &SourceInput) -> Result<Vec<Seam>, Error> {
     Ok(vec![seam])
 }
 
-// The one file of the tree, read into the seam that carries it.
 fn to_note(root: &str) -> Result<Seam, Error> {
     let files = emery_sdk::workspace::list(root, |entry| !entry.hidden())?;
     let [file] = files.as_slice() else {

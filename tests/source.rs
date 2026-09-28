@@ -1,9 +1,6 @@
 //! Verifies every shipped adapter through the component interface.
 //!
 //! Each adapter runs under the omnia runtime against a strict model script.
-//! The scenarios verify metadata, survey-selected seam counts and content,
-//! embedded extraction prompts, and caller-visible refusals.
-//!
 //! Assertions use adapter-owned source data rather than SDK prompt wording.
 //! Shared SDK and component-boundary behaviour is covered by `probe.rs`.
 
