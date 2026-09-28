@@ -21,10 +21,19 @@ const BRIEF: &str = "Let users reset passwords by email.";
 
 // The prompts as this build compiled them in.
 mod prompt {
-    pub const DOCUMENTATION: &str = include_str!("../sources/documentation/prose/extract.md");
-    pub const INTENT: &str = include_str!("../sources/intent/prose/extract.md");
-    pub const TYPESCRIPT: &str = include_str!("../sources/typescript/prose/extract.md");
-    pub const TYPESCRIPT_SURVEY: &str = include_str!("../sources/typescript/prose/survey.md");
+    use emery_sdk::{Doc, body};
+
+    pub fn extract(docs: &[Doc]) -> &'static str {
+        prompt(docs, "extract.md")
+    }
+
+    pub fn survey(docs: &[Doc]) -> &'static str {
+        prompt(docs, "survey.md")
+    }
+
+    fn prompt(docs: &[Doc], path: &str) -> &'static str {
+        body(docs, path).unwrap_or_else(|| panic!("`{path}` is in the adapter's `PROSE`"))
+    }
 }
 
 fn answer() -> String {
@@ -74,12 +83,11 @@ fn prompted(model: &ScriptedModel, prompt: &str, seams: usize) -> Vec<String> {
     seen[..seams].iter().map(|request| request.messages[0].clone()).collect()
 }
 
-// The system is the compiled-in prompt with the SDK's claim rules after it.
+// What the SDK appends after the prompt is the SDK's fact, asserted over the
+// `gated` probe.
 fn system(request: &Seen, prompt: &str) {
     let system = request.system.as_deref().expect("a system prompt");
-    let claims = emery_sdk::body(emery_sdk::RUNTIME, "claims.md").expect("the claim rules");
     assert!(system.starts_with(prompt), "the compiled-in prompt leads the system");
-    assert!(system.ends_with(claims), "the claim rules ride the system");
 }
 
 // Every group appears together in exactly one turn.
@@ -115,7 +123,7 @@ async fn documentation() {
 
     let model = extract(test_programs::ADAPTER_DOCUMENTATION, &project, 1).await;
 
-    prompted(&model, prompt::DOCUMENTATION, 1);
+    prompted(&model, prompt::extract(documentation::PROSE), 1);
 }
 
 // The cut is the first path segment: `guide/advanced/` has two documents of its
@@ -140,7 +148,7 @@ async fn documentation_directories() {
 
     let model = extract(test_programs::ADAPTER_DOCUMENTATION, &project, 3).await;
 
-    let turns = prompted(&model, prompt::DOCUMENTATION, 3);
+    let turns = prompted(&model, prompt::extract(documentation::PROSE), 3);
     partitioned(
         &turns,
         &[
@@ -176,7 +184,7 @@ async fn documentation_large_directory() {
 
     let model = extract(test_programs::ADAPTER_DOCUMENTATION, &project, 4).await;
 
-    let turns = prompted(&model, prompt::DOCUMENTATION, 4);
+    let turns = prompted(&model, prompt::extract(documentation::PROSE), 4);
     partitioned(&turns, &[&own, &v1, &v2, &["guide/intro.md", "guide/setup.md"]]);
 
     // flat: nothing cuts, so the directory stays one seam whatever its size
@@ -188,7 +196,7 @@ async fn documentation_large_directory() {
 
     let model = extract(test_programs::ADAPTER_DOCUMENTATION, &project, 2).await;
 
-    let turns = prompted(&model, prompt::DOCUMENTATION, 2);
+    let turns = prompted(&model, prompt::extract(documentation::PROSE), 2);
     partitioned(&turns, &[&flat, &["guide/intro.md", "guide/setup.md"]]);
 
     // a remainder of one joins the first subdirectory's seam
@@ -200,24 +208,26 @@ async fn documentation_large_directory() {
 
     let model = extract(test_programs::ADAPTER_DOCUMENTATION, &project, 3).await;
 
-    let turns = prompted(&model, prompt::DOCUMENTATION, 3);
+    let turns = prompted(&model, prompt::extract(documentation::PROSE), 3);
     let joined: Vec<&str> = v1.iter().copied().chain(["api/misc/glossary.md"]).collect();
     partitioned(&turns, &[&joined, &v2, &["guide/intro.md", "guide/setup.md"]]);
 }
 
-// The engine's own output beside the brief is not a file of the tree, so the
-// tree is still one file.
+// The engine's own output and the dot entries an editor or `git` leaves
+// beside the brief are not files of the tree, so the tree is still one file.
 #[tokio::test]
 async fn intent() {
     let project = scratch();
     project.write("brief/intent.md", BRIEF);
+    project.write("brief/.gitkeep", "");
+    project.write(".DS_Store", "");
     project.write("spec.md", "# Spec");
     project.write("design.md", "# Design");
     project.write(".omnia/store.json", "{}");
 
     let model = extract(test_programs::ADAPTER_INTENT, &project, 1).await;
 
-    let turns = prompted(&model, prompt::INTENT, 1);
+    let turns = prompted(&model, prompt::extract(intent::PROSE), 1);
     assert!(turns[0].contains(BRIEF), "the brief read through the mount is the seam: {}", turns[0]);
     assert!(!turns[0].contains("# Spec"), "the projection is not the brief: {}", turns[0]);
 }
@@ -277,11 +287,11 @@ async fn typescript() {
     assert_eq!(seen.len(), 5, "one survey, one extract per surface, one for the inline value");
     assert_eq!(
         seen[0].system.as_deref(),
-        Some(prompt::TYPESCRIPT_SURVEY),
+        Some(prompt::survey(typescript::PROSE)),
         "the compiled-in survey prompt is the system"
     );
     for request in &seen[1..] {
-        system(request, prompt::TYPESCRIPT);
+        system(request, prompt::extract(typescript::PROSE));
     }
     let mut surfaces: Vec<_> =
         seen[1..4].iter().map(|request| surface(&request.messages[0])).collect();
@@ -345,6 +355,31 @@ async fn typescript_non_production() {
     assert_eq!(surface(&seen[2].messages[0]), ("POST /orders", "routes/orders.ts"));
 }
 
+// *.config.* files are production modules and count toward the survey cutoff.
+#[tokio::test]
+async fn typescript_config_module() {
+    let project = scratch();
+    tree(&project, &["vite.config.ts", "src/index.ts"]);
+    let inventory = r#"{"surfaces":[{"name":"start script","entry":"src/index.ts"}]}"#;
+    let answer = answer();
+
+    let model = support::run(
+        test_programs::ADAPTER_TYPESCRIPT,
+        &project,
+        &[],
+        ScriptedModel::answering([inventory, answer.as_str(), answer.as_str()]),
+    )
+    .await;
+
+    let seen = model.seen();
+    assert_eq!(seen.len(), 3, "one survey, one extract, one inline");
+    assert_eq!(
+        seen[0].system.as_deref(),
+        Some(prompt::survey(typescript::PROSE)),
+        "two production modules spend a survey turn"
+    );
+}
+
 // A tree of one production module cannot be cut, so no survey turn is spent
 // and the one extract mines the tree whole.
 #[tokio::test]
@@ -366,7 +401,7 @@ async fn typescript_one_module() {
 
     let model = extract(test_programs::ADAPTER_TYPESCRIPT, &project, 1).await;
 
-    let turns = prompted(&model, prompt::TYPESCRIPT, 1);
+    let turns = prompted(&model, prompt::extract(typescript::PROSE), 1);
     assert!(!turns[0].contains("Surface `"), "no surface was surveyed: {}", turns[0]);
 }
 
@@ -407,7 +442,7 @@ async fn typescript_no_surface() {
 
     let seen = model.seen();
     assert_eq!(seen.len(), 1, "the one survey turn, and no extract");
-    assert_eq!(seen[0].system.as_deref(), Some(prompt::TYPESCRIPT_SURVEY));
+    assert_eq!(seen[0].system.as_deref(), Some(prompt::survey(typescript::PROSE)));
     let exchanges = model.exchanges();
     assert_eq!(exchanges.len(), 1, "the inventory was offered to the check once");
     assert_eq!(exchanges[0].outcome, Ok(String::new()), "an empty inventory is a valid answer");

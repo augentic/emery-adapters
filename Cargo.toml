@@ -87,7 +87,6 @@ unused_result_ok = "warn"
 # - `field_scoped_visibility_modifiers`
 
 [workspace.dependencies]
-anyhow = "1.0.104"
 futures = "0.3.34"
 opentelemetry-proto = "0.33.0"
 semver = "1.0.28"

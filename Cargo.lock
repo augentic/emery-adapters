@@ -1722,7 +1722,6 @@ dependencies = [
 name = "intent"
 version = "0.13.0"
 dependencies = [
- "anyhow",
  "emery-sdk",
 ]
 
@@ -3809,7 +3808,6 @@ dependencies = [
  "futures",
  "omnia-sdk",
  "omnia-test",
- "omnia-wasi-otel",
  "semver",
  "serde_json",
  "tracing",
@@ -4216,7 +4214,6 @@ name = "typescript"
 version = "0.13.0"
 dependencies = [
  "emery-sdk",
- "tracing",
 ]
 
 [[package]]

@@ -2,7 +2,7 @@
 
 ## Scenario
 
-The survey named one surface: the exported API `processMessage`, entered at `src/handler.ts`. The extract call is lent the tree and told the surface and its entry; the tree holds this one file.
+Among the surfaces of a tree of several modules, the survey named the exported API `processMessage`, entered at `src/handler.ts`. The extract call for it is lent the whole tree and told the surface and its entry; `src/handler.ts` is all this surface reaches, so it is the one module shown.
 
 ## Source
 

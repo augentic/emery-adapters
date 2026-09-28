@@ -19,12 +19,18 @@ Run from the repository root: `emery` mounts the invocation directory as the pro
 cargo build --workspace --target wasm32-wasip2 --release
 
 # run the example
-export CURSOR_API_KEY=<Cursor API key>
+set -a; source .env; set +a
 cargo run --manifest-path ../emery/Cargo.toml -- specify -v --config examples/typescript/emery.toml
 
 # review the committed revision
 cargo run --manifest-path ../emery/Cargo.toml -- show spec
 cargo run --manifest-path ../emery/Cargo.toml -- show design
+```
+
+Without `.env`:
+
+```bash
+export CURSOR_API_KEY=<Cursor API key>
 ```
 
 Swap the config for [intent](intent/emery.toml), [typescript](typescript/emery.toml), or the combined [emery.toml](emery.toml).
@@ -56,6 +62,8 @@ Four optional environment knobs bound the wait and choose the model:
 - `CURSOR_INACTIVITY_SECS` (120) — cancels a run whose stream has gone silent while waiting on the bridge (the opening frame, a tool call). It does not apply once the model is composing its answer.
 - `CURSOR_MAX_AGENTS` (4) — bridge agents live at once; further completions queue.
 - `CURSOR_MODEL` (`auto`) — the model every completion of the run is put to, extraction and synthesis alike; `auto` is Cursor's server-side selection, and a model that reasons less shortens the synthesis completions most, since they spend their time composing rather than reading.
+
+
 
 ## Host-to-guest tool calls
 
