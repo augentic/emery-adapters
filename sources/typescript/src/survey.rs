@@ -42,7 +42,7 @@ pub async fn survey<P: Model>(
 
 const SKIP_DIRS: &[&str] =
     &["node_modules", "vendor", "target", "dist", "build", "tests", "__tests__"];
-const SKIP_INFIXES: &[&str] = &["config", "d", "spec", "test"];
+const SKIP_INFIXES: &[&str] = &["d", "spec", "test"];
 const EXTENSIONS: &[&str] = &["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"];
 
 fn include(entry: Entry<'_>) -> bool {

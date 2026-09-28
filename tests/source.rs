@@ -355,6 +355,31 @@ async fn typescript_non_production() {
     assert_eq!(surface(&seen[2].messages[0]), ("POST /orders", "routes/orders.ts"));
 }
 
+// *.config.* files are production modules and count toward the survey cutoff.
+#[tokio::test]
+async fn typescript_config_module() {
+    let project = scratch();
+    tree(&project, &["vite.config.ts", "src/index.ts"]);
+    let inventory = r#"{"surfaces":[{"name":"start script","entry":"src/index.ts"}]}"#;
+    let answer = answer();
+
+    let model = support::run(
+        test_programs::ADAPTER_TYPESCRIPT,
+        &project,
+        &[],
+        ScriptedModel::answering([inventory, answer.as_str(), answer.as_str()]),
+    )
+    .await;
+
+    let seen = model.seen();
+    assert_eq!(seen.len(), 3, "one survey, one extract, one inline");
+    assert_eq!(
+        seen[0].system.as_deref(),
+        Some(prompt::survey(typescript::PROSE)),
+        "two production modules spend a survey turn"
+    );
+}
+
 // A tree of one production module cannot be cut, so no survey turn is spent
 // and the one extract mines the tree whole.
 #[tokio::test]
