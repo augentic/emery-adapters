@@ -39,10 +39,11 @@ impl Strict for ScriptedModel {
 /// A [`ScriptedModel`] that answers a completion only once `parties` are pending.
 ///
 /// Concurrent requests pass the barrier together. A serial host reaches the
-/// bounded [`HOLD`] timeout instead, identifying the missing party, and
-/// every completion after that fails at once: a party the guest fills late —
-/// the SDK puts a seam whose turn failed upstream once more — proves nothing
-/// about what the host ran together. The barrier resets for each party.
+/// bounded [`HOLD`] timeout instead, which identifies the missing party, and
+/// every completion after that fails at once. A party the guest fills late
+/// proves nothing about what the host ran together, since the SDK puts a
+/// seam whose turn failed upstream once more. The barrier resets for each
+/// party.
 #[derive(Clone, Debug)]
 pub struct Barrier {
     inner: ScriptedModel,
@@ -183,10 +184,10 @@ pub async fn run<M: Strict>(adapter: &str, project: &Scratch, args: &[&str], mod
 
 /// Runs an adapter under recording telemetry and returns its model and spans.
 ///
-/// Host telemetry is installed here, once per test process: the host grafts
+/// Host telemetry is installed here, once per test process. The host grafts
 /// a guest's spans onto its own live span and drops them without one, so the
 /// run is driven inside a host span. `cargo nextest` gives every test its own
-/// process; a second call in one process fails at the install.
+/// process, and a second call in one process fails at the install.
 ///
 /// # Panics
 ///

@@ -10,8 +10,6 @@ const MIN_SIZE: usize = 2;
 // run behind one turn.
 const MAX_SIZE: usize = 16;
 
-// Refuses `BadRequest` for a non-UTF-8 entry name and `ServerError` when a
-// directory cannot be read. No model call is made.
 pub fn survey(input: &SourceInput) -> Result<Vec<Seam>, Error> {
     let SourceContent::Workspace(root) = &input.content else {
         return Ok(vec![Seam::Whole]);
@@ -22,7 +20,7 @@ pub fn survey(input: &SourceInput) -> Result<Vec<Seam>, Error> {
     Ok(if seams.len() < 2 { vec![Seam::Whole] } else { seams })
 }
 
-// Partitions the files under `prefix` (`""` at the root) by next path segment.
+// `prefix` is `""` at the root and ends in `/` beneath it.
 fn partition(prefix: &str, files: Vec<String>) -> Vec<Vec<String>> {
     // bucket by the next path segment
     let mut groups: BTreeMap<Option<String>, Vec<String>> = BTreeMap::new();

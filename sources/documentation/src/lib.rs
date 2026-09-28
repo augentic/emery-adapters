@@ -1,13 +1,15 @@
 //! Extracts claims from a tree of written documentation.
 //!
 //! Workspace inputs are grouped by top-level directory, the root's own
-//! documents one group beside them. A directory of fewer than two documents
-//! joins the root's group, and the root's group joins the first directory's
-//! when it is itself fewer than two. A directory of more than sixteen
-//! documents is cut once more, by its subdirectories under the same rule, its
-//! remaining documents one group beside them; a directory no subdirectory can
-//! cut stays one group. If fewer than two groups remain, the entire input is
-//! mined as a whole.
+//! documents one group beside them.
+//!
+//! - A directory of fewer than two documents joins the root's group.
+//! - The root's group joins the first directory's when it is itself fewer
+//!   than two.
+//! - A directory of more than sixteen documents is cut once more, by its
+//!   subdirectories under the same rule, its remaining documents one group
+//!   beside them. A directory no subdirectory can cut stays one group.
+//! - If fewer than two groups remain, the entire input is mined as a whole.
 //!
 //! Inline inputs are always mined as a whole.
 
