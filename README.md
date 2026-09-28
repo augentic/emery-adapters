@@ -50,7 +50,7 @@ The live rung is a **public-contract client**: it spawns the sibling shipped `em
 1. Edit `sources/<name>/prose/**` (the extract prompt, references, rules).
 2. `cargo nextest run -p emery-adapters` to re-run its component and corpus suites; `cargo build -p <name> --target wasm32-wasip2 --release` to rebuild the shipped component; `emery specify --config examples/<name>/emery.toml` to watch it become a spec.
 
-The component suites are the Rust inner loop and prove every component, the adapter's own decisions included; the live examples show one adapter's claims becoming a specification; live eval is for prompt quality. See [docs/testing.md](docs/testing.md).
+The component suites are the Rust inner loop and prove every component, the adapter's own decisions included; the live examples show one adapter's claims becoming a specification; live eval is for prompt quality.
 
 ## Stuck?
 
@@ -65,9 +65,7 @@ Bugs and questions: [GitHub Issues](https://github.com/augentic/emery-adapters/i
 ## Further reading
 
 - Contributor setup, engine pin, publishing: [CONTRIBUTING.md](CONTRIBUTING.md)
-- Creating an adapter: [docs/authoring.md](docs/authoring.md)
-- Test ownership: [docs/testing.md](docs/testing.md)
-- Agent instructions: [AGENTS.md](AGENTS.md)
+- The adapter shape, invariants, and test ownership: [AGENTS.md](AGENTS.md)
 
 ## License
 

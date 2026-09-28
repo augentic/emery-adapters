@@ -1,6 +1,6 @@
 # Contributing to emery-adapters
 
-Human-facing contributor guide (toolchain, layout, prompts, pin, publishing). Creating an adapter end-to-end is [`docs/authoring.md`](docs/authoring.md); agent and contract rules live in [`AGENTS.md`](AGENTS.md); test ownership in [`docs/testing.md`](docs/testing.md).
+Human-facing contributor guide (toolchain, layout, prompts, pin, publishing). The adapter shape, the contract rules, and test ownership live in [`AGENTS.md`](AGENTS.md); an existing `sources/<name>` is the template for a new one.
 
 ## Getting started
 
@@ -105,12 +105,10 @@ make publish <name>
 
 1. Branch off `main`.
 2. Run `make ci` (or say exactly which narrower checks ran and why the full gate was unavailable).
-3. Read [docs/testing.md](docs/testing.md) before adding, deleting, or relocating tests. A behavior the adapter itself decides goes in the root `tests/source.rs`, asserted through the built component; the component boundary is `tests/probe.rs`'s; do not add a `src` `#[cfg(test)]` module without a one-line reason from that document, never pin a prompt phrase, and never widen `pub` surface — or compile a module natively — solely for a test.
+3. A behavior the adapter itself decides goes in the root `tests/source.rs`, asserted through the built component; the component boundary is `tests/probe.rs`'s. Never pin a prompt phrase, and never widen `pub` surface — or compile a module natively — solely for a test.
 4. Do not commit built `.wasm` artifacts.
 
 ## See also
 
-- [docs/authoring.md](docs/authoring.md) — creating a source adapter
-- [AGENTS.md](AGENTS.md) — vocabulary, component contract, agent commands
-- [docs/testing.md](docs/testing.md) — test ownership
+- [AGENTS.md](AGENTS.md) — vocabulary, component contract, test ownership, agent commands
 - [emery CONTRIBUTING](https://github.com/augentic/emery/blob/main/CONTRIBUTING.md) — DCO and org contribution norms

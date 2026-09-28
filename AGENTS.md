@@ -1,6 +1,6 @@
 # Emery Adapters — Agent Instructions
 
-Emery's first-party **source adapters**. Each `sources/<name>` is one crate shipping as one WebAssembly component that exports the `source-adapter` world of the `emery:adapter` WIT package: `metadata`, and `extract(SourceInput) -> Evidence` — a typed `SourceInput` (a name and a workspace or inline value) in, one Evidence document of typed claims out. The contract, vocabulary, and coding standards are the engine repository's ([`augentic/emery`](https://github.com/augentic/emery/blob/main/AGENTS.md), [`docs/standards/`](https://github.com/augentic/emery/tree/main/docs/standards)); this repository owns extraction behaviour and prose. The v1 tree is archived at git tag `v1`.
+Emery's first-party **source adapters**. Each `sources/<name>` is one crate shipping as one WebAssembly component that exports the `source-adapter` world of the `emery:adapter` WIT package: `metadata`, and `extract(SourceInput) -> Evidence` — a typed `SourceInput` (a name and a workspace or inline value) in, one Evidence document of typed claims out. The contract, vocabulary, and coding standards are the engine repository's ([`augentic/emery` AGENTS.md](https://github.com/augentic/emery/blob/main/AGENTS.md)); this repository owns extraction behaviour and prose. The v1 tree is archived at git tag `v1`.
 
 ## Git
 
@@ -27,9 +27,9 @@ The root `emery-adapters` package is tests only; it names each adapter crate as 
 
 ## Code style
 
-The engine repository's [style.md](https://github.com/augentic/emery/blob/main/docs/standards/style.md) and [coding-standards.md](https://github.com/augentic/emery/blob/main/docs/standards/coding-standards.md), under the shared `[workspace.lints]` in `Cargo.toml` and the guest deny-list in `clippy.toml`. Short names that lean on the module path. Doc comments are written for the crate's user and state the contract, never the mechanics: one summary sentence of about fifteen words (a verb sentence for a fn, a noun phrase for a type, what the module provides for a `//!`), a blank line, then short plain sentences and bullet lists, with `# Examples` / `# Errors` / `# Panics` as the canonical sections, `# Errors` naming each linked class the caller matches on, and every mentioned item an intra-doc link — the engine's [coding-standards.md § Comments](https://github.com/augentic/emery/blob/main/docs/standards/coding-standards.md#comments) is the full rule. Rustdoc (`///`) goes only on `pub` items — never on a private or `pub(crate)` item, an `impl` block, or a trait-impl method; everything else carries a `//` above it only when a senior Rust developer would not see the fact from the name and signature, and most private fns carry nothing. A test fn names the scenario (`documentation_directories`, `gated_spent`), never the outcome; it takes a `//`, never `///`, and only for rationale the scenario and assertions do not expose, while `pub` items under `tests/support/` keep `///`. Inside a fn body, a `//` comment is a section header — a lowercase fragment with no full stop above each blank-line-separated block, naming what the block achieves so the headers read as the fn's outline (`// load source adapters`); it never narrates the line beneath it, a fn readable at a glance carries none, and the one trick a senior Rust developer would not see through is `// HACK: …`. A fn's result comes back through its return value, never through a `&mut` argument it fills: a recursive walk returns its part and the caller `extend`s. Formatting is nightly rustfmt (`make fmt`).
+The engine repository's ([`augentic/emery` AGENTS.md § Code style](https://github.com/augentic/emery/blob/main/AGENTS.md)): clippy under the shared `[workspace.lints]` in `Cargo.toml` and the guest deny-list in `clippy.toml`, plus nightly rustfmt (`make fmt`), are the gate; beyond them, match the surrounding code. `#[expect(lint, reason = "…")]` at the smallest scope, never `#[allow]`. Rustdoc (`///`) on `pub` items only; no history in comments.
 
-An adapter crate's `//!` docs state the source it accepts, how that source is divided for extraction, and any refusal visible to a caller. They do not narrate the `wasm32` module layout, guest-macro wiring, root test suite, or how `PROSE` is checked; those are repository mechanics, not the adapter's public contract.
+An adapter crate's `//!` docs state the source it accepts, how that source is divided for extraction, and any refusal visible to a caller — not the `wasm32` module layout, the guest-macro wiring, or how `PROSE` is checked.
 
 ## Testing
 
@@ -39,7 +39,7 @@ An adapter crate's `//!` docs state the source it accepts, how that source is di
 - Always `cargo nextest`, and `--workspace` from the root as `make test` and CI do; every suite is the root package's today, so `cargo nextest run -p emery-adapters` runs the same tests.
 - The guest side (`crates/test-programs/programs/`, the adapters' `survey` and `guest` modules) is `cfg(target_arch = "wasm32")`, which native clippy compiles to nothing, so `make lint` runs a second clippy pass for `wasm32-wasip2` over it (the command below); `make test` compiles it through the component build alone.
 
-Placement rules: [docs/testing.md](docs/testing.md). Creating an adapter: [docs/authoring.md](docs/authoring.md). Toolchain and publishing: [CONTRIBUTING.md](CONTRIBUTING.md).
+Toolchain and publishing: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Commands
 
