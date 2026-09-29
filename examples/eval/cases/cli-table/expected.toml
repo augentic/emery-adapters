@@ -1,0 +1,118 @@
+# A commander CLI whose three commands are rows of one table in `src/cli.ts`,
+# registered by one `for` loop — one `program.command(job.usage)…action(..)`
+# call handing one function, so the parser sees one registration with no
+# literal and names one surface under the receiver's type: the "wrong:
+# merged" case. Each command is expected as its own surface at the table
+# row that declares it, under the usage's first word, with the job module it
+# names as what it reaches. Written before any run.
+
+fixture = "examples/typescript/cli-table"
+stems = ["start", "import", "reconcile", "nightly"]
+
+# --- surfaces: the bootstrap and the three table rows ---
+
+[[surface]]
+entry = "src/cli.ts"
+stem = "start"
+
+[[surface]]
+entry = "src/cli.ts"
+stem = "import"
+
+[[surface]]
+entry = "src/cli.ts"
+stem = "reconcile"
+
+[[surface]]
+entry = "src/cli.ts"
+stem = "nightly"
+
+# --- start ---
+
+[[requirement]]
+stem = "start"
+anchor = "src/cli.ts#L21-L32"
+gloss = "Every row of JOBS is registered as a command with its usage, description, and a `--dry-run` option, and its exit code becomes the process's"
+
+[[requirement]]
+stem = "start"
+anchor = "src/cli.ts#L34-L36"
+gloss = "The database pool is closed after any command"
+
+[[requirement]]
+stem = "start"
+anchor = "src/cli.ts#L38-L41"
+gloss = "A command that throws is logged and exits 1"
+
+# --- import ---
+
+[[requirement]]
+stem = "import"
+anchor = "src/jobs/import.ts#L20-L23"
+gloss = "`import` without a file exits 64"
+
+[[requirement]]
+stem = "import"
+anchor = "src/jobs/import.ts#L30-L33"
+gloss = "A row with a date not `YYYY-MM-DD`, a non-numeric amount, or an amount past MAX_AMOUNT_CENTS is rejected and skipped"
+
+[[requirement]]
+stem = "import"
+anchor = "src/jobs/import.ts#L34-L37"
+gloss = "A well-formed row is inserted, with the amount in cents and the reference trimmed, unless `--dry-run`"
+
+[[requirement]]
+stem = "import"
+anchor = "src/jobs/import.ts#L41"
+gloss = "`import` exits 2 when any row was rejected and it was not a dry run, else 0"
+
+# --- reconcile ---
+
+[[requirement]]
+stem = "reconcile"
+anchor = "src/jobs/reconcile.ts#L16-L19"
+gloss = "`reconcile` without both dates exits 64"
+
+[[requirement]]
+stem = "reconcile"
+anchor = "src/jobs/reconcile.ts#L39-L50"
+gloss = "Each ledger entry in the range is matched to the first untaken bank movement within MATCH_TOLERANCE_CENTS of its amount"
+
+[[requirement]]
+stem = "reconcile"
+anchor = "src/jobs/reconcile.ts#L31"
+gloss = "`reconcile` exits 3 when any ledger entry or bank movement is left unmatched, else 0"
+
+# --- nightly ---
+
+[[requirement]]
+stem = "nightly"
+anchor = "src/jobs/nightly.ts#L8-L10"
+gloss = "`nightly` selects every open invoice due more than OVERDUE_DAYS before today"
+
+[[requirement]]
+stem = "nightly"
+anchor = "src/jobs/nightly.ts#L12-L14"
+gloss = "The selected invoices are marked overdue unless `--dry-run`"
+
+# --- criteria ---
+
+[[criterion]]
+anchor = "src/config.ts#L6"
+gloss = "MAX_AMOUNT_CENTS is 100000000"
+
+[[criterion]]
+anchor = "src/config.ts#L9"
+gloss = "OVERDUE_DAYS is 30"
+
+[[criterion]]
+anchor = "src/config.ts#L12"
+gloss = "MATCH_TOLERANCE_CENTS is 1"
+
+[[criterion]]
+anchor = "src/jobs/import.ts#L13"
+gloss = "DATE: a posting date is `YYYY-MM-DD`"
+
+[[criterion]]
+anchor = "src/config.ts#L3"
+gloss = "DATABASE_URL defaults to postgres://localhost:5432/ledger"

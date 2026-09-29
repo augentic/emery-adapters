@@ -175,7 +175,8 @@ pub fn parsed(prepared: &Prepared) {
 }
 
 // One line the run's log carries at TRACE: `what` the surfaces are, each
-// with its name, entry, and stem, as one JSON array.
+// with its name, entry, stem, and the ids its requirements lead with, as one
+// JSON array.
 fn logged(source: &str, what: &str, surfaces: &[Surface]) {
     if !emery_sdk::tracing::enabled!(emery_sdk::tracing::Level::TRACE) {
         return;
@@ -187,6 +188,7 @@ fn logged(source: &str, what: &str, surfaces: &[Surface]) {
                 "name": surface.name,
                 "entry": surface.entry,
                 "stem": surface.stem,
+                "ids": surface.ids,
             })
         })
         .collect();

@@ -1,0 +1,28 @@
+{
+  "name": "hono-mounted",
+  "version": "0.5.0",
+  "private": true,
+  "description": "Orders API for the NZ storefront on Hono: sub-applications mounted by resource",
+  "main": "src/server.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/server.ts",
+    "start": "node dist/server.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.2",
+    "@hono/zod-validator": "^0.4.1",
+    "hono": "^4.6.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.2",
+    "tsx": "^4.19.1",
+    "typescript": "^5.5.3",
+    "vitest": "^2.0.5"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

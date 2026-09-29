@@ -48,7 +48,14 @@ const DECORATOR_NOISE: &[&str] = &[
     "Transactional",
     "Injectable",
     "Inject",
+    "SerializeOptions",
 ];
+
+// A decorator that shapes what it decorates rather than register it: the
+// noise list, and the documentation decorators (`@ApiTags`, `@ApiOkResponse`).
+fn shapes(decorator: &str) -> bool {
+    DECORATOR_NOISE.contains(&decorator) || decorator.starts_with("Api")
+}
 
 // How many bindings a receiver is traced through before it counts as local.
 const TRACE: usize = 4;
@@ -520,7 +527,7 @@ pub(super) fn start(tree: &Tree, module: &Module, registered: &[Surface]) -> Sur
 
 // Where each module's routes are mounted: `app.use("/api", ordersRouter(..))`
 // gives `routes/orders.ts` the prefix `/api`.
-fn mounts(tree: &Tree, scope: &[String]) -> BTreeMap<String, String> {
+pub(super) fn mounts(tree: &Tree, scope: &[String]) -> BTreeMap<String, String> {
     let mut mounts = BTreeMap::new();
     for path in scope {
         let Some(module) = tree.modules.get(path) else { continue };
@@ -577,12 +584,7 @@ fn callbacks(
         let handler = call.args.iter().find(|arg| arg.function).map(|arg| arg.lines);
         // a handler passed by name tells the surface apart; an anonymous
         // route's verb and path past the resource do
-        let named = call
-            .args
-            .iter()
-            .find(|arg| tree.handler(module, arg, &call.frames))
-            .filter(|arg| !arg.function)
-            .and_then(|arg| kebab(arg.root.as_ref()?.last()?));
+        let named = named_handler(tree, module, call);
         let mut detail = vec![match (&call.class, &call.function) {
             (Some(class), Some(function)) => {
                 format!("registered {} in `{class}.{function}`", call.lines)
@@ -610,7 +612,17 @@ fn callbacks(
     }
 }
 
+// The handler a registration is handed by name, kebab-cased.
+fn named_handler(tree: &Tree, module: &Module, call: &Call) -> Option<String> {
+    call.args
+        .iter()
+        .find(|arg| tree.handler(module, arg, &call.frames))
+        .filter(|arg| !arg.function)
+        .and_then(|arg| kebab(arg.root.as_ref()?.last()?))
+}
+
 // What leads a call's arguments and names what it registers.
+#[derive(Clone)]
 enum Lead {
     // a string literal, or a constant bound to one in the tree
     Literal(String),
@@ -653,31 +665,20 @@ fn name_callback(
     module: &Module, call: &Call, receiver: &Receiver, lead: Option<&Lead>,
     mounts: &BTreeMap<String, String>,
 ) -> (String, String, Option<String>) {
-    // a chain names itself at its first call with a literal: `command("x")`
-    let chained = call.callee.links.iter().find_map(|link| {
-        let literal = link.call.as_ref()?.literal.clone()?;
-        Some((link.name.as_str(), Lead::Literal(literal)))
-    });
-    let (method, lead) = match &chained {
-        Some((method, lead)) => (*method, Some(lead)),
-        None => (call.method(), lead),
-    };
-    let literal = lead.and_then(Lead::literal);
+    let (method, lead) = registered(call, lead);
+    let literal = lead.as_ref().and_then(Lead::literal);
     let typed = || receiver.type_name.as_deref().and_then(kebab);
 
-    if let Some(path) = literal.filter(|l| l.starts_with('/'))
-        && VERBS.contains(&method)
-    {
-        let prefix = mounts.get(&module.path).map_or("", String::as_str);
-        let route = join_route(prefix, path);
+    if let Some(route) = routed(module, method, literal, mounts) {
         let name = format!("{} {route}", method.to_ascii_uppercase());
         let stem = route_stem(&route).or_else(typed).unwrap_or_else(|| module_stem(module));
-        return (name, stem, route_discriminator(method, &route));
+        let discriminator = route_discriminator(method, &route, &stem);
+        return (name, stem, discriminator);
     }
 
     let receiver_name =
         receiver.type_name.clone().unwrap_or_else(|| call.callee.receiver().to_owned());
-    let argument = lead.map(Lead::spelled).unwrap_or_default();
+    let argument = lead.as_ref().map(Lead::spelled).unwrap_or_default();
     let name = if call.is_new {
         format!("{}({argument})", call.method())
     } else if lead.is_some() {
@@ -687,6 +688,170 @@ fn name_callback(
     };
     let stem = literal.and_then(literal_stem).or_else(typed).unwrap_or_else(|| module_stem(module));
     (name, stem, kebab(method))
+}
+
+// The method a registration is spelled by and what leads it: a chain names
+// itself at its first call with a literal (`command("x")`), else the call's
+// own method and lead.
+fn registered<'c>(call: &'c Call, lead: Option<&Lead>) -> (&'c str, Option<Lead>) {
+    let chained = call.callee.links.iter().find_map(|link| {
+        let literal = link.call.as_ref()?.literal.clone()?;
+        Some((link.name.as_str(), Lead::Literal(literal)))
+    });
+    chained.map_or_else(|| (call.method(), lead.cloned()), |(method, lead)| (method, Some(lead)))
+}
+
+// The route a verb registers with a path literal, under the module's mount.
+fn routed(
+    module: &Module, method: &str, literal: Option<&str>, mounts: &BTreeMap<String, String>,
+) -> Option<String> {
+    let path = literal.filter(|literal| literal.starts_with('/'))?;
+    VERBS.contains(&method).then(|| {
+        let prefix = mounts.get(&module.path).map_or("", String::as_str);
+        join_route(prefix, path)
+    })
+}
+
+// What tells a registration from the others under its stem: a route's verb
+// and path past the resource, else the method that registers it.
+#[cfg(feature = "model-survey")]
+fn tell_callback(
+    module: &Module, call: &Call, lead: Option<&Lead>, stem: &str,
+    mounts: &BTreeMap<String, String>,
+) -> Option<String> {
+    let (method, lead) = registered(call, lead);
+    routed(module, method, lead.as_ref().and_then(Lead::literal), mounts)
+        .map_or_else(|| kebab(method), |route| route_discriminator(method, &route, stem))
+}
+
+// What tells a surface the survey anchored at `lines` of `module` from the
+// others under `stem`, derived as the parser derives its own: from the
+// registration at those lines — the handler handed by name, else the route's
+// verb and path past the resource, else the registering method — from the
+// decorated method's name, or from the export's name joined with the
+// segments a file-routed module's path spells past its stem; failing every
+// one, from the survey's own `name` less the stem and what only namespaces.
+#[cfg(feature = "model-survey")]
+pub(super) fn discriminate(
+    tree: &Tree, module: &Module, lines: Lines, name: &str, stem: &str,
+    mounts: &BTreeMap<String, String>,
+) -> Option<String> {
+    if let Some(call) = registration_at(tree, module, lines) {
+        let led = call.args.first().and_then(|arg| lead(tree, module, arg, &call.frames));
+        return named_handler(tree, module, call)
+            .or_else(|| tell_callback(module, call, led.as_ref(), stem, mounts));
+    }
+    if let Some(member) = module
+        .decorated
+        .iter()
+        .filter(|decorated| overlaps(decorated.lines, lines))
+        .find_map(|decorated| decorated.member.as_deref())
+    {
+        return kebab(member);
+    }
+    if let Some(export) = export_at(module, lines) {
+        let display =
+            if export.name == "default" { module_stem(module) } else { export.name.clone() };
+        let mut parts = vec![display];
+        parts.extend(file_routed(&module.path, stem));
+        return kebab(&parts.join("-"));
+    }
+    normalised(name, stem)
+}
+
+// Whether a call has the shape of a registration as `callbacks` reads one,
+// at any depth and whatever its receiver: it hands a function to something
+// and is discarded, constructs, or is led by a literal. A wrapper handed a
+// function for its value — `export default fp(async (app) => ..)` — has
+// not: it defines a plugin, it registers nothing.
+#[cfg(feature = "model-survey")]
+pub(super) fn registers(tree: &Tree, module: &Module, call: &Call) -> bool {
+    !call.structural()
+        && call.args.iter().any(|arg| tree.handler(module, arg, &call.frames))
+        && (call.discarded
+            || call.is_new
+            || call
+                .args
+                .first()
+                .and_then(|arg| lead(tree, module, arg, &call.frames))
+                .is_some_and(|led| led.literal().is_some()))
+}
+
+// The registration at `lines`: the first call of that shape starting within
+// them — since the survey has decided the lines register a surface — else
+// the one enclosing their first line, for an anchor within a handler.
+#[cfg(feature = "model-survey")]
+fn registration_at<'m>(tree: &Tree, module: &'m Module, lines: Lines) -> Option<&'m Call> {
+    let registers = |call: &&Call| registers(tree, module, call);
+    module.calls.iter().filter(registers).find(|call| lines.holds(call.lines.start)).or_else(|| {
+        module.calls.iter().filter(registers).find(|call| call.lines.holds(lines.start))
+    })
+}
+
+// The export declared at `lines`: a function or class whose declaration
+// starts within them, else a value's, else the one enclosing their first
+// line.
+#[cfg(feature = "model-survey")]
+fn export_at(module: &Module, lines: Lines) -> Option<&Export> {
+    let declared = |export: &Export| {
+        let local = export.local.as_deref().unwrap_or(&export.name);
+        module.binding(local, &[]).map_or(export.lines, |binding| binding.lines)
+    };
+    let callable =
+        |export: &&Export| matches!(export.kind, ExportKind::Function | ExportKind::Class { .. });
+    let value = |export: &&Export| matches!(export.kind, ExportKind::Value);
+    let exports = || module.exports.iter();
+    exports()
+        .filter(callable)
+        .find(|export| lines.holds(declared(export).start))
+        .or_else(|| exports().filter(value).find(|export| lines.holds(declared(export).start)))
+        .or_else(|| {
+            exports()
+                .filter(|export| callable(export) || value(export))
+                .find(|export| declared(export).holds(lines.start))
+        })
+}
+
+// The directory segments a file-routed module's path spells past the one
+// that spells its stem — a parameter by its bare name, a group by nothing:
+// `app/api/orders/[id]/route.ts` under `orders` spells `id`. None when no
+// segment spells the stem.
+#[cfg(feature = "model-survey")]
+fn file_routed(path: &str, stem: &str) -> Vec<String> {
+    let dirs: Vec<&str> = path
+        .rsplit_once('/')
+        .map_or("", |(dir, _)| dir)
+        .split('/')
+        .filter(|segment| !segment.is_empty())
+        .collect();
+    let Some(at) = dirs.iter().position(|segment| kebab(segment).as_deref() == Some(stem)) else {
+        return Vec::new();
+    };
+    dirs[at + 1..]
+        .iter()
+        .filter(|segment| !(segment.starts_with('(') && segment.ends_with(')')))
+        .map(|segment| segment.trim_matches(|c| matches!(c, '[' | ']' | ':' | '.')).to_owned())
+        .filter(|segment| !segment.is_empty())
+        .collect()
+}
+
+// The survey's own name for a surface as what tells it apart: kebab-cased,
+// less the words of its stem and the segments that only version or
+// namespace a path — `GET /api/customers` under `customers` is `get`. None
+// when nothing is left.
+#[cfg(feature = "model-survey")]
+fn normalised(name: &str, stem: &str) -> Option<String> {
+    let spelled = kebab(name)?;
+    let kept: Vec<&str> = spelled
+        .split('-')
+        .filter(|word| !stem.split('-').any(|own| own == *word) && names_resource(word))
+        .collect();
+    kebab(&kept.join("-"))
+}
+
+#[cfg(feature = "model-survey")]
+const fn overlaps(a: Lines, b: Lines) -> bool {
+    a.start <= b.end && b.start <= a.end
 }
 
 // The call as the code spells it, for a hook's note.
@@ -707,7 +872,7 @@ fn decorated(tree: &Tree, module: &Module, surfaces: &mut Vec<Surface>) {
     for decorated in &module.decorated {
         let Some(member) = &decorated.member else { continue };
         let Some(decorator) = decorated.name.last() else { continue };
-        if DECORATOR_NOISE.contains(&decorator.as_str()) || decorator.starts_with("Api") {
+        if shapes(decorator) {
             continue;
         }
         let Some(package) = decorated.name.first().and_then(|head| tree.package(module, head))
@@ -718,10 +883,13 @@ fn decorated(tree: &Tree, module: &Module, surfaces: &mut Vec<Surface>) {
             continue;
         }
 
+        // the class decorator that registers the class carries the prefix;
+        // one that documents it (`@ApiTags("Users")`) does not
         let prefix = module
             .decorated
             .iter()
-            .find(|d| d.class == decorated.class && d.member.is_none() && d.literal.is_some())
+            .filter(|d| d.class == decorated.class && d.member.is_none() && d.literal.is_some())
+            .find(|d| d.name.last().is_some_and(|name| !shapes(name)))
             .and_then(|d| d.literal.as_deref())
             .unwrap_or("");
         let verb = decorator.to_ascii_lowercase();
@@ -891,12 +1059,17 @@ fn join_route(prefix: &str, path: &str) -> String {
     format!("/{}", segments.join("/"))
 }
 
-// What tells a route from the others under its resource: the verb, then the
-// path segments past the resource, a parameter by its bare name — `GET
-// /api/orders/:id` is `get-id`.
-fn route_discriminator(verb: &str, route: &str) -> Option<String> {
+// What tells a route from the others under its stem: the verb, then the
+// path segments past the one that spells the stem, a parameter by its bare
+// name — `GET /api/orders/:id` under `orders` is `get-id`; a route spelling
+// no segment as its stem is relative to a mount the survey did not read, so
+// every segment tells — `POST /:id/assign` under `tasks` is `post-id-assign`.
+fn route_discriminator(verb: &str, route: &str, stem: &str) -> Option<String> {
     let segments: Vec<&str> = route.split('/').filter(|segment| !segment.is_empty()).collect();
-    let past = segments.iter().position(|segment| names_resource(segment)).map_or(0, |i| i + 1);
+    let past = segments
+        .iter()
+        .position(|segment| kebab(segment).is_some_and(|spelled| spelled == stem))
+        .map_or(0, |i| i + 1);
     let parts: Vec<&str> = std::iter::once(verb)
         .chain(segments[past..].iter().map(|segment| segment.trim_start_matches(':')))
         .collect();

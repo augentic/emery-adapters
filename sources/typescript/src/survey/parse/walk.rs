@@ -299,7 +299,8 @@ impl<'s> Walker<'s> {
             .last()
             .and_then(|link| link.call.as_ref())
             .or(callee.head_call.as_ref())
-            .and_then(|invocation| invocation.literal.clone());
+            .and_then(|invocation| invocation.literal.clone())
+            .or_else(|| object_path(&decorator.expression));
         self.module.decorated.push(Decorated {
             class: class.to_owned(),
             member: member.map(str::to_owned),
@@ -1054,6 +1055,22 @@ fn string_value(expr: &Expression<'_>) -> Option<String> {
         }
         _ => None,
     }
+}
+
+// The `path` a call's object-form first argument names where a literal
+// would stand: `Controller({ path: "users", version: "1" })` is `users`.
+fn object_path(expr: &Expression<'_>) -> Option<String> {
+    let Expression::CallExpression(call) = bare(expr) else { return None };
+    let Expression::ObjectExpression(object) = bare(call.arguments.first()?.as_expression()?)
+    else {
+        return None;
+    };
+    object.properties.iter().find_map(|property| match property {
+        ObjectPropertyKind::ObjectProperty(p) if key_name(&p.key).as_deref() == Some("path") => {
+            string_value(&p.value)
+        }
+        _ => None,
+    })
 }
 
 // A function, an object with a function-valued property or a method, or a

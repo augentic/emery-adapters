@@ -1,0 +1,289 @@
+# fastify/demo at 5cd56012 (MIT), vendored by the command in examples/README.md
+# and gitignored: a Fastify application of 34 production modules, ~45 KB,
+# which fits one message. `src/server.ts` bootstraps and registers `src/app.ts`,
+# which loads `plugins/external`, `plugins/app`, and `routes` through
+# `@fastify/autoload` by directory — a computed load no resolver follows — and
+# each route module registers its routes on the `fastify` instance its plugin
+# function is handed, an untyped parameter typed only through the plugin's own
+# type. The routes are real and registered; the parser's conventions see
+# neither the load nor the receiver, which is the "wrong: missed" case. The
+# four `scripts/*.ts` are operator commands the manifest's `db:*` scripts run
+# — each guarded by its own `CAN_*` variable — expected one surface each under
+# its module's stem; the parser reads only `start` and `dev` for entries, so it
+# never names them. Written before any run, and amended once at the
+# checkpoint, before the graded runs: the one route at the `/api` root
+# (`src/routes/api/index.ts`) was first expected as no surface, its behaviour
+# graded under no stem, because no path segment names its resource — an
+# expectation the survey's own coverage gate cannot meet, since a module the
+# facts list a live registration in is a surface or a finding and never
+# unreached (the checkpoint run named it `index` once and exhausted the
+# correction round over it once). The stem convention now gives such a route
+# its module's or, for an `index`, its directory's name, so it is expected as
+# one surface under `api`.
+
+fixture = "examples/typescript/fastify-demo"
+stems = ["start", "home", "api", "auth", "users", "tasks", "create-database", "drop-database", "migrate", "seed-database"]
+
+# --- surfaces: the bootstrap, five route modules, four operator scripts ---
+
+[[surface]]
+entry = "src/server.ts"
+stem = "start"
+
+[[surface]]
+entry = "src/routes/home.ts"
+stem = "home"
+
+[[surface]]
+entry = "src/routes/api/index.ts"
+stem = "api"
+
+[[surface]]
+entry = "src/routes/api/auth/index.ts"
+stem = "auth"
+
+[[surface]]
+entry = "src/routes/api/users/index.ts"
+stem = "users"
+
+[[surface]]
+entry = "src/routes/api/tasks/index.ts"
+stem = "tasks"
+
+[[surface]]
+entry = "scripts/create-database.ts"
+stem = "create-database"
+
+[[surface]]
+entry = "scripts/drop-database.ts"
+stem = "drop-database"
+
+[[surface]]
+entry = "scripts/migrate.ts"
+stem = "migrate"
+
+[[surface]]
+entry = "scripts/seed-database.ts"
+stem = "seed-database"
+
+# --- start ---
+
+[[requirement]]
+stem = "start"
+anchor = "src/server.ts#L32-L47"
+gloss = "The server is built with the connection, request, keep-alive, and headers timeouts and an ajv that coerces types to arrays and strips additional body properties"
+
+[[requirement]]
+stem = "start"
+anchor = "src/server.ts#L55-L64"
+gloss = "On a close signal the app closes gracefully within FASTIFY_CLOSE_GRACE_DELAY (500 ms by default), logging any error"
+
+[[requirement]]
+stem = "start"
+anchor = "src/server.ts#L68-L74"
+gloss = "The server listens on PORT (3000 by default); a failure to listen is logged and exits 1"
+
+[[requirement]]
+stem = "start"
+anchor = "src/app.ts#L34-L56"
+gloss = "An unhandled error is logged with the request and answered with its status code (500 when none) and its message only below 500"
+
+[[requirement]]
+stem = "start"
+anchor = "src/app.ts#L59-L82"
+gloss = "An unknown URL is answered 404 `Not Found`, rate limited to 3 in 500 ms, and logged as a warning"
+
+# --- home ---
+
+[[requirement]]
+stem = "home"
+anchor = "src/routes/home.ts#L7-L21"
+gloss = "GET / answers the welcome message"
+
+# --- auth ---
+
+[[requirement]]
+stem = "auth"
+anchor = "src/routes/api/auth/index.ts#L32-L50"
+gloss = "POST /api/auth/login with a known email and a matching scrypt password stores the user and their role names in the session and answers success"
+
+[[requirement]]
+stem = "auth"
+anchor = "src/routes/api/auth/index.ts#L53-L55"
+gloss = "POST /api/auth/login with an unknown email or a wrong password is 401 `Invalid email or password.`"
+
+# --- users ---
+
+[[requirement]]
+stem = "users"
+anchor = "src/routes/api/users/index.ts#L40-L42"
+gloss = "PUT /api/users/update-password for a session user no longer stored is 401"
+
+[[requirement]]
+stem = "users"
+anchor = "src/routes/api/users/index.ts#L49-L51"
+gloss = "PUT /api/users/update-password with a wrong current password is 401 `Invalid current password.`"
+
+[[requirement]]
+stem = "users"
+anchor = "src/routes/api/users/index.ts#L53-L56"
+gloss = "PUT /api/users/update-password with the new password equal to the current one is 400"
+
+[[requirement]]
+stem = "users"
+anchor = "src/routes/api/users/index.ts#L58-L61"
+gloss = "A valid password change stores the scrypt hash of the new password and answers `Password updated successfully`"
+
+[[requirement]]
+stem = "users"
+anchor = "src/routes/api/users/index.ts#L12-L17"
+gloss = "PUT /api/users/update-password is rate limited to 3 per minute"
+
+# --- tasks ---
+
+[[requirement]]
+stem = "tasks"
+anchor = "src/routes/api/tasks/index.ts#L19-L33"
+gloss = "GET /api/tasks pages the tasks by QueryTaskPaginationSchema — page, limit, author, assignee, status, order — and answers the page with the total"
+
+[[requirement]]
+stem = "tasks"
+anchor = "src/routes/api/tasks/index.ts#L53-L55"
+gloss = "GET /api/tasks/:id for an unknown id is 404 `Task not found`"
+
+[[requirement]]
+stem = "tasks"
+anchor = "src/routes/api/tasks/index.ts#L74-L86"
+gloss = "POST /api/tasks creates the task for the session user with status `new` and answers 201 with the id"
+
+[[requirement]]
+stem = "tasks"
+anchor = "src/routes/api/tasks/index.ts#L108-L110"
+gloss = "PATCH /api/tasks/:id for an unknown id is 404"
+
+[[requirement]]
+stem = "tasks"
+anchor = "src/routes/api/tasks/index.ts#L129"
+gloss = "DELETE /api/tasks/:id is allowed to an admin only (403 otherwise)"
+
+[[requirement]]
+stem = "tasks"
+anchor = "src/routes/api/tasks/index.ts#L132-L137"
+gloss = "DELETE /api/tasks/:id answers 204 when a task was deleted, 404 when none was"
+
+[[requirement]]
+stem = "tasks"
+anchor = "src/routes/api/tasks/index.ts#L157"
+gloss = "POST /api/tasks/:id/assign is allowed to a moderator only (403 otherwise)"
+
+[[requirement]]
+stem = "tasks"
+anchor = "src/routes/api/tasks/index.ts#L162-L172"
+gloss = "Assigning sets the task's assignee to the given user, or clears it when none is given, and answers the task; an unknown task is 404"
+
+[[requirement]]
+stem = "tasks"
+anchor = "src/routes/api/tasks/index.ts#L197-L209"
+gloss = "Uploading a task image needs a file (404), under the size limit (400 `File size limit exceeded`), of type image/jpeg or image/png (400 `Invalid file type`)"
+
+[[requirement]]
+stem = "tasks"
+anchor = "src/routes/api/tasks/index.ts#L216-L237"
+gloss = "A replaced image is moved to a temp name first and restored if the upload transaction fails"
+
+[[requirement]]
+stem = "tasks"
+anchor = "src/routes/api/tasks/index.ts#L258-L269"
+gloss = "GET /api/tasks/:filename/image serves the task's file from the upload directory, or 404 when no task has that filename"
+
+[[requirement]]
+stem = "tasks"
+anchor = "src/routes/api/tasks/index.ts#L292-L302"
+gloss = "DELETE /api/tasks/:filename/image clears the filename and removes the file, answering 204, or 404 when no task has it"
+
+[[requirement]]
+stem = "tasks"
+anchor = "src/routes/api/tasks/index.ts#L318-L332"
+gloss = "GET /api/tasks/download/csv streams every task as gzipped CSV with a `tasks.csv.gz` attachment header"
+
+# --- the operator scripts ---
+
+[[requirement]]
+stem = "create-database"
+anchor = "scripts/create-database.ts#L3-L5"
+gloss = "db:create refuses to run unless CAN_CREATE_DATABASE is 1"
+
+[[requirement]]
+stem = "create-database"
+anchor = "scripts/create-database.ts#L25-L28"
+gloss = "db:create creates MYSQL_DATABASE if it does not exist"
+
+[[requirement]]
+stem = "drop-database"
+anchor = "scripts/drop-database.ts#L3-L5"
+gloss = "db:drop refuses to run unless CAN_DROP_DATABASE is 1"
+
+[[requirement]]
+stem = "migrate"
+anchor = "scripts/migrate.ts#L24-L28"
+gloss = "db:migrate fails when the `migrations` directory is missing"
+
+[[requirement]]
+stem = "migrate"
+anchor = "scripts/migrate.ts#L30-L41"
+gloss = "db:migrate runs every file under `migrations` through Postgrator against MySQL, tracking versions in `schemaversion`"
+
+[[requirement]]
+stem = "seed-database"
+anchor = "scripts/seed-database.ts#L4-L6"
+gloss = "db:seed refuses to run unless CAN_SEED_DATABASE is 1"
+
+[[requirement]]
+stem = "seed-database"
+anchor = "scripts/seed-database.ts#L49-L87"
+gloss = "db:seed truncates every table, then creates the basic, moderator, and admin users with one scrypt-hashed password and a cumulative role hierarchy"
+
+# --- the /api root route, a hook on every /api route, the shared checks; no stem expected ---
+
+[[requirement]]
+stem = "api"
+anchor = "src/routes/api/index.ts#L4-L9"
+gloss = "GET /api greets the session's user by username and points at the documentation"
+
+[[requirement]]
+anchor = "src/routes/api/autohooks.ts#L4-L12"
+gloss = "Every /api route except /api/auth/login requires a session user, else 401"
+
+[[requirement]]
+anchor = "src/plugins/app/authorization.ts#L12-L16"
+gloss = "verifyAccess answers 403 when the session user lacks the role"
+
+[[requirement]]
+anchor = "src/plugins/app/password-manager.ts#L21-L39"
+gloss = "Passwords are hashed with scrypt under a random salt, stored as `<salt>.<key>` in hex"
+
+# --- criteria ---
+
+[[criterion]]
+anchor = "src/server.ts#L35-L39"
+gloss = "connectionTimeout 120000, requestTimeout 60000, keepAliveTimeout 10000, headersTimeout 15000"
+
+[[criterion]]
+anchor = "src/schemas/tasks.ts#L48-L58"
+gloss = "QueryTaskPaginationSchema: page ≥ 1 defaulting to 1, limit 1–100 defaulting to 10, order asc/desc defaulting to desc"
+
+[[criterion]]
+anchor = "src/schemas/tasks.ts#L4-L11"
+gloss = "TaskStatusEnum: new, in-progress, on-hold, completed, canceled, archived"
+
+[[criterion]]
+anchor = "src/plugins/external/env.ts#L34-L81"
+gloss = "Environment defaults: MYSQL_HOST localhost, MYSQL_PORT 3306, COOKIE_SECURED true, RATE_LIMIT_MAX 100, UPLOAD_DIRNAME uploads (no `..`), UPLOAD_TASKS_DIRNAME tasks"
+
+[[criterion]]
+anchor = "src/plugins/app/password-manager.ts#L10-L14"
+gloss = "scrypt parameters: keylen 32, cost 65536, block size 8, parallelization 2"
+
+[[criterion]]
+anchor = "src/routes/api/tasks/index.ts#L206"
+gloss = "allowedMimeTypes for a task image: image/jpeg, image/png"

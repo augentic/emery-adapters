@@ -18,8 +18,9 @@
 //! `EVAL_RUNS` (`3`), `EVAL_LADDER` (`600/120,1200/240,2400/480`: each rung
 //! `CURSOR_TIMEOUT_SECS/CURSOR_INACTIVITY_SECS`), and the runtime's other
 //! `CURSOR_*` knobs. `RUST_LOG` is set for the run unless the caller sets it:
-//! the scorecard needs the SDK's `accepted` trace lines, the adapter's
-//! `surveyed` line, and the backend's `completion` lines.
+//! the scorecard needs the SDK's `accepted` trace lines and `surveyed by
+//! model` line, the adapter's `surveyed` and `placed by model` lines, and the
+//! backend's `completion` lines.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{self, Display, Formatter, Write as _};
@@ -291,6 +292,10 @@ struct Run {
     // the parser's surfaces, logged beside the model's under the
     // `model-survey` arm alone
     parsed: Option<Vec<Surveyed>>,
+    // the modules the model's survey placed under no surface, by the
+    // adapter's own count (`placed by model`), else as the model listed them
+    // (the SDK's `surveyed by model` line); none under the parser
+    unreached: Option<usize>,
     spec: Option<Value>,
     design: Option<Value>,
     plan: Option<Value>,
@@ -302,6 +307,8 @@ struct Surveyed {
     name: String,
     entry: String,
     stem: String,
+    #[serde(default)]
+    ids: Vec<String>,
 }
 
 impl Run {
@@ -461,6 +468,7 @@ fn run(project: &Path, settings: &Settings, n: usize, rung: Rung, tag: &str) -> 
         completions: completions(&stderr),
         surveyed: surveyed(&stderr, "surveyed").unwrap_or_default(),
         parsed: surveyed(&stderr, "parsed"),
+        unreached: unreached(&stderr),
         spec: None,
         design: None,
         plan: None,
@@ -524,6 +532,22 @@ fn surveyed(stderr: &str, what: &str) -> Option<Vec<Surveyed>> {
         .filter(|line| line.contains(&mark))
         .filter_map(|line| line.split_once("surfaces="))
         .find_map(|(_, json)| serde_json::from_str(json.trim()).ok())
+}
+
+// The adapter's `placed by model` info line carries how many modules no
+// surface reaches by code's own count; the SDK's `surveyed by model` line,
+// how many the accepted inventory listed as `unreached`. The count is the
+// adapter's where it logs one.
+fn unreached(stderr: &str) -> Option<usize> {
+    let count = |mark: &str, key: &str| {
+        stderr
+            .lines()
+            .filter(|line| line.contains(mark))
+            .filter_map(|line| line.split_once(key))
+            .find_map(|(_, rest)| rest.split_whitespace().next()?.parse().ok())
+    };
+    count(" placed by model source=", "unplaced=")
+        .or_else(|| count(" surveyed by model source=", "unreached="))
 }
 
 // The backend's one line per completion: `label="…"` in the span, then
@@ -591,11 +615,14 @@ struct Recall {
     misplaced: Vec<String>,
 }
 
-// The (entry, stem) pairs the survey decided against the ones expected.
+// The (entry, stem) pairs the survey decided against the ones expected: the
+// pairs met, the entries found under another stem, the pairs met by nothing
+// at their entry, and the surveyed surfaces no expected entry accounts for.
 #[derive(Default)]
 struct Surfaces {
     matched: usize,
     expected: usize,
+    restemmed: Vec<String>,
     missed: Vec<String>,
     extra: Vec<String>,
 }
@@ -661,18 +688,35 @@ fn recall(items: &[Item], run: &Run, kind: ClaimKind) -> Recall {
 }
 
 // An expected surface is met when the survey decided a surface at its entry
-// under its stem; the names are the survey's own and never graded.
+// under its stem; one the survey decided at the entry under another stem is
+// restemmed — found, and stemmed differently, which is how a survey that is
+// present but wrong reads apart from one that is absent. The names are the
+// survey's own and never graded.
 fn surfaces(expected: &[ExpectedSurface], run: &Run) -> Surfaces {
     let wanted: BTreeSet<(&str, &str)> =
         expected.iter().map(|surface| (surface.entry.as_str(), surface.stem.as_str())).collect();
     let observed = run.pairs();
     let label = |(entry, stem): &(&str, &str)| format!("`{entry}` · {stem}");
 
+    let mut open: Vec<(&str, &str)> = observed.difference(&wanted).copied().collect();
+    let mut restemmed = Vec::new();
+    let mut missed = Vec::new();
+    for pair in wanted.difference(&observed) {
+        match open.iter().position(|(entry, _)| *entry == pair.0) {
+            Some(at) => {
+                let (_, got) = open.remove(at);
+                restemmed.push(format!("{} (as {got})", label(pair)));
+            }
+            None => missed.push(label(pair)),
+        }
+    }
+
     Surfaces {
         matched: wanted.intersection(&observed).count(),
         expected: wanted.len(),
-        missed: wanted.difference(&observed).map(label).collect(),
-        extra: observed.difference(&wanted).map(label).collect(),
+        restemmed,
+        missed,
+        extra: open.iter().map(label).collect(),
     }
 }
 
@@ -836,10 +880,22 @@ fn notes(f: &mut Formatter<'_>, attempt: &Attempt, climbed: bool) -> fmt::Result
             .surveyed
             .iter()
             .map(|surface| {
-                format!("`{}` @ `{}` as `{}`", surface.name, surface.entry, surface.stem)
+                let ids: Vec<String> = surface.ids.iter().map(|id| format!("`{id}`")).collect();
+                let led = if ids.is_empty() {
+                    String::new()
+                } else {
+                    format!(" (id {})", ids.join(", "))
+                };
+                format!("`{}` @ `{}` as `{}`{led}", surface.name, surface.entry, surface.stem)
             })
             .collect();
         writeln!(f, "- surfaces: {}", listed.join(", "))?;
+    }
+    if let Some(unreached) = run.unreached {
+        writeln!(f, "- unreached: {unreached} modules the survey placed under no surface")?;
+    }
+    for restemmed in &grade.surfaces.restemmed {
+        writeln!(f, "- surface restemmed: {restemmed}")?;
     }
     for missed in &grade.surfaces.missed {
         writeln!(f, "- surface missed: {missed}")?;
@@ -1032,6 +1088,9 @@ impl Display for Surfaces {
             return f.write_str("—");
         }
         write!(f, "{}/{}", self.matched, self.expected)?;
+        if !self.restemmed.is_empty() {
+            write!(f, " ~{}", self.restemmed.len())?;
+        }
         if !self.extra.is_empty() {
             write!(f, " +{}", self.extra.len())?;
         }

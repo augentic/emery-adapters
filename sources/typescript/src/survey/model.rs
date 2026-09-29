@@ -10,16 +10,19 @@
 //! by a named surface or listed as unreached, and the bootstrap's `start` is
 //! the caller's, never the model's. From the accepted anchors the same code
 //! as the parser's derives the closure each surface reaches, the bootstrap
-//! surface, and the ids, so the seams cut from either arm differ in the
-//! naming alone.
+//! surface, what tells each surface from the others under its stem (read
+//! from the registration, decorator, or export at the anchor, never from the
+//! model's name for it), and the ids, so the seams cut from either arm
+//! differ in the naming alone.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use emery_sdk::survey::{Facts, Inventory};
 use emery_sdk::{Context, Doc, Error, Model};
 
-use super::parse::{ExportKind, Lines, Module};
-use super::surface::{Surface, Tree};
+use super::parse::{Call, ExportKind, Lines, Module};
+use super::surface::{Receiver, Surface, Tree};
 use super::{Prepared, push_unique, skeleton, surface, unique};
 
 /// The surfaces the model names in a prepared tree, held to it, with the
@@ -43,19 +46,52 @@ pub async fn surfaces<P: Model>(
         text: &text,
         lay: &lay,
     };
+    let mounts = surface::mounts(tree, &modules);
 
     let inventory = emery_sdk::survey::surfaces(ctx, docs, &facts, |answer| {
-        check(tree, bootstrap.as_deref(), answer)
+        check(tree, bootstrap.as_deref(), &mounts, answer)
     })
     .await?;
 
-    let mut surfaces = build(tree, &inventory);
+    let mut surfaces = build(tree, &inventory, &mounts);
     if let Some(module) = bootstrap.as_deref().and_then(|entry| tree.modules.get(entry)) {
         let start = surface::start(tree, module, &surfaces);
         surfaces.insert(0, start);
     }
     surface::identify(tree, &mut surfaces);
+
+    // what no surface reaches, by code's own count: the modules the model
+    // listed and the ones the facts said nothing of, which the gate took as
+    // unreached without asking
+    let covered = unique(surfaces.iter().flat_map(|surface| surface.closure.iter()));
+    let unplaced: Vec<&String> =
+        tree.modules.keys().filter(|path| !covered.contains(path)).collect();
+    emery_sdk::tracing::info!(
+        source = %prepared.source,
+        surfaces = surfaces.len(),
+        unplaced = unplaced.len(),
+        "placed by model"
+    );
+    emery_sdk::tracing::debug!(source = %prepared.source, ?unplaced, "modules under no surface");
     Ok(surfaces)
+}
+
+// A module the facts locate a surface in: one that hands a function to a
+// package's receiver outside any handler in the shape a registration has —
+// discarded, constructing, or led by a literal, so a plugin definition
+// handed to a wrapper for its value (`export default fp(async (app) => ..)`)
+// is listed among the facts and locates nothing — or one a package's
+// decorator marks a method of. One the survey leaves reached by no surface
+// and unlisted is a finding; a module the facts say nothing of — a plugin a
+// framework loads by directory, a helper nothing imports — is taken as
+// unreached without one.
+fn locates(tree: &Tree, module: &Module) -> bool {
+    module.calls.iter().any(|call| {
+        registration(tree, module, call).is_some() && surface::registers(tree, module, call)
+    }) || module.decorated.iter().any(|decorated| {
+        decorated.member.is_some()
+            && decorated.name.first().is_some_and(|head| tree.package(module, head).is_some())
+    })
 }
 
 // What the parser read of the tree, for the model to decide from: the
@@ -129,13 +165,7 @@ fn registrations(tree: &Tree) -> Option<String> {
     let mut lines: Vec<String> = Vec::new();
     for module in tree.modules.values() {
         for call in &module.calls {
-            if call.depth > 0 || call.structural() {
-                continue;
-            }
-            if !call.args.iter().any(|arg| tree.handler(module, arg, &call.frames)) {
-                continue;
-            }
-            let Some(receiver) = tree.receiver(module, call) else { continue };
+            let Some(receiver) = registration(tree, module, call) else { continue };
             let literal = call.literal().map(str::to_owned).or_else(|| {
                 call.callee.links.iter().find_map(|link| link.call.as_ref()?.literal.clone())
             });
@@ -168,6 +198,18 @@ fn registrations(tree: &Tree) -> Option<String> {
          listener, a completion handler) is not a surface of its own:\n\n{}",
         lines.join("\n")
     ))
+}
+
+// The receiver a call hands a function to, when the call is one outside any
+// handler that hands one to something a package provides.
+fn registration(tree: &Tree, module: &Module, call: &Call) -> Option<Receiver> {
+    if call.depth > 0
+        || call.structural()
+        || !call.args.iter().any(|arg| tree.handler(module, arg, &call.frames))
+    {
+        return None;
+    }
+    tree.receiver(module, call)
 }
 
 // Every method and class under a decorator a package provides, with the
@@ -243,7 +285,10 @@ fn exports(tree: &Tree) -> Option<String> {
 }
 
 // The files laid into the turn whole, as far as they fit: the manifest, the
-// bootstrap, the entry modules, then the rest of the tree in path order.
+// bootstrap, the modules the facts cite — where a function is handed to a
+// package, where a package's decorator marks a method, the entry modules
+// whose exports are listed — then the rest of the tree in path order, so a
+// tree past the budget lays what locates its surfaces before what does not.
 fn laid(tree: &Tree, root: &str, bootstrap: Option<&str>) -> Vec<String> {
     let mut lay: Vec<String> = Vec::new();
     if Path::new(root).join("package.json").is_file() {
@@ -251,6 +296,9 @@ fn laid(tree: &Tree, root: &str, bootstrap: Option<&str>) -> Vec<String> {
     }
     if let Some(entry) = bootstrap {
         push_unique(&mut lay, entry.to_owned());
+    }
+    for module in tree.modules.values().filter(|module| locates(tree, module)) {
+        push_unique(&mut lay, module.path.clone());
     }
     for entry in tree.manifest.entries(&tree.resolver) {
         push_unique(&mut lay, entry);
@@ -265,9 +313,14 @@ fn laid(tree: &Tree, root: &str, bootstrap: Option<&str>) -> Vec<String> {
 }
 
 // What the tree alone can hold the model's answer to: no surface under the
-// bootstrap's stem, and every module reached by a named surface or the
-// bootstrap, or listed as unreached.
-fn check(tree: &Tree, bootstrap: Option<&str>, answer: &Inventory) -> Vec<String> {
+// bootstrap's stem, and every module the facts locate a surface in — or the
+// manifest names — reached by a named surface or the bootstrap, or listed as
+// unreached. A module the facts say nothing of is not asked after: a
+// framework may load it by directory, and a model made to account for every
+// such module invents surfaces to cover them.
+fn check(
+    tree: &Tree, bootstrap: Option<&str>, mounts: &BTreeMap<String, String>, answer: &Inventory,
+) -> Vec<String> {
     let mut findings: Vec<String> = Vec::new();
     if bootstrap.is_some() {
         for named in answer.surfaces.iter().filter(|named| named.stem == "start") {
@@ -280,7 +333,7 @@ fn check(tree: &Tree, bootstrap: Option<&str>, answer: &Inventory) -> Vec<String
     }
 
     // what the named surfaces reach, and what the bootstrap reaches beside them
-    let surfaces = build(tree, answer);
+    let surfaces = build(tree, answer, mounts);
     let mut covered: Vec<String> =
         unique(surfaces.iter().flat_map(|surface| surface.closure.iter().cloned()));
     if let Some(module) = bootstrap.and_then(|entry| tree.modules.get(entry)) {
@@ -291,18 +344,29 @@ fn check(tree: &Tree, bootstrap: Option<&str>, answer: &Inventory) -> Vec<String
     }
     let unreached: Vec<&str> =
         answer.unreached.iter().map(|path| path.trim_start_matches("./")).collect();
+    let entries = tree.manifest.entries(&tree.resolver);
     let missing: Vec<String> = tree
         .modules
-        .keys()
-        .filter(|path| !covered.contains(path) && !unreached.contains(&path.as_str()))
-        .map(|path| format!("`{path}`"))
+        .values()
+        .filter(|module| {
+            !covered.contains(&module.path)
+                && !unreached.contains(&module.path.as_str())
+                && (entries.contains(&module.path) || locates(tree, module))
+        })
+        .map(|module| format!("`{}`", module.path))
         .collect();
     if !missing.is_empty() {
+        let (these, are) = if missing.len() == 1 {
+            ("one module the facts list a registration or declaration in is", "it")
+        } else {
+            ("these modules the facts list a registration or declaration in are", "each")
+        };
         findings.push(format!(
-            "- {} reached by no surface you named and not listed under `unreached`: {}; name the \
-             surface each belongs to — anchored where it is registered, so the caller follows \
-             its imports to the module — or list it under `unreached`",
-            if missing.len() == 1 { "one module is" } else { "these modules are" },
+            "- {these} reached by no surface you named and not listed under `unreached`: {}; where \
+             a caller outside the process reaches what is registered there — a route, a command, \
+             a job — name that surface, anchored at the registration, so the caller follows its \
+             imports to the module; otherwise list {are} under `unreached` — a plugin, a hook, a \
+             helper is no surface, and none is invented to cover a module",
             missing.join(", ")
         ));
     }
@@ -310,10 +374,11 @@ fn check(tree: &Tree, bootstrap: Option<&str>, answer: &Inventory) -> Vec<String
 }
 
 // The surfaces the answer names, each at the module and lines its anchor
-// names, reaching what the code at those lines references — as the parser's
-// own do from a registration. A surface whose anchor the tree does not hold
-// is left out; the SDK's gate has refused it already.
-fn build(tree: &Tree, answer: &Inventory) -> Vec<Surface> {
+// names, reaching what the code at those lines references and told from the
+// others under its stem by what is registered, decorated, or exported there
+// — as the parser's own are from a registration. A surface whose anchor the
+// tree does not hold is left out; the SDK's gate has refused it already.
+fn build(tree: &Tree, answer: &Inventory, mounts: &BTreeMap<String, String>) -> Vec<Surface> {
     answer
         .surfaces
         .iter()
@@ -337,7 +402,14 @@ fn build(tree: &Tree, answer: &Inventory) -> Vec<Surface> {
                 lines,
                 detail: vec![format!("registered or declared {lines}, named by the survey")],
                 closure: tree.reaches(module, lines, &[], None),
-                discriminator: None,
+                discriminator: surface::discriminate(
+                    tree,
+                    module,
+                    lines,
+                    &named.name,
+                    &named.stem,
+                    mounts,
+                ),
                 methods: Vec::new(),
                 ids: Vec::new(),
             })

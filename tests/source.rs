@@ -902,6 +902,60 @@ async fn typescript_decorated() {
     }
 }
 
+// A class decorator that takes its path in an object — `@Controller({ path,
+// version })` — prefixes its methods' routes as a literal one does, so the
+// routes stem by the resource and not by the class; a documentation
+// decorator before it (`@ApiTags("Users")`) carries no prefix, and one that
+// shapes a method's answer (`@SerializeOptions`) does not stand in for the
+// verb beneath it.
+#[tokio::test]
+async fn typescript_decorated_object_path() {
+    let project = scratch();
+    modules(
+        &project,
+        &[
+            ("package.json", "{\"name\":\"nest\",\"main\":\"src/main.ts\"}\n"),
+            (
+                "src/main.ts",
+                "import { NestFactory } from \"@nestjs/core\";\nimport { UsersController } from \
+                 \"./users.controller\";\n\nasync function bootstrap() {\n  const app = await \
+                 NestFactory.create(UsersController);\n  await app.listen(3000);\n}\nbootstrap();\n",
+            ),
+            (
+                "src/users.controller.ts",
+                "import { Controller, Delete, Get, Param, SerializeOptions } from \
+                 \"@nestjs/common\";\nimport { ApiTags } from \"@nestjs/swagger\";\n\n@ApiTags(\"Users\")\n\
+                 @Controller({\n  path: \"users\",\n  version: \"1\",\n})\nexport class UsersController \
+                 {\n  @SerializeOptions({ groups: [\"admin\"] })\n  @Get(\":id\")\n  find(@Param(\"id\") \
+                 id: string) {\n    return { id };\n  }\n\n  @Delete(\":id\")\n  remove(@Param(\"id\") \
+                 id: string) {\n    return { id, removed: true };\n  }\n}\n",
+            ),
+        ],
+    );
+
+    let answer = claim("users.find");
+    let model = support::run(
+        test_programs::ADAPTER_TYPESCRIPT,
+        &project,
+        &[],
+        ScriptedModel::answering([answer.as_str(), answer.as_str()]),
+    )
+    .await;
+
+    let turns = prompted(&model, prompt::extract(typescript::PROSE), 1);
+    assert_eq!(
+        surfaces(&turns[0]),
+        [
+            ("start", "src/main.ts", "start"),
+            ("GET /users/:id", "src/users.controller.ts", "users"),
+            ("DELETE /users/:id", "src/users.controller.ts", "users"),
+        ]
+    );
+    for id in ["id `users.find`", "id `users.remove`"] {
+        assert!(turns[0].contains(id), "the method tells the surface: {id}: {}", turns[0]);
+    }
+}
+
 // A library's entry only declares and exports, so the tree has no bootstrap
 // and what the entry exports — a function, a class, through a re-export —
 // is its surfaces; a type and an error class are none. A class carries an id
