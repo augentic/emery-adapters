@@ -118,10 +118,10 @@ oxc_parser = "=0.152.0"
 oxc_span = "=0.152.0"
 
 [patch.crates-io]
-# emery-prose = { git = "https://github.com/augentic/emery" }
-# emery-sdk = { git = "https://github.com/augentic/emery" }
-emery-prose = { path = "../emery/crates/prose" }
-emery-sdk = { path = "../emery/crates/sdk" }
+emery-prose = { git = "https://github.com/augentic/emery", rev = "bbcc1fd2" }
+emery-sdk = { git = "https://github.com/augentic/emery", rev = "bbcc1fd2" }
+# emery-prose = { path = "../emery/crates/prose" }
+# emery-sdk = { path = "../emery/crates/sdk" }
 
 omnia = { git = "https://github.com/augentic/omnia" }
 omnia-sdk = { git = "https://github.com/augentic/omnia" }

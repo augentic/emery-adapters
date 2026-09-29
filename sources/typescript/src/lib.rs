@@ -3,33 +3,40 @@
 //! A workspace's production modules — its `.ts`, `.tsx`, `.js`, and sibling
 //! files outside tests, declarations, dependencies, and build output — are
 //! parsed, and the surfaces a caller enters the source through are found
-//! from the code: the bootstrap `package.json` names or a conventional entry
-//! holds, each handler registered with a package, each method under a
-//! package's decorator, and, in a tree with no bootstrap, each function and
-//! class an entry module exports. Each surface carries the stem its
-//! `requirement` and `criterion` ids lead with, the id that tells it from
-//! the other surfaces under that stem — a handler's name, a route's verb and
-//! path, a method — and the modules it reaches.
+//! from the code: the bootstrap — the first entry `package.json` names, or
+//! conventional entry the tree holds, that runs something when loaded — each
+//! handler registered with a package, each method under a package's
+//! decorator, and, in a tree with no bootstrap, each function and class an
+//! entry module exports. Each surface carries the stem its `requirement` and
+//! `criterion` ids lead with, the id that tells it from the other surfaces
+//! under that stem — a handler's name, a route's verb and path, a method —
+//! and the modules it reaches.
 //!
 //! A tree whose modules fit within the SDK's inline budget is mined in one
 //! call over every module, laid into the turn, held to every surface's stem;
 //! a larger tree is mined one call per stem, over the modules its surfaces
-//! reach, each held to that stem alone. Each call is told its surfaces, each
-//! with its id and what it reaches; the boundaries its modules spell as
-//! values of their own — literals and expressions over them, patterns,
-//! `process.env` reads with whatever the code does to them, definitions
-//! handed literals, at module level, in a class, or as a constant-named local
-//! — the packages they import, and the calls they make through those
-//! packages, grouped by callee at their sites. Inline input is mined whole.
+//! reach, each held to that stem alone — and, where one of those imports a
+//! module the tree does not hold or loads one by a computed name, over the
+//! rest of the tree after them, so what the import names stays within reach.
+//! Each call is told its surfaces, each with its id and what it reaches; the
+//! boundaries its modules spell as values of their own — literals and
+//! expressions over them, patterns, `process.env` reads with whatever the
+//! code does to them, definitions handed literals, at module level, in a
+//! class, or as a constant-named local — the packages they import, the calls
+//! they make through those packages, grouped by callee at their sites, the
+//! `.json` files they import, laid after them as the seam's data, and what
+//! could not be followed. Inline input is mined whole.
 //!
 //! The `type` claims of the source are copied from its declarations —
 //! every `interface`, `type`, `enum`, and class the seams' modules export,
 //! verbatim — and joined after the model's answer, which is held to the other
 //! kinds; a declaration a module keeps to itself is none.
 //!
-//! A workspace with no production module, or one that exposes no surface, is
-//! rejected. A module the parser cannot read is walked as far as it got and
-//! never fails the run.
+//! A workspace with no production module is rejected; one that exposes no
+//! surface is mined under a mechanical cut — one call under the package's or
+//! the root directory's name, or one per top-level directory past the budget
+//! — and read as a library is. A module the parser cannot read is walked as
+//! far as it got and never fails the run.
 
 #[cfg(target_arch = "wasm32")]
 mod survey;

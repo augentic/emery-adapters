@@ -4,7 +4,10 @@
 //! A relative specifier is probed the way the compiler probes it — as
 //! written, then with each source extension, then as a directory's `index` —
 //! and `tsconfig.json` `baseUrl` and `paths` resolve the aliases a bare
-//! specifier may spell. A bare specifier no mapping answers is a package.
+//! specifier may spell. A bare specifier no mapping answers is a package. The
+//! resolver owns every outcome: a relative or aliased specifier it cannot
+//! answer is `Unresolved`, never dropped, so the survey can say what it could
+//! not follow and widen what it lays.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -12,7 +15,7 @@ use std::path::Path;
 use emery_sdk::serde_json::{self, Value};
 
 use super::parse::Module;
-use super::{EXTENSIONS, push_unique};
+use super::{EXTENSIONS, push_unique, unique};
 
 // The build outputs a manifest may point at in place of their sources.
 const OUTPUT_DIRS: &[&str] = &["dist", "build", "lib", "out"];
@@ -24,12 +27,21 @@ pub enum Target {
     Module(String),
     /// A package outside the tree, by the specifier as written.
     Package(String),
+    /// A data file of the tree — a `.json` imported by relative or aliased
+    /// path — by its root-relative path.
+    Data(String),
+    /// A relative or aliased specifier no module or data file of the tree
+    /// answers — a file the keep left out, a module not yet generated, a typo
+    /// — by the specifier as written.
+    Unresolved(String),
 }
 
-/// The tree's modules and the alias mappings its `tsconfig.json` declares.
+/// The tree's modules, its data files, and the alias mappings its
+/// `tsconfig.json` declares.
 #[derive(Debug)]
 pub struct Resolver {
     modules: BTreeSet<String>,
+    data: BTreeSet<String>,
     // root-relative, `""` for the root itself
     base_url: Option<String>,
     // each `paths` pattern with its targets, relative to `base_url` or the
@@ -39,10 +51,15 @@ pub struct Resolver {
 
 impl Resolver {
     /// Reads the tree's `tsconfig.json` under `root`, following one relative
-    /// `extends` where it can be read, and indexes `modules`.
-    pub fn new(root: &Path, modules: impl IntoIterator<Item = String>) -> Self {
+    /// `extends` where it can be read, and indexes `modules` and the `data`
+    /// files an import may name.
+    pub fn new(
+        root: &Path, modules: impl IntoIterator<Item = String>,
+        data: impl IntoIterator<Item = String>,
+    ) -> Self {
         let mut resolver = Self {
             modules: modules.into_iter().collect(),
+            data: data.into_iter().collect(),
             base_url: None,
             paths: Vec::new(),
         };
@@ -68,34 +85,44 @@ impl Resolver {
 
     /// Resolves `specifier` as imported from the module at `from`.
     ///
-    /// `None` for a relative or aliased specifier that names no module of
-    /// the tree — a file the keep left out, a `.json`, a typo.
+    /// `None` only for an absolute specifier, which names nothing of the
+    /// tree; a relative or aliased one the tree does not answer is
+    /// [`Target::Unresolved`]. A bare specifier that matches a `paths`
+    /// pattern other than the catch-all `*` is aliased; one no mapping
+    /// answers is a package.
     pub fn resolve(&self, from: &str, specifier: &str) -> Option<Target> {
         if specifier.starts_with('/') {
             return None;
         }
+        let unresolved = || Some(Target::Unresolved(specifier.to_owned()));
         if matches!(specifier, "." | "..")
             || specifier.starts_with("./")
             || specifier.starts_with("../")
         {
             let dir = from.rsplit_once('/').map_or("", |(dir, _)| dir);
-            return self.probe(&normalize(dir, specifier)?).map(Target::Module);
+            let Some(candidate) = normalize(dir, specifier) else { return unresolved() };
+            return self.file(&candidate).or_else(unresolved);
         }
 
+        let mut aliased = false;
         for (pattern, targets) in &self.paths {
             let Some(rest) = alias(pattern, specifier) else { continue };
+            aliased |= pattern != "*";
             for target in targets {
                 let candidate = target.replacen('*', rest, 1);
                 let base = self.base_url.as_deref().unwrap_or("");
-                if let Some(found) = normalize(base, &candidate).and_then(|c| self.probe(&c)) {
-                    return Some(Target::Module(found));
+                if let Some(found) = normalize(base, &candidate).and_then(|c| self.file(&c)) {
+                    return Some(found);
                 }
             }
         }
         if let Some(base) = &self.base_url
-            && let Some(found) = normalize(base, specifier).and_then(|c| self.probe(&c))
+            && let Some(found) = normalize(base, specifier).and_then(|c| self.file(&c))
         {
-            return Some(Target::Module(found));
+            return Some(found);
+        }
+        if aliased {
+            return unresolved();
         }
 
         Some(Target::Package(specifier.to_owned()))
@@ -118,6 +145,29 @@ impl Resolver {
     /// The first of `candidates` that is a module of the tree.
     pub fn first(&self, candidates: &[&str]) -> Option<String> {
         candidates.iter().find_map(|candidate| self.probe(candidate))
+    }
+
+    /// The data files `module` imports, root-relative, in order, once each.
+    pub fn data(&self, module: &Module) -> Vec<String> {
+        unique(module.specifiers().filter_map(|specifier| {
+            match self.resolve(&module.path, specifier) {
+                Some(Target::Data(path)) => Some(path),
+                _ => None,
+            }
+        }))
+    }
+
+    /// The specifiers `module` imports for a value that name nothing of the
+    /// tree, as written, in order, once each. A type-only import is a
+    /// declaration's, followed nowhere, so it never counts.
+    pub fn unresolved<'m>(&self, module: &'m Module) -> Vec<&'m str> {
+        let imports =
+            module.imports.iter().filter(|import| !import.type_only).map(|i| i.specifier.as_str());
+        let reexports =
+            module.reexports.iter().filter(|re| !re.type_only).map(|re| re.specifier.as_str());
+        unique(imports.chain(reexports).filter(|specifier| {
+            matches!(self.resolve(&module.path, specifier), Some(Target::Unresolved(_)))
+        }))
     }
 
     /// The modules `seeds` reach through imports and re-exports, `seeds`
@@ -145,6 +195,18 @@ impl Resolver {
             }
         }
         order
+    }
+
+    // The module `candidate` names, else the data file it names — as written,
+    // or with the `.json` a `require` may leave off.
+    fn file(&self, candidate: &str) -> Option<Target> {
+        if let Some(module) = self.probe(candidate) {
+            return Some(Target::Module(module));
+        }
+        [candidate.to_owned(), format!("{candidate}.json")]
+            .into_iter()
+            .find(|path| self.data.contains(path))
+            .map(Target::Data)
     }
 
     // The module `candidate` names: as written, with a source extension in
@@ -335,23 +397,25 @@ impl Manifest {
         }
     }
 
-    /// The bootstrap module the manifest names, resolved against the tree:
+    /// The entry module the manifest names first, resolved against the tree:
     /// `main`, else `bin`, else the source a `start` or `dev` script runs.
     pub fn entry(&self, resolver: &Resolver) -> Option<String> {
-        self.main
-            .as_deref()
-            .and_then(|hint| resolver.entry(hint))
-            .or_else(|| self.bin.as_deref().and_then(|hint| resolver.entry(hint)))
-            .or_else(|| {
-                ["start", "dev"].iter().find_map(|script| {
-                    self.scripts.get(*script)?.split_whitespace().find_map(|word| {
-                        let (_, extension) = word.rsplit_once('.')?;
-                        if word.starts_with('-') || !EXTENSIONS.contains(&extension) {
-                            return None;
-                        }
-                        resolver.entry(word)
-                    })
+        self.entries(resolver).into_iter().next()
+    }
+
+    /// Every module the manifest names as an entry, resolved against the
+    /// tree, in the order it names them — `main`, `bin`, then the sources the
+    /// `start` and `dev` scripts run — once each.
+    pub fn entries(&self, resolver: &Resolver) -> Vec<String> {
+        let scripts = ["start", "dev"].into_iter().flat_map(|script| {
+            self.scripts.get(script).into_iter().flat_map(|command| {
+                command.split_whitespace().filter(|word| {
+                    !word.starts_with('-')
+                        && word.rsplit_once('.').is_some_and(|(_, ext)| EXTENSIONS.contains(&ext))
                 })
             })
+        });
+        let hints = self.main.as_deref().into_iter().chain(self.bin.as_deref()).chain(scripts);
+        unique(hints.filter_map(|hint| resolver.entry(hint)))
     }
 }

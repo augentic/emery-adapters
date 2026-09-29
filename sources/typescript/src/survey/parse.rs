@@ -147,6 +147,9 @@ pub struct Module {
     /// result is decided, which a requirement about what it computes anchors
     /// at.
     pub returns: Vec<Lines>,
+    /// The lines of every `import()` or `require()` handed a computed name: a
+    /// module loaded that no resolver can follow.
+    pub dynamic: Vec<Lines>,
     references: Vec<Reference>,
 }
 

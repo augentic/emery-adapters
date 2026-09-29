@@ -16,6 +16,13 @@ stem = "start"
 anchor = "src/cli.ts#L73-L76"
 gloss = "A failed command is logged and exits with 1"
 
+# The queue is constructed at module level with the boundaries' values, so
+# the prompt's rule makes it start's, once, at the construction.
+[[requirement]]
+stem = "start"
+anchor = "src/queues.ts#L16-L25"
+gloss = "Invoice jobs retry INVOICE_ATTEMPTS times with exponential backoff from INVOICE_BACKOFF_MS"
+
 # --- import ---
 
 [[requirement]]
@@ -95,11 +102,6 @@ gloss = "A reminder above MAX_REMINDER_AMOUNT_CENTS voids the invoice instead; o
 stem = "invoices"
 anchor = "src/workers/invoices.ts#L50-L55"
 gloss = "Failed and completed jobs are logged with their id"
-
-[[requirement]]
-stem = "invoices"
-anchor = "src/queues.ts#L16-L25"
-gloss = "Invoice jobs retry INVOICE_ATTEMPTS times with exponential backoff from INVOICE_BACKOFF_MS"
 
 # --- criteria ---
 

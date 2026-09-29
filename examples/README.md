@@ -80,7 +80,9 @@ EMERY_BIN=../emery/target/release/emery TYPESCRIPT_WASM=target/wasm32-wasip2/rel
   cargo run --example eval -- orders express-orders
 ```
 
-Both paths are the defaults, so a sibling `../emery` release build needs neither variable. `RUST_LOG` is set for the run unless the caller sets it — the scorecard reads the SDK's `accepted` trace lines and the backend's `completion` lines — and `CURSOR_MODEL` is recorded in the card, so pin it before comparing two.
+Both paths are the defaults, so a sibling `../emery` release build needs neither variable — unless `CARGO_TARGET_DIR` points both builds elsewhere, when the variables name the artifacts there. `RUST_LOG` is set for the run unless the caller sets it — the scorecard reads the SDK's `accepted` trace lines and the backend's `completion` lines — and `CURSOR_MODEL` is recorded in the card, so pin it before comparing two.
+
+A card worth keeping is copied by hand into [eval/cards/](eval/cards/) — `target/` is gitignored and `make sweep` drops what sits there untouched for a week — and its README says what each card shows; the cards there run from the survey-by-model baseline through each change to the survey. The `Stability` line a card ends with counts the requirement ids two runs share: the revision diff is positional and the model names each id's second segment, so the figure measures the model's naming run to run and is not a target the survey holds — the stems, the surfaces, the anchors, and the files a seam lays are what the survey fixes, and [tests/source.rs](../tests/source.rs) pins those over `typescript/cli-jobs/` and `typescript/express-orders/` with no model turn.
 
 ## Host-to-guest tool calls
 

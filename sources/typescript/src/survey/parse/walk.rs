@@ -471,6 +471,12 @@ impl<'a> Visit<'a> for Walker<'_> {
     }
 
     fn visit_call_expression(&mut self, it: &CallExpression<'a>) {
+        if is_require(&it.callee)
+            && it.arguments.first().and_then(|a| a.as_expression()).and_then(string_value).is_none()
+        {
+            let lines = self.lines(it.span);
+            self.module.dynamic.push(lines);
+        }
         let handler = self
             .record_call(&it.callee, &it.arguments, false, it.span)
             .is_some_and(|call| !call.structural());
@@ -679,6 +685,9 @@ impl<'a> Visit<'a> for Walker<'_> {
     fn visit_import_expression(&mut self, it: &ImportExpression<'a>) {
         if let Some(specifier) = string_value(&it.source) {
             self.import("", &specifier, Imported::Effect, false);
+        } else {
+            let lines = self.lines(it.span);
+            self.module.dynamic.push(lines);
         }
         walk::walk_import_expression(self, it);
     }

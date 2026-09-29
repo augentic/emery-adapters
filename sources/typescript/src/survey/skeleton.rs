@@ -13,8 +13,9 @@
 //! `callee` spelled from the import. Every point where the code decides — a
 //! guard, a switch, a throw, a catch, a timer — is listed at its lines, so a
 //! requirement anchors where a behaviour starts rather than where a value is
-//! wired; those points, the calls through packages, the boundaries, and the
-//! surfaces' own lines are the seam's anchors, which the SDK holds every
+//! wired; those points, the `return`s, the heads of the functions and
+//! methods, the calls through packages, the boundaries, and the surfaces'
+//! own lines are the seam's anchors, which the SDK holds every
 //! `requirement` to. Every behaviour the tree's own tests state — a test's
 //! nested titles, a feature's scenarios — is listed at its line, so what the
 //! code confirms of them is claimed and what it does not hold is not
@@ -25,7 +26,7 @@ use std::collections::BTreeMap;
 use emery_sdk::serde_json::{Map, Value};
 use emery_sdk::{Claim, ClaimKind};
 
-use super::parse::{BindingKind, Call, Imported, Lines, MemberKind, Module, Scope, TypeKind};
+use super::parse::{BindingKind, Call, Imported, Init, Lines, MemberKind, Module, Scope, TypeKind};
 use super::push_unique;
 use super::resolve::{Resolver, Target};
 use super::surface::{Surface, Tree};
@@ -160,7 +161,8 @@ pub fn decisions<'m>(modules: impl IntoIterator<Item = &'m Module>) -> Option<St
     Some(format!(
         "Decision points in these modules, each at its lines: the guards, switches, conditionals, \
          throws, catches, and timers the code turns on. A `requirement` anchors where a behaviour \
-         starts or its result is decided — at one of these, at a `return`, at a listed call or a \
+         starts or its result is decided — at one of these, at a `return`, at the line that opens \
+         the function or method whose whole body is the behaviour, at a listed call or a \
          package's construction, at a boundary, at the code a stated behaviour names, or at a \
          surface's registration or handler lines; a line that only wires or assigns is no \
          requirement's anchor, and what `start` constructs with a boundary's value is one \
@@ -191,6 +193,85 @@ pub fn stated<'t>(tests: impl IntoIterator<Item = &'t Test>) -> Option<String> {
          it states and the values it asserts, and is no `requirement`'s or `criterion`'s \
          anchor:\n\n{}",
         lines.join("\n")
+    ))
+}
+
+/// The brief's data files over `modules`: each `.json` they import, with the
+/// modules importing it, in the order the modules are laid. `None` when they
+/// import none.
+pub fn data<'m>(
+    modules: impl IntoIterator<Item = &'m Module>, resolver: &Resolver,
+) -> Option<String> {
+    // path → importing modules
+    let mut files: Vec<(String, Vec<&str>)> = Vec::new();
+    for module in modules {
+        for path in resolver.data(module) {
+            match files.iter_mut().find(|(known, _)| *known == path) {
+                Some((_, by)) => push_unique(by, module.path.as_str()),
+                None => files.push((path, vec![module.path.as_str()])),
+            }
+        }
+    }
+    if files.is_empty() {
+        return None;
+    }
+    let lines: Vec<String> = files
+        .iter()
+        .map(|(path, by)| {
+            let by: Vec<String> = by.iter().map(|module| format!("`{module}`")).collect();
+            format!("- `{path}` — imported by {}", by.join(", "))
+        })
+        .collect();
+    Some(format!(
+        "Data files these modules import, each with the modules reading it, laid after the \
+         modules:\n\n{}",
+        lines.join("\n")
+    ))
+}
+
+/// What the resolver could not follow from `modules`: each relative or
+/// aliased specifier naming nothing of the tree, with the module importing
+/// it, and each module loaded by a computed name, at its lines — and, when
+/// `widened`, that the modules after the closure are the rest of the tree,
+/// laid so what those name is still within reach. `None` when every import
+/// was followed.
+pub fn unfollowed<'m>(
+    modules: impl IntoIterator<Item = &'m Module>, resolver: &Resolver, widened: bool,
+) -> Option<String> {
+    let mut items: Vec<String> = Vec::new();
+    for module in modules {
+        let unresolved: Vec<String> =
+            resolver.unresolved(module).into_iter().map(|s| format!("`{s}`")).collect();
+        if !unresolved.is_empty() {
+            items.push(format!(
+                "{} from `{}` {} no module of the tree",
+                unresolved.join(", "),
+                module.path,
+                if unresolved.len() == 1 { "names" } else { "name" }
+            ));
+        }
+        if !module.dynamic.is_empty() {
+            let at: Vec<String> = module.dynamic.iter().map(ToString::to_string).collect();
+            items.push(format!(
+                "`{}` loads a module by a computed name at {}",
+                module.path,
+                at.join(", ")
+            ));
+        }
+    }
+    if items.is_empty() {
+        return None;
+    }
+    let consequence = if widened {
+        " The modules after the closure are the rest of the tree, laid so what these name is \
+         still within reach; read them for that alone."
+    } else {
+        ""
+    };
+    Some(format!(
+        "The caller could not follow every import: {}. What these name is in none of the lists \
+         above.{consequence}",
+        items.join("; ")
     ))
 }
 
@@ -291,7 +372,9 @@ fn spelled(module: &Module) -> impl Iterator<Item = (String, &str, Lines)> {
 
 /// The lines a `requirement` of a seam over the modules at `files` of `tree`
 /// may anchor at — where the code's behaviour starts or its result is
-/// decided: every decision point, every `return` of a value, every call
+/// decided: every decision point, every `return` of a value, the head of
+/// every function, method, getter, setter, and constructor — the line that
+/// opens it, where a behaviour it computes whole is anchored — every call
 /// made through a package or a global that leaves the process
 /// (constructions, registrations, and lifecycle calls among them), every
 /// boundary and `process.env` read, and the registration or declaration
@@ -302,6 +385,10 @@ pub fn anchors<'s>(
     let mut anchors: Vec<String> = Vec::new();
     let mut push =
         |path: &str, lines: Lines| push_unique(&mut anchors, format!("{path}#{}", lines.anchor()));
+    let head = |lines: Lines| Lines {
+        start: lines.start,
+        end: lines.start,
+    };
     for surface in surfaces {
         push(&surface.entry, surface.lines);
     }
@@ -311,6 +398,27 @@ pub fn anchors<'s>(
         }
         for lines in &module.returns {
             push(&module.path, *lines);
+        }
+        for binding in &module.bindings {
+            if matches!(
+                binding.kind,
+                BindingKind::Function
+                    | BindingKind::Value {
+                        init: Init::Function,
+                        ..
+                    }
+                    | BindingKind::Field {
+                        init: Init::Function,
+                        ..
+                    }
+            ) {
+                push(&module.path, head(binding.lines));
+            }
+        }
+        for member in module.classes.iter().flat_map(|class| &class.members) {
+            if member.kind != MemberKind::Field {
+                push(&module.path, head(member.lines));
+            }
         }
         for call in &module.calls {
             if callee(tree, module, call).is_some() {

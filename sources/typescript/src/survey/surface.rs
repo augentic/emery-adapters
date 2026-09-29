@@ -87,19 +87,25 @@ pub struct Surface {
 }
 
 impl Tree {
-    /// The bootstrap module: the entry the manifest names, else the first of
-    /// the conventional entries the tree holds, when loading it runs
-    /// something — a call at module level whose value is discarded, or an
+    /// The bootstrap module: the first of the entries the manifest names,
+    /// then the conventional entries the tree holds, that loading runs
+    /// something in — a call at module level whose value is discarded, or an
     /// import for its effect. An entry that only declares and exports is a
-    /// library's, and the tree has no bootstrap.
+    /// library's — a `main` naming the barrel while `start` runs the server
+    /// — and a tree with no entry that runs has no bootstrap.
     pub fn bootstrap(&self) -> Option<String> {
-        let entry =
-            self.manifest.entry(&self.resolver).or_else(|| self.resolver.first(BOOTSTRAPS))?;
-        let module = self.modules.get(&entry)?;
-        let runs = module.calls.iter().any(|call| {
-            call.discarded && call.depth == 0 && call.function.is_none() && call.class.is_none()
-        }) || module.imports.iter().any(|import| import.imported == Imported::Effect);
-        runs.then_some(entry)
+        let conventional =
+            BOOTSTRAPS.iter().filter_map(|candidate| self.resolver.first(&[candidate]));
+        self.manifest.entries(&self.resolver).into_iter().chain(conventional).find(|entry| {
+            self.modules.get(entry).is_some_and(|module| {
+                module.calls.iter().any(|call| {
+                    call.discarded
+                        && call.depth == 0
+                        && call.function.is_none()
+                        && call.class.is_none()
+                }) || module.imports.iter().any(|import| import.imported == Imported::Effect)
+            })
+        })
     }
 
     /// The package `local` is imported from in `module`, if it is an import
@@ -108,7 +114,7 @@ impl Tree {
         let import = module.import(local)?;
         match self.resolver.resolve(&module.path, &import.specifier)? {
             Target::Package(package) => Some(package),
-            Target::Module(_) => None,
+            Target::Module(_) | Target::Data(_) | Target::Unresolved(_) => None,
         }
     }
 
@@ -500,7 +506,9 @@ fn start(tree: &Tree, module: &Module, registered: &[Surface]) -> Surface {
         stem: "start".to_owned(),
         lines,
         detail: vec![
-            "the process bootstrap: what runs before each handler is registered, and at shutdown"
+            "the process bootstrap: what runs before each handler is registered, what it awaits \
+             before serving, and at shutdown — `stop` and what a signal handler calls, wherever \
+             declared"
                 .to_owned(),
         ],
         closure: tree.resolver.closure(&tree.modules, &seeds, &entries),

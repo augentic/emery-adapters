@@ -8,6 +8,8 @@
 
 mod support;
 
+use std::path::Path;
+
 use omnia_test::Seen;
 use omnia_test::host::{Scratch, ScriptedModel, scratch};
 
@@ -66,6 +68,31 @@ fn bulk(project: &Scratch, file: &str, head: &str) {
     let line = "// padding\n";
     let count = usize::try_from(emery_sdk::INLINE_BYTES).expect("fits") / line.len() + 1;
     project.write(file, format!("{head}{}", line.repeat(count)));
+}
+
+// A committed fixture under `examples/typescript/`, copied whole into the
+// scratch — less the `node_modules` and `dist` a checkout may hold — so the
+// component runs over the real tree the eval's case of that name runs over.
+fn fixture(project: &Scratch, name: &str) {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/typescript").join(name);
+    copy_tree(&root, project, "");
+}
+
+fn copy_tree(from: &Path, project: &Scratch, under: &str) {
+    let entries = std::fs::read_dir(from).unwrap_or_else(|e| panic!("{}: {e}", from.display()));
+    for entry in entries {
+        let entry = entry.expect("a readable directory entry");
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if matches!(name.as_str(), "node_modules" | "dist") {
+            continue;
+        }
+        let path = if under.is_empty() { name } else { format!("{under}/{name}") };
+        if entry.file_type().expect("a file type").is_dir() {
+            copy_tree(&entry.path(), project, &path);
+        } else {
+            project.write(&path, std::fs::read(entry.path()).expect("a readable fixture file"));
+        }
+    }
 }
 
 // One answer per workspace seam, and one for the inline value.
@@ -350,7 +377,9 @@ async fn typescript() {
     );
     for note in [
         "- Surface `start` — entry `src/index.ts` — stem `start`: the process bootstrap: what runs \
-         before each handler is registered, and at shutdown; id `start`; reaches `src/routes.ts`.",
+         before each handler is registered, what it awaits before serving, and at shutdown — \
+         `stop` and what a signal handler calls, wherever declared; id `start`; reaches \
+         `src/routes.ts`.",
         "; through `express`; id `orders.post`; reaches `src/orders.ts`, `src/db.ts`.",
         "; through `express`; id `orders.find-order`; reaches `src/orders.ts`, `src/db.ts`.",
     ] {
@@ -491,39 +520,255 @@ async fn typescript_constructed() {
 
 // The manifest's `start` script names the bootstrap over the conventional
 // entry, which here only re-exports; a router mounted with no prefix keeps
-// its own path.
+// its own path. When `main` names that barrel too — the CommonJS shape, the
+// package's exports beside the server its `start` runs — the bootstrap is
+// the first entry named that runs, not the first that resolves.
 #[tokio::test]
 async fn typescript_bootstrap() {
-    let project = scratch();
-    modules(
-        &project,
-        &[
-            (
-                "package.json",
-                "{\"name\":\"shop\",\"scripts\":{\"start\":\"ts-node src/server.ts\"}}\n",
-            ),
-            ("src/index.ts", "export { ordersRouter } from \"./routes\";\n"),
-            (
-                "src/server.ts",
-                "import express from \"express\";\nimport { ordersRouter } from \"./routes\";\n\n\
-                 const app = express();\napp.use(ordersRouter());\napp.listen(3000);\n",
-            ),
-            (
-                "src/routes.ts",
-                "import { Router } from \"express\";\n\nexport function ordersRouter() {\n  const \
-                 router = Router();\n  router.get(\"/orders/:id\", (req, res) => {\n    res.json({ \
-                 id: req.params.id });\n  });\n  return router;\n}\n",
-            ),
-        ],
-    );
+    const SOURCES: [(&str, &str); 3] = [
+        ("src/index.ts", "export { ordersRouter } from \"./routes\";\n"),
+        (
+            "src/server.ts",
+            "import express from \"express\";\nimport { ordersRouter } from \"./routes\";\n\n\
+             const app = express();\napp.use(ordersRouter());\napp.listen(3000);\n",
+        ),
+        (
+            "src/routes.ts",
+            "import { Router } from \"express\";\n\nexport function ordersRouter() {\n  const \
+             router = Router();\n  router.get(\"/orders/:id\", (req, res) => {\n    res.json({ \
+             id: req.params.id });\n  });\n  return router;\n}\n",
+        ),
+    ];
+    for manifest in [
+        "{\"name\":\"shop\",\"scripts\":{\"start\":\"ts-node src/server.ts\"}}\n",
+        "{\"name\":\"shop\",\"main\":\"src/index.ts\",\"scripts\":{\"start\":\"ts-node \
+         src/server.ts\"}}\n",
+    ] {
+        let project = scratch();
+        modules(&project, &SOURCES);
+        project.write("package.json", manifest);
 
-    let model = extract(test_programs::ADAPTER_TYPESCRIPT, &project, 1).await;
+        let model = extract(test_programs::ADAPTER_TYPESCRIPT, &project, 1).await;
+
+        let turns = prompted(&model, prompt::extract(typescript::PROSE), 1);
+        assert_eq!(
+            surfaces(&turns[0]),
+            [("start", "src/server.ts", "start"), ("GET /orders/:id", "src/routes.ts", "orders")],
+            "under {manifest}"
+        );
+    }
+}
+
+// The survey over the committed `cli-jobs` fixture, the tree the eval case of
+// that name runs over: within the budget, so one seam lays every module; the
+// bootstrap the manifest's `main` names, four commands registered at module
+// level, a schedule registered inside a function, and a worker with its hooks.
+// Under the `nightly` stem the command and the schedule are told apart by the
+// registering method.
+#[tokio::test]
+async fn typescript_fixture_cli_jobs() {
+    let project = scratch();
+    fixture(&project, "cli-jobs");
+    let neutral = decision();
+    let answer = answer();
+
+    let model = support::run(
+        test_programs::ADAPTER_TYPESCRIPT,
+        &project,
+        &[],
+        ScriptedModel::answering([&neutral, &answer]),
+    )
+    .await;
 
     let turns = prompted(&model, prompt::extract(typescript::PROSE), 1);
     assert_eq!(
         surfaces(&turns[0]),
-        [("start", "src/server.ts", "start"), ("GET /orders/:id", "src/routes.ts", "orders")]
+        [
+            ("start", "src/cli.ts", "start"),
+            ("Command.command(\"import <file>\")", "src/cli.ts", "import"),
+            ("Command.command(\"reconcile\")", "src/cli.ts", "reconcile"),
+            ("Command.command(\"nightly\")", "src/cli.ts", "nightly"),
+            ("Command.command(\"serve\")", "src/cli.ts", "serve"),
+            ("cron.schedule(NIGHTLY_CRON)", "src/jobs/nightly.ts", "nightly"),
+            ("Worker(\"invoices\")", "src/workers/invoices.ts", "invoices"),
+        ]
     );
+    for note in [
+        "; id `start`; reaches `src/lib/db.ts`, `src/queues.ts`, `src/config.ts`, \
+         `src/jobs/nightly.ts`, `src/services/importer.ts`, `src/services/reconcile.ts`, \
+         `src/workers/invoices.ts`, `src/lib/csv.ts`.",
+        "registered L47–L64 at module level; handler L50–L64; through `commander`; id `serve`;",
+        "registered L35–L45 in `scheduleNightly`; handler L37–L43; through `node-cron`; id \
+         `nightly.schedule`; reaches `src/config.ts`, `src/lib/db.ts`, `src/queues.ts`, \
+         `src/services/reconcile.ts`.",
+        "through `commander`; id `nightly.command`;",
+        "through `bullmq`; hook `worker.on(\"failed\")` L50–L52; hook `worker.on(\"completed\")` \
+         L53–L55; id `invoices`; reaches `src/queues.ts`, `src/lib/db.ts`, `src/config.ts`.",
+    ] {
+        assert!(turns[0].contains(note), "{note} is in the brief: {}", turns[0]);
+    }
+    laid(
+        &turns[0],
+        &[
+            "src/cli.ts",
+            "src/lib/db.ts",
+            "src/queues.ts",
+            "src/config.ts",
+            "src/jobs/nightly.ts",
+            "src/services/importer.ts",
+            "src/services/reconcile.ts",
+            "src/workers/invoices.ts",
+            "src/lib/csv.ts",
+        ],
+        &["package.json", "tsconfig.json"],
+    );
+}
+
+// The `express-orders` bootstrap's closure in the order the survey lays it:
+// the entry, then every module it imports breadth-first — the three routers
+// it mounts reached and stopped at, the services and stores it constructs
+// followed. The postcode table is where the SDK's budget runs out, so the
+// two modules after it are listed rather than laid.
+const EXPRESS_START: [&str; 20] = [
+    "src/server.ts",
+    "src/config.ts",
+    "src/lib/cache.ts",
+    "src/lib/shipping.ts",
+    "src/services/customers.ts",
+    "src/repositories/customers.ts",
+    "src/services/orders.ts",
+    "src/repositories/orders.ts",
+    "src/middleware/request-log.ts",
+    "src/routes/health.ts",
+    "src/middleware/auth.ts",
+    "src/routes/customers.ts",
+    "src/routes/orders.ts",
+    "src/middleware/errors.ts",
+    "src/lib/errors.ts",
+    "src/data/postcodes.ts",
+    "src/domain/order.ts",
+    "src/schemas/customers.ts",
+    "src/schemas/orders.ts",
+    "src/services/pricing.ts",
+];
+const EXPRESS_LAID: usize = 18;
+
+// The `orders` router's closure, from its entry.
+const EXPRESS_ORDERS: [&str; 14] = [
+    "src/routes/orders.ts",
+    "src/schemas/orders.ts",
+    "src/services/orders.ts",
+    "src/config.ts",
+    "src/domain/order.ts",
+    "src/lib/cache.ts",
+    "src/lib/errors.ts",
+    "src/lib/shipping.ts",
+    "src/repositories/orders.ts",
+    "src/services/customers.ts",
+    "src/services/pricing.ts",
+    "src/data/postcodes.ts",
+    "src/repositories/customers.ts",
+    "src/schemas/customers.ts",
+];
+
+// The `customers` router's closure, from its entry.
+const EXPRESS_CUSTOMERS: [&str; 6] = [
+    "src/routes/customers.ts",
+    "src/services/customers.ts",
+    "src/schemas/customers.ts",
+    "src/domain/order.ts",
+    "src/lib/errors.ts",
+    "src/repositories/customers.ts",
+];
+
+// The survey over the committed `express-orders` fixture: past the budget, so
+// one seam per stem. The bootstrap's seam lays its closure in import order up
+// to where the budget runs out and lists the rest; each router's seam lays
+// its own closure and nothing of the entry's.
+#[tokio::test]
+async fn typescript_fixture_express_orders() {
+    let project = scratch();
+    fixture(&project, "express-orders");
+    let neutral = decision();
+    let answer = answer();
+
+    let model = support::run(
+        test_programs::ADAPTER_TYPESCRIPT,
+        &project,
+        &[],
+        ScriptedModel::answering([&neutral, &neutral, &neutral, &neutral, &answer]),
+    )
+    .await;
+
+    let turns = prompted(&model, prompt::extract(typescript::PROSE), 4);
+    let start = turn_for(&turns, "start");
+    assert_eq!(surfaces(start), [("start", "src/server.ts", "start")]);
+    let reached: Vec<String> = EXPRESS_START[1..].iter().map(|path| format!("`{path}`")).collect();
+    assert!(
+        start.contains(&format!("; id `start`; reaches {}.", reached.join(", "))),
+        "the bootstrap reaches the tree in import order: {start}"
+    );
+    laid(start, &EXPRESS_START[..EXPRESS_LAID], &[]);
+    for listed in &EXPRESS_START[EXPRESS_LAID..] {
+        assert!(start.contains(&format!("- `{listed}`\n")), "`{listed}` is listed: {start}");
+        assert!(!start.contains(&format!("### `{listed}`")), "`{listed}` is not laid: {start}");
+    }
+
+    let orders = turn_for(&turns, "GET /api/orders");
+    assert_eq!(
+        surfaces(orders),
+        [
+            ("GET /api/orders", "src/routes/orders.ts", "orders"),
+            ("GET /api/orders/:id", "src/routes/orders.ts", "orders"),
+            ("POST /api/orders", "src/routes/orders.ts", "orders"),
+            ("PUT /api/orders/:id/lines", "src/routes/orders.ts", "orders"),
+            ("POST /api/orders/:id/pay", "src/routes/orders.ts", "orders"),
+            ("POST /api/orders/:id/ship", "src/routes/orders.ts", "orders"),
+            ("POST /api/orders/:id/cancel", "src/routes/orders.ts", "orders"),
+        ]
+    );
+    for note in [
+        "registered L17–L25 in `ordersRouter`; handler L19–L24; through `express`; id `orders.get`;",
+        "id `orders.get-id`;",
+        "id `orders.put-id-lines`;",
+        "id `orders.post-id-cancel`;",
+    ] {
+        assert!(orders.contains(note), "{note} is in the brief: {orders}");
+    }
+    laid(
+        orders,
+        &EXPRESS_ORDERS,
+        &["src/server.ts", "src/routes/health.ts", "src/routes/customers.ts", "src/middleware/"],
+    );
+
+    let customers = turn_for(&turns, "GET /api/customers/:id");
+    assert_eq!(
+        surfaces(customers),
+        [
+            ("GET /api/customers/:id", "src/routes/customers.ts", "customers"),
+            ("POST /api/customers", "src/routes/customers.ts", "customers"),
+            ("PUT /api/customers/:id/tier", "src/routes/customers.ts", "customers"),
+        ]
+    );
+    laid(
+        customers,
+        &EXPRESS_CUSTOMERS,
+        &["src/server.ts", "src/services/orders.ts", "src/routes/orders.ts"],
+    );
+
+    let health = turn_for(&turns, "GET /health/live");
+    assert_eq!(
+        surfaces(health),
+        [
+            ("GET /health/live", "src/routes/health.ts", "health"),
+            ("GET /health/ready", "src/routes/health.ts", "health"),
+        ]
+    );
+    assert!(
+        health.contains("id `health.get-ready`; reaches nothing beyond its entry."),
+        "the probes reach no module: {health}"
+    );
+    laid(health, &["src/routes/health.ts"], &["src/server.ts", "src/config.ts"]);
 }
 
 // A handler handed to what a package provides is a surface — a command, a
@@ -869,7 +1114,8 @@ async fn typescript_calls() {
 // member it inherits — an HTTP client on a shared config base — is a call
 // through that package, listed under the base's name and an anchor a
 // requirement may take; a call to a member the class declares itself is the
-// tree's own.
+// tree's own. The finding at a line that only builds a URL names the seam's
+// anchors in the file: the function heads, the inherited calls, the return.
 #[tokio::test]
 async fn typescript_inherited() {
     let project = scratch();
@@ -900,7 +1146,7 @@ async fn typescript_inherited() {
     });
     let strayed = serde_json::json!({ "claims": [{
         "kind": "requirement", "id": "orders.create",
-        "statement": "An order is posted to the orders service.", "path": "src/orders.ts#L3"
+        "statement": "An order is posted to the orders service.", "path": "src/orders.ts#L4"
     }] })
     .to_string();
     let corrected = serde_json::json!({ "claims": [&posted] }).to_string();
@@ -928,11 +1174,12 @@ async fn typescript_inherited() {
     );
     let exchanges = model.exchanges();
     let correction =
-        exchanges[0].outcome.as_ref().expect_err("a requirement at the declaration is refused");
+        exchanges[0].outcome.as_ref().expect_err("a requirement at the URL's binding is refused");
     assert!(
-        correction.contains("claim 0: path `src/orders.ts#L3`")
-            && correction.contains("in `src/orders.ts` it names L5, L6, L7;"),
-        "the finding names the inherited calls and the return as anchors: {correction}"
+        correction.contains("claim 0: path `src/orders.ts#L4`")
+            && correction.contains("in `src/orders.ts` it names L3, L5, L6, L7, L10;"),
+        "the finding names the heads, the inherited calls, and the return as anchors: \
+         {correction}"
     );
     assert_eq!(exchanges[1].outcome, Ok(String::new()), "the requirement at the post is accepted");
 }
@@ -1084,10 +1331,11 @@ async fn typescript_decisions() {
 }
 
 // The seam's anchors hold every `requirement` to where the code's behaviour
-// starts or its result is decided — a decision, a `return`, a call through
-// a package, a boundary, a surface's lines: one anchored at a line that only
-// imports is the SDK's finding, a `criterion` there is not, the corrected
-// answer is accepted, and the inline value is held to no anchor.
+// starts or its result is decided — a decision, a `return`, a function's
+// head, a call through a package, a boundary, a surface's lines: one
+// anchored at a line that only imports is the SDK's finding, a `criterion`
+// there is not, the corrected answer is accepted, and the inline value is
+// held to no anchor.
 #[tokio::test]
 async fn typescript_anchors() {
     let project = scratch();
@@ -1112,11 +1360,18 @@ async fn typescript_anchors() {
         "kind": "criterion", "id": "orders.retry-ms",
         "criterion": "RETRY_MS is 500 ms.", "path": "src/orders.ts#L1"
     });
-    let strayed =
-        serde_json::json!({ "claims": [&guarded, &wired, &listening, &retry, &returned] })
-            .to_string();
+    let headed = serde_json::json!({
+        "kind": "requirement", "id": "orders.create-order",
+        "statement": "Creating an order validates the body, then responds 201 with the id.",
+        "path": "src/orders.ts#L5"
+    });
+    let strayed = serde_json::json!({
+        "claims": [&guarded, &wired, &listening, &retry, &returned, &headed]
+    })
+    .to_string();
     let corrected =
-        serde_json::json!({ "claims": [&guarded, &listening, &retry, &returned] }).to_string();
+        serde_json::json!({ "claims": [&guarded, &listening, &retry, &returned, &headed] })
+            .to_string();
     let inline = answer();
 
     let model = support::run(
@@ -1135,7 +1390,7 @@ async fn typescript_anchors() {
         correction.contains("claim 1: path `src/orders.ts#L1`"),
         "the finding names the claim at the import: {correction}"
     );
-    for held in ["claim 0:", "claim 2:", "claim 3:", "claim 4:"] {
+    for held in ["claim 0:", "claim 2:", "claim 3:", "claim 4:", "claim 5:"] {
         assert!(!correction.contains(held), "{held} is at an anchor or not held: {correction}");
     }
     assert_eq!(exchanges[1].outcome, Ok(String::new()), "the corrected answer is accepted");
@@ -1216,6 +1471,135 @@ async fn typescript_stated() {
     );
     assert!(!start.contains("orders.feature"), "{start}");
     laid(start, &["src/index.ts", "src/routes.ts", "test/health.test.ts"], &[]);
+}
+
+// The service imports a module the tree does not hold and loads another by
+// a computed name, so its seam cannot know what it reaches: the rest of the
+// tree follows the closure — the entry, listed after the store past the
+// budget — and the brief says what could not be followed and why the list
+// runs on. The bootstrap's seam, whose modules import nothing unresolved,
+// is not widened. Within the budget every module is laid already, so the
+// brief says only what could not be followed.
+#[tokio::test]
+async fn typescript_unresolved() {
+    const ORDERS: &str = "import { pool } from \"./db\";\nimport { seed } from \
+                          \"./generated\";\n\nexport async function createOrder(input: unknown) \
+                          {\n  return { id: pool, input, seed };\n}\n\nexport function \
+                          loadPlugin(name: string) {\n  return import(name);\n}\n\nexport function \
+                          findOrder(req: { params: { id: string } }, res: { json(body: unknown): \
+                          void }) {\n  res.json({ id: req.params.id, pool });\n}\n";
+    const UNFOLLOWED: &str = "The caller could not follow every import: `./generated` from \
+                              `src/orders.ts` names no module of the tree; `src/orders.ts` loads a \
+                              module by a computed name at L9. What these name is in none of the \
+                              lists above.";
+    let project = scratch();
+    modules(&project, &APP);
+    project.write("src/orders.ts", ORDERS);
+    bulk(&project, "src/db.ts", "export const pool = \"o-1\";\n");
+    let neutral = decision();
+    let answer = answer();
+
+    let model = support::run(
+        test_programs::ADAPTER_TYPESCRIPT,
+        &project,
+        &[],
+        ScriptedModel::answering([&neutral, &neutral, &answer]),
+    )
+    .await;
+
+    let turns = prompted(&model, prompt::extract(typescript::PROSE), 2);
+    let orders = turn_for(&turns, "POST /api/orders");
+    laid(orders, &["src/routes.ts", "src/orders.ts"], &[]);
+    let db = orders.find("- `src/db.ts`\n").expect("the store past the budget is listed");
+    let index = orders.find("- `src/index.ts`\n").expect("the entry follows the closure");
+    assert!(db < index, "the rest of the tree is listed after the closure: {orders}");
+    assert!(
+        orders.contains(&format!(
+            "{UNFOLLOWED} The modules after the closure are the rest of the tree, laid so what \
+             these name is still within reach; read them for that alone."
+        )),
+        "the brief says what could not be followed and why the list runs on: {orders}"
+    );
+    let start = turn_for(&turns, "start");
+    laid(start, &["src/index.ts", "src/routes.ts"], &["src/orders.ts", "src/db.ts"]);
+    assert!(!start.contains("could not follow"), "nothing of `start` is unresolved: {start}");
+
+    // within the budget
+    let project = scratch();
+    modules(&project, &APP);
+    project.write("src/orders.ts", ORDERS);
+
+    let model = extract(test_programs::ADAPTER_TYPESCRIPT, &project, 1).await;
+
+    let turns = prompted(&model, prompt::extract(typescript::PROSE), 1);
+    laid(&turns[0], &["src/index.ts", "src/routes.ts", "src/orders.ts", "src/db.ts"], &[]);
+    assert!(turns[0].contains(UNFOLLOWED), "{}", turns[0]);
+    assert!(!turns[0].contains("rest of the tree"), "nothing was widened: {}", turns[0]);
+}
+
+// A `.json` a module imports by path is a data file of the seam: named in the
+// brief with the module reading it, laid after the modules, and a file a
+// `criterion` may cite a value in — while a `requirement` there is at no
+// anchor and comes back.
+#[tokio::test]
+async fn typescript_data() {
+    let project = scratch();
+    modules(&project, &APP);
+    project.write(
+        "src/orders.ts",
+        "import { pool } from \"./db\";\nimport zones from \"./zones.json\";\n\nexport async \
+         function createOrder(input: unknown) {\n  return { id: pool, input, zone: \
+         zones.rural };\n}\n\nexport function findOrder(req: { params: { id: string } }, res: { \
+         json(body: unknown): void }) {\n  res.json({ id: req.params.id, pool });\n}\n",
+    );
+    project.write("src/zones.json", "{\n  \"rural\": 650,\n  \"urban\": 0\n}\n");
+    let cited = serde_json::json!({
+        "kind": "criterion", "id": "orders.rural-surcharge",
+        "criterion": "The rural surcharge is 650 cents.", "path": "src/zones.json#L2"
+    });
+    let anchored = serde_json::json!({
+        "kind": "requirement", "id": "orders.rural",
+        "statement": "A rural order carries the surcharge.", "path": "src/zones.json#L2"
+    });
+    let strayed = serde_json::json!({ "claims": [&cited, &anchored] }).to_string();
+    let corrected = serde_json::json!({ "claims": [&cited] }).to_string();
+    let inline = answer();
+
+    let model = support::run(
+        test_programs::ADAPTER_TYPESCRIPT,
+        &project,
+        &[],
+        ScriptedModel::answering([strayed.as_str(), corrected.as_str(), inline.as_str()]),
+    )
+    .await;
+
+    let seen = model.seen();
+    assert_eq!(seen.len(), 3, "two rounds for the one seam, one for the inline value");
+    let turn = &seen[0].messages[0];
+    assert!(
+        turn.contains(
+            "Data files these modules import, each with the modules reading it, laid after the \
+             modules:\n\n- `src/zones.json` — imported by `src/orders.ts`"
+        ),
+        "the data file is named with its reader: {turn}"
+    );
+    laid(
+        turn,
+        &["src/index.ts", "src/routes.ts", "src/orders.ts", "src/db.ts", "src/zones.json"],
+        &[],
+    );
+    let modules_end = turn.find("### `src/db.ts`").expect("the last module is laid");
+    let data_start = turn.find("### `src/zones.json`").expect("the data file is laid");
+    assert!(modules_end < data_start, "the data file is laid after the modules: {turn}");
+    assert!(turn.contains("2|  \"rural\": 650,"), "numbered: {turn}");
+    let exchanges = model.exchanges();
+    let correction = exchanges[0].outcome.as_ref().expect_err("a requirement in data is refused");
+    assert!(
+        correction.contains("claim 1: path `src/zones.json#L2`")
+            && !correction.contains("claim 0:"),
+        "the criterion is held to no anchor, the requirement to the modules': {correction}"
+    );
+    assert_eq!(exchanges[1].outcome, Ok(String::new()), "the criterion in data is accepted");
 }
 
 // *.config.* files are production modules: laid beside the app's own.
