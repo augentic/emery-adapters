@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use emery_sdk::{Error, Note, Seam, SourceContent, SourceInput, bad_request, server_error};
+use emery_sdk::{Error, Seam, SourceContent, SourceInput, bad_request, server_error};
 
 pub fn survey(input: &SourceInput) -> Result<Vec<Seam>, Error> {
     let seam = match &input.content {
@@ -10,7 +10,7 @@ pub fn survey(input: &SourceInput) -> Result<Vec<Seam>, Error> {
             if value.trim().is_empty() {
                 return Err(bad_request!("intent brief is empty"));
             }
-            Seam::Whole
+            Seam::whole()
         }
         SourceContent::Workspace(root) => to_note(root)?,
     };
@@ -31,10 +31,9 @@ fn to_note(root: &str) -> Result<Seam, Error> {
         return Err(bad_request!("intent brief is empty"));
     }
 
-    // the brief rides the text itself, so no module is laid out a second time
-    Ok(Seam::Note(Note::from(format!(
-        "The operator's brief, `{file}` under `$SOURCE_DIR`, the one file of the bound \
-         tree:\n\n{brief}\n\n\
-         Nothing else is reachable; extract mines only this source."
-    ))))
+    // the SDK lays the one file into the turn and holds every anchor to it
+    Ok(Seam {
+        text: format!("The operator's brief is `{file}`, the one file of the bound tree."),
+        ..Seam::files([file.as_str()])
+    })
 }

@@ -8,7 +8,7 @@ Human-facing contributor guide (toolchain, layout, prompts, pin, publishing). Th
 2. `rustup` picks up the pinned **stable** toolchain from `rust-toolchain.toml` (including the `wasm32-wasip2` target); a nightly toolchain is additionally needed for the `fmt` arm (`cargo +nightly fmt`). The first `make` installs [mise](https://mise.jdx.dev) if it is missing. Also install `cargo-nextest`, `cargo-deny`, and `cargo-vet`. Publishing also uses `wkg`.
 3. Run `make check` from the repo root. Before opening a PR, run `make ci`.
 
-For the adapter SDK's type-level contract (`extract`, the `survey` helpers, the contract types, the answer schemas), generate the docs locally: `cargo doc -p emery-sdk --open`; the `export` module — the world an adapter's guest implements — documents under `--target wasm32-wasip2`.
+For the adapter SDK's type-level contract (`extract`, the `workspace` helpers, the contract types, the answer schemas), generate the docs locally: `cargo doc -p emery-sdk --open`; the `export` module — the world an adapter's guest implements — documents under `--target wasm32-wasip2`.
 
 Unless you are fixing a known bug, discuss larger changes in a GitHub issue first. Legal / DCO expectations match the engine repo — see [emery CONTRIBUTING](https://github.com/augentic/emery/blob/main/CONTRIBUTING.md).
 
@@ -26,10 +26,10 @@ Every source adapter shares the same guest anatomy:
 sources/
   <name>/             # documentation, intent, typescript
     prose/            # agent-facing markdown (listed in src/lib.rs, embedded into the component)
-      extract.md      # the one extraction pass; survey.md beside it for an adapter that surveys by model
+      extract.md      # the one extraction pass, and the one prompt
       references/     # lazy reference corpus; the shared runtime references are the SDK's, linked as <doc>.md
     Cargo.toml        # `<name>` — adapter identity semver is its `version`
-    src/              # lib.rs (PROSE, then the wasm32-only `mod survey` and `mod guest`) + survey.rs, the guest's survey
+    src/              # lib.rs (PROSE, then the wasm32-only `mod survey` and `mod guest`) + survey.rs, the guest's survey, and whatever the survey reads its source with (typescript: parse.rs, resolve.rs, surface.rs, skeleton.rs)
 crates/test-programs/ # omnia's test-programs pattern: guest programs + the nested wasm32 build of every component
   programs/<group>/   # one scenario per file: source/extract.rs drives the component boundary, probe/ are fixture adapters
   src/                # lib.rs: the generated artifact table (native) / helpers.rs (wasm32)
@@ -47,11 +47,11 @@ Identity lives in the guest crate's `Cargo.toml` `version` (the shared `[workspa
 Adapter prompts are markdown documents compiled into the guest and driven by the engine's `extract` dispatch. They are not skills: no YAML frontmatter, no discovery metadata.
 
 - **`prose/extract.md`** carries the whole extraction pass: the claim-kind table with each kind's required body field (the `emery_sdk::Evidence::findings` gate, run as the check on each seam's turn inside the SDK's `extract` so the backend corrects a miss in place, and fail-closed engine-side, A8), the id-derivation rules reconciliation joins on, and the JSON output contract. Soft cap ~500 non-blank lines, hard cap 800 — above that, move material to `prose/references/`.
-- **`prose/survey.md`**, for an adapter that surveys by model, is the system prompt of its one survey call: what a surface is for this source and where a caller enters it, what is not one — the modules behind a surface, which the extract call follows — and the `surfaces` answer, each a `name` and its `entry` — never a claim, and never a grouping. Same caps; its `## Worked example` must parse as `emery_sdk::survey::Inventory`.
+- **There is no survey prompt.** A survey is code over the source — `typescript` parses its tree and derives each surface, its stem, and the modules it reaches — and what it decides is laid into each seam's turn as text the prompt describes under its Inputs: the prompt tells the model how to read what the survey hands it, never how to find it.
 - **References are cited via relative markdown links, never inlined** — the model reads a reference through `read_doc`, which answers from the adapter's `PROSE` and then from the SDK's runtime references (`emery_sdk::RUNTIME`: `claims.md` for the claim `id` grammar, `path` anchors, the skip roots, and the fail-closed gate; `reconciliation.md` for the `specify` pipeline), so every relative link must name a document listed in `PROSE` or one of those two (`claims.md` from a prompt at the `prose/` root), and every listed document must be reached from a prompt by such a link (the root `tests/prose.rs` holds the list to the `prose/` tree and refuses a link to a directory, an unlisted file, or a path outside the tree, a listed document no prompt reaches, and a listed document at a runtime reference's path). Link a rule the runtime references state rather than restating it; the references ship with the SDK the adapter compiles against, so they move with the contract they describe.
 - **A reference is written for the model, in the adapter's current contract.** It says what to read in the source and which claims to emit, in the prompt's vocabulary — the surface, the entry, the claim kinds and their extras — and nothing addressed to a contributor: no retrospectives, no tooling proposals, no description of what the engine renders downstream. Prose the prompt would contradict is worse than none.
-- **Worked examples live under `prose/references/examples/`**, one document per scenario beside a `README.md` index: the surface as the survey names it, the source the extract call reads, and the Evidence the call answers with under a `## Evidence` JSON fence — claims alone, like the prompt's own worked example. The root `tests/prose.rs` parses every such fence as the SDK's `Evidence` and holds it to the claim gate, so an example cannot teach a shape the adapter would refuse.
-- The v1 survey prompts were deleted, never ported (ADR-0008); the survey a model makes today chooses a cut and mines nothing.
+- **Worked examples live under `prose/references/examples/`**, one document per scenario beside a `README.md` index: the surface as the survey lays it into the turn, the source the extract call reads, and the Evidence the call answers with under a `## Evidence` JSON fence — claims alone, like the prompt's own worked example. The root `tests/prose.rs` parses every such fence as the SDK's `Evidence` and holds it to the claim gate, so an example cannot teach a shape the adapter would refuse.
+- The v1 survey prompts were deleted, never ported (ADR-0008), and the one survey prompt that followed them (`typescript`'s `survey.md`) is deleted too: a survey is decided by code, and the model is put to nothing but a seam's turn.
 
 ## Engine pin and sibling co-development
 
@@ -72,7 +72,7 @@ cargo build -p <name> --target wasm32-wasip2 --release   # one adapter → targe
 cargo build --workspace --target wasm32-wasip2 --release   # every adapter
 ```
 
-The `fmt` arm uses nightly `rustfmt`. `make lint` runs clippy under `-D warnings` twice: over the native side, then — since the guest side, the programs under `crates/test-programs/programs/` and the adapters' `survey` and `guest` modules, is `cfg(target_arch = "wasm32")` and native clippy compiles it to nothing — for `wasm32-wasip2`, the target it ships on, where `clippy.toml`'s guest deny-list applies (the second command above on its own). `make vet` is check-only; regenerate audit inputs with `make vetgen`. The component suites are the Rust inner loop and prove every built component under the omnia runtime, each adapter's own decisions included; `emery specify --config examples/<name>/emery.toml` walks one adapter live through the shipped `emery` binary and the Cursor backend ([examples/README.md](examples/README.md)); the graded live eval — being recreated as a root example beside the live examples — proves prompt quality end to end and writes the dated scorecard.
+The `fmt` arm uses nightly `rustfmt`. `make lint` runs clippy under `-D warnings` twice: over the native side, then — since the guest side, the programs under `crates/test-programs/programs/` and the adapters' `survey` and `guest` modules, is `cfg(target_arch = "wasm32")` and native clippy compiles it to nothing — for `wasm32-wasip2`, the target it ships on, where `clippy.toml`'s guest deny-list applies (the second command above on its own). `make vet` is check-only; regenerate audit inputs with `make vetgen`. The component suites are the Rust inner loop and prove every built component under the omnia runtime, each adapter's own decisions included; `emery specify --config examples/<name>/emery.toml` walks one adapter live through the shipped `emery` binary and the Cursor backend ([examples/README.md](examples/README.md)); the graded live eval, `cargo run --example eval` over the cases under `examples/eval/cases/`, proves prompt quality end to end and writes the dated scorecard ([examples/README.md](examples/README.md)).
 
 ## Publishing
 

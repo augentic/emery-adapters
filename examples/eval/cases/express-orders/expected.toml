@@ -1,0 +1,206 @@
+# An Express orders API over pg and Redis with zod validation, a `tsconfig`
+# `paths` alias (`@app/*`), and a postcode table that carries the kept tree
+# past the SDK's inline budget, so the tree is surveyed and mined by surface.
+
+fixture = "examples/typescript/express-orders"
+stems = ["start", "orders", "customers", "health"]
+
+# --- start ---
+
+[[requirement]]
+stem = "start"
+anchor = "src/server.ts#L18-L19"
+gloss = "A pg pool of at most 10 connections and a lazily connected Redis client are constructed from DATABASE_URL and REDIS_URL"
+
+[[requirement]]
+stem = "start"
+anchor = "src/server.ts#L28"
+gloss = "JSON bodies are parsed up to 256kb"
+
+[[requirement]]
+stem = "start"
+anchor = "src/server.ts#L30-L33"
+gloss = "Health routes mount under /health; /api routes require the bearer token and mount the customers and orders routers"
+
+[[requirement]]
+stem = "start"
+anchor = "src/server.ts#L38-L42"
+gloss = "Startup connects Redis, probes Postgres with SELECT 1, and listens on PORT"
+
+[[requirement]]
+stem = "start"
+anchor = "src/server.ts#L44-L54"
+gloss = "SIGTERM and SIGINT close the server, end the pool, disconnect Redis, exit 0, or exit 1 after SHUTDOWN_GRACE_MS"
+
+[[requirement]]
+stem = "start"
+anchor = "src/server.ts#L57-L60"
+gloss = "A startup failure is logged fatal and exits with 1"
+
+[[requirement]]
+stem = "start"
+anchor = "src/middleware/auth.ts#L7-L18"
+gloss = "An /api request without a Bearer token in API_TOKENS is unauthorized"
+
+[[requirement]]
+stem = "start"
+anchor = "src/middleware/errors.ts#L10-L38"
+gloss = "Errors map to statuses: zod and validation 400, unauthorized 401, not found 404, conflict 409 with the state, upstream 502, else 500"
+
+[[requirement]]
+stem = "start"
+anchor = "src/middleware/request-log.ts#L6-L17"
+gloss = "Every response is logged with method, path, status, and elapsed ms; above SLOW_REQUEST_MS at warn"
+
+[[requirement]]
+stem = "start"
+anchor = "src/config.ts#L3-L9"
+gloss = "A missing required environment variable fails startup naming it"
+
+# --- orders ---
+
+[[requirement]]
+stem = "orders"
+anchor = "src/routes/orders.ts#L17-L25"
+gloss = "GET /orders lists a page filtered by customerId and state with x-total-count"
+
+[[requirement]]
+stem = "orders"
+anchor = "src/routes/orders.ts#L35-L42"
+gloss = "POST /orders validates the body against placeOrderSchema and answers 201 with a Location header"
+
+[[requirement]]
+stem = "orders"
+anchor = "src/routes/orders.ts#L44-L51"
+gloss = "PUT /orders/:id/lines amends the lines"
+
+[[requirement]]
+stem = "orders"
+anchor = "src/routes/orders.ts#L53-L76"
+gloss = "POST /orders/:id/pay, /ship, and /cancel transition the order; cancel requires a reason"
+
+[[requirement]]
+stem = "orders"
+anchor = "src/services/orders.ts#L23-L34"
+gloss = "Reading an order checks the cache first and caches a hit for ORDER_CACHE_TTL_SECONDS; unknown is not found"
+
+[[requirement]]
+stem = "orders"
+anchor = "src/services/orders.ts#L40-L60"
+gloss = "Placing an order prices the lines from the catalogue, quotes shipping for the postcode and weight, totals, and stores pending"
+
+[[requirement]]
+stem = "orders"
+anchor = "src/services/orders.ts#L62-L66"
+gloss = "Only a pending order's lines may be amended; otherwise conflict"
+
+[[requirement]]
+stem = "orders"
+anchor = "src/services/orders.ts#L81-L88"
+gloss = "A terminal order or a transition TRANSITIONS does not allow is a conflict"
+
+[[requirement]]
+stem = "orders"
+anchor = "src/services/orders.ts#L107-L127"
+gloss = "An unknown or discontinued sku is a validation error; repeated skus merge their quantities"
+
+[[requirement]]
+stem = "orders"
+anchor = "src/services/pricing.ts#L27-L31"
+gloss = "The discount rate is the greater of the tier rate and the bulk rate"
+
+[[requirement]]
+stem = "orders"
+anchor = "src/services/pricing.ts#L33-L46"
+gloss = "Shipping is free at or above FREE_SHIPPING_THRESHOLD_CENTS after discount; GST applies to goods plus shipping"
+
+[[requirement]]
+stem = "orders"
+anchor = "src/lib/shipping.ts#L20-L37"
+gloss = "A shipping quote is the cheapest rate for the postcode's zone; an unzoned postcode or no rate is an upstream error"
+
+[[requirement]]
+stem = "orders"
+anchor = "src/lib/shipping.ts#L39-L72"
+gloss = "The rates API is called with a bearer token under REQUEST_TIMEOUT_MS, retried up to MAX_ATTEMPTS on 5xx or transport failure with linear backoff"
+
+[[requirement]]
+stem = "orders"
+anchor = "src/lib/cache.ts#L9-L36"
+gloss = "Cache reads, writes, and invalidations that fail are logged and ignored"
+
+[[requirement]]
+stem = "orders"
+anchor = "src/repositories/orders.ts#L117-L148"
+gloss = "An order update runs in a transaction and rolls back when the row was modified concurrently"
+
+# --- customers ---
+
+[[requirement]]
+stem = "customers"
+anchor = "src/routes/customers.ts#L24-L31"
+gloss = "POST /customers validates against createCustomerSchema and answers 201 with a Location header"
+
+[[requirement]]
+stem = "customers"
+anchor = "src/services/customers.ts#L18-L32"
+gloss = "A second customer with the same email is a conflict; emails are stored lower-cased"
+
+[[requirement]]
+stem = "customers"
+anchor = "src/services/customers.ts#L34-L40"
+gloss = "Setting a tier on an unknown customer is not found"
+
+# --- health ---
+
+[[requirement]]
+stem = "health"
+anchor = "src/routes/health.ts#L22-L24"
+gloss = "GET /live answers status ok"
+
+[[requirement]]
+stem = "health"
+anchor = "src/routes/health.ts#L26-L38"
+gloss = "GET /ready probes Postgres and Redis within PROBE_TIMEOUT_MS; 503 degraded when Postgres fails"
+
+# --- criteria ---
+
+[[criterion]]
+anchor = "src/config.ts#L11"
+gloss = "PORT defaults to 3000"
+
+[[criterion]]
+anchor = "src/config.ts#L16"
+gloss = "REQUEST_TIMEOUT_MS defaults to 5000"
+
+[[criterion]]
+anchor = "src/config.ts#L18-L19"
+gloss = "DEFAULT_PAGE_SIZE defaults to 20 and MAX_PAGE_SIZE is 100"
+
+[[criterion]]
+anchor = "src/config.ts#L21"
+gloss = "SHUTDOWN_GRACE_MS defaults to 10000"
+
+[[criterion]]
+anchor = "src/schemas/orders.ts#L4-L8"
+gloss = "MAX_LINES 50, MAX_LINE_QUANTITY 999, MAX_COURIER_NOTE 200, the postcode and sku patterns"
+
+[[criterion]]
+anchor = "src/services/pricing.ts#L4-L9"
+gloss = "GST 0.15, free shipping at 10000 cents, trade 0.1, vip 0.15, bulk 24 units at 0.05"
+
+[[criterion]]
+anchor = "src/lib/shipping.ts#L16-L17"
+gloss = "MAX_ATTEMPTS 3 and RETRY_BACKOFF_MS 250"
+
+[[criterion]]
+anchor = "src/services/orders.ts#L13"
+gloss = "ORDER_CACHE_TTL_SECONDS is 60"
+
+[[criterion]]
+anchor = "src/middleware/request-log.ts#L4"
+gloss = "SLOW_REQUEST_MS is 1000"
+
+[[criterion]]
+anchor = "src/routes/health.ts#L5"
+gloss = "PROBE_TIMEOUT_MS is 2000"

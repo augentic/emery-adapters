@@ -2,7 +2,7 @@
 
 ## Scenario
 
-The survey named one surface: the exported API `validateAndProcess`, entered at `src/data-service.ts`. The tree also holds `src/cache.ts` and `src/api-client.ts`, which the surface reaches; the example shows the entry file alone.
+A library with no bootstrap. The message names `` Surface `validateAndProcess` — entry `src/data-service.ts` — stem `data-lookup`: exported function L16–L39; id `data-lookup`; reaches `src/cache.ts`, `src/api-client.ts` `` and lays out the three modules the surface reaches — `src/data-service.ts`, `src/cache.ts`, `src/api-client.ts`; the example shows the entry alone. Its Boundaries list is empty for this module: the regex is written into the guard that tests it, not bound to a name.
 
 ## Source
 
@@ -12,12 +12,12 @@ The survey named one surface: the exported API `validateAndProcess`, entered at 
 import { cache } from "./cache";
 import { fetchFromAPI } from "./api-client";
 
-interface InputData {
+export interface InputData {
   id: string;
   forceRefresh?: boolean;
 }
 
-interface Result {
+export interface Result {
   success: boolean;
   data?: object;
   error?: string;
@@ -65,13 +65,7 @@ export async function validateAndProcess(data: InputData): Promise<Result> {
       "kind": "requirement",
       "id": "data-lookup.id-format",
       "path": "src/data-service.ts#L20-L22",
-      "statement": "A lookup whose id is not exactly eight uppercase alphanumeric characters returns success false with error \"ID must be 8 alphanumeric characters\"."
-    },
-    {
-      "kind": "criterion",
-      "id": "data-lookup.id-format.pattern",
-      "path": "src/data-service.ts#L20",
-      "criterion": "The id matches ^[A-Z0-9]{8}$."
+      "statement": "A lookup whose id does not match ^[A-Z0-9]{8}$ returns success false with error \"ID must be 8 alphanumeric characters\"."
     },
     {
       "kind": "requirement",
@@ -114,18 +108,6 @@ export async function validateAndProcess(data: InputData): Promise<Result> {
       "excerpt": "Cache-aside over key data:{id} with TTL 3600: forceRefresh skips the read and writes through; otherwise a hit returns source \"cache\" and a miss fetches, writes, and returns source \"api\". Only the miss path sits inside the try, so only its fetch and write become a failure Result."
     },
     {
-      "kind": "type",
-      "path": "src/data-service.ts#L4-L7",
-      "name": "InputData",
-      "signature": "interface InputData { id: string; forceRefresh?: boolean }"
-    },
-    {
-      "kind": "type",
-      "path": "src/data-service.ts#L9-L14",
-      "name": "Result",
-      "signature": "interface Result { success: boolean; data?: object; error?: string; source?: \"cache\" | \"api\" }"
-    },
-    {
       "kind": "call",
       "path": "src/data-service.ts#L24",
       "callee": "src/api-client.ts:fetchFromAPI",
@@ -162,6 +144,6 @@ export async function validateAndProcess(data: InputData): Promise<Result> {
 ## What to notice
 
 - Five paths through the function, one `requirement` each, then the two failure behaviours. The extent of the `try` decides which failures become a `Result` and which propagate, and the statements follow the code: a cache write failing inside the `try` is reported as `API fetch failed`.
-- The regex is the one explicit boundary the source encodes, so it is the one `criterion`, with an id extending `data-lookup.id-format`. The TTL and the key pattern are values inside the statements, not criteria.
+- No `criterion`: the regex is written into the guard that tests it, so the message lists no Boundary for it, and the pattern is the rule's value in the `id-format` statement. Bound to a name — `const ID_PATTERN = /^[A-Z0-9]{8}$/` — it would be listed, and a criterion at that anchor would extend `data-lookup.id-format`. The TTL and the key pattern are values inside the statements likewise.
 - `cache` and `fetchFromAPI` live in other modules of the tree. They are `call` claims for what this surface does with them; the extract call follows them and claims what they reach, but never claims them as surfaces of their own.
-- `Result.source` is carried as the union the declaration spells, not flattened to `string`.
+- `InputData` and `Result` are no claims of the answer: the caller copies both exported declarations, `Result.source` as the union it spells. What the answer carries of them is the behaviour that turns on a field — `forceRefresh` in the statements.

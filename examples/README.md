@@ -51,11 +51,11 @@ A run is a few model completions with long silences between log lines. The `in p
 
 The shape follows the config:
 
-- `path = "src/"` — one module under one stem, so three completions and no survey or slicing turn: `evidence` 155–195 s over 140–200 K context, `spec-draft` 40–50 s, `design-draft` 60–110 s. Reasoning is about 90% of the output and 95% of the wall time.
+- `path = "src/"` — one module under one stem, so three completions and no slicing turn: `evidence` 155–195 s over 140–200 K context, `spec-draft` 40–50 s, `design-draft` 60–110 s. Reasoning is about 90% of the output and 95% of the wall time.
 - The combined [emery.toml](emery.toml) adds a `grouping` completion and, across more than one stem, a `slicing` one.
-- [typescript/emery.toml](typescript/emery.toml) points at a multi-module tree (a gitignored Node service under `r9k/legacy/at_r9k_position_adapter/`), so a `survey` completion precedes one `evidence` per surface. Two runs took 21 and 46 minutes; the one that committed read 950 K tokens and wrote 220 K. The Kafka-consumer seam ran 9–20 minutes and hit the cap in three attempts of four; it is the seam an extract-prompt change is measured on.
+- [typescript/emery.toml](typescript/emery.toml) points at a multi-module tree (a gitignored Node service under `at_r9k_position_adapter/`), so the adapter parses it and opens one `evidence` per stem — `start` for the bootstrap and everything it reaches, `kafka-consumer` for the one message handler — with no `survey` completion: the surfaces, their stems, the id each surface's requirements lead with, and the modules each seam lays are decided by code and are the same on every run, and each seam's message lists what its modules spell — the boundaries a criterion cites, the packages they import, the calls they make through them — before the modules themselves. Under `composer-2.5` the tree fits one message, so a run is five completions in 85–105 s over 130–200 K input tokens — `evidence` 40–60 s, then `grouping`, `spec-draft`, `design-draft`, and `slicing` at 15–30 s each. Under the survey by model that preceded the parser, two runs took 21 and 46 minutes, the one that committed read 950 K tokens and wrote 220 K, and the Kafka-consumer seam ran 9–20 minutes and hit the cap in three attempts of four; the eval below is where the current numbers live.
 
-The shape holds run to run; the size does not. Identical input varied by a third in wall time, and one tree surveyed to three surfaces and then two. To compare prompts, pin `CURSOR_MODEL` (`auto` is a different model run to run), leave the cap alone, and take several runs per side.
+The shape holds run to run; the size does not. Identical input varied by a third in wall time. To compare prompts, pin `CURSOR_MODEL` (`auto` is a different model run to run), leave the cap alone, and take several runs per side — or run the eval, which does.
 
 Environment knobs:
 
@@ -64,13 +64,27 @@ Environment knobs:
 - `CURSOR_MAX_AGENTS` (4) — bridge agents live at once; further completions queue.
 - `CURSOR_MODEL` (`auto`) — the model every completion is put to; one that reasons less shortens synthesis most.
 
+## The graded eval
 
+`cargo run --example eval -- [case..]` grades the shipped `typescript` component end to end over the live model. Each case under [eval/cases/](eval/cases/) is a directory named for it holding one `expected.toml`: the fixture tree (relative to the repository root), the stems every accepted requirement must lead with, and the requirements and criteria a reviewer would write from the code, each as a `stem`, an `anchor` (`path#Ln` or `path#Ln-Lm`), and a one-line `gloss`. The runner stages every case (or the named ones) as its own project beneath `target/eval/`, runs `emery specify` over it `EVAL_RUNS` times (three), reads the committed documents back through `emery show --format json`, and grades each run: an expected item is found when an accepted claim's anchor overlaps its lines, a stem is a miss when the run's requirements do not lead with it, and the token and wall-clock figures come from the backend's `completion` lines on stderr. It prints and writes a dated scorecard to `target/eval/<timestamp>.md`; compare two by hand. Three runs a case is what tells a stable id from a lucky one; `EVAL_RUNS` trades time for confidence. An expected criterion is a boundary the code spells as a value of its own — a named constant, a default, a pattern, at the line that binds it — never a literal written into the branch that uses it, and middleware mounted for every route is expected under `start`.
+
+The four cases: [orders](eval/cases/orders/expected.toml) is one module under one stem (the inline-budget path); [express-orders](eval/cases/express-orders/expected.toml) an Express service over `typescript/express-orders/` (routes under `orders`, `customers`, `health`, and the bootstrap under `start`); [cli-jobs](eval/cases/cli-jobs/expected.toml) a commander CLI with queue workers over `typescript/cli-jobs/`; [r9k](eval/cases/r9k/expected.toml) the Kafka consumer above. Build both binaries first and point the runner at them:
+
+```bash
+cargo build --manifest-path ../emery/Cargo.toml --release
+cargo build -p typescript --target wasm32-wasip2 --release
+set -a; source .env; set +a
+EMERY_BIN=../emery/target/release/emery TYPESCRIPT_WASM=target/wasm32-wasip2/release/typescript.wasm \
+  cargo run --example eval -- orders express-orders
+```
+
+Both paths are the defaults, so a sibling `../emery` release build needs neither variable. `RUST_LOG` is set for the run unless the caller sets it — the scorecard reads the SDK's `accepted` trace lines and the backend's `completion` lines — and `CURSOR_MODEL` is recorded in the card, so pin it before comparing two.
 
 ## Host-to-guest tool calls
 
 The only tools an adapter's completion session declares are the reference tools — `list_docs` and `read_doc` — over its embedded prose corpus. `wasi-model` delivers them as two streams rather than direct callbacks: the host writes each `ToolCall` to the session's `calls` stream, and the guest answers with a `ToolResult` on a second stream it created and passed to `create`, carrying the same correlation ID so the host can resume the completion.
 
-Every answer is served in-process by the SDK from the adapter's listed `PROSE`: `list_docs` returns the adapter's reference paths and Emery's `reconciliation.md` — never a system document (`extract.md`, `survey.md`, `claims.md`), which a turn either carries already or has nothing to learn from — `read_doc` returns one document body by adapter-relative path, and anything else — an unknown tool, malformed arguments, an unembedded path — comes back as a repairable error. No HTTP shelf, no MCP callback, and no access to the source input or the revision store crosses this boundary; the model reaches nothing but the adapter's own reference documents.
+Every answer is served in-process by the SDK from the adapter's listed `PROSE`: `list_docs` returns the adapter's reference paths and Emery's `reconciliation.md` — never a system document (`extract.md`, `claims.md`), which a turn carries already — `read_doc` returns one document body by adapter-relative path, and anything else — an unknown tool, malformed arguments, an unembedded path — comes back as a repairable error. No HTTP shelf, no MCP callback, and no access to the source input or the revision store crosses this boundary; the model reaches nothing but the adapter's own reference documents.
 
 ## Installing cursor-sdk-bridge
 

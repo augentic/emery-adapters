@@ -1,0 +1,140 @@
+# A commander CLI with a node-cron nightly job and a bullmq worker: three
+# kinds of surface in one small tree, mined whole with every module laid out.
+
+fixture = "examples/typescript/cli-jobs"
+stems = ["start", "import", "reconcile", "nightly", "serve", "invoices"]
+
+# --- start ---
+
+[[requirement]]
+stem = "start"
+anchor = "src/cli.ts#L66-L71"
+gloss = "After any command but serve, the pool is ended and the Redis connection dropped"
+
+[[requirement]]
+stem = "start"
+anchor = "src/cli.ts#L73-L76"
+gloss = "A failed command is logged and exits with 1"
+
+# --- import ---
+
+[[requirement]]
+stem = "import"
+anchor = "src/cli.ts#L14-L24"
+gloss = "import <file> parses the CSV, writes unless --dry-run, prints the summary as JSON, and exits 2 when rows were rejected"
+
+[[requirement]]
+stem = "import"
+anchor = "src/lib/csv.ts#L20-L28"
+gloss = "An import over MAX_ROWS rows or missing a required column is rejected whole"
+
+[[requirement]]
+stem = "import"
+anchor = "src/lib/csv.ts#L32-L55"
+gloss = "A row with a bad account code, a non-ISO date, or a zero or non-numeric amount is rejected with its line; the rest proceed"
+
+[[requirement]]
+stem = "import"
+anchor = "src/lib/db.ts#L23-L48"
+gloss = "Entries insert in one transaction, ignoring an id already present, rolled back on failure"
+
+# --- reconcile ---
+
+[[requirement]]
+stem = "reconcile"
+anchor = "src/cli.ts#L26-L38"
+gloss = "reconcile --from --to matches the range, optionally imports unmatched bank movements, prints counts, and exits 3 when anything is unmatched"
+
+[[requirement]]
+stem = "reconcile"
+anchor = "src/services/reconcile.ts#L22-L33"
+gloss = "Bank transactions are fetched from `${BANK_FEED_URL}/transactions` with a bearer token under FEED_TIMEOUT_MS; a non-2xx is an error"
+
+[[requirement]]
+stem = "reconcile"
+anchor = "src/services/reconcile.ts#L35-L41"
+gloss = "A ledger entry matches a bank movement on account, date, and amount within RECONCILE_TOLERANCE_CENTS"
+
+[[requirement]]
+stem = "reconcile"
+anchor = "src/services/reconcile.ts#L43-L75"
+gloss = "Each bank movement matches at most one entry; unmatched bank movements import as `bank-<id>` entries when asked"
+
+# --- nightly ---
+
+[[requirement]]
+stem = "nightly"
+anchor = "src/jobs/nightly.ts#L13-L32"
+gloss = "The nightly run reconciles yesterday with import, marks issued invoices past due as overdue, and queues a remind job per invoice"
+
+[[requirement]]
+stem = "nightly"
+anchor = "src/jobs/nightly.ts#L34-L47"
+gloss = "The nightly job runs on NIGHTLY_CRON in TIMEZONE; a failure is logged and the schedule continues"
+
+# --- serve ---
+
+[[requirement]]
+stem = "serve"
+anchor = "src/cli.ts#L47-L64"
+gloss = "serve starts the invoice worker and the nightly schedule; SIGINT and SIGTERM close the worker, queue, connection, and pool and exit 0"
+
+# --- invoices ---
+
+[[requirement]]
+stem = "invoices"
+anchor = "src/workers/invoices.ts#L33-L48"
+gloss = "The invoices worker runs INVOICE_CONCURRENCY jobs: remind sends a reminder, void voids the invoice, another name fails the job"
+
+[[requirement]]
+stem = "invoices"
+anchor = "src/workers/invoices.ts#L11-L30"
+gloss = "A reminder above MAX_REMINDER_AMOUNT_CENTS voids the invoice instead; otherwise the mail API is POSTed and a non-2xx fails the job"
+
+[[requirement]]
+stem = "invoices"
+anchor = "src/workers/invoices.ts#L50-L55"
+gloss = "Failed and completed jobs are logged with their id"
+
+[[requirement]]
+stem = "invoices"
+anchor = "src/queues.ts#L16-L25"
+gloss = "Invoice jobs retry INVOICE_ATTEMPTS times with exponential backoff from INVOICE_BACKOFF_MS"
+
+# --- criteria ---
+
+[[criterion]]
+anchor = "src/config.ts#L7"
+gloss = "NIGHTLY_CRON defaults to 0 2 * * *"
+
+[[criterion]]
+anchor = "src/config.ts#L8"
+gloss = "TZ defaults to Pacific/Auckland"
+
+[[criterion]]
+anchor = "src/config.ts#L9"
+gloss = "INVOICE_CONCURRENCY defaults to 4"
+
+[[criterion]]
+anchor = "src/config.ts#L10"
+gloss = "INVOICE_ATTEMPTS defaults to 5"
+
+[[criterion]]
+anchor = "src/config.ts#L11"
+gloss = "RECONCILE_TOLERANCE_CENTS defaults to 100"
+
+[[criterion]]
+anchor = "src/config.ts#L12"
+gloss = "FEED_TIMEOUT_MS defaults to 15000"
+
+[[criterion]]
+anchor = "src/lib/csv.ts#L4-L7"
+gloss = "MAX_ROWS 50000, the required columns, the account code and ISO date patterns"
+
+[[criterion]]
+anchor = "src/queues.ts#L6"
+gloss = "INVOICE_BACKOFF_MS is 30000"
+
+[[criterion]]
+anchor = "src/workers/invoices.ts#L9"
+gloss = "MAX_REMINDER_AMOUNT_CENTS is 5000000"

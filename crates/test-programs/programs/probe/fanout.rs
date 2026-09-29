@@ -14,9 +14,7 @@ fn metadata() -> AdapterMetadata {
 }
 
 async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {
-    let seams = [
-        Seam::Note("The first half of the source.".into()),
-        Seam::Note("The second half of the source.".into()),
-    ];
+    let seams =
+        [Seam::note("The first half of the source."), Seam::note("The second half of the source.")];
     emery_sdk::extract(ctx, PROSE, &seams).await
 }
