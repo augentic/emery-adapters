@@ -26,7 +26,7 @@ An adapter is one Rust crate that ships as one Wasm component exporting the `sou
 The suites need no model credentials. Every test is the root package's: the component suites run every built component under the omnia runtime over a scripted model (the components are built by `crates/test-programs` on the first `make test`) and assert what each adapter decides through what the host sees of it, the fixture probes prove the boundary, and every adapter's corpus is checked natively:
 
 ```bash
-make check
+make ci                                             # exactly the CI gate: fmt-check, lint (host + wasm32), tests, doctests, docs, vet, deny
 cargo nextest run -p emery-adapters                 # the root suites: every component, the probes, the corpora
 cargo nextest run -p emery-adapters --test source   # the shipped components alone
 ```
@@ -56,6 +56,7 @@ The component suites are the Rust inner loop and prove every component, the adap
 
 | Symptom | What to check |
 | --- | --- |
+| `make` says mise is not on `PATH` | Install [mise](https://mise.jdx.dev/getting-started.html); the `Makefile` forwards to it and never installs it |
 | `make fmt` fails | Install nightly rustfmt: `rustup toolchain install nightly --component rustfmt` |
 | The first `make test` is slow | `crates/test-programs/build.rs` nested-builds every component for `wasm32-wasip2`; later builds are incremental |
 | Patch-resolution errors after editing root `Cargo.toml` | The committed `[patch.crates-io]` git patches fetch `augentic/emery`; uncomment the path patches only when co-developing against `../emery` |

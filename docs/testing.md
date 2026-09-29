@@ -50,7 +50,7 @@ make test                                           # the whole workspace, match
 
 The root is a package, so `make test` and the shared CI workflow pass `--workspace`, and so should any invocation meant to match them; every suite is the root package's today, so `cargo nextest run -p emery-adapters` runs the same tests.
 
-The guest side — every program under `crates/test-programs/programs/` and the adapters' `survey` and `guest` modules — is `cfg(target_arch = "wasm32")`, which native clippy compiles to nothing, so `make lint` runs a second pass for `wasm32-wasip2`, where `clippy.toml`'s guest deny-list applies: `cargo clippy --workspace --exclude emery-adapters --lib --examples --target wasm32-wasip2 -- -D warnings` (the root package, native tests alone, is excluded). `make test` compiles that side only through the component build.
+The guest side — every program under `crates/test-programs/programs/` and the adapters' `survey` and `guest` modules — is `cfg(target_arch = "wasm32")`, which native clippy compiles to nothing, so `make lint` runs the shared `lint-wasm` pass for `wasm32-wasip2`, where `clippy.toml`'s guest deny-list applies: clippy over every workspace lib, bin and example — never tests or benches — `cargo clippy --workspace --lib --bins --examples --all-features --target wasm32-wasip2 -- -D warnings`, then the same through `cargo hack --each-feature`. The root package is native tests alone, so it contributes nothing to that pass. `make test` compiles that side only through the component build.
 
 ### 2. Graded live eval
 

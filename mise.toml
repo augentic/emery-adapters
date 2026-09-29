@@ -1,28 +1,18 @@
-# Install: first `make <task>` installs mise if missing (https://mise.run)
+# Install: https://mise.jdx.dev
 # Run: `mise run <task>` (the root Makefile forwards `make <task>` here)
 
-# Satellite tools stay operator-installed until [tools] is version-pinned.
-# rustc stays on rust-toolchain.toml.
-
 [task_config]
-includes = ["git::https://github.com/augentic/.github.git//mise/rust.toml?ref=v0.1.2"]
+includes = ["git::https://github.com/augentic/.github.git//mise/rust.toml?ref=v0.2.0"]
 
 # -------------------------------------
 # Adapter overrides
 # -------------------------------------
 
-# The guest side — every adapter's `survey` and `guest` modules, and every
-# program under `crates/test-programs/programs/` — is `cfg(target_arch =
-# "wasm32")`, which native clippy compiles to nothing: lint it for its own
-# target too, where `clippy.toml`'s guest deny-list applies. The root package
-# is native tests alone and is left out of that pass.
-[tasks.lint]
-run = [
-  "cargo clippy --workspace --all-targets --all-features -- -D warnings",
-  "cargo clippy --workspace --exclude emery-adapters --lib --examples --target wasm32-wasip2 -- -D warnings",
-]
-
+# Shadows the shared `publish` (a crates.io dry run): nothing in this workspace
+# publishes to crates.io, and the train ships as Wasm OCI packages instead —
+# the same `wkg oci push` `.github/workflows/adapters.yaml` runs per component.
 [tasks.publish]
+description = "Push one release-built component to its GHCR tag: mise run publish <name>"
 run = '''
 name="${1:?usage: make publish <name>}"
 version="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version *= *"\(.*\)"/\1/p' Cargo.toml)"

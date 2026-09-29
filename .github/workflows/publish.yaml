@@ -4,8 +4,8 @@ name: Publish Release
 # dispatch from the release branch. Gates on the shared CI workflow, then the
 # shared publish workflow dates RELEASES.md, tags vX.Y.Z, and creates the
 # GitHub Release; adapters.yaml then release-builds and pushes each
-# component to GHCR (same cargo / wkg commands as `make release` /
-# `make publish` locally).
+# component to GHCR (same cargo / wkg commands as the release build and
+# `make publish <name>` locally).
 
 on:
   workflow_dispatch:
@@ -29,15 +29,17 @@ jobs:
   ci:
     name: CI
     if: ${{ startsWith(github.ref_name, 'release-') }}
-    uses: augentic/.github/.github/workflows/ci.yaml@main
+    uses: augentic/.github/.github/workflows/ci.yaml@v0.2.0
     secrets: inherit
+    with:
+      targets: wasm32-wasip2
 
   publish:
     name: Publish
     needs: ci
     permissions:
       contents: write
-    uses: augentic/.github/.github/workflows/publish.yaml@main
+    uses: augentic/.github/.github/workflows/publish.yaml@v0.2.0
 
   adapters:
     name: Publish adapters
