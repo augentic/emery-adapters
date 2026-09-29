@@ -8,5 +8,10 @@ permissions:
 
 jobs:
   ci:
-    uses: augentic/.github/.github/workflows/ci.yaml@main
+    uses: augentic/.github/.github/workflows/ci.yaml@v0.2.0
     secrets: inherit
+    with:
+      # Whole-workspace wasm32 clippy over every lib, bin and example: the
+      # `sources/*` adapters and the `test-programs` guest programs. The root
+      # package is native tests alone, so it adds nothing to that pass.
+      targets: wasm32-wasip2
