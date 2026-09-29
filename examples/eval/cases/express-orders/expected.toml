@@ -5,6 +5,24 @@
 fixture = "examples/typescript/express-orders"
 stems = ["start", "orders", "customers", "health"]
 
+# --- surfaces: the (entry, stem) pairs the survey decides ---
+
+[[surface]]
+entry = "src/server.ts"
+stem = "start"
+
+[[surface]]
+entry = "src/routes/orders.ts"
+stem = "orders"
+
+[[surface]]
+entry = "src/routes/customers.ts"
+stem = "customers"
+
+[[surface]]
+entry = "src/routes/health.ts"
+stem = "health"
+
 # --- start ---
 
 [[requirement]]

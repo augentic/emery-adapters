@@ -330,7 +330,7 @@ impl Tree {
 
     // The modules the names referenced within `lines` of `module` reach:
     // imports, and the types of the parameters and fields in scope.
-    fn reaches(
+    pub(super) fn reaches(
         &self, module: &Module, lines: Lines, frames: &[u32], class: Option<&str>,
     ) -> Vec<String> {
         let mut seeds = vec![module.path.clone()];
@@ -431,7 +431,7 @@ pub fn survey(tree: &Tree) -> Vec<Surface> {
 // each, else by their name, else by their entry's module, and two still
 // alike by their entries' modules; a class carries an id per public method
 // beside its own.
-fn identify(tree: &Tree, surfaces: &mut [Surface]) {
+pub(super) fn identify(tree: &Tree, surfaces: &mut [Surface]) {
     let module_of = |surface: &Surface| tree.modules.get(&surface.entry).map(module_stem);
     let mut owned: Vec<String> = surfaces
         .iter()
@@ -470,7 +470,7 @@ fn identify(tree: &Tree, surfaces: &mut [Surface]) {
 // it registers, from its first line to its last, reaching the other
 // surfaces' entries — what it mounts — and, through each, what that entry
 // constructs, and no further.
-fn start(tree: &Tree, module: &Module, registered: &[Surface]) -> Surface {
+pub(super) fn start(tree: &Tree, module: &Module, registered: &[Surface]) -> Surface {
     let lines = Lines {
         start: 1,
         end: u32::try_from(module.text.lines().count()).unwrap_or(u32::MAX).max(1),
@@ -869,7 +869,7 @@ fn methods<'m>(module: &'m Module, name: &str) -> Vec<(&'m str, Lines)> {
 }
 
 // The modules no other module imports.
-fn roots(tree: &Tree) -> Vec<String> {
+pub(super) fn roots(tree: &Tree) -> Vec<String> {
     let mut imported: Vec<String> = Vec::new();
     for module in tree.modules.values() {
         for specifier in module.specifiers() {

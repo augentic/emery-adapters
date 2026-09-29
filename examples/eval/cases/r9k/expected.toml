@@ -5,6 +5,17 @@
 fixture = "examples/typescript/at_r9k_position_adapter"
 stems = ["start", "kafka-consumer"]
 
+# --- surfaces: the bootstrap, and the one message handler `Main.start`
+# registers on the consumer ---
+
+[[surface]]
+entry = "src/start.ts"
+stem = "start"
+
+[[surface]]
+entry = "src/main.ts"
+stem = "kafka-consumer"
+
 # --- start: the bootstrap and everything that runs before a message arrives ---
 
 [[requirement]]

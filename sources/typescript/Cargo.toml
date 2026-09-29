@@ -15,6 +15,12 @@ crate-type = ["cdylib", "rlib"]
 [lints]
 workspace = true
 
+# `model-survey`: the surfaces are named by the model in one turn from the
+# facts the parser read, in place of the parser's own — an experiment's arm,
+# never the shipped default.
+[features]
+model-survey = []
+
 [dependencies]
 emery-sdk.workspace = true
 

@@ -4,6 +4,37 @@
 fixture = "examples/typescript/cli-jobs"
 stems = ["start", "import", "reconcile", "nightly", "serve", "invoices"]
 
+# --- surfaces: the (entry, stem) pairs the survey decides ---
+
+[[surface]]
+entry = "src/cli.ts"
+stem = "start"
+
+[[surface]]
+entry = "src/cli.ts"
+stem = "import"
+
+[[surface]]
+entry = "src/cli.ts"
+stem = "reconcile"
+
+# the `nightly` command, and the cron schedule it shares a stem with
+[[surface]]
+entry = "src/cli.ts"
+stem = "nightly"
+
+[[surface]]
+entry = "src/jobs/nightly.ts"
+stem = "nightly"
+
+[[surface]]
+entry = "src/cli.ts"
+stem = "serve"
+
+[[surface]]
+entry = "src/workers/invoices.ts"
+stem = "invoices"
+
 # --- start ---
 
 [[requirement]]

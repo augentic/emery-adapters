@@ -54,8 +54,30 @@ mod guest {
         emery_sdk::metadata(SourceKind::Behaviour)
     }
 
+    // The surfaces are the parser's, and no turn is spent before the seams'.
+    #[cfg(not(feature = "model-survey"))]
+    #[expect(clippy::unused_async, reason = "the model arm awaits a turn here; one call site")]
+    async fn surveyed<P: Model>(ctx: &Context<'_, P>) -> Result<Survey, Error> {
+        survey::survey(ctx.input)
+    }
+
+    // The surfaces are the model's, named in one turn from what the parser
+    // read; the seams are cut from them as from the parser's own, which the
+    // log carries beside them.
+    #[cfg(feature = "model-survey")]
+    async fn surveyed<P: Model>(ctx: &Context<'_, P>) -> Result<Survey, Error> {
+        match survey::prepare(ctx.input)? {
+            survey::Preparation::Value(survey) => Ok(survey),
+            survey::Preparation::Workspace(prepared) => {
+                survey::parsed(&prepared);
+                let surfaces = survey::model::surfaces(ctx, PROSE, &prepared).await?;
+                Ok(survey::seams(&prepared, &surfaces))
+            }
+        }
+    }
+
     async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {
-        let Survey { seams, types } = survey::survey(ctx.input)?;
+        let Survey { seams, types } = surveyed(ctx).await?;
         let mut evidence = emery_sdk::extract(ctx, PROSE, &seams).await?;
 
         // the declarations are the code's to state: what the model answered
@@ -75,6 +97,7 @@ mod guest {
 /// The prompts and reference documents embedded in the adapter.
 pub static PROSE: &[emery_sdk::Doc] = emery_sdk::prose![
     "../prose/extract.md",
+    "../prose/survey.md",
     "../prose/references/examples/README.md",
     "../prose/references/examples/branching-caching.md",
     "../prose/references/examples/outbound-http.md",

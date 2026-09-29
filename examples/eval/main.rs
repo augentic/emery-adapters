@@ -4,15 +4,22 @@
 //! `cargo run --example eval -- [case..]` stages every case under
 //! `examples/eval/cases/` (or the named ones) as its own project beneath
 //! `target/eval/`, runs `emery specify` over it three times, reads the committed
-//! documents back through `emery show`, grades the accepted claims against
-//! the case's `expected.toml`, and writes a dated scorecard to `target/eval/`.
-//! A case whose fixture the checkout lacks is skipped unless it is named.
+//! documents back through `emery show`, grades the accepted claims and the
+//! surveyed surfaces against the case's `expected.toml`, and writes a dated
+//! scorecard to `target/eval/`. A case whose fixture the checkout lacks is
+//! skipped unless it is named.
+//!
+//! A run that hits the backend's time cap — a `timeout` or `inactive`
+//! completion — is put again one rung up the budget ladder, so the card says
+//! at which budget it landed; the comparison columns are the first rung's.
 //!
 //! Environment: `EMERY_BIN` (`../emery/target/release/emery`),
 //! `TYPESCRIPT_WASM` (`target/wasm32-wasip2/release/typescript.wasm`),
-//! `EVAL_RUNS` (`3`), and the runtime's own `CURSOR_*` knobs. `RUST_LOG` is
-//! set for the run unless the caller sets it: the scorecard needs the SDK's
-//! `accepted` trace lines and the backend's `completion` lines.
+//! `EVAL_RUNS` (`3`), `EVAL_LADDER` (`600/120,1200/240,2400/480`: each rung
+//! `CURSOR_TIMEOUT_SECS/CURSOR_INACTIVITY_SECS`), and the runtime's other
+//! `CURSOR_*` knobs. `RUST_LOG` is set for the run unless the caller sets it:
+//! the scorecard needs the SDK's `accepted` trace lines, the adapter's
+//! `surveyed` line, and the backend's `completion` lines.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{self, Display, Formatter, Write as _};
@@ -26,7 +33,8 @@ use serde::Deserialize;
 use serde_json::Value;
 
 const CASES: &str = "examples/eval/cases";
-const RUST_LOG: &str = "emery_sdk=trace,omnia_cursor=info,omnia_core=off";
+const RUST_LOG: &str = "emery_sdk=trace,typescript=trace,omnia_cursor=info,omnia_core=off";
+const LADDER: &str = "600/120,1200/240,2400/480";
 
 fn main() -> ExitCode {
     match eval() {
@@ -48,7 +56,8 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
         return Err(format!("no case under `{CASES}` matches").into());
     }
 
-    // run and grade every case
+    // run and grade every case, each run climbing the ladder while the cap
+    // is what fails it
     let started = now();
     let mut reports = Vec::with_capacity(cases.len());
     for case in &cases {
@@ -56,16 +65,24 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
         let project = stage(root, case, &settings)?;
         let mut runs = Vec::with_capacity(settings.runs);
         for n in 1..=settings.runs {
-            eprintln!("eval: `{}` run {n}", case.name);
-            let run = run(&project, &settings, n)?;
-            eprintln!("eval: `{}` run {n} {}", case.name, run.summary());
-            runs.push(run);
+            let mut attempts = Vec::new();
+            for (index, rung) in settings.ladder.iter().enumerate() {
+                eprintln!("eval: `{}` run {n} at {rung}", case.name);
+                let tag = if index == 0 { format!("run-{n}") } else { format!("run-{n}@{rung}") };
+                let run = run(&project, &settings, n, *rung, &tag)?;
+                eprintln!("eval: `{}` run {n} at {rung} {}", case.name, run.summary());
+                let climb = run.starved() && index + 1 < settings.ladder.len();
+                attempts.push(Attempt {
+                    grade: grade(&case.expected, &run),
+                    run,
+                });
+                if !climb {
+                    break;
+                }
+            }
+            runs.push(attempts);
         }
-        reports.push(Report {
-            case,
-            grades: runs.iter().map(|run| grade(&case.expected, run)).collect(),
-            runs,
-        });
+        reports.push(Report { case, runs });
     }
 
     // write the scorecard
@@ -82,6 +99,7 @@ struct Settings {
     emery: PathBuf,
     wasm: PathBuf,
     runs: usize,
+    ladder: Vec<Rung>,
     model: String,
     rust_log: String,
 }
@@ -103,14 +121,45 @@ impl Settings {
             Ok(runs) => runs.parse().map_err(|error| format!("EVAL_RUNS: `{runs}`: {error}"))?,
             Err(_) => 3,
         };
+        let ladder = env::var("EVAL_LADDER").unwrap_or_else(|_| LADDER.to_owned());
+        let ladder: Vec<Rung> = ladder.split(',').map(Rung::parse).collect::<Result<_, _>>()?;
 
         Ok(Self {
             emery,
             wasm,
             runs,
+            ladder,
             model: env::var("CURSOR_MODEL").unwrap_or_else(|_| "auto".to_owned()),
             rust_log: env::var("RUST_LOG").unwrap_or_else(|_| RUST_LOG.to_owned()),
         })
+    }
+}
+
+// One rung of the budget ladder: the backend's cap per completion and its
+// inactivity cut-off, in seconds.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct Rung {
+    timeout: u64,
+    inactivity: u64,
+}
+
+impl Rung {
+    fn parse(text: &str) -> Result<Self, String> {
+        let parsed = text.trim().split_once('/').and_then(|(timeout, inactivity)| {
+            Some(Self {
+                timeout: timeout.parse().ok()?,
+                inactivity: inactivity.parse().ok()?,
+            })
+        });
+        parsed.ok_or_else(|| {
+            format!("EVAL_LADDER: `{text}`: a rung is `<timeout>/<inactivity>` in seconds")
+        })
+    }
+}
+
+impl Display for Rung {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}/{}", self.timeout, self.inactivity)
     }
 }
 
@@ -128,10 +177,20 @@ struct Expected {
     fixture: String,
     // the stems the accepted requirement claims lead with, exactly
     stems: Vec<String>,
+    // the (entry, stem) pairs the survey decides, exactly
+    #[serde(default, rename = "surface")]
+    surfaces: Vec<ExpectedSurface>,
     #[serde(default, rename = "requirement")]
     requirements: Vec<Item>,
     #[serde(default, rename = "criterion")]
     criteria: Vec<Item>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ExpectedSurface {
+    entry: String,
+    stem: String,
 }
 
 #[derive(Deserialize)]
@@ -220,15 +279,29 @@ fn copy_tree(from: &Path, to: &Path) -> io::Result<()> {
 
 struct Run {
     n: usize,
+    rung: Rung,
     wall: Duration,
     exit: Option<i32>,
     tail: String,
     diff: Option<Value>,
     evidence: Vec<Evidence>,
     completions: Vec<Completion>,
+    // the surfaces the seams were cut from, as the adapter logged them
+    surveyed: Vec<Surveyed>,
+    // the parser's surfaces, logged beside the model's under the
+    // `model-survey` arm alone
+    parsed: Option<Vec<Surveyed>>,
     spec: Option<Value>,
     design: Option<Value>,
     plan: Option<Value>,
+}
+
+// One surface as the adapter's `surveyed` line spells it.
+#[derive(Deserialize)]
+struct Surveyed {
+    name: String,
+    entry: String,
+    stem: String,
 }
 
 impl Run {
@@ -245,6 +318,18 @@ impl Run {
         }
     }
 
+    // Whether the backend's cap ended a completion: what the next rung of
+    // the ladder is for.
+    fn starved(&self) -> bool {
+        self.completions
+            .iter()
+            .any(|completion| matches!(completion.outcome.as_str(), "timeout" | "inactive"))
+    }
+
+    fn passed(&self) -> bool {
+        self.exit == Some(0) && !self.starved()
+    }
+
     fn claims(&self, kind: ClaimKind) -> impl Iterator<Item = &Claim> {
         self.evidence
             .iter()
@@ -258,6 +343,11 @@ impl Run {
 
     fn ids(&self) -> BTreeSet<&str> {
         self.claims(ClaimKind::Requirement).filter_map(|claim| claim.id.as_deref()).collect()
+    }
+
+    // The (entry, stem) pairs the survey decided, however many surfaces share one.
+    fn pairs(&self) -> BTreeSet<(&str, &str)> {
+        pairs(&self.surveyed)
     }
 
     fn requirements(&self) -> &[Value] {
@@ -317,6 +407,10 @@ impl Run {
     }
 }
 
+fn pairs(surveyed: &[Surveyed]) -> BTreeSet<(&str, &str)> {
+    surveyed.iter().map(|surface| (surface.entry.as_str(), surface.stem.as_str())).collect()
+}
+
 #[derive(Clone, Copy, Default)]
 struct Tokens {
     input: u64,
@@ -344,26 +438,29 @@ struct Completion {
 }
 
 #[expect(clippy::disallowed_methods, reason = "the eval is a native operator tool, not a guest")]
-fn run(project: &Path, settings: &Settings, n: usize) -> io::Result<Run> {
+fn run(project: &Path, settings: &Settings, n: usize, rung: Rung, tag: &str) -> io::Result<Run> {
     let started = Instant::now();
-    let output = emery(project, settings, &["specify", "--config", "emery.toml"])?;
+    let output = emery(project, settings, rung, &["specify", "--config", "emery.toml"])?;
     let wall = started.elapsed();
     let stderr = String::from_utf8_lossy(&output.stderr);
     let stdout = String::from_utf8_lossy(&output.stdout);
-    fs::write(project.join(format!("run-{n}.stderr")), stderr.as_bytes())?;
-    fs::write(project.join(format!("run-{n}.stdout")), stdout.as_bytes())?;
+    fs::write(project.join(format!("{tag}.stderr")), stderr.as_bytes())?;
+    fs::write(project.join(format!("{tag}.stdout")), stdout.as_bytes())?;
     let mut tail: Vec<&str> = stderr.lines().rev().take(5).collect();
     tail.reverse();
 
     // what the run committed, read back through `show`
     let mut run = Run {
         n,
+        rung,
         wall,
         exit: output.status.code(),
         tail: tail.join("\n"),
         diff: serde_json::from_str::<Value>(&stdout).ok().and_then(|out| out.get("diff").cloned()),
         evidence: accepted(&stderr),
         completions: completions(&stderr),
+        surveyed: surveyed(&stderr, "surveyed").unwrap_or_default(),
+        parsed: surveyed(&stderr, "parsed"),
         spec: None,
         design: None,
         plan: None,
@@ -372,17 +469,17 @@ fn run(project: &Path, settings: &Settings, n: usize) -> io::Result<Run> {
         for (artifact, slot) in
             [("spec", &mut run.spec), ("design", &mut run.design), ("plan", &mut run.plan)]
         {
-            let shown = emery(project, settings, &["show", artifact])?;
+            let shown = emery(project, settings, rung, &["show", artifact])?;
             let envelope: Value = serde_json::from_slice(&shown.stdout)?;
             fs::write(
-                project.join(format!("run-{n}.{artifact}.json")),
+                project.join(format!("{tag}.{artifact}.json")),
                 serde_json::to_string_pretty(&envelope["document"])?,
             )?;
             *slot = Some(envelope["document"].clone());
         }
         for (index, evidence) in run.evidence.iter().enumerate() {
             fs::write(
-                project.join(format!("run-{n}.evidence-{index}.json")),
+                project.join(format!("{tag}.evidence-{index}.json")),
                 serde_json::to_string_pretty(evidence)?,
             )?;
         }
@@ -392,7 +489,9 @@ fn run(project: &Path, settings: &Settings, n: usize) -> io::Result<Run> {
 }
 
 #[expect(clippy::disallowed_types, reason = "the eval runs the shipped `emery` binary natively")]
-fn emery(project: &Path, settings: &Settings, args: &[&str]) -> io::Result<std::process::Output> {
+fn emery(
+    project: &Path, settings: &Settings, rung: Rung, args: &[&str],
+) -> io::Result<std::process::Output> {
     std::process::Command::new(&settings.emery)
         .arg("--format")
         .arg("json")
@@ -400,6 +499,8 @@ fn emery(project: &Path, settings: &Settings, args: &[&str]) -> io::Result<std::
         .current_dir(project)
         .env("NO_COLOR", "1")
         .env("RUST_LOG", &settings.rust_log)
+        .env("CURSOR_TIMEOUT_SECS", rung.timeout.to_string())
+        .env("CURSOR_INACTIVITY_SECS", rung.inactivity.to_string())
         .output()
 }
 
@@ -412,6 +513,17 @@ fn accepted(stderr: &str) -> Vec<Evidence> {
         .filter_map(|line| line.split_once("evidence="))
         .filter_map(|(_, json)| serde_json::from_str(json.trim()).ok())
         .collect()
+}
+
+// The adapter's `surveyed` (or, under the model arm, `parsed`) trace line
+// carries the surfaces as one JSON array at the end of the line.
+fn surveyed(stderr: &str, what: &str) -> Option<Vec<Surveyed>> {
+    let mark = format!(" {what} source=");
+    stderr
+        .lines()
+        .filter(|line| line.contains(&mark))
+        .filter_map(|line| line.split_once("surfaces="))
+        .find_map(|(_, json)| serde_json::from_str(json.trim()).ok())
 }
 
 // The backend's one line per completion: `label="…"` in the span, then
@@ -452,13 +564,19 @@ fn completions(stderr: &str) -> Vec<Completion> {
 
 struct Report<'a> {
     case: &'a Case,
-    runs: Vec<Run>,
-    grades: Vec<Grade>,
+    // one entry per run: its attempts up the ladder, the first rung's first
+    runs: Vec<Vec<Attempt>>,
+}
+
+struct Attempt {
+    run: Run,
+    grade: Grade,
 }
 
 struct Grade {
     requirements: Recall,
     criteria: Recall,
+    surfaces: Surfaces,
     missing_stems: Vec<String>,
     extra_stems: Vec<String>,
 }
@@ -473,6 +591,15 @@ struct Recall {
     misplaced: Vec<String>,
 }
 
+// The (entry, stem) pairs the survey decided against the ones expected.
+#[derive(Default)]
+struct Surfaces {
+    matched: usize,
+    expected: usize,
+    missed: Vec<String>,
+    extra: Vec<String>,
+}
+
 fn grade(expected: &Expected, run: &Run) -> Grade {
     let observed: BTreeSet<&str> = run.stems();
     let wanted: BTreeSet<&str> = expected.stems.iter().map(String::as_str).collect();
@@ -480,6 +607,7 @@ fn grade(expected: &Expected, run: &Run) -> Grade {
     Grade {
         requirements: recall(&expected.requirements, run, ClaimKind::Requirement),
         criteria: recall(&expected.criteria, run, ClaimKind::Criterion),
+        surfaces: surfaces(&expected.surfaces, run),
         missing_stems: wanted.difference(&observed).map(|stem| (*stem).to_owned()).collect(),
         extra_stems: observed.difference(&wanted).map(|stem| (*stem).to_owned()).collect(),
     }
@@ -532,6 +660,22 @@ fn recall(items: &[Item], run: &Run, kind: ClaimKind) -> Recall {
     recall
 }
 
+// An expected surface is met when the survey decided a surface at its entry
+// under its stem; the names are the survey's own and never graded.
+fn surfaces(expected: &[ExpectedSurface], run: &Run) -> Surfaces {
+    let wanted: BTreeSet<(&str, &str)> =
+        expected.iter().map(|surface| (surface.entry.as_str(), surface.stem.as_str())).collect();
+    let observed = run.pairs();
+    let label = |(entry, stem): &(&str, &str)| format!("`{entry}` · {stem}");
+
+    Surfaces {
+        matched: wanted.intersection(&observed).count(),
+        expected: wanted.len(),
+        missed: wanted.difference(&observed).map(label).collect(),
+        extra: observed.difference(&wanted).map(label).collect(),
+    }
+}
+
 fn stem(id: &str) -> Option<&str> {
     id.split('.').next().filter(|stem| !stem.is_empty())
 }
@@ -549,57 +693,97 @@ fn overlaps(a: Anchor<'_>, b: Anchor<'_>) -> bool {
 // --- the scorecard ---
 
 fn scorecard(settings: &Settings, reports: &[Report<'_>], started: &str) -> String {
+    let ladder: Vec<String> = settings.ladder.iter().map(Rung::to_string).collect();
     let mut card = format!(
-        "# Eval {started}\n\nmodel `{}` · emery `{}` · adapter `{}` · {} runs per case\n",
+        "# Eval {started}\n\nmodel `{}` · emery `{}` · adapter `{}` · {} runs per case · ladder {} \
+         (`CURSOR_TIMEOUT_SECS`/`CURSOR_INACTIVITY_SECS`, climbed on a `timeout` or `inactive` \
+         completion; the columns are the first rung's)\n",
         settings.model,
         settings.emery.display(),
         settings.wasm.display(),
-        settings.runs
+        settings.runs,
+        ladder.join(" → "),
     );
     for report in reports {
-        let _ = write!(card, "{}", Card(report));
+        let _ = write!(
+            card,
+            "{}",
+            Card {
+                report,
+                ladder: &settings.ladder,
+            }
+        );
     }
 
     card
 }
 
-struct Card<'a>(&'a Report<'a>);
+struct Card<'a> {
+    report: &'a Report<'a>,
+    ladder: &'a [Rung],
+}
 
 impl Display for Card<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let Report { case, runs, grades } = self.0;
+        let Report { case, runs } = self.report;
         writeln!(f, "\n## {}\n\nfixture `{}`\n", case.name, case.expected.fixture)?;
 
-        // one row per run
+        // one row per run, at the first rung
         writeln!(
             f,
             "| run | exit | wall | completions | input | cached | output | reasoning | claims | \
-             req | crit | recall req | recall crit | stems | conflicts | unknown | covered | \
-             then [unknown] | slices | design blocks (types) |"
+             req | crit | recall req | recall crit | surfaces | stems | conflicts | unknown | \
+             covered | then [unknown] | slices | design blocks (types) |"
         )?;
-        writeln!(f, "|{}", " --- |".repeat(20))?;
-        for (run, grade) in runs.iter().zip(grades) {
-            row(f, run, grade)?;
+        writeln!(f, "|{}", " --- |".repeat(21))?;
+        for attempts in runs {
+            if let Some(first) = attempts.first() {
+                row(f, first)?;
+            }
         }
 
-        // what each run missed and spent
-        for (run, grade) in runs.iter().zip(grades) {
-            notes(f, run, grade)?;
+        // what each attempt missed and spent
+        for attempts in runs {
+            for (index, attempt) in attempts.iter().enumerate() {
+                notes(f, attempt, index > 0)?;
+            }
         }
 
-        // stability across runs
-        if let [first, second, ..] = runs.as_slice()
-            && first.exit == Some(0)
-            && second.exit == Some(0)
-        {
-            stability(f, first, second)?;
+        // where each run landed on the ladder
+        if self.ladder.len() > 1 {
+            ladder(f, runs, self.ladder)?;
+        }
+
+        // stability across runs: at the first rung when two landed there,
+        // else across the attempts that landed anywhere
+        let first: Vec<&Run> = runs
+            .iter()
+            .filter_map(|attempts| attempts.first())
+            .map(|attempt| &attempt.run)
+            .collect();
+        let landed: Vec<&Run> = first.iter().copied().filter(|run| run.exit == Some(0)).collect();
+        if landed.len() >= 2 {
+            let label = format!("across {} runs at {}", landed.len(), self.ladder[0]);
+            stability(f, &label, &landed)?;
+        } else {
+            let landed: Vec<&Run> = runs
+                .iter()
+                .filter_map(|attempts| attempts.last())
+                .map(|attempt| &attempt.run)
+                .filter(|run| run.exit == Some(0))
+                .collect();
+            if landed.len() >= 2 {
+                let label = format!("across the {} attempts that landed", landed.len());
+                stability(f, &label, &landed)?;
+            }
         }
 
         Ok(())
     }
 }
 
-fn row(f: &mut Formatter<'_>, run: &Run, grade: &Grade) -> fmt::Result {
+fn row(f: &mut Formatter<'_>, attempt: &Attempt) -> fmt::Result {
+    let Attempt { run, grade } = attempt;
     let tokens = run.tokens();
     let (blocks, types) = run.design_blocks();
     let stems = if grade.missing_stems.is_empty() && grade.extra_stems.is_empty() {
@@ -611,7 +795,7 @@ fn row(f: &mut Formatter<'_>, run: &Run, grade: &Grade) -> fmt::Result {
     writeln!(
         f,
         "| {} | {} | {}s | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | \
-         {} | {} ({}) |",
+         {} | {} | {} ({}) |",
         run.n,
         run.exit.map_or_else(|| "killed".to_owned(), |code| code.to_string()),
         run.wall.as_secs(),
@@ -625,6 +809,7 @@ fn row(f: &mut Formatter<'_>, run: &Run, grade: &Grade) -> fmt::Result {
         run.claims(ClaimKind::Criterion).count(),
         grade.requirements,
         grade.criteria,
+        grade.surfaces,
         stems,
         run.status("conflict"),
         run.status("unknown"),
@@ -636,25 +821,65 @@ fn row(f: &mut Formatter<'_>, run: &Run, grade: &Grade) -> fmt::Result {
     )
 }
 
-fn notes(f: &mut Formatter<'_>, run: &Run, grade: &Grade) -> fmt::Result {
-    if run.exit != Some(0) {
-        return writeln!(f, "\nRun {} failed:\n\n```\n{}\n```", run.n, run.tail);
+fn notes(f: &mut Formatter<'_>, attempt: &Attempt, climbed: bool) -> fmt::Result {
+    let Attempt { run, grade } = attempt;
+    let at = if climbed { format!(" @ {}", run.rung) } else { String::new() };
+    if run.exit == Some(0) {
+        writeln!(f, "\nRun {}{at}: stems {:?}", run.n, run.stems())?;
+    } else {
+        writeln!(f, "\nRun {}{at} failed:\n\n```\n{}\n```", run.n, run.tail)?;
     }
-    writeln!(f, "\nRun {}: stems {:?}", run.n, run.stems())?;
-    if !grade.missing_stems.is_empty() {
-        writeln!(f, "- stems missing: {:?}", grade.missing_stems)?;
+
+    // the survey
+    if !run.surveyed.is_empty() {
+        let listed: Vec<String> = run
+            .surveyed
+            .iter()
+            .map(|surface| {
+                format!("`{}` @ `{}` as `{}`", surface.name, surface.entry, surface.stem)
+            })
+            .collect();
+        writeln!(f, "- surfaces: {}", listed.join(", "))?;
     }
-    if !grade.extra_stems.is_empty() {
-        writeln!(f, "- stems extra: {:?}", grade.extra_stems)?;
+    for missed in &grade.surfaces.missed {
+        writeln!(f, "- surface missed: {missed}")?;
     }
-    for (kind, recall) in [("requirement", &grade.requirements), ("criterion", &grade.criteria)] {
-        for missed in &recall.missed {
-            writeln!(f, "- {kind} missed: {missed}")?;
+    if grade.surfaces.expected > 0 {
+        for extra in &grade.surfaces.extra {
+            writeln!(f, "- surface extra: {extra}")?;
         }
-        for misplaced in &recall.misplaced {
-            writeln!(f, "- {kind} misplaced: {misplaced}")?;
+    }
+    if let Some(parsed) = &run.parsed {
+        let parser = pairs(parsed);
+        if parser == run.pairs() {
+            writeln!(f, "- the parser names the same (entry, stem) pairs")?;
+        } else {
+            let listed: Vec<String> =
+                parser.iter().map(|(entry, stem)| format!("`{entry}` · {stem}")).collect();
+            writeln!(f, "- the parser would name: {}", listed.join(", "))?;
         }
     }
+
+    // the claims
+    if run.exit == Some(0) {
+        if !grade.missing_stems.is_empty() {
+            writeln!(f, "- stems missing: {:?}", grade.missing_stems)?;
+        }
+        if !grade.extra_stems.is_empty() {
+            writeln!(f, "- stems extra: {:?}", grade.extra_stems)?;
+        }
+        for (kind, recall) in [("requirement", &grade.requirements), ("criterion", &grade.criteria)]
+        {
+            for missed in &recall.missed {
+                writeln!(f, "- {kind} missed: {missed}")?;
+            }
+            for misplaced in &recall.misplaced {
+                writeln!(f, "- {kind} misplaced: {misplaced}")?;
+            }
+        }
+    }
+
+    // the completions
     for completion in &run.completions {
         writeln!(
             f,
@@ -672,30 +897,120 @@ fn notes(f: &mut Formatter<'_>, run: &Run, grade: &Grade) -> fmt::Result {
     Ok(())
 }
 
-fn stability(f: &mut Formatter<'_>, first: &Run, second: &Run) -> fmt::Result {
+// One row per run: pass or fail at each rung attempted, `—` past the rung
+// it landed on.
+fn ladder(f: &mut Formatter<'_>, runs: &[Vec<Attempt>], ladder: &[Rung]) -> fmt::Result {
     writeln!(
         f,
-        "\nStability: requirement ids {}, spec subjects {}",
-        Jaccard::of(&first.ids(), &second.ids()),
-        Jaccard::of(&first.subjects(), &second.subjects()),
+        "\nBudget ladder (`CURSOR_TIMEOUT_SECS`/`CURSOR_INACTIVITY_SECS`), climbed on a `timeout` \
+         or `inactive` completion:\n"
     )?;
-    if let Some(diff) = &second.diff {
-        writeln!(
-            f,
-            "- run 2 diff vs run 1: spec +{} -{} ~{}, design +{} -{} ~{}, plan +{} -{} ~{}",
-            len(&diff["spec"]["added"]),
-            len(&diff["spec"]["removed"]),
-            len(&diff["spec"]["changed"]),
-            len(&diff["design"]["added"]),
-            len(&diff["design"]["removed"]),
-            len(&diff["design"]["changed"]),
-            len(&diff["plan"]["added"]),
-            len(&diff["plan"]["removed"]),
-            len(&diff["plan"]["changed"]),
-        )?;
+    let heads: Vec<String> = ladder.iter().map(Rung::to_string).collect();
+    writeln!(f, "| run | {} |", heads.join(" | "))?;
+    writeln!(f, "|{}", " --- |".repeat(ladder.len() + 1))?;
+    for attempts in runs {
+        let Some(first) = attempts.first() else { continue };
+        let cells: Vec<String> = (0..ladder.len())
+            .map(|index| attempts.get(index).map_or_else(|| "—".to_owned(), verdict))
+            .collect();
+        writeln!(f, "| {} | {} |", first.run.n, cells.join(" | "))?;
     }
 
     Ok(())
+}
+
+fn verdict(attempt: &Attempt) -> String {
+    let Attempt { run, grade } = attempt;
+    let wall = run.wall.as_secs();
+    if run.passed() {
+        return format!(
+            "pass (req {}/{}, {wall}s)",
+            grade.requirements.matched, grade.requirements.expected
+        );
+    }
+    let starved: Vec<String> = ["timeout", "inactive"]
+        .into_iter()
+        .filter_map(|outcome| {
+            let count = run.completions.iter().filter(|c| c.outcome == outcome).count();
+            (count > 0).then(|| format!("{count} {outcome}"))
+        })
+        .collect();
+    let why = if starved.is_empty() {
+        let failed: BTreeSet<&str> = run
+            .completions
+            .iter()
+            .filter(|c| !matches!(c.outcome.as_str(), "ok" | "corrected"))
+            .map(|c| c.outcome.as_str())
+            .collect();
+        match (run.exit, failed.is_empty()) {
+            (Some(code), true) => format!("exit {code}"),
+            (Some(code), false) => format!("exit {code}, {}", Vec::from_iter(failed).join(", ")),
+            (None, _) => "killed".to_owned(),
+        }
+    } else {
+        starved.join(", ")
+    };
+
+    format!("fail: {why} ({wall}s)")
+}
+
+fn stability(f: &mut Formatter<'_>, label: &str, runs: &[&Run]) -> fmt::Result {
+    writeln!(f, "\nStability {label}:")?;
+
+    // the stems each run's requirements lead with, as sets
+    let sets: BTreeSet<BTreeSet<&str>> = runs.iter().map(|run| run.stems()).collect();
+    if sets.len() == 1 {
+        writeln!(f, "- stem sets: 1 distinct")?;
+    } else {
+        writeln!(f, "- stem sets: {} distinct — {:?}", sets.len(), sets)?;
+    }
+
+    // every pair of runs
+    pairwise(f, "surfaces (entry, stem)", runs, Run::pairs)?;
+    pairwise(f, "requirement ids", runs, Run::ids)?;
+    pairwise(f, "spec subjects", runs, Run::subjects)?;
+
+    // what each later revision changed
+    for run in runs.iter().skip(1) {
+        if let Some(diff) = &run.diff {
+            writeln!(
+                f,
+                "- run {} diff vs the previous revision: spec +{} -{} ~{}, design +{} -{} ~{}, plan \
+                 +{} -{} ~{}",
+                run.n,
+                len(&diff["spec"]["added"]),
+                len(&diff["spec"]["removed"]),
+                len(&diff["spec"]["changed"]),
+                len(&diff["design"]["added"]),
+                len(&diff["design"]["removed"]),
+                len(&diff["design"]["changed"]),
+                len(&diff["plan"]["added"]),
+                len(&diff["plan"]["removed"]),
+                len(&diff["plan"]["changed"]),
+            )?;
+        }
+    }
+
+    Ok(())
+}
+
+// The Jaccard index of `of` over every pair of runs, as one line.
+fn pairwise<'r, T: Ord>(
+    f: &mut Formatter<'_>, label: &str, runs: &[&'r Run], of: impl Fn(&'r Run) -> BTreeSet<T>,
+) -> fmt::Result {
+    let sets: Vec<BTreeSet<T>> = runs.iter().map(|run| of(run)).collect();
+    let mut cells = Vec::new();
+    for (left, first) in sets.iter().enumerate() {
+        for (right, second) in sets.iter().enumerate().skip(left + 1) {
+            cells.push(format!(
+                "{}↔{} {}",
+                runs[left].n,
+                runs[right].n,
+                Jaccard::of(first, second)
+            ));
+        }
+    }
+    writeln!(f, "- {label}: {}", cells.join(" · "))
 }
 
 impl Display for Recall {
@@ -711,13 +1026,26 @@ impl Display for Recall {
     }
 }
 
+impl Display for Surfaces {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if self.expected == 0 {
+            return f.write_str("—");
+        }
+        write!(f, "{}/{}", self.matched, self.expected)?;
+        if !self.extra.is_empty() {
+            write!(f, " +{}", self.extra.len())?;
+        }
+        Ok(())
+    }
+}
+
 struct Jaccard {
     shared: usize,
     union: usize,
 }
 
 impl Jaccard {
-    fn of(a: &BTreeSet<&str>, b: &BTreeSet<&str>) -> Self {
+    fn of<T: Ord>(a: &BTreeSet<T>, b: &BTreeSet<T>) -> Self {
         Self {
             shared: a.intersection(b).count(),
             union: a.union(b).count(),

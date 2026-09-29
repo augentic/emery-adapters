@@ -30,6 +30,11 @@
 //! Beside the seams, the survey yields the `type` claims the reached modules
 //! declare, copied from the code for the guest to join after the model's
 //! answer.
+//!
+//! The surfaces are the parser's; under the `model-survey` feature the guest
+//! may have the model name them instead ([`model`]), from the facts the
+//! parser read, and everything after the surfaces — the cut, the closures,
+//! the anchors, the briefs — is the same code either way.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -41,6 +46,8 @@ use self::resolve::{Manifest, Resolver, Target};
 use self::skeleton::Test;
 use self::surface::{Surface, Tree};
 
+#[cfg(feature = "model-survey")]
+pub mod model;
 mod parse;
 mod resolve;
 mod skeleton;
@@ -54,7 +61,42 @@ pub struct Survey {
     pub types: Vec<Claim>,
 }
 
+/// A source read and ready for its surfaces to be decided.
+pub enum Preparation {
+    /// An inline value: one seam mined whole, its declarations copied unanchored.
+    Value(Survey),
+    /// A workspace, parsed, whose surfaces decide its seams.
+    Workspace(Prepared),
+}
+
+/// A workspace parsed, with what the seams are cut from once its surfaces
+/// are decided.
+pub struct Prepared {
+    /// The source's name, for the log.
+    pub source: String,
+    /// The lent root.
+    pub root: String,
+    /// The parsed tree.
+    pub tree: Tree,
+    tests: Vec<Test>,
+}
+
+/// The surfaces decided by the code alone: the parser's survey, then the
+/// seams cut from them.
+#[cfg(not(feature = "model-survey"))]
 pub fn survey(input: &SourceInput) -> Result<Survey, Error> {
+    match prepare(input)? {
+        Preparation::Value(survey) => Ok(survey),
+        Preparation::Workspace(prepared) => {
+            let surfaces = surface::survey(&prepared.tree);
+            Ok(seams(&prepared, &surfaces))
+        }
+    }
+}
+
+/// Reads the source: an inline value is one seam at once; a workspace is
+/// listed, every production module parsed, and its tests read.
+pub fn prepare(input: &SourceInput) -> Result<Preparation, Error> {
     let source = &input.name;
 
     // pass an inline value through whole, its declarations copied unanchored
@@ -62,10 +104,10 @@ pub fn survey(input: &SourceInput) -> Result<Survey, Error> {
         SourceContent::Value(text) => {
             let module = parse::parse("value.ts", text.clone());
             let types = skeleton::types([&module], false);
-            return Ok(Survey {
+            return Ok(Preparation::Value(Survey {
                 seams: vec![Seam::whole()],
                 types,
-            });
+            }));
         }
         SourceContent::Workspace(workspace) => workspace,
     };
@@ -84,26 +126,72 @@ pub fn survey(input: &SourceInput) -> Result<Survey, Error> {
 
     let root = Path::new(workspace);
     let tree = read(root, modules, data);
-    let surfaces = surface::survey(&tree);
     let tests = tests(root, emery_sdk::workspace::list(workspace, is_test)?, &tree);
+
+    Ok(Preparation::Workspace(Prepared {
+        source: source.clone(),
+        root: workspace.clone(),
+        tree,
+        tests,
+    }))
+}
+
+/// Cuts the seams of a prepared workspace from its `surfaces`, however they
+/// were decided, and copies the `type` claims the seams' modules declare.
+pub fn seams(prepared: &Prepared, surfaces: &[Surface]) -> Survey {
+    let Prepared {
+        source,
+        root: workspace,
+        tree,
+        tests,
+    } = prepared;
+
+    logged(source, "surveyed", surfaces);
 
     // a tree small enough to lay into one turn, or of one module, cuts no
     // finer; one the code exposes no surface of is cut mechanically
     let size: usize = tree.modules.values().map(|module| module.text.len()).sum();
     let fits = tree.modules.len() == 1 || u64::try_from(size).unwrap_or(u64::MAX) <= INLINE_BYTES;
     let leads = match (surfaces.is_empty(), fits) {
-        (false, true) => vec![whole(&tree, &surfaces)],
-        (false, false) => by_stem(&tree, &surfaces),
-        (true, true) => vec![unsurfaced(&tree, workspace)],
-        (true, false) => by_directory(&tree, workspace),
+        (false, true) => vec![whole(tree, surfaces)],
+        (false, false) => by_stem(tree, surfaces),
+        (true, true) => vec![unsurfaced(tree, workspace)],
+        (true, false) => by_directory(tree, workspace),
     };
     let seams: Vec<Seam> =
-        leads.into_iter().map(|lead| finish(&tree, lead, &surfaces, &tests)).collect();
+        leads.into_iter().map(|lead| finish(tree, lead, surfaces, tests)).collect();
 
     let reached = unique(seams.iter().flat_map(|seam| seam.files.iter().map(String::as_str)));
     let types = skeleton::types(reached.iter().filter_map(|path| tree.modules.get(*path)), true);
 
-    Ok(Survey { seams, types })
+    Survey { seams, types }
+}
+
+/// Logs the parser's surfaces of a prepared workspace as `parsed`, for a run
+/// whose seams are cut from the model's, so the two read side by side.
+#[cfg(feature = "model-survey")]
+pub fn parsed(prepared: &Prepared) {
+    logged(&prepared.source, "parsed", &surface::survey(&prepared.tree));
+}
+
+// One line the run's log carries at TRACE: `what` the surfaces are, each
+// with its name, entry, and stem, as one JSON array.
+fn logged(source: &str, what: &str, surfaces: &[Surface]) {
+    if !emery_sdk::tracing::enabled!(emery_sdk::tracing::Level::TRACE) {
+        return;
+    }
+    let listed: Vec<emery_sdk::serde_json::Value> = surfaces
+        .iter()
+        .map(|surface| {
+            emery_sdk::serde_json::json!({
+                "name": surface.name,
+                "entry": surface.entry,
+                "stem": surface.stem,
+            })
+        })
+        .collect();
+    let json = emery_sdk::serde_json::Value::Array(listed).to_string();
+    emery_sdk::tracing::trace!(%source, surfaces = %json, "{what}");
 }
 
 const SKIP_DIRS: &[&str] =

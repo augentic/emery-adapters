@@ -4,6 +4,12 @@
 fixture = "examples/typescript/src"
 stems = ["order-service"]
 
+# The one exported class; the error classes beside it are what it throws,
+# not surfaces.
+[[surface]]
+entry = "orders.ts"
+stem = "order-service"
+
 [[requirement]]
 stem = "order-service"
 anchor = "orders.ts#L40-L42"

@@ -7,6 +7,7 @@
 
 use std::path::Path;
 
+use emery_sdk::survey::Inventory;
 use emery_sdk::{Doc, Evidence, RUNTIME, body, check};
 
 // Every `sources/*` component must have a matching test here.
@@ -72,7 +73,29 @@ fn intent() {
     corpus(intent::PROSE, "intent", &["extract.md"]);
 }
 
+// `survey.md` is the prompt of the `model-survey` arm alone, embedded under
+// either build, so its worked example is held to the SDK's survey answer
+// the same way `extract.md`'s is held to its Evidence.
 #[test]
 fn typescript() {
-    corpus(typescript::PROSE, "typescript", &["extract.md"]);
+    corpus(typescript::PROSE, "typescript", &["extract.md", "survey.md"]);
+
+    let prompt = body(typescript::PROSE, "survey.md").expect("the survey prompt is listed");
+    capped("survey.md", prompt);
+    let inventory: Inventory = serde_json::from_str(fenced_json(prompt, "## Worked example"))
+        .unwrap_or_else(|err| {
+            panic!("`survey.md`: the worked example is not the SDK's Inventory: {err}")
+        });
+    assert!(!inventory.surfaces.is_empty(), "`survey.md`: the worked example names no surface");
+    for surface in &inventory.surfaces {
+        surface.anchor().unwrap_or_else(|err| {
+            panic!("`survey.md`: surface `{}`'s anchor `{}` {err}", surface.name, surface.anchor)
+        });
+        assert!(
+            emery_sdk::is_kebab(&surface.stem),
+            "`survey.md`: surface `{}`'s stem `{}` is not kebab-case",
+            surface.name,
+            surface.stem
+        );
+    }
 }
