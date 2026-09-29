@@ -2,8 +2,9 @@ name: Publish adapters
 
 # First-party Wasm OCI packages for GHCR. Called from publish.yaml after
 # the shared publish workflow has tagged and created the GitHub Release.
-# Uses the same cargo / wkg commands as `make release` / `make publish`
-# locally (RFC-76 Phase E).
+# Uses the same cargo / wkg commands as the release build
+# (`cargo build --workspace --target wasm32-wasip2 --release`) and
+# `make publish <name>` locally (RFC-76 Phase E).
 
 on:
   workflow_call:

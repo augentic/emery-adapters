@@ -38,7 +38,7 @@ An adapter crate's `//!` docs state the source it accepts, how that source is di
 - Root `tests/`: every shipped component, the boundary, and the corpus. `foreach_adapter!` and `foreach_probe!` make a new adapter or probe a compile error until `source.rs`, `prose.rs`, or `probe.rs` names it; that test carries its adapter's or program's name (`intent`, `probe_echo`), and an adapter's further scenarios are `<name>_<scenario>` (`documentation_directories`, `intent_empty_brief`). `prose.rs` runs `emery_sdk::check(<name>::PROSE, ..)` over the adapter's tree and the prompts it names, then the prompt checks, so a new adapter is also a root dev-dependency.
 - What the SDK does for every adapter (the request shape, the reference tools, the lend, the claim gate's repair and spent-rounds refusal, the check of every anchor and id against its seam) is asserted once in the SDK's own suite and once under the runtime over the `gated` probe — never per adapter; an adapter's tracing follows its guest environment's `RUST_LOG`, which the runtime sets from the run's one level — command mode's `info` under the support's `deployment()`, which names no `Deployment::level`, as under a bare run of the shipped `emery` runtime — and that the SDK's `source_adapter_extract` boundary span exports under command mode's default filter alongside the adapter's own spans is asserted once, over the `telemetry` probe. The host property the SDK's fan-out rests on — the completions one guest issues together are pending together — is guarded once, over the `fanout` probe behind the support's `Barrier` model; the one the engine's fan-out over sources rests on — the link dispatches one caller issues together run together — once more, over the same probe in the driver's `together` mode.
 - Always `cargo nextest`, and `--workspace` from the root as `make test` and CI do; every suite is the root package's today, so `cargo nextest run -p emery-adapters` runs the same tests.
-- The guest side (`crates/test-programs/programs/`, the adapters' `survey` and `guest` modules) is `cfg(target_arch = "wasm32")`, which native clippy compiles to nothing, so `make lint` runs a second clippy pass for `wasm32-wasip2` over it (the command below); `make test` compiles it through the component build alone.
+- The guest side (`crates/test-programs/programs/`, the adapters' `survey` and `guest` modules) is `cfg(target_arch = "wasm32")`, which native clippy compiles to nothing, so `make lint` runs the shared `lint-wasm` pass — clippy over every workspace lib, bin and example (never tests or benches) for `wasm32-wasip2` — over it (the command below); `make test` compiles it through the component build alone.
 
 Toolchain and publishing: [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -46,15 +46,19 @@ Toolchain and publishing: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 All from the repository root through `make` ([`Makefile`](Makefile) → mise):
 
+The tasks are the shared [`augentic/.github`](https://github.com/augentic/.github) `mise/rust.toml`, pinned in [`mise.toml`](mise.toml) to the same tag the workflows under `.github/workflows/` use; bump both together. `publish` is the one local task (it shadows the shared crates.io dry run: this train ships to GHCR).
+
 ```bash
-make ci                              # check + vet + deny — run before committing
-make check                           # fmt + lint + test + test-docs + doc
+make ci                              # exactly the CI jobs: fmt-check + lint + test + test-docs + docs + vet + deny — run before committing
+make check                           # local advisories: audit + fmt (rewrites) + lint + outdated + deps
 make test                            # cargo nextest run --locked --workspace --all-features
 cargo nextest run -p emery-adapters --test source   # the shipped components alone
-cargo clippy --workspace --exclude emery-adapters --lib --examples --target wasm32-wasip2 -- -D warnings   # the guest side; the second pass of `make lint`
+make lint                            # lint-host (cargo clippy --workspace --all-targets --all-features, then cargo hack --each-feature), then lint-wasm (the same over every lib, bin and example for wasm32-wasip2 — never tests)
+cargo clippy --workspace --lib --bins --examples --all-features --target wasm32-wasip2 -- -D warnings   # the guest side alone; the first command of lint-wasm
 cargo build -p <name> --target wasm32-wasip2 --release   # one component
 cargo build --workspace --target wasm32-wasip2 --release   # every component
 make publish <name>                  # push one built component to its GHCR tag
+make vet-regen                       # regenerate cargo-vet imports/exemptions/unpublished, then vet
 make sweep                           # drop target/ artifacts untouched for a week
 ```
 

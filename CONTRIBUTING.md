@@ -5,8 +5,8 @@ Human-facing contributor guide (toolchain, layout, prompts, pin, publishing). Th
 ## Getting started
 
 1. Clone this repository. Until an engine release carries the extract-only SDK, the engine crates (`emery-sdk`, and `emery-prose` beneath it) resolve through the `[patch.crates-io]` git patches in the root `Cargo.toml` (see [Engine pin and sibling co-development](#engine-pin-and-sibling-co-development)); once that release exists the pin moves to its tag (`tag = "vX.Y.Z"`, RFC-77 D13). A sibling `../emery` checkout is needed only for co-development (uncomment the path patches) and the live eval (it drives that repo's built `emery` binary).
-2. `rustup` picks up the pinned **stable** toolchain from `rust-toolchain.toml` (including the `wasm32-wasip2` target); a nightly toolchain is additionally needed for the `fmt` arm (`cargo +nightly fmt`). The first `make` installs [mise](https://mise.jdx.dev) if it is missing. Also install `cargo-nextest`, `cargo-deny`, and `cargo-vet`. Publishing also uses `wkg`.
-3. Run `make check` from the repo root. Before opening a PR, run `make ci`.
+2. `rustup` picks up the pinned **stable** toolchain from `rust-toolchain.toml` (including the `wasm32-wasip2` target); a nightly toolchain is additionally needed for the `fmt` arm (`cargo +nightly fmt`). Install [mise](https://mise.jdx.dev) yourself: the root `Makefile` forwards every target to [`mise.toml`](mise.toml), which includes the shared Augentic Rust tasks, and never installs mise. The cargo subcommands those tasks need (`cargo-nextest`, `cargo-hack`, `cargo-deny`, `cargo-vet`, …) are installed on first use. Publishing also uses `wkg`.
+3. Run `make ci` from the repo root before opening a PR; `make check` is the local advisory set (audit, `fmt` rewriting in place, lint, outdated, udeps).
 
 For the adapter SDK's type-level contract (`extract`, the `workspace` helpers, the contract types, the answer schemas), generate the docs locally: `cargo doc -p emery-sdk --open`; the `export` module — the world an adapter's guest implements — documents under `--target wasm32-wasip2`.
 
@@ -65,14 +65,18 @@ For sibling co-development against uncommitted engine changes, uncomment the pat
 ## Local development loops
 
 ```bash
-make check                 # fmt + lint + nextest + doctests + doc
-make ci                    # full gate — adds cargo-vet + cargo-deny
-cargo clippy --workspace --exclude emery-adapters --lib --examples --target wasm32-wasip2 -- -D warnings   # the guest side alone
+make ci                    # exactly the CI jobs: fmt-check + lint + nextest + doctests + docs + cargo-vet + cargo-deny
+make check                 # local advisories: audit + fmt (rewrites) + lint + outdated + udeps
+cargo clippy --workspace --lib --bins --examples --all-features --target wasm32-wasip2 -- -D warnings   # the guest side alone
 cargo build -p <name> --target wasm32-wasip2 --release   # one adapter → target/wasm32-wasip2/release/<name>.wasm (the path the examples bind)
 cargo build --workspace --target wasm32-wasip2 --release   # every adapter
 ```
 
+<<<<<<< HEAD
 The `fmt` arm uses nightly `rustfmt`. `make lint` runs clippy under `-D warnings` twice: over the native side, then — since the guest side, the programs under `crates/test-programs/programs/` and the adapters' `survey` and `guest` modules, is `cfg(target_arch = "wasm32")` and native clippy compiles it to nothing — for `wasm32-wasip2`, the target it ships on, where `clippy.toml`'s guest deny-list applies (the second command above on its own). `make vet` is check-only; regenerate audit inputs with `make vetgen`. The component suites are the Rust inner loop and prove every built component under the omnia runtime, each adapter's own decisions included; `emery specify --config examples/<name>/emery.toml` walks one adapter live through the shipped `emery` binary and the Cursor backend ([examples/README.md](examples/README.md)); the graded live eval, `cargo run --example eval` over the cases under `examples/eval/cases/`, proves prompt quality end to end and writes the dated scorecard ([examples/README.md](examples/README.md)).
+=======
+The tasks are the shared [`augentic/.github`](https://github.com/augentic/.github) `mise/rust.toml`, pinned in [`mise.toml`](mise.toml) to the same tag the workflows under `.github/workflows/` use; bump both together. The `fmt` arm uses nightly `rustfmt`. `make lint` runs clippy under `-D warnings` natively first (`lint-host`: all targets with all features, then each feature through `cargo hack`), then — since the guest side, the programs under `crates/test-programs/programs/` and the adapters' `survey` and `guest` modules, is `cfg(target_arch = "wasm32")` and native clippy compiles it to nothing — the shared `lint-wasm` pass for `wasm32-wasip2`, the target it ships on, where `clippy.toml`'s guest deny-list applies: every workspace lib, bin and example, never tests or benches (the third command above is its first half). The root package is native tests alone, so it contributes nothing to that pass and needs no exclusion. `make vet` is check-only; regenerate audit inputs with `make vet-regen`. The component suites are the Rust inner loop and prove every built component under the omnia runtime, each adapter's own decisions included; `emery specify --config examples/<name>/emery.toml` walks one adapter live through the shipped `emery` binary and the Cursor backend ([examples/README.md](examples/README.md)); the graded live eval — being recreated as a root example beside the live examples — proves prompt quality end to end and writes the dated scorecard.
+>>>>>>> origin/main
 
 ## Publishing
 
