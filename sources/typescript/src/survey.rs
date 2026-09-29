@@ -33,13 +33,18 @@ use std::path::Path;
 use emery_sdk::workspace::Entry;
 use emery_sdk::{Claim, Error, INLINE_BYTES, Seam, SourceContent, SourceInput, bad_request};
 
-use crate::resolve::{Manifest, Resolver, Target};
-use crate::skeleton::Test;
-use crate::surface::{self, Surface, Tree};
-use crate::{parse, skeleton};
+use self::resolve::{Manifest, Resolver, Target};
+use self::skeleton::Test;
+use self::surface::{Surface, Tree};
+
+mod parse;
+mod resolve;
+mod skeleton;
+mod surface;
 
 /// What a source is mined by: its seams, and the claims its code states.
 pub struct Survey {
+    /// The seams, each one gated turn.
     pub seams: Vec<Seam>,
     /// The `type` claims of every module a seam reaches, declaration verbatim.
     pub types: Vec<Claim>,
@@ -87,14 +92,7 @@ pub fn survey(input: &SourceInput) -> Result<Survey, Error> {
     let seams: Vec<Seam> =
         leads.into_iter().map(|lead| finish(&tree, lead, &surfaces, &tests)).collect();
 
-    let mut reached: Vec<&str> = Vec::new();
-    for seam in &seams {
-        for path in &seam.files {
-            if !reached.contains(&path.as_str()) {
-                reached.push(path);
-            }
-        }
-    }
+    let reached = unique(seams.iter().flat_map(|seam| seam.files.iter().map(String::as_str)));
     let types = skeleton::types(reached.iter().filter_map(|path| tree.modules.get(*path)), true);
 
     Ok(Survey { seams, types })
@@ -104,6 +102,22 @@ const SKIP_DIRS: &[&str] =
     &["node_modules", "vendor", "target", "dist", "build", "test", "tests", "__tests__"];
 const SKIP_INFIXES: &[&str] = &["d", "spec", "test"];
 const EXTENSIONS: &[&str] = &["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"];
+
+// Pushes `item` unless the list holds it.
+fn push_unique<T: PartialEq>(into: &mut Vec<T>, item: T) {
+    if !into.contains(&item) {
+        into.push(item);
+    }
+}
+
+// The items once each, in first-occurrence order.
+fn unique<T: PartialEq>(items: impl IntoIterator<Item = T>) -> Vec<T> {
+    let mut list = Vec::new();
+    for item in items {
+        push_unique(&mut list, item);
+    }
+    list
+}
 
 fn include(entry: Entry<'_>) -> bool {
     if entry.hidden() {
@@ -178,19 +192,12 @@ fn tests(root: &Path, paths: Vec<String>, tree: &Tree) -> Vec<Test> {
             continue;
         }
         let module = parse::parse(&path, text);
-        let mut imports: Vec<String> = Vec::new();
-        for specifier in module
-            .imports
-            .iter()
-            .map(|import| import.specifier.as_str())
-            .chain(module.reexports.iter().map(|reexport| reexport.specifier.as_str()))
-        {
-            if let Some(Target::Module(imported)) = tree.resolver.resolve(&path, specifier)
-                && !imports.contains(&imported)
-            {
-                imports.push(imported);
+        let imports = unique(module.specifiers().filter_map(|specifier| {
+            match tree.resolver.resolve(&path, specifier) {
+                Some(Target::Module(imported)) => Some(imported),
+                _ => None,
             }
-        }
+        }));
         tests.push(Test {
             path,
             imports,
@@ -205,9 +212,7 @@ fn tests(root: &Path, paths: Vec<String>, tree: &Tree) -> Vec<Test> {
             .map_or_else(String::new, |(parent, _)| format!("{parent}/"));
         for test in tests.iter().filter(|test| test.path.starts_with(&beside)) {
             for import in &test.imports {
-                if !feature.imports.contains(import) {
-                    feature.imports.push(import.clone());
-                }
+                push_unique(&mut feature.imports, import.clone());
             }
         }
         tests.push(feature);
@@ -272,27 +277,13 @@ fn read(root: &Path, paths: Vec<String>) -> Tree {
 // below yield leads — the text that opens the brief, the modules, the
 // stems — for `finish` to seal.
 fn whole(tree: &Tree, surfaces: &[Surface]) -> Seam {
-    let mut files: Vec<String> = Vec::new();
-    for surface in surfaces {
-        for path in &surface.closure {
-            if !files.contains(path) {
-                files.push(path.clone());
-            }
-        }
-    }
-    for path in tree.modules.keys() {
-        if !files.contains(path) {
-            files.push(path.clone());
-        }
-    }
-
-    let mut stems: Vec<String> = Vec::new();
-    for surface in surfaces {
-        if !stems.contains(&surface.stem) {
-            stems.push(surface.stem.clone());
-        }
-    }
-
+    let files = unique(
+        surfaces
+            .iter()
+            .flat_map(|surface| surface.closure.iter().cloned())
+            .chain(tree.modules.keys().cloned()),
+    );
+    let stems = unique(surfaces.iter().map(|surface| surface.stem.clone()));
     let text = format!(
         "The surfaces of this source, found by reading its code — where control enters it from \
          outside the process:\n\n{}\n\nEvery `requirement` and `criterion` belongs to one of these \
@@ -310,34 +301,20 @@ fn whole(tree: &Tree, surfaces: &[Surface]) -> Seam {
 
 // One seam per stem, over the modules the surfaces under it reach.
 fn by_stem(surfaces: &[Surface]) -> Vec<Seam> {
-    let mut stems: Vec<&str> = Vec::new();
-    for surface in surfaces {
-        if !stems.contains(&surface.stem.as_str()) {
-            stems.push(&surface.stem);
-        }
-    }
-
-    stems
+    unique(surfaces.iter().map(|surface| surface.stem.as_str()))
         .into_iter()
         .map(|stem| {
             let under: Vec<&Surface> = surfaces.iter().filter(|s| s.stem == stem).collect();
-            let mut files: Vec<String> = Vec::new();
-            for surface in &under {
-                for path in &surface.closure {
-                    if !files.contains(path) {
-                        files.push(path.clone());
-                    }
-                }
-            }
-            let count = under.len();
+            let files = unique(under.iter().flat_map(|surface| surface.closure.iter().cloned()));
+            let (count, reach, whose) = match under.len() {
+                1 => ("surface".to_owned(), "it reaches", "its"),
+                n => (format!("{n} surfaces"), "they reach", "their"),
+            };
             let text = format!(
-                "This call mines the {} under the stem `{stem}` alone:\n\n{}\n\nThe files below are \
-                 what {} from {} entry, the entry first. What the tree does for another surface is \
-                 that surface's call to claim, even in a module the two share.",
-                if count == 1 { "surface".to_owned() } else { format!("{count} surfaces") },
+                "This call mines the {count} under the stem `{stem}` alone:\n\n{}\n\nThe files \
+                 below are what {reach} from {whose} entry, the entry first. What the tree does for \
+                 another surface is that surface's call to claim, even in a module the two share.",
                 listed(under.iter().copied()),
-                if count == 1 { "it reaches" } else { "they reach" },
-                if count == 1 { "its" } else { "their" },
             );
             Seam {
                 text,
@@ -387,9 +364,7 @@ fn by_directory(tree: &Tree, root: &str) -> Vec<Seam> {
             continue;
         };
         let dir = &path[..path.len() - rest.len() + name.len()];
-        let stem = Some(surface::kebab(name))
-            .filter(|stem| !stem.is_empty())
-            .unwrap_or_else(|| fallback_stem(tree, root));
+        let stem = surface::kebab(name).unwrap_or_else(|| fallback_stem(tree, root));
         match groups.iter_mut().find(|(s, ..)| *s == stem) {
             Some((_, _, files)) => files.push(path.clone()),
             None => groups.push((stem, format!("`{dir}/`"), vec![path.clone()])),
@@ -432,16 +407,10 @@ fn fallback_stem(tree: &Tree, root: &str) -> String {
         .manifest
         .name
         .as_deref()
-        .map(|name| name.rsplit('/').next().unwrap_or(name))
-        .map(surface::kebab)
-        .filter(|stem| !stem.is_empty());
+        .and_then(|name| surface::kebab(name.rsplit('/').next().unwrap_or(name)));
     named
         .or_else(|| {
-            Path::new(root)
-                .file_name()
-                .and_then(|name| name.to_str())
-                .map(surface::kebab)
-                .filter(|stem| !stem.is_empty())
+            Path::new(root).file_name().and_then(|name| name.to_str()).and_then(surface::kebab)
         })
         .unwrap_or_else(|| "module".to_owned())
 }

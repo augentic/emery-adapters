@@ -8,14 +8,23 @@
 //! that stem, and the modules it reaches, all derived from the code, so two
 //! runs over one tree find the same surfaces and lead their ids the same way.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
-use crate::parse::{Arg, BindingKind, Call, ExportKind, Init, Lines, Module};
-use crate::resolve::{Manifest, Resolver, Target};
+use super::parse::{
+    Arg, Binding, BindingKind, Call, Export, ExportKind, Imported, Init, Lines, MemberKind, Module,
+    Scope,
+};
+use super::resolve::{Manifest, Resolver, Target};
+use super::{push_unique, unique};
 
 // The bootstrap modules looked for when the manifest names none.
 const BOOTSTRAPS: &[&str] =
     &["src/index.ts", "src/main.ts", "index.ts", "main.ts", "src/server.ts", "src/app.ts"];
+
+// The index modules a library's exports are read from when the manifest
+// names no entry.
+const INDEXES: &[&str] =
+    &["src/index.ts", "index.ts", "src/index.tsx", "index.tsx", "src/index.js", "index.js"];
 
 const VERBS: &[&str] = &["get", "post", "put", "patch", "delete", "head", "options", "all"];
 
@@ -89,10 +98,7 @@ impl Tree {
         let module = self.modules.get(&entry)?;
         let runs = module.calls.iter().any(|call| {
             call.discarded && call.depth == 0 && call.function.is_none() && call.class.is_none()
-        }) || module
-            .imports
-            .iter()
-            .any(|import| matches!(import.imported, crate::parse::Imported::Effect));
+        }) || module.imports.iter().any(|import| import.imported == Imported::Effect);
         runs.then_some(entry)
     }
 
@@ -114,9 +120,9 @@ impl Tree {
             return None;
         };
         let name = match &import.imported {
-            crate::parse::Imported::Named(name) => name.clone(),
-            crate::parse::Imported::Default => "default".to_owned(),
-            crate::parse::Imported::Namespace | crate::parse::Imported::Effect => return None,
+            Imported::Named(name) => name.clone(),
+            Imported::Default => "default".to_owned(),
+            Imported::Namespace | Imported::Effect => return None,
         };
         Some((self.modules.get(&path)?, name))
     }
@@ -175,9 +181,9 @@ impl Tree {
         };
         let Some(target) = self.modules.get(&path) else { return false };
         let exported = match (&import.imported, rest) {
-            (crate::parse::Imported::Named(exported), []) => exported.as_str(),
-            (crate::parse::Imported::Default, []) => "default",
-            (crate::parse::Imported::Namespace, [member]) => member.as_str(),
+            (Imported::Named(exported), []) => exported.as_str(),
+            (Imported::Default, []) => "default",
+            (Imported::Namespace, [member]) => member.as_str(),
             _ => return false,
         };
         let Some(export) = target.export(exported) else { return false };
@@ -200,22 +206,22 @@ impl Tree {
     }
 
     /// What a call's receiver is, traced through the bindings that construct
-    /// it to the package it comes from; `None` for a receiver of the tree's
-    /// own or of the runtime's.
+    /// it to the package it comes from — a class of the tree's that extends a
+    /// package's class among them, for a member it inherits; `None` for a
+    /// receiver of the tree's own or of the runtime's.
     pub fn receiver(&self, module: &Module, call: &Call) -> Option<Receiver> {
         let head = call.callee.head.as_str();
+        let link = |index: usize| call.callee.links.get(index).map(|link| link.name.as_str());
         if head == "this" {
             let class = call.class.as_deref()?;
-            if call.callee.links.len() < 2 {
-                return None;
-            }
-            let field = module.field(class, &call.callee.links[0].name)?;
+            let [field, _, ..] = call.callee.links.as_slice() else { return None };
+            let field = module.field(class, &field.name)?;
             return match &field.kind {
                 BindingKind::Field {
                     type_path: Some(path),
                     ..
                 } => {
-                    let package = self.package(module, &path[0])?;
+                    let package = self.package(module, path.first()?)?;
                     Some(Receiver {
                         package,
                         type_name: path.last().cloned(),
@@ -223,16 +229,20 @@ impl Tree {
                     })
                 }
                 BindingKind::Field { root: Some(root), .. } => {
-                    self.trace(module, &root[0], &[], TRACE)
+                    let [head, rest @ ..] = root.as_slice() else { return None };
+                    let member = rest.first().map(String::as_str).or_else(|| link(1));
+                    self.trace(module, head, &[], member, TRACE)
                 }
                 _ => None,
             };
         }
-        self.trace(module, head, &call.frames, TRACE)
+        self.trace(module, head, &call.frames, link(0), TRACE)
     }
 
+    // `member` is the member accessed on the receiver, which tells a member a
+    // class of the tree's declares from one it inherits.
     fn trace(
-        &self, module: &Module, name: &str, frames: &[u32], budget: usize,
+        &self, module: &Module, name: &str, frames: &[u32], member: Option<&str>, budget: usize,
     ) -> Option<Receiver> {
         if budget == 0 {
             return None;
@@ -244,7 +254,7 @@ impl Tree {
                     call,
                     ..
                 } => {
-                    let package = self.package(module, &path[0])?;
+                    let package = self.package(module, path.first()?)?;
                     Some(Receiver {
                         package,
                         type_name: path.last().cloned(),
@@ -256,7 +266,9 @@ impl Tree {
                     call,
                     ..
                 } => {
-                    let traced = self.trace(module, &root[0], frames, budget - 1)?;
+                    let [head, rest @ ..] = root.as_slice() else { return None };
+                    let member = rest.first().map(String::as_str).or(member);
+                    let traced = self.trace(module, head, frames, member, budget - 1)?;
                     let constructed = call
                         .and_then(|index| module.calls.get(index))
                         .filter(|init| init.is_new)
@@ -270,11 +282,28 @@ impl Tree {
                 BindingKind::Param {
                     type_path: Some(path),
                 } => {
-                    let package = self.package(module, &path[0])?;
+                    let package = self.package(module, path.first()?)?;
                     Some(Receiver {
                         package,
                         type_name: path.last().cloned(),
                         call: None,
+                    })
+                }
+                // a member the class declares is the tree's own; one it
+                // inherits from a package's class is that package's
+                BindingKind::Class { extends: Some(base) } => {
+                    let declared = module.classes.iter().any(|class| {
+                        class.name == binding.name
+                            && class.members.iter().any(|m| Some(m.name.as_str()) == member)
+                    });
+                    if declared {
+                        return None;
+                    }
+                    let traced = self.trace(module, base, &[], None, budget - 1)?;
+                    Some(Receiver {
+                        type_name: traced.type_name.or_else(|| Some(base.clone())),
+                        call: None,
+                        ..traced
                     })
                 }
                 _ => None,
@@ -289,7 +318,7 @@ impl Tree {
         }
         let (target, imported) = self.imported(module, name)?;
         let binding = exported_binding(target, &imported)?;
-        let traced = self.trace(target, &binding.name, &[], budget - 1)?;
+        let traced = self.trace(target, &binding.name, &[], member, budget - 1)?;
         Some(Receiver { call: None, ..traced })
     }
 
@@ -299,20 +328,11 @@ impl Tree {
         &self, module: &Module, lines: Lines, frames: &[u32], class: Option<&str>,
     ) -> Vec<String> {
         let mut seeds = vec![module.path.clone()];
-        let push = |seeds: &mut Vec<String>, local: &str| {
-            if let Some(import) = module.import(local)
-                && let Some(Target::Module(path)) =
-                    self.resolver.resolve(&module.path, &import.specifier)
-                && !seeds.contains(&path)
-            {
-                seeds.push(path);
-            }
-        };
         let span = class
             .and_then(|class| module.classes.iter().find(|c| c.name == class))
             .map_or(lines, |c| c.lines);
         for name in module.referenced(span) {
-            push(&mut seeds, name);
+            self.seed(&mut seeds, module, name);
             if let Some(binding) = module.binding(name, frames)
                 && let BindingKind::Param {
                     type_path: Some(path),
@@ -321,32 +341,40 @@ impl Tree {
                     type_path: Some(path),
                     ..
                 } = &binding.kind
+                && let Some(head) = path.first()
             {
-                push(&mut seeds, &path[0]);
+                self.seed(&mut seeds, module, head);
             }
         }
         if let Some(class) = class {
-            for binding in module
+            let fields = module
                 .bindings
                 .iter()
-                .filter(|b| b.scope == crate::parse::Scope::Class(class.to_owned()))
-            {
+                .filter(|b| matches!(&b.scope, Scope::Class(c) if c == class));
+            for binding in fields {
                 if let BindingKind::Field { type_path, root, .. } = &binding.kind {
-                    if let Some(path) = type_path {
-                        push(&mut seeds, &path[0]);
-                    }
-                    if let Some(root) = root {
-                        push(&mut seeds, &root[0]);
+                    for head in type_path.iter().chain(root).filter_map(|path| path.first()) {
+                        self.seed(&mut seeds, module, head);
                     }
                 }
             }
         }
         self.resolver.closure(&self.modules, &seeds, &[])
     }
+
+    // Seeds the in-tree module `local` is imported from in `module`, once.
+    fn seed(&self, seeds: &mut Vec<String>, module: &Module, local: &str) {
+        if let Some(import) = module.import(local)
+            && let Some(Target::Module(path)) =
+                self.resolver.resolve(&module.path, &import.specifier)
+        {
+            push_unique(seeds, path);
+        }
+    }
 }
 
 // The module-level binding an export of `module` names.
-fn exported_binding<'m>(module: &'m Module, name: &str) -> Option<&'m crate::parse::Binding> {
+fn exported_binding<'m>(module: &'m Module, name: &str) -> Option<&'m Binding> {
     let export = module.export(name)?;
     let local = export.local.as_deref().unwrap_or(&export.name);
     module.binding(local, &[])
@@ -408,10 +436,7 @@ fn identify(tree: &Tree, surfaces: &mut [Surface]) {
             let tell = surface
                 .discriminator
                 .clone()
-                .or_else(|| {
-                    Some(kebab(&surface.name))
-                        .filter(|tell| !tell.is_empty() && *tell != surface.stem)
-                })
+                .or_else(|| kebab(&surface.name).filter(|tell| *tell != surface.stem))
                 .or_else(|| module_of(surface))
                 .unwrap_or_else(|| "module".to_owned());
             format!("{}.{tell}", surface.stem)
@@ -451,20 +476,14 @@ fn start(tree: &Tree, module: &Module, registered: &[Surface]) -> Surface {
         .collect();
     let mut seeds = vec![module.path.clone()];
     for name in module.referenced_outside(&registrations) {
-        if let Some(import) = module.import(name)
-            && let Some(Target::Module(path)) =
-                tree.resolver.resolve(&module.path, &import.specifier)
-            && !seeds.contains(&path)
-        {
-            seeds.push(path);
-        }
+        tree.seed(&mut seeds, module, name);
     }
-    let mut entries: Vec<String> = registered
-        .iter()
-        .map(|surface| surface.entry.clone())
-        .filter(|entry| *entry != module.path)
-        .collect();
-    entries.dedup();
+    let entries = unique(
+        registered
+            .iter()
+            .map(|surface| surface.entry.clone())
+            .filter(|entry| *entry != module.path),
+    );
 
     // an entry is reached and not followed, but what loading it constructs
     // — its class fields' types and initializers, its module-level bindings
@@ -472,13 +491,7 @@ fn start(tree: &Tree, module: &Module, registered: &[Surface]) -> Surface {
     for entry in &entries {
         let Some(target) = tree.modules.get(entry) else { continue };
         for local in target.constructed() {
-            if let Some(import) = target.import(local)
-                && let Some(Target::Module(path)) =
-                    tree.resolver.resolve(&target.path, &import.specifier)
-                && !seeds.contains(&path)
-            {
-                seeds.push(path);
-            }
+            tree.seed(&mut seeds, target, local);
         }
     }
     Surface {
@@ -511,8 +524,10 @@ fn mounts(tree: &Tree, scope: &[String]) -> BTreeMap<String, String> {
                 continue;
             };
             for arg in call.args.iter().skip(1) {
-                let Some(root) = arg.root.as_deref() else { continue };
-                let Some((target, _)) = tree.imported(module, &root[0]) else { continue };
+                let Some(head) = arg.root.as_deref().and_then(|root| root.first()) else {
+                    continue;
+                };
+                let Some((target, _)) = tree.imported(module, head) else { continue };
                 mounts.entry(target.path.clone()).or_insert_with(|| prefix.to_owned());
             }
         }
@@ -537,10 +552,7 @@ fn callbacks(
             continue;
         }
         let lead = call.args.first().and_then(|arg| lead(tree, module, arg, &call.frames));
-        let literal = match &lead {
-            Some(Lead::Literal(literal)) => Some(literal.as_str()),
-            _ => None,
-        };
+        let literal = lead.as_ref().and_then(Lead::literal);
         if !(call.discarded || call.is_new || literal.is_some()) {
             continue;
         }
@@ -562,9 +574,7 @@ fn callbacks(
             .iter()
             .find(|arg| tree.handler(module, arg, &call.frames))
             .filter(|arg| !arg.function)
-            .and_then(|arg| arg.root.as_ref()?.last())
-            .map(|name| kebab(name))
-            .filter(|name| !name.is_empty());
+            .and_then(|arg| kebab(arg.root.as_ref()?.last()?));
         let mut detail = vec![match (&call.class, &call.function) {
             (Some(class), Some(function)) => {
                 format!("registered {} in `{class}.{function}`", call.lines)
@@ -601,6 +611,13 @@ enum Lead {
 }
 
 impl Lead {
+    fn literal(&self) -> Option<&str> {
+        match self {
+            Self::Literal(literal) => Some(literal),
+            Self::Ident(_) => None,
+        }
+    }
+
     fn spelled(&self) -> String {
         match self {
             Self::Literal(literal) => format!("\"{literal}\""),
@@ -637,11 +654,8 @@ fn name_callback(
         Some((method, lead)) => (*method, Some(lead)),
         None => (call.method(), lead),
     };
-    let literal = match lead {
-        Some(Lead::Literal(literal)) => Some(literal.as_str()),
-        _ => None,
-    };
-    let typed = || receiver.type_name.as_deref().map(kebab).filter(|s| !s.is_empty());
+    let literal = lead.and_then(Lead::literal);
+    let typed = || receiver.type_name.as_deref().and_then(kebab);
 
     if let Some(path) = literal.filter(|l| l.starts_with('/'))
         && VERBS.contains(&method)
@@ -653,13 +667,8 @@ fn name_callback(
         return (name, stem, route_discriminator(method, &route));
     }
 
-    let receiver_name = receiver.type_name.clone().unwrap_or_else(|| {
-        if call.callee.head == "this" {
-            call.callee.links.first().map_or_else(|| "this".to_owned(), |link| link.name.clone())
-        } else {
-            call.callee.head.clone()
-        }
-    });
+    let receiver_name =
+        receiver.type_name.clone().unwrap_or_else(|| call.callee.receiver().to_owned());
     let argument = lead.map(Lead::spelled).unwrap_or_default();
     let name = if call.is_new {
         format!("{}({argument})", call.method())
@@ -669,16 +678,12 @@ fn name_callback(
         format!("{receiver_name}.{method}")
     };
     let stem = literal.and_then(literal_stem).or_else(typed).unwrap_or_else(|| module_stem(module));
-    (name, stem, Some(kebab(method)).filter(|tell| !tell.is_empty()))
+    (name, stem, kebab(method))
 }
 
 // The call as the code spells it, for a hook's note.
 fn spelled(call: &Call, lead: Option<&Lead>) -> String {
-    let receiver = if call.callee.head == "this" {
-        call.callee.links.first().map_or("this", |link| link.name.as_str())
-    } else {
-        call.callee.head.as_str()
-    };
+    let receiver = call.callee.receiver();
     let argument = lead.map(Lead::spelled).unwrap_or_default();
     if lead.is_some() {
         format!("{receiver}.{}({argument})", call.method())
@@ -690,19 +695,20 @@ fn spelled(call: &Call, lead: Option<&Lead>) -> String {
 // Decorated surfaces: a method under a decorator a package provides, named
 // by the decorator and its literal, or as the route a verb decorator maps.
 fn decorated(tree: &Tree, module: &Module, surfaces: &mut Vec<Surface>) {
-    let mut seen: Vec<(String, String)> = Vec::new();
+    let mut seen: BTreeSet<(&str, &str)> = BTreeSet::new();
     for decorated in &module.decorated {
         let Some(member) = &decorated.member else { continue };
         let Some(decorator) = decorated.name.last() else { continue };
         if DECORATOR_NOISE.contains(&decorator.as_str()) || decorator.starts_with("Api") {
             continue;
         }
-        let Some(package) = tree.package(module, &decorated.name[0]) else { continue };
-        let key = (decorated.class.clone(), member.clone());
-        if seen.contains(&key) {
+        let Some(package) = decorated.name.first().and_then(|head| tree.package(module, head))
+        else {
+            continue;
+        };
+        if !seen.insert((&decorated.class, member)) {
             continue;
         }
-        seen.push(key);
 
         let prefix = module
             .decorated
@@ -713,20 +719,14 @@ fn decorated(tree: &Tree, module: &Module, surfaces: &mut Vec<Surface>) {
         let verb = decorator.to_ascii_lowercase();
         let (name, stem) = if VERBS.contains(&verb.as_str()) {
             let route = join_route(prefix, decorated.literal.as_deref().unwrap_or(""));
-            let stem = route_stem(&route).unwrap_or_else(|| kebab(&decorated.class));
-            (format!("{} {route}", verb.to_ascii_uppercase()), stem)
+            (format!("{} {route}", verb.to_ascii_uppercase()), route_stem(&route))
         } else {
             let argument =
                 decorated.literal.as_ref().map(|l| format!("(\"{l}\")")).unwrap_or_default();
             let name = format!("@{decorator}{argument} {}.{member}", decorated.class);
-            let stem = decorated
-                .literal
-                .as_deref()
-                .and_then(literal_stem)
-                .unwrap_or_else(|| kebab(&decorated.class));
-            (name, stem)
+            (name, decorated.literal.as_deref().and_then(literal_stem))
         };
-        let stem = if stem.is_empty() { module_stem(module) } else { stem };
+        let stem = stem.or_else(|| kebab(&decorated.class)).unwrap_or_else(|| module_stem(module));
 
         surfaces.push(Surface {
             name,
@@ -738,7 +738,7 @@ fn decorated(tree: &Tree, module: &Module, surfaces: &mut Vec<Surface>) {
                 format!("through `{package}`"),
             ],
             closure: tree.reaches(module, decorated.lines, &[], Some(&decorated.class)),
-            discriminator: Some(kebab(member)).filter(|tell| !tell.is_empty()),
+            discriminator: kebab(member),
             methods: Vec::new(),
             ids: Vec::new(),
         });
@@ -749,13 +749,8 @@ fn decorated(tree: &Tree, module: &Module, surfaces: &mut Vec<Surface>) {
 // entry modules export, one re-export hop deep, less error types and the
 // functions that host registrations.
 fn exports(tree: &Tree, surfaces: &mut Vec<Surface>) {
-    for (path, name) in exported(tree) {
-        let Some(module) = tree.modules.get(&path) else { continue };
-        let Some(export) =
-            module.exports.iter().find(|e| e.name == name || e.local.as_deref() == Some(&name))
-        else {
-            continue;
-        };
+    for (module, export) in exported(tree) {
+        let path = &module.path;
         let local = export.local.as_deref().unwrap_or(&export.name);
         let display =
             if export.name == "default" { module_stem(module) } else { export.name.clone() };
@@ -787,7 +782,7 @@ fn exports(tree: &Tree, surfaces: &mut Vec<Surface>) {
         };
         let declared = module.binding(local, &[]).map_or(export.lines, |binding| binding.lines);
         // a function that registers surfaces hosts them; it is not one
-        if surfaces.iter().any(|s| s.entry == path && declared.contains(s.lines)) {
+        if surfaces.iter().any(|s| s.entry == *path && declared.contains(s.lines)) {
             continue;
         }
         let mut detail = vec![format!("{what} {declared}")];
@@ -796,51 +791,37 @@ fn exports(tree: &Tree, surfaces: &mut Vec<Surface>) {
                 methods.iter().map(|(name, lines)| format!("`{name}` {lines}")).collect();
             detail.push(format!("methods {}", noted.join(", ")));
         }
-        let stem = kebab(&display);
+        let stem = kebab(&display).unwrap_or_else(|| module_stem(module));
         surfaces.push(Surface {
             name: display,
             entry: path.clone(),
-            stem: if stem.is_empty() { module_stem(module) } else { stem },
+            stem,
             lines: declared,
             detail,
             closure: tree.reaches(module, declared, &[], None),
             discriminator: None,
-            methods: methods
-                .iter()
-                .map(|(name, _)| kebab(name))
-                .filter(|method| !method.is_empty())
-                .collect(),
+            methods: methods.iter().filter_map(|(name, _)| kebab(name)).collect(),
             ids: Vec::new(),
         });
     }
 }
 
-// What the entry modules export, as `(module, name)`: the manifest's entry
-// or the conventional index, else the modules nothing imports; a re-export
-// is followed one hop to the module that declares it.
-fn exported(tree: &Tree) -> Vec<(String, String)> {
+// What the entry modules export, each with the module that declares it: the
+// manifest's entry or the conventional index, else the modules nothing
+// imports; a re-export is followed one hop to the module that declares it.
+fn exported(tree: &Tree) -> Vec<(&Module, &Export)> {
     let entries: Vec<String> = tree
         .manifest
         .entry(&tree.resolver)
         .into_iter()
-        .chain(tree.resolver.first(&[
-            "src/index.ts",
-            "index.ts",
-            "src/index.tsx",
-            "index.tsx",
-            "src/index.js",
-            "index.js",
-        ]))
+        .chain(tree.resolver.first(INDEXES))
         .collect();
     let entries = if entries.is_empty() { roots(tree) } else { entries };
 
-    let mut listed: Vec<(String, String)> = Vec::new();
+    let mut listed = Vec::new();
     for entry in &entries {
         let Some(module) = tree.modules.get(entry) else { continue };
-        for export in &module.exports {
-            let name = export.local.clone().unwrap_or_else(|| export.name.clone());
-            listed.push((entry.clone(), name));
-        }
+        listed.extend(module.exports.iter().map(|export| (module, export)));
         for reexport in module.reexports.iter().filter(|reexport| !reexport.type_only) {
             let Some(Target::Module(path)) = tree.resolver.resolve(entry, &reexport.specifier)
             else {
@@ -848,17 +829,13 @@ fn exported(tree: &Tree) -> Vec<(String, String)> {
             };
             let Some(target) = tree.modules.get(&path) else { continue };
             match &reexport.names {
-                Some(names) => {
-                    for (imported, _) in names {
-                        listed.push((path.clone(), imported.clone()));
-                    }
-                }
-                None => {
-                    for export in &target.exports {
-                        let name = export.local.clone().unwrap_or_else(|| export.name.clone());
-                        listed.push((path.clone(), name));
-                    }
-                }
+                Some(names) => listed.extend(names.iter().filter_map(|(imported, _)| {
+                    let export = target.exports.iter().find(|export| {
+                        export.name == *imported || export.local.as_deref() == Some(imported)
+                    })?;
+                    Some((target, export))
+                })),
+                None => listed.extend(target.exports.iter().map(|export| (target, export))),
             }
         }
     }
@@ -876,13 +853,7 @@ fn methods<'m>(module: &'m Module, name: &str) -> Vec<(&'m str, Lines)> {
             class
                 .members
                 .iter()
-                .filter(|m| {
-                    !m.private
-                        && matches!(
-                            m.kind,
-                            crate::parse::MemberKind::Method | crate::parse::MemberKind::Getter
-                        )
-                })
+                .filter(|m| !m.private && matches!(m.kind, MemberKind::Method | MemberKind::Getter))
                 .map(|m| (m.name.as_str(), m.lines))
                 .collect()
         })
@@ -893,12 +864,7 @@ fn methods<'m>(module: &'m Module, name: &str) -> Vec<(&'m str, Lines)> {
 fn roots(tree: &Tree) -> Vec<String> {
     let mut imported: Vec<String> = Vec::new();
     for module in tree.modules.values() {
-        for specifier in module
-            .imports
-            .iter()
-            .map(|i| i.specifier.as_str())
-            .chain(module.reexports.iter().map(|r| r.specifier.as_str()))
-        {
+        for specifier in module.specifiers() {
             if let Some(Target::Module(path)) = tree.resolver.resolve(&module.path, specifier) {
                 imported.push(path);
             }
@@ -926,7 +892,7 @@ fn route_discriminator(verb: &str, route: &str) -> Option<String> {
     let parts: Vec<&str> = std::iter::once(verb)
         .chain(segments[past..].iter().map(|segment| segment.trim_start_matches(':')))
         .collect();
-    Some(kebab(&parts.join("-"))).filter(|tell| !tell.is_empty())
+    kebab(&parts.join("-"))
 }
 
 // The first segment of a route that names a resource: not a version, an
@@ -936,8 +902,7 @@ fn route_stem(route: &str) -> Option<String> {
         .split('/')
         .filter(|segment| !segment.is_empty())
         .find(|segment| names_resource(segment))
-        .map(kebab)
-        .filter(|stem| !stem.is_empty())
+        .and_then(kebab)
 }
 
 fn names_resource(segment: &str) -> bool {
@@ -957,18 +922,16 @@ fn literal_stem(literal: &str) -> Option<String> {
     {
         return None;
     }
-    let stem = kebab(word);
-    (!stem.is_empty()).then_some(stem)
+    kebab(word)
 }
 
 fn module_stem(module: &Module) -> String {
-    let stem = kebab(module.stem());
-    if stem.is_empty() { "module".to_owned() } else { stem }
+    kebab(module.stem()).unwrap_or_else(|| "module".to_owned())
 }
 
-/// `text` as a kebab-case id segment: camel humps split, anything that is
-/// not a letter or digit a hyphen, runs collapsed.
-pub fn kebab(text: &str) -> String {
+// `text` as a kebab-case id segment: camel humps split, anything that is
+// not a letter or digit a hyphen, runs collapsed; none when nothing is left.
+pub(super) fn kebab(text: &str) -> Option<String> {
     let mut out = String::with_capacity(text.len() + 4);
     let chars: Vec<char> = text.chars().collect();
     for (i, &c) in chars.iter().enumerate() {
@@ -989,5 +952,5 @@ pub fn kebab(text: &str) -> String {
         }
     }
     let trimmed = out.trim_matches('-');
-    if emery_sdk::is_kebab(trimmed) { trimmed.to_owned() } else { String::new() }
+    emery_sdk::is_kebab(trimmed).then(|| trimmed.to_owned())
 }

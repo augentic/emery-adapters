@@ -25,9 +25,10 @@ use std::collections::BTreeMap;
 use emery_sdk::serde_json::{Map, Value};
 use emery_sdk::{Claim, ClaimKind};
 
-use crate::parse::{BindingKind, Call, Imported, Lines, MemberKind, Module, Scope, TypeKind};
-use crate::resolve::{Resolver, Target};
-use crate::surface::{Surface, Tree};
+use super::parse::{BindingKind, Call, Imported, Lines, MemberKind, Module, Scope, TypeKind};
+use super::push_unique;
+use super::resolve::{Resolver, Target};
+use super::surface::{Surface, Tree};
 
 // The runtime's own functions that leave the process, listed as calls with
 // no package when nothing in the module binds the name.
@@ -230,16 +231,16 @@ pub fn types<'m>(modules: impl IntoIterator<Item = &'m Module>, anchored: bool) 
 }
 
 fn claim(name: &str, signature: &str, path: Option<String>, what: &str) -> Claim {
-    let mut extras = Map::new();
-    extras.insert("name".to_owned(), Value::String(name.to_owned()));
-    extras.insert("signature".to_owned(), Value::String(signature.to_owned()));
     Claim {
         kind: ClaimKind::Type,
         id: None,
         path,
         synopsis: Some(format!("exported {what}")),
         backing: None,
-        extras,
+        extras: Map::from_iter([
+            ("name".to_owned(), Value::String(name.to_owned())),
+            ("signature".to_owned(), Value::String(signature.to_owned())),
+        ]),
     }
 }
 
@@ -299,12 +300,8 @@ pub fn anchors<'s>(
     tree: &Tree, files: &[String], surfaces: impl IntoIterator<Item = &'s Surface>,
 ) -> Vec<String> {
     let mut anchors: Vec<String> = Vec::new();
-    let mut push = |path: &str, lines: Lines| {
-        let anchor = format!("{path}#{}", lines.anchor());
-        if !anchors.contains(&anchor) {
-            anchors.push(anchor);
-        }
-    };
+    let mut push =
+        |path: &str, lines: Lines| push_unique(&mut anchors, format!("{path}#{}", lines.anchor()));
     for surface in surfaces {
         push(&surface.entry, surface.lines);
     }
@@ -393,13 +390,9 @@ pub fn packages<'m>(
                 Imported::Named(name) => format!("`{name}` as `{}`", import.local),
                 Imported::Effect => continue,
             };
-            let entry = packages.entry(import.specifier.as_str()).or_default();
-            if !entry.0.contains(&bound) {
-                entry.0.push(bound);
-            }
-            if !entry.1.contains(&module.path.as_str()) {
-                entry.1.push(&module.path);
-            }
+            let (names, paths) = packages.entry(import.specifier.as_str()).or_default();
+            push_unique(names, bound);
+            push_unique(paths, module.path.as_str());
         }
     }
     if packages.is_empty() {
@@ -487,21 +480,20 @@ pub fn calls(tree: &Tree, files: &[String]) -> Option<String> {
 // itself (`fetch`).
 fn callee(tree: &Tree, module: &Module, call: &Call) -> Option<String> {
     let head = call.callee.head.as_str();
-    let mut members: Vec<&str> = call.callee.links.iter().map(|link| link.name.as_str()).collect();
+    let links: Vec<&str> = call.callee.links.iter().map(|link| link.name.as_str()).collect();
     // a receiver in a field: the first link is the field
-    let bound = if head == "this" {
-        if members.is_empty() {
-            return None;
-        }
-        members.remove(0)
-    } else {
-        head
+    let (bound, members) = match (head, links.as_slice()) {
+        ("this", [field, members @ ..]) => (*field, members),
+        ("this", []) => return None,
+        (head, members) => (head, members),
     };
     let Some(receiver) = tree.receiver(module, call) else {
         let global = GLOBALS.contains(&head)
             && module.binding(head, &call.frames).is_none()
             && module.import(head).is_none();
-        return global.then(|| std::iter::once(head).chain(members).collect::<Vec<_>>().join("."));
+        return global.then(|| {
+            std::iter::once(head).chain(members.iter().copied()).collect::<Vec<_>>().join(".")
+        });
     };
     let direct = head != "this" && tree.package(module, head).is_some();
     let mut path: Vec<&str> = Vec::new();
@@ -510,7 +502,7 @@ fn callee(tree: &Tree, module: &Module, call: &Call) -> Option<String> {
         None if direct && call.callee.head_call.is_none() => {}
         None => path.push(bound),
     }
-    path.extend(members);
+    path.extend_from_slice(members);
     if path.is_empty() {
         path.push(head);
     }

@@ -12,13 +12,13 @@ pub fn survey(input: &SourceInput) -> Result<Vec<Seam>, Error> {
             }
             Seam::whole()
         }
-        SourceContent::Workspace(root) => to_note(root)?,
+        SourceContent::Workspace(root) => carrier(root)?,
     };
 
     Ok(vec![seam])
 }
 
-fn to_note(root: &str) -> Result<Seam, Error> {
+fn carrier(root: &str) -> Result<Seam, Error> {
     let files = emery_sdk::workspace::list(root, |entry| !entry.hidden())?;
     let [file] = files.as_slice() else {
         return Err(bad_request!("intent expects one file, found {}", files.len()));

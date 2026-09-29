@@ -15,13 +15,13 @@
 //! `accepted` trace lines and the backend's `completion` lines.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::fmt::Write as _;
+use std::fmt::{self, Display, Formatter, Write as _};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use std::{env, fs, io};
 
-use emery_sdk::{Claim, ClaimKind, Evidence};
+use emery_sdk::{Anchor, Claim, ClaimKind, Evidence};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -245,7 +245,7 @@ impl Run {
         }
     }
 
-    fn claims(&self, kind: ClaimKind) -> impl Iterator<Item = &emery_sdk::Claim> {
+    fn claims(&self, kind: ClaimKind) -> impl Iterator<Item = &Claim> {
         self.evidence
             .iter()
             .flat_map(|evidence| &evidence.claims)
@@ -495,18 +495,14 @@ fn recall(items: &[Item], run: &Run, kind: ClaimKind) -> Recall {
         ..Recall::default()
     };
     for item in items {
-        let Some(wanted) = Anchor::parse(&item.anchor) else {
+        let Ok(wanted) = Anchor::parse(&item.anchor) else {
             recall.missed.push(format!("{} (unparseable anchor)", item.anchor));
             continue;
         };
         let meeting: Vec<&Claim> = run
             .claims(kind)
             .filter(|claim| {
-                claim
-                    .path
-                    .as_deref()
-                    .and_then(Anchor::parse)
-                    .is_some_and(|got| got.overlaps(&wanted))
+                claim.anchor().and_then(Result::ok).is_some_and(|got| overlaps(got, wanted))
             })
             .collect();
         let label = || {
@@ -540,41 +536,14 @@ fn stem(id: &str) -> Option<&str> {
     id.split('.').next().filter(|stem| !stem.is_empty())
 }
 
-struct Anchor<'a> {
-    path: &'a str,
-    lines: Option<(u64, u64)>,
-}
-
-impl<'a> Anchor<'a> {
-    // `<path>`, `<path>#L<n>`, or `<path>#L<start>-L<end>`, as the claim rules spell it.
-    fn parse(anchor: &'a str) -> Option<Self> {
-        let Some((path, fragment)) = anchor.split_once('#') else {
-            return Some(Self {
-                path: anchor,
-                lines: None,
-            });
-        };
-        let line = |text: &str| text.strip_prefix('L')?.parse::<u64>().ok();
-        let lines = if let Some((start, end)) = fragment.split_once('-') {
-            (line(start)?, line(end)?)
-        } else {
-            let only = line(fragment)?;
-            (only, only)
-        };
-
-        Some(Self {
-            path,
-            lines: Some(lines),
-        })
-    }
-
-    fn overlaps(&self, other: &Self) -> bool {
-        self.path.trim_start_matches("./") == other.path.trim_start_matches("./")
-            && match (self.lines, other.lines) {
-                (Some((a, b)), Some((c, d))) => a <= d && c <= b,
-                _ => true,
-            }
-    }
+// Two anchors meet in one file when either names no lines or their ranges
+// overlap.
+fn overlaps(a: Anchor<'_>, b: Anchor<'_>) -> bool {
+    a.path == b.path
+        && match (a.lines, b.lines) {
+            (Some((a, b)), Some((c, d))) => a <= d && c <= b,
+            _ => true,
+        }
 }
 
 // --- the scorecard ---
@@ -596,8 +565,8 @@ fn scorecard(settings: &Settings, reports: &[Report<'_>], started: &str) -> Stri
 
 struct Card<'a>(&'a Report<'a>);
 
-impl std::fmt::Display for Card<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for Card<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let Report { case, runs, grades } = self.0;
         writeln!(f, "\n## {}\n\nfixture `{}`\n", case.name, case.expected.fixture)?;
 
@@ -630,7 +599,7 @@ impl std::fmt::Display for Card<'_> {
     }
 }
 
-fn row(f: &mut std::fmt::Formatter<'_>, run: &Run, grade: &Grade) -> std::fmt::Result {
+fn row(f: &mut Formatter<'_>, run: &Run, grade: &Grade) -> fmt::Result {
     let tokens = run.tokens();
     let (blocks, types) = run.design_blocks();
     let stems = if grade.missing_stems.is_empty() && grade.extra_stems.is_empty() {
@@ -667,7 +636,7 @@ fn row(f: &mut std::fmt::Formatter<'_>, run: &Run, grade: &Grade) -> std::fmt::R
     )
 }
 
-fn notes(f: &mut std::fmt::Formatter<'_>, run: &Run, grade: &Grade) -> std::fmt::Result {
+fn notes(f: &mut Formatter<'_>, run: &Run, grade: &Grade) -> fmt::Result {
     if run.exit != Some(0) {
         return writeln!(f, "\nRun {} failed:\n\n```\n{}\n```", run.n, run.tail);
     }
@@ -703,7 +672,7 @@ fn notes(f: &mut std::fmt::Formatter<'_>, run: &Run, grade: &Grade) -> std::fmt:
     Ok(())
 }
 
-fn stability(f: &mut std::fmt::Formatter<'_>, first: &Run, second: &Run) -> std::fmt::Result {
+fn stability(f: &mut Formatter<'_>, first: &Run, second: &Run) -> fmt::Result {
     writeln!(
         f,
         "\nStability: requirement ids {}, spec subjects {}",
@@ -729,8 +698,8 @@ fn stability(f: &mut std::fmt::Formatter<'_>, first: &Run, second: &Run) -> std:
     Ok(())
 }
 
-impl std::fmt::Display for Recall {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for Recall {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if self.expected == 0 {
             return f.write_str("—");
         }
@@ -756,8 +725,8 @@ impl Jaccard {
     }
 }
 
-impl std::fmt::Display for Jaccard {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for Jaccard {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if self.union == 0 {
             return f.write_str("—");
         }

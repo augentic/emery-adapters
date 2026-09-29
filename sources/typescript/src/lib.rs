@@ -32,21 +32,14 @@
 //! never fails the run.
 
 #[cfg(target_arch = "wasm32")]
-mod parse;
-#[cfg(target_arch = "wasm32")]
-mod resolve;
-#[cfg(target_arch = "wasm32")]
-mod skeleton;
-#[cfg(target_arch = "wasm32")]
-mod surface;
-#[cfg(target_arch = "wasm32")]
 mod survey;
 
 #[cfg(target_arch = "wasm32")]
 mod guest {
     use emery_sdk::{AdapterMetadata, ClaimKind, Context, Error, Evidence, Model, SourceKind};
 
-    use crate::{PROSE, survey};
+    use crate::PROSE;
+    use crate::survey::{self, Survey};
 
     emery_sdk::source_adapter!(metadata, extract);
 
@@ -55,21 +48,19 @@ mod guest {
     }
 
     async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {
-        let survey = survey::survey(ctx.input)?;
-        let mut evidence = emery_sdk::extract(ctx, PROSE, &survey.seams).await?;
+        let Survey { seams, types } = survey::survey(ctx.input)?;
+        let mut evidence = emery_sdk::extract(ctx, PROSE, &seams).await?;
 
         // the declarations are the code's to state: what the model answered
         // as a `type` gives way to what the parser read
-        let answered = evidence.claims.len();
-        evidence.claims.retain(|claim| claim.kind != ClaimKind::Type);
-        let dropped = answered - evidence.claims.len();
+        let dropped = evidence.claims.extract_if(.., |claim| claim.kind == ClaimKind::Type).count();
         if dropped > 0 {
             emery_sdk::tracing::debug!(
                 dropped,
                 "type claims the model answered give way to the parsed declarations"
             );
         }
-        evidence.claims.extend(survey.types);
+        evidence.claims.extend(types);
         Ok(evidence)
     }
 }

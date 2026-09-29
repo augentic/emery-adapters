@@ -865,6 +865,78 @@ async fn typescript_calls() {
     );
 }
 
+// A class of the tree's that extends a package's class: a call through a
+// member it inherits — an HTTP client on a shared config base — is a call
+// through that package, listed under the base's name and an anchor a
+// requirement may take; a call to a member the class declares itself is the
+// tree's own.
+#[tokio::test]
+async fn typescript_inherited() {
+    let project = scratch();
+    modules(&project, &APP);
+    modules(
+        &project,
+        &[
+            (
+                "src/config.ts",
+                "import { ConfigCommon } from \"acme-common\";\n\nexport class Config extends \
+                 ConfigCommon {\n  public static ordersUrl = process.env.ORDERS_URL || \
+                 \"http://orders\";\n\n  public static prefixed(value: string): string {\n    return \
+                 `orders-${value}`;\n  }\n}\n",
+            ),
+            (
+                "src/orders.ts",
+                "import { Config } from \"./config\";\n\nexport async function createOrder(input: \
+                 unknown) {\n  const url = `${Config.ordersUrl}/orders`;\n  const response = await \
+                 Config.axios.post(url, input);\n  Config.logger.info(Config.prefixed(\"created\"));\n  \
+                 return response.data;\n}\n\nexport function findOrder(req: { params: { id: string } }, \
+                 res: { json(body: unknown): void }) {\n  res.json({ id: req.params.id });\n}\n",
+            ),
+        ],
+    );
+    let posted = serde_json::json!({
+        "kind": "requirement", "id": "orders.create",
+        "statement": "An order is posted to the orders service.", "path": "src/orders.ts#L5"
+    });
+    let strayed = serde_json::json!({ "claims": [{
+        "kind": "requirement", "id": "orders.create",
+        "statement": "An order is posted to the orders service.", "path": "src/orders.ts#L3"
+    }] })
+    .to_string();
+    let corrected = serde_json::json!({ "claims": [&posted] }).to_string();
+    let inline = answer();
+
+    let model = support::run(
+        test_programs::ADAPTER_TYPESCRIPT,
+        &project,
+        &[],
+        ScriptedModel::answering([strayed.as_str(), corrected.as_str(), inline.as_str()]),
+    )
+    .await;
+
+    let seen = model.seen();
+    assert_eq!(seen.len(), 3, "two rounds for the one seam, one for the inline value");
+    let turn = &seen[0].messages[0];
+    assert!(
+        turn.contains("- `acme-common:ConfigCommon.axios.post` in `src/orders.ts` at L5")
+            && turn.contains("- `acme-common:ConfigCommon.logger.info` in `src/orders.ts` at L6"),
+        "a member the class inherits is the package's: {turn}"
+    );
+    assert!(
+        !turn.contains("ConfigCommon.prefixed") && !turn.contains("ConfigCommon.ordersUrl"),
+        "a member the class declares is the tree's own: {turn}"
+    );
+    let exchanges = model.exchanges();
+    let correction =
+        exchanges[0].outcome.as_ref().expect_err("a requirement at the declaration is refused");
+    assert!(
+        correction.contains("claim 0: path `src/orders.ts#L3`")
+            && correction.contains("in `src/orders.ts` it names L5, L6, L7;"),
+        "the finding names the inherited calls and the return as anchors: {correction}"
+    );
+    assert_eq!(exchanges[1].outcome, Ok(String::new()), "the requirement at the post is accepted");
+}
+
 // A `tsconfig` `paths` alias resolves like a relative import: the route is
 // mounted through it, and its seam reaches the service it names through it.
 // The config `extends` a base with no `compilerOptions`, which leaves the

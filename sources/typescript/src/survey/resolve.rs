@@ -11,9 +11,8 @@ use std::path::Path;
 
 use emery_sdk::serde_json::{self, Value};
 
-use crate::parse::Module;
-
-const EXTENSIONS: &[&str] = &["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"];
+use super::parse::Module;
+use super::{EXTENSIONS, push_unique};
 
 // The build outputs a manifest may point at in place of their sources.
 const OUTPUT_DIRS: &[&str] = &["dist", "build", "lib", "out"];
@@ -33,7 +32,8 @@ pub struct Resolver {
     modules: BTreeSet<String>,
     // root-relative, `""` for the root itself
     base_url: Option<String>,
-    // each `paths` pattern with its targets, relative to `base_url` or the root
+    // each `paths` pattern with its targets, relative to `base_url` or the
+    // root
     paths: Vec<(String, Vec<String>)>,
 }
 
@@ -46,7 +46,7 @@ impl Resolver {
             base_url: None,
             paths: Vec::new(),
         };
-        let Some(config) = tsconfig(root, "tsconfig.json", 0) else { return resolver };
+        let Some(config) = tsconfig(root, "tsconfig.json", true) else { return resolver };
         let options = config.get("compilerOptions");
         resolver.base_url = options
             .and_then(|o| o.get("baseUrl"))
@@ -74,8 +74,7 @@ impl Resolver {
         if specifier.starts_with('/') {
             return None;
         }
-        if specifier == "."
-            || specifier == ".."
+        if matches!(specifier, "." | "..")
             || specifier.starts_with("./")
             || specifier.starts_with("../")
         {
@@ -129,29 +128,19 @@ impl Resolver {
         &self, modules: &BTreeMap<String, Module>, seeds: &[String], stop: &[String],
     ) -> Vec<String> {
         let mut order: Vec<String> = Vec::new();
-        for seed in seeds {
-            if modules.contains_key(seed) && !order.contains(seed) {
-                order.push(seed.clone());
-            }
+        for seed in seeds.iter().filter(|seed| modules.contains_key(*seed)) {
+            push_unique(&mut order, seed.clone());
         }
         let mut next = 0;
-        while next < order.len() {
-            let from = order[next].clone();
+        while let Some(from) = order.get(next).cloned() {
             next += 1;
             if stop.contains(&from) {
                 continue;
             }
             let Some(module) = modules.get(&from) else { continue };
-            let specifiers = module
-                .imports
-                .iter()
-                .map(|import| import.specifier.as_str())
-                .chain(module.reexports.iter().map(|reexport| reexport.specifier.as_str()));
-            for specifier in specifiers {
-                if let Some(Target::Module(path)) = self.resolve(&from, specifier)
-                    && !order.contains(&path)
-                {
-                    order.push(path);
+            for specifier in module.specifiers() {
+                if let Some(Target::Module(path)) = self.resolve(&from, specifier) {
+                    push_unique(&mut order, path);
                 }
             }
         }
@@ -215,11 +204,12 @@ fn normalize(dir: &str, path: &str) -> Option<String> {
 
 // A `tsconfig.json` as a JSON value, comments and trailing commas removed,
 // its own `compilerOptions` laid over the ones a readable relative `extends`
-// supplies. Anything unreadable is ignored.
-fn tsconfig(root: &Path, path: &str, hops: usize) -> Option<Value> {
+// supplies when `follow` — the base itself is read without following. Anything
+// unreadable is ignored.
+fn tsconfig(root: &Path, path: &str, follow: bool) -> Option<Value> {
     let text = std::fs::read_to_string(root.join(path)).ok()?;
     let mut config: Value = serde_json::from_str(&strip_jsonc(&text)).ok()?;
-    if hops == 0
+    if follow
         && let Some(base) = config.get("extends").and_then(Value::as_str)
         && (base.starts_with("./") || base.starts_with("../"))
     {
@@ -228,7 +218,7 @@ fn tsconfig(root: &Path, path: &str, hops: usize) -> Option<Value> {
         if Path::new(&base_path).extension().is_none_or(|ext| !ext.eq_ignore_ascii_case("json")) {
             base_path.push_str(".json");
         }
-        if let Some(parent) = tsconfig(root, &base_path, hops + 1) {
+        if let Some(parent) = tsconfig(root, &base_path, false) {
             // a base with no `compilerOptions` leaves the child's own in place
             let mut options = parent
                 .get("compilerOptions")
@@ -356,9 +346,10 @@ impl Manifest {
                 ["start", "dev"].iter().find_map(|script| {
                     self.scripts.get(*script)?.split_whitespace().find_map(|word| {
                         let (_, extension) = word.rsplit_once('.')?;
-                        (!word.starts_with('-') && EXTENSIONS.contains(&extension))
-                            .then(|| resolver.entry(word))
-                            .flatten()
+                        if word.starts_with('-') || !EXTENSIONS.contains(&extension) {
+                            return None;
+                        }
+                        resolver.entry(word)
                     })
                 })
             })

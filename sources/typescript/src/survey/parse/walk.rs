@@ -1,13 +1,7 @@
-//! Reads one module into the facts the survey decides from.
-//!
-//! The parser is confined here: a `Module` is plain data, so the rules in
-//! `surface` never name a syntax-tree type, and a parser swap touches this
-//! file alone. A module the parser cannot read is still a `Module` — its
-//! imports and exports as far as the parser got, and `parsed` false — so one
-//! broken file never fails a run.
+//! Walks one module's syntax tree into its `Module`: the one file that names
+//! a parser type.
 
 use std::borrow::Cow;
-use std::fmt::{self, Display, Formatter};
 
 use oxc_allocator::Allocator;
 use oxc_ast::AstKind;
@@ -20,90 +14,18 @@ use oxc_ast::ast::{
     ImportDeclarationSpecifier, ImportExpression, ImportOrExportKind, MethodDefinition,
     MethodDefinitionKind, NewExpression, ObjectPropertyKind, PropertyDefinition, PropertyKey,
     ReturnStatement, StaticMemberExpression, SwitchStatement, TSAccessibility, TSEnumDeclaration,
-    TSInterfaceDeclaration, TSType, TSTypeAliasDeclaration, TSTypeName, ThrowStatement,
-    UnaryOperator, VariableDeclarator,
+    TSInterfaceDeclaration, TSType, TSTypeAliasDeclaration, TSTypeAnnotation, TSTypeName,
+    ThrowStatement, UnaryOperator, VariableDeclarator,
 };
 use oxc_ast_visit::{Visit, walk};
 use oxc_parser::Parser;
 use oxc_span::{GetSpan, SourceType, Span};
 
-// The methods whose function arguments are structure rather than handlers —
-// lifecycle, promise, iteration, and mounting — so a call through one never
-// registers a surface, and a function passed to one runs at its caller's
-// depth. Matched against a call's method, or its head when it has none.
-const STRUCTURAL: &[&str] = &[
-    "use",
-    "register",
-    "mount",
-    "plugin",
-    "decorate",
-    "addHook",
-    "hook",
-    "listen",
-    "connect",
-    "disconnect",
-    "close",
-    "end",
-    "then",
-    "catch",
-    "finally",
-    "start",
-    "stop",
-    "init",
-    "initialize",
-    "forEach",
-    "map",
-    "filter",
-    "reduce",
-    "find",
-    "findIndex",
-    "some",
-    "every",
-    "sort",
-    "flatMap",
-    "Promise",
-    "setTimeout",
-    "setInterval",
-    "setImmediate",
-    "nextTick",
-    "queueMicrotask",
-    "describe",
-    "it",
-    "test",
-    "beforeEach",
-    "afterEach",
-    "beforeAll",
-    "afterAll",
-];
-
-// The listener methods whose event decides whether a handler is a surface.
-const LISTENERS: &[&str] = &["on", "once", "addListener", "addEventListener", "prependListener"];
-
-// The events a listener method hears about the process, a connection, or a
-// stream, not about a caller: a handler for one is lifecycle, not a surface.
-const LIFECYCLE_EVENTS: &[&str] = &[
-    "error",
-    "close",
-    "connect",
-    "connecting",
-    "disconnect",
-    "end",
-    "ready",
-    "open",
-    "listening",
-    "exit",
-    "warning",
-    "drain",
-    "finish",
-    "timeout",
-    "reconnecting",
-    "SIGINT",
-    "SIGTERM",
-    "SIGHUP",
-    "unhandledRejection",
-    "uncaughtException",
-    "beforeExit",
-];
+use super::{
+    Arg, Binding, BindingKind, Call, Callee, ClassDecl, Decision, Decorated, EnvRead, Export,
+    ExportKind, Import, Imported, Init, Invocation, Lines, Link, Member, MemberKind, Module,
+    Reexport, Reference, Scope, TypeDecl, TypeKind,
+};
 
 // A binding's initializer is kept as its head: its first line, cut to this
 // many characters — a literal, a default, a small expression a criterion
@@ -119,441 +41,12 @@ const TIMERS: &[&str] =
 // spells a value as `3000` does.
 const WRAPPERS: &[&str] = &["Number", "String", "Boolean", "BigInt", "parseInt", "parseFloat"];
 
-/// A 1-based, inclusive range of lines.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub struct Lines {
-    pub start: u32,
-    pub end: u32,
-}
-
-impl Lines {
-    pub const fn contains(self, other: Self) -> bool {
-        self.start <= other.start && other.end <= self.end
-    }
-
-    /// The range in the claim anchor grammar: `L3`, or `L3-L5`.
-    pub fn anchor(self) -> String {
-        if self.start == self.end {
-            format!("L{}", self.start)
-        } else {
-            format!("L{}-L{}", self.start, self.end)
-        }
-    }
-}
-
-impl Display for Lines {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        if self.start == self.end {
-            write!(f, "L{}", self.start)
-        } else {
-            write!(f, "L{}–L{}", self.start, self.end)
-        }
-    }
-}
-
-/// One production module, read into the facts the survey decides from.
-#[derive(Debug, Default)]
-pub struct Module {
-    pub path: String,
-    pub text: String,
-    pub parsed: bool,
-    pub imports: Vec<Import>,
-    pub reexports: Vec<Reexport>,
-    pub exports: Vec<Export>,
-    pub bindings: Vec<Binding>,
-    pub calls: Vec<Call>,
-    pub decorated: Vec<Decorated>,
-    pub types: Vec<TypeDecl>,
-    pub classes: Vec<ClassDecl>,
-    pub env: Vec<EnvRead>,
-    pub decisions: Vec<Decision>,
-    /// The lines of every `return` that yields a value: where a function's
-    /// result is decided, which a requirement about what it computes anchors
-    /// at.
-    pub returns: Vec<Lines>,
-    references: Vec<Reference>,
-}
-
-impl Module {
-    /// The file's stem, or its directory's for an `index` or `main` module
-    /// beneath a directory that names something.
-    pub fn stem(&self) -> &str {
-        let (dir, file) = self.path.rsplit_once('/').unwrap_or(("", &self.path));
-        let stem = file.split_once('.').map_or(file, |(stem, _)| stem);
-        let parent = dir.rsplit_once('/').map_or(dir, |(_, last)| last);
-        if matches!(stem, "index" | "main") && !matches!(parent, "" | "src" | "lib" | "app") {
-            parent
-        } else {
-            stem
-        }
-    }
-
-    /// The import binding `local` names, if any.
-    pub fn import(&self, local: &str) -> Option<&Import> {
-        self.imports.iter().find(|import| import.local == local)
-    }
-
-    /// The binding `name` resolves to from `scope`: the innermost enclosing
-    /// function that binds it, else the module.
-    pub fn binding(&self, name: &str, frames: &[u32]) -> Option<&Binding> {
-        frames
-            .iter()
-            .rev()
-            .find_map(|frame| {
-                self.bindings.iter().find(|b| b.name == name && b.scope == Scope::Function(*frame))
-            })
-            .or_else(|| self.bindings.iter().find(|b| b.name == name && b.scope == Scope::Module))
-    }
-
-    /// The field `name` of `class`, if the class declares or constructs it.
-    pub fn field(&self, class: &str, name: &str) -> Option<&Binding> {
-        self.bindings.iter().find(|b| b.name == name && b.scope == Scope::Class(class.to_owned()))
-    }
-
-    /// The export `name` names, if any.
-    pub fn export(&self, name: &str) -> Option<&Export> {
-        self.exports.iter().find(|export| export.name == name)
-    }
-
-    /// The names referenced within `lines`, in order, once each.
-    pub fn referenced(&self, lines: Lines) -> Vec<&str> {
-        let mut names: Vec<&str> = Vec::new();
-        for reference in &self.references {
-            if reference.line >= lines.start
-                && reference.line <= lines.end
-                && !names.contains(&reference.name.as_str())
-            {
-                names.push(&reference.name);
-            }
-        }
-        names
-    }
-
-    /// The names referenced outside every range of `lines`, in order, once
-    /// each.
-    pub fn referenced_outside(&self, lines: &[Lines]) -> Vec<&str> {
-        let mut names: Vec<&str> = Vec::new();
-        for reference in &self.references {
-            let inside = lines.iter().any(|l| reference.line >= l.start && reference.line <= l.end);
-            if !inside && !names.contains(&reference.name.as_str()) {
-                names.push(&reference.name);
-            }
-        }
-        names
-    }
-
-    /// The names loading the module or constructing its classes reach: the
-    /// head of the declared type and of the initializer of every class field
-    /// and module-level value binding, in order, once each.
-    pub fn constructed(&self) -> Vec<&str> {
-        let mut names: Vec<&str> = Vec::new();
-        for binding in &self.bindings {
-            let ((Scope::Class(_), BindingKind::Field { type_path, root, .. })
-            | (Scope::Module, BindingKind::Value { type_path, root, .. })) =
-                (&binding.scope, &binding.kind)
-            else {
-                continue;
-            };
-            for head in type_path.iter().chain(root).filter_map(|path| path.first()) {
-                if !names.contains(&head.as_str()) {
-                    names.push(head);
-                }
-            }
-        }
-        names
-    }
-}
-
-#[derive(Debug)]
-pub struct Import {
-    pub local: String,
-    pub specifier: String,
-    pub imported: Imported,
-    pub type_only: bool,
-}
-
-#[derive(Debug, Eq, PartialEq)]
-pub enum Imported {
-    Default,
-    Namespace,
-    Named(String),
-    // `import "./polyfill"` or `import("./x")`: reached, binding nothing
-    Effect,
-}
-
-#[derive(Debug)]
-pub struct Reexport {
-    pub specifier: String,
-    // `(imported, exported)` pairs, or `None` for `export * from`
-    pub names: Option<Vec<(String, String)>>,
-    pub type_only: bool,
-}
-
-#[derive(Debug)]
-pub struct Export {
-    pub name: String,
-    // the local binding an `export { local as name }` list names
-    pub local: Option<String>,
-    pub kind: ExportKind,
-    pub lines: Lines,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ExportKind {
-    Function,
-    Class { extends: Option<String> },
-    Value,
-    Type,
-    Unknown,
-}
-
-#[derive(Debug)]
-pub struct Binding {
-    pub name: String,
-    pub scope: Scope,
-    pub kind: BindingKind,
-    pub lines: Lines,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum Scope {
-    Module,
-    Function(u32),
-    Class(String),
-}
-
-#[derive(Debug)]
-pub enum BindingKind {
-    Function,
-    Class {
-        extends: Option<String>,
-    },
-    Value {
-        // the identifier path at the head of the initializer: `express` for
-        // `express()`, `Worker` for `new Worker(..)`, `ApmCommon.APMService`
-        // for `const { APMService } = ApmCommon`
-        root: Option<Vec<String>>,
-        // the declared type's path, `Kafka.Consumer` for `x: Kafka.Consumer`
-        type_path: Option<Vec<String>>,
-        // the index in `Module::calls` of the call or construction that
-        // initializes it
-        call: Option<usize>,
-        // the string a plain string literal initializer holds
-        string: Option<String>,
-        init: Init,
-        // the initializer's head, when it has one
-        head: Option<String>,
-    },
-    Field {
-        type_path: Option<Vec<String>>,
-        root: Option<Vec<String>>,
-        init: Init,
-        // the initializer's head, when it has one
-        head: Option<String>,
-    },
-    Param {
-        type_path: Option<Vec<String>>,
-    },
-}
-
-/// What a binding's initializer is, read from its syntax.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Init {
-    /// A literal, or an expression over literals: `5 * 1000`, `["a", "b"]`,
-    /// `Number("3")`.
-    Literal,
-    /// A regular expression: a literal, or `new RegExp` over a literal.
-    Pattern,
-    /// An expression reading `process.env`, whatever else it does with it.
-    Env,
-    /// A call or construction handed something spelled in place — a literal,
-    /// an object, an array — and no function: `z.object({ .. })`.
-    Definition,
-    /// A call or construction handed nothing spelled in place, a module
-    /// loaded, or an `await`ed one: `express()`, `require("pg")`.
-    Construction,
-    /// A function.
-    Function,
-    /// A reference, a member read, or no initializer at all.
-    Other,
-}
-
-impl Init {
-    /// Whether the initializer spells a value of its own — one a criterion
-    /// could cite — rather than building, referencing, or defining behaviour.
-    pub const fn is_value(self) -> bool {
-        matches!(self, Self::Literal | Self::Pattern | Self::Env | Self::Definition)
-    }
-}
-
-#[derive(Debug)]
-pub struct Call {
-    pub callee: Callee,
-    pub is_new: bool,
-    pub args: Vec<Arg>,
-    // how many handler bodies enclose the call
-    pub depth: usize,
-    // the call is an expression statement, awaited or not
-    pub discarded: bool,
-    // the call's value is what a further call in its chain is made on:
-    // `a.b()` in `a.b().c()`, unless that further call is structural
-    pub inner: bool,
-    // the enclosing function frames, outermost first
-    pub frames: Vec<u32>,
-    // the innermost named enclosing function
-    pub function: Option<String>,
-    pub class: Option<String>,
-    pub lines: Lines,
-}
-
-impl Call {
-    /// The method the call invokes: the last link, or the head when there
-    /// is none.
-    pub fn method(&self) -> &str {
-        self.callee.links.last().map_or(&self.callee.head, |link| &link.name)
-    }
-
-    /// The string literal leading the arguments, or the one a chain's first
-    /// call led with.
-    pub fn literal(&self) -> Option<&str> {
-        self.args.first().and_then(|arg| arg.literal.as_deref())
-    }
-
-    /// Whether the call is structure rather than a registration: a lifecycle,
-    /// promise, iteration, or mounting method, or a listener for a lifecycle
-    /// event.
-    pub fn structural(&self) -> bool {
-        structural(&self.callee, self.args.first().and_then(|arg| arg.literal.as_deref()))
-    }
-}
-
-fn structural(callee: &Callee, literal: Option<&str>) -> bool {
-    let method = callee.links.last().map_or(callee.head.as_str(), |link| link.name.as_str());
-    STRUCTURAL.contains(&method)
-        || (LISTENERS.contains(&method)
-            && literal.is_none_or(|event| LIFECYCLE_EVENTS.contains(&event)))
-}
-
-#[derive(Debug)]
-pub struct Callee {
-    // the identifier the callee starts from, or `this`
-    pub head: String,
-    // present when the head itself is called first (`Router().get`)
-    pub head_call: Option<Invocation>,
-    pub links: Vec<Link>,
-}
-
-#[derive(Debug)]
-pub struct Link {
-    pub name: String,
-    // present when this member is called within the chain
-    pub call: Option<Invocation>,
-}
-
-/// A call made along a chain, with the string literal leading its arguments.
-#[derive(Clone, Debug)]
-pub struct Invocation {
-    pub literal: Option<String>,
-}
-
-#[derive(Debug)]
-pub struct Arg {
-    pub literal: Option<String>,
-    // the identifier path the argument starts from, `healthRouter` for
-    // `healthRouter(pool)` and `controller.list` for the member
-    pub root: Option<Vec<String>>,
-    pub called: bool,
-    // a function, an object holding one, or a call passing one
-    pub function: bool,
-    pub lines: Lines,
-}
-
-#[derive(Debug)]
-pub struct Decorated {
-    pub class: String,
-    // the method decorated, or `None` for the class itself
-    pub member: Option<String>,
-    pub name: Vec<String>,
-    pub literal: Option<String>,
-    pub lines: Lines,
-}
-
-#[derive(Debug)]
-pub struct TypeDecl {
-    pub name: String,
-    pub kind: TypeKind,
-    pub exported: bool,
-    pub lines: Lines,
-    pub text: String,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum TypeKind {
-    Interface,
-    Alias,
-    Enum,
-}
-
-#[derive(Debug)]
-pub struct ClassDecl {
-    pub name: String,
-    pub exported: bool,
-    pub lines: Lines,
-    // the class header as written, `export class Main`
-    pub header: String,
-    pub members: Vec<Member>,
-}
-
-#[derive(Debug)]
-pub struct Member {
-    pub name: String,
-    pub kind: MemberKind,
-    pub private: bool,
-    pub lines: Lines,
-    // the declaration up to its body or initializer
-    pub signature: String,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum MemberKind {
-    Constructor,
-    Method,
-    Getter,
-    Setter,
-    Field,
-}
-
-#[derive(Debug)]
-pub struct EnvRead {
-    pub key: String,
-    pub lines: Lines,
-}
-
-/// A point where the code decides: a guard, a switch, a throw, a catch, or
-/// a timer — where a behaviour a caller observes starts.
-#[derive(Debug)]
-pub struct Decision {
-    pub lines: Lines,
-    // the innermost named enclosing function
-    pub function: Option<String>,
-    pub class: Option<String>,
-    // `if (<test>)`, `switch (<discriminant>)`, the throw statement, `catch
-    // (<parameter>)`, or the timer call: its first line, cut as an
-    // initializer is
-    pub text: String,
-}
-
-#[derive(Debug)]
-struct Reference {
-    name: String,
-    line: u32,
-}
-
-/// Parses `text`, the module at `path` relative to the source root.
-pub fn parse(path: &str, text: String) -> Module {
+// Reads `text`, the module at `path`, as far as the parser gets: its exports
+// unsettled and its text unset, which `parse` finishes.
+pub(super) fn read(path: &str, text: &str) -> Module {
     let allocator = Allocator::default();
     let source_type = SourceType::from_path(path).unwrap_or_else(|_| SourceType::ts());
-    let parsed = Parser::new(&allocator, &text, source_type).parse();
+    let parsed = Parser::new(&allocator, text, source_type).parse();
     if parsed.diagnostics.has_errors() {
         let first = parsed.diagnostics.errors().next().map(|d| d.message.to_string());
         emery_sdk::tracing::warn!(
@@ -564,7 +57,7 @@ pub fn parse(path: &str, text: String) -> Module {
     }
 
     let mut walker = Walker {
-        text: &text,
+        text,
         starts: std::iter::once(0)
             .chain(text.match_indices('\n').map(|(i, _)| u32::try_from(i + 1).unwrap_or(u32::MAX)))
             .collect(),
@@ -573,63 +66,13 @@ pub fn parse(path: &str, text: String) -> Module {
             parsed: !parsed.fatal_error,
             ..Module::default()
         },
-        frames: Vec::new(),
-        classes: Vec::new(),
-        next_frame: 0,
-        arg_nesting: 0,
-        positions: Vec::new(),
-        discarded: None,
-        chained: Vec::new(),
-        pending_name: None,
-        constructor: false,
+        ..Walker::default()
     };
     walker.visit_program(&parsed.program);
-
-    let mut module = walker.module;
-    settle_exports(&mut module);
-    module.text = text;
-    module
+    walker.module
 }
 
-// An `export { local as name }` list names a binding declared elsewhere in
-// the module; its kind is that binding's. Declared types and classes learn
-// whether they are exported.
-fn settle_exports(module: &mut Module) {
-    for index in 0..module.exports.len() {
-        if module.exports[index].kind != ExportKind::Unknown {
-            continue;
-        }
-        let local = module.exports[index].local.clone().unwrap_or_default();
-        let kind = module
-            .bindings
-            .iter()
-            .find(|b| b.name == local && b.scope == Scope::Module)
-            .map(|b| match &b.kind {
-                BindingKind::Function => ExportKind::Function,
-                BindingKind::Class { extends } => ExportKind::Class {
-                    extends: extends.clone(),
-                },
-                _ => ExportKind::Value,
-            })
-            .or_else(|| module.types.iter().any(|t| t.name == local).then_some(ExportKind::Type));
-        if let Some(kind) = kind {
-            module.exports[index].kind = kind;
-        }
-    }
-
-    let exported: Vec<String> = module
-        .exports
-        .iter()
-        .map(|export| export.local.clone().unwrap_or_else(|| export.name.clone()))
-        .collect();
-    for decl in &mut module.types {
-        decl.exported = exported.contains(&decl.name);
-    }
-    for class in &mut module.classes {
-        class.exported = exported.contains(&class.name);
-    }
-}
-
+#[derive(Default)]
 struct Walker<'s> {
     text: &'s str,
     starts: Vec<u32>,
@@ -677,6 +120,19 @@ impl<'s> Walker<'s> {
         self.text.get(start as usize..end as usize).unwrap_or("")
     }
 
+    // the first line of `span`, cut as an initializer's head is
+    fn excerpt(&self, span: Span) -> String {
+        first_line(self.slice(span.start, span.end))
+    }
+
+    // what an initializer is and its head, `Init::Other` and none for no
+    // initializer
+    fn initializer(&self, value: Option<&Expression<'_>>) -> (Init, Option<String>) {
+        value.map_or((Init::Other, None), |value| {
+            (classify(value), Some(self.excerpt(value.span())))
+        })
+    }
+
     fn scope(&self) -> Scope {
         self.frames.last().map_or(Scope::Module, |frame| Scope::Function(frame.id))
     }
@@ -710,8 +166,7 @@ impl<'s> Walker<'s> {
         let class = self.classes.last().cloned();
         for param in &params.items {
             let Some(name) = pattern_name(&param.pattern) else { continue };
-            let type_path =
-                param.type_annotation.as_ref().and_then(|t| type_path(&t.type_annotation));
+            let type_path = typed(param.type_annotation.as_deref());
             let property = param.accessibility.is_some() || param.readonly;
             match (&class, self.constructor && property) {
                 (Some(class), true) => self.bind(
@@ -755,13 +210,9 @@ impl<'s> Walker<'s> {
     fn enter_class(&mut self, class: &Class<'_>) {
         let name =
             class.id.as_ref().map_or_else(|| "<anonymous>".to_owned(), |id| id.name.to_string());
-        let extends = class
-            .heritage
-            .as_ref()
-            .and_then(|heritage| head_path(&heritage.expression))
-            .and_then(|path| path.last().cloned());
         let lines = self.lines(class.span);
         if class.id.is_some() {
+            let extends = extends(class);
             self.bind(name.clone(), self.scope(), BindingKind::Class { extends }, class.span);
         }
         for decorator in &class.decorators {
@@ -805,13 +256,7 @@ impl<'s> Walker<'s> {
                         .trim_end_matches(['=', ';'])
                         .trim_end()
                         .to_owned();
-                    let (init, head) =
-                        property.value.as_ref().map_or((Init::Other, None), |value| {
-                            (
-                                classify(value),
-                                Some(first_line(self.slice(value.span().start, value.span().end))),
-                            )
-                        });
+                    let (init, head) = self.initializer(property.value.as_ref());
                     members.push(Member {
                         name: key.clone(),
                         kind: MemberKind::Field,
@@ -823,10 +268,7 @@ impl<'s> Walker<'s> {
                         key,
                         Scope::Class(name.clone()),
                         BindingKind::Field {
-                            type_path: property
-                                .type_annotation
-                                .as_ref()
-                                .and_then(|t| type_path(&t.type_annotation)),
+                            type_path: typed(property.type_annotation.as_deref()),
                             root: property.value.as_ref().and_then(head_path),
                             init,
                             head,
@@ -858,34 +300,31 @@ impl<'s> Walker<'s> {
             .and_then(|link| link.call.as_ref())
             .or(callee.head_call.as_ref())
             .and_then(|invocation| invocation.literal.clone());
-        let name = std::iter::once(callee.head)
-            .chain(callee.links.into_iter().map(|link| link.name))
-            .collect();
         self.module.decorated.push(Decorated {
             class: class.to_owned(),
             member: member.map(str::to_owned),
-            name,
+            name: callee.path(),
             literal,
             lines,
         });
     }
 
+    // records the call, the call being walked, and answers it
     fn record_call(
         &mut self, callee_expr: &Expression<'_>, arguments: &[Argument<'_>], is_new: bool,
         span: Span,
-    ) {
-        let Some(callee) = callee(callee_expr) else { return };
+    ) -> Option<&Call> {
+        let callee = callee(callee_expr)?;
         let literal = arguments.first().and_then(|a| a.as_expression()).and_then(string_value);
-        if !structural(&callee, literal.as_deref())
+        if !callee.structural(literal.as_deref())
             && let Some(inner) = inner_call(callee_expr)
         {
             self.chained.push(inner);
         }
         let args = arguments.iter().map(|argument| self.arg(argument)).collect();
         let lines = self.lines(span);
-        let method = callee.links.last().map_or(callee.head.as_str(), |link| link.name.as_str());
-        if TIMERS.contains(&method) {
-            let text = first_line(self.slice(span.start, span.end));
+        if TIMERS.contains(&callee.method()) {
+            let text = self.excerpt(span);
             self.decide(span, text);
         }
         self.module.calls.push(Call {
@@ -900,6 +339,7 @@ impl<'s> Walker<'s> {
             class: self.classes.last().cloned(),
             lines,
         });
+        self.module.calls.last()
     }
 
     fn arg(&self, argument: &Argument<'_>) -> Arg {
@@ -950,11 +390,7 @@ impl<'s> Walker<'s> {
             }
             Declaration::ClassDeclaration(class) => {
                 if let Some(id) = &class.id {
-                    let extends = class
-                        .heritage
-                        .as_ref()
-                        .and_then(|heritage| head_path(&heritage.expression))
-                        .and_then(|path| path.last().cloned());
+                    let extends = extends(class);
                     self.export(&id.name, None, ExportKind::Class { extends }, span);
                 }
             }
@@ -1035,25 +471,18 @@ impl<'a> Visit<'a> for Walker<'_> {
     }
 
     fn visit_call_expression(&mut self, it: &CallExpression<'a>) {
-        self.record_call(&it.callee, &it.arguments, false, it.span);
-        let handler = callee(&it.callee).is_some_and(|callee| {
-            !structural(
-                &callee,
-                it.arguments
-                    .first()
-                    .and_then(|a| a.as_expression())
-                    .and_then(string_value)
-                    .as_deref(),
-            )
-        });
+        let handler = self
+            .record_call(&it.callee, &it.arguments, false, it.span)
+            .is_some_and(|call| !call.structural());
         self.positions.push(handler);
         walk::walk_call_expression(self, it);
         self.positions.pop();
     }
 
     fn visit_new_expression(&mut self, it: &NewExpression<'a>) {
-        self.record_call(&it.callee, &it.arguments, true, it.span);
-        let handler = callee(&it.callee).is_some_and(|callee| !structural(&callee, None));
+        let handler = self
+            .record_call(&it.callee, &it.arguments, true, it.span)
+            .is_some_and(|call| !call.structural());
         self.positions.push(handler);
         walk::walk_new_expression(self, it);
         self.positions.pop();
@@ -1069,29 +498,25 @@ impl<'a> Visit<'a> for Walker<'_> {
     }
 
     fn visit_if_statement(&mut self, it: &IfStatement<'a>) {
-        let guard = it.test.span();
-        let text = format!("if ({})", first_line(self.slice(guard.start, guard.end)));
+        let text = format!("if ({})", self.excerpt(it.test.span()));
         self.decide(it.span, text);
         walk::walk_if_statement(self, it);
     }
 
     fn visit_switch_statement(&mut self, it: &SwitchStatement<'a>) {
-        let discriminant = it.discriminant.span();
-        let text =
-            format!("switch ({})", first_line(self.slice(discriminant.start, discriminant.end)));
+        let text = format!("switch ({})", self.excerpt(it.discriminant.span()));
         self.decide(it.span, text);
         walk::walk_switch_statement(self, it);
     }
 
     fn visit_conditional_expression(&mut self, it: &ConditionalExpression<'a>) {
-        let condition = it.test.span();
-        let text = format!("{} ? …", first_line(self.slice(condition.start, condition.end)));
+        let text = format!("{} ? …", self.excerpt(it.test.span()));
         self.decide(it.span, text);
         walk::walk_conditional_expression(self, it);
     }
 
     fn visit_throw_statement(&mut self, it: &ThrowStatement<'a>) {
-        let text = first_line(self.slice(it.span.start, it.span.end));
+        let text = self.excerpt(it.span);
         self.decide(it.span, text);
         walk::walk_throw_statement(self, it);
     }
@@ -1107,10 +532,7 @@ impl<'a> Visit<'a> for Walker<'_> {
     fn visit_catch_clause(&mut self, it: &CatchClause<'a>) {
         let text = it.param.as_ref().map_or_else(
             || "catch".to_owned(),
-            |param| {
-                let span = param.pattern.span();
-                format!("catch ({})", first_line(self.slice(span.start, span.end)))
-            },
+            |param| format!("catch ({})", self.excerpt(param.pattern.span())),
         );
         self.decide(it.span, text);
         walk::walk_catch_clause(self, it);
@@ -1123,10 +545,8 @@ impl<'a> Visit<'a> for Walker<'_> {
             .then_some(self.module.calls.len());
         let root = init.and_then(head_path);
         let string = init.and_then(string_value);
-        let type_path = it.type_annotation.as_ref().and_then(|t| type_path(&t.type_annotation));
-        let (kind, head) = init.map_or((Init::Other, None), |init| {
-            (classify(init), Some(first_line(self.slice(init.span().start, init.span().end))))
-        });
+        let type_path = typed(it.type_annotation.as_deref());
+        let (kind, head) = self.initializer(init);
         let required = init.and_then(|init| match core(init) {
             Core::Call(call) if is_require(&call.callee) => {
                 call.arguments.first().and_then(|a| a.as_expression()).and_then(string_value)
@@ -1198,14 +618,7 @@ impl<'a> Visit<'a> for Walker<'_> {
     }
 
     fn visit_property_definition(&mut self, it: &PropertyDefinition<'a>) {
-        if it.value.as_ref().is_some_and(|value| {
-            matches!(
-                core(value),
-                Core::Other(
-                    Expression::FunctionExpression(_) | Expression::ArrowFunctionExpression(_)
-                )
-            )
-        }) {
+        if it.value.as_ref().is_some_and(is_function) {
             self.pending_name = key_name(&it.key);
         }
         walk::walk_property_definition(self, it);
@@ -1320,11 +733,7 @@ impl<'a> Visit<'a> for Walker<'_> {
             }
             ExportDefaultDeclarationKind::ClassDeclaration(class) => {
                 let local = class.id.as_ref().map(|id| id.name.to_string());
-                let extends = class
-                    .heritage
-                    .as_ref()
-                    .and_then(|heritage| head_path(&heritage.expression))
-                    .and_then(|path| path.last().cloned());
+                let extends = extends(class);
                 self.export("default", local.as_deref(), ExportKind::Class { extends }, it.span);
             }
             ExportDefaultDeclarationKind::TSInterfaceDeclaration(_) => {
@@ -1361,8 +770,36 @@ fn hidden(accessibility: Option<TSAccessibility>, key: &str) -> bool {
         || key.starts_with('#')
 }
 
-// The expression under the wrappers that change nothing about what is
-// called: parentheses, `await`, `void`, `!`, and TypeScript's casts.
+// The class a class extends, by the last name of what it is written over.
+fn extends(class: &Class<'_>) -> Option<String> {
+    head_path(&class.heritage.as_ref()?.expression)?.pop()
+}
+
+// The path a type annotation names, `Kafka.Consumer` for `: Kafka.Consumer`.
+fn typed(annotation: Option<&TSTypeAnnotation<'_>>) -> Option<Vec<String>> {
+    type_path(&annotation?.type_annotation)
+}
+
+// The expression under the wrappers that change nothing about what it is:
+// parentheses and TypeScript's casts, within a chain too.
+fn bare<'a, 'b>(expr: &'b Expression<'a>) -> &'b Expression<'a> {
+    match expr {
+        Expression::ParenthesizedExpression(e) => bare(&e.expression),
+        Expression::TSAsExpression(e) => bare(&e.expression),
+        Expression::TSSatisfiesExpression(e) => bare(&e.expression),
+        Expression::TSNonNullExpression(e) => bare(&e.expression),
+        Expression::TSTypeAssertion(e) => bare(&e.expression),
+        Expression::TSInstantiationExpression(e) => bare(&e.expression),
+        Expression::ChainExpression(chain) => match &chain.expression {
+            ChainElement::TSNonNullExpression(e) => bare(&e.expression),
+            _ => expr,
+        },
+        other => other,
+    }
+}
+
+// What is called under the wrappers that change nothing about it: the bare
+// expression, `await`, `void`, and `!`.
 enum Core<'a, 'b> {
     Call(&'b CallExpression<'a>),
     New(&'b NewExpression<'a>),
@@ -1370,50 +807,43 @@ enum Core<'a, 'b> {
 }
 
 fn core<'a, 'b>(expr: &'b Expression<'a>) -> Core<'a, 'b> {
-    let mut expr = expr;
-    loop {
-        expr = match expr {
-            Expression::ParenthesizedExpression(e) => &e.expression,
-            Expression::AwaitExpression(e) => &e.argument,
-            Expression::UnaryExpression(e)
-                if matches!(e.operator, UnaryOperator::Void | UnaryOperator::LogicalNot) =>
-            {
-                &e.argument
-            }
-            Expression::TSAsExpression(e) => &e.expression,
-            Expression::TSSatisfiesExpression(e) => &e.expression,
-            Expression::TSNonNullExpression(e) => &e.expression,
-            Expression::TSTypeAssertion(e) => &e.expression,
-            Expression::TSInstantiationExpression(e) => &e.expression,
-            Expression::ChainExpression(chain) => {
-                return match &chain.expression {
-                    ChainElement::CallExpression(call) => Core::Call(call),
-                    ChainElement::TSNonNullExpression(e) => core(&e.expression),
-                    _ => Core::Other(expr),
-                };
-            }
-            Expression::CallExpression(call) => return Core::Call(call),
-            Expression::NewExpression(new) => return Core::New(new),
-            other => return Core::Other(other),
-        };
+    let expr = bare(expr);
+    match expr {
+        Expression::AwaitExpression(e) => core(&e.argument),
+        Expression::UnaryExpression(e)
+            if matches!(e.operator, UnaryOperator::Void | UnaryOperator::LogicalNot) =>
+        {
+            core(&e.argument)
+        }
+        Expression::ChainExpression(chain) => match &chain.expression {
+            ChainElement::CallExpression(call) => Core::Call(call),
+            _ => Core::Other(expr),
+        },
+        Expression::CallExpression(call) => Core::Call(call),
+        Expression::NewExpression(new) => Core::New(new),
+        other => Core::Other(other),
     }
+}
+
+// A function, under the wrappers `core` sees through.
+fn is_function(expr: &Expression<'_>) -> bool {
+    matches!(
+        core(expr),
+        Core::Other(Expression::FunctionExpression(_) | Expression::ArrowFunctionExpression(_))
+    )
 }
 
 // What an initializer is: a function first, whatever it reads; then an
 // environment read, whatever it does with it; then a pattern, a value over
 // literals, a call or construction by what it is handed, a reference.
 fn classify(expr: &Expression<'_>) -> Init {
-    let core = core(expr);
-    if matches!(
-        core,
-        Core::Other(Expression::FunctionExpression(_) | Expression::ArrowFunctionExpression(_))
-    ) {
+    if is_function(expr) {
         return Init::Function;
     }
     if reads_env(expr) {
         return Init::Env;
     }
-    match core {
+    match core(expr) {
         Core::Other(Expression::RegExpLiteral(_)) => Init::Pattern,
         Core::New(new) if is_regexp(&new.callee) && all_literal(&new.arguments) => Init::Pattern,
         Core::Other(other) if literal(other) => Init::Literal,
@@ -1437,7 +867,7 @@ fn invoked(arguments: &[Argument<'_>]) -> Init {
 // A literal, or an expression over literals: arithmetic, an array or object
 // holding literals, a template, a wrapper call such as `Number(..)`.
 fn literal(expr: &Expression<'_>) -> bool {
-    match expr {
+    match bare(expr) {
         Expression::BooleanLiteral(_)
         | Expression::NullLiteral(_)
         | Expression::NumericLiteral(_)
@@ -1472,11 +902,6 @@ fn literal(expr: &Expression<'_>) -> bool {
                 && literal(&conditional.alternate)
         }
         Expression::CallExpression(call) => wraps(call),
-        Expression::ParenthesizedExpression(e) => literal(&e.expression),
-        Expression::TSAsExpression(e) => literal(&e.expression),
-        Expression::TSSatisfiesExpression(e) => literal(&e.expression),
-        Expression::TSNonNullExpression(e) => literal(&e.expression),
-        Expression::TSTypeAssertion(e) => literal(&e.expression),
         _ => false,
     }
 }
@@ -1495,13 +920,10 @@ fn all_literal(arguments: &[Argument<'_>]) -> bool {
 // An argument spelled in place — a literal, or an object, array, or template
 // written out whatever it holds — rather than passed by name.
 fn spelled(expr: &Expression<'_>) -> bool {
-    match expr {
+    match bare(expr) {
         Expression::ArrayExpression(_)
         | Expression::ObjectExpression(_)
         | Expression::TemplateLiteral(_) => true,
-        Expression::ParenthesizedExpression(e) => spelled(&e.expression),
-        Expression::TSAsExpression(e) => spelled(&e.expression),
-        Expression::TSSatisfiesExpression(e) => spelled(&e.expression),
         other => literal(other),
     }
 }
@@ -1550,15 +972,12 @@ fn first_line(text: &str) -> String {
 // The call a chain continues from, when a callee is a member of one's
 // value: for `a.b().c()`, the span of `a.b()`.
 fn inner_call(callee_expr: &Expression<'_>) -> Option<Span> {
-    let object = match callee_expr {
+    let object = match bare(callee_expr) {
         Expression::StaticMemberExpression(member) => &member.object,
         Expression::ChainExpression(chain) => match &chain.expression {
             ChainElement::StaticMemberExpression(member) => &member.object,
             _ => return None,
         },
-        Expression::ParenthesizedExpression(e) => return inner_call(&e.expression),
-        Expression::TSNonNullExpression(e) => return inner_call(&e.expression),
-        Expression::TSAsExpression(e) => return inner_call(&e.expression),
         _ => return None,
     };
     match core(object) {
@@ -1571,7 +990,7 @@ fn inner_call(callee_expr: &Expression<'_>) -> Option<Span> {
 // The callee of a call as a head and the members walked from it, each
 // marked when it is itself called along the way.
 fn callee(expr: &Expression<'_>) -> Option<Callee> {
-    match expr {
+    match bare(expr) {
         Expression::Identifier(id) => Some(Callee {
             head: id.name.to_string(),
             head_call: None,
@@ -1596,16 +1015,9 @@ fn callee(expr: &Expression<'_>) -> Option<Callee> {
             ChainElement::CallExpression(call) => {
                 Some(called(callee(&call.callee)?, &call.arguments))
             }
-            ChainElement::TSNonNullExpression(e) => callee(&e.expression),
             other => callee(other.as_member_expression()?.as_expression()),
         },
-        Expression::ParenthesizedExpression(e) => callee(&e.expression),
         Expression::AwaitExpression(e) => callee(&e.argument),
-        Expression::TSAsExpression(e) => callee(&e.expression),
-        Expression::TSSatisfiesExpression(e) => callee(&e.expression),
-        Expression::TSNonNullExpression(e) => callee(&e.expression),
-        Expression::TSTypeAssertion(e) => callee(&e.expression),
-        Expression::TSInstantiationExpression(e) => callee(&e.expression),
         _ => None,
     }
 }
@@ -1622,23 +1034,15 @@ fn called(mut callee: Callee, arguments: &[Argument<'_>]) -> Callee {
 
 // The identifier path an expression starts from, casts and calls stripped.
 fn head_path(expr: &Expression<'_>) -> Option<Vec<String>> {
-    let callee = callee(expr)?;
-    Some(
-        std::iter::once(callee.head)
-            .chain(callee.links.into_iter().map(|link| link.name))
-            .collect(),
-    )
+    callee(expr).map(Callee::path)
 }
 
 fn string_value(expr: &Expression<'_>) -> Option<String> {
-    match expr {
+    match bare(expr) {
         Expression::StringLiteral(literal) => Some(literal.value.to_string()),
         Expression::TemplateLiteral(template) => {
             template.single_quasi().map(|quasi| quasi.to_string())
         }
-        Expression::ParenthesizedExpression(e) => string_value(&e.expression),
-        Expression::TSAsExpression(e) => string_value(&e.expression),
-        Expression::TSSatisfiesExpression(e) => string_value(&e.expression),
         _ => None,
     }
 }
@@ -1647,7 +1051,7 @@ fn string_value(expr: &Expression<'_>) -> Option<String> {
 // call — not a structural one, so `items.map(fn)` is a value — passing one
 // of those.
 fn fn_valued(expr: &Expression<'_>) -> bool {
-    match expr {
+    match bare(expr) {
         Expression::FunctionExpression(_) | Expression::ArrowFunctionExpression(_) => true,
         Expression::ObjectExpression(object) => {
             object.properties.iter().any(|property| match property {
@@ -1656,14 +1060,10 @@ fn fn_valued(expr: &Expression<'_>) -> bool {
             })
         }
         Expression::CallExpression(call) => {
-            callee(&call.callee).is_some_and(|callee| !structural(&callee, None))
+            callee(&call.callee).is_some_and(|callee| !callee.structural(None))
                 && call.arguments.iter().any(|a| a.as_expression().is_some_and(fn_valued))
         }
-        Expression::ParenthesizedExpression(e) => fn_valued(&e.expression),
         Expression::AwaitExpression(e) => fn_valued(&e.argument),
-        Expression::TSAsExpression(e) => fn_valued(&e.expression),
-        Expression::TSSatisfiesExpression(e) => fn_valued(&e.expression),
-        Expression::TSNonNullExpression(e) => fn_valued(&e.expression),
         _ => false,
     }
 }
