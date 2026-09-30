@@ -243,6 +243,12 @@ impl Module {
         unique(self.references.iter().filter(|r| keep(r.line)).map(|r| r.name.as_str()))
     }
 
+    /// The lines at which a name `keep` admits is referenced, in order, once
+    /// each.
+    pub fn referencing(&self, keep: impl Fn(&str) -> bool) -> Vec<u32> {
+        unique(self.references.iter().filter(|r| keep(&r.name)).map(|r| r.line))
+    }
+
     /// The names loading the module or constructing its classes reach: the
     /// head of the declared type and of the initializer of every class field
     /// and module-level value binding, in order, once each.
@@ -427,6 +433,17 @@ impl Init {
     }
 }
 
+/// What becomes of a call's value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Use {
+    /// An expression statement's, awaited or not: dropped.
+    Discarded,
+    /// What an `await` waits on, then used.
+    Awaited,
+    /// Assigned, passed, returned, or chained on as written.
+    Consumed,
+}
+
 #[derive(Debug)]
 pub struct Call {
     pub callee: Callee,
@@ -434,8 +451,8 @@ pub struct Call {
     pub args: Vec<Arg>,
     /// How many handler bodies enclose the call.
     pub depth: usize,
-    /// The call is an expression statement, awaited or not.
-    pub discarded: bool,
+    /// What becomes of the call's value.
+    pub value: Use,
     /// The call's value is what a further call in its chain is made on:
     /// `a.b()` in `a.b().c()`, unless that further call is structural.
     pub inner: bool,
@@ -452,6 +469,11 @@ impl Call {
     /// is none.
     pub fn method(&self) -> &str {
         self.callee.method()
+    }
+
+    /// The call is an expression statement, awaited or not.
+    pub fn discarded(&self) -> bool {
+        self.value == Use::Discarded
     }
 
     /// The string literal leading the arguments.

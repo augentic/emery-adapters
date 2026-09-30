@@ -98,10 +98,7 @@ fn bulk(project: &Scratch, file: &str, head: &str) {
 // the scratch — less the `node_modules` and `dist` a checkout may hold — so
 // the component runs over the real tree the eval's case of that name runs over.
 fn fixture(project: &Scratch, name: &str) {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("evals/cases")
-        .join(name)
-        .join("fixture");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("evals/cases").join(name).join("fixture");
     copy_tree(&root, project, "");
 }
 
@@ -1558,7 +1555,12 @@ async fn typescript_boundaries() {
                  listen(app: { listen(port: number): void }) {\n  app.listen(Number(process.env.PORT \
                  ?? 3000));\n}\n\nexport async function settle(sleep: (ms: number) => \
                  Promise<void>) {\n  const FIVE_SEC_DELAY = 5 * 1000;\n  const attempts = 0;\n  \
-                 await sleep(FIVE_SEC_DELAY);\n  return attempts;\n}\n",
+                 await sleep(FIVE_SEC_DELAY);\n  return attempts;\n}\n\nexport const \
+                 validation = {\n  transform: true,\n  status: Status.UNPROCESSABLE,\n  \
+                 factory: (errors: string[]) => errors.join(\",\"),\n};\n\nexport function \
+                 accept(kind: string) {\n  const allowedKinds = [\"image/jpeg\", \
+                 \"image/png\"];\n  const fallback = allowedKinds[0];\n  return \
+                 allowedKinds.includes(kind) ? kind : fallback;\n}\n",
             ),
             (
                 "src/index.ts",
@@ -1578,15 +1580,20 @@ async fn typescript_boundaries() {
         "- `src/config.ts#L5` — `SKU = /^[A-Z]{2,4}-\\d{3,6}$/`",
         "- `src/config.ts#L6` — `API_TOKENS = (process.env.API_TOKENS ?? \"\").split(\",\").filter((token) \
          => token.length > 0)`",
-        "- `src/config.ts#L7-L10` — `ORDER = define({…`",
+        "- `src/config.ts#L7-L10` — `ORDER = define({ id: \"string\", lines: \"number\", })`",
         "- `src/config.ts#L13` — `Limits.pageSize = Number(process.env.PAGE_SIZE ?? 20)`",
         "- `src/config.ts#L17` — `process.env.PORT` in `app.listen(Number(process.env.PORT ?? 3000));`",
         "- `src/config.ts#L21` — `FIVE_SEC_DELAY = 5 * 1000`",
+        "- `src/config.ts#L27-L31` — `validation = { transform: true, status: Status.UNPROCESSABLE, \
+         factory: (errors: string[]) => errors.join(\",\"), }`",
+        "- `src/config.ts#L34` — `allowedKinds = [\"image/jpeg\", \"image/png\"]`",
         "- `express` — `express` (default), `Router` — in `src/index.ts`, `src/routes.ts`",
     ] {
         assert!(turns[0].contains(line), "{line} is in the brief: {}", turns[0]);
     }
-    for absent in ["`app = express()`", "`port = PORT`", "`attempts = 0`"] {
+    for absent in
+        ["`app = express()`", "`port = PORT`", "`attempts = 0`", "`fallback = allowedKinds[0]`"]
+    {
         assert!(!turns[0].contains(absent), "{absent} is no boundary: {}", turns[0]);
     }
     assert!(
