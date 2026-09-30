@@ -397,12 +397,6 @@ impl Manifest {
         }
     }
 
-    /// The entry module the manifest names first, resolved against the tree:
-    /// `main`, else `bin`, else the source a `start` or `dev` script runs.
-    pub fn entry(&self, resolver: &Resolver) -> Option<String> {
-        self.entries(resolver).into_iter().next()
-    }
-
     /// Every module the manifest names as an entry, resolved against the
     /// tree, in the order it names them — `main`, `bin`, then the sources the
     /// `start` and `dev` scripts run — once each.

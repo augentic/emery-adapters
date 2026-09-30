@@ -14,7 +14,7 @@ use emery_sdk::{Doc, Evidence, RUNTIME, body, check};
 test_programs::foreach_adapter!();
 
 // `prompts` are the documents the SDK puts to the model: `extract.md` for every
-// adapter.
+// adapter, and `survey.md` for one that has the model name its surfaces.
 fn corpus(docs: &[Doc], name: &str, prompts: &[&str]) {
     let tree = Path::new(env!("CARGO_MANIFEST_DIR")).join("sources").join(name).join("prose");
     let findings = check(docs, &tree, prompts, RUNTIME);
@@ -73,9 +73,9 @@ fn intent() {
     corpus(intent::PROSE, "intent", &["extract.md"]);
 }
 
-// `survey.md` is the prompt of the `model-survey` arm alone, embedded under
-// either build, so its worked example is held to the SDK's survey answer
-// the same way `extract.md`'s is held to its Evidence.
+// `survey.md` is the prompt of the one survey turn a workspace opens, so its
+// worked example is held to the SDK's survey answer the same way
+// `extract.md`'s is held to its Evidence.
 #[test]
 fn typescript() {
     corpus(typescript::PROSE, "typescript", &["extract.md", "survey.md"]);

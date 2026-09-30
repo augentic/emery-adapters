@@ -10,8 +10,8 @@ mod support;
 
 use std::path::Path;
 
-use omnia_test::Seen;
 use omnia_test::host::{Scratch, ScriptedModel, scratch};
+use omnia_test::{Exchange, Seen};
 
 // Every `sources/*` component must have a matching test here.
 test_programs::foreach_adapter!();
@@ -26,9 +26,27 @@ mod prompt {
         prompt(docs, "extract.md")
     }
 
+    pub fn survey(docs: &[Doc]) -> &'static str {
+        prompt(docs, "survey.md")
+    }
+
     fn prompt(docs: &[Doc], path: &str) -> &'static str {
         body(docs, path).unwrap_or_else(|| panic!("`{path}` is in the adapter's `PROSE`"))
     }
+}
+
+// The survey answer a typescript workspace's first turn is scripted with:
+// the SDK's inventory as the model would answer it — each surface named at
+// the anchor that registers or declares it, under the stem its ids lead
+// with — and the modules no surface reaches.
+fn inventory(surfaces: &[(&str, &str, &str)], unreached: &[&str]) -> String {
+    let surfaces: Vec<serde_json::Value> = surfaces
+        .iter()
+        .map(|(name, anchor, stem)| {
+            serde_json::json!({ "name": name, "anchor": anchor, "stem": stem })
+        })
+        .collect();
+    serde_json::json!({ "surfaces": surfaces, "unreached": unreached }).to_string()
 }
 
 // Unanchored, so one answer serves a workspace seam and the inline value alike;
@@ -102,6 +120,15 @@ async fn extract(component: &str, project: &Scratch, seams: usize) -> ScriptedMo
     support::run(component, project, &[], ScriptedModel::answering(answers)).await
 }
 
+// The typescript run over a workspace: the scripted survey answer, then one
+// answer per seam, and one for the inline value.
+async fn mined(project: &Scratch, inventory: &str, seams: usize) -> ScriptedModel {
+    let answer = answer();
+    let answers = std::iter::once(inventory).chain(std::iter::repeat_n(answer.as_str(), seams + 1));
+    support::run(test_programs::ADAPTER_TYPESCRIPT, project, &[], ScriptedModel::answering(answers))
+        .await
+}
+
 async fn refused(
     component: &str, project: &Scratch, inline: Option<&str>, model: ScriptedModel,
 ) -> ScriptedModel {
@@ -110,7 +137,7 @@ async fn refused(
     support::run(component, project, &args, model).await
 }
 
-// Returns the workspace seams' turns.
+// Returns the workspace seams' turns of a run that surveys by code alone.
 fn prompted(model: &ScriptedModel, prompt: &str, seams: usize) -> Vec<String> {
     let seen = model.seen();
     assert_eq!(
@@ -122,6 +149,35 @@ fn prompted(model: &ScriptedModel, prompt: &str, seams: usize) -> Vec<String> {
         system(request, prompt);
     }
     seen[..seams].iter().map(|request| request.messages[0].clone()).collect()
+}
+
+// Returns the workspace seams' turns of a typescript run, which the survey
+// turn opens under `survey.md` — one per workspace, none for the inline
+// value — before the seams' under `extract.md`.
+fn surveyed(model: &ScriptedModel, seams: usize) -> Vec<String> {
+    let seen = model.seen();
+    assert_eq!(
+        seen.len(),
+        seams + 2,
+        "metadata opens no completion; the survey opens one, each seam one, the inline value one \
+         more and no survey"
+    );
+    system(&seen[0], prompt::survey(typescript::PROSE));
+    for request in &seen[1..] {
+        system(request, prompt::extract(typescript::PROSE));
+    }
+    seen[1..=seams].iter().map(|request| request.messages[0].clone()).collect()
+}
+
+// The `check` rounds a typescript run's mining turns put, after the
+// survey's — the run's first exchange, which accepted the scripted inventory
+// at once.
+fn checked(model: &ScriptedModel) -> Vec<Exchange> {
+    let exchanges = model.exchanges();
+    let (survey, mining) = exchanges.split_first().expect("the survey's check is recorded");
+    assert_eq!(survey.tool, "check", "the survey's answer is checked before any seam opens");
+    assert_eq!(survey.outcome, Ok(String::new()), "the inventory is accepted at once");
+    mining.to_vec()
 }
 
 // What the SDK appends after the prompt is the SDK's fact, asserted over the
@@ -351,22 +407,35 @@ const APP: [(&str, &str); 4] = [
     ("src/db.ts", "export const pool = \"o-1\";\n"),
 ];
 
-// A tree whose modules fit within the SDK's inline budget is one extract over
-// every module, laid into the turn, told every surface the code registers and
-// held to every stem; the conventional entry is the bootstrap when no manifest
-// names one. Each surface line carries the id its requirements lead with —
-// the stem alone for a stem's one surface; under a shared stem, the handler's
-// name when one is passed, else the verb and the path past the resource — and
-// the modules it reaches beyond its entry. The inline value spends one turn
-// more.
+// The survey answer over `APP`: the two routes, each at its registration.
+fn app_inventory() -> String {
+    inventory(
+        &[
+            ("POST /api/orders", "src/routes.ts#L6-L8", "orders"),
+            ("GET /api/orders/:id", "src/routes.ts#L9", "orders"),
+        ],
+        &[],
+    )
+}
+
+// A workspace opens one survey turn before it is mined, and the inline value
+// none. A tree whose modules fit within the SDK's inline budget is one extract
+// over every module, laid into the turn, told every surface the survey named
+// and held to every stem; the conventional entry is the bootstrap when no
+// manifest names one, and the caller's `start` leads the surfaces. Each
+// surface line carries what the code read at its anchor — the registration,
+// its handler, the package — the id its requirements lead with (the stem
+// alone for a stem's one surface; under a shared stem, the handler's name
+// when one is passed, else the verb and the path past the resource) and the
+// modules it reaches beyond its entry. The inline value spends one turn more.
 #[tokio::test]
 async fn typescript() {
     let project = scratch();
     modules(&project, &APP);
 
-    let model = extract(test_programs::ADAPTER_TYPESCRIPT, &project, 1).await;
+    let model = mined(&project, &app_inventory(), 1).await;
 
-    let turns = prompted(&model, prompt::extract(typescript::PROSE), 1);
+    let turns = surveyed(&model, 1);
     assert_eq!(
         surfaces(&turns[0]),
         [
@@ -380,8 +449,10 @@ async fn typescript() {
          before each handler is registered, what it awaits before serving, and at shutdown — \
          `stop` and what a signal handler calls, wherever declared; id `start`; reaches \
          `src/routes.ts`.",
-        "; through `express`; id `orders.post`; reaches `src/orders.ts`, `src/db.ts`.",
-        "; through `express`; id `orders.find-order`; reaches `src/orders.ts`, `src/db.ts`.",
+        ": registered L6–L8 in `ordersRouter`; handler L6–L8; through `express`; id `orders.post`; \
+         reaches `src/orders.ts`, `src/db.ts`.",
+        ": registered L9 in `ordersRouter`; through `express`; id `orders.find-order`; reaches \
+         `src/orders.ts`, `src/db.ts`.",
     ] {
         assert!(turns[0].contains(note), "{note} is in the brief: {}", turns[0]);
     }
@@ -396,6 +467,7 @@ async fn typescript() {
 async fn typescript_stem() {
     let project = scratch();
     modules(&project, &APP);
+    let survey = app_inventory();
     let strayed = claim("reconciliation.nightly");
     let corrected = claim("orders.create");
 
@@ -403,13 +475,13 @@ async fn typescript_stem() {
         test_programs::ADAPTER_TYPESCRIPT,
         &project,
         &[],
-        ScriptedModel::answering([strayed.as_str(), corrected.as_str(), strayed.as_str()]),
+        ScriptedModel::answering([&survey, &strayed, &corrected, &strayed]),
     )
     .await;
 
     let seen = model.seen();
-    assert_eq!(seen.len(), 3, "two rounds for the one seam, one for the inline value");
-    let exchanges = model.exchanges();
+    assert_eq!(seen.len(), 4, "the survey, two rounds for the one seam, one for the inline value");
+    let exchanges = checked(&model);
     let correction = exchanges[0].outcome.as_ref().expect_err("the stray stem is refused");
     assert!(
         correction.contains("`reconciliation.nightly`")
@@ -431,6 +503,7 @@ async fn typescript_closure() {
     let project = scratch();
     modules(&project, &APP);
     bulk(&project, "src/db.ts", "export const pool = \"o-1\";\n");
+    let survey = app_inventory();
     let neutral = decision();
     let answer = answer();
 
@@ -438,11 +511,11 @@ async fn typescript_closure() {
         test_programs::ADAPTER_TYPESCRIPT,
         &project,
         &[],
-        ScriptedModel::answering([&neutral, &neutral, &answer]),
+        ScriptedModel::answering([&survey, &neutral, &neutral, &answer]),
     )
     .await;
 
-    let turns = prompted(&model, prompt::extract(typescript::PROSE), 2);
+    let turns = surveyed(&model, 2);
     let start = turn_for(&turns, "start");
     assert_eq!(surfaces(start), [("start", "src/index.ts", "start")]);
     assert!(start.contains("; id `start`; reaches `src/routes.ts`."), "{start}");
@@ -464,9 +537,10 @@ async fn typescript_closure() {
 }
 
 // The bootstrap constructs a class whose constructor builds a service and
-// whose method registers the handler: the entry is reached and not
-// followed, but what loading it constructs runs before any handler, so the
-// service reaches the `start` turn as well as the handler's.
+// whose method registers the handler the survey anchors: the entry is
+// reached and not followed, but what loading it constructs runs before any
+// handler, so the service reaches the `start` turn — and the handler's,
+// which the code reads through the class the registration sits in.
 #[tokio::test]
 async fn typescript_constructed() {
     let project = scratch();
@@ -493,6 +567,7 @@ async fn typescript_constructed() {
         "export class Stops {\n  constructor() {\n    setTimeout(() => this.fetch(), 1000);\n  }\n\n  \
          fetch() {}\n\n  lookup(code: string) {\n    return code;\n  }\n}\n",
     );
+    let survey = inventory(&[("message consumer", "src/main.ts#L13", "message")], &[]);
     let neutral = decision();
     let answer = answer();
 
@@ -500,11 +575,11 @@ async fn typescript_constructed() {
         test_programs::ADAPTER_TYPESCRIPT,
         &project,
         &[],
-        ScriptedModel::answering([&neutral, &neutral, &answer]),
+        ScriptedModel::answering([&survey, &neutral, &neutral, &answer]),
     )
     .await;
 
-    let turns = prompted(&model, prompt::extract(typescript::PROSE), 2);
+    let turns = surveyed(&model, 2);
     let start = turn_for(&turns, "start");
     assert_eq!(surfaces(start), [("start", "src/start.ts", "start")]);
     laid(start, &["src/start.ts", "src/main.ts"], &[]);
@@ -512,8 +587,10 @@ async fn typescript_constructed() {
         start.contains("- `src/stops.ts`"),
         "the service the entry constructs is the bootstrap's to reach: {start}"
     );
-    let message = turn_for(&turns, "Consumer.on(\"message\")");
-    assert_eq!(surfaces(message), [("Consumer.on(\"message\")", "src/main.ts", "message")]);
+    let message = turn_for(&turns, "message consumer");
+    assert_eq!(surfaces(message), [("message consumer", "src/main.ts", "message")]);
+    let note = ": registered L13 in `Main.start`; handler L13; through `kafkajs`; id `message`;";
+    assert!(message.contains(note), "the registration is read in its class: {message}");
     laid(message, &["src/main.ts"], &["src/start.ts"]);
     assert!(message.contains("- `src/stops.ts`"), "the handler reaches the service too: {message}");
 }
@@ -522,7 +599,8 @@ async fn typescript_constructed() {
 // entry, which here only re-exports; a router mounted with no prefix keeps
 // its own path. When `main` names that barrel too — the CommonJS shape, the
 // package's exports beside the server its `start` runs — the bootstrap is
-// the first entry named that runs, not the first that resolves.
+// the first entry named that runs, not the first that resolves, and the
+// barrel is a module the survey lists as reached by no surface.
 #[tokio::test]
 async fn typescript_bootstrap() {
     const SOURCES: [(&str, &str); 3] = [
@@ -547,10 +625,12 @@ async fn typescript_bootstrap() {
         let project = scratch();
         modules(&project, &SOURCES);
         project.write("package.json", manifest);
+        let survey =
+            inventory(&[("GET /orders/:id", "src/routes.ts#L5-L7", "orders")], &["src/index.ts"]);
 
-        let model = extract(test_programs::ADAPTER_TYPESCRIPT, &project, 1).await;
+        let model = mined(&project, &survey, 1).await;
 
-        let turns = prompted(&model, prompt::extract(typescript::PROSE), 1);
+        let turns = surveyed(&model, 1);
         assert_eq!(
             surfaces(&turns[0]),
             [("start", "src/server.ts", "start"), ("GET /orders/:id", "src/routes.ts", "orders")],
@@ -560,15 +640,28 @@ async fn typescript_bootstrap() {
 }
 
 // The survey over the committed `cli-jobs` fixture, the tree the eval case of
-// that name runs over: within the budget, so one seam lays every module; the
-// bootstrap the manifest's `main` names, four commands registered at module
-// level, a schedule registered inside a function, and a worker with its hooks.
-// Under the `nightly` stem the command and the schedule are told apart by the
-// registering method.
+// that name runs over, answered as the eval expects it: within the budget, so
+// one seam lays every module; the bootstrap the manifest's `main` names, four
+// commands registered at module level, a schedule registered inside a
+// function, and a worker. The code reads each anchor for what registers
+// there — the chain's `command` literal, the schedule's constant, the
+// worker's queue — and under the `nightly` stem the command and the schedule
+// are told apart by the registering method.
 #[tokio::test]
 async fn typescript_fixture_cli_jobs() {
     let project = scratch();
     fixture(&project, "cli-jobs");
+    let survey = inventory(
+        &[
+            ("import command", "src/cli.ts#L14-L24", "import"),
+            ("reconcile command", "src/cli.ts#L26-L38", "reconcile"),
+            ("nightly command", "src/cli.ts#L40-L45", "nightly"),
+            ("serve command", "src/cli.ts#L47-L64", "serve"),
+            ("nightly schedule", "src/jobs/nightly.ts#L34-L47", "nightly"),
+            ("invoices worker", "src/workers/invoices.ts#L32-L57", "invoices"),
+        ],
+        &[],
+    );
     let neutral = decision();
     let answer = answer();
 
@@ -576,21 +669,21 @@ async fn typescript_fixture_cli_jobs() {
         test_programs::ADAPTER_TYPESCRIPT,
         &project,
         &[],
-        ScriptedModel::answering([&neutral, &answer]),
+        ScriptedModel::answering([&survey, &neutral, &answer]),
     )
     .await;
 
-    let turns = prompted(&model, prompt::extract(typescript::PROSE), 1);
+    let turns = surveyed(&model, 1);
     assert_eq!(
         surfaces(&turns[0]),
         [
             ("start", "src/cli.ts", "start"),
-            ("Command.command(\"import <file>\")", "src/cli.ts", "import"),
-            ("Command.command(\"reconcile\")", "src/cli.ts", "reconcile"),
-            ("Command.command(\"nightly\")", "src/cli.ts", "nightly"),
-            ("Command.command(\"serve\")", "src/cli.ts", "serve"),
-            ("cron.schedule(NIGHTLY_CRON)", "src/jobs/nightly.ts", "nightly"),
-            ("Worker(\"invoices\")", "src/workers/invoices.ts", "invoices"),
+            ("import command", "src/cli.ts", "import"),
+            ("reconcile command", "src/cli.ts", "reconcile"),
+            ("nightly command", "src/cli.ts", "nightly"),
+            ("serve command", "src/cli.ts", "serve"),
+            ("nightly schedule", "src/jobs/nightly.ts", "nightly"),
+            ("invoices worker", "src/workers/invoices.ts", "invoices"),
         ]
     );
     for note in [
@@ -602,8 +695,8 @@ async fn typescript_fixture_cli_jobs() {
          `nightly.schedule`; reaches `src/config.ts`, `src/lib/db.ts`, `src/queues.ts`, \
          `src/services/reconcile.ts`.",
         "through `commander`; id `nightly.command`;",
-        "through `bullmq`; hook `worker.on(\"failed\")` L50–L52; hook `worker.on(\"completed\")` \
-         L53–L55; id `invoices`; reaches `src/queues.ts`, `src/lib/db.ts`, `src/config.ts`.",
+        "registered L33–L48 in `startInvoiceWorker`; handler L35–L46; through `bullmq`; id \
+         `invoices`; reaches `src/queues.ts`, `src/lib/db.ts`, `src/config.ts`.",
     ] {
         assert!(turns[0].contains(note), "{note} is in the brief: {}", turns[0]);
     }
@@ -681,14 +774,34 @@ const EXPRESS_CUSTOMERS: [&str; 6] = [
     "src/repositories/customers.ts",
 ];
 
-// The survey over the committed `express-orders` fixture: past the budget, so
-// one seam per stem. The bootstrap's seam lays its closure in import order up
-// to where the budget runs out and lists the rest; each router's seam lays
-// its own closure and nothing of the entry's.
+// The survey over the committed `express-orders` fixture, answered as the
+// eval expects it: past the budget, so one seam per stem. The bootstrap's
+// seam lays its closure in import order up to where the budget runs out and
+// lists the rest; each router's seam lays its own closure and nothing of the
+// entry's. Every route's stem is the code's, read from its path under the
+// router's mount, and each is told apart by its verb and the path past the
+// resource.
 #[tokio::test]
 async fn typescript_fixture_express_orders() {
     let project = scratch();
     fixture(&project, "express-orders");
+    let survey = inventory(
+        &[
+            ("GET /api/orders", "src/routes/orders.ts#L17-L25", "orders"),
+            ("GET /api/orders/:id", "src/routes/orders.ts#L27-L33", "orders"),
+            ("POST /api/orders", "src/routes/orders.ts#L35-L42", "orders"),
+            ("PUT /api/orders/:id/lines", "src/routes/orders.ts#L44-L51", "orders"),
+            ("POST /api/orders/:id/pay", "src/routes/orders.ts#L53-L59", "orders"),
+            ("POST /api/orders/:id/ship", "src/routes/orders.ts#L61-L67", "orders"),
+            ("POST /api/orders/:id/cancel", "src/routes/orders.ts#L69-L76", "orders"),
+            ("GET /api/customers/:id", "src/routes/customers.ts#L17-L22", "customers"),
+            ("POST /api/customers", "src/routes/customers.ts#L24-L31", "customers"),
+            ("PUT /api/customers/:id/tier", "src/routes/customers.ts#L33-L39", "customers"),
+            ("GET /health/live", "src/routes/health.ts#L22-L24", "health"),
+            ("GET /health/ready", "src/routes/health.ts#L26-L38", "health"),
+        ],
+        &[],
+    );
     let neutral = decision();
     let answer = answer();
 
@@ -696,11 +809,11 @@ async fn typescript_fixture_express_orders() {
         test_programs::ADAPTER_TYPESCRIPT,
         &project,
         &[],
-        ScriptedModel::answering([&neutral, &neutral, &neutral, &neutral, &answer]),
+        ScriptedModel::answering([&survey, &neutral, &neutral, &neutral, &neutral, &answer]),
     )
     .await;
 
-    let turns = prompted(&model, prompt::extract(typescript::PROSE), 4);
+    let turns = surveyed(&model, 4);
     let start = turn_for(&turns, "start");
     assert_eq!(surfaces(start), [("start", "src/server.ts", "start")]);
     let reached: Vec<String> = EXPRESS_START[1..].iter().map(|path| format!("`{path}`")).collect();
@@ -771,116 +884,317 @@ async fn typescript_fixture_express_orders() {
     laid(health, &["src/routes/health.ts"], &["src/server.ts", "src/config.ts"]);
 }
 
-// A handler handed to what a package provides is a surface — a command, a
-// worker — named by the call that registers it and stemmed by its literal;
-// a hook on the worker folds into the worker's surface; a handler handed to
-// the tree's own class (`bus.on`) is not a surface, nor is a call with no
-// handler (`program.parse`). Under a stem two surfaces share, a handler
-// passed by name tells its surface apart and the registering method tells
-// the other.
+// The commands, the worker, and the tree's own bus of a CLI: what the code
+// reads at each anchor the survey names.
+const JOBS: [(&str, &str); 5] = [
+    ("package.json", "{\"name\":\"jobs\",\"main\":\"src/cli.ts\"}\n"),
+    (
+        "src/cli.ts",
+        "import { Command } from \"commander\";\nimport { listInvoices, runImport } from \
+         \"./import\";\nimport { startWorker } from \"./worker\";\n\nconst program = new \
+         Command();\nprogram.command(\"import <file>\").description(\"Import a \
+         CSV\").action(runImport);\nprogram.command(\"invoices\").action(listInvoices);\n\
+         program.command(\"serve\").action(async () => {\n  await startWorker();\n});\n\
+         program.parse();\n",
+    ),
+    (
+        "src/import.ts",
+        "export async function runImport(file: string) {\n  console.log(file);\n}\n\nexport async \
+         function listInvoices() {\n  console.log(\"invoices\");\n}\n",
+    ),
+    (
+        "src/worker.ts",
+        "import { Worker } from \"bullmq\";\nimport { Bus } from \"./bus\";\n\nexport async \
+         function startWorker() {\n  const worker = new Worker(\"invoices\", async (job) => {\n    \
+         console.log(job.id);\n  });\n  worker.on(\"failed\", (job, error) => {\n    \
+         console.error(job?.id, error);\n  });\n  const bus = new Bus();\n  bus.on(\"paid\", (id: \
+         string) => {\n    console.log(id);\n  });\n  return worker;\n}\n",
+    ),
+    (
+        "src/bus.ts",
+        "export class Bus {\n  on(event: string, handler: (id: string) => void) {\n    \
+         handler(event);\n  }\n}\n",
+    ),
+];
+
+// A registration the survey anchors is read for what it spells: the chain's
+// `command` literal gives the stem, in place of the survey's where the two
+// differ; a worker's queue gives its own. Under a stem two surfaces share, a
+// handler passed by name tells its surface apart and the registering method
+// tells the other. A hook on the worker (`worker.on("failed")`) the survey
+// left unnamed is no surface, and neither is the handler handed to the
+// tree's own class (`bus.on`).
 #[tokio::test]
 async fn typescript_callbacks() {
     let project = scratch();
-    modules(
-        &project,
+    modules(&project, &JOBS);
+    let survey = inventory(
         &[
-            ("package.json", "{\"name\":\"jobs\",\"main\":\"src/cli.ts\"}\n"),
-            (
-                "src/cli.ts",
-                "import { Command } from \"commander\";\nimport { listInvoices, runImport } from \
-                 \"./import\";\nimport { startWorker } from \"./worker\";\n\nconst program = new \
-                 Command();\nprogram.command(\"import <file>\").description(\"Import a \
-                 CSV\").action(runImport);\nprogram.command(\"invoices\").action(listInvoices);\n\
-                 program.command(\"serve\").action(async () => {\n  await startWorker();\n});\n\
-                 program.parse();\n",
-            ),
-            (
-                "src/import.ts",
-                "export async function runImport(file: string) {\n  console.log(file);\n}\n\nexport \
-                 async function listInvoices() {\n  console.log(\"invoices\");\n}\n",
-            ),
-            (
-                "src/worker.ts",
-                "import { Worker } from \"bullmq\";\nimport { Bus } from \"./bus\";\n\nexport async \
-                 function startWorker() {\n  const worker = new Worker(\"invoices\", async (job) => \
-                 {\n    console.log(job.id);\n  });\n  worker.on(\"failed\", (job, error) => {\n    \
-                 console.error(job?.id, error);\n  });\n  const bus = new Bus();\n  bus.on(\"paid\", \
-                 (id: string) => {\n    console.log(id);\n  });\n  return worker;\n}\n",
-            ),
-            (
-                "src/bus.ts",
-                "export class Bus {\n  on(event: string, handler: (id: string) => void) {\n    \
-                 handler(event);\n  }\n}\n",
-            ),
+            ("import command", "src/cli.ts#L6", "ledger-import"),
+            ("invoices command", "src/cli.ts#L7", "invoices"),
+            ("serve command", "src/cli.ts#L8-L10", "serve"),
+            ("invoices worker", "src/worker.ts#L5-L7", "invoices"),
         ],
+        &[],
     );
-    let answer = claim("invoices.failed");
+    let answer = claim("invoices.worker");
 
     let model = support::run(
         test_programs::ADAPTER_TYPESCRIPT,
         &project,
         &[],
-        ScriptedModel::answering([&answer, &answer]),
+        ScriptedModel::answering([&survey, &answer, &answer]),
     )
     .await;
 
-    let turns = prompted(&model, prompt::extract(typescript::PROSE), 1);
+    let turns = surveyed(&model, 1);
     assert_eq!(
         surfaces(&turns[0]),
         [
             ("start", "src/cli.ts", "start"),
-            ("Command.command(\"import <file>\")", "src/cli.ts", "import"),
-            ("Command.command(\"invoices\")", "src/cli.ts", "invoices"),
-            ("Command.command(\"serve\")", "src/cli.ts", "serve"),
-            ("Worker(\"invoices\")", "src/worker.ts", "invoices"),
+            ("import command", "src/cli.ts", "import"),
+            ("invoices command", "src/cli.ts", "invoices"),
+            ("serve command", "src/cli.ts", "serve"),
+            ("invoices worker", "src/worker.ts", "invoices"),
         ]
     );
     for note in [
-        "through `commander`; id `import`; reaches `src/import.ts`, `src/worker.ts`, `src/bus.ts`.",
+        ": registered L6 at module level; through `commander`; id `import`; reaches \
+         `src/import.ts`, `src/worker.ts`, `src/bus.ts`.",
         "through `commander`; id `invoices.list-invoices`; reaches",
-        "through `commander`; id `serve`; reaches `src/worker.ts`, `src/import.ts`, `src/bus.ts`.",
-        "hook `worker.on(\"failed\")` L8–L10; id `invoices.worker`; reaches `src/bus.ts`.",
+        ": registered L8–L10 at module level; handler L8–L10; through `commander`; id `serve`; \
+         reaches `src/worker.ts`, `src/import.ts`, `src/bus.ts`.",
+        ": registered L5–L7 in `startWorker`; handler L5–L7; through `bullmq`; id \
+         `invoices.worker`; reaches `src/bus.ts`.",
     ] {
         assert!(turns[0].contains(note), "{note} is in the brief: {}", turns[0]);
     }
-    assert!(!turns[0].contains("hook `bus.on"), "the tree's own class hooks nothing: {}", turns[0]);
 }
 
-// A method under a package's decorator is a surface: a verb decorator maps a
-// route under the class decorator's prefix, a shaping decorator marks none.
+// The survey turn carries what the parser read of the tree, for the model to
+// name its surfaces from: the manifest, the bootstrap, every call outside a
+// handler that hands a function to something a package provides — with the
+// literal that led it and the package — and the production modules; the
+// manifest and the modules that locate a surface are laid into it whole.
 #[tokio::test]
-async fn typescript_decorated() {
+async fn typescript_survey_facts() {
     let project = scratch();
+    modules(&project, &JOBS);
+    let survey = inventory(&[("import command", "src/cli.ts#L6", "import")], &[]);
+    let answer = claim("import.run-import");
+
+    let model = support::run(
+        test_programs::ADAPTER_TYPESCRIPT,
+        &project,
+        &[],
+        ScriptedModel::answering([&survey, &answer, &answer]),
+    )
+    .await;
+
+    let seen = model.seen();
+    let survey = &seen[0].messages[0];
+    for fact in [
+        "The manifest `package.json` names the package `jobs`; `main` is `src/cli.ts`.",
+        "The bootstrap — the entry that runs something when loaded — is `src/cli.ts`.",
+        "- `src/cli.ts#L6` — `program.action` led by `\"import <file>\"` handed a function, through \
+         `commander`",
+        "- `src/cli.ts#L8-L10` — `program.action` led by `\"serve\"` handed a function, through \
+         `commander`",
+        "- `src/worker.ts#L5-L7` — `new Worker` led by `\"invoices\"` handed a function, through \
+         `bullmq`",
+        "- `src/worker.ts#L8-L10` — `worker.on` led by `\"failed\"` handed a function, through \
+         `bullmq` as `Worker`",
+        "- `src/bus.ts`",
+    ] {
+        assert!(survey.contains(fact), "{fact} is among the facts: {survey}");
+    }
+    assert!(!survey.contains("`bus.on`"), "the tree's own receiver is no fact: {survey}");
+    assert!(!survey.contains("`program.parse`"), "a call handed no function is none: {survey}");
+    let at = |file: &str| {
+        survey
+            .find(&format!("### `{file}` ("))
+            .unwrap_or_else(|| panic!("`{file}` is laid: {survey}"))
+    };
+    assert!(
+        at("package.json") < at("src/cli.ts") && at("src/cli.ts") < at("src/worker.ts"),
+        "the manifest, the bootstrap, then the modules that locate a surface: {survey}"
+    );
+    assert!(seen[0].workspace.is_some(), "the tree is lent to the survey");
+    assert!(seen[2].workspace.is_none(), "the inline value lends nothing and is not surveyed");
+}
+
+// The survey's stem stands where the code spells none at the anchor — a
+// route on `/`, a schedule led by a pattern — and gives way where it does:
+// a route's resource under its mount replaces the survey's reading, so the
+// seam's stems are the code's.
+#[tokio::test]
+async fn typescript_survey_stem_derived() {
+    let project = scratch();
+    modules(&project, &APP[1..]);
     modules(
         &project,
         &[
-            ("package.json", "{\"name\":\"nest\",\"main\":\"src/main.ts\"}\n"),
             (
-                "src/main.ts",
-                "import { NestFactory } from \"@nestjs/core\";\nimport { OrdersController } from \
-                 \"./orders.controller\";\n\nasync function bootstrap() {\n  const app = await \
-                 NestFactory.create(OrdersController);\n  await app.listen(3000);\n}\nbootstrap();\n",
+                "src/index.ts",
+                "import express from \"express\";\nimport cron from \"node-cron\";\nimport { \
+                 ordersRouter } from \"./routes\";\nimport { sweep } from \"./sweep\";\n\nconst app \
+                 = express();\napp.get(\"/\", (req, res) => {\n  res.json({ ok: true \
+                 });\n});\napp.use(\"/api\", ordersRouter());\ncron.schedule(\"0 2 * * *\", \
+                 sweep);\napp.listen(3000);\n",
             ),
-            (
-                "src/orders.controller.ts",
-                "import { Body, Controller, Get, HttpCode, Post } from \"@nestjs/common\";\nimport { \
-                 OrdersService } from \"./orders.service\";\n\n@Controller(\"orders\")\nexport class \
-                 OrdersController {\n  constructor(private readonly orders: OrdersService) {}\n\n  \
-                 @Get(\":id\")\n  @HttpCode(200)\n  find(id: string) {\n    return \
-                 this.orders.find(id);\n  }\n\n  @Post()\n  create(@Body() input: unknown) {\n    \
-                 return this.orders.create(input);\n  }\n}\n",
-            ),
-            (
-                "src/orders.service.ts",
-                "export class OrdersService {\n  find(id: string) {\n    return { id };\n  }\n  \
-                 create(input: unknown) {\n    return { input };\n  }\n}\n",
-            ),
+            ("src/sweep.ts", "export function sweep() {\n  console.log(\"swept\");\n}\n"),
         ],
     );
+    let survey = inventory(
+        &[
+            ("GET /", "src/index.ts#L7-L9", "home"),
+            ("POST /api/orders", "src/routes.ts#L6-L8", "api-orders"),
+            ("GET /api/orders/:id", "src/routes.ts#L9", "api-orders"),
+            ("nightly sweep", "src/index.ts#L11", "sweep"),
+        ],
+        &[],
+    );
 
-    let model = extract(test_programs::ADAPTER_TYPESCRIPT, &project, 1).await;
+    let model = mined(&project, &survey, 1).await;
 
-    let turns = prompted(&model, prompt::extract(typescript::PROSE), 1);
+    let turns = surveyed(&model, 1);
+    assert_eq!(
+        surfaces(&turns[0]),
+        [
+            ("start", "src/index.ts", "start"),
+            ("GET /", "src/index.ts", "home"),
+            ("POST /api/orders", "src/routes.ts", "orders"),
+            ("GET /api/orders/:id", "src/routes.ts", "orders"),
+            ("nightly sweep", "src/index.ts", "sweep"),
+        ]
+    );
+    for id in ["id `home`;", "id `orders.post`;", "id `orders.find-order`;", "id `sweep`;"] {
+        assert!(turns[0].contains(id), "{id} is in the brief: {}", turns[0]);
+    }
+    assert!(!turns[0].contains("api-orders"), "the survey's stem gave way: {}", turns[0]);
+}
+
+// The survey names a surface under `start` — the bootstrap's stem, which
+// the caller names itself — and the finding sends the answer back for the
+// stem of what a caller does through the surface; the corrected answer is
+// accepted, and the run goes on to mine.
+#[tokio::test]
+async fn typescript_survey_start_stem() {
+    let project = scratch();
+    modules(&project, &APP);
+    let strayed = inventory(
+        &[
+            ("POST /api/orders", "src/routes.ts#L6-L8", "start"),
+            ("GET /api/orders/:id", "src/routes.ts#L9", "orders"),
+        ],
+        &[],
+    );
+    let corrected = app_inventory();
+    let answer = answer();
+
+    let model = support::run(
+        test_programs::ADAPTER_TYPESCRIPT,
+        &project,
+        &[],
+        ScriptedModel::answering([&strayed, &corrected, &answer, &answer]),
+    )
+    .await;
+
+    let seen = model.seen();
+    assert_eq!(seen.len(), 4, "two survey rounds, one seam, one for the inline value");
+    for request in &seen[..2] {
+        system(request, prompt::survey(typescript::PROSE));
+    }
+    system(&seen[2], prompt::extract(typescript::PROSE));
+    let exchanges = model.exchanges();
+    let finding = exchanges[0].outcome.as_ref().expect_err("the `start` stem is refused");
+    assert!(
+        finding.contains(
+            "- surface `POST /api/orders`: `start` is the bootstrap's stem, which the caller names \
+             itself; give the surface the stem of what a caller does through it"
+        ),
+        "the finding names the surface and the stem: {finding}"
+    );
+    assert_eq!(exchanges[1].outcome, Ok(String::new()), "the corrected inventory is accepted");
+    assert_eq!(surfaces(&seen[2].messages[0]).len(), 3, "{}", seen[2].messages[0]);
+}
+
+// A module the facts list a registration in — a worker nothing imports — that
+// no named surface reaches and the answer does not list under `unreached` is
+// a finding, naming the module; the answer that names the worker's surface
+// is accepted, and the module is that surface's to reach.
+#[tokio::test]
+async fn typescript_survey_unplaced() {
+    let project = scratch();
+    modules(&project, &JOBS);
+    project.write(
+        "src/cli.ts",
+        "import { Command } from \"commander\";\nimport { runImport } from \"./import\";\n\nconst \
+         program = new Command();\nprogram.command(\"import <file>\").action(runImport);\n\
+         program.parse();\n",
+    );
+    let partial = inventory(&[("import command", "src/cli.ts#L5", "import")], &[]);
+    let complete = inventory(
+        &[
+            ("import command", "src/cli.ts#L5", "import"),
+            ("invoices worker", "src/worker.ts#L5-L7", "invoices"),
+        ],
+        &[],
+    );
+    let answer = claim("invoices.remind");
+
+    let model = support::run(
+        test_programs::ADAPTER_TYPESCRIPT,
+        &project,
+        &[],
+        ScriptedModel::answering([&partial, &complete, &answer, &answer]),
+    )
+    .await;
+
+    let seen = model.seen();
+    assert_eq!(seen.len(), 4, "two survey rounds, one seam, one for the inline value");
+    let exchanges = model.exchanges();
+    let finding = exchanges[0].outcome.as_ref().expect_err("the unplaced worker is refused");
+    assert!(
+        finding.contains(
+            "- one module the facts list a registration or declaration in is reached by no \
+             surface you named and not listed under `unreached`: `src/worker.ts`;"
+        ),
+        "the finding names the module: {finding}"
+    );
+    assert_eq!(exchanges[1].outcome, Ok(String::new()), "the completed inventory is accepted");
+    let turn = &seen[2].messages[0];
+    assert_eq!(
+        surfaces(turn),
+        [
+            ("start", "src/cli.ts", "start"),
+            ("import command", "src/cli.ts", "import"),
+            ("invoices worker", "src/worker.ts", "invoices"),
+        ]
+    );
+    assert!(turn.contains("id `invoices`; reaches `src/bus.ts`."), "{turn}");
+}
+
+// A method under a package's decorator is a surface at the lines the survey
+// names: a verb decorator maps a route under the class decorator's prefix,
+// which gives the stem; a shaping decorator (`@HttpCode`) marks none, so the
+// method under two is one surface; the method's name tells it apart, and its
+// modules are read through the class it sits in.
+#[tokio::test]
+async fn typescript_decorated() {
+    let project = scratch();
+    modules(&project, &NEST);
+    let survey = inventory(
+        &[
+            ("GET /orders/:id", "src/orders.controller.ts#L8-L12", "orders"),
+            ("POST /orders", "src/orders.controller.ts#L14-L17", "orders"),
+        ],
+        &[],
+    );
+
+    let model = mined(&project, &survey, 1).await;
+
+    let turns = surveyed(&model, 1);
     assert_eq!(
         surfaces(&turns[0]),
         [
@@ -902,12 +1216,132 @@ async fn typescript_decorated() {
     }
 }
 
+// The survey anchors a whole controller as one surface: the class decorator's
+// prefix gives the stem, the class's decorated methods each give an id
+// beside the surface's own, and the decorators section of the survey turn
+// is where the model read them.
+#[tokio::test]
+async fn typescript_survey_methods() {
+    let project = scratch();
+    modules(&project, &NEST);
+    let survey =
+        inventory(&[("orders controller", "src/orders.controller.ts#L4-L18", "orders")], &[]);
+
+    let model = mined(&project, &survey, 1).await;
+
+    let seen = model.seen();
+    let facts = &seen[0].messages[0];
+    for fact in [
+        "- `src/orders.controller.ts#L5-L18` — `@Controller(\"orders\")` on class \
+         `OrdersController`, through `@nestjs/common`",
+        "- `src/orders.controller.ts#L8-L12` — `@Get(\":id\")` on `OrdersController.find`, through \
+         `@nestjs/common`",
+        "- `src/orders.controller.ts#L14-L17` — `@Post` on `OrdersController.create`, through \
+         `@nestjs/common`",
+    ] {
+        assert!(facts.contains(fact), "{fact} is among the facts: {facts}");
+    }
+    let turns = surveyed(&model, 1);
+    assert_eq!(
+        surfaces(&turns[0]),
+        [
+            ("start", "src/main.ts", "start"),
+            ("orders controller", "src/orders.controller.ts", "orders")
+        ]
+    );
+    assert!(
+        turns[0].contains(
+            "under `@Controller(\"orders\")`; through `@nestjs/common`; methods `find` L8–L12, \
+             `create` L14–L17; ids `orders`, `orders.find`, `orders.create`; reaches \
+             `src/orders.service.ts`."
+        ),
+        "the class carries its decorated methods as ids: {}",
+        turns[0]
+    );
+}
+
+// Two surfaces the code tells apart by nothing at their anchors — one
+// `@Post("upload")` method `upload` under `@Controller("files")` in each of
+// two drivers' modules — are told apart by the nearest segment of their
+// entries' paths that spells neither the stem nor the id's own tail.
+#[tokio::test]
+async fn typescript_survey_alike() {
+    const CONTROLLER: &str = "import { Controller, Post } from \"@nestjs/common\";\n\n\
+                              @Controller(\"files\")\nexport class FilesController {\n  \
+                              @Post(\"upload\")\n  upload() {\n    return { stored: true };\n  \
+                              }\n}\n";
+    let project = scratch();
+    modules(
+        &project,
+        &[
+            ("package.json", "{\"name\":\"nest\",\"main\":\"src/main.ts\"}\n"),
+            (
+                "src/main.ts",
+                "import { NestFactory } from \"@nestjs/core\";\nimport { FilesController as Local } \
+                 from \"./local/files.controller\";\nimport { FilesController as S3 } from \
+                 \"./s3/files.controller\";\n\nasync function bootstrap() {\n  const app = await \
+                 NestFactory.create([Local, S3]);\n  await app.listen(3000);\n}\nbootstrap();\n",
+            ),
+            ("src/local/files.controller.ts", CONTROLLER),
+            ("src/s3/files.controller.ts", CONTROLLER),
+        ],
+    );
+    let survey = inventory(
+        &[
+            ("POST /files/upload (local)", "src/local/files.controller.ts#L5-L8", "files"),
+            ("POST /files/upload (s3)", "src/s3/files.controller.ts#L5-L8", "files"),
+        ],
+        &[],
+    );
+    let answer = claim("files.upload.s3");
+
+    let model = support::run(
+        test_programs::ADAPTER_TYPESCRIPT,
+        &project,
+        &[],
+        ScriptedModel::answering([&survey, &answer, &answer]),
+    )
+    .await;
+
+    let turns = surveyed(&model, 1);
+    for id in ["id `files.upload.local`;", "id `files.upload.s3`;"] {
+        assert!(turns[0].contains(id), "{id} is in the brief: {}", turns[0]);
+    }
+}
+
+// The Nest service `typescript_decorated` and `typescript_survey_methods`
+// read: a controller under a package's decorators, and the service it
+// constructs.
+const NEST: [(&str, &str); 4] = [
+    ("package.json", "{\"name\":\"nest\",\"main\":\"src/main.ts\"}\n"),
+    (
+        "src/main.ts",
+        "import { NestFactory } from \"@nestjs/core\";\nimport { OrdersController } from \
+         \"./orders.controller\";\n\nasync function bootstrap() {\n  const app = await \
+         NestFactory.create(OrdersController);\n  await app.listen(3000);\n}\nbootstrap();\n",
+    ),
+    (
+        "src/orders.controller.ts",
+        "import { Body, Controller, Get, HttpCode, Post } from \"@nestjs/common\";\nimport { \
+         OrdersService } from \"./orders.service\";\n\n@Controller(\"orders\")\nexport class \
+         OrdersController {\n  constructor(private readonly orders: OrdersService) {}\n\n  \
+         @Get(\":id\")\n  @HttpCode(200)\n  find(id: string) {\n    return \
+         this.orders.find(id);\n  }\n\n  @Post()\n  create(@Body() input: unknown) {\n    \
+         return this.orders.create(input);\n  }\n}\n",
+    ),
+    (
+        "src/orders.service.ts",
+        "export class OrdersService {\n  find(id: string) {\n    return { id };\n  }\n  \
+         create(input: unknown) {\n    return { input };\n  }\n}\n",
+    ),
+];
+
 // A class decorator that takes its path in an object — `@Controller({ path,
 // version })` — prefixes its methods' routes as a literal one does, so the
-// routes stem by the resource and not by the class; a documentation
-// decorator before it (`@ApiTags("Users")`) carries no prefix, and one that
-// shapes a method's answer (`@SerializeOptions`) does not stand in for the
-// verb beneath it.
+// routes stem by the resource the code reads and not by the survey's
+// versioned reading; a documentation decorator before it (`@ApiTags("Users")`)
+// carries no prefix, and one that shapes a method's answer
+// (`@SerializeOptions`) does not stand in for the verb beneath it.
 #[tokio::test]
 async fn typescript_decorated_object_path() {
     let project = scratch();
@@ -933,22 +1367,29 @@ async fn typescript_decorated_object_path() {
         ],
     );
 
+    let survey = inventory(
+        &[
+            ("GET /v1/users/:id", "src/users.controller.ts#L10-L14", "users-v1"),
+            ("DELETE /v1/users/:id", "src/users.controller.ts#L16-L19", "users-v1"),
+        ],
+        &[],
+    );
     let answer = claim("users.find");
     let model = support::run(
         test_programs::ADAPTER_TYPESCRIPT,
         &project,
         &[],
-        ScriptedModel::answering([answer.as_str(), answer.as_str()]),
+        ScriptedModel::answering([&survey, &answer, &answer]),
     )
     .await;
 
-    let turns = prompted(&model, prompt::extract(typescript::PROSE), 1);
+    let turns = surveyed(&model, 1);
     assert_eq!(
         surfaces(&turns[0]),
         [
             ("start", "src/main.ts", "start"),
-            ("GET /users/:id", "src/users.controller.ts", "users"),
-            ("DELETE /users/:id", "src/users.controller.ts", "users"),
+            ("GET /v1/users/:id", "src/users.controller.ts", "users"),
+            ("DELETE /v1/users/:id", "src/users.controller.ts", "users"),
         ]
     );
     for id in ["id `users.find`", "id `users.remove`"] {
@@ -956,10 +1397,12 @@ async fn typescript_decorated_object_path() {
     }
 }
 
-// A library's entry only declares and exports, so the tree has no bootstrap
-// and what the entry exports — a function, a class, through a re-export —
-// is its surfaces; a type and an error class are none. A class carries an id
-// per public method beside its own.
+// A library's entry only declares and exports, so the tree has no bootstrap;
+// the survey turn lists what the entry exports, following a barrel's
+// re-exports one hop to the modules that declare them, and the surfaces the
+// survey names there are read at their declarations: a class carries an id
+// per public method beside its own, a private method none; a function
+// reaches what it imports.
 #[tokio::test]
 async fn typescript_exports() {
     let project = scratch();
@@ -987,29 +1430,49 @@ async fn typescript_exports() {
             ),
         ],
     );
+    let survey = inventory(
+        &[("Money", "src/money.ts#L3-L11", "money"), ("parse", "src/parse.ts#L5-L7", "parse")],
+        &["src/index.ts"],
+    );
     let answer = claim("parse.text");
 
     let model = support::run(
         test_programs::ADAPTER_TYPESCRIPT,
         &project,
         &[],
-        ScriptedModel::answering([&answer, &answer]),
+        ScriptedModel::answering([&survey, &answer, &answer]),
     )
     .await;
 
-    let turns = prompted(&model, prompt::extract(typescript::PROSE), 1);
+    let seen = model.seen();
+    let facts = &seen[0].messages[0];
+    for fact in [
+        "No bootstrap runs at load",
+        "- `src/index.ts` re-exports from `src/money.ts`, where each is declared: `Money` (class) \
+         L3–L11",
+        "- `src/index.ts` re-exports from `src/parse.ts`, where each is declared: `parse` \
+         (function) L5–L7, `ParseError` (class) L3",
+    ] {
+        assert!(facts.contains(fact), "{fact} is among the facts: {facts}");
+    }
+    let turns = surveyed(&model, 1);
     assert_eq!(
         surfaces(&turns[0]),
         [("Money", "src/money.ts", "money"), ("parse", "src/parse.ts", "parse")]
     );
     assert!(
         turns[0].contains(
-            "methods `add` L6–L8; ids `money`, `money.add`; reaches nothing beyond its entry."
+            ": exported class L3–L11; methods `add` L6–L8; ids `money`, `money.add`; reaches \
+             nothing beyond its entry."
         ),
         "public methods only, each an id: {}",
         turns[0]
     );
-    assert!(turns[0].contains("; id `parse`; reaches `src/money.ts`."), "{}", turns[0]);
+    assert!(
+        turns[0].contains(": exported function L5–L7; id `parse`; reaches `src/money.ts`."),
+        "{}",
+        turns[0]
+    );
 }
 
 // The `type` claims are the declarations the parser read — every exported
@@ -1038,6 +1501,10 @@ async fn typescript_types() {
             ),
         ],
     );
+    let survey = inventory(
+        &[("Money", "src/money.ts#L15-L21", "money"), ("parse", "src/money.ts#L27-L30", "parse")],
+        &["src/index.ts"],
+    );
     let answered = serde_json::json!({
         "claims": [
             { "kind": "requirement", "id": "parse.text", "statement": "Parses an amount." },
@@ -1050,11 +1517,11 @@ async fn typescript_types() {
         test_programs::ADAPTER_TYPESCRIPT,
         &project,
         &["types", "Currency", "Rounding", "Money"],
-        ScriptedModel::answering([&answered, &answered]),
+        ScriptedModel::answering([&survey, &answered, &answered]),
     )
     .await;
 
-    assert_eq!(model.seen().len(), 2, "one seam over the tree, one over the value");
+    assert_eq!(model.seen().len(), 3, "the survey, one seam over the tree, one over the value");
 }
 
 // The turn lists what the modules spell as values of their own — an
@@ -1093,9 +1560,9 @@ async fn typescript_boundaries() {
         ],
     );
 
-    let model = extract(test_programs::ADAPTER_TYPESCRIPT, &project, 1).await;
+    let model = mined(&project, &app_inventory(), 1).await;
 
-    let turns = prompted(&model, prompt::extract(typescript::PROSE), 1);
+    let turns = surveyed(&model, 1);
     for line in [
         "- `src/config.ts#L3` — `PORT = Number(process.env.PORT ?? 3000)`",
         "- `src/config.ts#L4` — `MAX_LINES = 50`",
@@ -1149,9 +1616,9 @@ async fn typescript_calls() {
         ],
     );
 
-    let model = extract(test_programs::ADAPTER_TYPESCRIPT, &project, 1).await;
+    let model = mined(&project, &app_inventory(), 1).await;
 
-    let turns = prompted(&model, prompt::extract(typescript::PROSE), 1);
+    let turns = surveyed(&model, 1);
     assert!(
         turns[0].contains("- `pg:Pool.query` in `src/orders.ts` at L4, L9"),
         "the store's calls are one callee at its sites: {}",
@@ -1204,19 +1671,20 @@ async fn typescript_inherited() {
     }] })
     .to_string();
     let corrected = serde_json::json!({ "claims": [&posted] }).to_string();
+    let survey = app_inventory();
     let inline = answer();
 
     let model = support::run(
         test_programs::ADAPTER_TYPESCRIPT,
         &project,
         &[],
-        ScriptedModel::answering([strayed.as_str(), corrected.as_str(), inline.as_str()]),
+        ScriptedModel::answering([&survey, &strayed, &corrected, &inline]),
     )
     .await;
 
     let seen = model.seen();
-    assert_eq!(seen.len(), 3, "two rounds for the one seam, one for the inline value");
-    let turn = &seen[0].messages[0];
+    assert_eq!(seen.len(), 4, "the survey, two rounds for the one seam, one for the inline value");
+    let turn = &seen[1].messages[0];
     assert!(
         turn.contains("- `acme-common:ConfigCommon.axios.post` in `src/orders.ts` at L5")
             && turn.contains("- `acme-common:ConfigCommon.logger.info` in `src/orders.ts` at L6"),
@@ -1226,7 +1694,7 @@ async fn typescript_inherited() {
         !turn.contains("ConfigCommon.prefixed") && !turn.contains("ConfigCommon.ordersUrl"),
         "a member the class declares is the tree's own: {turn}"
     );
-    let exchanges = model.exchanges();
+    let exchanges = checked(&model);
     let correction =
         exchanges[0].outcome.as_ref().expect_err("a requirement at the URL's binding is refused");
     assert!(
@@ -1275,6 +1743,7 @@ async fn typescript_paths() {
         "src/services/orders.ts",
         "export function findOrder(id: string) {\n  return { id };\n}\n",
     );
+    let survey = inventory(&[("GET /api/orders/:id", "src/routes/orders.ts#L6-L8", "orders")], &[]);
     let neutral = decision();
     let answer = answer();
 
@@ -1282,11 +1751,11 @@ async fn typescript_paths() {
         test_programs::ADAPTER_TYPESCRIPT,
         &project,
         &[],
-        ScriptedModel::answering([&neutral, &neutral, &answer]),
+        ScriptedModel::answering([&survey, &neutral, &neutral, &answer]),
     )
     .await;
 
-    let turns = prompted(&model, prompt::extract(typescript::PROSE), 2);
+    let turns = surveyed(&model, 2);
     let orders = turn_for(&turns, "GET /api/orders/:id");
     assert_eq!(surfaces(orders), [("GET /api/orders/:id", "src/routes/orders.ts", "orders")]);
     laid(orders, &["src/routes/orders.ts"], &["src/server.ts"]);
@@ -1320,9 +1789,9 @@ async fn typescript_non_production() {
         );
     }
 
-    let model = extract(test_programs::ADAPTER_TYPESCRIPT, &project, 1).await;
+    let model = mined(&project, &app_inventory(), 1).await;
 
-    let turns = prompted(&model, prompt::extract(typescript::PROSE), 1);
+    let turns = surveyed(&model, 1);
     assert_eq!(surfaces(&turns[0]).len(), 3, "the app's three surfaces alone: {}", turns[0]);
     assert!(!turns[0].contains("/refused"), "nothing refused registers: {}", turns[0]);
     laid(&turns[0], &["src/index.ts"], &REFUSED);
@@ -1351,6 +1820,11 @@ const DECIDING: [(&str, &str); 3] = [
     ("src/db.ts", "export const pool = \"o-1\";\n"),
 ];
 
+// The survey answer over `DECIDING`: the one route, at its registration.
+fn deciding_inventory() -> String {
+    inventory(&[("POST /orders", "src/index.ts#L5", "orders")], &[])
+}
+
 // The points where the code decides — a guard, a switch, a throw, a catch,
 // a timer, a conditional — are listed at their lines with their text and
 // the function they run in, so a requirement anchors where a behaviour
@@ -1360,9 +1834,9 @@ async fn typescript_decisions() {
     let project = scratch();
     modules(&project, &DECIDING);
 
-    let model = extract(test_programs::ADAPTER_TYPESCRIPT, &project, 1).await;
+    let model = mined(&project, &deciding_inventory(), 1).await;
 
-    let turns = prompted(&model, prompt::extract(typescript::PROSE), 1);
+    let turns = surveyed(&model, 1);
     let sections: Vec<&str> = turns[0].split("\n\n").collect();
     let at = sections
         .iter()
@@ -1426,19 +1900,20 @@ async fn typescript_anchors() {
     let corrected =
         serde_json::json!({ "claims": [&guarded, &listening, &retry, &returned, &headed] })
             .to_string();
+    let survey = deciding_inventory();
     let inline = answer();
 
     let model = support::run(
         test_programs::ADAPTER_TYPESCRIPT,
         &project,
         &[],
-        ScriptedModel::answering([strayed.as_str(), corrected.as_str(), inline.as_str()]),
+        ScriptedModel::answering([&survey, &strayed, &corrected, &inline]),
     )
     .await;
 
     let seen = model.seen();
-    assert_eq!(seen.len(), 3, "two rounds for the one seam, one for the inline value");
-    let exchanges = model.exchanges();
+    assert_eq!(seen.len(), 4, "the survey, two rounds for the one seam, one for the inline value");
+    let exchanges = checked(&model);
     let correction = exchanges[0].outcome.as_ref().expect_err("the wired anchor is refused");
     assert!(
         correction.contains("claim 1: path `src/orders.ts#L1`"),
@@ -1487,6 +1962,7 @@ async fn typescript_stated() {
             ),
         ],
     );
+    let survey = app_inventory();
     let neutral = decision();
     let answer = answer();
 
@@ -1494,11 +1970,11 @@ async fn typescript_stated() {
         test_programs::ADAPTER_TYPESCRIPT,
         &project,
         &[],
-        ScriptedModel::answering([&neutral, &neutral, &answer]),
+        ScriptedModel::answering([&survey, &neutral, &neutral, &answer]),
     )
     .await;
 
-    let turns = prompted(&model, prompt::extract(typescript::PROSE), 2);
+    let turns = surveyed(&model, 2);
     let orders = turn_for(&turns, "POST /api/orders");
     assert!(
         orders.contains("- `test/orders.test.ts#L4` — orders › creates an order from the body"),
@@ -1550,6 +2026,7 @@ async fn typescript_unresolved() {
     modules(&project, &APP);
     project.write("src/orders.ts", ORDERS);
     bulk(&project, "src/db.ts", "export const pool = \"o-1\";\n");
+    let survey = app_inventory();
     let neutral = decision();
     let answer = answer();
 
@@ -1557,11 +2034,11 @@ async fn typescript_unresolved() {
         test_programs::ADAPTER_TYPESCRIPT,
         &project,
         &[],
-        ScriptedModel::answering([&neutral, &neutral, &answer]),
+        ScriptedModel::answering([&survey, &neutral, &neutral, &answer]),
     )
     .await;
 
-    let turns = prompted(&model, prompt::extract(typescript::PROSE), 2);
+    let turns = surveyed(&model, 2);
     let orders = turn_for(&turns, "POST /api/orders");
     laid(orders, &["src/routes.ts", "src/orders.ts"], &[]);
     let db = orders.find("- `src/db.ts`\n").expect("the store past the budget is listed");
@@ -1583,9 +2060,9 @@ async fn typescript_unresolved() {
     modules(&project, &APP);
     project.write("src/orders.ts", ORDERS);
 
-    let model = extract(test_programs::ADAPTER_TYPESCRIPT, &project, 1).await;
+    let model = mined(&project, &app_inventory(), 1).await;
 
-    let turns = prompted(&model, prompt::extract(typescript::PROSE), 1);
+    let turns = surveyed(&model, 1);
     laid(&turns[0], &["src/index.ts", "src/routes.ts", "src/orders.ts", "src/db.ts"], &[]);
     assert!(turns[0].contains(UNFOLLOWED), "{}", turns[0]);
     assert!(!turns[0].contains("rest of the tree"), "nothing was widened: {}", turns[0]);
@@ -1617,19 +2094,20 @@ async fn typescript_data() {
     });
     let strayed = serde_json::json!({ "claims": [&cited, &anchored] }).to_string();
     let corrected = serde_json::json!({ "claims": [&cited] }).to_string();
+    let survey = app_inventory();
     let inline = answer();
 
     let model = support::run(
         test_programs::ADAPTER_TYPESCRIPT,
         &project,
         &[],
-        ScriptedModel::answering([strayed.as_str(), corrected.as_str(), inline.as_str()]),
+        ScriptedModel::answering([&survey, &strayed, &corrected, &inline]),
     )
     .await;
 
     let seen = model.seen();
-    assert_eq!(seen.len(), 3, "two rounds for the one seam, one for the inline value");
-    let turn = &seen[0].messages[0];
+    assert_eq!(seen.len(), 4, "the survey, two rounds for the one seam, one for the inline value");
+    let turn = &seen[1].messages[0];
     assert!(
         turn.contains(
             "Data files these modules import, each with the modules reading it, laid after the \
@@ -1646,7 +2124,7 @@ async fn typescript_data() {
     let data_start = turn.find("### `src/zones.json`").expect("the data file is laid");
     assert!(modules_end < data_start, "the data file is laid after the modules: {turn}");
     assert!(turn.contains("2|  \"rural\": 650,"), "numbered: {turn}");
-    let exchanges = model.exchanges();
+    let exchanges = checked(&model);
     let correction = exchanges[0].outcome.as_ref().expect_err("a requirement in data is refused");
     assert!(
         correction.contains("claim 1: path `src/zones.json#L2`")
@@ -1666,15 +2144,15 @@ async fn typescript_config_module() {
         "import { defineConfig } from \"vite\";\n\nexport default defineConfig({ plugins: [] });\n",
     );
 
-    let model = extract(test_programs::ADAPTER_TYPESCRIPT, &project, 1).await;
+    let model = mined(&project, &app_inventory(), 1).await;
 
-    let turns = prompted(&model, prompt::extract(typescript::PROSE), 1);
+    let turns = surveyed(&model, 1);
     laid(&turns[0], &["vite.config.ts", "src/index.ts"], &[]);
 }
 
 // A tree of one production module cuts no finer than itself: one extract
-// over the module, listed when it is past the budget, its exports the
-// surfaces.
+// over the module, listed when it is past the budget, the export the survey
+// names its surface.
 #[tokio::test]
 async fn typescript_one_module() {
     const REFUSED: [&str; 7] = [
@@ -1693,18 +2171,24 @@ async fn typescript_one_module() {
         "src/orders.ts",
         "export class OrderService {\n  create(input: unknown) {\n    return { input };\n  }\n}\n",
     );
+    let survey = inventory(&[("OrderService", "src/orders.ts#L1-L5", "order-service")], &[]);
     let answer = claim("order-service.create");
 
     let model = support::run(
         test_programs::ADAPTER_TYPESCRIPT,
         &project,
         &[],
-        ScriptedModel::answering([&answer, &answer]),
+        ScriptedModel::answering([&survey, &answer, &answer]),
     )
     .await;
 
-    let turns = prompted(&model, prompt::extract(typescript::PROSE), 1);
+    let turns = surveyed(&model, 1);
     assert_eq!(surfaces(&turns[0]), [("OrderService", "src/orders.ts", "order-service")]);
+    assert!(
+        turns[0].contains("ids `order-service`, `order-service.create`;"),
+        "the class carries its method: {}",
+        turns[0]
+    );
     assert!(turns[0].contains("- `src/orders.ts`"), "the one module is listed: {}", turns[0]);
     for file in REFUSED {
         assert!(!turns[0].contains(file), "`{file}` is no module: {}", turns[0]);
@@ -1731,10 +2215,10 @@ async fn typescript_no_module() {
     assert!(model.seen().is_empty(), "no turn is spent on a tree with no module");
 }
 
-// A tree with no bootstrap, no registration, no decorator, and no entry
-// export is cut mechanically, never refused: within the budget, one extract
-// over every module, told no surface was found and held to the one stem the
-// manifest's package name gives.
+// A tree the survey names no surface in — no bootstrap, no registration, no
+// decorator, and no entry export — is cut mechanically, never refused:
+// within the budget, one extract over every module, told no surface was
+// found and held to the one stem the manifest's package name gives.
 #[tokio::test]
 async fn typescript_no_surface() {
     let project = scratch();
@@ -1746,17 +2230,18 @@ async fn typescript_no_surface() {
             ("src/lib/config.ts", "export const retries = 3;\nexport type Mode = \"fast\";\n"),
         ],
     );
+    let survey = inventory(&[], &["src/lib/config.ts", "src/lib/db.ts"]);
     let answer = claim("shared-helpers.pool");
 
     let model = support::run(
         test_programs::ADAPTER_TYPESCRIPT,
         &project,
         &[],
-        ScriptedModel::answering([&answer, &answer]),
+        ScriptedModel::answering([&survey, &answer, &answer]),
     )
     .await;
 
-    let turns = prompted(&model, prompt::extract(typescript::PROSE), 1);
+    let turns = surveyed(&model, 1);
     assert!(surfaces(&turns[0]).is_empty(), "no surface is named: {}", turns[0]);
     assert!(turns[0].contains("No surface was found"), "{}", turns[0]);
     assert!(turns[0].contains("the one stem `shared-helpers`"), "{}", turns[0]);
@@ -1779,6 +2264,7 @@ async fn typescript_no_surface_directories() {
         ],
     );
     bulk(&project, "src/lib/db.ts", "export const pool = 1;\n");
+    let survey = inventory(&[], &["src/index.ts", "src/lib/config.ts", "src/lib/db.ts"]);
     let neutral = decision();
     let answer = answer();
 
@@ -1786,11 +2272,11 @@ async fn typescript_no_surface_directories() {
         test_programs::ADAPTER_TYPESCRIPT,
         &project,
         &[],
-        ScriptedModel::answering([&neutral, &neutral, &answer]),
+        ScriptedModel::answering([&survey, &neutral, &neutral, &answer]),
     )
     .await;
 
-    let turns = prompted(&model, prompt::extract(typescript::PROSE), 2);
+    let turns = surveyed(&model, 2);
     let seam = |stem: &str| {
         let naming: Vec<&String> =
             turns.iter().filter(|turn| turn.contains(&format!("the stem `{stem}`"))).collect();

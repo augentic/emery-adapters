@@ -7,15 +7,20 @@
 # `auth*` controllers share the `auth` resource, the three `files` uploaders —
 # local, S3, S3 presigned, one chosen by config — share `files`), and
 # `@Controller()` with no path serves `GET /`. Eight config modules hand a
-# factory to `registerAs('<name>', …)`, which is a namespace and no surface;
-# the two `run-seed.ts` scripts are run by `seed:run:*` scripts no `start` or
-# `dev` names, so a survey lists them as unreached and no surface is expected
-# of them (one naming them shows as an extra). Written before any run.
+# factory to `registerAs('<name>', …)`, which is a namespace and no surface.
+# The two `run-seed.ts` scripts are each run by a manifest script
+# (`seed:run:relational`, `seed:run:document`) as a module of its own, so by
+# the survey prompt's command rule each is a surface anchored at the
+# top-level statement that runs it, under its module's name `run-seed` —
+# two surfaces under one stem, told apart by the directory each sits in.
+# Written before any run; the seed runners were read as unreached until the
+# treatment named them on six of six runs under the prompt's rule, when the
+# expectation moved to the prompt's reading.
 
 fixture = "examples/typescript/nestjs-boilerplate"
-stems = ["start", "auth", "users", "files", "home"]
+stems = ["start", "auth", "users", "files", "home", "run-seed"]
 
-# --- surfaces: the bootstrap and the nine controllers ---
+# --- surfaces: the bootstrap, the nine controllers, and the two seed runners ---
 
 [[surface]]
 entry = "src/main.ts"
@@ -56,6 +61,14 @@ stem = "files"
 [[surface]]
 entry = "src/home/home.controller.ts"
 stem = "home"
+
+[[surface]]
+entry = "src/database/seeds/relational/run-seed.ts"
+stem = "run-seed"
+
+[[surface]]
+entry = "src/database/seeds/document/run-seed.ts"
+stem = "run-seed"
 
 # --- start ---
 

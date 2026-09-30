@@ -2,8 +2,13 @@
 //! states on its own.
 //!
 //! An inline value is one seam mined whole. A workspace is listed under this
-//! adapter's keep, every production module parsed, and its surfaces found
-//! from the code alone. A tree whose modules fit within the SDK's inline
+//! adapter's keep, every production module parsed, and its surfaces named
+//! by the model in one turn over the facts the parser read ([`model`]) —
+//! the manifest, the bootstrap, every call that hands a function to a
+//! package's receiver, every method under a package's decorator, what the
+//! entry modules export — each anchored where the code registers or
+//! declares it; the code then holds the answer to the tree and derives the
+//! rest from the anchors. A tree whose modules fit within the SDK's inline
 //! budget is one seam over every module, laid into the turn, held to every
 //! stem its surfaces carry; a larger tree is one seam per stem, over the
 //! modules the surfaces under it reach, its entry first — and, where one of
@@ -13,12 +18,12 @@
 //! seam's brief names its surfaces — each with the id its claims lead with
 //! and the modules it reaches — the boundaries its modules spell, the
 //! packages they import, its data files, and what could not be followed. A
-//! tree the parser finds no surface in is cut mechanically
-//! instead: within the budget, one seam over every module under one stem —
-//! the package the manifest names, else the root directory's name, else
-//! `module`; past it, one seam per top-level directory beneath `src/` (or
-//! the root) under that directory's name, the root's own modules joined to
-//! the first. Only a tree with no production module is refused.
+//! tree the survey names no surface in is cut mechanically instead: within
+//! the budget, one seam over every module under one stem — the package the
+//! manifest names, else the root directory's name, else `module`; past it,
+//! one seam per top-level directory beneath `src/` (or the root) under that
+//! directory's name, the root's own modules joined to the first. Only a
+//! tree with no production module is refused.
 //!
 //! The tree's own tests are never modules: they are read for what they
 //! state — a test's titles, a feature's scenarios — and each test file
@@ -30,11 +35,6 @@
 //! Beside the seams, the survey yields the `type` claims the reached modules
 //! declare, copied from the code for the guest to join after the model's
 //! answer.
-//!
-//! The surfaces are the parser's; under the `model-survey` feature the guest
-//! may have the model name them instead ([`model`]), from the facts the
-//! parser read, and everything after the surfaces — the cut, the closures,
-//! the anchors, the briefs — is the same code either way.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -46,7 +46,6 @@ use self::resolve::{Manifest, Resolver, Target};
 use self::skeleton::Test;
 use self::surface::{Surface, Tree};
 
-#[cfg(feature = "model-survey")]
 pub mod model;
 mod parse;
 mod resolve;
@@ -79,19 +78,6 @@ pub struct Prepared {
     /// The parsed tree.
     pub tree: Tree,
     tests: Vec<Test>,
-}
-
-/// The surfaces decided by the code alone: the parser's survey, then the
-/// seams cut from them.
-#[cfg(not(feature = "model-survey"))]
-pub fn survey(input: &SourceInput) -> Result<Survey, Error> {
-    match prepare(input)? {
-        Preparation::Value(survey) => Ok(survey),
-        Preparation::Workspace(prepared) => {
-            let surfaces = surface::survey(&prepared.tree);
-            Ok(seams(&prepared, &surfaces))
-        }
-    }
 }
 
 /// Reads the source: an inline value is one seam at once; a workspace is
@@ -167,14 +153,7 @@ pub fn seams(prepared: &Prepared, surfaces: &[Surface]) -> Survey {
     Survey { seams, types }
 }
 
-/// Logs the parser's surfaces of a prepared workspace as `parsed`, for a run
-/// whose seams are cut from the model's, so the two read side by side.
-#[cfg(feature = "model-survey")]
-pub fn parsed(prepared: &Prepared) {
-    logged(&prepared.source, "parsed", &surface::survey(&prepared.tree));
-}
-
-// One line the run's log carries at TRACE: `what` the surfaces are, each
+// One line the run's log carries at TRACE: the surfaces as `surveyed`, each
 // with its name, entry, stem, and the ids its requirements lead with, as one
 // JSON array.
 fn logged(source: &str, what: &str, surfaces: &[Surface]) {
@@ -461,13 +440,14 @@ fn by_stem(tree: &Tree, surfaces: &[Surface]) -> Vec<Seam> {
 }
 
 // What a seam of a tree with no surface is told in place of its surfaces.
-const NO_SURFACE: &str = "No surface was found in this source by reading its code: no bootstrap \
-                          the manifest names or a conventional entry holds, no handler registered \
-                          with a package, no method under a package's decorator, and no function \
-                          or class exported at an entry module. Read it as a library is read — for \
-                          what its exports do for a caller — and claim what the code exhibits.";
+const NO_SURFACE: &str = "No surface was found in this source: its survey named no route, command, \
+                          job, consumer, or exported API — no bootstrap the manifest names or a \
+                          conventional entry holds, no handler registered with a package, no \
+                          method under a package's decorator, and no function or class exported at \
+                          an entry module for a caller. Read it as a library is read — for what \
+                          its exports do for a caller — and claim what the code exhibits.";
 
-// One seam over a tree the parser finds no surface in: every module, under
+// One seam over a tree the survey names no surface in: every module, under
 // the one stem the tree is named by.
 fn unsurfaced(tree: &Tree, root: &str) -> Seam {
     let files: Vec<String> = tree.modules.keys().cloned().collect();
@@ -485,7 +465,7 @@ fn unsurfaced(tree: &Tree, root: &str) -> Seam {
     }
 }
 
-// One seam per top-level directory of a tree the parser finds no surface in
+// One seam per top-level directory of a tree the survey names no surface in
 // — beneath `src/` where a module sits under it, else beneath the root —
 // under the directory's name, the root's own modules joined to the first.
 fn by_directory(tree: &Tree, root: &str) -> Vec<Seam> {

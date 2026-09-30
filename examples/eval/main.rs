@@ -19,8 +19,8 @@
 //! `CURSOR_TIMEOUT_SECS/CURSOR_INACTIVITY_SECS`), and the runtime's other
 //! `CURSOR_*` knobs. `RUST_LOG` is set for the run unless the caller sets it:
 //! the scorecard needs the SDK's `accepted` trace lines and `surveyed by
-//! model` line, the adapter's `surveyed` and `placed by model` lines, and the
-//! backend's `completion` lines.
+//! model` line, the adapter's `surveyed` trace line and `placed by model`
+//! line, and the backend's `completion` lines.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{self, Display, Formatter, Write as _};
@@ -289,12 +289,9 @@ struct Run {
     completions: Vec<Completion>,
     // the surfaces the seams were cut from, as the adapter logged them
     surveyed: Vec<Surveyed>,
-    // the parser's surfaces, logged beside the model's under the
-    // `model-survey` arm alone
-    parsed: Option<Vec<Surveyed>>,
-    // the modules the model's survey placed under no surface, by the
-    // adapter's own count (`placed by model`), else as the model listed them
-    // (the SDK's `surveyed by model` line); none under the parser
+    // the modules the survey placed under no surface, by the adapter's own
+    // count (`placed by model`), else as the model listed them (the SDK's
+    // `surveyed by model` line)
     unreached: Option<usize>,
     spec: Option<Value>,
     design: Option<Value>,
@@ -354,7 +351,10 @@ impl Run {
 
     // The (entry, stem) pairs the survey decided, however many surfaces share one.
     fn pairs(&self) -> BTreeSet<(&str, &str)> {
-        pairs(&self.surveyed)
+        self.surveyed
+            .iter()
+            .map(|surface| (surface.entry.as_str(), surface.stem.as_str()))
+            .collect()
     }
 
     fn requirements(&self) -> &[Value] {
@@ -414,10 +414,6 @@ impl Run {
     }
 }
 
-fn pairs(surveyed: &[Surveyed]) -> BTreeSet<(&str, &str)> {
-    surveyed.iter().map(|surface| (surface.entry.as_str(), surface.stem.as_str())).collect()
-}
-
 #[derive(Clone, Copy, Default)]
 struct Tokens {
     input: u64,
@@ -466,8 +462,7 @@ fn run(project: &Path, settings: &Settings, n: usize, rung: Rung, tag: &str) -> 
         diff: serde_json::from_str::<Value>(&stdout).ok().and_then(|out| out.get("diff").cloned()),
         evidence: accepted(&stderr),
         completions: completions(&stderr),
-        surveyed: surveyed(&stderr, "surveyed").unwrap_or_default(),
-        parsed: surveyed(&stderr, "parsed"),
+        surveyed: surveyed(&stderr).unwrap_or_default(),
         unreached: unreached(&stderr),
         spec: None,
         design: None,
@@ -523,13 +518,12 @@ fn accepted(stderr: &str) -> Vec<Evidence> {
         .collect()
 }
 
-// The adapter's `surveyed` (or, under the model arm, `parsed`) trace line
-// carries the surfaces as one JSON array at the end of the line.
-fn surveyed(stderr: &str, what: &str) -> Option<Vec<Surveyed>> {
-    let mark = format!(" {what} source=");
+// The adapter's `surveyed` trace line carries the surfaces as one JSON array
+// at the end of the line.
+fn surveyed(stderr: &str) -> Option<Vec<Surveyed>> {
     stderr
         .lines()
-        .filter(|line| line.contains(&mark))
+        .filter(|line| line.contains(" surveyed source="))
         .filter_map(|line| line.split_once("surfaces="))
         .find_map(|(_, json)| serde_json::from_str(json.trim()).ok())
 }
@@ -905,17 +899,6 @@ fn notes(f: &mut Formatter<'_>, attempt: &Attempt, climbed: bool) -> fmt::Result
             writeln!(f, "- surface extra: {extra}")?;
         }
     }
-    if let Some(parsed) = &run.parsed {
-        let parser = pairs(parsed);
-        if parser == run.pairs() {
-            writeln!(f, "- the parser names the same (entry, stem) pairs")?;
-        } else {
-            let listed: Vec<String> =
-                parser.iter().map(|(entry, stem)| format!("`{entry}` · {stem}")).collect();
-            writeln!(f, "- the parser would name: {}", listed.join(", "))?;
-        }
-    }
-
     // the claims
     if run.exit == Some(0) {
         if !grade.missing_stems.is_empty() {

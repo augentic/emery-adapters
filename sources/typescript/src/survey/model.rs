@@ -1,19 +1,20 @@
 //! Has the model name the surfaces of a tree, from the facts the parser read.
 //!
-//! The parser's survey decides the surfaces from the code alone; this arm
-//! hands what it read — the manifest, the bootstrap, every call that hands a
-//! function to something a package provides, every method under a package's
-//! decorator, what the entry modules export, the packages imported — to the
-//! model, laid beside the modules that fit, and asks it to name each surface,
-//! anchor it where it is registered or declared, and give the stem its ids
-//! lead with. Code then holds the answer to the tree: every module is reached
-//! by a named surface or listed as unreached, and the bootstrap's `start` is
-//! the caller's, never the model's. From the accepted anchors the same code
-//! as the parser's derives the closure each surface reaches, the bootstrap
-//! surface, what tells each surface from the others under its stem (read
-//! from the registration, decorator, or export at the anchor, never from the
-//! model's name for it), and the ids, so the seams cut from either arm
-//! differ in the naming alone.
+//! The parser reads the tree; the model decides what in it is a surface.
+//! What the parser read — the manifest, the bootstrap, every call that hands
+//! a function to something a package provides, every method under a
+//! package's decorator, what the entry modules export, the packages imported
+//! — is handed to the model, laid beside the modules that fit, and it names
+//! each surface, anchors it where it is registered or declared, and gives
+//! the stem its ids lead with. Code then holds the answer to the tree: every
+//! module the facts locate a surface in is reached by a named surface or
+//! listed as unreached, and the bootstrap's `start` is the caller's, never
+//! the model's. From the accepted anchors the code derives the rest — the
+//! closure each surface reaches, the bootstrap surface, the stem the code
+//! spells at the anchor where it spells one, what tells each surface from
+//! the others under its stem, a class's methods, and the ids — read from the
+//! registration, decorator, or export at the anchor, never from the model's
+//! name for it, so two runs that accept the same anchors cut the same seams.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -21,7 +22,8 @@ use std::path::Path;
 use emery_sdk::survey::{Facts, Inventory};
 use emery_sdk::{Context, Doc, Error, Model};
 
-use super::parse::{Call, ExportKind, Lines, Module};
+use super::parse::{Call, Export, ExportKind, Lines, Module};
+use super::resolve::Target;
 use super::surface::{Receiver, Surface, Tree};
 use super::{Prepared, push_unique, skeleton, surface, unique};
 
@@ -54,6 +56,22 @@ pub async fn surfaces<P: Model>(
     .await?;
 
     let mut surfaces = build(tree, &inventory, &mounts);
+    let restemmed: Vec<String> = inventory
+        .surfaces
+        .iter()
+        .filter_map(|named| {
+            let built = surfaces.iter().find(|surface| surface.name == named.name)?;
+            (built.stem != named.stem)
+                .then(|| format!("`{}`: `{}` for `{}`", named.name, built.stem, named.stem))
+        })
+        .collect();
+    if !restemmed.is_empty() {
+        emery_sdk::tracing::debug!(
+            source = %prepared.source,
+            ?restemmed,
+            "stems the code spells at the anchors, in place of the survey's"
+        );
+    }
     if let Some(module) = bootstrap.as_deref().and_then(|entry| tree.modules.get(entry)) {
         let start = surface::start(tree, module, &surfaces);
         surfaces.insert(0, start);
@@ -247,7 +265,8 @@ fn decorated(tree: &Tree) -> Option<String> {
 }
 
 // What the entry modules — the ones the manifest names, and the ones no
-// other module imports — export, with the kind and lines of each.
+// other module imports — export, with the kind and lines of each, and what
+// a barrel among them re-exports, one hop, at the module that declares it.
 fn exports(tree: &Tree) -> Option<String> {
     let mut entries = tree.manifest.entries(&tree.resolver);
     for root in surface::roots(tree) {
@@ -255,33 +274,63 @@ fn exports(tree: &Tree) -> Option<String> {
     }
     let mut lines: Vec<String> = Vec::new();
     for module in entries.iter().filter_map(|path| tree.modules.get(path)) {
-        let exported: Vec<String> = module
-            .exports
-            .iter()
-            .filter_map(|export| {
-                let kind = match &export.kind {
-                    ExportKind::Function => "function",
-                    ExportKind::Class { .. } => "class",
-                    ExportKind::Value => "value",
-                    ExportKind::Type | ExportKind::Unknown => return None,
-                };
-                Some(format!("`{}` ({kind}) {}", export.name, export.lines))
-            })
-            .collect();
-        if exported.is_empty() {
-            continue;
+        let exported = declared(module.exports.iter());
+        if !exported.is_empty() {
+            lines.push(format!("- `{}` exports {}", module.path, exported.join(", ")));
         }
-        lines.push(format!("- `{}` exports {}", module.path, exported.join(", ")));
+        for reexport in module.reexports.iter().filter(|reexport| !reexport.type_only) {
+            let Some(Target::Module(path)) =
+                tree.resolver.resolve(&module.path, &reexport.specifier)
+            else {
+                continue;
+            };
+            let Some(target) = tree.modules.get(&path) else { continue };
+            let exported = reexport.names.as_ref().map_or_else(
+                || declared(target.exports.iter()),
+                |names| {
+                    declared(names.iter().filter_map(|(imported, _)| {
+                        target.exports.iter().find(|export| {
+                            export.name == *imported || export.local.as_deref() == Some(imported)
+                        })
+                    }))
+                },
+            );
+            if !exported.is_empty() {
+                lines.push(format!(
+                    "- `{}` re-exports from `{}`, where each is declared: {}",
+                    module.path,
+                    target.path,
+                    exported.join(", ")
+                ));
+            }
+        }
     }
     if lines.is_empty() {
         return None;
     }
     Some(format!(
         "What the entry modules — the ones the manifest names, and the ones no other module \
-         imports — export, each with its kind and lines. In a tree with no bootstrap, or under \
-         a framework that routes by file, these are where a caller enters:\n\n{}",
+         imports — export, each with its kind and lines, and what a barrel among them re-exports \
+         at the module that declares it. In a tree with no bootstrap, or under a framework that \
+         routes by file, these are where a caller enters:\n\n{}",
         lines.join("\n")
     ))
+}
+
+// The exports that declare something a caller calls, each with its kind and
+// lines; a type is none.
+fn declared<'e>(exports: impl Iterator<Item = &'e Export>) -> Vec<String> {
+    exports
+        .filter_map(|export| {
+            let kind = match &export.kind {
+                ExportKind::Function => "function",
+                ExportKind::Class { .. } => "class",
+                ExportKind::Value => "value",
+                ExportKind::Type | ExportKind::Unknown => return None,
+            };
+            Some(format!("`{}` ({kind}) {}", export.name, export.lines))
+        })
+        .collect()
 }
 
 // The files laid into the turn whole, as far as they fit: the manifest, the
@@ -374,10 +423,12 @@ fn check(
 }
 
 // The surfaces the answer names, each at the module and lines its anchor
-// names, reaching what the code at those lines references and told from the
-// others under its stem by what is registered, decorated, or exported there
-// — as the parser's own are from a registration. A surface whose anchor the
-// tree does not hold is left out; the SDK's gate has refused it already.
+// names, carrying what the code there says of it — the registration or
+// declaration whole, the modules it reaches, the stem it spells, where it
+// spells one, in place of the survey's; what tells it from the others under
+// that stem; a class's methods — as the parser's own are read from a
+// registration. A surface whose anchor the tree does not hold is left out;
+// the SDK's gate has refused it already.
 fn build(tree: &Tree, answer: &Inventory, mounts: &BTreeMap<String, String>) -> Vec<Surface> {
     answer
         .surfaces
@@ -395,22 +446,20 @@ fn build(tree: &Tree, answer: &Inventory, mounts: &BTreeMap<String, String>) -> 
                     end: u32::try_from(module.text.lines().count()).unwrap_or(u32::MAX).max(1),
                 },
             };
+            let derived = surface::derive(tree, module, lines, &named.name, &named.stem, mounts);
             Some(Surface {
                 name: named.name.clone(),
                 entry: module.path.clone(),
-                stem: named.stem.clone(),
-                lines,
-                detail: vec![format!("registered or declared {lines}, named by the survey")],
-                closure: tree.reaches(module, lines, &[], None),
-                discriminator: surface::discriminate(
-                    tree,
-                    module,
-                    lines,
-                    &named.name,
-                    &named.stem,
-                    mounts,
-                ),
-                methods: Vec::new(),
+                stem: derived.stem.unwrap_or_else(|| named.stem.clone()),
+                lines: derived.lines,
+                detail: derived.detail,
+                closure: derived.closure,
+                discriminator: derived.discriminator,
+                methods: derived
+                    .methods
+                    .iter()
+                    .filter_map(|(name, _)| surface::kebab(name))
+                    .collect(),
                 ids: Vec::new(),
             })
         })
