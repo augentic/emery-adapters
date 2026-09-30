@@ -60,7 +60,7 @@ fn shapes(decorator: &str) -> bool {
 }
 
 // How many bindings a receiver is traced through before it counts as local.
-const TRACE: usize = 4;
+pub(super) const TRACE: usize = 4;
 
 /// The parsed tree with what locates its modules.
 #[derive(Debug)]
@@ -116,7 +116,7 @@ impl Tree {
             .filter_map(|entry| self.modules.get(&entry))
             .find(|module| {
                 module.calls.iter().any(|call| {
-                    call.discarded
+                    call.discarded()
                         && call.depth == 0
                         && call.function.is_none()
                         && call.class.is_none()
@@ -828,7 +828,7 @@ pub(super) fn handed(tree: &Tree, module: &Module, call: &Call) -> Option<Receiv
 // plugin, it registers nothing.
 pub(super) fn registers(tree: &Tree, module: &Module, call: &Call) -> bool {
     hands(tree, module, call)
-        && (call.discarded || call.is_new || led(tree, module, call).is_some())
+        && (call.discarded() || call.is_new || led(tree, module, call).is_some())
 }
 
 // The registration at `lines`: the first call of that shape starting within

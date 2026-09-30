@@ -17,7 +17,7 @@
 # treatment named them on six of six runs under the prompt's rule, when the
 # expectation moved to the prompt's reading.
 
-fixture = "examples/typescript/nestjs-boilerplate"
+fixture = "evals/cases/nestjs-boilerplate/fixture"
 stems = ["start", "auth", "users", "files", "home", "run-seed"]
 
 # --- surfaces: the bootstrap, the nine controllers, and the two seed runners ---

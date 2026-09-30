@@ -21,7 +21,7 @@
 # its module's or, for an `index`, its directory's name, so it is expected as
 # one surface under `api`.
 
-fixture = "examples/typescript/fastify-demo"
+fixture = "evals/cases/fastify-demo/fixture"
 stems = ["start", "home", "api", "auth", "users", "tasks", "create-database", "drop-database", "migrate", "seed-database"]
 
 # --- surfaces: the bootstrap, five route modules, four operator scripts ---

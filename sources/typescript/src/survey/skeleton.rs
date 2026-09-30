@@ -21,15 +21,17 @@
 //! code confirms of them is claimed and what it does not hold is not
 //! invented.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use emery_sdk::serde_json::{Map, Value};
 use emery_sdk::{Claim, ClaimKind};
 
-use super::parse::{BindingKind, Call, Imported, Init, Lines, MemberKind, Module, Scope, TypeKind};
+use super::parse::{
+    BindingKind, Call, Imported, Init, Lines, MemberKind, Module, Scope, TypeKind, Use,
+};
 use super::push_unique;
 use super::resolve::Target;
-use super::surface::{Surface, Tree};
+use super::surface::{Surface, TRACE, Tree};
 
 // The runtime's own functions that leave the process, listed as calls with
 // no package when nothing in the module binds the name.
@@ -163,10 +165,12 @@ pub fn decisions<'m>(modules: impl IntoIterator<Item = &'m Module>) -> Option<St
          throws, catches, and timers the code turns on. A `requirement` anchors where a behaviour \
          starts or its result is decided — at one of these, at a `return`, at the line that opens \
          the function or method whose whole body is the behaviour, at a listed call or a \
-         package's construction, at a boundary, at the code a stated behaviour names, or at a \
-         surface's registration or handler lines; a line that only wires or assigns is no \
-         requirement's anchor, and what `start` constructs with a boundary's value is one \
-         requirement at that construction:\n\n{}",
+         package's construction, at a boundary or a line that applies a named constant, at a step \
+         the function takes into the tree (a write, a delete, a publish, a lookup it awaits), at \
+         the code a stated behaviour names, or at a surface's registration or handler lines; a \
+         line that only wires or assigns — a value passed on, a field set, a value computed from \
+         the ones in hand — is no requirement's anchor, and what `start` constructs with a \
+         boundary's value is one requirement at that construction:\n\n{}",
         lines.join("\n")
     ))
 }
@@ -332,9 +336,11 @@ fn constant_name(name: &str) -> bool {
 }
 
 // The bindings of `module` that spell a value of their own: each module-level
-// binding, class field (named `Class.field`), and constant-named function
-// local whose initializer is a literal, a pattern, a `process.env` read, or
-// a definition, with the initializer's head and the binding's lines.
+// binding, class field (named `Class.field`), and function local that is
+// constant-named or an enumeration written out in place (`allowedMimeTypes =
+// ['image/jpeg', 'image/png']`) whose initializer is a literal, a pattern, a
+// `process.env` read, or a definition, with the initializer's head and the
+// binding's lines.
 fn spelled(module: &Module) -> impl Iterator<Item = (String, &str, Lines)> {
     module.bindings.iter().filter_map(|binding| {
         let (name, init, head) = match (&binding.scope, &binding.kind) {
@@ -353,7 +359,11 @@ fn spelled(module: &Module) -> impl Iterator<Item = (String, &str, Lines)> {
                     head: Some(head),
                     ..
                 },
-            ) if constant_name(&binding.name) => (binding.name.clone(), *init, head),
+            ) if constant_name(&binding.name)
+                || (*init == Init::Literal && head.starts_with(['[', '{'])) =>
+            {
+                (binding.name.clone(), *init, head)
+            }
             (
                 Scope::Class(class),
                 BindingKind::Field {
@@ -375,7 +385,11 @@ fn spelled(module: &Module) -> impl Iterator<Item = (String, &str, Lines)> {
 /// opens it, where a behaviour it computes whole is anchored — every call
 /// made through a package or a global that leaves the process
 /// (constructions, registrations, and lifecycle calls among them), every
-/// boundary and `process.env` read, and the registration or declaration
+/// boundary and `process.env` read, every line that applies one of the
+/// tree's constant-named boundaries, every step a function takes into the
+/// tree or on one of its class's members — a call for its effect alone or
+/// one it awaits, on `this`, a module import, or a local or parameter a
+/// tree class constructs or types — and the registration or declaration
 /// lines of each of `surfaces`; each in the claim `path` grammar, once.
 pub fn anchors<'s>(
     tree: &Tree, files: &[String], surfaces: impl IntoIterator<Item = &'s Surface>,
@@ -387,10 +401,32 @@ pub fn anchors<'s>(
         start: lines.start,
         end: lines.start,
     };
+    // the constant-named boundaries of the whole tree: a line that applies
+    // one, wherever it is spelled, is where a behaviour that depends on it
+    // is decided
+    let constants: BTreeSet<String> = tree
+        .modules
+        .values()
+        .flat_map(spelled)
+        .map(|(name, _, _)| name)
+        .filter(|name| constant_name(name))
+        .collect();
     for surface in surfaces {
         push(&surface.entry, surface.lines);
     }
     for module in files.iter().filter_map(|path| tree.modules.get(path)) {
+        for line in module.referencing(|name| constants.contains(name)) {
+            push(
+                &module.path,
+                Lines {
+                    start: line,
+                    end: line,
+                },
+            );
+        }
+        for call in module.calls.iter().filter(|call| step(tree, module, call)) {
+            push(&module.path, call.lines);
+        }
         for decision in &module.decisions {
             push(&module.path, decision.lines);
         }
@@ -433,18 +469,69 @@ pub fn anchors<'s>(
     anchors
 }
 
+// A step a function takes into a module of the tree or on one of its class's
+// members: a call for its effect alone — an expression statement, its value
+// discarded (`this.sessions.deleteByUserId(..)`): a write, a delete, a
+// publish — or one it awaits (`await this.customers.get(id)`): a lookup, a
+// fetch, where that step is claimed. Not a registration handed a handler, a
+// lifecycle or mounting call, or a call at module level.
+fn step(tree: &Tree, module: &Module, call: &Call) -> bool {
+    if call.value == Use::Consumed || call.frames.is_empty() || call.structural() {
+        return false;
+    }
+    if call.args.iter().any(|arg| tree.handler(module, arg, &call.frames)) {
+        return false;
+    }
+    let head = call.callee.head.as_str();
+    head == "this" || of_tree(module, head, &call.frames, TRACE)
+}
+
+// Whether `name`, from within `frames` of `module`, is the tree's own: an
+// import of one of its modules, a class or function the module declares, or
+// a binding constructed as or typed by one — the local that holds `new
+// OrdersRepository(..)`, the parameter typed `mailer: Mailer` — traced
+// through the bindings that initialise it as a package receiver is.
+fn of_tree(module: &Module, name: &str, frames: &[u32], budget: usize) -> bool {
+    if budget == 0 {
+        return false;
+    }
+    let Some(binding) = module.binding(name, frames) else {
+        return module.imported(name).is_some();
+    };
+    let heads = |type_path: &Option<Vec<String>>, root: &Option<Vec<String>>| {
+        type_path
+            .iter()
+            .chain(root)
+            .filter_map(|path| path.first())
+            .any(|head| of_tree(module, head, frames, budget - 1))
+    };
+    match &binding.kind {
+        BindingKind::Class { .. }
+        | BindingKind::Function
+        | BindingKind::Value {
+            init: Init::Function, ..
+        } => true,
+        BindingKind::Value { type_path, root, .. } => heads(type_path, root),
+        BindingKind::Param { type_path } => heads(type_path, &None),
+        BindingKind::Field { .. } => false,
+    }
+}
+
 /// The brief's boundaries over `modules`: each module-level binding, class
-/// field, and constant-named function local whose initializer spells a value
-/// of its own — a literal, a pattern, a `process.env` read, a definition —
-/// and each `process.env` read no such binding holds, at its lines as the
-/// code writes it. `None` when they spell none.
+/// field, and constant-named or enumerating function local whose initializer
+/// spells a value of its own — a literal, a pattern, a `process.env` read, a
+/// definition — and each `process.env` read no such binding holds, at its
+/// lines as the code writes it, a value written over several lines collapsed
+/// to one. `None` when they spell none.
 pub fn boundaries<'m>(modules: impl IntoIterator<Item = &'m Module>) -> Option<String> {
     let mut lines: Vec<String> = Vec::new();
     for module in modules {
         let mut spoken: Vec<Lines> = Vec::new();
         for (name, head, at) in spelled(module) {
             spoken.push(at);
-            lines.push(format!("- `{}#{}` — `{name} = {head}`", module.path, at.anchor()));
+            let value = if at.end > at.start { collapsed(&module.text, at) } else { None };
+            let value = value.as_deref().unwrap_or(head);
+            lines.push(format!("- `{}#{}` — `{name} = {value}`", module.path, at.anchor()));
         }
         for read in &module.env {
             if spoken.iter().any(|lines| lines.contains(read.lines)) {
@@ -474,6 +561,33 @@ pub fn boundaries<'m>(modules: impl IntoIterator<Item = &'m Module>) -> Option<S
          to state, and no criterion:\n\n{}",
         lines.join("\n")
     ))
+}
+
+// A value written over the lines `at` of `text`, collapsed to one line: the
+// lines trimmed, comment lines dropped, joined by one space, what follows the
+// first `=` kept, and cut at `COLLAPSED` characters. `None` when nothing is
+// left.
+fn collapsed(text: &str, at: Lines) -> Option<String> {
+    const COLLAPSED: usize = 400;
+    let start = at.start.saturating_sub(1) as usize;
+    let count = (at.end.saturating_sub(at.start) + 1) as usize;
+    let joined = text
+        .lines()
+        .skip(start)
+        .take(count)
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with("//") && !line.starts_with('*'))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let value = joined.split_once(" = ").map_or(joined.as_str(), |(_, value)| value);
+    let value = value.trim().trim_end_matches(';').trim_end();
+    if value.is_empty() {
+        return None;
+    }
+    Some(match value.char_indices().nth(COLLAPSED) {
+        Some((cut, _)) => format!("{}…", value[..cut].trim_end()),
+        None => value.to_owned(),
+    })
 }
 
 /// The brief's packages over `modules`: each bare specifier they import, with

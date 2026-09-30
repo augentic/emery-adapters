@@ -107,14 +107,6 @@ emery-prose = "0.38.0"
 emery-sdk = "0.38.0"
 test-programs = { path = "crates/test-programs" }
 
-# The TypeScript parser `typescript` surveys with; pre-1.0, so pinned exactly
-# and bumped deliberately, every crate at one version.
-oxc_allocator = "=0.152.0"
-oxc_ast = "=0.152.0"
-oxc_ast_visit = "=0.152.0"
-oxc_parser = "=0.152.0"
-oxc_span = "=0.152.0"
-
 [patch.crates-io]
 emery-prose = { git = "https://github.com/augentic/emery" }
 emery-sdk = { git = "https://github.com/augentic/emery" }

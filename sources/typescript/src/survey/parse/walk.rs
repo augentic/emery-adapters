@@ -6,11 +6,11 @@ use std::borrow::Cow;
 use oxc_allocator::Allocator;
 use oxc_ast::AstKind;
 use oxc_ast::ast::{
-    Argument, BindingPattern, CallExpression, CatchClause, ChainElement, Class, ClassElement,
-    ComputedMemberExpression, ConditionalExpression, Declaration, Decorator, ExportAllDeclaration,
-    ExportDeclaration, ExportDefaultDeclaration, ExportDefaultDeclarationKind,
-    ExportFromDeclaration, ExportNamedDeclaration, Expression, ExpressionStatement,
-    FormalParameters, IdentifierReference, IfStatement, ImportDeclaration,
+    Argument, AwaitExpression, BindingPattern, CallExpression, CatchClause, ChainElement, Class,
+    ClassElement, ComputedMemberExpression, ConditionalExpression, Declaration, Decorator,
+    ExportAllDeclaration, ExportDeclaration, ExportDefaultDeclaration,
+    ExportDefaultDeclarationKind, ExportFromDeclaration, ExportNamedDeclaration, Expression,
+    ExpressionStatement, FormalParameters, IdentifierReference, IfStatement, ImportDeclaration,
     ImportDeclarationSpecifier, ImportExpression, ImportOrExportKind, MethodDefinition,
     MethodDefinitionKind, NewExpression, ObjectPropertyKind, PropertyDefinition, PropertyKey,
     ReturnStatement, StaticMemberExpression, SwitchStatement, TSAccessibility, TSEnumDeclaration,
@@ -24,7 +24,7 @@ use oxc_span::{GetSpan, SourceType, Span};
 use super::{
     Arg, Binding, BindingKind, Call, Callee, ClassDecl, Decision, Decorated, EnvRead, Export,
     ExportKind, Import, Imported, Init, Invocation, Lines, Link, Member, MemberKind, Module,
-    Reexport, Reference, Scope, TypeDecl, TypeKind,
+    Reexport, Reference, Scope, TypeDecl, TypeKind, Use,
 };
 
 // A binding's initializer is kept as its head: its first line, cut to this
@@ -88,6 +88,8 @@ struct Walker<'s> {
     positions: Vec<bool>,
     // the call an expression statement discards the value of
     discarded: Option<Span>,
+    // the call an `await` waits on
+    awaited: Option<Span>,
     // the calls a further, non-structural call in their chain is made on
     chained: Vec<Span>,
     // the name the next function frame takes: a variable's, a method's
@@ -333,7 +335,13 @@ impl<'s> Walker<'s> {
             is_new,
             args,
             depth: self.frames.last().map_or(0, |frame| frame.depth),
-            discarded: self.discarded == Some(span),
+            value: if self.discarded == Some(span) {
+                Use::Discarded
+            } else if self.awaited == Some(span) {
+                Use::Awaited
+            } else {
+                Use::Consumed
+            },
             inner: self.chained.contains(&span),
             frames: self.frames.iter().map(|frame| frame.id).collect(),
             function: self.frames.iter().rev().find_map(|frame| frame.name.clone()),
@@ -503,6 +511,15 @@ impl<'a> Visit<'a> for Walker<'_> {
             Core::Other(_) => None,
         };
         walk::walk_expression_statement(self, it);
+    }
+
+    fn visit_await_expression(&mut self, it: &AwaitExpression<'a>) {
+        self.awaited = match core(&it.argument) {
+            Core::Call(call) => Some(call.span),
+            Core::New(new) => Some(new.span),
+            Core::Other(_) => None,
+        };
+        walk::walk_await_expression(self, it);
     }
 
     fn visit_if_statement(&mut self, it: &IfStatement<'a>) {
@@ -859,7 +876,7 @@ fn classify(expr: &Expression<'_>) -> Init {
     match core(expr) {
         Core::Other(Expression::RegExpLiteral(_)) => Init::Pattern,
         Core::New(new) if is_regexp(&new.callee) && all_literal(&new.arguments) => Init::Pattern,
-        Core::Other(other) if literal(other) => Init::Literal,
+        Core::Other(other) if literal(other) || settings(other) => Init::Literal,
         Core::Call(call) if wraps(call) => Init::Literal,
         Core::Call(call) if is_require(&call.callee) => Init::Construction,
         Core::Call(call) => invoked(&call.arguments),
@@ -917,6 +934,46 @@ fn literal(expr: &Expression<'_>) -> bool {
         Expression::CallExpression(call) => wraps(call),
         _ => false,
     }
+}
+
+// An object or array written out as settings are: at least one property or
+// element a literal, every other one a name, a member path, an inline
+// function, or settings again — never a call, a construction, or a spread,
+// which make it a construction or a derivation.
+fn settings(expr: &Expression<'_>) -> bool {
+    fn plain(expr: &Expression<'_>) -> bool {
+        match bare(expr) {
+            Expression::Identifier(_) | Expression::StaticMemberExpression(_) => true,
+            other => is_function(other) || literal(other) || settings(other),
+        }
+    }
+    let (mut any, mut all) = (false, true);
+    match bare(expr) {
+        Expression::ObjectExpression(object) => {
+            for property in &object.properties {
+                match property {
+                    ObjectPropertyKind::ObjectProperty(p) => {
+                        any |= literal(&p.value);
+                        all &= p.method || plain(&p.value);
+                    }
+                    ObjectPropertyKind::SpreadProperty(_) => all = false,
+                }
+            }
+        }
+        Expression::ArrayExpression(array) => {
+            for element in &array.elements {
+                match element.as_expression() {
+                    Some(value) => {
+                        any |= literal(value);
+                        all &= plain(value);
+                    }
+                    None => all = false,
+                }
+            }
+        }
+        _ => return false,
+    }
+    any && all
 }
 
 // A wrapper call over literals: `Number(3000)`, `parseInt("10", 10)`.

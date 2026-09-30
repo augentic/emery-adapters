@@ -94,11 +94,11 @@ fn bulk(project: &Scratch, file: &str, head: &str) {
     project.write(file, format!("{head}{}", line.repeat(count)));
 }
 
-// A committed fixture under `examples/typescript/`, copied whole into the
-// scratch — less the `node_modules` and `dist` a checkout may hold — so the
-// component runs over the real tree the eval's case of that name runs over.
+// A committed fixture under `evals/cases/<name>/fixture`, copied whole into
+// the scratch — less the `node_modules` and `dist` a checkout may hold — so
+// the component runs over the real tree the eval's case of that name runs over.
 fn fixture(project: &Scratch, name: &str) {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/typescript").join(name);
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("evals/cases").join(name).join("fixture");
     copy_tree(&root, project, "");
 }
 
@@ -1555,7 +1555,12 @@ async fn typescript_boundaries() {
                  listen(app: { listen(port: number): void }) {\n  app.listen(Number(process.env.PORT \
                  ?? 3000));\n}\n\nexport async function settle(sleep: (ms: number) => \
                  Promise<void>) {\n  const FIVE_SEC_DELAY = 5 * 1000;\n  const attempts = 0;\n  \
-                 await sleep(FIVE_SEC_DELAY);\n  return attempts;\n}\n",
+                 await sleep(FIVE_SEC_DELAY);\n  return attempts;\n}\n\nexport const \
+                 validation = {\n  transform: true,\n  status: Status.UNPROCESSABLE,\n  \
+                 factory: (errors: string[]) => errors.join(\",\"),\n};\n\nexport function \
+                 accept(kind: string) {\n  const allowedKinds = [\"image/jpeg\", \
+                 \"image/png\"];\n  const fallback = allowedKinds[0];\n  return \
+                 allowedKinds.includes(kind) ? kind : fallback;\n}\n",
             ),
             (
                 "src/index.ts",
@@ -1575,15 +1580,20 @@ async fn typescript_boundaries() {
         "- `src/config.ts#L5` — `SKU = /^[A-Z]{2,4}-\\d{3,6}$/`",
         "- `src/config.ts#L6` — `API_TOKENS = (process.env.API_TOKENS ?? \"\").split(\",\").filter((token) \
          => token.length > 0)`",
-        "- `src/config.ts#L7-L10` — `ORDER = define({…`",
+        "- `src/config.ts#L7-L10` — `ORDER = define({ id: \"string\", lines: \"number\", })`",
         "- `src/config.ts#L13` — `Limits.pageSize = Number(process.env.PAGE_SIZE ?? 20)`",
         "- `src/config.ts#L17` — `process.env.PORT` in `app.listen(Number(process.env.PORT ?? 3000));`",
         "- `src/config.ts#L21` — `FIVE_SEC_DELAY = 5 * 1000`",
+        "- `src/config.ts#L27-L31` — `validation = { transform: true, status: Status.UNPROCESSABLE, \
+         factory: (errors: string[]) => errors.join(\",\"), }`",
+        "- `src/config.ts#L34` — `allowedKinds = [\"image/jpeg\", \"image/png\"]`",
         "- `express` — `express` (default), `Router` — in `src/index.ts`, `src/routes.ts`",
     ] {
         assert!(turns[0].contains(line), "{line} is in the brief: {}", turns[0]);
     }
-    for absent in ["`app = express()`", "`port = PORT`", "`attempts = 0`"] {
+    for absent in
+        ["`app = express()`", "`port = PORT`", "`attempts = 0`", "`fallback = allowedKinds[0]`"]
+    {
         assert!(!turns[0].contains(absent), "{absent} is no boundary: {}", turns[0]);
     }
     assert!(
@@ -1927,6 +1937,87 @@ async fn typescript_anchors() {
     );
     for held in ["claim 0:", "claim 2:", "claim 3:", "claim 4:", "claim 5:"] {
         assert!(!correction.contains(held), "{held} is at an anchor or not held: {correction}");
+    }
+    assert_eq!(exchanges[1].outcome, Ok(String::new()), "the corrected answer is accepted");
+    assert_eq!(exchanges[2].outcome, Ok(String::new()), "the inline value is held to no anchor");
+}
+
+// An Express service whose handler steps into the tree through instances:
+// a repository constructed into a local, awaited and then called for its
+// effect alone, and a mailer handed to a helper whose parameter is typed
+// by the tree's class.
+const STEPPING: [(&str, &str); 4] = [
+    (
+        "src/index.ts",
+        "import express from \"express\";\nimport { createOrder } from \"./orders\";\n\nconst app \
+         = express();\napp.post(\"/orders\", createOrder);\napp.listen(3000);\n",
+    ),
+    (
+        "src/orders.ts",
+        "import { OrdersRepository } from \"./repository\";\nimport { Mailer } from \
+         \"./mailer\";\n\nexport async function createOrder(req: { body: { sku: string } }, res: { \
+         json(body: unknown): void }) {\n  const repo = new OrdersRepository();\n  const id = \
+         await repo.insert(req.body.sku);\n  repo.flush();\n  await notify(new Mailer(), id);\n  \
+         res.json({ id });\n}\n\nasync function notify(mailer: Mailer, id: string) {\n  await \
+         mailer.send(id);\n}\n",
+    ),
+    (
+        "src/repository.ts",
+        "export class OrdersRepository {\n  async insert(sku: string): Promise<string> {\n    \
+         return sku;\n  }\n  flush(): void {}\n}\n",
+    ),
+    ("src/mailer.ts", "export class Mailer {\n  async send(id: string): Promise<void> {}\n}\n"),
+];
+
+// A step a function takes into the tree is a `requirement`'s anchor however
+// the code reaches the instance it steps on: a call awaited or made for its
+// effect alone on a local a tree class constructs, or on a parameter typed
+// by one, as on `this` or a module import; the construction the local holds
+// only wires, and is refused.
+#[tokio::test]
+async fn typescript_steps() {
+    let project = scratch();
+    modules(&project, &STEPPING);
+    let inserted = serde_json::json!({
+        "kind": "requirement", "id": "orders.insert",
+        "statement": "An order is inserted by its sku.", "path": "src/orders.ts#L6"
+    });
+    let flushed = serde_json::json!({
+        "kind": "requirement", "id": "orders.flush",
+        "statement": "The repository is flushed after the insert.", "path": "src/orders.ts#L7"
+    });
+    let sent = serde_json::json!({
+        "kind": "requirement", "id": "orders.notify",
+        "statement": "The order's id is mailed.", "path": "src/orders.ts#L13"
+    });
+    let constructed = serde_json::json!({
+        "kind": "requirement", "id": "orders.repository",
+        "statement": "Orders use a repository.", "path": "src/orders.ts#L5"
+    });
+    let strayed =
+        serde_json::json!({ "claims": [&inserted, &constructed, &flushed, &sent] }).to_string();
+    let corrected = serde_json::json!({ "claims": [&inserted, &flushed, &sent] }).to_string();
+    let survey = inventory(&[("POST /orders", "src/index.ts#L5", "orders")], &[]);
+    let inline = answer();
+
+    let model = support::run(
+        test_programs::ADAPTER_TYPESCRIPT,
+        &project,
+        &[],
+        ScriptedModel::answering([&survey, &strayed, &corrected, &inline]),
+    )
+    .await;
+
+    let seen = model.seen();
+    assert_eq!(seen.len(), 4, "the survey, two rounds for the one seam, one for the inline value");
+    let exchanges = checked(&model);
+    let correction = exchanges[0].outcome.as_ref().expect_err("the construction is refused");
+    assert!(
+        correction.contains("claim 1: path `src/orders.ts#L5`"),
+        "the finding names the claim at the construction: {correction}"
+    );
+    for held in ["claim 0:", "claim 2:", "claim 3:"] {
+        assert!(!correction.contains(held), "{held} is at a step into the tree: {correction}");
     }
     assert_eq!(exchanges[1].outcome, Ok(String::new()), "the corrected answer is accepted");
     assert_eq!(exchanges[2].outcome, Ok(String::new()), "the inline value is held to no anchor");

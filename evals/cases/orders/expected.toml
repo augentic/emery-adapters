@@ -1,7 +1,7 @@
 # One module, one exported service, no manifest: the inline-budget case. The
 # same estate `examples/documentation/docs/orders-api.md` specifies in prose.
 
-fixture = "examples/typescript/src"
+fixture = "evals/cases/orders/fixture"
 stems = ["order-service"]
 
 # The one exported class; the error classes beside it are what it throws,

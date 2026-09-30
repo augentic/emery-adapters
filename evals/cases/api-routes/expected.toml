@@ -7,7 +7,7 @@
 # `delete` as stems), while a survey that reads the file paths names the
 # resources. Written before any run.
 
-fixture = "examples/typescript/api-routes"
+fixture = "evals/cases/api-routes/fixture"
 stems = ["orders", "customers", "health"]
 
 # --- surfaces: one pair per route module, under the resource its path spells ---
