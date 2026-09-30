@@ -1,0 +1,153 @@
+# A Hono service whose bootstrap mounts three sub-applications by resource —
+# `app.route("/orders", orders)`, `/customers`, `/health` — while each
+# sub-application registers its routes at "/" and "/:id" relative to the
+# mount. The resource is in the mount, which the parser's `mounts()` reads
+# from `use` alone and `route()` never carries, so every route it names
+# falls back to the receiver's type as its stem: the "wrong: stem" case. The
+# bearer check under `/orders/*` and `/customers/*` is the bootstrap's.
+# Written before any run.
+
+fixture = "examples/typescript/hono-mounted"
+stems = ["start", "orders", "customers", "health"]
+
+# --- surfaces: the bootstrap and the three sub-applications ---
+
+[[surface]]
+entry = "src/server.ts"
+stem = "start"
+
+[[surface]]
+entry = "src/routes/orders.ts"
+stem = "orders"
+
+[[surface]]
+entry = "src/routes/customers.ts"
+stem = "customers"
+
+[[surface]]
+entry = "src/routes/health.ts"
+stem = "health"
+
+# --- start ---
+
+[[requirement]]
+stem = "start"
+anchor = "src/server.ts#L16-L20"
+gloss = "Health is served at /health without a token; /orders/* and /customers/* are behind the bearer check, each sub-application mounted under its resource"
+
+[[requirement]]
+stem = "start"
+anchor = "src/lib/auth.ts#L8-L10"
+gloss = "A request without `Authorization: Bearer <token>` naming one of API_TOKENS is 401 `unauthorized`"
+
+[[requirement]]
+stem = "start"
+anchor = "src/server.ts#L22"
+gloss = "The server listens on PORT"
+
+[[requirement]]
+stem = "start"
+anchor = "src/server.ts#L25-L30"
+gloss = "SIGTERM and SIGINT close the server and exit 0"
+
+# --- orders ---
+
+[[requirement]]
+stem = "orders"
+anchor = "src/routes/orders.ts#L24-L31"
+gloss = "GET /orders lists orders newest first, filtered by `state`, with `limit` defaulting to DEFAULT_PAGE_SIZE and capped at MAX_PAGE_SIZE; a non-integer or non-positive limit falls back to the default"
+
+[[requirement]]
+stem = "orders"
+anchor = "src/routes/orders.ts#L35-L37"
+gloss = "GET /orders/:id for an unknown id is 404 `not-found`"
+
+[[requirement]]
+stem = "orders"
+anchor = "src/routes/orders.ts#L41"
+gloss = "POST /orders rejects a body failing PlaceOrderSchema with 400"
+
+[[requirement]]
+stem = "orders"
+anchor = "src/routes/orders.ts#L44-L46"
+gloss = "POST /orders for an unknown customer is 422 `unknown-customer`"
+
+[[requirement]]
+stem = "orders"
+anchor = "src/routes/orders.ts#L47-L57"
+gloss = "A valid order is priced for the customer's tier, stored as `placed`, and answered 201 with a Location header"
+
+[[requirement]]
+stem = "orders"
+anchor = "src/lib/pricing.ts#L9-L12"
+gloss = "The total is the lines less the tier's discount, plus SHIPPING_CENTS unless the discounted subtotal reaches FREE_SHIPPING_THRESHOLD_CENTS, plus GST_RATE on the lot"
+
+[[requirement]]
+stem = "orders"
+anchor = "src/routes/orders.ts#L65-L67"
+gloss = "DELETE /orders/:id of a shipped order is 409 `already-shipped`"
+
+[[requirement]]
+stem = "orders"
+anchor = "src/routes/orders.ts#L68-L69"
+gloss = "DELETE /orders/:id cancels the order and answers 204"
+
+# --- customers ---
+
+[[requirement]]
+stem = "customers"
+anchor = "src/routes/customers.ts#L16-L21"
+gloss = "GET /customers with `email` answers the one customer at that address, matched lowercased, or an empty list; without it, every customer"
+
+[[requirement]]
+stem = "customers"
+anchor = "src/routes/customers.ts#L26-L28"
+gloss = "GET /customers/:id for an unknown id is 404 `not-found`"
+
+[[requirement]]
+stem = "customers"
+anchor = "src/routes/customers.ts#L32"
+gloss = "POST /customers rejects a body failing CustomerSchema with 400"
+
+[[requirement]]
+stem = "customers"
+anchor = "src/routes/customers.ts#L35-L37"
+gloss = "POST /customers with an email already registered, case-insensitively, is 409 `duplicate-email`"
+
+[[requirement]]
+stem = "customers"
+anchor = "src/routes/customers.ts#L38-L40"
+gloss = "A valid customer is created with the lowercased email and answered 201"
+
+# --- health ---
+
+[[requirement]]
+stem = "health"
+anchor = "src/routes/health.ts#L9-L16"
+gloss = "GET /health answers `ok`, the uptime in seconds, and the order count with `Cache-Control: no-store`"
+
+# --- criteria ---
+
+[[criterion]]
+anchor = "src/config.ts#L9-L10"
+gloss = "DEFAULT_PAGE_SIZE is 20 and MAX_PAGE_SIZE is 100"
+
+[[criterion]]
+anchor = "src/config.ts#L12-L14"
+gloss = "FREE_SHIPPING_THRESHOLD_CENTS 15000, SHIPPING_CENTS 850, GST_RATE 0.15"
+
+[[criterion]]
+anchor = "src/config.ts#L4-L7"
+gloss = "API_TOKENS is read from the environment, comma-separated, blanks dropped"
+
+[[criterion]]
+anchor = "src/lib/pricing.ts#L4"
+gloss = "TIER_DISCOUNT: standard 0, silver 0.05, gold 0.1"
+
+[[criterion]]
+anchor = "src/routes/orders.ts#L8-L19"
+gloss = "PlaceOrderSchema: a customerId, at least one line with a positive integer quantity and a non-negative integer unit price"
+
+[[criterion]]
+anchor = "src/routes/customers.ts#L6-L10"
+gloss = "CustomerSchema: an email, a name of 1–120 characters, a tier of TIERS defaulting to standard"

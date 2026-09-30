@@ -1,0 +1,314 @@
+# brocoders/nestjs-boilerplate at 9620f159 (MIT), vendored by the command in
+# evals/README.md and gitignored: 177 production modules, ~236 KB, well
+# past the 64 KB the survey lays into one message, so this is the scale case
+# — most modules reach a survey by model only through the lend. A NestJS
+# application: `src/main.ts` bootstraps, nine controllers under object-form
+# `@Controller({ path, version })` decorators register the routes (the four
+# `auth*` controllers share the `auth` resource, the three `files` uploaders —
+# local, S3, S3 presigned, one chosen by config — share `files`), and
+# `@Controller()` with no path serves `GET /`. Eight config modules hand a
+# factory to `registerAs('<name>', …)`, which is a namespace and no surface.
+# The two `run-seed.ts` scripts are each run by a manifest script
+# (`seed:run:relational`, `seed:run:document`) as a module of its own, so by
+# the survey prompt's command rule each is a surface anchored at the
+# top-level statement that runs it, under its module's name `run-seed` —
+# two surfaces under one stem, told apart by the directory each sits in.
+# Written before any run; the seed runners were read as unreached until the
+# treatment named them on six of six runs under the prompt's rule, when the
+# expectation moved to the prompt's reading.
+
+fixture = "examples/typescript/nestjs-boilerplate"
+stems = ["start", "auth", "users", "files", "home", "run-seed"]
+
+# --- surfaces: the bootstrap, the nine controllers, and the two seed runners ---
+
+[[surface]]
+entry = "src/main.ts"
+stem = "start"
+
+[[surface]]
+entry = "src/auth/auth.controller.ts"
+stem = "auth"
+
+[[surface]]
+entry = "src/auth-google/auth-google.controller.ts"
+stem = "auth"
+
+[[surface]]
+entry = "src/auth-facebook/auth-facebook.controller.ts"
+stem = "auth"
+
+[[surface]]
+entry = "src/auth-apple/auth-apple.controller.ts"
+stem = "auth"
+
+[[surface]]
+entry = "src/users/users.controller.ts"
+stem = "users"
+
+[[surface]]
+entry = "src/files/infrastructure/uploader/local/files.controller.ts"
+stem = "files"
+
+[[surface]]
+entry = "src/files/infrastructure/uploader/s3/files.controller.ts"
+stem = "files"
+
+[[surface]]
+entry = "src/files/infrastructure/uploader/s3-presigned/files.controller.ts"
+stem = "files"
+
+[[surface]]
+entry = "src/home/home.controller.ts"
+stem = "home"
+
+[[surface]]
+entry = "src/database/seeds/relational/run-seed.ts"
+stem = "run-seed"
+
+[[surface]]
+entry = "src/database/seeds/document/run-seed.ts"
+stem = "run-seed"
+
+# --- start ---
+
+[[requirement]]
+stem = "start"
+anchor = "src/main.ts#L22-L27"
+gloss = "Every response carries helmet's headers with the content security policy off and a cross-origin resource policy"
+
+[[requirement]]
+stem = "start"
+anchor = "src/main.ts#L29-L34"
+gloss = "CORS allows the configured origins, or any origin when the list holds `*`"
+
+[[requirement]]
+stem = "start"
+anchor = "src/main.ts#L37-L42"
+gloss = "Every route is served under the configured API prefix and URI versioning, `/` alone excluded from the prefix"
+
+[[requirement]]
+stem = "start"
+anchor = "src/main.ts#L46"
+gloss = "Every request body is validated by the global pipe under validationOptions: transformed, whitelisted, and refused 422 with an errors tree"
+
+[[requirement]]
+stem = "start"
+anchor = "src/main.ts#L54-L70"
+gloss = "Swagger documentation is served at `docs` with bearer auth and the language header as a global parameter"
+
+[[requirement]]
+stem = "start"
+anchor = "src/main.ts#L72"
+gloss = "The server listens on the configured port"
+
+# --- auth ---
+
+[[requirement]]
+stem = "auth"
+anchor = "src/auth/auth.service.ts#L45-L49"
+gloss = "Email login for an unknown email is refused 422 (`notFound`, or the uniform message)"
+
+[[requirement]]
+stem = "auth"
+anchor = "src/auth/auth.service.ts#L51-L55"
+gloss = "Email login for a user registered through a social provider is refused, naming the provider to log in via"
+
+[[requirement]]
+stem = "auth"
+anchor = "src/auth/auth.service.ts#L63-L72"
+gloss = "Email login with a password that does not match the bcrypt hash is refused 422 `incorrectPassword`"
+
+[[requirement]]
+stem = "auth"
+anchor = "src/auth/auth.service.ts#L74-L96"
+gloss = "A successful login creates a session with a fresh hash and answers the access token, the refresh token, the expiry, and the user"
+
+[[requirement]]
+stem = "auth"
+anchor = "src/auth/auth.service.ts#L107-L114"
+gloss = "A social login whose email is not verified by the provider is refused 422 `emailNotVerified`"
+
+[[requirement]]
+stem = "auth"
+anchor = "src/auth/auth.service.ts#L126-L160"
+gloss = "A social login binds to the user with that social id, else adopts the inactive user at that email, else creates an active user with the user role"
+
+[[requirement]]
+stem = "auth"
+anchor = "src/auth/auth.service.ts#L200-L232"
+gloss = "Registration creates an inactive user with the user role and mails a confirmation link signed with the confirm-email secret"
+
+[[requirement]]
+stem = "auth"
+anchor = "src/auth/auth.service.ts#L248-L255"
+gloss = "Confirming with a hash that does not verify is 422 `invalidHash`"
+
+[[requirement]]
+stem = "auth"
+anchor = "src/auth/auth.service.ts#L259-L273"
+gloss = "Confirming activates only a user still inactive; any other is 404"
+
+[[requirement]]
+stem = "auth"
+anchor = "src/auth/auth.service.ts#L322-L340"
+gloss = "Forgot-password for an unknown email answers as success when uniform errors are on, else 422 `emailNotExists`"
+
+[[requirement]]
+stem = "auth"
+anchor = "src/auth/auth.service.ts#L342-L364"
+gloss = "Forgot-password mails a reset link signed with the forgot secret and the current password hash, expiring after the configured time"
+
+[[requirement]]
+stem = "auth"
+anchor = "src/auth/auth.service.ts#L390-L411"
+gloss = "Reset-password with a hash naming no user, or one that no longer verifies, is 422 `invalidHash`"
+
+[[requirement]]
+stem = "auth"
+anchor = "src/auth/auth.service.ts#L413-L419"
+gloss = "A reset sets the new password and deletes every session of the user"
+
+[[requirement]]
+stem = "auth"
+anchor = "src/auth/auth.service.ts#L440-L478"
+gloss = "Changing the password needs the correct old password (422 `missingOldPassword` / `incorrectOldPassword`) and deletes the user's other sessions"
+
+[[requirement]]
+stem = "auth"
+anchor = "src/auth/auth.service.ts#L480-L513"
+gloss = "Changing the email to one another user holds is 422 `emailExists`; otherwise a confirmation is mailed and the email is not applied until confirmed"
+
+[[requirement]]
+stem = "auth"
+anchor = "src/auth/auth.service.ts#L531-L544"
+gloss = "Refresh rotates the session hash and answers 401 when the session or the user's role is gone"
+
+[[requirement]]
+stem = "auth"
+anchor = "src/auth/auth.service.ts#L566-L568"
+gloss = "Logout deletes the current session"
+
+[[requirement]]
+stem = "auth"
+anchor = "src/auth/auth.service.ts#L570-L586"
+gloss = "With uniform errors on, every failed login reports `incorrectEmailOrPassword` for both fields"
+
+[[requirement]]
+stem = "auth"
+anchor = "src/auth-google/auth-google.service.ts#L35-L53"
+gloss = "Google login verifies the id token against the client id; no payload is `wrongToken`, an unverified email is `emailNotVerified`"
+
+[[requirement]]
+stem = "auth"
+anchor = "src/auth/auth.controller.ts#L94-L104"
+gloss = "GET /auth/me answers the current user under a JWT"
+
+# --- users ---
+
+[[requirement]]
+stem = "users"
+anchor = "src/users/users.controller.ts#L40-L41"
+gloss = "Every users route requires a JWT and the admin role"
+
+[[requirement]]
+stem = "users"
+anchor = "src/users/users.controller.ts#L73-L77"
+gloss = "Listing users pages from 1 with a limit defaulting to 10 and capped at 50"
+
+[[requirement]]
+stem = "users"
+anchor = "src/users/users.service.ts#L35-L38"
+gloss = "A password is hashed with bcrypt before it is stored"
+
+[[requirement]]
+stem = "users"
+anchor = "src/users/users.service.ts#L42-L55"
+gloss = "Creating a user with an email already taken is 422 `emailAlreadyExists`"
+
+[[requirement]]
+stem = "users"
+anchor = "src/users/users.service.ts#L59-L74"
+gloss = "A photo id naming no file is 422 `imageNotExists`"
+
+[[requirement]]
+stem = "users"
+anchor = "src/users/users.service.ts#L78-L94"
+gloss = "A role id outside RoleEnum is 422 `roleNotExists`"
+
+[[requirement]]
+stem = "users"
+anchor = "src/users/users.service.ts#L98-L114"
+gloss = "A status id outside StatusEnum is 422 `statusNotExists`"
+
+[[requirement]]
+stem = "users"
+anchor = "src/users/users.service.ts#L192-L209"
+gloss = "Updating a user to an email another user holds is 422 `emailAlreadyExists`"
+
+# --- files ---
+
+[[requirement]]
+stem = "files"
+anchor = "src/files/infrastructure/uploader/local/files.service.ts#L20-L27"
+gloss = "Uploading with no file is 422 `selectFile`"
+
+[[requirement]]
+stem = "files"
+anchor = "src/files/infrastructure/uploader/local/files.service.ts#L29-L35"
+gloss = "A locally stored file is recorded at `/<apiPrefix>/v1/<path>`"
+
+[[requirement]]
+stem = "files"
+anchor = "src/files/infrastructure/uploader/local/files.controller.ts#L58-L62"
+gloss = "GET /files/:path serves the file from the `./files` directory"
+
+[[requirement]]
+stem = "files"
+anchor = "src/files/infrastructure/uploader/s3-presigned/files.service.ts#L50-L57"
+gloss = "A presigned upload accepts only jpg, jpeg, png, and gif file names (422 `cantUploadFileType`)"
+
+[[requirement]]
+stem = "files"
+anchor = "src/files/infrastructure/uploader/s3-presigned/files.service.ts#L59-L70"
+gloss = "A presigned upload larger than the configured maximum is 413"
+
+[[requirement]]
+stem = "files"
+anchor = "src/files/infrastructure/uploader/s3-presigned/files.service.ts#L77-L92"
+gloss = "A presigned upload answers the file record and a PUT URL for the bucket valid one hour"
+
+# --- home ---
+
+[[requirement]]
+stem = "home"
+anchor = "src/home/home.controller.ts#L11-L14"
+gloss = "GET / answers the configured application name"
+
+# --- a guard shared by the routes that name roles; no stem expected ---
+
+[[requirement]]
+anchor = "src/roles/roles.guard.ts#L14-L21"
+gloss = "RolesGuard passes when the handler names no roles, else only a user whose role is among them"
+
+# --- criteria ---
+
+[[criterion]]
+anchor = "src/config/app.config.ts#L73-L80"
+gloss = "The port defaults to 3000, the API prefix to `api`, the fallback language to `en`, the language header to `x-custom-lang`"
+
+[[criterion]]
+anchor = "src/config/app.config.ts#L65-L72"
+gloss = "CORS origins are APP_CORS_ORIGINS, else FRONTEND_DOMAIN, else `*`, comma-split and trimmed"
+
+[[criterion]]
+anchor = "src/files/config/file.config.ts#L40-L46"
+gloss = "The file driver defaults to local and the maximum file size is 5242880 bytes"
+
+[[criterion]]
+anchor = "src/utils/validation-options.ts#L25-L35"
+gloss = "validationOptions: transform, whitelist, and 422 with the errors tree"
+
+[[criterion]]
+anchor = "src/auth/config/auth.config.ts#L9-L14"
+gloss = "PLACEHOLDER_SECRETS: the four example secrets a production start refuses to run with"

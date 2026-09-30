@@ -10,15 +10,15 @@ pub fn survey(input: &SourceInput) -> Result<Vec<Seam>, Error> {
             if value.trim().is_empty() {
                 return Err(bad_request!("intent brief is empty"));
             }
-            Seam::Whole
+            Seam::whole()
         }
-        SourceContent::Workspace(root) => to_note(root)?,
+        SourceContent::Workspace(root) => carrier(root)?,
     };
 
     Ok(vec![seam])
 }
 
-fn to_note(root: &str) -> Result<Seam, Error> {
+fn carrier(root: &str) -> Result<Seam, Error> {
     let files = emery_sdk::workspace::list(root, |entry| !entry.hidden())?;
     let [file] = files.as_slice() else {
         return Err(bad_request!("intent expects one file, found {}", files.len()));
@@ -31,9 +31,9 @@ fn to_note(root: &str) -> Result<Seam, Error> {
         return Err(bad_request!("intent brief is empty"));
     }
 
-    Ok(Seam::Note(format!(
-        "The operator's brief, `{file}` under `$SOURCE_DIR`, the one file of the bound \
-         tree:\n\n{brief}\n\n\
-         Nothing else is reachable; extract mines only this source."
-    )))
+    // the SDK lays the one file into the turn and holds every anchor to it
+    Ok(Seam {
+        text: format!("The operator's brief is `{file}`, the one file of the bound tree."),
+        ..Seam::files([file.as_str()])
+    })
 }

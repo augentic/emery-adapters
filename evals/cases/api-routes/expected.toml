@@ -1,0 +1,137 @@
+# A Next.js app-router API: four route modules a framework routes by file
+# path, each exporting its handlers (`GET`, `POST`, `DELETE`), and nothing
+# that runs at load — no bootstrap, no registration, no decorator. The tree
+# fits one message. The surfaces are a convention the parser has not been
+# taught, so this case is where the survey's two arms are expected to part:
+# the parser falls back to the route modules' exports (`get`, `post`,
+# `delete` as stems), while a survey that reads the file paths names the
+# resources. Written before any run.
+
+fixture = "examples/typescript/api-routes"
+stems = ["orders", "customers", "health"]
+
+# --- surfaces: one pair per route module, under the resource its path spells ---
+
+[[surface]]
+entry = "app/api/orders/route.ts"
+stem = "orders"
+
+[[surface]]
+entry = "app/api/orders/[id]/route.ts"
+stem = "orders"
+
+[[surface]]
+entry = "app/api/customers/route.ts"
+stem = "customers"
+
+[[surface]]
+entry = "app/api/health/route.ts"
+stem = "health"
+
+# --- orders ---
+
+[[requirement]]
+stem = "orders"
+anchor = "app/api/orders/route.ts#L30-L33"
+gloss = "GET /api/orders lists orders newest first, filtered by `state`, with `limit` defaulting to DEFAULT_PAGE_SIZE and capped at MAX_PAGE_SIZE; a non-numeric or non-positive limit falls back to the default"
+
+[[requirement]]
+stem = "orders"
+anchor = "app/api/orders/route.ts#L44-L46"
+gloss = "POST /api/orders rejects a body failing PlaceOrderSchema with 400 `invalid-order` and the issues"
+
+[[requirement]]
+stem = "orders"
+anchor = "app/api/orders/route.ts#L48-L50"
+gloss = "POST /api/orders for an unknown customer is 422 `unknown-customer`"
+
+[[requirement]]
+stem = "orders"
+anchor = "app/api/orders/route.ts#L51-L53"
+gloss = "A valid order is priced for the customer's tier and promo code, stored as `placed`, and answered 201 with a Location header"
+
+[[requirement]]
+stem = "orders"
+anchor = "lib/pricing.ts#L22-L24"
+gloss = "The discount is the greater of the tier's rate and the promo's — a listed PROMO_CODE, case-insensitive — never both"
+
+[[requirement]]
+stem = "orders"
+anchor = "lib/pricing.ts#L26-L27"
+gloss = "Shipping is free from FREE_SHIPPING_THRESHOLD_CENTS of discounted subtotal, else SHIPPING_CENTS; GST_RATE applies to the discounted subtotal plus shipping"
+
+[[requirement]]
+stem = "orders"
+anchor = "app/api/orders/[id]/route.ts#L13-L15"
+gloss = "GET /api/orders/:id for an unknown id is 404 `not-found`"
+
+[[requirement]]
+stem = "orders"
+anchor = "app/api/orders/[id]/route.ts#L29-L31"
+gloss = "DELETE /api/orders/:id of a shipped order is 409 `already-shipped`"
+
+[[requirement]]
+stem = "orders"
+anchor = "app/api/orders/[id]/route.ts#L32-L33"
+gloss = "DELETE /api/orders/:id cancels the order and answers 204"
+
+# --- customers ---
+
+[[requirement]]
+stem = "customers"
+anchor = "app/api/customers/route.ts#L17-L22"
+gloss = "GET /api/customers with `email` answers the one customer at that address, lowercased, or an empty list; without it, every customer"
+
+[[requirement]]
+stem = "customers"
+anchor = "app/api/customers/route.ts#L32-L34"
+gloss = "POST /api/customers rejects a body failing CustomerSchema with 400 `invalid-customer`"
+
+[[requirement]]
+stem = "customers"
+anchor = "app/api/customers/route.ts#L36-L38"
+gloss = "POST /api/customers with an email already registered, case-insensitively, is 409 `duplicate-email`"
+
+[[requirement]]
+stem = "customers"
+anchor = "app/api/customers/route.ts#L39-L40"
+gloss = "A valid customer is created with the lowercased email and answered 201"
+
+# --- health ---
+
+[[requirement]]
+stem = "health"
+anchor = "app/api/health/route.ts#L10-L16"
+gloss = "GET /api/health answers `ok`, the uptime in seconds, and the order count with `Cache-Control: no-store`, without authentication"
+
+# --- reached by every route, so no stem is expected ---
+
+[[requirement]]
+anchor = "lib/auth.ts#L14-L16"
+gloss = "A request without `Authorization: Bearer <token>` naming one of API_TOKENS is 401 `unauthorized`"
+
+[[requirement]]
+anchor = "lib/errors.ts#L16-L23"
+gloss = "An HttpError answers its status and code, a body that is not JSON is 400 `malformed-json`, anything else is logged and 500 `internal`"
+
+# --- criteria ---
+
+[[criterion]]
+anchor = "app/api/orders/route.ts#L11-L12"
+gloss = "DEFAULT_PAGE_SIZE is 20 and MAX_PAGE_SIZE is 100"
+
+[[criterion]]
+anchor = "app/api/orders/route.ts#L14-L24"
+gloss = "PlaceOrderSchema: a uuid customerId, at least one line with a positive integer quantity and a non-negative unit price, an optional promoCode"
+
+[[criterion]]
+anchor = "app/api/customers/route.ts#L8-L12"
+gloss = "CustomerSchema: an email, a name of 1–120 characters, a tier of TIERS defaulting to standard"
+
+[[criterion]]
+anchor = "lib/pricing.ts#L3-L8"
+gloss = "TIER_DISCOUNT 0 / 0.05 / 0.1, PROMO_CODES, PROMO_DISCOUNT 0.15, FREE_SHIPPING_THRESHOLD_CENTS 15000, SHIPPING_CENTS 850, GST_RATE 0.15"
+
+[[criterion]]
+anchor = "lib/auth.ts#L6-L9"
+gloss = "API_TOKENS is read from the environment, comma-separated, blanks dropped"

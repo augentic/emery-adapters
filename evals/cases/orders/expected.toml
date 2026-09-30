@@ -1,0 +1,41 @@
+# One module, one exported service, no manifest: the inline-budget case. The
+# same estate `examples/documentation/docs/orders-api.md` specifies in prose.
+
+fixture = "examples/typescript/src"
+stems = ["order-service"]
+
+# The one exported class; the error classes beside it are what it throws,
+# not surfaces.
+[[surface]]
+entry = "orders.ts"
+stem = "order-service"
+
+[[requirement]]
+stem = "order-service"
+anchor = "orders.ts#L40-L42"
+gloss = "Placing an order with no lines is a ValidationError"
+
+[[requirement]]
+stem = "order-service"
+anchor = "orders.ts#L43-L45"
+gloss = "A line quantity below one is a ValidationError"
+
+[[requirement]]
+stem = "order-service"
+anchor = "orders.ts#L46-L56"
+gloss = "A valid order is stored pending under `ord_<n>` with a pending transition and returned"
+
+[[requirement]]
+stem = "order-service"
+anchor = "orders.ts#L59-L65"
+gloss = "Reading an unknown order is a NotFoundError naming the id"
+
+[[requirement]]
+stem = "order-service"
+anchor = "orders.ts#L67-L71"
+gloss = "Cancelling a shipped order is a ConflictError carrying the state"
+
+[[requirement]]
+stem = "order-service"
+anchor = "orders.ts#L72-L74"
+gloss = "Cancelling marks the order cancelled and records the transition"

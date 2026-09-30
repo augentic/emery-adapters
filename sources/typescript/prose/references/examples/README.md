@@ -1,6 +1,6 @@
 # Worked examples
 
-Each example is one surface as the survey names it, the source the extract call reads, and the Evidence the call answers with — claims alone, in the shape of the prompt's worked example. Read the one nearest the surface in hand.
+Each example is one surface as the message names it, the module the extract call reads, and the Evidence the call answers with — claims alone, in the shape of the prompt's worked example, with no `type` among them: the caller copies the exported declarations. Read the one nearest the surface in hand.
 
 | File                                           | Read when the surface has                                                                                                                      |
 | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |

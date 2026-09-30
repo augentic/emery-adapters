@@ -12,12 +12,12 @@ const MAX_SIZE: usize = 16;
 
 pub fn survey(input: &SourceInput) -> Result<Vec<Seam>, Error> {
     let SourceContent::Workspace(root) = &input.content else {
-        return Ok(vec![Seam::Whole]);
+        return Ok(vec![Seam::whole()]);
     };
 
     let files = emery_sdk::workspace::list(root, |entry| !entry.hidden())?;
-    let seams: Vec<Seam> = partition("", files).into_iter().map(Seam::Files).collect();
-    Ok(if seams.len() < 2 { vec![Seam::Whole] } else { seams })
+    let seams: Vec<Seam> = partition("", files).into_iter().map(Seam::files).collect();
+    Ok(if seams.len() < 2 { vec![Seam::whole()] } else { seams })
 }
 
 // `prefix` is `""` at the root and ends in `/` beneath it.

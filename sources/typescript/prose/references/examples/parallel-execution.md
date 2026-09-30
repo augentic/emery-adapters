@@ -2,7 +2,7 @@
 
 ## Scenario
 
-The survey named one surface: the exported API `EventProcessor`, entered at `services/event-processor/index.ts`. The tree also holds `services/event-processor/publisher.ts`; the example shows the entry file alone, with the private method bodies elided.
+A library with no bootstrap. The message names `` Surface `EventProcessor` — entry `services/event-processor/index.ts` — stem `event-processing`: exported class L20–L53; methods `process` L23–L39; ids `event-processing`, `event-processing.process`; reaches `services/event-processor/publisher.ts` ``, lists one boundary — `` `services/event-processor/index.ts#L18` — `config = { tenantId: process.env.AZURE_TENANT_ID! }` `` — one package — `` `@azure/identity` — `getAzureToken` — in `services/event-processor/index.ts` `` — and one call through it — `` `@azure/identity:getAzureToken` in `services/event-processor/index.ts` at L25 `` — and lays out the two modules the surface reaches; the example shows the entry alone, with the private method bodies elided.
 
 ## Source
 
@@ -12,13 +12,13 @@ The survey named one surface: the exported API `EventProcessor`, entered at `ser
 import { getAzureToken } from "@azure/identity";
 import { Publish } from "./publisher";
 
-interface EventInput {
+export interface EventInput {
   id: string;
   type: string;
   data: object;
 }
 
-interface EnrichedEvent {
+export interface EnrichedEvent {
   id: string;
   type: string;
   data: object;
@@ -70,37 +70,37 @@ export class EventProcessor {
   "claims": [
     {
       "kind": "requirement",
-      "id": "event-processing.authentication",
+      "id": "event-processing.process.authentication",
       "path": "services/event-processor/index.ts#L25",
       "statement": "Processing an event first acquires an Azure AD token for the tenant named by AZURE_TENANT_ID."
     },
     {
       "kind": "requirement",
-      "id": "event-processing.tenant-config",
+      "id": "event-processing.process.tenant-config",
       "path": "services/event-processor/index.ts#L18",
       "statement": "The tenant id is read from AZURE_TENANT_ID once when the module loads and is asserted present rather than checked."
     },
     {
       "kind": "requirement",
-      "id": "event-processing.enrichment",
+      "id": "event-processing.process.enrichment",
       "path": "services/event-processor/index.ts#L26-L29",
       "statement": "Enrichment with the token and the metadata lookup by event id run in parallel, and publishing waits for both to complete."
     },
     {
       "kind": "requirement",
-      "id": "event-processing.publication",
+      "id": "event-processing.process.publication",
       "path": "services/event-processor/index.ts#L30-L32",
       "statement": "The enriched event is published once to events-topic; 5000 milliseconds later an audit record carrying the current timestamp and the metadata is published once to audit-topic."
     },
     {
       "kind": "requirement",
-      "id": "event-processing.auth-failure",
+      "id": "event-processing.process.auth-failure",
       "path": "services/event-processor/index.ts#L34-L36",
       "statement": "An error whose code is AUTH_FAILED, from any step, is rethrown as Error(\"Authentication failed\") and nothing further is published."
     },
     {
       "kind": "requirement",
-      "id": "event-processing.other-failure",
+      "id": "event-processing.process.other-failure",
       "path": "services/event-processor/index.ts#L37",
       "statement": "Any other error is logged as \"Processing error:\" with the error and processing returns normally, so an event may reach events-topic with no audit record following it."
     },
@@ -108,18 +108,6 @@ export class EventProcessor {
       "kind": "excerpt",
       "path": "services/event-processor/index.ts#L24-L38",
       "excerpt": "One try around the whole flow: token, Promise.all over enrichData and fetchMetadata, publish to events-topic, delay(5000), publish { timestamp: Date.now(), metadata } to audit-topic. The catch rethrows AUTH_FAILED alone and swallows everything else with console.error."
-    },
-    {
-      "kind": "type",
-      "path": "services/event-processor/index.ts#L4-L8",
-      "name": "EventInput",
-      "signature": "interface EventInput { id: string; type: string; data: object }"
-    },
-    {
-      "kind": "type",
-      "path": "services/event-processor/index.ts#L10-L16",
-      "name": "EnrichedEvent",
-      "signature": "interface EnrichedEvent { id: string; type: string; data: object; enrichedData: object; metadata: object }"
     },
     {
       "kind": "call",
@@ -147,6 +135,7 @@ export class EventProcessor {
 
 - Parallelism is stated where it is observable: nothing is published until both lookups complete. The order of the two publishes and the delay between them are behaviour, with the value the source spells.
 - One `try` covers the whole flow, so the two arms of the `catch` are two requirements with different consequences, and the partial-publication consequence is stated because the code exhibits it.
-- The audit payload is an inline literal with no declaration, so it has no `type` claim; its shape lives in the statement and the excerpt.
+- `EventInput` and `EnrichedEvent` are no claims of the answer: the caller copies both exported declarations. The audit payload is an inline literal with no declaration, so nothing copies it; its shape lives in the statement and the excerpt.
+- Every id leads with `event-processing.process`, the id the surface line gives the one public method the behaviour sits in. `config` is the one Boundary and is no criterion: `tenant-config` states what the code does with it — reads once, asserts present — and no requirement rests on a value it spells.
 - The private method bodies are elided here. In a real tree the extract call follows them, and the outbound calls enrichment makes are this surface's `call` claims; nothing is claimed about what they do until it is read.
-- `getAzureToken` comes from a package, so its `callee` is `<package>:<symbol>`; `Publish.send` is a method of the tree, so its `callee` is `<file>:<symbol>`.
+- `getAzureToken` comes from a package, so its `callee` is `<package>:<symbol>` as the Calls list spells it; `Publish.send` is a method of the tree, so its `callee` is `<file>:<symbol>` — the list shows the call inside `publisher.ts`, and the surface's site is where it is made from.

@@ -1,0 +1,215 @@
+# The R9K position adapter: a Kafka consumer of train-update XML publishing
+# SmarTrak location events, bootstrapped from `src/start.ts`. Private wrapper
+# packages (`at-realtime-common`, `at-connector-common`) hide the frameworks.
+
+fixture = "examples/typescript/at_r9k_position_adapter"
+stems = ["start", "kafka-consumer"]
+
+# --- surfaces: the bootstrap, and the one message handler `Main.start`
+# registers on the consumer ---
+
+[[surface]]
+entry = "src/start.ts"
+stem = "start"
+
+[[surface]]
+entry = "src/main.ts"
+stem = "kafka-consumer"
+
+# --- start: the bootstrap and everything that runs before a message arrives ---
+
+[[requirement]]
+stem = "start"
+anchor = "src/start.ts#L11-L13"
+gloss = "Confluent secrets are retrieved before APM initialises when Config.useConfluentKafkaConfig is set"
+
+[[requirement]]
+stem = "start"
+anchor = "src/start.ts#L15-L17"
+gloss = "APM is initialised and the Express status web app is started on Config.port"
+
+[[requirement]]
+stem = "start"
+anchor = "src/start.ts#L19"
+gloss = "A startup metric `${apmPrefix}/startup` is incremented once the web app is up"
+
+[[requirement]]
+stem = "start"
+anchor = "src/start.ts#L21-L34"
+gloss = "The Kafka consumer is constructed from consumer endpoints, topics, and group, with SSL and SASL plain under Confluent"
+
+[[requirement]]
+stem = "start"
+anchor = "src/start.ts#L36-L48"
+gloss = "The Kafka producer is constructed for the VP topic with the same SSL and SASL settings"
+
+[[requirement]]
+stem = "start"
+anchor = "src/start.ts#L51-L58"
+gloss = "Under Confluent, a secret watcher stops Main and exits with 1 after 10 s when the Kafka key changes"
+
+[[requirement]]
+stem = "start"
+anchor = "src/start.ts#L65-L77"
+gloss = "unhandledRejection and uncaughtException notice the error, stop Main, and exit with 1 after 30 s"
+
+[[requirement]]
+stem = "start"
+anchor = "src/main.ts#L47-L53"
+gloss = "Start fetches the block-management auth token, GTFS stops, starts the producer, and starts the consumer unless Config.isSlot"
+
+[[requirement]]
+stem = "start"
+anchor = "src/main.ts#L55-L56"
+gloss = "The status check is configured over the consumer and producer and the status log is scheduled"
+
+[[requirement]]
+stem = "start"
+anchor = "src/main.ts#L60-L67"
+gloss = "Stop closes the web app, consumer, and producer and clears the status log timer"
+
+[[requirement]]
+stem = "start"
+anchor = "src/main.ts#L147-L161"
+gloss = "Every 60000 ms the sent, received, queue size, and partitions are logged and the counters reset"
+
+[[requirement]]
+stem = "start"
+anchor = "src/services/gtfs-api.ts#L17-L36"
+gloss = "Stops are fetched from `${staticCCUrl}/gtfs/stops` with retry; a status below 500 is not retried; a failure is logged and the previous stops kept"
+
+[[requirement]]
+stem = "start"
+anchor = "src/services/gtfs-api.ts#L38-L43"
+gloss = "Stops are refetched every 3600000 ms"
+
+[[requirement]]
+stem = "start"
+anchor = "src/services/block-mgt-api.ts#L34-L36"
+gloss = "The block-management token retriever is provided from the Azure access token config"
+
+[[requirement]]
+stem = "start"
+anchor = "src/confluent-secret-retriever.ts#L14-L29"
+gloss = "Retrieve reads the Confluent key from Key Vault, parses key and secret, and throws `No valid kafka keys` when empty"
+
+[[requirement]]
+stem = "start"
+anchor = "src/confluent-secret-retriever.ts#L33-L41"
+gloss = "Watch re-reads the secret every SECRET_WATCHER_INTERVAL minutes and calls closeApp when it changed"
+
+[[requirement]]
+stem = "start"
+anchor = "src/key-vault.ts#L6-L14"
+gloss = "A Key Vault secret without a value is an error naming the secret"
+
+# --- kafka-consumer: one message in, zero or more SmarTrak events out ---
+
+[[requirement]]
+stem = "kafka-consumer"
+anchor = "src/main.ts#L36-L45"
+gloss = "Each message is processed in an APM background transaction `onMessage`; a processing error is noticed and logged and the message acknowledged"
+
+[[requirement]]
+stem = "kafka-consumer"
+anchor = "src/main.ts#L70-L81"
+gloss = "An invalid message is warned, counted under `invalid_message_counter_<errorType>`, and skipped"
+
+[[requirement]]
+stem = "kafka-consumer"
+anchor = "src/main.ts#L82-L98"
+gloss = "Every converted event is published twice, each after a 5 s delay with the timestamp advanced 5000 ms, without awaiting"
+
+[[requirement]]
+stem = "kafka-consumer"
+anchor = "src/main.ts#L102-L106"
+gloss = "The XML is deserialised under Config.rootElement; a message without changes is rejected as `no_update`"
+
+[[requirement]]
+stem = "kafka-consumer"
+anchor = "src/main.ts#L108-L117"
+gloss = "The event time is the actual departure when departed, else the actual arrival when arrived; none is `no_actual_update`"
+
+[[requirement]]
+stem = "kafka-consumer"
+anchor = "src/main.ts#L119-L121"
+gloss = "The message delay is computed from createdDate plus the event seconds and recorded as `r9k_delay`"
+
+[[requirement]]
+stem = "kafka-consumer"
+anchor = "src/main.ts#L123-L125"
+gloss = "A delay above Config.maxMessageDelay is rejected as `outdated`"
+
+[[requirement]]
+stem = "kafka-consumer"
+anchor = "src/main.ts#L127-L129"
+gloss = "A delay below Config.minMessageDelay is rejected as `wrong_time`"
+
+[[requirement]]
+stem = "kafka-consumer"
+anchor = "src/main.ts#L138-L145"
+gloss = "Publish sends the event as JSON keyed by externalId or remoteName; a publish failure is noticed and logged"
+
+[[requirement]]
+stem = "kafka-consumer"
+anchor = "src/r9k-to-smartrak.ts#L16-L19"
+gloss = "A single change of movement type OTHER yields no events and counts `not_relevant_type_message_counter`"
+
+[[requirement]]
+stem = "kafka-consumer"
+anchor = "src/r9k-to-smartrak.ts#L21-L25"
+gloss = "A station not mapped or not in Config.filterStations yields no events and counts `not_relevant_station_message_counter`"
+
+[[requirement]]
+stem = "kafka-consumer"
+anchor = "src/r9k-to-smartrak.ts#L27-L33"
+gloss = "One event per vehicle allocated to the even or odd train id, at the overwrite location for non-arrivals"
+
+[[requirement]]
+stem = "kafka-consumer"
+anchor = "src/r9k-to-smartrak.ts#L40-L54"
+gloss = "Change types map to arrival, departure, prediction, or other"
+
+[[requirement]]
+stem = "kafka-consumer"
+anchor = "src/r9k-to-smartrak.ts#L56-L79"
+gloss = "A SmarTrak Location event carries the vehicle label without spaces, the station coordinates, speed 0, and accuracy 0"
+
+[[requirement]]
+stem = "kafka-consumer"
+anchor = "src/services/block-mgt-api.ts#L10-L32"
+gloss = "Vehicle labels come from block management `allocations/trips` with a bearer token and retry; a failure yields none"
+
+# --- criteria: the boundaries the source spells as values of their own ---
+
+[[criterion]]
+anchor = "src/config.ts#L12"
+gloss = "MAX_MESSAGE_DELAY_IN_SECONDS defaults to 60"
+
+[[criterion]]
+anchor = "src/config.ts#L13"
+gloss = "MIN_MESSAGE_DELAY_IN_SECONDS defaults to -30"
+
+[[criterion]]
+anchor = "src/config.ts#L6"
+gloss = "STATIONS defaults to 0,19,40"
+
+[[criterion]]
+anchor = "src/config.ts#L15"
+gloss = "Confluent config is used unless IS_LOCAL is `true`"
+
+[[criterion]]
+anchor = "src/config.ts#L11"
+gloss = "R9K dates are DD/MM/YYYY"
+
+[[criterion]]
+anchor = "src/main.ts#L86"
+gloss = "FIVE_SEC_DELAY is 5000 ms"
+
+[[criterion]]
+anchor = "src/confluent-secret-retriever.ts#L6"
+gloss = "SECRET_WATCHER_INTERVAL defaults to 5 minutes"
+
+[[criterion]]
+anchor = "src/confluent-secret-retriever.ts#L4"
+gloss = "KEY_VAULT_SECRET_NAME_CONFLUENT_KEY defaults to realtime-confluent-key"

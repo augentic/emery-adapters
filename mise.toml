@@ -4,6 +4,14 @@
 [task_config]
 includes = ["git::https://github.com/augentic/.github.git//mise/rust.toml?ref=v0.2.0"]
 
+# The shared `lint-wasm` pass is over the guest side alone — every adapter
+# and the guest programs — because the root package and the `evals` harness
+# are native: the suites and the runner name host-only dependencies.
+# Mirrors `wasm-packages` in .github/workflows/ci.yaml; a new adapter is
+# named in both.
+[env]
+WASM32_PACKAGES = "documentation intent typescript test-programs"
+
 # -------------------------------------
 # Adapter overrides
 # -------------------------------------

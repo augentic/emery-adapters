@@ -5,9 +5,7 @@
 # `adapter` and `path` resolve relative to this file and must land inside the
 # invocation directory, which emery mounts as the project.
 
-# The built component, loaded fresh on every run, over the orders service
-# behaviour it reads.
 [[source]]
 adapter = "../../target/wasm32-wasip2/release/typescript.wasm"
 # path = "src/"
-path = "r9k/"
+path = "at_r9k_position_adapter/"

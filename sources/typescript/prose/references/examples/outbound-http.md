@@ -2,20 +2,20 @@
 
 ## Scenario
 
-Among the surfaces of a tree of several modules, the survey named the exported API `processMessage`, entered at `src/handler.ts`. The extract call for it is lent the whole tree and told the surface and its entry; `src/handler.ts` is all this surface reaches, so it is the one module shown.
+A library with no bootstrap, so its entry's exports are its surfaces. The message names this one as `` Surface `processMessage` — entry `src/handler.ts` — stem `message-processing`: exported function L12–L21; id `message-processing`; reaches nothing beyond its entry ``, lists one boundary — `` `src/handler.ts#L13` — `process.env.API_URL` in `const apiUrl = process.env.API_URL;` `` — and no package; `src/handler.ts` is all the surface reaches, so it is the one module laid out.
 
 ## Source
 
 `src/handler.ts`:
 
 ```typescript
-interface Message {
+export interface Message {
   id: string;
   content: string;
   timestamp: number;
 }
 
-interface Output {
+export interface Output {
   status: string;
   data: unknown;
 }
@@ -61,18 +61,6 @@ export async function processMessage(message: Message): Promise<Output> {
       "excerpt": "Reads API_URL, POSTs the message as the JSON body with Content-Type application/json, parses the response as JSON without consulting response.ok, and returns { status: \"processed\", data }."
     },
     {
-      "kind": "type",
-      "path": "src/handler.ts#L1-L5",
-      "name": "Message",
-      "signature": "interface Message { id: string; content: string; timestamp: number }"
-    },
-    {
-      "kind": "type",
-      "path": "src/handler.ts#L7-L10",
-      "name": "Output",
-      "signature": "interface Output { status: string; data: unknown }"
-    },
-    {
       "kind": "call",
       "path": "src/handler.ts#L14",
       "callee": "fetch",
@@ -84,8 +72,8 @@ export async function processMessage(message: Message): Promise<Output> {
 
 ## What to notice
 
-- The response has no `type` claim: the code reads nothing from it (`data: unknown`), so the source holds no shape to carry. The engine renders that gap; the answer does not fill it.
-- `API_URL` is spelled as the source spells it, and "no default" is read from the code — there is no `??`.
+- `Message` and `Output` are no claims of the answer: the caller copies both exported declarations from L1–L10. The response's shape is not a gap to fill either: the code reads nothing from it (`data: unknown`), and the engine renders that.
+- `API_URL` is the one Boundary and is no criterion: no requirement rests on a value it spells — there is no `??`, so "no default" is read from the code and stated in `target-config`.
 - No retry and no status check are stated as the behaviour the code exhibits, not left out as omissions.
 - `fetch` is a global, so its `callee` is bare; a function of the tree would be `<file>:<symbol>`.
-- Every `requirement` id leads with the surface's noun, `message-processing`, and every `path` anchors the span that exhibits the behaviour.
+- Every `requirement` id leads with `message-processing`, the id the surface line gives, and every `path` anchors the span that exhibits the behaviour.

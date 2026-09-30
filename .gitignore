@@ -7,5 +7,3 @@ target/
 **/*.rs.bk
 rustc-ice-*
 .DS_Store
-
-examples/typescript/r9k/

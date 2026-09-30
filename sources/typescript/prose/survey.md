@@ -1,89 +1,116 @@
 # TypeScript / JavaScript source survey
 
-This prompt runs once per bound `typescript` source, before anything is extracted. The caller lends the source tree as `$SOURCE_DIR` and asks which surfaces the source exposes: each one thing a caller outside the source reaches, and the module the caller enters it at. Your job: find the boundary, and nothing behind it. You follow no import, group no module, and extract nothing. The caller mines each surface in its own call under the [extract prompt](extract.md), lending the whole tree and naming the surface and its entry; that call starts at the entry and follows what the surface reaches. The calls' answers are joined into the source's one Evidence document — see [From sources to a spec](reconciliation.md).
+This prompt runs once per bound `typescript` source, before anything is extracted. The caller has parsed the tree already: the message lists every production module, says what the manifest names and whether an entry runs anything when loaded, lists every call that hands a function to something a package provides, every decorated class and method, what the entry modules export, and the packages imported — and lays the modules into the message whole, every line numbered, as far as they fit. Your job: from those facts, name each surface the source exposes — each one thing a caller outside the process does through it — anchor it at the lines where the code registers or declares it, and give it the stem its requirements lead with. You follow no import, group no module, and extract nothing. The caller derives the rest from the anchors you name: the stem the code spells at each, where it spells one, the id that tells a surface from the others under its stem, the modules each surface reaches, the lines a requirement may anchor at, the seams the [extract prompt](extract.md) mines, whose answers the engine reconciles into the specification — see [From sources to a spec](reconciliation.md).
+
+Everything this call needs is in this prompt and the message. The references `read_doc` offers are written for the extract call; load one only where a rule here links it — [claims.md](claims.md) for the `path` grammar — and never to decide what a surface is.
 
 ## Inputs
 
-- **`$SOURCE_DIR`** — read-only view of the bound source root, the whole tree. Read what declares the boundary: `package.json`, the bootstrap, routers, command registries, schedulers and consumers, public barrels.
-- **The module list** — every production module the caller kept, as `/`-separated paths relative to `$SOURCE_DIR`; past 200 modules, the root's own files and each top-level directory with its count instead. Read the manifest and the bootstrap among them; list a directory only when it stands for its modules, and never glob the tree yourself.
-- **An entry** — a `/`-separated path relative to `$SOURCE_DIR` to a production module: a `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, or `.cjs` file of the source's own. Tests (`*.test.*`, `*.spec.*`, `tests/`, `__tests__/`), declaration files (`*.d.ts`), dependencies (`node_modules/`, `vendor/`), build output (`dist/`, `build/`, `target/`), and dot entries are not modules and enter nothing; the caller checks every entry against the tree and refuses one named there, or at no file.
+- **The manifest** — what `package.json` names: the package, `main`, `bin`, and the scripts with what each runs. Absent when the tree has none.
+- **The bootstrap** — the entry that runs something when loaded, when the tree has one: the first module the manifest names, or the conventional entry the tree holds, that calls something at module level or imports a module for its effect. The caller names the bootstrap `start` itself and owns everything it does — configuration read, clients constructed, routers mounted, consumers subscribed, jobs scheduled, signal handlers, `stop` — so `start` is never a surface you list, and no surface you list leads with the stem `start`. When no entry runs at load, the message says so: the tree is a library, or an application a framework enters by convention.
+- **Registrations** — every call, outside any handler, that hands a function to something a package provides, with the literal that led it, the package, and the type the receiver is constructed or typed as, at its lines (`` `src/routes/orders.ts#L12-L14` — `router.post` led by `"/"` handed a function, through `express` as `Router` ``). This is where a framework, a queue, a scheduler, or a CLI is told what to run: most surfaces are registered by one of these lines. A hook on a surface already registered — an error listener, a completion handler, `worker.on("failed")` — is that surface's behaviour, not a surface of its own.
+- **Decorators** — every decorator a package provides, on a class or a method, with its literal, at its lines (`` `src/orders.controller.ts#L20-L24` — `@Post("")` on `OrdersController.create`, through `@nestjs/common` ``). A verb decorator on a method is a route; a class decorator carries the prefix.
+- **Exports** — what the entry modules export: the modules the manifest names, and the ones no other module imports, each export with its kind and lines — and what a barrel among them re-exports, listed at the module that declares it, which is where such a surface is anchored. In a tree with no bootstrap these are where a caller enters: a library's public functions and classes, or, under a framework that routes by file — `app/api/<resource>/route.ts` exporting `GET` and `POST`, `pages/api/<name>.ts` exporting a handler, a `functions/` directory of handlers — one surface per exported handler, anchored at the export. In a tree with a bootstrap they are not: a module nothing imports and no manifest script runs — a DTO, a constants file, a data source a tool reads by path — is dead to the process and goes under `unreached`.
+- **Packages** — the bare specifiers the modules import, with the names bound to each and the modules binding them. The package a registration goes through tells what kind of surface it is: an HTTP framework registers routes, a CLI framework registers commands, a queue or broker client registers consumers, a scheduler registers jobs.
+- **The modules** — every production module, listed by path; an `anchor` names one of these and nothing else. The leading ones are laid out whole with every line numbered: cite `#L<n>` from the numbers shown rather than reading them again; a module listed but not laid is read from `$SOURCE_DIR` only when the facts above leave its surfaces unclear.
+- **`$SOURCE_DIR`** — read-only view of the bound source root, the whole tree, for a module the message lists rather than lays out.
 
 Nothing outside the bound source is reachable; writes back into `$SOURCE_DIR` are denied.
 
 ## What a surface is
 
-A surface is one thing the source does for a caller outside it, reached at a boundary the source itself declares:
+A surface is one thing the source does for a caller outside the process, reached at a boundary the source itself declares:
 
-- a **route** or route family — `POST /orders`, the `/users` routes — registered on an HTTP framework, or a serverless handler export;
-- a **command** — a CLI verb, a `bin` entry, the module a `package.json` script runs (`start`, `serve`, `worker`, `migrate`); starting the process is a command, and what starting does — the port, the connections, the routers mounted — is its behaviour;
-- a **job** — a scheduled task, a queue or topic consumer, an event handler the source subscribes;
-- an **exported API** — what a library's `package.json` `exports` / `main` / `module`, or its public barrel, makes importable: one surface per export path, or per cohesive export when one barrel exposes several.
+- a **route** — `POST /orders`, `GET /orders/:id` — registered on an HTTP framework, mapped by a verb decorator, or exported by a module a framework routes by file;
+- a **command** — a CLI verb, a `bin` entry's subcommand, or a script the manifest runs as a module of its own (`"db:migrate": "tsx scripts/migrate.ts"`), which an operator runs by the script's name: one surface, anchored at the module's top-level statement that runs it;
+- a **job** — a scheduled task, a queue worker, a topic or event consumer;
+- an **exported API** — what a library's entry module makes importable: one surface per exported function or class, less an error type (`extends Error`, a name ending in `Error` or `Exception`), which is what a surface throws, and less a function whose body registers surfaces, which hosts them.
 
-A surface's **entry** is the production module where the caller's request first meets the source's own code: the module that registers the route and holds or names its handler, the command's module, the consumer's module, the export path's target. Several surfaces may enter at one module — a router registering four routes is four surfaces at one entry, or one route family when the routes are one resource's operations over one handler module. A module no surface enters — a service, a repository, a mapper, a logger, a config loader — is no surface: it is reached from the surfaces that use it and mined through them.
+The grain is a reviewer's: one surface per route, per command, per job, per export. Several surfaces may anchor in one module — a router registering four routes is four surfaces at four anchors in one file, a CLI module registering three commands is three. A module no surface is registered or declared in — a service, a repository, a mapper, a client wrapper, a config loader — is no surface: the caller reaches it from the surfaces whose anchors import it, and mines it through them.
 
-Choose the grain a reviewer would name: one surface per route family per handler module, per command, per job, per export path. Each surface is mined in its own call, which leads every requirement id with the surface's domain noun, so a surface is one thing a caller does and no two surfaces reach the same behaviour under different nouns.
+## Anchors
 
-## Method
+A surface's `anchor` is where the code registers or declares it, in the claim `path` grammar of [claims.md](claims.md): the module, relative to `$SOURCE_DIR`, and the lines of the registration call, the decorated method, or the exported declaration — `src/routes/orders.ts#L12-L14`, `src/orders.controller.ts#L20-L24`, `app/api/orders/route.ts#L5-L20`. Cite the lines the message gives for the registration, the decorator, or the export; a module alone, with no lines, anchors a surface the whole file declares and nothing else does. The caller follows the imports the anchored lines reference to find what the surface reaches, so an anchor at the registration — where the handler is named — reaches the handler's module; one at an unrelated line reaches the wrong code.
 
-1. **Read the manifest.** `package.json`: `bin` names commands; `exports` / `main` / `module` name what a library makes importable; `scripts` name what is run and its entry module. `tsconfig.json` `paths` resolve the aliases you meet on the way. [Component structure](references/component-structure.md) is the fuller procedure.
-2. **Find the bootstrap.** The module the manifest or its scripts start — `src/index.ts`, `src/server.ts`, `src/main.ts`, a framework's `app.ts` — and what it mounts, registers, schedules, or subscribes. Each is a surface, entered at the module that declares it, and the bootstrap itself is the start command's entry.
-3. **Stop at the boundary.** Do not follow a handler into its services and stores — the extract call does, from the entry you name. You need only where each surface is entered.
-4. **Name each surface for what the caller does.** `POST /orders`, `/users routes`, `nightly reconciliation job`, `migrate command`, `start script`, `@acme/client` — the name is the seam's identity: the extract call leads every requirement id with its domain noun, so two surfaces never name one thing.
+## Stems
+
+The stem is the first segment of every `requirement` and `criterion` id the surface's extraction answers, and the engine slices the build plan by it, so two runs over one tree must name the same stems. Derive each by this convention, lowercase kebab-case, and by nothing else. The caller applies the same convention to what the code spells at the anchor you name — a route's path under its mount or its controller's prefix, a registration's or decorator's literal — and where the code spells a stem there, the caller's reading replaces yours; your stem stands where it spells none (a route on `/`, a schedule, an export, a script), so it is on those that the convention below rests on you alone:
+
+- a **route**'s stem is the first path segment that names a resource, past any prefix a mount adds, with `api`, `rest`, `internal`, and a version (`v1`, `v2`) skipped and a parameter (`:id`) never counted — the first, however specific a later segment is: `GET /api/v1/orders/:id` → `orders`; `POST /customers` → `customers`; `GET /health/live` → `health`; `POST /auth/google/login` → `auth`, not `google`; `GET /users/:id/orders` → `users`; a route whose path names no resource at all — `GET /`, `GET /api` — takes the name of its module, less a `.controller` or `.routes` suffix, or of its directory when the module is `index`: `routes/home.ts` → `home`, `home/home.controller.ts` → `home`, `routes/api/index.ts` → `api`;
+- a **command**'s stem is its literal's first word: `command("import <file>")` → `import`; `reconcile --from` → `reconcile`; a script the manifest runs takes its module's name: `scripts/migrate.ts` → `migrate`, `scripts/seed-database.ts` → `seed-database`;
+- a **job**'s or **consumer**'s stem is the name its registration led with — the queue, topic, or job name — as its first word: `new Worker("invoices", …)` → `invoices`; `schedule("0 2 * * *", nightly)` led by a schedule rather than a name → the stem the handler's name gives, `nightly`;
+- a registration led by no literal takes the stem of the type its receiver is constructed or typed as, kebab-cased: a `KafkaConsumer` subscribed with a callback → `kafka-consumer`; a `Router` with no path → the module's name;
+- an **exported API**'s stem is the export's name kebab-cased: `class OrderService` → `order-service`; `function parseCsv` → `parse-csv`;
+- a route a framework routes by file takes its stem from the path segments the file spells, by the route rule: `app/api/orders/[id]/route.ts` → `orders`.
+
+Routes on one resource share one stem — `GET /orders`, `POST /orders`, `GET /orders/:id` are three surfaces under `orders` — and the caller tells them apart by their names. Middleware mounted for every route — a global guard, an error handler, a request log — is the bootstrap's behaviour under `start`, which the caller owns; a guard on one route is that route's. So is what a package serves on the source's behalf with no handler the source writes — a docs UI under a `routePrefix`, a static directory, a metrics page: the source declares no surface there. Name nothing `start`.
+
+## Unreached modules
+
+Every production module is reached by some surface — through the imports its anchor's lines reference, the bootstrap's among them — or it is not. List under `unreached` each module the surfaces you name do not reach and the bootstrap does not: dead code, a script no entry and no manifest script runs, a module a framework loads by directory or glob rather than by import (a plugin folder an autoloader walks, a hooks file), a module you cannot place. The caller checks the coverage: a module in neither set that the facts list a registration or declaration in comes back as a finding — name the surface registered there, anchored at the registration whose lines import it, or list it — while a module the facts say nothing of is taken as unreached without one. Never invent a surface to cover a module.
 
 ## Output
 
-One JSON object matching the survey schema: `surfaces`, each with a `name` and its `entry`.
+One JSON object matching the survey schema: `surfaces`, each with a `name`, an `anchor`, and a `stem`; and `unreached`, the modules no surface reaches, empty when every module is reached.
 
 Rules:
 
-- Every `entry` is a production module the tree holds, named by its path relative to `$SOURCE_DIR`.
-- Every surface has a name, and no two surfaces share one.
-- Several surfaces may enter at one module.
-- A module no surface enters is not named. An internal module — a service, a repository, a logger, a base client — is reached from surfaces and mined through them, never listed as one.
-- An empty `surfaces` is the answer when the tree declares no boundary: nothing registers a route, a command, a job, or an export. Do not invent a surface to have one — the caller refuses such a source as incomplete rather than mining what no caller reaches.
+- Every `anchor` names a module the message lists, relative to `$SOURCE_DIR`, with lines the file holds.
+- Every `stem` is lowercase kebab-case, derived by the convention above.
+- Every surface has a name, and no two surfaces share one; the name is what a caller does — `POST /orders`, `import command`, `invoices worker`, `OrderService` — never a description of the code.
+- No surface leads with `start` when the tree has a bootstrap.
+- A module no surface is registered or declared in is not a surface, however central.
+- An empty `surfaces` is the answer when the tree declares no boundary — nothing registers a route, a command, a job, or a consumer, and no entry exports anything a caller would call. Do not invent one; the caller mines such a tree as a library.
 
 ## Worked example
 
-A small Express service whose production modules are:
+A commander CLI bound as the source `ledger-cli`. The message says the manifest names `ledger-cli` with `bin` `dist/cli.js` and a `start` script running `tsx src/cli.ts`; the bootstrap is `src/cli.ts`, the caller's `start`; and lists:
 
-- `src/index.ts` — creates the app, mounts `usersRouter` at `/users` and `ordersRouter` at `/orders`, starts the nightly job, listens on `PORT`; `package.json` runs it as `start`.
-- `src/users/router.ts` — registers `POST /users` and `GET /users/:id`, handlers in `src/users/register.ts` and `src/users/lookup.ts`.
-- `src/orders/router.ts` — registers `POST /orders`, handler in `src/orders/create.ts`.
-- `src/jobs/nightly.ts` — the scheduled reconciliation, reading both repositories.
-- `src/cli.ts` — the `bin` entry, registering a `migrate` command.
-- `src/users/register.ts`, `src/users/lookup.ts`, `src/orders/create.ts`, `src/users/repository.ts`, `src/orders/repository.ts`, `src/lib/db.ts`, `src/lib/logger.ts` — what the surfaces reach.
+> - `src/cli.ts#L14-L24` — `program.command` led by `"import <file>"` handed a function, through `commander` as `Command`
+> - `src/cli.ts#L26-L38` — `program.command` led by `"reconcile"` handed a function, through `commander` as `Command`
+> - `src/jobs/nightly.ts#L34-L47` — `cron.schedule` led by `"0 2 * * *"` handed a function, through `node-cron`
+> - `src/workers/invoices.ts#L33-L48` — `new Worker` led by `"invoices"` handed a function, through `bullmq` as `Worker`
+> - `src/workers/invoices.ts#L50` — `worker.on` led by `"failed"` handed a function, through `bullmq` as `Worker`
+>
+> Packages … `commander` — `Command` — in `src/cli.ts`; `node-cron` — `cron` (default) — in `src/jobs/nightly.ts`; `bullmq` — `Worker`, `Queue` — in `src/workers/invoices.ts`, `src/queues.ts`; `pg` — `Pool` — in `src/lib/db.ts` …
+
+The modules are `src/cli.ts`, `src/config.ts`, `src/jobs/nightly.ts`, `src/lib/csv.ts`, `src/lib/db.ts`, `src/queues.ts`, `src/services/reconcile.ts`, `src/workers/invoices.ts`, and `scripts/seed.ts`, which nothing imports and no entry or manifest script runs.
 
 Resulting survey answer:
 
 ```json
 {
   "surfaces": [
-    { "name": "start script", "entry": "src/index.ts" },
-    { "name": "/users routes", "entry": "src/users/router.ts" },
-    { "name": "POST /orders", "entry": "src/orders/router.ts" },
-    { "name": "nightly reconciliation job", "entry": "src/jobs/nightly.ts" },
-    { "name": "migrate command", "entry": "src/cli.ts" }
-  ]
+    { "name": "import command", "anchor": "src/cli.ts#L14-L24", "stem": "import" },
+    { "name": "reconcile command", "anchor": "src/cli.ts#L26-L38", "stem": "reconcile" },
+    { "name": "nightly job", "anchor": "src/jobs/nightly.ts#L34-L47", "stem": "nightly" },
+    { "name": "invoices worker", "anchor": "src/workers/invoices.ts#L33-L48", "stem": "invoices" }
+  ],
+  "unreached": ["scripts/seed.ts"]
 }
 ```
 
-Five surfaces, five extract calls. The handlers, the repositories, `src/lib/db.ts`, and `src/lib/logger.ts` are named by none: each extract call reaches them from its surface's entry and claims what its caller observes there. The `/users` routes are one family — two operations on one resource over one router — where `POST /orders` stands alone; `src/index.ts` is both where the boundary is read and the start command's own entry, whose call claims what starting the service does and leaves each route to its own.
+Four surfaces, each at the registration the message lists, each stem by the convention: the commands' literals' first words, the cron job's handler name since its literal is a schedule, the worker's queue name. `worker.on("failed")` is a hook on the worker already registered, so it is the worker's behaviour and no surface. `src/cli.ts` is the bootstrap: the caller lists it as `start` and owns the pool it opens and the Redis connection it drops, so it is not listed here, and the two commands anchored inside it lead with their own stems. `src/config.ts`, `src/lib/*`, `src/queues.ts`, and `src/services/reconcile.ts` are reached through the surfaces' anchors and the bootstrap, so they are named by none; `scripts/seed.ts` is reached by nothing and is listed as unreached rather than given a surface.
 
 ## Anti-patterns
 
-- **Grouping.** Listing the modules behind a surface — its handler, its service, its repository — is not this call's. Name the surface and its entry; the extract call follows the rest.
-- **Cutting by layer or directory.** `src/routes/*` is not a surface, nor is `src/services/*`. A surface is what a caller reaches, wherever the code sits.
-- **Listing internals.** A helper, a repository, a base client is not a surface however central; it is reached through the surfaces that use it, and a call over it alone would claim behaviour no caller observes.
-- **Inventing entries.** A file that is not production source of the tree — a test, a declaration file, a dependency, build output — or a path at no file is no entry. The caller refuses it.
-- **Inventing surfaces.** A tree that declares no boundary exposes nothing; answer so.
-- **Extracting.** This call finds the boundary and nothing else; claims are the extract call's, over each surface in turn.
+- **Naming `start`.** The bootstrap is the caller's. What it constructs, mounts, and awaits is `start`'s behaviour by the caller's rule; you name what it registers, not the bootstrap itself.
+- **Naming a module.** A service, a repository, a helper is not a surface; it is reached through the surfaces whose anchors import it.
+- **Cutting by directory or layer.** `src/routes/*` is not a surface, nor is `src/services/*`. A surface is what a caller reaches, wherever the code sits.
+- **Inventing a stem.** The stem is derived by the convention from the literal, the type, or the export — not chosen for elegance: `invoice-worker` for a worker on the queue `invoices` is wrong; `invoices` is right.
+- **Anchoring at a handler's body.** The anchor is the registration, the decorator, or the export — where the code declares the surface — not the function that implements it.
+- **Inventing a surface.** A module nothing reaches is listed under `unreached`; a tree that declares no boundary is answered `surfaces: []`.
+- **Extracting.** This call names surfaces and nothing else; claims are the extract call's.
 
 ## Failure modes
 
 | Condition | Action |
 | --------- | ------ |
-| The tree has one surface | Answer it alone; one extract call mines the source through it. |
-| A router registers many routes | A route family per resource when its routes are one handler module's operations; a route of its own when it does one distinct thing or has its own handler. Each surface costs one call. |
-| The tree is a subtree of an app — routers without the bootstrap that mounts them — or modules with no manifest | Answer the surfaces the tree itself declares — a router's routes, a module's exports are its own boundary — and no more. |
-| The tree declares no boundary — no route, command, job, or export | Answer `surfaces: []`. The caller refuses the source; it does not mine what no caller reaches. |
-| The answer names an entry at no production module, a surface twice, or a nameless surface | The caller rejects it and asks again with the findings; correct the named surfaces. |
+| The tree has one surface | Answer it alone. |
+| A router registers many routes | One surface per route, all under the resource's stem; the caller tells them apart by name. |
+| The tree is a subtree — routers without the bootstrap that mounts them | Answer the surfaces the tree itself registers; no bootstrap means no `start`, and a mounted prefix you cannot see is not guessed. |
+| A framework routes by file and nothing registers | One surface per exported handler, anchored at the export, stem by the route rule over the file's path. |
+| The tree declares no boundary | Answer `surfaces: []` and list nothing as unreached; the caller mines it as a library. |
+| A module the facts list a registration or declaration in is reached by no surface you named and is not listed as unreached | The caller returns it as a finding: anchor the surface registered or declared there, or list it. |
+| A framework loads a directory of modules nothing imports | Name the surfaces those modules register, anchored where each is registered; the modules that register none — plugins, hooks, helpers — are unreached, not surfaces. |
+| The answer names a module the tree lacks, a stem outside kebab-case, a surface twice, or a surface under `start` | The caller rejects it and asks again with the findings; correct the named surfaces. |
