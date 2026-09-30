@@ -17,7 +17,7 @@ path = "documentation/docs/"
 # The orders service behaviour.
 [[source]]
 adapter = "../target/wasm32-wasip2/release/typescript.wasm"
-path = "typescript/src/"
+path = "../evals/cases/orders/fixture/"
 
 # The operator's brief, inline.
 [[source]]

@@ -7,7 +7,7 @@
 # bearer check under `/orders/*` and `/customers/*` is the bootstrap's.
 # Written before any run.
 
-fixture = "examples/typescript/hono-mounted"
+fixture = "evals/cases/hono-mounted/fixture"
 stems = ["start", "orders", "customers", "health"]
 
 # --- surfaces: the bootstrap and the three sub-applications ---

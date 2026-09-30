@@ -1,7 +1,7 @@
 # A commander CLI with a node-cron nightly job and a bullmq worker: three
 # kinds of surface in one small tree, mined whole with every module laid out.
 
-fixture = "examples/typescript/cli-jobs"
+fixture = "evals/cases/cli-jobs/fixture"
 stems = ["start", "import", "reconcile", "nightly", "serve", "invoices"]
 
 # --- surfaces: the (entry, stem) pairs the survey decides ---

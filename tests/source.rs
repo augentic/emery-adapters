@@ -94,11 +94,14 @@ fn bulk(project: &Scratch, file: &str, head: &str) {
     project.write(file, format!("{head}{}", line.repeat(count)));
 }
 
-// A committed fixture under `examples/typescript/`, copied whole into the
-// scratch — less the `node_modules` and `dist` a checkout may hold — so the
-// component runs over the real tree the eval's case of that name runs over.
+// A committed fixture under `evals/cases/<name>/fixture`, copied whole into
+// the scratch — less the `node_modules` and `dist` a checkout may hold — so
+// the component runs over the real tree the eval's case of that name runs over.
 fn fixture(project: &Scratch, name: &str) {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/typescript").join(name);
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("evals/cases")
+        .join(name)
+        .join("fixture");
     copy_tree(&root, project, "");
 }
 

@@ -6,7 +6,7 @@
 # row that declares it, under the usage's first word, with the job module it
 # names as what it reaches. Written before any run.
 
-fixture = "examples/typescript/cli-table"
+fixture = "evals/cases/cli-table/fixture"
 stems = ["start", "import", "reconcile", "nightly"]
 
 # --- surfaces: the bootstrap and the three table rows ---
