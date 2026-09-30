@@ -248,8 +248,7 @@ fn decorated(tree: &Tree) -> Option<String> {
     let mut lines: Vec<String> = Vec::new();
     for module in tree.modules.values() {
         for decorated in &module.decorated {
-            let Some(package) = decorated.name.first().and_then(|head| module.package(head))
-            else {
+            let Some(package) = decorated.name.first().and_then(|head| module.package(head)) else {
                 continue;
             };
             let decorator = decorated.name.join(".");
