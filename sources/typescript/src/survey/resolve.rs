@@ -1,5 +1,4 @@
-//! Locates modules: the manifest's entry, an import's target, and the closure
-//! a module reaches through its imports.
+//! Locates modules: the manifest's entry and where each import leads.
 //!
 //! A relative specifier is probed the way the compiler probes it — as
 //! written, then with each source extension, then as a directory's `index` —
@@ -7,7 +6,8 @@
 //! specifier may spell. A bare specifier no mapping answers is a package. The
 //! resolver owns every outcome: a relative or aliased specifier it cannot
 //! answer is `Unresolved`, never dropped, so the survey can say what it could
-//! not follow and widen what it lays.
+//! not follow and widen what it lays. Each module's imports are settled once
+//! the tree is read and carried on the module, so nothing resolves twice.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -15,7 +15,7 @@ use std::path::Path;
 use emery_sdk::serde_json::{self, Value};
 
 use super::parse::Module;
-use super::{EXTENSIONS, push_unique, unique};
+use super::{EXTENSIONS, unique};
 
 // The build outputs a manifest may point at in place of their sources.
 const OUTPUT_DIRS: &[&str] = &["dist", "build", "lib", "out"];
@@ -34,6 +34,16 @@ pub enum Target {
     /// answers — a file the keep left out, a module not yet generated, a typo
     /// — by the specifier as written.
     Unresolved(String),
+}
+
+impl Target {
+    /// The module of the tree the target names, if it names one.
+    pub fn module(&self) -> Option<&str> {
+        match self {
+            Self::Module(path) => Some(path),
+            Self::Package(_) | Self::Data(_) | Self::Unresolved(_) => None,
+        }
+    }
 }
 
 /// The tree's modules, its data files, and the alias mappings its
@@ -81,6 +91,17 @@ impl Resolver {
             }
         }
         resolver
+    }
+
+    /// Settles where every import and re-export of `module` leads.
+    pub fn settle(&self, module: &mut Module) {
+        let from = module.path.clone();
+        for import in &mut module.imports {
+            import.target = self.resolve(&from, &import.specifier);
+        }
+        for reexport in &mut module.reexports {
+            reexport.target = self.resolve(&from, &reexport.specifier);
+        }
     }
 
     /// Resolves `specifier` as imported from the module at `from`.
@@ -145,56 +166,6 @@ impl Resolver {
     /// The first of `candidates` that is a module of the tree.
     pub fn first(&self, candidates: &[&str]) -> Option<String> {
         candidates.iter().find_map(|candidate| self.probe(candidate))
-    }
-
-    /// The data files `module` imports, root-relative, in order, once each.
-    pub fn data(&self, module: &Module) -> Vec<String> {
-        unique(module.specifiers().filter_map(|specifier| {
-            match self.resolve(&module.path, specifier) {
-                Some(Target::Data(path)) => Some(path),
-                _ => None,
-            }
-        }))
-    }
-
-    /// The specifiers `module` imports for a value that name nothing of the
-    /// tree, as written, in order, once each. A type-only import is a
-    /// declaration's, followed nowhere, so it never counts.
-    pub fn unresolved<'m>(&self, module: &'m Module) -> Vec<&'m str> {
-        let imports =
-            module.imports.iter().filter(|import| !import.type_only).map(|i| i.specifier.as_str());
-        let reexports =
-            module.reexports.iter().filter(|re| !re.type_only).map(|re| re.specifier.as_str());
-        unique(imports.chain(reexports).filter(|specifier| {
-            matches!(self.resolve(&module.path, specifier), Some(Target::Unresolved(_)))
-        }))
-    }
-
-    /// The modules `seeds` reach through imports and re-exports, `seeds`
-    /// first in their order, then breadth-first, once each. A module in
-    /// `stop` is reached and not followed: another surface's entry is what
-    /// the bootstrap mounts, not what it does.
-    pub fn closure(
-        &self, modules: &BTreeMap<String, Module>, seeds: &[String], stop: &[String],
-    ) -> Vec<String> {
-        let mut order: Vec<String> = Vec::new();
-        for seed in seeds.iter().filter(|seed| modules.contains_key(*seed)) {
-            push_unique(&mut order, seed.clone());
-        }
-        let mut next = 0;
-        while let Some(from) = order.get(next).cloned() {
-            next += 1;
-            if stop.contains(&from) {
-                continue;
-            }
-            let Some(module) = modules.get(&from) else { continue };
-            for specifier in module.specifiers() {
-                if let Some(Target::Module(path)) = self.resolve(&from, specifier) {
-                    push_unique(&mut order, path);
-                }
-            }
-        }
-        order
     }
 
     // The module `candidate` names, else the data file it names — as written,

@@ -43,7 +43,11 @@ emery show spec
 
 ## Graded live eval
 
-The live rung is a **public-contract client**: it spawns the sibling shipped `emery` binary over the built components, drives one `specify` per case across the adapter contract, grades the committed spec via `emery show spec`, and writes the dated scorecard. Operator-invoked, never CI. It is being recreated as a root example beside the live examples, whose `emery.toml` files are its cases.
+The live rung is a **public-contract client**: `evals/` spawns the sibling shipped `emery` binary over the built `typescript` component, drives one `specify` per case across the adapter contract, grades the accepted claims and the surveyed surfaces against the case's `expected.toml` through `emery show`, and writes the dated scorecard. Operator-invoked, never CI; see [evals/README.md](evals/README.md).
+
+```bash
+cargo run -p evals -- orders express-orders   # the named cases; none names every case whose fixture the checkout holds
+```
 
 ## Repair loop
 

@@ -13,9 +13,9 @@ jobs:
     with:
       # wasm32 clippy over every lib, bin and example of the guest side: the
       # `sources/*` adapters and the `test-programs` guest programs. The root
-      # package is native — its suites and the eval harness under
-      # `examples/eval/` name host-only dependencies — so the pass is scoped
-      # to the guest packages; mirrors `WASM32_PACKAGES` in mise.toml, and a
-      # new adapter is named in both.
+      # package and the `evals` harness are native — the suites and the
+      # runner name host-only dependencies — so the pass is scoped to the
+      # guest packages; mirrors `WASM32_PACKAGES` in mise.toml, and a new
+      # adapter is named in both.
       targets: wasm32-wasip2
       wasm-packages: documentation intent typescript test-programs

@@ -1,17 +1,21 @@
 //! Derives what the code says of a tree's surfaces from the anchors the
 //! survey accepted.
 //!
-//! None of the rules names a framework. A surface is where control enters
-//! from outside the process — the bootstrap the manifest names, a handler
-//! handed to something a package provides, a method under a package's
-//! decorator, or, in a library, what the entry module exports — and the
-//! survey names each at the lines that register or declare it. From those
-//! lines the code here reads the rest: the stem a route or literal spells,
-//! the id that tells the surface from the others under its stem, a class's
-//! methods, and the modules the surface reaches, so two runs that accept the
-//! same anchors lead their ids the same way and reach the same modules.
+//! A surface is where control enters from outside the process — the
+//! bootstrap the manifest names, a handler handed to something a package
+//! provides, a method under a package's decorator, or, in a library, what
+//! the entry module exports — and the survey names each at the lines that
+//! register or declare it. From those lines the code here reads the rest:
+//! the stem a route or literal spells, the id that tells the surface from
+//! the others under its stem, a class's methods, and the modules the surface
+//! reaches, so two runs that accept the same anchors lead their ids the same
+//! way and reach the same modules. The rules read shapes — a call handed a
+//! function, a decorator with a literal, an export — never a framework's
+//! name; the one list that spells names, the decorators that shape a handler
+//! rather than register it, is what keeps a verb decorator beneath one of
+//! them the surface.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::parse::{
     Arg, Binding, BindingKind, Call, Decorated, Export, ExportKind, Imported, Init, Lines,
@@ -61,14 +65,18 @@ const TRACE: usize = 4;
 /// The parsed tree with what locates its modules.
 #[derive(Debug)]
 pub struct Tree {
+    /// Every production module by its root-relative path, each import settled.
     pub modules: BTreeMap<String, Module>,
+    /// What locates a module the manifest or a convention names.
     pub resolver: Resolver,
+    /// What `package.json` says, empty for none.
     pub manifest: Manifest,
 }
 
 /// One place control enters the source from outside the process.
 #[derive(Debug)]
 pub struct Surface {
+    /// What a caller does through the surface, as the survey named it.
     pub name: String,
     /// The module the surface is registered or declared in.
     pub entry: String,
@@ -98,11 +106,15 @@ impl Tree {
     /// import for its effect. An entry that only declares and exports is a
     /// library's — a `main` naming the barrel while `start` runs the server
     /// — and a tree with no entry that runs has no bootstrap.
-    pub fn bootstrap(&self) -> Option<String> {
+    pub(super) fn bootstrap(&self) -> Option<&Module> {
         let conventional =
             BOOTSTRAPS.iter().filter_map(|candidate| self.resolver.first(&[candidate]));
-        self.manifest.entries(&self.resolver).into_iter().chain(conventional).find(|entry| {
-            self.modules.get(entry).is_some_and(|module| {
+        self.manifest
+            .entries(&self.resolver)
+            .into_iter()
+            .chain(conventional)
+            .filter_map(|entry| self.modules.get(&entry))
+            .find(|module| {
                 module.calls.iter().any(|call| {
                     call.discarded
                         && call.depth == 0
@@ -110,32 +122,45 @@ impl Tree {
                         && call.class.is_none()
                 }) || module.imports.iter().any(|import| import.imported == Imported::Effect)
             })
-        })
     }
 
-    /// The package `local` is imported from in `module`, if it is an import
-    /// of one.
-    pub fn package(&self, module: &Module, local: &str) -> Option<String> {
+    // The module of the tree that exports what `local` imports in `module`,
+    // with the name it is exported under.
+    fn exporter(&self, module: &Module, local: &str) -> Option<(&Module, String)> {
         let import = module.import(local)?;
-        match self.resolver.resolve(&module.path, &import.specifier)? {
-            Target::Package(package) => Some(package),
-            Target::Module(_) | Target::Data(_) | Target::Unresolved(_) => None,
-        }
-    }
-
-    // The module `local` is imported from in `module`, if it is an import
-    // of one, with the name imported.
-    fn imported(&self, module: &Module, local: &str) -> Option<(&Module, String)> {
-        let import = module.import(local)?;
-        let Target::Module(path) = self.resolver.resolve(&module.path, &import.specifier)? else {
-            return None;
-        };
+        let path = import.target.as_ref()?.module()?;
         let name = match &import.imported {
             Imported::Named(name) => name.clone(),
             Imported::Default => "default".to_owned(),
             Imported::Namespace | Imported::Effect => return None,
         };
-        Some((self.modules.get(&path)?, name))
+        Some((self.modules.get(path)?, name))
+    }
+
+    /// The modules `seeds` reach through imports and re-exports, `seeds`
+    /// first in their order, then breadth-first, once each. A module in
+    /// `stop` is reached and not followed: another surface's entry is what
+    /// the bootstrap mounts, not what it does.
+    pub(super) fn closure(&self, seeds: &[String], stop: &[String]) -> Vec<String> {
+        let mut order: Vec<String> = Vec::new();
+        let mut seen: BTreeSet<&str> = BTreeSet::new();
+        for seed in seeds.iter().filter(|seed| self.modules.contains_key(*seed)) {
+            if seen.insert(seed.as_str()) {
+                order.push(seed.clone());
+            }
+        }
+        let mut next = 0;
+        while next < order.len() {
+            let from = self.modules.get(&order[next]).filter(|_| !stop.contains(&order[next]));
+            next += 1;
+            let Some(module) = from else { continue };
+            for path in module.reached() {
+                if seen.insert(path) {
+                    order.push(path.to_owned());
+                }
+            }
+        }
+        order
     }
 
     // The string a leading argument stands for: a literal, or an identifier
@@ -154,7 +179,7 @@ impl Tree {
                 _ => None,
             };
         }
-        let (target, imported) = self.imported(module, name)?;
+        let (target, imported) = self.exporter(module, name)?;
         match &exported_binding(target, &imported)?.kind {
             BindingKind::Value { string, .. } => string.clone(),
             _ => None,
@@ -165,7 +190,7 @@ impl Tree {
     /// carrying one, or a name bound to a function in the tree — declared
     /// here, imported from a module of the tree, or a member of a namespace
     /// import (`handlers.list`).
-    pub fn handler(&self, module: &Module, arg: &Arg, frames: &[u32]) -> bool {
+    pub(super) fn handler(&self, module: &Module, arg: &Arg, frames: &[u32]) -> bool {
         if arg.function {
             return true;
         }
@@ -186,11 +211,8 @@ impl Tree {
                 );
         }
         let Some(import) = module.import(name) else { return false };
-        let Some(Target::Module(path)) = self.resolver.resolve(&module.path, &import.specifier)
-        else {
-            return false;
-        };
-        let Some(target) = self.modules.get(&path) else { return false };
+        let Some(target) = import.target.as_ref().and_then(Target::module) else { return false };
+        let Some(target) = self.modules.get(target) else { return false };
         let exported = match (&import.imported, rest) {
             (Imported::Named(exported), []) => exported.as_str(),
             (Imported::Default, []) => "default",
@@ -220,7 +242,7 @@ impl Tree {
     /// it to the package it comes from — a class of the tree's that extends a
     /// package's class among them, for a member it inherits; `None` for a
     /// receiver of the tree's own or of the runtime's.
-    pub fn receiver(&self, module: &Module, call: &Call) -> Option<Receiver> {
+    pub(super) fn receiver(&self, module: &Module, call: &Call) -> Option<Receiver> {
         let head = call.callee.head.as_str();
         let link = |index: usize| call.callee.links.get(index).map(|link| link.name.as_str());
         if head == "this" {
@@ -232,9 +254,9 @@ impl Tree {
                     type_path: Some(path),
                     ..
                 } => {
-                    let package = self.package(module, path.first()?)?;
+                    let package = module.package(path.first()?)?;
                     Some(Receiver {
-                        package,
+                        package: package.to_owned(),
                         type_name: path.last().cloned(),
                     })
                 }
@@ -266,9 +288,9 @@ impl Tree {
                 | BindingKind::Param {
                     type_path: Some(path),
                 } => {
-                    let package = self.package(module, path.first()?)?;
+                    let package = module.package(path.first()?)?;
                     Some(Receiver {
-                        package,
+                        package: package.to_owned(),
                         type_name: path.last().cloned(),
                     })
                 }
@@ -308,20 +330,20 @@ impl Tree {
                 _ => None,
             };
         }
-        if let Some(package) = self.package(module, name) {
+        if let Some(package) = module.package(name) {
             return Some(Receiver {
-                package,
+                package: package.to_owned(),
                 type_name: None,
             });
         }
-        let (target, imported) = self.imported(module, name)?;
+        let (target, imported) = self.exporter(module, name)?;
         let binding = exported_binding(target, &imported)?;
         self.trace(target, &binding.name, &[], member, budget - 1)
     }
 
     // The modules the names referenced within `lines` of `module` reach:
     // imports, and the types of the parameters and fields in scope.
-    pub(super) fn reaches(
+    fn reaches(
         &self, module: &Module, lines: Lines, frames: &[u32], class: Option<&str>,
     ) -> Vec<String> {
         let mut seeds = vec![module.path.clone()];
@@ -329,7 +351,7 @@ impl Tree {
             .and_then(|class| module.classes.iter().find(|c| c.name == class))
             .map_or(lines, |c| c.lines);
         for name in module.referenced(span) {
-            self.seed(&mut seeds, module, name);
+            seed(&mut seeds, module, name);
             if let Some(binding) = module.binding(name, frames)
                 && let BindingKind::Param {
                     type_path: Some(path),
@@ -340,7 +362,7 @@ impl Tree {
                 } = &binding.kind
                 && let Some(head) = path.first()
             {
-                self.seed(&mut seeds, module, head);
+                seed(&mut seeds, module, head);
             }
         }
         if let Some(class) = class {
@@ -351,22 +373,19 @@ impl Tree {
             for binding in fields {
                 if let BindingKind::Field { type_path, root, .. } = &binding.kind {
                     for head in type_path.iter().chain(root).filter_map(|path| path.first()) {
-                        self.seed(&mut seeds, module, head);
+                        seed(&mut seeds, module, head);
                     }
                 }
             }
         }
-        self.resolver.closure(&self.modules, &seeds, &[])
+        self.closure(&seeds, &[])
     }
+}
 
-    // Seeds the in-tree module `local` is imported from in `module`, once.
-    fn seed(&self, seeds: &mut Vec<String>, module: &Module, local: &str) {
-        if let Some(import) = module.import(local)
-            && let Some(Target::Module(path)) =
-                self.resolver.resolve(&module.path, &import.specifier)
-        {
-            push_unique(seeds, path);
-        }
+// Seeds the in-tree module `local` is imported from in `module`, once.
+fn seed(seeds: &mut Vec<String>, module: &Module, local: &str) {
+    if let Some(path) = module.imported(local) {
+        push_unique(seeds, path.to_owned());
     }
 }
 
@@ -379,17 +398,19 @@ fn exported_binding<'m>(module: &'m Module, name: &str) -> Option<&'m Binding> {
 
 /// A receiver traced to the package that provides it.
 pub struct Receiver {
+    /// The package, by its specifier as imported.
     pub package: String,
     /// The class it is typed or constructed as, when the code says.
     pub type_name: Option<String>,
 }
 
-// The ids each surface's requirements lead with: a stem's one surface is
-// its stem; surfaces sharing a stem are told apart by what discriminates
-// each, else by their name, else by their entry's module, and two still
-// alike by the nearest segment of their entries' paths that spells neither
-// the stem nor the id's own tail; a class carries an id per public method
-// beside its own.
+// The ids each surface's requirements lead with, decided over the surfaces
+// that share the tree — so `build` runs it once every named surface is
+// derived: a stem's one surface is its stem; surfaces sharing a stem are
+// told apart by what discriminates each, else by their name, else by their
+// entry's module, and two still alike by the nearest segment of their
+// entries' paths that spells neither the stem nor the id's own tail; a class
+// carries an id per public method beside its own.
 pub(super) fn identify(tree: &Tree, surfaces: &mut [Surface]) {
     let module_of = |surface: &Surface| tree.modules.get(&surface.entry);
     let mut owned: Vec<String> = surfaces
@@ -442,10 +463,6 @@ fn tells_apart(module: &Module, stem: &str, own: &str) -> Option<String> {
 // surfaces' entries — what it mounts — and, through each, what that entry
 // constructs, and no further.
 pub(super) fn start(tree: &Tree, module: &Module, registered: &[Surface]) -> Surface {
-    let lines = Lines {
-        start: 1,
-        end: u32::try_from(module.text.lines().count()).unwrap_or(u32::MAX).max(1),
-    };
     let registrations: Vec<Lines> = registered
         .iter()
         .filter(|surface| surface.entry == module.path)
@@ -453,7 +470,7 @@ pub(super) fn start(tree: &Tree, module: &Module, registered: &[Surface]) -> Sur
         .collect();
     let mut seeds = vec![module.path.clone()];
     for name in module.referenced_outside(&registrations) {
-        tree.seed(&mut seeds, module, name);
+        seed(&mut seeds, module, name);
     }
     let entries = unique(
         registered
@@ -468,33 +485,32 @@ pub(super) fn start(tree: &Tree, module: &Module, registered: &[Surface]) -> Sur
     for entry in &entries {
         let Some(target) = tree.modules.get(entry) else { continue };
         for local in target.constructed() {
-            tree.seed(&mut seeds, target, local);
+            seed(&mut seeds, target, local);
         }
     }
     Surface {
         name: "start".to_owned(),
         entry: module.path.clone(),
         stem: "start".to_owned(),
-        lines,
+        lines: module.span,
         detail: vec![
             "the process bootstrap: what runs before each handler is registered, what it awaits \
              before serving, and at shutdown — `stop` and what a signal handler calls, wherever \
              declared"
                 .to_owned(),
         ],
-        closure: tree.resolver.closure(&tree.modules, &seeds, &entries),
+        closure: tree.closure(&seeds, &entries),
         discriminator: None,
         methods: Vec::new(),
-        ids: Vec::new(),
+        ids: vec!["start".to_owned()],
     }
 }
 
 // Where each module's routes are mounted: `app.use("/api", ordersRouter(..))`
 // gives `routes/orders.ts` the prefix `/api`.
-pub(super) fn mounts(tree: &Tree, scope: &[String]) -> BTreeMap<String, String> {
+pub(super) fn mounts(tree: &Tree) -> BTreeMap<String, String> {
     let mut mounts = BTreeMap::new();
-    for path in scope {
-        let Some(module) = tree.modules.get(path) else { continue };
+    for module in tree.modules.values() {
         for call in &module.calls {
             if call.method() != "use" {
                 continue;
@@ -506,7 +522,7 @@ pub(super) fn mounts(tree: &Tree, scope: &[String]) -> BTreeMap<String, String> 
                 let Some(head) = arg.root.as_deref().and_then(|root| root.first()) else {
                     continue;
                 };
-                let Some((target, _)) = tree.imported(module, head) else { continue };
+                let Some((target, _)) = tree.exporter(module, head) else { continue };
                 mounts.entry(target.path.clone()).or_insert_with(|| prefix.to_owned());
             }
         }
@@ -525,14 +541,14 @@ fn named_handler(tree: &Tree, module: &Module, call: &Call) -> Option<String> {
 
 // The literal that leads a call's arguments: a string literal, or a constant
 // bound to one in the tree.
-fn led(tree: &Tree, module: &Module, call: &Call) -> Option<String> {
+pub(super) fn led(tree: &Tree, module: &Module, call: &Call) -> Option<String> {
     call.args.first().and_then(|arg| tree.constant(module, arg, &call.frames))
 }
 
 // The method a registration is spelled by and the literal that leads it: a
 // chain names itself at its first call with a literal (`command("x")`), else
 // the call's own method and lead.
-fn registered(call: &Call, led: Option<String>) -> (&str, Option<String>) {
+pub(super) fn registered(call: &Call, led: Option<String>) -> (&str, Option<String>) {
     let chained = call.callee.links.iter().find_map(|link| {
         let literal = link.call.as_ref()?.literal.clone()?;
         Some((link.name.as_str(), literal))
@@ -662,7 +678,7 @@ fn at_decorated_class(tree: &Tree, module: &Module, class: &Decorated) -> Derive
     );
     let mut detail =
         vec![format!("class `{}` {} under `@{}`", class.class, class.lines, spelled(class))];
-    detail.extend(through(tree, module, class));
+    detail.extend(through(module, class));
     detail.extend(noted(&methods));
     Derived {
         stem: route_stem(&route),
@@ -678,7 +694,7 @@ fn at_decorated_class(tree: &Tree, module: &Module, class: &Decorated) -> Derive
 fn at_decorated_method(tree: &Tree, module: &Module, decorated: &Decorated) -> Derived {
     let member = decorated.member.as_deref().unwrap_or_default();
     let mut detail = vec![format!("method `{}.{member}` {}", decorated.class, decorated.lines)];
-    detail.extend(through(tree, module, decorated));
+    detail.extend(through(module, decorated));
     Derived {
         stem: decorated_stem(module, decorated),
         discriminator: kebab(member),
@@ -728,8 +744,8 @@ fn spelled(decorated: &Decorated) -> String {
 }
 
 // The package a decorator comes from, as a note, when it is a package's.
-fn through(tree: &Tree, module: &Module, decorated: &Decorated) -> Option<String> {
-    let package = tree.package(module, decorated.name.first()?)?;
+fn through(module: &Module, decorated: &Decorated) -> Option<String> {
+    let package = module.package(decorated.name.first()?)?;
     Some(format!("through `{package}`"))
 }
 
@@ -792,14 +808,26 @@ fn decorated_at(module: &Module, lines: Lines) -> Option<&Decorated> {
         .or_else(|| methods().find(|d| d.lines.holds(lines.start)))
 }
 
+// Whether a call hands a function to something: a handler among its
+// arguments, and not a structural call (`.then`, `.map`) that takes one.
+fn hands(tree: &Tree, module: &Module, call: &Call) -> bool {
+    !call.structural() && call.args.iter().any(|arg| tree.handler(module, arg, &call.frames))
+}
+
+// The receiver a call hands a function to, when the call is one outside any
+// handler that hands one to something a package provides — where a
+// framework, a queue, a scheduler, or a CLI is told what to run.
+pub(super) fn handed(tree: &Tree, module: &Module, call: &Call) -> Option<Receiver> {
+    (call.depth == 0 && hands(tree, module, call)).then(|| tree.receiver(module, call))?
+}
+
 // Whether a call has the shape of a registration, at any depth and whatever
 // its receiver: it hands a function to something and is discarded,
 // constructs, or is led by a literal. A wrapper handed a function for its
 // value — `export default fp(async (app) => ..)` — has not: it defines a
 // plugin, it registers nothing.
 pub(super) fn registers(tree: &Tree, module: &Module, call: &Call) -> bool {
-    !call.structural()
-        && call.args.iter().any(|arg| tree.handler(module, arg, &call.frames))
+    hands(tree, module, call)
         && (call.discarded || call.is_new || led(tree, module, call).is_some())
 }
 
@@ -889,18 +917,12 @@ fn methods<'m>(module: &'m Module, name: &str) -> Vec<(&'m str, Lines)> {
         .unwrap_or_default()
 }
 
-// The modules no other module imports.
+// The modules no other module imports; every module where each is imported.
 pub(super) fn roots(tree: &Tree) -> Vec<String> {
-    let mut imported: Vec<String> = Vec::new();
-    for module in tree.modules.values() {
-        for specifier in module.specifiers() {
-            if let Some(Target::Module(path)) = tree.resolver.resolve(&module.path, specifier) {
-                imported.push(path);
-            }
-        }
-    }
+    let imported: BTreeSet<&str> =
+        tree.modules.values().flat_map(|module| module.reached()).collect();
     let roots: Vec<String> =
-        tree.modules.keys().filter(|path| !imported.contains(path)).cloned().collect();
+        tree.modules.keys().filter(|path| !imported.contains(path.as_str())).cloned().collect();
     if roots.is_empty() { tree.modules.keys().cloned().collect() } else { roots }
 }
 

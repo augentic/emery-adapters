@@ -369,6 +369,7 @@ impl<'s> Walker<'s> {
             specifier: specifier.to_owned(),
             imported,
             type_only,
+            target: None,
         });
     }
 
@@ -722,6 +723,7 @@ impl<'a> Visit<'a> for Walker<'_> {
             specifier: it.source.value.to_string(),
             names: Some(names),
             type_only: it.export_kind == ImportOrExportKind::Type,
+            target: None,
         });
         walk::walk_export_from_declaration(self, it);
     }
@@ -731,6 +733,7 @@ impl<'a> Visit<'a> for Walker<'_> {
             specifier: it.source.value.to_string(),
             names: None,
             type_only: it.export_kind == ImportOrExportKind::Type,
+            target: None,
         });
         walk::walk_export_all_declaration(self, it);
     }

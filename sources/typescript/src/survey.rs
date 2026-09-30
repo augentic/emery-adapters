@@ -42,7 +42,7 @@ use std::path::Path;
 use emery_sdk::workspace::Entry;
 use emery_sdk::{Claim, Error, INLINE_BYTES, Seam, SourceContent, SourceInput, bad_request};
 
-use self::resolve::{Manifest, Resolver, Target};
+use self::resolve::{Manifest, Resolver};
 use self::skeleton::Test;
 use self::surface::{Surface, Tree};
 
@@ -281,16 +281,11 @@ fn tests(root: &Path, paths: Vec<String>, tree: &Tree) -> Vec<Test> {
             });
             continue;
         }
-        let module = parse::parse(&path, text);
-        let imports = unique(module.specifiers().filter_map(|specifier| {
-            match tree.resolver.resolve(&path, specifier) {
-                Some(Target::Module(imported)) => Some(imported),
-                _ => None,
-            }
-        }));
+        let mut module = parse::parse(&path, text);
+        tree.resolver.settle(&mut module);
         tests.push(Test {
             path,
-            imports,
+            imports: module.reached().into_iter().map(str::to_owned).collect(),
             statements: skeleton::statements(&module),
         });
     }
@@ -340,9 +335,10 @@ fn finish(tree: &Tree, lead: Seam, surfaces: &[Surface], tests: &[Test]) -> Seam
         .filter(|test| test.imports.is_empty() || test.imports.iter().any(|m| files.contains(m)))
         .collect();
     let text = brief(tree, text, &files, widened, &attached);
-    let modules: Vec<&parse::Module> =
-        files.iter().filter_map(|path| tree.modules.get(path)).collect();
-    files.extend(unique(modules.iter().flat_map(|module| tree.resolver.data(module))));
+    let data = unique(
+        files.iter().filter_map(|path| tree.modules.get(path)).flat_map(parse::Module::data),
+    );
+    files.extend(data.into_iter().map(str::to_owned));
     files.extend(attached.iter().map(|test| test.path.clone()));
     Seam {
         text,
@@ -352,7 +348,8 @@ fn finish(tree: &Tree, lead: Seam, surfaces: &[Surface], tests: &[Test]) -> Seam
     }
 }
 
-// Every module parsed; one that is not UTF-8 text is left out with a warning.
+// Every module parsed and each of its imports settled to what it names; one
+// that is not UTF-8 text is left out with a warning.
 fn read(root: &Path, paths: Vec<String>, data: Vec<String>) -> Tree {
     let mut modules = BTreeMap::new();
     for path in paths {
@@ -366,6 +363,9 @@ fn read(root: &Path, paths: Vec<String>, data: Vec<String>) -> Tree {
         }
     }
     let resolver = Resolver::new(root, modules.keys().cloned(), data);
+    for module in modules.values_mut() {
+        resolver.settle(module);
+    }
     Tree {
         modules,
         resolver,
@@ -411,9 +411,10 @@ fn by_stem(tree: &Tree, surfaces: &[Surface]) -> Vec<Seam> {
             let under: Vec<&Surface> = surfaces.iter().filter(|s| s.stem == stem).collect();
             let mut files =
                 unique(under.iter().flat_map(|surface| surface.closure.iter().cloned()));
-            let unfollowed = files.iter().filter_map(|path| tree.modules.get(path)).any(|module| {
-                !module.dynamic.is_empty() || !tree.resolver.unresolved(module).is_empty()
-            });
+            let unfollowed = files
+                .iter()
+                .filter_map(|path| tree.modules.get(path))
+                .any(|module| !module.dynamic.is_empty() || !module.unresolved().is_empty());
             if unfollowed {
                 let rest: Vec<String> =
                     tree.modules.keys().filter(|path| !files.contains(*path)).cloned().collect();
@@ -539,12 +540,12 @@ fn brief(tree: &Tree, lead: String, files: &[String], widened: bool, tests: &[&T
     let modules = || files.iter().filter_map(|path| tree.modules.get(path));
     let mut sections = vec![lead];
     sections.extend(skeleton::boundaries(modules()));
-    sections.extend(skeleton::packages(modules(), &tree.resolver));
+    sections.extend(skeleton::packages(modules()));
     sections.extend(skeleton::calls(tree, files));
     sections.extend(skeleton::decisions(modules()));
-    sections.extend(skeleton::data(modules(), &tree.resolver));
+    sections.extend(skeleton::data(modules()));
     sections.extend(skeleton::stated(tests.iter().copied()));
-    sections.extend(skeleton::unfollowed(modules(), &tree.resolver, widened));
+    sections.extend(skeleton::unfollowed(modules(), widened));
     let unparsed: Vec<String> =
         modules().filter(|m| !m.parsed).map(|m| format!("`{}`", m.path)).collect();
     if !unparsed.is_empty() {

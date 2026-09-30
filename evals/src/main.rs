@@ -1,13 +1,14 @@
 //! Grades the shipped `typescript` component end to end over the live model.
 //! Operator-invoked, never CI.
 //!
-//! `cargo run --example eval -- [case..]` stages every case under
-//! `examples/eval/cases/` (or the named ones) as its own project beneath
-//! `target/eval/`, runs `emery specify` over it three times, reads the committed
-//! documents back through `emery show`, grades the accepted claims and the
-//! surveyed surfaces against the case's `expected.toml`, and writes a dated
-//! scorecard to `target/eval/`. A case whose fixture the checkout lacks is
-//! skipped unless it is named.
+//! `cargo run -p evals -- [case..]` stages every case under `evals/cases/` (or
+//! the named ones) as its own project beneath `target/eval/`, runs `emery
+//! specify` over it three times, reads the committed documents back through
+//! `emery show`, grades the accepted claims and the surveyed surfaces against
+//! the case's `expected.toml`, and writes a dated scorecard to `target/eval/`.
+//! Every path — a case's `fixture`, the binaries' defaults, the scorecard's —
+//! is relative to the repository root. A case whose fixture the checkout lacks
+//! is skipped unless it is named.
 //!
 //! A run that hits the backend's time cap — a `timeout` or `inactive`
 //! completion — is put again one rung up the budget ladder, so the card says
@@ -33,7 +34,7 @@ use emery_sdk::{Anchor, Claim, ClaimKind, Evidence};
 use serde::Deserialize;
 use serde_json::Value;
 
-const CASES: &str = "examples/eval/cases";
+const CASES: &str = "evals/cases";
 const RUST_LOG: &str = "emery_sdk=trace,typescript=trace,omnia_cursor=info,omnia_core=off";
 const LADDER: &str = "600/120,1200/240,2400/480";
 
@@ -49,7 +50,11 @@ fn main() -> ExitCode {
 
 #[expect(clippy::disallowed_methods, reason = "the eval is a native operator tool, not a guest")]
 fn eval() -> Result<(), Box<dyn std::error::Error>> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    // the crate sits one level beneath the repository root, which every
+    // fixture, binary, and scorecard path is relative to
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .ok_or("CARGO_MANIFEST_DIR: no parent directory")?;
     let settings = Settings::from_env(root)?;
     let filter: BTreeSet<String> = env::args().skip(1).collect();
     let cases = cases(root, &filter)?;

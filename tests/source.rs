@@ -10,6 +10,7 @@ mod support;
 
 use std::path::Path;
 
+use emery_sdk::survey::{Inventory, Surface};
 use omnia_test::host::{Scratch, ScriptedModel, scratch};
 use omnia_test::{Exchange, Seen};
 
@@ -40,13 +41,18 @@ mod prompt {
 // the anchor that registers or declares it, under the stem its ids lead
 // with — and the modules no surface reaches.
 fn inventory(surfaces: &[(&str, &str, &str)], unreached: &[&str]) -> String {
-    let surfaces: Vec<serde_json::Value> = surfaces
-        .iter()
-        .map(|(name, anchor, stem)| {
-            serde_json::json!({ "name": name, "anchor": anchor, "stem": stem })
-        })
-        .collect();
-    serde_json::json!({ "surfaces": surfaces, "unreached": unreached }).to_string()
+    let inventory = Inventory {
+        surfaces: surfaces
+            .iter()
+            .map(|&(name, anchor, stem)| Surface {
+                name: name.to_owned(),
+                anchor: anchor.to_owned(),
+                stem: stem.to_owned(),
+            })
+            .collect(),
+        unreached: unreached.iter().map(|&path| path.to_owned()).collect(),
+    };
+    serde_json::to_string(&inventory).expect("the SDK's inventory serialises")
 }
 
 // Unanchored, so one answer serves a workspace seam and the inline value alike;

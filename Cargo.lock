@@ -1049,11 +1049,9 @@ dependencies = [
  "omnia-wasi-model",
  "omnia-wasi-otel",
  "opentelemetry-proto",
- "serde",
  "serde_json",
  "test-programs",
  "tokio",
- "toml",
  "tracing",
  "typescript",
 ]
@@ -1116,6 +1114,16 @@ checksum = "de48cc4d1c1d97a20fd819def54b890cadde72ed3ad0c614822a0a433361be96"
 dependencies = [
  "cfg-if",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "evals"
+version = "0.13.0"
+dependencies = [
+ "emery-sdk",
+ "serde",
+ "serde_json",
+ "toml",
 ]
 
 [[package]]

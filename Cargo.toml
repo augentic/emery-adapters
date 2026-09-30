@@ -17,11 +17,9 @@ omnia-test = { workspace = true, features = ["host"] }
 omnia-wasi-model.workspace = true
 omnia-wasi-otel.workspace = true
 opentelemetry-proto.workspace = true
-serde.workspace = true
 serde_json.workspace = true
 test-programs.workspace = true
 tokio.workspace = true
-toml.workspace = true
 tracing.workspace = true
 typescript = { path = "sources/typescript" }
 
@@ -29,7 +27,7 @@ typescript = { path = "sources/typescript" }
 workspace = true
 
 [workspace]
-members = ["crates/*", "sources/*"]
+members = ["crates/*", "evals", "sources/*"]
 resolver = "3"
 
 [workspace.package]
@@ -118,8 +116,8 @@ oxc_parser = "=0.152.0"
 oxc_span = "=0.152.0"
 
 [patch.crates-io]
-# emery-prose = { git = "https://github.com/augentic/emery", rev = "bbcc1fd2" }
-# emery-sdk = { git = "https://github.com/augentic/emery", rev = "bbcc1fd2" }
+# emery-prose = { git = "https://github.com/augentic/emery", rev = "14245fe7" }
+# emery-sdk = { git = "https://github.com/augentic/emery", rev = "14245fe7" }
 emery-prose = { path = "../emery/crates/prose" }
 emery-sdk = { path = "../emery/crates/sdk" }
 

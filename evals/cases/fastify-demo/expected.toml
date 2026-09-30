@@ -1,4 +1,4 @@
-# fastify/demo at 5cd56012 (MIT), vendored by the command in examples/README.md
+# fastify/demo at 5cd56012 (MIT), vendored by the command in evals/README.md
 # and gitignored: a Fastify application of 34 production modules, ~45 KB,
 # which fits one message. `src/server.ts` bootstraps and registers `src/app.ts`,
 # which loads `plugins/external`, `plugins/app`, and `routes` through

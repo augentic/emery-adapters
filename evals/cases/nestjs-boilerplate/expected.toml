@@ -1,5 +1,5 @@
 # brocoders/nestjs-boilerplate at 9620f159 (MIT), vendored by the command in
-# examples/README.md and gitignored: 177 production modules, ~236 KB, well
+# evals/README.md and gitignored: 177 production modules, ~236 KB, well
 # past the 64 KB the survey lays into one message, so this is the scale case
 # — most modules reach a survey by model only through the lend. A NestJS
 # application: `src/main.ts` bootstraps, nine controllers under object-form

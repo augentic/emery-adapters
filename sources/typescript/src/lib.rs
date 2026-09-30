@@ -81,7 +81,9 @@ mod guest {
 
         // the declarations are the code's to state: what the model answered
         // as a `type` gives way to what the parser read
-        let dropped = evidence.claims.extract_if(.., |claim| claim.kind == ClaimKind::Type).count();
+        let answered = evidence.claims.len();
+        evidence.claims.retain(|claim| claim.kind != ClaimKind::Type);
+        let dropped = answered - evidence.claims.len();
         if dropped > 0 {
             emery_sdk::tracing::debug!(
                 dropped,

@@ -28,7 +28,7 @@ use emery_sdk::{Claim, ClaimKind};
 
 use super::parse::{BindingKind, Call, Imported, Init, Lines, MemberKind, Module, Scope, TypeKind};
 use super::push_unique;
-use super::resolve::{Resolver, Target};
+use super::resolve::Target;
 use super::surface::{Surface, Tree};
 
 // The runtime's own functions that leave the process, listed as calls with
@@ -199,13 +199,11 @@ pub fn stated<'t>(tests: impl IntoIterator<Item = &'t Test>) -> Option<String> {
 /// The brief's data files over `modules`: each `.json` they import, with the
 /// modules importing it, in the order the modules are laid. `None` when they
 /// import none.
-pub fn data<'m>(
-    modules: impl IntoIterator<Item = &'m Module>, resolver: &Resolver,
-) -> Option<String> {
+pub fn data<'m>(modules: impl IntoIterator<Item = &'m Module>) -> Option<String> {
     // path → importing modules
-    let mut files: Vec<(String, Vec<&str>)> = Vec::new();
+    let mut files: Vec<(&str, Vec<&str>)> = Vec::new();
     for module in modules {
-        for path in resolver.data(module) {
+        for path in module.data() {
             match files.iter_mut().find(|(known, _)| *known == path) {
                 Some((_, by)) => push_unique(by, module.path.as_str()),
                 None => files.push((path, vec![module.path.as_str()])),
@@ -236,12 +234,12 @@ pub fn data<'m>(
 /// laid so what those name is still within reach. `None` when every import
 /// was followed.
 pub fn unfollowed<'m>(
-    modules: impl IntoIterator<Item = &'m Module>, resolver: &Resolver, widened: bool,
+    modules: impl IntoIterator<Item = &'m Module>, widened: bool,
 ) -> Option<String> {
     let mut items: Vec<String> = Vec::new();
     for module in modules {
         let unresolved: Vec<String> =
-            resolver.unresolved(module).into_iter().map(|s| format!("`{s}`")).collect();
+            module.unresolved().into_iter().map(|s| format!("`{s}`")).collect();
         if !unresolved.is_empty() {
             items.push(format!(
                 "{} from `{}` {} no module of the tree",
@@ -481,16 +479,14 @@ pub fn boundaries<'m>(modules: impl IntoIterator<Item = &'m Module>) -> Option<S
 /// The brief's packages over `modules`: each bare specifier they import, with
 /// the names bound to it and the modules binding them. `None` when they
 /// import none.
-pub fn packages<'m>(
-    modules: impl IntoIterator<Item = &'m Module>, resolver: &Resolver,
-) -> Option<String> {
+pub fn packages<'m>(modules: impl IntoIterator<Item = &'m Module>) -> Option<String> {
     // specifier → (bound names, importing modules)
     let mut packages: BTreeMap<&str, (Vec<String>, Vec<&str>)> = BTreeMap::new();
     for module in modules {
         for import in module.imports.iter().filter(|import| !import.type_only) {
-            let Some(Target::Package(_)) = resolver.resolve(&module.path, &import.specifier) else {
+            if !matches!(import.target, Some(Target::Package(_))) {
                 continue;
-            };
+            }
             let bound = match &import.imported {
                 Imported::Default => format!("`{}` (default)", import.local),
                 Imported::Namespace => format!("`{}` (namespace)", import.local),
@@ -603,7 +599,7 @@ fn callee(tree: &Tree, module: &Module, call: &Call) -> Option<String> {
             std::iter::once(head).chain(members.iter().copied()).collect::<Vec<_>>().join(".")
         });
     };
-    let direct = head != "this" && tree.package(module, head).is_some();
+    let direct = head != "this" && module.package(head).is_some();
     let mut path: Vec<&str> = Vec::new();
     match &receiver.type_name {
         Some(type_name) => path.push(type_name),

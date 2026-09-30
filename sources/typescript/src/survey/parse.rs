@@ -4,10 +4,13 @@
 //! name a syntax-tree type; the parser is confined to `walk`, and a parser
 //! swap touches that file alone. A module the parser cannot read is still a
 //! `Module` — its imports and exports as far as the parser got, and `parsed`
-//! false — so one broken file never fails a run.
+//! false — so one broken file never fails a run. Where each import leads is
+//! settled once the tree is read (`Resolver::settle`) and carried on the
+//! import, so every rule reads the target rather than resolving again.
 
 use std::fmt::{self, Display, Formatter};
 
+use super::resolve::Target;
 use super::unique;
 
 mod walk;
@@ -90,8 +93,8 @@ const LIFECYCLE_EVENTS: &[&str] = &[
     "beforeExit",
 ];
 
-/// A 1-based, inclusive range of lines.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+/// A 1-based, inclusive range of lines; the default holds none.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Lines {
     pub start: u32,
     pub end: u32,
@@ -116,6 +119,17 @@ impl Lines {
     }
 }
 
+/// The range a claim anchor cites, saturated to what a module can hold.
+impl From<(u64, u64)> for Lines {
+    fn from((start, end): (u64, u64)) -> Self {
+        let line = |cited: u64| u32::try_from(cited).unwrap_or(u32::MAX);
+        Self {
+            start: line(start),
+            end: line(end),
+        }
+    }
+}
+
 // The range as prose, with an en dash; `anchor` is the claim grammar.
 impl Display for Lines {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -132,6 +146,8 @@ impl Display for Lines {
 pub struct Module {
     pub path: String,
     pub text: String,
+    /// The whole file: its first line to its last, one line at the least.
+    pub span: Lines,
     pub parsed: bool,
     pub imports: Vec<Import>,
     pub reexports: Vec<Reexport>,
@@ -170,6 +186,20 @@ impl Module {
     /// The import binding `local` names, if any.
     pub fn import(&self, local: &str) -> Option<&Import> {
         self.imports.iter().find(|import| import.local == local)
+    }
+
+    /// The package `local` is imported from, if it is an import of one.
+    pub fn package(&self, local: &str) -> Option<&str> {
+        match self.import(local)?.target.as_ref()? {
+            Target::Package(package) => Some(package),
+            Target::Module(_) | Target::Data(_) | Target::Unresolved(_) => None,
+        }
+    }
+
+    /// The module of the tree `local` is imported from, if it is an import
+    /// of one.
+    pub fn imported(&self, local: &str) -> Option<&str> {
+        self.import(local)?.target.as_ref()?.module()
     }
 
     /// The binding `name` resolves to from within `frames`, the enclosing
@@ -232,12 +262,40 @@ impl Module {
         }))
     }
 
-    /// The specifiers the module imports or re-exports from, in order.
-    pub fn specifiers(&self) -> impl Iterator<Item = &str> {
+    /// Where the module's imports and re-exports lead, in order, once the
+    /// tree is read; an absolute specifier, which leads nowhere, is skipped.
+    pub fn targets(&self) -> impl Iterator<Item = &Target> {
         self.imports
             .iter()
-            .map(|import| import.specifier.as_str())
-            .chain(self.reexports.iter().map(|reexport| reexport.specifier.as_str()))
+            .map(|import| import.target.as_ref())
+            .chain(self.reexports.iter().map(|reexport| reexport.target.as_ref()))
+            .flatten()
+    }
+
+    /// The modules of the tree the module imports or re-exports from, in
+    /// order, once each.
+    pub fn reached(&self) -> Vec<&str> {
+        unique(self.targets().filter_map(Target::module))
+    }
+
+    /// The data files the module imports, root-relative, in order, once each.
+    pub fn data(&self) -> Vec<&str> {
+        unique(self.targets().filter_map(|target| match target {
+            Target::Data(path) => Some(path.as_str()),
+            _ => None,
+        }))
+    }
+
+    /// The specifiers the module imports for a value that name nothing of
+    /// the tree, as written, in order, once each. A type-only import is a
+    /// declaration's, followed nowhere, so it never counts.
+    pub fn unresolved(&self) -> Vec<&str> {
+        let imports = self.imports.iter().filter(|import| !import.type_only).map(|i| &i.target);
+        let reexports = self.reexports.iter().filter(|re| !re.type_only).map(|re| &re.target);
+        unique(imports.chain(reexports).filter_map(|target| match target {
+            Some(Target::Unresolved(specifier)) => Some(specifier.as_str()),
+            _ => None,
+        }))
     }
 }
 
@@ -247,6 +305,10 @@ pub struct Import {
     pub specifier: String,
     pub imported: Imported,
     pub type_only: bool,
+    /// Where the specifier leads, settled once the tree is read; `None`
+    /// before then, and for an absolute specifier, which names nothing of
+    /// the tree.
+    pub target: Option<Target>,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -264,6 +326,8 @@ pub struct Reexport {
     /// `(imported, exported)` pairs, or `None` for `export * from`.
     pub names: Option<Vec<(String, String)>>,
     pub type_only: bool,
+    /// Where the specifier leads, as an [`Import`]'s.
+    pub target: Option<Target>,
 }
 
 #[derive(Debug)]
@@ -390,8 +454,7 @@ impl Call {
         self.callee.method()
     }
 
-    /// The string literal leading the arguments, or the one a chain's first
-    /// call led with.
+    /// The string literal leading the arguments.
     pub fn literal(&self) -> Option<&str> {
         self.args.first().and_then(|arg| arg.literal.as_deref())
     }
@@ -551,10 +614,15 @@ struct Reference {
     line: u32,
 }
 
-/// Parses `text`, the module at `path` relative to the source root.
+/// Parses `text`, the module at `path` relative to the source root. Where
+/// its imports lead is the resolver's to settle once the tree is read.
 pub fn parse(path: &str, text: String) -> Module {
     let mut module = walk::read(path, &text);
     settle_exports(&mut module);
+    module.span = Lines {
+        start: 1,
+        end: u32::try_from(text.lines().count()).unwrap_or(u32::MAX).max(1),
+    };
     module.text = text;
     module
 }

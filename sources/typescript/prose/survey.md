@@ -2,7 +2,7 @@
 
 This prompt runs once per bound `typescript` source, before anything is extracted. The caller has parsed the tree already: the message lists every production module, says what the manifest names and whether an entry runs anything when loaded, lists every call that hands a function to something a package provides, every decorated class and method, what the entry modules export, and the packages imported — and lays the modules into the message whole, every line numbered, as far as they fit. Your job: from those facts, name each surface the source exposes — each one thing a caller outside the process does through it — anchor it at the lines where the code registers or declares it, and give it the stem its requirements lead with. You follow no import, group no module, and extract nothing. The caller derives the rest from the anchors you name: the stem the code spells at each, where it spells one, the id that tells a surface from the others under its stem, the modules each surface reaches, the lines a requirement may anchor at, the seams the [extract prompt](extract.md) mines, whose answers the engine reconciles into the specification — see [From sources to a spec](reconciliation.md).
 
-Everything this call needs is in this prompt and the message. The references the `read_doc` tool offers are the extract prompt's; this call does not need them.
+Everything this call needs is in this prompt and the message. The references `read_doc` offers are written for the extract call; load one only where a rule here links it — [claims.md](claims.md) for the `path` grammar — and never to decide what a surface is.
 
 ## Inputs
 
@@ -97,7 +97,7 @@ Four surfaces, each at the registration the message lists, each stem by the conv
 - **Naming `start`.** The bootstrap is the caller's. What it constructs, mounts, and awaits is `start`'s behaviour by the caller's rule; you name what it registers, not the bootstrap itself.
 - **Naming a module.** A service, a repository, a helper is not a surface; it is reached through the surfaces whose anchors import it.
 - **Cutting by directory or layer.** `src/routes/*` is not a surface, nor is `src/services/*`. A surface is what a caller reaches, wherever the code sits.
-- **Inventing a stem.** The stem is derived by the convention from the literal, the type, or the export — not chosen for elegance. `invoice-worker` for a worker on the queue `invoices` is wrong; `invoices` is right; `google` for `POST /auth/google/login` is wrong, since `auth` is the first segment that names a resource.
+- **Inventing a stem.** The stem is derived by the convention from the literal, the type, or the export — not chosen for elegance: `invoice-worker` for a worker on the queue `invoices` is wrong; `invoices` is right.
 - **Anchoring at a handler's body.** The anchor is the registration, the decorator, or the export — where the code declares the surface — not the function that implements it.
 - **Inventing a surface.** A module nothing reaches is listed under `unreached`; a tree that declares no boundary is answered `surfaces: []`.
 - **Extracting.** This call names surfaces and nothing else; claims are the extract call's.

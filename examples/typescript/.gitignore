@@ -1,4 +1,4 @@
 at_r9k_position_adapter/
-# vendored at a pinned SHA for the eval (examples/README.md); never committed
+# vendored at a pinned SHA for the eval (evals/README.md); never committed
 nestjs-boilerplate/
 fastify-demo/
