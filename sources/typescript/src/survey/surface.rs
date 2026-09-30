@@ -60,7 +60,7 @@ fn shapes(decorator: &str) -> bool {
 }
 
 // How many bindings a receiver is traced through before it counts as local.
-const TRACE: usize = 4;
+pub(super) const TRACE: usize = 4;
 
 /// The parsed tree with what locates its modules.
 #[derive(Debug)]

@@ -1942,6 +1942,87 @@ async fn typescript_anchors() {
     assert_eq!(exchanges[2].outcome, Ok(String::new()), "the inline value is held to no anchor");
 }
 
+// An Express service whose handler steps into the tree through instances:
+// a repository constructed into a local, awaited and then called for its
+// effect alone, and a mailer handed to a helper whose parameter is typed
+// by the tree's class.
+const STEPPING: [(&str, &str); 4] = [
+    (
+        "src/index.ts",
+        "import express from \"express\";\nimport { createOrder } from \"./orders\";\n\nconst app \
+         = express();\napp.post(\"/orders\", createOrder);\napp.listen(3000);\n",
+    ),
+    (
+        "src/orders.ts",
+        "import { OrdersRepository } from \"./repository\";\nimport { Mailer } from \
+         \"./mailer\";\n\nexport async function createOrder(req: { body: { sku: string } }, res: { \
+         json(body: unknown): void }) {\n  const repo = new OrdersRepository();\n  const id = \
+         await repo.insert(req.body.sku);\n  repo.flush();\n  await notify(new Mailer(), id);\n  \
+         res.json({ id });\n}\n\nasync function notify(mailer: Mailer, id: string) {\n  await \
+         mailer.send(id);\n}\n",
+    ),
+    (
+        "src/repository.ts",
+        "export class OrdersRepository {\n  async insert(sku: string): Promise<string> {\n    \
+         return sku;\n  }\n  flush(): void {}\n}\n",
+    ),
+    ("src/mailer.ts", "export class Mailer {\n  async send(id: string): Promise<void> {}\n}\n"),
+];
+
+// A step a function takes into the tree is a `requirement`'s anchor however
+// the code reaches the instance it steps on: a call awaited or made for its
+// effect alone on a local a tree class constructs, or on a parameter typed
+// by one, as on `this` or a module import; the construction the local holds
+// only wires, and is refused.
+#[tokio::test]
+async fn typescript_steps() {
+    let project = scratch();
+    modules(&project, &STEPPING);
+    let inserted = serde_json::json!({
+        "kind": "requirement", "id": "orders.insert",
+        "statement": "An order is inserted by its sku.", "path": "src/orders.ts#L6"
+    });
+    let flushed = serde_json::json!({
+        "kind": "requirement", "id": "orders.flush",
+        "statement": "The repository is flushed after the insert.", "path": "src/orders.ts#L7"
+    });
+    let sent = serde_json::json!({
+        "kind": "requirement", "id": "orders.notify",
+        "statement": "The order's id is mailed.", "path": "src/orders.ts#L13"
+    });
+    let constructed = serde_json::json!({
+        "kind": "requirement", "id": "orders.repository",
+        "statement": "Orders use a repository.", "path": "src/orders.ts#L5"
+    });
+    let strayed =
+        serde_json::json!({ "claims": [&inserted, &constructed, &flushed, &sent] }).to_string();
+    let corrected = serde_json::json!({ "claims": [&inserted, &flushed, &sent] }).to_string();
+    let survey = inventory(&[("POST /orders", "src/index.ts#L5", "orders")], &[]);
+    let inline = answer();
+
+    let model = support::run(
+        test_programs::ADAPTER_TYPESCRIPT,
+        &project,
+        &[],
+        ScriptedModel::answering([&survey, &strayed, &corrected, &inline]),
+    )
+    .await;
+
+    let seen = model.seen();
+    assert_eq!(seen.len(), 4, "the survey, two rounds for the one seam, one for the inline value");
+    let exchanges = checked(&model);
+    let correction = exchanges[0].outcome.as_ref().expect_err("the construction is refused");
+    assert!(
+        correction.contains("claim 1: path `src/orders.ts#L5`"),
+        "the finding names the claim at the construction: {correction}"
+    );
+    for held in ["claim 0:", "claim 2:", "claim 3:"] {
+        assert!(!correction.contains(held), "{held} is at a step into the tree: {correction}");
+    }
+    assert_eq!(exchanges[1].outcome, Ok(String::new()), "the corrected answer is accepted");
+    assert_eq!(exchanges[2].outcome, Ok(String::new()), "the inline value is held to no anchor");
+}
+
 // The tree's own tests are read for what they state: each running case
 // under its suites, each scenario under its feature, listed at its line in
 // the seam whose modules the test imports — a feature through the step

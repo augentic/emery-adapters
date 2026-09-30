@@ -31,7 +31,7 @@ use super::parse::{
 };
 use super::push_unique;
 use super::resolve::Target;
-use super::surface::{Surface, Tree};
+use super::surface::{Surface, TRACE, Tree};
 
 // The runtime's own functions that leave the process, listed as calls with
 // no package when nothing in the module binds the name.
@@ -388,8 +388,9 @@ fn spelled(module: &Module) -> impl Iterator<Item = (String, &str, Lines)> {
 /// boundary and `process.env` read, every line that applies one of the
 /// tree's constant-named boundaries, every step a function takes into the
 /// tree or on one of its class's members — a call for its effect alone or
-/// one it awaits — and the registration or declaration lines of each of
-/// `surfaces`; each in the claim `path` grammar, once.
+/// one it awaits, on `this`, a module import, or a local or parameter a
+/// tree class constructs or types — and the registration or declaration
+/// lines of each of `surfaces`; each in the claim `path` grammar, once.
 pub fn anchors<'s>(
     tree: &Tree, files: &[String], surfaces: impl IntoIterator<Item = &'s Surface>,
 ) -> Vec<String> {
@@ -482,11 +483,38 @@ fn step(tree: &Tree, module: &Module, call: &Call) -> bool {
         return false;
     }
     let head = call.callee.head.as_str();
-    head == "this"
-        || matches!(
-            module.import(head).and_then(|import| import.target.as_ref()),
-            Some(Target::Module(_))
-        )
+    head == "this" || of_tree(module, head, &call.frames, TRACE)
+}
+
+// Whether `name`, from within `frames` of `module`, is the tree's own: an
+// import of one of its modules, a class or function the module declares, or
+// a binding constructed as or typed by one — the local that holds `new
+// OrdersRepository(..)`, the parameter typed `mailer: Mailer` — traced
+// through the bindings that initialise it as a package receiver is.
+fn of_tree(module: &Module, name: &str, frames: &[u32], budget: usize) -> bool {
+    if budget == 0 {
+        return false;
+    }
+    let Some(binding) = module.binding(name, frames) else {
+        return module.imported(name).is_some();
+    };
+    let heads = |type_path: &Option<Vec<String>>, root: &Option<Vec<String>>| {
+        type_path
+            .iter()
+            .chain(root)
+            .filter_map(|path| path.first())
+            .any(|head| of_tree(module, head, frames, budget - 1))
+    };
+    match &binding.kind {
+        BindingKind::Class { .. }
+        | BindingKind::Function
+        | BindingKind::Value {
+            init: Init::Function, ..
+        } => true,
+        BindingKind::Value { type_path, root, .. } => heads(type_path, root),
+        BindingKind::Param { type_path } => heads(type_path, &None),
+        BindingKind::Field { .. } => false,
+    }
 }
 
 /// The brief's boundaries over `modules`: each module-level binding, class
