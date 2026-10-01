@@ -21,13 +21,12 @@
 //! its statements are listed in the brief of each seam whose modules it
 //! imports. Only a tree with no production module is refused.
 
-use std::collections::BTreeMap;
 use std::path::Path;
 
 use emery_sdk::workspace::Entry;
 use emery_sdk::{Claim, Error, INLINE_BYTES, Seam, SourceContent, SourceInput, bad_request};
 
-use self::resolve::{Manifest, Resolver};
+use self::parse::Module;
 use self::skeleton::Test;
 use self::surface::{Surface, Tree};
 
@@ -67,7 +66,7 @@ pub fn prepare(input: &SourceInput) -> Result<Preparation, Error> {
     // an inline value is one seam, with no survey
     let workspace = match &input.content {
         SourceContent::Value(text) => {
-            let module = parse::parse("value.py", text.clone());
+            let module = Module::parse("value.py", text.clone());
             let types = skeleton::types([&module], false);
             return Ok(Preparation::Value(Survey {
                 seams: vec![Seam::whole()],
@@ -90,7 +89,7 @@ pub fn prepare(input: &SourceInput) -> Result<Preparation, Error> {
     }
 
     let root = Path::new(workspace);
-    let tree = read(root, modules, data);
+    let tree = Tree::read(root, modules, data);
     let tests = tests(root, emery_sdk::workspace::list(workspace, is_test)?, &tree);
 
     Ok(Preparation::Workspace(Prepared {
@@ -102,26 +101,19 @@ pub fn prepare(input: &SourceInput) -> Result<Preparation, Error> {
 }
 
 pub fn seams(prepared: &Prepared, surfaces: &[Surface]) -> Survey {
-    let Prepared {
-        source,
-        root: workspace,
-        tree,
-        tests,
-    } = prepared;
-
-    logged(source, "surveyed", surfaces);
+    let tree = &prepared.tree;
+    logged(&prepared.source, "surveyed", surfaces);
 
     // choose the cut by size and by whether any surface was named
     let size: usize = tree.modules.values().map(|module| module.text.len()).sum();
     let fits = tree.modules.len() == 1 || u64::try_from(size).unwrap_or(u64::MAX) <= INLINE_BYTES;
     let leads = match (surfaces.is_empty(), fits) {
-        (false, true) => vec![whole(tree, surfaces)],
-        (false, false) => by_stem(tree, surfaces),
-        (true, true) => vec![unsurfaced(tree, workspace)],
-        (true, false) => by_directory(tree, workspace),
+        (false, true) => vec![Lead::whole(tree, surfaces)],
+        (false, false) => Lead::by_stem(tree, surfaces),
+        (true, true) => vec![Lead::unsurfaced(prepared)],
+        (true, false) => Lead::by_directory(prepared),
     };
-    let seams: Vec<Seam> =
-        leads.into_iter().map(|lead| finish(workspace, tree, lead, surfaces, tests)).collect();
+    let seams: Vec<Seam> = leads.into_iter().map(|lead| lead.finish(prepared, surfaces)).collect();
 
     let reached = unique(seams.iter().flat_map(|seam| seam.files.iter().map(String::as_str)));
     let types = skeleton::types(reached.iter().filter_map(|path| tree.modules.get(*path)), true);
@@ -289,7 +281,7 @@ fn tests(root: &Path, paths: Vec<String>, tree: &Tree) -> Vec<Test> {
             });
             continue;
         }
-        let mut module = parse::parse(&path, text);
+        let mut module = Module::parse(&path, text);
         tree.resolver.settle(&mut module);
         tests.push(Test {
             path,
@@ -316,92 +308,56 @@ fn tests(root: &Path, paths: Vec<String>, tree: &Tree) -> Vec<Test> {
     tests
 }
 
-// Seals a lead into its seam. A tree with no surface has no anchors, so its
-// exports are read for what they do. Data files sit among the modules in
-// `files` and tests follow them, never among the anchors; a test importing
-// no module of the tree follows every seam.
-fn finish(root: &str, tree: &Tree, lead: Lead, surfaces: &[Surface], tests: &[Test]) -> Seam {
-    let Lead {
-        seam: Seam {
-            text, files, stems, ..
-        },
-        widened,
-    } = lead;
-    let under: Vec<&Surface> =
-        surfaces.iter().filter(|surface| stems.contains(&surface.stem)).collect();
-    let anchors = if surfaces.is_empty() {
-        Vec::new()
-    } else {
-        skeleton::anchors(tree, &files, under.iter().copied())
-    };
-    let attached: Vec<&Test> = tests
-        .iter()
-        .filter(|test| test.imports.is_empty() || test.imports.iter().any(|m| files.contains(m)))
-        .collect();
-    let text = brief(tree, text, &files, widened, &attached);
-    let mut files = with_data(root, tree, files);
-    files.extend(attached.iter().map(|test| test.path.clone()));
-    Seam {
-        text,
-        files,
-        stems,
-        anchors,
-    }
-}
-
 // A data file within this many bytes is laid directly after the first module
-// naming it, so a long module later in the seam's order — a generated table
-// — cannot end the laid run before a value a `criterion` would cite; a
-// larger one is laid after every module.
+// naming it, a larger one after every module. Laid after a long module such
+// as a generated table, a small file could fall past where the laid run
+// ends, and a `criterion` could not cite its value.
 const DATA_BESIDE_BYTES: u64 = 8 * 1024;
 
-// The seam's modules with the data files they name placed among them: a
-// small one after the first module naming it, a large one after them all.
-fn with_data(root: &str, tree: &Tree, modules: Vec<String>) -> Vec<String> {
-    let mut files: Vec<String> = Vec::with_capacity(modules.len());
-    let mut large: Vec<String> = Vec::new();
-    for path in modules {
-        let named = tree.modules.get(&path).map(parse::Module::data).unwrap_or_default();
-        files.push(path);
-        for data in named {
-            if files.iter().chain(&large).any(|file| file == data) {
-                continue;
-            }
-            let size = std::fs::metadata(Path::new(root).join(data)).map_or(u64::MAX, |m| m.len());
-            if size <= DATA_BESIDE_BYTES {
-                files.push(data.to_owned());
-            } else {
-                large.push(data.to_owned());
+impl Prepared {
+    fn fallback_stem(&self) -> String {
+        let named = self.tree.manifest.name.as_deref().and_then(surface::kebab);
+        named
+            .or_else(|| {
+                Path::new(&self.root)
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .and_then(surface::kebab)
+            })
+            .unwrap_or_else(|| "module".to_owned())
+    }
+
+    fn with_data(&self, modules: Vec<String>) -> Vec<String> {
+        let mut files: Vec<String> = Vec::with_capacity(modules.len());
+        let mut large: Vec<String> = Vec::new();
+        for path in modules {
+            let named = self.tree.modules.get(&path).map(Module::data).unwrap_or_default();
+            files.push(path);
+            for data in named {
+                if files.iter().chain(&large).any(|file| file == data) {
+                    continue;
+                }
+                let size = std::fs::metadata(Path::new(&self.root).join(data))
+                    .map_or(u64::MAX, |m| m.len());
+                if size <= DATA_BESIDE_BYTES {
+                    files.push(data.to_owned());
+                } else {
+                    large.push(data.to_owned());
+                }
             }
         }
+        files.extend(large);
+        files
     }
-    files.extend(large);
-    files
 }
 
-fn read(root: &Path, paths: Vec<String>, data: Vec<String>) -> Tree {
-    let mut modules = BTreeMap::new();
-    for path in paths {
-        match std::fs::read_to_string(root.join(&path)) {
-            Ok(text) => {
-                modules.insert(path.clone(), parse::parse(&path, text));
-            }
-            Err(error) => {
-                emery_sdk::tracing::warn!(path, %error, "module is not readable text; left out");
-            }
-        }
-    }
-    let manifest = Manifest::read(root);
-    let resolver = Resolver::new(modules.keys().cloned(), data, manifest.name.as_deref());
-    for module in modules.values_mut() {
-        resolver.settle(module);
-    }
-    Tree {
-        modules,
-        resolver,
-        manifest,
-    }
-}
+const NO_SURFACE: &str = "No surface was found in this source: its survey named no route, command, \
+                          job, consumer, or exported API — no bootstrap the manifest's scripts \
+                          name or a conventional entry holds, no handler registered with a \
+                          package, no function or class under a package's decorator, and no \
+                          function or class exported at an entry module for a caller. Read it as \
+                          a library is read — for what its exports do for a caller — and claim \
+                          what the code exhibits.";
 
 struct Lead {
     seam: Seam,
@@ -422,174 +378,197 @@ impl Lead {
             widened: false,
         }
     }
-}
 
-// Every module, the surfaces' closures first.
-fn whole(tree: &Tree, surfaces: &[Surface]) -> Lead {
-    let files = unique(
-        surfaces
-            .iter()
-            .flat_map(|surface| surface.closure.iter().cloned())
-            .chain(tree.modules.keys().cloned()),
-    );
-    let stems = unique(surfaces.iter().map(|surface| surface.stem.clone()));
-    let text = format!(
-        "The surfaces of this source, found by reading its code — where control enters it from \
-         outside the process:\n\n{}\n\nEvery `requirement` and `criterion` belongs to one of these \
-         surfaces: lead its id with that surface's id, and claim a behaviour under the surface \
-         whose caller observes it, once.",
-        listed(surfaces)
-    );
-    Lead::new(text, files, stems)
-}
-
-fn by_stem(tree: &Tree, surfaces: &[Surface]) -> Vec<Lead> {
-    unique(surfaces.iter().map(|surface| surface.stem.as_str()))
-        .into_iter()
-        .map(|stem| {
-            let under: Vec<&Surface> = surfaces.iter().filter(|s| s.stem == stem).collect();
-            let mut files =
-                unique(under.iter().flat_map(|surface| surface.closure.iter().cloned()));
-
-            // widen to the rest of the tree past an import the resolver could not follow
-            let unfollowed = files
+    // Every module, the surfaces' closures first.
+    fn whole(tree: &Tree, surfaces: &[Surface]) -> Self {
+        let files = unique(
+            surfaces
                 .iter()
-                .filter_map(|path| tree.modules.get(path))
-                .any(|module| !module.dynamic.is_empty() || !module.unresolved().is_empty());
-            let rest: Vec<String> = if unfollowed {
-                tree.modules.keys().filter(|path| !files.contains(*path)).cloned().collect()
-            } else {
-                Vec::new()
-            };
-            let widened = !rest.is_empty();
-            files.extend(rest);
+                .flat_map(|surface| surface.closure.iter().cloned())
+                .chain(tree.modules.keys().cloned()),
+        );
+        let stems = unique(surfaces.iter().map(|surface| surface.stem.clone()));
+        let text = format!(
+            "The surfaces of this source, found by reading its code — where control enters it \
+             from outside the process:\n\n{}\n\nEvery `requirement` and `criterion` belongs to \
+             one of these surfaces: lead its id with that surface's id, and claim a behaviour \
+             under the surface whose caller observes it, once.",
+            listed(surfaces)
+        );
+        Self::new(text, files, stems)
+    }
 
-            let (count, reach, whose) = match under.len() {
-                1 => ("surface".to_owned(), "it reaches", "its"),
-                n => (format!("{n} surfaces"), "they reach", "their"),
-            };
-            let text = format!(
-                "This call mines the {count} under the stem `{stem}` alone:\n\n{}\n\nThe files \
-                 below are what {reach} from {whose} entry, the entry first. What the tree does for \
-                 another surface is that surface's call to claim, even in a module the two share.",
-                listed(under.iter().copied()),
-            );
-            Lead {
-                widened,
-                ..Lead::new(text, files, vec![stem.to_owned()])
-            }
-        })
-        .collect()
-}
+    fn by_stem(tree: &Tree, surfaces: &[Surface]) -> Vec<Self> {
+        unique(surfaces.iter().map(|surface| surface.stem.as_str()))
+            .into_iter()
+            .map(|stem| {
+                let under: Vec<&Surface> = surfaces.iter().filter(|s| s.stem == stem).collect();
+                let mut files =
+                    unique(under.iter().flat_map(|surface| surface.closure.iter().cloned()));
 
-const NO_SURFACE: &str = "No surface was found in this source: its survey named no route, command, \
-                          job, consumer, or exported API — no bootstrap the manifest's scripts \
-                          name or a conventional entry holds, no handler registered with a \
-                          package, no function or class under a package's decorator, and no \
-                          function or class exported at an entry module for a caller. Read it as \
-                          a library is read — for what its exports do for a caller — and claim \
-                          what the code exhibits.";
+                // widen to the rest of the tree past an import the resolver could not follow
+                let unfollowed = files
+                    .iter()
+                    .filter_map(|path| tree.modules.get(path))
+                    .any(|module| !module.dynamic.is_empty() || !module.unresolved().is_empty());
+                let rest: Vec<String> = if unfollowed {
+                    tree.modules.keys().filter(|path| !files.contains(*path)).cloned().collect()
+                } else {
+                    Vec::new()
+                };
+                let widened = !rest.is_empty();
+                files.extend(rest);
 
-fn unsurfaced(tree: &Tree, root: &str) -> Lead {
-    let files: Vec<String> = tree.modules.keys().cloned().collect();
-    let stem = fallback_stem(tree, root);
-    let text = format!(
-        "{NO_SURFACE} The modules below are the whole source, mined under the one stem `{stem}`: \
-         lead every `requirement` and `criterion` id with it, and name each behaviour for the \
-         export that exhibits it."
-    );
-    Lead::new(text, files, vec![stem])
-}
+                let (count, reach, whose) = match under.len() {
+                    1 => ("surface".to_owned(), "it reaches", "its"),
+                    n => (format!("{n} surfaces"), "they reach", "their"),
+                };
+                let text = format!(
+                    "This call mines the {count} under the stem `{stem}` alone:\n\n{}\n\nThe \
+                     files below are what {reach} from {whose} entry, the entry first. What the \
+                     tree does for another surface is that surface's call to claim, even in a \
+                     module the two share.",
+                    listed(under.iter().copied()),
+                );
+                Self {
+                    widened,
+                    ..Self::new(text, files, vec![stem.to_owned()])
+                }
+            })
+            .collect()
+    }
 
-fn by_directory(tree: &Tree, root: &str) -> Vec<Lead> {
-    // cut beneath `src/` and beneath a lone top-level package
-    let packages: Vec<&str> = tree
-        .modules
-        .keys()
-        .filter_map(|path| path.strip_suffix("/__init__.py"))
-        .map(|package| package.strip_prefix("src/").unwrap_or(package))
-        .filter(|package| !package.contains('/'))
-        .collect();
-    let package = match packages.as_slice() {
-        [one] => Some(format!("{one}/")),
-        _ => None,
-    };
+    fn unsurfaced(prepared: &Prepared) -> Self {
+        let files: Vec<String> = prepared.tree.modules.keys().cloned().collect();
+        let stem = prepared.fallback_stem();
+        let text = format!(
+            "{NO_SURFACE} The modules below are the whole source, mined under the one stem \
+             `{stem}`: lead every `requirement` and `criterion` id with it, and name each \
+             behaviour for the export that exhibits it."
+        );
+        Self::new(text, files, vec![stem])
+    }
 
-    // group the modules by top-level directory, under its name
-    let mut groups: Vec<(String, String, Vec<String>)> = Vec::new();
-    let mut loose: Vec<String> = Vec::new();
-    for path in tree.modules.keys() {
-        let rest = path.strip_prefix("src/").unwrap_or(path);
-        let rest =
-            package.as_deref().and_then(|package| rest.strip_prefix(package)).unwrap_or(rest);
-        let Some((name, _)) = rest.split_once('/') else {
-            loose.push(path.clone());
-            continue;
+    fn by_directory(prepared: &Prepared) -> Vec<Self> {
+        let tree = &prepared.tree;
+
+        // cut beneath `src/` and beneath a lone top-level package
+        let packages: Vec<&str> = tree
+            .modules
+            .keys()
+            .filter_map(|path| path.strip_suffix("/__init__.py"))
+            .map(|package| package.strip_prefix("src/").unwrap_or(package))
+            .filter(|package| !package.contains('/'))
+            .collect();
+        let package = match packages.as_slice() {
+            [one] => Some(format!("{one}/")),
+            _ => None,
         };
-        let dir = &path[..path.len() - rest.len() + name.len()];
-        let stem = surface::kebab(name).unwrap_or_else(|| fallback_stem(tree, root));
-        match groups.iter_mut().find(|(s, ..)| *s == stem) {
-            Some((_, _, files)) => files.push(path.clone()),
-            None => groups.push((stem, format!("`{dir}/`"), vec![path.clone()])),
+
+        // group the modules by top-level directory, under its name
+        let mut groups: Vec<(String, String, Vec<String>)> = Vec::new();
+        let mut loose: Vec<String> = Vec::new();
+        for path in tree.modules.keys() {
+            let rest = path.strip_prefix("src/").unwrap_or(path);
+            let rest =
+                package.as_deref().and_then(|package| rest.strip_prefix(package)).unwrap_or(rest);
+            let Some((name, _)) = rest.split_once('/') else {
+                loose.push(path.clone());
+                continue;
+            };
+            let dir = &path[..path.len() - rest.len() + name.len()];
+            let stem = surface::kebab(name).unwrap_or_else(|| prepared.fallback_stem());
+            match groups.iter_mut().find(|(s, ..)| *s == stem) {
+                Some((_, _, files)) => files.push(path.clone()),
+                None => groups.push((stem, format!("`{dir}/`"), vec![path.clone()])),
+            }
+        }
+
+        // the root's own modules join the first group
+        if groups.is_empty() {
+            groups.push((prepared.fallback_stem(), "the root".to_owned(), Vec::new()));
+        }
+        if !loose.is_empty() {
+            let (_, dir, files) = &mut groups[0];
+            loose.append(files);
+            *files = loose;
+            dir.push_str(", with the root's own modules");
+        }
+
+        groups
+            .into_iter()
+            .map(|(stem, dir, files)| {
+                let text = format!(
+                    "{NO_SURFACE} It is past the budget of one call and cut by directory: this \
+                     call mines the {} under {dir} alone, under the stem `{stem}` — lead every \
+                     `requirement` and `criterion` id with it. What another directory's modules \
+                     do is another call's to claim, even where these import them.",
+                    if files.len() == 1 {
+                        "module".to_owned()
+                    } else {
+                        format!("{} modules", files.len())
+                    },
+                );
+                Self::new(text, files, vec![stem])
+            })
+            .collect()
+    }
+
+    // A tree with no surface has no anchors, so its exports are read for what
+    // they do. Neither a data file nor a test is an anchor. A test importing
+    // no module of the tree follows every seam.
+    fn finish(self, prepared: &Prepared, surfaces: &[Surface]) -> Seam {
+        let tree = &prepared.tree;
+        let files = &self.seam.files;
+        let under: Vec<&Surface> =
+            surfaces.iter().filter(|surface| self.seam.stems.contains(&surface.stem)).collect();
+        let anchors = if surfaces.is_empty() {
+            Vec::new()
+        } else {
+            skeleton::anchors(tree, files, under.iter().copied())
+        };
+        let attached: Vec<&Test> = prepared
+            .tests
+            .iter()
+            .filter(|test| {
+                test.imports.is_empty() || test.imports.iter().any(|m| files.contains(m))
+            })
+            .collect();
+        let text = self.brief(tree, &attached);
+        let Seam { files, stems, .. } = self.seam;
+        let mut files = prepared.with_data(files);
+        files.extend(attached.iter().map(|test| test.path.clone()));
+        Seam {
+            text,
+            files,
+            stems,
+            anchors,
         }
     }
 
-    // the root's own modules join the first group
-    if groups.is_empty() {
-        groups.push((fallback_stem(tree, root), "the root".to_owned(), Vec::new()));
+    fn brief(&self, tree: &Tree, tests: &[&Test]) -> String {
+        let files = &self.seam.files;
+        let modules = || files.iter().filter_map(|path| tree.modules.get(path));
+        let mut sections = vec![self.seam.text.clone()];
+        sections.extend(skeleton::boundaries(modules()));
+        sections.extend(skeleton::packages(modules()));
+        sections.extend(skeleton::calls(tree, files));
+        sections.extend(skeleton::decisions(modules()));
+        sections.extend(skeleton::data(modules()));
+        sections.extend(skeleton::stated(tests.iter().copied()));
+        sections.extend(skeleton::unfollowed(modules(), self.widened));
+        let unparsed: Vec<String> =
+            modules().filter(|m| !m.parsed).map(|m| format!("`{}`", m.path)).collect();
+        if !unparsed.is_empty() {
+            sections.push(format!(
+                "The parser could not read {} whole; what {} declares is not in the lists above \
+                 and is read from the text alone.",
+                unparsed.join(", "),
+                if unparsed.len() == 1 { "it" } else { "each" }
+            ));
+        }
+        sections.join("\n\n")
     }
-    if !loose.is_empty() {
-        let (_, dir, files) = &mut groups[0];
-        loose.append(files);
-        *files = loose;
-        dir.push_str(", with the root's own modules");
-    }
-
-    groups
-        .into_iter()
-        .map(|(stem, dir, files)| {
-            let text = format!(
-                "{NO_SURFACE} It is past the budget of one call and cut by directory: this call \
-                 mines the {} under {dir} alone, under the stem `{stem}` — lead every `requirement` \
-                 and `criterion` id with it. What another directory's modules do is another \
-                 call's to claim, even where these import them.",
-                if files.len() == 1 { "module".to_owned() } else { format!("{} modules", files.len()) },
-            );
-            Lead::new(text, files, vec![stem])
-        })
-        .collect()
-}
-
-fn fallback_stem(tree: &Tree, root: &str) -> String {
-    let named = tree.manifest.name.as_deref().and_then(surface::kebab);
-    named
-        .or_else(|| {
-            Path::new(root).file_name().and_then(|name| name.to_str()).and_then(surface::kebab)
-        })
-        .unwrap_or_else(|| "module".to_owned())
-}
-
-fn brief(tree: &Tree, lead: String, files: &[String], widened: bool, tests: &[&Test]) -> String {
-    let modules = || files.iter().filter_map(|path| tree.modules.get(path));
-    let mut sections = vec![lead];
-    sections.extend(skeleton::boundaries(modules()));
-    sections.extend(skeleton::packages(modules()));
-    sections.extend(skeleton::calls(tree, files));
-    sections.extend(skeleton::decisions(modules()));
-    sections.extend(skeleton::data(modules()));
-    sections.extend(skeleton::stated(tests.iter().copied()));
-    sections.extend(skeleton::unfollowed(modules(), widened));
-    let unparsed: Vec<String> =
-        modules().filter(|m| !m.parsed).map(|m| format!("`{}`", m.path)).collect();
-    if !unparsed.is_empty() {
-        sections.push(format!(
-            "The parser could not read {} whole; what {} declares is not in the lists above and is \
-             read from the text alone.",
-            unparsed.join(", "),
-            if unparsed.len() == 1 { "it" } else { "each" }
-        ));
-    }
-    sections.join("\n\n")
 }
 
 fn listed<'s>(surfaces: impl IntoIterator<Item = &'s Surface>) -> String {

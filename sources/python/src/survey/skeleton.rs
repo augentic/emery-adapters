@@ -348,7 +348,7 @@ fn defaulted(module: &Module) -> impl Iterator<Item = (String, &str, Lines)> {
 }
 
 // Every anchor in the claim `path` grammar, once. A function's or method's
-// head is its opening line — through the `def` line where it is decorated.
+// head is its opening line, or the first decorator through the `def` line.
 // A class field is declared policy (`permission_classes = (..)`), whatever
 // initialises it. A line applying one of the tree's constant-named
 // boundaries anchors wherever the constant is spelled, so the constants are
@@ -579,10 +579,12 @@ pub fn packages<'m>(modules: impl IntoIterator<Item = &'m Module>) -> Option<Str
     ))
 }
 
-// Left out as structure rather than a call: a construction, a structural
-// call, a call another in its chain is made on, a call handed nothing whose
-// value is used in place, a registration or hook handed a handler, and a
-// call in a module-level declaration or a class body outside any function.
+// Left out as structure rather than a call:
+// - a construction or a structural call
+// - a call another in its chain is made on
+// - a call handed nothing whose value is used in place
+// - a registration or hook handed a handler
+// - a call in a module-level declaration or a class body outside any function
 pub fn calls(tree: &Tree, files: &[String]) -> Option<String> {
     let mut lines: Vec<String> = Vec::new();
     for module in files.iter().filter_map(|path| tree.modules.get(path)) {

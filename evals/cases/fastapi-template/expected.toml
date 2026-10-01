@@ -105,15 +105,18 @@ stem = ["start", "users", "login"]
 anchor = "app/core/config.py#L59-L62"
 gloss = "Emails are enabled only when SMTP_HOST and EMAILS_FROM_EMAIL are both set"
 
-# --- shared guards: each router's dependency, placed under any of them ---
+# --- shared guards: each router's dependency, declared in the API's own
+# module and applied route by route across four routers, so the model
+# places them under a router or under `start` run to run (under `start` on
+# five runs of the first six), which the expectation cannot settle ---
 
 [[requirement]]
-stem = ["items", "users", "login", "utils"]
+stem = ["start", "items", "users", "login", "utils"]
 anchor = "app/api/deps.py#L30-L46"
 gloss = "A bearer token that does not decode or validate is 403; one for an unknown user is 404; one for an inactive user is 400"
 
 [[requirement]]
-stem = ["users", "login", "utils"]
+stem = ["start", "users", "login", "utils"]
 anchor = "app/api/deps.py#L52-L57"
 gloss = "A route reserved for superusers answers 403 to a user who is not one"
 

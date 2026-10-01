@@ -124,8 +124,8 @@ impl Resolver {
         }
     }
 
-    // `name` is what a `from` import takes, probed first as a submodule. An
-    // import of a namespace package binds no module and is `None`.
+    // `name` is what a `from` import takes. An import of a namespace package
+    // binds no module and is `None`.
     pub fn resolve(&self, from: &str, specifier: &str, name: Option<&str>) -> Option<Target> {
         let unresolved = || Some(Target::Unresolved(specifier.to_owned()));
         let dots = specifier.len() - specifier.trim_start_matches('.').len();
