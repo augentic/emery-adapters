@@ -1,0 +1,112 @@
+# A `src/` layout library with no bootstrap: the package's `__init__` re-exports
+# a class and two functions under `__all__`, so the surfaces are the exports
+# where they are declared — `Money`, `parse_csv`, `convert` — and the error
+# classes beside them are what they raise, not surfaces. The rate table is a
+# data file the conversion names by path. Mirrors `orders`.
+
+adapter = "python"
+fixture = "evals/cases/money-library/fixture"
+stems = ["money", "parse-csv", "convert"]
+
+# --- surfaces: the (entry, stem) pairs the survey decides ---
+
+[[surface]]
+entry = "src/money/money.py"
+stem = "money"
+
+[[surface]]
+entry = "src/money/parse.py"
+stem = "parse-csv"
+
+[[surface]]
+entry = "src/money/rates.py"
+stem = "convert"
+
+# --- money ---
+
+[[requirement]]
+stem = "money"
+anchor = "src/money/money.py#L38-L40"
+gloss = "An amount beyond MAX_AMOUNT in either direction is a MoneyError"
+
+[[requirement]]
+stem = "money"
+anchor = "src/money/money.py#L43-L46"
+gloss = "A decimal is scaled to the currency's minor units — none for JPY — and rounded half-even unless asked otherwise"
+
+[[requirement]]
+stem = "money"
+anchor = "src/money/money.py#L52-L53"
+gloss = "Combining two currencies is a CurrencyMismatch naming both"
+
+[[requirement]]
+stem = "money"
+anchor = "src/money/money.py#L55-L61"
+gloss = "Adding or subtracting amounts of one currency answers the sum or difference in it"
+
+[[requirement]]
+stem = "money"
+anchor = "src/money/money.py#L69-L72"
+gloss = "Allocating by no ratios, a negative ratio, ratios summing to zero, or more than ALLOCATION_RATIOS_MAX shares is a MoneyError"
+
+[[requirement]]
+stem = "money"
+anchor = "src/money/money.py#L73-L78"
+gloss = "Allocation splits by the ratios and hands the remainder one unit at a time from the first share"
+
+# --- parse-csv ---
+
+[[requirement]]
+stem = "parse-csv"
+anchor = "src/money/parse.py#L15-L18"
+gloss = "A CSV missing the amount or currency column is a ParseError at line 1"
+
+[[requirement]]
+stem = "parse-csv"
+anchor = "src/money/parse.py#L22-L23"
+gloss = "More than MAX_ROWS rows is a ParseError at the row past the limit"
+
+[[requirement]]
+stem = "parse-csv"
+anchor = "src/money/parse.py#L24-L33"
+gloss = "An unknown currency code or a non-numeric amount is a ParseError naming the row's line; the code is upper-cased and thousands separators dropped"
+
+[[requirement]]
+stem = "parse-csv"
+anchor = "src/money/parse.py#L34-L35"
+gloss = "Rows parse into Money in order under the given rounding"
+
+# --- convert ---
+
+[[requirement]]
+stem = "convert"
+anchor = "src/money/rates.py#L29-L30"
+gloss = "An amount converts to its own currency unchanged"
+
+[[requirement]]
+stem = "convert"
+anchor = "src/money/rates.py#L18-L24"
+gloss = "A currency the rate table lacks is an UnknownRate; the rate is the target's over the source's against the base"
+
+[[requirement]]
+stem = "convert"
+anchor = "src/money/rates.py#L31-L32"
+gloss = "The converted amount is the decimal value times the rate, rounded into the target's minor units"
+
+# --- criteria ---
+
+[[criterion]]
+anchor = "src/money/money.py#L9"
+gloss = "MAX_AMOUNT is 10^15"
+
+[[criterion]]
+anchor = "src/money/money.py#L10"
+gloss = "ALLOCATION_RATIOS_MAX is 100"
+
+[[criterion]]
+anchor = "src/money/parse.py#L9"
+gloss = "MAX_ROWS is 10000"
+
+[[criterion]]
+anchor = "src/money/data/rates.json#L7"
+gloss = "USD is 0.6085 against the NZD base"

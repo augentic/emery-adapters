@@ -1,0 +1,200 @@
+# A FastAPI service past the inline budget: the manifest's console script
+# enters `app.main`, which mounts three `APIRouter`s under `/api/v1` and at
+# the root, a middleware, and four exception handlers; the tree's module
+# text exceeds `INLINE_BYTES` (a generated postcode table carries most of
+# it), so the survey cuts one seam per stem, each laying the surfaces under
+# it and the union of their closures, with the `rates.json` the pricing
+# module reads by path laid after the modules as a data file. Mirrors
+# `express-orders`.
+
+adapter = "python"
+fixture = "evals/cases/fastapi-routers/fixture"
+stems = ["start", "orders", "customers", "health"]
+
+# --- surfaces: the (entry, stem) pairs the survey decides ---
+
+[[surface]]
+entry = "app/main.py"
+stem = "start"
+
+# the five routes under `/api/v1/orders`, one surface each
+[[surface]]
+entry = "app/routers/orders.py"
+stem = "orders"
+
+# the three routes under `/api/v1/customers`
+[[surface]]
+entry = "app/routers/customers.py"
+stem = "customers"
+
+# `/health` and `/health/ready`, mounted at the root
+[[surface]]
+entry = "app/routers/health.py"
+stem = "health"
+
+# --- start ---
+
+[[requirement]]
+stem = "start"
+anchor = "app/main.py#L19-L25"
+gloss = "On startup the cache connects and readiness is logged; on shutdown the shipping client and the cache close"
+
+[[requirement]]
+stem = "start"
+anchor = "app/main.py#L30-L35"
+gloss = "CORS allows the configured origins for GET, POST and PUT with authorization and content-type headers"
+
+[[requirement]]
+stem = "start"
+anchor = "app/main.py#L38-L43"
+gloss = "Every response carries a server-timing header with the handling duration"
+
+[[requirement]]
+stem = "start"
+anchor = "app/main.py#L46-L64"
+gloss = "NotFoundError is 404, ConflictError 409 with the state, ValidationError 422 with the field, UpstreamError 502 with the system and a logged error"
+
+[[requirement]]
+stem = "start"
+anchor = "app/main.py#L72-L73"
+gloss = "The console script serves app.main:app on the configured port at the configured log level"
+
+# --- orders ---
+
+# the bearer guard is each router's dependency, not the application's: the
+# orders and customers routers declare `dependencies=[Authed]`
+[[requirement]]
+stem = "orders"
+anchor = "app/deps.py#L10-L14"
+gloss = "A request to an orders route without a bearer token in the configured set is 401"
+
+[[requirement]]
+stem = "orders"
+anchor = "app/routers/orders.py#L41-L49"
+gloss = "GET /api/v1/orders pages orders by customer and state, page from 1, size defaulting to default_page_size and capped at max_page_size"
+
+[[requirement]]
+stem = "orders"
+anchor = "app/routers/orders.py#L52-L56"
+gloss = "POST /api/v1/orders answers 201 with the placed order and its location"
+
+[[requirement]]
+stem = "orders"
+anchor = "app/services/orders.py#L26-L34"
+gloss = "An order is read from the cache before the repository, is 404 when neither holds it, and is cached for order_cache_ttl_s"
+
+[[requirement]]
+stem = "orders"
+anchor = "app/services/orders.py#L39-L58"
+gloss = "Placing prices the lines, quotes shipping for the postcode and weight, and totals the order as pending"
+
+[[requirement]]
+stem = "orders"
+anchor = "app/services/orders.py#L60-L73"
+gloss = "Amending is refused unless the order is pending; the lines are repriced, the totals recomputed, and the cache entry dropped"
+
+[[requirement]]
+stem = "orders"
+anchor = "app/services/orders.py#L75-L90"
+gloss = "A transition is refused from a terminal state or one the table does not allow; a cancellation needs a reason; the transition is appended and the cache entry dropped"
+
+[[requirement]]
+stem = "orders"
+anchor = "app/services/orders.py#L92-L102"
+gloss = "An unknown sku is a validation error; insufficient stock is a conflict"
+
+[[requirement]]
+stem = "orders"
+anchor = "app/services/pricing.py#L23-L28"
+gloss = "The discount is the tier's basis points, or the bulk discount when it is larger and the order reaches BULK_UNITS"
+
+[[requirement]]
+stem = "orders"
+anchor = "app/services/pricing.py#L31-L36"
+gloss = "Shipping is waived at FREE_SHIPPING_THRESHOLD_CENTS; a rural postcode adds RURAL_SURCHARGE_CENTS to the quote"
+
+[[requirement]]
+stem = "orders"
+anchor = "app/services/shipping.py#L29-L43"
+gloss = "A postcode outside every zone or a zone with no rate is an upstream error; the cheapest quote wins, with business days at least the zone's minimum"
+
+[[requirement]]
+stem = "orders"
+anchor = "app/services/shipping.py#L45-L62"
+gloss = "The rates API is tried MAX_ATTEMPTS times with linear backoff on transport errors and 5xx; a 4xx is refused at once"
+
+[[requirement]]
+stem = "orders"
+anchor = "app/schemas/orders.py#L32-L36"
+gloss = "An order's skus are unique"
+
+# --- customers ---
+
+[[requirement]]
+stem = "customers"
+anchor = "app/routers/customers.py#L26-L30"
+gloss = "POST /api/v1/customers answers 201 with the customer and its location"
+
+[[requirement]]
+stem = "customers"
+anchor = "app/services/customers.py#L19-L27"
+gloss = "A customer is read from the cache before the repository, is 404 when neither holds it, and is cached for cache_ttl_s"
+
+[[requirement]]
+stem = "customers"
+anchor = "app/services/customers.py#L29-L36"
+gloss = "Registering lower-cases the email and refuses one already registered"
+
+[[requirement]]
+stem = "customers"
+anchor = "app/services/customers.py#L38-L47"
+gloss = "Promotion is refused for an unknown tier or one no higher than the current; the cache entry is dropped"
+
+# --- health ---
+
+[[requirement]]
+stem = "health"
+anchor = "app/routers/health.py#L11-L15"
+gloss = "GET /health checks the database and the cache, answering 503 and degraded when either fails"
+
+# --- criteria ---
+
+[[criterion]]
+anchor = "app/settings.py#L14"
+gloss = "cache_ttl_s defaults to 300"
+
+[[criterion]]
+anchor = "app/settings.py#L15"
+gloss = "order_cache_ttl_s defaults to 60"
+
+[[criterion]]
+anchor = "app/settings.py#L16"
+gloss = "default_page_size defaults to 20"
+
+[[criterion]]
+anchor = "app/settings.py#L17"
+gloss = "max_page_size defaults to 100"
+
+[[criterion]]
+anchor = "app/schemas/orders.py#L5"
+gloss = "MAX_LINES is 50"
+
+[[criterion]]
+anchor = "app/services/shipping.py#L12"
+gloss = "MAX_ATTEMPTS is 3"
+
+[[criterion]]
+anchor = "app/services/shipping.py#L13"
+gloss = "RETRY_BACKOFF_S is 0.25"
+
+[[criterion]]
+anchor = "app/data/postcodes.py#L9"
+gloss = "RURAL_SURCHARGE_CENTS is 650"
+
+[[criterion]]
+anchor = "app/data/rates.json#L7"
+gloss = "free_shipping_threshold_cents is 15000"
+
+[[criterion]]
+anchor = "app/data/rates.json#L8"
+gloss = "bulk_discount_bps is 300"

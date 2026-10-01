@@ -18,4 +18,4 @@ jobs:
       # guest packages; mirrors `WASM32_PACKAGES` in mise.toml, and a new
       # adapter is named in both.
       targets: wasm32-wasip2
-      wasm-packages: documentation intent typescript test-programs
+      wasm-packages: documentation intent python typescript test-programs

@@ -1,0 +1,12 @@
+# Python example. Run from the repository root:
+#
+#   emery specify --config examples/python/emery.toml
+#
+# `adapter` and `path` resolve relative to this file and must land inside the
+# invocation directory, which emery mounts as the project. The tree is the
+# eval's `fastapi-routers` case: a FastAPI service past the inline budget, so
+# the run opens one `survey-<source>` turn and then one seam per stem.
+
+[[source]]
+adapter = "../../target/wasm32-wasip2/release/python.wasm"
+path = "../../evals/cases/fastapi-routers/fixture/"

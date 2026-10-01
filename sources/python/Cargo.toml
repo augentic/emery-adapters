@@ -1,0 +1,24 @@
+[package]
+name = "python"
+description = "Python source-adapter"
+
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[lints]
+workspace = true
+
+[dependencies]
+emery-sdk.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+ruff_python_ast = { version = "0.0.15", default-features = false }
+ruff_python_parser = { version = "0.0.15", default-features = false }
+ruff_text_size = { version = "0.0.15", default-features = false }

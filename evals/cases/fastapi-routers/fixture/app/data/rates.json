@@ -1,0 +1,10 @@
+{
+  "tier_discount_bps": {
+    "standard": 0,
+    "silver": 250,
+    "gold": 500
+  },
+  "free_shipping_threshold_cents": 15000,
+  "bulk_discount_bps": 300,
+  "bulk_units": 24
+}

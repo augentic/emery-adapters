@@ -2148,6 +2148,12 @@ criteria = "safe-to-deploy"
 delta = "0.10.3 -> 0.10.5"
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
+[[audits.mozilla.audits.itertools]]
+who = "Erich Gubler <erichdongubler@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.14.0 -> 0.15.0"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
 [[audits.mozilla.audits.mime]]
 who = "Jan-Erik Rediger <jrediger@mozilla.com>"
 criteria = "safe-to-deploy"
@@ -2409,6 +2415,91 @@ criteria = "safe-to-deploy"
 delta = "0.14.2 -> 0.14.5"
 notes = "I did not thoroughly check the safety argument for fold_impl, but it at least seems to be well documented."
 aggregated-from = "https://raw.githubusercontent.com/zcash/librustzcash/main/supply-chain/audits.toml"
+
+[[audits.zcash.audits.phf]]
+who = "Jack Grigg <jack@z.cash>"
+criteria = "safe-to-deploy"
+delta = "0.8.0 -> 0.11.1"
+notes = """
+Mostly modernisation, migrating to `PhfBorrow`, and making more things `&'static`.
+No unsafe code in the new `OrderedMap` and `OrderedSet` types.
+"""
+aggregated-from = "https://raw.githubusercontent.com/zcash/zcash/master/qa/supply-chain/audits.toml"
+
+[[audits.zcash.audits.phf]]
+who = "Jack Grigg <thestr4d@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.11.1 -> 0.11.2"
+aggregated-from = "https://raw.githubusercontent.com/zcash/zcash/master/qa/supply-chain/audits.toml"
+
+[[audits.zcash.audits.phf]]
+who = "Jack Grigg <jack@electriccoin.co>"
+criteria = "safe-to-deploy"
+delta = "0.11.2 -> 0.11.3"
+aggregated-from = "https://raw.githubusercontent.com/zcash/zcash/master/qa/supply-chain/audits.toml"
+
+[[audits.zcash.audits.phf_codegen]]
+who = "Jack Grigg <jack@z.cash>"
+criteria = "safe-to-deploy"
+delta = "0.8.0 -> 0.11.1"
+notes = "New codegen and changes to existing codegen look fine."
+aggregated-from = "https://raw.githubusercontent.com/zcash/zcash/master/qa/supply-chain/audits.toml"
+
+[[audits.zcash.audits.phf_codegen]]
+who = "Jack Grigg <thestr4d@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.11.1 -> 0.11.2"
+aggregated-from = "https://raw.githubusercontent.com/zcash/zcash/master/qa/supply-chain/audits.toml"
+
+[[audits.zcash.audits.phf_codegen]]
+who = "Jack Grigg <jack@electriccoin.co>"
+criteria = "safe-to-deploy"
+delta = "0.11.2 -> 0.11.3"
+notes = "Only an MSRV bump (to 1.61)."
+aggregated-from = "https://raw.githubusercontent.com/zcash/zcash/master/qa/supply-chain/audits.toml"
+
+[[audits.zcash.audits.phf_generator]]
+who = "Jack Grigg <jack@z.cash>"
+criteria = "safe-to-deploy"
+delta = "0.8.0 -> 0.11.1"
+notes = "Just dependency and edition bumps and code formatting."
+aggregated-from = "https://raw.githubusercontent.com/zcash/zcash/master/qa/supply-chain/audits.toml"
+
+[[audits.zcash.audits.phf_generator]]
+who = "Jack Grigg <thestr4d@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.11.1 -> 0.11.2"
+aggregated-from = "https://raw.githubusercontent.com/zcash/zcash/master/qa/supply-chain/audits.toml"
+
+[[audits.zcash.audits.phf_generator]]
+who = "Jack Grigg <jack@electriccoin.co>"
+criteria = "safe-to-deploy"
+delta = "0.11.2 -> 0.11.3"
+aggregated-from = "https://raw.githubusercontent.com/zcash/zcash/master/qa/supply-chain/audits.toml"
+
+[[audits.zcash.audits.phf_shared]]
+who = "Jack Grigg <jack@z.cash>"
+criteria = "safe-to-deploy"
+delta = "0.8.0 -> 0.11.1"
+notes = """
+Adds `uncased` dependency, and newly generates unsafe code to transmute `&'static str`
+into `&'static UncasedStr`. I verified that `UncasedStr` is a `#[repr(transparent)]`
+newtype around `str`.
+"""
+aggregated-from = "https://raw.githubusercontent.com/zcash/zcash/master/qa/supply-chain/audits.toml"
+
+[[audits.zcash.audits.phf_shared]]
+who = "Jack Grigg <thestr4d@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.11.1 -> 0.11.2"
+aggregated-from = "https://raw.githubusercontent.com/zcash/zcash/master/qa/supply-chain/audits.toml"
+
+[[audits.zcash.audits.phf_shared]]
+who = "Jack Grigg <jack@electriccoin.co>"
+criteria = "safe-to-deploy"
+delta = "0.11.2 -> 0.11.3"
+notes = "Bumped MSRV and dependency versions to remove an `unsafe` block."
+aggregated-from = "https://raw.githubusercontent.com/zcash/zcash/master/qa/supply-chain/audits.toml"
 
 [[audits.zcash.audits.r-efi]]
 who = "Jack Grigg <jack@electriccoin.co>"

@@ -3,11 +3,12 @@
 #
 #   emery specify --config examples/emery.toml
 #
-# Three sources put the grouping judgment: claims about the same subject
-# from the specification, the behaviour, and the brief are reconciled
-# under authority precedence into one requirement each. `adapter` and
-# `path` resolve relative to this file and must land inside the invocation
-# directory, which emery mounts as the project.
+# Four sources put the grouping judgment: claims about the same subject
+# from the specification, the behaviour — the service in TypeScript and
+# again in Python — and the brief are reconciled under authority precedence
+# into one requirement each. `adapter` and `path` resolve relative to this
+# file and must land inside the invocation directory, which emery mounts as
+# the project.
 
 # The orders service specification.
 [[source]]
@@ -18,6 +19,11 @@ path = "documentation/docs/"
 [[source]]
 adapter = "../target/wasm32-wasip2/release/typescript.wasm"
 path = "../evals/cases/orders/fixture/"
+
+# The same service in Python: one FastAPI module under its `__main__` guard.
+[[source]]
+adapter = "../target/wasm32-wasip2/release/python.wasm"
+path = "../evals/cases/fastapi-orders/fixture/"
 
 # The operator's brief, inline.
 [[source]]

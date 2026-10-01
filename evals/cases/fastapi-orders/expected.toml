@@ -1,0 +1,85 @@
+# One FastAPI module, no manifest: the inline-budget case for the Python
+# adapter. The application is constructed at load and run under the module's
+# `__main__` guard, so the one module is the bootstrap and the four routes
+# under `/orders` are the one stem beside `start`.
+
+adapter = "python"
+fixture = "evals/cases/fastapi-orders/fixture"
+stems = ["start", "orders"]
+
+# --- surfaces: the (entry, stem) pairs the survey decides ---
+
+[[surface]]
+entry = "orders.py"
+stem = "start"
+
+[[surface]]
+entry = "orders.py"
+stem = "orders"
+
+# --- start ---
+
+[[requirement]]
+stem = "start"
+anchor = "orders.py#L135-L138"
+gloss = "Run as a script, the module serves the application on 0.0.0.0 at PORT"
+
+# --- orders ---
+
+[[requirement]]
+stem = "orders"
+anchor = "orders.py#L56-L60"
+gloss = "A request whose bearer token is not among API_TOKENS is 401"
+
+[[requirement]]
+stem = "orders"
+anchor = "orders.py#L85-L90"
+gloss = "Placing an order with no lines, or more than MAX_LINES, is 422"
+
+[[requirement]]
+stem = "orders"
+anchor = "orders.py#L63-L69"
+gloss = "Lines are priced by POSTing them to the pricing service's /quote under PRICING_TIMEOUT_S; a non-200 answer is 502"
+
+[[requirement]]
+stem = "orders"
+anchor = "orders.py#L91-L104"
+gloss = "A placed order is stored pending under `ord_<n>` with tax at TAX_RATE of the subtotal and answered 201"
+
+[[requirement]]
+stem = "orders"
+anchor = "orders.py#L78-L82"
+gloss = "Reading, paying, or cancelling an unknown order is 404 naming the id"
+
+[[requirement]]
+stem = "orders"
+anchor = "orders.py#L112-L119"
+gloss = "Paying an order that is not pending is 409 carrying its state; otherwise it is marked paid"
+
+[[requirement]]
+stem = "orders"
+anchor = "orders.py#L125-L126"
+gloss = "Cancelling a shipped order is 409"
+
+[[requirement]]
+stem = "orders"
+anchor = "orders.py#L127-L132"
+gloss = "A paid order older than CANCEL_WINDOW_HOURS cannot be cancelled; otherwise the order is marked cancelled"
+
+# --- criteria ---
+
+[[criterion]]
+anchor = "orders.py#L13"
+gloss = "MAX_LINES is 50"
+
+[[criterion]]
+anchor = "orders.py#L14"
+gloss = "TAX_RATE defaults to 0.15"
+
+[[criterion]]
+anchor = "orders.py#L16"
+gloss = "PRICING_TIMEOUT_S defaults to 2.5"
+
+[[criterion]]
+anchor = "orders.py#L18"
+gloss = "CANCEL_WINDOW_HOURS is 24"

@@ -24,20 +24,20 @@ Every source adapter shares the same guest anatomy:
 
 ```text
 sources/
-  <name>/             # documentation, intent, typescript
+  <name>/             # documentation, intent, typescript, python
     prose/            # agent-facing markdown (listed in src/lib.rs, embedded into the component)
       extract.md      # the one extraction pass, and the one extraction prompt
-      survey.md       # the one survey prompt, where the model names the surfaces (typescript)
+      survey.md       # the one survey prompt, where the model names the surfaces (typescript, python)
       references/     # lazy reference corpus; the shared runtime references are the SDK's, linked as <doc>.md
     Cargo.toml        # `<name>` — adapter identity semver is its `version`
-    src/              # lib.rs (PROSE, then the wasm32-only `mod survey` and `mod guest`) + survey.rs, the guest's survey, and whatever the survey reads its source with as its children under survey/ (typescript: model.rs — the survey turn — parse.rs and parse/walk.rs, resolve.rs, surface.rs, skeleton.rs)
+    src/              # lib.rs (PROSE, then the wasm32-only `mod survey` and `mod guest`) + survey.rs, the guest's survey, and whatever the survey reads its source with as its children under survey/ (typescript and python alike: model.rs — the survey turn — parse.rs and parse/walk.rs, resolve.rs, surface.rs, skeleton.rs)
 crates/test-programs/ # omnia's test-programs pattern: guest programs + the nested wasm32 build of every component
   programs/<group>/   # one scenario per file: source/extract.rs drives the component boundary, probe/ are fixture adapters
   src/                # lib.rs: the generated artifact table (native) / helpers.rs (wasm32)
   build.rs            # one omnia_test::build::Components build → gen.rs (every adapter + every program)
 tests/                # root component suites: source.rs (every shipped component, and what each adapter decides), probe.rs (the error arms, the lowering, the SDK's side of the boundary), prose.rs (every adapter's corpus)
   support/            # mod.rs — the one runner source.rs and probe.rs share (the deployment under the omnia runtime)
-examples/             # live walks: one emery.toml per adapter (plus one over all three) the shipped `emery` binary runs, and the fixtures they lend
+examples/             # live walks: one emery.toml per adapter (plus one over all four) the shipped `emery` binary runs, and the fixtures they lend
 Cargo.toml            # the tests `emery-adapters` root package over crates/* + sources/*
 ```
 
@@ -48,11 +48,11 @@ Identity lives in the guest crate's `Cargo.toml` `version` (the shared `[workspa
 Adapter prompts are markdown documents compiled into the guest and driven by the engine's `extract` dispatch. They are not skills: no YAML frontmatter, no discovery metadata.
 
 - **`prose/extract.md`** carries the whole extraction pass: the claim-kind table with each kind's required body field (the `emery_sdk::Evidence::findings` gate, run as the check on each seam's turn inside the SDK's `extract` so the backend corrects a miss in place, and fail-closed engine-side, A8), the id-derivation rules reconciliation joins on, and the JSON output contract. Soft cap ~500 non-blank lines, hard cap 800 — above that, move material to `prose/references/`.
-- **`prose/survey.md` is the one survey prompt, and only an adapter whose surfaces are the model's to name carries one.** `typescript` parses its tree and lays what it read — the manifest, the bootstrap, every registration through a package, every decorated method, the entry modules' exports, the modules whole where they fit — into one `survey-<source>` turn under it, put through `emery_sdk::survey::surfaces` and answered as the SDK's `Inventory`: each surface named at the lines that register or declare it with the stem its ids lead with, and the modules no surface reaches. Code holds the answer to the tree and derives the rest from the accepted anchors — the registration whole, the stem the code spells there, the discriminating id, a class's methods, the closure — and lays that into each seam's turn as text the extraction prompt describes under its Inputs. Both prompts tell the model how to read what code hands it, never how to find it; the same cap applies, and the root `tests/prose.rs` parses `survey.md`'s `## Worked example` fence as an `Inventory` whose anchors parse and whose stems are kebab-case.
+- **`prose/survey.md` is the one survey prompt, and only an adapter whose surfaces are the model's to name carries one.** `typescript` and `python` parse their trees and lay what they read — the manifest, the bootstrap, every registration through a package, every decorated method (every decorated `def` and class, for `python`), the entry modules' exports, the modules whole where they fit — into one `survey-<source>` turn under it, put through `emery_sdk::survey::surfaces` and answered as the SDK's `Inventory`: each surface named at the lines that register or declare it with the stem its ids lead with, and the modules no surface reaches. Code holds the answer to the tree and derives the rest from the accepted anchors — the registration whole, the stem the code spells there, the discriminating id, a class's methods, the closure — and lays that into each seam's turn as text the extraction prompt describes under its Inputs. Both prompts tell the model how to read what code hands it, never how to find it; the same cap applies, and the root `tests/prose.rs` parses `survey.md`'s `## Worked example` fence as an `Inventory` whose anchors parse and whose stems are kebab-case.
 - **References are cited via relative markdown links, never inlined** — the model reads a reference through `read_doc`, which answers from the adapter's `PROSE` and then from the SDK's runtime references (`emery_sdk::RUNTIME`: `claims.md` for the claim `id` grammar, `path` anchors, the skip roots, and the fail-closed gate; `reconciliation.md` for the `specify` pipeline), so every relative link must name a document listed in `PROSE` or one of those two (`claims.md` from a prompt at the `prose/` root), and every listed document must be reached from a prompt by such a link (the root `tests/prose.rs` holds the list to the `prose/` tree and refuses a link to a directory, an unlisted file, or a path outside the tree, a listed document no prompt reaches, and a listed document at a runtime reference's path). Link a rule the runtime references state rather than restating it; the references ship with the SDK the adapter compiles against, so they move with the contract they describe.
 - **A reference is written for the model, in the adapter's current contract.** It says what to read in the source and which claims to emit, in the prompt's vocabulary — the surface, the entry, the claim kinds and their extras — and nothing addressed to a contributor: no retrospectives, no tooling proposals, no description of what the engine renders downstream. Prose the prompt would contradict is worse than none.
 - **Worked examples live under `prose/references/examples/`**, one document per scenario beside a `README.md` index: the surface as the survey lays it into the turn, the source the extract call reads, and the Evidence the call answers with under a `## Evidence` JSON fence — claims alone, like the prompt's own worked example. The root `tests/prose.rs` parses every such fence as the SDK's `Evidence` and holds it to the claim gate, so an example cannot teach a shape the adapter would refuse.
-- The v1 survey prompts were deleted, never ported (ADR-0008): they asked the model to find the surfaces in a tree it was handed. `typescript`'s `survey.md` is not that prompt — the model names surfaces among the facts the parser laid, and everything a claim id or a seam rests on is derived by code from the anchors it accepted, with the model put to nothing else before the seams' turns.
+- The v1 survey prompts were deleted, never ported (ADR-0008): they asked the model to find the surfaces in a tree it was handed. `typescript`'s and `python`'s `survey.md` are not that prompt — the model names surfaces among the facts the parser laid, and everything a claim id or a seam rests on is derived by code from the anchors it accepted, with the model put to nothing else before the seams' turns.
 
 ## Engine pin and sibling co-development
 
@@ -68,7 +68,7 @@ For sibling co-development against uncommitted engine changes, uncomment the pat
 ```bash
 make ci                    # exactly the CI jobs: fmt-check + lint + nextest + doctests + docs + cargo-vet + cargo-deny
 make check                 # local advisories: audit + fmt (rewrites) + lint + outdated + udeps
-cargo clippy -p documentation -p intent -p typescript -p test-programs --lib --bins --examples --all-features --target wasm32-wasip2 -- -D warnings   # the guest side alone (`WASM32_PACKAGES` in mise.toml)
+cargo clippy -p documentation -p intent -p typescript -p python -p test-programs --lib --bins --examples --all-features --target wasm32-wasip2 -- -D warnings   # the guest side alone (`WASM32_PACKAGES` in mise.toml)
 cargo build -p <name> --target wasm32-wasip2 --release   # one adapter → target/wasm32-wasip2/release/<name>.wasm (the path the examples bind)
 cargo build --workspace --target wasm32-wasip2 --release   # every adapter
 ```

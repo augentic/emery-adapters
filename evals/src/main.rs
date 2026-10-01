@@ -1,22 +1,27 @@
-//! Grades the shipped `typescript` component end to end over the live model.
+//! Grades the shipped components end to end over the live model.
 //! Operator-invoked, never CI.
 //!
-//! `cargo run -p evals -- [case..]` stages every case under `evals/cases/` (or
-//! the named ones) as its own project beneath `target/eval/`, runs `emery
-//! specify` over it three times, reads the committed documents back through
-//! `emery show`, grades the accepted claims and the surveyed surfaces against
-//! the case's `expected.toml`, and writes a dated scorecard to `target/eval/`.
-//! Every path — a case's `fixture`, the binaries' defaults, the scorecard's —
-//! is relative to the repository root. A case whose fixture the checkout lacks
+//! `cargo run -p evals -- [case|adapter..]` stages every case under
+//! `evals/cases/` (or the named ones, and every case of a named adapter) as
+//! its own project beneath `target/eval/`, runs `emery specify` over it three
+//! times, reads the committed documents back through `emery show`, grades the
+//! accepted claims and the surveyed surfaces against the case's
+//! `expected.toml`, and writes a dated scorecard to `target/eval/`. A case
+//! names the adapter it runs under (`adapter = "python"`; `typescript` when
+//! it names none). Every path — a case's `fixture`, the binaries' defaults
+//! and a relative `EMERY_BIN` or `<ADAPTER>_WASM`, the scorecard's — is
+//! relative to the repository root. A case whose fixture the checkout lacks
 //! is skipped unless it is named.
 //!
 //! A run that hits the backend's time cap — a `timeout` or `inactive`
 //! completion — is put again one rung up the budget ladder, so the card says
 //! at which budget it landed; the comparison columns are the first rung's.
 //!
-//! Environment: `EMERY_BIN` (`../emery/target/release/emery`),
+//! Environment: `EMERY_BIN` (`../emery/target/release/emery`), one
+//! `<ADAPTER>_WASM` per adapter a selected case runs under —
 //! `TYPESCRIPT_WASM` (`target/wasm32-wasip2/release/typescript.wasm`),
-//! `EVAL_RUNS` (`3`), `EVAL_LADDER` (`600/120,1200/240,2400/480`: each rung
+//! `PYTHON_WASM` (`target/wasm32-wasip2/release/python.wasm`) — `EVAL_RUNS`
+//! (`3`), `EVAL_LADDER` (`600/120,1200/240,2400/480`: each rung
 //! `CURSOR_TIMEOUT_SECS/CURSOR_INACTIVITY_SECS`), and the runtime's other
 //! `CURSOR_*` knobs. `RUST_LOG` is set for the run unless the caller sets it:
 //! the scorecard needs the SDK's `accepted` trace lines and `surveyed by
@@ -36,8 +41,15 @@ use serde::Deserialize;
 use serde_json::Value;
 
 const CASES: &str = "evals/cases";
-const RUST_LOG: &str = "emery_sdk=trace,typescript=trace,omnia_cursor=info,omnia_core=off";
 const LADDER: &str = "600/120,1200/240,2400/480";
+// The adapter a case runs under when its `expected.toml` names none.
+const DEFAULT_ADAPTER: &str = "typescript";
+
+// The run's log filter unless the caller sets one: the adapter's own crate
+// at trace beside the SDK's.
+fn rust_log(adapter: &str) -> String {
+    format!("emery_sdk=trace,{adapter}=trace,omnia_cursor=info,omnia_core=off")
+}
 
 fn main() -> ExitCode {
     match eval() {
@@ -56,12 +68,14 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .ok_or("CARGO_MANIFEST_DIR: no parent directory")?;
-    let settings = Settings::from_env(root)?;
     let filter: BTreeSet<String> = env::args().skip(1).collect();
     let cases = cases(root, &filter)?;
     if cases.is_empty() {
         return Err(format!("no case under `{CASES}` matches").into());
     }
+    let adapters: BTreeSet<&str> =
+        cases.iter().map(|case| case.expected.adapter.as_str()).collect();
+    let settings = Settings::from_env(root, &adapters)?;
 
     // run and grade every case, each run climbing the ladder while the cap
     // is what fails it
@@ -76,7 +90,7 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
             for (index, rung) in settings.ladder.iter().enumerate() {
                 eprintln!("eval: `{}` run {n} at {rung}", case.name);
                 let tag = if index == 0 { format!("run-{n}") } else { format!("run-{n}@{rung}") };
-                let run = run(&project, &settings, n, *rung, &tag)?;
+                let run = run(&project, &settings, &case.expected.adapter, n, *rung, &tag)?;
                 eprintln!("eval: `{}` run {n} at {rung} {}", case.name, run.summary());
                 let climb = run.starved() && index + 1 < settings.ladder.len();
                 attempts.push(Attempt {
@@ -104,25 +118,35 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
 
 struct Settings {
     emery: PathBuf,
-    wasm: PathBuf,
+    // each adapter a selected case runs under, with its built component
+    wasm: BTreeMap<String, PathBuf>,
     runs: usize,
     ladder: Vec<Rung>,
     model: String,
-    rust_log: String,
+    // the caller's `RUST_LOG`, when set, over the per-adapter default
+    rust_log: Option<String>,
 }
 
 impl Settings {
-    fn from_env(root: &Path) -> Result<Self, String> {
-        let emery = env::var_os("EMERY_BIN")
-            .map_or_else(|| root.join("../emery/target/release/emery"), PathBuf::from);
-        let wasm = env::var_os("TYPESCRIPT_WASM").map_or_else(
-            || root.join("target/wasm32-wasip2/release/typescript.wasm"),
-            PathBuf::from,
-        );
-        for (name, path) in [("EMERY_BIN", &emery), ("TYPESCRIPT_WASM", &wasm)] {
+    fn from_env(root: &Path, adapters: &BTreeSet<&str>) -> Result<Self, String> {
+        // a relative path is from the repository root, the directory the
+        // runner is run from; the binary runs with each staged project as
+        // its directory, so the path it is spawned by must be absolute
+        let given = |name: &str, default: String| {
+            root.join(env::var_os(name).map_or_else(|| PathBuf::from(default), PathBuf::from))
+        };
+        let emery = given("EMERY_BIN", "../emery/target/release/emery".to_owned());
+        if !emery.is_file() {
+            return Err(format!("EMERY_BIN: no file at `{}`", emery.display()));
+        }
+        let mut wasm = BTreeMap::new();
+        for adapter in adapters {
+            let name = format!("{}_WASM", adapter.to_uppercase());
+            let path = given(&name, format!("target/wasm32-wasip2/release/{adapter}.wasm"));
             if !path.is_file() {
                 return Err(format!("{name}: no file at `{}`", path.display()));
             }
+            wasm.insert((*adapter).to_owned(), path);
         }
         let runs = match env::var("EVAL_RUNS") {
             Ok(runs) => runs.parse().map_err(|error| format!("EVAL_RUNS: `{runs}`: {error}"))?,
@@ -137,8 +161,20 @@ impl Settings {
             runs,
             ladder,
             model: env::var("CURSOR_MODEL").unwrap_or_else(|_| "auto".to_owned()),
-            rust_log: env::var("RUST_LOG").unwrap_or_else(|_| RUST_LOG.to_owned()),
+            rust_log: env::var("RUST_LOG").ok(),
         })
+    }
+
+    // The component a case's adapter was built to: every selected case's is
+    // read at start.
+    fn component(&self, adapter: &str) -> io::Result<&Path> {
+        self.wasm.get(adapter).map(PathBuf::as_path).ok_or_else(|| {
+            io::Error::new(io::ErrorKind::NotFound, format!("no component for adapter `{adapter}`"))
+        })
+    }
+
+    fn rust_log(&self, adapter: &str) -> String {
+        self.rust_log.clone().unwrap_or_else(|| rust_log(adapter))
     }
 }
 
@@ -180,6 +216,9 @@ struct Case {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Expected {
+    // the adapter the case runs under, by crate name
+    #[serde(default = "default_adapter")]
+    adapter: String,
     // the fixture tree, relative to the repository root
     fixture: String,
     // the stems the accepted requirement claims lead with, exactly
@@ -209,18 +248,27 @@ struct Item {
     gloss: String,
 }
 
+fn default_adapter() -> String {
+    DEFAULT_ADAPTER.to_owned()
+}
+
+// Every case under `evals/cases/`, or the ones the filter names — a name is
+// a case's or an adapter's, which selects every case running under it.
 fn cases(root: &Path, filter: &BTreeSet<String>) -> Result<Vec<Case>, Box<dyn std::error::Error>> {
     let mut cases = Vec::new();
     for entry in fs::read_dir(root.join(CASES))? {
         let dir = entry?.path();
         let Some(name) = dir.file_name().and_then(|name| name.to_str()) else { continue };
-        if !dir.is_dir() || (!filter.is_empty() && !filter.contains(name)) {
+        if !dir.is_dir() {
             continue;
         }
         let expected = fs::read_to_string(dir.join("expected.toml"))
             .map_err(|error| format!("{name}: expected.toml: {error}"))?;
         let expected: Expected =
             toml::from_str(&expected).map_err(|error| format!("{name}: {error}"))?;
+        if !filter.is_empty() && !filter.contains(name) && !filter.contains(&expected.adapter) {
+            continue;
+        }
         // a fixture the checkout lacks (the vendored ones are gitignored until
         // fetched) skips its case unless the case was asked for by name
         if !root.join(&expected.fixture).is_dir() {
@@ -236,6 +284,18 @@ fn cases(root: &Path, filter: &BTreeSet<String>) -> Result<Vec<Case>, Box<dyn st
         });
     }
     cases.sort_by(|a, b| a.name.cmp(&b.name));
+    if cases.is_empty() {
+        return Ok(cases);
+    }
+    let unmatched: Vec<&String> = filter
+        .iter()
+        .filter(|name| {
+            !cases.iter().any(|case| case.name == **name || case.expected.adapter == **name)
+        })
+        .collect();
+    if !unmatched.is_empty() {
+        return Err(format!("no case or adapter under `{CASES}` named {unmatched:?}").into());
+    }
 
     Ok(cases)
 }
@@ -252,23 +312,40 @@ fn stage(root: &Path, case: &Case, settings: &Settings) -> io::Result<PathBuf> {
     }
     fs::create_dir_all(&project)?;
     copy_tree(&root.join(&case.expected.fixture), &project.join("source"))?;
-    fs::copy(&settings.wasm, project.join("typescript.wasm"))?;
+    let adapter = &case.expected.adapter;
+    fs::copy(settings.component(adapter)?, project.join(format!("{adapter}.wasm")))?;
     fs::write(
         project.join("emery.toml"),
-        "[[source]]\nadapter = \"typescript.wasm\"\npath = \"source/\"\n",
+        format!("[[source]]\nadapter = \"{adapter}.wasm\"\npath = \"source/\"\n"),
     )?;
 
     Ok(project)
 }
 
-const UNCOPIED: &[&str] = &["node_modules", ".git", ".omnia", "dist"];
+// What a fixture's checkout may hold that no run reads: dependencies,
+// environments, caches, build output, and the revision store of an earlier
+// run; `*.egg-info` by its suffix.
+const UNCOPIED: &[&str] = &[
+    "node_modules",
+    ".git",
+    ".omnia",
+    "dist",
+    "__pycache__",
+    ".venv",
+    "venv",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+];
 
 fn copy_tree(from: &Path, to: &Path) -> io::Result<()> {
     fs::create_dir_all(to)?;
     for entry in fs::read_dir(from)? {
         let entry = entry?;
         let name = entry.file_name();
-        if UNCOPIED.iter().any(|skip| name == *skip) {
+        let skipped = UNCOPIED.iter().any(|skip| name == *skip)
+            || name.to_str().is_some_and(|name| name.ends_with(".egg-info"));
+        if skipped {
             continue;
         }
         let target = to.join(&name);
@@ -447,9 +524,12 @@ struct Completion {
 }
 
 #[expect(clippy::disallowed_methods, reason = "the eval is a native operator tool, not a guest")]
-fn run(project: &Path, settings: &Settings, n: usize, rung: Rung, tag: &str) -> io::Result<Run> {
+fn run(
+    project: &Path, settings: &Settings, adapter: &str, n: usize, rung: Rung, tag: &str,
+) -> io::Result<Run> {
     let started = Instant::now();
-    let output = emery(project, settings, rung, &["specify", "--config", "emery.toml"])?;
+    let rust_log = settings.rust_log(adapter);
+    let output = emery(project, settings, &rust_log, rung, &["specify", "--config", "emery.toml"])?;
     let wall = started.elapsed();
     let stderr = String::from_utf8_lossy(&output.stderr);
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -478,7 +558,7 @@ fn run(project: &Path, settings: &Settings, n: usize, rung: Rung, tag: &str) -> 
         for (artifact, slot) in
             [("spec", &mut run.spec), ("design", &mut run.design), ("plan", &mut run.plan)]
         {
-            let shown = emery(project, settings, rung, &["show", artifact])?;
+            let shown = emery(project, settings, &rust_log, rung, &["show", artifact])?;
             let envelope: Value = serde_json::from_slice(&shown.stdout)?;
             fs::write(
                 project.join(format!("{tag}.{artifact}.json")),
@@ -499,7 +579,7 @@ fn run(project: &Path, settings: &Settings, n: usize, rung: Rung, tag: &str) -> 
 
 #[expect(clippy::disallowed_types, reason = "the eval runs the shipped `emery` binary natively")]
 fn emery(
-    project: &Path, settings: &Settings, rung: Rung, args: &[&str],
+    project: &Path, settings: &Settings, rust_log: &str, rung: Rung, args: &[&str],
 ) -> io::Result<std::process::Output> {
     std::process::Command::new(&settings.emery)
         .arg("--format")
@@ -507,7 +587,7 @@ fn emery(
         .args(args)
         .current_dir(project)
         .env("NO_COLOR", "1")
-        .env("RUST_LOG", &settings.rust_log)
+        .env("RUST_LOG", rust_log)
         .env("CURSOR_TIMEOUT_SECS", rung.timeout.to_string())
         .env("CURSOR_INACTIVITY_SECS", rung.inactivity.to_string())
         .output()
@@ -738,13 +818,18 @@ fn overlaps(a: Anchor<'_>, b: Anchor<'_>) -> bool {
 
 fn scorecard(settings: &Settings, reports: &[Report<'_>], started: &str) -> String {
     let ladder: Vec<String> = settings.ladder.iter().map(Rung::to_string).collect();
+    let adapters: Vec<String> = settings
+        .wasm
+        .iter()
+        .map(|(adapter, path)| format!("adapter `{adapter}` `{}`", path.display()))
+        .collect();
     let mut card = format!(
-        "# Eval {started}\n\nmodel `{}` · emery `{}` · adapter `{}` · {} runs per case · ladder {} \
+        "# Eval {started}\n\nmodel `{}` · emery `{}` · {} · {} runs per case · ladder {} \
          (`CURSOR_TIMEOUT_SECS`/`CURSOR_INACTIVITY_SECS`, climbed on a `timeout` or `inactive` \
          completion; the columns are the first rung's)\n",
         settings.model,
         settings.emery.display(),
-        settings.wasm.display(),
+        adapters.join(" · "),
         settings.runs,
         ladder.join(" → "),
     );
@@ -770,7 +855,11 @@ struct Card<'a> {
 impl Display for Card<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let Report { case, runs } = self.report;
-        writeln!(f, "\n## {}\n\nfixture `{}`\n", case.name, case.expected.fixture)?;
+        writeln!(
+            f,
+            "\n## {}\n\nadapter `{}` · fixture `{}`\n",
+            case.name, case.expected.adapter, case.expected.fixture
+        )?;
 
         // one row per run, at the first rung
         writeln!(

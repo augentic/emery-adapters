@@ -1,0 +1,17 @@
+[project]
+name = "money"
+version = "2.1.0"
+description = "Money arithmetic in integer minor units, with CSV parsing and rate conversion"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

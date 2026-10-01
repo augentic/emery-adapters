@@ -10,7 +10,7 @@ includes = ["git::https://github.com/augentic/.github.git//mise/rust.toml?ref=v0
 # Mirrors `wasm-packages` in .github/workflows/ci.yaml; a new adapter is
 # named in both.
 [env]
-WASM32_PACKAGES = "documentation intent typescript test-programs"
+WASM32_PACKAGES = "documentation intent python typescript test-programs"
 
 # -------------------------------------
 # Adapter overrides
