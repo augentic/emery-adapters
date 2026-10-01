@@ -6,7 +6,8 @@
 //! `__init__`, or a submodule the imported name spells. A relative import
 //! climbs from the importing module's directory by its dots. A dotted path a
 //! string spells (`"orders.urls"`, `"app.main:serve"`) is probed as an
-//! absolute import is. Anything the tree does not answer is a package —
+//! absolute import is; one spelling a data file's name (`"config.toml"`)
+//! names the file alone. Anything the tree does not answer is a package —
 //! third-party and standard library alike — unless its first segment is a
 //! package of the tree's own, when it is `Unresolved`, never dropped, so the
 //! survey can say what it could not follow and widen what it lays. Each
@@ -169,14 +170,17 @@ impl Resolver {
     }
 
     // The module a string spells: the dotted path whole, or less its last
-    // segment where that names an attribute (`orders.apps.OrdersConfig`);
-    // else the data file it names, from the module's directory or the root,
-    // or — a bare file name joined onto a path the code computes
+    // segment where that names an attribute (`orders.apps.OrdersConfig`) —
+    // never one whose last segment is a data file's extension, which spells
+    // the file's name and no module's (`config.toml`, beside a `config.py`
+    // or not); else the data file it names, from the module's directory or
+    // the root, or — a bare file name joined onto a path the code computes
     // (`Path(__file__).parent / "data" / "rates.json"`) — the one data file
     // of that name in the tree.
     fn literal(&self, from: &str, value: &str) -> Option<Target> {
-        if let Some((path, _)) = value.rsplit_once('.')
+        if let Some((path, last)) = value.rsplit_once('.')
             && !value.contains('/')
+            && !super::DATA_EXTENSIONS.contains(&last)
         {
             let whole = value.replace('.', "/");
             let shorter = path.replace('.', "/");

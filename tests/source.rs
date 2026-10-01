@@ -3110,6 +3110,73 @@ async fn python_mounts() {
     }
 }
 
+// A router included beneath a router: the entry includes the package's
+// router under the resource, and that router includes the versioned one
+// under it. The inner module's mount joins the outer prefix however the
+// modules sort — the package's `__init__` reads before the entry — so the
+// stem its routes spell is the resource the outer include names, and the
+// path past it tells them apart.
+#[tokio::test]
+async fn python_mounts_nested() {
+    let project = scratch();
+    modules(
+        &project,
+        &[
+            ("app/__init__.py", ""),
+            (
+                "app/main.py",
+                "from fastapi import FastAPI\n\nfrom .billing import router\n\napp = \
+                 FastAPI()\napp.include_router(router, prefix=\"/billing\")\n",
+            ),
+            (
+                "app/billing/__init__.py",
+                "from fastapi import APIRouter\n\nfrom . import v1\n\nrouter = \
+                 APIRouter()\nrouter.include_router(v1.router, prefix=\"/v1\")\n",
+            ),
+            (
+                "app/billing/v1.py",
+                "from fastapi import APIRouter\n\nrouter = APIRouter()\n\n\n@router.get(\"\")\ndef \
+                 list_invoices() -> list:\n    return []\n\n\n@router.post(\"/{invoice_id}/pay\")\n\
+                 def pay(invoice_id: str) -> dict:\n    return {\"id\": invoice_id}\n",
+            ),
+        ],
+    );
+    let survey = inventory(
+        &[
+            ("GET /billing/v1", "app/billing/v1.py#L6-L8", "invoices"),
+            ("POST /billing/v1/{invoice_id}/pay", "app/billing/v1.py#L11-L13", "pay"),
+        ],
+        &[],
+    );
+    let answer = claim("billing.get-v1");
+
+    let model = support::run(
+        test_programs::ADAPTER_PYTHON,
+        &project,
+        &[],
+        ScriptedModel::answering([&survey, &answer, &answer]),
+    )
+    .await;
+
+    let turns = surveyed(PYTHON, &model, 1);
+    assert_eq!(
+        surfaces(&turns[0]),
+        [
+            ("start", "app/main.py", "start"),
+            ("GET /billing/v1", "app/billing/v1.py", "billing"),
+            ("POST /billing/v1/{invoice_id}/pay", "app/billing/v1.py", "billing"),
+        ]
+    );
+    for note in [
+        ": def `list_invoices` L6–L8; under `@router.get(\"\")`; through `fastapi`; id \
+         `billing.get-v1`;",
+        ": def `pay` L11–L13; under `@router.post(\"/{invoice_id}/pay\")`; through `fastapi`; id \
+         `billing.post-v1-invoice-id-pay`;",
+    ] {
+        assert!(turns[0].contains(note), "{note} is in the brief: {}", turns[0]);
+    }
+}
+
 // A decorator's head is a binding of the tree, not an import: it is traced
 // through the module-level construction (`app = Flask(..)`) and one import
 // hop (`from .app import app`) to the package, so the `def` under it is a
@@ -4690,6 +4757,43 @@ async fn python_data() {
         "the criterion is held to no anchor, the requirement to the modules': {correction}"
     );
     assert_eq!(exchanges[1].outcome, Ok(String::new()), "the criterion in data is accepted");
+}
+
+// A string spelling a data file's name — `config.toml` — names the file and
+// not the `config` module beside it: the file is the seam's data, named by
+// the module reading it, and that module reaches nothing through the string.
+#[tokio::test]
+async fn python_data_beside_module() {
+    let project = scratch();
+    modules(&project, &PY_APP);
+    project.write(
+        "app/services/orders.py",
+        "import tomllib\nfrom pathlib import Path\n\nfrom ..db import pool\n\nLIMITS = \
+         tomllib.loads(Path(\"config.toml\").read_text())\n\n\nasync def create_order(body: \
+         dict) -> dict:\n    return {\"id\": pool, \"body\": body, \"limit\": \
+         LIMITS[\"lines\"]}\n\n\ndef find_order(order_id: str) -> dict:\n    return {\"id\": \
+         order_id, \"pool\": pool}\n",
+    );
+    project.write("config.py", "LINES = 10\n");
+    project.write("config.toml", "lines = 10\n");
+
+    let model = mined(PYTHON, &project, &py_app_inventory(), 1).await;
+
+    let turns = surveyed(PYTHON, &model, 1);
+    assert!(
+        turns[0].contains("- `config.toml` — named by `app/services/orders.py`"),
+        "the data file is named with its reader: {}",
+        turns[0]
+    );
+    assert!(
+        turns[0].contains(
+            ": def `create` L8–L10; under `@router.post(\"\")`; through `fastapi`; id \
+             `orders.post`; reaches `app/services/orders.py`, `app/db.py`."
+        ),
+        "the module of the file's stem is reached through no string: {}",
+        turns[0]
+    );
+    laid(&turns[0], &["app/services/orders.py", "config.py", "config.toml"], &[]);
 }
 
 // Tests, stubs, fixture and build configuration, migrations, caches,

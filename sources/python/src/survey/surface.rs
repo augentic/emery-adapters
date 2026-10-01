@@ -754,13 +754,18 @@ pub(super) fn start(tree: &Tree, module: &Module, runs: &Runs, registered: &[Sur
 // the path, under its own module's mount; a router's own
 // `APIRouter(prefix="/orders")` joins the prefix it is included under, and a
 // blueprint's own `url_prefix` stands where none registers it under
-// another. The first mount read of a module stands.
+// another. The first mount read of a module in one pass stands.
 pub(super) fn mounts(tree: &Tree) -> BTreeMap<String, String> {
     let mut mounts: BTreeMap<String, String> = BTreeMap::new();
-    // two passes, so an include beneath an include reads its parent's mount
-    for _ in 0..2 {
+    // each pass reads an includer's own mount from the pass before and
+    // writes a fresh map, so an include beneath an include joins its
+    // parent's prefix whichever module the walk reads first; the walk
+    // settles when a pass repeats the last, and at the tree's depth where
+    // includes cycle
+    for _ in 0..=tree.modules.len() {
+        let mut next: BTreeMap<String, String> = BTreeMap::new();
         for module in tree.modules.values() {
-            let own = mounts.get(&module.path).cloned().unwrap_or_default();
+            let own = mounts.get(&module.path).map_or("", String::as_str);
             for call in &module.calls {
                 let method = call.method();
                 if MOUNTING.contains(&method) {
@@ -775,9 +780,9 @@ pub(super) fn mounts(tree: &Tree) -> BTreeMap<String, String> {
                             continue;
                         };
                         let Some((target, _)) = tree.exporter(module, head) else { continue };
-                        let mounted = join_route(&own, &prefix);
+                        let mounted = join_route(own, &prefix);
                         if mounted != "/" {
-                            mounts.entry(target.path.clone()).or_insert(mounted);
+                            next.entry(target.path.clone()).or_insert(mounted);
                         }
                     }
                 }
@@ -793,13 +798,18 @@ pub(super) fn mounts(tree: &Tree) -> BTreeMap<String, String> {
                             continue;
                         };
                         let Some(target) = tree.resolver.entry(dotted) else { continue };
-                        let mounted = join_route(&own, &strip_pattern(literal));
+                        let mounted = join_route(own, &strip_pattern(literal));
                         if mounted != "/" {
-                            mounts.entry(target).or_insert(mounted);
+                            next.entry(target).or_insert(mounted);
                         }
                     }
                 }
             }
+        }
+        let settled = next == mounts;
+        mounts = next;
+        if settled {
+            break;
         }
     }
     // a module's own prefix: joined under a router's include, standing only
