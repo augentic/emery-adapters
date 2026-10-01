@@ -1082,9 +1082,10 @@ fn at_decorated_class(
     }
 }
 
-// The stem is what the route spells, else the command group the `def` is
-// under, else the literal's first word. The tell is the verb and the path
-// past the resource, else the literal's tail, else the `def`'s name.
+// The stem is what the route sits under, else what it spells itself, else
+// the command group the `def` is under, else the literal's first word. The
+// tell is the verb and the path past the resource, else the literal's tail,
+// else the `def`'s name.
 fn at_decorated_def(
     tree: &Tree, module: &Module, decorated: &Decorated, mounts: &BTreeMap<String, String>,
 ) -> Derived {
@@ -1098,7 +1099,10 @@ fn at_decorated_def(
     let route = decorated_route(module, decorated, mounts);
     let group = group_of(module, decorated);
     let literal = || decorated.literal.as_deref().and_then(literal_stem);
-    let stem = route.as_deref().map_or_else(|| group.clone().or_else(literal), route_stem);
+    let stem = route.as_deref().map_or_else(
+        || group.clone().or_else(literal),
+        |route| under(module, decorated, mounts).or_else(|| route_stem(route)),
+    );
     let discriminator = match (&route, &stem) {
         (Some(route), Some(stem)) => {
             let method = decorated.name.last().map_or("", String::as_str).to_ascii_lowercase();
@@ -1146,6 +1150,42 @@ fn at_export(tree: &Tree, module: &Module, export: &Export) -> Derived {
         detail,
         closure: tree.reaches(module, declared, &[], class),
     }
+}
+
+// The resource a route sits under before its own literal: what its module's
+// mount or its class's prefix spells, else the first tag of the router it is
+// declared on — `APIRouter(tags=["login"])` with no prefix groups its routes
+// as `login`, however each spells its path. `None` where only the literal
+// names one.
+fn under(
+    module: &Module, decorated: &Decorated, mounts: &BTreeMap<String, String>,
+) -> Option<String> {
+    let mount = mounts.get(&module.path).map_or("", String::as_str);
+    let prefix = decorated
+        .class
+        .as_deref()
+        .and_then(|class| class_prefix(module, class))
+        .and_then(|d| d.literal.as_deref())
+        .unwrap_or("");
+    route_stem(&join_route(mount, prefix)).or_else(|| router_tag(module, decorated))
+}
+
+// The first `tags` literal of the `APIRouter` the decorator's head is bound
+// to at module level.
+fn router_tag(module: &Module, decorated: &Decorated) -> Option<String> {
+    let binding = module.binding(decorated.name.first()?, &[])?;
+    let BindingKind::Value {
+        root: Some(root),
+        call: Some(index),
+        ..
+    } = &binding.kind
+    else {
+        return None;
+    };
+    if binding.scope != Scope::Module || root.last().map(String::as_str) != Some("APIRouter") {
+        return None;
+    }
+    module.calls.get(*index)?.keyword("tags")?.inner.as_deref().and_then(kebab)
 }
 
 // `app.get("/orders")`, for a note.

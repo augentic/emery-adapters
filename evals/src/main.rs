@@ -17,6 +17,14 @@
 //! completion — is put again one rung up the budget ladder, so the card says
 //! at which budget it landed; the comparison columns are the first rung's.
 //!
+//! `cargo run -p evals -- --facts [case|adapter..]` stages the named cases
+//! and runs each once with no `CURSOR_API_KEY` in the environment, so the
+//! adapter reads the tree and lays its survey facts — the text the model
+//! would be asked to name surfaces from — and the first turn fails before
+//! any is spent; the facts are printed and written to
+//! `target/eval/<case>/facts.md`. A graded run writes the same beside its
+//! log as `run-N.facts.md`.
+//!
 //! Environment: `EMERY_BIN` (`../emery/target/release/emery`), one
 //! `<ADAPTER>_WASM` per adapter a selected case runs under —
 //! `TYPESCRIPT_WASM` (`target/wasm32-wasip2/release/typescript.wasm`),
@@ -25,8 +33,8 @@
 //! `CURSOR_TIMEOUT_SECS/CURSOR_INACTIVITY_SECS`), and the runtime's other
 //! `CURSOR_*` knobs. `RUST_LOG` is set for the run unless the caller sets it:
 //! the scorecard needs the SDK's `accepted` trace lines and `surveyed by
-//! model` line, the adapter's `surveyed` trace line and `placed by model`
-//! line, and the backend's `completion` lines.
+//! model` line, the adapter's `survey facts` and `surveyed` trace lines and
+//! `placed by model` line, and the backend's `completion` lines.
 
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
@@ -68,7 +76,11 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .ok_or("CARGO_MANIFEST_DIR: no parent directory")?;
-    let filter: BTreeSet<String> = env::args().skip(1).collect();
+    let mut filter: BTreeSet<String> = env::args().skip(1).collect();
+    let facts_only = filter.remove("--facts");
+    if facts_only && filter.is_empty() {
+        return Err("`--facts` names a case or an adapter".into());
+    }
     let cases = cases(root, &filter)?;
     if cases.is_empty() {
         return Err(format!("no case under `{CASES}` matches").into());
@@ -76,6 +88,17 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
     let adapters: BTreeSet<&str> =
         cases.iter().map(|case| case.expected.adapter.as_str()).collect();
     let settings = Settings::from_env(root, &adapters)?;
+
+    if facts_only {
+        for case in &cases {
+            let project = stage(root, case, &settings)?;
+            let text = facts(&project, &settings, &case.expected.adapter)?;
+            fs::write(project.join("facts.md"), &text)?;
+            println!("# {} — survey facts ({})\n\n{text}\n", case.name, case.expected.adapter);
+            eprintln!("eval: `{}` facts at {}", case.name, project.join("facts.md").display());
+        }
+        return Ok(());
+    }
 
     // run and grade every case, each run climbing the ladder while the cap
     // is what fails it
@@ -242,10 +265,40 @@ struct ExpectedSurface {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Item {
+    // the stem — or any one of the stems — a meeting claim's id leads with
+    // for the match to count as `in stem`; none grades the anchor alone
     #[serde(default)]
-    stem: Option<String>,
+    stem: Option<Stems>,
     anchor: String,
     gloss: String,
+}
+
+// One stem, or a list where the code is shared — a guard two routers
+// declare, one declared in the bootstrap's module and applied per route —
+// and a requirement at it is rightly placed under either.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum Stems {
+    One(String),
+    Any(Vec<String>),
+}
+
+impl Stems {
+    fn holds(&self, stem: &str) -> bool {
+        match self {
+            Self::One(one) => one == stem,
+            Self::Any(any) => any.iter().any(|one| one == stem),
+        }
+    }
+}
+
+impl Display for Stems {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::One(one) => f.write_str(one),
+            Self::Any(any) => f.write_str(&any.join("|")),
+        }
+    }
 }
 
 fn default_adapter() -> String {
@@ -529,12 +582,15 @@ fn run(
 ) -> io::Result<Run> {
     let started = Instant::now();
     let rust_log = settings.rust_log(adapter);
-    let output = emery(project, settings, &rust_log, rung, &["specify", "--config", "emery.toml"])?;
+    let output = emery(project, settings, &rust_log, rung, SPECIFY, Turns::Live)?;
     let wall = started.elapsed();
     let stderr = String::from_utf8_lossy(&output.stderr);
     let stdout = String::from_utf8_lossy(&output.stdout);
     fs::write(project.join(format!("{tag}.stderr")), stderr.as_bytes())?;
     fs::write(project.join(format!("{tag}.stdout")), stdout.as_bytes())?;
+    if let Some(facts) = survey_facts(&stderr) {
+        fs::write(project.join(format!("{tag}.facts.md")), facts)?;
+    }
     let mut tail: Vec<&str> = stderr.lines().rev().take(5).collect();
     tail.reverse();
 
@@ -558,7 +614,8 @@ fn run(
         for (artifact, slot) in
             [("spec", &mut run.spec), ("design", &mut run.design), ("plan", &mut run.plan)]
         {
-            let shown = emery(project, settings, &rust_log, rung, &["show", artifact])?;
+            let shown =
+                emery(project, settings, &rust_log, rung, &["show", artifact], Turns::Live)?;
             let envelope: Value = serde_json::from_slice(&shown.stdout)?;
             fs::write(
                 project.join(format!("{tag}.{artifact}.json")),
@@ -577,11 +634,23 @@ fn run(
     Ok(run)
 }
 
+const SPECIFY: &[&str] = &["specify", "--config", "emery.toml"];
+
+// Whether a run may put a turn to the model: `None` strips `CURSOR_API_KEY`
+// from the binary's environment, so the backend refuses the first turn
+// after the adapter has read the tree and logged its facts.
+#[derive(Clone, Copy)]
+enum Turns {
+    Live,
+    None,
+}
+
 #[expect(clippy::disallowed_types, reason = "the eval runs the shipped `emery` binary natively")]
 fn emery(
-    project: &Path, settings: &Settings, rust_log: &str, rung: Rung, args: &[&str],
+    project: &Path, settings: &Settings, rust_log: &str, rung: Rung, args: &[&str], turns: Turns,
 ) -> io::Result<std::process::Output> {
-    std::process::Command::new(&settings.emery)
+    let mut command = std::process::Command::new(&settings.emery);
+    command
         .arg("--format")
         .arg("json")
         .args(args)
@@ -589,8 +658,42 @@ fn emery(
         .env("NO_COLOR", "1")
         .env("RUST_LOG", rust_log)
         .env("CURSOR_TIMEOUT_SECS", rung.timeout.to_string())
-        .env("CURSOR_INACTIVITY_SECS", rung.inactivity.to_string())
-        .output()
+        .env("CURSOR_INACTIVITY_SECS", rung.inactivity.to_string());
+    if matches!(turns, Turns::None) {
+        command.env_remove("CURSOR_API_KEY");
+    }
+    command.output()
+}
+
+// The survey facts a staged project's adapter lays, read from one run that
+// spends no turn: the run fails at the first completion, after the facts
+// are logged.
+fn facts(project: &Path, settings: &Settings, adapter: &str) -> io::Result<String> {
+    let rust_log = settings.rust_log(adapter);
+    let rung =
+        settings.ladder.first().copied().ok_or_else(|| io::Error::other("EVAL_LADDER: no rung"))?;
+    let output = emery(project, settings, &rust_log, rung, SPECIFY, Turns::None)?;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    fs::write(project.join("facts.stderr"), stderr.as_bytes())?;
+    survey_facts(&stderr).ok_or_else(|| {
+        let mut tail: Vec<&str> = stderr.lines().rev().take(5).collect();
+        tail.reverse();
+        io::Error::other(format!(
+            "no `survey facts` line from adapter `{adapter}` (does it survey? is `{adapter}=trace` \
+             in RUST_LOG?); the run ended:\n{}",
+            tail.join("\n")
+        ))
+    })
+}
+
+// The adapter's `survey facts` trace line carries the text laid before the
+// model as one JSON string at the end of the line.
+fn survey_facts(stderr: &str) -> Option<String> {
+    stderr
+        .lines()
+        .filter(|line| line.contains(" survey facts source="))
+        .filter_map(|line| line.split_once(" facts="))
+        .find_map(|(_, json)| serde_json::from_str(json.trim()).ok())
 }
 
 // The SDK's `accepted` trace line carries each seam's evidence as one JSON
@@ -741,7 +844,7 @@ fn recall(items: &[Item], run: &Run, kind: ClaimKind) -> Recall {
             })
             .collect();
         let label = || {
-            let stem = item.stem.as_deref().map_or(String::new(), |stem| format!("{stem} · "));
+            let stem = item.stem.as_ref().map_or(String::new(), |stems| format!("{stems} · "));
             format!("{stem}`{}` — {}", item.anchor, item.gloss)
         };
         if meeting.is_empty() {
@@ -749,9 +852,10 @@ fn recall(items: &[Item], run: &Run, kind: ClaimKind) -> Recall {
             continue;
         }
         recall.matched += 1;
-        if let Some(stem) = item.stem.as_deref() {
-            let placed =
-                meeting.iter().any(|claim| claim.id.as_deref().and_then(self::stem) == Some(stem));
+        if let Some(stems) = &item.stem {
+            let placed = meeting.iter().any(|claim| {
+                claim.id.as_deref().and_then(self::stem).is_some_and(|s| stems.holds(s))
+            });
             if placed {
                 recall.placed += 1;
             } else {

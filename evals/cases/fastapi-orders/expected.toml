@@ -26,8 +26,10 @@ gloss = "Run as a script, the module serves the application on 0.0.0.0 at PORT"
 
 # --- orders ---
 
+# the guard is declared in the bootstrap's module and applied per route, so
+# a requirement at it is rightly placed under either stem
 [[requirement]]
-stem = "orders"
+stem = ["orders", "start"]
 anchor = "orders.py#L56-L60"
 gloss = "A request whose bearer token is not among API_TOKENS is 401"
 

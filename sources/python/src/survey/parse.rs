@@ -75,6 +75,8 @@ const LIFECYCLE: &[&str] = &[
 // framework. A `def` under one of these alone is no handler.
 const DECORATOR_NOISE: &[&str] = &[
     "dataclass",
+    "define",
+    "frozen",
     "property",
     "setter",
     "getter",
@@ -103,6 +105,7 @@ const DECORATOR_NOISE: &[&str] = &[
     "field_validator",
     "model_validator",
     "root_validator",
+    "computed_field",
     "total_ordering",
     "unique",
     "fixture",
@@ -599,8 +602,9 @@ pub struct Arg {
     // `OrderList.as_view`.
     pub root: Option<Vec<String>>,
     pub called: bool,
-    // The string literal leading a called argument's own arguments:
-    // `orders.urls` for `include("orders.urls")`.
+    // The string literal leading a called argument's own arguments, or a
+    // list's elements: `orders.urls` for `include("orders.urls")`, `login`
+    // for `["login"]`.
     pub inner: Option<String>,
     // A lambda, a class handed by `as_view()`, or a call passing one.
     pub function: bool,
@@ -623,6 +627,8 @@ pub struct Decorated {
     // Each keyword argument with its value's head: `methods` and
     // `["GET", "POST"]`.
     pub keywords: Vec<(String, String)>,
+    // From the first decorator through the `def` or `class` line.
+    pub head: Lines,
     // From the first decorator to the end of what it decorates.
     pub lines: Lines,
 }

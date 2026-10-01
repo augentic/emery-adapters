@@ -341,8 +341,11 @@ impl<'s> Walker<'s> {
         }
 
         // record the decorations and the test
+        let signature_end =
+            def.returns.as_deref().map_or_else(|| def.parameters.end(), Ranged::end);
+        let head = self.lines(TextRange::new(range.start(), signature_end));
         for decorator in &def.decorator_list {
-            self.decorate(class.as_deref(), Some(&name), decorator, lines);
+            self.decorate(class.as_deref(), Some(&name), decorator, head, lines);
         }
         if let Some(test) = self.test_def(def, class.as_deref(), &decorators) {
             self.module.tests.push(test);
@@ -441,8 +444,12 @@ impl<'s> Walker<'s> {
                     if super::declares_data(&bases) { ExportKind::Type } else { ExportKind::Class };
                 self.export(&name, kind, range);
             }
+            let header_lines = self.lines(TextRange::new(
+                range.start(),
+                class.arguments.as_deref().map_or_else(|| class.name.end(), Ranged::end),
+            ));
             for decorator in &class.decorator_list {
-                self.decorate(Some(&name), None, decorator, lines);
+                self.decorate(Some(&name), None, decorator, header_lines, lines);
             }
             self.module.classes.push(ClassDecl {
                 name: name.clone(),
@@ -469,7 +476,8 @@ impl<'s> Walker<'s> {
     }
 
     fn decorate(
-        &mut self, class: Option<&str>, member: Option<&str>, decorator: &Decorator, lines: Lines,
+        &mut self, class: Option<&str>, member: Option<&str>, decorator: &Decorator, head: Lines,
+        lines: Lines,
     ) {
         let Some(callee) = callee(&decorator.expression) else { return };
         let arguments = match &decorator.expression {
@@ -501,6 +509,7 @@ impl<'s> Walker<'s> {
             name: callee.path(),
             literal,
             keywords,
+            head,
             lines,
         });
     }
@@ -565,7 +574,8 @@ impl<'s> Walker<'s> {
 
     fn arg(&self, keyword: Option<String>, expr: &Expr) -> Arg {
         let inner = match core(expr) {
-            Core::Call(call) => call.arguments.args.first().and_then(string_value),
+            Core::Call(call) => call.arguments.args.first().and_then(leading_string),
+            Core::Other(Expr::List(list)) => list.elts.first().and_then(string_value),
             Core::Other(_) => None,
         };
         Arg {
@@ -1305,6 +1315,15 @@ fn called(mut callee: Callee, arguments: &Arguments) -> Callee {
 // Calls and subscripts stripped.
 fn head_path(expr: &Expr) -> Option<Vec<String>> {
     callee(expr).map(Callee::path)
+}
+
+// The string an argument leads with: itself, or the first element of a
+// tuple — `include(("orders.urls", "orders"))` names `orders.urls`.
+fn leading_string(expr: &Expr) -> Option<String> {
+    match expr {
+        Expr::Tuple(tuple) => tuple.elts.first().and_then(string_value),
+        other => string_value(other),
+    }
 }
 
 // An f-string over literals included.

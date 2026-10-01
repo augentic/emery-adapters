@@ -8,3 +8,24 @@ updates:
       actions:
         patterns:
           - "*"
+  # The parsers each adapter pins exactly while they are pre-1.0 — ruff's
+  # crates ship weekly, oxc's often — and nothing else: `make check` surfaces
+  # the rest through `cargo outdated`. Each parser's crates bump as one group,
+  # so a bump is deliberate and the component suite runs over all of them at
+  # one version.
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    allow:
+      - dependency-name: "ruff_python_parser"
+      - dependency-name: "ruff_python_ast"
+      - dependency-name: "ruff_text_size"
+      - dependency-name: "oxc_*"
+    groups:
+      ruff:
+        patterns:
+          - "ruff_*"
+      oxc:
+        patterns:
+          - "oxc_*"

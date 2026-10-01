@@ -15,10 +15,11 @@
 //!   under the package's or the root directory's name within the budget,
 //!   one per top-level directory past it
 //!
-//! A seam's data files follow its modules, and the tree's own tests follow
-//! those. A test is read for what it states, never mined: its statements
-//! are listed in the brief of each seam whose modules it imports. Only a
-//! tree with no production module is refused.
+//! A seam's data files sit among its modules — a small one directly after
+//! the first module naming it, a large one after them all — and the tree's
+//! own tests follow those. A test is read for what it states, never mined:
+//! its statements are listed in the brief of each seam whose modules it
+//! imports. Only a tree with no production module is refused.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -120,7 +121,7 @@ pub fn seams(prepared: &Prepared, surfaces: &[Surface]) -> Survey {
         (true, false) => by_directory(tree, workspace),
     };
     let seams: Vec<Seam> =
-        leads.into_iter().map(|lead| finish(tree, lead, surfaces, tests)).collect();
+        leads.into_iter().map(|lead| finish(workspace, tree, lead, surfaces, tests)).collect();
 
     let reached = unique(seams.iter().flat_map(|seam| seam.files.iter().map(String::as_str)));
     let types = skeleton::types(reached.iter().filter_map(|path| tree.modules.get(*path)), true);
@@ -169,8 +170,10 @@ const SKIP_DIRS: &[&str] = &[
     "migrations",
 ];
 // Build and test configuration, not the program. `manage.py` stays: it is
-// Django's bootstrap.
-const SKIP_FILES: &[&str] = &["setup.py", "conftest.py", "noxfile.py"];
+// Django's bootstrap. `setup.py` is the packaging script at the root alone;
+// beneath a package it is a module like any other.
+const SKIP_FILES: &[&str] = &["conftest.py", "noxfile.py"];
+const SKIP_ROOT_FILES: &[&str] = &["setup.py"];
 const EXTENSIONS: &[&str] = &["py"];
 const DATA_EXTENSIONS: &[&str] = &["json", "yaml", "yml", "toml", "csv", "ini"];
 
@@ -205,7 +208,7 @@ fn include(entry: Entry<'_>) -> bool {
         return !skipped_dir(entry);
     }
     let name = entry.name();
-    if SKIP_FILES.contains(&name) {
+    if SKIP_FILES.contains(&name) || (SKIP_ROOT_FILES.contains(&name) && entry.path() == name) {
         return false;
     }
     let Some((stem, extension)) = name.rsplit_once('.') else {
@@ -314,18 +317,14 @@ fn tests(root: &Path, paths: Vec<String>, tree: &Tree) -> Vec<Test> {
 }
 
 // Seals a lead into its seam. A tree with no surface has no anchors, so its
-// exports are read for what they do. Data files and tests follow the modules
-// in `files`, never among the anchors; a test importing no module of the
-// tree follows every seam.
-fn finish(tree: &Tree, lead: Lead, surfaces: &[Surface], tests: &[Test]) -> Seam {
+// exports are read for what they do. Data files sit among the modules in
+// `files` and tests follow them, never among the anchors; a test importing
+// no module of the tree follows every seam.
+fn finish(root: &str, tree: &Tree, lead: Lead, surfaces: &[Surface], tests: &[Test]) -> Seam {
     let Lead {
-        seam:
-            Seam {
-                text,
-                mut files,
-                stems,
-                ..
-            },
+        seam: Seam {
+            text, files, stems, ..
+        },
         widened,
     } = lead;
     let under: Vec<&Surface> =
@@ -340,10 +339,7 @@ fn finish(tree: &Tree, lead: Lead, surfaces: &[Surface], tests: &[Test]) -> Seam
         .filter(|test| test.imports.is_empty() || test.imports.iter().any(|m| files.contains(m)))
         .collect();
     let text = brief(tree, text, &files, widened, &attached);
-    let data = unique(
-        files.iter().filter_map(|path| tree.modules.get(path)).flat_map(parse::Module::data),
-    );
-    files.extend(data.into_iter().map(str::to_owned));
+    let mut files = with_data(root, tree, files);
     files.extend(attached.iter().map(|test| test.path.clone()));
     Seam {
         text,
@@ -351,6 +347,36 @@ fn finish(tree: &Tree, lead: Lead, surfaces: &[Surface], tests: &[Test]) -> Seam
         stems,
         anchors,
     }
+}
+
+// A data file within this many bytes is laid directly after the first module
+// naming it, so a long module later in the seam's order — a generated table
+// — cannot end the laid run before a value a `criterion` would cite; a
+// larger one is laid after every module.
+const DATA_BESIDE_BYTES: u64 = 8 * 1024;
+
+// The seam's modules with the data files they name placed among them: a
+// small one after the first module naming it, a large one after them all.
+fn with_data(root: &str, tree: &Tree, modules: Vec<String>) -> Vec<String> {
+    let mut files: Vec<String> = Vec::with_capacity(modules.len());
+    let mut large: Vec<String> = Vec::new();
+    for path in modules {
+        let named = tree.modules.get(&path).map(parse::Module::data).unwrap_or_default();
+        files.push(path);
+        for data in named {
+            if files.iter().chain(&large).any(|file| file == data) {
+                continue;
+            }
+            let size = std::fs::metadata(Path::new(root).join(data)).map_or(u64::MAX, |m| m.len());
+            if size <= DATA_BESIDE_BYTES {
+                files.push(data.to_owned());
+            } else {
+                large.push(data.to_owned());
+            }
+        }
+    }
+    files.extend(large);
+    files
 }
 
 fn read(root: &Path, paths: Vec<String>, data: Vec<String>) -> Tree {

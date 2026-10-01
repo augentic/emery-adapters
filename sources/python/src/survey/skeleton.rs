@@ -189,7 +189,7 @@ pub fn data<'m>(modules: impl IntoIterator<Item = &'m Module>) -> Option<String>
         .collect();
     Some(format!(
         "Data files these modules name by path, each with the modules reading it, laid after the \
-         modules:\n\n{}",
+         first module naming it — a large one after every module:\n\n{}",
         lines.join("\n")
     ))
 }
@@ -348,7 +348,9 @@ fn defaulted(module: &Module) -> impl Iterator<Item = (String, &str, Lines)> {
 }
 
 // Every anchor in the claim `path` grammar, once. A function's or method's
-// head is its opening line. A line applying one of the tree's constant-named
+// head is its opening line — through the `def` line where it is decorated.
+// A class field is declared policy (`permission_classes = (..)`), whatever
+// initialises it. A line applying one of the tree's constant-named
 // boundaries anchors wherever the constant is spelled, so the constants are
 // read from the whole tree, not the seam's files.
 pub fn anchors<'s>(
@@ -391,25 +393,22 @@ pub fn anchors<'s>(
             push(&module.path, *lines);
         }
         for binding in &module.bindings {
-            if matches!(
-                binding.kind,
+            match binding.kind {
                 BindingKind::Function
-                    | BindingKind::Value {
-                        init: Init::Function,
-                        ..
-                    }
-                    | BindingKind::Field {
-                        init: Init::Function,
-                        ..
-                    }
-            ) {
-                push(&module.path, head(binding.lines));
+                | BindingKind::Value {
+                    init: Init::Function, ..
+                } => push(&module.path, head(binding.lines)),
+                BindingKind::Field { .. } => push(&module.path, binding.lines),
+                _ => {}
             }
         }
         for member in module.classes.iter().flat_map(|class| &class.members) {
             if !matches!(member.kind, MemberKind::Field | MemberKind::Nested) {
                 push(&module.path, head(member.lines));
             }
+        }
+        for decorated in &module.decorated {
+            push(&module.path, decorated.head);
         }
         for call in &module.calls {
             if callee(tree, module, call).is_some() {
@@ -437,16 +436,19 @@ fn step(tree: &Tree, module: &Module, call: &Call) -> bool {
     if call.args.iter().any(|arg| tree.handler(module, arg, &call.frames)) {
         return false;
     }
-    let head = call.callee.head.as_str();
-    head == "self" || of_tree(module, head, &call.frames, TRACE)
+    of_tree(module, call.callee.head.as_str(), &call.frames, TRACE)
 }
 
 // Traced through the bindings that initialise it, as a package receiver is:
 // the local holding `OrdersRepository(..)`, the parameter typed
-// `mailer: Mailer`.
+// `mailer: Mailer`, the local a member of the class made
+// (`serializer = self.InputSerializer(..)`).
 fn of_tree(module: &Module, name: &str, frames: &[u32], budget: usize) -> bool {
     if budget == 0 {
         return false;
+    }
+    if name == "self" {
+        return true;
     }
     let Some(binding) = module.binding(name, frames) else {
         return module.imported(name).is_some();

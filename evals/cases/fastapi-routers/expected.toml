@@ -62,11 +62,12 @@ gloss = "The console script serves app.main:app on the configured port at the co
 # --- orders ---
 
 # the bearer guard is each router's dependency, not the application's: the
-# orders and customers routers declare `dependencies=[Authed]`
+# orders and customers routers declare `dependencies=[Authed]`, so a
+# requirement at it is rightly placed under either stem
 [[requirement]]
-stem = "orders"
+stem = ["orders", "customers"]
 anchor = "app/deps.py#L10-L14"
-gloss = "A request to an orders route without a bearer token in the configured set is 401"
+gloss = "A request to an orders or customers route without a bearer token in the configured set is 401"
 
 [[requirement]]
 stem = "orders"

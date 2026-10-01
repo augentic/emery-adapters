@@ -103,8 +103,10 @@ stem = "auth"
 anchor = "shop/auth/routes.py#L40-L49"
 gloss = "POST /auth/login rejects a password under MIN_PASSWORD_LENGTH with 422 and an unknown user or wrong password with 401; otherwise issues a token with its TTL"
 
+# the guard is the auth blueprint's and decorates every orders route, so a
+# requirement at it is rightly placed under either stem
 [[requirement]]
-stem = "auth"
+stem = ["auth", "orders"]
 anchor = "shop/auth/routes.py#L24-L34"
 gloss = "A guarded route without a known bearer token, or one older than TOKEN_TTL_S, is 401"
 

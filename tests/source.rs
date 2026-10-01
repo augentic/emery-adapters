@@ -3290,12 +3290,93 @@ async fn python_mounts_local() {
     }
 }
 
+// Django's namespaced include — `include((module, namespace))`, the module
+// the first element of a tuple — mounts the module it names as the bare
+// string does, through two levels: the project's `urls.py` includes the
+// API's under `api/`, the API's includes the application's under
+// `orders/`, so a route on `create/` there is `orders`, the resource past
+// `api`, in place of the survey's own.
+#[tokio::test]
+async fn python_mounts_namespaced() {
+    let project = scratch();
+    modules(
+        &project,
+        &[
+            (
+                "manage.py",
+                "import os\nimport sys\n\n\ndef main() -> None:\n    \
+                 os.environ.setdefault(\"DJANGO_SETTINGS_MODULE\", \"shop.settings\")\n    from \
+                 django.core.management import execute_from_command_line\n\n    \
+                 execute_from_command_line(sys.argv)\n\n\nif __name__ == \"__main__\":\n    \
+                 main()\n",
+            ),
+            ("shop/__init__.py", ""),
+            ("shop/settings.py", "ROOT_URLCONF = \"shop.urls\"\n"),
+            (
+                "shop/urls.py",
+                "from django.urls import include, path\n\nurlpatterns = [\n    path(\"api/\", \
+                 include((\"shop.api.urls\", \"api\"))),\n]\n",
+            ),
+            ("shop/api/__init__.py", ""),
+            (
+                "shop/api/urls.py",
+                "from django.urls import include, path\n\nurlpatterns = [\n    \
+                 path(\"orders/\", include((\"orders.urls\", \"orders\"))),\n]\n",
+            ),
+            ("orders/__init__.py", ""),
+            (
+                "orders/urls.py",
+                "from django.urls import path\n\nfrom . import views\n\nurlpatterns = [\n    \
+                 path(\"\", views.list_orders, name=\"list\"),\n    path(\"create/\", \
+                 views.create_order, name=\"create\"),\n]\n",
+            ),
+            (
+                "orders/views.py",
+                "from django.http import JsonResponse\n\n\ndef list_orders(request):\n    return \
+                 JsonResponse({\"orders\": []})\n\n\ndef create_order(request):\n    return \
+                 JsonResponse({\"id\": 1}, status=201)\n",
+            ),
+        ],
+    );
+    let survey = inventory(
+        &[
+            ("GET /api/orders/", "orders/urls.py#L6", "orders"),
+            ("POST /api/orders/create/", "orders/urls.py#L7", "create"),
+        ],
+        &[],
+    );
+
+    let model = mined(PYTHON, &project, &survey, 1).await;
+
+    let turns = surveyed(PYTHON, &model, 1);
+    assert_eq!(
+        surfaces(&turns[0]),
+        [
+            ("start", "manage.py", "start"),
+            ("GET /api/orders/", "orders/urls.py", "orders"),
+            ("POST /api/orders/create/", "orders/urls.py", "orders"),
+        ]
+    );
+    for note in [
+        "; id `start`; reaches `shop/settings.py`, `shop/urls.py`, `shop/api/urls.py`, \
+         `orders/urls.py`.",
+        ": registered L6 at module level; through `django`; id `orders.list-orders`; reaches \
+         `orders/views.py`.",
+        ": registered L7 at module level; through `django`; id `orders.create-order`; reaches \
+         `orders/views.py`.",
+    ] {
+        assert!(turns[0].contains(note), "{note} is in the brief: {}", turns[0]);
+    }
+    assert!(!turns[0].contains("stem `create`"), "gave way: {}", turns[0]);
+}
+
 // A decorator's head is a binding of the tree, not an import: it is traced
 // through the module-level construction (`app = Flask(..)`) and one import
 // hop (`from .app import app`) to the package, so the `def` under it is a
 // surface through `flask`. A decorator that hooks the application's
-// lifecycle (`errorhandler`, `before_request`) or shapes a class
-// (`dataclass`) registers nothing, and is no fact.
+// lifecycle (`errorhandler`, `before_request`) or shapes a class or a
+// member (`dataclass`, attrs' `define`, pydantic's `computed_field`)
+// registers nothing, and is no fact.
 #[tokio::test]
 async fn python_decorated() {
     let project = scratch();
@@ -3307,15 +3388,18 @@ async fn python_decorated() {
             ("app/app.py", "from flask import Flask\n\napp = Flask(__name__)\n"),
             (
                 "app/views.py",
-                "from dataclasses import dataclass\n\nfrom .app import app\n\n\n@dataclass\nclass \
-                 Page:\n    size: int = 20\n\n\n@app.get(\"/users\")\ndef list_users() -> dict:\n    \
-                 return {\"page\": Page().size}\n\n\n@app.errorhandler(404)\ndef not_found(error) \
-                 -> dict:\n    return {\"error\": \"not-found\"}\n\n\n@app.before_request\ndef \
-                 audit() -> None:\n    pass\n",
+                "from dataclasses import dataclass\n\nfrom attrs import define\nfrom pydantic \
+                 import BaseModel, computed_field\n\nfrom .app import app\n\n\n@dataclass\nclass \
+                 Page:\n    size: int = 20\n\n\n@define\nclass Cursor:\n    after: str\n\n\nclass \
+                 Window(BaseModel):\n    size: int = 20\n\n    @computed_field\n    @property\n    \
+                 def wide(self) -> bool:\n        return self.size > 50\n\n\n@app.get(\"/users\")\n\
+                 def list_users() -> dict:\n    return {\"page\": Page().size}\n\n\n\
+                 @app.errorhandler(404)\ndef not_found(error) -> dict:\n    return {\"error\": \
+                 \"not-found\"}\n\n\n@app.before_request\ndef audit() -> None:\n    pass\n",
             ),
         ],
     );
-    let survey = inventory(&[("GET /users", "app/views.py#L11-L13", "users")], &[]);
+    let survey = inventory(&[("GET /users", "app/views.py#L28-L30", "users")], &[]);
     let answer = claim("users.list");
 
     let model = support::run(
@@ -3330,12 +3414,12 @@ async fn python_decorated() {
     let facts = &seen[0].messages[0];
     assert!(
         facts.contains(
-            "- `app/views.py#L11-L13` — `@app.get(\"/users\")` on `list_users`, through \
+            "- `app/views.py#L28-L30` — `@app.get(\"/users\")` on `list_users`, through \
                         `flask`"
         ),
         "{facts}"
     );
-    for absent in ["errorhandler", "before_request", "dataclass"] {
+    for absent in ["errorhandler", "before_request", "dataclass", "define", "computed_field"] {
         assert!(!facts.contains(&format!("`@{absent}")), "`{absent}` registers nothing: {facts}");
         assert!(!facts.contains(&format!("`@app.{absent}")), "`{absent}` is a hook: {facts}");
     }
@@ -3346,7 +3430,7 @@ async fn python_decorated() {
     );
     assert!(
         turns[0].contains(
-            ": def `list_users` L11–L13; under `@app.get(\"/users\")`; through `flask`; id \
+            ": def `list_users` L28–L30; under `@app.get(\"/users\")`; through `flask`; id \
              `users`; reaches `app/app.py`."
         ),
         "{}",
@@ -3676,6 +3760,75 @@ async fn python_survey_stem_derived() {
         assert!(turns[0].contains(id), "{id} is in the brief: {}", turns[0]);
     }
     assert!(!turns[0].contains("api-orders"), "the survey's stem gave way: {}", turns[0]);
+}
+
+// A router that declares no prefix and is included under none groups its
+// routes under its first tag, whatever each path spells, so one router is
+// one stem; a prefix, its own or its inclusion's, stands over the tag.
+#[tokio::test]
+async fn python_survey_stem_tagged() {
+    let project = scratch();
+    modules(
+        &project,
+        &[
+            ("app/__init__.py", ""),
+            (
+                "app/main.py",
+                "from fastapi import FastAPI\n\nfrom .routes import items, login\n\napp = \
+                 FastAPI()\napp.include_router(login.router)\napp.include_router(items.router)\n",
+            ),
+            ("app/routes/__init__.py", ""),
+            (
+                "app/routes/login.py",
+                "from fastapi import APIRouter\n\nrouter = APIRouter(tags=[\"login\"])\n\n\n\
+                 @router.post(\"/login/access-token\")\ndef login_access_token() -> dict:\n    \
+                 return {}\n\n\n@router.post(\"/password-recovery/{email}\")\ndef \
+                 recover_password(email: str) -> dict:\n    return {\"email\": email}\n",
+            ),
+            (
+                "app/routes/items.py",
+                "from fastapi import APIRouter\n\nrouter = APIRouter(prefix=\"/items\", \
+                 tags=[\"things\"])\n\n\n@router.get(\"/\")\ndef read_items() -> list:\n    \
+                 return []\n",
+            ),
+        ],
+    );
+    let survey = inventory(
+        &[
+            ("POST /login/access-token", "app/routes/login.py#L6-L8", "login"),
+            ("POST /password-recovery/{email}", "app/routes/login.py#L11-L13", "password-recovery"),
+            ("GET /items/", "app/routes/items.py#L6-L8", "things"),
+        ],
+        &[],
+    );
+    let answer = claim("login.post-access-token");
+
+    let model = support::run(
+        test_programs::ADAPTER_PYTHON,
+        &project,
+        &[],
+        ScriptedModel::answering([&survey, &answer, &answer]),
+    )
+    .await;
+
+    let turns = surveyed(PYTHON, &model, 1);
+    assert_eq!(
+        surfaces(&turns[0]),
+        [
+            ("start", "app/main.py", "start"),
+            ("POST /login/access-token", "app/routes/login.py", "login"),
+            ("POST /password-recovery/{email}", "app/routes/login.py", "login"),
+            ("GET /items/", "app/routes/items.py", "items"),
+        ]
+    );
+    for id in
+        ["id `login.post-access-token`;", "id `login.post-password-recovery-email`;", "id `items`;"]
+    {
+        assert!(turns[0].contains(id), "{id} is in the brief: {}", turns[0]);
+    }
+    for stem in ["`password-recovery`", "`things`"] {
+        assert!(!turns[0].contains(&format!("stem {stem}")), "gave way: {}", turns[0]);
+    }
 }
 
 // The survey names a surface under `start` — the bootstrap's stem, which
@@ -4382,6 +4535,91 @@ async fn python_steps() {
     assert_eq!(exchanges[2].outcome, Ok(String::new()), "the inline value is held to no anchor");
 }
 
+// What a class declares is decided at its fields, whatever initialises them
+// — a view's `permission_classes` names its guards — so a field is an
+// anchor; a decorated `def` is anchored through its `def` line, not at its
+// decorator alone; and a call for its effect on a local a member of the
+// class made (`serializer = self.InputSerializer(..)`, then
+// `serializer.is_valid(..)`) is a step into the tree, while the construction
+// that made it only wires.
+#[tokio::test]
+async fn python_anchors_declared() {
+    let project = scratch();
+    modules(
+        &project,
+        &[
+            ("manage.py", "import sys\n\nif __name__ == \"__main__\":\n    sys.exit(0)\n"),
+            ("app/__init__.py", ""),
+            (
+                "app/urls.py",
+                "from django.urls import path\n\nfrom . import views\n\nurlpatterns = \
+                 [\n    path(\"users/\", views.UserCreateApi.as_view()),\n]\n",
+            ),
+            (
+                "app/views.py",
+                "from django.db import transaction\nfrom rest_framework import \
+                 serializers\nfrom rest_framework.permissions import IsAuthenticated\nfrom \
+                 rest_framework.response import Response\nfrom rest_framework.views import \
+                 APIView\n\nfrom .services import user_create\n\n\nclass ApiAuthMixin:\n    \
+                 permission_classes = (IsAuthenticated,)\n\n\nclass UserCreateApi(ApiAuthMixin, \
+                 APIView):\n    class InputSerializer(serializers.Serializer):\n        email = \
+                 serializers.CharField()\n\n    def post(self, request):\n        serializer = \
+                 self.InputSerializer(data=request.data)\n        \
+                 serializer.is_valid(raise_exception=True)\n        user = \
+                 user_create(**serializer.validated_data)\n        return Response({\"id\": \
+                 user.id})\n\n\n@transaction.atomic\ndef user_rename(\n    user_id: int,\n    \
+                 name: str,\n) -> None:\n    pass\n",
+            ),
+            ("app/services.py", "def user_create(**data):\n    return data\n"),
+        ],
+    );
+    let guarded = serde_json::json!({
+        "kind": "requirement", "id": "users.authenticated",
+        "statement": "Creating a user requires an authenticated caller.",
+        "path": "app/views.py#L11"
+    });
+    let validated = serde_json::json!({
+        "kind": "requirement", "id": "users.create.body",
+        "statement": "A body that fails the input serializer is refused.",
+        "path": "app/views.py#L20"
+    });
+    let headed = serde_json::json!({
+        "kind": "requirement", "id": "users.rename",
+        "statement": "A rename runs in one transaction.", "path": "app/views.py#L26-L29"
+    });
+    let constructed = serde_json::json!({
+        "kind": "requirement", "id": "users.create.serializer",
+        "statement": "Creating a user builds the input serializer.", "path": "app/views.py#L19"
+    });
+    let strayed =
+        serde_json::json!({ "claims": [&guarded, &constructed, &validated, &headed] }).to_string();
+    let corrected = serde_json::json!({ "claims": [&guarded, &validated, &headed] }).to_string();
+    let survey = inventory(&[("POST /users/", "app/urls.py#L6", "users")], &[]);
+    let inline = answer();
+
+    let model = support::run(
+        test_programs::ADAPTER_PYTHON,
+        &project,
+        &[],
+        ScriptedModel::answering([&survey, &strayed, &corrected, &inline]),
+    )
+    .await;
+
+    let seen = model.seen();
+    assert_eq!(seen.len(), 4, "the survey, two rounds for the one seam, one for the inline value");
+    let exchanges = checked(&model);
+    let correction = exchanges[0].outcome.as_ref().expect_err("the construction is refused");
+    assert!(
+        correction.contains("claim 1: path `app/views.py#L19`"),
+        "the finding names the claim at the construction: {correction}"
+    );
+    for held in ["claim 0:", "claim 2:", "claim 3:"] {
+        assert!(!correction.contains(held), "{held} is at a declared anchor: {correction}");
+    }
+    assert_eq!(exchanges[1].outcome, Ok(String::new()), "the corrected answer is accepted");
+    assert_eq!(exchanges[2].outcome, Ok(String::new()), "the inline value is held to no anchor");
+}
+
 // The tree's own tests are read for what they state: each test by its
 // docstring or its name read as words, under its class, a parametrized one
 // over several values, each scenario under its feature, listed at its line
@@ -4787,9 +5025,9 @@ const FASTAPI_START: [&str; 9] = [
 ];
 const FASTAPI_START_LAID: usize = 8;
 
-// The `orders` router's closure, from its entry; the table ends the laid
-// run, and the two models after it are listed with the data file and the
-// tests.
+// The `orders` router's closure, from its entry; the rates table is laid
+// after `pricing.py`, which names it, the table ends the laid run, and the
+// two models after it are listed with the tests.
 const FASTAPI_ORDERS: [&str; 19] = [
     "app/routers/orders.py",
     "app/schemas/orders.py",
@@ -4959,13 +5197,16 @@ async fn python_fixture_fastapi_routers() {
         "def `get_order` L59–L61; under `@router.get(\"/{order_id}\")`; through `fastapi`; id \
          `orders.get-order-id`;",
         "- `app/data/rates.json` — named by `app/services/pricing.py`",
-        "- `app/data/rates.json`\n",
         "- `tests/test_orders.py#L48` — a cancellation needs a reason",
         "- `tests/test_pricing.py#L30` — totals sum the parts (over several values)",
     ] {
         assert!(orders.contains(note), "{note} is in the brief: {orders}");
     }
-    assert!(!orders.contains("### `app/data/rates.json`"), "the data file is listed: {orders}");
+    let pricing = orders.find("### `app/services/pricing.py`").expect("the reader is laid");
+    let rates = orders.find("### `app/data/rates.json` (10 lines)").expect("the table is laid");
+    let after = orders.find("### `app/db.py`").expect("the module after the reader is laid");
+    assert!(pricing < rates && rates < after, "the table is laid after its reader: {orders}");
+    assert!(!orders.contains("- `app/data/rates.json`\n"), "the data file is laid: {orders}");
 
     fastapi_router(
         turn_for(&turns, "POST /api/v1/customers"),
@@ -5058,7 +5299,8 @@ async fn python_dynamic() {
 }
 
 // A `.json` a module names by path is a data file of the seam: named in the
-// brief with the module reading it, laid after the modules, and a file a
+// brief with the module reading it, laid directly after that module when
+// it is small and after every module when it is large, and a file a
 // `criterion` may cite a value in — while a `requirement` there is at no
 // anchor and comes back.
 #[tokio::test]
@@ -5068,12 +5310,16 @@ async fn python_data() {
     project.write(
         "app/services/orders.py",
         "import json\nfrom pathlib import Path\n\nfrom ..db import pool\n\nZONES = \
-         json.loads(Path(\"app/data/zones.json\").read_text())\n\n\nasync def create_order(body: \
-         dict) -> dict:\n    return {\"id\": pool, \"body\": body, \"zone\": \
-         ZONES[\"rural\"]}\n\n\ndef find_order(order_id: str) -> dict:\n    return {\"id\": \
-         order_id, \"pool\": pool}\n",
+         json.loads(Path(\"app/data/zones.json\").read_text())\nTARIFFS = \
+         json.loads(Path(\"app/data/tariffs.json\").read_text())\n\n\nasync def \
+         create_order(body: dict) -> dict:\n    return {\"id\": pool, \"body\": body, \"zone\": \
+         ZONES[\"rural\"], \"tariff\": TARIFFS[\"0\"]}\n\n\ndef find_order(order_id: str) -> \
+         dict:\n    return {\"id\": order_id, \"pool\": pool}\n",
     );
     project.write("app/data/zones.json", "{\n  \"rural\": 650,\n  \"urban\": 0\n}\n");
+    // a generated table past the 8 KB a data file is laid beside its module within
+    let tariffs: Vec<String> = (0..800).map(|i| format!("  \"{i}\": {}", i * 7)).collect();
+    project.write("app/data/tariffs.json", format!("{{\n{}\n}}\n", tariffs.join(",\n")));
     let cited = serde_json::json!({
         "kind": "criterion", "id": "orders.rural-surcharge",
         "criterion": "The rural surcharge is 650 cents.", "path": "app/data/zones.json#L2"
@@ -5101,14 +5347,27 @@ async fn python_data() {
     assert!(
         turn.contains(
             "Data files these modules name by path, each with the modules reading it, laid after \
-             the modules:\n\n- `app/data/zones.json` — named by `app/services/orders.py`"
+             the first module naming it — a large one after every module:\n\n- \
+             `app/data/zones.json` — named by `app/services/orders.py`\n- `app/data/tariffs.json` \
+             — named by `app/services/orders.py`"
         ),
-        "the data file is named with its reader: {turn}"
+        "the data files are named with their reader: {turn}"
     );
-    laid(turn, &["app/main.py", "app/services/orders.py", "app/data/zones.json"], &[]);
-    let modules_end = turn.find("### `app/routers/__init__.py`").expect("the last module is laid");
-    let data_start = turn.find("### `app/data/zones.json`").expect("the data file is laid");
-    assert!(modules_end < data_start, "the data file is laid after the modules: {turn}");
+    laid(
+        turn,
+        &["app/main.py", "app/services/orders.py", "app/data/zones.json", "app/data/tariffs.json"],
+        &[],
+    );
+    let at = |heading: &str| turn.find(&format!("### `{heading}`")).expect(heading);
+    let reader = at("app/services/orders.py");
+    let last_module = at("app/routers/__init__.py");
+    let small = at("app/data/zones.json");
+    let large = at("app/data/tariffs.json");
+    assert!(
+        reader < small && small < last_module,
+        "the small data file is laid directly after the module naming it: {turn}"
+    );
+    assert!(last_module < large, "the large data file is laid after every module: {turn}");
     assert!(turn.contains("2|  \"rural\": 650,"), "numbered: {turn}");
     let exchanges = checked(&model);
     let correction = exchanges[0].outcome.as_ref().expect_err("a requirement in data is refused");
@@ -5161,15 +5420,15 @@ async fn python_data_beside_module() {
 // environments, build output, documentation, and dot entries are not
 // modules: what they register is no surface, and — a test stating nothing
 // included — they are neither laid nor listed; `manage.py` is a module,
-// and the bootstrap.
+// and the bootstrap. The packaging `setup.py` is the root's alone: one
+// beneath a package is a module like any other.
 #[tokio::test]
 async fn python_non_production() {
-    const REFUSED: [&str; 12] = [
+    const REFUSED: [&str; 11] = [
         "tests/test_orders.py",
         "app/orders_test.py",
         "app/types.pyi",
         "conftest.py",
-        "setup.py",
         "app/migrations/0001_initial.py",
         "app/__pycache__/orders.cpython-312.py",
         "venv/lib/site-packages/flask/__init__.py",
@@ -5180,7 +5439,7 @@ async fn python_non_production() {
     ];
     let project = scratch();
     modules(&project, &PY_APP);
-    for file in REFUSED {
+    for file in REFUSED.iter().chain(&["setup.py"]) {
         project.write(
             file,
             "from flask import Flask\n\napp = Flask(__name__)\n\n\n@app.get(\"/refused\")\ndef \
@@ -5191,6 +5450,7 @@ async fn python_non_production() {
         "manage.py",
         "from app.main import app\n\nif __name__ == \"__main__\":\n    app.run()\n",
     );
+    project.write("app/setup.py", "ENV = \"production\"\n");
 
     let model = mined(PYTHON, &project, &py_app_inventory(), 1).await;
 
@@ -5199,7 +5459,8 @@ async fn python_non_production() {
     assert_eq!(surfaces.len(), 4, "the app's four surfaces alone: {}", turns[0]);
     assert_eq!(surfaces[0], ("start", "manage.py", "start"), "{}", turns[0]);
     assert!(!turns[0].contains("/refused"), "nothing refused registers: {}", turns[0]);
-    laid(&turns[0], &["manage.py", "app/main.py"], &REFUSED);
+    laid(&turns[0], &["manage.py", "app/main.py", "app/setup.py"], &REFUSED);
+    assert!(!turns[0].contains("### `setup.py` ("), "the root's `setup.py` is not a module");
 }
 
 // A tree of one production module cuts no finer than itself: one extract

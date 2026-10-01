@@ -42,6 +42,12 @@ pub async fn surfaces<P: Model>(
     let modules: Vec<String> = located.tree.modules.keys().cloned().collect();
     let text = facts(&located);
     let files = laid(&located, &prepared.root);
+    // the facts as one JSON string, for a host reading what the model was
+    // told without a turn
+    if emery_sdk::tracing::enabled!(emery_sdk::tracing::Level::TRACE) {
+        let json = emery_sdk::serde_json::Value::String(text.clone()).to_string();
+        emery_sdk::tracing::trace!(source = %prepared.source, facts = %json, "survey facts");
+    }
     let facts = Facts {
         modules: &modules,
         text: &text,
