@@ -1,0 +1,149 @@
+# A Django project: `manage.py` under its `__main__` guard is the bootstrap,
+# the settings and URL modules are reached by the strings that name them
+# (`DJANGO_SETTINGS_MODULE`, `ROOT_URLCONF`, `include(..)`, `INSTALLED_APPS`),
+# function views and class-based views are registered in `orders/urls.py`
+# under the `orders/` mount, a DRF router registers a viewset with two
+# `@action`s under `api/`, a management command is a surface by its path,
+# and the migration is skipped. A signal receiver reached through `ready()`
+# and the admin module are unreached without a finding.
+
+adapter = "python"
+fixture = "evals/cases/django-shop/fixture"
+stems = ["start", "orders", "import-orders"]
+
+# --- surfaces: the (entry, stem) pairs the survey decides ---
+
+[[surface]]
+entry = "manage.py"
+stem = "start"
+
+# the five `path(..)` registrations, one surface each, under the `orders/` mount
+[[surface]]
+entry = "orders/urls.py"
+stem = "orders"
+
+# the viewset the router registers at `orders`, with its `pay` and `cancel` actions
+[[surface]]
+entry = "api/urls.py"
+stem = "orders"
+
+[[surface]]
+entry = "orders/management/commands/import_orders.py"
+stem = "import-orders"
+
+# --- start ---
+
+[[requirement]]
+stem = "start"
+anchor = "manage.py#L8-L16"
+gloss = "The settings module defaults to shop.settings; a missing Django is an ImportError that says so; argv is handed to Django's command line"
+
+# --- orders ---
+
+[[requirement]]
+stem = "orders"
+anchor = "orders/forms.py#L16-L27"
+gloss = "An order form needs one to ORDER_MAX_LINES lines, each a valid sku, quantity of at least 1, and non-negative unit price"
+
+[[requirement]]
+stem = "orders"
+anchor = "orders/services.py#L15-L18"
+gloss = "Shipping is SHIPPING_CENTS, waived at or above FREE_SHIPPING_THRESHOLD_CENTS"
+
+[[requirement]]
+stem = "orders"
+anchor = "orders/services.py#L21-L37"
+gloss = "Placing creates the order and its lines in one transaction and mails the customer a receipt, failing silently"
+
+[[requirement]]
+stem = "orders"
+anchor = "orders/services.py#L41-L45"
+gloss = "Paying an order that is not pending is refused; otherwise it is marked paid"
+
+[[requirement]]
+stem = "orders"
+anchor = "orders/services.py#L49-L54"
+gloss = "A shipped order cannot be cancelled, nor a paid one older than ORDER_CANCEL_WINDOW_HOURS"
+
+[[requirement]]
+stem = "orders"
+anchor = "orders/services.py#L55-L62"
+gloss = "Cancelling marks the order cancelled and mails the customer, failing silently"
+
+[[requirement]]
+stem = "orders"
+anchor = "orders/views.py#L27-L30"
+gloss = "GET /orders/ lists the signed-in customer's latest PAGE_SIZE orders with their lines"
+
+[[requirement]]
+stem = "orders"
+anchor = "orders/views.py#L33-L40"
+gloss = "POST /orders/new/ answers 400 with the form's errors or 201 with the placed order"
+
+[[requirement]]
+stem = "orders"
+anchor = "orders/views.py#L43-L46"
+gloss = "GET /orders/<pk>/ is 404 unless the order is the signed-in customer's"
+
+[[requirement]]
+stem = "orders"
+anchor = "orders/views.py#L49-L56"
+gloss = "POST /orders/<pk>/pay/ answers 409 with the state error, else the paid order"
+
+[[requirement]]
+stem = "orders"
+anchor = "orders/views.py#L59-L68"
+gloss = "POST /orders/<pk>/cancel/ requires confirm=yes (400 otherwise) and answers 409 with the state error, else the cancelled order"
+
+[[requirement]]
+stem = "orders"
+anchor = "api/views.py#L18-L20"
+gloss = "POST /api/orders/ places the order from the validated lines and note"
+
+[[requirement]]
+stem = "orders"
+anchor = "api/views.py#L22-L36"
+gloss = "POST /api/orders/<pk>/pay/ and /cancel/ answer 409 with the state error, else the order"
+
+[[requirement]]
+stem = "orders"
+anchor = "api/serializers.py#L22-L26"
+gloss = "The API refuses an order with no lines or more than ORDER_MAX_LINES"
+
+# --- import-orders ---
+
+[[requirement]]
+stem = "import-orders"
+anchor = "orders/management/commands/import_orders.py#L21-L29"
+gloss = "import_orders refuses a path that is not a file or a CSV missing a required column"
+
+[[requirement]]
+stem = "import-orders"
+anchor = "orders/management/commands/import_orders.py#L36-L50"
+gloss = "Rows grouped by order_ref place one order per customer found by email in one transaction; an unknown customer is skipped and reported; --dry-run rolls back"
+
+# --- criteria ---
+
+[[criterion]]
+anchor = "shop/settings.py#L54"
+gloss = "ORDER_CANCEL_WINDOW_HOURS defaults to 24"
+
+[[criterion]]
+anchor = "shop/settings.py#L55"
+gloss = "ORDER_MAX_LINES is 20"
+
+[[criterion]]
+anchor = "shop/settings.py#L56"
+gloss = "FREE_SHIPPING_THRESHOLD_CENTS is 10000"
+
+[[criterion]]
+anchor = "shop/settings.py#L57"
+gloss = "SHIPPING_CENTS is 850"
+
+[[criterion]]
+anchor = "orders/views.py#L12"
+gloss = "PAGE_SIZE is 20"
+
+[[criterion]]
+anchor = "orders/management/commands/import_orders.py#L11"
+gloss = "The required import columns"

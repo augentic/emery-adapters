@@ -1,0 +1,148 @@
+# A Flask application factory behind a `wsgi.py` that constructs it at load:
+# two blueprints — one mounted under a prefix the registration spells, one
+# under its own — a health rule added by hand, request hooks and error
+# handlers that are the bootstrap's, and a Redis cache the services read
+# through. Tests and a feature file state the behaviour.
+
+adapter = "python"
+fixture = "evals/cases/flask-blueprints/fixture"
+stems = ["start", "health", "orders", "auth"]
+
+# --- surfaces: the (entry, stem) pairs the survey decides ---
+
+[[surface]]
+entry = "wsgi.py"
+stem = "start"
+
+# the rule added by hand in the factory, at its registration
+[[surface]]
+entry = "shop/__init__.py"
+stem = "health"
+
+[[surface]]
+entry = "shop/orders/routes.py"
+stem = "orders"
+
+[[surface]]
+entry = "shop/auth/routes.py"
+stem = "auth"
+
+# --- start ---
+
+[[requirement]]
+stem = "start"
+anchor = "shop/__init__.py#L22-L28"
+gloss = "The factory configures the app from Config, connects the cache, mounts orders under /orders and auth under its own /auth prefix, and adds /health"
+
+[[requirement]]
+stem = "start"
+anchor = "shop/__init__.py#L34-L39"
+gloss = "Every response carries X-Elapsed-Ms and is logged with its method, path, status, and elapsed time"
+
+[[requirement]]
+stem = "start"
+anchor = "shop/__init__.py#L41-L47"
+gloss = "An OrderError answers its status with the message and code as JSON; an HTTP error answers its code with the description"
+
+# `wsgi.py` constructs the application and nothing more: a `start` surface
+# the bootstrap rule finds, with no requirement of its own to anchor there
+
+# --- health ---
+
+[[requirement]]
+stem = "health"
+anchor = "shop/__init__.py#L16-L18"
+gloss = "GET /health is ok 200 when the cache is connected, degraded 503 otherwise"
+
+# --- orders ---
+
+[[requirement]]
+stem = "orders"
+anchor = "shop/orders/service.py#L27-L39"
+gloss = "An order needs a customer and one to MAX_LINES lines, each with a positive quantity and a non-negative price; each failure has its code"
+
+[[requirement]]
+stem = "orders"
+anchor = "shop/orders/service.py#L43-L46"
+gloss = "The total is the lines' sum plus SHIPPING_CENTS, waived at or above FREE_SHIPPING_THRESHOLD_CENTS"
+
+[[requirement]]
+stem = "orders"
+anchor = "shop/orders/service.py#L50-L60"
+gloss = "Placing and cancelling POST an event to WEBHOOK_URL under WEBHOOK_TIMEOUT_S; no URL skips it and a failure is logged, not raised"
+
+[[requirement]]
+stem = "orders"
+anchor = "shop/orders/routes.py#L9-L13"
+gloss = "POST /orders/ places the order and answers 201 with it"
+
+[[requirement]]
+stem = "orders"
+anchor = "shop/orders/routes.py#L16-L23"
+gloss = "GET /orders/ requires a customer and lists their recent orders up to limit, default 10"
+
+[[requirement]]
+stem = "orders"
+anchor = "shop/orders/service.py#L72-L80"
+gloss = "Reading an order serves the cache first; an unknown id is 404 not_found; a hit is cached"
+
+[[requirement]]
+stem = "orders"
+anchor = "shop/orders/service.py#L83-L91"
+gloss = "Recent orders are capped at PAGE_LIMIT and served from the cache when it holds enough"
+
+[[requirement]]
+stem = "orders"
+anchor = "shop/orders/service.py#L94-L103"
+gloss = "Cancelling an order that is not pending or paid is 409 not_cancellable; otherwise it is marked cancelled, dropped from the cache, and notified"
+
+# --- auth ---
+
+[[requirement]]
+stem = "auth"
+anchor = "shop/auth/routes.py#L40-L49"
+gloss = "POST /auth/login rejects a password under MIN_PASSWORD_LENGTH with 422 and an unknown user or wrong password with 401; otherwise issues a token with its TTL"
+
+[[requirement]]
+stem = "auth"
+anchor = "shop/auth/routes.py#L24-L34"
+gloss = "A guarded route without a known bearer token, or one older than TOKEN_TTL_S, is 401"
+
+[[requirement]]
+stem = "auth"
+anchor = "shop/auth/routes.py#L53-L57"
+gloss = "POST /auth/logout drops the token and answers 204"
+
+# --- criteria ---
+
+[[criterion]]
+anchor = "shop/config.py#L8"
+gloss = "WEBHOOK_TIMEOUT_S defaults to 5"
+
+[[criterion]]
+anchor = "shop/config.py#L9"
+gloss = "CACHE_TTL_S defaults to 300"
+
+[[criterion]]
+anchor = "shop/config.py#L10"
+gloss = "TOKEN_TTL_S defaults to 3600"
+
+[[criterion]]
+anchor = "shop/config.py#L11"
+gloss = "MAX_LINES is 20"
+
+[[criterion]]
+anchor = "shop/config.py#L12"
+gloss = "FREE_SHIPPING_THRESHOLD_CENTS is 10000"
+
+[[criterion]]
+anchor = "shop/config.py#L13"
+gloss = "SHIPPING_CENTS is 850"
+
+[[criterion]]
+anchor = "shop/orders/service.py#L12"
+gloss = "PAGE_LIMIT is 50"
+
+[[criterion]]
+anchor = "shop/auth/routes.py#L13"
+gloss = "MIN_PASSWORD_LENGTH is 8"

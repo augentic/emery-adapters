@@ -17,6 +17,7 @@ omnia-test = { workspace = true, features = ["host"] }
 omnia-wasi-model.workspace = true
 omnia-wasi-otel.workspace = true
 opentelemetry-proto.workspace = true
+python = { path = "sources/python" }
 serde_json.workspace = true
 test-programs.workspace = true
 tokio.workspace = true

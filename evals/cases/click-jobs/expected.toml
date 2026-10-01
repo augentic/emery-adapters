@@ -1,0 +1,177 @@
+# A Click group with an APScheduler nightly job and two Celery tasks, in a
+# `src/` layout the manifest's console script enters: three kinds of surface
+# in one small tree, mined whole with every module laid out, and a seed
+# script no surface reaches. Mirrors `cli-jobs`.
+
+adapter = "python"
+fixture = "evals/cases/click-jobs/fixture"
+stems = ["start", "import", "reconcile", "nightly", "serve", "invoices"]
+
+# --- surfaces: the (entry, stem) pairs the survey decides ---
+
+[[surface]]
+entry = "src/ledger/cli.py"
+stem = "start"
+
+[[surface]]
+entry = "src/ledger/cli.py"
+stem = "import"
+
+[[surface]]
+entry = "src/ledger/cli.py"
+stem = "reconcile"
+
+# the `nightly` command, and the schedule it shares a stem with
+[[surface]]
+entry = "src/ledger/cli.py"
+stem = "nightly"
+
+[[surface]]
+entry = "src/ledger/jobs/nightly.py"
+stem = "nightly"
+
+[[surface]]
+entry = "src/ledger/cli.py"
+stem = "serve"
+
+# the two tasks under `invoices.*`, one surface each
+[[surface]]
+entry = "src/ledger/workers/invoices.py"
+stem = "invoices"
+
+# --- start ---
+
+[[requirement]]
+stem = "start"
+anchor = "src/ledger/cli.py#L83-L86"
+gloss = "After any command but serve, the connection pool is closed"
+
+[[requirement]]
+stem = "start"
+anchor = "src/ledger/cli.py#L89-L97"
+gloss = "A Click error is shown and exits with its code; any other failure is logged and exits 1"
+
+# The Celery application is configured at module level with the boundaries'
+# values, so the prompt's rule makes it start's, once, at the construction.
+[[requirement]]
+stem = "start"
+anchor = "src/ledger/queues.py#L8-L14"
+gloss = "Tasks run on the invoices queue, acknowledged late, retrying INVOICE_ATTEMPTS times INVOICE_BACKOFF_S apart"
+
+# --- import ---
+
+[[requirement]]
+stem = "import"
+anchor = "src/ledger/cli.py#L22-L30"
+gloss = "import <file> parses the CSV, writes unless --dry-run, prints the summary as JSON, and exits 2 when rows were rejected"
+
+[[requirement]]
+stem = "import"
+anchor = "src/ledger/lib/csv.py#L30-L35"
+gloss = "An import over MAX_ROWS rows or missing a required column is rejected whole"
+
+[[requirement]]
+stem = "import"
+anchor = "src/ledger/lib/csv.py#L40-L55"
+gloss = "A row with a bad account code, a non-ISO date, or a zero or non-numeric amount is rejected with its line; the rest proceed"
+
+[[requirement]]
+stem = "import"
+anchor = "src/ledger/lib/db.py#L35-L56"
+gloss = "Entries insert in one transaction, ignoring an id already present, rolled back on failure"
+
+# --- reconcile ---
+
+[[requirement]]
+stem = "reconcile"
+anchor = "src/ledger/cli.py#L33-L53"
+gloss = "reconcile --from --to matches the range, optionally imports unmatched bank movements, prints counts, and exits 3 when anything is unmatched"
+
+[[requirement]]
+stem = "reconcile"
+anchor = "src/ledger/services/reconcile.py#L28-L38"
+gloss = "Bank transactions are fetched from `${BANK_FEED_URL}/transactions` with a bearer token under FEED_TIMEOUT_S; a non-200 is an error"
+
+[[requirement]]
+stem = "reconcile"
+anchor = "src/ledger/services/reconcile.py#L41-L46"
+gloss = "A ledger entry matches a bank movement on account, date, and amount within RECONCILE_TOLERANCE_CENTS"
+
+[[requirement]]
+stem = "reconcile"
+anchor = "src/ledger/services/reconcile.py#L49-L77"
+gloss = "Each bank movement matches at most one entry; unmatched bank movements import as `bank-<id>` entries when asked"
+
+# --- nightly ---
+
+[[requirement]]
+stem = "nightly"
+anchor = "src/ledger/jobs/nightly.py#L15-L31"
+gloss = "The nightly run reconciles yesterday with import, marks issued invoices past due as overdue, and queues a reminder per invoice"
+
+[[requirement]]
+stem = "nightly"
+anchor = "src/ledger/jobs/nightly.py#L34-L39"
+gloss = "The nightly job runs at NIGHTLY_HOUR in TIMEZONE with an hour's misfire grace; a failed run is logged and the schedule continues"
+
+# --- serve ---
+
+[[requirement]]
+stem = "serve"
+anchor = "src/ledger/cli.py#L62-L80"
+gloss = "serve starts the nightly schedule and a Celery worker over the invoices queue; SIGINT and SIGTERM shut both down, close the pool, and exit 0"
+
+# --- invoices ---
+
+[[requirement]]
+stem = "invoices"
+anchor = "src/ledger/workers/invoices.py#L14-L17"
+gloss = "A reminder above MAX_REMINDER_AMOUNT_CENTS voids the invoice instead"
+
+[[requirement]]
+stem = "invoices"
+anchor = "src/ledger/workers/invoices.py#L18-L33"
+gloss = "The mail API is POSTed under MAIL_TIMEOUT_S; a transport error retries the task, up to 3 times, and a non-2xx fails it"
+
+[[requirement]]
+stem = "invoices"
+anchor = "src/ledger/workers/invoices.py#L37-L40"
+gloss = "invoices.void marks the invoice void"
+
+# --- criteria ---
+
+[[criterion]]
+anchor = "src/ledger/config.py#L8"
+gloss = "NIGHTLY_HOUR defaults to 2"
+
+[[criterion]]
+anchor = "src/ledger/config.py#L9"
+gloss = "TZ defaults to Pacific/Auckland"
+
+[[criterion]]
+anchor = "src/ledger/config.py#L10"
+gloss = "INVOICE_CONCURRENCY defaults to 4"
+
+[[criterion]]
+anchor = "src/ledger/config.py#L11"
+gloss = "INVOICE_ATTEMPTS defaults to 5"
+
+[[criterion]]
+anchor = "src/ledger/config.py#L12"
+gloss = "RECONCILE_TOLERANCE_CENTS defaults to 100"
+
+[[criterion]]
+anchor = "src/ledger/config.py#L13"
+gloss = "FEED_TIMEOUT_S defaults to 15"
+
+[[criterion]]
+anchor = "src/ledger/lib/csv.py#L8-L11"
+gloss = "MAX_ROWS 50000, the required columns, the account code and ISO date patterns"
+
+[[criterion]]
+anchor = "src/ledger/queues.py#L6"
+gloss = "INVOICE_BACKOFF_S is 30"
+
+[[criterion]]
+anchor = "src/ledger/workers/invoices.py#L8"
+gloss = "MAX_REMINDER_AMOUNT_CENTS is 5000000"

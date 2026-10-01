@@ -3,7 +3,7 @@
 [![CI](https://github.com/augentic/emery-adapters/actions/workflows/ci.yaml/badge.svg)](https://github.com/augentic/emery-adapters/actions/workflows/ci.yaml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
-First-party **source** Wasm components for [Emery](https://github.com/augentic/emery)'s specification generator: `documentation`, `intent`, and `typescript`.
+First-party **source** Wasm components for [Emery](https://github.com/augentic/emery)'s specification generator: `documentation`, `intent`, `typescript`, and `python`.
 
 **Using Emery in a project?** You do not need this repository. Name a published adapter by package reference (`emery:<name>@<version>`) or a built `.wasm` by path in the project's `emery.toml`; follow the [Emery README](https://github.com/augentic/emery#readme).
 
@@ -20,6 +20,7 @@ An adapter is one Rust crate that ships as one Wasm component exporting the `sou
 | `sources/documentation` | documentation | written specs, guides, ADRs — requirement / criterion / decision claims |
 | `sources/intent` | intent | the operator's brief, verbatim plus its directives as requirement claims |
 | `sources/typescript` | behaviour | TS/JS estates — requirement claims backed by excerpt / type / call detail |
+| `sources/python` | behaviour | Python estates — FastAPI, Flask, Django, Click, Celery, and plain libraries — requirement claims backed by excerpt / type / call detail |
 
 ## Rust-only loop
 
@@ -37,16 +38,17 @@ cargo nextest run -p emery-adapters --test source   # the shipped components alo
 
 ```bash
 cargo build --workspace --target wasm32-wasip2 --release   # every component
-emery specify --config examples/documentation/emery.toml  # or intent, typescript; examples/emery.toml runs all three
+emery specify --config examples/documentation/emery.toml  # or intent, typescript, python; examples/emery.toml runs all four
 emery show spec
 ```
 
 ## Graded live eval
 
-The live rung is a **public-contract client**: `evals/` spawns the sibling shipped `emery` binary over the built `typescript` component, drives one `specify` per case across the adapter contract, grades the accepted claims and the surveyed surfaces against the case's `expected.toml` through `emery show`, and writes the dated scorecard. Operator-invoked, never CI; see [evals/README.md](evals/README.md).
+The live rung is a **public-contract client**: `evals/` spawns the sibling shipped `emery` binary over the built `typescript` or `python` component a case names, drives one `specify` per case across the adapter contract, grades the accepted claims and the surveyed surfaces against the case's `expected.toml` through `emery show`, and writes the dated scorecard. Operator-invoked, never CI; see [evals/README.md](evals/README.md).
 
 ```bash
 cargo run -p evals -- orders express-orders   # the named cases; none names every case whose fixture the checkout holds
+cargo run -p evals -- python                  # every case under one adapter
 ```
 
 ## Repair loop

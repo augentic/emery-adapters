@@ -79,8 +79,17 @@ fn intent() {
 #[test]
 fn typescript() {
     corpus(typescript::PROSE, "typescript", &["extract.md", "survey.md"]);
+    surveying(typescript::PROSE);
+}
 
-    let prompt = body(typescript::PROSE, "survey.md").expect("the survey prompt is listed");
+#[test]
+fn python() {
+    corpus(python::PROSE, "python", &["extract.md", "survey.md"]);
+    surveying(python::PROSE);
+}
+
+fn surveying(docs: &[Doc]) {
+    let prompt = body(docs, "survey.md").expect("the survey prompt is listed");
     capped("survey.md", prompt);
     let inventory: Inventory = serde_json::from_str(fenced_json(prompt, "## Worked example"))
         .unwrap_or_else(|err| {

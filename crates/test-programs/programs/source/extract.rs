@@ -54,7 +54,7 @@ async fn scenario() {
             check_evidence(&first.expect("the first extract, dispatched beside the second"));
             check_evidence(&second.expect("the second extract, dispatched beside the first"));
         }
-        ["types", names @ ..] => {
+        ["types", inline, exported, names @ ..] => {
             let evidence = Caller
                 .extract(ADAPTER, &workspace())
                 .await
@@ -69,18 +69,13 @@ async fn scenario() {
             }
 
             let evidence = Caller
-                .extract(
-                    ADAPTER,
-                    &value(
-                        "export interface Inline { id: string }\ninterface Local { n: number }\n",
-                    ),
-                )
+                .extract(ADAPTER, &value(inline))
                 .await
                 .expect("extract over an inline value");
             check_evidence(&evidence);
             assert_eq!(
                 types(&evidence),
-                ["Inline"],
+                [*exported],
                 "the value's exported declaration, and no other"
             );
             let inline = evidence.claims.iter().find(|claim| claim.kind == ClaimKind::Type);
@@ -88,8 +83,8 @@ async fn scenario() {
         }
         other => {
             panic!(
-                "no argument, `refused <code> [<value>]`, `echoed`, `together`, or `types \
-                 <name>..`; got {other:?}"
+                "no argument, `refused <code> [<value>]`, `echoed`, `together`, or `types <value> \
+                 <exported> <name>..`; got {other:?}"
             )
         }
     }

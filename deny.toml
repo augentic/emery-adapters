@@ -35,6 +35,9 @@ allow = [
 ]
 
 exceptions = [
+  # the Unicode character-name table `ruff_python_parser` reads identifiers
+  # with, under the Unicode data-files licence beside MIT OR Apache-2.0
+  { allow = ["Unicode-DFS-2016"], crate = "unicode_names2" },
 ]
 
 [licenses.private]
