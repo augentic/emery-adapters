@@ -552,7 +552,32 @@ pub struct Arg {
     pub called: bool,
     /// A function, an object holding one, or a call passing one.
     pub function: bool,
+    /// The string-valued properties of an object written in place, nested
+    /// objects flattened: `{ dir: join(__dirname, "routes"), options: {
+    /// prefix: "/api" } }` holds `dir` and `options.prefix`.
+    pub properties: Vec<Property>,
     pub lines: Lines,
+}
+
+impl Arg {
+    /// The property `key` names, by its dotted path from the object.
+    pub fn property(&self, key: &str) -> Option<&Property> {
+        self.properties.iter().find(|property| property.key == key)
+    }
+}
+
+/// A string-valued property of an object written in place.
+#[derive(Debug)]
+pub struct Property {
+    /// The static keys from the object down to the property, dotted.
+    pub key: String,
+    /// The string the property holds, or the path it spells from the
+    /// module's own directory.
+    pub value: String,
+    /// The value is a path spelled from the module's own directory —
+    /// `path.join(__dirname, "routes")`, `${import.meta.dirname}/routes` —
+    /// so it names a directory of the tree relative to the module's.
+    pub relative: bool,
 }
 
 #[derive(Debug)]

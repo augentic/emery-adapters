@@ -1,6 +1,6 @@
 [package]
 name = "typescript"
-description = "TypeScript source-adapter"
+description = "TypeScript and JavaScript source-adapter"
 
 version.workspace = true
 edition.workspace = true

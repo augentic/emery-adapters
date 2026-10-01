@@ -23,6 +23,7 @@
 //! model` line, the adapter's `surveyed` trace line and `placed by model`
 //! line, and the backend's `completion` lines.
 
+use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{self, Display, Formatter, Write as _};
 use std::path::{Path, PathBuf};
@@ -220,8 +221,8 @@ fn cases(root: &Path, filter: &BTreeSet<String>) -> Result<Vec<Case>, Box<dyn st
             .map_err(|error| format!("{name}: expected.toml: {error}"))?;
         let expected: Expected =
             toml::from_str(&expected).map_err(|error| format!("{name}: {error}"))?;
-        // a fixture the checkout lacks (`r9k` is gitignored) skips its case
-        // unless the case was asked for by name
+        // a fixture the checkout lacks (the vendored ones are gitignored until
+        // fetched) skips its case unless the case was asked for by name
         if !root.join(&expected.fixture).is_dir() {
             if filter.contains(name) {
                 return Err(format!("{name}: no fixture at `{}`", expected.fixture).into());
@@ -1013,6 +1014,7 @@ fn stability(f: &mut Formatter<'_>, label: &str, runs: &[&Run]) -> fmt::Result {
     pairwise(f, "surfaces (entry, stem)", runs, Run::pairs)?;
     pairwise(f, "requirement ids", runs, Run::ids)?;
     pairwise(f, "spec subjects", runs, Run::subjects)?;
+    anchored(f, runs)?;
 
     // what each later revision changed
     for run in runs.iter().skip(1) {
@@ -1055,6 +1057,82 @@ fn pairwise<'r, T: Ord>(
         }
     }
     writeln!(f, "- {label}: {}", cells.join(" · "))
+}
+
+// The requirements every pair of runs anchors alike, as one line in the
+// `pairwise` shape: the pairs the engine's re-mine diff would match — the
+// same stem and a cited `path` in common, one to one, the pair sharing the
+// most anchors first — over the requirements the two revisions hold together.
+// Reads the `sources[].path` that `emery show --format json` carries from
+// grammar `4`; a revision stored under an earlier grammar matches none.
+fn anchored(f: &mut Formatter<'_>, runs: &[&Run]) -> fmt::Result {
+    let mut cells = Vec::new();
+    for (left, first) in runs.iter().enumerate() {
+        for second in runs.iter().skip(left + 1) {
+            let shared = matched(first.requirements(), second.requirements());
+            let union = first.requirements().len() + second.requirements().len() - shared;
+            cells.push(format!("{}↔{} {}", first.n, second.n, Jaccard { shared, union }));
+        }
+    }
+    writeln!(f, "- anchor-matched requirements: {}", cells.join(" · "))
+}
+
+// How many one-to-one pairs of `outgoing` and `incoming` requirements share a
+// stem and cite an anchor in common: every pair scored by the anchors it
+// shares, the highest taken first, ties in position order — the engine's
+// pairing, less its fallback to id.
+fn matched(outgoing: &[Value], incoming: &[Value]) -> usize {
+    let mut scored: Vec<(usize, usize, usize)> = Vec::new();
+    for (out, before) in outgoing.iter().enumerate() {
+        let Some(under) = before["subject"].as_str().and_then(stem) else { continue };
+        for (into, after) in incoming.iter().enumerate() {
+            if after["subject"].as_str().and_then(stem) != Some(under) {
+                continue;
+            }
+            let shared = citations(before)
+                .flat_map(|cited| citations(after).filter(move |other| cited_alike(cited, *other)))
+                .count();
+            if shared > 0 {
+                scored.push((shared, out, into));
+            }
+        }
+    }
+    scored.sort_by_key(|&(shared, out, into)| (Reverse(shared), out, into));
+    let mut outs = BTreeSet::new();
+    let mut intos = BTreeSet::new();
+    for (_, out, into) in scored {
+        if !outs.contains(&out) && !intos.contains(&into) {
+            outs.insert(out);
+            intos.insert(into);
+        }
+    }
+    outs.len()
+}
+
+// A requirement's citations that anchor somewhere: the source and the parsed
+// `path`, as `emery show --format json` spells them.
+fn citations(requirement: &Value) -> impl Iterator<Item = (&str, Anchor<'_>)> {
+    requirement["sources"].as_array().into_iter().flatten().filter_map(|cited| {
+        let source = cited["source"].as_str()?;
+        let anchor = Anchor::parse(cited["path"].as_str()?).ok()?;
+        Some((source, anchor))
+    })
+}
+
+// Two citations anchor at one place when they come from the same source and
+// name the same file, with line ranges that meet, or neither naming lines —
+// the engine's rule, stricter than `overlaps`, which lets a whole-file anchor
+// meet any.
+fn cited_alike((source, a): (&str, Anchor<'_>), (other, b): (&str, Anchor<'_>)) -> bool {
+    source == other
+        && a.path == b.path
+        && match (a.lines, b.lines) {
+            (Some((start, end)), Some((other_start, other_end))) => {
+                start <= other_end && other_start <= end
+            }
+            (None, None) => true,
+            _ => false,
+        }
 }
 
 impl Display for Recall {

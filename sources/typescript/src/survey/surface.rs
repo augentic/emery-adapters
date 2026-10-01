@@ -21,7 +21,7 @@ use super::parse::{
     Arg, Binding, BindingKind, Call, Decorated, Export, ExportKind, Imported, Init, Lines,
     MemberKind, Module, Scope,
 };
-use super::resolve::{Manifest, Resolver, Target};
+use super::resolve::{Manifest, Resolver, Target, normalize};
 use super::{push_unique, unique};
 
 // The bootstrap modules looked for when the manifest names none.
@@ -29,6 +29,11 @@ const BOOTSTRAPS: &[&str] =
     &["src/index.ts", "src/main.ts", "index.ts", "main.ts", "src/server.ts", "src/app.ts"];
 
 const VERBS: &[&str] = &["get", "post", "put", "patch", "delete", "head", "options", "all"];
+
+// The methods that mount what they are handed — `use` a router under a path,
+// any of them a loader over a directory — so a route registered in a mounted
+// module is read under its mount.
+const MOUNTING: &[&str] = &["use", "register", "mount", "plugin"];
 
 // Path segments that version or namespace an API rather than name a surface.
 const PATH_NOISE: &[&str] = &["api", "rest", "internal"];
@@ -507,23 +512,46 @@ pub(super) fn start(tree: &Tree, module: &Module, registered: &[Surface]) -> Sur
 }
 
 // Where each module's routes are mounted: `app.use("/api", ordersRouter(..))`
-// gives `routes/orders.ts` the prefix `/api`.
+// gives `routes/orders.ts` the prefix `/api`; a loader registered over a
+// directory of the tree (`app.register(autoload, { dir: join(__dirname,
+// "routes") })`) gives each module beneath it the path of its directory from
+// there, under the loader's own `prefix` option where it names one, so
+// `routes/api/auth/index.ts` is `/api/auth` and `routes/home.ts` is mounted
+// at the root. The first mount read of a module stands.
 pub(super) fn mounts(tree: &Tree) -> BTreeMap<String, String> {
     let mut mounts = BTreeMap::new();
     for module in tree.modules.values() {
         for call in &module.calls {
-            if call.method() != "use" {
+            if !MOUNTING.contains(&call.method()) {
                 continue;
             }
-            let Some(prefix) = call.literal().filter(|literal| literal.starts_with('/')) else {
-                continue;
-            };
-            for arg in call.args.iter().skip(1) {
-                let Some(head) = arg.root.as_deref().and_then(|root| root.first()) else {
-                    continue;
-                };
-                let Some((target, _)) = tree.exporter(module, head) else { continue };
-                mounts.entry(target.path.clone()).or_insert_with(|| prefix.to_owned());
+            if call.method() == "use"
+                && let Some(prefix) = call.literal().filter(|literal| literal.starts_with('/'))
+            {
+                for arg in call.args.iter().skip(1) {
+                    let Some(head) = arg.root.as_deref().and_then(|root| root.first()) else {
+                        continue;
+                    };
+                    let Some((target, _)) = tree.exporter(module, head) else { continue };
+                    mounts.entry(target.path.clone()).or_insert_with(|| prefix.to_owned());
+                }
+            }
+            for arg in &call.args {
+                let Some(dir) = arg.property("dir").filter(|dir| dir.relative) else { continue };
+                let from = module.path.rsplit_once('/').map_or("", |(dir, _)| dir);
+                let Some(root) = normalize(from, &dir.value) else { continue };
+                let base = arg
+                    .property("prefix")
+                    .or_else(|| arg.property("options.prefix"))
+                    .map_or("", |prefix| prefix.value.as_str());
+                for path in tree.modules.keys() {
+                    let Some(beneath) = path.strip_prefix(&format!("{root}/")) else { continue };
+                    let dirs = beneath.rsplit_once('/').map_or("", |(dirs, _)| dirs);
+                    let prefix = join_route(base, dirs);
+                    if prefix != "/" {
+                        mounts.entry(path.clone()).or_insert(prefix);
+                    }
+                }
             }
         }
     }
