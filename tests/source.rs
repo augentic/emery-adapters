@@ -4552,6 +4552,57 @@ async fn python_type_checking_star() {
     assert!(!start.contains("app/audit.py"), "nothing of `start` reaches it either: {start}");
 }
 
+// A relative import whose module shares a typing module's name — `from
+// .types import Status`, as `.enum`, `.abc`, or `.dataclasses` would — is the
+// tree's own module, not the standard library's: the seam reaches it past
+// the budget, and its declaration is a parser `type` claim.
+#[tokio::test]
+async fn python_relative_typing_name() {
+    let project = scratch();
+    modules(&project, &PY_APP);
+    py_bulk(&project, "app/db.py", "pool = \"o-1\"\n");
+    modules(
+        &project,
+        &[
+            (
+                "app/services/orders.py",
+                "from ..db import pool\nfrom .types import Status\n\n\nasync def \
+                 create_order(body: dict, status: Status = \"new\") -> dict:\n    return {\"id\": \
+                 pool, \"body\": body, \"status\": status}\n\n\ndef find_order(order_id: str) -> \
+                 dict:\n    return {\"id\": order_id, \"pool\": pool}\n",
+            ),
+            (
+                "app/services/types.py",
+                "from typing import Literal\n\nStatus = Literal[\"new\", \"paid\"]\n",
+            ),
+        ],
+    );
+    let survey = py_app_inventory();
+    let neutral = decision();
+    let answer = answer();
+
+    let model = support::run(
+        test_programs::ADAPTER_PYTHON,
+        &project,
+        &["types", "class Inline:\n    id: str\n", "Inline", "Status"],
+        ScriptedModel::answering([&survey, &neutral, &neutral, &neutral, &answer]),
+    )
+    .await;
+
+    let turns = surveyed(PYTHON, &model, 3);
+    let orders = turn_for(&turns, "POST /api/orders");
+    assert!(
+        orders.contains(
+            "; id `orders.post`; reaches `app/services/orders.py`, `app/db.py`, \
+             `app/services/types.py`."
+        ),
+        "{orders}"
+    );
+    laid(orders, &["app/routers/orders.py", "app/services/orders.py"], &[]);
+    assert!(orders.contains("- `app/services/types.py`"), "the module is listed: {orders}");
+    assert!(!orders.contains("could not follow"), "the import is followed: {orders}");
+}
+
 // The service imports a module the tree does not hold and loads another by
 // a computed name, so its seam cannot know what it reaches: the rest of the
 // tree follows the closure — the entry, listed after the store past the

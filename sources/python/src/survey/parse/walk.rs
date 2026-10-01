@@ -634,7 +634,7 @@ impl<'s> Walker<'s> {
         let dots = ".".repeat(usize::try_from(import.level).unwrap_or(0));
         let module = import.module.as_ref().map_or("", |m| m.as_str());
         let specifier = format!("{dots}{module}");
-        let type_only = self.type_checking || typing_module(module);
+        let type_only = self.type_checking || typing_module(&specifier);
         for alias in &import.names {
             let name = alias.name.as_str();
             if name == "*" {
@@ -1010,6 +1010,8 @@ fn decorator_name(expr: &Expr) -> Option<String> {
     callee(expr).map(|callee| callee.method().to_owned())
 }
 
+// Over the specifier as written: a relative one is led by its dots, so
+// `.types` is the tree's own module however its last segment reads.
 fn typing_module(module: &str) -> bool {
     TYPING_MODULES
         .iter()
