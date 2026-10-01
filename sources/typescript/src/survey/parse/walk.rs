@@ -6,16 +6,16 @@ use std::borrow::Cow;
 use oxc_allocator::Allocator;
 use oxc_ast::AstKind;
 use oxc_ast::ast::{
-    Argument, AwaitExpression, BindingPattern, CallExpression, CatchClause, ChainElement, Class,
-    ClassElement, ComputedMemberExpression, ConditionalExpression, Declaration, Decorator,
-    ExportAllDeclaration, ExportDeclaration, ExportDefaultDeclaration,
+    Argument, AwaitExpression, BinaryOperator, BindingPattern, CallExpression, CatchClause,
+    ChainElement, Class, ClassElement, ComputedMemberExpression, ConditionalExpression,
+    Declaration, Decorator, ExportAllDeclaration, ExportDeclaration, ExportDefaultDeclaration,
     ExportDefaultDeclarationKind, ExportFromDeclaration, ExportNamedDeclaration, Expression,
     ExpressionStatement, FormalParameters, IdentifierReference, IfStatement, ImportDeclaration,
     ImportDeclarationSpecifier, ImportExpression, ImportOrExportKind, MethodDefinition,
-    MethodDefinitionKind, NewExpression, ObjectPropertyKind, PropertyDefinition, PropertyKey,
-    ReturnStatement, StaticMemberExpression, SwitchStatement, TSAccessibility, TSEnumDeclaration,
-    TSInterfaceDeclaration, TSType, TSTypeAliasDeclaration, TSTypeAnnotation, TSTypeName,
-    ThrowStatement, UnaryOperator, VariableDeclarator,
+    MethodDefinitionKind, NewExpression, ObjectExpression, ObjectPropertyKind, PropertyDefinition,
+    PropertyKey, ReturnStatement, StaticMemberExpression, SwitchStatement, TSAccessibility,
+    TSEnumDeclaration, TSInterfaceDeclaration, TSType, TSTypeAliasDeclaration, TSTypeAnnotation,
+    TSTypeName, ThrowStatement, UnaryOperator, VariableDeclarator,
 };
 use oxc_ast_visit::{Visit, walk};
 use oxc_parser::Parser;
@@ -24,7 +24,7 @@ use oxc_span::{GetSpan, SourceType, Span};
 use super::{
     Arg, Binding, BindingKind, Call, Callee, ClassDecl, Decision, Decorated, EnvRead, Export,
     ExportKind, Import, Imported, Init, Invocation, Lines, Link, Member, MemberKind, Module,
-    Reexport, Reference, Scope, TypeDecl, TypeKind, Use,
+    Property, Reexport, Reference, Scope, TypeDecl, TypeKind, Use,
 };
 
 // A binding's initializer is kept as its head: its first line, cut to this
@@ -359,6 +359,7 @@ impl<'s> Walker<'s> {
                 root: None,
                 called: false,
                 function: false,
+                properties: Vec::new(),
                 lines,
             };
         };
@@ -367,6 +368,7 @@ impl<'s> Walker<'s> {
             root: head_path(expr),
             called: matches!(core(expr), Core::Call(_) | Core::New(_)),
             function: fn_valued(expr),
+            properties: properties(expr),
             lines,
         }
     }
@@ -1131,6 +1133,85 @@ fn object_path(expr: &Expression<'_>) -> Option<String> {
         }
         _ => None,
     })
+}
+
+// The string-valued properties of an object written in place, each by its
+// dotted key path, nested objects flattened: `{ dir: join(__dirname,
+// "routes"), options: { prefix: "/api" } }` is `dir` and `options.prefix`.
+// Nothing for anything but an object.
+fn properties(expr: &Expression<'_>) -> Vec<Property> {
+    fn collect(object: &ObjectExpression<'_>, prefix: &str, out: &mut Vec<Property>) {
+        for property in &object.properties {
+            let ObjectPropertyKind::ObjectProperty(p) = property else { continue };
+            let Some(name) = key_name(&p.key) else { continue };
+            let key = if prefix.is_empty() { name } else { format!("{prefix}.{name}") };
+            match bare(&p.value) {
+                Expression::ObjectExpression(nested) => collect(nested, &key, out),
+                value => {
+                    if let Some(literal) = string_value(value) {
+                        out.push(Property {
+                            key,
+                            value: literal,
+                            relative: false,
+                        });
+                    } else if let Some(path) = module_relative(value) {
+                        out.push(Property {
+                            key,
+                            value: path,
+                            relative: true,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    let Expression::ObjectExpression(object) = bare(expr) else { return Vec::new() };
+    let mut out = Vec::new();
+    collect(object, "", &mut out);
+    out
+}
+
+// A path spelled from the module's own directory, as the segments past it:
+// `join(__dirname, "a", "b")` or `path.resolve(import.meta.dirname, "a")`
+// over string literals, `${__dirname}/a`, or `__dirname + "/a"`.
+fn module_relative(expr: &Expression<'_>) -> Option<String> {
+    match bare(expr) {
+        Expression::CallExpression(call) => {
+            if !matches!(callee(&call.callee)?.method(), "join" | "resolve") {
+                return None;
+            }
+            let mut arguments = call.arguments.iter().map(Argument::as_expression);
+            if !arguments.next()?.is_some_and(is_module_dir) {
+                return None;
+            }
+            let segments: Option<Vec<String>> =
+                arguments.map(|argument| argument.and_then(string_value)).collect();
+            Some(segments?.join("/"))
+        }
+        Expression::TemplateLiteral(template) => {
+            let [head] = template.expressions.as_slice() else { return None };
+            let [lead, tail] = template.quasis.as_slice() else { return None };
+            (is_module_dir(head) && lead.value.cooked.is_some_and(|lead| lead.is_empty()))
+                .then(|| tail.value.cooked.map(|tail| tail.to_string()))
+                .flatten()
+        }
+        Expression::BinaryExpression(binary) if binary.operator == BinaryOperator::Addition => {
+            is_module_dir(&binary.left).then(|| string_value(&binary.right)).flatten()
+        }
+        _ => None,
+    }
+}
+
+// `__dirname`, or `import.meta.dirname`: the directory of the module itself.
+fn is_module_dir(expr: &Expression<'_>) -> bool {
+    match bare(expr) {
+        Expression::Identifier(id) => id.name == "__dirname",
+        Expression::StaticMemberExpression(member) => {
+            member.property.name == "dirname"
+                && matches!(bare(&member.object), Expression::ImportMeta(_))
+        }
+        _ => false,
+    }
 }
 
 // A function, an object with a function-valued property or a method, or a

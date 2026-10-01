@@ -221,7 +221,7 @@ fn alias<'s>(pattern: &str, specifier: &'s str) -> Option<&'s str> {
 
 // `path` joined beneath `dir`, `.` and `..` segments folded; `None` when it
 // climbs above the root.
-fn normalize(dir: &str, path: &str) -> Option<String> {
+pub(super) fn normalize(dir: &str, path: &str) -> Option<String> {
     let mut segments: Vec<&str> = Vec::new();
     for segment in dir.split('/').chain(path.split('/')) {
         match segment {

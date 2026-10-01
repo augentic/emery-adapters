@@ -1080,6 +1080,121 @@ async fn typescript_survey_stem_derived() {
     assert!(!turns[0].contains("api-orders"), "the survey's stem gave way: {}", turns[0]);
 }
 
+// A loader registered over a directory of the tree — `register(autoload, {
+// dir: join(__dirname, "routes") })` — mounts each module beneath it at the
+// path of its directory from there, under the loader's `prefix` option where
+// it names one, so a route's resource is read from its directory and the
+// survey's stem for the literal alone gives way: `/login` registered in
+// `routes/api/auth/index.ts` is `auth`, as `/daily` in `admin/reports/` under
+// `/internal` is `reports`, while a route on `/` at the root or under a
+// namespace alone keeps the survey's.
+const AUTOLOAD: [(&str, &str); 7] = [
+    (
+        "src/server.ts",
+        "import Fastify from \"fastify\";\nimport { app } from \"./app\";\n\nconst server = \
+         Fastify();\nserver.register(app);\nserver.listen({ port: 3000 });\n",
+    ),
+    (
+        "src/app.ts",
+        "import path from \"node:path\";\nimport autoload from \"@fastify/autoload\";\nimport type \
+         { FastifyInstance } from \"fastify\";\n\nexport async function app(fastify: \
+         FastifyInstance) {\n  fastify.register(autoload, {\n    dir: \
+         path.join(import.meta.dirname, \"routes\"),\n    autoHooks: true\n  });\n  \
+         fastify.register(autoload, {\n    dir: __dirname + \"/admin\",\n    options: { prefix: \
+         \"/internal\" }\n  });\n}\n",
+    ),
+    (
+        "src/routes/home.ts",
+        "import type { FastifyInstance } from \"fastify\";\n\nexport default async function \
+         (fastify: FastifyInstance) {\n  fastify.get(\"/\", async () => ({ ok: true }));\n}\n",
+    ),
+    (
+        "src/routes/api/index.ts",
+        "import type { FastifyInstance } from \"fastify\";\n\nexport default async function \
+         (fastify: FastifyInstance) {\n  fastify.get(\"/\", async () => ({ version: 1 }));\n}\n",
+    ),
+    (
+        "src/routes/api/auth/index.ts",
+        "import type { FastifyPluginAsync } from \"fastify\";\n\nconst plugin: FastifyPluginAsync \
+         = async (fastify) => {\n  fastify.post(\"/login\", async () => {\n    return { token: \
+         \"t\" };\n  });\n};\n\nexport default plugin;\n",
+    ),
+    (
+        "src/routes/api/users/index.ts",
+        "import type { FastifyInstance } from \"fastify\";\n\nexport default async function \
+         (fastify: FastifyInstance) {\n  fastify.get(\"/:id\", async () => ({ id: 1 }));\n  \
+         fastify.put(\"/update-password\", async () => ({ ok: true }));\n}\n",
+    ),
+    (
+        "src/admin/reports/index.ts",
+        "import type { FastifyInstance } from \"fastify\";\n\nexport default async function \
+         (fastify: FastifyInstance) {\n  fastify.get(\"/daily\", async () => ({ rows: [] \
+         }));\n}\n",
+    ),
+];
+
+#[tokio::test]
+async fn typescript_autoload_routes() {
+    let project = scratch();
+    modules(&project, &AUTOLOAD);
+    let survey = inventory(
+        &[
+            ("GET /", "src/routes/home.ts#L4", "home"),
+            ("GET /api", "src/routes/api/index.ts#L4", "api"),
+            ("POST /api/auth/login", "src/routes/api/auth/index.ts#L4-L6", "login"),
+            ("GET /api/users/:id", "src/routes/api/users/index.ts#L4", "users"),
+            (
+                "PUT /api/users/update-password",
+                "src/routes/api/users/index.ts#L5",
+                "update-password",
+            ),
+            ("GET /internal/reports/daily", "src/admin/reports/index.ts#L4", "daily"),
+        ],
+        &[],
+    );
+    let login = claim("auth.login");
+    let answer = answer();
+
+    let model = support::run(
+        test_programs::ADAPTER_TYPESCRIPT,
+        &project,
+        &[],
+        ScriptedModel::answering([&survey, &login, &answer]),
+    )
+    .await;
+
+    let turns = surveyed(&model, 1);
+    assert_eq!(
+        surfaces(&turns[0]),
+        [
+            ("start", "src/server.ts", "start"),
+            ("GET /", "src/routes/home.ts", "home"),
+            ("GET /api", "src/routes/api/index.ts", "api"),
+            ("POST /api/auth/login", "src/routes/api/auth/index.ts", "auth"),
+            ("GET /api/users/:id", "src/routes/api/users/index.ts", "users"),
+            ("PUT /api/users/update-password", "src/routes/api/users/index.ts", "users"),
+            ("GET /internal/reports/daily", "src/admin/reports/index.ts", "reports"),
+        ]
+    );
+    for id in [
+        "id `home`;",
+        "id `api`;",
+        "id `auth`;",
+        "id `users.get-id`;",
+        "id `users.put-update-password`;",
+        "id `reports`;",
+    ] {
+        assert!(turns[0].contains(id), "{id} is in the brief: {}", turns[0]);
+    }
+    for stem in ["`login`", "`update-password`", "`daily`"] {
+        assert!(
+            !turns[0].contains(&format!("stem {stem}")),
+            "the survey's stem gave way: {}",
+            turns[0]
+        );
+    }
+}
+
 // The survey names a surface under `start` — the bootstrap's stem, which
 // the caller names itself — and the finding sends the answer back for the
 // stem of what a caller does through the surface; the corrected answer is
