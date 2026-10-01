@@ -2822,6 +2822,66 @@ async fn python_bootstrap() {
     );
 }
 
+// A console script whose function the entry module imports from a module of
+// the tree rather than declares — `ledger = "ledger.cli:cli"` over a `cli.py`
+// of `from .app import cli` — is still the bootstrap: the manifest names a
+// running entry, and a module of the tree declares what it runs. The
+// `start` reaches the module the function is imported from.
+#[tokio::test]
+async fn python_bootstrap_imported() {
+    let project = scratch();
+    modules(
+        &project,
+        &[
+            (
+                "pyproject.toml",
+                "[project]\nname = \"ledger\"\n\n[project.scripts]\nledger = \"ledger.cli:cli\"\n",
+            ),
+            ("ledger/__init__.py", ""),
+            ("ledger/cli.py", "from .app import cli\n"),
+            (
+                "ledger/app.py",
+                "import click\n\nfrom .importer import run_import\n\n\n@click.group()\ndef cli() -> \
+                 None:\n    pass\n\n\n@cli.command(\"import\")\n@click.argument(\"file\")\ndef \
+                 import_command(file: str) -> None:\n    run_import(file)\n",
+            ),
+            ("ledger/importer.py", "def run_import(file: str) -> None:\n    print(file)\n"),
+        ],
+    );
+    let survey = inventory(&[("import command", "ledger/app.py#L11-L14", "ledger-import")], &[]);
+    let answer = claim("import.file");
+
+    let model = support::run(
+        test_programs::ADAPTER_PYTHON,
+        &project,
+        &[],
+        ScriptedModel::answering([&survey, &answer, &answer]),
+    )
+    .await;
+
+    let seen = model.seen();
+    let facts = &seen[0].messages[0];
+    assert!(
+        facts.contains(
+            "The bootstrap — the entry that runs something — is `ledger/cli.py`: the console \
+             script `ledger` calls its `cli()`."
+        ),
+        "{facts}"
+    );
+    let turns = surveyed(PYTHON, &model, 1);
+    assert_eq!(
+        surfaces(&turns[0]),
+        [("start", "ledger/cli.py", "start"), ("import command", "ledger/app.py", "import")]
+    );
+    assert!(
+        turns[0].contains(
+            "the process bootstrap, run by the console script `ledger`, which calls `cli()`: "
+        ) && turns[0].contains("; id `start`; reaches `ledger/app.py`."),
+        "{}",
+        turns[0]
+    );
+}
+
 // An entry that only declares — a factory a server imports — is no
 // bootstrap, so the tree has no `start` and its surfaces are what the
 // factory registers.

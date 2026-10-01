@@ -177,12 +177,13 @@ impl Tree {
     /// The bootstrap module and how it runs: the first of the entries the
     /// manifest's scripts name, then the conventional entries the tree
     /// holds, then the one module of a tree of one, that a caller starts
-    /// something through — a script whose function the module declares, a
-    /// `__main__` guard, a call at module level whose value is discarded, or
-    /// a module-level binding constructed from a package's class or a
-    /// function of the tree (`app = FastAPI()`, `app = create_app()`). An
-    /// entry that only declares is a library's, and a tree with no entry
-    /// that runs has no bootstrap.
+    /// something through — a script whose function the module declares, or
+    /// imports from a module of the tree that does (`from .app import
+    /// cli`), a `__main__` guard, a call at module level whose value is
+    /// discarded, or a module-level binding constructed from a package's
+    /// class or a function of the tree (`app = FastAPI()`, `app =
+    /// create_app()`). An entry that only declares is a library's, and a
+    /// tree with no entry that runs has no bootstrap.
     pub(super) fn bootstrap(&self) -> Option<(&Module, Runs)> {
         let scripts =
             self.manifest.entries(&self.resolver).into_iter().filter_map(|(entry, function)| {
@@ -194,7 +195,7 @@ impl Tree {
                     .find(|(_, target)| self.resolver.entry(target).as_deref() == Some(&entry))
                     .map(|(name, _)| name.clone());
                 let runs = match (function, script) {
-                    (Some(function), Some(script)) if module.binding(&function, &[]).is_some() => {
+                    (Some(function), Some(script)) if self.tree_binding(module, &function) => {
                         Some(Runs::Script(script, function))
                     }
                     _ => self.runs_at_load(module),
@@ -242,6 +243,16 @@ impl Tree {
             from_package || self.tree_function(module, head)
         });
         (discards || constructs).then_some(Runs::Load)
+    }
+
+    // Whether `name` in `module` is bound by the tree: declared here, or
+    // imported from a module of the tree that exports it — what a console
+    // script's target names through an entry that only imports it.
+    fn tree_binding(&self, module: &Module, name: &str) -> bool {
+        module.binding(name, &[]).is_some()
+            || self
+                .exporter(module, name)
+                .is_some_and(|(target, exported)| target.export(&exported).is_some())
     }
 
     // Whether `name` in `module` is a function of the tree: declared here,
