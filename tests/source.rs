@@ -3468,6 +3468,84 @@ async fn python_registrations() {
     }
 }
 
+// A route registered by a call named for its verb is a registration under
+// every verb alike: `web.patch(..)` hands its handler as `web.post(..)`
+// does. `patch` is structural only spelled as `unittest.mock`'s — bare or
+// through `mock` — so a stubs module handing lambdas to it registers
+// nothing.
+#[tokio::test]
+async fn python_registrations_patch() {
+    let project = scratch();
+    modules(
+        &project,
+        &[
+            ("app/__init__.py", ""),
+            (
+                "app/server.py",
+                "from aiohttp import web\n\nfrom .handlers import create, update\n\napp = \
+                 web.Application()\napp.add_routes([\n    web.post(\"/orders\", create),\n    \
+                 web.patch(\"/orders/{id}\", update),\n])\n",
+            ),
+            (
+                "app/handlers.py",
+                "async def create(request):\n    return {}\n\n\nasync def update(request):\n    \
+                 return {}\n",
+            ),
+            (
+                "app/stubs.py",
+                "from unittest import mock\nfrom unittest.mock import patch\n\n\ndef \
+                 stub_create():\n    return patch(\"app.handlers.create\", lambda request: \
+                 {})\n\n\ndef stub_update():\n    return mock.patch(\"app.handlers.update\", \
+                 lambda request: {})\n",
+            ),
+        ],
+    );
+    let survey = inventory(
+        &[
+            ("POST /orders", "app/server.py#L7", "orders"),
+            ("PATCH /orders/{id}", "app/server.py#L8", "orders"),
+        ],
+        &[],
+    );
+    let answer = claim("orders.update");
+
+    let model = support::run(
+        test_programs::ADAPTER_PYTHON,
+        &project,
+        &[],
+        ScriptedModel::answering([&survey, &answer, &answer]),
+    )
+    .await;
+
+    let seen = model.seen();
+    let facts = &seen[0].messages[0];
+    for fact in [
+        "- `app/server.py#L7` — `web.post` led by `\"/orders\"` handed a function, through \
+         `aiohttp`",
+        "- `app/server.py#L8` — `web.patch` led by `\"/orders/{id}\"` handed a function, through \
+         `aiohttp`",
+    ] {
+        assert!(facts.contains(fact), "{fact} is among the facts: {facts}");
+    }
+    assert!(!facts.contains("app/stubs.py#"), "a mock's `patch` registers nothing: {facts}");
+    let turns = surveyed(PYTHON, &model, 1);
+    assert_eq!(
+        surfaces(&turns[0]),
+        [
+            ("POST /orders", "app/server.py", "orders"),
+            ("PATCH /orders/{id}", "app/server.py", "orders"),
+        ]
+    );
+    for note in [
+        ": registered L7 at module level; through `aiohttp`; id `orders.create`; reaches \
+         `app/handlers.py`.",
+        ": registered L8 at module level; through `aiohttp`; id `orders.update`; reaches \
+         `app/handlers.py`.",
+    ] {
+        assert!(turns[0].contains(note), "{note} is in the brief: {}", turns[0]);
+    }
+}
+
 // The survey turn carries what the parser read of the tree, for the model to
 // name its surfaces from: the manifest and the scripts it installs, the
 // bootstrap and how it runs, every call outside a handler that hands a

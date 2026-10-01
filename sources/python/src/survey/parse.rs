@@ -41,7 +41,6 @@ const STRUCTURAL: &[&str] = &[
     "setdefault",
     "Depends",
     "Security",
-    "patch",
     "raises",
     "fixture",
     "parametrize",
@@ -51,6 +50,10 @@ const STRUCTURAL: &[&str] = &[
     "mapped_column",
     "relationship",
 ];
+
+// `unittest.mock`'s `patch` and pytest-mock's, by their spelling whole. The
+// same name on an application, a router, or an HTTP client is a verb.
+const MOCKING: &[&str] = &["patch", "mock.patch", "unittest.mock.patch", "mocker.patch"];
 
 // Hooks on the process, a connection, or the application's lifecycle, not
 // registrations. Matched by the tail of the dotted spelling.
@@ -549,7 +552,8 @@ impl Callee {
     }
 
     pub fn structural(&self) -> bool {
-        STRUCTURAL.contains(&self.method()) || hooks(&self.dotted())
+        let dotted = self.dotted();
+        STRUCTURAL.contains(&self.method()) || MOCKING.contains(&dotted.as_str()) || hooks(&dotted)
     }
 
     pub fn path(self) -> Vec<String> {
