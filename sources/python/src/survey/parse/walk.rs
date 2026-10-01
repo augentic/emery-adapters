@@ -1,5 +1,6 @@
-//! Walks one module's syntax tree into its `Module`: the one file that names
-//! a parser type.
+//! Walks one module's syntax tree into its `Module`.
+//!
+//! The one file that names a parser type.
 
 use ruff_python_ast::visitor::{self, Visitor};
 use ruff_python_ast::{
@@ -17,13 +18,13 @@ use super::{
     Reference, Scope, TestDef, TypeDecl, TypeKind, Use,
 };
 
-// A binding's initializer is kept as its head: its first line, cut to this
-// many characters — a literal, a default, a small expression a criterion
-// could quote. A decision's text is cut the same way.
+// An initializer is kept as its head: its first line, cut to this many
+// characters, enough for a literal or a default a criterion could quote. A
+// decision's text is cut the same way.
 const INIT_TEXT: usize = 160;
 
-// The calls that defer or repeat what they are handed: a decision about
-// when the code runs.
+// Calls that defer or repeat what they are handed: a decision about when
+// the code runs.
 const TIMERS: &[&str] = &[
     "sleep",
     "call_later",
@@ -40,7 +41,7 @@ const TIMERS: &[&str] = &[
     "timeout",
 ];
 
-// The calls that return their literal argument as a value, so `int("3000")`
+// Calls that return their literal argument as a value, so `int("3000")`
 // spells a value as `3000` does.
 const WRAPPERS: &[&str] = &[
     "int",
@@ -59,7 +60,7 @@ const WRAPPERS: &[&str] = &[
     "Fraction",
 ];
 
-// The modules whose imports are declarations' — followed nowhere, as a
+// Modules whose imports are declarations', followed nowhere, as a
 // `TYPE_CHECKING` import is.
 const TYPING_MODULES: &[&str] = &[
     "typing",
@@ -72,12 +73,12 @@ const TYPING_MODULES: &[&str] = &[
     "enum",
 ];
 
-// The calls that declare a type by a name they are handed.
+// Calls that declare a type by a name they are handed.
 const TYPE_ALIASES: &[&str] = &["TypeVar", "NewType", "ParamSpec", "TypeVarTuple"];
 const TYPE_FUNCTIONAL: &[&str] =
     &["TypedDict", "NamedTuple", "namedtuple", "Enum", "IntEnum", "StrEnum", "Flag", "IntFlag"];
 
-// The heads a module-level subscript is a type alias under.
+// Heads a module-level subscript is a type alias under.
 const TYPING_HEADS: &[&str] = &[
     "Literal",
     "Union",
@@ -100,19 +101,18 @@ const TYPING_HEADS: &[&str] = &[
     "type",
 ];
 
-// The calls that load a module by name: a literal name is an import, a
-// computed one is dynamic.
+// Calls that load a module by name: a literal name is an import, a computed
+// one is dynamic.
 const LOADERS: &[&str] = &["import_module", "__import__", "load_entry_point"];
 
-// The calls that walk packages or entry points: dynamic, whatever they are
+// Calls that walk packages or entry points: dynamic, whatever they are
 // handed.
 const WALKERS: &[&str] = &["iter_modules", "walk_packages", "entry_points", "autodiscover_modules"];
 
-// The data files a string may name, by extension: the survey's `is_data`.
+// Mirrors the survey's `is_data`.
 const DATA_EXTENSIONS: &[&str] = &["json", "yaml", "yml", "toml", "csv", "ini"];
 
-// Reads `text`, the module at `path`, as far as the parser gets: its exports
-// unsettled and its text unset, which `parse` finishes.
+// Exports unsettled and `text` unset; `parse` finishes both.
 pub(super) fn read(path: &str, text: &str) -> Module {
     let parsed = parse_unchecked_source(text, PySourceType::Python);
     if let Some(first) = parsed.errors().first() {
@@ -147,21 +147,21 @@ struct Walker<'s> {
     frames: Vec<Frame>,
     classes: Vec<ClassContext>,
     next_frame: u32,
-    // how many argument lists enclose the node being walked, within the
-    // current function body
+    // How many argument lists enclose the node being walked, within the
+    // current function body.
     arg_nesting: usize,
-    // for each call being walked, whether a function among its arguments is
-    // a handler, so its body runs one depth in
+    // For each call being walked, whether a function among its arguments is
+    // a handler, so its body runs one depth in.
     positions: Vec<bool>,
-    // the call an expression statement discards the value of
+    // The call an expression statement discards the value of.
     discarded: Option<TextRange>,
-    // the call an `await` waits on
+    // The call an `await` waits on.
     awaited: Option<TextRange>,
-    // the calls a further, non-structural call in their chain is made on
+    // The calls a further, non-structural call in their chain is made on.
     chained: Vec<TextRange>,
-    // the name the next lambda frame takes: the variable it is assigned to
+    // The name the next lambda frame takes: the variable it is assigned to.
     pending_name: Option<String>,
-    // within `if TYPE_CHECKING:`, where imports are declarations'
+    // Within `if TYPE_CHECKING:`, where imports are declarations'.
     type_checking: bool,
 }
 
@@ -174,7 +174,7 @@ struct Frame {
 
 struct ClassContext {
     name: String,
-    // how many frames enclosed the class: a `def` at that many is a method
+    // How many frames enclosed the class: a `def` at that many is a method.
     frames: usize,
 }
 
@@ -200,13 +200,11 @@ impl<'s> Walker<'s> {
         self.slice(range.start().to_u32(), range.end().to_u32())
     }
 
-    // the first line of `range`, cut as an initializer's head is
+    // The first line of `range`, cut as an initializer's head is.
     fn excerpt(&self, range: TextRange) -> String {
         first_line(self.text_of(range))
     }
 
-    // what an initializer is and its head, `Init::Other` and none for no
-    // initializer
     fn initializer(&self, value: Option<&Expr>) -> (Init, Option<String>) {
         value.map_or((Init::Other, None), |value| {
             (classify(value), Some(self.excerpt(value.range())))
@@ -221,8 +219,8 @@ impl<'s> Walker<'s> {
         self.frames.is_empty() && self.classes.is_empty()
     }
 
-    // directly within a class body: a `def` here is a method, an assignment
-    // a field
+    // Directly within a class body: a `def` here is a method, an assignment
+    // a field.
     fn in_class_body(&self) -> Option<&str> {
         self.classes
             .last()
@@ -258,6 +256,8 @@ impl<'s> Walker<'s> {
         });
     }
 
+    // A function positioned as a handler argument, or decorated as one, runs
+    // one depth in.
     fn enter_function(&mut self, name: Option<String>, params: Option<&Parameters>, handler: bool) {
         let positioned = self.arg_nesting > 0 && self.positions.last().copied().unwrap_or(false);
         let raise = positioned || handler;
@@ -302,6 +302,7 @@ impl<'s> Walker<'s> {
             def.decorator_list.iter().filter_map(|d| decorator_name(&d.expression)).collect();
         let handler = decorators.iter().any(|decorator| !super::shapes(decorator));
 
+        // a method is its class's member; a function a binding, and an export at module level
         if let Some(class) = &class {
             let end = def.body.first().map_or_else(|| range.end(), Ranged::start);
             let def_start = def
@@ -338,6 +339,8 @@ impl<'s> Walker<'s> {
                 self.export(&name, ExportKind::Function, range);
             }
         }
+
+        // record the decorations and the test
         for decorator in &def.decorator_list {
             self.decorate(class.as_deref(), Some(&name), decorator, lines);
         }
@@ -345,6 +348,7 @@ impl<'s> Walker<'s> {
             self.module.tests.push(test);
         }
 
+        // walk the decorators, the signature, and the body
         for decorator in &def.decorator_list {
             self.decorator_parts(decorator);
         }
@@ -357,8 +361,8 @@ impl<'s> Walker<'s> {
         self.leave_function();
     }
 
-    // a `def` read as a test: `test_*` at module level, or in a class
-    // named as a suite is; one marked skipped states nothing
+    // A suite is a class named `Test*` or extending a `TestCase`. A skipped
+    // test states nothing.
     fn test_def(
         &self, def: &StmtFunctionDef, class: Option<&str>, decorators: &[String],
     ) -> Option<TestDef> {
@@ -383,7 +387,7 @@ impl<'s> Walker<'s> {
         })
     }
 
-    // the offset of the first non-blank character after `offset`
+    // The offset of the first non-blank character after `offset`.
     fn after(&self, offset: TextSize) -> TextSize {
         let start = offset.to_u32();
         let skipped =
@@ -414,8 +418,7 @@ impl<'s> Walker<'s> {
         let header_end = class.body.first().map_or_else(|| range.end(), Ranged::start);
         let header = self.slice(header_start.to_u32(), header_end.to_u32()).trim_end().to_owned();
 
-        // a class nested in another's body is one line of the outer class's
-        // declaration — a `Meta`, a `Config` — and no class of the module's
+        // a nested class is a member of the outer class, not a class of the module
         if let Some(outer) = self.in_class_body().map(str::to_owned) {
             if let Some(decl) = self.module.classes.iter_mut().rev().find(|c| c.name == outer) {
                 decl.members.push(Member {
@@ -434,8 +437,6 @@ impl<'s> Walker<'s> {
                 range,
             );
             if self.at_module() {
-                // an enumeration, a typed mapping, a protocol is a type the
-                // caller copies, not a class it calls
                 let kind =
                     if super::declares_data(&bases) { ExportKind::Type } else { ExportKind::Class };
                 self.export(&name, kind, range);
@@ -504,10 +505,10 @@ impl<'s> Walker<'s> {
         });
     }
 
-    // walks what a decorator references — its head and its arguments —
-    // without recording its own call, which `decorate` has recorded as the
-    // decoration: `@router.get("", response_model=Page)` registers nothing
-    // beyond the `def` it decorates, however many classes it is handed
+    // Walks the decorator's head and arguments without recording its call:
+    // `decorate` has recorded it as the decoration, and
+    // `@router.get("", response_model=Page)` registers nothing beyond the
+    // `def`, however many classes it is handed.
     fn decorator_parts(&mut self, decorator: &'s Decorator) {
         match &decorator.expression {
             Expr::Call(call) => {
@@ -518,7 +519,6 @@ impl<'s> Walker<'s> {
         }
     }
 
-    // records the call, the call being walked, and answers it
     fn record_call(&mut self, call: &ExprCall) -> Option<&Call> {
         let range = call.range();
         let callee = callee(&call.func)?;
@@ -646,8 +646,6 @@ impl<'s> Walker<'s> {
         }
     }
 
-    // `__all__ = [..]` at module level, annotated or not: the names the
-    // module declares exported
     fn declare_all(&mut self, target: &Expr, value: &Expr) {
         if name_of(target) == Some("__all__") && self.at_module() {
             self.module.all = Some(listed(value));
@@ -697,8 +695,7 @@ impl<'s> Walker<'s> {
         self.visit_expr(&assign.target);
     }
 
-    // binds one assignment target: a name at module, function, or class
-    // scope, or `self.<name>` within a method
+    // A `self.<name>` target within a method is a field of the class.
     fn target(
         &mut self, target: &Expr, annotation: Option<&Expr>, value: Option<&Expr>, range: TextRange,
     ) {
@@ -709,8 +706,6 @@ impl<'s> Walker<'s> {
             Expr::Name(name) => {
                 let name = name.id.as_str().to_owned();
                 if let Some(class) = self.in_class_body().map(str::to_owned) {
-                    // the statement whole, as a field's default is part of
-                    // what the class declares
                     let signature = self.excerpt(range);
                     let lines = self.lines(range);
                     if let Some(decl) =
@@ -797,7 +792,6 @@ impl<'s> Walker<'s> {
             self.module.main_guard = Some(self.lines(stmt.range()));
         }
         let type_checking = is_type_checking(&stmt.test);
-        // a type-checking guard decides nothing at runtime
         if !type_checking {
             let text = format!("if {}", self.excerpt(stmt.test.range()));
             self.decide(stmt.range(), text);
@@ -996,7 +990,6 @@ fn hidden(name: &str) -> bool {
     name.starts_with('_') && !(name.starts_with("__") && name.ends_with("__"))
 }
 
-// The names a `__all__` list or tuple spells.
 fn listed(value: &Expr) -> Vec<String> {
     let elements = match value {
         Expr::List(list) => &list.elts,
@@ -1013,8 +1006,6 @@ fn name_of(expr: &Expr) -> Option<&str> {
     }
 }
 
-// The last name of a decorator: `route` for `@app.route("/")`, `property`
-// for `@property`, `setter` for `@name.setter`.
 fn decorator_name(expr: &Expr) -> Option<String> {
     callee(expr).map(|callee| callee.method().to_owned())
 }
@@ -1025,7 +1016,6 @@ fn typing_module(module: &str) -> bool {
         .any(|typing| module == *typing || module.starts_with(&format!("{typing}.")))
 }
 
-// `__name__ == "__main__"`, either way round.
 fn is_main_guard(test: &Expr) -> bool {
     let Expr::Compare(compare) = test else { return false };
     let [left, right] = compare.operands.as_ref() else { return false };
@@ -1035,13 +1025,10 @@ fn is_main_guard(test: &Expr) -> bool {
     (dunder(left) && main(right)) || (dunder(right) && main(left))
 }
 
-// `TYPE_CHECKING`, bare or under `typing`.
 fn is_type_checking(test: &Expr) -> bool {
     matches!(head_path(test).as_deref(), Some([.., last]) if last == "TYPE_CHECKING")
 }
 
-// What an assignment declares as a type: a `TypeVar`, a functional
-// `TypedDict` or `Enum`, a typing subscript, or a union of names.
 fn type_kind(value: Option<&Expr>) -> Option<TypeKind> {
     let value = value?;
     match value {
@@ -1066,11 +1053,9 @@ fn type_kind(value: Option<&Expr>) -> Option<TypeKind> {
     }
 }
 
-// A name, an attribute path, a typing subscript, `None`, or a union of
-// those: what a type alias is written over.
+// What a type alias is written over; a string is a forward reference.
 fn type_like(expr: &Expr) -> bool {
     match expr {
-        // a string is a forward reference
         Expr::Name(_) | Expr::Attribute(_) | Expr::NoneLiteral(_) | Expr::StringLiteral(_) => true,
         Expr::Subscript(subscript) => type_like(&subscript.value),
         Expr::BinOp(binop) if binop.op == Operator::BitOr => {
@@ -1080,7 +1065,6 @@ fn type_like(expr: &Expr) -> bool {
     }
 }
 
-// The first line of a body's docstring, if it opens with one.
 fn docstring(body: &[Stmt]) -> Option<&str> {
     let Stmt::Expr(expr) = body.first()? else { return None };
     let Expr::StringLiteral(literal) = &*expr.value else { return None };
@@ -1088,8 +1072,7 @@ fn docstring(body: &[Stmt]) -> Option<&str> {
     (!text.is_empty()).then_some(text)
 }
 
-// What is called under the wrappers that change nothing about it: `await`
-// and `not`.
+// The expression under `await` and `not`, which change nothing about it.
 enum Core<'b> {
     Call(&'b ExprCall),
     Other(&'b Expr),
@@ -1104,9 +1087,8 @@ fn core(expr: &Expr) -> Core<'_> {
     }
 }
 
-// What an initializer is: a function first, whatever it reads; then an
-// environment read, whatever it does with it; then a pattern, a value over
-// literals, a call by what it is handed, a reference.
+// Precedence: a function whatever it reads, then an environment read
+// whatever it does with it, then the rest.
 fn classify(expr: &Expr) -> Init {
     if matches!(expr, Expr::Lambda(_)) {
         return Init::Function;
@@ -1123,8 +1105,6 @@ fn classify(expr: &Expr) -> Init {
     }
 }
 
-// A call is a definition when it is handed something spelled in place and
-// no function, a construction otherwise.
 fn invoked(arguments: &Arguments) -> Init {
     let mut values = values(arguments);
     let spelled = values.clone().any(spelled);
@@ -1135,9 +1115,6 @@ fn values(arguments: &Arguments) -> impl Iterator<Item = &Expr> + Clone {
     arguments.args.iter().chain(arguments.keywords.iter().map(|keyword| &keyword.value))
 }
 
-// A literal, or an expression over literals: arithmetic, a list, tuple, set,
-// or dict holding literals, an f-string over literals, a wrapper call such
-// as `int(..)`.
 fn literal(expr: &Expr) -> bool {
     match expr {
         Expr::BooleanLiteral(_)
@@ -1168,10 +1145,9 @@ fn literal(expr: &Expr) -> bool {
     }
 }
 
-// A dict or list written out as settings are: at least one value a literal,
-// every other one a name, an attribute path, a lambda, or settings again —
-// never a call, a comprehension, or a splat, which make it a construction
-// or a derivation.
+// Written out as settings are: at least one value a literal, every other a
+// name, an attribute path, a lambda, or settings again. A call, a
+// comprehension, or a splat makes it a construction or a derivation.
 fn settings(expr: &Expr) -> bool {
     fn plain(expr: &Expr) -> bool {
         match expr {
@@ -1209,7 +1185,6 @@ fn settings(expr: &Expr) -> bool {
     any && all
 }
 
-// A wrapper call over literals: `int("3000")`, `timedelta(hours=2)`.
 fn wraps(call: &ExprCall) -> bool {
     callee(&call.func).is_some_and(|callee| WRAPPERS.contains(&callee.method()))
         && !(call.arguments.args.is_empty() && call.arguments.keywords.is_empty())
@@ -1220,8 +1195,7 @@ fn all_literal(arguments: &Arguments) -> bool {
     values(arguments).all(literal)
 }
 
-// An argument spelled in place — a literal, or a list, tuple, set, dict, or
-// f-string written out whatever it holds — rather than passed by name.
+// Spelled in place, whatever a container holds, rather than passed by name.
 fn spelled(expr: &Expr) -> bool {
     match expr {
         Expr::List(_) | Expr::Tuple(_) | Expr::Set(_) | Expr::Dict(_) | Expr::FString(_) => true,
@@ -1233,14 +1207,12 @@ fn is_compile(func: &Expr) -> bool {
     callee(func).is_some_and(|callee| callee.method() == "compile" && callee.head == "re")
 }
 
-// `os.environ`, or `environ` imported from `os`.
 fn is_environ(expr: &Expr) -> bool {
     matches!(head_path(expr).as_deref(), Some([head]) if head == "environ")
         || matches!(head_path(expr).as_deref(), Some([os, environ]) if os == "os" && environ == "environ")
 }
 
-// The key an environment-reading call names: `os.getenv("K")`,
-// `os.environ.get("K")`, `environ.get("K")`, `getenv("K")`.
+// `os.getenv("K")`, `os.environ.get("K")`, `environ.get("K")`, `getenv("K")`.
 fn env_key(call: &ExprCall) -> Option<String> {
     let callee = callee(&call.func)?;
     let reads = match callee.method() {
@@ -1254,7 +1226,7 @@ fn env_key(call: &ExprCall) -> Option<String> {
     reads.then(|| call.arguments.args.first().and_then(string_value)).flatten()
 }
 
-// Whether an expression reads the environment anywhere within it.
+// Anywhere within the expression.
 fn reads_env(expr: &Expr) -> bool {
     struct Finder(bool);
 
@@ -1274,8 +1246,8 @@ fn reads_env(expr: &Expr) -> bool {
     finder.0
 }
 
-// An initializer's first line, cut to `INIT_TEXT` characters, `…` marking
-// what is cut or continues below.
+// Cut to `INIT_TEXT` characters, `…` marking what is cut or continues
+// below.
 fn first_line(text: &str) -> String {
     let (first, more) = text.split_once('\n').map_or((text, false), |(first, _)| (first, true));
     let first = first.trim_end();
@@ -1286,8 +1258,7 @@ fn first_line(text: &str) -> String {
     }
 }
 
-// The call a chain continues from, when a callee is a member of one's
-// value: for `a.b().c()`, the range of `a.b()`.
+// The call a chain continues from: for `a.b().c()`, the range of `a.b()`.
 fn inner_call(func: &Expr) -> Option<TextRange> {
     let Expr::Attribute(attribute) = func else { return None };
     match core(&attribute.value) {
@@ -1296,9 +1267,7 @@ fn inner_call(func: &Expr) -> Option<TextRange> {
     }
 }
 
-// The callee of a call as a head and the members walked from it, each
-// marked when it is itself called along the way; a subscript along the way
-// is read through.
+// A subscript or an `await` along the way is read through.
 fn callee(expr: &Expr) -> Option<Callee> {
     match expr {
         Expr::Name(name) => Some(Callee {
@@ -1331,13 +1300,12 @@ fn called(mut callee: Callee, arguments: &Arguments) -> Callee {
     callee
 }
 
-// The identifier path an expression starts from, calls and subscripts
-// stripped.
+// Calls and subscripts stripped.
 fn head_path(expr: &Expr) -> Option<Vec<String>> {
     callee(expr).map(Callee::path)
 }
 
-// The string a literal spells, an f-string over literals included.
+// An f-string over literals included.
 fn string_value(expr: &Expr) -> Option<String> {
     match expr {
         Expr::StringLiteral(literal) => Some(literal.value.to_str().to_owned()),
@@ -1364,8 +1332,7 @@ fn string_value(expr: &Expr) -> Option<String> {
     }
 }
 
-// A string spelling a dotted module path — `shop.urls`, `app.main:app`
-// with its object cut — as the path alone.
+// `shop.urls` as itself; `app.main:app` as `app.main`.
 fn module_literal(value: &str) -> Option<&str> {
     let path = value
         .split_once(':')
@@ -1391,7 +1358,6 @@ fn is_identifier(text: &str) -> bool {
         && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
-// A relative path to a data file, by its extension: `data/rates.json`.
 fn is_data_path(value: &str) -> bool {
     let Some((stem, extension)) = value.rsplit_once('.') else { return false };
     DATA_EXTENSIONS.contains(&extension)
@@ -1401,9 +1367,8 @@ fn is_data_path(value: &str) -> bool {
         && value.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '.' | '_' | '-'))
 }
 
-// A lambda, a view class handed by `as_view()`, a list or dict holding one,
-// or a call — not a structural one, so `sorted(items, key=f)` is a value —
-// passing one of those.
+// A structural call passing one (`sorted(items, key=f)`) is a value, not a
+// function.
 fn fn_valued(expr: &Expr) -> bool {
     match expr {
         Expr::Lambda(_) => true,

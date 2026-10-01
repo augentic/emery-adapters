@@ -1,39 +1,24 @@
-//! Chooses the seams of a Python source and what the code states on its own.
+//! Chooses the seams of a Python source and the claims its code states.
 //!
 //! An inline value is one seam mined whole. A workspace is listed under this
 //! adapter's keep, every production module parsed, and its surfaces named
-//! by the model in one turn over the facts the parser read ([`model`]) —
-//! the manifest and its scripts, the bootstrap, every call that hands a
-//! function to a package's receiver, every `def` and class under a
-//! package's decorator, what the entry modules export — each anchored where
-//! the code registers or declares it; the code then holds the answer to the
-//! tree and derives the rest from the anchors. A tree whose modules fit
-//! within the SDK's inline budget is one seam over every module, laid into
-//! the turn, held to every stem its surfaces carry; a larger tree is one
-//! seam per stem, over the modules the surfaces under it reach, its entry
-//! first — and, where one of those imports what the resolver cannot follow
-//! or loads a module by a computed name, the rest of the tree after them.
-//! The data files a seam's modules name by path are laid after the modules.
-//! Each seam's brief names its surfaces — each with the id its claims lead
-//! with and the modules it reaches — the boundaries its modules spell, the
-//! packages they import, its data files, and what could not be followed. A
-//! tree the survey names no surface in is cut mechanically instead: within
-//! the budget, one seam over every module under one stem — the package the
-//! manifest names, else the root directory's name, else `module`; past it,
-//! one seam per top-level directory beneath `src/` and the one top-level
-//! package (or the root) under that directory's name, the root's own modules
-//! joined to the first. Only a tree with no production module is refused.
+//! by the model over the facts the parser read (`model`). The seams are cut
+//! from the surfaces:
 //!
-//! The tree's own tests are never modules: they are read for what they
-//! state — a test's names and docstrings, a feature's scenarios — and each
-//! test file follows the seams whose modules it imports (a feature file, the
-//! step modules beside it), its statements listed in the brief and the file
-//! itself laid after the seam's modules, so the model reads what the code
-//! confirms of them and invents nothing the code does not hold.
+//! - a tree within the SDK's inline budget, or of one module, is one seam
+//!   over every module, held to every stem its surfaces carry
+//! - a larger tree is one seam per stem, over the modules the surfaces
+//!   under it reach, the entry first; where one of those imports what the
+//!   resolver cannot follow or loads a module by a computed name, the rest
+//!   of the tree follows
+//! - a tree the survey names no surface in is cut mechanically: one seam
+//!   under the package's or the root directory's name within the budget,
+//!   one per top-level directory past it
 //!
-//! Beside the seams, the survey yields the `type` claims the reached modules
-//! declare, copied from the code for the guest to join after the model's
-//! answer.
+//! A seam's data files follow its modules, and the tree's own tests follow
+//! those. A test is read for what it states, never mined: its statements
+//! are listed in the brief of each seam whose modules it imports. Only a
+//! tree with no production module is refused.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -51,40 +36,34 @@ mod resolve;
 mod skeleton;
 mod surface;
 
-/// What a source is mined by: its seams, and the claims its code states.
 pub struct Survey {
-    /// The seams, each one gated turn.
     pub seams: Vec<Seam>,
-    /// The `type` claims of every module a seam reaches, declaration verbatim.
+    // Declared by the modules the seams reach; the guest joins them after
+    // the model's answer.
     pub types: Vec<Claim>,
 }
 
-/// A source read and ready for its surfaces to be decided.
 pub enum Preparation {
-    /// An inline value: one seam mined whole, its declarations copied unanchored.
+    // An inline value needs no survey turn: one seam, its declarations
+    // unanchored.
     Value(Survey),
-    /// A workspace, parsed, whose surfaces decide its seams.
     Workspace(Prepared),
 }
 
-/// A workspace parsed, with what the seams are cut from once its surfaces
-/// are decided.
 pub struct Prepared {
-    /// The source's name, for the log.
+    // For the log.
     pub source: String,
-    /// The lent root.
+    // The lent workspace root.
     pub root: String,
-    /// The parsed tree.
     pub tree: Tree,
     tests: Vec<Test>,
 }
 
-/// Reads the source: an inline value is one seam at once; a workspace is
-/// listed, every production module parsed, and its tests read.
+// Refuses a workspace with no production module, and nothing else.
 pub fn prepare(input: &SourceInput) -> Result<Preparation, Error> {
     let source = &input.name;
 
-    // pass an inline value through whole, its declarations copied unanchored
+    // an inline value is one seam, with no survey
     let workspace = match &input.content {
         SourceContent::Value(text) => {
             let module = parse::parse("value.py", text.clone());
@@ -97,7 +76,7 @@ pub fn prepare(input: &SourceInput) -> Result<Preparation, Error> {
         SourceContent::Workspace(workspace) => workspace,
     };
 
-    // one walk: the production modules, and the data files a string may name
+    // one walk lists the modules and the data files a string may name
     let (modules, data): (Vec<String>, Vec<String>) =
         emery_sdk::workspace::list(workspace, |entry| include(entry) || is_data(entry))?
             .into_iter()
@@ -121,8 +100,6 @@ pub fn prepare(input: &SourceInput) -> Result<Preparation, Error> {
     }))
 }
 
-/// Cuts the seams of a prepared workspace from its `surfaces`, however they
-/// were decided, and copies the `type` claims the seams' modules declare.
 pub fn seams(prepared: &Prepared, surfaces: &[Surface]) -> Survey {
     let Prepared {
         source,
@@ -133,8 +110,7 @@ pub fn seams(prepared: &Prepared, surfaces: &[Surface]) -> Survey {
 
     logged(source, "surveyed", surfaces);
 
-    // a tree small enough to lay into one turn, or of one module, cuts no
-    // finer; one the code exposes no surface of is cut mechanically
+    // choose the cut by size and by whether any surface was named
     let size: usize = tree.modules.values().map(|module| module.text.len()).sum();
     let fits = tree.modules.len() == 1 || u64::try_from(size).unwrap_or(u64::MAX) <= INLINE_BYTES;
     let leads = match (surfaces.is_empty(), fits) {
@@ -152,9 +128,6 @@ pub fn seams(prepared: &Prepared, surfaces: &[Surface]) -> Survey {
     Survey { seams, types }
 }
 
-// One line the run's log carries at TRACE: the surfaces as `surveyed`, each
-// with its name, entry, stem, and the ids its requirements lead with, as one
-// JSON array.
 fn logged(source: &str, what: &str, surfaces: &[Surface]) {
     if !emery_sdk::tracing::enabled!(emery_sdk::tracing::Level::TRACE) {
         return;
@@ -174,9 +147,8 @@ fn logged(source: &str, what: &str, surfaces: &[Surface]) {
     emery_sdk::tracing::trace!(%source, surfaces = %json, "{what}");
 }
 
-// The directories that never hold a production module: dependencies and
-// environments, caches, build output, coverage and documentation, tests,
-// and schema history.
+// Never a production module's: dependencies, environments, caches, build
+// output, coverage, documentation, tests, and schema history.
 const SKIP_DIRS: &[&str] = &[
     "__pycache__",
     "node_modules",
@@ -196,21 +168,19 @@ const SKIP_DIRS: &[&str] = &[
     "features",
     "migrations",
 ];
-// The files beside the modules that configure a build or a test run rather
-// than belong to the program; `manage.py` is kept, since it is Django's
-// bootstrap.
+// Build and test configuration, not the program. `manage.py` stays: it is
+// Django's bootstrap.
 const SKIP_FILES: &[&str] = &["setup.py", "conftest.py", "noxfile.py"];
 const EXTENSIONS: &[&str] = &["py"];
 const DATA_EXTENSIONS: &[&str] = &["json", "yaml", "yml", "toml", "csv", "ini"];
 
-// Pushes `item` unless the list holds it.
 fn push_unique<T: PartialEq>(into: &mut Vec<T>, item: T) {
     if !into.contains(&item) {
         into.push(item);
     }
 }
 
-// The items once each, in first-occurrence order.
+// First-occurrence order.
 fn unique<T: PartialEq>(items: impl IntoIterator<Item = T>) -> Vec<T> {
     let mut list = Vec::new();
     for item in items {
@@ -219,8 +189,7 @@ fn unique<T: PartialEq>(items: impl IntoIterator<Item = T>) -> Vec<T> {
     list
 }
 
-// A directory the keep prunes: a skip directory by name, a distribution's
-// `.egg-info`, or Alembic's `versions` of schema history.
+// Alembic's `versions` is schema history, not a package.
 fn skipped_dir(entry: Entry<'_>) -> bool {
     let name = entry.name();
     SKIP_DIRS.contains(&name)
@@ -245,14 +214,11 @@ fn include(entry: Entry<'_>) -> bool {
     EXTENSIONS.contains(&extension) && !is_test_name(stem)
 }
 
-// A module named as a test: `test_*`, `*_test`, or Django's `tests`.
 fn is_test_name(stem: &str) -> bool {
     stem.starts_with("test_") || stem.ends_with("_test") || stem == "tests"
 }
 
-// A data file a module may name by path — a table, a mapping, a schedule, a
-// configuration — wherever a module may sit. Only one a string names is
-// ever laid.
+// Candidates only: a data file is laid only where a module names it by path.
 fn is_data(entry: Entry<'_>) -> bool {
     if entry.hidden() {
         return false;
@@ -279,9 +245,6 @@ const NEVER_DIRS: &[&str] = &[
     "migrations",
 ];
 
-// The tree's own tests: a module under a test directory or named as a test,
-// and a Gherkin feature file — never a stub, a fixture configuration, a
-// dependency, build output, or a dot entry.
 fn is_test(entry: Entry<'_>) -> bool {
     if entry.hidden() {
         return false;
@@ -302,14 +265,11 @@ fn is_test(entry: Entry<'_>) -> bool {
     is_test_name(stem) || entry.path().split('/').rev().skip(1).any(|dir| TEST_DIRS.contains(&dir))
 }
 
-// Every test file read for what it states and which modules of the tree it
-// imports; a feature file states its scenarios and imports what the step
-// modules beside it — the parsed tests under its directory's parent — do.
-// One that states nothing is dropped; one that is not UTF-8 text is left
-// out with a warning.
 fn tests(root: &Path, paths: Vec<String>, tree: &Tree) -> Vec<Test> {
     let mut tests: Vec<Test> = Vec::new();
     let mut features: Vec<Test> = Vec::new();
+
+    // read each test for what it states and what it imports
     for path in paths {
         let text = match std::fs::read_to_string(root.join(&path)) {
             Ok(text) => text,
@@ -334,6 +294,8 @@ fn tests(root: &Path, paths: Vec<String>, tree: &Tree) -> Vec<Test> {
             statements: skeleton::statements(&module),
         });
     }
+
+    // a feature inherits the imports of the tests under its directory's parent
     for mut feature in features {
         let beside = feature
             .path
@@ -351,13 +313,10 @@ fn tests(root: &Path, paths: Vec<String>, tree: &Tree) -> Vec<Test> {
     tests
 }
 
-// The seam sealed: its anchors — where its modules' behaviour starts, and
-// the lines of the surfaces under its stems; none for a tree with no
-// surface, whose exports are read for what they do — then the data files its
-// modules name, appended to its files after the modules so a criterion may
-// cite a value in one, then the tests that follow its modules — the ones
-// importing one of them, and the ones importing no module of the tree at all
-// — appended after those, never among the anchors, and its brief rendered.
+// Seals a lead into its seam. A tree with no surface has no anchors, so its
+// exports are read for what they do. Data files and tests follow the modules
+// in `files`, never among the anchors; a test importing no module of the
+// tree follows every seam.
 fn finish(tree: &Tree, lead: Lead, surfaces: &[Surface], tests: &[Test]) -> Seam {
     let Lead {
         seam:
@@ -394,8 +353,6 @@ fn finish(tree: &Tree, lead: Lead, surfaces: &[Surface], tests: &[Test]) -> Seam
     }
 }
 
-// Every module parsed and each of its imports settled to what it names; one
-// that is not UTF-8 text is left out with a warning.
 fn read(root: &Path, paths: Vec<String>, data: Vec<String>) -> Tree {
     let mut modules = BTreeMap::new();
     for path in paths {
@@ -420,11 +377,10 @@ fn read(root: &Path, paths: Vec<String>, data: Vec<String>) -> Tree {
     }
 }
 
-// What opens a seam: the text that leads its brief, its modules, its stems
-// — and whether the modules run past its surfaces' closures to the rest of
-// the tree, which only the cut by stem decides.
 struct Lead {
     seam: Seam,
+    // The files run past the surfaces' closures to the rest of the tree.
+    // Only the cut by stem sets it.
     widened: bool,
 }
 
@@ -442,9 +398,7 @@ impl Lead {
     }
 }
 
-// One seam over the whole tree: the bootstrap and what it reaches first,
-// then the rest, every surface named, every stem held. This and the cuts
-// below yield the leads for `finish` to seal.
+// Every module, the surfaces' closures first.
 fn whole(tree: &Tree, surfaces: &[Surface]) -> Lead {
     let files = unique(
         surfaces
@@ -463,10 +417,6 @@ fn whole(tree: &Tree, surfaces: &[Surface]) -> Lead {
     Lead::new(text, files, stems)
 }
 
-// One seam per stem, over the modules the surfaces under it reach — and,
-// where one of those imports what the resolver could not follow or loads a
-// module by a computed name, the rest of the tree after them, so what the
-// import names is still within the seam's reach.
 fn by_stem(tree: &Tree, surfaces: &[Surface]) -> Vec<Lead> {
     unique(surfaces.iter().map(|surface| surface.stem.as_str()))
         .into_iter()
@@ -474,6 +424,8 @@ fn by_stem(tree: &Tree, surfaces: &[Surface]) -> Vec<Lead> {
             let under: Vec<&Surface> = surfaces.iter().filter(|s| s.stem == stem).collect();
             let mut files =
                 unique(under.iter().flat_map(|surface| surface.closure.iter().cloned()));
+
+            // widen to the rest of the tree past an import the resolver could not follow
             let unfollowed = files
                 .iter()
                 .filter_map(|path| tree.modules.get(path))
@@ -485,6 +437,7 @@ fn by_stem(tree: &Tree, surfaces: &[Surface]) -> Vec<Lead> {
             };
             let widened = !rest.is_empty();
             files.extend(rest);
+
             let (count, reach, whose) = match under.len() {
                 1 => ("surface".to_owned(), "it reaches", "its"),
                 n => (format!("{n} surfaces"), "they reach", "their"),
@@ -503,7 +456,6 @@ fn by_stem(tree: &Tree, surfaces: &[Surface]) -> Vec<Lead> {
         .collect()
 }
 
-// What a seam of a tree with no surface is told in place of its surfaces.
 const NO_SURFACE: &str = "No surface was found in this source: its survey named no route, command, \
                           job, consumer, or exported API — no bootstrap the manifest's scripts \
                           name or a conventional entry holds, no handler registered with a \
@@ -512,8 +464,6 @@ const NO_SURFACE: &str = "No surface was found in this source: its survey named 
                           a library is read — for what its exports do for a caller — and claim \
                           what the code exhibits.";
 
-// One seam over a tree the survey names no surface in: every module, under
-// the one stem the tree is named by.
 fn unsurfaced(tree: &Tree, root: &str) -> Lead {
     let files: Vec<String> = tree.modules.keys().cloned().collect();
     let stem = fallback_stem(tree, root);
@@ -525,11 +475,8 @@ fn unsurfaced(tree: &Tree, root: &str) -> Lead {
     Lead::new(text, files, vec![stem])
 }
 
-// One seam per top-level directory of a tree the survey names no surface in
-// — beneath `src/` where a module sits under it, and beneath the one
-// top-level package where the tree has exactly one, else beneath the root —
-// under the directory's name, the root's own modules joined to the first.
 fn by_directory(tree: &Tree, root: &str) -> Vec<Lead> {
+    // cut beneath `src/` and beneath a lone top-level package
     let packages: Vec<&str> = tree
         .modules
         .keys()
@@ -541,6 +488,8 @@ fn by_directory(tree: &Tree, root: &str) -> Vec<Lead> {
         [one] => Some(format!("{one}/")),
         _ => None,
     };
+
+    // group the modules by top-level directory, under its name
     let mut groups: Vec<(String, String, Vec<String>)> = Vec::new();
     let mut loose: Vec<String> = Vec::new();
     for path in tree.modules.keys() {
@@ -558,6 +507,8 @@ fn by_directory(tree: &Tree, root: &str) -> Vec<Lead> {
             None => groups.push((stem, format!("`{dir}/`"), vec![path.clone()])),
         }
     }
+
+    // the root's own modules join the first group
     if groups.is_empty() {
         groups.push((fallback_stem(tree, root), "the root".to_owned(), Vec::new()));
     }
@@ -583,8 +534,6 @@ fn by_directory(tree: &Tree, root: &str) -> Vec<Lead> {
         .collect()
 }
 
-// The stem a tree with no surface is held to: the package the manifest
-// names, else the root directory's name, else `module`.
 fn fallback_stem(tree: &Tree, root: &str) -> String {
     let named = tree.manifest.name.as_deref().and_then(surface::kebab);
     named
@@ -594,12 +543,6 @@ fn fallback_stem(tree: &Tree, root: &str) -> String {
         .unwrap_or_else(|| "module".to_owned())
 }
 
-// The seam's brief: its lead, then what its modules state on their own —
-// the boundaries they spell, the packages they import, the calls they make
-// through them, the points where they decide — the data files they name,
-// what the tests that follow them state, what the resolver could not follow
-// (and that the rest of the tree follows the closure when `widened`), and
-// which modules the parser could not read whole.
 fn brief(tree: &Tree, lead: String, files: &[String], widened: bool, tests: &[&Test]) -> String {
     let modules = || files.iter().filter_map(|path| tree.modules.get(path));
     let mut sections = vec![lead];
@@ -623,9 +566,6 @@ fn brief(tree: &Tree, lead: String, files: &[String], widened: bool, tests: &[&T
     sections.join("\n\n")
 }
 
-// One line per surface: its name, its entry, its stem, the notes the survey
-// made of it, the ids its requirements lead with, and the modules it reaches
-// beyond its entry.
 fn listed<'s>(surfaces: impl IntoIterator<Item = &'s Surface>) -> String {
     surfaces
         .into_iter()

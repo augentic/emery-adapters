@@ -1,21 +1,16 @@
-//! Has the model name the surfaces of a tree, from the facts the parser read.
+//! Has the model name the surfaces of a tree from the facts the parser read.
 //!
-//! The parser reads the tree; the model decides what in it is a surface.
-//! What the parser read — the manifest and the scripts it installs, the
-//! bootstrap, every call that hands a function to something a package
-//! provides, every `def` and class under a package's decorator, what the
-//! entry modules export, the packages imported — is handed to the model,
-//! laid beside the modules that fit, and it names each surface, anchors it
-//! where it is registered or declared, and gives the stem its ids lead
-//! with. Code then holds the answer to the tree: every module the facts
-//! locate a surface in is reached by a named surface or listed as
-//! unreached, and the bootstrap's `start` is the caller's, never the
-//! model's. From the accepted anchors the code derives the rest — the
-//! closure each surface reaches, the bootstrap surface, the stem the code
-//! spells at the anchor where it spells one, what tells each surface from
-//! the others under its stem, a class's methods, and the ids — read from the
-//! registration, decorator, or export at the anchor, never from the model's
-//! name for it, so two runs that accept the same anchors cut the same seams.
+//! The parser reads; the model decides what is a surface. The facts laid
+//! before it are the manifest and its scripts, the bootstrap, every call
+//! that hands a function to something a package provides, every `def` and
+//! class under a package's decorator, what the entry modules export, and
+//! the packages imported. The model names each surface, anchors it where it
+//! is registered or declared, and gives the stem its ids lead with.
+//!
+//! Code holds the answer to the tree and derives the rest from the accepted
+//! anchors, never from the model's names, so two runs that accept the same
+//! anchors cut the same seams. The bootstrap's `start` is the code's own
+//! surface, never the model's.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -28,14 +23,10 @@ use super::resolve::Target;
 use super::surface::{Runs, Surface, Tree};
 use super::{Prepared, push_unique, skeleton, surface, unique};
 
-/// The surfaces the model names in a prepared tree, held to it, with the
-/// bootstrap surface before them and every id decided.
-///
-/// # Errors
-///
-/// The SDK's: the model rejects the request or no acceptable answer lands
-/// within the rounds (`bad_request`), the prompt is not embedded
-/// (`server_error`), or the model transport fails (`bad_gateway`).
+// The bootstrap surface leads, and every id is decided over them all. The
+// errors are the SDK's: `bad_request` when no acceptable answer lands within
+// the rounds, `server_error` for a prompt not embedded, `bad_gateway` for a
+// transport failure.
 pub async fn surfaces<P: Model>(
     ctx: &Context<'_, P>, docs: &'static [Doc], prepared: &Prepared,
 ) -> Result<Vec<Surface>, Error> {
@@ -70,9 +61,7 @@ pub async fn surfaces<P: Model>(
         );
     }
 
-    // what no surface reaches, by code's own count: the modules the model
-    // listed and the ones the facts said nothing of, which the gate took as
-    // unreached without asking
+    // log the modules under no surface
     let covered: BTreeSet<&str> =
         surfaces.iter().flat_map(|surface| surface.closure.iter().map(String::as_str)).collect();
     let unplaced: Vec<&String> =
@@ -87,11 +76,8 @@ pub async fn surfaces<P: Model>(
     Ok(surfaces)
 }
 
-// What the tree says of itself before the model is asked, read once and
-// held through every round: the bootstrap and how it runs, the entries the
-// manifest's scripts name, the modules no other imports, the classes a
-// registration hands, the modules the facts locate a surface in, and where
-// each module's routes are mounted.
+// Read once before the model is asked and held through every correction
+// round.
 struct Located<'t> {
     tree: &'t Tree,
     bootstrap: Option<(&'t Module, Runs)>,
@@ -127,15 +113,9 @@ impl<'t> Located<'t> {
     }
 }
 
-// A module the facts locate a surface in: one that hands a function to a
-// package's receiver outside any handler in the shape a registration has —
-// discarded, constructing, or led by a literal, so a function handed to a
-// wrapper for its value (`handler = retrying(send)`) is listed among the
-// facts and locates nothing — or one a package's decorator registers a `def`
-// or a method of — a method of a class a registration hands excepted, which
-// the registration locates. One the survey leaves reached by no surface and
-// unlisted is a finding; a module the facts say nothing of — a settings
-// module, a helper nothing imports — is taken as unreached without one.
+// Whether the facts place a registration or a registering decorator in
+// `module`, so the answer must reach it or list it `unreached`. A method of
+// a class a registration hands is the registration's to locate.
 fn locates(tree: &Tree, module: &Module, handed: &BTreeSet<(String, String)>) -> bool {
     module.calls.iter().any(|call| {
         surface::handed(tree, module, call).is_some() && surface::registers(tree, module, call)
@@ -150,8 +130,7 @@ fn locates(tree: &Tree, module: &Module, handed: &BTreeSet<(String, String)>) ->
     })
 }
 
-// Whether a decorator sits on a method of a class a registration hands —
-// a view set's `@action` — which the registration carries as an id.
+// A view set's `@action` is an id of the registration, not a surface.
 fn of_handed(module: &Module, decorated: &Decorated, handed: &BTreeSet<(String, String)>) -> bool {
     match (&decorated.class, &decorated.member) {
         (Some(class), Some(_)) => handed.contains(&(module.path.clone(), class.clone())),
@@ -159,11 +138,6 @@ fn of_handed(module: &Module, decorated: &Decorated, handed: &BTreeSet<(String, 
     }
 }
 
-// What the parser read of the tree, for the model to decide from: the
-// manifest, the bootstrap and what the caller makes of it, every call that
-// hands a function to a package's receiver, every decorated `def` and
-// class, what the entry modules export, the packages imported, and what
-// could not be followed.
 fn facts(located: &Located<'_>) -> String {
     let tree = located.tree;
     let mut sections: Vec<String> = Vec::new();
@@ -217,6 +191,7 @@ fn facts(located: &Located<'_>) -> String {
         },
     ));
 
+    // the registrations, decorations, exports, and what could not be followed
     sections.extend(registrations(tree));
     sections.extend(decorated(located));
     sections.extend(exports(located));
@@ -226,10 +201,6 @@ fn facts(located: &Located<'_>) -> String {
     sections.join("\n\n")
 }
 
-// Every call, outside any handler, that hands a function to something a
-// package provides — where a framework is told what to run — with the
-// literal that led it, as the code derives a stem from it, and the package,
-// at its lines. What each is, is the model's to say.
 fn registrations(tree: &Tree) -> Option<String> {
     let mut lines: Vec<String> = Vec::new();
     for module in tree.modules.values() {
@@ -268,10 +239,6 @@ fn registrations(tree: &Tree) -> Option<String> {
     ))
 }
 
-// Every `def`, method, and class under a decorator a package provides —
-// one that registers rather than shapes — with the decorator's literal, at
-// its lines; a method of a class a registration hands is left to the
-// registration, which carries the class's actions as ids.
 fn decorated(located: &Located<'_>) -> Option<String> {
     let tree = located.tree;
     let mut lines: Vec<String> = Vec::new();
@@ -315,10 +282,7 @@ fn decorated(located: &Located<'_>) -> Option<String> {
     ))
 }
 
-// What the entry modules — the ones the manifest's scripts name, and the
-// ones no other module imports — export, with the kind and lines of each,
-// and what a package's `__init__` among them re-exports, one hop, at the
-// module that declares it.
+// A re-export is followed one hop, to the module that declares it.
 fn exports(located: &Located<'_>) -> Option<String> {
     let tree = located.tree;
     let entries = unique(located.entries.iter().chain(&located.roots));
@@ -362,10 +326,8 @@ fn exports(located: &Located<'_>) -> Option<String> {
     ))
 }
 
-// The exports of `module` that declare something a caller calls, each with
-// its kind and lines; a type is none, and so is a class that declares data
-// alone — a dataclass or a model of fields and properties — which the
-// caller copies as a type.
+// A type, or a class declaring data alone, is the caller's to copy, not to
+// call.
 fn declared<'e>(module: &Module, exports: impl Iterator<Item = &'e Export>) -> Vec<String> {
     exports
         .filter_map(|export| {
@@ -385,11 +347,8 @@ fn declared<'e>(module: &Module, exports: impl Iterator<Item = &'e Export>) -> V
         .collect()
 }
 
-// The files laid into the turn whole, as far as they fit: the manifest, the
-// bootstrap, the modules the facts cite — where a function is handed to a
-// package, where a package's decorator registers a `def`, the entry modules
-// whose exports are listed — then the rest of the tree in path order, so a
-// tree past the budget lays what locates its surfaces before what does not.
+// Ordered so a tree past the budget lays what locates its surfaces before
+// what does not.
 fn laid(located: &Located<'_>, root: &str) -> Vec<String> {
     let tree = located.tree;
     let mut files: Vec<String> = Vec::new();
@@ -414,12 +373,9 @@ fn laid(located: &Located<'_>, root: &str) -> Vec<String> {
     files
 }
 
-// What the tree alone can hold the model's answer to: no surface under the
-// bootstrap's stem, and every module the facts locate a surface in — or a
-// script names — reached by a named surface or the bootstrap, or listed as
-// unreached. A module the facts say nothing of is not asked after: a
-// framework may load it by a setting's name, and a model made to account
-// for every such module invents surfaces to cover them.
+// A module the facts say nothing of is not asked after: a framework may
+// load it by a setting's name, and a model made to account for every such
+// module invents surfaces to cover them.
 fn check(located: &Located<'_>, answer: &Inventory) -> Vec<String> {
     let tree = located.tree;
     let mut findings: Vec<String> = Vec::new();
@@ -433,7 +389,7 @@ fn check(located: &Located<'_>, answer: &Inventory) -> Vec<String> {
         }
     }
 
-    // what the named surfaces reach, and what the bootstrap reaches beside them
+    // modules the facts locate a surface in that no surface reaches
     let surfaces = build(located, answer);
     let covered: BTreeSet<&str> =
         surfaces.iter().flat_map(|surface| surface.closure.iter().map(String::as_str)).collect();
@@ -467,14 +423,8 @@ fn check(located: &Located<'_>, answer: &Inventory) -> Vec<String> {
     findings
 }
 
-// The surfaces the answer names, each at the module and lines its anchor
-// names, carrying what the code there says of it — the registration or
-// declaration whole, the modules it reaches, the stem it spells, where it
-// spells one, in place of the survey's; what tells it from the others under
-// that stem; a class's methods — as the parser's own are read from a
-// registration; the bootstrap's `start` before them, reaching what they do
-// not; and every id decided over them all. A surface whose anchor the tree
-// does not hold is left out; the SDK's gate has refused it already.
+// An anchor the tree does not hold is skipped: the SDK's gate has refused it
+// already.
 fn build(located: &Located<'_>, answer: &Inventory) -> Vec<Surface> {
     let tree = located.tree;
     let mut surfaces: Vec<Surface> = answer

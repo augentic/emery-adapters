@@ -29,7 +29,7 @@ The root `emery-adapters` package is tests only; it names each adapter crate as 
 
 ## Code style
 
-The engine repository's ([`augentic/emery` AGENTS.md § Code style](https://github.com/augentic/emery/blob/main/AGENTS.md)): clippy under the shared `[workspace.lints]` in `Cargo.toml` and the guest deny-list in `clippy.toml`, plus nightly rustfmt (`make fmt`), are the gate; beyond them, match the surrounding code. `#[expect(lint, reason = "…")]` at the smallest scope, never `#[allow]`. Rustdoc (`///`) on `pub` items only; no history in comments.
+The engine repository's ([`augentic/emery` AGENTS.md § Code style](https://github.com/augentic/emery/blob/main/AGENTS.md)): clippy under the shared `[workspace.lints]` in `Cargo.toml` and the guest deny-list in `clippy.toml`, plus nightly rustfmt (`make fmt`), are the gate; beyond them and the engine's standing rules, match the surrounding code. `#[expect(lint, reason = "…")]` at the smallest scope, never `#[allow]`. Comments follow the engine's rules in full: `///` on the public API only — in an adapter, the crate's `//!` and `PROSE`, since `survey` is private — a `//` on a private item only for a constraint, a why, or an invariant its name and signature do not say, in-body `//` as lowercase section headers, no match-arm labels, no history.
 
 An adapter crate's `//!` docs state the source it accepts, how that source is divided for extraction, and any refusal visible to a caller — not the `wasm32` module layout, the guest-macro wiring, or how `PROSE` is checked.
 
