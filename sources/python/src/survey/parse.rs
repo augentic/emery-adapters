@@ -884,7 +884,7 @@ fn settle_exports(module: &mut Module) {
                 grouped.push(Reexport {
                     specifier: import.specifier.clone(),
                     names: None,
-                    type_only: false,
+                    type_only: import.type_only,
                     target: None,
                 });
             }

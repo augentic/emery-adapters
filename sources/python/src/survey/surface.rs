@@ -761,7 +761,8 @@ pub(super) fn start(tree: &Tree, module: &Module, runs: &Runs, registered: &[Sur
 // Where each module's routes are mounted: `app.register_blueprint(bp,
 // url_prefix="/orders")` and `app.include_router(orders.router,
 // prefix="/api/v1")` give the module declaring the blueprint or router that
-// prefix; `path("orders/", include("orders.urls"))` gives `orders/urls.py`
+// prefix — the registering module itself where it declares what it
+// registers; `path("orders/", include("orders.urls"))` gives `orders/urls.py`
 // the path, under its own module's mount; a router's own
 // `APIRouter(prefix="/orders")` joins the prefix it is included under, and a
 // blueprint's own `url_prefix` stands where none registers it under
@@ -790,10 +791,20 @@ pub(super) fn mounts(tree: &Tree) -> BTreeMap<String, String> {
                         let Some(head) = arg.root.as_deref().and_then(|root| root.first()) else {
                             continue;
                         };
-                        let Some((target, _)) = tree.exporter(module, head) else { continue };
-                        let mounted = join_route(own, &prefix);
+                        // what is imported mounts the module it is imported
+                        // from under this module's own mount; what is bound
+                        // here mounts this module, whose own mount is the
+                        // one being read, so the prefix stands alone
+                        let (target, under) = match tree.exporter(module, head) {
+                            Some((target, _)) => (target.path.as_str(), own),
+                            None if module.binding(head, &call.frames).is_some() => {
+                                (module.path.as_str(), "")
+                            }
+                            None => continue,
+                        };
+                        let mounted = join_route(under, &prefix);
                         if mounted != "/" {
-                            next.entry(target.path.clone()).or_insert(mounted);
+                            next.entry(target.to_owned()).or_insert(mounted);
                         }
                     }
                 }

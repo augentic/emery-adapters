@@ -3237,6 +3237,59 @@ async fn python_mounts_nested() {
     }
 }
 
+// A router declared in the module that includes it: the module is mounted
+// under the prefix the include passes, as it is under one that imports the
+// router, so the resource that prefix spells is the stem its routes lead
+// with — in place of the survey's — and the verb and the path past it tell
+// them apart.
+#[tokio::test]
+async fn python_mounts_local() {
+    let project = scratch();
+    modules(
+        &project,
+        &[
+            ("app/__init__.py", ""),
+            (
+                "app/main.py",
+                "from fastapi import APIRouter, FastAPI\n\napp = FastAPI()\nrouter = \
+                 APIRouter()\n\n\n@router.get(\"\")\ndef list_orders() -> list:\n    return \
+                 []\n\n\n@router.post(\"/{order_id}/pay\")\ndef pay(order_id: str) -> dict:\n    \
+                 return {\"id\": order_id}\n\n\napp.include_router(router, prefix=\"/orders\")\n",
+            ),
+        ],
+    );
+    let survey = inventory(
+        &[
+            ("GET /orders", "app/main.py#L7-L9", "listing"),
+            ("POST /orders/{order_id}/pay", "app/main.py#L12-L14", "pay"),
+        ],
+        &[],
+    );
+
+    let model = mined(PYTHON, &project, &survey, 1).await;
+
+    let turns = surveyed(PYTHON, &model, 1);
+    assert_eq!(
+        surfaces(&turns[0]),
+        [
+            ("start", "app/main.py", "start"),
+            ("GET /orders", "app/main.py", "orders"),
+            ("POST /orders/{order_id}/pay", "app/main.py", "orders"),
+        ]
+    );
+    for note in [
+        ": def `list_orders` L7–L9; under `@router.get(\"\")`; through `fastapi`; id \
+         `orders.get`;",
+        ": def `pay` L12–L14; under `@router.post(\"/{order_id}/pay\")`; through `fastapi`; id \
+         `orders.post-order-id-pay`;",
+    ] {
+        assert!(turns[0].contains(note), "{note} is in the brief: {}", turns[0]);
+    }
+    for stem in ["`listing`", "`pay`"] {
+        assert!(!turns[0].contains(&format!("stem {stem}")), "gave way: {}", turns[0]);
+    }
+}
+
 // A decorator's head is a binding of the tree, not an import: it is traced
 // through the module-level construction (`app = Flask(..)`) and one import
 // hop (`from .app import app`) to the package, so the `def` under it is a
@@ -3857,6 +3910,71 @@ async fn python_types() {
     assert_eq!(model.seen().len(), 3, "the survey, one seam over the tree, one over the value");
 }
 
+// An `__all__` declared with an annotation — `__all__: list[str] = [..]` —
+// lists the module's exports as the plain form does: a public class or
+// function it leaves out is the module's own, so a package's star re-export
+// of the module is listed without it and no `type` claim copies it; an
+// inline value's annotated list cuts its declarations the same way.
+#[tokio::test]
+async fn python_exports_annotated_all() {
+    let project = scratch();
+    modules(
+        &project,
+        &[
+            ("pyproject.toml", "[project]\nname = \"money\"\n"),
+            ("src/money/__init__.py", "from .money import *\n"),
+            (
+                "src/money/money.py",
+                "from dataclasses import dataclass\nfrom enum import Enum\n\n__all__: list[str] = \
+                 [\"Money\", \"parse\"]\n\n\nclass Currency(str, Enum):\n    GBP = \"GBP\"\n    \
+                 EUR = \"EUR\"\n\n\n@dataclass\nclass Money:\n    amount: int\n    currency: \
+                 Currency\n\n    def add(self, other: \"Money\") -> \"Money\":\n        return \
+                 Money(self.amount + other.amount, self.currency)\n\n\nclass Ledger:\n    entries: \
+                 list = []\n\n    def post(self, money: Money) -> None:\n        \
+                 self.entries.append(money)\n\n\ndef parse(text: str) -> Money:\n    return \
+                 Money(int(text), \"GBP\")\n\n\ndef audit(ledger: Ledger) -> int:\n    return \
+                 len(ledger.entries)\n",
+            ),
+        ],
+    );
+    let survey = inventory(
+        &[
+            ("Money", "src/money/money.py#L12-L18", "money"),
+            ("parse", "src/money/money.py#L28-L29", "parse"),
+        ],
+        &["src/money/__init__.py"],
+    );
+    let answer = claim("parse.text");
+
+    let model = support::run(
+        test_programs::ADAPTER_PYTHON,
+        &project,
+        &[
+            "types",
+            "__all__: list[str] = [\"Inline\"]\n\n\nclass Inline:\n    id: str\n\n\nclass \
+             Local:\n    n: int\n",
+            "Inline",
+            "Money",
+        ],
+        ScriptedModel::answering([&survey, &answer, &answer]),
+    )
+    .await;
+
+    let seen = model.seen();
+    let facts = &seen[0].messages[0];
+    assert!(
+        facts.contains(
+            "- `src/money/__init__.py` re-exports from `src/money/money.py`, where each is \
+             declared: `Money` (class) L12–L18, `parse` (function) L28–L29"
+        ),
+        "the listed names alone are re-exported: {facts}"
+    );
+    for own in ["`Ledger` (class)", "`audit` (function)"] {
+        assert!(!facts.contains(own), "{own} is left off the list, so the module's own: {facts}");
+    }
+    assert_eq!(seen.len(), 3, "the survey, one seam over the tree, one over the value");
+}
+
 // The turn lists what the modules spell as values of their own — an
 // environment read with its default, or with whatever the code does to it,
 // a named constant at module level or inside a function, a pattern, a
@@ -4300,6 +4418,60 @@ async fn python_type_checking() {
     assert!(orders.contains("- `app/db.py`"), "the store is reached: {orders}");
     assert!(!orders.contains("could not follow"), "a typing import is followed nowhere: {orders}");
     assert!(!orders.contains("TYPE_CHECKING`"), "the guard decides nothing: {orders}");
+}
+
+// A `from .. import *` under `if TYPE_CHECKING:` in a package `__init__` is
+// a declaration's too: the star re-export it records is type-only, so the
+// module it names is reached by no seam, and counts as nothing the resolver
+// could not follow.
+#[tokio::test]
+async fn python_type_checking_star() {
+    let project = scratch();
+    modules(
+        &project,
+        &[
+            ("app/__init__.py", ""),
+            (
+                "app/main.py",
+                "from fastapi import FastAPI\n\nfrom .routers import orders\n\napp = \
+                 FastAPI()\napp.include_router(orders.router, prefix=\"/api\")\n",
+            ),
+            ("app/routers/__init__.py", ""),
+            (
+                "app/routers/orders.py",
+                "from fastapi import APIRouter\n\nfrom ..store import pool\n\nrouter = \
+                 APIRouter(prefix=\"/orders\")\n\n\n@router.get(\"/{order_id}\")\nasync def \
+                 get(order_id: str) -> dict:\n    return {\"id\": order_id, \"pool\": pool}\n",
+            ),
+            ("app/audit.py", "class Auditor:\n    pass\n"),
+        ],
+    );
+    py_bulk(
+        &project,
+        "app/store/__init__.py",
+        "from typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n    from ..audit import *\n\npool \
+         = \"o-1\"\n",
+    );
+    let survey =
+        inventory(&[("GET /api/orders/{order_id}", "app/routers/orders.py#L8-L10", "orders")], &[]);
+    let neutral = decision();
+    let answer = answer();
+
+    let model = support::run(
+        test_programs::ADAPTER_PYTHON,
+        &project,
+        &[],
+        ScriptedModel::answering([&survey, &neutral, &neutral, &answer]),
+    )
+    .await;
+
+    let turns = surveyed(PYTHON, &model, 2);
+    let orders = turn_for(&turns, "GET /api/orders/{order_id}");
+    laid(orders, &["app/routers/orders.py"], &["app/audit.py"]);
+    assert!(orders.contains("- `app/store/__init__.py`"), "the store is reached: {orders}");
+    assert!(!orders.contains("could not follow"), "a typing import is followed nowhere: {orders}");
+    let start = turn_for(&turns, "start");
+    assert!(!start.contains("app/audit.py"), "nothing of `start` reaches it either: {start}");
 }
 
 // The service imports a module the tree does not hold and loads another by

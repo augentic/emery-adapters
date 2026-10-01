@@ -646,13 +646,18 @@ impl<'s> Walker<'s> {
         }
     }
 
+    // `__all__ = [..]` at module level, annotated or not: the names the
+    // module declares exported
+    fn declare_all(&mut self, target: &Expr, value: &Expr) {
+        if name_of(target) == Some("__all__") && self.at_module() {
+            self.module.all = Some(listed(value));
+        }
+    }
+
     fn assign(&mut self, assign: &'s StmtAssign) {
         let value = &*assign.value;
-        if let Some(name) = assign.targets.iter().find_map(name_of)
-            && name == "__all__"
-            && self.at_module()
-        {
-            self.module.all = Some(listed(value));
+        for target in &assign.targets {
+            self.declare_all(target, value);
         }
         for target in &assign.targets {
             self.target(target, None, Some(value), assign.range());
@@ -670,6 +675,9 @@ impl<'s> Walker<'s> {
     fn ann_assign(&mut self, assign: &'s StmtAnnAssign) {
         let value = assign.value.as_deref();
         let annotation = &*assign.annotation;
+        if let Some(value) = value {
+            self.declare_all(&assign.target, value);
+        }
         let type_alias =
             matches!(head_path(annotation).as_deref(), Some([.., last]) if last == "TypeAlias");
         if let (Some(name), true, true) = (name_of(&assign.target), type_alias, self.at_module()) {
