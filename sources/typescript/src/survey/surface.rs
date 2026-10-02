@@ -54,12 +54,14 @@ pub struct TypeScript {
 
 impl TypeScript {
     // The manifest read and the resolver built over the parsed tree, before
-    // any import is settled.
-    pub(super) fn new(root: &Path, parsed: &Parsed<Module>) -> Self {
+    // any import is settled. `tests` are the test modules the keep set
+    // aside, which an import may still reach.
+    pub(super) fn new(root: &Path, parsed: &Parsed<Module>, tests: Vec<String>) -> Self {
         Self {
             resolver: Resolver::new(
                 parsed.modules.keys().cloned(),
                 parsed.data.iter().cloned(),
+                tests,
                 root,
             ),
             manifest: resolve::Manifest::read(root),

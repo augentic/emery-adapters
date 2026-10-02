@@ -2,16 +2,16 @@
 
 use emery_sdk::survey::Lines;
 use emery_sdk::survey::code::{
-    self, Arg, Binding, BindingKind, Call, Callee, ClassDecl, Decision, Decorated, EnvRead, Export,
-    ExportKind, Import, Imported, Init, Invocation, Link, Member, MemberKind, Reference, Scope,
-    TypeDecl, TypeKind, Use,
+    self, Arg, Binding, BindingKind, Call, Callee, ClassDecl, Decision, Decorated, Dynamic,
+    EnvRead, Export, ExportKind, Import, Imported, Init, Invocation, Link, Member, MemberKind,
+    Reference, Scope, TypeDecl, TypeKind, Use,
 };
 use ruff_python_ast::visitor::{self, Visitor};
 use ruff_python_ast::{
     Arguments, CmpOp, Decorator, ElifElseClause, ExceptHandler, Expr, ExprCall, ExprContext,
     FStringPartRef, InterpolatedStringElement, Operator, Parameters, PySourceType, Stmt,
     StmtAnnAssign, StmtAssign, StmtAugAssign, StmtClassDef, StmtFunctionDef, StmtIf, StmtImport,
-    StmtImportFrom, StmtTypeAlias, UnaryOp,
+    StmtImportFrom, StmtTypeAlias, StmtWith, UnaryOp,
 };
 use ruff_python_parser::parse_unchecked_source;
 use ruff_text_size::{Ranged, TextRange, TextSize};
@@ -161,6 +161,8 @@ struct Walker<'s> {
     discarded: Option<TextRange>,
     // The call an `await` waits on.
     awaited: Option<TextRange>,
+    // The call whose value an assignment or a `with` item binds to a name.
+    bound: Option<TextRange>,
     // The calls a further, non-structural call in their chain is made on.
     chained: Vec<TextRange>,
     // The name the next lambda frame takes: the variable it is assigned to.
@@ -553,6 +555,8 @@ impl<'s> Walker<'s> {
             Use::Discarded
         } else if self.awaited == Some(range) {
             Use::Awaited
+        } else if self.bound == Some(range) {
+            Use::Bound
         } else {
             Use::Consumed
         };
@@ -687,6 +691,7 @@ impl<'s> Walker<'s> {
         if classify(value) == Init::Function {
             self.pending_name = assign.targets.first().and_then(name_of).map(str::to_owned);
         }
+        self.bound = bound_call(value);
         self.visit_expr(value);
         self.pending_name = None;
         for target in &assign.targets {
@@ -712,6 +717,7 @@ impl<'s> Walker<'s> {
             if classify(value) == Init::Function {
                 self.pending_name = name_of(&assign.target).map(str::to_owned);
             }
+            self.bound = bound_call(value);
             self.visit_expr(value);
             self.pending_name = None;
         }
@@ -811,6 +817,23 @@ impl<'s> Walker<'s> {
         }
     }
 
+    // Each `as` target is bound from its context expression as `assign`
+    // binds a target from its value, so a step on the local is traced
+    // through what made it.
+    fn with_stmt(&mut self, stmt: &'s StmtWith) {
+        for item in &stmt.items {
+            if let Some(vars) = &item.optional_vars {
+                self.target(vars, None, Some(&item.context_expr), item.range());
+                self.bound = bound_call(&item.context_expr);
+            }
+            self.visit_expr(&item.context_expr);
+            if let Some(vars) = &item.optional_vars {
+                self.visit_expr(vars);
+            }
+        }
+        self.visit_body(&stmt.body);
+    }
+
     fn if_stmt(&mut self, stmt: &'s StmtIf) {
         let at_module = self.at_module();
         if at_module && is_main_guard(&stmt.test) {
@@ -835,11 +858,18 @@ impl<'s> Walker<'s> {
         let method = callee(&call.func).map(|callee| callee.method().to_owned());
         if let Some(method) = &method {
             let first = call.arguments.args.first();
+            let walks = WALKERS.contains(&method.as_str());
             let loads_computed =
                 LOADERS.contains(&method.as_str()) && first.and_then(string_value).is_none();
-            if loads_computed || WALKERS.contains(&method.as_str()) {
+            if loads_computed || walks {
+                let specifier = first
+                    .and_then(|arg| if walks { walked_package(arg) } else { literal_head(arg) });
                 let lines = self.lines(call.range());
-                self.module.dynamic.push(lines);
+                self.module.dynamic.push(Dynamic {
+                    lines,
+                    specifier,
+                    scope: None,
+                });
             }
             if let Some(key) = env_key(call) {
                 self.env_read(&key, call.range());
@@ -876,6 +906,7 @@ impl<'s> Visitor<'s> for Walker<'s> {
                 visitor::walk_stmt(self, stmt);
             }
             Stmt::If(if_) => self.if_stmt(if_),
+            Stmt::With(with) => self.with_stmt(with),
             Stmt::Match(match_) => {
                 let text = format!("match {}", self.excerpt(match_.subject.range()));
                 self.decide(stmt.range(), text);
@@ -1111,6 +1142,15 @@ fn core(expr: &Expr) -> Core<'_> {
         Expr::UnaryOp(unary) if unary.op == UnaryOp::Not => core(&unary.operand),
         Expr::Call(call) => Core::Call(call),
         other => Core::Other(other),
+    }
+}
+
+// The call a bound value is, as its range; an awaited one is marked by its
+// `await` when it is walked.
+fn bound_call(value: &Expr) -> Option<TextRange> {
+    match core(value) {
+        Core::Call(call) => Some(call.range()),
+        Core::Other(_) => None,
     }
 }
 
@@ -1366,6 +1406,38 @@ fn string_value(expr: &Expr) -> Option<String> {
         }
         _ => None,
     }
+}
+
+// The dotted package a computed name leads with: `f"app.plugins.{name}"`
+// spells `app.plugins`. None where the lead spells no package.
+fn literal_head(expr: &Expr) -> Option<String> {
+    let Expr::FString(fstring) = expr else { return None };
+    let mut lead = String::new();
+    'parts: for part in &fstring.value {
+        match part {
+            FStringPartRef::Literal(literal) => lead.push_str(&literal.value),
+            FStringPartRef::FString(fstring) => {
+                for element in &fstring.elements {
+                    match element {
+                        InterpolatedStringElement::Literal(literal) => {
+                            lead.push_str(&literal.value);
+                        }
+                        InterpolatedStringElement::Interpolation(_) => break 'parts,
+                    }
+                }
+            }
+        }
+    }
+    let (package, _) = lead.rsplit_once('.')?;
+    (!package.is_empty()).then(|| package.to_owned())
+}
+
+// The package whose path a walker is handed: `plugins.__path__` spells
+// `plugins`, `app.plugins.__path__` spells `app.plugins`.
+fn walked_package(expr: &Expr) -> Option<String> {
+    let path = head_path(expr)?;
+    let (last, package) = path.split_last()?;
+    (last == "__path__" && !package.is_empty()).then(|| package.join("."))
 }
 
 // `shop.urls` as itself; `app.main:app` as `app.main`.

@@ -60,9 +60,13 @@ pub fn prepare(input: &SourceInput) -> Result<Preparation, Error> {
     let tests = emery_sdk::workspace::list(workspace, is_test)?;
 
     let root = Path::new(workspace);
-    let listing = Listing { modules, data, tests };
+    let listing = Listing {
+        modules,
+        data,
+        tests: tests.clone(),
+    };
     let parsed = Parsed::read(root, &DIALECT, listing, Module::parse);
-    let recogniser = Python::new(root, &parsed);
+    let recogniser = Python::new(root, &parsed, tests);
     Ok(Preparation::Workspace(parsed.settle(recogniser)))
 }
 

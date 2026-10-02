@@ -5,9 +5,9 @@ use std::borrow::Cow;
 
 use emery_sdk::survey::Lines;
 use emery_sdk::survey::code::{
-    self, Arg, Binding, BindingKind, Call, Callee, ClassDecl, Decision, Decorated, EnvRead, Export,
-    ExportKind, Import, Imported, Init, Invocation, Link, Member, MemberKind, Property, Reexport,
-    Reference, Scope, TypeDecl, TypeKind, Use,
+    self, Arg, Binding, BindingKind, Call, Callee, ClassDecl, Decision, Decorated, Dynamic,
+    EnvRead, Export, ExportKind, Import, Imported, Init, Invocation, Link, Member, MemberKind,
+    Property, Reexport, Reference, Scope, TypeDecl, TypeKind, Use,
 };
 use oxc_allocator::Allocator;
 use oxc_ast::AstKind;
@@ -94,6 +94,8 @@ struct Walker<'s> {
     discarded: Option<Span>,
     // The call an `await` waits on.
     awaited: Option<Span>,
+    // The call whose value a declaration binds to a name.
+    bound: Option<Span>,
     // The calls a further, non-structural call in their chain is made on.
     chained: Vec<Span>,
     // The name the next function frame takes: a variable's, a method's.
@@ -354,6 +356,8 @@ impl<'s> Walker<'s> {
                 Use::Discarded
             } else if self.awaited == Some(span) {
                 Use::Awaited
+            } else if self.bound == Some(span) {
+                Use::Bound
             } else {
                 Use::Consumed
             },
@@ -402,6 +406,17 @@ impl<'s> Walker<'s> {
             imported,
             type_only,
             target: None,
+        });
+    }
+
+    // A load by a computed name, with the directory its literal lead spells
+    // where it spells one.
+    fn dynamic(&mut self, source: Option<&Expression<'_>>, span: Span) {
+        let lines = self.lines(span);
+        self.module.dynamic.push(Dynamic {
+            lines,
+            specifier: source.and_then(literal_head),
+            scope: None,
         });
     }
 
@@ -505,11 +520,11 @@ impl<'a> Visit<'a> for Walker<'_> {
     }
 
     fn visit_call_expression(&mut self, it: &CallExpression<'a>) {
-        if is_require(&it.callee)
-            && it.arguments.first().and_then(|a| a.as_expression()).and_then(string_value).is_none()
-        {
-            let lines = self.lines(it.span);
-            self.module.dynamic.push(lines);
+        if is_require(&it.callee) {
+            let argument = it.arguments.first().and_then(|a| a.as_expression());
+            if argument.and_then(string_value).is_none() {
+                self.dynamic(argument, it.span);
+            }
         }
         let handler = self
             .record_call(&it.callee, &it.arguments, false, it.span)
@@ -655,6 +670,11 @@ impl<'a> Visit<'a> for Walker<'_> {
             }
             _ => {}
         }
+        self.bound = init.and_then(|init| match core(init) {
+            Core::Call(call) => Some(call.span),
+            Core::New(new) => Some(new.span),
+            Core::Other(_) => None,
+        });
         walk::walk_variable_declarator(self, it);
     }
 
@@ -729,8 +749,7 @@ impl<'a> Visit<'a> for Walker<'_> {
         if let Some(specifier) = string_value(&it.source) {
             self.import("", &specifier, Imported::Effect, false);
         } else {
-            let lines = self.lines(it.span);
-            self.module.dynamic.push(lines);
+            self.dynamic(Some(&it.source), it.span);
         }
         walk::walk_import_expression(self, it);
     }
@@ -1243,6 +1262,26 @@ fn module_relative(expr: &Expression<'_>) -> Option<String> {
         }
         _ => None,
     }
+}
+
+// The relative directory a computed specifier leads with: `` `./plugins/${name}` ``
+// spells `./plugins`, `"./plugins/" + name` the same. None where the lead
+// spells no directory of the tree.
+fn literal_head(expr: &Expression<'_>) -> Option<String> {
+    let lead = match bare(expr) {
+        Expression::TemplateLiteral(template) => {
+            template.quasis.first()?.value.cooked.map(|lead| lead.to_string())?
+        }
+        Expression::BinaryExpression(binary) if binary.operator == BinaryOperator::Addition => {
+            string_value(&binary.left)?
+        }
+        _ => return None,
+    };
+    if !lead.starts_with('.') {
+        return None;
+    }
+    let (dir, _) = lead.rsplit_once('/')?;
+    Some(dir.to_owned())
 }
 
 // `__dirname`, or `import.meta.dirname`: the directory of the module itself.

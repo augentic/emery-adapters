@@ -11,8 +11,11 @@
 //! What the tree does not answer is a package, third-party and standard
 //! library alike, unless its first segment is a package of the tree's own.
 //! That import is `Target::Unresolved`, never dropped, so the survey can say
-//! what it could not follow and widen what it lays. Imports are settled
-//! once, after the tree is read, and carried on the module.
+//! what it could not follow and widen what it lays; one reaching a test
+//! module the keep set aside is `Target::Skipped`, known and followed
+//! nowhere. A load by a computed name is settled to the directory its
+//! literal head or the walked package leads into. Imports are settled once,
+//! after the tree is read, and carried on the module.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -26,6 +29,9 @@ use super::unique;
 #[derive(Debug)]
 pub struct Resolver {
     modules: BTreeSet<String>,
+    // The test modules the keep set aside, which a production module may
+    // still import.
+    tests: BTreeSet<String>,
     data: BTreeSet<String>,
     // Root-relative, `""` for the root itself.
     roots: Vec<String>,
@@ -39,7 +45,7 @@ impl Resolver {
     // `owned` is the manifest's name, when it has one.
     pub fn new(
         modules: impl IntoIterator<Item = String>, data: impl IntoIterator<Item = String>,
-        owned: Option<&str>,
+        tests: impl IntoIterator<Item = String>, owned: Option<&str>,
     ) -> Self {
         let modules: BTreeSet<String> = modules.into_iter().collect();
         let packages: BTreeSet<&str> =
@@ -80,6 +86,7 @@ impl Resolver {
 
         Self {
             modules,
+            tests: tests.into_iter().collect(),
             data: data.into_iter().collect(),
             roots,
             owned,
@@ -104,6 +111,14 @@ impl Resolver {
         for reexport in &mut module.reexports {
             reexport.target = self.resolve(&from, &reexport.specifier, None);
         }
+        let scopes: Vec<Option<String>> = module
+            .dynamic
+            .iter()
+            .map(|load| load.specifier.as_deref().and_then(|spelled| self.scope(module, spelled)))
+            .collect();
+        for (load, scope) in module.dynamic.iter_mut().zip(scopes) {
+            load.scope = scope;
+        }
     }
 
     // `name` is what a `from` import takes. An import of a namespace package
@@ -121,13 +136,22 @@ impl Resolver {
                 dir = dir.rsplit_once('/').map_or("", |(parent, _)| parent);
             }
             let base = join(dir, &rest.replace('.', "/"));
-            return self.module_at(&base, name).map(Target::Module).or_else(unresolved);
+            return self
+                .module_at(&base, name)
+                .map(Target::Module)
+                .or_else(|| self.test_at(&base, name).map(Target::Skipped))
+                .or_else(unresolved);
         }
 
         let path = specifier.replace('.', "/");
         for root in &self.roots {
             if let Some(found) = self.module_at(&join(root, &path), name) {
                 return Some(Target::Module(found));
+            }
+        }
+        for root in &self.roots {
+            if let Some(found) = self.test_at(&join(root, &path), name) {
+                return Some(Target::Skipped(found));
             }
         }
         let first = specifier.split('.').next().unwrap_or(specifier);
@@ -219,26 +243,49 @@ impl Resolver {
     // `name` is probed as a submodule first, as the interpreter probes it.
     fn module_at(&self, base: &str, name: Option<&str>) -> Option<String> {
         if let Some(name) = name
-            && let Some(found) = self.file_or_init(&join(base, name))
+            && let Some(found) = file_or_init(&self.modules, &join(base, name))
         {
             return Some(found);
         }
-        self.file_or_init(base)
+        file_or_init(&self.modules, base)
     }
 
-    fn file_or_init(&self, base: &str) -> Option<String> {
-        if base.is_empty() {
-            return None;
+    // `module_at`, over the test modules the keep set aside.
+    fn test_at(&self, base: &str, name: Option<&str>) -> Option<String> {
+        if let Some(name) = name
+            && let Some(found) = file_or_init(&self.tests, &join(base, name))
+        {
+            return Some(found);
         }
-        [format!("{base}.py"), format!("{base}/__init__.py")]
-            .into_iter()
-            .find(|path| self.modules.contains(path))
+        file_or_init(&self.tests, base)
+    }
+
+    // The directory a computed load leads into: the package the dotted name
+    // it spells is, beneath the first root holding one, else the package
+    // that name is imported as.
+    fn scope(&self, module: &Module, spelled: &str) -> Option<String> {
+        let path = spelled.replace('.', "/");
+        if let Some(base) =
+            self.roots.iter().map(|root| join(root, &path)).find(|base| self.holds_package(base))
+        {
+            return Some(base);
+        }
+        module.imported(spelled)?.strip_suffix("/__init__.py").map(str::to_owned)
     }
 
     // A namespace package: a directory of modules with no `__init__`.
     fn holds_package(&self, base: &str) -> bool {
         !base.is_empty() && self.modules.iter().any(|path| path.starts_with(&format!("{base}/")))
     }
+}
+
+fn file_or_init(among: &BTreeSet<String>, base: &str) -> Option<String> {
+    if base.is_empty() {
+        return None;
+    }
+    [format!("{base}.py"), format!("{base}/__init__.py")]
+        .into_iter()
+        .find(|path| among.contains(path))
 }
 
 fn join(dir: &str, path: &str) -> String {

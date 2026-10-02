@@ -6,8 +6,11 @@
 //! specifier may spell, and a bare specifier no mapping answers is a
 //! package. A relative or aliased specifier the tree does not answer is
 //! `Unresolved`, never dropped, so the survey can say what it could not
-//! follow and widen what it lays. Each module's imports are settled once the
-//! tree is read and carried on the module.
+//! follow and widen what it lays; one reaching a test module the keep set
+//! aside is `Skipped`, known and followed nowhere. A load by a computed
+//! name is settled to the directory its literal head leads into. Each
+//! module's imports are settled once the tree is read and carried on the
+//! module.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -25,6 +28,9 @@ const OUTPUT_DIRS: &[&str] = &["dist", "build", "lib", "out"];
 #[derive(Debug)]
 pub struct Resolver {
     modules: BTreeSet<String>,
+    // The test modules the keep set aside, which a production module may
+    // still import.
+    tests: BTreeSet<String>,
     data: BTreeSet<String>,
     // Root-relative, `""` for the root itself.
     base_url: Option<String>,
@@ -38,10 +44,11 @@ impl Resolver {
     // read.
     pub fn new(
         modules: impl IntoIterator<Item = String>, data: impl IntoIterator<Item = String>,
-        root: &Path,
+        tests: impl IntoIterator<Item = String>, root: &Path,
     ) -> Self {
         let mut resolver = Self {
             modules: modules.into_iter().collect(),
+            tests: tests.into_iter().collect(),
             data: data.into_iter().collect(),
             base_url: None,
             paths: Vec::new(),
@@ -73,6 +80,10 @@ impl Resolver {
         }
         for reexport in &mut module.reexports {
             reexport.target = self.resolve(&from, &reexport.specifier);
+        }
+        let dir = from.rsplit_once('/').map_or("", |(dir, _)| dir);
+        for load in &mut module.dynamic {
+            load.scope = load.specifier.as_deref().and_then(|spelled| normalize(dir, spelled));
         }
     }
 
@@ -137,7 +148,7 @@ impl Resolver {
     }
 
     // A module first, else a data file as written or with the `.json` a
-    // `require` may leave off.
+    // `require` may leave off, else a test module the keep set aside.
     fn file(&self, candidate: &str) -> Option<Target> {
         if let Some(module) = self.probe(candidate) {
             return Some(Target::Module(module));
@@ -146,34 +157,39 @@ impl Resolver {
             .into_iter()
             .find(|path| self.data.contains(path))
             .map(Target::Data)
+            .or_else(|| probe(&self.tests, candidate).map(Target::Skipped))
     }
 
-    // As written, with a source extension in place of the one it has or
-    // lacks, or as a directory's `index`.
     fn probe(&self, candidate: &str) -> Option<String> {
-        if self.modules.contains(candidate) {
-            return Some(candidate.to_owned());
-        }
-        let (dir, file) = candidate.rsplit_once('/').map_or(("", candidate), |(d, f)| (d, f));
-        let stem = match file.rsplit_once('.') {
-            Some((stem, extension)) if EXTENSIONS.contains(&extension) => stem,
-            _ => file,
-        };
-        let prefix = if dir.is_empty() { String::new() } else { format!("{dir}/") };
-        for extension in EXTENSIONS {
-            let path = format!("{prefix}{stem}.{extension}");
-            if self.modules.contains(&path) {
-                return Some(path);
-            }
-        }
-        for extension in EXTENSIONS {
-            let path = format!("{candidate}/index.{extension}");
-            if self.modules.contains(&path) {
-                return Some(path);
-            }
-        }
-        None
+        probe(&self.modules, candidate)
     }
+}
+
+// As written, with a source extension in place of the one it has or lacks,
+// or as a directory's `index`.
+fn probe(among: &BTreeSet<String>, candidate: &str) -> Option<String> {
+    if among.contains(candidate) {
+        return Some(candidate.to_owned());
+    }
+    let (dir, file) = candidate.rsplit_once('/').map_or(("", candidate), |(d, f)| (d, f));
+    let stem = match file.rsplit_once('.') {
+        Some((stem, extension)) if EXTENSIONS.contains(&extension) => stem,
+        _ => file,
+    };
+    let prefix = if dir.is_empty() { String::new() } else { format!("{dir}/") };
+    for extension in EXTENSIONS {
+        let path = format!("{prefix}{stem}.{extension}");
+        if among.contains(&path) {
+            return Some(path);
+        }
+    }
+    for extension in EXTENSIONS {
+        let path = format!("{candidate}/index.{extension}");
+        if among.contains(&path) {
+            return Some(path);
+        }
+    }
+    None
 }
 
 // What the pattern's `*` stood for, or the empty string for an exact match.

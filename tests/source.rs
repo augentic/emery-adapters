@@ -2093,9 +2093,9 @@ async fn typescript_anchors() {
 }
 
 // An Express service whose handler steps into the tree through instances:
-// a repository constructed into a local, awaited and then called for its
-// effect alone, and a mailer handed to a helper whose parameter is typed
-// by the tree's class.
+// a repository constructed into a local, awaited, called for its effect
+// alone, and called for a result it binds, and a mailer handed to a helper
+// whose parameter is typed by the tree's class.
 const STEPPING: [(&str, &str); 4] = [
     (
         "src/index.ts",
@@ -2107,23 +2107,24 @@ const STEPPING: [(&str, &str); 4] = [
         "import { OrdersRepository } from \"./repository\";\nimport { Mailer } from \
          \"./mailer\";\n\nexport async function createOrder(req: { body: { sku: string } }, res: { \
          json(body: unknown): void }) {\n  const repo = new OrdersRepository();\n  const id = \
-         await repo.insert(req.body.sku);\n  repo.flush();\n  await notify(new Mailer(), id);\n  \
-         res.json({ id });\n}\n\nasync function notify(mailer: Mailer, id: string) {\n  await \
-         mailer.send(id);\n}\n",
+         await repo.insert(req.body.sku);\n  repo.flush();\n  const total = repo.total(id);\n  \
+         await notify(new Mailer(), id);\n  res.json({ id, total });\n}\n\nasync function \
+         notify(mailer: Mailer, id: string) {\n  await mailer.send(id);\n}\n",
     ),
     (
         "src/repository.ts",
         "export class OrdersRepository {\n  async insert(sku: string): Promise<string> {\n    \
-         return sku;\n  }\n  flush(): void {}\n}\n",
+         return sku;\n  }\n  flush(): void {}\n  total(id: string): number {\n    return \
+         id.length;\n  }\n}\n",
     ),
     ("src/mailer.ts", "export class Mailer {\n  async send(id: string): Promise<void> {}\n}\n"),
 ];
 
 // A step a function takes into the tree is a `requirement`'s anchor however
-// the code reaches the instance it steps on: a call awaited or made for its
-// effect alone on a local a tree class constructs, or on a parameter typed
-// by one, as on `this` or a module import; the construction the local holds
-// only wires, and is refused.
+// the code reaches the instance it steps on: a call awaited, made for its
+// effect alone, or made for a result it binds on a local a tree class
+// constructs, or on a parameter typed by one, as on `this` or a module
+// import; the construction the local holds only wires, and is refused.
 #[tokio::test]
 async fn typescript_steps() {
     let project = scratch();
@@ -2136,17 +2137,23 @@ async fn typescript_steps() {
         "kind": "requirement", "id": "orders.flush",
         "statement": "The repository is flushed after the insert.", "path": "src/orders.ts#L7"
     });
+    let totalled = serde_json::json!({
+        "kind": "requirement", "id": "orders.total",
+        "statement": "The order's total is read from the repository.", "path": "src/orders.ts#L8"
+    });
     let sent = serde_json::json!({
         "kind": "requirement", "id": "orders.notify",
-        "statement": "The order's id is mailed.", "path": "src/orders.ts#L13"
+        "statement": "The order's id is mailed.", "path": "src/orders.ts#L14"
     });
     let constructed = serde_json::json!({
         "kind": "requirement", "id": "orders.repository",
         "statement": "Orders use a repository.", "path": "src/orders.ts#L5"
     });
     let strayed =
-        serde_json::json!({ "claims": [&inserted, &constructed, &flushed, &sent] }).to_string();
-    let corrected = serde_json::json!({ "claims": [&inserted, &flushed, &sent] }).to_string();
+        serde_json::json!({ "claims": [&inserted, &constructed, &flushed, &totalled, &sent] })
+            .to_string();
+    let corrected =
+        serde_json::json!({ "claims": [&inserted, &flushed, &totalled, &sent] }).to_string();
     let survey = inventory(&[("POST /orders", "src/index.ts#L5", "orders")], &[]);
     let inline = answer();
 
@@ -2166,7 +2173,7 @@ async fn typescript_steps() {
         correction.contains("claim 1: path `src/orders.ts#L5`"),
         "the finding names the claim at the construction: {correction}"
     );
-    for held in ["claim 0:", "claim 2:", "claim 3:"] {
+    for held in ["claim 0:", "claim 2:", "claim 3:", "claim 4:"] {
         assert!(!correction.contains(held), "{held} is at a step into the tree: {correction}");
     }
     assert_eq!(exchanges[1].outcome, Ok(String::new()), "the corrected answer is accepted");
@@ -2251,12 +2258,13 @@ async fn typescript_stated() {
 }
 
 // The service imports a module the tree does not hold and loads another by
-// a computed name, so its seam cannot know what it reaches: the rest of the
-// tree follows the closure — the entry, listed after the store past the
-// budget — and the brief says what could not be followed and why the list
-// runs on. The bootstrap's seam, whose modules import nothing unresolved,
-// is not widened. Within the budget every module is laid already, so the
-// brief says only what could not be followed.
+// a name spelling no directory, so its seam cannot know what it reaches:
+// the rest of the importing module's directory follows the closure — the
+// entry, listed after the store past the budget — and the brief says what
+// could not be followed and why the list runs on. The bootstrap's seam,
+// whose modules import nothing unresolved, is not widened. Within the
+// budget every module is laid already, so the brief says only what could
+// not be followed.
 #[tokio::test]
 async fn typescript_unresolved() {
     const ORDERS: &str = "import { pool } from \"./db\";\nimport { seed } from \
@@ -2290,10 +2298,10 @@ async fn typescript_unresolved() {
     laid(orders, &["src/routes.ts", "src/orders.ts"], &[]);
     let db = orders.find("- `src/db.ts`\n").expect("the store past the budget is listed");
     let index = orders.find("- `src/index.ts`\n").expect("the entry follows the closure");
-    assert!(db < index, "the rest of the tree is listed after the closure: {orders}");
+    assert!(db < index, "the rest of the directory is listed after the closure: {orders}");
     assert!(
         orders.contains(&format!(
-            "{UNFOLLOWED} The modules after the closure are the rest of the tree, laid so what \
+            "{UNFOLLOWED} The modules after the closure are the rest of `src`, laid so what \
              these name is still within reach; read them for that alone."
         )),
         "the brief says what could not be followed and why the list runs on: {orders}"
@@ -2312,7 +2320,98 @@ async fn typescript_unresolved() {
     let turns = surveyed(TYPESCRIPT, &model, 1);
     laid(&turns[0], &["src/index.ts", "src/routes.ts", "src/orders.ts", "src/db.ts"], &[]);
     assert!(turns[0].contains(UNFOLLOWED), "{}", turns[0]);
-    assert!(!turns[0].contains("rest of the tree"), "nothing was widened: {}", turns[0]);
+    assert!(!turns[0].contains("rest of `src`"), "nothing was widened: {}", turns[0]);
+}
+
+// A load by a computed name whose literal lead spells a directory of the
+// tree widens the seam to that directory alone: its modules follow the
+// closure, in path order, and the brief names the directory the load
+// spells; a module beside the loader is not laid for it.
+#[tokio::test]
+async fn typescript_dynamic() {
+    const ORDERS: &str = "import { pool } from \"./db\";\n\nexport async function \
+                          createOrder(input: unknown) {\n  return { id: pool, input };\n}\n\nexport \
+                          function loadPlugin(name: string) {\n  return import(`./plugins/${name}`);\n}\n\nexport \
+                          function findOrder(req: { params: { id: string } }, res: { json(body: \
+                          unknown): void }) {\n  res.json({ id: req.params.id, pool });\n}\n";
+    let project = scratch();
+    modules(&project, &APP);
+    project.write("src/orders.ts", ORDERS);
+    bulk(&project, "src/db.ts", "export const pool = \"o-1\";\n");
+    project.write("src/plugins/rural.ts", "export const surcharge = 650;\n");
+    project.write("src/plugins/urban.ts", "export const surcharge = 0;\n");
+    let survey = app_inventory();
+    let neutral = decision();
+    let answer = answer();
+
+    let model = support::run(
+        test_programs::ADAPTER_TYPESCRIPT,
+        &project,
+        &[],
+        ScriptedModel::answering([&survey, &neutral, &neutral, &answer]),
+    )
+    .await;
+
+    let turns = surveyed(TYPESCRIPT, &model, 2);
+    let orders = turn_for(&turns, "POST /api/orders");
+    laid(orders, &["src/routes.ts", "src/orders.ts"], &[]);
+    let db = orders.find("- `src/db.ts`\n").expect("the store past the budget is listed");
+    let rural = orders.find("- `src/plugins/rural.ts`\n").expect("the plugins follow the closure");
+    let urban = orders.find("- `src/plugins/urban.ts`\n").expect("in path order");
+    assert!(db < rural && rural < urban, "the directory the load spells is laid last: {orders}");
+    assert!(
+        !orders.contains("- `src/index.ts`\n"),
+        "a module beside the loader is not laid for a load spelling another directory: {orders}"
+    );
+    assert!(
+        orders.contains(
+            "The caller could not follow every import: `src/orders.ts` loads a module of \
+             `src/plugins` by a computed name at L8. What these name is in none of the lists \
+             above. The modules after the closure are the rest of `src/plugins`, laid so what \
+             these name is still within reach; read them for that alone."
+        ),
+        "the brief names the directory the load spells: {orders}"
+    );
+}
+
+// A production module importing a test helper the keep set aside is
+// followed to a module the survey skips, not to nothing: the seam is not
+// widened for it, the brief says nothing could not be followed, and the
+// helper is laid among neither the modules nor the stated tests.
+#[tokio::test]
+async fn typescript_skipped_import() {
+    let project = scratch();
+    modules(&project, &APP);
+    project.write(
+        "src/orders.ts",
+        "import { pool } from \"./db\";\nimport { fixture } from \"../test/helpers\";\n\nexport \
+         async function createOrder(input: unknown) {\n  return { id: pool, input, fixture \
+         };\n}\n\nexport function findOrder(req: { params: { id: string } }, res: { json(body: \
+         unknown): void }) {\n  res.json({ id: req.params.id, pool });\n}\n",
+    );
+    project.write("test/helpers.ts", "export const fixture = { sku: \"a\" };\n");
+    bulk(&project, "src/db.ts", "export const pool = \"o-1\";\n");
+    let survey = app_inventory();
+    let neutral = decision();
+    let answer = answer();
+
+    let model = support::run(
+        test_programs::ADAPTER_TYPESCRIPT,
+        &project,
+        &[],
+        ScriptedModel::answering([&survey, &neutral, &neutral, &answer]),
+    )
+    .await;
+
+    let turns = surveyed(TYPESCRIPT, &model, 2);
+    let orders = turn_for(&turns, "POST /api/orders");
+    laid(orders, &["src/routes.ts", "src/orders.ts"], &["src/index.ts"]);
+    assert!(orders.contains("- `src/db.ts`\n"), "the store past the budget is listed: {orders}");
+    assert!(
+        !orders.contains("could not follow"),
+        "the helper is skipped, not unresolved: {orders}"
+    );
+    assert!(!orders.contains("test/helpers.ts"), "a skipped helper is laid nowhere: {orders}");
 }
 
 // A `.json` a module imports by path is a data file of the seam: named in the
@@ -4480,10 +4579,13 @@ async fn python_anchors() {
 }
 
 // A step a function takes into the tree is a `requirement`'s anchor however
-// the code reaches the instance it steps on: a call awaited or made for its
-// effect alone on a local a tree class constructs, or on a parameter typed
-// by one, as on `self` or a module import; the construction the local holds
-// only wires, and is refused.
+// the code reaches the instance it steps on: a call awaited, made for its
+// effect alone, or made for a result it binds on a local a tree class
+// constructs, or on a parameter typed by one, as on `self` or a module
+// import; the construction the local holds only wires, and is refused. A
+// local a `with` binds is traced through its context expression as an
+// assigned one is through its value, so a call on the cursor a pool's
+// connection opened is a call through the pool's package.
 #[tokio::test]
 async fn python_steps() {
     let project = scratch();
@@ -4494,17 +4596,22 @@ async fn python_steps() {
             PY_DECIDING[1],
             (
                 "app/orders.py",
-                "from .mailer import Mailer\nfrom .repository import OrdersRepository\n\n\nasync \
-                 def create_order(body: dict) -> dict:\n    repo = OrdersRepository()\n    \
-                 order_id = await repo.insert(body[\"sku\"])\n    repo.flush()\n    await \
-                 notify(Mailer(), order_id)\n    return {\"id\": order_id}\n\n\nasync def \
-                 notify(mailer: Mailer, order_id: str) -> None:\n    await \
-                 mailer.send(order_id)\n",
+                "import os\n\nfrom psycopg_pool import ConnectionPool\n\nfrom .mailer import \
+                 Mailer\nfrom .repository import OrdersRepository\n\npool = \
+                 ConnectionPool(os.environ[\"DATABASE_URL\"])\n\n\nasync def create_order(body: \
+                 dict) -> dict:\n    repo = OrdersRepository()\n    order_id = await \
+                 repo.insert(body[\"sku\"])\n    repo.flush()\n    total = \
+                 repo.total(order_id)\n    with pool.connection() as conn, conn.cursor() as \
+                 cur:\n        cur.execute(\"INSERT INTO orders (id) VALUES (%s)\", \
+                 [order_id])\n    await notify(Mailer(), order_id)\n    return {\"id\": order_id, \
+                 \"total\": total}\n\n\nasync def notify(mailer: Mailer, order_id: str) -> \
+                 None:\n    await mailer.send(order_id)\n",
             ),
             (
                 "app/repository.py",
                 "class OrdersRepository:\n    async def insert(self, sku: str) -> str:\n        \
-                 return sku\n\n    def flush(self) -> None:\n        pass\n",
+                 return sku\n\n    def flush(self) -> None:\n        pass\n\n    def total(self, \
+                 order_id: str) -> int:\n        return len(order_id)\n",
             ),
             (
                 "app/mailer.py",
@@ -4514,23 +4621,35 @@ async fn python_steps() {
     );
     let inserted = serde_json::json!({
         "kind": "requirement", "id": "orders.insert",
-        "statement": "An order is inserted by its sku.", "path": "app/orders.py#L7"
+        "statement": "An order is inserted by its sku.", "path": "app/orders.py#L13"
     });
     let flushed = serde_json::json!({
         "kind": "requirement", "id": "orders.flush",
-        "statement": "The repository is flushed after the insert.", "path": "app/orders.py#L8"
+        "statement": "The repository is flushed after the insert.", "path": "app/orders.py#L14"
+    });
+    let totalled = serde_json::json!({
+        "kind": "requirement", "id": "orders.total",
+        "statement": "The order's total is read from the repository.", "path": "app/orders.py#L15"
+    });
+    let executed = serde_json::json!({
+        "kind": "requirement", "id": "orders.record",
+        "statement": "The order is recorded in the store.", "path": "app/orders.py#L17"
     });
     let sent = serde_json::json!({
         "kind": "requirement", "id": "orders.notify",
-        "statement": "The order's id is mailed.", "path": "app/orders.py#L14"
+        "statement": "The order's id is mailed.", "path": "app/orders.py#L23"
     });
     let constructed = serde_json::json!({
         "kind": "requirement", "id": "orders.repository",
-        "statement": "Orders use a repository.", "path": "app/orders.py#L6"
+        "statement": "Orders use a repository.", "path": "app/orders.py#L12"
     });
-    let strayed =
-        serde_json::json!({ "claims": [&inserted, &constructed, &flushed, &sent] }).to_string();
-    let corrected = serde_json::json!({ "claims": [&inserted, &flushed, &sent] }).to_string();
+    let strayed = serde_json::json!({
+        "claims": [&inserted, &constructed, &flushed, &totalled, &executed, &sent]
+    })
+    .to_string();
+    let corrected =
+        serde_json::json!({ "claims": [&inserted, &flushed, &totalled, &executed, &sent] })
+            .to_string();
     let survey = py_deciding_inventory();
     let inline = answer();
 
@@ -4544,13 +4663,18 @@ async fn python_steps() {
 
     let seen = model.seen();
     assert_eq!(seen.len(), 4, "the survey, two rounds for the one seam, one for the inline value");
+    let turn = &seen[1].messages[0];
+    assert!(
+        turn.contains("- `psycopg_pool:ConnectionPool.execute` in `app/orders.py` at L17"),
+        "the cursor's call is listed under the pool's package: {turn}"
+    );
     let exchanges = checked(&model);
     let correction = exchanges[0].outcome.as_ref().expect_err("the construction is refused");
     assert!(
-        correction.contains("claim 1: path `app/orders.py#L6`"),
+        correction.contains("claim 1: path `app/orders.py#L12`"),
         "the finding names the claim at the construction: {correction}"
     );
-    for held in ["claim 0:", "claim 2:", "claim 3:"] {
+    for held in ["claim 0:", "claim 2:", "claim 3:", "claim 4:", "claim 5:"] {
         assert!(!correction.contains(held), "{held} is at a step into the tree: {correction}");
     }
     assert_eq!(exchanges[1].outcome, Ok(String::new()), "the corrected answer is accepted");
@@ -4864,13 +4988,14 @@ async fn python_relative_typing_name() {
 }
 
 // The service imports a module the tree does not hold and loads another by
-// a computed name, so its seam cannot know what it reaches: the rest of the
-// tree follows the closure — the entry, listed after the store past the
-// budget — and the brief says what could not be followed and why the list
-// runs on. The bootstrap's seam, whose modules import nothing unresolved,
-// is not widened. Within the budget every module is laid already — the
-// package `__init__.py` files no closure holds among them — so the brief says
-// only what could not be followed.
+// a name spelling no package, so its seam cannot know what it reaches: the
+// rest of the importing module's package follows the closure — nothing,
+// since `app/services/` holds the service alone, so the entry is not listed
+// — and the brief says what could not be followed and nothing of a list
+// that does not run on. The bootstrap's seam, whose modules import nothing
+// unresolved, is not widened. Within the budget every module is laid
+// already — the package `__init__.py` files no closure holds among them —
+// so the brief says only what could not be followed there too.
 #[tokio::test]
 async fn python_unresolved() {
     const ORDERS: &str = "import importlib\n\nfrom ..db import pool\nfrom .generated import \
@@ -4901,17 +5026,14 @@ async fn python_unresolved() {
 
     let turns = surveyed(PYTHON, &model, 3);
     let orders = turn_for(&turns, "POST /api/orders");
-    laid(orders, &["app/routers/orders.py", "app/services/orders.py"], &[]);
-    let db = orders.find("- `app/db.py`\n").expect("the store past the budget is listed");
-    let main = orders.find("- `app/main.py`\n").expect("the entry follows the closure");
-    assert!(db < main, "the rest of the tree is listed after the closure: {orders}");
+    laid(orders, &["app/routers/orders.py", "app/services/orders.py"], &["app/main.py"]);
+    assert!(orders.contains("- `app/db.py`\n"), "the store past the budget is listed: {orders}");
     assert!(
-        orders.contains(&format!(
-            "{UNFOLLOWED} The modules after the closure are the rest of the tree, laid so what \
-             these name is still within reach; read them for that alone."
-        )),
-        "the brief says what could not be followed and why the list runs on: {orders}"
+        orders.contains(&format!("{UNFOLLOWED}\n")),
+        "the brief says what could not be followed and nothing of a list that does not run on: \
+         {orders}"
     );
+    assert!(!orders.contains("after the closure"), "the package holds nothing more: {orders}");
     let start = turn_for(&turns, "start");
     laid(start, &["app/main.py", "app/routers/orders.py"], &["app/services/orders.py"]);
     assert!(!start.contains("could not follow"), "nothing of `start` is unresolved: {start}");
@@ -4926,7 +5048,7 @@ async fn python_unresolved() {
     let turns = surveyed(PYTHON, &model, 1);
     laid(&turns[0], &["app/main.py", "app/routers/orders.py", "app/services/orders.py"], &[]);
     assert!(turns[0].contains(UNFOLLOWED), "{}", turns[0]);
-    assert!(!turns[0].contains("rest of the tree"), "nothing was widened: {}", turns[0]);
+    assert!(!turns[0].contains("after the closure"), "nothing was widened: {}", turns[0]);
 }
 
 // The survey over the committed `click-jobs` fixture — the tree the eval of
@@ -5257,8 +5379,11 @@ async fn python_fixture_fastapi_routers() {
 
 // A module loaded by a literal dotted name is followed into the closure as
 // an import is; one loaded by a computed name, or found by walking a
-// package, cannot be, so the seam is widened to the rest of the tree and the
-// brief says where the load is spelled — every import of it followed.
+// package, cannot be, so the seam is widened to the package the load
+// spells — the f-string's dotted lead, the package whose `__path__` is
+// walked — and the brief names that package where the load is spelled,
+// every import of it followed; a module beside the loader is not laid for
+// a load spelling another package.
 #[tokio::test]
 async fn python_dynamic() {
     let project = scratch();
@@ -5304,20 +5429,65 @@ async fn python_dynamic() {
         "the literal load is followed: {orders}"
     );
     let rural = orders.find("- `app/plugins/rural.py`\n").expect("the closure is listed");
-    let urban = orders.find("- `app/plugins/urban.py`\n").expect("the rest of the tree follows");
-    assert!(rural < urban, "the rest of the tree is listed after the closure: {orders}");
+    let urban = orders.find("- `app/plugins/urban.py`\n").expect("the rest of the package follows");
+    assert!(rural < urban, "the rest of the package is listed after the closure: {orders}");
+    assert!(
+        !orders.contains("- `app/main.py`\n"),
+        "a module beside the loader is not laid for a load spelling another package: {orders}"
+    );
     assert!(
         orders.contains(
-            "The caller could not follow every import: `app/services/orders.py` loads a module by \
-             a computed name at L11, L12. What these name is in none of the lists above. The \
-             modules after the closure are the rest of the tree, laid so what these name is \
-             still within reach; read them for that alone."
+            "The caller could not follow every import: `app/services/orders.py` loads a module of \
+             `app/plugins` by a computed name at L11, L12. What these name is in none of the \
+             lists above. The modules after the closure are the rest of `app/plugins`, laid so \
+             what these name is still within reach; read them for that alone."
         ),
-        "the brief says where the loads are spelled: {orders}"
+        "the brief names the package the loads spell: {orders}"
     );
     assert!(!orders.contains("names no module"), "every import was followed: {orders}");
     let start = turn_for(&turns, "start");
     assert!(!start.contains("could not follow"), "nothing of `start` is dynamic: {start}");
+}
+
+// A production module importing a test helper the keep set aside is
+// followed to a module the survey skips, not to nothing: the seam is not
+// widened for it, the brief says nothing could not be followed, and the
+// helper is laid among neither the modules nor the stated tests.
+#[tokio::test]
+async fn python_skipped_import() {
+    let project = scratch();
+    modules(&project, &PY_APP);
+    project.write(
+        "app/services/orders.py",
+        "from tests.factories import order_body\n\nfrom ..db import pool\n\n\nasync def \
+         create_order(body: dict) -> dict:\n    return {\"id\": pool, \"body\": body or \
+         order_body()}\n\n\ndef find_order(order_id: str) -> dict:\n    return {\"id\": order_id, \
+         \"pool\": pool}\n",
+    );
+    project.write("tests/__init__.py", "");
+    project.write("tests/factories.py", "def order_body() -> dict:\n    return {\"sku\": \"a\"}\n");
+    py_bulk(&project, "app/db.py", "pool = \"o-1\"\n");
+    let survey = py_app_inventory();
+    let neutral = decision();
+    let answer = answer();
+
+    let model = support::run(
+        test_programs::ADAPTER_PYTHON,
+        &project,
+        &[],
+        ScriptedModel::answering([&survey, &neutral, &neutral, &neutral, &answer]),
+    )
+    .await;
+
+    let turns = surveyed(PYTHON, &model, 3);
+    let orders = turn_for(&turns, "POST /api/orders");
+    laid(orders, &["app/routers/orders.py", "app/services/orders.py"], &["app/main.py"]);
+    assert!(orders.contains("- `app/db.py`\n"), "the store past the budget is listed: {orders}");
+    assert!(
+        !orders.contains("could not follow"),
+        "the helper is skipped, not unresolved: {orders}"
+    );
+    assert!(!orders.contains("tests/factories.py"), "a skipped helper is laid nowhere: {orders}");
 }
 
 // A `.json` a module names by path is a data file of the seam: named in the
