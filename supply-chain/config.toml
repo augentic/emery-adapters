@@ -154,11 +154,11 @@ version = "0.12.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.bon]]
-version = "3.10.1"
+version = "3.10.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.bon-macros]]
-version = "3.10.1"
+version = "3.10.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.bstr]]
@@ -669,6 +669,14 @@ criteria = "safe-to-deploy"
 version = "0.2.19"
 criteria = "safe-to-deploy"
 
+[[exemptions.lazy_static]]
+version = "1.5.1"
+criteria = "safe-to-deploy"
+
+[[exemptions.libc]]
+version = "0.2.190"
+criteria = "safe-to-deploy"
+
 [[exemptions.libsqlite3-sys]]
 version = "0.38.2"
 criteria = "safe-to-deploy"
@@ -1162,7 +1170,7 @@ version = "0.6.5"
 criteria = "safe-to-deploy"
 
 [[exemptions.spdx]]
-version = "0.13.5"
+version = "0.13.6"
 criteria = "safe-to-deploy"
 
 [[exemptions.spki]]
@@ -1370,7 +1378,7 @@ version = "0.9.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.uuid]]
-version = "1.26.1"
+version = "1.27.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.version_check]]
