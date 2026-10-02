@@ -1,3 +1,8 @@
+//! Drives one adapter through the `source-adapter` world under the omnia
+//! runtime and asserts what the host sees: the metadata, the evidence over a
+//! lent workspace and an inline value, a refusal's class, the echoed answer,
+//! or the `type` claims the adapter joins by its own reading.
+
 #![cfg(target_arch = "wasm32")]
 
 use emery_sdk::{ClaimKind, Evidence, Source, SourceKind};

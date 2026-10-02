@@ -1,21 +1,23 @@
+# Managed by augentic/toolkit from conventions/workflows/release.yaml and conventions.toml. Do not edit: run `make conventions-sync`.
+
 name: Create Release
 
-# Cut a durable release-X.Y.Z line for the first-party adapter train via the
-# shared Omnia-shaped workflow: push release-<version> at the current main
-# tip, then open a PR that bumps main to the next unreleased train version
-# and resets RELEASES.md. GHCR publication runs in Publish Release.
+# Cut a durable release-X.Y.Z line from main: push release-<version> at the
+# current tip, then open a pull request that bumps main to the next unreleased
+# version and resets RELEASES.md.
 
 on:
   workflow_dispatch:
     inputs:
-      # N.B Cargo version rules allow "minor" for breaking changes while on 0.x.y
       increment:
-        description: The type of version bump to perform
+        description: The version bump for main after the cut; while on 0.x, minor marks a breaking change
+        type: choice
+        options: [minor, patch, major]
         default: minor
-        type: string
 
 concurrency:
-  group: release
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -23,7 +25,7 @@ permissions:
 
 jobs:
   release:
-    uses: augentic/.github/.github/workflows/release.yaml@v0.2.0
+    uses: augentic/toolkit/.github/workflows/release.yaml@v0.3.0
     with:
       increment: ${{ inputs.increment }}
     secrets: inherit

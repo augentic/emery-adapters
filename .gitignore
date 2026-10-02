@@ -1,9 +1,10 @@
-.env
+# conventions:begin gitignore/head
 target/
-
-# Emery project state: the revision store the examples commit under
-.omnia/
-
+.env
 **/*.rs.bk
 rustc-ice-*
 .DS_Store
+# conventions:end gitignore/head
+
+# Emery project state: the revision store the examples commit under
+.omnia/

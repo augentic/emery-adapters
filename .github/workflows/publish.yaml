@@ -29,7 +29,7 @@ jobs:
   ci:
     name: CI
     if: ${{ startsWith(github.ref_name, 'release-') }}
-    uses: augentic/.github/.github/workflows/ci.yaml@v0.2.0
+    uses: augentic/toolkit/.github/workflows/ci.yaml@v0.3.0
     secrets: inherit
     with:
       targets: wasm32-wasip2
@@ -39,7 +39,7 @@ jobs:
     needs: ci
     permissions:
       contents: write
-    uses: augentic/.github/.github/workflows/publish.yaml@v0.2.0
+    uses: augentic/toolkit/.github/workflows/publish.yaml@v0.3.0
 
   adapters:
     name: Publish adapters

@@ -12,20 +12,25 @@ targets = [
 [output]
 feature-depth = 1
 
+# conventions:begin deny/advisories
 [advisories]
-unmaintained = 'workspace'
+unmaintained = "workspace"
+# conventions:end deny/advisories
 ignore = []
 
 # Mirrors the emery engine's allowlist: the omnia host graph the component
 # suites pull in (rustls / aws-lc-rs / opentelemetry) carries the
 # ISC / LLVM-exception / CDLA / CC0 entries beyond this repo's original
 # extension-only set.
+# conventions:begin deny/licenses
 [licenses]
 allow = [
   "Apache-2.0 WITH LLVM-exception",
   "Apache-2.0",
   "BSD-2-Clause",
   "BSD-3-Clause",
+  "BSL-1.0",
+  "CC0-1.0",
   "CDLA-Permissive-2.0",
   "ISC",
   "MIT",
@@ -33,6 +38,7 @@ allow = [
   "Unicode-3.0",
   "Zlib",
 ]
+# conventions:end deny/licenses
 
 exceptions = [
   # the Unicode character-name table `ruff_python_parser` reads identifiers

@@ -1,13 +1,5 @@
 version: 2
 updates:
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: weekly
-    groups:
-      actions:
-        patterns:
-          - "*"
   # The parsers each adapter pins exactly while they are pre-1.0 — ruff's
   # crates ship weekly, oxc's often — and nothing else: `make check` surfaces
   # the rest through `cargo outdated`. Each parser's crates bump as one group,
@@ -29,3 +21,18 @@ updates:
       oxc:
         patterns:
           - "oxc_*"
+
+# conventions:begin dependabot/actions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns:
+          - "*"
+    ignore:
+      # The toolkit pin is Renovate's: one pull request over every `uses:`
+      # and the mise `?ref=` together (renovate.json).
+      - dependency-name: "augentic/*"
+# conventions:end dependabot/actions

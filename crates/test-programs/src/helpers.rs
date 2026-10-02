@@ -1,27 +1,33 @@
 use emery_sdk::{AdapterMetadata, Backing, Claim, ClaimKind, Evidence, Source, SourceInput};
 use serde_json::json;
 
+/// The source name every probe input carries.
 pub const KEY: &str = "source";
 
+/// The caller every driver dispatches through: a `Source` with no state.
 pub struct Caller;
 
 impl Source for Caller {}
 
+/// Returns the program's arguments past its own name.
 #[must_use]
 pub fn arguments() -> Vec<String> {
     wasip3::cli::environment::get_arguments().into_iter().skip(1).collect()
 }
 
+/// Returns the input that lends the mounted workspace.
 #[must_use]
 pub fn workspace() -> SourceInput {
     SourceInput::workspace(KEY, ".")
 }
 
+/// Returns the input that carries `text` inline.
 #[must_use]
 pub fn value(text: &str) -> SourceInput {
     SourceInput::value(KEY, text)
 }
 
+/// Asserts the metadata's `emery_version`, where it carries one, is exact semver.
 pub fn check_metadata(metadata: &AdapterMetadata) {
     if let Some(version) = &metadata.emery_version {
         assert!(
@@ -31,6 +37,7 @@ pub fn check_metadata(metadata: &AdapterMetadata) {
     }
 }
 
+/// Asserts the evidence carries claims and passes the claim gate.
 pub fn check_evidence(evidence: &Evidence) {
     assert!(!evidence.claims.is_empty(), "evidence carries no claims");
 
@@ -38,6 +45,7 @@ pub fn check_evidence(evidence: &Evidence) {
     assert!(findings.is_empty(), "claim gate findings:\n{}", findings.join("\n"));
 }
 
+/// Asserts `actual` carries `expected`'s claims, field by field and in order.
 pub fn check_same(expected: &Evidence, actual: &Evidence) {
     assert_eq!(actual.claims.len(), expected.claims.len(), "claim count");
     for (index, (want, got)) in expected.claims.iter().zip(&actual.claims).enumerate() {
