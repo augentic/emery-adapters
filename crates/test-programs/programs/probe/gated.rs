@@ -1,3 +1,6 @@
+//! A `source-adapter` probe that mines one seam through the SDK, so the suite
+//! can drive the claim gate's repair rounds and its spent-rounds refusal.
+
 #![cfg(target_arch = "wasm32")]
 
 use emery_sdk::{AdapterMetadata, Context, Doc, Error, Evidence, Model, Seam, SourceKind};

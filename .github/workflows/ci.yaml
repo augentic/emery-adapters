@@ -1,21 +1,21 @@
+# Managed by augentic/toolkit from conventions/workflows/ci.yaml and conventions.toml. Do not edit: run `make conventions-sync`.
+
 name: CI
 
 on:
   push:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
 
 jobs:
   ci:
-    uses: augentic/.github/.github/workflows/ci.yaml@v0.2.0
+    uses: augentic/toolkit/.github/workflows/ci.yaml@v0.3.0
     secrets: inherit
     with:
-      # wasm32 clippy over every lib, bin and example of the guest side: the
-      # `sources/*` adapters and the `test-programs` guest programs. The root
-      # package and the `evals` harness are native — the suites and the
-      # runner name host-only dependencies — so the pass is scoped to the
-      # guest packages; mirrors `WASM32_PACKAGES` in mise.toml, and a new
-      # adapter is named in both.
       targets: wasm32-wasip2
       wasm-packages: documentation intent python typescript test-programs

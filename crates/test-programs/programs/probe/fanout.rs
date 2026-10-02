@@ -1,3 +1,6 @@
+//! A `source-adapter` probe that mines two seams at once, so the suite can
+//! hold the host to keeping one guest's completions pending together.
+
 #![cfg(target_arch = "wasm32")]
 
 use emery_sdk::{AdapterMetadata, Context, Doc, Error, Evidence, Model, Seam, SourceKind};
