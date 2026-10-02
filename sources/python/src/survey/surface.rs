@@ -12,16 +12,18 @@
 //!
 //! The rules read shapes, never a framework's name: a call handed a
 //! function, a decorator with a literal, an export. Two exceptions spell
-//! names. `DECORATOR_HOOKS` lists the decorators that shape a handler rather
-//! than register it, which keeps a verb decorator beneath one of them the
-//! surface. A module under `management/commands/` is read as a file-routed
-//! framework's module is.
+//! names. A decorator among the lifecycle hooks the data model lists
+//! (`Decorated::registering`) shapes a handler rather than registers it,
+//! which keeps a verb decorator beneath one of them the surface. A module
+//! under `management/commands/` is read as a file-routed framework's module
+//! is.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
 
 use super::parse::{
-    Arg, Binding, BindingKind, Call, Decorated, Export, ExportKind, Imported, Init, Lines,
-    MemberKind, Module, Scope, hooks, shapes,
+    Arg, BindingKind, Call, Decorated, Export, ExportKind, Imported, Init, Lines, MemberKind,
+    Module, Scope,
 };
 use super::resolve::{Manifest, Resolver};
 use super::{push_unique, unique};
@@ -82,41 +84,6 @@ const PREFIXED: &[&str] = &["APIRouter", "Blueprint", "Router"];
 // Path segments that version or namespace an API rather than name a surface.
 const PATH_NOISE: &[&str] = &["api", "rest", "internal"];
 
-// Decorators that hook what they decorate onto an application's or a
-// signal's lifecycle rather than register a surface for a caller.
-const DECORATOR_HOOKS: &[&str] = &[
-    "connect",
-    "receiver",
-    "listens_for",
-    "exception_handler",
-    "errorhandler",
-    "error_handler",
-    "before_request",
-    "after_request",
-    "before_first_request",
-    "middleware",
-    "context_processor",
-    "template_filter",
-    "url_value_preprocessor",
-    "url_defaults",
-];
-
-// Keywords a function is handed under as a hook on the thing being built,
-// not as the handler it registers.
-const HOOK_KEYWORDS: &[&str] = &[
-    "lifespan",
-    "on_startup",
-    "on_shutdown",
-    "exception_handlers",
-    "default_factory",
-    "default",
-    "key",
-    "callback",
-    "dependencies",
-    "middleware",
-    "result_callback",
-];
-
 // How many bindings a receiver is traced through before it counts as local.
 pub(super) const TRACE: usize = 4;
 
@@ -163,12 +130,37 @@ pub enum Runs {
 }
 
 impl Tree {
-    // The first entry that runs something, in this order: the entries the
-    // manifest's scripts name, the conventional entries the tree holds,
-    // then the one module of a tree of one. An entry runs by a console
-    // script whose function it declares or imports from a module of the
-    // tree that does, by a `__main__` guard, or at load. An entry that only
-    // declares is a library's.
+    pub(super) fn read(root: &Path, paths: Vec<String>, data: Vec<String>) -> Self {
+        let mut modules = BTreeMap::new();
+        for path in paths {
+            match std::fs::read_to_string(root.join(&path)) {
+                Ok(text) => {
+                    modules.insert(path.clone(), Module::parse(&path, text));
+                }
+                Err(error) => {
+                    emery_sdk::tracing::warn!(path, %error, "module is not readable text; left out");
+                }
+            }
+        }
+        let manifest = Manifest::read(root);
+        let resolver = Resolver::new(modules.keys().cloned(), data, manifest.name.as_deref());
+        for module in modules.values_mut() {
+            resolver.settle(module);
+        }
+        Self {
+            modules,
+            resolver,
+            manifest,
+        }
+    }
+
+    // The first entry that runs something, probed in this order:
+    // - the entries the manifest's scripts name
+    // - the conventional entries the tree holds
+    // - the one module of a tree of one
+    // An entry runs by a console script whose function it declares or
+    // imports from a module of the tree that does, by a `__main__` guard, or
+    // at load. An entry that only declares is a library's.
     pub(super) fn bootstrap(&self) -> Option<(&Module, Runs)> {
         let scripts =
             self.manifest.entries(&self.resolver).into_iter().filter_map(|(entry, function)| {
@@ -326,7 +318,7 @@ impl Tree {
             };
         }
         let (target, imported) = self.exporter(module, name)?;
-        match &exported_binding(target, &imported)?.kind {
+        match &target.exported_binding(&imported)?.kind {
             BindingKind::Value { string, .. } => string.clone(),
             _ => None,
         }
@@ -394,7 +386,7 @@ impl Tree {
             .values()
             .flat_map(|module| module.calls.iter().map(move |call| (module, call)))
             .filter(|(module, call)| {
-                handed(self, module, call).is_some() && registers(self, module, call)
+                self.handed(module, call).is_some() && self.registers(module, call)
             })
             .filter_map(|(module, call)| self.handed_class(module, call))
             .map(|(target, class)| (target.path.clone(), class))
@@ -404,7 +396,7 @@ impl Tree {
     // A view handed by `as_view()`, a view set, a worker class, with the
     // module declaring it.
     fn handed_class<'m>(&'m self, module: &'m Module, call: &Call) -> Option<(&'m Module, String)> {
-        call.args.iter().filter(|arg| !hook(arg)).find_map(|arg| {
+        call.args.iter().filter(|arg| !arg.is_hook()).find_map(|arg| {
             let root = arg.root.as_deref()?;
             let root = match root {
                 [.., last] if last == "as_view" => &root[..root.len() - 1],
@@ -538,7 +530,7 @@ impl Tree {
             });
         }
         let (target, imported) = self.exporter(module, name)?;
-        let binding = exported_binding(target, &imported)?;
+        let binding = target.exported_binding(&imported)?;
         self.trace(target, &binding.name, &[], member, budget - 1)
     }
 
@@ -548,9 +540,7 @@ impl Tree {
         &self, module: &Module, lines: Lines, frames: &[u32], class: Option<&str>,
     ) -> Vec<String> {
         let mut seeds = vec![module.path.clone()];
-        let span = class
-            .and_then(|class| module.classes.iter().find(|c| c.name == class))
-            .map_or(lines, |c| c.lines);
+        let span = class.and_then(|class| module.class(class)).map_or(lines, |c| c.lines);
         for name in module.referenced(span) {
             seed(&mut seeds, module, name);
             if let Some(binding) = module.binding(name, frames)
@@ -581,6 +571,255 @@ impl Tree {
         }
         self.closure(&seeds, &[])
     }
+
+    // A decorator's head is a binding of the tree (`app = FastAPI()`), traced
+    // as a call's receiver is.
+    pub(super) fn receiver_of(&self, module: &Module, name: &str) -> Option<Receiver> {
+        self.trace(module, name, &[], None, TRACE)
+    }
+
+    // A string literal, or a constant bound to one in the tree.
+    pub(super) fn led(&self, module: &Module, call: &Call) -> Option<String> {
+        call.args
+            .iter()
+            .find(|arg| arg.keyword.is_none())
+            .and_then(|arg| self.constant(module, arg, &call.frames))
+    }
+
+    // The function, or the class handed by `as_view()`, kebab-cased.
+    fn named_handler(&self, module: &Module, call: &Call) -> Option<String> {
+        call.args
+            .iter()
+            .filter(|arg| !arg.is_hook() && arg.root.is_some())
+            .find(|arg| self.handler(module, arg, &call.frames))
+            .and_then(|arg| {
+                let root = arg.root.as_ref()?;
+                let name = match root.as_slice() {
+                    [.., class, last] if last == "as_view" => class,
+                    [.., last] => last,
+                    [] => return None,
+                };
+                kebab(name)
+            })
+    }
+
+    // A handler among the arguments, not under a hook keyword, and not to a
+    // structural call (`sorted`, `partial`, `Depends`). A class handed straight
+    // to a package's own function or constructor (`select(Product)`,
+    // `models.ForeignKey(Order)`) is queried or typed by it, not run; one
+    // handed to a receiver the code constructs (`router.register("orders",
+    // OrderViewSet)`) is run.
+    fn hands(&self, module: &Module, call: &Call) -> bool {
+        if call.structural() {
+            return false;
+        }
+        let through_package = module.package(&call.callee.head).is_some();
+        call.args.iter().any(|arg| {
+            !arg.is_hook()
+                && self.handler(module, arg, &call.frames)
+                && !(through_package && self.class_handed(module, arg, &call.frames))
+        })
+    }
+
+    // A call outside any handler that hands a function to something a package
+    // provides: where a framework, a queue, a scheduler, or a CLI is told what
+    // to run.
+    pub(super) fn handed(&self, module: &Module, call: &Call) -> Option<Receiver> {
+        (call.depth == 0 && self.hands(module, call)).then(|| self.receiver(module, call))?
+    }
+
+    // At any depth and whatever the receiver. A wrapper handed a function for
+    // its value (`handler = retrying(send)`) defines and registers nothing.
+    pub(super) fn registers(&self, module: &Module, call: &Call) -> bool {
+        self.hands(module, call)
+            && (call.discarded() || call.constructs || self.led(module, call).is_some())
+    }
+
+    fn registration_at<'m>(&self, module: &'m Module, lines: Lines) -> Option<&'m Call> {
+        module
+            .calls
+            .iter()
+            .filter(|call| self.registers(module, call))
+            .find(|call| lines.holds(call.lines.start))
+    }
+
+    fn registration_enclosing<'m>(&self, module: &'m Module, lines: Lines) -> Option<&'m Call> {
+        module
+            .calls
+            .iter()
+            .filter(|call| self.registers(module, call))
+            .find(|call| call.lines.holds(lines.start))
+    }
+
+    // The modules no other imports; every module where each is imported.
+    pub(super) fn roots(&self) -> Vec<String> {
+        let imported: BTreeSet<&str> =
+            self.modules.values().flat_map(|module| module.reached()).collect();
+        let roots: Vec<String> =
+            self.modules.keys().filter(|path| !imported.contains(path.as_str())).cloned().collect();
+        if roots.is_empty() { self.modules.keys().cloned().collect() } else { roots }
+    }
+
+    // The route prefix each module's routes sit under:
+    // - `app.register_blueprint(bp, url_prefix="/orders")` and
+    //   `app.include_router(orders.router, prefix="/api/v1")` mount the module
+    //   declaring what is registered, under the registering module's own mount;
+    //   where the registering module declares it itself, the prefix stands
+    //   alone
+    // - `path("orders/", include("orders.urls"))` mounts `orders/urls.py` under
+    //   the including module's own mount
+    // - a router's own `APIRouter(prefix=..)` joins the prefix it is included
+    //   under; a blueprint's own `url_prefix` stands only where nothing
+    //   registers it under another
+    // The first mount read of a module in one pass stands.
+    pub(super) fn mounts(&self) -> BTreeMap<String, String> {
+        let mut mounts: BTreeMap<String, String> = BTreeMap::new();
+
+        // settle nested includes to a fixpoint, bounded where includes cycle
+        for _ in 0..=self.modules.len() {
+            let mut next: BTreeMap<String, String> = BTreeMap::new();
+            for module in self.modules.values() {
+                let own = mounts.get(&module.path).map_or("", String::as_str);
+                for call in &module.calls {
+                    let method = call.method();
+                    if MOUNTING.contains(&method) {
+                        let prefix = call
+                            .keyword("prefix")
+                            .or_else(|| call.keyword("url_prefix"))
+                            .and_then(|arg| arg.literal.clone())
+                            .or_else(|| call.literal().map(str::to_owned))
+                            .unwrap_or_default();
+                        for arg in call.args.iter().filter(|arg| arg.keyword.is_none()) {
+                            let Some(head) = arg.root.as_deref().and_then(|root| root.first())
+                            else {
+                                continue;
+                            };
+                            let (target, under) = match self.exporter(module, head) {
+                                Some((target, _)) => (target.path.as_str(), own),
+                                None if module.binding(head, &call.frames).is_some() => {
+                                    (module.path.as_str(), "")
+                                }
+                                None => continue,
+                            };
+                            let mounted = join_route(under, &prefix);
+                            if mounted != "/" {
+                                next.entry(target.to_owned()).or_insert(mounted);
+                            }
+                        }
+                    }
+                    if ROUTERS.contains(&method)
+                        && let Some(literal) = call.literal()
+                    {
+                        for arg in call.args.iter().filter(|arg| arg.called) {
+                            let included = arg.root.as_deref().is_some_and(|root| {
+                                root.last().is_some_and(|last| last == "include")
+                            });
+                            let Some(dotted) = arg.inner.as_deref().filter(|_| included) else {
+                                continue;
+                            };
+                            let Some(target) = self.resolver.entry(dotted) else { continue };
+                            let mounted = join_route(own, &strip_pattern(literal));
+                            if mounted != "/" {
+                                next.entry(target).or_insert(mounted);
+                            }
+                        }
+                    }
+                }
+            }
+            let settled = next == mounts;
+            mounts = next;
+            if settled {
+                break;
+            }
+        }
+
+        // join each module's own prefix onto its mount
+        for module in self.modules.values() {
+            for binding in &module.bindings {
+                let (
+                    Scope::Module,
+                    BindingKind::Value {
+                        root: Some(root),
+                        call: Some(index),
+                        ..
+                    },
+                ) = (&binding.scope, &binding.kind)
+                else {
+                    continue;
+                };
+                let Some(constructor) =
+                    root.last().filter(|last| PREFIXED.contains(&last.as_str()))
+                else {
+                    continue;
+                };
+                let Some(prefix) = module
+                    .calls
+                    .get(*index)
+                    .and_then(|call| call.keyword("prefix").or_else(|| call.keyword("url_prefix")))
+                    .and_then(|arg| arg.literal.as_deref())
+                else {
+                    continue;
+                };
+                let own = join_route("", prefix);
+                match mounts.get(&module.path) {
+                    Some(_) if constructor == "Blueprint" => {}
+                    Some(outer) => {
+                        let joined = join_route(outer, prefix);
+                        mounts.insert(module.path.clone(), joined);
+                    }
+                    None if own != "/" => {
+                        mounts.insert(module.path.clone(), own);
+                    }
+                    None => {}
+                }
+            }
+        }
+        mounts
+    }
+
+    // Decided over every surface of the tree at once, so `build` runs it last:
+    // - a stem's one surface is its stem
+    // - surfaces sharing a stem are `<stem>.<tell>`, the tell its discriminator,
+    //   else its name, else its entry's module stem
+    // - two still alike take the nearest segment of their entries' paths that
+    //   spells neither the stem nor the tell
+    // - a class carries an id per public method beside its own
+    pub(super) fn identify(&self, surfaces: &mut [Surface]) {
+        let module_of = |surface: &Surface| self.modules.get(&surface.entry);
+        let mut owned: Vec<String> = surfaces
+            .iter()
+            .map(|surface| {
+                if surfaces.iter().filter(|other| other.stem == surface.stem).count() == 1 {
+                    return surface.stem.clone();
+                }
+                let tell = surface
+                    .discriminator
+                    .clone()
+                    .or_else(|| kebab(&surface.name).filter(|tell| *tell != surface.stem))
+                    .or_else(|| module_of(surface).map(module_stem))
+                    .unwrap_or_else(|| "module".to_owned());
+                format!("{}.{tell}", surface.stem)
+            })
+            .collect();
+        let alike: Vec<bool> = owned
+            .iter()
+            .map(|own| owned.iter().filter(|other| *other == own).count() > 1)
+            .collect();
+        for (index, own) in owned.iter_mut().enumerate() {
+            if alike[index]
+                && let Some(module) = module_of(&surfaces[index])
+                && let Some(segment) = tells_apart(module, &surfaces[index].stem, own)
+            {
+                own.push('.');
+                own.push_str(&segment);
+            }
+        }
+        for (surface, own) in surfaces.iter_mut().zip(owned) {
+            let mut ids = vec![own.clone()];
+            ids.extend(surface.methods.iter().map(|method| format!("{own}.{method}")));
+            surface.ids = ids;
+        }
+    }
 }
 
 fn seed(seeds: &mut Vec<String>, module: &Module, local: &str) {
@@ -589,68 +828,11 @@ fn seed(seeds: &mut Vec<String>, module: &Module, local: &str) {
     }
 }
 
-fn exported_binding<'m>(module: &'m Module, name: &str) -> Option<&'m Binding> {
-    let export = module.export(name)?;
-    module.binding(&export.name, &[])
-}
-
 pub struct Receiver {
     // By top-level name, as imported.
     pub package: String,
     // The class it is typed or constructed as, where the code says.
     pub type_name: Option<String>,
-}
-
-// A decorator's head is a binding of the tree (`app = FastAPI()`), traced
-// as a call's receiver is.
-pub(super) fn receiver_of(tree: &Tree, module: &Module, name: &str) -> Option<Receiver> {
-    tree.trace(module, name, &[], None, TRACE)
-}
-
-fn hook(arg: &Arg) -> bool {
-    arg.keyword.as_deref().is_some_and(|keyword| HOOK_KEYWORDS.contains(&keyword))
-}
-
-// Decided over every surface of the tree at once, so `build` runs it last:
-// - a stem's one surface is its stem
-// - surfaces sharing a stem are `<stem>.<tell>`, the tell its discriminator,
-//   else its name, else its entry's module stem
-// - two still alike take the nearest segment of their entries' paths that
-//   spells neither the stem nor the tell
-// - a class carries an id per public method beside its own
-pub(super) fn identify(tree: &Tree, surfaces: &mut [Surface]) {
-    let module_of = |surface: &Surface| tree.modules.get(&surface.entry);
-    let mut owned: Vec<String> = surfaces
-        .iter()
-        .map(|surface| {
-            if surfaces.iter().filter(|other| other.stem == surface.stem).count() == 1 {
-                return surface.stem.clone();
-            }
-            let tell = surface
-                .discriminator
-                .clone()
-                .or_else(|| kebab(&surface.name).filter(|tell| *tell != surface.stem))
-                .or_else(|| module_of(surface).map(module_stem))
-                .unwrap_or_else(|| "module".to_owned());
-            format!("{}.{tell}", surface.stem)
-        })
-        .collect();
-    let alike: Vec<bool> =
-        owned.iter().map(|own| owned.iter().filter(|other| *other == own).count() > 1).collect();
-    for (index, own) in owned.iter_mut().enumerate() {
-        if alike[index]
-            && let Some(module) = module_of(&surfaces[index])
-            && let Some(segment) = tells_apart(module, &surfaces[index].stem, own)
-        {
-            own.push('.');
-            own.push_str(&segment);
-        }
-    }
-    for (surface, own) in surfaces.iter_mut().zip(owned) {
-        let mut ids = vec![own.clone()];
-        ids.extend(surface.methods.iter().map(|method| format!("{own}.{method}")));
-        surface.ids = ids;
-    }
 }
 
 // `local/files.py` and `s3/files.py` under `files` are told apart by `local`
@@ -663,207 +845,58 @@ fn tells_apart(module: &Module, stem: &str, own: &str) -> Option<String> {
         .find(|segment| segment != stem && !own.ends_with(&format!(".{segment}")))
 }
 
-// What the entry module does outside the handlers it registers. Another
-// surface's entry is what the bootstrap mounts, not what it does, so it is
-// reached and not followed; what loading that entry constructs runs before
-// any handler and is the bootstrap's to reach.
-pub(super) fn start(tree: &Tree, module: &Module, runs: &Runs, registered: &[Surface]) -> Surface {
-    let registrations: Vec<Lines> = registered
-        .iter()
-        .filter(|surface| surface.entry == module.path)
-        .map(|surface| surface.lines)
-        .collect();
-    let mut seeds = vec![module.path.clone()];
-    for name in module.referenced_outside(&registrations) {
-        seed(&mut seeds, module, name);
-    }
-    let entries = unique(
-        registered
+impl Surface {
+    // What the entry module does outside the handlers it registers. Another
+    // surface's entry is what the bootstrap mounts, not what it does, so it is
+    // reached and not followed; what loading that entry constructs runs before
+    // any handler and is the bootstrap's to reach.
+    pub(super) fn start(tree: &Tree, module: &Module, runs: &Runs, registered: &[Self]) -> Self {
+        let registrations: Vec<Lines> = registered
             .iter()
-            .map(|surface| surface.entry.clone())
-            .filter(|entry| *entry != module.path),
-    );
-
-    // what each mounted entry constructs at load
-    for entry in &entries {
-        let Some(target) = tree.modules.get(entry) else { continue };
-        for local in target.constructed() {
-            seed(&mut seeds, target, local);
+            .filter(|surface| surface.entry == module.path)
+            .map(|surface| surface.lines)
+            .collect();
+        let mut seeds = vec![module.path.clone()];
+        for name in module.referenced_outside(&registrations) {
+            seed(&mut seeds, module, name);
         }
-    }
-    let how = match runs {
-        Runs::Script(script, function) => {
-            format!("run by the console script `{script}`, which calls `{function}()`")
-        }
-        Runs::Guard => "run under its `__main__` guard".to_owned(),
-        Runs::Load => "run at load".to_owned(),
-    };
-    Surface {
-        name: "start".to_owned(),
-        entry: module.path.clone(),
-        stem: "start".to_owned(),
-        lines: module.span,
-        detail: vec![format!(
-            "the process bootstrap, {how}: what runs before each handler is registered, what it \
-             awaits before serving, and at shutdown — `stop` and what a signal handler calls, \
-             wherever declared"
-        )],
-        closure: tree.closure(&seeds, &entries),
-        discriminator: None,
-        methods: Vec::new(),
-        ids: vec!["start".to_owned()],
-    }
-}
+        let entries = unique(
+            registered
+                .iter()
+                .map(|surface| surface.entry.clone())
+                .filter(|entry| *entry != module.path),
+        );
 
-// The route prefix each module's routes sit under:
-// - `app.register_blueprint(bp, url_prefix="/orders")` and
-//   `app.include_router(orders.router, prefix="/api/v1")` mount the module
-//   declaring what is registered, under the registering module's own mount;
-//   where the registering module declares it itself, the prefix stands
-//   alone
-// - `path("orders/", include("orders.urls"))` mounts `orders/urls.py` under
-//   the including module's own mount
-// - a router's own `APIRouter(prefix=..)` joins the prefix it is included
-//   under; a blueprint's own `url_prefix` stands only where nothing
-//   registers it under another
-// The first mount read of a module in one pass stands.
-pub(super) fn mounts(tree: &Tree) -> BTreeMap<String, String> {
-    let mut mounts: BTreeMap<String, String> = BTreeMap::new();
-
-    // settle nested includes to a fixpoint, bounded where includes cycle
-    for _ in 0..=tree.modules.len() {
-        let mut next: BTreeMap<String, String> = BTreeMap::new();
-        for module in tree.modules.values() {
-            let own = mounts.get(&module.path).map_or("", String::as_str);
-            for call in &module.calls {
-                let method = call.method();
-                if MOUNTING.contains(&method) {
-                    let prefix = call
-                        .keyword("prefix")
-                        .or_else(|| call.keyword("url_prefix"))
-                        .and_then(|arg| arg.literal.clone())
-                        .or_else(|| call.literal().map(str::to_owned))
-                        .unwrap_or_default();
-                    for arg in call.args.iter().filter(|arg| arg.keyword.is_none()) {
-                        let Some(head) = arg.root.as_deref().and_then(|root| root.first()) else {
-                            continue;
-                        };
-                        let (target, under) = match tree.exporter(module, head) {
-                            Some((target, _)) => (target.path.as_str(), own),
-                            None if module.binding(head, &call.frames).is_some() => {
-                                (module.path.as_str(), "")
-                            }
-                            None => continue,
-                        };
-                        let mounted = join_route(under, &prefix);
-                        if mounted != "/" {
-                            next.entry(target.to_owned()).or_insert(mounted);
-                        }
-                    }
-                }
-                if ROUTERS.contains(&method)
-                    && let Some(literal) = call.literal()
-                {
-                    for arg in call.args.iter().filter(|arg| arg.called) {
-                        let included = arg
-                            .root
-                            .as_deref()
-                            .is_some_and(|root| root.last().is_some_and(|last| last == "include"));
-                        let Some(dotted) = arg.inner.as_deref().filter(|_| included) else {
-                            continue;
-                        };
-                        let Some(target) = tree.resolver.entry(dotted) else { continue };
-                        let mounted = join_route(own, &strip_pattern(literal));
-                        if mounted != "/" {
-                            next.entry(target).or_insert(mounted);
-                        }
-                    }
-                }
+        // what each mounted entry constructs at load
+        for entry in &entries {
+            let Some(target) = tree.modules.get(entry) else { continue };
+            for local in target.constructed() {
+                seed(&mut seeds, target, local);
             }
         }
-        let settled = next == mounts;
-        mounts = next;
-        if settled {
-            break;
-        }
-    }
-
-    // a module's own prefix
-    for module in tree.modules.values() {
-        for binding in &module.bindings {
-            let (
-                Scope::Module,
-                BindingKind::Value {
-                    root: Some(root),
-                    call: Some(index),
-                    ..
-                },
-            ) = (&binding.scope, &binding.kind)
-            else {
-                continue;
-            };
-            let Some(constructor) = root.last().filter(|last| PREFIXED.contains(&last.as_str()))
-            else {
-                continue;
-            };
-            let Some(prefix) = module
-                .calls
-                .get(*index)
-                .and_then(|call| call.keyword("prefix").or_else(|| call.keyword("url_prefix")))
-                .and_then(|arg| arg.literal.as_deref())
-            else {
-                continue;
-            };
-            let own = join_route("", prefix);
-            match mounts.get(&module.path) {
-                Some(_) if constructor == "Blueprint" => {}
-                Some(outer) => {
-                    let joined = join_route(outer, prefix);
-                    mounts.insert(module.path.clone(), joined);
-                }
-                None if own != "/" => {
-                    mounts.insert(module.path.clone(), own);
-                }
-                None => {}
+        let how = match runs {
+            Runs::Script(script, function) => {
+                format!("run by the console script `{script}`, which calls `{function}()`")
             }
+            Runs::Guard => "run under its `__main__` guard".to_owned(),
+            Runs::Load => "run at load".to_owned(),
+        };
+        Self {
+            name: "start".to_owned(),
+            entry: module.path.clone(),
+            stem: "start".to_owned(),
+            lines: module.span,
+            detail: vec![format!(
+                "the process bootstrap, {how}: what runs before each handler is registered, what \
+                 it awaits before serving, and at shutdown — `stop` and what a signal handler \
+                 calls, wherever declared"
+            )],
+            closure: tree.closure(&seeds, &entries),
+            discriminator: None,
+            methods: Vec::new(),
+            ids: vec!["start".to_owned()],
         }
     }
-    mounts
-}
-
-// The function, or the class handed by `as_view()`, kebab-cased.
-fn named_handler(tree: &Tree, module: &Module, call: &Call) -> Option<String> {
-    call.args
-        .iter()
-        .filter(|arg| !hook(arg) && arg.root.is_some())
-        .find(|arg| tree.handler(module, arg, &call.frames))
-        .and_then(|arg| {
-            let root = arg.root.as_ref()?;
-            let name = match root.as_slice() {
-                [.., class, last] if last == "as_view" => class,
-                [.., last] => last,
-                [] => return None,
-            };
-            kebab(name)
-        })
-}
-
-// A string literal, or a constant bound to one in the tree.
-pub(super) fn led(tree: &Tree, module: &Module, call: &Call) -> Option<String> {
-    call.args
-        .iter()
-        .find(|arg| arg.keyword.is_none())
-        .and_then(|arg| tree.constant(module, arg, &call.frames))
-}
-
-// A chain names itself at its first call with a literal (`command("x")`),
-// else the call's own method and lead stand.
-pub(super) fn registered(call: &Call, led: Option<String>) -> (&str, Option<String>) {
-    let chained = call.callee.links.iter().find_map(|link| {
-        let literal = link.call.as_ref()?.literal.clone()?;
-        Some((link.name.as_str(), literal))
-    });
-    chained.map_or_else(|| (call.method(), led), |(method, literal)| (method, Some(literal)))
 }
 
 // Under the module's mount. A verb's literal is a path only when it leads
@@ -921,231 +954,275 @@ enum At<'m> {
     Export(&'m Export),
 }
 
-// A module under `management/commands/` is read by its path before any
-// anchor. Otherwise the first registration, decorated class or `def`, or
-// export starting within `lines` is read; failing one, the one enclosing
-// the first line, for an anchor within a handler. Where nothing is found,
-// the survey's `name` less its stem tells the surface apart and the lines
-// are read as they are.
-pub(super) fn derive(
-    tree: &Tree, module: &Module, lines: Lines, name: &str, stem: &str,
-    mounts: &BTreeMap<String, String>,
-) -> Derived {
-    if let Some(derived) = at_command(tree, module) {
-        return derived;
+impl Derived {
+    // A module under `management/commands/` is read by its path before any
+    // anchor. Otherwise the first registration, decorated class or `def`, or
+    // export starting within `lines` is read. Failing one, the one enclosing
+    // the first line is read, for an anchor within a handler. Where nothing is
+    // found, the survey's `name` less its stem tells the surface apart and the
+    // lines are read as they are.
+    pub(super) fn derive(
+        tree: &Tree, module: &Module, lines: Lines, name: &str, stem: &str,
+        mounts: &BTreeMap<String, String>,
+    ) -> Self {
+        if let Some(derived) = Self::at_command(tree, module) {
+            return derived;
+        }
+        let within = [
+            tree.registration_at(module, lines)
+                .map(|call| (call.lines.start, At::Registration(call))),
+            decorated_class_at(module, lines).map(|class| (class.lines.start, At::Class(class))),
+            decorated_at(module, lines).map(|def| (def.lines.start, At::Def(def))),
+            export_at(module, lines)
+                .map(|export| (module.declared_at(export).start, At::Export(export))),
+        ];
+        let first = within
+            .into_iter()
+            .flatten()
+            .filter(|(start, _)| lines.holds(*start))
+            .min_by_key(|(start, _)| *start)
+            .map(|(_, at)| at);
+        let enclosing = || {
+            tree.registration_enclosing(module, lines)
+                .map(At::Registration)
+                .or_else(|| decorated_enclosing(module, lines).map(At::Def))
+                .or_else(|| export_enclosing(module, lines).map(At::Export))
+        };
+        match first.or_else(enclosing) {
+            Some(At::Registration(call)) => Self::at_registration(tree, module, call, stem, mounts),
+            Some(At::Class(class)) => Self::at_decorated_class(tree, module, class, mounts),
+            Some(At::Def(decorated)) => Self::at_decorated_def(tree, module, decorated, mounts),
+            Some(At::Export(export)) => Self::at_export(tree, module, export),
+            None => Self {
+                stem: None,
+                discriminator: normalised(name, stem),
+                methods: Vec::new(),
+                lines,
+                detail: vec![format!("named by the survey at {lines}")],
+                closure: tree.reaches(module, lines, &[], None),
+            },
+        }
     }
-    let within = [
-        registration_at(tree, module, lines).map(|call| (call.lines.start, At::Registration(call))),
-        decorated_class_at(module, lines).map(|class| (class.lines.start, At::Class(class))),
-        decorated_at(module, lines).map(|def| (def.lines.start, At::Def(def))),
-        export_at(module, lines)
-            .map(|export| (declared_at(module, export).start, At::Export(export))),
-    ];
-    let first = within
-        .into_iter()
-        .flatten()
-        .filter(|(start, _)| lines.holds(*start))
-        .min_by_key(|(start, _)| *start)
-        .map(|(_, at)| at);
-    let enclosing = || {
-        registration_enclosing(tree, module, lines)
-            .map(At::Registration)
-            .or_else(|| decorated_enclosing(module, lines).map(At::Def))
-            .or_else(|| export_enclosing(module, lines).map(At::Export))
-    };
-    match first.or_else(enclosing) {
-        Some(At::Registration(call)) => at_registration(tree, module, call, stem, mounts),
-        Some(At::Class(class)) => at_decorated_class(tree, module, class, mounts),
-        Some(At::Def(decorated)) => at_decorated_def(tree, module, decorated, mounts),
-        Some(At::Export(export)) => at_export(tree, module, export),
-        None => Derived {
-            stem: None,
-            discriminator: normalised(name, stem),
+
+    // A management command is named by its file and declared by its `Command`
+    // class.
+    fn at_command(tree: &Tree, module: &Module) -> Option<Self> {
+        let (dir, file) = module.path.rsplit_once('/')?;
+        if !dir.ends_with("management/commands") || file.starts_with('_') {
+            return None;
+        }
+        let stem = kebab(file.strip_suffix(".py")?)?;
+        let class = module.class("Command");
+        let lines = class.map_or(module.span, |class| class.lines);
+        let mut detail = vec![format!("management command `{}` by its path", file)];
+        if let Some(class) = class {
+            detail.push(format!("class `Command` {}", class.lines));
+        }
+        Some(Self {
+            stem: Some(stem),
+            discriminator: None,
             methods: Vec::new(),
             lines,
-            detail: vec![format!("named by the survey at {lines}")],
-            closure: tree.reaches(module, lines, &[], None),
-        },
+            detail,
+            closure: tree.reaches(module, lines, &[], class.map(|_| "Command")),
+        })
+    }
+
+    // The stem is what the route or literal spells. The tell is the handler
+    // handed by name, unless it is the stem itself, else the verb and the path
+    // past the resource, else the registering method. A handed class's methods
+    // and what its module references are reached too.
+    fn at_registration(
+        tree: &Tree, module: &Module, call: &Call, stem: &str, mounts: &BTreeMap<String, String>,
+    ) -> Self {
+        let (method, literal) = call.registered(tree.led(module, call));
+        let literal = literal.as_deref();
+        let route = routed(module, method, literal, mounts);
+        let derived = route.as_deref().map_or_else(|| literal.and_then(literal_stem), route_stem);
+        let stem = derived.as_deref().unwrap_or(stem);
+        let methods_keyword = call.keyword("methods").map(|arg| arg.head.as_str());
+        let discriminator =
+            tree.named_handler(module, call).filter(|handler| handler != stem).or_else(|| {
+                route.as_deref().map_or_else(
+                    || kebab(method),
+                    |route| route_discriminator(&verb_of(method, methods_keyword), route, stem),
+                )
+            });
+        let mut detail = vec![match (&call.class, &call.function) {
+            (Some(class), Some(function)) => {
+                format!("registered {} in `{class}.{function}`", call.lines)
+            }
+            (None, Some(function)) => format!("registered {} in `{function}`", call.lines),
+            _ => format!("registered {} at module level", call.lines),
+        }];
+        if let Some(handler) = call.args.iter().find(|arg| arg.function && arg.root.is_none()) {
+            detail.push(format!("handler {}", handler.lines));
+        }
+        if let Some(receiver) = tree.receiver(module, call) {
+            detail.push(format!("through `{}`", receiver.package));
+        }
+        let (methods, class) = match tree.handed_class(module, call) {
+            Some((declaring, class)) => {
+                let methods: Vec<(String, Lines)> = view_methods(declaring, &class)
+                    .into_iter()
+                    .map(|(name, lines)| (name.to_owned(), lines))
+                    .collect();
+                detail.push(format!("class `{class}` handed"));
+                detail.extend(noted(&methods));
+                (methods, Some((declaring, class)))
+            }
+            None => (Vec::new(), None),
+        };
+        let mut closure = tree.reaches(module, call.lines, &call.frames, call.class.as_deref());
+        if let Some((declaring, class)) = class {
+            for path in tree.reaches(declaring, declaring.span, &[], Some(&class)) {
+                push_unique(&mut closure, path);
+            }
+        }
+        Self {
+            stem: derived,
+            discriminator,
+            methods,
+            lines: call.lines,
+            detail,
+            closure,
+        }
+    }
+
+    // The stem is what the decorator's prefix spells under the module's mount;
+    // the tell is the class's name.
+    fn at_decorated_class(
+        tree: &Tree, module: &Module, class: &Decorated, mounts: &BTreeMap<String, String>,
+    ) -> Self {
+        let name = class.class.as_deref().unwrap_or_default();
+        let prefix = mounts.get(&module.path).map_or("", String::as_str);
+        let route = join_route(prefix, &strip_pattern(class.literal.as_deref().unwrap_or("")));
+        let methods = unique(
+            module
+                .decorated
+                .iter()
+                .filter(|d| d.class == class.class && d.member.is_some() && d.registering())
+                .filter_map(|d| Some((d.member.clone()?, d.lines))),
+        );
+        let mut detail =
+            vec![format!("class `{name}` {} under `@{}`", class.lines, spelled(class))];
+        detail.extend(through(tree, module, class));
+        detail.extend(noted(&methods));
+        Self {
+            stem: route_stem(&route),
+            discriminator: kebab(name),
+            methods,
+            lines: class.lines,
+            detail,
+            closure: tree.reaches(module, class.lines, &[], Some(name)),
+        }
+    }
+
+    // The stem is what the route sits under, else what it spells itself, else
+    // the command group the `def` is under, else the literal's first word. The
+    // tell is the verb and the path past the resource, else the literal's tail,
+    // else the `def`'s name.
+    fn at_decorated_def(
+        tree: &Tree, module: &Module, decorated: &Decorated, mounts: &BTreeMap<String, String>,
+    ) -> Self {
+        let member = decorated.member.as_deref().unwrap_or_default();
+        let mut detail = vec![decorated.class.as_ref().map_or_else(
+            || format!("def `{member}` {}", decorated.lines),
+            |class| format!("method `{class}.{member}` {}", decorated.lines),
+        )];
+        detail.push(format!("under `@{}`", spelled(decorated)));
+        detail.extend(through(tree, module, decorated));
+        let route = decorated_route(module, decorated, mounts);
+        let group = group_of(module, decorated);
+        let literal = || decorated.literal.as_deref().and_then(literal_stem);
+        let stem = route.as_deref().map_or_else(
+            || group.clone().or_else(literal),
+            |route| under(module, decorated, mounts).or_else(|| route_stem(route)),
+        );
+        let discriminator = match (&route, &stem) {
+            (Some(route), Some(stem)) => {
+                let method = decorated.name.last().map_or("", String::as_str).to_ascii_lowercase();
+                route_discriminator(&verb_of(&method, decorated.keyword("methods")), route, stem)
+                    .or_else(|| kebab(member))
+            }
+            (None, _) if group.is_some() => literal().or_else(|| kebab(member)),
+            _ => decorated.literal.as_deref().and_then(literal_tail).or_else(|| kebab(member)),
+        };
+        if let Some(group) = &group {
+            detail.push(format!("subcommand of the group `{group}`"));
+        }
+        Self {
+            stem,
+            discriminator,
+            methods: Vec::new(),
+            lines: decorated.lines,
+            detail,
+            closure: tree.reaches(module, decorated.lines, &[], decorated.class.as_deref()),
+        }
+    }
+
+    // The export's name tells it apart, and a class carries its public methods.
+    fn at_export(tree: &Tree, module: &Module, export: &Export) -> Self {
+        let (what, methods, class) = match &export.kind {
+            ExportKind::Class => (
+                "class",
+                methods(module, &export.name, |name| !dunder(name))
+                    .into_iter()
+                    .map(|(name, lines)| (name.to_owned(), lines))
+                    .collect(),
+                Some(export.name.as_str()),
+            ),
+            ExportKind::Function => ("function", Vec::new(), None),
+            ExportKind::Value | ExportKind::Type => ("value", Vec::new(), None),
+        };
+        let declared = module.declared_at(export);
+        let mut detail = vec![format!("exported {what} {declared}")];
+        detail.extend(noted(&methods));
+        Self {
+            stem: None,
+            discriminator: kebab(&export.name),
+            methods,
+            lines: declared,
+            detail,
+            closure: tree.reaches(module, declared, &[], class),
+        }
     }
 }
 
-// A management command is named by its file and declared by its `Command`
-// class.
-fn at_command(tree: &Tree, module: &Module) -> Option<Derived> {
-    let (dir, file) = module.path.rsplit_once('/')?;
-    if !dir.ends_with("management/commands") || file.starts_with('_') {
+// The resource a route sits under before its own literal: what its module's
+// mount or its class's prefix spells, else the first tag of the router it is
+// declared on — `APIRouter(tags=["login"])` with no prefix groups its routes
+// as `login`, however each spells its path. `None` where only the literal
+// names one.
+fn under(
+    module: &Module, decorated: &Decorated, mounts: &BTreeMap<String, String>,
+) -> Option<String> {
+    let mount = mounts.get(&module.path).map_or("", String::as_str);
+    let prefix = decorated
+        .class
+        .as_deref()
+        .and_then(|class| class_prefix(module, class))
+        .and_then(|d| d.literal.as_deref())
+        .unwrap_or("");
+    route_stem(&join_route(mount, prefix)).or_else(|| router_tag(module, decorated))
+}
+
+// The first `tags` literal of the `APIRouter` the decorator's head is bound
+// to at module level.
+fn router_tag(module: &Module, decorated: &Decorated) -> Option<String> {
+    let binding = module.binding(decorated.name.first()?, &[])?;
+    let BindingKind::Value {
+        root: Some(root),
+        call: Some(index),
+        ..
+    } = &binding.kind
+    else {
+        return None;
+    };
+    if binding.scope != Scope::Module || root.last().map(String::as_str) != Some("APIRouter") {
         return None;
     }
-    let stem = kebab(file.strip_suffix(".py")?)?;
-    let class = module.class("Command");
-    let lines = class.map_or(module.span, |class| class.lines);
-    let mut detail = vec![format!("management command `{}` by its path", file)];
-    if let Some(class) = class {
-        detail.push(format!("class `Command` {}", class.lines));
-    }
-    Some(Derived {
-        stem: Some(stem),
-        discriminator: None,
-        methods: Vec::new(),
-        lines,
-        detail,
-        closure: tree.reaches(module, lines, &[], class.map(|_| "Command")),
-    })
-}
-
-// The stem is what the route or literal spells. The tell is the handler
-// handed by name, unless it is the stem itself, else the verb and the path
-// past the resource, else the registering method. A handed class's methods
-// and what its module references are reached too.
-fn at_registration(
-    tree: &Tree, module: &Module, call: &Call, stem: &str, mounts: &BTreeMap<String, String>,
-) -> Derived {
-    let (method, literal) = registered(call, led(tree, module, call));
-    let literal = literal.as_deref();
-    let route = routed(module, method, literal, mounts);
-    let derived = route.as_deref().map_or_else(|| literal.and_then(literal_stem), route_stem);
-    let stem = derived.as_deref().unwrap_or(stem);
-    let methods_keyword = call.keyword("methods").map(|arg| arg.head.as_str());
-    let discriminator =
-        named_handler(tree, module, call).filter(|handler| handler != stem).or_else(|| {
-            route.as_deref().map_or_else(
-                || kebab(method),
-                |route| route_discriminator(&verb_of(method, methods_keyword), route, stem),
-            )
-        });
-    let mut detail = vec![match (&call.class, &call.function) {
-        (Some(class), Some(function)) => {
-            format!("registered {} in `{class}.{function}`", call.lines)
-        }
-        (None, Some(function)) => format!("registered {} in `{function}`", call.lines),
-        _ => format!("registered {} at module level", call.lines),
-    }];
-    if let Some(handler) = call.args.iter().find(|arg| arg.function && arg.root.is_none()) {
-        detail.push(format!("handler {}", handler.lines));
-    }
-    if let Some(receiver) = tree.receiver(module, call) {
-        detail.push(format!("through `{}`", receiver.package));
-    }
-    let (methods, class) = match tree.handed_class(module, call) {
-        Some((declaring, class)) => {
-            let methods: Vec<(String, Lines)> = view_methods(declaring, &class)
-                .into_iter()
-                .map(|(name, lines)| (name.to_owned(), lines))
-                .collect();
-            detail.push(format!("class `{class}` handed"));
-            detail.extend(noted(&methods));
-            (methods, Some((declaring, class)))
-        }
-        None => (Vec::new(), None),
-    };
-    let mut closure = tree.reaches(module, call.lines, &call.frames, call.class.as_deref());
-    if let Some((declaring, class)) = class {
-        for path in tree.reaches(declaring, declaring.span, &[], Some(&class)) {
-            push_unique(&mut closure, path);
-        }
-    }
-    Derived {
-        stem: derived,
-        discriminator,
-        methods,
-        lines: call.lines,
-        detail,
-        closure,
-    }
-}
-
-// The stem is what the decorator's prefix spells under the module's mount;
-// the tell is the class's name.
-fn at_decorated_class(
-    tree: &Tree, module: &Module, class: &Decorated, mounts: &BTreeMap<String, String>,
-) -> Derived {
-    let name = class.class.as_deref().unwrap_or_default();
-    let prefix = mounts.get(&module.path).map_or("", String::as_str);
-    let route = join_route(prefix, &strip_pattern(class.literal.as_deref().unwrap_or("")));
-    let methods = unique(
-        module
-            .decorated
-            .iter()
-            .filter(|d| d.class == class.class && d.member.is_some() && registering(d))
-            .filter_map(|d| Some((d.member.clone()?, d.lines))),
-    );
-    let mut detail = vec![format!("class `{name}` {} under `@{}`", class.lines, spelled(class))];
-    detail.extend(through(tree, module, class));
-    detail.extend(noted(&methods));
-    Derived {
-        stem: route_stem(&route),
-        discriminator: kebab(name),
-        methods,
-        lines: class.lines,
-        detail,
-        closure: tree.reaches(module, class.lines, &[], Some(name)),
-    }
-}
-
-// The stem is what the route spells, else the command group the `def` is
-// under, else the literal's first word. The tell is the verb and the path
-// past the resource, else the literal's tail, else the `def`'s name.
-fn at_decorated_def(
-    tree: &Tree, module: &Module, decorated: &Decorated, mounts: &BTreeMap<String, String>,
-) -> Derived {
-    let member = decorated.member.as_deref().unwrap_or_default();
-    let mut detail = vec![decorated.class.as_ref().map_or_else(
-        || format!("def `{member}` {}", decorated.lines),
-        |class| format!("method `{class}.{member}` {}", decorated.lines),
-    )];
-    detail.push(format!("under `@{}`", spelled(decorated)));
-    detail.extend(through(tree, module, decorated));
-    let route = decorated_route(module, decorated, mounts);
-    let group = group_of(module, decorated);
-    let literal = || decorated.literal.as_deref().and_then(literal_stem);
-    let stem = route.as_deref().map_or_else(|| group.clone().or_else(literal), route_stem);
-    let discriminator = match (&route, &stem) {
-        (Some(route), Some(stem)) => {
-            let method = decorated.name.last().map_or("", String::as_str).to_ascii_lowercase();
-            route_discriminator(&verb_of(&method, decorated.keyword("methods")), route, stem)
-                .or_else(|| kebab(member))
-        }
-        (None, _) if group.is_some() => literal().or_else(|| kebab(member)),
-        _ => decorated.literal.as_deref().and_then(literal_tail).or_else(|| kebab(member)),
-    };
-    if let Some(group) = &group {
-        detail.push(format!("subcommand of the group `{group}`"));
-    }
-    Derived {
-        stem,
-        discriminator,
-        methods: Vec::new(),
-        lines: decorated.lines,
-        detail,
-        closure: tree.reaches(module, decorated.lines, &[], decorated.class.as_deref()),
-    }
-}
-
-// The export's name tells it apart, and a class carries its public methods.
-fn at_export(tree: &Tree, module: &Module, export: &Export) -> Derived {
-    let (what, methods, class) = match &export.kind {
-        ExportKind::Class => (
-            "class",
-            methods(module, &export.name)
-                .into_iter()
-                .map(|(name, lines)| (name.to_owned(), lines))
-                .collect(),
-            Some(export.name.as_str()),
-        ),
-        ExportKind::Function => ("function", Vec::new(), None),
-        ExportKind::Value | ExportKind::Type => ("value", Vec::new(), None),
-    };
-    let declared = declared_at(module, export);
-    let mut detail = vec![format!("exported {what} {declared}")];
-    detail.extend(noted(&methods));
-    Derived {
-        stem: None,
-        discriminator: kebab(&export.name),
-        methods,
-        lines: declared,
-        detail,
-        closure: tree.reaches(module, declared, &[], class),
-    }
+    module.calls.get(*index)?.keyword("tags")?.inner.as_deref().and_then(kebab)
 }
 
 // `app.get("/orders")`, for a note.
@@ -1155,7 +1232,7 @@ fn spelled(decorated: &Decorated) -> String {
 }
 
 fn through(tree: &Tree, module: &Module, decorated: &Decorated) -> Option<String> {
-    let receiver = receiver_of(tree, module, decorated.name.first()?)?;
+    let receiver = tree.receiver_of(module, decorated.name.first()?)?;
     Some(format!("through `{}`", receiver.package))
 }
 
@@ -1166,16 +1243,6 @@ fn noted(methods: &[(String, Lines)]) -> Option<String> {
     let listed: Vec<String> =
         methods.iter().map(|(name, lines)| format!("`{name}` {lines}")).collect();
     Some(format!("methods {}", listed.join(", ")))
-}
-
-// Registers what it decorates, rather than shaping it or hooking it on a
-// lifecycle.
-pub(super) fn registering(decorated: &Decorated) -> bool {
-    decorated
-        .name
-        .last()
-        .is_some_and(|name| !shapes(name) && !DECORATOR_HOOKS.contains(&name.as_str()))
-        && !hooks(&decorated.name.join("."))
 }
 
 // `@orders.command("list")` where `orders` is `@cli.group()` is a
@@ -1202,7 +1269,7 @@ fn class_prefix<'m>(module: &'m Module, class: &str) -> Option<&'m Decorated> {
         .decorated
         .iter()
         .filter(|d| d.class.as_deref() == Some(class) && d.member.is_none() && d.literal.is_some())
-        .find(|d| registering(d))
+        .find(|d| d.registering())
 }
 
 // Under the module's mount and, for a method, its class's prefix.
@@ -1228,7 +1295,7 @@ fn decorated_class_at(module: &Module, lines: Lines) -> Option<&Decorated> {
     module
         .decorated
         .iter()
-        .filter(|d| d.member.is_none() && registering(d))
+        .filter(|d| d.member.is_none() && d.registering())
         .find(|d| lines.holds(d.lines.start))
 }
 
@@ -1241,85 +1308,25 @@ fn decorated_enclosing(module: &Module, lines: Lines) -> Option<&Decorated> {
 }
 
 fn registering_defs(module: &Module) -> impl Iterator<Item = &Decorated> {
-    module.decorated.iter().filter(|d| d.member.is_some() && registering(d))
-}
-
-// A handler among the arguments, not under a hook keyword, and not to a
-// structural call (`sorted`, `partial`, `Depends`). A class handed straight
-// to a package's own function or constructor (`select(Product)`,
-// `models.ForeignKey(Order)`) is queried or typed by it, not run; one
-// handed to a receiver the code constructs (`router.register("orders",
-// OrderViewSet)`) is run.
-fn hands(tree: &Tree, module: &Module, call: &Call) -> bool {
-    if call.structural() {
-        return false;
-    }
-    let through_package = module.package(&call.callee.head).is_some();
-    call.args.iter().any(|arg| {
-        !hook(arg)
-            && tree.handler(module, arg, &call.frames)
-            && !(through_package && tree.class_handed(module, arg, &call.frames))
-    })
-}
-
-// A call outside any handler that hands a function to something a package
-// provides: where a framework, a queue, a scheduler, or a CLI is told what
-// to run.
-pub(super) fn handed(tree: &Tree, module: &Module, call: &Call) -> Option<Receiver> {
-    (call.depth == 0 && hands(tree, module, call)).then(|| tree.receiver(module, call))?
-}
-
-// At any depth and whatever the receiver. A wrapper handed a function for
-// its value (`handler = retrying(send)`) defines and registers nothing.
-pub(super) fn registers(tree: &Tree, module: &Module, call: &Call) -> bool {
-    hands(tree, module, call)
-        && (call.discarded() || call.constructs || led(tree, module, call).is_some())
-}
-
-fn registration_at<'m>(tree: &Tree, module: &'m Module, lines: Lines) -> Option<&'m Call> {
-    module
-        .calls
-        .iter()
-        .filter(|call| registers(tree, module, call))
-        .find(|call| lines.holds(call.lines.start))
-}
-
-fn registration_enclosing<'m>(tree: &Tree, module: &'m Module, lines: Lines) -> Option<&'m Call> {
-    module
-        .calls
-        .iter()
-        .filter(|call| registers(tree, module, call))
-        .find(|call| call.lines.holds(lines.start))
-}
-
-fn declared_at(module: &Module, export: &Export) -> Lines {
-    module.binding(&export.name, &[]).map_or(export.lines, |binding| binding.lines)
+    module.decorated.iter().filter(|d| d.member.is_some() && d.registering())
 }
 
 // A function or class before a value.
 fn export_at(module: &Module, lines: Lines) -> Option<&Export> {
-    let starts = |export: &&Export| lines.holds(declared_at(module, export).start);
+    let starts = |export: &&Export| lines.holds(module.declared_at(export).start);
     let exports = || module.exports.iter();
     exports()
-        .filter(|export| callable(export))
+        .filter(|export| export.kind.callable())
         .find(starts)
-        .or_else(|| exports().filter(|export| valued(export)).find(starts))
+        .or_else(|| exports().filter(|export| export.kind.valued()).find(starts))
 }
 
 fn export_enclosing(module: &Module, lines: Lines) -> Option<&Export> {
     module
         .exports
         .iter()
-        .filter(|export| callable(export) || valued(export))
-        .find(|export| declared_at(module, export).holds(lines.start))
-}
-
-const fn callable(export: &Export) -> bool {
-    matches!(export.kind, ExportKind::Function | ExportKind::Class)
-}
-
-const fn valued(export: &Export) -> bool {
-    matches!(export.kind, ExportKind::Value)
+        .filter(|export| export.kind.callable() || export.kind.valued())
+        .find(|export| module.declared_at(export).holds(lines.start))
 }
 
 // The survey's name less the words of its stem and the segments that only
@@ -1334,7 +1341,11 @@ fn normalised(name: &str, stem: &str) -> Option<String> {
     kebab(&kept.join("-"))
 }
 
-fn methods<'m>(module: &'m Module, name: &str) -> Vec<(&'m str, Lines)> {
+// The public methods and getters of the class `name` that `keep` admits,
+// each with its lines.
+fn methods<'m>(
+    module: &'m Module, name: &str, keep: impl Fn(&str) -> bool,
+) -> Vec<(&'m str, Lines)> {
     module
         .class(name)
         .map(|class| {
@@ -1343,7 +1354,7 @@ fn methods<'m>(module: &'m Module, name: &str) -> Vec<(&'m str, Lines)> {
                 .iter()
                 .filter(|m| {
                     !m.private
-                        && !dunder(&m.name)
+                        && keep(&m.name)
                         && matches!(m.kind, MemberKind::Method | MemberKind::Getter)
                 })
                 .map(|m| (m.name.as_str(), m.lines))
@@ -1361,7 +1372,7 @@ fn dunder(name: &str) -> bool {
 // A view's verb methods, else those under an `action` decorator, else all
 // its public methods.
 fn view_methods<'m>(module: &'m Module, name: &str) -> Vec<(&'m str, Lines)> {
-    let all = methods(module, name);
+    let all = methods(module, name, |name| !dunder(name));
     let verbs: Vec<(&str, Lines)> =
         all.iter().filter(|(method, _)| VERBS.contains(method)).copied().collect();
     if !verbs.is_empty() {
@@ -1378,15 +1389,6 @@ fn view_methods<'m>(module: &'m Module, name: &str) -> Vec<(&'m str, Lines)> {
         .copied()
         .collect();
     if actions.is_empty() { all } else { actions }
-}
-
-// The modules no other imports; every module where each is imported.
-pub(super) fn roots(tree: &Tree) -> Vec<String> {
-    let imported: BTreeSet<&str> =
-        tree.modules.values().flat_map(|module| module.reached()).collect();
-    let roots: Vec<String> =
-        tree.modules.keys().filter(|path| !imported.contains(path.as_str())).cloned().collect();
-    if roots.is_empty() { tree.modules.keys().cloned().collect() } else { roots }
 }
 
 // `/prefix/path`, however either is spelled: `"/orders/"` and `"orders/"`

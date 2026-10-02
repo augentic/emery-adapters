@@ -56,7 +56,9 @@ const STRUCTURAL: &[&str] = &[
 const MOCKING: &[&str] = &["patch", "mock.patch", "unittest.mock.patch", "mocker.patch"];
 
 // Hooks on the process, a connection, or the application's lifecycle, not
-// registrations. Matched by the tail of the dotted spelling.
+// registrations — Django's admin site among them, which serves what it
+// registers on the source's behalf, by call or by decorator. Matched by the
+// tail of the dotted spelling.
 const LIFECYCLE: &[&str] = &[
     "signal.signal",
     "atexit.register",
@@ -69,12 +71,17 @@ const LIFECYCLE: &[&str] = &[
     "teardown_request",
     "lifespan",
     "site.register",
+    "admin.register",
+    "admin.action",
+    "admin.display",
 ];
 
 // Decorators that shape what they decorate rather than register it with a
 // framework. A `def` under one of these alone is no handler.
 const DECORATOR_NOISE: &[&str] = &[
     "dataclass",
+    "define",
+    "frozen",
     "property",
     "setter",
     "getter",
@@ -103,6 +110,7 @@ const DECORATOR_NOISE: &[&str] = &[
     "field_validator",
     "model_validator",
     "root_validator",
+    "computed_field",
     "total_ordering",
     "unique",
     "fixture",
@@ -110,6 +118,41 @@ const DECORATOR_NOISE: &[&str] = &[
     "mark",
     "skip",
     "skipif",
+];
+
+// Decorators that hook what they decorate onto an application's or a
+// signal's lifecycle rather than register a surface for a caller.
+const DECORATOR_HOOKS: &[&str] = &[
+    "connect",
+    "receiver",
+    "listens_for",
+    "exception_handler",
+    "errorhandler",
+    "error_handler",
+    "before_request",
+    "after_request",
+    "before_first_request",
+    "middleware",
+    "context_processor",
+    "template_filter",
+    "url_value_preprocessor",
+    "url_defaults",
+];
+
+// Keywords a function is handed under as a hook on the thing being built,
+// not as the handler it registers.
+const HOOK_KEYWORDS: &[&str] = &[
+    "lifespan",
+    "on_startup",
+    "on_shutdown",
+    "exception_handlers",
+    "default_factory",
+    "default",
+    "key",
+    "callback",
+    "dependencies",
+    "middleware",
+    "result_callback",
 ];
 
 // Stems that name a role rather than a thing; the module takes its
@@ -142,7 +185,7 @@ pub(super) fn declares_data(bases: &[String]) -> bool {
     })
 }
 
-pub(super) fn hooks(dotted: &str) -> bool {
+fn hooks(dotted: &str) -> bool {
     LIFECYCLE.iter().any(|tail| dotted == *tail || dotted.ends_with(&format!(".{tail}")))
 }
 
@@ -226,6 +269,88 @@ pub struct Module {
 }
 
 impl Module {
+    // `path` is root-relative. Imports are the resolver's to settle.
+    pub fn parse(path: &str, text: String) -> Self {
+        let mut module = walk::read(path, &text);
+        module.settle_exports();
+        module.span = Lines {
+            start: 1,
+            end: u32::try_from(text.lines().count()).unwrap_or(u32::MAX).max(1),
+        };
+        module.text = text;
+        module
+    }
+
+    // The exports are the names `__all__` lists, else every module-level
+    // declaration not led by an underscore. The re-exports are:
+    // - a listed name the module imports rather than declares
+    // - every relative `from` import of an `__init__.py`
+    // - a star import of an `__init__.py`, which re-exports everything
+    fn settle_exports(&mut self) {
+        let is_init = self.is_init();
+        let Self {
+            exports,
+            imports,
+            reexports,
+            types,
+            classes,
+            all,
+            ..
+        } = self;
+
+        if let Some(all) = all {
+            exports.retain(|export| all.contains(&export.name));
+        } else {
+            exports.retain(|export| !export.name.starts_with('_'));
+        }
+
+        // group the re-exports by specifier, in first-seen order
+        let mut grouped: Vec<Reexport> = Vec::new();
+        for import in imports.iter().filter(|import| !import.local.is_empty()) {
+            let relative = import.specifier.starts_with('.');
+            let listed = all.as_ref().is_some_and(|all| all.contains(&import.local));
+            if !(listed || (is_init && relative)) {
+                continue;
+            }
+            let Imported::Named(name) = &import.imported else { continue };
+            let pair = (name.clone(), import.local.clone());
+            match grouped.iter_mut().find(|re| re.specifier == import.specifier) {
+                Some(Reexport {
+                    names: Some(names), ..
+                }) => names.push(pair),
+                Some(_) => {}
+                None => grouped.push(Reexport {
+                    specifier: import.specifier.clone(),
+                    names: Some(vec![pair]),
+                    type_only: import.type_only,
+                    target: None,
+                }),
+            }
+        }
+        if is_init {
+            for import in imports.iter().filter(|import| import.imported == Imported::Star) {
+                if !grouped.iter().any(|re| re.specifier == import.specifier) {
+                    grouped.push(Reexport {
+                        specifier: import.specifier.clone(),
+                        names: None,
+                        type_only: import.type_only,
+                        target: None,
+                    });
+                }
+            }
+        }
+        *reexports = grouped;
+
+        // mark the declared types and classes exported
+        let exported: Vec<&str> = exports.iter().map(|export| export.name.as_str()).collect();
+        for decl in types {
+            decl.exported = exported.contains(&decl.name.as_str());
+        }
+        for class in classes {
+            class.exported = exported.contains(&class.name.as_str());
+        }
+    }
+
     pub fn stem(&self) -> &str {
         let (dir, file) = self.path.rsplit_once('/').unwrap_or(("", &self.path));
         let stem = file.split_once('.').map_or(file, |(stem, _)| stem);
@@ -276,6 +401,15 @@ impl Module {
 
     pub fn export(&self, name: &str) -> Option<&Export> {
         self.exports.iter().find(|export| export.name == name)
+    }
+
+    pub fn exported_binding(&self, name: &str) -> Option<&Binding> {
+        let export = self.export(name)?;
+        self.binding(&export.name, &[])
+    }
+
+    pub fn declared_at(&self, export: &Export) -> Lines {
+        self.binding(&export.name, &[]).map_or(export.lines, |binding| binding.lines)
     }
 
     pub fn class(&self, name: &str) -> Option<&ClassDecl> {
@@ -407,6 +541,16 @@ pub enum ExportKind {
     Type,
 }
 
+impl ExportKind {
+    pub const fn callable(&self) -> bool {
+        matches!(self, Self::Function | Self::Class)
+    }
+
+    pub const fn valued(&self) -> bool {
+        matches!(self, Self::Value)
+    }
+}
+
 #[derive(Debug)]
 pub struct Binding {
     pub name: String,
@@ -534,6 +678,16 @@ impl Call {
     pub fn structural(&self) -> bool {
         self.callee.structural()
     }
+
+    // A chain names itself at its first call with a literal (`command("x")`),
+    // else the call's own method and lead stand.
+    pub fn registered(&self, led: Option<String>) -> (&str, Option<String>) {
+        let chained = self.callee.links.iter().find_map(|link| {
+            let literal = link.call.as_ref()?.literal.clone()?;
+            Some((link.name.as_str(), literal))
+        });
+        chained.map_or_else(|| (self.method(), led), |(method, literal)| (method, Some(literal)))
+    }
 }
 
 #[derive(Debug)]
@@ -599,14 +753,21 @@ pub struct Arg {
     // `OrderList.as_view`.
     pub root: Option<Vec<String>>,
     pub called: bool,
-    // The string literal leading a called argument's own arguments:
-    // `orders.urls` for `include("orders.urls")`.
+    // The string literal leading a called argument's own arguments, or a
+    // list's elements: `orders.urls` for `include("orders.urls")`, `login`
+    // for `["login"]`.
     pub inner: Option<String>,
     // A lambda, a class handed by `as_view()`, or a call passing one.
     pub function: bool,
     // The argument's first line, cut as an initializer's head is.
     pub head: String,
     pub lines: Lines,
+}
+
+impl Arg {
+    pub fn is_hook(&self) -> bool {
+        self.keyword.as_deref().is_some_and(|keyword| HOOK_KEYWORDS.contains(&keyword))
+    }
 }
 
 #[derive(Debug)]
@@ -623,6 +784,8 @@ pub struct Decorated {
     // Each keyword argument with its value's head: `methods` and
     // `["GET", "POST"]`.
     pub keywords: Vec<(String, String)>,
+    // From the first decorator through the `def` or `class` line.
+    pub head: Lines,
     // From the first decorator to the end of what it decorates.
     pub lines: Lines,
 }
@@ -630,6 +793,15 @@ pub struct Decorated {
 impl Decorated {
     pub fn keyword(&self, name: &str) -> Option<&str> {
         self.keywords.iter().find(|(key, _)| key == name).map(|(_, value)| value.as_str())
+    }
+
+    // Registers what it decorates, rather than shaping it or hooking it on a
+    // lifecycle.
+    pub fn registering(&self) -> bool {
+        self.name
+            .last()
+            .is_some_and(|name| !shapes(name) && !DECORATOR_HOOKS.contains(&name.as_str()))
+            && !hooks(&self.name.join("."))
     }
 }
 
@@ -741,86 +913,4 @@ pub struct TestDef {
 struct Reference {
     name: String,
     line: u32,
-}
-
-// `path` is root-relative. Imports are the resolver's to settle.
-pub fn parse(path: &str, text: String) -> Module {
-    let mut module = walk::read(path, &text);
-    settle_exports(&mut module);
-    module.span = Lines {
-        start: 1,
-        end: u32::try_from(text.lines().count()).unwrap_or(u32::MAX).max(1),
-    };
-    module.text = text;
-    module
-}
-
-// The exports are the names `__all__` lists, else every module-level
-// declaration not led by an underscore. The re-exports are:
-// - a listed name the module imports rather than declares
-// - every relative `from` import of an `__init__.py`
-// - a star import of an `__init__.py`, which re-exports everything
-fn settle_exports(module: &mut Module) {
-    let is_init = module.is_init();
-    let Module {
-        exports,
-        imports,
-        reexports,
-        types,
-        classes,
-        all,
-        ..
-    } = module;
-
-    if let Some(all) = all {
-        exports.retain(|export| all.contains(&export.name));
-    } else {
-        exports.retain(|export| !export.name.starts_with('_'));
-    }
-
-    // group the re-exports by specifier, in first-seen order
-    let mut grouped: Vec<Reexport> = Vec::new();
-    for import in imports.iter().filter(|import| !import.local.is_empty()) {
-        let relative = import.specifier.starts_with('.');
-        let listed = all.as_ref().is_some_and(|all| all.contains(&import.local));
-        if !(listed || (is_init && relative)) {
-            continue;
-        }
-        let Imported::Named(name) = &import.imported else { continue };
-        let pair = (name.clone(), import.local.clone());
-        match grouped.iter_mut().find(|re| re.specifier == import.specifier) {
-            Some(Reexport {
-                names: Some(names), ..
-            }) => names.push(pair),
-            Some(_) => {}
-            None => grouped.push(Reexport {
-                specifier: import.specifier.clone(),
-                names: Some(vec![pair]),
-                type_only: import.type_only,
-                target: None,
-            }),
-        }
-    }
-    if is_init {
-        for import in imports.iter().filter(|import| import.imported == Imported::Star) {
-            if !grouped.iter().any(|re| re.specifier == import.specifier) {
-                grouped.push(Reexport {
-                    specifier: import.specifier.clone(),
-                    names: None,
-                    type_only: import.type_only,
-                    target: None,
-                });
-            }
-        }
-    }
-    *reexports = grouped;
-
-    // mark the declared types and classes exported
-    let exported: Vec<&str> = exports.iter().map(|export| export.name.as_str()).collect();
-    for decl in types {
-        decl.exported = exported.contains(&decl.name.as_str());
-    }
-    for class in classes {
-        class.exported = exported.contains(&class.name.as_str());
-    }
 }

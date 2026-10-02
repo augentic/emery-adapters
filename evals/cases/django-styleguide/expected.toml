@@ -1,0 +1,488 @@
+# HackSoftware/Django-Styleguide-Example at a70ef43d (MIT), vendored by the
+# command in evals/README.md and gitignored: 128 production modules, ~115 KB,
+# past the 64 KB the survey lays into one message, so the tree is cut one
+# seam per stem — the `python` adapter's scale case. A Django project the
+# way the styleguide writes one: `manage.py` under its guard names
+# `config.django.base` by a string, the settings name `config.urls`, which
+# includes the API's URL module under `api/` with the namespaced
+# `include((module, namespace))` tuple, and that includes five applications
+# under `auth/`, `users/`, `errors/`, `files/`, and `google-oauth2/` the same
+# way; the settings are assembled from `config/settings/*` by star imports,
+# two of them `setup.py` modules beneath a package. Each application
+# registers class-based `APIView`s by `path(..)`, two of them with nested
+# inline includes; `emails/tasks.py` and `tasks/tasks.py` declare
+# `@shared_task`s, a blog example registers one through a wrapper of its own,
+# and `tasks/management/commands/setup_periodic_tasks.py` is a management
+# command; `custom_admin/sites.py` registers the two 2FA pages of an admin
+# site the settings leave commented out, a registration the code spells all
+# the same, as `fastapi-template`'s development-only router is. The admin
+# modules, the testing examples, the Celery application module,
+# `gunicorn.conf.py`, and the `markdown_tools/toc.py` script are reached by
+# no surface. Written from the facts dump and the code before any run; the
+# first baseline card named the 2FA pages on 3/3 and read four requirements
+# as missed on 3/3 at code no surface reaches — `production.py`, which
+# nothing imports; `create_superuser`, which only Django's own command
+# calls; `email_send_all`, which only an admin action calls; `File.url`,
+# which nothing reads — so the pages are expected and the four are gone.
+
+adapter = "python"
+fixture = "evals/cases/django-styleguide/fixture"
+stems = ["start", "auth", "users", "errors", "files", "google-oauth2", "setup-2fa", "confirm-2fa", "email-send", "debug-task", "test-non-concurrent-task", "setup-periodic-tasks"]
+
+# --- surfaces: the bootstrap, five applications' routes, the admin site's two pages, three tasks, one command ---
+
+[[surface]]
+entry = "manage.py"
+stem = "start"
+
+# session login and logout, JWT login and logout, `me/`, under `api/auth/`
+[[surface]]
+entry = "styleguide_example/authentication/urls.py"
+stem = "auth"
+
+# list, create, detail, update, under `api/users/`
+[[surface]]
+entry = "styleguide_example/users/urls.py"
+stem = "users"
+
+# three trigger routes under `api/errors/`
+[[surface]]
+entry = "styleguide_example/errors/urls.py"
+stem = "errors"
+
+# the standard upload and the three direct-upload routes under `api/files/`
+[[surface]]
+entry = "styleguide_example/files/urls.py"
+stem = "files"
+
+# the raw and the SDK flows' callback and redirect, under `api/google-oauth2/`
+[[surface]]
+entry = "styleguide_example/blog_examples/google_login_server_flow/raw/urls.py"
+stem = "google-oauth2"
+
+[[surface]]
+entry = "styleguide_example/blog_examples/google_login_server_flow/sdk/urls.py"
+stem = "google-oauth2"
+
+# the admin site's `get_urls` registers `setup-2fa/` and `confirm-2fa/`, a
+# route each under no mount, so each is a stem of its own
+[[surface]]
+entry = "styleguide_example/custom_admin/sites.py"
+stem = "setup-2fa"
+
+[[surface]]
+entry = "styleguide_example/custom_admin/sites.py"
+stem = "confirm-2fa"
+
+[[surface]]
+entry = "styleguide_example/emails/tasks.py"
+stem = "email-send"
+
+[[surface]]
+entry = "styleguide_example/tasks/tasks.py"
+stem = "debug-task"
+
+# registered through the module's own `non_concurrent_task` wrapper, which
+# hands `shared_task` the wrapped function: a task by the function's name
+[[surface]]
+entry = "styleguide_example/blog_examples/celery_non_concurrent/tasks.py"
+stem = "test-non-concurrent-task"
+
+[[surface]]
+entry = "styleguide_example/tasks/management/commands/setup_periodic_tasks.py"
+stem = "setup-periodic-tasks"
+
+# --- start ---
+
+[[requirement]]
+stem = "start"
+anchor = "config/django/base.py#L107-L122"
+gloss = "The database is DATABASE_URL, defaulting to a local postgres, replaced by the GitHub Actions service when GITHUB_WORKFLOW is set, with every request atomic"
+
+[[requirement]]
+stem = "start"
+anchor = "config/urls.py#L21-L28"
+gloss = "The admin is served at admin/, the API under api/, media from MEDIA_URL, and the debug toolbar's URLs are appended when it is shown"
+
+[[requirement]]
+stem = "start"
+anchor = "config/env.py#L10-L15"
+gloss = "An environment value outside its enum is ImproperlyConfigured"
+
+[[requirement]]
+stem = "start"
+anchor = "config/settings/sentry.py#L5-L77"
+gloss = "Sentry is initialised only when SENTRY_DSN is set, with the Django and Celery integrations and no PII, sampling half of web transactions in production and no Celery transaction"
+
+[[requirement]]
+stem = "start"
+anchor = "config/settings/loggers/setup.py#L34-L77"
+gloss = "structlog is configured for LOGGING_FORMAT: dev formats exception info, json and logfmt render tracebacks as dicts without locals"
+
+[[requirement]]
+stem = "start"
+anchor = "config/settings/loggers/setup.py#L80-L141"
+gloss = "The console handler's formatter follows LOGGING_FORMAT, and django.server and django.request logs are dropped"
+
+[[requirement]]
+stem = "start"
+anchor = "config/settings/debug_toolbar/setup.py#L4-L31"
+gloss = "The debug toolbar is shown only when DEBUG_TOOLBAR_ENABLED and the package is installed"
+
+[[requirement]]
+stem = "start"
+anchor = "config/settings/debug_toolbar/setup.py#L39-L76"
+gloss = "When shown, the toolbar is added to INSTALLED_APPS and MIDDLEWARE and its URLs are mounted at __debug__/"
+
+# the storage and the mail strategy are chosen in the settings and read by
+# the files and the email surfaces
+[[requirement]]
+stem = ["start", "files"]
+anchor = "config/settings/files_and_storages.py#L6-L35"
+gloss = "The upload strategy and storage come from FILE_UPLOAD_STRATEGY and FILE_UPLOAD_STORAGE; local storage serves media from BASE_DIR/media, S3 configures django-storages from the AWS settings"
+
+[[requirement]]
+stem = ["start", "email-send"]
+anchor = "config/settings/email_sending.py#L10-L18"
+gloss = "The local mail strategy writes to the console; mailtrap sends over SMTP with the MAILTRAP settings"
+
+[[requirement]]
+stem = ["start", "auth"]
+anchor = "config/settings/jwt.py#L15-L24"
+gloss = "JWTs expire after JWT_EXPIRATION_DELTA_SECONDS, cannot be refreshed, ride a secure cookie, and are signed with the user's own jwt_key"
+
+# --- the API's exception handlers, configured in the settings and
+# exercised by the errors application ---
+
+[[requirement]]
+stem = ["start", "errors"]
+anchor = "styleguide_example/api/exception_handlers.py#L12-L31"
+gloss = "A Django ValidationError, Http404, or PermissionDenied is answered as DRF's equivalent, with list or dict details wrapped under detail"
+
+[[requirement]]
+stem = ["start", "errors"]
+anchor = "styleguide_example/api/exception_handlers.py#L34-L72"
+gloss = "The proposed handler answers message and extra: an ApplicationError is 400 with its message and extra, a validation error is Validation error with the fields"
+
+# --- auth ---
+
+[[requirement]]
+stem = "auth"
+anchor = "styleguide_example/authentication/apis.py#L22-L36"
+gloss = "POST /api/auth/session/login/ requires email and password, answers 400 when they do not authenticate, else logs the session in and answers the session key with the user's login data"
+
+[[requirement]]
+stem = "auth"
+anchor = "styleguide_example/authentication/apis.py#L39-L48"
+gloss = "GET or POST /api/auth/session/logout/ logs the session out"
+
+[[requirement]]
+stem = "auth"
+anchor = "styleguide_example/authentication/apis.py#L51-L60"
+gloss = "POST /api/auth/jwt/login/ answers the token with 200 rather than 201"
+
+[[requirement]]
+stem = "auth"
+anchor = "styleguide_example/authentication/apis.py#L63-L72"
+gloss = "POST /api/auth/jwt/logout/ rotates the user's jwt_key, invalidating every issued token, and deletes the JWT cookie when one is configured"
+
+[[requirement]]
+stem = "auth"
+anchor = "styleguide_example/authentication/apis.py#L75-L79"
+gloss = "GET /api/auth/me/ answers the authenticated user's login data"
+
+# the authentication mixin is the auth and the files views' guard
+[[requirement]]
+stem = ["auth", "files"]
+anchor = "styleguide_example/api/mixins.py#L32-L50"
+gloss = "An Authorization: Session header authenticates as the session it names"
+
+[[requirement]]
+stem = ["auth", "files"]
+anchor = "styleguide_example/api/mixins.py#L73-L79"
+gloss = "An authenticated API accepts a CSRF-exempt session, a session header, or a JWT, and requires an authenticated user"
+
+[[requirement]]
+stem = ["auth", "users"]
+anchor = "styleguide_example/users/selectors.py#L10-L17"
+gloss = "Login data is the user's id, email, is_active, is_admin, and is_superuser"
+
+# --- users ---
+
+[[requirement]]
+stem = "users"
+anchor = "styleguide_example/users/apis.py#L22-L30"
+gloss = "GET /api/users/<id>/ is 404 for an unknown user, else the id and email"
+
+[[requirement]]
+stem = "users"
+anchor = "styleguide_example/users/apis.py#L47-L60"
+gloss = "GET /api/users/ validates the id, is_admin, and email filters and pages the matches by limit and offset"
+
+[[requirement]]
+stem = "users"
+anchor = "styleguide_example/users/apis.py#L68-L82"
+gloss = "POST /api/users/create/ requires an email and a password and answers the new user's id and email"
+
+[[requirement]]
+stem = "users"
+anchor = "styleguide_example/users/apis.py#L91-L108"
+gloss = "POST /api/users/<id>/update/ requires first_name and last_name, is 404 for an unknown user, else updates and answers the user"
+
+# the manager is reached from the users services and from the errors
+# trigger that creates the same user twice
+[[requirement]]
+stem = ["users", "errors"]
+anchor = "styleguide_example/users/models.py#L15-L33"
+gloss = "Creating a user requires an email, lower-cases and normalises it, sets the password or an unusable one, and validates before saving"
+
+# the generic update is the users' and the emails' services' alike
+[[requirement]]
+stem = ["users", "email-send"]
+anchor = "styleguide_example/common/services.py#L37-L87"
+gloss = "model_update sets only the listed fields present in the data, refuses a field the model lacks, defers many-to-many fields, bumps updated_at when something changed, and saves only those fields"
+
+[[requirement]]
+stem = "users"
+anchor = "styleguide_example/api/pagination.py#L21-L53"
+gloss = "A paginated response carries limit, offset, count, next, previous, and results"
+
+# --- errors ---
+
+[[requirement]]
+stem = "errors"
+anchor = "styleguide_example/errors/services.py#L99-L115"
+gloss = "Every trigger function is run and its exception handed to the handler; the answer carries each response, or 500 SERVER ERROR where the handler returns none"
+
+[[requirement]]
+stem = "errors"
+anchor = "styleguide_example/errors/apis.py#L16-L22"
+gloss = "GET /api/errors/trigger/ answers the triggered errors under both exception handlers"
+
+[[requirement]]
+stem = "errors"
+anchor = "styleguide_example/errors/apis.py#L26-L31"
+gloss = "GET /api/errors/trigger/unique/ creates the same user twice to raise a unique-constraint validation error"
+
+[[requirement]]
+stem = "errors"
+anchor = "styleguide_example/errors/apis.py#L35-L44"
+gloss = "GET /api/errors/trigger/exception/ logs and re-raises an unhandled exception"
+
+# --- files ---
+
+[[requirement]]
+stem = "files"
+anchor = "styleguide_example/files/apis.py#L15-L19"
+gloss = "POST /api/files/upload/standard/ stores the uploaded file and answers 201 with its id"
+
+[[requirement]]
+stem = "files"
+anchor = "styleguide_example/files/services.py#L21-L25"
+gloss = "A file larger than FILE_MAX_SIZE is a validation error naming the limit in MiB"
+
+[[requirement]]
+stem = "files"
+anchor = "styleguide_example/files/services.py#L43-L55"
+gloss = "A file's type is guessed from its name when not given, empty when it cannot be"
+
+[[requirement]]
+stem = "files"
+anchor = "styleguide_example/files/services.py#L58-L75"
+gloss = "A standard upload is size-checked, stored under a generated uuid name keeping the extension, attributed to the user, and marked finished"
+
+[[requirement]]
+stem = "files"
+anchor = "styleguide_example/files/services.py#L110-L139"
+gloss = "Starting a direct upload records the file under a generated name at files/<name> and answers a presigned S3 post when storage is S3, else the local upload URL"
+
+[[requirement]]
+stem = "files"
+anchor = "styleguide_example/files/services.py#L142-L148"
+gloss = "Finishing a direct upload marks the file finished"
+
+[[requirement]]
+stem = "files"
+anchor = "styleguide_example/files/apis.py#L38-L46"
+gloss = "POST /api/files/upload/direct/local/<file_id>/ is 404 for an unknown file, else stores the upload against it"
+
+[[requirement]]
+stem = "files"
+anchor = "styleguide_example/files/services.py#L151-L159"
+gloss = "A local direct upload is size-checked before the file is stored"
+
+[[requirement]]
+stem = "files"
+anchor = "styleguide_example/integrations/aws/client.py#L58-L98"
+gloss = "A presigned S3 post fixes the acl and content type, bounds the size to FILE_MAX_SIZE, and expires after AWS_PRESIGNED_EXPIRY"
+
+# --- google-oauth2 ---
+
+[[requirement]]
+stem = "google-oauth2"
+anchor = "styleguide_example/blog_examples/google_login_server_flow/raw/apis.py#L19-L26"
+gloss = "GET /api/google-oauth2/login/raw/redirect/ stores the state in the session and redirects to Google's authorization URL"
+
+[[requirement]]
+stem = "google-oauth2"
+anchor = "styleguide_example/blog_examples/google_login_server_flow/raw/apis.py#L35-L82"
+gloss = "The raw callback is 400 on an error or a missing code or state, 400 when the session state is missing or differs, 404 when no user has the id token's email, else logs the user in and answers the decoded id token and user info"
+
+[[requirement]]
+stem = "google-oauth2"
+anchor = "styleguide_example/blog_examples/google_login_server_flow/raw/service.py#L63-L82"
+gloss = "The authorization URL requests a code for the email, profile, and openid scopes with offline access and the select_account prompt"
+
+[[requirement]]
+stem = "google-oauth2"
+anchor = "styleguide_example/blog_examples/google_login_server_flow/raw/service.py#L84-L104"
+gloss = "A failed token exchange with Google is an ApplicationError"
+
+[[requirement]]
+stem = "google-oauth2"
+anchor = "styleguide_example/blog_examples/google_login_server_flow/raw/service.py#L117-L133"
+gloss = "A missing GOOGLE_OAUTH2_CLIENT_ID, CLIENT_SECRET, or PROJECT_ID is ImproperlyConfigured"
+
+[[requirement]]
+stem = "google-oauth2"
+anchor = "styleguide_example/blog_examples/google_login_server_flow/sdk/apis.py#L35-L82"
+gloss = "The SDK callback checks the state against the session the same way and exchanges the code through the Google SDK flow"
+
+[[requirement]]
+stem = "google-oauth2"
+anchor = "styleguide_example/blog_examples/google_login_server_flow/sdk/services.py#L93-L110"
+gloss = "An empty credentials payload from the SDK flow is a ValidationError"
+
+# --- setup-2fa and confirm-2fa: the admin site's two pages ---
+
+[[requirement]]
+stem = "setup-2fa"
+anchor = "styleguide_example/blog_examples/admin_2fa/views.py#L13-L26"
+gloss = "POST setup-2fa creates the user's 2FA data and answers the OTP secret with its QR code, or the validation errors when creation fails"
+
+[[requirement]]
+stem = "setup-2fa"
+anchor = "styleguide_example/blog_examples/admin_2fa/services.py#L9-L15"
+gloss = "Creating 2FA data for a user who already has it is refused"
+
+[[requirement]]
+stem = "confirm-2fa"
+anchor = "styleguide_example/blog_examples/admin_2fa/views.py#L36-L47"
+gloss = "Confirming refuses a user with no 2FA set up and a code that does not validate"
+
+[[requirement]]
+stem = "confirm-2fa"
+anchor = "styleguide_example/blog_examples/admin_2fa/views.py#L59-L64"
+gloss = "A valid code rotates the session identifier and stores it as the session's 2fa_token before redirecting to the admin index"
+
+# the site's own overrides serve both pages, so either stem places them
+[[requirement]]
+stem = ["setup-2fa", "confirm-2fa"]
+anchor = "styleguide_example/custom_admin/sites.py#L23-L39"
+gloss = "An admin POST login is redirected on to confirm-2fa, or to setup-2fa for a user with no 2FA data"
+
+[[requirement]]
+stem = ["setup-2fa", "confirm-2fa"]
+anchor = "styleguide_example/custom_admin/sites.py#L41-L59"
+gloss = "Admin permission beyond the two 2FA pages requires the session's 2fa_token to match the user's session identifier"
+
+# --- email-send ---
+
+[[requirement]]
+stem = "email-send"
+anchor = "styleguide_example/emails/tasks.py#L18-L29"
+gloss = "The email_send task sends the email and retries after 5 seconds when sending fails"
+
+[[requirement]]
+stem = "email-send"
+anchor = "styleguide_example/emails/tasks.py#L9-L15"
+gloss = "When the task finally fails the email is marked failed"
+
+[[requirement]]
+stem = "email-send"
+anchor = "styleguide_example/emails/services.py#L24-L50"
+gloss = "Only a SENDING email is sent; with EMAIL_SENDING_FAILURE_TRIGGER a roll under EMAIL_SENDING_FAILURE_RATE fails it; otherwise the plain text and HTML go out and it is marked SENT with sent_at"
+
+[[requirement]]
+stem = "email-send"
+anchor = "styleguide_example/emails/services.py#L15-L21"
+gloss = "Only a SENDING email can be marked failed"
+
+# --- debug-task ---
+
+[[requirement]]
+stem = "debug-task"
+anchor = "styleguide_example/tasks/tasks.py#L4-L6"
+gloss = "debug_task prints its request"
+
+# --- test-non-concurrent-task ---
+
+[[requirement]]
+stem = "test-non-concurrent-task"
+anchor = "styleguide_example/blog_examples/celery_non_concurrent/tasks.py#L18-L38"
+gloss = "A non-concurrent task skips its run with a warning when another instance of it is already active on a worker"
+
+# --- setup-periodic-tasks ---
+
+[[requirement]]
+stem = "setup-periodic-tasks"
+anchor = "styleguide_example/tasks/management/commands/setup_periodic_tasks.py#L17-L55"
+gloss = "setup_periodic_tasks deletes every interval and crontab schedule and periodic task, then creates a crontab schedule in the default timezone and a periodic task for each configured entry, in one transaction"
+
+# --- criteria ---
+
+[[criterion]]
+anchor = "config/settings/celery.py#L10"
+gloss = "CELERY_TASK_SOFT_TIME_LIMIT is 20 seconds"
+
+[[criterion]]
+anchor = "config/settings/celery.py#L11"
+gloss = "CELERY_TASK_TIME_LIMIT is 30 seconds"
+
+[[criterion]]
+anchor = "config/settings/celery.py#L12"
+gloss = "CELERY_TASK_MAX_RETRIES is 3"
+
+[[criterion]]
+anchor = "config/settings/jwt.py#L9"
+gloss = "JWT_EXPIRATION_DELTA_SECONDS defaults to seven days"
+
+[[criterion]]
+anchor = "config/settings/sessions.py#L9"
+gloss = "SESSION_COOKIE_AGE defaults to 1209600 seconds, two weeks"
+
+[[criterion]]
+anchor = "config/settings/files_and_storages.py#L9"
+gloss = "FILE_MAX_SIZE defaults to 10485760 bytes, 10 MiB"
+
+[[criterion]]
+anchor = "config/settings/files_and_storages.py#L30"
+gloss = "AWS_PRESIGNED_EXPIRY defaults to 10 seconds"
+
+[[criterion]]
+anchor = "config/settings/email_sending.py#L8"
+gloss = "EMAIL_SENDING_FAILURE_RATE defaults to 0.2"
+
+[[criterion]]
+anchor = "config/settings/cors.py#L6"
+gloss = "BASE_BACKEND_URL defaults to http://localhost:8000"
+
+[[criterion]]
+anchor = "styleguide_example/api/pagination.py#L22"
+gloss = "The default page limit is 10"
+
+[[criterion]]
+anchor = "styleguide_example/api/pagination.py#L23"
+gloss = "The page limit is at most 50"
+
+[[criterion]]
+anchor = "styleguide_example/users/apis.py#L35"
+gloss = "The user list's default limit is 1"
+
+[[criterion]]
+anchor = "styleguide_example/emails/tasks.py#L29"
+gloss = "A failed send is retried after 5 seconds"
+
+[[criterion]]
+anchor = "styleguide_example/blog_examples/google_login_server_flow/raw/service.py#L51"
+gloss = "The state token is 30 characters"

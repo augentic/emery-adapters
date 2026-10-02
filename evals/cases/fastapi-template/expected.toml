@@ -1,0 +1,304 @@
+# fastapi/full-stack-fastapi-template at cb740b65 (MIT), the repository's
+# `backend/` directory vendored by the command in evals/README.md and
+# gitignored: 20 production modules, ~37 KB, within the 64 KB the survey
+# lays into one message, so every module is laid into one seam. A FastAPI
+# service the way the framework's own template writes one: `app/main.py`
+# constructs `app = FastAPI(..)` at load with no guard and no console script
+# (the construction-at-load bootstrap on a real tree), mounts the API router
+# under `settings.API_V1_STR` — a prefix the code does not spell — and
+# serves the frontend at `/`; `app/api/main.py` includes five `APIRouter`s,
+# four under a prefix of their own (`/items`, `/users`, `/utils`,
+# `/private`) and the login router under none, with `tags=["login"]` as its
+# one grouping; the private router is included only in development. Shared
+# guards in `app/api/deps.py` resolve the current user and the superuser;
+# `app/core/config.py` is a pydantic settings class whose validators rewrite
+# the database driver and refuse default secrets at startup; `alembic/`
+# holds the migration environment, its `versions/` skipped by the keep.
+# Written from the facts dump and the code before any run.
+#
+# The login router's five routes spell four resources (`login`,
+# `password-recovery`, `reset-password`, `password-recovery-html-content`)
+# under the route convention alone; the expectation wants them under the
+# one stem the router's tag spells, `login`, since the plan slices by stem
+# and a resource of one route is no slice. The first baseline card read the
+# three extra stems on 3/3, as predicted, and the derivation now reads a
+# prefix-less router's first tag as the resource its routes sit under.
+
+adapter = "python"
+fixture = "evals/cases/fastapi-template/fixture"
+stems = ["start", "items", "users", "login", "utils", "private"]
+
+# --- surfaces: the bootstrap and the five routers' routes ---
+
+[[surface]]
+entry = "app/main.py"
+stem = "start"
+
+# five routes under `/api/v1/items`
+[[surface]]
+entry = "app/api/routes/items.py"
+stem = "items"
+
+# ten routes under `/api/v1/users`
+[[surface]]
+entry = "app/api/routes/users.py"
+stem = "users"
+
+# five routes under no prefix, tagged `login`
+[[surface]]
+entry = "app/api/routes/login.py"
+stem = "login"
+
+# `POST /utils/test-email/` and `GET /utils/health-check/`
+[[surface]]
+entry = "app/api/routes/utils.py"
+stem = "utils"
+
+# `POST /private/users/`, included in development alone
+[[surface]]
+entry = "app/api/routes/private.py"
+stem = "private"
+
+# --- start ---
+
+[[requirement]]
+stem = "start"
+anchor = "app/main.py#L14-L15"
+gloss = "A route's operation id is its first tag joined to its name"
+
+[[requirement]]
+stem = "start"
+anchor = "app/main.py#L18-L19"
+gloss = "Sentry is initialised with tracing when SENTRY_DSN is set and the environment is not development"
+
+[[requirement]]
+stem = "start"
+anchor = "app/main.py#L27-L33"
+gloss = "CORS allows the configured FRONTEND_HOST origin with credentials, every method and every header"
+
+[[requirement]]
+stem = "start"
+anchor = "app/main.py#L35-L36"
+gloss = "The API router is mounted under API_V1_STR and the frontend directory is served at the root"
+
+# the private router's inclusion is decided in the module the bootstrap
+# reaches, so a requirement at it is rightly placed under either stem
+[[requirement]]
+stem = ["start", "private"]
+anchor = "app/api/main.py#L13-L14"
+gloss = "The private router is included only when FASTAPI_ENV is development"
+
+[[requirement]]
+stem = "start"
+anchor = "app/core/config.py#L33-L40"
+gloss = "A postgres:// or postgresql:// DATABASE_URL is rewritten to the postgresql+psycopg driver"
+
+[[requirement]]
+stem = "start"
+anchor = "app/core/config.py#L68-L88"
+gloss = "A SECRET_KEY, database password, or FIRST_SUPERUSER_PASSWORD left at changethis is refused at startup, and only warned about in development"
+
+# emails are enabled by two settings together; the guard is read where a
+# user is created and where a password is recovered
+[[requirement]]
+stem = ["start", "users", "login"]
+anchor = "app/core/config.py#L59-L62"
+gloss = "Emails are enabled only when SMTP_HOST and EMAILS_FROM_EMAIL are both set"
+
+# --- shared guards: each router's dependency, declared in the API's own
+# module and applied route by route across four routers, so the model
+# places them under a router or under `start` run to run (under `start` on
+# five runs of the first six), which the expectation cannot settle ---
+
+[[requirement]]
+stem = ["start", "items", "users", "login", "utils"]
+anchor = "app/api/deps.py#L30-L46"
+gloss = "A bearer token that does not decode or validate is 403; one for an unknown user is 404; one for an inactive user is 400"
+
+[[requirement]]
+stem = ["start", "users", "login", "utils"]
+anchor = "app/api/deps.py#L52-L57"
+gloss = "A route reserved for superusers answers 403 to a user who is not one"
+
+# --- items ---
+
+[[requirement]]
+stem = "items"
+anchor = "app/api/routes/items.py#L21-L45"
+gloss = "GET /items/ lists every item newest first for a superuser and only the caller's own otherwise, paged by skip and limit with the count"
+
+[[requirement]]
+stem = "items"
+anchor = "app/api/routes/items.py#L53-L58"
+gloss = "GET /items/{id} is 404 for an unknown item and 403 for another user's item unless the caller is a superuser"
+
+[[requirement]]
+stem = "items"
+anchor = "app/api/routes/items.py#L61-L72"
+gloss = "POST /items/ creates the item owned by the caller"
+
+[[requirement]]
+stem = "items"
+anchor = "app/api/routes/items.py#L86-L96"
+gloss = "PUT /items/{id} is 404 for an unknown item and 403 for another user's unless superuser, else updates the fields given"
+
+[[requirement]]
+stem = "items"
+anchor = "app/api/routes/items.py#L106-L113"
+gloss = "DELETE /items/{id} is 404 for an unknown item and 403 for another user's unless superuser, else deletes it"
+
+# --- users ---
+
+[[requirement]]
+stem = "users"
+anchor = "app/api/routes/users.py#L32-L51"
+gloss = "GET /users/ (superuser) pages users newest first by skip and limit with the total count"
+
+[[requirement]]
+stem = "users"
+anchor = "app/api/routes/users.py#L61-L78"
+gloss = "POST /users/ (superuser) refuses an email already registered with 400, creates the user, and emails the new account when emails are enabled"
+
+[[requirement]]
+stem = "users"
+anchor = "app/api/routes/users.py#L89-L100"
+gloss = "PATCH /users/me refuses with 409 an email another user holds, else updates the fields given"
+
+[[requirement]]
+stem = "users"
+anchor = "app/api/routes/users.py#L110-L121"
+gloss = "PATCH /users/me/password is 400 when the current password is wrong or the new one equals it, else stores the new password hashed"
+
+[[requirement]]
+stem = "users"
+anchor = "app/api/routes/users.py#L137-L143"
+gloss = "DELETE /users/me is refused with 403 for a superuser, else deletes the caller"
+
+[[requirement]]
+stem = "users"
+anchor = "app/api/routes/users.py#L151-L159"
+gloss = "POST /users/signup refuses with 400 an email already registered, else creates the user without a login"
+
+[[requirement]]
+stem = "users"
+anchor = "app/api/routes/users.py#L169-L179"
+gloss = "GET /users/{user_id} answers the caller their own record, 403 to a non-superuser asking for another, 404 for an unknown id"
+
+[[requirement]]
+stem = "users"
+anchor = "app/api/routes/users.py#L197-L211"
+gloss = "PATCH /users/{user_id} (superuser) is 404 for an unknown id and 409 for an email another user holds, else updates"
+
+[[requirement]]
+stem = "users"
+anchor = "app/api/routes/users.py#L221-L232"
+gloss = "DELETE /users/{user_id} (superuser) is 404 for an unknown id and 403 for the caller themself, else deletes the user's items and the user"
+
+[[requirement]]
+stem = "users"
+anchor = "app/crud.py#L10-L17"
+gloss = "Creating a user stores the password as a hash"
+
+# an update carrying a password is reached from the users routes and from
+# the password reset
+[[requirement]]
+stem = ["users", "login"]
+anchor = "app/crud.py#L20-L31"
+gloss = "An update carrying a password stores its hash; fields not set are left alone"
+
+# --- login ---
+
+[[requirement]]
+stem = "login"
+anchor = "app/api/routes/login.py#L30-L42"
+gloss = "POST /login/access-token answers a bearer token expiring in ACCESS_TOKEN_EXPIRE_MINUTES for a valid email and password, 400 for a wrong pair or an inactive user"
+
+[[requirement]]
+stem = "login"
+anchor = "app/crud.py#L45-L60"
+gloss = "Authentication verifies against a dummy hash when the email is unknown so timing does not reveal it, and stores a hash the verifier upgraded"
+
+[[requirement]]
+stem = "login"
+anchor = "app/api/routes/login.py#L58-L74"
+gloss = "POST /password-recovery/{email} sends a reset link only when the email is registered and answers the same message either way"
+
+[[requirement]]
+stem = "login"
+anchor = "app/api/routes/login.py#L82-L97"
+gloss = "POST /reset-password/ answers 400 Invalid token for a bad token and an unknown user alike, 400 for an inactive user, else stores the new password"
+
+[[requirement]]
+stem = "login"
+anchor = "app/api/routes/login.py#L109-L123"
+gloss = "POST /password-recovery-html-content/{email} (superuser) is 404 for an unknown user, else answers the reset email's HTML"
+
+[[requirement]]
+stem = "login"
+anchor = "app/utils.py#L105-L115"
+gloss = "A password reset token is a JWT with the email as subject, not valid before now and expiring EMAIL_RESET_TOKEN_EXPIRE_HOURS later"
+
+# mail leaves through one function the login, users, and utils routes share
+[[requirement]]
+stem = ["login", "users", "utils"]
+anchor = "app/utils.py#L34-L57"
+gloss = "Mail is sent over SMTP to the configured host and port with TLS when SMTP_TLS else SSL when SMTP_SSL, and the credentials when set; sending with emails disabled is an assertion failure"
+
+# --- utils ---
+
+[[requirement]]
+stem = "utils"
+anchor = "app/api/routes/utils.py#L16-L26"
+gloss = "POST /utils/test-email/ (superuser) sends a test email to the address and answers 201"
+
+[[requirement]]
+stem = "utils"
+anchor = "app/api/routes/utils.py#L29-L31"
+gloss = "GET /utils/health-check/ answers true"
+
+# --- private ---
+
+[[requirement]]
+stem = "private"
+anchor = "app/api/routes/private.py#L24-L38"
+gloss = "POST /private/users/ creates a user with the given name and hashed password without authentication"
+
+# --- criteria ---
+
+[[criterion]]
+anchor = "app/core/config.py#L22"
+gloss = "API_V1_STR is /api/v1"
+
+[[criterion]]
+anchor = "app/core/config.py#L25"
+gloss = "ACCESS_TOKEN_EXPIRE_MINUTES is 60 * 24 * 8, eight days"
+
+[[criterion]]
+anchor = "app/core/config.py#L26"
+gloss = "FRONTEND_HOST defaults to http://localhost:5173"
+
+[[criterion]]
+anchor = "app/core/config.py#L44"
+gloss = "SMTP_PORT defaults to 587"
+
+[[criterion]]
+anchor = "app/core/config.py#L57"
+gloss = "EMAIL_RESET_TOKEN_EXPIRE_HOURS is 48"
+
+[[criterion]]
+anchor = "app/core/security.py#L19"
+gloss = "ALGORITHM is HS256"
+
+# spelled at three fields (`UserCreate`, `UserRegister`, `NewPassword`); the
+# signup body's is the one the runs cite
+[[criterion]]
+anchor = "app/models.py#L28"
+gloss = "A signup password is 8 to 128 characters"
+
+[[criterion]]
+anchor = "app/api/routes/items.py#L15"
+gloss = "GET /items/ limit defaults to 100"
+
+[[criterion]]
+anchor = "app/api/routes/utils.py#L14"
+gloss = "POST /utils/test-email/ answers 201"

@@ -1,13 +1,13 @@
-//! Locates modules: the manifest's entry and where each import leads.
+//! Locates modules: the manifest's entries and where each import leads.
 //!
-//! A relative specifier is probed the way the compiler probes it — as
-//! written, then with each source extension, then as a directory's `index` —
-//! and `tsconfig.json` `baseUrl` and `paths` resolve the aliases a bare
-//! specifier may spell. A bare specifier no mapping answers is a package. The
-//! resolver owns every outcome: a relative or aliased specifier it cannot
-//! answer is `Unresolved`, never dropped, so the survey can say what it could
-//! not follow and widen what it lays. Each module's imports are settled once
-//! the tree is read and carried on the module, so nothing resolves twice.
+//! A relative specifier is probed the way the compiler probes it: as
+//! written, then with each source extension, then as a directory's `index`.
+//! The `baseUrl` and `paths` of `tsconfig.json` resolve the aliases a bare
+//! specifier may spell, and a bare specifier no mapping answers is a
+//! package. A relative or aliased specifier the tree does not answer is
+//! `Unresolved`, never dropped, so the survey can say what it could not
+//! follow and widen what it lays. Each module's imports are settled once the
+//! tree is read and carried on the module.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -20,24 +20,21 @@ use super::{EXTENSIONS, unique};
 // The build outputs a manifest may point at in place of their sources.
 const OUTPUT_DIRS: &[&str] = &["dist", "build", "lib", "out"];
 
-/// What an import specifier names.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Target {
-    /// A module of the tree, by its root-relative path.
+    // By root-relative path.
     Module(String),
-    /// A package outside the tree, by the specifier as written.
+    // By the specifier as written.
     Package(String),
-    /// A data file of the tree — a `.json` imported by relative or aliased
-    /// path — by its root-relative path.
+    // By root-relative path, for a `.json` imported by relative or aliased
+    // path.
     Data(String),
-    /// A relative or aliased specifier no module or data file of the tree
-    /// answers — a file the keep left out, a module not yet generated, a typo
-    /// — by the specifier as written.
+    // By the specifier as written: a relative or aliased one no module or
+    // data file of the tree answers.
     Unresolved(String),
 }
 
 impl Target {
-    /// The module of the tree the target names, if it names one.
     pub fn module(&self) -> Option<&str> {
         match self {
             Self::Module(path) => Some(path),
@@ -46,26 +43,23 @@ impl Target {
     }
 }
 
-/// The tree's modules, its data files, and the alias mappings its
-/// `tsconfig.json` declares.
 #[derive(Debug)]
 pub struct Resolver {
     modules: BTreeSet<String>,
     data: BTreeSet<String>,
-    // root-relative, `""` for the root itself
+    // Root-relative, `""` for the root itself.
     base_url: Option<String>,
-    // each `paths` pattern with its targets, relative to `base_url` or the
-    // root
+    // Each `paths` pattern with its targets, relative to `base_url` or the
+    // root.
     paths: Vec<(String, Vec<String>)>,
 }
 
 impl Resolver {
-    /// Reads the tree's `tsconfig.json` under `root`, following one relative
-    /// `extends` where it can be read, and indexes `modules` and the `data`
-    /// files an import may name.
+    // One relative `extends` of `tsconfig.json` is followed where it can be
+    // read.
     pub fn new(
-        root: &Path, modules: impl IntoIterator<Item = String>,
-        data: impl IntoIterator<Item = String>,
+        modules: impl IntoIterator<Item = String>, data: impl IntoIterator<Item = String>,
+        root: &Path,
     ) -> Self {
         let mut resolver = Self {
             modules: modules.into_iter().collect(),
@@ -93,7 +87,6 @@ impl Resolver {
         resolver
     }
 
-    /// Settles where every import and re-export of `module` leads.
     pub fn settle(&self, module: &mut Module) {
         let from = module.path.clone();
         for import in &mut module.imports {
@@ -104,13 +97,10 @@ impl Resolver {
         }
     }
 
-    /// Resolves `specifier` as imported from the module at `from`.
-    ///
-    /// `None` only for an absolute specifier, which names nothing of the
-    /// tree; a relative or aliased one the tree does not answer is
-    /// [`Target::Unresolved`]. A bare specifier that matches a `paths`
-    /// pattern other than the catch-all `*` is aliased; one no mapping
-    /// answers is a package.
+    // `None` only for an absolute specifier, which names nothing of the tree.
+    // A bare specifier matching a `paths` pattern other than the catch-all
+    // `*` is aliased, so one the mapping does not answer is `Unresolved`
+    // rather than a package.
     pub fn resolve(&self, from: &str, specifier: &str) -> Option<Target> {
         if specifier.starts_with('/') {
             return None;
@@ -149,8 +139,8 @@ impl Resolver {
         Some(Target::Package(specifier.to_owned()))
     }
 
-    /// The module a manifest `hint` names: `src/server.ts` as written, or
-    /// `dist/server.js` mapped back to its source.
+    // `src/server.ts` as written, or `dist/server.js` mapped back to its
+    // source.
     pub fn entry(&self, hint: &str) -> Option<String> {
         let hint = normalize("", hint.trim())?;
         if let Some(found) = self.probe(&hint) {
@@ -163,13 +153,12 @@ impl Resolver {
         self.probe(&format!("src/{rest}")).or_else(|| self.probe(rest))
     }
 
-    /// The first of `candidates` that is a module of the tree.
     pub fn first(&self, candidates: &[&str]) -> Option<String> {
         candidates.iter().find_map(|candidate| self.probe(candidate))
     }
 
-    // The module `candidate` names, else the data file it names — as written,
-    // or with the `.json` a `require` may leave off.
+    // A module first, else a data file as written or with the `.json` a
+    // `require` may leave off.
     fn file(&self, candidate: &str) -> Option<Target> {
         if let Some(module) = self.probe(candidate) {
             return Some(Target::Module(module));
@@ -180,8 +169,8 @@ impl Resolver {
             .map(Target::Data)
     }
 
-    // The module `candidate` names: as written, with a source extension in
-    // place of the one it has or lacks, or as a directory's `index`.
+    // As written, with a source extension in place of the one it has or
+    // lacks, or as a directory's `index`.
     fn probe(&self, candidate: &str) -> Option<String> {
         if self.modules.contains(candidate) {
             return Some(candidate.to_owned());
@@ -208,8 +197,7 @@ impl Resolver {
     }
 }
 
-// The remainder a `paths` pattern leaves of `specifier`: what its `*` stood
-// for, or the empty string for an exact match.
+// What the pattern's `*` stood for, or the empty string for an exact match.
 fn alias<'s>(pattern: &str, specifier: &'s str) -> Option<&'s str> {
     match pattern.split_once('*') {
         Some((prefix, suffix)) => {
@@ -219,8 +207,7 @@ fn alias<'s>(pattern: &str, specifier: &'s str) -> Option<&'s str> {
     }
 }
 
-// `path` joined beneath `dir`, `.` and `..` segments folded; `None` when it
-// climbs above the root.
+// `None` where `..` climbs above the root.
 pub(super) fn normalize(dir: &str, path: &str) -> Option<String> {
     let mut segments: Vec<&str> = Vec::new();
     for segment in dir.split('/').chain(path.split('/')) {
@@ -235,10 +222,10 @@ pub(super) fn normalize(dir: &str, path: &str) -> Option<String> {
     Some(segments.join("/"))
 }
 
-// A `tsconfig.json` as a JSON value, comments and trailing commas removed,
-// its own `compilerOptions` laid over the ones a readable relative `extends`
-// supplies when `follow` — the base itself is read without following. Anything
-// unreadable is ignored.
+// Comments and trailing commas removed. When `follow`, the file's own
+// `compilerOptions` are laid over the ones a readable relative `extends`
+// supplies; the base itself is read without following. Anything unreadable
+// is ignored.
 fn tsconfig(root: &Path, path: &str, follow: bool) -> Option<Value> {
     let text = std::fs::read_to_string(root.join(path)).ok()?;
     let mut config: Value = serde_json::from_str(&strip_jsonc(&text)).ok()?;
@@ -252,7 +239,6 @@ fn tsconfig(root: &Path, path: &str, follow: bool) -> Option<Value> {
             base_path.push_str(".json");
         }
         if let Some(parent) = tsconfig(root, &base_path, false) {
-            // a base with no `compilerOptions` leaves the child's own in place
             let mut options = parent
                 .get("compilerOptions")
                 .and_then(Value::as_object)
@@ -311,7 +297,6 @@ fn strip_jsonc(text: &str) -> String {
                 }
             }
             ',' => {
-                // a trailing comma is dropped
                 let closes =
                     matches!(chars.clone().find(|next| !next.is_whitespace()), Some('}' | ']'));
                 if !closes {
@@ -324,7 +309,6 @@ fn strip_jsonc(text: &str) -> String {
     out
 }
 
-/// What `package.json` says about the package and where the program starts.
 #[derive(Debug, Default)]
 pub struct Manifest {
     pub name: Option<String>,
@@ -334,8 +318,7 @@ pub struct Manifest {
 }
 
 impl Manifest {
-    /// Reads `package.json` under `root`; an absent or unreadable one is
-    /// empty.
+    // An absent or unreadable manifest is empty.
     pub fn read(root: &Path) -> Self {
         let Some(value) = std::fs::read_to_string(root.join("package.json"))
             .ok()
@@ -368,9 +351,8 @@ impl Manifest {
         }
     }
 
-    /// Every module the manifest names as an entry, resolved against the
-    /// tree, in the order it names them — `main`, `bin`, then the sources the
-    /// `start` and `dev` scripts run — once each.
+    // In manifest order, once each: `main`, `bin`, then the sources the
+    // `start` and `dev` scripts run.
     pub fn entries(&self, resolver: &Resolver) -> Vec<String> {
         let scripts = ["start", "dev"].into_iter().flat_map(|script| {
             self.scripts.get(script).into_iter().flat_map(|command| {

@@ -41,8 +41,7 @@ const TIMERS: &[&str] =
 // spells a value as `3000` does.
 const WRAPPERS: &[&str] = &["Number", "String", "Boolean", "BigInt", "parseInt", "parseFloat"];
 
-// Reads `text`, the module at `path`, as far as the parser gets: its exports
-// unsettled and its text unset, which `parse` finishes.
+// Exports unsettled and `text` unset; `Module::parse` finishes both.
 pub(super) fn read(path: &str, text: &str) -> Module {
     let allocator = Allocator::default();
     let source_type = SourceType::from_path(path).unwrap_or_else(|_| SourceType::ts());
@@ -80,19 +79,19 @@ struct Walker<'s> {
     frames: Vec<Frame>,
     classes: Vec<String>,
     next_frame: u32,
-    // how many argument lists enclose the node being walked, within the
-    // current function body
+    // How many argument lists enclose the node being walked, within the
+    // current function body.
     arg_nesting: usize,
-    // for each call being walked, whether a function among its arguments is
-    // a handler, so its body runs one depth in
+    // For each call being walked, whether a function among its arguments is
+    // a handler, so its body runs one depth in.
     positions: Vec<bool>,
-    // the call an expression statement discards the value of
+    // The call an expression statement discards the value of.
     discarded: Option<Span>,
-    // the call an `await` waits on
+    // The call an `await` waits on.
     awaited: Option<Span>,
-    // the calls a further, non-structural call in their chain is made on
+    // The calls a further, non-structural call in their chain is made on.
     chained: Vec<Span>,
-    // the name the next function frame takes: a variable's, a method's
+    // The name the next function frame takes: a variable's, a method's.
     pending_name: Option<String>,
     constructor: bool,
 }
@@ -122,13 +121,12 @@ impl<'s> Walker<'s> {
         self.text.get(start as usize..end as usize).unwrap_or("")
     }
 
-    // the first line of `span`, cut as an initializer's head is
+    // The first line of `span`, cut as an initializer's head is.
     fn excerpt(&self, span: Span) -> String {
         first_line(self.slice(span.start, span.end))
     }
 
-    // what an initializer is and its head, `Init::Other` and none for no
-    // initializer
+    // `Init::Other` and no head for no initializer.
     fn initializer(&self, value: Option<&Expression<'_>>) -> (Init, Option<String>) {
         value.map_or((Init::Other, None), |value| {
             (classify(value), Some(self.excerpt(value.span())))
@@ -312,7 +310,6 @@ impl<'s> Walker<'s> {
         });
     }
 
-    // records the call, the call being walked, and answers it
     fn record_call(
         &mut self, callee_expr: &Expression<'_>, arguments: &[Argument<'_>], is_new: bool,
         span: Span,
