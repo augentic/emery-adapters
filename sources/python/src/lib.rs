@@ -51,10 +51,10 @@ mod survey;
 
 #[cfg(target_arch = "wasm32")]
 mod guest {
+    use emery_sdk::survey::Survey;
     use emery_sdk::{AdapterMetadata, ClaimKind, Context, Error, Evidence, Model, SourceKind};
 
-    use crate::PROSE;
-    use crate::survey::{self, Survey};
+    use crate::{PROSE, survey};
 
     emery_sdk::source_adapter!(metadata, extract);
 
@@ -62,12 +62,13 @@ mod guest {
         emery_sdk::metadata(SourceKind::Behaviour)
     }
 
+    // An inline value is one seam at once; a workspace's surfaces are named
+    // in one turn from what the parser read, and its seams cut from them.
     async fn surveyed<P: Model>(ctx: &Context<'_, P>) -> Result<Survey, Error> {
         match survey::prepare(ctx.input)? {
             survey::Preparation::Value(survey) => Ok(survey),
-            survey::Preparation::Workspace(prepared) => {
-                let surfaces = survey::model::surfaces(ctx, PROSE, &prepared).await?;
-                Ok(survey::seams(&prepared, &surfaces))
+            survey::Preparation::Workspace(tree) => {
+                emery_sdk::survey::seams(ctx, PROSE, &tree).await
             }
         }
     }

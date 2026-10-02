@@ -13,6 +13,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use emery_sdk::serde_json::{self, Value};
+use emery_sdk::survey::code;
 use emery_sdk::survey::resolve::{Target, normalize};
 
 use super::parse::Module;
@@ -314,9 +315,36 @@ impl Manifest {
         }
     }
 
+    // What the facts say of the manifest, and the modules its entries name.
+    pub fn summary(&self, resolver: &Resolver) -> code::Manifest {
+        let mut says: Vec<String> = Vec::new();
+        if let Some(name) = &self.name {
+            says.push(format!("names the package `{name}`"));
+        }
+        if let Some(main) = &self.main {
+            says.push(format!("`main` is `{main}`"));
+        }
+        if let Some(bin) = &self.bin {
+            says.push(format!("`bin` is `{bin}`"));
+        }
+        if !self.scripts.is_empty() {
+            let scripts: Vec<String> = self
+                .scripts
+                .iter()
+                .map(|(name, command)| format!("`{name}` runs `{command}`"))
+                .collect();
+            says.push(format!("scripts: {}", scripts.join(", ")));
+        }
+        code::Manifest {
+            name: self.name.clone(),
+            says,
+            entries: self.entries(resolver),
+        }
+    }
+
     // In manifest order, once each: `main`, `bin`, then the sources the
     // `start` and `dev` scripts run.
-    pub fn entries(&self, resolver: &Resolver) -> Vec<String> {
+    fn entries(&self, resolver: &Resolver) -> Vec<String> {
         let scripts = ["start", "dev"].into_iter().flat_map(|script| {
             self.scripts.get(script).into_iter().flat_map(|command| {
                 command.split_whitespace().filter(|word| {

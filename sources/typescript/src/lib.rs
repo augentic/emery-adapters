@@ -7,8 +7,8 @@
 //! the first entry `package.json` names, or conventional entry the tree
 //! holds, that runs something when loaded, which the adapter names `start`
 //! itself — every call that hands a function to something a package
-//! provides, every method under a package's decorator, and what the entry
-//! modules export, each at its lines, with the modules laid into the call as
+//! provides, every method under a package's registering decorator, and what
+//! the entry modules export, each at its lines, with the modules laid into the call as
 //! far as they fit. The answer names each surface — a route, a command, a
 //! job, an exported API — at the lines that register or declare it and the
 //! modules no surface reaches, and is held to the tree before anything rests
@@ -33,8 +33,10 @@
 //! code does to them, definitions handed literals, at module level, in a
 //! class, or as a constant-named local — the packages they import, the calls
 //! they make through those packages, grouped by callee at their sites, the
-//! `.json` files they import, laid after them as the seam's data, and what
-//! could not be followed. Inline input is mined whole, with no survey call.
+//! `.json` files they import, laid as the seam's data — a small one directly
+//! after the first module importing it, a large one after them all — and
+//! what could not be followed. Inline input is mined whole, with no survey
+//! call.
 //!
 //! The `type` claims of the source are copied from its declarations —
 //! every `interface`, `type`, `enum`, and class the seams' modules export,
@@ -52,10 +54,10 @@ mod survey;
 
 #[cfg(target_arch = "wasm32")]
 mod guest {
+    use emery_sdk::survey::Survey;
     use emery_sdk::{AdapterMetadata, ClaimKind, Context, Error, Evidence, Model, SourceKind};
 
-    use crate::PROSE;
-    use crate::survey::{self, Survey};
+    use crate::{PROSE, survey};
 
     emery_sdk::source_adapter!(metadata, extract);
 
@@ -68,9 +70,8 @@ mod guest {
     async fn surveyed<P: Model>(ctx: &Context<'_, P>) -> Result<Survey, Error> {
         match survey::prepare(ctx.input)? {
             survey::Preparation::Value(survey) => Ok(survey),
-            survey::Preparation::Workspace(prepared) => {
-                let surfaces = survey::model::surfaces(ctx, PROSE, &prepared).await?;
-                Ok(survey::seams(&prepared, &surfaces))
+            survey::Preparation::Workspace(tree) => {
+                emery_sdk::survey::seams(ctx, PROSE, &tree).await
             }
         }
     }

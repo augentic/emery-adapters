@@ -17,7 +17,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use emery_sdk::survey::code::Imported;
+use emery_sdk::survey::code::{self, Imported};
 use emery_sdk::survey::resolve::{Target, normalize};
 
 use super::parse::Module;
@@ -296,8 +296,29 @@ impl Manifest {
         manifest
     }
 
+    // What the facts say of the manifest, and the modules its scripts name.
+    pub fn summary(&self, resolver: &Resolver) -> code::Manifest {
+        let mut says: Vec<String> = Vec::new();
+        if let Some(name) = &self.name {
+            says.push(format!("names the package `{name}`"));
+        }
+        if !self.scripts.is_empty() {
+            let scripts: Vec<String> = self
+                .scripts
+                .iter()
+                .map(|(name, target)| format!("`{name}` runs `{target}`"))
+                .collect();
+            says.push(format!("installs the console scripts {}", scripts.join(", ")));
+        }
+        code::Manifest {
+            name: self.name.clone(),
+            says,
+            entries: self.targets(resolver).into_iter().map(|(module, _)| module).collect(),
+        }
+    }
+
     // In script order, once each, with the function each target names.
-    pub fn entries(&self, resolver: &Resolver) -> Vec<(String, Option<String>)> {
+    pub fn targets(&self, resolver: &Resolver) -> Vec<(String, Option<String>)> {
         unique(self.scripts.values().filter_map(|target| {
             let module = resolver.entry(target)?;
             let function = target.split_once(':').map(|(_, function)| function.trim().to_owned());

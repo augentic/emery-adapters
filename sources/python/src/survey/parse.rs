@@ -2,17 +2,20 @@
 //!
 //! A `Module` is the SDK's [`code::Module`] with what Python alone declares
 //! — the `__main__` guard, the tests, `__all__` — filled by the parser
-//! confined to `walk`, so the rules in `surface` and `skeleton` never name a
-//! syntax-tree type and a parser swap touches one file. A module the parser
-//! cannot read is still a `Module`, read as far as the parser got with
-//! `parsed` false, so one broken file never fails a run. Where each import
-//! leads is settled once the tree is read (`Resolver::settle`) and carried
-//! on the import.
+//! confined to `walk`, so the rules in `surface` never name a syntax-tree
+//! type and a parser swap touches one file. A module the parser cannot read
+//! is still a `Module`, read as far as the parser got with `parsed` false,
+//! so one broken file never fails a run. Where each import leads is settled
+//! once the tree is read (`Resolver::settle`) and carried on the import. A
+//! test module is read the same way, for the behaviours its tests state.
 
 use std::ops::{Deref, DerefMut};
 
 use emery_sdk::survey::Lines;
 use emery_sdk::survey::code::{self, ClassDecl, Imported, MemberKind, Reexport};
+use emery_sdk::survey::tests::Statement;
+
+use super::DIALECT;
 
 mod walk;
 
@@ -21,13 +24,7 @@ const DATA_BASES: &[&str] = &["TypedDict", "NamedTuple", "Protocol"];
 
 // A type the caller copies, not an export it calls.
 pub(super) fn data_bases(bases: &[String]) -> bool {
-    bases.iter().any(|base| {
-        base.ends_with("Enum") || base.ends_with("Flag") || DATA_BASES.contains(&base.as_str())
-    })
-}
-
-pub(super) fn is_enum(class: &ClassDecl) -> bool {
-    class.bases.iter().any(|base| base.ends_with("Enum") || base.ends_with("Flag"))
+    DIALECT.enumerates(bases) || bases.iter().any(|base| DATA_BASES.contains(&base.as_str()))
 }
 
 // A dunder method is a dataclass's or a model's, not a caller's. An empty
@@ -155,6 +152,32 @@ impl Module {
 
     pub fn is_init(&self) -> bool {
         self.path.ends_with("__init__.py")
+    }
+
+    // Each test by its docstring's first line, else its name spelled as
+    // words, under its class's name less `Test`.
+    pub fn statements(&self) -> Vec<Statement> {
+        self.tests
+            .iter()
+            .map(|test| {
+                let title = test.doc.clone().unwrap_or_else(|| {
+                    test.name.trim_start_matches("test").trim_start_matches('_').replace('_', " ")
+                });
+                let title = if test.parametrized {
+                    format!("{title} (over several values)")
+                } else {
+                    title
+                };
+                let text = match &test.class {
+                    Some(class) => format!("{} › {title}", class.trim_start_matches("Test")),
+                    None => title,
+                };
+                Statement {
+                    text,
+                    line: test.lines.start,
+                }
+            })
+            .collect()
     }
 }
 

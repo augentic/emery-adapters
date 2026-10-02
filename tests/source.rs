@@ -478,10 +478,10 @@ async fn typescript() {
         ]
     );
     for note in [
-        "- Surface `start` — entry `src/index.ts` — stem `start`: the process bootstrap: what runs \
-         before each handler is registered, what it awaits before serving, and at shutdown — \
-         `stop` and what a signal handler calls, wherever declared; id `start`; reaches \
-         `src/routes.ts`.",
+        "- Surface `start` — entry `src/index.ts` — stem `start`: the process bootstrap, run at \
+         load: what runs before each handler is registered, what it awaits before serving, and \
+         at shutdown — `stop` and what a signal handler calls, wherever declared; id `start`; \
+         reaches `src/routes.ts`.",
         ": registered L6–L8 in `ordersRouter`; handler L6–L8; through `express`; id `orders.post`; \
          reaches `src/orders.ts`, `src/db.ts`.",
         ": registered L9 in `ordersRouter`; through `express`; id `orders.find-order`; reaches \
@@ -1027,8 +1027,9 @@ async fn typescript_survey_facts() {
     let seen = model.seen();
     let survey = &seen[0].messages[0];
     for fact in [
-        "The manifest `package.json` names the package `jobs`; `main` is `src/cli.ts`.",
-        "The bootstrap — the entry that runs something when loaded — is `src/cli.ts`.",
+        "The manifest names the package `jobs`; `main` is `src/cli.ts`.",
+        "The bootstrap — the entry that runs something — is `src/cli.ts`: it runs or constructs \
+         the application at load.",
         "- `src/cli.ts#L6` — `program.action` led by `\"import <file>\"` handed a function, through \
          `commander`",
         "- `src/cli.ts#L8-L10` — `program.action` led by `\"serve\"` handed a function, through \
@@ -1729,12 +1730,12 @@ async fn typescript_boundaries() {
         "- `src/config.ts#L5` — `SKU = /^[A-Z]{2,4}-\\d{3,6}$/`",
         "- `src/config.ts#L6` — `API_TOKENS = (process.env.API_TOKENS ?? \"\").split(\",\").filter((token) \
          => token.length > 0)`",
-        "- `src/config.ts#L7-L10` — `ORDER = define({ id: \"string\", lines: \"number\", })`",
+        "- `src/config.ts#L7-L10` — `ORDER = define({ id: \"string\", lines: \"number\", });`",
         "- `src/config.ts#L13` — `Limits.pageSize = Number(process.env.PAGE_SIZE ?? 20)`",
         "- `src/config.ts#L17` — `process.env.PORT` in `app.listen(Number(process.env.PORT ?? 3000));`",
         "- `src/config.ts#L21` — `FIVE_SEC_DELAY = 5 * 1000`",
         "- `src/config.ts#L27-L31` — `validation = { transform: true, status: Status.UNPROCESSABLE, \
-         factory: (errors: string[]) => errors.join(\",\"), }`",
+         factory: (errors: string[]) => errors.join(\",\"), };`",
         "- `src/config.ts#L34` — `allowedKinds = [\"image/jpeg\", \"image/png\"]`",
         "- `express` — `express` (default), `Router` — in `src/index.ts`, `src/routes.ts`",
     ] {
@@ -2315,9 +2316,9 @@ async fn typescript_unresolved() {
 }
 
 // A `.json` a module imports by path is a data file of the seam: named in the
-// brief with the module reading it, laid after the modules, and a file a
-// `criterion` may cite a value in — while a `requirement` there is at no
-// anchor and comes back.
+// brief with the module reading it, laid directly after the first module
+// importing it when small, and a file a `criterion` may cite a value in —
+// while a `requirement` there is at no anchor and comes back.
 #[tokio::test]
 async fn typescript_data() {
     let project = scratch();
@@ -2356,8 +2357,9 @@ async fn typescript_data() {
     let turn = &seen[1].messages[0];
     assert!(
         turn.contains(
-            "Data files these modules import, each with the modules reading it, laid after the \
-             modules:\n\n- `src/zones.json` — imported by `src/orders.ts`"
+            "Data files these modules name by path, each with the modules reading it, laid after \
+             the first module naming it — a large one after every module:\n\n- `src/zones.json` \
+             — named by `src/orders.ts`"
         ),
         "the data file is named with its reader: {turn}"
     );
@@ -2366,9 +2368,13 @@ async fn typescript_data() {
         &["src/index.ts", "src/routes.ts", "src/orders.ts", "src/db.ts", "src/zones.json"],
         &[],
     );
-    let modules_end = turn.find("### `src/db.ts`").expect("the last module is laid");
+    let reader = turn.find("### `src/orders.ts`").expect("the reading module is laid");
     let data_start = turn.find("### `src/zones.json`").expect("the data file is laid");
-    assert!(modules_end < data_start, "the data file is laid after the modules: {turn}");
+    let next = turn.find("### `src/db.ts`").expect("the module after the reader is laid");
+    assert!(
+        reader < data_start && data_start < next,
+        "a small data file is laid directly after the module naming it: {turn}"
+    );
     assert!(turn.contains("2|  \"rural\": 650,"), "numbered: {turn}");
     let exchanges = checked(&model);
     let correction = exchanges[0].outcome.as_ref().expect_err("a requirement in data is refused");
