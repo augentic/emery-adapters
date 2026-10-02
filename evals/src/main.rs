@@ -3,27 +3,34 @@
 //!
 //! `cargo run -p evals -- [case|adapter..]` stages every case under
 //! `evals/cases/` (or the named ones, and every case of a named adapter) as
-//! its own project beneath `target/eval/`, runs `emery specify` over it three
-//! times, reads the committed documents back through `emery show`, grades the
-//! accepted claims and the surveyed surfaces against the case's
-//! `expected.toml`, and writes a dated scorecard to `target/eval/`. A case
-//! names the adapter it runs under (`adapter = "python"`; `typescript` when
-//! it names none). Every path — a case's `fixture`, the binaries' defaults
-//! and a relative `EMERY_BIN` or `<ADAPTER>_WASM`, the scorecard's — is
-//! relative to the repository root. A case whose fixture the checkout lacks
-//! is skipped unless it is named.
+//! its own project beneath `target/eval/<card>/`, runs `emery specify` over
+//! it three times, reads the committed documents back through `emery show`,
+//! grades the accepted claims and the surveyed surfaces against the case's
+//! `expected.toml`, and writes the scorecard to `target/eval/<card>.md` —
+//! `<card>` the run's UTC start, so every run's files outlive the next
+//! invocation and a card can be read back to its anchors. A case names the
+//! adapter it runs under (`adapter = "python"`; `typescript` when it names
+//! none). Every path — a case's `fixture`, the binaries' defaults and a
+//! relative `EMERY_BIN` or `<ADAPTER>_WASM`, the scorecard's — is relative
+//! to the repository root. A case whose fixture the checkout lacks is
+//! skipped unless it is named.
 //!
 //! A run that hits the backend's time cap — a `timeout` or `inactive`
 //! completion — is put again one rung up the budget ladder, so the card says
-//! at which budget it landed; the comparison columns are the first rung's.
+//! at which budget it landed; the comparison columns are the first rung's. A
+//! run the backend refuses before any claim is accepted — a `bad_gateway` at
+//! a turn's opening — is put again once at the same rung, the dead attempt's
+//! log kept as `run-N.dead.stderr`. A run that fails after its claims are
+//! accepted — in the engine's own turns — is graded on them, and the card
+//! names the turn it died in.
 //!
 //! `cargo run -p evals -- --facts [case|adapter..]` stages the named cases
 //! and runs each once with no `CURSOR_API_KEY` in the environment, so the
 //! adapter reads the tree and lays its survey facts — the text the model
 //! would be asked to name surfaces from — and the first turn fails before
 //! any is spent; the facts are printed and written to
-//! `target/eval/<case>/facts.md`. A graded run writes the same beside its
-//! log as `run-N.facts.md`.
+//! `target/eval/facts/<case>/facts.md`. A graded run writes the same beside
+//! its log as `run-N.facts.md`.
 //!
 //! Environment: `EMERY_BIN` (`../emery/target/release/emery`), one
 //! `<ADAPTER>_WASM` per adapter a selected case runs under —
@@ -89,9 +96,10 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
         cases.iter().map(|case| case.expected.adapter.as_str()).collect();
     let settings = Settings::from_env(root, &adapters)?;
 
+    let eval_dir = root.join("target/eval");
     if facts_only {
         for case in &cases {
-            let project = stage(root, case, &settings)?;
+            let project = stage(&eval_dir.join("facts"), case, &settings)?;
             let text = facts(&project, &settings, &case.expected.adapter)?;
             fs::write(project.join("facts.md"), &text)?;
             println!("# {} — survey facts ({})\n\n{text}\n", case.name, case.expected.adapter);
@@ -103,22 +111,18 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
     // run and grade every case, each run climbing the ladder while the cap
     // is what fails it
     let started = now();
+    let card_name = started.replace(':', "-");
     let mut reports = Vec::with_capacity(cases.len());
     for case in &cases {
         eprintln!("eval: case `{}`", case.name);
-        let project = stage(root, case, &settings)?;
+        let project = stage(&eval_dir.join(&card_name), case, &settings)?;
         let mut runs = Vec::with_capacity(settings.runs);
         for n in 1..=settings.runs {
             let mut attempts = Vec::new();
             for (index, rung) in settings.ladder.iter().enumerate() {
                 eprintln!("eval: `{}` run {n} at {rung}", case.name);
-                // the rung with its `/` as a `-`, since the tag names files
-                let tag = if index == 0 {
-                    format!("run-{n}")
-                } else {
-                    format!("run-{n}@{}-{}", rung.timeout, rung.inactivity)
-                };
-                let run = run(&project, &settings, &case.expected.adapter, n, *rung, &tag)?;
+                let tag = tag(n, index, *rung);
+                let run = attempt(&project, &settings, case, n, *rung, &tag)?;
                 eprintln!("eval: `{}` run {n} at {rung} {}", case.name, run.summary());
                 let climb = run.starved() && index + 1 < settings.ladder.len();
                 attempts.push(Attempt {
@@ -135,8 +139,8 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // write the scorecard
-    let card = scorecard(&settings, &reports, &started);
-    let out = root.join("target/eval").join(format!("{}.md", started.replace(':', "-")));
+    let card = scorecard(&settings, &reports, &started, &card_name);
+    let out = eval_dir.join(format!("{card_name}.md"));
     fs::write(&out, &card)?;
     print!("{card}");
     eprintln!("eval: scorecard at {}", out.display());
@@ -144,7 +148,45 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+// The name a run's files carry beneath its case: `run-N` at the first rung,
+// `run-N@<timeout>-<inactivity>` up the ladder — the rung's `/` as a `-`,
+// since the tag is a file name.
+fn tag(n: usize, index: usize, rung: Rung) -> String {
+    if index == 0 {
+        format!("run-{n}")
+    } else {
+        format!("run-{n}@{}-{}", rung.timeout, rung.inactivity)
+    }
+}
+
+// One run at one rung, put again once when the backend refused it before
+// any claim was accepted: the failure is the host's, not the arm's, and a
+// second opening is cheaper than a run short. The dead attempt's files are
+// kept as `<tag>.dead.*`.
+fn attempt(
+    project: &Path, settings: &Settings, case: &Case, n: usize, rung: Rung, tag: &str,
+) -> io::Result<Run> {
+    let adapter = &case.expected.adapter;
+    let first = run(project, settings, adapter, n, rung, tag)?;
+    if !first.stillborn() {
+        return Ok(first);
+    }
+    eprintln!("eval: `{}` run {n} at {rung} {} — put again", case.name, first.summary());
+    for suffix in ["stderr", "stdout", "facts.md"] {
+        let from = project.join(format!("{tag}.{suffix}"));
+        if from.exists() {
+            fs::rename(from, project.join(format!("{tag}.dead.{suffix}")))?;
+        }
+    }
+    let mut again = run(project, settings, adapter, n, rung, tag)?;
+    again.dead = Some(first.summary());
+
+    Ok(again)
+}
+
 struct Settings {
+    // the repository root, which every fixture path is relative to
+    root: PathBuf,
     emery: PathBuf,
     // each adapter a selected case runs under, with its built component
     wasm: BTreeMap<String, PathBuf>,
@@ -184,6 +226,7 @@ impl Settings {
         let ladder: Vec<Rung> = ladder.split(',').map(Rung::parse).collect::<Result<_, _>>()?;
 
         Ok(Self {
+            root: root.to_path_buf(),
             emery,
             wasm,
             runs,
@@ -360,16 +403,16 @@ fn cases(root: &Path, filter: &BTreeSet<String>) -> Result<Vec<Case>, Box<dyn st
 
 // --- staging ---
 
-// Copies the fixture and the component into a project of their own: `emery`
-// mounts its invocation directory, so both must sit inside it, and the
-// revision store the run commits under stays with the case.
-fn stage(root: &Path, case: &Case, settings: &Settings) -> io::Result<PathBuf> {
-    let project = root.join("target/eval").join(&case.name);
+// Copies the fixture and the component into a project of their own beneath
+// `dir`: `emery` mounts its invocation directory, so both must sit inside
+// it, and the revision store the run commits under stays with the case.
+fn stage(dir: &Path, case: &Case, settings: &Settings) -> io::Result<PathBuf> {
+    let project = dir.join(&case.name);
     if project.exists() {
         fs::remove_dir_all(&project)?;
     }
     fs::create_dir_all(&project)?;
-    copy_tree(&root.join(&case.expected.fixture), &project.join("source"))?;
+    copy_tree(&settings.root.join(&case.expected.fixture), &project.join("source"))?;
     let adapter = &case.expected.adapter;
     fs::copy(settings.component(adapter)?, project.join(format!("{adapter}.wasm")))?;
     fs::write(
@@ -437,9 +480,13 @@ struct Run {
     spec: Option<Value>,
     design: Option<Value>,
     plan: Option<Value>,
+    // the summary of a stillborn attempt this run was put again after
+    dead: Option<String>,
 }
 
-// One surface as the adapter's `surveyed` line spells it.
+// One surface as the adapter's `surveyed` line spells it; `lines` is its
+// registration or declaration, `L<n>` or `L<n>-L<n>`, where the adapter
+// logs one.
 #[derive(Deserialize)]
 struct Surveyed {
     name: String,
@@ -447,6 +494,16 @@ struct Surveyed {
     stem: String,
     #[serde(default)]
     ids: Vec<String>,
+    #[serde(default)]
+    lines: Option<String>,
+}
+
+impl Surveyed {
+    fn span(&self) -> Option<(u64, u64)> {
+        let text = self.lines.as_deref()?.strip_prefix('L')?;
+        let (start, end) = text.split_once("-L").unwrap_or((text, text));
+        Some((start.parse().ok()?, end.parse().ok()?))
+    }
 }
 
 impl Run {
@@ -458,7 +515,10 @@ impl Run {
                 self.completions.len(),
                 self.evidence.iter().map(|evidence| evidence.claims.len()).sum::<usize>()
             ),
-            Some(code) => format!("exit {code} after {}s", self.wall.as_secs()),
+            Some(code) => {
+                let died = self.died_in().map_or(String::new(), |label| format!(" in `{label}`"));
+                format!("exit {code}{died} after {}s", self.wall.as_secs())
+            }
             None => format!("killed after {}s", self.wall.as_secs()),
         }
     }
@@ -471,8 +531,54 @@ impl Run {
             .any(|completion| matches!(completion.outcome.as_str(), "timeout" | "inactive"))
     }
 
+    // Whether the backend refused the run before any claim was accepted:
+    // `bad_gateway` exits 4, and with no evidence there is nothing to grade.
+    fn stillborn(&self) -> bool {
+        self.exit == Some(4) && self.evidence.is_empty()
+    }
+
     fn passed(&self) -> bool {
         self.exit == Some(0) && !self.starved()
+    }
+
+    // The label of the completion a failed run died in: the one the backend
+    // or the gate ended, the siblings it aborted set aside.
+    fn died_in(&self) -> Option<&str> {
+        self.completions
+            .iter()
+            .rev()
+            .find(|completion| !matches!(completion.outcome.as_str(), "ok" | "corrected" | "abort"))
+            .or_else(|| self.completions.last())
+            .map(|completion| completion.label.as_str())
+    }
+
+    // Where the accepted requirement claims anchor against the surfaces the
+    // survey decided; none when the adapter logged no surface span.
+    fn landing(&self) -> Option<Landing> {
+        let spans: Vec<(&str, (u64, u64))> = self
+            .surveyed
+            .iter()
+            .filter_map(|surface| Some((surface.entry.as_str(), surface.span()?)))
+            .collect();
+        if spans.is_empty() {
+            return None;
+        }
+        let mut landing = Landing::default();
+        for claim in self.claims(ClaimKind::Requirement) {
+            let Some(Ok(anchor)) = claim.anchor() else { continue };
+            let Some((start, end)) = anchor.lines else { continue };
+            let at = |held: &dyn Fn((u64, u64)) -> bool| {
+                spans.iter().any(|(entry, span)| *entry == anchor.path && held(*span))
+            };
+            if at(&|(first, _)| start <= first && first <= end) {
+                landing.head += 1;
+            } else if at(&|(first, last)| first < start && end <= last) {
+                landing.inside += 1;
+            } else {
+                landing.outside += 1;
+            }
+        }
+        Some(landing)
     }
 
     fn claims(&self, kind: ClaimKind) -> impl Iterator<Item = &Claim> {
@@ -555,6 +661,28 @@ impl Run {
     }
 }
 
+// Where the accepted requirement claims land against the surfaces: covering
+// a surface's own first line — the span a requirement over a whole handler
+// takes, from its decorator or registration — inside a surface's span past
+// that line, or outside every surface. What an arm over the anchor set is
+// read by.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct Landing {
+    head: usize,
+    inside: usize,
+    outside: usize,
+}
+
+impl Display for Landing {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{} covering a surface's head, {} inside a surface past it, {} outside every surface",
+            self.head, self.inside, self.outside
+        )
+    }
+}
+
 #[derive(Clone, Copy, Default)]
 struct Tokens {
     input: u64,
@@ -614,6 +742,7 @@ fn run(
         spec: None,
         design: None,
         plan: None,
+        dead: None,
     };
     if run.exit == Some(0) {
         for (artifact, slot) in
@@ -628,12 +757,13 @@ fn run(
             )?;
             *slot = Some(envelope["document"].clone());
         }
-        for (index, evidence) in run.evidence.iter().enumerate() {
-            fs::write(
-                project.join(format!("{tag}.evidence-{index}.json")),
-                serde_json::to_string_pretty(evidence)?,
-            )?;
-        }
+    }
+    // the claims are graded whether or not the engine's turns landed after them
+    for (index, evidence) in run.evidence.iter().enumerate() {
+        fs::write(
+            project.join(format!("{tag}.evidence-{index}.json")),
+            serde_json::to_string_pretty(evidence)?,
+        )?;
     }
 
     Ok(run)
@@ -925,7 +1055,7 @@ fn overlaps(a: Anchor<'_>, b: Anchor<'_>) -> bool {
 
 // --- the scorecard ---
 
-fn scorecard(settings: &Settings, reports: &[Report<'_>], started: &str) -> String {
+fn scorecard(settings: &Settings, reports: &[Report<'_>], started: &str, name: &str) -> String {
     let ladder: Vec<String> = settings.ladder.iter().map(Rung::to_string).collect();
     let adapters: Vec<String> = settings
         .wasm
@@ -935,7 +1065,7 @@ fn scorecard(settings: &Settings, reports: &[Report<'_>], started: &str) -> Stri
     let mut card = format!(
         "# Eval {started}\n\nmodel `{}` · emery `{}` · {} · {} runs per case · ladder {} \
          (`CURSOR_TIMEOUT_SECS`/`CURSOR_INACTIVITY_SECS`, climbed on a `timeout` or `inactive` \
-         completion; the columns are the first rung's)\n",
+         completion; the columns are the first rung's) · runs under `target/eval/{name}/`\n",
         settings.model,
         settings.emery.display(),
         adapters.join(" · "),
@@ -1039,7 +1169,12 @@ fn row(f: &mut Formatter<'_>, attempt: &Attempt) -> fmt::Result {
         "| {} | {} | {}s | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | \
          {} | {} | {} ({}) |",
         run.n,
-        run.exit.map_or_else(|| "killed".to_owned(), |code| code.to_string()),
+        match (run.exit, run.died_in()) {
+            (Some(0), _) => "0".to_owned(),
+            (Some(code), Some(label)) => format!("{code} in `{label}`"),
+            (Some(code), None) => code.to_string(),
+            (None, _) => "killed".to_owned(),
+        },
         run.wall.as_secs(),
         run.completions.len(),
         tokens.input,
@@ -1066,10 +1201,21 @@ fn row(f: &mut Formatter<'_>, attempt: &Attempt) -> fmt::Result {
 fn notes(f: &mut Formatter<'_>, attempt: &Attempt, climbed: bool) -> fmt::Result {
     let Attempt { run, grade } = attempt;
     let at = if climbed { format!(" @ {}", run.rung) } else { String::new() };
+    let graded = !run.evidence.is_empty();
     if run.exit == Some(0) {
         writeln!(f, "\nRun {}{at}: stems {:?}", run.n, run.stems())?;
     } else {
-        writeln!(f, "\nRun {}{at} failed:\n\n```\n{}\n```", run.n, run.tail)?;
+        // the turn the run died in, and whether it left claims to grade
+        let died = run.died_in().map_or(String::new(), |label| format!(" in `{label}`"));
+        let left = if graded {
+            format!(", {} seams accepted — the claims are graded below", run.evidence.len())
+        } else {
+            ", no claim accepted".to_owned()
+        };
+        writeln!(f, "\nRun {}{at} failed{died}{left}:\n\n```\n{}\n```", run.n, run.tail)?;
+    }
+    if let Some(dead) = &run.dead {
+        writeln!(f, "- put again once: the first attempt {dead}, before any claim")?;
     }
 
     // the survey
@@ -1104,7 +1250,10 @@ fn notes(f: &mut Formatter<'_>, attempt: &Attempt, climbed: bool) -> fmt::Result
         }
     }
     // the claims
-    if run.exit == Some(0) {
+    if graded {
+        if let Some(landing) = run.landing() {
+            writeln!(f, "- requirement anchors: {landing}")?;
+        }
         if !grade.missing_stems.is_empty() {
             writeln!(f, "- stems missing: {:?}", grade.missing_stems)?;
         }
@@ -1182,12 +1331,15 @@ fn verdict(attempt: &Attempt) -> String {
         let failed: BTreeSet<&str> = run
             .completions
             .iter()
-            .filter(|c| !matches!(c.outcome.as_str(), "ok" | "corrected"))
+            .filter(|c| !matches!(c.outcome.as_str(), "ok" | "corrected" | "abort"))
             .map(|c| c.outcome.as_str())
             .collect();
+        let died = run.died_in().map_or(String::new(), |label| format!(" in `{label}`"));
         match (run.exit, failed.is_empty()) {
-            (Some(code), true) => format!("exit {code}"),
-            (Some(code), false) => format!("exit {code}, {}", Vec::from_iter(failed).join(", ")),
+            (Some(code), true) => format!("exit {code}{died}"),
+            (Some(code), false) => {
+                format!("exit {code}, {}{died}", Vec::from_iter(failed).join(", "))
+            }
             (None, _) => "killed".to_owned(),
         }
     } else {
@@ -1419,4 +1571,153 @@ fn civil(days: u64) -> (u64, u64, u64) {
     let year = yoe + era * 400 + u64::from(month <= 2);
 
     (year, month, day)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const RUNG: Rung = Rung {
+        timeout: 600,
+        inactivity: 120,
+    };
+
+    // A run read from the lines the runner parses, as the backend and the
+    // SDK log them.
+    fn run_from(exit: Option<i32>, stderr: &str) -> Run {
+        Run {
+            n: 1,
+            rung: RUNG,
+            wall: Duration::ZERO,
+            exit,
+            tail: String::new(),
+            diff: None,
+            evidence: accepted(stderr),
+            completions: completions(stderr),
+            surveyed: surveyed(stderr).unwrap_or_default(),
+            unreached: None,
+            spec: None,
+            design: None,
+            plan: None,
+            dead: None,
+        }
+    }
+
+    fn completion(label: &str, outcome: &str) -> String {
+        format!(
+            "INFO complete{{n=1 model=\"m\" format=schema label=\"{label}\"}}: \
+             omnia_cursor::model::observe: completion outcome=\"{outcome}\" attempts=1 \
+             duration_ms=10 input_tokens=5 cache_read_tokens=0 output_tokens=2 \
+             reasoning_tokens=0\n"
+        )
+    }
+
+    fn accepted_line(claims: &str) -> String {
+        format!("TRACE emery_sdk: accepted source=python evidence={{\"claims\":[{claims}]}}\n")
+    }
+
+    fn requirement(id: &str, path: &str) -> String {
+        format!(
+            "{{\"kind\":\"requirement\",\"id\":\"{id}\",\"path\":\"{path}\",\"statement\":\"s\"}}"
+        )
+    }
+
+    #[test]
+    fn first_rung_tag() {
+        assert_eq!(tag(2, 0, RUNG), "run-2");
+    }
+
+    #[test]
+    fn climbed_tag() {
+        let rung = Rung {
+            timeout: 1200,
+            inactivity: 240,
+        };
+        let tag = tag(1, 1, rung);
+        assert_eq!(tag, "run-1@1200-240");
+        assert!(!tag.contains('/'), "a tag names files beneath the case");
+    }
+
+    #[test]
+    fn ladder_rungs() {
+        let ladder: Vec<Rung> =
+            LADDER.split(',').map(Rung::parse).collect::<Result<_, _>>().unwrap();
+        assert_eq!(ladder.len(), 3);
+        assert_eq!(ladder[1].to_string(), "1200/240");
+        assert!(Rung::parse("1200").is_err());
+        assert!(Rung::parse("a/b").is_err());
+    }
+
+    #[test]
+    fn starved_run() {
+        let starved = run_from(
+            Some(3),
+            &(completion("survey-python", "ok") + &completion("evidence-python-0", "timeout")),
+        );
+        assert!(starved.starved());
+        assert!(!starved.passed());
+        let landed = run_from(Some(0), &completion("evidence-python-0", "ok"));
+        assert!(!landed.starved());
+        assert!(landed.passed());
+    }
+
+    #[test]
+    fn stillborn_run() {
+        let refused = run_from(Some(4), &completion("survey-python", "error"));
+        assert!(refused.stillborn());
+        assert_eq!(refused.died_in(), Some("survey-python"));
+
+        let after_claims = run_from(
+            Some(4),
+            &(completion("evidence-python-0", "ok")
+                + &accepted_line(&requirement("orders.create", "app.py#L3-L9"))
+                + &completion("grouping", "error")),
+        );
+        assert!(!after_claims.stillborn(), "a claim accepted is a run to grade");
+        assert_eq!(after_claims.died_in(), Some("grouping"));
+
+        let engine = run_from(Some(1), &completion("survey-python", "ok"));
+        assert!(!engine.stillborn(), "only the backend's refusal is put again");
+    }
+
+    #[test]
+    fn died_in_engine_turn() {
+        let stderr = completion("survey-python", "ok")
+            + &completion("evidence-python-0", "corrected")
+            + &completion("spec-draft", "ok")
+            + &completion("spec-draft", "exhausted")
+            + &completion("design-draft", "abort")
+            + &completion("slicing", "abort");
+        let run = run_from(Some(1), &stderr);
+        assert_eq!(run.died_in(), Some("spec-draft"), "the aborted siblings are not where it died");
+    }
+
+    #[test]
+    fn anchor_landing() {
+        let surveyed = "TRACE python: surveyed source=python surfaces=[\
+            {\"name\":\"GET /items\",\"entry\":\"app/items.py\",\"stem\":\"items\",\"ids\":[\"items.get\"],\"lines\":\"L10-L30\"},\
+            {\"name\":\"start\",\"entry\":\"app/main.py\",\"stem\":\"start\",\"ids\":[\"start\"],\"lines\":\"L5\"}]\n";
+        let claims = [
+            requirement("items.get.whole", "app/items.py#L10-L30"),
+            requirement("items.get.decorator", "app/items.py#L8-L11"),
+            requirement("items.get.guard", "app/items.py#L14-L16"),
+            requirement("items.get.last", "app/items.py#L30"),
+            requirement("items.get.helper", "app/items.py#L40-L42"),
+            requirement("start.boot", "app/main.py#L5"),
+            requirement("start.config", "app/config.py#L1-L3"),
+        ]
+        .join(",");
+        let run = run_from(Some(0), &(surveyed.to_owned() + &accepted_line(&claims)));
+        assert_eq!(
+            run.landing(),
+            Some(Landing {
+                head: 3,
+                inside: 2,
+                outside: 2
+            })
+        );
+
+        let unlined = run_from(Some(0), &accepted_line(&claims));
+        assert_eq!(unlined.landing(), None, "no surface span logged, nothing to land against");
+    }
 }

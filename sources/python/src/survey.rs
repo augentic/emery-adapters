@@ -132,6 +132,7 @@ fn logged(source: &str, what: &str, surfaces: &[Surface]) {
                 "name": surface.name,
                 "entry": surface.entry,
                 "stem": surface.stem,
+                "lines": surface.lines.anchor(),
                 "ids": surface.ids,
             })
         })
