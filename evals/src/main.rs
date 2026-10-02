@@ -139,7 +139,7 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
 
             runs.push(attempts);
         }
-        
+
         reports.push(Report { case, runs });
     }
 
