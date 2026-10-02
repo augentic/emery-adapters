@@ -22,15 +22,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use emery_sdk::kebab;
-use emery_sdk::survey::Lines;
-use emery_sdk::survey::route::{self, Spelling};
-
-use super::parse::{
-    Arg, BindingKind, Call, Decorated, Export, ExportKind, Imported, Init, MemberKind, Module,
-    Scope,
+use emery_sdk::survey::code::{
+    Arg, BindingKind, Call, Decorated, Export, ExportKind, Imported, Init, MemberKind, Scope,
 };
+use emery_sdk::survey::{Lines, route};
+
+use super::parse::Module;
 use super::resolve::{Manifest, Resolver};
-use super::{push_unique, unique};
+use super::{DIALECT, push_unique, unique};
 
 // Looked for in this order when the manifest's scripts name no entry:
 // Django's, a package run as a script, the conventional entries at the root
@@ -84,12 +83,6 @@ const MOUNTING: &[&str] = &["register_blueprint", "include_router", "mount"];
 // Constructors whose `prefix` or `url_prefix` keyword mounts the module
 // declaring them.
 const PREFIXED: &[&str] = &["APIRouter", "Blueprint", "Router"];
-
-// A pattern spells a wildcard, a brace, a `<converter>`, or a regex.
-const SPELLING: Spelling = Spelling {
-    pattern: &['*', '{', '(', '[', '<', '?', '\\'],
-    param_name,
-};
 
 // How many bindings a receiver is traced through before it counts as local.
 pub(super) const TRACE: usize = 4;
@@ -253,8 +246,8 @@ impl Tree {
         let path = import.target.as_ref()?.module()?;
         let name = match &import.imported {
             Imported::Named(name) => name.clone(),
-            Imported::Module => local.to_owned(),
-            Imported::Star | Imported::Literal => return None,
+            Imported::Whole => local.to_owned(),
+            Imported::Default | Imported::Star | Imported::Effect => return None,
         };
         Some((self.modules.get(path)?, name))
     }
@@ -271,7 +264,7 @@ impl Tree {
                 Some((target, exported.clone()))
             }
             (Imported::Named(_), [member]) => Some((target, member.clone())),
-            (Imported::Module, rest) => {
+            (Imported::Whole, rest) => {
                 let segments: Vec<&str> = import.specifier.split('.').collect();
                 let bound =
                     if segments.first() == Some(&name.as_str()) { segments.len() - 1 } else { 0 };
@@ -299,7 +292,7 @@ impl Tree {
             let from = self.modules.get(&order[next]).filter(|_| !stop.contains(&order[next]));
             next += 1;
             let Some(module) = from else { continue };
-            for path in module.reached() {
+            for path in module.reached(&DIALECT) {
                 if seen.insert(path) {
                     order.push(path.to_owned());
                 }
@@ -357,7 +350,7 @@ impl Tree {
         }
         let Some((target, member)) = self.member_of(module, root) else { return false };
         let Some(export) = target.export(&member) else { return false };
-        match &export.kind {
+        match export.kind {
             ExportKind::Function | ExportKind::Class => true,
             ExportKind::Value => target.binding(&export.name, &[]).is_some_and(|binding| {
                 matches!(
@@ -368,7 +361,7 @@ impl Tree {
                     }
                 )
             }),
-            ExportKind::Type => false,
+            ExportKind::Type | ExportKind::Unknown => false,
         }
     }
 
@@ -403,7 +396,7 @@ impl Tree {
     // A view handed by `as_view()`, a view set, a worker class, with the
     // module declaring it.
     fn handed_class<'m>(&'m self, module: &'m Module, call: &Call) -> Option<(&'m Module, String)> {
-        call.args.iter().filter(|arg| !arg.is_hook()).find_map(|arg| {
+        call.args.iter().filter(|arg| !arg.is_hook(&DIALECT)).find_map(|arg| {
             let root = arg.root.as_deref()?;
             let root = match root {
                 [.., last] if last == "as_view" => &root[..root.len() - 1],
@@ -426,7 +419,7 @@ impl Tree {
     pub(super) fn receiver(&self, module: &Module, call: &Call) -> Option<Receiver> {
         let head = call.callee.head.as_str();
         let link = |index: usize| call.callee.links.get(index).map(|link| link.name.as_str());
-        if head == "self" {
+        if head == DIALECT.self_name {
             let class = call.class.as_deref()?;
             let [field, _, ..] = call.callee.links.as_slice() else { return None };
             let field = module.field(class, &field.name)?;
@@ -597,7 +590,7 @@ impl Tree {
     fn named_handler(&self, module: &Module, call: &Call) -> Option<String> {
         call.args
             .iter()
-            .filter(|arg| !arg.is_hook() && arg.root.is_some())
+            .filter(|arg| !arg.is_hook(&DIALECT) && arg.root.is_some())
             .find(|arg| self.handler(module, arg, &call.frames))
             .and_then(|arg| {
                 let root = arg.root.as_ref()?;
@@ -617,12 +610,12 @@ impl Tree {
     // handed to a receiver the code constructs (`router.register("orders",
     // OrderViewSet)`) is run.
     fn hands(&self, module: &Module, call: &Call) -> bool {
-        if call.structural() {
+        if call.structural(&DIALECT) {
             return false;
         }
         let through_package = module.package(&call.callee.head).is_some();
         call.args.iter().any(|arg| {
-            !arg.is_hook()
+            !arg.is_hook(&DIALECT)
                 && self.handler(module, arg, &call.frames)
                 && !(through_package && self.class_handed(module, arg, &call.frames))
         })
@@ -661,7 +654,7 @@ impl Tree {
     // The modules no other imports; every module where each is imported.
     pub(super) fn roots(&self) -> Vec<String> {
         let imported: BTreeSet<&str> =
-            self.modules.values().flat_map(|module| module.reached()).collect();
+            self.modules.values().flat_map(|module| module.reached(&DIALECT)).collect();
         let roots: Vec<String> =
             self.modules.keys().filter(|path| !imported.contains(path.as_str())).cloned().collect();
         if roots.is_empty() { self.modules.keys().cloned().collect() } else { roots }
@@ -846,7 +839,7 @@ pub struct Receiver {
 // and `s3`.
 fn tells_apart(module: &Module, stem: &str, own: &str) -> Option<String> {
     let dir = module.path.rsplit_once('/').map_or("", |(dir, _)| dir);
-    std::iter::once(module.stem())
+    std::iter::once(module.stem(&DIALECT))
         .chain(dir.rsplit('/'))
         .filter_map(kebab)
         .find(|segment| segment != stem && !own.ends_with(&format!(".{segment}")))
@@ -1002,7 +995,7 @@ impl Derived {
             Some(At::Export(export)) => Self::at_export(tree, module, export),
             None => Self {
                 stem: None,
-                discriminator: SPELLING.normalised(name, stem),
+                discriminator: DIALECT.route.normalised(name, stem),
                 methods: Vec::new(),
                 lines,
                 detail: vec![format!("named by the survey at {lines}")],
@@ -1045,16 +1038,19 @@ impl Derived {
         let (method, literal) = call.registered(tree.led(module, call));
         let literal = literal.as_deref();
         let route = routed(module, method, literal, mounts);
-        let derived = route
-            .as_deref()
-            .map_or_else(|| literal.and_then(route::literal_stem), |route| SPELLING.stem(route));
+        let derived = route.as_deref().map_or_else(
+            || literal.and_then(route::literal_stem),
+            |route| DIALECT.route.stem(route),
+        );
         let stem = derived.as_deref().unwrap_or(stem);
         let methods_keyword = call.keyword("methods").map(|arg| arg.head.as_str());
         let discriminator =
             tree.named_handler(module, call).filter(|handler| handler != stem).or_else(|| {
                 route.as_deref().map_or_else(
                     || kebab(method),
-                    |route| SPELLING.discriminator(&verb_of(method, methods_keyword), route, stem),
+                    |route| {
+                        DIALECT.route.discriminator(&verb_of(method, methods_keyword), route, stem)
+                    },
                 )
             });
         let mut detail = vec![match (&call.class, &call.function) {
@@ -1110,7 +1106,7 @@ impl Derived {
             module
                 .decorated
                 .iter()
-                .filter(|d| d.class == class.class && d.member.is_some() && d.registering())
+                .filter(|d| d.class == class.class && d.member.is_some() && d.registering(&DIALECT))
                 .filter_map(|d| Some((d.member.clone()?, d.lines))),
         );
         let mut detail =
@@ -1118,7 +1114,7 @@ impl Derived {
         detail.extend(through(tree, module, class));
         detail.extend(noted(&methods));
         Self {
-            stem: SPELLING.stem(&route),
+            stem: DIALECT.route.stem(&route),
             discriminator: kebab(name),
             methods,
             lines: class.lines,
@@ -1146,12 +1142,13 @@ impl Derived {
         let literal = || decorated.literal.as_deref().and_then(route::literal_stem);
         let stem = route.as_deref().map_or_else(
             || group.clone().or_else(literal),
-            |route| under(module, decorated, mounts).or_else(|| SPELLING.stem(route)),
+            |route| under(module, decorated, mounts).or_else(|| DIALECT.route.stem(route)),
         );
         let discriminator = match (&route, &stem) {
             (Some(route), Some(stem)) => {
                 let method = decorated.name.last().map_or("", String::as_str).to_ascii_lowercase();
-                SPELLING
+                DIALECT
+                    .route
                     .discriminator(&verb_of(&method, decorated.keyword("methods")), route, stem)
                     .or_else(|| kebab(member))
             }
@@ -1173,7 +1170,7 @@ impl Derived {
 
     // The export's name tells it apart, and a class carries its public methods.
     fn at_export(tree: &Tree, module: &Module, export: &Export) -> Self {
-        let (what, methods, class) = match &export.kind {
+        let (what, methods, class) = match export.kind {
             ExportKind::Class => (
                 "class",
                 methods(module, &export.name, |name| !dunder(name))
@@ -1183,7 +1180,9 @@ impl Derived {
                 Some(export.name.as_str()),
             ),
             ExportKind::Function => ("function", Vec::new(), None),
-            ExportKind::Value | ExportKind::Type => ("value", Vec::new(), None),
+            ExportKind::Value | ExportKind::Type | ExportKind::Unknown => {
+                ("value", Vec::new(), None)
+            }
         };
         let declared = module.declared_at(export);
         let mut detail = vec![format!("exported {what} {declared}")];
@@ -1214,7 +1213,7 @@ fn under(
         .and_then(|class| class_prefix(module, class))
         .and_then(|d| d.literal.as_deref())
         .unwrap_or("");
-    SPELLING.stem(&route::join(mount, prefix)).or_else(|| router_tag(module, decorated))
+    DIALECT.route.stem(&route::join(mount, prefix)).or_else(|| router_tag(module, decorated))
 }
 
 // The first `tags` literal of the `APIRouter` the decorator's head is bound
@@ -1279,7 +1278,7 @@ fn class_prefix<'m>(module: &'m Module, class: &str) -> Option<&'m Decorated> {
         .decorated
         .iter()
         .filter(|d| d.class.as_deref() == Some(class) && d.member.is_none() && d.literal.is_some())
-        .find(|d| d.registering())
+        .find(|d| d.registering(&DIALECT))
 }
 
 // Under the module's mount and, for a method, its class's prefix.
@@ -1305,7 +1304,7 @@ fn decorated_class_at(module: &Module, lines: Lines) -> Option<&Decorated> {
     module
         .decorated
         .iter()
-        .filter(|d| d.member.is_none() && d.registering())
+        .filter(|d| d.member.is_none() && d.registering(&DIALECT))
         .find(|d| lines.holds(d.lines.start))
 }
 
@@ -1318,7 +1317,7 @@ fn decorated_enclosing(module: &Module, lines: Lines) -> Option<&Decorated> {
 }
 
 fn registering_defs(module: &Module) -> impl Iterator<Item = &Decorated> {
-    module.decorated.iter().filter(|d| d.member.is_some() && d.registering())
+    module.decorated.iter().filter(|d| d.member.is_some() && d.registering(&DIALECT))
 }
 
 // A function or class before a value.
@@ -1396,7 +1395,7 @@ fn strip_pattern(route: &str) -> String {
 
 // `<int:pk>` and `(?P<pk>\d+)` are `pk`; `{id}` and `:id` are `id`; any
 // other segment is as written.
-fn param_name(segment: &str) -> &str {
+pub(super) fn param_name(segment: &str) -> &str {
     if let Some(inner) = segment.strip_prefix('{').and_then(|rest| rest.strip_suffix('}')) {
         return inner.split_once(':').map_or(inner, |(name, _)| name);
     }
@@ -1420,5 +1419,5 @@ fn literal_tail(literal: &str) -> Option<String> {
 }
 
 fn module_stem(module: &Module) -> String {
-    kebab(module.stem()).unwrap_or_else(|| "module".to_owned())
+    kebab(module.stem(&DIALECT)).unwrap_or_else(|| "module".to_owned())
 }

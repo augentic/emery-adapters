@@ -15,13 +15,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+use emery_sdk::survey::code::{Export, ExportKind};
 use emery_sdk::survey::resolve::Target;
 use emery_sdk::survey::{Facts, Inventory, Lines};
 use emery_sdk::{Context, Doc, Error, Model, kebab};
 
-use super::parse::{Export, ExportKind, Module};
+use super::parse::Module;
 use super::surface::{Derived, Surface, Tree};
-use super::{Prepared, push_unique, skeleton, unique};
+use super::{DIALECT, Prepared, push_unique, skeleton, unique};
 
 // The bootstrap surface leads, and every id is decided over them all. The
 // errors are the SDK's:
@@ -202,10 +203,10 @@ impl<'t> Located<'t> {
                 let (_, literal) = call.registered(tree.led(module, call));
                 let led =
                     literal.map(|literal| format!(" led by `\"{literal}\"`")).unwrap_or_default();
-                let spelled = if call.is_new {
+                let spelled = if call.constructs {
                     format!("new {}", call.method())
                 } else {
-                    format!("{}.{}", call.callee.receiver(), call.method())
+                    format!("{}.{}", call.callee.receiver(&DIALECT), call.method())
                 };
                 let typed = receiver
                     .type_name
@@ -247,9 +248,10 @@ impl<'t> Located<'t> {
                 let decorator = decorated.name.join(".");
                 let argument =
                     decorated.literal.as_ref().map(|l| format!("(\"{l}\")")).unwrap_or_default();
+                let class = decorated.class.as_deref().unwrap_or_default();
                 let on = decorated.member.as_ref().map_or_else(
-                    || format!("class `{}`", decorated.class),
-                    |member| format!("`{}.{member}`", decorated.class),
+                    || format!("class `{class}`"),
+                    |member| format!("`{class}.{member}`"),
                 );
                 lines.push(format!(
                     "- `{}#{}` — `@{decorator}{argument}` on {on}, through `{package}`",
@@ -437,9 +439,9 @@ impl<'t> Located<'t> {
 fn declared<'e>(exports: impl Iterator<Item = &'e Export>) -> Vec<String> {
     exports
         .filter_map(|export| {
-            let kind = match &export.kind {
+            let kind = match export.kind {
                 ExportKind::Function => "function",
-                ExportKind::Class { .. } => "class",
+                ExportKind::Class => "class",
                 ExportKind::Value => "value",
                 ExportKind::Type | ExportKind::Unknown => return None,
             };

@@ -17,9 +17,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+use emery_sdk::survey::code::Imported;
 use emery_sdk::survey::resolve::{Target, normalize};
 
-use super::parse::{Imported, Module};
+use super::parse::Module;
 use super::unique;
 
 #[derive(Debug)]
@@ -90,14 +91,16 @@ impl Resolver {
         let from = module.path.clone();
         for import in &mut module.imports {
             import.target = match &import.imported {
-                Imported::Literal => self.literal(&from, &import.specifier),
+                Imported::Effect => self.literal(&from, &import.specifier),
                 Imported::Named(name) => self.resolve(&from, &import.specifier, Some(name)),
-                Imported::Module | Imported::Star => self.resolve(&from, &import.specifier, None),
+                Imported::Default | Imported::Whole | Imported::Star => {
+                    self.resolve(&from, &import.specifier, None)
+                }
             };
         }
         module
             .imports
-            .retain(|import| import.imported != Imported::Literal || import.target.is_some());
+            .retain(|import| import.imported != Imported::Effect || import.target.is_some());
         for reexport in &mut module.reexports {
             reexport.target = self.resolve(&from, &reexport.specifier, None);
         }

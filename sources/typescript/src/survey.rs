@@ -32,6 +32,8 @@
 
 use std::path::Path;
 
+use emery_sdk::survey::Dialect;
+use emery_sdk::survey::route::Spelling;
 use emery_sdk::survey::tests::{Test, scenarios, stated};
 use emery_sdk::workspace::Entry;
 use emery_sdk::{Claim, Error, INLINE_BYTES, Seam, SourceContent, SourceInput, bad_request, kebab};
@@ -150,6 +152,113 @@ fn logged(source: &str, what: &str, surfaces: &[Surface]) {
     emery_sdk::tracing::trace!(%source, surfaces = %json, "{what}");
 }
 
+// What the SDK's lookups read of TypeScript and JavaScript.
+static DIALECT: Dialect = Dialect {
+    self_name: "this",
+    generic_stems: &["index", "main"],
+    structural: &[
+        "use",
+        "register",
+        "mount",
+        "plugin",
+        "decorate",
+        "addHook",
+        "hook",
+        "listen",
+        "connect",
+        "disconnect",
+        "close",
+        "end",
+        "then",
+        "catch",
+        "finally",
+        "start",
+        "stop",
+        "init",
+        "initialize",
+        "forEach",
+        "map",
+        "filter",
+        "reduce",
+        "find",
+        "findIndex",
+        "some",
+        "every",
+        "sort",
+        "flatMap",
+        "Promise",
+        "setTimeout",
+        "setInterval",
+        "setImmediate",
+        "nextTick",
+        "queueMicrotask",
+        "describe",
+        "it",
+        "test",
+        "beforeEach",
+        "afterEach",
+        "beforeAll",
+        "afterAll",
+    ],
+    listeners: &["on", "once", "addListener", "addEventListener", "prependListener"],
+    lifecycle_events: &[
+        "error",
+        "close",
+        "connect",
+        "connecting",
+        "disconnect",
+        "end",
+        "ready",
+        "open",
+        "listening",
+        "exit",
+        "warning",
+        "drain",
+        "finish",
+        "timeout",
+        "reconnecting",
+        "SIGINT",
+        "SIGTERM",
+        "SIGHUP",
+        "unhandledRejection",
+        "uncaughtException",
+        "beforeExit",
+    ],
+    mocking: &[],
+    lifecycle: &[],
+    decorator_noise: &[
+        "UseGuards",
+        "UseInterceptors",
+        "UsePipes",
+        "UseFilters",
+        "HttpCode",
+        "Header",
+        "Redirect",
+        "Bind",
+        "SetMetadata",
+        "Roles",
+        "Public",
+        "Version",
+        "Transactional",
+        "Injectable",
+        "Inject",
+        "SerializeOptions",
+    ],
+    decorator_noise_prefixes: &["Api"],
+    decorator_hooks: &[],
+    hook_keywords: &[],
+    type_imports_reach: true,
+    openers: &['[', '{'],
+    comment_prefixes: &["//", "*"],
+    globals: &["fetch"],
+    // A parameter is `:id`; a pattern spells a wildcard, a regex group, or a
+    // bracketed segment.
+    route: Spelling {
+        pattern: &['*', '{', '(', '['],
+        param_name: |segment| segment.trim_start_matches(':'),
+    },
+};
+
 // Never a production module's: dependencies, build output, and tests.
 const SKIP_DIRS: &[&str] =
     &["node_modules", "vendor", "target", "dist", "build", "test", "tests", "__tests__"];
@@ -267,7 +376,7 @@ fn tests(root: &Path, paths: Vec<String>, tree: &Tree) -> Vec<Test> {
         tree.resolver.settle(&mut module);
         tests.push(Test {
             path,
-            imports: module.reached().into_iter().map(str::to_owned).collect(),
+            imports: module.reached(&DIALECT).into_iter().map(str::to_owned).collect(),
             statements: skeleton::statements(&module),
         });
     }
@@ -475,8 +584,9 @@ impl Lead {
             })
             .collect();
         let text = self.brief(tree, &attached);
-        let data =
-            unique(files.iter().filter_map(|path| tree.modules.get(path)).flat_map(Module::data));
+        let data = unique(
+            files.iter().filter_map(|path| tree.modules.get(path)).flat_map(|module| module.data()),
+        );
         let Seam { mut files, stems, .. } = self.seam;
         files.extend(data.into_iter().map(str::to_owned));
         files.extend(attached.iter().map(|test| test.path.clone()));

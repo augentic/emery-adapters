@@ -24,17 +24,16 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use emery_sdk::serde_json::{Map, Value};
 use emery_sdk::survey::Lines;
+use emery_sdk::survey::code::{
+    BindingKind, Call, Imported, Init, MemberKind, Scope, TypeKind, Use,
+};
 use emery_sdk::survey::resolve::Target;
 use emery_sdk::survey::tests::Statement;
 use emery_sdk::{Claim, ClaimKind};
 
-use super::parse::{BindingKind, Call, Imported, Init, MemberKind, Module, Scope, TypeKind, Use};
+use super::parse::Module;
 use super::surface::{Surface, TRACE, Tree};
-use super::{grouped, push_unique};
-
-// The runtime's own functions that leave the process, listed as calls with
-// no package when nothing in the module binds the name.
-const GLOBALS: &[&str] = &["open"];
+use super::{DIALECT, grouped, push_unique};
 
 // How many sites a callee is listed at before the rest are counted.
 const SITES: usize = 8;
@@ -177,7 +176,9 @@ pub fn types<'m>(modules: impl IntoIterator<Item = &'m Module>, anchored: bool) 
         let anchor = |lines: Lines| anchored.then(|| format!("{}#{}", module.path, lines.anchor()));
         for decl in module.types.iter().filter(|decl| decl.exported) {
             let what = match decl.kind {
+                TypeKind::Interface => "interface",
                 TypeKind::Alias => "type alias",
+                TypeKind::Enum => "enum",
                 TypeKind::Functional => "type",
             };
             claims.push(claim(&decl.name, &decl.text, anchor(decl.lines), what));
@@ -200,7 +201,7 @@ pub fn types<'m>(modules: impl IntoIterator<Item = &'m Module>, anchored: bool) 
             if class.members.is_empty() {
                 signature.push_str("\n    ...");
             }
-            let what = if class.is_enum() { "enum" } else { "class" };
+            let what = if super::parse::is_enum(class) { "enum" } else { "class" };
             claims.push(claim(&class.name, &signature, anchor(class.lines), what));
         }
     }
@@ -252,7 +253,7 @@ fn spelled(module: &Module) -> impl Iterator<Item = (String, &str, Lines)> {
                     ..
                 },
             ) if constant_name(&binding.name)
-                || (*init == Init::Literal && head.starts_with(['[', '{', '('])) =>
+                || (*init == Init::Literal && head.starts_with(DIALECT.openers)) =>
             {
                 (binding.name.clone(), *init, head)
             }
@@ -364,7 +365,7 @@ pub fn anchors<'s>(
 // its class. Not a registration handed a handler, a structural call, or a
 // call at module level.
 fn step(tree: &Tree, module: &Module, call: &Call) -> bool {
-    if call.value == Use::Consumed || call.frames.is_empty() || call.structural() {
+    if call.value == Use::Consumed || call.frames.is_empty() || call.structural(&DIALECT) {
         return false;
     }
     if call.args.iter().any(|arg| tree.handler(module, arg, &call.frames)) {
@@ -381,7 +382,7 @@ fn of_tree(module: &Module, name: &str, frames: &[u32], budget: usize) -> bool {
     if budget == 0 {
         return false;
     }
-    if name == "self" {
+    if name == DIALECT.self_name {
         return true;
     }
     let Some(binding) = module.binding(name, frames) else {
@@ -460,7 +461,10 @@ fn collapsed(text: &str, at: Lines) -> Option<String> {
         .skip(start)
         .take(count)
         .map(str::trim)
-        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .filter(|line| {
+            !line.is_empty()
+                && !DIALECT.comment_prefixes.iter().any(|prefix| line.starts_with(prefix))
+        })
         .collect::<Vec<_>>()
         .join(" ");
     let value = joined.split_once(" = ").map_or(joined.as_str(), |(_, value)| value);
@@ -482,14 +486,15 @@ pub fn packages<'m>(modules: impl IntoIterator<Item = &'m Module>) -> Option<Str
                 continue;
             }
             let bound = match &import.imported {
-                Imported::Module if import.local == import.specifier => {
+                Imported::Whole if import.local == import.specifier => {
                     format!("`{}`", import.local)
                 }
-                Imported::Module => format!("the module as `{}`", import.local),
+                Imported::Whole => format!("the module as `{}`", import.local),
+                Imported::Default => format!("`{}` (default)", import.local),
                 Imported::Named(name) if *name == import.local => format!("`{name}`"),
                 Imported::Named(name) => format!("`{name}` as `{}`", import.local),
                 Imported::Star => "`*`".to_owned(),
-                Imported::Literal => continue,
+                Imported::Effect => continue,
             };
             let (names, paths) = packages.entry(import.specifier.as_str()).or_default();
             push_unique(names, bound);
@@ -530,7 +535,7 @@ pub fn calls(tree: &Tree, files: &[String]) -> Option<String> {
         };
         let sites = grouped(module.calls.iter().filter_map(|call| {
             if call.constructs
-                || call.structural()
+                || call.structural(&DIALECT)
                 || call.inner
                 || (call.args.is_empty() && call.value == Use::Consumed)
                 || call.args.iter().any(|arg| tree.handler(module, arg, &call.frames))
@@ -575,20 +580,21 @@ pub fn calls(tree: &Tree, files: &[String]) -> Option<String> {
 fn callee(tree: &Tree, module: &Module, call: &Call) -> Option<String> {
     let head = call.callee.head.as_str();
     let links: Vec<&str> = call.callee.links.iter().map(|link| link.name.as_str()).collect();
-    let (bound, members) = match (head, links.as_slice()) {
-        ("self", [field, members @ ..]) => (*field, members),
-        ("self", []) => return None,
-        (head, members) => (head, members),
+    let (bound, members) = if head == DIALECT.self_name {
+        let [field, members @ ..] = links.as_slice() else { return None };
+        (*field, members)
+    } else {
+        (head, links.as_slice())
     };
     let Some(receiver) = tree.receiver(module, call) else {
-        let global = GLOBALS.contains(&head)
+        let global = DIALECT.globals.contains(&head)
             && module.binding(head, &call.frames).is_none()
             && module.import(head).is_none();
         return global.then(|| {
             std::iter::once(head).chain(members.iter().copied()).collect::<Vec<_>>().join(".")
         });
     };
-    let direct = head != "self" && module.package(head).is_some();
+    let direct = head != DIALECT.self_name && module.package(head).is_some();
     let mut path: Vec<&str> = Vec::new();
     match &receiver.type_name {
         Some(type_name) => path.push(type_name),

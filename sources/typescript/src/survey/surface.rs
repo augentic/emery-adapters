@@ -20,16 +20,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use emery_sdk::kebab;
-use emery_sdk::survey::Lines;
-use emery_sdk::survey::resolve::{Target, normalize};
-use emery_sdk::survey::route::{self, Spelling};
-
-use super::parse::{
-    Arg, BindingKind, Call, Decorated, Export, ExportKind, Imported, Init, MemberKind, Module,
-    Scope,
+use emery_sdk::survey::code::{
+    Arg, BindingKind, Call, Decorated, Export, ExportKind, Imported, Init, MemberKind, Scope,
 };
+use emery_sdk::survey::resolve::{Target, normalize};
+use emery_sdk::survey::{Lines, route};
+
+use super::parse::Module;
 use super::resolve::{Manifest, Resolver};
-use super::{push_unique, unique};
+use super::{DIALECT, push_unique, unique};
 
 // Looked for in this order when the manifest names no entry.
 const BOOTSTRAPS: &[&str] =
@@ -41,13 +40,6 @@ const VERBS: &[&str] = &["get", "post", "put", "patch", "delete", "head", "optio
 // of them a loader over a directory. A route registered in a mounted module
 // is read under its mount.
 const MOUNTING: &[&str] = &["use", "register", "mount", "plugin"];
-
-// A parameter is `:id`; a pattern spells a wildcard, a regex group, or a
-// bracketed segment.
-const SPELLING: Spelling = Spelling {
-    pattern: &['*', '{', '(', '['],
-    param_name: |segment| segment.trim_start_matches(':'),
-};
 
 // How many bindings a receiver is traced through before it counts as local.
 pub(super) const TRACE: usize = 4;
@@ -141,7 +133,7 @@ impl Tree {
         let name = match &import.imported {
             Imported::Named(name) => name.clone(),
             Imported::Default => "default".to_owned(),
-            Imported::Namespace | Imported::Effect => return None,
+            Imported::Whole | Imported::Star | Imported::Effect => return None,
         };
         Some((self.modules.get(path)?, name))
     }
@@ -162,7 +154,7 @@ impl Tree {
             let from = self.modules.get(&order[next]).filter(|_| !stop.contains(&order[next]));
             next += 1;
             let Some(module) = from else { continue };
-            for path in module.reached() {
+            for path in module.reached(&DIALECT) {
                 if seen.insert(path) {
                     order.push(path.to_owned());
                 }
@@ -223,7 +215,7 @@ impl Tree {
         let exported = match (&import.imported, rest) {
             (Imported::Named(exported), []) => exported.as_str(),
             (Imported::Default, []) => "default",
-            (Imported::Namespace, [member]) => member.as_str(),
+            (Imported::Whole, [member]) => member.as_str(),
             _ => return false,
         };
         let Some(export) = target.export(exported) else { return false };
@@ -249,7 +241,7 @@ impl Tree {
     pub(super) fn receiver(&self, module: &Module, call: &Call) -> Option<Receiver> {
         let head = call.callee.head.as_str();
         let link = |index: usize| call.callee.links.get(index).map(|link| link.name.as_str());
-        if head == "this" {
+        if head == DIALECT.self_name {
             let class = call.class.as_deref()?;
             let [field, _, ..] = call.callee.links.as_slice() else { return None };
             let field = module.field(class, &field.name)?;
@@ -308,14 +300,15 @@ impl Tree {
                     let traced = self.trace(module, head, frames, member, budget - 1)?;
                     let constructed = call
                         .and_then(|index| module.calls.get(index))
-                        .filter(|init| init.is_new)
+                        .filter(|init| init.constructs)
                         .map(|init| init.method().to_owned());
                     Some(Receiver {
                         package: traced.package,
                         type_name: constructed.or(traced.type_name),
                     })
                 }
-                BindingKind::Class { extends: Some(base) } => {
+                BindingKind::Class { bases } => {
+                    let base = bases.first()?;
                     let declared = module.classes.iter().any(|class| {
                         class.name == binding.name
                             && class.members.iter().any(|m| Some(m.name.as_str()) == member)
@@ -398,7 +391,8 @@ impl Tree {
     // A handler among the arguments, and not a structural call (`.then`,
     // `.map`) that takes one.
     fn hands(&self, module: &Module, call: &Call) -> bool {
-        !call.structural() && call.args.iter().any(|arg| self.handler(module, arg, &call.frames))
+        !call.structural(&DIALECT)
+            && call.args.iter().any(|arg| self.handler(module, arg, &call.frames))
     }
 
     // A call outside any handler that hands a function to something a package
@@ -414,7 +408,7 @@ impl Tree {
     // defines a plugin and registers nothing.
     pub(super) fn registers(&self, module: &Module, call: &Call) -> bool {
         self.hands(module, call)
-            && (call.discarded() || call.is_new || self.led(module, call).is_some())
+            && (call.discarded() || call.constructs || self.led(module, call).is_some())
     }
 
     // The first registration starting within `lines`, else the one enclosing
@@ -429,7 +423,7 @@ impl Tree {
     // The modules no other imports; every module where each is imported.
     pub(super) fn roots(&self) -> Vec<String> {
         let imported: BTreeSet<&str> =
-            self.modules.values().flat_map(|module| module.reached()).collect();
+            self.modules.values().flat_map(|module| module.reached(&DIALECT)).collect();
         let roots: Vec<String> =
             self.modules.keys().filter(|path| !imported.contains(path.as_str())).cloned().collect();
         if roots.is_empty() { self.modules.keys().cloned().collect() } else { roots }
@@ -550,7 +544,7 @@ pub struct Receiver {
 // told apart by `local` and `s3`.
 fn tells_apart(module: &Module, stem: &str, own: &str) -> Option<String> {
     let dir = module.path.rsplit_once('/').map_or("", |(dir, _)| dir);
-    std::iter::once(module.stem())
+    std::iter::once(module.stem(&DIALECT))
         .chain(dir.rsplit('/'))
         .filter_map(kebab)
         .find(|segment| segment != stem && !own.ends_with(&format!(".{segment}")))
@@ -658,7 +652,7 @@ impl Derived {
         }
         Self {
             stem: None,
-            discriminator: SPELLING.normalised(name, stem),
+            discriminator: DIALECT.route.normalised(name, stem),
             methods: Vec::new(),
             lines,
             detail: vec![format!("named by the survey at {lines}")],
@@ -675,14 +669,16 @@ impl Derived {
         let (method, literal) = call.registered(tree.led(module, call));
         let literal = literal.as_deref();
         let route = routed(module, method, literal, mounts);
-        let derived = route
-            .as_deref()
-            .map_or_else(|| literal.and_then(route::literal_stem), |route| SPELLING.stem(route));
+        let derived = route.as_deref().map_or_else(
+            || literal.and_then(route::literal_stem),
+            |route| DIALECT.route.stem(route),
+        );
         let stem = derived.as_deref().unwrap_or(stem);
         let discriminator = tree.named_handler(module, call).or_else(|| {
-            route
-                .as_deref()
-                .map_or_else(|| kebab(method), |route| SPELLING.discriminator(method, route, stem))
+            route.as_deref().map_or_else(
+                || kebab(method),
+                |route| DIALECT.route.discriminator(method, route, stem),
+            )
         });
         let mut detail = vec![match (&call.class, &call.function) {
             (Some(class), Some(function)) => {
@@ -710,33 +706,35 @@ impl Derived {
     // The stem its registering decorator's prefix spells, its name, and its
     // decorated methods.
     fn at_decorated_class(tree: &Tree, module: &Module, class: &Decorated) -> Self {
+        let name = class.class.as_deref().unwrap_or_default();
         let route = route::join(class.literal.as_deref().unwrap_or(""), "");
         let methods = unique(
             module
                 .decorated
                 .iter()
-                .filter(|d| d.class == class.class && d.registering())
+                .filter(|d| d.class == class.class && d.registering(&DIALECT))
                 .filter_map(|d| Some((d.member.clone()?, d.lines))),
         );
         let mut detail =
-            vec![format!("class `{}` {} under `@{}`", class.class, class.lines, spelled(class))];
+            vec![format!("class `{name}` {} under `@{}`", class.lines, spelled(class))];
         detail.extend(through(module, class));
         detail.extend(noted(&methods));
         Self {
-            stem: SPELLING.stem(&route),
-            discriminator: kebab(&class.class),
+            stem: DIALECT.route.stem(&route),
+            discriminator: kebab(name),
             methods,
             lines: class.lines,
             detail,
-            closure: tree.reaches(module, class.lines, &[], Some(&class.class)),
+            closure: tree.reaches(module, class.lines, &[], class.class.as_deref()),
         }
     }
 
     // The stem its route or literal spells under the class's prefix, and the
     // method's name.
     fn at_decorated_method(tree: &Tree, module: &Module, decorated: &Decorated) -> Self {
+        let class = decorated.class.as_deref().unwrap_or_default();
         let member = decorated.member.as_deref().unwrap_or_default();
-        let mut detail = vec![format!("method `{}.{member}` {}", decorated.class, decorated.lines)];
+        let mut detail = vec![format!("method `{class}.{member}` {}", decorated.lines)];
         detail.extend(through(module, decorated));
         Self {
             stem: decorated_stem(module, decorated),
@@ -744,7 +742,7 @@ impl Derived {
             methods: Vec::new(),
             lines: decorated.lines,
             detail,
-            closure: tree.reaches(module, decorated.lines, &[], Some(&decorated.class)),
+            closure: tree.reaches(module, decorated.lines, &[], decorated.class.as_deref()),
         }
     }
 
@@ -756,8 +754,8 @@ impl Derived {
             if export.name == "default" { module_stem(module) } else { export.name.clone() };
         let mut parts = vec![display];
         parts.extend(file_routed(&module.path, stem));
-        let (what, methods, class) = match &export.kind {
-            ExportKind::Class { .. } => (
+        let (what, methods, class) = match export.kind {
+            ExportKind::Class => (
                 "class",
                 methods(module, local, |_| true)
                     .into_iter()
@@ -807,12 +805,12 @@ fn noted(methods: &[(String, Lines)]) -> Option<String> {
 
 // The class decorator that registers the class and carries its prefix
 // (`@Controller("orders")`), never one that documents it (`@ApiTags("Users")`).
-fn class_prefix<'m>(module: &'m Module, class: &str) -> Option<&'m Decorated> {
+fn class_prefix<'m>(module: &'m Module, class: Option<&str>) -> Option<&'m Decorated> {
     module
         .decorated
         .iter()
-        .filter(|d| d.class == class && d.member.is_none() && d.literal.is_some())
-        .find(|d| d.registering())
+        .filter(|d| d.class.as_deref() == class && d.member.is_none() && d.literal.is_some())
+        .find(|d| d.registering(&DIALECT))
 }
 
 // A verb decorator's path under the class's prefix, by the route rule;
@@ -820,9 +818,10 @@ fn class_prefix<'m>(module: &'m Module, class: &str) -> Option<&'m Decorated> {
 fn decorated_stem(module: &Module, decorated: &Decorated) -> Option<String> {
     let verb = decorated.name.last()?.to_ascii_lowercase();
     if VERBS.contains(&verb.as_str()) {
-        let prefix = class_prefix(module, &decorated.class).and_then(|d| d.literal.as_deref());
+        let prefix =
+            class_prefix(module, decorated.class.as_deref()).and_then(|d| d.literal.as_deref());
         let route = route::join(prefix.unwrap_or(""), decorated.literal.as_deref().unwrap_or(""));
-        SPELLING.stem(&route)
+        DIALECT.route.stem(&route)
     } else {
         decorated.literal.as_deref().and_then(route::literal_stem)
     }
@@ -834,14 +833,15 @@ fn decorated_class_at(module: &Module, lines: Lines) -> Option<&Decorated> {
     module
         .decorated
         .iter()
-        .filter(|d| d.member.is_none() && d.registering())
+        .filter(|d| d.member.is_none() && d.registering(&DIALECT))
         .find(|d| lines.holds(d.lines.start))
 }
 
 // The registering decorator of the first method starting within `lines`,
 // else of the one enclosing their first line.
 fn decorated_at(module: &Module, lines: Lines) -> Option<&Decorated> {
-    let methods = || module.decorated.iter().filter(|d| d.member.is_some() && d.registering());
+    let methods =
+        || module.decorated.iter().filter(|d| d.member.is_some() && d.registering(&DIALECT));
     methods()
         .find(|d| lines.holds(d.lines.start))
         .or_else(|| methods().find(|d| d.lines.holds(lines.start)))
@@ -910,5 +910,5 @@ fn methods<'m>(
 }
 
 fn module_stem(module: &Module) -> String {
-    kebab(module.stem()).unwrap_or_else(|| "module".to_owned())
+    kebab(module.stem(&DIALECT)).unwrap_or_else(|| "module".to_owned())
 }

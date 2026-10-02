@@ -15,13 +15,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+use emery_sdk::survey::code::{Decorated, Export, ExportKind};
 use emery_sdk::survey::resolve::Target;
 use emery_sdk::survey::{Facts, Inventory, Lines};
 use emery_sdk::{Context, Doc, Error, Model, kebab};
 
-use super::parse::{ClassDecl, Decorated, Export, ExportKind, Module};
+use super::parse::Module;
 use super::surface::{Derived, Runs, Surface, Tree};
-use super::{Prepared, push_unique, skeleton, unique};
+use super::{DIALECT, Prepared, push_unique, skeleton, unique};
 
 // The bootstrap surface leads, and every id is decided over them all. The
 // errors are the SDK's:
@@ -130,7 +131,7 @@ impl<'t> Located<'t> {
             .any(|call| tree.handed(module, call).is_some() && tree.registers(module, call))
             || module.decorated.iter().any(|decorated| {
                 decorated.member.is_some()
-                    && decorated.registering()
+                    && decorated.registering(&DIALECT)
                     && !Self::of_handed(handed, module, decorated)
                     && decorated
                         .name
@@ -226,7 +227,7 @@ impl<'t> Located<'t> {
                 let spelled = if call.constructs || call.callee.links.is_empty() {
                     format!("{}(..)", call.method())
                 } else {
-                    format!("{}.{}", call.callee.receiver(), call.method())
+                    format!("{}.{}", call.callee.receiver(&DIALECT), call.method())
                 };
                 let typed = receiver
                     .type_name
@@ -261,7 +262,7 @@ impl<'t> Located<'t> {
             for decorated in module
                 .decorated
                 .iter()
-                .filter(|d| d.registering() && !Self::of_handed(&self.handed, module, d))
+                .filter(|d| d.registering(&DIALECT) && !Self::of_handed(&self.handed, module, d))
             {
                 let Some(receiver) =
                     decorated.name.first().and_then(|head| tree.receiver_of(module, head))
@@ -461,16 +462,16 @@ impl<'t> Located<'t> {
 fn declared<'e>(module: &Module, exports: impl Iterator<Item = &'e Export>) -> Vec<String> {
     exports
         .filter_map(|export| {
-            let kind = match &export.kind {
+            let kind = match export.kind {
                 ExportKind::Function => "function",
                 ExportKind::Class
-                    if module.class(&export.name).is_some_and(ClassDecl::declares_data) =>
+                    if module.class(&export.name).is_some_and(super::parse::declares_data) =>
                 {
                     return None;
                 }
                 ExportKind::Class => "class",
                 ExportKind::Value => "value",
-                ExportKind::Type => return None,
+                ExportKind::Type | ExportKind::Unknown => return None,
             };
             Some(format!("`{}` ({kind}) {}", export.name, export.lines))
         })

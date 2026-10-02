@@ -23,6 +23,8 @@
 
 use std::path::Path;
 
+use emery_sdk::survey::Dialect;
+use emery_sdk::survey::route::Spelling;
 use emery_sdk::survey::tests::{Test, scenarios, stated};
 use emery_sdk::workspace::Entry;
 use emery_sdk::{Claim, Error, INLINE_BYTES, Seam, SourceContent, SourceInput, bad_request, kebab};
@@ -140,6 +142,158 @@ fn logged(source: &str, what: &str, surfaces: &[Surface]) {
     let json = emery_sdk::serde_json::Value::Array(listed).to_string();
     emery_sdk::tracing::trace!(%source, surfaces = %json, "{what}");
 }
+
+// What the SDK's lookups read of Python.
+static DIALECT: Dialect = Dialect {
+    self_name: "self",
+    generic_stems: &[
+        "__init__",
+        "__main__",
+        "main",
+        "app",
+        "views",
+        "urls",
+        "routes",
+        "api",
+        "handlers",
+        "endpoints",
+        "tasks",
+    ],
+    structural: &[
+        "map",
+        "filter",
+        "sorted",
+        "sort",
+        "reduce",
+        "partial",
+        "wraps",
+        "run",
+        "run_until_complete",
+        "create_task",
+        "gather",
+        "ensure_future",
+        "run_in_executor",
+        "to_thread",
+        "register_blueprint",
+        "include_router",
+        "add_middleware",
+        "mount",
+        "setdefault",
+        "Depends",
+        "Security",
+        "raises",
+        "fixture",
+        "parametrize",
+        "field",
+        "Field",
+        "Column",
+        "mapped_column",
+        "relationship",
+    ],
+    listeners: &[],
+    lifecycle_events: &[],
+    // `patch` by its spelling whole: the same name on an application, a
+    // router, or an HTTP client is a verb.
+    mocking: &["patch", "mock.patch", "unittest.mock.patch", "mocker.patch"],
+    // Django's admin site among them: it serves what it registers on the
+    // source's behalf, by call or by decorator.
+    lifecycle: &[
+        "signal.signal",
+        "atexit.register",
+        "add_signal_handler",
+        "on_event",
+        "add_event_handler",
+        "add_exception_handler",
+        "register_error_handler",
+        "teardown_appcontext",
+        "teardown_request",
+        "lifespan",
+        "site.register",
+        "admin.register",
+        "admin.action",
+        "admin.display",
+    ],
+    decorator_noise: &[
+        "dataclass",
+        "define",
+        "frozen",
+        "property",
+        "setter",
+        "getter",
+        "deleter",
+        "staticmethod",
+        "classmethod",
+        "cached_property",
+        "lru_cache",
+        "cache",
+        "wraps",
+        "overload",
+        "abstractmethod",
+        "override",
+        "final",
+        "contextmanager",
+        "asynccontextmanager",
+        "login_required",
+        "permission_required",
+        "csrf_exempt",
+        "require_http_methods",
+        "require_POST",
+        "require_GET",
+        "atomic",
+        "retry",
+        "validator",
+        "field_validator",
+        "model_validator",
+        "root_validator",
+        "computed_field",
+        "total_ordering",
+        "unique",
+        "fixture",
+        "parametrize",
+        "mark",
+        "skip",
+        "skipif",
+    ],
+    decorator_noise_prefixes: &[],
+    decorator_hooks: &[
+        "connect",
+        "receiver",
+        "listens_for",
+        "exception_handler",
+        "errorhandler",
+        "error_handler",
+        "before_request",
+        "after_request",
+        "before_first_request",
+        "middleware",
+        "context_processor",
+        "template_filter",
+        "url_value_preprocessor",
+        "url_defaults",
+    ],
+    hook_keywords: &[
+        "lifespan",
+        "on_startup",
+        "on_shutdown",
+        "exception_handlers",
+        "default_factory",
+        "default",
+        "key",
+        "callback",
+        "dependencies",
+        "middleware",
+        "result_callback",
+    ],
+    type_imports_reach: false,
+    openers: &['[', '{', '('],
+    comment_prefixes: &["#"],
+    globals: &["open"],
+    // A pattern spells a wildcard, a brace, a `<converter>`, or a regex.
+    route: Spelling {
+        pattern: &['*', '{', '(', '[', '<', '?', '\\'],
+        param_name: surface::param_name,
+    },
+};
 
 // Never a production module's: dependencies, environments, caches, build
 // output, coverage, documentation, tests, and schema history.
@@ -298,7 +452,7 @@ fn tests(root: &Path, paths: Vec<String>, tree: &Tree) -> Vec<Test> {
         tree.resolver.settle(&mut module);
         tests.push(Test {
             path,
-            imports: module.reached().into_iter().map(str::to_owned).collect(),
+            imports: module.reached(&DIALECT).into_iter().map(str::to_owned).collect(),
             statements: skeleton::statements(&module),
         });
     }
@@ -341,7 +495,8 @@ impl Prepared {
         let mut files: Vec<String> = Vec::with_capacity(modules.len());
         let mut large: Vec<String> = Vec::new();
         for path in modules {
-            let named = self.tree.modules.get(&path).map(Module::data).unwrap_or_default();
+            let named =
+                self.tree.modules.get(&path).map(|module| module.data()).unwrap_or_default();
             files.push(path);
             for data in named {
                 if files.iter().chain(&large).any(|file| file == data) {

@@ -1,6 +1,11 @@
 //! Walks one module's syntax tree into its `Module`.
 
 use emery_sdk::survey::Lines;
+use emery_sdk::survey::code::{
+    self, Arg, Binding, BindingKind, Call, Callee, ClassDecl, Decision, Decorated, EnvRead, Export,
+    ExportKind, Import, Imported, Init, Invocation, Link, Member, MemberKind, Reference, Scope,
+    TypeDecl, TypeKind, Use,
+};
 use ruff_python_ast::visitor::{self, Visitor};
 use ruff_python_ast::{
     Arguments, CmpOp, Decorator, ElifElseClause, ExceptHandler, Expr, ExprCall, ExprContext,
@@ -11,11 +16,8 @@ use ruff_python_ast::{
 use ruff_python_parser::parse_unchecked_source;
 use ruff_text_size::{Ranged, TextRange, TextSize};
 
-use super::{
-    Arg, Binding, BindingKind, Call, Callee, ClassDecl, Decision, Decorated, EnvRead, Export,
-    ExportKind, Import, Imported, Init, Invocation, Link, Member, MemberKind, Module, Reference,
-    Scope, TestDef, TypeDecl, TypeKind, Use,
-};
+use super::{Module, TestDef};
+use crate::survey::DIALECT;
 
 // An initializer is kept as its head: its first line, cut to this many
 // characters, enough for a literal or a default a criterion could quote. A
@@ -128,8 +130,11 @@ pub(super) fn read(path: &str, text: &str) -> Module {
             .chain(text.match_indices('\n').map(|(i, _)| u32::try_from(i + 1).unwrap_or(u32::MAX)))
             .collect(),
         module: Module {
-            path: path.to_owned(),
-            parsed: parsed.errors().is_empty(),
+            core: code::Module {
+                path: path.to_owned(),
+                parsed: parsed.errors().is_empty(),
+                ..code::Module::default()
+            },
             ..Module::default()
         },
         ..Walker::default()
@@ -247,10 +252,12 @@ impl<'s> Walker<'s> {
 
     fn decide(&mut self, range: TextRange, text: String) {
         let lines = self.lines(range);
+        let function = self.function_name();
+        let class = self.class_name();
         self.module.decisions.push(Decision {
             lines,
-            function: self.function_name(),
-            class: self.class_name(),
+            function,
+            class,
             text,
         });
     }
@@ -299,7 +306,7 @@ impl<'s> Walker<'s> {
         let class = self.in_class_body().map(str::to_owned);
         let decorators: Vec<String> =
             def.decorator_list.iter().filter_map(|d| decorator_name(&d.expression)).collect();
-        let handler = decorators.iter().any(|decorator| !super::shapes(decorator));
+        let handler = decorators.iter().any(|decorator| !DIALECT.shapes(decorator));
 
         // record a method as a member, a function as a binding and, at module level, an export
         if let Some(class) = &class {
@@ -440,7 +447,7 @@ impl<'s> Walker<'s> {
             );
             if self.at_module() {
                 let kind =
-                    if super::declares_data(&bases) { ExportKind::Type } else { ExportKind::Class };
+                    if super::data_bases(&bases) { ExportKind::Type } else { ExportKind::Class };
                 self.export(&name, kind, range);
             }
             let header_lines = self.lines(TextRange::new(
@@ -530,7 +537,7 @@ impl<'s> Walker<'s> {
     fn record_call(&mut self, call: &ExprCall) -> Option<&Call> {
         let range = call.range();
         let callee = callee(&call.func)?;
-        if !callee.structural()
+        if !callee.structural(None, &DIALECT)
             && let Some(inner) = inner_call(&call.func)
         {
             self.chained.push(inner);
@@ -542,22 +549,25 @@ impl<'s> Walker<'s> {
             self.decide(range, text);
         }
         let constructs = callee.method().chars().next().is_some_and(char::is_uppercase);
+        let value = if self.discarded == Some(range) {
+            Use::Discarded
+        } else if self.awaited == Some(range) {
+            Use::Awaited
+        } else {
+            Use::Consumed
+        };
+        let function = self.function_name();
+        let class = self.class_name();
         self.module.calls.push(Call {
             callee,
             constructs,
             args,
             depth: self.frames.last().map_or(0, |frame| frame.depth),
-            value: if self.discarded == Some(range) {
-                Use::Discarded
-            } else if self.awaited == Some(range) {
-                Use::Awaited
-            } else {
-                Use::Consumed
-            },
+            value,
             inner: self.chained.contains(&range),
             frames: self.frames.iter().map(|frame| frame.id).collect(),
-            function: self.function_name(),
-            class: self.class_name(),
+            function,
+            class,
             lines,
         });
         self.module.calls.last()
@@ -577,6 +587,8 @@ impl<'s> Walker<'s> {
             Core::Other(Expr::List(list)) => list.elts.first().and_then(string_value),
             Core::Other(_) => None,
         };
+        // Python hands options as keywords, which `keyword` carries; a dict
+        // written in place is not read.
         Arg {
             keyword,
             literal: string_value(expr),
@@ -584,6 +596,7 @@ impl<'s> Walker<'s> {
             called: matches!(core(expr), Core::Call(_)),
             inner,
             function: fn_valued(expr),
+            properties: Vec::new(),
             head: self.excerpt(expr.range()),
             lines: self.lines(expr.range()),
         }
@@ -603,6 +616,7 @@ impl<'s> Walker<'s> {
         let lines = self.lines(range);
         self.module.exports.push(Export {
             name: name.to_owned(),
+            local: None,
             kind,
             lines,
         });
@@ -610,12 +624,13 @@ impl<'s> Walker<'s> {
 
     fn type_decl(&mut self, name: &str, kind: TypeKind, range: TextRange) {
         let lines = self.lines(range);
+        let text = self.text_of(range).to_owned();
         self.module.types.push(TypeDecl {
             name: name.to_owned(),
             kind,
             exported: false,
             lines,
-            text: self.text_of(range).to_owned(),
+            text,
         });
     }
 
@@ -635,7 +650,7 @@ impl<'s> Walker<'s> {
                 .as_ref()
                 .map_or_else(|| specifier.split('.').next().unwrap_or(specifier), |n| n.as_str());
             let type_only = self.type_checking || typing_module(specifier);
-            self.import(local, specifier, Imported::Module, type_only);
+            self.import(local, specifier, Imported::Whole, type_only);
         }
     }
 
@@ -770,7 +785,8 @@ impl<'s> Walker<'s> {
                 );
             }
             Expr::Attribute(attribute) => {
-                if !matches!(&*attribute.value, Expr::Name(object) if object.id == "self") {
+                if !matches!(&*attribute.value, Expr::Name(object) if object.id == DIALECT.self_name)
+                {
                     return;
                 }
                 let Some(class) = self.class_name() else { return };
@@ -829,7 +845,7 @@ impl<'s> Walker<'s> {
                 self.env_read(&key, call.range());
             }
         }
-        let handler = self.record_call(call).is_some_and(|call| !call.structural());
+        let handler = self.record_call(call).is_some_and(|call| !call.structural(&DIALECT));
         self.positions.push(handler);
         self.visit_expr(&call.func);
         self.visit_arguments(&call.arguments);
@@ -958,9 +974,9 @@ impl<'s> Visitor<'s> for Walker<'s> {
             Expr::StringLiteral(literal) => {
                 let value = literal.value.to_str();
                 if let Some(specifier) = module_literal(value) {
-                    self.import("", specifier, Imported::Literal, false);
+                    self.import("", specifier, Imported::Effect, false);
                 } else if is_data_path(value) {
-                    self.import("", value, Imported::Literal, false);
+                    self.import("", value, Imported::Effect, false);
                 }
             }
             _ => visitor::walk_expr(self, expr),
@@ -1397,7 +1413,7 @@ fn fn_valued(expr: &Expr) -> bool {
         Expr::Dict(dict) => dict.items.iter().any(|item| fn_valued(&item.value)),
         Expr::Call(call) => callee(&call.func).is_some_and(|callee| {
             callee.method() == "as_view"
-                || (!callee.structural() && values(&call.arguments).any(fn_valued))
+                || (!callee.structural(None, &DIALECT) && values(&call.arguments).any(fn_valued))
         }),
         Expr::Await(await_) => fn_valued(&await_.value),
         _ => false,

@@ -4,6 +4,11 @@
 use std::borrow::Cow;
 
 use emery_sdk::survey::Lines;
+use emery_sdk::survey::code::{
+    self, Arg, Binding, BindingKind, Call, Callee, ClassDecl, Decision, Decorated, EnvRead, Export,
+    ExportKind, Import, Imported, Init, Invocation, Link, Member, MemberKind, Property, Reexport,
+    Reference, Scope, TypeDecl, TypeKind, Use,
+};
 use oxc_allocator::Allocator;
 use oxc_ast::AstKind;
 use oxc_ast::ast::{
@@ -22,11 +27,8 @@ use oxc_ast_visit::{Visit, walk};
 use oxc_parser::Parser;
 use oxc_span::{GetSpan, SourceType, Span};
 
-use super::{
-    Arg, Binding, BindingKind, Call, Callee, ClassDecl, Decision, Decorated, EnvRead, Export,
-    ExportKind, Import, Imported, Init, Invocation, Link, Member, MemberKind, Module, Property,
-    Reexport, Reference, Scope, TypeDecl, TypeKind, Use,
-};
+use super::Module;
+use crate::survey::DIALECT;
 
 // A binding's initializer is kept as its head: its first line, cut to this
 // many characters — a literal, a default, a small expression a criterion
@@ -62,9 +64,11 @@ pub(super) fn read(path: &str, text: &str) -> Module {
             .chain(text.match_indices('\n').map(|(i, _)| u32::try_from(i + 1).unwrap_or(u32::MAX)))
             .collect(),
         module: Module {
-            path: path.to_owned(),
-            parsed: !parsed.fatal_error,
-            ..Module::default()
+            core: code::Module {
+                path: path.to_owned(),
+                parsed: !parsed.fatal_error,
+                ..code::Module::default()
+            },
         },
         ..Walker::default()
     };
@@ -212,12 +216,17 @@ impl<'s> Walker<'s> {
         let name =
             class.id.as_ref().map_or_else(|| "<anonymous>".to_owned(), |id| id.name.to_string());
         let lines = self.lines(class.span);
+        let bases = bases(class);
         if class.id.is_some() {
-            let extends = extends(class);
-            self.bind(name.clone(), self.scope(), BindingKind::Class { extends }, class.span);
+            let kind = BindingKind::Class { bases: bases.clone() };
+            self.bind(name.clone(), self.scope(), kind, class.span);
         }
+        let head = self.lines(Span::new(
+            class.decorators.first().map_or(class.span.start, |decorator| decorator.span.start),
+            class.body.span.start,
+        ));
         for decorator in &class.decorators {
-            self.decorate(&name, None, decorator, lines);
+            self.decorate(&name, None, decorator, head, lines);
         }
 
         let header = self.slice(class.span.start, class.body.span.start).trim_end().to_owned();
@@ -241,8 +250,12 @@ impl<'s> Walker<'s> {
                         lines: member_lines,
                         signature: self.slice(method.span.start, end).trim_end().to_owned(),
                     });
+                    let head = self.lines(Span::new(
+                        method.decorators.first().map_or(method.span.start, |d| d.span.start),
+                        end,
+                    ));
                     for decorator in &method.decorators {
-                        self.decorate(&name, Some(&key), decorator, member_lines);
+                        self.decorate(&name, Some(&key), decorator, head, member_lines);
                     }
                 }
                 ClassElement::PropertyDefinition(property) => {
@@ -286,13 +299,15 @@ impl<'s> Walker<'s> {
             exported: false,
             lines,
             header,
+            bases,
             members,
         });
         self.classes.push(name);
     }
 
     fn decorate(
-        &mut self, class: &str, member: Option<&str>, decorator: &Decorator<'_>, lines: Lines,
+        &mut self, class: &str, member: Option<&str>, decorator: &Decorator<'_>, head: Lines,
+        lines: Lines,
     ) {
         let Some(callee) = callee(&decorator.expression) else { return };
         let literal = callee
@@ -303,21 +318,23 @@ impl<'s> Walker<'s> {
             .and_then(|invocation| invocation.literal.clone())
             .or_else(|| object_path(&decorator.expression));
         self.module.decorated.push(Decorated {
-            class: class.to_owned(),
+            class: Some(class.to_owned()),
             member: member.map(str::to_owned),
             name: callee.path(),
             literal,
+            keywords: Vec::new(),
+            head,
             lines,
         });
     }
 
     fn record_call(
-        &mut self, callee_expr: &Expression<'_>, arguments: &[Argument<'_>], is_new: bool,
+        &mut self, callee_expr: &Expression<'_>, arguments: &[Argument<'_>], constructs: bool,
         span: Span,
     ) -> Option<&Call> {
         let callee = callee(callee_expr)?;
         let literal = arguments.first().and_then(|a| a.as_expression()).and_then(string_value);
-        if !callee.structural(literal.as_deref())
+        if !callee.structural(literal.as_deref(), &DIALECT)
             && let Some(inner) = inner_call(callee_expr)
         {
             self.chained.push(inner);
@@ -330,7 +347,7 @@ impl<'s> Walker<'s> {
         }
         self.module.calls.push(Call {
             callee,
-            is_new,
+            constructs,
             args,
             depth: self.frames.last().map_or(0, |frame| frame.depth),
             value: if self.discarded == Some(span) {
@@ -351,22 +368,29 @@ impl<'s> Walker<'s> {
 
     fn arg(&self, argument: &Argument<'_>) -> Arg {
         let lines = self.lines(argument.span());
+        let head = self.excerpt(argument.span());
         let Some(expr) = argument.as_expression() else {
             return Arg {
+                keyword: None,
                 literal: None,
                 root: None,
                 called: false,
+                inner: None,
                 function: false,
                 properties: Vec::new(),
+                head,
                 lines,
             };
         };
         Arg {
+            keyword: None,
             literal: string_value(expr),
             root: head_path(expr),
             called: matches!(core(expr), Core::Call(_) | Core::New(_)),
+            inner: inner(expr),
             function: fn_valued(expr),
             properties: properties(expr),
+            head,
             lines,
         }
     }
@@ -400,8 +424,7 @@ impl<'s> Walker<'s> {
             }
             Declaration::ClassDeclaration(class) => {
                 if let Some(id) = &class.id {
-                    let extends = extends(class);
-                    self.export(&id.name, None, ExportKind::Class { extends }, span);
+                    self.export(&id.name, None, ExportKind::Class, span);
                 }
             }
             Declaration::VariableDeclaration(declaration) => {
@@ -426,12 +449,13 @@ impl<'s> Walker<'s> {
 
     fn type_decl(&mut self, name: &str, kind: TypeKind, span: Span) {
         let lines = self.lines(span);
+        let text = self.slice(span.start, span.end).to_owned();
         self.module.types.push(TypeDecl {
             name: name.to_owned(),
             kind,
             exported: false,
             lines,
-            text: self.slice(span.start, span.end).to_owned(),
+            text,
         });
     }
 
@@ -489,7 +513,7 @@ impl<'a> Visit<'a> for Walker<'_> {
         }
         let handler = self
             .record_call(&it.callee, &it.arguments, false, it.span)
-            .is_some_and(|call| !call.structural());
+            .is_some_and(|call| !call.structural(&DIALECT));
         self.positions.push(handler);
         walk::walk_call_expression(self, it);
         self.positions.pop();
@@ -498,7 +522,7 @@ impl<'a> Visit<'a> for Walker<'_> {
     fn visit_new_expression(&mut self, it: &NewExpression<'a>) {
         let handler = self
             .record_call(&it.callee, &it.arguments, true, it.span)
-            .is_some_and(|call| !call.structural());
+            .is_some_and(|call| !call.structural(&DIALECT));
         self.positions.push(handler);
         walk::walk_new_expression(self, it);
         self.positions.pop();
@@ -586,7 +610,7 @@ impl<'a> Visit<'a> for Walker<'_> {
         match &it.id {
             BindingPattern::BindingIdentifier(id) => {
                 if let Some(specifier) = &required {
-                    self.import(&id.name, specifier, Imported::Namespace, false);
+                    self.import(&id.name, specifier, Imported::Whole, false);
                 }
                 self.bind(
                     id.name.to_string(),
@@ -692,7 +716,7 @@ impl<'a> Visit<'a> for Walker<'_> {
                             self.import(&s.local.name, &specifier, Imported::Default, type_only);
                         }
                         ImportDeclarationSpecifier::ImportNamespaceSpecifier(s) => {
-                            self.import(&s.local.name, &specifier, Imported::Namespace, type_only);
+                            self.import(&s.local.name, &specifier, Imported::Whole, type_only);
                         }
                     }
                 }
@@ -763,8 +787,7 @@ impl<'a> Visit<'a> for Walker<'_> {
             }
             ExportDefaultDeclarationKind::ClassDeclaration(class) => {
                 let local = class.id.as_ref().map(|id| id.name.to_string());
-                let extends = extends(class);
-                self.export("default", local.as_deref(), ExportKind::Class { extends }, it.span);
+                self.export("default", local.as_deref(), ExportKind::Class, it.span);
             }
             ExportDefaultDeclarationKind::TSInterfaceDeclaration(_) => {
                 self.export("default", None, ExportKind::Type, it.span);
@@ -800,9 +823,31 @@ fn hidden(accessibility: Option<TSAccessibility>, key: &str) -> bool {
         || key.starts_with('#')
 }
 
-// The class a class extends, by the last name of what it is written over.
-fn extends(class: &Class<'_>) -> Option<String> {
-    head_path(&class.heritage.as_ref()?.expression)?.pop()
+// The class a class extends, by the last name of what it is written over:
+// one base at most.
+fn bases(class: &Class<'_>) -> Vec<String> {
+    class
+        .heritage
+        .as_ref()
+        .and_then(|heritage| head_path(&heritage.expression)?.pop())
+        .into_iter()
+        .collect()
+}
+
+// The string a called argument's own arguments lead with, or an array's
+// first element: `routes` for `loadRoutes("routes")`.
+fn inner(expr: &Expression<'_>) -> Option<String> {
+    let leading = |arguments: &[Argument<'_>]| {
+        arguments.first().and_then(|a| a.as_expression()).and_then(string_value)
+    };
+    match core(expr) {
+        Core::Call(call) => leading(&call.arguments),
+        Core::New(new) => leading(&new.arguments),
+        Core::Other(Expression::ArrayExpression(array)) => {
+            array.elements.first().and_then(|e| e.as_expression()).and_then(string_value)
+        }
+        Core::Other(_) => None,
+    }
 }
 
 // The path a type annotation names, `Kafka.Consumer` for `: Kafka.Consumer`.
@@ -1067,7 +1112,7 @@ fn callee(expr: &Expression<'_>) -> Option<Callee> {
             links: Vec::new(),
         }),
         Expression::ThisExpression(_) => Some(Callee {
-            head: "this".to_owned(),
+            head: DIALECT.self_name.to_owned(),
             head_call: None,
             links: Vec::new(),
         }),
@@ -1225,7 +1270,7 @@ fn fn_valued(expr: &Expression<'_>) -> bool {
             })
         }
         Expression::CallExpression(call) => {
-            callee(&call.callee).is_some_and(|callee| !callee.structural(None))
+            callee(&call.callee).is_some_and(|callee| !callee.structural(None, &DIALECT))
                 && call.arguments.iter().any(|a| a.as_expression().is_some_and(fn_valued))
         }
         Expression::AwaitExpression(e) => fn_valued(&e.argument),
