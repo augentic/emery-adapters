@@ -112,7 +112,12 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
             let mut attempts = Vec::new();
             for (index, rung) in settings.ladder.iter().enumerate() {
                 eprintln!("eval: `{}` run {n} at {rung}", case.name);
-                let tag = if index == 0 { format!("run-{n}") } else { format!("run-{n}@{rung}") };
+                // the rung with its `/` as a `-`, since the tag names files
+                let tag = if index == 0 {
+                    format!("run-{n}")
+                } else {
+                    format!("run-{n}@{}-{}", rung.timeout, rung.inactivity)
+                };
                 let run = run(&project, &settings, &case.expected.adapter, n, *rung, &tag)?;
                 eprintln!("eval: `{}` run {n} at {rung} {}", case.name, run.summary());
                 let climb = run.starved() && index + 1 < settings.ladder.len();

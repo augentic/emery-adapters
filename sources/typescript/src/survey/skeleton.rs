@@ -1,25 +1,24 @@
 //! What a parsed tree states on its own, copied rather than restated.
 //!
-//! Every `interface`, `type`, `enum`, and class the seams' modules export is
-//! a `type` claim with its declaration verbatim — a class as its header and
-//! member signatures, bodies elided — so the design's domain model is the
-//! code's, not a paraphrase; a declaration a module keeps to itself is its
-//! own business. Every value the code spells as its own — a
-//! `process.env` read with the default beside it, a named constant, a
-//! pattern — is a boundary the brief lists at its line, so a criterion cites
-//! one or is none. Every package the modules import is listed with the names
-//! bound to it, and every call the modules make through one is listed under
-//! its callee, so a `call` is drawn from the code's own calls and its
-//! `callee` spelled from the import. Every point where the code decides — a
-//! guard, a switch, a throw, a catch, a timer — is listed at its lines, so a
-//! requirement anchors where a behaviour starts rather than where a value is
-//! wired; those points, the `return`s, the heads of the functions and
-//! methods, the calls through packages, the boundaries, and the surfaces'
-//! own lines are the seam's anchors, which the SDK holds every
-//! `requirement` to. Every behaviour the tree's own tests state — a test's
-//! nested titles, a feature's scenarios — is listed at its line, so what the
-//! code confirms of them is claimed and what it does not hold is not
-//! invented.
+//! The briefs carry what the code spells, so the model draws from it rather
+//! than paraphrase:
+//!
+//! - every exported `interface`, `type`, `enum`, and class as a `type`
+//!   claim, its declaration verbatim with bodies elided
+//! - every value the code spells as its own, a boundary at its line, so a
+//!   criterion cites one or is none
+//! - every package imported with the names bound to it, and every call made
+//!   through one under its callee, so a `call` is drawn from the code's own
+//!   calls
+//! - every point where the code decides, so a requirement anchors where a
+//!   behaviour starts rather than where a value is wired
+//! - every behaviour the tree's own tests state, so what the code confirms
+//!   is claimed and what it does not hold is not invented
+//!
+//! The decision points, the `return`s, the heads of functions and methods,
+//! the calls through packages, the boundaries, and the surfaces' own lines
+//! are the seam's anchors, which the SDK holds every `requirement` to. Each
+//! section builder answers `None` where it has nothing to list.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -53,28 +52,26 @@ const RUNS: &[&str] = &["only", "concurrent", "sequential"];
 const FEATURE: &str = "Feature:";
 const SCENARIOS: &[&str] = &["Scenario Outline:", "Scenario Template:", "Scenario:", "Example:"];
 
-/// A test file of the tree, read for what it states.
 #[derive(Debug)]
 pub struct Test {
     pub path: String,
-    /// The modules of the tree it imports — for a feature file, the ones
-    /// the step modules beside it import.
+    // The modules of the tree it imports; for a feature file, the ones the
+    // step modules beside it import.
     pub imports: Vec<String>,
     pub statements: Vec<Statement>,
 }
 
-/// One behaviour a test states: a case's title under its suites' titles,
-/// or a scenario's under its feature's, at the line that states it.
+// A case's title under its suites' titles, or a scenario's under its
+// feature's, at the line that states it.
 #[derive(Debug)]
 pub struct Statement {
     pub text: String,
     pub line: u32,
 }
 
-/// The behaviours a parsed test module states: each `it` or `test` case
-/// led by a string, under the `describe` suites whose bodies enclose it,
-/// outermost first; a skipped, pending, or parameterised one states
-/// nothing the run holds.
+// Each case led by a string, under the suites whose bodies enclose it,
+// outermost first. A skipped, pending, or parameterised one states nothing
+// the run holds.
 pub fn statements(module: &Module) -> Vec<Statement> {
     let runs = |call: &Call| {
         call.callee.head_call.is_none()
@@ -111,8 +108,6 @@ pub fn statements(module: &Module) -> Vec<Statement> {
         .collect()
 }
 
-/// The behaviours a Gherkin feature file states: each scenario's title
-/// under its feature's, at the line that opens it.
 pub fn scenarios(text: &str) -> Vec<Statement> {
     let mut feature: Option<&str> = None;
     let mut statements = Vec::new();
@@ -135,10 +130,6 @@ pub fn scenarios(text: &str) -> Vec<Statement> {
     statements
 }
 
-/// The brief's decision points over `modules`: each guard, switch,
-/// conditional, throw, catch, and timer at its lines with its text and the
-/// function it runs in, under the rule of where a requirement anchors.
-/// `None` when the modules decide nothing.
 pub fn decisions<'m>(modules: impl IntoIterator<Item = &'m Module>) -> Option<String> {
     let mut lines: Vec<String> = Vec::new();
     for module in modules {
@@ -175,8 +166,6 @@ pub fn decisions<'m>(modules: impl IntoIterator<Item = &'m Module>) -> Option<St
     ))
 }
 
-/// The brief's stated behaviours over `tests`: each statement at its line.
-/// `None` when they state none.
 pub fn stated<'t>(tests: impl IntoIterator<Item = &'t Test>) -> Option<String> {
     let lines: Vec<String> = tests
         .into_iter()
@@ -200,9 +189,6 @@ pub fn stated<'t>(tests: impl IntoIterator<Item = &'t Test>) -> Option<String> {
     ))
 }
 
-/// The brief's data files over `modules`: each `.json` they import, with the
-/// modules importing it, in the order the modules are laid. `None` when they
-/// import none.
 pub fn data<'m>(modules: impl IntoIterator<Item = &'m Module>) -> Option<String> {
     // path → importing modules
     let mut files: Vec<(&str, Vec<&str>)> = Vec::new();
@@ -231,12 +217,8 @@ pub fn data<'m>(modules: impl IntoIterator<Item = &'m Module>) -> Option<String>
     ))
 }
 
-/// What the resolver could not follow from `modules`: each relative or
-/// aliased specifier naming nothing of the tree, with the module importing
-/// it, and each module loaded by a computed name, at its lines — and, when
-/// `widened`, that the modules after the closure are the rest of the tree,
-/// laid so what those name is still within reach. `None` when every import
-/// was followed.
+// `widened` says the modules after the closure are the rest of the tree,
+// laid for what these imports name.
 pub fn unfollowed<'m>(
     modules: impl IntoIterator<Item = &'m Module>, widened: bool,
 ) -> Option<String> {
@@ -277,9 +259,7 @@ pub fn unfollowed<'m>(
     ))
 }
 
-/// The `type` claims of `modules`: one per exported declaration, its
-/// declaration verbatim, anchored at its lines when `anchored` — a tree's
-/// file, never an inline value.
+// `anchored` is false for an inline value, which has no path to cite.
 pub fn types<'m>(modules: impl IntoIterator<Item = &'m Module>, anchored: bool) -> Vec<Claim> {
     let mut claims = Vec::new();
     for module in modules {
@@ -327,20 +307,18 @@ fn claim(name: &str, signature: &str, path: Option<String>, what: &str) -> Claim
     }
 }
 
-// A local spelled as a constant is named for one: `FIVE_SEC_DELAY`, never
-// `count` or `i`, so a function's working variables stay out of the list.
+// `FIVE_SEC_DELAY`, never `count` or `i`: a function's working variables
+// stay out of the list.
 fn constant_name(name: &str) -> bool {
     name.len() > 1
         && name.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
         && name.chars().any(|c| c.is_ascii_uppercase())
 }
 
-// The bindings of `module` that spell a value of their own: each module-level
-// binding, class field (named `Class.field`), and function local that is
-// constant-named or an enumeration written out in place (`allowedMimeTypes =
-// ['image/jpeg', 'image/png']`) whose initializer is a literal, a pattern, a
-// `process.env` read, or a definition, with the initializer's head and the
-// binding's lines.
+// The bindings whose initializer spells a value of its own. A function local
+// counts only where it is constant-named or an enumeration written out in
+// place (`allowedMimeTypes = ['image/jpeg', 'image/png']`). A class field is
+// named `Class.field`.
 fn spelled(module: &Module) -> impl Iterator<Item = (String, &str, Lines)> {
     module.bindings.iter().filter_map(|binding| {
         let (name, init, head) = match (&binding.scope, &binding.kind) {
@@ -378,19 +356,10 @@ fn spelled(module: &Module) -> impl Iterator<Item = (String, &str, Lines)> {
     })
 }
 
-/// The lines a `requirement` of a seam over the modules at `files` of `tree`
-/// may anchor at — where the code's behaviour starts or its result is
-/// decided: every decision point, every `return` of a value, the head of
-/// every function, method, getter, setter, and constructor — the line that
-/// opens it, where a behaviour it computes whole is anchored — every call
-/// made through a package or a global that leaves the process
-/// (constructions, registrations, and lifecycle calls among them), every
-/// boundary and `process.env` read, every line that applies one of the
-/// tree's constant-named boundaries, every step a function takes into the
-/// tree or on one of its class's members — a call for its effect alone or
-/// one it awaits, on `this`, a module import, or a local or parameter a
-/// tree class constructs or types — and the registration or declaration
-/// lines of each of `surfaces`; each in the claim `path` grammar, once.
+// Every anchor in the claim `path` grammar, once. A function's or method's
+// head is its opening line. A line applying one of the tree's constant-named
+// boundaries anchors wherever the constant is spelled, so the constants are
+// read from the whole tree, not the seam's files.
 pub fn anchors<'s>(
     tree: &Tree, files: &[String], surfaces: impl IntoIterator<Item = &'s Surface>,
 ) -> Vec<String> {
@@ -401,9 +370,6 @@ pub fn anchors<'s>(
         start: lines.start,
         end: lines.start,
     };
-    // the constant-named boundaries of the whole tree: a line that applies
-    // one, wherever it is spelled, is where a behaviour that depends on it
-    // is decided
     let constants: BTreeSet<String> = tree
         .modules
         .values()
@@ -469,12 +435,10 @@ pub fn anchors<'s>(
     anchors
 }
 
-// A step a function takes into a module of the tree or on one of its class's
-// members: a call for its effect alone — an expression statement, its value
-// discarded (`this.sessions.deleteByUserId(..)`): a write, a delete, a
-// publish — or one it awaits (`await this.customers.get(id)`): a lookup, a
-// fetch, where that step is claimed. Not a registration handed a handler, a
-// lifecycle or mounting call, or a call at module level.
+// A call for its effect alone (`this.sessions.deleteByUserId(..)`) or one
+// awaited (`await this.customers.get(id)`), into the tree or on a member of
+// its class. Not a registration handed a handler, a structural call, or a
+// call at module level.
 fn step(tree: &Tree, module: &Module, call: &Call) -> bool {
     if call.value == Use::Consumed || call.frames.is_empty() || call.structural() {
         return false;
@@ -486,11 +450,9 @@ fn step(tree: &Tree, module: &Module, call: &Call) -> bool {
     head == "this" || of_tree(module, head, &call.frames, TRACE)
 }
 
-// Whether `name`, from within `frames` of `module`, is the tree's own: an
-// import of one of its modules, a class or function the module declares, or
-// a binding constructed as or typed by one — the local that holds `new
-// OrdersRepository(..)`, the parameter typed `mailer: Mailer` — traced
-// through the bindings that initialise it as a package receiver is.
+// Traced through the bindings that initialise it, as a package receiver is:
+// the local holding `new OrdersRepository(..)`, the parameter typed
+// `mailer: Mailer`.
 fn of_tree(module: &Module, name: &str, frames: &[u32], budget: usize) -> bool {
     if budget == 0 {
         return false;
@@ -517,12 +479,7 @@ fn of_tree(module: &Module, name: &str, frames: &[u32], budget: usize) -> bool {
     }
 }
 
-/// The brief's boundaries over `modules`: each module-level binding, class
-/// field, and constant-named or enumerating function local whose initializer
-/// spells a value of its own — a literal, a pattern, a `process.env` read, a
-/// definition — and each `process.env` read no such binding holds, at its
-/// lines as the code writes it, a value written over several lines collapsed
-/// to one. `None` when they spell none.
+// A `process.env` read no spelled binding holds is listed on its own.
 pub fn boundaries<'m>(modules: impl IntoIterator<Item = &'m Module>) -> Option<String> {
     let mut lines: Vec<String> = Vec::new();
     for module in modules {
@@ -563,10 +520,7 @@ pub fn boundaries<'m>(modules: impl IntoIterator<Item = &'m Module>) -> Option<S
     ))
 }
 
-// A value written over the lines `at` of `text`, collapsed to one line: the
-// lines trimmed, comment lines dropped, joined by one space, what follows the
-// first `=` kept, and cut at `COLLAPSED` characters. `None` when nothing is
-// left.
+// A value written over several lines, as one.
 fn collapsed(text: &str, at: Lines) -> Option<String> {
     const COLLAPSED: usize = 400;
     let start = at.start.saturating_sub(1) as usize;
@@ -590,9 +544,6 @@ fn collapsed(text: &str, at: Lines) -> Option<String> {
     })
 }
 
-/// The brief's packages over `modules`: each bare specifier they import, with
-/// the names bound to it and the modules binding them. `None` when they
-/// import none.
 pub fn packages<'m>(modules: impl IntoIterator<Item = &'m Module>) -> Option<String> {
     // specifier → (bound names, importing modules)
     let mut packages: BTreeMap<&str, (Vec<String>, Vec<&str>)> = BTreeMap::new();
@@ -630,14 +581,12 @@ pub fn packages<'m>(modules: impl IntoIterator<Item = &'m Module>) -> Option<Str
     ))
 }
 
-/// The brief's calls over the modules at `files` of `tree`: each call made
-/// through a package — its receiver traced to the import, or a global that
-/// leaves the process — grouped by module and callee with the lines of its
-/// sites, less what is structure rather than a call: a construction, a
-/// lifecycle or mounting call, a registration or hook handed a handler, a
-/// call within a module-level declaration or a class body outside any
-/// function, a call another in its chain is made on, and a call handed
-/// nothing. `None` when the modules make none.
+// Left out as structure rather than a call:
+// - a construction or a structural call
+// - a call another in its chain is made on
+// - a call handed nothing
+// - a registration or hook handed a handler
+// - a call in a module-level declaration or a class body outside any function
 pub fn calls(tree: &Tree, files: &[String]) -> Option<String> {
     let mut lines: Vec<String> = Vec::new();
     for module in files.iter().filter_map(|path| tree.modules.get(path)) {
@@ -689,13 +638,14 @@ pub fn calls(tree: &Tree, files: &[String]) -> Option<String> {
     ))
 }
 
-// The callee of a call through a package, as a `call` claim spells it: for
-// a head imported from the package, `<package>:<members>` (`axios:post`,
-// `@azure/identity:getAzureToken`), or `<package>:<Head>.<members>` when
-// the head is itself called first (`pg:Client.query` for `new
-// Client(..).query(..)`); for a head bound in the tree, `<package>:<type or
-// bound name>.<members>` (`pg:Pool.query`, `pino:logger.info`); a global as
-// itself (`fetch`).
+// The `callee` a `call` claim spells:
+// - `<package>:<members>` for a head imported from the package
+//   (`axios:post`, `@azure/identity:getAzureToken`)
+// - `<package>:<Head>.<members>` where the head is itself called first
+//   (`pg:Client.query` for `new Client(..).query(..)`)
+// - `<package>:<type or bound name>.<members>` for a head bound in the tree
+//   (`pg:Pool.query`, `pino:logger.info`)
+// - a global as itself (`fetch`)
 fn callee(tree: &Tree, module: &Module, call: &Call) -> Option<String> {
     let head = call.callee.head.as_str();
     let links: Vec<&str> = call.callee.links.iter().map(|link| link.name.as_str()).collect();

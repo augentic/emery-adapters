@@ -2938,9 +2938,10 @@ async fn python_bootstrap_factory() {
 // by a string, the settings name the URL configuration by one, which
 // includes an application's URL module by one more; the application's
 // routes hand a view function and a view class by name, a signal receiver
-// hooks a model, and a management command is a module under
-// `management/commands/`.
-const DJANGO: [(&str, &str); 13] = [
+// hooks a model, an admin module registers the model with the admin site
+// and declares an action and a display on it, and a management command is
+// a module under `management/commands/`.
+const DJANGO: [(&str, &str); 14] = [
     (
         "manage.py",
         "import os\nimport sys\n\n\ndef main() -> None:\n    \
@@ -2990,6 +2991,16 @@ const DJANGO: [(&str, &str); 13] = [
         "from django.db import models\n\n\nclass Order(models.Model):\n    status = \
          models.CharField(max_length=16)\n",
     ),
+    (
+        "orders/admin.py",
+        "from django.contrib import admin\n\nfrom .models import Order\nfrom .services import \
+         cancel\n\n\n@admin.register(Order)\nclass OrderAdmin(admin.ModelAdmin):\n    \
+         list_display = [\"id\", \"status\"]\n    actions = [\"cancel_orders\"]\n\n    \
+         @admin.action(description=\"Cancel selected orders.\")\n    def cancel_orders(self, \
+         request, queryset):\n        for order in queryset:\n            cancel(order.pk)\n\n    \
+         @admin.display(description=\"State\")\n    def state(self, order):\n        return \
+         order.status\n",
+    ),
     ("orders/management/__init__.py", ""),
     ("orders/management/commands/__init__.py", ""),
     (
@@ -3025,7 +3036,9 @@ fn django_inventory() -> String {
 // a view class handed by `as_view()` carries its verb methods as ids; a
 // module under `management/commands/` is a command named by its file,
 // declared by its `Command` class; a migration and a `tests.py` are no
-// modules.
+// modules. The admin site's `register`, `action`, and `display` decorators
+// hook what they decorate onto a site a package serves, so none is a fact
+// and the admin module is asked after by no finding.
 #[tokio::test]
 async fn python_string_imports() {
     let project = scratch();
@@ -3040,6 +3053,8 @@ async fn python_string_imports() {
 
     let model = mined(PYTHON, &project, &django_inventory(), 1).await;
 
+    let facts = &model.seen()[0].messages[0];
+    assert!(!facts.contains("`@admin."), "the admin site's decorators register nothing: {facts}");
     let turns = surveyed(PYTHON, &model, 1);
     assert_eq!(
         surfaces(&turns[0]),
@@ -3077,6 +3092,7 @@ async fn python_string_imports() {
             "orders/services.py",
             "orders/signals.py",
             "orders/models.py",
+            "orders/admin.py",
             "orders/management/commands/import_orders.py",
         ],
         &["orders/migrations/0001_initial.py"],

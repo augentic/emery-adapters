@@ -56,7 +56,9 @@ const STRUCTURAL: &[&str] = &[
 const MOCKING: &[&str] = &["patch", "mock.patch", "unittest.mock.patch", "mocker.patch"];
 
 // Hooks on the process, a connection, or the application's lifecycle, not
-// registrations. Matched by the tail of the dotted spelling.
+// registrations — Django's admin site among them, which serves what it
+// registers on the source's behalf, by call or by decorator. Matched by the
+// tail of the dotted spelling.
 const LIFECYCLE: &[&str] = &[
     "signal.signal",
     "atexit.register",
@@ -69,6 +71,9 @@ const LIFECYCLE: &[&str] = &[
     "teardown_request",
     "lifespan",
     "site.register",
+    "admin.register",
+    "admin.action",
+    "admin.display",
 ];
 
 // Decorators that shape what they decorate rather than register it with a

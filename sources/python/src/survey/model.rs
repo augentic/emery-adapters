@@ -277,7 +277,7 @@ impl<'t> Located<'t> {
                 lines.push(format!(
                     "- `{}#{}` — `@{decorator}{argument}` on {on}, through `{}`",
                     module.path,
-                    decorated.head.anchor(),
+                    decorated.lines.anchor(),
                     receiver.package
                 ));
             }

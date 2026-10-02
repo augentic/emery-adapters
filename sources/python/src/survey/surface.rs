@@ -1157,7 +1157,7 @@ impl Derived {
             stem,
             discriminator,
             methods: Vec::new(),
-            lines: decorated.head,
+            lines: decorated.lines,
             detail,
             closure: tree.reaches(module, decorated.lines, &[], decorated.class.as_deref()),
         }
