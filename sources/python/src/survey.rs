@@ -184,6 +184,18 @@ fn unique<T: PartialEq>(items: impl IntoIterator<Item = T>) -> Vec<T> {
     list
 }
 
+// Each key's values together, the keys in first-occurrence order.
+fn grouped<K: PartialEq, V>(items: impl IntoIterator<Item = (K, V)>) -> Vec<(K, Vec<V>)> {
+    let mut groups: Vec<(K, Vec<V>)> = Vec::new();
+    for (key, value) in items {
+        match groups.iter_mut().find(|(known, _)| *known == key) {
+            Some((_, values)) => values.push(value),
+            None => groups.push((key, vec![value])),
+        }
+    }
+    groups
+}
+
 // Alembic's `versions` is schema history, not a package.
 fn skipped_dir(entry: Entry<'_>) -> bool {
     let name = entry.name();
@@ -352,12 +364,12 @@ impl Prepared {
 }
 
 const NO_SURFACE: &str = "No surface was found in this source: its survey named no route, command, \
-                          job, consumer, or exported API — no bootstrap the manifest's scripts \
-                          name or a conventional entry holds, no handler registered with a \
-                          package, no function or class under a package's decorator, and no \
-                          function or class exported at an entry module for a caller. Read it as \
-                          a library is read — for what its exports do for a caller — and claim \
-                          what the code exhibits.";
+                          job, consumer, or exported API — no bootstrap the manifest names or a \
+                          conventional entry holds, no handler registered with a package, \
+                          no function or class under a package's decorator, \
+                          and no function or class exported at an entry module for a caller. \
+                          Read it as a library is read — for what its exports do for a caller — \
+                          and claim what the code exhibits.";
 
 struct Lead {
     seam: Seam,

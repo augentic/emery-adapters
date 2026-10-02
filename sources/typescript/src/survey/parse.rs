@@ -302,6 +302,10 @@ impl Module {
             .map_or(export.lines, |binding| binding.lines)
     }
 
+    pub fn class(&self, name: &str) -> Option<&ClassDecl> {
+        self.classes.iter().find(|class| class.name == name)
+    }
+
     pub fn referenced(&self, lines: Lines) -> Vec<&str> {
         self.names(|line| lines.holds(line))
     }

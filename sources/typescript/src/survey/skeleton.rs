@@ -28,9 +28,9 @@ use emery_sdk::{Claim, ClaimKind};
 use super::parse::{
     BindingKind, Call, Imported, Init, Lines, MemberKind, Module, Scope, TypeKind, Use,
 };
-use super::push_unique;
 use super::resolve::Target;
 use super::surface::{Surface, TRACE, Tree};
+use super::{grouped, push_unique};
 
 // The runtime's own functions that leave the process, listed as calls with
 // no package when nothing in the module binds the name.
@@ -152,16 +152,17 @@ pub fn decisions<'m>(modules: impl IntoIterator<Item = &'m Module>) -> Option<St
         return None;
     }
     Some(format!(
-        "Decision points in these modules, each at its lines: the guards, switches, conditionals, \
-         throws, catches, and timers the code turns on. A `requirement` anchors where a behaviour \
-         starts or its result is decided — at one of these, at a `return`, at the line that opens \
-         the function or method whose whole body is the behaviour, at a listed call or a \
-         package's construction, at a boundary or a line that applies a named constant, at a step \
-         the function takes into the tree (a write, a delete, a publish, a lookup it awaits), at \
-         the code a stated behaviour names, or at a surface's registration or handler lines; a \
-         line that only wires or assigns — a value passed on, a field set, a value computed from \
-         the ones in hand — is no requirement's anchor, and what `start` constructs with a \
-         boundary's value is one requirement at that construction:\n\n{}",
+        "Decision points in these modules, each at its lines: \
+         the guards, switches, conditionals, throws, catches, and timers the code turns on. \
+         A `requirement` anchors where a behaviour starts or its result is decided — at one of \
+         these, at a `return`, at the line that opens the function or method whose whole body \
+         is the behaviour, at a listed call or a package's construction, at a boundary or a \
+         line that applies a named constant, at a step the function takes into the tree (a \
+         write, a delete, a publish, a lookup it awaits), at the code a stated behaviour names, \
+         or at a surface's registration or handler lines; a line that only wires or assigns — \
+         a value passed on, a field set, a value computed from the ones in hand — is no \
+         requirement's anchor, and what `start` constructs with a boundary's value is one \
+         requirement at that construction:\n\n{}",
         lines.join("\n")
     ))
 }
@@ -190,16 +191,9 @@ pub fn stated<'t>(tests: impl IntoIterator<Item = &'t Test>) -> Option<String> {
 }
 
 pub fn data<'m>(modules: impl IntoIterator<Item = &'m Module>) -> Option<String> {
-    // path → importing modules
-    let mut files: Vec<(&str, Vec<&str>)> = Vec::new();
-    for module in modules {
-        for path in module.data() {
-            match files.iter_mut().find(|(known, _)| *known == path) {
-                Some((_, by)) => push_unique(by, module.path.as_str()),
-                None => files.push((path, vec![module.path.as_str()])),
-            }
-        }
-    }
+    let files = grouped(modules.into_iter().flat_map(|module| {
+        module.data().into_iter().map(move |path| (path, module.path.as_str()))
+    }));
     if files.is_empty() {
         return None;
     }
@@ -479,7 +473,6 @@ fn of_tree(module: &Module, name: &str, frames: &[u32], budget: usize) -> bool {
     }
 }
 
-// A `process.env` read no spelled binding holds is listed on its own.
 pub fn boundaries<'m>(modules: impl IntoIterator<Item = &'m Module>) -> Option<String> {
     let mut lines: Vec<String> = Vec::new();
     for module in modules {
@@ -545,7 +538,6 @@ fn collapsed(text: &str, at: Lines) -> Option<String> {
 }
 
 pub fn packages<'m>(modules: impl IntoIterator<Item = &'m Module>) -> Option<String> {
-    // specifier → (bound names, importing modules)
     let mut packages: BTreeMap<&str, (Vec<String>, Vec<&str>)> = BTreeMap::new();
     for module in modules {
         for import in module.imports.iter().filter(|import| !import.type_only) {
@@ -596,9 +588,7 @@ pub fn calls(tree: &Tree, files: &[String]) -> Option<String> {
                 .iter()
                 .any(|binding| binding.scope == Scope::Module && binding.lines.contains(call.lines))
         };
-        // callee → the lines of its sites, in the order first seen
-        let mut sites: Vec<(String, Vec<Lines>)> = Vec::new();
-        for call in &module.calls {
+        let sites = grouped(module.calls.iter().filter_map(|call| {
             if call.is_new
                 || call.structural()
                 || call.inner
@@ -606,14 +596,10 @@ pub fn calls(tree: &Tree, files: &[String]) -> Option<String> {
                 || call.args.iter().any(|arg| tree.handler(module, arg, &call.frames))
                 || (call.frames.is_empty() && (call.class.is_some() || declared(call)))
             {
-                continue;
+                return None;
             }
-            let Some(callee) = callee(tree, module, call) else { continue };
-            match sites.iter_mut().find(|(known, _)| *known == callee) {
-                Some((_, at)) => at.push(call.lines),
-                None => sites.push((callee, vec![call.lines])),
-            }
-        }
+            Some((callee(tree, module, call)?, call.lines))
+        }));
         for (callee, at) in sites {
             let shown: Vec<String> = at.iter().take(SITES).map(|lines| lines.anchor()).collect();
             let more = at.len().saturating_sub(SITES);
@@ -649,7 +635,6 @@ pub fn calls(tree: &Tree, files: &[String]) -> Option<String> {
 fn callee(tree: &Tree, module: &Module, call: &Call) -> Option<String> {
     let head = call.callee.head.as_str();
     let links: Vec<&str> = call.callee.links.iter().map(|link| link.name.as_str()).collect();
-    // a receiver in a field: the first link is the field
     let (bound, members) = match (head, links.as_slice()) {
         ("this", [field, members @ ..]) => (*field, members),
         ("this", []) => return None,

@@ -58,8 +58,8 @@ impl Resolver {
     // One relative `extends` of `tsconfig.json` is followed where it can be
     // read.
     pub fn new(
-        root: &Path, modules: impl IntoIterator<Item = String>,
-        data: impl IntoIterator<Item = String>,
+        modules: impl IntoIterator<Item = String>, data: impl IntoIterator<Item = String>,
+        root: &Path,
     ) -> Self {
         let mut resolver = Self {
             modules: modules.into_iter().collect(),

@@ -97,7 +97,14 @@ struct Located<'t> {
 
 impl<'t> Located<'t> {
     fn new(tree: &'t Tree) -> Self {
-        let mut located = Self {
+        let handed = tree.handed_classes();
+        let locating = tree
+            .modules
+            .values()
+            .filter(|module| Self::locates(tree, &handed, module))
+            .map(|module| module.path.as_str())
+            .collect();
+        Self {
             tree,
             bootstrap: tree.bootstrap(),
             entries: tree
@@ -107,24 +114,16 @@ impl<'t> Located<'t> {
                 .map(|(module, _)| module)
                 .collect(),
             roots: tree.roots(),
-            handed: tree.handed_classes(),
-            locating: BTreeSet::new(),
+            handed,
+            locating,
             mounts: tree.mounts(),
-        };
-        located.locating = tree
-            .modules
-            .values()
-            .filter(|module| located.locates(module))
-            .map(|module| module.path.as_str())
-            .collect();
-        located
+        }
     }
 
     // Whether the facts place a registration or a registering decorator in
     // `module`, so the answer must reach it or list it `unreached`. A method
     // of a class a registration hands is the registration's to locate.
-    fn locates(&self, module: &Module) -> bool {
-        let tree = self.tree;
+    fn locates(tree: &Tree, handed: &BTreeSet<(String, String)>, module: &Module) -> bool {
         module
             .calls
             .iter()
@@ -132,7 +131,7 @@ impl<'t> Located<'t> {
             || module.decorated.iter().any(|decorated| {
                 decorated.member.is_some()
                     && decorated.registering()
-                    && !self.of_handed(module, decorated)
+                    && !Self::of_handed(handed, module, decorated)
                     && decorated
                         .name
                         .first()
@@ -141,9 +140,11 @@ impl<'t> Located<'t> {
     }
 
     // A view set's `@action` is an id of the registration, not a surface.
-    fn of_handed(&self, module: &Module, decorated: &Decorated) -> bool {
+    fn of_handed(
+        handed: &BTreeSet<(String, String)>, module: &Module, decorated: &Decorated,
+    ) -> bool {
         match (&decorated.class, &decorated.member) {
-            (Some(class), Some(_)) => self.handed.contains(&(module.path.clone(), class.clone())),
+            (Some(class), Some(_)) => handed.contains(&(module.path.clone(), class.clone())),
             _ => false,
         }
     }
@@ -257,8 +258,10 @@ impl<'t> Located<'t> {
         let tree = self.tree;
         let mut lines: Vec<String> = Vec::new();
         for module in tree.modules.values() {
-            for decorated in
-                module.decorated.iter().filter(|d| d.registering() && !self.of_handed(module, d))
+            for decorated in module
+                .decorated
+                .iter()
+                .filter(|d| d.registering() && !Self::of_handed(&self.handed, module, d))
             {
                 let Some(receiver) =
                     decorated.name.first().and_then(|head| tree.receiver_of(module, head))

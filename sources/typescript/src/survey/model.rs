@@ -96,21 +96,20 @@ struct Located<'t> {
 
 impl<'t> Located<'t> {
     fn new(tree: &'t Tree) -> Self {
-        let mut located = Self {
+        let locating = tree
+            .modules
+            .values()
+            .filter(|module| Self::locates(tree, module))
+            .map(|module| module.path.as_str())
+            .collect();
+        Self {
             tree,
             bootstrap: tree.bootstrap(),
             entries: tree.manifest.entries(&tree.resolver),
             roots: tree.roots(),
-            locating: BTreeSet::new(),
+            locating,
             mounts: tree.mounts(),
-        };
-        located.locating = tree
-            .modules
-            .values()
-            .filter(|module| located.locates(module))
-            .map(|module| module.path.as_str())
-            .collect();
-        located
+        }
     }
 
     // Whether the facts place a registration or a package's method decorator
@@ -119,8 +118,7 @@ impl<'t> Located<'t> {
     // fp(async (app) => ..)`) is listed among the facts and locates nothing.
     // A module the facts say nothing of is taken as unreached without a
     // finding: a framework may load it by directory.
-    fn locates(&self, module: &Module) -> bool {
-        let tree = self.tree;
+    fn locates(tree: &Tree, module: &Module) -> bool {
         module
             .calls
             .iter()

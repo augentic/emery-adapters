@@ -162,13 +162,25 @@ fn push_unique<T: PartialEq>(into: &mut Vec<T>, item: T) {
     }
 }
 
-// Once each, in first-occurrence order.
+// First-occurrence order.
 fn unique<T: PartialEq>(items: impl IntoIterator<Item = T>) -> Vec<T> {
     let mut list = Vec::new();
     for item in items {
         push_unique(&mut list, item);
     }
     list
+}
+
+// Each key's values together, the keys in first-occurrence order.
+fn grouped<K: PartialEq, V>(items: impl IntoIterator<Item = (K, V)>) -> Vec<(K, Vec<V>)> {
+    let mut groups: Vec<(K, Vec<V>)> = Vec::new();
+    for (key, value) in items {
+        match groups.iter_mut().find(|(known, _)| *known == key) {
+            Some((_, values)) => values.push(value),
+            None => groups.push((key, vec![value])),
+        }
+    }
+    groups
 }
 
 fn include(entry: Entry<'_>) -> bool {
@@ -205,8 +217,6 @@ const TEST_INFIXES: &[&str] = &["spec", "test"];
 // Never a test's either: dependencies and build output.
 const NEVER_DIRS: &[&str] = &["node_modules", "vendor", "target", "dist", "build"];
 
-// A source file under a test directory or named as a test, or a Gherkin
-// feature file; never a declaration.
 fn is_test(entry: Entry<'_>) -> bool {
     if entry.hidden() {
         return false;
@@ -231,8 +241,6 @@ fn is_test(entry: Entry<'_>) -> bool {
         || entry.path().split('/').rev().skip(1).any(|dir| TEST_DIRS.contains(&dir))
 }
 
-// A test that states nothing is dropped; one that is not UTF-8 text is left
-// out with a warning.
 fn tests(root: &Path, paths: Vec<String>, tree: &Tree) -> Vec<Test> {
     let mut tests: Vec<Test> = Vec::new();
     let mut features: Vec<Test> = Vec::new();
@@ -282,8 +290,6 @@ fn tests(root: &Path, paths: Vec<String>, tree: &Tree) -> Vec<Test> {
 }
 
 impl Prepared {
-    // The package the manifest names, less its npm scope, else the root
-    // directory's name, else `module`.
     fn fallback_stem(&self) -> String {
         let named = self
             .tree
@@ -304,14 +310,16 @@ impl Prepared {
 
 const NO_SURFACE: &str = "No surface was found in this source: its survey named no route, command, \
                           job, consumer, or exported API — no bootstrap the manifest names or a \
-                          conventional entry holds, no handler registered with a package, no \
-                          method under a package's decorator, and no function or class exported at \
-                          an entry module for a caller. Read it as a library is read — for what \
-                          its exports do for a caller — and claim what the code exhibits.";
+                          conventional entry holds, no handler registered with a package, \
+                          no method under a package's decorator, \
+                          and no function or class exported at an entry module for a caller. \
+                          Read it as a library is read — for what its exports do for a caller — \
+                          and claim what the code exhibits.";
 
 struct Lead {
     seam: Seam,
     // The files run past the surfaces' closures to the rest of the tree.
+    // Only the cut by stem sets it.
     widened: bool,
 }
 
@@ -336,8 +344,6 @@ impl Lead {
                 .flat_map(|surface| surface.closure.iter().cloned())
                 .chain(tree.modules.keys().cloned()),
         );
-        let widened =
-            files.iter().any(|file| !surfaces.iter().any(|surface| surface.closure.contains(file)));
         let stems = unique(surfaces.iter().map(|surface| surface.stem.clone()));
         let text = format!(
             "The surfaces of this source, found by reading its code — where control enters it \
@@ -346,10 +352,7 @@ impl Lead {
              under the surface whose caller observes it, once.",
             listed(surfaces)
         );
-        Self {
-            widened,
-            ..Self::new(text, files, stems)
-        }
+        Self::new(text, files, stems)
     }
 
     fn by_stem(tree: &Tree, surfaces: &[Surface]) -> Vec<Self> {

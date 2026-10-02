@@ -540,9 +540,7 @@ impl Tree {
         &self, module: &Module, lines: Lines, frames: &[u32], class: Option<&str>,
     ) -> Vec<String> {
         let mut seeds = vec![module.path.clone()];
-        let span = class
-            .and_then(|class| module.classes.iter().find(|c| c.name == class))
-            .map_or(lines, |c| c.lines);
+        let span = class.and_then(|class| module.class(class)).map_or(lines, |c| c.lines);
         for name in module.referenced(span) {
             seed(&mut seeds, module, name);
             if let Some(binding) = module.binding(name, frames)
@@ -1168,7 +1166,7 @@ impl Derived {
         let (what, methods, class) = match &export.kind {
             ExportKind::Class => (
                 "class",
-                methods(module, &export.name)
+                methods(module, &export.name, |name| !dunder(name))
                     .into_iter()
                     .map(|(name, lines)| (name.to_owned(), lines))
                     .collect(),
@@ -1343,7 +1341,11 @@ fn normalised(name: &str, stem: &str) -> Option<String> {
     kebab(&kept.join("-"))
 }
 
-fn methods<'m>(module: &'m Module, name: &str) -> Vec<(&'m str, Lines)> {
+// The public methods and getters of the class `name` that `keep` admits,
+// each with its lines.
+fn methods<'m>(
+    module: &'m Module, name: &str, keep: impl Fn(&str) -> bool,
+) -> Vec<(&'m str, Lines)> {
     module
         .class(name)
         .map(|class| {
@@ -1352,7 +1354,7 @@ fn methods<'m>(module: &'m Module, name: &str) -> Vec<(&'m str, Lines)> {
                 .iter()
                 .filter(|m| {
                     !m.private
-                        && !dunder(&m.name)
+                        && keep(&m.name)
                         && matches!(m.kind, MemberKind::Method | MemberKind::Getter)
                 })
                 .map(|m| (m.name.as_str(), m.lines))
@@ -1370,7 +1372,7 @@ fn dunder(name: &str) -> bool {
 // A view's verb methods, else those under an `action` decorator, else all
 // its public methods.
 fn view_methods<'m>(module: &'m Module, name: &str) -> Vec<(&'m str, Lines)> {
-    let all = methods(module, name);
+    let all = methods(module, name, |name| !dunder(name));
     let verbs: Vec<(&str, Lines)> =
         all.iter().filter(|(method, _)| VERBS.contains(method)).copied().collect();
     if !verbs.is_empty() {
