@@ -7,9 +7,9 @@
 //! broken file never fails a run. Where each import leads is settled once
 //! the tree is read (`Resolver::settle`) and carried on the import.
 
-use std::fmt::{self, Display, Formatter};
+use emery_sdk::survey::Lines;
+use emery_sdk::survey::resolve::Target;
 
-use super::resolve::Target;
 use super::unique;
 
 mod walk;
@@ -189,54 +189,6 @@ fn hooks(dotted: &str) -> bool {
     LIFECYCLE.iter().any(|tail| dotted == *tail || dotted.ends_with(&format!(".{tail}")))
 }
 
-// 1-based and inclusive. The default holds no line.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Ord, PartialOrd)]
-pub struct Lines {
-    pub start: u32,
-    pub end: u32,
-}
-
-impl Lines {
-    pub const fn contains(self, other: Self) -> bool {
-        self.start <= other.start && other.end <= self.end
-    }
-
-    pub const fn holds(self, line: u32) -> bool {
-        self.start <= line && line <= self.end
-    }
-
-    // The claim anchor grammar: `L3`, or `L3-L5`.
-    pub fn anchor(self) -> String {
-        if self.start == self.end {
-            format!("L{}", self.start)
-        } else {
-            format!("L{}-L{}", self.start, self.end)
-        }
-    }
-}
-
-// A cited line past `u32::MAX` saturates.
-impl From<(u64, u64)> for Lines {
-    fn from((start, end): (u64, u64)) -> Self {
-        let line = |cited: u64| u32::try_from(cited).unwrap_or(u32::MAX);
-        Self {
-            start: line(start),
-            end: line(end),
-        }
-    }
-}
-
-// Prose, with an en dash; `anchor` is the claim grammar.
-impl Display for Lines {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        if self.start == self.end {
-            write!(f, "L{}", self.start)
-        } else {
-            write!(f, "L{}–L{}", self.start, self.end)
-        }
-    }
-}
-
 #[derive(Debug, Default)]
 pub struct Module {
     pub path: String,
@@ -371,10 +323,7 @@ impl Module {
     }
 
     pub fn package(&self, local: &str) -> Option<&str> {
-        match self.import(local)?.target.as_ref()? {
-            Target::Package(package) => Some(package),
-            Target::Module(_) | Target::Data(_) | Target::Unresolved(_) => None,
-        }
+        self.import(local)?.target.as_ref()?.package()
     }
 
     pub fn imported(&self, local: &str) -> Option<&str> {
@@ -474,20 +423,14 @@ impl Module {
     }
 
     pub fn data(&self) -> Vec<&str> {
-        unique(self.targets().filter_map(|target| match target {
-            Target::Data(path) => Some(path.as_str()),
-            _ => None,
-        }))
+        unique(self.targets().filter_map(Target::data))
     }
 
     // A type-only import never counts.
     pub fn unresolved(&self) -> Vec<&str> {
         let imports = self.imports.iter().filter(|import| !import.type_only).map(|i| &i.target);
         let reexports = self.reexports.iter().filter(|re| !re.type_only).map(|re| &re.target);
-        unique(imports.chain(reexports).filter_map(|target| match target {
-            Some(Target::Unresolved(specifier)) => Some(specifier.as_str()),
-            _ => None,
-        }))
+        unique(imports.chain(reexports).flatten().filter_map(Target::unresolved))
     }
 }
 

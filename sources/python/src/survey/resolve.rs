@@ -17,31 +17,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+use emery_sdk::survey::resolve::{Target, normalize};
+
 use super::parse::{Imported, Module};
 use super::unique;
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum Target {
-    // By root-relative path.
-    Module(String),
-    // By top-level name: `fastapi` for `fastapi.routing`.
-    Package(String),
-    // By root-relative path, for a data file a string names.
-    Data(String),
-    // By the specifier as written: a relative import naming nothing, or an
-    // absolute one beneath a package of the tree's own whose module is
-    // absent.
-    Unresolved(String),
-}
-
-impl Target {
-    pub fn module(&self) -> Option<&str> {
-        match self {
-            Self::Module(path) => Some(path),
-            Self::Package(_) | Self::Data(_) | Self::Unresolved(_) => None,
-        }
-    }
-}
 
 #[derive(Debug)]
 pub struct Resolver {
@@ -265,21 +244,6 @@ fn join(dir: &str, path: &str) -> String {
         (false, true) => dir.to_owned(),
         (false, false) => format!("{dir}/{path}"),
     }
-}
-
-// `None` where `..` climbs above the root.
-pub(super) fn normalize(dir: &str, path: &str) -> Option<String> {
-    let mut segments: Vec<&str> = Vec::new();
-    for segment in dir.split('/').chain(path.split('/')) {
-        match segment {
-            "" | "." => {}
-            ".." => {
-                segments.pop()?;
-            }
-            other => segments.push(other),
-        }
-    }
-    Some(segments.join("/"))
 }
 
 #[derive(Debug, Default)]

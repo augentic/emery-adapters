@@ -15,13 +15,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use emery_sdk::survey::{Facts, Inventory};
-use emery_sdk::{Context, Doc, Error, Model};
+use emery_sdk::survey::resolve::Target;
+use emery_sdk::survey::{Facts, Inventory, Lines};
+use emery_sdk::{Context, Doc, Error, Model, kebab};
 
-use super::parse::{ClassDecl, Decorated, Export, ExportKind, Lines, Module};
-use super::resolve::Target;
+use super::parse::{ClassDecl, Decorated, Export, ExportKind, Module};
 use super::surface::{Derived, Runs, Surface, Tree};
-use super::{Prepared, push_unique, skeleton, surface, unique};
+use super::{Prepared, push_unique, skeleton, unique};
 
 // The bootstrap surface leads, and every id is decided over them all. The
 // errors are the SDK's:
@@ -442,11 +442,7 @@ impl<'t> Located<'t> {
                     detail: derived.detail,
                     closure: derived.closure,
                     discriminator: derived.discriminator,
-                    methods: derived
-                        .methods
-                        .iter()
-                        .filter_map(|(name, _)| surface::kebab(name))
-                        .collect(),
+                    methods: derived.methods.iter().filter_map(|(name, _)| kebab(name)).collect(),
                     ids: Vec::new(),
                 })
             })

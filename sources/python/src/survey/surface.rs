@@ -21,9 +21,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+use emery_sdk::kebab;
+use emery_sdk::survey::Lines;
+use emery_sdk::survey::route::{self, Spelling};
+
 use super::parse::{
-    Arg, BindingKind, Call, Decorated, Export, ExportKind, Imported, Init, Lines, MemberKind,
-    Module, Scope,
+    Arg, BindingKind, Call, Decorated, Export, ExportKind, Imported, Init, MemberKind, Module,
+    Scope,
 };
 use super::resolve::{Manifest, Resolver};
 use super::{push_unique, unique};
@@ -81,8 +85,11 @@ const MOUNTING: &[&str] = &["register_blueprint", "include_router", "mount"];
 // declaring them.
 const PREFIXED: &[&str] = &["APIRouter", "Blueprint", "Router"];
 
-// Path segments that version or namespace an API rather than name a surface.
-const PATH_NOISE: &[&str] = &["api", "rest", "internal"];
+// A pattern spells a wildcard, a brace, a `<converter>`, or a regex.
+const SPELLING: Spelling = Spelling {
+    pattern: &['*', '{', '(', '[', '<', '?', '\\'],
+    param_name,
+};
 
 // How many bindings a receiver is traced through before it counts as local.
 pub(super) const TRACE: usize = 4;
@@ -701,7 +708,7 @@ impl Tree {
                                 }
                                 None => continue,
                             };
-                            let mounted = join_route(under, &prefix);
+                            let mounted = route::join(under, &prefix);
                             if mounted != "/" {
                                 next.entry(target.to_owned()).or_insert(mounted);
                             }
@@ -718,7 +725,7 @@ impl Tree {
                                 continue;
                             };
                             let Some(target) = self.resolver.entry(dotted) else { continue };
-                            let mounted = join_route(own, &strip_pattern(literal));
+                            let mounted = route::join(own, &strip_pattern(literal));
                             if mounted != "/" {
                                 next.entry(target).or_insert(mounted);
                             }
@@ -760,11 +767,11 @@ impl Tree {
                 else {
                     continue;
                 };
-                let own = join_route("", prefix);
+                let own = route::join("", prefix);
                 match mounts.get(&module.path) {
                     Some(_) if constructor == "Blueprint" => {}
                     Some(outer) => {
-                        let joined = join_route(outer, prefix);
+                        let joined = route::join(outer, prefix);
                         mounts.insert(module.path.clone(), joined);
                     }
                     None if own != "/" => {
@@ -908,7 +915,7 @@ fn routed(
     let verb = VERBS.contains(&method) && literal.starts_with('/');
     (verb || ROUTERS.contains(&method)).then(|| {
         let prefix = mounts.get(&module.path).map_or("", String::as_str);
-        join_route(prefix, &strip_pattern(literal))
+        route::join(prefix, &strip_pattern(literal))
     })
 }
 
@@ -995,7 +1002,7 @@ impl Derived {
             Some(At::Export(export)) => Self::at_export(tree, module, export),
             None => Self {
                 stem: None,
-                discriminator: normalised(name, stem),
+                discriminator: SPELLING.normalised(name, stem),
                 methods: Vec::new(),
                 lines,
                 detail: vec![format!("named by the survey at {lines}")],
@@ -1038,14 +1045,16 @@ impl Derived {
         let (method, literal) = call.registered(tree.led(module, call));
         let literal = literal.as_deref();
         let route = routed(module, method, literal, mounts);
-        let derived = route.as_deref().map_or_else(|| literal.and_then(literal_stem), route_stem);
+        let derived = route
+            .as_deref()
+            .map_or_else(|| literal.and_then(route::literal_stem), |route| SPELLING.stem(route));
         let stem = derived.as_deref().unwrap_or(stem);
         let methods_keyword = call.keyword("methods").map(|arg| arg.head.as_str());
         let discriminator =
             tree.named_handler(module, call).filter(|handler| handler != stem).or_else(|| {
                 route.as_deref().map_or_else(
                     || kebab(method),
-                    |route| route_discriminator(&verb_of(method, methods_keyword), route, stem),
+                    |route| SPELLING.discriminator(&verb_of(method, methods_keyword), route, stem),
                 )
             });
         let mut detail = vec![match (&call.class, &call.function) {
@@ -1096,7 +1105,7 @@ impl Derived {
     ) -> Self {
         let name = class.class.as_deref().unwrap_or_default();
         let prefix = mounts.get(&module.path).map_or("", String::as_str);
-        let route = join_route(prefix, &strip_pattern(class.literal.as_deref().unwrap_or("")));
+        let route = route::join(prefix, &strip_pattern(class.literal.as_deref().unwrap_or("")));
         let methods = unique(
             module
                 .decorated
@@ -1109,7 +1118,7 @@ impl Derived {
         detail.extend(through(tree, module, class));
         detail.extend(noted(&methods));
         Self {
-            stem: route_stem(&route),
+            stem: SPELLING.stem(&route),
             discriminator: kebab(name),
             methods,
             lines: class.lines,
@@ -1134,15 +1143,16 @@ impl Derived {
         detail.extend(through(tree, module, decorated));
         let route = decorated_route(module, decorated, mounts);
         let group = group_of(module, decorated);
-        let literal = || decorated.literal.as_deref().and_then(literal_stem);
+        let literal = || decorated.literal.as_deref().and_then(route::literal_stem);
         let stem = route.as_deref().map_or_else(
             || group.clone().or_else(literal),
-            |route| under(module, decorated, mounts).or_else(|| route_stem(route)),
+            |route| under(module, decorated, mounts).or_else(|| SPELLING.stem(route)),
         );
         let discriminator = match (&route, &stem) {
             (Some(route), Some(stem)) => {
                 let method = decorated.name.last().map_or("", String::as_str).to_ascii_lowercase();
-                route_discriminator(&verb_of(&method, decorated.keyword("methods")), route, stem)
+                SPELLING
+                    .discriminator(&verb_of(&method, decorated.keyword("methods")), route, stem)
                     .or_else(|| kebab(member))
             }
             (None, _) if group.is_some() => literal().or_else(|| kebab(member)),
@@ -1204,7 +1214,7 @@ fn under(
         .and_then(|class| class_prefix(module, class))
         .and_then(|d| d.literal.as_deref())
         .unwrap_or("");
-    route_stem(&join_route(mount, prefix)).or_else(|| router_tag(module, decorated))
+    SPELLING.stem(&route::join(mount, prefix)).or_else(|| router_tag(module, decorated))
 }
 
 // The first `tags` literal of the `APIRouter` the decorator's head is bound
@@ -1288,7 +1298,7 @@ fn decorated_route(
         .and_then(|class| class_prefix(module, class))
         .and_then(|d| d.literal.as_deref())
         .unwrap_or("");
-    Some(join_route(&join_route(mount, prefix), &strip_pattern(literal)))
+    Some(route::join(&route::join(mount, prefix), &strip_pattern(literal)))
 }
 
 fn decorated_class_at(module: &Module, lines: Lines) -> Option<&Decorated> {
@@ -1327,18 +1337,6 @@ fn export_enclosing(module: &Module, lines: Lines) -> Option<&Export> {
         .iter()
         .filter(|export| export.kind.callable() || export.kind.valued())
         .find(|export| module.declared_at(export).holds(lines.start))
-}
-
-// The survey's name less the words of its stem and the segments that only
-// version or namespace a path: `GET /api/customers` under `customers` is
-// `get`.
-fn normalised(name: &str, stem: &str) -> Option<String> {
-    let spelled = kebab(name)?;
-    let kept: Vec<&str> = spelled
-        .split('-')
-        .filter(|word| !stem.split('-').any(|own| own == *word) && names_resource(word))
-        .collect();
-    kebab(&kept.join("-"))
 }
 
 // The public methods and getters of the class `name` that `keep` admits,
@@ -1391,14 +1389,6 @@ fn view_methods<'m>(module: &'m Module, name: &str) -> Vec<(&'m str, Lines)> {
     if actions.is_empty() { all } else { actions }
 }
 
-// `/prefix/path`, however either is spelled: `"/orders/"` and `"orders/"`
-// both lead with one slash and end with none.
-fn join_route(prefix: &str, path: &str) -> String {
-    let segments: Vec<&str> =
-        prefix.split('/').chain(path.split('/')).filter(|segment| !segment.is_empty()).collect();
-    format!("/{}", segments.join("/"))
-}
-
 // Less the regex anchors `re_path` spells a pattern with.
 fn strip_pattern(route: &str) -> String {
     route.trim_start_matches('^').trim_end_matches('$').to_owned()
@@ -1420,62 +1410,10 @@ fn param_name(segment: &str) -> &str {
     segment.trim_start_matches(':')
 }
 
-// The verb, then the segments past the one spelling the stem, a parameter
-// by its bare name: `GET /api/orders/{id}` under `orders` is `get-id`. A
-// route spelling no segment as its stem is relative to a mount the survey
-// did not read, so every segment tells: `POST /<int:pk>/assign` under
-// `tasks` is `post-pk-assign`.
-fn route_discriminator(verb: &str, route: &str, stem: &str) -> Option<String> {
-    let segments: Vec<&str> = route.split('/').filter(|segment| !segment.is_empty()).collect();
-    let past = segments
-        .iter()
-        .position(|segment| kebab(segment).is_some_and(|spelled| spelled == stem))
-        .map_or(0, |i| i + 1);
-    let parts: Vec<&str> = std::iter::once(verb)
-        .chain(segments[past..].iter().map(|segment| param_name(segment)))
-        .collect();
-    kebab(&parts.join("-"))
-}
-
-// The first segment that names a resource.
-fn route_stem(route: &str) -> Option<String> {
-    route
-        .split('/')
-        .filter(|segment| !segment.is_empty())
-        .find(|segment| names_resource(segment))
-        .and_then(kebab)
-}
-
-fn names_resource(segment: &str) -> bool {
-    let version = segment
-        .strip_prefix('v')
-        .is_some_and(|rest| !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit()));
-    let pattern =
-        segment.starts_with(':') || segment.contains(['*', '{', '(', '[', '<', '?', '\\']);
-    !(PATH_NOISE.contains(&segment) || version || pattern)
-}
-
-// Literals a scheduler is led by that name its trigger, not its job.
-const TRIGGERS: &[&str] = &["cron", "interval", "date"];
-
-// The first word of a literal that names something, a dotted name by its
-// first segment (`invoices.send` is `invoices`). Nothing for a pattern, a
-// schedule, or a trigger.
-fn literal_stem(literal: &str) -> Option<String> {
-    let word = literal.split_whitespace().next()?;
-    if !word.starts_with(|c: char| c.is_ascii_alphabetic())
-        || word.contains(['<', '>', '[', ']', '*', '/', ':'])
-        || TRIGGERS.contains(&word)
-    {
-        return None;
-    }
-    kebab(word.split('.').next().unwrap_or(word))
-}
-
 // `invoices.remind` is told from `invoices.void` by `remind`. Nothing for a
 // literal of one segment or one naming nothing.
 fn literal_tail(literal: &str) -> Option<String> {
-    literal_stem(literal)?;
+    route::literal_stem(literal)?;
     let word = literal.split_whitespace().next()?;
     let (_, tail) = word.split_once('.')?;
     kebab(tail)
@@ -1483,30 +1421,4 @@ fn literal_tail(literal: &str) -> Option<String> {
 
 fn module_stem(module: &Module) -> String {
     kebab(module.stem()).unwrap_or_else(|| "module".to_owned())
-}
-
-// Camel humps split, anything not a letter or digit a hyphen, runs
-// collapsed. `None` when nothing is left.
-pub(super) fn kebab(text: &str) -> Option<String> {
-    let mut out = String::with_capacity(text.len() + 4);
-    let chars: Vec<char> = text.chars().collect();
-    for (i, &c) in chars.iter().enumerate() {
-        if c.is_ascii_alphanumeric() {
-            if c.is_ascii_uppercase() && i > 0 {
-                let prev = chars[i - 1];
-                let next = chars.get(i + 1).copied();
-                let hump = prev.is_ascii_lowercase()
-                    || prev.is_ascii_digit()
-                    || (prev.is_ascii_uppercase() && next.is_some_and(|n| n.is_ascii_lowercase()));
-                if hump && !out.ends_with('-') && !out.is_empty() {
-                    out.push('-');
-                }
-            }
-            out.push(c.to_ascii_lowercase());
-        } else if !out.is_empty() && !out.ends_with('-') {
-            out.push('-');
-        }
-    }
-    let trimmed = out.trim_matches('-');
-    emery_sdk::is_kebab(trimmed).then(|| trimmed.to_owned())
 }

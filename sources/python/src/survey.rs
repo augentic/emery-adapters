@@ -23,11 +23,11 @@
 
 use std::path::Path;
 
+use emery_sdk::survey::tests::{Test, scenarios, stated};
 use emery_sdk::workspace::Entry;
-use emery_sdk::{Claim, Error, INLINE_BYTES, Seam, SourceContent, SourceInput, bad_request};
+use emery_sdk::{Claim, Error, INLINE_BYTES, Seam, SourceContent, SourceInput, bad_request, kebab};
 
 use self::parse::Module;
-use self::skeleton::Test;
 use self::surface::{Surface, Tree};
 
 pub mod model;
@@ -290,7 +290,7 @@ fn tests(root: &Path, paths: Vec<String>, tree: &Tree) -> Vec<Test> {
             features.push(Test {
                 path,
                 imports: Vec::new(),
-                statements: skeleton::scenarios(&text),
+                statements: scenarios(&text),
             });
             continue;
         }
@@ -329,13 +329,10 @@ const DATA_BESIDE_BYTES: u64 = 8 * 1024;
 
 impl Prepared {
     fn fallback_stem(&self) -> String {
-        let named = self.tree.manifest.name.as_deref().and_then(surface::kebab);
+        let named = self.tree.manifest.name.as_deref().and_then(kebab);
         named
             .or_else(|| {
-                Path::new(&self.root)
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .and_then(surface::kebab)
+                Path::new(&self.root).file_name().and_then(|name| name.to_str()).and_then(kebab)
             })
             .unwrap_or_else(|| "module".to_owned())
     }
@@ -490,7 +487,7 @@ impl Lead {
                 continue;
             };
             let dir = &path[..path.len() - rest.len() + name.len()];
-            let stem = surface::kebab(name).unwrap_or_else(|| prepared.fallback_stem());
+            let stem = kebab(name).unwrap_or_else(|| prepared.fallback_stem());
             match groups.iter_mut().find(|(s, ..)| *s == stem) {
                 Some((_, _, files)) => files.push(path.clone()),
                 None => groups.push((stem, format!("`{dir}/`"), vec![path.clone()])),
@@ -568,7 +565,7 @@ impl Lead {
         sections.extend(skeleton::calls(tree, files));
         sections.extend(skeleton::decisions(modules()));
         sections.extend(skeleton::data(modules()));
-        sections.extend(skeleton::stated(tests.iter().copied()));
+        sections.extend(stated(tests.iter().copied(), skeleton::DESCRIBED));
         sections.extend(skeleton::unfollowed(modules(), self.widened));
         let unparsed: Vec<String> =
             modules().filter(|m| !m.parsed).map(|m| format!("`{}`", m.path)).collect();

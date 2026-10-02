@@ -3,6 +3,7 @@
 
 use std::borrow::Cow;
 
+use emery_sdk::survey::Lines;
 use oxc_allocator::Allocator;
 use oxc_ast::AstKind;
 use oxc_ast::ast::{
@@ -23,8 +24,8 @@ use oxc_span::{GetSpan, SourceType, Span};
 
 use super::{
     Arg, Binding, BindingKind, Call, Callee, ClassDecl, Decision, Decorated, EnvRead, Export,
-    ExportKind, Import, Imported, Init, Invocation, Lines, Link, Member, MemberKind, Module,
-    Property, Reexport, Reference, Scope, TypeDecl, TypeKind, Use,
+    ExportKind, Import, Imported, Init, Invocation, Link, Member, MemberKind, Module, Property,
+    Reexport, Reference, Scope, TypeDecl, TypeKind, Use,
 };
 
 // A binding's initializer is kept as its head: its first line, cut to this

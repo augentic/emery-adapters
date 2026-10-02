@@ -1,5 +1,6 @@
 //! Walks one module's syntax tree into its `Module`.
 
+use emery_sdk::survey::Lines;
 use ruff_python_ast::visitor::{self, Visitor};
 use ruff_python_ast::{
     Arguments, CmpOp, Decorator, ElifElseClause, ExceptHandler, Expr, ExprCall, ExprContext,
@@ -12,8 +13,8 @@ use ruff_text_size::{Ranged, TextRange, TextSize};
 
 use super::{
     Arg, Binding, BindingKind, Call, Callee, ClassDecl, Decision, Decorated, EnvRead, Export,
-    ExportKind, Import, Imported, Init, Invocation, Lines, Link, Member, MemberKind, Module,
-    Reference, Scope, TestDef, TypeDecl, TypeKind, Use,
+    ExportKind, Import, Imported, Init, Invocation, Link, Member, MemberKind, Module, Reference,
+    Scope, TestDef, TypeDecl, TypeKind, Use,
 };
 
 // An initializer is kept as its head: its first line, cut to this many

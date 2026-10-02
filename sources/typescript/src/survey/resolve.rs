@@ -13,35 +13,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use emery_sdk::serde_json::{self, Value};
+use emery_sdk::survey::resolve::{Target, normalize};
 
 use super::parse::Module;
 use super::{EXTENSIONS, unique};
 
 // The build outputs a manifest may point at in place of their sources.
 const OUTPUT_DIRS: &[&str] = &["dist", "build", "lib", "out"];
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum Target {
-    // By root-relative path.
-    Module(String),
-    // By the specifier as written.
-    Package(String),
-    // By root-relative path, for a `.json` imported by relative or aliased
-    // path.
-    Data(String),
-    // By the specifier as written: a relative or aliased one no module or
-    // data file of the tree answers.
-    Unresolved(String),
-}
-
-impl Target {
-    pub fn module(&self) -> Option<&str> {
-        match self {
-            Self::Module(path) => Some(path),
-            Self::Package(_) | Self::Data(_) | Self::Unresolved(_) => None,
-        }
-    }
-}
 
 #[derive(Debug)]
 pub struct Resolver {
@@ -205,21 +183,6 @@ fn alias<'s>(pattern: &str, specifier: &'s str) -> Option<&'s str> {
         }
         None => (pattern == specifier).then_some(""),
     }
-}
-
-// `None` where `..` climbs above the root.
-pub(super) fn normalize(dir: &str, path: &str) -> Option<String> {
-    let mut segments: Vec<&str> = Vec::new();
-    for segment in dir.split('/').chain(path.split('/')) {
-        match segment {
-            "" | "." => {}
-            ".." => {
-                segments.pop()?;
-            }
-            other => segments.push(other),
-        }
-    }
-    Some(segments.join("/"))
 }
 
 // Comments and trailing commas removed. When `follow`, the file's own

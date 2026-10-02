@@ -23,12 +23,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use emery_sdk::serde_json::{Map, Value};
+use emery_sdk::survey::Lines;
+use emery_sdk::survey::resolve::Target;
+use emery_sdk::survey::tests::Statement;
 use emery_sdk::{Claim, ClaimKind};
 
-use super::parse::{
-    BindingKind, Call, Imported, Init, Lines, MemberKind, Module, Scope, TypeKind, Use,
-};
-use super::resolve::Target;
+use super::parse::{BindingKind, Call, Imported, Init, MemberKind, Module, Scope, TypeKind, Use};
 use super::surface::{Surface, TRACE, Tree};
 use super::{grouped, push_unique};
 
@@ -48,26 +48,8 @@ const CASES: &[&str] = &["it", "test", "specify"];
 // `each` state nothing the run holds.
 const RUNS: &[&str] = &["only", "concurrent", "sequential"];
 
-// The Gherkin keywords that open a feature and a scenario.
-const FEATURE: &str = "Feature:";
-const SCENARIOS: &[&str] = &["Scenario Outline:", "Scenario Template:", "Scenario:", "Example:"];
-
-#[derive(Debug)]
-pub struct Test {
-    pub path: String,
-    // The modules of the tree it imports; for a feature file, the ones the
-    // step modules beside it import.
-    pub imports: Vec<String>,
-    pub statements: Vec<Statement>,
-}
-
-// A case's title under its suites' titles, or a scenario's under its
-// feature's, at the line that states it.
-#[derive(Debug)]
-pub struct Statement {
-    pub text: String,
-    pub line: u32,
-}
+// What a line `statements` lists is, for the stated-behaviours section.
+pub const DESCRIBED: &str = "a case's title under its suites'";
 
 // Each case led by a string, under the suites whose bodies enclose it,
 // outermost first. A skipped, pending, or parameterised one states nothing
@@ -108,28 +90,6 @@ pub fn statements(module: &Module) -> Vec<Statement> {
         .collect()
 }
 
-pub fn scenarios(text: &str) -> Vec<Statement> {
-    let mut feature: Option<&str> = None;
-    let mut statements = Vec::new();
-    for (index, line) in text.lines().enumerate() {
-        let line = line.trim();
-        if let Some(title) = line.strip_prefix(FEATURE) {
-            feature = Some(title.trim());
-            continue;
-        }
-        let Some(title) = SCENARIOS.iter().find_map(|keyword| line.strip_prefix(keyword)) else {
-            continue;
-        };
-        let title = title.trim();
-        statements.push(Statement {
-            text: feature
-                .map_or_else(|| title.to_owned(), |feature| format!("{feature} › {title}")),
-            line: u32::try_from(index + 1).unwrap_or(u32::MAX),
-        });
-    }
-    statements
-}
-
 pub fn decisions<'m>(modules: impl IntoIterator<Item = &'m Module>) -> Option<String> {
     let mut lines: Vec<String> = Vec::new();
     for module in modules {
@@ -163,29 +123,6 @@ pub fn decisions<'m>(modules: impl IntoIterator<Item = &'m Module>) -> Option<St
          a value passed on, a field set, a value computed from the ones in hand — is no \
          requirement's anchor, and what `start` constructs with a boundary's value is one \
          requirement at that construction:\n\n{}",
-        lines.join("\n")
-    ))
-}
-
-pub fn stated<'t>(tests: impl IntoIterator<Item = &'t Test>) -> Option<String> {
-    let lines: Vec<String> = tests
-        .into_iter()
-        .flat_map(|test| {
-            test.statements.iter().map(move |statement| {
-                format!("- `{}#L{}` — {}", test.path, statement.line, statement.text)
-            })
-        })
-        .collect();
-    if lines.is_empty() {
-        return None;
-    }
-    Some(format!(
-        "Behaviours the tree's own tests state, each at its line — a case's title under its \
-         suites', a scenario's under its feature's. One the laid code confirms is a `requirement` \
-         anchored at the code that exhibits it, named for that code, its statement the test's \
-         made present tense; one the code does not hold is not invented. A test is read for what \
-         it states and the values it asserts, and is no `requirement`'s or `criterion`'s \
-         anchor:\n\n{}",
         lines.join("\n")
     ))
 }
