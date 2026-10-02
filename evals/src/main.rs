@@ -57,8 +57,8 @@ use serde_json::Value;
 
 const CASES: &str = "evals/cases";
 const LADDER: &str = "600/120,1200/240,2400/480";
-// The adapter a case runs under when its `expected.toml` names none.
 const DEFAULT_ADAPTER: &str = "typescript";
+const BOOTSTRAP: &str = "start";
 
 // The run's log filter unless the caller sets one: the adapter's own crate
 // at trace beside the SDK's.
@@ -117,8 +117,10 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("eval: case `{}`", case.name);
         let project = stage(&eval_dir.join(&card_name), case, &settings)?;
         let mut runs = Vec::with_capacity(settings.runs);
+
         for n in 1..=settings.runs {
             let mut attempts = Vec::new();
+
             for (index, rung) in settings.ladder.iter().enumerate() {
                 eprintln!("eval: `{}` run {n} at {rung}", case.name);
                 let tag = tag(n, index, *rung);
@@ -129,12 +131,15 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
                     grade: grade(&case.expected, &run),
                     run,
                 });
+
                 if !climb {
                     break;
                 }
             }
+
             runs.push(attempts);
         }
+        
         reports.push(Report { case, runs });
     }
 
@@ -553,11 +558,14 @@ impl Run {
     }
 
     // Where the accepted requirement claims anchor against the surfaces the
-    // survey decided; none when the adapter logged no surface span.
+    // survey decided, the bootstrap set aside — its span is its module or
+    // its guard, not a registration or a declaration; none when the adapter
+    // logged no surface span.
     fn landing(&self) -> Option<Landing> {
         let spans: Vec<(&str, (u64, u64))> = self
             .surveyed
             .iter()
+            .filter(|surface| surface.stem != BOOTSTRAP)
             .filter_map(|surface| Some((surface.entry.as_str(), surface.span()?)))
             .collect();
         if spans.is_empty() {
@@ -661,11 +669,12 @@ impl Run {
     }
 }
 
-// Where the accepted requirement claims land against the surfaces: covering
-// a surface's own first line — the span a requirement over a whole handler
-// takes, from its decorator or registration — inside a surface's span past
-// that line, or outside every surface. What an arm over the anchor set is
-// read by.
+// Where the accepted requirement claims land against the registered or
+// declared surfaces: covering a surface's own first line — the span a
+// requirement over a whole handler takes, from its decorator or
+// registration — inside a surface's span past that line, or outside every
+// surface (the bootstrap's module among the outside). What an arm over the
+// anchor set is read by.
 #[derive(Debug, Default, PartialEq, Eq)]
 struct Landing {
     head: usize,
@@ -1711,10 +1720,11 @@ mod tests {
         assert_eq!(
             run.landing(),
             Some(Landing {
-                head: 3,
+                head: 2,
                 inside: 2,
-                outside: 2
-            })
+                outside: 3
+            }),
+            "the bootstrap's span is set aside, so `start.boot` at its line is outside"
         );
 
         let unlined = run_from(Some(0), &accepted_line(&claims));
