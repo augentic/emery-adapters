@@ -28,6 +28,10 @@ pub fn value(text: &str) -> SourceInput {
 }
 
 /// Asserts the metadata's `emery_version`, where it carries one, is exact semver.
+///
+/// # Panics
+///
+/// Panics when `emery_version` is present and not an exact semver.
 pub fn check_metadata(metadata: &AdapterMetadata) {
     if let Some(version) = &metadata.emery_version {
         assert!(
@@ -38,6 +42,10 @@ pub fn check_metadata(metadata: &AdapterMetadata) {
 }
 
 /// Asserts the evidence carries claims and passes the claim gate.
+///
+/// # Panics
+///
+/// Panics when the evidence carries no claims or the claim gate reports findings.
 pub fn check_evidence(evidence: &Evidence) {
     assert!(!evidence.claims.is_empty(), "evidence carries no claims");
 
@@ -46,6 +54,10 @@ pub fn check_evidence(evidence: &Evidence) {
 }
 
 /// Asserts `actual` carries `expected`'s claims, field by field and in order.
+///
+/// # Panics
+///
+/// Panics when claim count or any claim field differs from `expected`.
 pub fn check_same(expected: &Evidence, actual: &Evidence) {
     assert_eq!(actual.claims.len(), expected.claims.len(), "claim count");
     for (index, (want, got)) in expected.claims.iter().zip(&actual.claims).enumerate() {
