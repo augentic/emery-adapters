@@ -10,7 +10,7 @@ Human-facing contributor guide (toolchain, layout, prompts, pin, publishing). Th
 
 For the adapter SDK's type-level contract (`extract`, the `workspace` helpers, the contract types, the answer schemas), generate the docs locally: `cargo doc -p emery-sdk --open`; the `export` module — the world an adapter's guest implements — documents under `--target wasm32-wasip2`.
 
-Unless you are fixing a known bug, discuss larger changes in a GitHub issue first. Legal / DCO expectations match the engine repo — see [emery CONTRIBUTING](https://github.com/augentic/emery/blob/main/CONTRIBUTING.md).
+Unless you are fixing a known bug, discuss larger changes in a GitHub issue first. Every commit accepts the [Developer's Certificate of Origin](#developers-certificate-of-origin).
 
 ### Troubleshooting first runs
 
@@ -73,7 +73,7 @@ cargo build -p <name> --target wasm32-wasip2 --release   # one adapter → targe
 cargo build --workspace --target wasm32-wasip2 --release   # every adapter
 ```
 
-The tasks are the shared [`augentic/.github`](https://github.com/augentic/.github) `mise/rust.toml`, pinned in [`mise.toml`](mise.toml) to the same tag the workflows under `.github/workflows/` use; bump both together. The `fmt` arm uses nightly `rustfmt`. `make lint` runs clippy under `-D warnings` natively first (`lint-host`: all targets with all features, then each feature through `cargo hack`), then — since the guest side, the programs under `crates/test-programs/programs/` and the adapters' `survey` and `guest` modules, is `cfg(target_arch = "wasm32")` and native clippy compiles it to nothing — the shared `lint-wasm` pass for `wasm32-wasip2`, the target it ships on, where `clippy.toml`'s guest deny-list applies: every workspace lib, bin and example, never tests or benches (the third command above is its first half). The root package and the `evals` harness are native, so they contribute nothing to that pass and need no exclusion. `make vet` is check-only; regenerate audit inputs with `make vet-regen`. The component suites are the Rust inner loop and prove every built component under the omnia runtime, each adapter's own decisions included; `emery specify --config examples/<name>/emery.toml` walks one adapter live through the shipped `emery` binary and the Cursor backend ([examples/README.md](examples/README.md)); the graded live eval, `cargo run -p evals` over the cases under `evals/cases/`, proves prompt quality end to end and writes the dated scorecard ([evals/README.md](evals/README.md)).
+The tasks are the shared `mise/rust.toml` of [`augentic/toolkit`](https://github.com/augentic/toolkit), pinned in [`mise.toml`](mise.toml) to the tag every `uses:` under `.github/workflows/` names; a bump is one pull request over both, and `make conventions-check` holds them together. The `fmt` arm uses nightly `rustfmt`. `make lint` runs clippy under `-D warnings` natively first (`lint-host`: all targets with all features, then each feature through `cargo hack`), then — since the guest side, the programs under `crates/test-programs/programs/` and the adapters' `survey` and `guest` modules, is `cfg(target_arch = "wasm32")` and native clippy compiles it to nothing — the shared `lint-wasm` pass for `wasm32-wasip2`, the target it ships on, where `clippy.toml`'s guest deny-list applies: every workspace lib, bin and example, never tests or benches (the third command above is its first half). The root package and the `evals` harness are native, so they contribute nothing to that pass and need no exclusion. `make vet` is check-only; regenerate audit inputs with `make vet-regen`. The component suites are the Rust inner loop and prove every built component under the omnia runtime, each adapter's own decisions included; `emery specify --config examples/<name>/emery.toml` walks one adapter live through the shipped `emery` binary and the Cursor backend ([examples/README.md](examples/README.md)); the graded live eval, `cargo run -p evals` over the cases under `evals/cases/`, proves prompt quality end to end and writes the dated scorecard ([evals/README.md](evals/README.md)).
 
 ## Publishing
 
@@ -102,14 +102,91 @@ cargo build --workspace --target wasm32-wasip2 --release
 make publish <name>
 ```
 
-## Before you open a PR
+<!-- conventions:begin contributing/dco -->
+## Developer's Certificate of Origin
 
-1. Branch off `main`.
-2. Run `make ci` (or say exactly which narrower checks ran and why the full gate was unavailable).
-3. A behavior the adapter itself decides goes in the root `tests/source.rs`, asserted through the built component; the component boundary is `tests/probe.rs`'s. Never pin a prompt phrase, and never widen `pub` surface — or compile a module natively — solely for a test.
-4. Do not commit built `.wasm` artifacts.
+All contributions must include acceptance of the [DCO](https://developercertificate.org/):
+
+```text
+Developer Certificate of Origin
+Version 1.1
+
+Copyright (C) 2004, 2006 The Linux Foundation and its contributors.
+660 York Street, Suite 102,
+San Francisco, CA 94110 USA
+
+Everyone is permitted to copy and distribute verbatim copies of this
+license document, but changing it is not allowed.
+
+
+Developer's Certificate of Origin 1.1
+
+By making a contribution to this project, I certify that:
+
+(a) The contribution was created in whole or in part by me and I
+    have the right to submit it under the open source license
+    indicated in the file; or
+
+(b) The contribution is based upon previous work that, to the best
+    of my knowledge, is covered under an appropriate open source
+    license and I have the right under that license to submit that
+    work with modifications, whether created in whole or in part
+    by me, under the same open source license (unless I am
+    permitted to submit under a different license), as indicated
+    in the file; or
+
+(c) The contribution was provided directly to me by some other
+    person who certified (a), (b) or (c) and I have not modified
+    it.
+
+(d) I understand and agree that this project and the contribution
+    are public and that a record of the contribution (including all
+    personal information I submit with it, including my sign-off) is
+    maintained indefinitely and may be redistributed consistent with
+    this project or the open source license(s) involved.
+```
+
+To accept the DCO, add this line to each commit message with your name and email address (`git commit -s` will do this for you):
+
+```text
+Signed-off-by: Jane Example <jane@example.com>
+```
+
+For legal reasons, no anonymous or pseudonymous contributions are accepted; open a GitHub issue if this is a problem for you.
+<!-- conventions:end contributing/dco -->
+
+<!-- conventions:begin contributing/pull-requests -->
+## Pull request procedure
+
+Pull requests should be targeted at the `main` branch. Before creating a pull request, go through this checklist:
+
+1. Create a feature branch off of `main`.
+2. [Rebase](https://git-scm.com/book/en/Git-Branching-Rebasing) your local changes against `main`.
+3. Run `make ci` and confirm that it passes: exactly the CI jobs, in order.
+4. Accept the Developer's Certificate of Origin on all commits (see above).
+
+All contributions are made via pull request. All patches from all contributors get reviewed. At least one review from a maintainer is required for all patches (even patches from maintainers). When CI fails, authors are expected to update the pull request until it passes.
+
+Normally, all pull requests must include tests that cover your change. Occasionally, a change will be very difficult to test for; in those cases, include a note in your commit message explaining why.
+<!-- conventions:end contributing/pull-requests -->
+
+Tests here cover a change at its public boundary: a behaviour the adapter itself decides goes in the root `tests/source.rs`, asserted through the built component; the component boundary is `tests/probe.rs`'s. Never pin a prompt phrase, and never widen `pub` surface — or compile a module natively — solely for a test. Do not commit built `.wasm` artifacts.
+
+<!-- conventions:begin contributing/conduct -->
+## Conduct
+
+Whether you are a regular contributor or a newcomer, we care about making this community a safe place for you and we've got your back.
+
+- We are committed to providing a friendly, safe and welcoming environment for all, regardless of gender, sexual orientation, disability, ethnicity, religion, or similar personal characteristic.
+- Be kind and courteous. There is no need to be mean or rude.
+- We will exclude you from interaction if you insult, demean or harass anyone. In particular, we do not tolerate behavior that excludes people in socially marginalized groups.
+- Private harassment is also unacceptable. If you feel you have been or are being harassed or made uncomfortable by a community member, please contact a member of the core team immediately.
+- Likewise any spamming, trolling, flaming, baiting or other attention-stealing behaviour is not welcome.
+
+We welcome discussion about creating a welcoming, safe, and productive environment for the community. If you have any questions, feedback, or concerns please let us know with a GitHub issue. The [Code of Conduct](CODE_OF_CONDUCT.md) applies throughout.
+<!-- conventions:end contributing/conduct -->
 
 ## See also
 
 - [AGENTS.md](AGENTS.md) — vocabulary, component contract, test ownership, agent commands
-- [emery CONTRIBUTING](https://github.com/augentic/emery/blob/main/CONTRIBUTING.md) — DCO and org contribution norms
+- [emery CONTRIBUTING](https://github.com/augentic/emery/blob/main/CONTRIBUTING.md) — the engine repository's guide

@@ -1,3 +1,6 @@
+//! A `source-adapter` probe that refuses every input as `bad_request`, so the
+//! suite can see a guest's typed refusal lift to its omnia class.
+
 #![cfg(target_arch = "wasm32")]
 
 use std::future::{Future, ready};

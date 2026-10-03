@@ -1,3 +1,6 @@
+//! A `source-adapter` probe that fails every input as `bad_gateway`, so the
+//! suite can see an upstream failure lift to its omnia class.
+
 #![cfg(target_arch = "wasm32")]
 
 use std::future::{Future, ready};
