@@ -11,41 +11,27 @@
 //! What the tree does not answer is a package, third-party and standard
 //! library alike, unless its first segment is a package of the tree's own.
 //! That import is `Target::Unresolved`, never dropped, so the survey can say
-//! what it could not follow and widen what it lays. Imports are settled
-//! once, after the tree is read, and carried on the module.
+//! what it could not follow and widen what it lays; one reaching a test
+//! module the keep set aside is `Target::Skipped`, known and followed
+//! nowhere. A load by a computed name is settled to the directory its
+//! literal head or the walked package leads into. Imports are settled once,
+//! after the tree is read, and carried on the module.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use super::parse::{Imported, Module};
+use emery_sdk::survey::code::{self, Imported};
+use emery_sdk::survey::resolve::{Target, normalize};
+
+use super::parse::Module;
 use super::unique;
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum Target {
-    // By root-relative path.
-    Module(String),
-    // By top-level name: `fastapi` for `fastapi.routing`.
-    Package(String),
-    // By root-relative path, for a data file a string names.
-    Data(String),
-    // By the specifier as written: a relative import naming nothing, or an
-    // absolute one beneath a package of the tree's own whose module is
-    // absent.
-    Unresolved(String),
-}
-
-impl Target {
-    pub fn module(&self) -> Option<&str> {
-        match self {
-            Self::Module(path) => Some(path),
-            Self::Package(_) | Self::Data(_) | Self::Unresolved(_) => None,
-        }
-    }
-}
 
 #[derive(Debug)]
 pub struct Resolver {
     modules: BTreeSet<String>,
+    // The test modules the keep set aside, which a production module may
+    // still import.
+    tests: BTreeSet<String>,
     data: BTreeSet<String>,
     // Root-relative, `""` for the root itself.
     roots: Vec<String>,
@@ -59,7 +45,7 @@ impl Resolver {
     // `owned` is the manifest's name, when it has one.
     pub fn new(
         modules: impl IntoIterator<Item = String>, data: impl IntoIterator<Item = String>,
-        owned: Option<&str>,
+        tests: impl IntoIterator<Item = String>, owned: Option<&str>,
     ) -> Self {
         let modules: BTreeSet<String> = modules.into_iter().collect();
         let packages: BTreeSet<&str> =
@@ -100,6 +86,7 @@ impl Resolver {
 
         Self {
             modules,
+            tests: tests.into_iter().collect(),
             data: data.into_iter().collect(),
             roots,
             owned,
@@ -111,16 +98,26 @@ impl Resolver {
         let from = module.path.clone();
         for import in &mut module.imports {
             import.target = match &import.imported {
-                Imported::Literal => self.literal(&from, &import.specifier),
+                Imported::Effect => self.literal(&from, &import.specifier),
                 Imported::Named(name) => self.resolve(&from, &import.specifier, Some(name)),
-                Imported::Module | Imported::Star => self.resolve(&from, &import.specifier, None),
+                Imported::Default | Imported::Whole | Imported::Star => {
+                    self.resolve(&from, &import.specifier, None)
+                }
             };
         }
         module
             .imports
-            .retain(|import| import.imported != Imported::Literal || import.target.is_some());
+            .retain(|import| import.imported != Imported::Effect || import.target.is_some());
         for reexport in &mut module.reexports {
             reexport.target = self.resolve(&from, &reexport.specifier, None);
+        }
+        let scopes: Vec<Option<String>> = module
+            .dynamic
+            .iter()
+            .map(|load| load.specifier.as_deref().and_then(|spelled| self.scope(module, spelled)))
+            .collect();
+        for (load, scope) in module.dynamic.iter_mut().zip(scopes) {
+            load.scope = scope;
         }
     }
 
@@ -139,13 +136,22 @@ impl Resolver {
                 dir = dir.rsplit_once('/').map_or("", |(parent, _)| parent);
             }
             let base = join(dir, &rest.replace('.', "/"));
-            return self.module_at(&base, name).map(Target::Module).or_else(unresolved);
+            return self
+                .module_at(&base, name)
+                .map(Target::Module)
+                .or_else(|| self.test_at(&base, name).map(Target::Skipped))
+                .or_else(unresolved);
         }
 
         let path = specifier.replace('.', "/");
         for root in &self.roots {
             if let Some(found) = self.module_at(&join(root, &path), name) {
                 return Some(Target::Module(found));
+            }
+        }
+        for root in &self.roots {
+            if let Some(found) = self.test_at(&join(root, &path), name) {
+                return Some(Target::Skipped(found));
             }
         }
         let first = specifier.split('.').next().unwrap_or(specifier);
@@ -237,20 +243,34 @@ impl Resolver {
     // `name` is probed as a submodule first, as the interpreter probes it.
     fn module_at(&self, base: &str, name: Option<&str>) -> Option<String> {
         if let Some(name) = name
-            && let Some(found) = self.file_or_init(&join(base, name))
+            && let Some(found) = file_or_init(&self.modules, &join(base, name))
         {
             return Some(found);
         }
-        self.file_or_init(base)
+        file_or_init(&self.modules, base)
     }
 
-    fn file_or_init(&self, base: &str) -> Option<String> {
-        if base.is_empty() {
-            return None;
+    // `module_at`, over the test modules the keep set aside.
+    fn test_at(&self, base: &str, name: Option<&str>) -> Option<String> {
+        if let Some(name) = name
+            && let Some(found) = file_or_init(&self.tests, &join(base, name))
+        {
+            return Some(found);
         }
-        [format!("{base}.py"), format!("{base}/__init__.py")]
-            .into_iter()
-            .find(|path| self.modules.contains(path))
+        file_or_init(&self.tests, base)
+    }
+
+    // The directory a computed load leads into: the package the dotted name
+    // it spells is, beneath the first root holding one, else the package
+    // that name is imported as.
+    fn scope(&self, module: &Module, spelled: &str) -> Option<String> {
+        let path = spelled.replace('.', "/");
+        if let Some(base) =
+            self.roots.iter().map(|root| join(root, &path)).find(|base| self.holds_package(base))
+        {
+            return Some(base);
+        }
+        module.imported(spelled)?.strip_suffix("/__init__.py").map(str::to_owned)
     }
 
     // A namespace package: a directory of modules with no `__init__`.
@@ -259,27 +279,21 @@ impl Resolver {
     }
 }
 
+fn file_or_init(among: &BTreeSet<String>, base: &str) -> Option<String> {
+    if base.is_empty() {
+        return None;
+    }
+    [format!("{base}.py"), format!("{base}/__init__.py")]
+        .into_iter()
+        .find(|path| among.contains(path))
+}
+
 fn join(dir: &str, path: &str) -> String {
     match (dir.is_empty(), path.is_empty()) {
         (true, _) => path.to_owned(),
         (false, true) => dir.to_owned(),
         (false, false) => format!("{dir}/{path}"),
     }
-}
-
-// `None` where `..` climbs above the root.
-pub(super) fn normalize(dir: &str, path: &str) -> Option<String> {
-    let mut segments: Vec<&str> = Vec::new();
-    for segment in dir.split('/').chain(path.split('/')) {
-        match segment {
-            "" | "." => {}
-            ".." => {
-                segments.pop()?;
-            }
-            other => segments.push(other),
-        }
-    }
-    Some(segments.join("/"))
 }
 
 #[derive(Debug, Default)]
@@ -329,8 +343,29 @@ impl Manifest {
         manifest
     }
 
+    // What the facts say of the manifest, and the modules its scripts name.
+    pub fn summary(&self, resolver: &Resolver) -> code::Manifest {
+        let mut says: Vec<String> = Vec::new();
+        if let Some(name) = &self.name {
+            says.push(format!("names the package `{name}`"));
+        }
+        if !self.scripts.is_empty() {
+            let scripts: Vec<String> = self
+                .scripts
+                .iter()
+                .map(|(name, target)| format!("`{name}` runs `{target}`"))
+                .collect();
+            says.push(format!("installs the console scripts {}", scripts.join(", ")));
+        }
+        code::Manifest {
+            name: self.name.clone(),
+            says,
+            entries: self.targets(resolver).into_iter().map(|(module, _)| module).collect(),
+        }
+    }
+
     // In script order, once each, with the function each target names.
-    pub fn entries(&self, resolver: &Resolver) -> Vec<(String, Option<String>)> {
+    pub fn targets(&self, resolver: &Resolver) -> Vec<(String, Option<String>)> {
         unique(self.scripts.values().filter_map(|target| {
             let module = resolver.entry(target)?;
             let function = target.split_once(':').map(|(_, function)| function.trim().to_owned());

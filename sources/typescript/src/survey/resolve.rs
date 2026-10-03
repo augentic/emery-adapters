@@ -6,13 +6,18 @@
 //! specifier may spell, and a bare specifier no mapping answers is a
 //! package. A relative or aliased specifier the tree does not answer is
 //! `Unresolved`, never dropped, so the survey can say what it could not
-//! follow and widen what it lays. Each module's imports are settled once the
-//! tree is read and carried on the module.
+//! follow and widen what it lays; one reaching a test module the keep set
+//! aside is `Skipped`, known and followed nowhere. A load by a computed
+//! name is settled to the directory its literal head leads into. Each
+//! module's imports are settled once the tree is read and carried on the
+//! module.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use emery_sdk::serde_json::{self, Value};
+use emery_sdk::survey::code;
+use emery_sdk::survey::resolve::{Target, normalize};
 
 use super::parse::Module;
 use super::{EXTENSIONS, unique};
@@ -20,32 +25,12 @@ use super::{EXTENSIONS, unique};
 // The build outputs a manifest may point at in place of their sources.
 const OUTPUT_DIRS: &[&str] = &["dist", "build", "lib", "out"];
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum Target {
-    // By root-relative path.
-    Module(String),
-    // By the specifier as written.
-    Package(String),
-    // By root-relative path, for a `.json` imported by relative or aliased
-    // path.
-    Data(String),
-    // By the specifier as written: a relative or aliased one no module or
-    // data file of the tree answers.
-    Unresolved(String),
-}
-
-impl Target {
-    pub fn module(&self) -> Option<&str> {
-        match self {
-            Self::Module(path) => Some(path),
-            Self::Package(_) | Self::Data(_) | Self::Unresolved(_) => None,
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct Resolver {
     modules: BTreeSet<String>,
+    // The test modules the keep set aside, which a production module may
+    // still import.
+    tests: BTreeSet<String>,
     data: BTreeSet<String>,
     // Root-relative, `""` for the root itself.
     base_url: Option<String>,
@@ -59,10 +44,11 @@ impl Resolver {
     // read.
     pub fn new(
         modules: impl IntoIterator<Item = String>, data: impl IntoIterator<Item = String>,
-        root: &Path,
+        tests: impl IntoIterator<Item = String>, root: &Path,
     ) -> Self {
         let mut resolver = Self {
             modules: modules.into_iter().collect(),
+            tests: tests.into_iter().collect(),
             data: data.into_iter().collect(),
             base_url: None,
             paths: Vec::new(),
@@ -94,6 +80,10 @@ impl Resolver {
         }
         for reexport in &mut module.reexports {
             reexport.target = self.resolve(&from, &reexport.specifier);
+        }
+        let dir = from.rsplit_once('/').map_or("", |(dir, _)| dir);
+        for load in &mut module.dynamic {
+            load.scope = load.specifier.as_deref().and_then(|spelled| normalize(dir, spelled));
         }
     }
 
@@ -158,7 +148,7 @@ impl Resolver {
     }
 
     // A module first, else a data file as written or with the `.json` a
-    // `require` may leave off.
+    // `require` may leave off, else a test module the keep set aside.
     fn file(&self, candidate: &str) -> Option<Target> {
         if let Some(module) = self.probe(candidate) {
             return Some(Target::Module(module));
@@ -167,34 +157,39 @@ impl Resolver {
             .into_iter()
             .find(|path| self.data.contains(path))
             .map(Target::Data)
+            .or_else(|| probe(&self.tests, candidate).map(Target::Skipped))
     }
 
-    // As written, with a source extension in place of the one it has or
-    // lacks, or as a directory's `index`.
     fn probe(&self, candidate: &str) -> Option<String> {
-        if self.modules.contains(candidate) {
-            return Some(candidate.to_owned());
-        }
-        let (dir, file) = candidate.rsplit_once('/').map_or(("", candidate), |(d, f)| (d, f));
-        let stem = match file.rsplit_once('.') {
-            Some((stem, extension)) if EXTENSIONS.contains(&extension) => stem,
-            _ => file,
-        };
-        let prefix = if dir.is_empty() { String::new() } else { format!("{dir}/") };
-        for extension in EXTENSIONS {
-            let path = format!("{prefix}{stem}.{extension}");
-            if self.modules.contains(&path) {
-                return Some(path);
-            }
-        }
-        for extension in EXTENSIONS {
-            let path = format!("{candidate}/index.{extension}");
-            if self.modules.contains(&path) {
-                return Some(path);
-            }
-        }
-        None
+        probe(&self.modules, candidate)
     }
+}
+
+// As written, with a source extension in place of the one it has or lacks,
+// or as a directory's `index`.
+fn probe(among: &BTreeSet<String>, candidate: &str) -> Option<String> {
+    if among.contains(candidate) {
+        return Some(candidate.to_owned());
+    }
+    let (dir, file) = candidate.rsplit_once('/').map_or(("", candidate), |(d, f)| (d, f));
+    let stem = match file.rsplit_once('.') {
+        Some((stem, extension)) if EXTENSIONS.contains(&extension) => stem,
+        _ => file,
+    };
+    let prefix = if dir.is_empty() { String::new() } else { format!("{dir}/") };
+    for extension in EXTENSIONS {
+        let path = format!("{prefix}{stem}.{extension}");
+        if among.contains(&path) {
+            return Some(path);
+        }
+    }
+    for extension in EXTENSIONS {
+        let path = format!("{candidate}/index.{extension}");
+        if among.contains(&path) {
+            return Some(path);
+        }
+    }
+    None
 }
 
 // What the pattern's `*` stood for, or the empty string for an exact match.
@@ -205,21 +200,6 @@ fn alias<'s>(pattern: &str, specifier: &'s str) -> Option<&'s str> {
         }
         None => (pattern == specifier).then_some(""),
     }
-}
-
-// `None` where `..` climbs above the root.
-pub(super) fn normalize(dir: &str, path: &str) -> Option<String> {
-    let mut segments: Vec<&str> = Vec::new();
-    for segment in dir.split('/').chain(path.split('/')) {
-        match segment {
-            "" | "." => {}
-            ".." => {
-                segments.pop()?;
-            }
-            other => segments.push(other),
-        }
-    }
-    Some(segments.join("/"))
 }
 
 // Comments and trailing commas removed. When `follow`, the file's own
@@ -351,9 +331,36 @@ impl Manifest {
         }
     }
 
+    // What the facts say of the manifest, and the modules its entries name.
+    pub fn summary(&self, resolver: &Resolver) -> code::Manifest {
+        let mut says: Vec<String> = Vec::new();
+        if let Some(name) = &self.name {
+            says.push(format!("names the package `{name}`"));
+        }
+        if let Some(main) = &self.main {
+            says.push(format!("`main` is `{main}`"));
+        }
+        if let Some(bin) = &self.bin {
+            says.push(format!("`bin` is `{bin}`"));
+        }
+        if !self.scripts.is_empty() {
+            let scripts: Vec<String> = self
+                .scripts
+                .iter()
+                .map(|(name, command)| format!("`{name}` runs `{command}`"))
+                .collect();
+            says.push(format!("scripts: {}", scripts.join(", ")));
+        }
+        code::Manifest {
+            name: self.name.clone(),
+            says,
+            entries: self.entries(resolver),
+        }
+    }
+
     // In manifest order, once each: `main`, `bin`, then the sources the
     // `start` and `dev` scripts run.
-    pub fn entries(&self, resolver: &Resolver) -> Vec<String> {
+    fn entries(&self, resolver: &Resolver) -> Vec<String> {
         let scripts = ["start", "dev"].into_iter().flat_map(|script| {
             self.scripts.get(script).into_iter().flat_map(|command| {
                 command.split_whitespace().filter(|word| {
