@@ -7,9 +7,7 @@ includes = ["git::https://github.com/augentic/toolkit.git//mise/rust.toml?ref=v0
 # The shared `lint-wasm` pass is over the guest side alone — every adapter
 # and the guest programs — because the root package and the `evals` harness
 # are native: the suites and the runner name host-only dependencies.
-# Mirrors `wasm-packages` in conventions.toml, which renders
-# .github/workflows/ci.yaml; a new adapter is named in both, and
-# `make conventions-check` holds the two together.
+# Add a new adapter here when it ships as a wasm32 guest component.
 [env]
 WASM32_PACKAGES = "documentation intent python typescript test-programs"
 
