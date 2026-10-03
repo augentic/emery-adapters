@@ -73,7 +73,7 @@ cargo build -p <name> --target wasm32-wasip2 --release   # one adapter → targe
 cargo build --workspace --target wasm32-wasip2 --release   # every adapter
 ```
 
-The tasks are the shared `mise/rust.toml` of [`augentic/toolkit`](https://github.com/augentic/toolkit), pinned in [`mise.toml`](mise.toml) to the tag every `uses:` under `.github/workflows/` names; a bump is one pull request over both, and `make conventions-check` holds them together. The `fmt` arm uses nightly `rustfmt`. `make lint` runs clippy under `-D warnings` natively first (`lint-host`: all targets with all features, then each feature through `cargo hack`), then — since the guest side, the programs under `crates/test-programs/programs/` and the adapters' `survey` and `guest` modules, is `cfg(target_arch = "wasm32")` and native clippy compiles it to nothing — the shared `lint-wasm` pass for `wasm32-wasip2`, the target it ships on, where `clippy.toml`'s guest deny-list applies: every workspace lib, bin and example, never tests or benches (the third command above is its first half). The root package and the `evals` harness are native, so they contribute nothing to that pass and need no exclusion. `make vet` is check-only; regenerate audit inputs with `make vet-regen`. The component suites are the Rust inner loop and prove every built component under the omnia runtime, each adapter's own decisions included; `emery specify --config examples/<name>/emery.toml` walks one adapter live through the shipped `emery` binary and the Cursor backend ([examples/README.md](examples/README.md)); the graded live eval, `cargo run -p evals` over the cases under `evals/cases/`, proves prompt quality end to end and writes the dated scorecard ([evals/README.md](evals/README.md)).
+The tasks are the shared `mise/rust.toml` of [`augentic/toolkit`](https://github.com/augentic/toolkit), pinned in [`mise.toml`](mise.toml) to the tag every `uses:` under `.github/workflows/` names; bump both in one pull request when the pin moves. The `fmt` arm uses nightly `rustfmt`. `make lint` runs clippy under `-D warnings` natively first (`lint-host`: all targets with all features, then each feature through `cargo hack`), then — since the guest side, the programs under `crates/test-programs/programs/` and the adapters' `survey` and `guest` modules, is `cfg(target_arch = "wasm32")` and native clippy compiles it to nothing — the shared `lint-wasm` pass for `wasm32-wasip2`, the target it ships on, where `clippy.toml`'s guest deny-list applies: every workspace lib, bin and example, never tests or benches (the third command above is its first half). The root package and the `evals` harness are native, so they contribute nothing to that pass and need no exclusion. `make vet` is check-only; regenerate audit inputs with `make vet-regen`. The component suites are the Rust inner loop and prove every built component under the omnia runtime, each adapter's own decisions included; `emery specify --config examples/<name>/emery.toml` walks one adapter live through the shipped `emery` binary and the Cursor backend ([examples/README.md](examples/README.md)); the graded live eval, `cargo run -p evals` over the cases under `evals/cases/`, proves prompt quality end to end and writes the dated scorecard ([evals/README.md](evals/README.md)).
 
 ## Publishing
 
@@ -102,8 +102,6 @@ cargo build --workspace --target wasm32-wasip2 --release
 make publish <name>
 ```
 
-<!-- BEGIN Managed by augentic/toolkit: conventions/contributing/dco.md -->
-<!-- Do not edit: run `make conventions-sync`. -->
 ## Developer's Certificate of Origin
 
 All contributions must include acceptance of the [DCO](https://developercertificate.org/):
@@ -154,10 +152,7 @@ Signed-off-by: Jane Example <jane@example.com>
 ```
 
 For legal reasons, no anonymous or pseudonymous contributions are accepted; open a GitHub issue if this is a problem for you.
-<!-- END Managed by augentic/toolkit: conventions/contributing/dco.md -->
 
-<!-- BEGIN Managed by augentic/toolkit: conventions/contributing/pull-requests.md -->
-<!-- Do not edit: run `make conventions-sync`. -->
 ## Pull request procedure
 
 Pull requests should be targeted at the `main` branch. Before creating a pull request, go through this checklist:
@@ -170,12 +165,9 @@ Pull requests should be targeted at the `main` branch. Before creating a pull re
 All contributions are made via pull request. All patches from all contributors get reviewed. At least one review from a maintainer is required for all patches (even patches from maintainers). When CI fails, authors are expected to update the pull request until it passes.
 
 Normally, all pull requests must include tests that cover your change. Occasionally, a change will be very difficult to test for; in those cases, include a note in your commit message explaining why.
-<!-- END Managed by augentic/toolkit: conventions/contributing/pull-requests.md -->
 
 Tests here cover a change at its public boundary: a behaviour the adapter itself decides goes in the root `tests/source.rs`, asserted through the built component; the component boundary is `tests/probe.rs`'s. Never pin a prompt phrase, and never widen `pub` surface — or compile a module natively — solely for a test. Do not commit built `.wasm` artifacts.
 
-<!-- BEGIN Managed by augentic/toolkit: conventions/contributing/conduct.md -->
-<!-- Do not edit: run `make conventions-sync`. -->
 ## Conduct
 
 Whether you are a regular contributor or a newcomer, we care about making this community a safe place for you and we've got your back.
@@ -187,7 +179,6 @@ Whether you are a regular contributor or a newcomer, we care about making this c
 - Likewise any spamming, trolling, flaming, baiting or other attention-stealing behaviour is not welcome.
 
 We welcome discussion about creating a welcoming, safe, and productive environment for the community. If you have any questions, feedback, or concerns please let us know with a GitHub issue. The [Code of Conduct](CODE_OF_CONDUCT.md) applies throughout.
-<!-- END Managed by augentic/toolkit: conventions/contributing/conduct.md -->
 
 ## See also
 

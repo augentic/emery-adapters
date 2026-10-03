@@ -2,13 +2,12 @@
 # Run: `mise run <task>` (the root Makefile forwards `make <task>` here)
 
 [task_config]
-includes = ["git::https://github.com/augentic/toolkit.git//mise/rust.toml?ref=v0.4.0"]
+includes = ["git::https://github.com/augentic/toolkit.git//mise/rust.toml?ref=v0.5.0"]
 
 # The shared `lint-wasm` pass is over the guest side alone — every adapter
 # and the guest programs — because the root package and the `evals` harness
 # are native: the suites and the runner name host-only dependencies.
-# The `wasm-packages` input of .github/workflows/ci.yaml carries the same
-# list; a new adapter is named in both.
+# Add a new adapter here when it ships as a wasm32 guest component.
 [env]
 WASM32_PACKAGES = "documentation intent python typescript test-programs"
 

@@ -20,7 +20,6 @@ ignore = []
 # suites pull in (rustls / aws-lc-rs / opentelemetry) carries the
 # ISC / LLVM-exception / CDLA / CC0 entries beyond this repo's original
 # extension-only set.
-
 [licenses]
 allow = [
   "Apache-2.0 WITH LLVM-exception",

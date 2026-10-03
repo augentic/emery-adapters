@@ -2,12 +2,9 @@
 
 Emery's first-party **source adapters**. Each `sources/<name>` is one crate shipping as one WebAssembly component that exports the `source-adapter` world of the `emery:adapter` WIT package: `metadata`, and `extract(SourceInput) -> Evidence` — a typed `SourceInput` (a name and a workspace or inline value) in, one Evidence document of typed claims out. The contract, vocabulary, and coding standards are the engine repository's ([`augentic/emery` AGENTS.md](https://github.com/augentic/emery/blob/main/AGENTS.md)); this repository owns extraction behaviour and prose. The v1 tree is archived at git tag `v1`.
 
-<!-- BEGIN Managed by augentic/toolkit: conventions/agents/git.md -->
-<!-- Do not edit: run `make conventions-sync`. -->
 ## Git
 
 Never `git commit`, `git push`, open or close a pull request, or delete a branch — in this repository or in any sibling checkout — unless the maintainer lifts this for the session, explicitly and for named work. Leave every change uncommitted in the working tree; the maintainer reviews and commits. No plan or to-do list carries a commit, push, or PR step, and an instruction to complete every step does not override this.
-<!-- END Managed by augentic/toolkit: conventions/agents/git.md -->
 
 ## Map
 
@@ -30,8 +27,6 @@ The root `emery-adapters` package is tests only; it names each adapter crate as 
 - `prose/extract.md` is the one extraction pass: at most 800 non-blank lines, with a `## Worked example` JSON fence that parses as the SDK's `Evidence` (claims alone — the kind of source is the adapter's metadata, never the answer's) and passes the claim gate — `tests/prose.rs` enforces both. Where an adapter has the model name its surfaces, `prose/survey.md` is the one survey prompt, under the same cap, with a `## Worked example` JSON fence that parses as the SDK's `Inventory`, every anchor in the `path` grammar and every stem kebab-case — `tests/prose.rs` enforces those the same way. There is no third prompt: what a survey lays into a turn — the facts it read for the survey, the seam's `text` for the extraction — the prompt describes under its inputs, so the model is told how to read what code found, never how to find it. Every document under `prose/references/examples/` other than `README.md` is a worked example: its `## Evidence` JSON fence parses as `Evidence` and passes the gate, enforced the same way. References are written for the model in the adapter's current contract — what to read, which claims to emit — never addressed to a contributor. References are linked, never inlined, and every link names a document in `PROSE` or one of the SDK's runtime references (`claims.md`, `reconciliation.md`, from a prompt at the `prose/` root) — a directory or an unlisted file is unreadable through `read_doc`, and `tests/prose.rs` refuses it — and every document in `PROSE` is reached from a prompt by those links, or `tests/prose.rs` refuses that too: what nothing links is embedded and never read. A rule the SDK's references state is linked, never restated. Contributor guidance never goes in the embedded corpus.
 - Do not commit built `.wasm` artifacts.
 
-<!-- BEGIN Managed by augentic/toolkit: conventions/agents/code-style.md -->
-<!-- Do not edit: run `make conventions-sync`. -->
 ## Code style
 
 clippy (`make lint`) and nightly rustfmt (`make fmt`) are the style gate; beyond them and the rules below, match the surrounding code.
@@ -39,10 +34,7 @@ clippy (`make lint`) and nightly rustfmt (`make fmt`) are the style gate; beyond
 - Suppress a lint with `#[expect(lint, reason = "…")]` at the smallest scope, never `#[allow]`.
 - `<module>.rs` plus `<module>/<child>.rs`; `mod.rs` only under `tests/support/`.
 - A fn over a type is that type's method, not a free fn taking it as its first argument, where the type's module declares the fn or the fn is a plain lookup or predicate on the type. A constructor is an associated fn. A policy `const` sits beside the type whose method reads it. Values several fns thread through every call become one struct whose methods they are. A fn stays free when it is pure over primitives and iterators, or when it is one module's rule applied to another module's type.
-<!-- END Managed by augentic/toolkit: conventions/agents/code-style.md -->
 
-<!-- BEGIN Managed by augentic/toolkit: conventions/agents/comments.md -->
-<!-- Do not edit: run `make conventions-sync`. -->
 Comments follow the conventions `std`, `serde`, and `tokio` converge on: docs state the observable contract for the crate's user, never the body's mechanics.
 
 - `///` goes on the public API only — the `pub` types, fns, fields, variants, and re-exports a user of the crate can reach — never on a private or `pub(crate)` item, an `impl` block, or a trait-impl method. A clap field's `///` is its `--help` text. A doc opens with one summary sentence (about fifteen words, full stop), then a blank line, then short sentences and bullet lists. `# Examples` holds compiled doctests, for non-obvious usage only; `# Errors` names each class the caller matches on, linked; `# Panics` the rest. Every item mentioned is an intra-doc link. No mechanics, history, or migration notes. A `//!` says what a module is for, in the same shape.
@@ -51,7 +43,6 @@ Comments follow the conventions `std`, `serde`, and `tokio` converge on: docs st
 - A test fn takes `//`, never `///`, and only for rationale its scenario name and assertions do not expose.
 - No commented-out code.
 - Every sentence earns its place and reads once: short plain sentences, one idea each; three or more things are a bullet list, not a colon-and-dash clause; no chained em-dashes, nested parentheticals, or semicolon runs; each fact has one home across `//!`, `///`, and `//`. A comment is as long as its why takes and no longer — concise is not dense, and readable is not verbose.
-<!-- END Managed by augentic/toolkit: conventions/agents/comments.md -->
 
 The guest deny-list in [`clippy.toml`](clippy.toml) is part of the gate beside the shared `[workspace.lints]`. In an adapter the public API is the crate's `//!` and `PROSE`, since `survey` is private.
 
@@ -59,41 +50,34 @@ An adapter crate's `//!` docs state the source it accepts, how that source is di
 
 A fn over one of the survey's types is that type's method, as the rule above has it. The adapter's recogniser (`typescript::TypeScript`, `python::Python` in `survey/surface.rs`) holds the `Resolver` and the manifest reader, and its `Recogniser` impl is where the language's rules answer the SDK: `bootstrap`, `handler`, `mounts`, and `derive`, with the `at_*` rules a `derive` dispatches to — a method where one reads the recogniser, a free fn over the SDK's `Tree` otherwise. `Module::parse` constructs; `Module::declared_at` and `Decorated::registering` look up and decide; the SDK's `Tree` (`closure`, `reaches`, `receiver`, `registration_at`, `identify`) carries what the rules would otherwise thread through every call. The module data model is the SDK's (`emery_sdk::survey::code`: `Module` and its lookups, `Import`, `Export`, `Binding`, `Call`, `Decorated`, `ClassDecl`, `TypeDecl`, and the rest), and an adapter's `parse.rs` wraps its `Module` — `Deref` to the core, `Module::parse`, `settle_exports`, and `statements` as methods, the fields its language alone fills beside it (`python`'s `main_guard`, `tests`, `all`) — with `parse/walk.rs` the one producer; a rule of the adapter's over an SDK type (`python`'s `declares_data`) is a free fn in `parse.rs`. What a lookup reads of the language is data, not code: the adapter's one `static DIALECT: emery_sdk::survey::Dialect` in `survey.rs`, passed to each lookup that reads one, with `DIALECT.route` the `Spelling` the route rules take; a policy list `Dialect` does not carry — the bootstraps, the verbs, the mounting methods, the data bases — sits beside the fn that reads it. A rule `surface` applies to a `Module` (`export_at`, `decorated_at`) stays its free fn, as does `unique`, pure over lists. What is pure over strings and reads no `Module` is the SDK's (`kebab`, `survey::Lines`, `survey::resolve`, `survey::route`, `survey::tests`), never an adapter's copy, and so is what the SDK reads of the language for the facts and the briefs: a `Dialect` field, never a `const` of the adapter's.
 
-<!-- BEGIN Managed by augentic/toolkit: conventions/agents/testing.md -->
-<!-- Do not edit: run `make conventions-sync`. -->
 ## Testing
 
 Tests drive the public boundary: a behaviour is asserted through what a user of the product or crate can reach, over scripted doubles rather than a live filesystem, network, or model, never through private internals. A suite below the root survives only for an independent library contract; a unit test only for a branch no public boundary reaches. A test fn names the scenario (`gen_spec`, `no_sources`), never the outcome. Scripted doubles are strict: script exactly the exchanges a run consumes.
-<!-- END Managed by augentic/toolkit: conventions/agents/testing.md -->
 
 - An adapter's one contract is the `source-adapter` world, so what it decides is asserted through it: the root `tests/source.rs` runs the built component under the omnia runtime over a scripted host model and reads what the host sees. A workspace `extract` opens one completion per seam the survey chose — the strict script consumes exactly that many — each under the embedded `extract.md` and carrying the seam's data: the files a seam lists, the brief `intent` read through the mount, the surface lines, boundaries, and packages the SDK lays for `typescript` and `python` from what their recognisers derived (what the tree decided, never the SDK's standing prompt text). Where the survey puts a turn, that turn opens first, under the embedded `survey.md` with the workspace lent and the survey schema, and the script answers it with an `Inventory` — the `inventory(..)` helper's surfaces and `unreached` — before the seam answers, one `Seen` per correction round where a finding sends the answer back, its `check` exchange recorded as the round's outcome; the scenario asserts what code derived from the anchors it scripted (the stems, ids, methods, closures, and notes the seams' briefs carry) and the facts the survey turn laid, never the answer's own words back; a refusal runs the driver's `refused <code> [<value>]` mode, lifting to its omnia class with no turn spent past it; what an adapter joins to the answer beyond the model's claims — `typescript`'s and `python`'s parsed `type` claims — runs the driver's `types <name>..` mode, which asserts the names and `#L` anchors the host sees over a workspace, then the unanchored ones over an inline value. An adapter has no tests of its own and no dev dependencies. Never pin prompt phrases; prompt quality is the live eval's.
-- Root `tests/`: every shipped component, the boundary, and the corpus. `foreach_adapter!` and `foreach_probe!` make a new adapter or probe a compile error until `source.rs`, `prose.rs`, or `probe.rs` names it; that test carries its adapter's or program's name (`intent`, `probe_echo`), and an adapter's further scenarios are `<name>_<scenario>` (`documentation_directories`, `intent_empty_brief`). `prose.rs` runs `emery_sdk::check(<name>::PROSE, ..)` over the adapter's tree and the prompts it names, then the prompt checks, so a new adapter is also a root dev-dependency, and a guest package `WASM32_PACKAGES` in [`mise.toml`](mise.toml) and the `wasm-packages` input of `.github/workflows/ci.yaml` name.
+- Root `tests/`: every shipped component, the boundary, and the corpus. `foreach_adapter!` and `foreach_probe!` make a new adapter or probe a compile error until `source.rs`, `prose.rs`, or `probe.rs` names it; that test carries its adapter's or program's name (`intent`, `probe_echo`), and an adapter's further scenarios are `<name>_<scenario>` (`documentation_directories`, `intent_empty_brief`). `prose.rs` runs `emery_sdk::check(<name>::PROSE, ..)` over the adapter's tree and the prompts it names, then the prompt checks, so a new adapter is also a root dev-dependency, and `WASM32_PACKAGES` in [`mise.toml`](mise.toml) must list it for `lint-wasm`.
 - What the SDK does for every adapter (the request shape, the reference tools, the lend, the claim gate's repair and spent-rounds refusal, the check of every anchor and id against its seam) is asserted once in the SDK's own suite and once under the runtime over the `gated` probe — never per adapter; an adapter's tracing follows its guest environment's `RUST_LOG`, which the runtime sets from the run's one level — command mode's `info` under the support's `deployment()`, which names no `Deployment::level`, as under a bare run of the shipped `emery` runtime — and that the SDK's `source_adapter_extract` boundary span exports under command mode's default filter alongside the adapter's own spans is asserted once, over the `telemetry` probe. The host property the SDK's fan-out rests on — the completions one guest issues together are pending together — is guarded once, over the `fanout` probe behind the support's `Barrier` model; the one the engine's fan-out over sources rests on — the link dispatches one caller issues together run together — once more, over the same probe in the driver's `together` mode.
 - Always `cargo nextest`, and `--workspace` from the root as `make test` and CI do; every suite is the root package's today, so `cargo nextest run -p emery-adapters` runs the same tests.
-- The guest side (`crates/test-programs/programs/`, the adapters' `survey` and `guest` modules) is `cfg(target_arch = "wasm32")`, which native clippy compiles to nothing, so `make lint` runs the shared `lint-wasm` pass — clippy over every lib, bin and example (never tests or benches) of the guest packages for `wasm32-wasip2`, the adapters and `test-programs` as `WASM32_PACKAGES` in `mise.toml` names them, since the root package and the `evals` harness are native — over it (the command below); the `wasm-packages` input of `.github/workflows/ci.yaml` carries the same list by hand; `make test` compiles the guest side through the component build alone.
+- The guest side (`crates/test-programs/programs/`, the adapters' `survey` and `guest` modules) is `cfg(target_arch = "wasm32")`, which native clippy compiles to nothing, so `make lint` runs the shared `lint-wasm` pass — clippy over every lib, bin and example (never tests or benches) of the guest packages for `wasm32-wasip2`, the adapters and `test-programs` named in `WASM32_PACKAGES` in `mise.toml`, since the root package and the `evals` harness are native — over it (the command below); `make test` compiles the guest side through the component build alone.
 
 Toolchain and publishing: [CONTRIBUTING.md](CONTRIBUTING.md).
 
-<!-- BEGIN Managed by augentic/toolkit: conventions/agents/commands.md -->
-<!-- Do not edit: run `make conventions-sync`. -->
 ## Commands
 
-All from the repository root through `make` ([`Makefile`](Makefile) → mise). The tasks are the shared `mise/rust.toml` of [`augentic/toolkit`](https://github.com/augentic/toolkit), pinned in [`mise.toml`](mise.toml) to the tag every `uses:` under `.github/workflows/` names; a bump is one pull request over both, and `make conventions-check` holds them together.
+All from the repository root through `make` ([`Makefile`](Makefile) → mise). The tasks are the shared `mise/rust.toml` of [`augentic/toolkit`](https://github.com/augentic/toolkit), pinned in [`mise.toml`](mise.toml) to the tag every `uses:` under `.github/workflows/` names; bump both in one pull request when the pin moves.
 
 ```bash
-make ci # exactly the CI jobs: fmt-check + lint + test + test-docs + docs + vet + deny + conventions-check — run before handing over
+make ci # exactly the CI jobs: fmt-check + lint + test + test-docs + docs + vet + deny — run before handing over
 make check # local advisories: audit + fmt (rewrites) + lint + outdated + deps
 make test # cargo nextest run --locked --workspace --all-features, under -Dwarnings
 make lint # lint-host (cargo clippy --workspace --all-targets --all-features, then cargo hack --each-feature), then lint-wasm (the same over every lib, bin and example for wasm32-wasip2 — never tests)
 make fmt # cargo +nightly fmt --all
 make vet-regen # regenerate cargo-vet imports/exemptions/unpublished, then vet
-make conventions-sync # write the shared conventions at the pinned toolkit tag
 make cov # cargo llvm-cov nextest --workspace --all-features --summary-only
 make sweep # drop target/ artifacts untouched for a week
 ```
 
-A file that opens with `Managed by augentic/toolkit`, everything from a `BEGIN Managed by augentic/toolkit` line to its `END` line, and every value the shared TOML tables set, is written by `make conventions-sync`: never edit it here. Change it in [`augentic/toolkit`](https://github.com/augentic/toolkit) instead. If `make ci` cannot run, say exactly why and which checks ran instead.
-<!-- END Managed by augentic/toolkit: conventions/agents/commands.md -->
+If `make ci` cannot run, say exactly why and which checks ran instead.
 
 `publish` is the one local task (it shadows the shared crates.io dry run: this train ships to GHCR).
 

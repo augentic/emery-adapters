@@ -43,6 +43,12 @@
 //! model` line, the adapter's `survey facts` and `surveyed` trace lines and
 //! `placed by model` line, and the backend's `completion` lines.
 
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "operator-facing CLI; stdout and stderr are the interface"
+)]
+
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{self, Display, Formatter, Write as _};
