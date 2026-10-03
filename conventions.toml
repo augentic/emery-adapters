@@ -1,4 +1,0 @@
-name = "Emery Adapters"
-targets = ["wasm32-wasip2"]
-wasm-packages = ["documentation", "intent", "python", "typescript", "test-programs"]
-guest-clippy = ["clippy.toml"]
