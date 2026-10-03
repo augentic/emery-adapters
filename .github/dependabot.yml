@@ -21,16 +21,3 @@ updates:
       oxc:
         patterns:
           - "oxc_*"
-
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: weekly
-    groups:
-      actions:
-        patterns:
-          - "*"
-    ignore:
-      # The toolkit pin is Renovate's: one pull request over every `uses:`
-      # and the mise `?ref=` together (renovate.json).
-      - dependency-name: "augentic/*"
