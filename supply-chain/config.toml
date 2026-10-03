@@ -1009,23 +1009,23 @@ version = "0.1.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.ruff_python_ast]]
-version = "0.0.15"
+version = "0.0.16"
 criteria = "safe-to-deploy"
 
 [[exemptions.ruff_python_parser]]
-version = "0.0.15"
+version = "0.0.16"
 criteria = "safe-to-deploy"
 
 [[exemptions.ruff_python_trivia]]
-version = "0.0.15"
+version = "0.0.16"
 criteria = "safe-to-deploy"
 
 [[exemptions.ruff_source_file]]
-version = "0.0.15"
+version = "0.0.16"
 criteria = "safe-to-deploy"
 
 [[exemptions.ruff_text_size]]
-version = "0.0.15"
+version = "0.0.16"
 criteria = "safe-to-deploy"
 
 [[exemptions.rusqlite]]
