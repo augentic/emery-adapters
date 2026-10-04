@@ -6,24 +6,26 @@
 # row that declares it, under the usage's first word, with the job module it
 # names as what it reaches. Written before any run.
 
+[[source]]
+adapter = "typescript"
 fixture = "evals/cases/cli-table/fixture"
 stems = ["start", "import", "reconcile", "nightly"]
 
 # --- surfaces: the bootstrap and the three table rows ---
 
-[[surface]]
+[[source.surface]]
 entry = "src/cli.ts"
 stem = "start"
 
-[[surface]]
+[[source.surface]]
 entry = "src/cli.ts"
 stem = "import"
 
-[[surface]]
+[[source.surface]]
 entry = "src/cli.ts"
 stem = "reconcile"
 
-[[surface]]
+[[source.surface]]
 entry = "src/cli.ts"
 stem = "nightly"
 

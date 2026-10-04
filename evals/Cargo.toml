@@ -1,6 +1,6 @@
 [package]
 name = "evals"
-description = "The graded live eval: the shipped `emery` binary run over the built `typescript` and `python` components and graded against each case's expected set"
+description = "The graded live eval: the shipped `emery` binary run over the built components — one source or several per case — and graded against each case's expected claims, surfaces, and reconciled behaviours"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

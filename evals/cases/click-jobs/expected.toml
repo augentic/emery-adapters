@@ -3,39 +3,40 @@
 # in one small tree, mined whole with every module laid out, and a seed
 # script no surface reaches. Mirrors `cli-jobs`.
 
+[[source]]
 adapter = "python"
 fixture = "evals/cases/click-jobs/fixture"
 stems = ["start", "import", "reconcile", "nightly", "serve", "invoices"]
 
 # --- surfaces: the (entry, stem) pairs the survey decides ---
 
-[[surface]]
+[[source.surface]]
 entry = "src/ledger/cli.py"
 stem = "start"
 
-[[surface]]
+[[source.surface]]
 entry = "src/ledger/cli.py"
 stem = "import"
 
-[[surface]]
+[[source.surface]]
 entry = "src/ledger/cli.py"
 stem = "reconcile"
 
 # the `nightly` command, and the schedule it shares a stem with
-[[surface]]
+[[source.surface]]
 entry = "src/ledger/cli.py"
 stem = "nightly"
 
-[[surface]]
+[[source.surface]]
 entry = "src/ledger/jobs/nightly.py"
 stem = "nightly"
 
-[[surface]]
+[[source.surface]]
 entry = "src/ledger/cli.py"
 stem = "serve"
 
 # the two tasks under `invoices.*`, one surface each
-[[surface]]
+[[source.surface]]
 entry = "src/ledger/workers/invoices.py"
 stem = "invoices"
 

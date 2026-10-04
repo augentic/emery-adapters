@@ -21,48 +21,50 @@
 # its module's or, for an `index`, its directory's name, so it is expected as
 # one surface under `api`.
 
+[[source]]
+adapter = "typescript"
 fixture = "evals/cases/fastify-demo/fixture"
 stems = ["start", "home", "api", "auth", "users", "tasks", "create-database", "drop-database", "migrate", "seed-database"]
 
 # --- surfaces: the bootstrap, five route modules, four operator scripts ---
 
-[[surface]]
+[[source.surface]]
 entry = "src/server.ts"
 stem = "start"
 
-[[surface]]
+[[source.surface]]
 entry = "src/routes/home.ts"
 stem = "home"
 
-[[surface]]
+[[source.surface]]
 entry = "src/routes/api/index.ts"
 stem = "api"
 
-[[surface]]
+[[source.surface]]
 entry = "src/routes/api/auth/index.ts"
 stem = "auth"
 
-[[surface]]
+[[source.surface]]
 entry = "src/routes/api/users/index.ts"
 stem = "users"
 
-[[surface]]
+[[source.surface]]
 entry = "src/routes/api/tasks/index.ts"
 stem = "tasks"
 
-[[surface]]
+[[source.surface]]
 entry = "scripts/create-database.ts"
 stem = "create-database"
 
-[[surface]]
+[[source.surface]]
 entry = "scripts/drop-database.ts"
 stem = "drop-database"
 
-[[surface]]
+[[source.surface]]
 entry = "scripts/migrate.ts"
 stem = "migrate"
 
-[[surface]]
+[[source.surface]]
 entry = "scripts/seed-database.ts"
 stem = "seed-database"
 

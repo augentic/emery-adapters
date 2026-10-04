@@ -1,0 +1,131 @@
+# Five architecture decision records and an overview, each record a
+# context, a decision, and its consequences. The decision-recall case:
+# every record carries one `decision`, and its requirements are stated in
+# the indicative ("A posted entry is immutable"), never with a modal. The
+# overview is an index and no subject. One subject per record, stemmed by
+# the noun the record is about and spells most.
+
+[[source]]
+name = "docs"
+adapter = "documentation"
+fixture = "evals/cases/adr/fixture"
+stems = ["entries", "posting", "amounts", "daily-close", "exports"]
+
+[[source.surface]]
+entry = "adr/0001-append-only-entries.md"
+stem = "entries"
+
+[[source.surface]]
+entry = "adr/0002-idempotent-posting.md"
+stem = "posting"
+
+[[source.surface]]
+entry = "adr/0003-amounts-in-minor-units.md"
+stem = "amounts"
+
+[[source.surface]]
+entry = "adr/0004-daily-close.md"
+stem = "daily-close"
+
+[[source.surface]]
+entry = "adr/0005-day-exports.md"
+stem = "exports"
+
+# --- decisions: one per record, at its Decision paragraph ---
+
+[[decision]]
+anchor = "adr/0001-append-only-entries.md#L16-L21"
+gloss = "Entries are append-only; corrections are reversing entries"
+
+[[decision]]
+anchor = "adr/0002-idempotent-posting.md#L15-L20"
+gloss = "Every posting carries a caller-chosen idempotency key"
+
+[[decision]]
+anchor = "adr/0003-amounts-in-minor-units.md#L14-L19"
+gloss = "Amounts are integer minor units with an ISO 4217 code"
+
+[[decision]]
+anchor = "adr/0004-daily-close.md#L14-L19"
+gloss = "Each UTC day closes at 23:59:59 or when an operator closes it early"
+
+[[decision]]
+anchor = "adr/0005-day-exports.md#L14-L20"
+gloss = "One CSV export per closed day in a fixed column order"
+
+# --- requirements: the rules the decisions and consequences state ---
+
+[[requirement]]
+stem = "entries"
+anchor = "adr/0001-append-only-entries.md#L16-L18"
+gloss = "A posted entry is immutable"
+
+[[requirement]]
+stem = "entries"
+anchor = "adr/0001-append-only-entries.md#L18-L21"
+gloss = "A mistake is corrected by a reversing entry referencing the original; no update or delete is exposed"
+
+[[requirement]]
+stem = "entries"
+anchor = "adr/0001-append-only-entries.md#L27-L28"
+gloss = "An entry is reversed at most once; a second reversal is refused"
+
+[[requirement]]
+stem = "posting"
+anchor = "adr/0002-idempotent-posting.md#L16-L17"
+gloss = "Posting with a key seen before returns the recorded entry and posts nothing"
+
+[[requirement]]
+stem = "posting"
+anchor = "adr/0002-idempotent-posting.md#L17-L19"
+gloss = "Posting with a seen key and a different body is refused as a conflict"
+
+[[requirement]]
+stem = "posting"
+anchor = "adr/0002-idempotent-posting.md#L19-L20"
+gloss = "Keys are kept for ninety days; an older key is treated as new"
+
+[[requirement]]
+stem = "amounts"
+anchor = "adr/0003-amounts-in-minor-units.md#L14-L17"
+gloss = "An amount is an integer count of minor units with a currency code, never a decimal or float"
+
+[[requirement]]
+stem = "amounts"
+anchor = "adr/0003-amounts-in-minor-units.md#L17-L19"
+gloss = "An amount in a currency the exponent table does not list is refused"
+
+[[requirement]]
+stem = "amounts"
+anchor = "adr/0003-amounts-in-minor-units.md#L24-L26"
+gloss = "An entry whose two sides carry different currencies is refused"
+
+[[requirement]]
+stem = "daily-close"
+anchor = "adr/0004-daily-close.md#L15-L17"
+gloss = "A closed day accepts no new entries; an entry dated within it is refused"
+
+[[requirement]]
+stem = "daily-close"
+anchor = "adr/0004-daily-close.md#L17-L18"
+gloss = "Closing is one-way; a closed day is never reopened"
+
+[[requirement]]
+stem = "daily-close"
+anchor = "adr/0004-daily-close.md#L27-L28"
+gloss = "The close time of each day and who closed it are kept"
+
+[[requirement]]
+stem = "exports"
+anchor = "adr/0005-day-exports.md#L17-L18"
+gloss = "An export covers exactly one closed day; an open day cannot be exported"
+
+[[requirement]]
+stem = "exports"
+anchor = "adr/0005-day-exports.md#L18"
+gloss = "Exporting a day twice produces byte-identical files"
+
+[[requirement]]
+stem = "exports"
+anchor = "adr/0005-day-exports.md#L28-L29"
+gloss = "A request for a range of days produces one file per day"

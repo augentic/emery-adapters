@@ -1,0 +1,123 @@
+# Three headless prose files narrating a neighbourhood car-share through
+# one member's Tuesday: no heading, no list, no table, the rules carried in
+# sentences. The no-structure case: whether the model names subjects in
+# prose with nothing to anchor them at but a paragraph's first line, and
+# what the fallback does when it names none. The subjects a reviewer would
+# name are the nouns the narrative turns on — bookings, returns, membership
+# — one per file at the paragraph that introduces it; a run that names them
+# differently reads as restemmed, not missed.
+
+[[source]]
+name = "docs"
+adapter = "documentation"
+fixture = "evals/cases/narrative/fixture"
+stems = ["bookings", "returns", "membership"]
+
+[[source.surface]]
+entry = "a-tuesday.md"
+stem = "bookings"
+
+[[source.surface]]
+entry = "the-return.md"
+stem = "returns"
+
+[[source.surface]]
+entry = "joining.md"
+stem = "membership"
+
+# --- requirements: the rules the sentences carry ---
+
+[[requirement]]
+stem = "bookings"
+anchor = "a-tuesday.md#L3-L7"
+gloss = "The price is shown before a booking is confirmed; nothing is charged until the trip ends"
+
+[[requirement]]
+stem = "bookings"
+anchor = "a-tuesday.md#L9-L12"
+gloss = "Two bookings never overlap on one car; an overlapping request is refused, never shortened"
+
+[[requirement]]
+stem = "bookings"
+anchor = "a-tuesday.md#L12-L14"
+gloss = "A booking is made fifteen minutes to sixty days ahead and runs one to seventy-two whole hours"
+
+[[requirement]]
+stem = "bookings"
+anchor = "a-tuesday.md#L16-L19"
+gloss = "Cancelling until an hour before is free; inside the last hour costs one hour at the booked rate"
+
+[[requirement]]
+stem = "bookings"
+anchor = "a-tuesday.md#L19-L22"
+gloss = "A no-show pays the whole booking; three in a year suspend bookings until the committee has spoken to the member"
+
+[[requirement]]
+stem = "bookings"
+anchor = "a-tuesday.md#L24-L25"
+gloss = "The car unlocks from the app from ten minutes before the booking, only for the member"
+
+[[requirement]]
+stem = "bookings"
+anchor = "a-tuesday.md#L25-L29"
+gloss = "Fuel level and damage are recorded before driving; unrecorded damage is attributed to the last booking that did not record it"
+
+[[requirement]]
+stem = "returns"
+anchor = "the-return.md#L1-L5"
+gloss = "A car left anywhere but its bay is still out; the booking runs on and the member pays the fetching"
+
+[[requirement]]
+stem = "returns"
+anchor = "the-return.md#L6-L9"
+gloss = "The booking ends when the car is locked in its bay; the member pays the hours booked, not used"
+
+[[requirement]]
+stem = "returns"
+anchor = "the-return.md#L11-L14"
+gloss = "A late return runs on in half-hour steps at one and a half times the rate and the next member is told"
+
+[[requirement]]
+stem = "returns"
+anchor = "the-return.md#L14-L15"
+gloss = "When the next booking starts first, that member gets another car at no extra cost and the difference is charged to the late member"
+
+[[requirement]]
+stem = "returns"
+anchor = "the-return.md#L19-L23"
+gloss = "A car returned under a quarter tank asks the member to fill it; a photographed same-day receipt is credited"
+
+[[requirement]]
+stem = "returns"
+anchor = "the-return.md#L27-L32"
+gloss = "One monthly statement, settled on the fifth; a failed payment is retried a week later and a second failure suspends bookings"
+
+[[requirement]]
+stem = "membership"
+anchor = "joining.md#L1-L3"
+gloss = "Membership is open to those over twenty-one, in the four postcodes, with a full licence held two years"
+
+[[requirement]]
+stem = "membership"
+anchor = "joining.md#L6-L8"
+gloss = "Until approved an applicant may browse but not book, and is told so"
+
+[[requirement]]
+stem = "membership"
+anchor = "joining.md#L10-L11"
+gloss = "Membership runs a year from approval and renews unless cancelled a month before the anniversary"
+
+[[requirement]]
+stem = "membership"
+anchor = "joining.md#L11-L14"
+gloss = "An expired licence or six or more penalty points remove the right to book until a volunteer has seen otherwise"
+
+[[requirement]]
+stem = "membership"
+anchor = "joining.md#L19-L24"
+gloss = "A second driver shares the account's statement, cannot add drivers, and removal does not cancel their bookings"
+
+[[requirement]]
+stem = "membership"
+anchor = "joining.md#L26-L30"
+gloss = "Committee actions are recorded with who and when; a suspended member is told why in writing on the day"

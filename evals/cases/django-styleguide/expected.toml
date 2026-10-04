@@ -25,70 +25,71 @@
 # calls; `email_send_all`, which only an admin action calls; `File.url`,
 # which nothing reads — so the pages are expected and the four are gone.
 
+[[source]]
 adapter = "python"
 fixture = "evals/cases/django-styleguide/fixture"
 stems = ["start", "auth", "users", "errors", "files", "google-oauth2", "setup-2fa", "confirm-2fa", "email-send", "debug-task", "test-non-concurrent-task", "setup-periodic-tasks"]
 
 # --- surfaces: the bootstrap, five applications' routes, the admin site's two pages, three tasks, one command ---
 
-[[surface]]
+[[source.surface]]
 entry = "manage.py"
 stem = "start"
 
 # session login and logout, JWT login and logout, `me/`, under `api/auth/`
-[[surface]]
+[[source.surface]]
 entry = "styleguide_example/authentication/urls.py"
 stem = "auth"
 
 # list, create, detail, update, under `api/users/`
-[[surface]]
+[[source.surface]]
 entry = "styleguide_example/users/urls.py"
 stem = "users"
 
 # three trigger routes under `api/errors/`
-[[surface]]
+[[source.surface]]
 entry = "styleguide_example/errors/urls.py"
 stem = "errors"
 
 # the standard upload and the three direct-upload routes under `api/files/`
-[[surface]]
+[[source.surface]]
 entry = "styleguide_example/files/urls.py"
 stem = "files"
 
 # the raw and the SDK flows' callback and redirect, under `api/google-oauth2/`
-[[surface]]
+[[source.surface]]
 entry = "styleguide_example/blog_examples/google_login_server_flow/raw/urls.py"
 stem = "google-oauth2"
 
-[[surface]]
+[[source.surface]]
 entry = "styleguide_example/blog_examples/google_login_server_flow/sdk/urls.py"
 stem = "google-oauth2"
 
 # the admin site's `get_urls` registers `setup-2fa/` and `confirm-2fa/`, a
 # route each under no mount, so each is a stem of its own
-[[surface]]
+[[source.surface]]
 entry = "styleguide_example/custom_admin/sites.py"
 stem = "setup-2fa"
 
-[[surface]]
+[[source.surface]]
 entry = "styleguide_example/custom_admin/sites.py"
 stem = "confirm-2fa"
 
-[[surface]]
+[[source.surface]]
 entry = "styleguide_example/emails/tasks.py"
 stem = "email-send"
 
-[[surface]]
+[[source.surface]]
 entry = "styleguide_example/tasks/tasks.py"
 stem = "debug-task"
 
 # registered through the module's own `non_concurrent_task` wrapper, which
 # hands `shared_task` the wrapped function: a task by the function's name
-[[surface]]
+[[source.surface]]
 entry = "styleguide_example/blog_examples/celery_non_concurrent/tasks.py"
 stem = "test-non-concurrent-task"
 
-[[surface]]
+[[source.surface]]
 entry = "styleguide_example/tasks/management/commands/setup_periodic_tasks.py"
 stem = "setup-periodic-tasks"
 

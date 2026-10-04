@@ -1,0 +1,199 @@
+# brocoders/nestjs-boilerplate at 9620f159 (MIT): the `docs/` directory of
+# the tree `nestjs-boilerplate` vendors, read in place from that case's
+# fixture — thirteen flat files, 48 KB, within the inline budget. Real
+# prose: an auth guide dense with rules, three how-to documents with a
+# rule or two each, and seven documents that are an index, an install
+# guide, a test runbook, or a one-liner — no subject, `unreached`. The
+# domain nouns are the ones the docs lead with; `auth` and `files` happen
+# to be the code's stems too, which is observed and not a target.
+
+[[source]]
+name = "docs"
+adapter = "documentation"
+fixture = "evals/cases/nestjs-boilerplate/fixture/docs"
+stems = ["auth", "files", "serialization", "translations", "database", "architecture"]
+
+[[source.surface]]
+entry = "auth.md"
+stem = "auth"
+
+[[source.surface]]
+entry = "file-uploading.md"
+stem = "files"
+
+[[source.surface]]
+entry = "serialization.md"
+stem = "serialization"
+
+[[source.surface]]
+entry = "translations.md"
+stem = "translations"
+
+[[source.surface]]
+entry = "database.md"
+stem = "database"
+
+[[source.surface]]
+entry = "architecture.md"
+stem = "architecture"
+
+# --- auth ---
+
+[[requirement]]
+stem = "auth"
+anchor = "auth.md#L28"
+gloss = "Sign in and sign up via email and password by default"
+
+[[requirement]]
+stem = "auth"
+anchor = "auth.md#L45"
+gloss = "Sign up via Apple, Facebook, and Google"
+
+[[requirement]]
+stem = "auth"
+anchor = "auth.md#L92"
+gloss = "The app refuses to start in production while any AUTH_*_SECRET is a placeholder; in development it warns"
+
+[[requirement]]
+stem = "auth"
+anchor = "auth.md#L130"
+gloss = "The JWT strategy's validate does not check that the user exists in the database"
+
+[[requirement]]
+stem = "auth"
+anchor = "auth.md#L206"
+gloss = "Sign in answers token, tokenExpires, and refreshToken"
+
+[[requirement]]
+stem = "auth"
+anchor = "auth.md#L208"
+gloss = "An expired token is refreshed by sending the refreshToken to POST /api/v1/auth/refresh"
+
+[[requirement]]
+stem = "auth"
+anchor = "auth.md#L216-L218"
+gloss = "A login creates a session; refresh checks the session hash and rotates it so the previous refresh token is disallowed"
+
+[[requirement]]
+stem = "auth"
+anchor = "auth.md#L220"
+gloss = "Refresh tokens expire after a rolling idle window of 30 days by default"
+
+[[requirement]]
+stem = "auth"
+anchor = "auth.md#L224-L230"
+gloss = "Logout is POST /api/v1/auth/logout, after which the client drops both tokens"
+
+[[requirement]]
+stem = "auth"
+anchor = "auth.md#L237"
+gloss = "HTTP security headers are set by helmet with the content security policy disabled for Swagger"
+
+[[requirement]]
+stem = "auth"
+anchor = "auth.md#L238"
+gloss = "CORS allows APP_CORS_ORIGINS, else FRONTEND_DOMAIN, else any origin; credentials mode stays off"
+
+[[requirement]]
+stem = "auth"
+anchor = "auth.md#L239"
+gloss = "Password reset links are single-use, signed with the current password hash; all sessions are revoked on reset"
+
+[[requirement]]
+stem = "auth"
+anchor = "auth.md#L240"
+gloss = "Social providers must supply verified emails; an unverified address is refused emailNotVerified"
+
+[[requirement]]
+stem = "auth"
+anchor = "auth.md#L241"
+gloss = "A social login matching an unconfirmed email account moves the account to the social identity rather than inheriting its password"
+
+[[requirement]]
+stem = "auth"
+anchor = "auth.md#L242"
+gloss = "AUTH_UNIFORM_ERRORS=true returns one incorrectEmailOrPassword error on login and a silent 204 from forgot-password"
+
+# --- files ---
+
+[[requirement]]
+stem = "files"
+anchor = "file-uploading.md#L23"
+gloss = "Three file drivers — local, s3, s3-presigned — chosen by FILE_DRIVER"
+
+[[requirement]]
+stem = "files"
+anchor = "file-uploading.md#L31"
+gloss = "POST /api/v1/files/upload returns a File entity with id and path to attach to another entity"
+
+[[requirement]]
+stem = "files"
+anchor = "file-uploading.md#L104"
+gloss = "Under s3-presigned the upload endpoint receives only fileName and returns a presigned URL and the File entity"
+
+[[requirement]]
+stem = "files"
+anchor = "file-uploading.md#L177"
+gloss = "Files are not deleted; the database uses soft delete"
+
+# --- serialization ---
+
+[[requirement]]
+stem = "serialization"
+anchor = "serialization.md#L3"
+gloss = "Serialization uses class-transformer through a global ClassSerializerInterceptor"
+
+[[requirement]]
+stem = "serialization"
+anchor = "serialization.md#L16"
+gloss = "A property is hidden from responses with @Exclude({ toPlainOnly: true })"
+
+[[requirement]]
+stem = "serialization"
+anchor = "serialization.md#L37"
+gloss = "A private property is shown to admins by @SerializeOptions({ groups: ['admin'] }) on an admin-only controller method"
+
+# --- translations ---
+
+[[requirement]]
+stem = "translations"
+anchor = "translations.md#L16"
+gloss = "The x-custom-lang request header selects the language"
+
+# --- database ---
+
+[[requirement]]
+stem = "database"
+anchor = "database.md#L31"
+gloss = "PostgreSQL with TypeORM and MongoDB with Mongoose are supported, one or both"
+
+[[requirement]]
+stem = "database"
+anchor = "database.md#L276-L282"
+gloss = "DATABASE_MAX_CONNECTIONS sets how many concurrent database connections the application holds"
+
+# --- decisions ---
+
+[[decision]]
+anchor = "architecture.md#L20"
+gloss = "The boilerplate is based on Hexagonal Architecture"
+
+[[decision]]
+anchor = "architecture.md#L26"
+gloss = "Business logic is separated from infrastructure so the database or the file store can change without touching it"
+
+[[decision]]
+anchor = "auth.md#L243"
+gloss = "Rate limiting is intentionally not bundled; add it at the proxy or platform level"
+
+[[decision]]
+anchor = "auth.md#L244"
+gloss = "Tokens stay in the response body under the Authorization header rather than HttpOnly cookies"
+
+[[decision]]
+anchor = "file-uploading.md#L25"
+gloss = "s3-presigned is recommended for production to offload the server"
+
+[[decision]]
+anchor = "file-uploading.md#L177"
+gloss = "Files are preferred not deleted, for the sake of restoring data"

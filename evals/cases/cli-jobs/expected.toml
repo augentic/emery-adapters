@@ -1,37 +1,39 @@
 # A commander CLI with a node-cron nightly job and a bullmq worker: three
 # kinds of surface in one small tree, mined whole with every module laid out.
 
+[[source]]
+adapter = "typescript"
 fixture = "evals/cases/cli-jobs/fixture"
 stems = ["start", "import", "reconcile", "nightly", "serve", "invoices"]
 
 # --- surfaces: the (entry, stem) pairs the survey decides ---
 
-[[surface]]
+[[source.surface]]
 entry = "src/cli.ts"
 stem = "start"
 
-[[surface]]
+[[source.surface]]
 entry = "src/cli.ts"
 stem = "import"
 
-[[surface]]
+[[source.surface]]
 entry = "src/cli.ts"
 stem = "reconcile"
 
 # the `nightly` command, and the cron schedule it shares a stem with
-[[surface]]
+[[source.surface]]
 entry = "src/cli.ts"
 stem = "nightly"
 
-[[surface]]
+[[source.surface]]
 entry = "src/jobs/nightly.ts"
 stem = "nightly"
 
-[[surface]]
+[[source.surface]]
 entry = "src/cli.ts"
 stem = "serve"
 
-[[surface]]
+[[source.surface]]
 entry = "src/workers/invoices.ts"
 stem = "invoices"
 

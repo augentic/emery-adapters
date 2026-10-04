@@ -1,0 +1,82 @@
+# The orders service with two documentation sources that disagree on one
+# value: the specification (`docs`) lets a pending or paid order be
+# cancelled, the support FAQ (`faq`) says only a pending one. Two agreement
+# classes led by claims of one kind are a `conflict` — the requirement
+# carries no body and both statements as notes — however the code (`code`,
+# agreeing with the specification) is classed. Two sources under one
+# adapter load the component once and run as two sources, each under its
+# own name and tree. Everything else the FAQ states agrees with the
+# specification and the code, and one answer is the FAQ's alone.
+
+[[source]]
+name = "docs"
+adapter = "documentation"
+fixture = "examples/documentation/docs"
+stems = ["orders"]
+
+[[source.surface]]
+entry = "orders-api.md"
+stem = "orders"
+
+[[source]]
+name = "faq"
+adapter = "documentation"
+fixture = "evals/cases/orders-conflict/fixture/faq"
+stems = ["orders"]
+
+[[source.surface]]
+entry = "support-faq.md"
+stem = "orders"
+
+[[source]]
+name = "code"
+adapter = "typescript"
+fixture = "evals/cases/orders/fixture"
+stems = ["order-service"]
+
+[[source.surface]]
+entry = "orders.ts"
+stem = "order-service"
+
+# --- the planted conflict ---
+
+[[behaviour]]
+gloss = "which orders can be cancelled (specification: pending or paid; FAQ: pending only)"
+status = "conflict"
+claims = [
+  { source = "docs", anchor = "orders-api.md#L31-L33" },
+  { source = "faq", anchor = "support-faq.md#L9-L12" },
+  { source = "code", anchor = "orders.ts#L67-L74" },
+]
+
+# --- the behaviours all three state alike ---
+
+# the FAQ states the two placing rules in one sentence, so it is left out
+# of each: a citation of it would read as merging the two
+[[behaviour]]
+gloss = "an order with no line items is refused"
+claims = [
+  { source = "docs", anchor = "orders-api.md#L15" },
+  { source = "code", anchor = "orders.ts#L40-L42" },
+]
+
+[[behaviour]]
+gloss = "a line quantity below one is refused"
+claims = [
+  { source = "docs", anchor = "orders-api.md#L16" },
+  { source = "code", anchor = "orders.ts#L43-L45" },
+]
+
+[[behaviour]]
+gloss = "reading an unknown order is not-found"
+claims = [
+  { source = "docs", anchor = "orders-api.md#L25-L27" },
+  { source = "faq", anchor = "support-faq.md#L21-L23" },
+  { source = "code", anchor = "orders.ts#L59-L65" },
+]
+
+# --- the FAQ's alone ---
+
+[[behaviour]]
+gloss = "an order's lines and courier note cannot be changed after it is placed"
+claims = [{ source = "faq", anchor = "support-faq.md#L33-L34" }]

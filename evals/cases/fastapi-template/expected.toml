@@ -24,38 +24,39 @@
 # three extra stems on 3/3, as predicted, and the derivation now reads a
 # prefix-less router's first tag as the resource its routes sit under.
 
+[[source]]
 adapter = "python"
 fixture = "evals/cases/fastapi-template/fixture"
 stems = ["start", "items", "users", "login", "utils", "private"]
 
 # --- surfaces: the bootstrap and the five routers' routes ---
 
-[[surface]]
+[[source.surface]]
 entry = "app/main.py"
 stem = "start"
 
 # five routes under `/api/v1/items`
-[[surface]]
+[[source.surface]]
 entry = "app/api/routes/items.py"
 stem = "items"
 
 # ten routes under `/api/v1/users`
-[[surface]]
+[[source.surface]]
 entry = "app/api/routes/users.py"
 stem = "users"
 
 # five routes under no prefix, tagged `login`
-[[surface]]
+[[source.surface]]
 entry = "app/api/routes/login.py"
 stem = "login"
 
 # `POST /utils/test-email/` and `GET /utils/health-check/`
-[[surface]]
+[[source.surface]]
 entry = "app/api/routes/utils.py"
 stem = "utils"
 
 # `POST /private/users/`, included in development alone
-[[surface]]
+[[source.surface]]
 entry = "app/api/routes/private.py"
 stem = "private"
 

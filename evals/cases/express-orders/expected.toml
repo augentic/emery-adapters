@@ -2,24 +2,26 @@
 # `paths` alias (`@app/*`), and a postcode table that carries the kept tree
 # past the SDK's inline budget, so the tree is surveyed and mined by surface.
 
+[[source]]
+adapter = "typescript"
 fixture = "evals/cases/express-orders/fixture"
 stems = ["start", "orders", "customers", "health"]
 
 # --- surfaces: the (entry, stem) pairs the survey decides ---
 
-[[surface]]
+[[source.surface]]
 entry = "src/server.ts"
 stem = "start"
 
-[[surface]]
+[[source.surface]]
 entry = "src/routes/orders.ts"
 stem = "orders"
 
-[[surface]]
+[[source.surface]]
 entry = "src/routes/customers.ts"
 stem = "customers"
 
-[[surface]]
+[[source.surface]]
 entry = "src/routes/health.ts"
 stem = "health"
 

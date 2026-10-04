@@ -1,0 +1,372 @@
+# A documentation tree past INLINE_BYTES (twenty files, ~70 KB) in three
+# directories — guides, reference, policies — written to break the
+# directory cut the way `hono-mounted` breaks a parser's conventions: one
+# subject, `returns`, is stated across three files in three directories
+# (the guide, the reference, the late-returns policy), and one file,
+# `reference/accounts.md`, holds three subjects (membership, signing in,
+# password reset). Mined a directory at a time, the three `returns`
+# documents are three calls that each name the subject their own way; mined
+# a subject at a time, they are one seam. The README, the error-code table,
+# the glossary, and the changelog are no subject: `unreached`.
+
+[[source]]
+name = "docs"
+adapter = "documentation"
+fixture = "evals/cases/cross-cut/fixture"
+stems = [
+  "membership",
+  "sign-in",
+  "password-reset",
+  "catalogue",
+  "loans",
+  "reservations",
+  "returns",
+  "damage",
+  "notifications",
+]
+
+# --- subjects: the (entry, stem) pairs the survey decides ---
+
+[[source.surface]]
+entry = "guides/getting-started.md"
+stem = "membership"
+
+[[source.surface]]
+entry = "guides/borrowing-a-tool.md"
+stem = "loans"
+
+[[source.surface]]
+entry = "guides/reserving-a-tool.md"
+stem = "reservations"
+
+[[source.surface]]
+entry = "guides/returning-a-tool.md"
+stem = "returns"
+
+[[source.surface]]
+entry = "guides/reporting-damage.md"
+stem = "damage"
+
+# three subjects in one file
+[[source.surface]]
+entry = "reference/accounts.md"
+stem = "membership"
+
+[[source.surface]]
+entry = "reference/accounts.md"
+stem = "sign-in"
+
+[[source.surface]]
+entry = "reference/accounts.md"
+stem = "password-reset"
+
+[[source.surface]]
+entry = "reference/catalogue.md"
+stem = "catalogue"
+
+[[source.surface]]
+entry = "reference/loans.md"
+stem = "loans"
+
+[[source.surface]]
+entry = "reference/reservations.md"
+stem = "reservations"
+
+[[source.surface]]
+entry = "reference/returns.md"
+stem = "returns"
+
+[[source.surface]]
+entry = "reference/notifications.md"
+stem = "notifications"
+
+[[source.surface]]
+entry = "policies/late-returns.md"
+stem = "returns"
+
+[[source.surface]]
+entry = "policies/membership-eligibility.md"
+stem = "membership"
+
+[[source.surface]]
+entry = "policies/damage-and-loss.md"
+stem = "damage"
+
+[[source.surface]]
+entry = "policies/fair-use.md"
+stem = "loans"
+
+[[source.surface]]
+entry = "policies/reservation-limits.md"
+stem = "reservations"
+
+# --- returns: the one subject across three directories ---
+
+[[requirement]]
+stem = "returns"
+anchor = "reference/returns.md#L13-L21"
+gloss = "A return is recorded at the volunteer's scan with the condition found and the case contents; the loan closes and a receipt is sent"
+
+[[requirement]]
+stem = "returns"
+anchor = "reference/returns.md#L23-L26"
+gloss = "A return is never backdated; a tool found unscanned is returned at the time it is found"
+
+[[requirement]]
+stem = "returns"
+anchor = "reference/returns.md#L30-L40"
+gloss = "Lateness is whole days from the due date; the first day is free and the charge accrues from the second"
+
+[[requirement]]
+stem = "returns"
+anchor = "reference/returns.md#L42-L47"
+gloss = "A loan twenty-eight days overdue is written off as lost at replacement value; a return within a further twenty-eight days refunds it"
+
+[[requirement]]
+stem = "returns"
+anchor = "reference/returns.md#L51-L58"
+gloss = "A worse condition or a case shortfall at return is attributed to the loan; a finding may be disputed within seven days"
+
+[[requirement]]
+stem = "returns"
+anchor = "reference/returns.md#L62-L67"
+gloss = "After a return the head of the queue is notified and the tool is held, else it is on the shelf or unavailable"
+
+[[requirement]]
+stem = "returns"
+anchor = "policies/late-returns.md#L15-L22"
+gloss = "A loan is late when returned after the due date on the loan at the time, counted in whole days"
+
+[[requirement]]
+stem = "returns"
+anchor = "policies/late-returns.md#L26-L32"
+gloss = "The first day late is free; one pound a day for a seven-day tool and two for a three-day tool, uncapped"
+
+[[requirement]]
+stem = "returns"
+anchor = "policies/late-returns.md#L34-L39"
+gloss = "The late charge is waived from a damage report onward and never for illness or holidays"
+
+[[requirement]]
+stem = "returns"
+anchor = "policies/late-returns.md#L43-L47"
+gloss = "A member with an overdue tool may not borrow or reserve and is told every seven days"
+
+[[requirement]]
+stem = "returns"
+anchor = "policies/late-returns.md#L51-L59"
+gloss = "Written off as lost at twenty-eight days; a return within twenty-eight more days refunds the replacement and reinstates the late charge"
+
+[[requirement]]
+stem = "returns"
+anchor = "policies/late-returns.md#L63-L68"
+gloss = "Three late returns in twelve months may mean a suspension of up to three months; six mean at least three"
+
+[[requirement]]
+stem = "returns"
+anchor = "guides/returning-a-tool.md#L8-L16"
+gloss = "A return is complete at the volunteer's scan; a tool left elsewhere is still on loan to the member"
+
+[[requirement]]
+stem = "returns"
+anchor = "guides/returning-a-tool.md#L27-L38"
+gloss = "Late returns are charged by the day with the first day free; an overdue tool blocks borrowing; four weeks overdue is lost"
+
+[[requirement]]
+stem = "returns"
+anchor = "guides/returning-a-tool.md#L42-L49"
+gloss = "A tool returned dirty is accepted and charged for cleaning; consumables are never charged"
+
+# --- membership, sign-in, password-reset: three subjects in one file ---
+
+[[requirement]]
+stem = "membership"
+anchor = "reference/accounts.md#L13-L19"
+gloss = "An account needs an email or mobile; an application undecided for thirty days lapses"
+
+[[requirement]]
+stem = "membership"
+anchor = "reference/accounts.md#L21-L33"
+gloss = "Four membership states; only an active membership may borrow or reserve; a suspension ends within six months"
+
+[[requirement]]
+stem = "membership"
+anchor = "reference/accounts.md#L35-L41"
+gloss = "One card per account; a cancelled card is refused at the desk; history is kept six years after closure"
+
+[[requirement]]
+stem = "membership"
+anchor = "policies/membership-eligibility.md#L14-L23"
+gloss = "Applicants are eighteen or over, resident in the four postcodes, with proof of address within three months; one membership per person"
+
+[[requirement]]
+stem = "membership"
+anchor = "policies/membership-eligibility.md#L32-L38"
+gloss = "The subscription is twenty pounds a year; volunteers staffing twelve sessions are not charged the next year"
+
+[[requirement]]
+stem = "membership"
+anchor = "guides/getting-started.md#L8-L18"
+gloss = "Until an application is approved the member may browse but not borrow or reserve, and is told so"
+
+[[requirement]]
+stem = "sign-in"
+anchor = "reference/accounts.md#L45-L53"
+gloss = "Passwords are twelve characters and not commonly used; five failed sign-ins lock for fifteen minutes; a code lasts ten minutes and one use"
+
+[[requirement]]
+stem = "sign-in"
+anchor = "reference/accounts.md#L55-L60"
+gloss = "A session lasts thirty days in the app; changing the password ends every other session"
+
+[[requirement]]
+stem = "password-reset"
+anchor = "reference/accounts.md#L64-L69"
+gloss = "The reset screen answers the same whether or not the details match an account"
+
+[[requirement]]
+stem = "password-reset"
+anchor = "reference/accounts.md#L71-L78"
+gloss = "A reset link lasts thirty minutes and one use; asking again invalidates it; setting the password ends every session"
+
+# --- catalogue ---
+
+[[requirement]]
+stem = "catalogue"
+anchor = "reference/catalogue.md#L31-L40"
+gloss = "Five conditions; a tool under repair or written off cannot be lent or reserved; a retired entry is kept out of searches"
+
+[[requirement]]
+stem = "catalogue"
+anchor = "reference/catalogue.md#L44-L49"
+gloss = "Availability is derived from loans, holds, and condition, and never shows who has a tool"
+
+[[requirement]]
+stem = "catalogue"
+anchor = "reference/catalogue.md#L61-L66"
+gloss = "A donated tool is a proposed entry inspected before acceptance; petrol tools and chainsaws are refused"
+
+# --- loans ---
+
+[[requirement]]
+stem = "loans"
+anchor = "reference/loans.md#L14-L23"
+gloss = "A loan opens after five checks in order, the first failure refusing it; a held or reserved tool is never lent to a walk-in"
+
+[[requirement]]
+stem = "loans"
+anchor = "reference/loans.md#L35-L40"
+gloss = "A loan is extended once by one to seven days unless the tool is reserved or the loan overdue"
+
+[[requirement]]
+stem = "loans"
+anchor = "policies/fair-use.md#L13-L18"
+gloss = "Three tools out at once, one in the first month; a volunteer may lend a fourth for a stated reason"
+
+[[requirement]]
+stem = "loans"
+anchor = "policies/fair-use.md#L22-L28"
+gloss = "High-demand tools are three-day loans, count double, and one at a time"
+
+[[requirement]]
+stem = "loans"
+anchor = "policies/fair-use.md#L51-L55"
+gloss = "Unpaid charges over ten pounds block a new loan; a disputed charge does not count"
+
+[[requirement]]
+stem = "loans"
+anchor = "guides/borrowing-a-tool.md#L29-L34"
+gloss = "A loan is seven days unless the catalogue says three"
+
+# --- reservations ---
+
+[[requirement]]
+stem = "reservations"
+anchor = "reference/reservations.md#L14-L23"
+gloss = "A reservation is refused for a duplicate, the limit, the reduced limit, or an overdue loan; one on a shelf tool is a hold to the next session"
+
+[[requirement]]
+stem = "reservations"
+anchor = "reference/reservations.md#L27-L34"
+gloss = "The next reservation becomes waiting and the tool is held until the end of the second desk session; a lapsed hold is missed"
+
+[[requirement]]
+stem = "reservations"
+anchor = "reference/reservations.md#L43-L46"
+gloss = "Cancelling before waiting counts against nothing; cancelling a waiting reservation is a miss"
+
+[[requirement]]
+stem = "reservations"
+anchor = "reference/reservations.md#L50-L54"
+gloss = "Reservations on a retired tool close as withdrawn, counting against no one, and the queue is notified"
+
+[[requirement]]
+stem = "reservations"
+anchor = "policies/reservation-limits.md#L13-L19"
+gloss = "Three open reservations at once, none twice on one tool; a fourth is refused naming the limit"
+
+[[requirement]]
+stem = "reservations"
+anchor = "policies/reservation-limits.md#L32-L38"
+gloss = "Two missed collections in three months reduce the limit to one until three months pass without a miss"
+
+# --- damage ---
+
+[[requirement]]
+stem = "damage"
+anchor = "policies/damage-and-loss.md#L14-L21"
+gloss = "Reported damage costs the repair up to half the replacement value, or nothing for wear"
+
+[[requirement]]
+stem = "damage"
+anchor = "policies/damage-and-loss.md#L30-L35"
+gloss = "Unreported damage costs the full repair up to replacement value; a second in twelve months goes to the committee"
+
+[[requirement]]
+stem = "damage"
+anchor = "policies/damage-and-loss.md#L43-L49"
+gloss = "A lost tool is charged at replacement value and refunded if returned within twenty-eight days"
+
+[[requirement]]
+stem = "damage"
+anchor = "policies/damage-and-loss.md#L51-L53"
+gloss = "Theft from a locked house or car with a police reference is not charged"
+
+[[requirement]]
+stem = "damage"
+anchor = "policies/damage-and-loss.md#L57-L61"
+gloss = "A dirty return is charged five pounds for cleaning; consumables are never charged"
+
+[[requirement]]
+stem = "damage"
+anchor = "guides/reporting-damage.md#L7-L17"
+gloss = "Damage reported before the return is charged at the reported rate; damage found at return is unreported"
+
+# --- notifications ---
+
+[[requirement]]
+stem = "notifications"
+anchor = "reference/notifications.md#L12-L23"
+gloss = "At least one channel stays on; an undelivered notification is retried once after an hour; quiet hours are eight to nine except a tool waiting"
+
+[[requirement]]
+stem = "notifications"
+anchor = "reference/notifications.md#L46-L50"
+gloss = "A notification never carries another member's name or contact details"
+
+# --- criteria: the one bullet list under a rule ---
+
+[[criterion]]
+stem = "membership"
+anchor = "policies/membership-eligibility.md#L44-L46"
+gloss = "A member who moves away keeps membership to the anniversary and is not renewed"
+
+[[criterion]]
+stem = "membership"
+anchor = "policies/membership-eligibility.md#L49-L53"
+gloss = "A suspension is for a stated period of up to six months, with the reason and end date in writing on the day"
+
+[[criterion]]
+stem = "membership"
+anchor = "policies/membership-eligibility.md#L54-L55"
+gloss = "A member may end their membership once every tool is back and every charge paid"

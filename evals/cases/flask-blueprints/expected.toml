@@ -4,26 +4,27 @@
 # handlers that are the bootstrap's, and a Redis cache the services read
 # through. Tests and a feature file state the behaviour.
 
+[[source]]
 adapter = "python"
 fixture = "evals/cases/flask-blueprints/fixture"
 stems = ["start", "health", "orders", "auth"]
 
 # --- surfaces: the (entry, stem) pairs the survey decides ---
 
-[[surface]]
+[[source.surface]]
 entry = "wsgi.py"
 stem = "start"
 
 # the rule added by hand in the factory, at its registration
-[[surface]]
+[[source.surface]]
 entry = "shop/__init__.py"
 stem = "health"
 
-[[surface]]
+[[source.surface]]
 entry = "shop/orders/routes.py"
 stem = "orders"
 
-[[surface]]
+[[source.surface]]
 entry = "shop/auth/routes.py"
 stem = "auth"
 

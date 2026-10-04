@@ -1,0 +1,179 @@
+# Hand-written user stories in two domains, each story a user, a want, and
+# a reason followed by an `Acceptance:` list; two files hold several
+# stories. The criteria-recall case: every acceptance line is a criterion
+# of its story's requirement. The README is an index and no subject.
+
+[[source]]
+name = "docs"
+adapter = "documentation"
+fixture = "evals/cases/stories/fixture"
+stems = ["wishlist", "invoices"]
+
+# --- subjects: the (entry, stem) pairs the survey decides ---
+
+[[source.surface]]
+entry = "wishlist/add-items.md"
+stem = "wishlist"
+
+# two stories, one entry, one stem
+[[source.surface]]
+entry = "wishlist/sharing.md"
+stem = "wishlist"
+
+[[source.surface]]
+entry = "invoices/issuing.md"
+stem = "invoices"
+
+# three stories, one entry, one stem
+[[source.surface]]
+entry = "invoices/payments.md"
+stem = "invoices"
+
+# --- requirements: one per story, at its "As a …" line ---
+
+[[requirement]]
+stem = "wishlist"
+anchor = "wishlist/add-items.md#L5-L6"
+gloss = "A member adds a product to their wishlist from its product page"
+
+[[requirement]]
+stem = "wishlist"
+anchor = "wishlist/sharing.md#L7-L8"
+gloss = "A member shares their wishlist by a link"
+
+[[requirement]]
+stem = "wishlist"
+anchor = "wishlist/sharing.md#L23-L24"
+gloss = "A member revokes a shared link"
+
+[[requirement]]
+stem = "invoices"
+anchor = "invoices/issuing.md#L5-L6"
+gloss = "An invoice is issued for every completed order"
+
+[[requirement]]
+stem = "invoices"
+anchor = "invoices/payments.md#L8-L9"
+gloss = "A seller records a payment against an invoice"
+
+[[requirement]]
+stem = "invoices"
+anchor = "invoices/payments.md#L25-L26"
+gloss = "Buyers are reminded when an invoice is overdue"
+
+[[requirement]]
+stem = "invoices"
+anchor = "invoices/payments.md#L40-L41"
+gloss = "A seller voids an invoice issued in error"
+
+# --- criteria: the acceptance lines ---
+
+[[criterion]]
+stem = "wishlist"
+anchor = "wishlist/add-items.md#L12-L13"
+gloss = "Adding a product already on the wishlist keeps the one entry"
+
+[[criterion]]
+stem = "wishlist"
+anchor = "wishlist/add-items.md#L14-L15"
+gloss = "A wishlist holds at most 200 items; adding to a full one is refused naming the limit"
+
+[[criterion]]
+stem = "wishlist"
+anchor = "wishlist/add-items.md#L16-L17"
+gloss = "A product no longer sold stays on the wishlist marked unavailable"
+
+[[criterion]]
+stem = "wishlist"
+anchor = "wishlist/sharing.md#L12-L13"
+gloss = "One link per wishlist; sharing again returns the same link until revoked"
+
+[[criterion]]
+stem = "wishlist"
+anchor = "wishlist/sharing.md#L16"
+gloss = "The link never reveals the member's email or delivery address"
+
+[[criterion]]
+stem = "wishlist"
+anchor = "wishlist/sharing.md#L17"
+gloss = "Private items are left out of the shared view"
+
+[[criterion]]
+stem = "wishlist"
+anchor = "wishlist/sharing.md#L28-L29"
+gloss = "Revoking takes effect immediately"
+
+[[criterion]]
+stem = "wishlist"
+anchor = "wishlist/sharing.md#L30-L31"
+gloss = "Sharing again after a revocation creates a new link; the revoked one never works again"
+
+[[criterion]]
+stem = "invoices"
+anchor = "invoices/issuing.md#L10"
+gloss = "An invoice is issued when the order is marked complete, not before"
+
+[[criterion]]
+stem = "invoices"
+anchor = "invoices/issuing.md#L11-L12"
+gloss = "Invoice numbers are unique per seller, increasing by one with no gaps"
+
+[[criterion]]
+stem = "invoices"
+anchor = "invoices/issuing.md#L15-L16"
+gloss = "An issued invoice is immutable; a correction is a credit note"
+
+[[criterion]]
+stem = "invoices"
+anchor = "invoices/issuing.md#L17-L18"
+gloss = "The buyer receives the invoice as a PDF by email within an hour"
+
+[[criterion]]
+stem = "invoices"
+anchor = "invoices/payments.md#L15-L16"
+gloss = "An invoice is marked paid when its payments total its amount"
+
+[[criterion]]
+stem = "invoices"
+anchor = "invoices/payments.md#L17-L18"
+gloss = "A payment taking the total over the invoice amount is refused"
+
+[[criterion]]
+stem = "invoices"
+anchor = "invoices/payments.md#L19"
+gloss = "A payment against a voided invoice is refused"
+
+[[criterion]]
+stem = "invoices"
+anchor = "invoices/payments.md#L30"
+gloss = "An invoice is overdue when unpaid thirty days after issue"
+
+[[criterion]]
+stem = "invoices"
+anchor = "invoices/payments.md#L31-L33"
+gloss = "Reminders on the overdue day and every fourteen days, to a maximum of three"
+
+[[criterion]]
+stem = "invoices"
+anchor = "invoices/payments.md#L34"
+gloss = "No reminder for a paid or voided invoice"
+
+[[criterion]]
+stem = "invoices"
+anchor = "invoices/payments.md#L45"
+gloss = "Only an invoice with no payment recorded can be voided"
+
+[[criterion]]
+stem = "invoices"
+anchor = "invoices/payments.md#L46-L47"
+gloss = "A voided invoice keeps its number, never reissued"
+
+# --- decisions ---
+
+[[decision]]
+anchor = "invoices/issuing.md#L21-L22"
+gloss = "Invoice numbers are per seller, not global"
+
+[[decision]]
+anchor = "invoices/payments.md#L50-L51"
+gloss = "Voiding is preferred to deletion so the sequence has no gap"

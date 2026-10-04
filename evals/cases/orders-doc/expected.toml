@@ -1,0 +1,54 @@
+# The orders service as the live example documents it, borrowed in place
+# from `examples/documentation/docs/`: one file, three subjects under one
+# domain noun — placing an order, order state, cancelling an order — all
+# under `orders`. The inline-budget path for documentation, and the
+# documentation half of every `orders-*` cross-source case.
+
+[[source]]
+name = "docs"
+adapter = "documentation"
+fixture = "examples/documentation/docs"
+stems = ["orders"]
+
+# three subjects at one entry under one stem read as one (entry, stem) pair
+[[source.surface]]
+entry = "orders-api.md"
+stem = "orders"
+
+[[requirement]]
+stem = "orders"
+anchor = "orders-api.md#L10-L13"
+gloss = "A client places an order with a customer id, line items, and an optional courier note; the service validates, assigns an id, and answers the order"
+
+[[requirement]]
+stem = "orders"
+anchor = "orders-api.md#L21-L23"
+gloss = "Every order is in exactly one of four states, starting pending; a shipped order can no longer be cancelled"
+
+[[requirement]]
+stem = "orders"
+anchor = "orders-api.md#L25-L27"
+gloss = "Reading an order by id answers its full detail; an unknown id answers not-found"
+
+[[requirement]]
+stem = "orders"
+anchor = "orders-api.md#L31-L33"
+gloss = "Cancelling a pending or paid order moves it to cancelled; cancelling a shipped order is refused with a conflict naming the state"
+
+# the bullets under placing an order are criteria of the placing
+# requirement, as the prompt reads a bullet list under a rule; a run that
+# states them as requirements of their own misses them here
+[[criterion]]
+stem = "orders"
+anchor = "orders-api.md#L15"
+gloss = "An order with no line items is rejected"
+
+[[criterion]]
+stem = "orders"
+anchor = "orders-api.md#L16"
+gloss = "A line quantity below one is rejected"
+
+[[criterion]]
+stem = "orders"
+anchor = "orders-api.md#L17"
+gloss = "The order id is opaque to clients"
