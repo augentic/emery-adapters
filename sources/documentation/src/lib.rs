@@ -22,10 +22,7 @@
 //! each subject's span and the id its claims lead with, and cuts the seams:
 //! one call over every subject's document within the SDK's inline budget,
 //! one per stem past it, each told its subjects and their spans, and the
-//! directory cut above when no subject is named. Under `anchors` besides,
-//! each call is held to the lines of its subjects that state a rule — a
-//! paragraph, a list item, a table row, a step, a quotation — as where a
-//! requirement may anchor.
+//! directory cut above when no subject is named.
 
 #[cfg(target_arch = "wasm32")]
 mod survey;

@@ -15,12 +15,10 @@ crate-type = ["cdylib", "rlib"]
 workspace = true
 
 [features]
-# The experiment arms (evals/cards/README.md, "The documentation survey
+# The experiment arm (evals/cards/README.md, "The documentation survey
 # experiment"): the default build cuts a tree by directory; `model-survey`
-# has the model name the tree's subjects and cuts the seams from them;
-# `anchors` holds each requirement to the rule-bearing lines of its subject.
+# has the model name the tree's subjects and cuts the seams from them.
 model-survey = []
-anchors = ["model-survey"]
 
 [dependencies]
 emery-sdk.workspace = true

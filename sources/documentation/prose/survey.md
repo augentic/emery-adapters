@@ -16,13 +16,13 @@ Nothing outside the bound source is reachable; writes back into `$SOURCE_DIR` ar
 
 ## What a subject is
 
-A subject is one thing the documented system does or governs for the people who use it — what a reviewer would put a heading over and write requirements under: a feature (resetting a password), a resource (orders, accounts), a flow (returning a tool), a policy (late returns), a recorded decision (append-only entries), a part of the design (the module layout). It is the grain the domain's own nouns give, not the grain of the writing:
+A subject is one thing the documented system does or governs for the people who use it — what a reviewer would put a heading over and write requirements under: a feature (resetting a password), a resource (orders, accounts), a flow (returning a tool), a policy (late returns), a recorded decision (append-only entries), a part of the design (the module layout). It is the grain the domain's own nouns give, not the grain of the writing, and its noun is the one a reader would file its rules under — never a finer one. An operation on the thing, a state it can be in, a story about it, a section of a page about it, is a part of the subject and no subject of its own: *Placing an order*, *Order state*, and *Cancelling an order* are three parts of `orders`; five stories about invoices are `invoices`. Two things stay two subjects — membership, signing in, and resetting a password are three, since no reader files one's rules under another's noun — and a page's title can be a container (*Accounts*) rather than a thing, when its sections are the subjects. The test is where a reader files the rules, not how many headings the writer used:
 
-- A document that treats one subject throughout — a guide to returning a tool, a policy on late returns, a decision record, a story file about invoices — is one subject, anchored at the document's title, or at its first line where it has no heading.
+- A document that treats one subject throughout — a guide to returning a tool, a policy on late returns, a decision record, a story file about invoices, a page whose sections are the operations and states of one resource — is one subject, anchored at the document's title, or at its first line where it has no heading; its sections are the subject's parts, which the caller tells apart by their headings.
 - A document that treats several — a reference page whose sections are membership, signing in, and resetting a password — is one subject per section, each anchored at the heading of its section; what comes before the first of them belongs to the first.
 - A subject several documents treat — a guide, a reference page, and a policy on returns — is named in each document, at the heading that introduces it there, every one under the same stem; the caller mines them together.
 - A guide's subject is what it walks through, not the walking: *Getting started* is about joining, so its subject is membership; *Returning a tool* is returns.
-- Several stories, scenarios, or records under one heading are one subject where they are about one thing (three stories about invoices) and several where the headings keep them apart.
+- Several stories, scenarios, or records under one heading are one subject where they are about one thing (three stories about invoices) and several where they are about several (five decision records, each governing its own thing); a story is never a subject of its own, and a part named as a subject all the same carries the thing's stem.
 
 What introduces no subject is `unreached`: an index or readme that points at other documents, a glossary, a changelog, a table of error codes, a licence, a contributing guide, and every document about working on the repository or the documentation rather than about the system — installing, running, building, testing, releasing, the project's own command-line tooling. A document that explains how the system is put together — its architecture, its data model, its persistence — is a subject: its decisions are claims.
 
@@ -38,6 +38,7 @@ The stem is the first segment of every `requirement` and `criterion` id the subj
 - a heading is a phrase about the noun, and the noun is what is kept: *Resetting a forgotten password* → `password-reset`; *Returning a tool* and *Late returns policy* and *Returns* → `returns`; *Joining Toolshed*, *Membership*, and *Membership eligibility policy* → `membership`; *Signing in* → `sign-in`;
 - a document that names the thing by the system's own identifier, and by nothing else — a page headed `OrderService` whose sections are its operations — spells its noun that way, and the stem is that name kebab-cased: `order-service`;
 - a decision record's stem is the thing the decision governs — *Append-only entries* → `entries`; *Idempotent posting* → `posting`; *Amounts in minor units* → `amounts` — not the record's number and not `decisions`;
+- never an operation, a state, or a story of the noun: `orders`, not `order-placement` or `order-cancellation`; `invoices`, not `payments` or `invoice-reminders` — the caller tells the parts apart by the headings you anchor them at;
 - never a file name, a directory name, or a document kind: not `guides`, `reference`, `policies`, `adr`, `stories`, `docs`, `readme`.
 
 Subjects on one noun share one stem — the guide, the reference page, and the policy on returns are three subjects under `returns` — and the caller tells them apart by the headings you anchored them at.
@@ -107,6 +108,7 @@ Five subjects. The guide and the policy each treat one subject throughout, so ea
 - **Cutting by directory or kind.** `guides/*` is not a subject, nor `policies/*`, nor "the reference"; a subject is what the system does, wherever it is written up.
 - **A stem from a path.** `guides`, `reference`, `adr`, `stories` are where the documents sit, not what they are about.
 - **A stem per heading.** *Returning a tool* and *Late returns policy* are both `returns`; a different stem for each breaks the one subject across two build slices.
+- **A stem per operation or story.** *Placing an order* and *Cancelling an order* are `orders`; *Recording a payment* and *Voiding an invoice* are `invoices`. A stem finer than the thing's noun breaks one subject across build slices and names its parts differently run to run.
 - **Anchoring inside the body.** The anchor is the heading or the first line, where the subject is introduced, not a line that states a rule about it; the rules are the extract call's.
 - **Inventing a subject.** A readme, an index, a glossary, a changelog, a build guide is listed under `unreached`; a tree of nothing else is answered `surfaces: []`.
 - **Extracting.** This call names subjects and nothing else; claims are the extract call's.
@@ -119,7 +121,8 @@ Five subjects. The guide and the policy each treat one subject throughout, so ea
 | A document has no heading | Anchor its subject at the line it opens at, and read what it is about from the laid text. |
 | One subject runs through several documents | Name it in each, at the heading introducing it there, under the one stem. |
 | A document's sections are about several things | One subject per section at its heading; the introduction before the first belongs to the first. |
-| Several stories or scenarios in one document | One subject where they are about one thing; one per heading where the headings keep them apart. |
+| A document's sections are the operations or states of one thing | One subject at the document's title, under the thing's noun; the sections are its parts. |
+| Several stories or scenarios in one document | One subject where they are about one thing, under its noun; several only where they are about several things, and never a stem per story. |
 | The documents are decision records | One subject per record, at its title, under the noun of what it governs; their index is unreached. |
 | A document is about the repository, the build, or the documentation itself | Unreached, however long. |
 | No document introduces a subject | Answer `surfaces: []` and list nothing as unreached; the caller mines the tree by directory. |

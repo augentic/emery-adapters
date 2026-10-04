@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 use std::fmt::Write as _;
 use std::path::Path;
 
-use emery_sdk::survey::{Inventory, Lines};
+use emery_sdk::survey::Inventory;
 use emery_sdk::{Error, INLINE_BYTES, Seam, SourceContent, SourceInput, serde_json, tracing};
 
 use super::model::{self, Subject};
@@ -134,27 +134,21 @@ fn cut(
         || stems.iter().map(|stem| (*stem).to_owned()).collect(),
         |stem| vec![stem.to_owned()],
     );
-    let anchors = anchors(prepared, subjects);
-    let text = text(&prepared.source, subjects, &files, stems, stem, unreached, &anchors);
+    let text = text(&prepared.source, subjects, &files, stems, stem, unreached);
     Seam {
         text,
         files,
         stems: held,
-        anchors: anchors
-            .iter()
-            .flat_map(|(path, spans)| {
-                spans.iter().map(move |span| format!("{path}#{}", span.anchor()))
-            })
-            .collect(),
+        anchors: Vec::new(),
     }
 }
 
 // The brief: the subjects and their spans, the documents under no
-// subject, the other stems where the seam is one of several, the anchor
-// rule, and — under `anchors` — the lines a requirement may anchor at.
+// subject, the other stems where the seam is one of several, and the
+// anchor rule.
 fn text(
     source: &str, subjects: &[Subject], files: &[String], stems: &[&str], stem: Option<&str>,
-    unreached: &[String], anchors: &[(String, Vec<Lines>)],
+    unreached: &[String],
 ) -> String {
     let plural =
         |n: usize, one: &str, many: &str| if n == 1 { one.to_owned() } else { many.to_owned() };
@@ -225,53 +219,11 @@ fn text(
     }
 
     text.push_str(
-        "\n\nA claim anchors at the lines that state it, never at a heading: a `requirement` \
-         at the paragraph, item, row, step, or quotation that states the rule; a `criterion` \
-         at the item that lists it — a bullet list beneath a rule, the cases a sentence \
-         introduces, an acceptance list, are criteria under the rule's id, not requirements \
-         of their own; a `decision` where the document records it. State each rule once, \
-         where its subject states it.",
+        "\n\nA claim anchors at the lines that state it, never at a heading, and keeps the kind \
+         the prompt gives it whatever line it anchors at.",
     );
 
-    if !anchors.is_empty() {
-        text.push_str(
-            "\n\nThe lines a `requirement` may anchor at — every paragraph, list item, table \
-             row, step, and quotation within the subjects above, by document:\n",
-        );
-        for (path, spans) in anchors {
-            let listed: Vec<String> = spans.iter().map(|span| span.anchor()).collect();
-            let _ = write!(text, "\n- `{path}`: {}", listed.join(", "));
-        }
-    }
-
     text
-}
-
-// Under `anchors`, the rule-bearing spans within the subjects' spans, by
-// document in path order; none otherwise.
-#[cfg(feature = "anchors")]
-fn anchors(prepared: &Prepared, subjects: &[Subject]) -> Vec<(String, Vec<Lines>)> {
-    let mut by_doc: std::collections::BTreeMap<&str, Vec<Lines>> =
-        std::collections::BTreeMap::new();
-    for subject in subjects {
-        let Some(doc) = prepared.document(&subject.entry) else { continue };
-        by_doc.entry(&doc.path).or_default().extend(doc.outline.stating(subject.span));
-    }
-    prepared
-        .documents
-        .iter()
-        .filter_map(|doc| {
-            let mut spans = by_doc.remove(doc.path.as_str())?;
-            spans.sort_unstable();
-            spans.dedup();
-            Some((doc.path.clone(), spans))
-        })
-        .collect()
-}
-
-#[cfg(not(feature = "anchors"))]
-const fn anchors(_prepared: &Prepared, _subjects: &[Subject]) -> Vec<(String, Vec<Lines>)> {
-    Vec::new()
 }
 
 // The `surveyed` trace line the eval reads, in the shape the SDK logs
