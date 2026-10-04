@@ -1,8 +1,20 @@
-//! Divides a documentation tree into independently mined groups.
+//! Divides a documentation tree into independently mined groups: by its
+//! directories, or — under `model-survey` — by the subjects the model names
+//! in it, from the outline code read of every document.
 
 use std::collections::BTreeMap;
 
 use emery_sdk::{Error, Seam, SourceContent, SourceInput};
+
+#[cfg(feature = "model-survey")]
+pub mod model;
+#[cfg(feature = "model-survey")]
+mod structure;
+#[cfg(feature = "model-survey")]
+mod subjects;
+
+#[cfg(feature = "model-survey")]
+pub use self::subjects::{Document, Preparation, Prepared, prepare, seams};
 
 const MIN_SIZE: usize = 2;
 

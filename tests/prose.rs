@@ -65,7 +65,8 @@ fn fenced_json<'d>(doc: &'d str, heading: &str) -> &'d str {
 
 #[test]
 fn documentation() {
-    corpus(documentation::PROSE, "documentation", &["extract.md"]);
+    corpus(documentation::PROSE, "documentation", &["extract.md", "survey.md"]);
+    surveying(documentation::PROSE);
 }
 
 #[test]
