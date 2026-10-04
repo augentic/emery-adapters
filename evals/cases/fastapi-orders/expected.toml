@@ -3,17 +3,18 @@
 # `__main__` guard, so the one module is the bootstrap and the four routes
 # under `/orders` are the one stem beside `start`.
 
+[[source]]
 adapter = "python"
 fixture = "evals/cases/fastapi-orders/fixture"
 stems = ["start", "orders"]
 
 # --- surfaces: the (entry, stem) pairs the survey decides ---
 
-[[surface]]
+[[source.surface]]
 entry = "orders.py"
 stem = "start"
 
-[[surface]]
+[[source.surface]]
 entry = "orders.py"
 stem = "orders"
 

@@ -17,56 +17,58 @@
 # treatment named them on six of six runs under the prompt's rule, when the
 # expectation moved to the prompt's reading.
 
+[[source]]
+adapter = "typescript"
 fixture = "evals/cases/nestjs-boilerplate/fixture"
 stems = ["start", "auth", "users", "files", "home", "run-seed"]
 
 # --- surfaces: the bootstrap, the nine controllers, and the two seed runners ---
 
-[[surface]]
+[[source.surface]]
 entry = "src/main.ts"
 stem = "start"
 
-[[surface]]
+[[source.surface]]
 entry = "src/auth/auth.controller.ts"
 stem = "auth"
 
-[[surface]]
+[[source.surface]]
 entry = "src/auth-google/auth-google.controller.ts"
 stem = "auth"
 
-[[surface]]
+[[source.surface]]
 entry = "src/auth-facebook/auth-facebook.controller.ts"
 stem = "auth"
 
-[[surface]]
+[[source.surface]]
 entry = "src/auth-apple/auth-apple.controller.ts"
 stem = "auth"
 
-[[surface]]
+[[source.surface]]
 entry = "src/users/users.controller.ts"
 stem = "users"
 
-[[surface]]
+[[source.surface]]
 entry = "src/files/infrastructure/uploader/local/files.controller.ts"
 stem = "files"
 
-[[surface]]
+[[source.surface]]
 entry = "src/files/infrastructure/uploader/s3/files.controller.ts"
 stem = "files"
 
-[[surface]]
+[[source.surface]]
 entry = "src/files/infrastructure/uploader/s3-presigned/files.controller.ts"
 stem = "files"
 
-[[surface]]
+[[source.surface]]
 entry = "src/home/home.controller.ts"
 stem = "home"
 
-[[surface]]
+[[source.surface]]
 entry = "src/database/seeds/relational/run-seed.ts"
 stem = "run-seed"
 
-[[surface]]
+[[source.surface]]
 entry = "src/database/seeds/document/run-seed.ts"
 stem = "run-seed"
 

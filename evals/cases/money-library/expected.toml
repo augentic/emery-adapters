@@ -4,21 +4,22 @@
 # classes beside them are what they raise, not surfaces. The rate table is a
 # data file the conversion names by path. Mirrors `orders`.
 
+[[source]]
 adapter = "python"
 fixture = "evals/cases/money-library/fixture"
 stems = ["money", "parse-csv", "convert"]
 
 # --- surfaces: the (entry, stem) pairs the survey decides ---
 
-[[surface]]
+[[source.surface]]
 entry = "src/money/money.py"
 stem = "money"
 
-[[surface]]
+[[source.surface]]
 entry = "src/money/parse.py"
 stem = "parse-csv"
 
-[[surface]]
+[[source.surface]]
 entry = "src/money/rates.py"
 stem = "convert"
 

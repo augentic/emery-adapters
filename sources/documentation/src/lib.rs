@@ -12,13 +12,27 @@
 //! - If fewer than two groups remain, the entire input is mined as a whole.
 //!
 //! Inline inputs are always mined as a whole.
+//!
+//! Under the `model-survey` feature — an experiment arm, not the default —
+//! a workspace is surveyed before it is mined: every document's outline is
+//! laid before the model, which names each subject the tree documents, a
+//! feature, a resource, or a flow, anchored at the heading or first line
+//! that introduces it, under the domain noun the documents spell as its
+//! stem; a document introducing no subject is listed unreached. Code derives
+//! each subject's span and the id its claims lead with, and cuts the seams:
+//! one call over every subject's document within the SDK's inline budget,
+//! one per stem past it, each told its subjects and their spans, and the
+//! directory cut above when no subject is named. Under `anchors` besides,
+//! each call is held to the lines of its subjects that state a rule — a
+//! paragraph, a list item, a table row, a step, a quotation — as where a
+//! requirement may anchor.
 
 #[cfg(target_arch = "wasm32")]
 mod survey;
 
 #[cfg(target_arch = "wasm32")]
 mod guest {
-    use emery_sdk::{AdapterMetadata, Context, Error, Evidence, Model, SourceKind};
+    use emery_sdk::{AdapterMetadata, Context, Error, Evidence, Model, Seam, SourceKind};
 
     use crate::{PROSE, survey};
 
@@ -28,11 +42,31 @@ mod guest {
         emery_sdk::metadata(SourceKind::Documentation)
     }
 
+    // An inline value is one seam at once; a workspace's subjects are named
+    // in one turn from the outlines code read, and its seams cut from them.
+    #[cfg(feature = "model-survey")]
+    async fn seams<P: Model>(ctx: &Context<'_, P>) -> Result<Vec<Seam>, Error> {
+        match survey::prepare(ctx.input)? {
+            survey::Preparation::Value => Ok(vec![Seam::whole()]),
+            survey::Preparation::Workspace(prepared) if prepared.documents.is_empty() => {
+                survey::survey(ctx.input)
+            }
+            survey::Preparation::Workspace(prepared) => {
+                let inventory = survey::model::subjects(ctx, PROSE, &prepared).await?;
+                survey::seams(ctx.input, &prepared, &inventory)
+            }
+        }
+    }
+
     async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {
-        let seams = survey::survey(ctx.input)?;
+        #[cfg(not(feature = "model-survey"))]
+        let seams: Vec<Seam> = survey::survey(ctx.input)?;
+        #[cfg(feature = "model-survey")]
+        let seams = seams(ctx).await?;
         emery_sdk::extract(ctx, PROSE, &seams).await
     }
 }
 
-/// The prompt embedded in the adapter.
-pub static PROSE: &[emery_sdk::Doc] = emery_sdk::prose!["../prose/extract.md"];
+/// The prompts embedded in the adapter.
+pub static PROSE: &[emery_sdk::Doc] =
+    emery_sdk::prose!["../prose/extract.md", "../prose/survey.md"];

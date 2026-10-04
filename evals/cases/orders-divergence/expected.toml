@@ -1,0 +1,74 @@
+# The orders service with a specification that disagrees with the code in
+# two planted places: the doc requires at least two line items where the
+# code refuses only an empty order (L10-L15 against orders.ts#L40-L42), and
+# the doc lets only a pending order be cancelled where the code refuses only
+# a shipped one (L21-L23, L30-L32 against orders.ts#L67-L74). Each is one
+# requirement with two agreement classes of different kinds, so its status
+# is `divergence` with the doc's statement winning and the code's as the
+# loser note. The doc also drops the not-found sentence, so "reading an
+# unknown order is not-found" is code-only, and keeps the opaque id, which
+# is doc-only.
+
+[[source]]
+name = "docs"
+adapter = "documentation"
+fixture = "evals/cases/orders-divergence/fixture/docs"
+stems = ["orders"]
+
+[[source.surface]]
+entry = "orders-api.md"
+stem = "orders"
+
+[[source]]
+name = "code"
+adapter = "typescript"
+fixture = "evals/cases/orders/fixture"
+stems = ["order-service"]
+
+[[source.surface]]
+entry = "orders.ts"
+stem = "order-service"
+
+# --- the two planted divergences ---
+
+[[behaviour]]
+gloss = "the minimum number of line items an order needs (doc: two; code: one)"
+status = "divergence"
+claims = [
+  { source = "docs", anchor = "orders-api.md#L15" },
+  { source = "code", anchor = "orders.ts#L40-L42" },
+]
+
+[[behaviour]]
+gloss = "which orders can be cancelled (doc: pending only; code: all but shipped)"
+status = "divergence"
+claims = [
+  { source = "docs", anchor = "orders-api.md#L30-L32" },
+  { source = "code", anchor = "orders.ts#L67-L74" },
+]
+
+# --- the behaviours both still state alike ---
+
+[[behaviour]]
+gloss = "a line quantity below one is refused"
+claims = [
+  { source = "docs", anchor = "orders-api.md#L16" },
+  { source = "code", anchor = "orders.ts#L43-L45" },
+]
+
+[[behaviour]]
+gloss = "a valid order is assigned an id, stored pending, and answered"
+claims = [
+  { source = "docs", anchor = "orders-api.md#L10-L13" },
+  { source = "code", anchor = "orders.ts#L46-L56" },
+]
+
+# --- one doc-only, one code-only ---
+
+[[behaviour]]
+gloss = "the order id is opaque to clients"
+claims = [{ source = "docs", anchor = "orders-api.md#L17" }]
+
+[[behaviour]]
+gloss = "reading an unknown order is not-found"
+claims = [{ source = "code", anchor = "orders.ts#L59-L65" }]

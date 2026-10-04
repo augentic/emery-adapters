@@ -7,27 +7,28 @@
 # and the migration is skipped. A signal receiver reached through `ready()`
 # and the admin module are unreached without a finding.
 
+[[source]]
 adapter = "python"
 fixture = "evals/cases/django-shop/fixture"
 stems = ["start", "orders", "import-orders"]
 
 # --- surfaces: the (entry, stem) pairs the survey decides ---
 
-[[surface]]
+[[source.surface]]
 entry = "manage.py"
 stem = "start"
 
 # the five `path(..)` registrations, one surface each, under the `orders/` mount
-[[surface]]
+[[source.surface]]
 entry = "orders/urls.py"
 stem = "orders"
 
 # the viewset the router registers at `orders`, with its `pay` and `cancel` actions
-[[surface]]
+[[source.surface]]
 entry = "api/urls.py"
 stem = "orders"
 
-[[surface]]
+[[source.surface]]
 entry = "orders/management/commands/import_orders.py"
 stem = "import-orders"
 

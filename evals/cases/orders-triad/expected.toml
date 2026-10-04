@@ -1,0 +1,107 @@
+# The orders service from three sources at once: the written specification
+# (`docs`, the live example's document), the TypeScript behaviour (`code`,
+# the `orders` case's one module), and the operator's inline brief (`brief`,
+# the live example's `description`). The sources agree, so the behaviours
+# below are the engine's grouping judgment: one requirement per behaviour,
+# citing the doc and the code, mostly `agreed` where a criterion covers it
+# and `unknown` where none does. No status is expected on them — whether the
+# doc's and the code's statements fall into one agreement class or two is
+# the model's call, and the card's status counts show which it made. The
+# brief is inline and anchors nothing, so it is not a behaviour's claim; its
+# effect is read in the status counts alone.
+
+[[source]]
+name = "docs"
+adapter = "documentation"
+fixture = "examples/documentation/docs"
+stems = ["orders"]
+
+[[source.surface]]
+entry = "orders-api.md"
+stem = "orders"
+
+[[source]]
+name = "code"
+adapter = "typescript"
+fixture = "evals/cases/orders/fixture"
+stems = ["order-service"]
+
+[[source.surface]]
+entry = "orders.ts"
+stem = "order-service"
+
+[[source]]
+name = "brief"
+adapter = "intent"
+description = "Ship the orders service: place, read, and cancel orders over HTTP. Every order carries at least one line item; a shipped order can no longer be cancelled. Keep the API platform-neutral."
+
+# --- what each source states, as the single-source cases expect ---
+
+[[requirement]]
+source = "docs"
+stem = "orders"
+anchor = "orders-api.md#L31-L33"
+gloss = "Cancelling a pending or paid order moves it to cancelled; cancelling a shipped order is refused with a conflict naming the state"
+
+[[requirement]]
+source = "code"
+stem = "order-service"
+anchor = "orders.ts#L40-L42"
+gloss = "Placing an order with no lines is a ValidationError"
+
+[[requirement]]
+source = "code"
+stem = "order-service"
+anchor = "orders.ts#L67-L71"
+gloss = "Cancelling a shipped order is a ConflictError carrying the state"
+
+# --- behaviours: one requirement each, citing both sources ---
+
+[[behaviour]]
+gloss = "an order with no line items is refused"
+claims = [
+  { source = "docs", anchor = "orders-api.md#L15" },
+  { source = "code", anchor = "orders.ts#L40-L42" },
+]
+
+[[behaviour]]
+gloss = "a line quantity below one is refused"
+claims = [
+  { source = "docs", anchor = "orders-api.md#L16" },
+  { source = "code", anchor = "orders.ts#L43-L45" },
+]
+
+[[behaviour]]
+gloss = "a valid order is assigned an id, stored pending, and answered"
+claims = [
+  { source = "docs", anchor = "orders-api.md#L10-L13" },
+  { source = "code", anchor = "orders.ts#L46-L56" },
+]
+
+[[behaviour]]
+gloss = "reading an unknown order is not-found"
+claims = [
+  { source = "docs", anchor = "orders-api.md#L25-L27" },
+  { source = "code", anchor = "orders.ts#L59-L65" },
+]
+
+# the doc states cancellation in one sentence the code states in two
+# branches; one requirement citing the sentence and both branches, or two
+# each citing the sentence, is the engine's cut — the second reads as a
+# split, the one this case allows
+[[behaviour]]
+gloss = "cancelling moves a pending or paid order to cancelled and refuses a shipped one with a conflict naming the state"
+claims = [
+  { source = "docs", anchor = "orders-api.md#L31-L33" },
+  { source = "code", anchor = "orders.ts#L67-L74" },
+]
+
+# --- doc-only behaviours: the code holds nothing about them ---
+
+[[behaviour]]
+gloss = "the order id is opaque to clients"
+claims = [{ source = "docs", anchor = "orders-api.md#L17" }]
+
+[[behaviour]]
+gloss = "an order is in exactly one of four states, starting pending"
+claims = [{ source = "docs", anchor = "orders-api.md#L21" }]

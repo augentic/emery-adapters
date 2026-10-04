@@ -7,28 +7,29 @@
 # module reads by path laid after the modules as a data file. Mirrors
 # `express-orders`.
 
+[[source]]
 adapter = "python"
 fixture = "evals/cases/fastapi-routers/fixture"
 stems = ["start", "orders", "customers", "health"]
 
 # --- surfaces: the (entry, stem) pairs the survey decides ---
 
-[[surface]]
+[[source.surface]]
 entry = "app/main.py"
 stem = "start"
 
 # the five routes under `/api/v1/orders`, one surface each
-[[surface]]
+[[source.surface]]
 entry = "app/routers/orders.py"
 stem = "orders"
 
 # the three routes under `/api/v1/customers`
-[[surface]]
+[[source.surface]]
 entry = "app/routers/customers.py"
 stem = "customers"
 
 # `/health` and `/health/ready`, mounted at the root
-[[surface]]
+[[source.surface]]
 entry = "app/routers/health.py"
 stem = "health"
 

@@ -1,0 +1,73 @@
+# The orders service documented under the code's own names — `OrderService`
+# at the top, `place`, `read`, and `cancel` as its sections, the error
+# classes by name — so the domain noun the doc spells is `order-service`,
+# the code's stem, and the ids the doc's claims lead with can collide
+# byte-equal with the code's. The byte-equal pre-merge (`basis.rs`
+# `baseline`) is the one literal rule in the engine's grouping; this case
+# counts how often it fires when the spelling invites it, and the
+# `orders-triad` card beside it — the same estate, the doc in its own words
+# — says whether the merges were any better for it. The doc states
+# cancellation in two bullets as the code does in two branches, so the two
+# are two behaviours here.
+
+[[source]]
+name = "docs"
+adapter = "documentation"
+fixture = "evals/cases/orders-spelled/fixture/docs"
+stems = ["order-service"]
+
+[[source.surface]]
+entry = "order-service.md"
+stem = "order-service"
+
+[[source]]
+name = "code"
+adapter = "typescript"
+fixture = "evals/cases/orders/fixture"
+stems = ["order-service"]
+
+[[source.surface]]
+entry = "orders.ts"
+stem = "order-service"
+
+[[behaviour]]
+gloss = "place with no lines throws ValidationError"
+claims = [
+  { source = "docs", anchor = "order-service.md#L14" },
+  { source = "code", anchor = "orders.ts#L40-L42" },
+]
+
+[[behaviour]]
+gloss = "place with a line quantity below one throws ValidationError"
+claims = [
+  { source = "docs", anchor = "order-service.md#L15-L16" },
+  { source = "code", anchor = "orders.ts#L43-L45" },
+]
+
+[[behaviour]]
+gloss = "place assigns ord_<n>, stores the order pending with one transition, and returns it"
+claims = [
+  { source = "docs", anchor = "order-service.md#L17-L19" },
+  { source = "code", anchor = "orders.ts#L46-L56" },
+]
+
+[[behaviour]]
+gloss = "read of an unknown id throws NotFoundError naming the id"
+claims = [
+  { source = "docs", anchor = "order-service.md#L25" },
+  { source = "code", anchor = "orders.ts#L59-L65" },
+]
+
+[[behaviour]]
+gloss = "cancel of a shipped order throws ConflictError carrying the state"
+claims = [
+  { source = "docs", anchor = "order-service.md#L31" },
+  { source = "code", anchor = "orders.ts#L67-L71" },
+]
+
+[[behaviour]]
+gloss = "cancel of any other order sets it cancelled, appends a transition, and returns it"
+claims = [
+  { source = "docs", anchor = "order-service.md#L32-L33" },
+  { source = "code", anchor = "orders.ts#L72-L74" },
+]

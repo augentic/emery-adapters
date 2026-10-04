@@ -7,24 +7,26 @@
 # bearer check under `/orders/*` and `/customers/*` is the bootstrap's.
 # Written before any run.
 
+[[source]]
+adapter = "typescript"
 fixture = "evals/cases/hono-mounted/fixture"
 stems = ["start", "orders", "customers", "health"]
 
 # --- surfaces: the bootstrap and the three sub-applications ---
 
-[[surface]]
+[[source.surface]]
 entry = "src/server.ts"
 stem = "start"
 
-[[surface]]
+[[source.surface]]
 entry = "src/routes/orders.ts"
 stem = "orders"
 
-[[surface]]
+[[source.surface]]
 entry = "src/routes/customers.ts"
 stem = "customers"
 
-[[surface]]
+[[source.surface]]
 entry = "src/routes/health.ts"
 stem = "health"
 

@@ -1,0 +1,213 @@
+# brocoders/nestjs-boilerplate at 9620f159 (MIT), vendored by the command in
+# evals/README.md into the `nestjs-boilerplate` case's fixture and read from
+# there: its `docs/` as the documentation source and the whole tree as the
+# TypeScript source — 177 modules, the code scale case — reconciled
+# together. The scale case for synthesis. The behaviours are the ones the
+# auth guide, the upload guide, and the serialization and translation notes
+# state and the code holds, anchored at the doc's sentence and the code's
+# branch the `nestjs-boilerplate` case expects a requirement at, plus a few
+# the docs alone state. No status is expected: the sources agree, and
+# whether each pair of statements is one class or two is the model's call.
+
+[[source]]
+name = "docs"
+adapter = "documentation"
+fixture = "evals/cases/nestjs-boilerplate/fixture/docs"
+stems = ["auth", "files", "serialization", "translations", "database", "architecture"]
+
+[[source.surface]]
+entry = "auth.md"
+stem = "auth"
+
+[[source.surface]]
+entry = "file-uploading.md"
+stem = "files"
+
+[[source.surface]]
+entry = "serialization.md"
+stem = "serialization"
+
+[[source.surface]]
+entry = "translations.md"
+stem = "translations"
+
+[[source.surface]]
+entry = "database.md"
+stem = "database"
+
+[[source.surface]]
+entry = "architecture.md"
+stem = "architecture"
+
+[[source]]
+name = "code"
+adapter = "typescript"
+fixture = "evals/cases/nestjs-boilerplate/fixture"
+stems = ["start", "auth", "users", "files", "home", "run-seed"]
+
+[[source.surface]]
+entry = "src/main.ts"
+stem = "start"
+
+[[source.surface]]
+entry = "src/auth/auth.controller.ts"
+stem = "auth"
+
+[[source.surface]]
+entry = "src/auth-apple/auth-apple.controller.ts"
+stem = "auth"
+
+[[source.surface]]
+entry = "src/auth-facebook/auth-facebook.controller.ts"
+stem = "auth"
+
+[[source.surface]]
+entry = "src/auth-google/auth-google.controller.ts"
+stem = "auth"
+
+[[source.surface]]
+entry = "src/users/users.controller.ts"
+stem = "users"
+
+[[source.surface]]
+entry = "src/files/infrastructure/uploader/local/files.controller.ts"
+stem = "files"
+
+[[source.surface]]
+entry = "src/files/infrastructure/uploader/s3/files.controller.ts"
+stem = "files"
+
+[[source.surface]]
+entry = "src/files/infrastructure/uploader/s3-presigned/files.controller.ts"
+stem = "files"
+
+[[source.surface]]
+entry = "src/home/home.controller.ts"
+stem = "home"
+
+[[source.surface]]
+entry = "src/database/seeds/relational/run-seed.ts"
+stem = "run-seed"
+
+[[source.surface]]
+entry = "src/database/seeds/document/run-seed.ts"
+stem = "run-seed"
+
+# --- auth: the guide's rules the service holds ---
+
+[[behaviour]]
+gloss = "a production start refuses placeholder AUTH_*_SECRET values and development warns"
+claims = [
+  { source = "docs", anchor = "auth.md#L92" },
+  { source = "docs", anchor = "auth.md#L236" },
+  { source = "code", anchor = "src/auth/config/auth.config.ts#L16-L32" },
+]
+
+[[behaviour]]
+gloss = "a successful login answers the access token, its expiry, and a refresh token"
+claims = [
+  { source = "docs", anchor = "auth.md#L206" },
+  { source = "code", anchor = "src/auth/auth.service.ts#L74-L96" },
+]
+
+[[behaviour]]
+gloss = "refresh checks the session hash and rotates it, disallowing the previous refresh token"
+claims = [
+  { source = "docs", anchor = "auth.md#L216-L218" },
+  { source = "code", anchor = "src/auth/auth.service.ts#L531-L544" },
+]
+
+[[behaviour]]
+gloss = "logout deletes the current session"
+claims = [
+  { source = "docs", anchor = "auth.md#L224-L230" },
+  { source = "code", anchor = "src/auth/auth.service.ts#L566-L568" },
+]
+
+[[behaviour]]
+gloss = "helmet sets the security headers with the content security policy off"
+claims = [
+  { source = "docs", anchor = "auth.md#L237" },
+  { source = "code", anchor = "src/main.ts#L22-L27" },
+]
+
+[[behaviour]]
+gloss = "CORS allows the configured origins, any origin when none is configured"
+claims = [
+  { source = "docs", anchor = "auth.md#L238" },
+  { source = "code", anchor = "src/main.ts#L29-L34" },
+]
+
+[[behaviour]]
+gloss = "a password reset link is signed with the current password hash and a reset revokes every session"
+claims = [
+  { source = "docs", anchor = "auth.md#L239" },
+  { source = "code", anchor = "src/auth/auth.service.ts#L342-L364" },
+  { source = "code", anchor = "src/auth/auth.service.ts#L413-L419" },
+]
+
+[[behaviour]]
+gloss = "a social login whose email the provider has not verified is refused emailNotVerified"
+claims = [
+  { source = "docs", anchor = "auth.md#L240" },
+  { source = "code", anchor = "src/auth/auth.service.ts#L107-L114" },
+]
+
+[[behaviour]]
+gloss = "a social login binds to its social id, else adopts the inactive account at its email, else creates a user"
+claims = [
+  { source = "docs", anchor = "auth.md#L241" },
+  { source = "code", anchor = "src/auth/auth.service.ts#L126-L160" },
+]
+
+[[behaviour]]
+gloss = "with uniform errors on, a failed login reports incorrectEmailOrPassword and forgot-password answers as success for an unknown email"
+claims = [
+  { source = "docs", anchor = "auth.md#L242" },
+  { source = "code", anchor = "src/auth/auth.service.ts#L570-L586" },
+  { source = "code", anchor = "src/auth/auth.service.ts#L322-L340" },
+]
+
+[[behaviour]]
+gloss = "GET /auth/me answers the current user under a JWT"
+claims = [
+  { source = "docs", anchor = "auth.md#L163-L175" },
+  { source = "code", anchor = "src/auth/auth.controller.ts#L94-L104" },
+]
+
+[[behaviour]]
+gloss = "the JWT strategy accepts a payload without a database lookup and refuses one with no id"
+claims = [
+  { source = "docs", anchor = "auth.md#L130" },
+  { source = "code", anchor = "src/auth/strategies/jwt.strategy.ts#L21-L27" },
+]
+
+# --- files ---
+
+[[behaviour]]
+gloss = "a presigned upload takes a file name and answers the file record and a PUT URL"
+claims = [
+  { source = "docs", anchor = "file-uploading.md#L104" },
+  { source = "code", anchor = "src/files/infrastructure/uploader/s3-presigned/files.service.ts#L77-L92" },
+]
+
+[[behaviour]]
+gloss = "a local upload answers the file record with its id and path"
+claims = [
+  { source = "docs", anchor = "file-uploading.md#L31" },
+  { source = "code", anchor = "src/files/infrastructure/uploader/local/files.service.ts#L29-L35" },
+]
+
+# --- the docs alone ---
+
+[[behaviour]]
+gloss = "rate limiting is intentionally not bundled"
+claims = [{ source = "docs", anchor = "auth.md#L243" }]
+
+[[behaviour]]
+gloss = "the x-custom-lang header selects the language"
+claims = [{ source = "docs", anchor = "translations.md#L16" }]
+
+[[behaviour]]
+gloss = "files are not deleted; soft delete is used"
+claims = [{ source = "docs", anchor = "file-uploading.md#L177" }]

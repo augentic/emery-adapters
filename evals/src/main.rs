@@ -5,15 +5,18 @@
 //! `evals/cases/` (or the named ones, and every case of a named adapter) as
 //! its own project beneath `target/eval/<card>/`, runs `emery specify` over
 //! it three times, reads the committed documents back through `emery show`,
-//! grades the accepted claims and the surveyed surfaces against the case's
-//! `expected.toml`, and writes the scorecard to `target/eval/<card>.md` —
-//! `<card>` the run's UTC start, so every run's files outlive the next
-//! invocation and a card can be read back to its anchors. A case names the
-//! adapter it runs under (`adapter = "python"`; `typescript` when it names
-//! none). Every path — a case's `fixture`, the binaries' defaults and a
-//! relative `EMERY_BIN` or `<ADAPTER>_WASM`, the scorecard's — is relative
-//! to the repository root. A case whose fixture the checkout lacks is
-//! skipped unless it is named.
+//! grades the accepted claims, the surveyed surfaces, and the reconciled
+//! requirements against the case's `expected.toml`, and writes the scorecard
+//! to `target/eval/<card>.md` — `<card>` the run's UTC start, so every run's
+//! files outlive the next invocation and a card can be read back to its
+//! anchors. A case names one `[[source]]` or several, each under the adapter
+//! it runs (`adapter = "python"`) over a `fixture` tree or an inline
+//! `description`; a case of several sources grades the specification's
+//! `[[behaviour]]`s — which requirements the engine reconciled from which
+//! sources, under which status. Every path — a source's `fixture`, the
+//! binaries' defaults and a relative `EMERY_BIN` or `<ADAPTER>_WASM`, the
+//! scorecard's — is relative to the repository root. A case whose fixture
+//! the checkout lacks is skipped unless it is named.
 //!
 //! A run that hits the backend's time cap — a `timeout` or `inactive`
 //! completion — is put again one rung up the budget ladder, so the card says
@@ -25,8 +28,8 @@
 //! names the turn it died in.
 //!
 //! `cargo run -p evals -- --facts [case|adapter..]` stages the named cases
-//! and runs each once with no `CURSOR_API_KEY` in the environment, so the
-//! adapter reads the tree and lays its survey facts — the text the model
+//! and runs each once with no `CURSOR_API_KEY` in the environment, so each
+//! adapter reads its tree and lays its survey facts — the text the model
 //! would be asked to name surfaces from — and the first turn fails before
 //! any is spent; the facts are printed and written to
 //! `target/eval/facts/<case>/facts.md`. A graded run writes the same beside
@@ -35,12 +38,12 @@
 //! Environment: `EMERY_BIN` (`../emery/target/release/emery`), one
 //! `<ADAPTER>_WASM` per adapter a selected case runs under —
 //! `TYPESCRIPT_WASM` (`target/wasm32-wasip2/release/typescript.wasm`),
-//! `PYTHON_WASM` (`target/wasm32-wasip2/release/python.wasm`) — `EVAL_RUNS`
-//! (`3`), `EVAL_LADDER` (`600/120,1200/240,2400/480`: each rung
+//! `PYTHON_WASM`, `DOCUMENTATION_WASM`, `INTENT_WASM` — `EVAL_RUNS` (`3`),
+//! `EVAL_LADDER` (`600/120,1200/240,2400/480`: each rung
 //! `CURSOR_TIMEOUT_SECS/CURSOR_INACTIVITY_SECS`), and the runtime's other
 //! `CURSOR_*` knobs. `RUST_LOG` is set for the run unless the caller sets it:
 //! the scorecard needs the SDK's `accepted` trace lines and `surveyed by
-//! model` line, the adapter's `survey facts` and `surveyed` trace lines and
+//! model` line, the adapters' `survey facts` and `surveyed` trace lines and
 //! `placed by model` line, and the backend's `completion` lines.
 
 #![allow(
@@ -63,13 +66,16 @@ use serde_json::Value;
 
 const CASES: &str = "evals/cases";
 const LADDER: &str = "600/120,1200/240,2400/480";
-const DEFAULT_ADAPTER: &str = "typescript";
 const BOOTSTRAP: &str = "start";
 
-// The run's log filter unless the caller sets one: the adapter's own crate
-// at trace beside the SDK's.
-fn rust_log(adapter: &str) -> String {
-    format!("emery_sdk=trace,{adapter}=trace,omnia_cursor=info,omnia_core=off")
+// The run's log filter unless the caller sets one: every adapter the case
+// runs under at trace beside the SDK's.
+fn rust_log<'a>(adapters: impl IntoIterator<Item = &'a str>) -> String {
+    let mut filter = "emery_sdk=trace".to_owned();
+    for adapter in adapters {
+        let _ = write!(filter, ",{adapter}=trace");
+    }
+    filter + ",omnia_cursor=info,omnia_core=off"
 }
 
 fn main() -> ExitCode {
@@ -98,17 +104,16 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
     if cases.is_empty() {
         return Err(format!("no case under `{CASES}` matches").into());
     }
-    let adapters: BTreeSet<&str> =
-        cases.iter().map(|case| case.expected.adapter.as_str()).collect();
+    let adapters: BTreeSet<&str> = cases.iter().flat_map(|case| case.expected.adapters()).collect();
     let settings = Settings::from_env(root, &adapters)?;
 
     let eval_dir = root.join("target/eval");
     if facts_only {
         for case in &cases {
             let project = stage(&eval_dir.join("facts"), case, &settings)?;
-            let text = facts(&project, &settings, &case.expected.adapter)?;
+            let text = facts(&project, &settings, case)?;
             fs::write(project.join("facts.md"), &text)?;
-            println!("# {} — survey facts ({})\n\n{text}\n", case.name, case.expected.adapter);
+            println!("# {} — survey facts\n\n{text}\n", case.name);
             eprintln!("eval: `{}` facts at {}", case.name, project.join("facts.md").display());
         }
         return Ok(());
@@ -177,8 +182,7 @@ fn tag(n: usize, index: usize, rung: Rung) -> String {
 fn attempt(
     project: &Path, settings: &Settings, case: &Case, n: usize, rung: Rung, tag: &str,
 ) -> io::Result<Run> {
-    let adapter = &case.expected.adapter;
-    let first = run(project, settings, adapter, n, rung, tag)?;
+    let first = run(project, settings, case, n, rung, tag)?;
     if !first.stillborn() {
         return Ok(first);
     }
@@ -189,7 +193,7 @@ fn attempt(
             fs::rename(from, project.join(format!("{tag}.dead.{suffix}")))?;
         }
     }
-    let mut again = run(project, settings, adapter, n, rung, tag)?;
+    let mut again = run(project, settings, case, n, rung, tag)?;
     again.dead = Some(first.summary());
 
     Ok(again)
@@ -204,7 +208,7 @@ struct Settings {
     runs: usize,
     ladder: Vec<Rung>,
     model: String,
-    // the caller's `RUST_LOG`, when set, over the per-adapter default
+    // the caller's `RUST_LOG`, when set, over the per-case default
     rust_log: Option<String>,
 }
 
@@ -247,16 +251,16 @@ impl Settings {
         })
     }
 
-    // The component a case's adapter was built to: every selected case's is
-    // read at start.
+    // The component an adapter was built to: every selected case's is read
+    // at start.
     fn component(&self, adapter: &str) -> io::Result<&Path> {
         self.wasm.get(adapter).map(PathBuf::as_path).ok_or_else(|| {
             io::Error::new(io::ErrorKind::NotFound, format!("no component for adapter `{adapter}`"))
         })
     }
 
-    fn rust_log(&self, adapter: &str) -> String {
-        self.rust_log.clone().unwrap_or_else(|| rust_log(adapter))
+    fn rust_log(&self, case: &Case) -> String {
+        self.rust_log.clone().unwrap_or_else(|| rust_log(case.expected.adapters()))
     }
 }
 
@@ -298,20 +302,45 @@ struct Case {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Expected {
-    // the adapter the case runs under, by crate name
-    #[serde(default = "default_adapter")]
-    adapter: String,
-    // the fixture tree, relative to the repository root
-    fixture: String,
-    // the stems the accepted requirement claims lead with, exactly
-    stems: Vec<String>,
-    // the (entry, stem) pairs the survey decides, exactly
-    #[serde(default, rename = "surface")]
-    surfaces: Vec<ExpectedSurface>,
+    // the sources the run binds, one or several
+    #[serde(rename = "source")]
+    sources: Vec<Source>,
     #[serde(default, rename = "requirement")]
     requirements: Vec<Item>,
     #[serde(default, rename = "criterion")]
     criteria: Vec<Item>,
+    #[serde(default, rename = "decision")]
+    decisions: Vec<Item>,
+    // the requirements the engine reconciles across the sources, exactly
+    #[serde(default, rename = "behaviour")]
+    behaviours: Vec<Behaviour>,
+}
+
+// One source of the run: the adapter it runs under and what it is bound to,
+// with the stems its accepted requirement claims lead with, exactly, and
+// the (entry, stem) pairs its survey decides, exactly.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Source {
+    // the name the specification cites the source by; the adapter's when
+    // the line is absent, as `emery` names it
+    name: Option<String>,
+    // the adapter the source runs under, by crate name
+    adapter: String,
+    // the fixture tree, relative to the repository root
+    fixture: Option<String>,
+    // an inline value in the fixture's place
+    description: Option<String>,
+    #[serde(default)]
+    stems: Vec<String>,
+    #[serde(default, rename = "surface")]
+    surfaces: Vec<ExpectedSurface>,
+}
+
+impl Source {
+    fn name(&self) -> &str {
+        self.name.as_deref().unwrap_or(&self.adapter)
+    }
 }
 
 #[derive(Deserialize)]
@@ -324,12 +353,45 @@ struct ExpectedSurface {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Item {
+    // the source the item is read from; the case's one source when absent
+    #[serde(default)]
+    source: Option<String>,
     // the stem — or any one of the stems — a meeting claim's id leads with
     // for the match to count as `in stem`; none grades the anchor alone
     #[serde(default)]
     stem: Option<Stems>,
     anchor: String,
     gloss: String,
+}
+
+// One behaviour the specification states once, however many sources state
+// it: the claims that contribute, each at its source and anchor, and the
+// status the engine's authority rule gives the requirement.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Behaviour {
+    gloss: String,
+    #[serde(default)]
+    status: Option<String>,
+    claims: Vec<ExpectedClaim>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ExpectedClaim {
+    source: String,
+    anchor: String,
+}
+
+impl Behaviour {
+    fn label(&self) -> String {
+        let claims: Vec<String> = self
+            .claims
+            .iter()
+            .map(|claim| format!("{}:`{}`", claim.source, claim.anchor))
+            .collect();
+        format!("{} — {}", claims.join(", "), self.gloss)
+    }
 }
 
 // One stem, or a list where the code is shared — a guard two routers
@@ -360,12 +422,77 @@ impl Display for Stems {
     }
 }
 
-fn default_adapter() -> String {
-    DEFAULT_ADAPTER.to_owned()
+impl Expected {
+    fn adapters(&self) -> impl Iterator<Item = &str> {
+        self.sources.iter().map(|source| source.adapter.as_str())
+    }
+
+    // The source an item names, or the case's one source when it names none.
+    fn source(&self, named: Option<&str>) -> Result<&Source, String> {
+        match named {
+            Some(name) => self
+                .sources
+                .iter()
+                .find(|source| source.name() == name)
+                .ok_or_else(|| format!("names no source of the case: `{name}`")),
+            None if self.sources.len() == 1 => Ok(&self.sources[0]),
+            None => Err("names no source, and the case has several".to_owned()),
+        }
+    }
+
+    // What the shape alone does not hold: one content key per source, each
+    // source named once, and every item and claim at a source of the case.
+    fn check(&self) -> Result<(), String> {
+        if self.sources.is_empty() {
+            return Err("names no `[[source]]`".to_owned());
+        }
+        let mut names = BTreeSet::new();
+        for source in &self.sources {
+            if source.fixture.is_some() == source.description.is_some() {
+                return Err(format!(
+                    "source `{}` has one of `fixture` and `description`, not both or neither",
+                    source.name()
+                ));
+            }
+            if !names.insert(source.name()) {
+                return Err(format!("source `{}` is named twice", source.name()));
+            }
+        }
+        for (kind, items) in [
+            ("requirement", &self.requirements),
+            ("criterion", &self.criteria),
+            ("decision", &self.decisions),
+        ] {
+            for item in items {
+                self.source(item.source.as_deref())
+                    .map_err(|why| format!("{kind} `{}` {why}", item.anchor))?;
+            }
+        }
+        for behaviour in &self.behaviours {
+            if behaviour.claims.is_empty() {
+                return Err(format!("behaviour `{}` names no claim", behaviour.gloss));
+            }
+            for claim in &behaviour.claims {
+                self.source(Some(&claim.source))
+                    .map_err(|why| format!("behaviour `{}` {why}", behaviour.gloss))?;
+            }
+            if let Some(status) = &behaviour.status
+                && !matches!(status.as_str(), "agreed" | "unknown" | "divergence" | "conflict")
+            {
+                return Err(format!(
+                    "behaviour `{}` expects status `{status}`; the statuses are `agreed`, \
+                     `unknown`, `divergence`, and `conflict`",
+                    behaviour.gloss
+                ));
+            }
+        }
+        Ok(())
+    }
 }
 
 // Every case under `evals/cases/`, or the ones the filter names — a name is
-// a case's or an adapter's, which selects every case running under it.
+// a case's or an adapter's, which selects every case with a source running
+// under it.
 fn cases(root: &Path, filter: &BTreeSet<String>) -> Result<Vec<Case>, Box<dyn std::error::Error>> {
     let mut cases = Vec::new();
     for entry in fs::read_dir(root.join(CASES))? {
@@ -378,16 +505,25 @@ fn cases(root: &Path, filter: &BTreeSet<String>) -> Result<Vec<Case>, Box<dyn st
             .map_err(|error| format!("{name}: expected.toml: {error}"))?;
         let expected: Expected =
             toml::from_str(&expected).map_err(|error| format!("{name}: {error}"))?;
-        if !filter.is_empty() && !filter.contains(name) && !filter.contains(&expected.adapter) {
+        expected.check().map_err(|error| format!("{name}: expected.toml {error}"))?;
+        let selected = filter.is_empty()
+            || filter.contains(name)
+            || expected.adapters().any(|adapter| filter.contains(adapter));
+        if !selected {
             continue;
         }
         // a fixture the checkout lacks (the vendored ones are gitignored until
         // fetched) skips its case unless the case was asked for by name
-        if !root.join(&expected.fixture).is_dir() {
+        let absent = expected
+            .sources
+            .iter()
+            .filter_map(|source| source.fixture.as_deref())
+            .find(|fixture| !root.join(fixture).is_dir());
+        if let Some(fixture) = absent {
             if filter.contains(name) {
-                return Err(format!("{name}: no fixture at `{}`", expected.fixture).into());
+                return Err(format!("{name}: no fixture at `{fixture}`").into());
             }
-            eprintln!("eval: `{name}` skipped, no fixture at `{}`", expected.fixture);
+            eprintln!("eval: `{name}` skipped, no fixture at `{fixture}`");
             continue;
         }
         cases.push(Case {
@@ -402,7 +538,9 @@ fn cases(root: &Path, filter: &BTreeSet<String>) -> Result<Vec<Case>, Box<dyn st
     let unmatched: Vec<&String> = filter
         .iter()
         .filter(|name| {
-            !cases.iter().any(|case| case.name == **name || case.expected.adapter == **name)
+            !cases.iter().any(|case| {
+                case.name == **name || case.expected.adapters().any(|adapter| adapter == *name)
+            })
         })
         .collect();
     if !unmatched.is_empty() {
@@ -414,24 +552,47 @@ fn cases(root: &Path, filter: &BTreeSet<String>) -> Result<Vec<Case>, Box<dyn st
 
 // --- staging ---
 
-// Copies the fixture and the component into a project of their own beneath
-// `dir`: `emery` mounts its invocation directory, so both must sit inside
-// it, and the revision store the run commits under stays with the case.
+// Copies each source's fixture and each adapter's component into a project
+// of their own beneath `dir`: `emery` mounts its invocation directory, so
+// both must sit inside it, and the revision store the run commits under
+// stays with the case. Each source's tree sits under its name.
 fn stage(dir: &Path, case: &Case, settings: &Settings) -> io::Result<PathBuf> {
     let project = dir.join(&case.name);
     if project.exists() {
         fs::remove_dir_all(&project)?;
     }
     fs::create_dir_all(&project)?;
-    copy_tree(&settings.root.join(&case.expected.fixture), &project.join("source"))?;
-    let adapter = &case.expected.adapter;
-    fs::copy(settings.component(adapter)?, project.join(format!("{adapter}.wasm")))?;
-    fs::write(
-        project.join("emery.toml"),
-        format!("[[source]]\nadapter = \"{adapter}.wasm\"\npath = \"source/\"\n"),
-    )?;
+    let mut config = String::new();
+    for source in &case.expected.sources {
+        let adapter = &source.adapter;
+        let component = project.join(format!("{adapter}.wasm"));
+        if !component.exists() {
+            fs::copy(settings.component(adapter)?, component)?;
+        }
+        let _ = write!(
+            config,
+            "[[source]]\nname = \"{}\"\nadapter = \"{adapter}.wasm\"\n",
+            toml_escaped(source.name())
+        );
+        match (&source.fixture, &source.description) {
+            (Some(fixture), _) => {
+                copy_tree(&settings.root.join(fixture), &project.join(source.name()))?;
+                let _ = writeln!(config, "path = \"{}/\"", toml_escaped(source.name()));
+            }
+            (None, Some(description)) => {
+                let _ = writeln!(config, "description = \"{}\"", toml_escaped(description));
+            }
+            (None, None) => {}
+        }
+        config.push('\n');
+    }
+    fs::write(project.join("emery.toml"), config)?;
 
     Ok(project)
+}
+
+fn toml_escaped(text: &str) -> String {
+    text.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n")
 }
 
 // What a fixture's checkout may hold that no run reads: dependencies,
@@ -480,14 +641,15 @@ struct Run {
     exit: Option<i32>,
     tail: String,
     diff: Option<Value>,
-    evidence: Vec<Evidence>,
+    // each seam's accepted evidence, under the source it was mined from
+    evidence: Vec<(String, Evidence)>,
     completions: Vec<Completion>,
-    // the surfaces the seams were cut from, as the adapter logged them
-    surveyed: Vec<Surveyed>,
-    // the modules the survey placed under no surface, by the adapter's own
-    // count (`placed by model`), else as the model listed them (the SDK's
-    // `surveyed by model` line)
-    unreached: Option<usize>,
+    // the surfaces each source's seams were cut from, as its adapter logged them
+    surveyed: BTreeMap<String, Vec<Surveyed>>,
+    // the modules each source's survey placed under no surface, by the
+    // adapter's own count (`placed by model`), else as the model listed them
+    // (the SDK's `surveyed by model` line)
+    unreached: BTreeMap<String, usize>,
     spec: Option<Value>,
     design: Option<Value>,
     plan: Option<Value>,
@@ -495,7 +657,7 @@ struct Run {
     dead: Option<String>,
 }
 
-// One surface as the adapter's `surveyed` line spells it; `lines` is its
+// One surface as an adapter's `surveyed` line spells it; `lines` is its
 // registration or declaration, `L<n>` or `L<n>-L<n>`, where the adapter
 // logs one.
 #[derive(Deserialize)]
@@ -524,7 +686,7 @@ impl Run {
                 "ok in {}s, {} completions, {} claims",
                 self.wall.as_secs(),
                 self.completions.len(),
-                self.evidence.iter().map(|evidence| evidence.claims.len()).sum::<usize>()
+                self.evidence.iter().map(|(_, evidence)| evidence.claims.len()).sum::<usize>()
             ),
             Some(code) => {
                 let died = self.died_in().map_or(String::new(), |label| format!(" in `{label}`"));
@@ -564,25 +726,30 @@ impl Run {
     }
 
     // Where the accepted requirement claims anchor against the surfaces the
-    // survey decided, the bootstrap set aside — its span is its module or
-    // its guard, not a registration or a declaration; none when the adapter
-    // logged no surface span.
+    // surveys decided, each source's against its own, the bootstrap set
+    // aside — its span is its module or its guard, not a registration or a
+    // declaration; none when no adapter logged a surface span.
     fn landing(&self) -> Option<Landing> {
-        let spans: Vec<(&str, (u64, u64))> = self
+        let spans: Vec<(&str, &str, (u64, u64))> = self
             .surveyed
             .iter()
-            .filter(|surface| surface.stem != BOOTSTRAP)
-            .filter_map(|surface| Some((surface.entry.as_str(), surface.span()?)))
+            .flat_map(|(source, surfaces)| {
+                surfaces.iter().filter(|surface| surface.stem != BOOTSTRAP).filter_map(|surface| {
+                    Some((source.as_str(), surface.entry.as_str(), surface.span()?))
+                })
+            })
             .collect();
         if spans.is_empty() {
             return None;
         }
         let mut landing = Landing::default();
-        for claim in self.claims(ClaimKind::Requirement) {
+        for (source, claim) in self.sourced(ClaimKind::Requirement) {
             let Some(Ok(anchor)) = claim.anchor() else { continue };
             let Some((start, end)) = anchor.lines else { continue };
             let at = |held: &dyn Fn((u64, u64)) -> bool| {
-                spans.iter().any(|(entry, span)| *entry == anchor.path && held(*span))
+                spans
+                    .iter()
+                    .any(|(of, entry, span)| *of == source && *entry == anchor.path && held(*span))
             };
             if at(&|(first, _)| start <= first && first <= end) {
                 landing.head += 1;
@@ -595,26 +762,61 @@ impl Run {
         Some(landing)
     }
 
-    fn claims(&self, kind: ClaimKind) -> impl Iterator<Item = &Claim> {
+    // Every accepted claim of `kind`, with the source it was mined from.
+    fn sourced(&self, kind: ClaimKind) -> impl Iterator<Item = (&str, &Claim)> {
         self.evidence
             .iter()
-            .flat_map(|evidence| &evidence.claims)
-            .filter(move |claim| claim.kind == kind)
+            .flat_map(|(source, evidence)| {
+                evidence.claims.iter().map(move |claim| (source.as_str(), claim))
+            })
+            .filter(move |(_, claim)| claim.kind == kind)
     }
 
-    fn stems(&self) -> BTreeSet<&str> {
-        self.claims(ClaimKind::Requirement).filter_map(|claim| stem(claim.id.as_deref()?)).collect()
+    fn claims(&self, kind: ClaimKind) -> impl Iterator<Item = &Claim> {
+        self.sourced(kind).map(|(_, claim)| claim)
     }
 
-    fn ids(&self) -> BTreeSet<&str> {
-        self.claims(ClaimKind::Requirement).filter_map(|claim| claim.id.as_deref()).collect()
+    fn claims_of<'r>(
+        &'r self, source: &'r str, kind: ClaimKind,
+    ) -> impl Iterator<Item = &'r Claim> {
+        self.sourced(kind).filter(move |(of, _)| *of == source).map(|(_, claim)| claim)
     }
 
-    // The (entry, stem) pairs the survey decided, however many surfaces share one.
-    fn pairs(&self) -> BTreeSet<(&str, &str)> {
+    // The stems each source's requirement claims lead with, as (source, stem).
+    fn stems(&self) -> BTreeSet<(&str, &str)> {
+        self.sourced(ClaimKind::Requirement)
+            .filter_map(|(source, claim)| Some((source, stem(claim.id.as_deref()?)?)))
+            .collect()
+    }
+
+    fn stems_of<'r>(&'r self, source: &'r str) -> BTreeSet<&'r str> {
+        self.stems().into_iter().filter(|(of, _)| *of == source).map(|(_, stem)| stem).collect()
+    }
+
+    fn ids(&self) -> BTreeSet<(&str, &str)> {
+        self.sourced(ClaimKind::Requirement)
+            .filter_map(|(source, claim)| Some((source, claim.id.as_deref()?)))
+            .collect()
+    }
+
+    // The (source, entry, stem) triples the surveys decided, however many
+    // surfaces share one.
+    fn pairs(&self) -> BTreeSet<(&str, &str, &str)> {
         self.surveyed
             .iter()
-            .map(|surface| (surface.entry.as_str(), surface.stem.as_str()))
+            .flat_map(|(source, surfaces)| {
+                surfaces.iter().map(move |surface| {
+                    (source.as_str(), surface.entry.as_str(), surface.stem.as_str())
+                })
+            })
+            .collect()
+    }
+
+    fn pairs_of<'r>(&'r self, source: &'r str) -> BTreeSet<(&'r str, &'r str)> {
+        self.pairs()
+            .into_iter()
+            .filter(|(of, _, _)| *of == source)
+            .map(|(_, entry, stem)| (entry, stem))
             .collect()
     }
 
@@ -726,18 +928,19 @@ struct Completion {
 
 #[expect(clippy::disallowed_methods, reason = "the eval is a native operator tool, not a guest")]
 fn run(
-    project: &Path, settings: &Settings, adapter: &str, n: usize, rung: Rung, tag: &str,
+    project: &Path, settings: &Settings, case: &Case, n: usize, rung: Rung, tag: &str,
 ) -> io::Result<Run> {
     let started = Instant::now();
-    let rust_log = settings.rust_log(adapter);
+    let rust_log = settings.rust_log(case);
     let output = emery(project, settings, &rust_log, rung, SPECIFY, Turns::Live)?;
     let wall = started.elapsed();
     let stderr = String::from_utf8_lossy(&output.stderr);
     let stdout = String::from_utf8_lossy(&output.stdout);
     fs::write(project.join(format!("{tag}.stderr")), stderr.as_bytes())?;
     fs::write(project.join(format!("{tag}.stdout")), stdout.as_bytes())?;
-    if let Some(facts) = survey_facts(&stderr) {
-        fs::write(project.join(format!("{tag}.facts.md")), facts)?;
+    let facts = survey_facts(&stderr);
+    if !facts.is_empty() {
+        fs::write(project.join(format!("{tag}.facts.md")), facts_text(&facts))?;
     }
     let mut tail: Vec<&str> = stderr.lines().rev().take(5).collect();
     tail.reverse();
@@ -752,7 +955,7 @@ fn run(
         diff: serde_json::from_str::<Value>(&stdout).ok().and_then(|out| out.get("diff").cloned()),
         evidence: accepted(&stderr),
         completions: completions(&stderr),
-        surveyed: surveyed(&stderr).unwrap_or_default(),
+        surveyed: surveyed(&stderr),
         unreached: unreached(&stderr),
         spec: None,
         design: None,
@@ -774,9 +977,9 @@ fn run(
         }
     }
     // the claims are graded whether or not the engine's turns landed after them
-    for (index, evidence) in run.evidence.iter().enumerate() {
+    for (index, (source, evidence)) in run.evidence.iter().enumerate() {
         fs::write(
-            project.join(format!("{tag}.evidence-{index}.json")),
+            project.join(format!("{tag}.evidence-{source}-{index}.json")),
             serde_json::to_string_pretty(evidence)?,
         )?;
     }
@@ -788,7 +991,7 @@ const SPECIFY: &[&str] = &["specify", "--config", "emery.toml"];
 
 // Whether a run may put a turn to the model: `None` strips `CURSOR_API_KEY`
 // from the binary's environment, so the backend refuses the first turn
-// after the adapter has read the tree and logged its facts.
+// after the adapters have read their trees and logged their facts.
 #[derive(Clone, Copy)]
 enum Turns {
     Live,
@@ -815,72 +1018,107 @@ fn emery(
     command.output()
 }
 
-// The survey facts a staged project's adapter lays, read from one run that
+// The survey facts a staged project's adapters lay, read from one run that
 // spends no turn: the run fails at the first completion, after the facts
 // are logged.
-fn facts(project: &Path, settings: &Settings, adapter: &str) -> io::Result<String> {
-    let rust_log = settings.rust_log(adapter);
+fn facts(project: &Path, settings: &Settings, case: &Case) -> io::Result<String> {
+    let rust_log = settings.rust_log(case);
     let rung =
         settings.ladder.first().copied().ok_or_else(|| io::Error::other("EVAL_LADDER: no rung"))?;
     let output = emery(project, settings, &rust_log, rung, SPECIFY, Turns::None)?;
     let stderr = String::from_utf8_lossy(&output.stderr);
     fs::write(project.join("facts.stderr"), stderr.as_bytes())?;
-    survey_facts(&stderr).ok_or_else(|| {
+    let facts = survey_facts(&stderr);
+    if facts.is_empty() {
         let mut tail: Vec<&str> = stderr.lines().rev().take(5).collect();
         tail.reverse();
-        io::Error::other(format!(
-            "no `survey facts` line from adapter `{adapter}` (does it survey? is `{adapter}=trace` \
-             in RUST_LOG?); the run ended:\n{}",
+        let adapters: Vec<&str> = case.expected.adapters().collect();
+        return Err(io::Error::other(format!(
+            "no `survey facts` line from {adapters:?} (does any survey? is each at `trace` in \
+             RUST_LOG?); the run ended:\n{}",
             tail.join("\n")
-        ))
-    })
+        )));
+    }
+    Ok(facts_text(&facts))
 }
 
-// The adapter's `survey facts` trace line carries the text laid before the
-// model as one JSON string at the end of the line.
-fn survey_facts(stderr: &str) -> Option<String> {
+// One source's facts bare; several each under a heading naming the source.
+fn facts_text(facts: &BTreeMap<String, String>) -> String {
+    if let [(_, text)] = facts.iter().collect::<Vec<_>>().as_slice() {
+        return (*text).clone();
+    }
+    facts
+        .iter()
+        .map(|(source, text)| format!("# source `{source}`\n\n{text}\n"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+// The value a log line carries under `<key>=`, bare up to the next space.
+fn field<'l>(line: &'l str, key: &str) -> Option<&'l str> {
+    let (_, rest) = line.split_once(key)?;
+    rest.split_whitespace().next()
+}
+
+// An adapter's `survey facts` trace line carries the text laid before the
+// model as one JSON string at the end of the line, per source.
+fn survey_facts(stderr: &str) -> BTreeMap<String, String> {
     stderr
         .lines()
         .filter(|line| line.contains(" survey facts source="))
-        .filter_map(|line| line.split_once(" facts="))
-        .find_map(|(_, json)| serde_json::from_str(json.trim()).ok())
-}
-
-// The SDK's `accepted` trace line carries each seam's evidence as one JSON
-// object at the end of the line.
-fn accepted(stderr: &str) -> Vec<Evidence> {
-    stderr
-        .lines()
-        .filter(|line| line.contains(" accepted source="))
-        .filter_map(|line| line.split_once("evidence="))
-        .filter_map(|(_, json)| serde_json::from_str(json.trim()).ok())
+        .filter_map(|line| {
+            let source = field(line, " source=")?;
+            let (_, json) = line.split_once(" facts=")?;
+            Some((source.to_owned(), serde_json::from_str(json.trim()).ok()?))
+        })
         .collect()
 }
 
-// The adapter's `surveyed` trace line carries the surfaces as one JSON array
-// at the end of the line.
-fn surveyed(stderr: &str) -> Option<Vec<Surveyed>> {
+// The SDK's `accepted` trace line carries each seam's evidence as one JSON
+// object at the end of the line, under the source it was mined from.
+fn accepted(stderr: &str) -> Vec<(String, Evidence)> {
+    stderr
+        .lines()
+        .filter(|line| line.contains(" accepted source="))
+        .filter_map(|line| {
+            let source = field(line, " source=")?;
+            let (_, json) = line.split_once("evidence=")?;
+            Some((source.to_owned(), serde_json::from_str(json.trim()).ok()?))
+        })
+        .collect()
+}
+
+// An adapter's `surveyed` trace line carries the surfaces as one JSON array
+// at the end of the line, per source.
+fn surveyed(stderr: &str) -> BTreeMap<String, Vec<Surveyed>> {
     stderr
         .lines()
         .filter(|line| line.contains(" surveyed source="))
-        .filter_map(|line| line.split_once("surfaces="))
-        .find_map(|(_, json)| serde_json::from_str(json.trim()).ok())
+        .filter_map(|line| {
+            let source = field(line, " source=")?;
+            let (_, json) = line.split_once("surfaces=")?;
+            Some((source.to_owned(), serde_json::from_str(json.trim()).ok()?))
+        })
+        .collect()
 }
 
-// The adapter's `placed by model` info line carries how many modules no
+// An adapter's `placed by model` info line carries how many modules no
 // surface reaches by code's own count; the SDK's `surveyed by model` line,
 // how many the accepted inventory listed as `unreached`. The count is the
-// adapter's where it logs one.
-fn unreached(stderr: &str) -> Option<usize> {
+// adapter's where it logs one, per source.
+fn unreached(stderr: &str) -> BTreeMap<String, usize> {
     let count = |mark: &str, key: &str| {
         stderr
             .lines()
             .filter(|line| line.contains(mark))
-            .filter_map(|line| line.split_once(key))
-            .find_map(|(_, rest)| rest.split_whitespace().next()?.parse().ok())
+            .filter_map(|line| {
+                Some((field(line, " source=")?.to_owned(), field(line, key)?.parse().ok()?))
+            })
+            .collect::<BTreeMap<String, usize>>()
     };
-    count(" placed by model source=", "unplaced=")
-        .or_else(|| count(" surveyed by model source=", "unreached="))
+    let mut counts = count(" surveyed by model source=", "unreached=");
+    counts.extend(count(" placed by model source=", "unplaced="));
+    counts
 }
 
 // The backend's one line per completion: `label="…"` in the span, then
@@ -933,6 +1171,14 @@ struct Attempt {
 struct Grade {
     requirements: Recall,
     criteria: Recall,
+    decisions: Recall,
+    behaviours: Behaviours,
+    // what each source's survey and stems read against its expectations
+    sources: Vec<SourceGrade>,
+}
+
+struct SourceGrade {
+    name: String,
     surfaces: Surfaces,
     missing_stems: Vec<String>,
     extra_stems: Vec<String>,
@@ -953,6 +1199,10 @@ struct Recall {
 // at their entry, and the surveyed surfaces no expected entry accounts for.
 #[derive(Default)]
 struct Surfaces {
+    // whether the source's adapter logged a survey at all: one that cuts its
+    // seams without a turn decides no surface, and reads as `no survey`
+    // rather than as a survey that missed every one
+    surveyed: bool,
     matched: usize,
     expected: usize,
     restemmed: Vec<String>,
@@ -960,43 +1210,93 @@ struct Surfaces {
     extra: Vec<String>,
 }
 
+// The specification's requirements against the behaviours expected: each
+// behaviour met by a requirement citing one of its claims, split across
+// two or more, or met by none; a requirement citing two behaviours is a
+// wrong merge; a met behaviour whose claims are not all cited is partial;
+// and the status the engine gave is read against the one expected.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct Behaviours {
+    expected: usize,
+    met: usize,
+    split: Vec<String>,
+    wrong: Vec<String>,
+    missed: Vec<String>,
+    partial: Vec<String>,
+    status_expected: usize,
+    status_met: usize,
+    status_wrong: Vec<String>,
+    // the requirements the engine pre-merged on a byte-equal id across
+    // sources, by their subject and the id
+    premerged: Vec<String>,
+}
+
 fn grade(expected: &Expected, run: &Run) -> Grade {
-    let observed: BTreeSet<&str> = run.stems();
-    let wanted: BTreeSet<&str> = expected.stems.iter().map(String::as_str).collect();
+    let sources = expected
+        .sources
+        .iter()
+        .map(|source| {
+            let observed = run.stems_of(source.name());
+            let wanted: BTreeSet<&str> = source.stems.iter().map(String::as_str).collect();
+            SourceGrade {
+                name: source.name().to_owned(),
+                surfaces: surfaces(
+                    &source.surfaces,
+                    &run.pairs_of(source.name()),
+                    run.surveyed.contains_key(source.name()),
+                ),
+                missing_stems: wanted
+                    .difference(&observed)
+                    .map(|stem| (*stem).to_owned())
+                    .collect(),
+                extra_stems: observed.difference(&wanted).map(|stem| (*stem).to_owned()).collect(),
+            }
+        })
+        .collect();
 
     Grade {
-        requirements: recall(&expected.requirements, run, ClaimKind::Requirement),
-        criteria: recall(&expected.criteria, run, ClaimKind::Criterion),
-        surfaces: surfaces(&expected.surfaces, run),
-        missing_stems: wanted.difference(&observed).map(|stem| (*stem).to_owned()).collect(),
-        extra_stems: observed.difference(&wanted).map(|stem| (*stem).to_owned()).collect(),
+        requirements: recall(&expected.requirements, expected, run, ClaimKind::Requirement),
+        criteria: recall(&expected.criteria, expected, run, ClaimKind::Criterion),
+        decisions: recall(&expected.decisions, expected, run, ClaimKind::Decision),
+        behaviours: behaviours(&expected.behaviours, run),
+        sources,
     }
 }
 
-// An expected item is met by a claim of its kind whose anchor overlaps its
-// own — same file, meeting line ranges, a whole-file anchor meeting any.
-// Paraphrase never enters into it; the stem is counted apart, so a survey
-// that shapes the estate differently still shows what it mined.
-fn recall(items: &[Item], run: &Run, kind: ClaimKind) -> Recall {
+// An expected item is met by a claim of its kind, from its source, whose
+// anchor overlaps its own — same file, meeting line ranges, a whole-file
+// anchor meeting any. Paraphrase never enters into it; the stem is counted
+// apart, so a survey that shapes the estate differently still shows what it
+// mined.
+fn recall(items: &[Item], expected: &Expected, run: &Run, kind: ClaimKind) -> Recall {
     let mut recall = Recall {
         expected: items.len(),
         ..Recall::default()
     };
     for item in items {
+        let label = || {
+            let stem = item.stem.as_ref().map_or(String::new(), |stems| format!("{stems} · "));
+            let source = match (&item.source, expected.sources.len()) {
+                (Some(source), _) => format!("{source}:"),
+                (None, 1) => String::new(),
+                (None, _) => "?:".to_owned(),
+            };
+            format!("{stem}{source}`{}` — {}", item.anchor, item.gloss)
+        };
+        let Ok(source) = expected.source(item.source.as_deref()) else {
+            recall.missed.push(format!("{} (no such source)", label()));
+            continue;
+        };
         let Ok(wanted) = Anchor::parse(&item.anchor) else {
-            recall.missed.push(format!("{} (unparseable anchor)", item.anchor));
+            recall.missed.push(format!("{} (unparseable anchor)", label()));
             continue;
         };
         let meeting: Vec<&Claim> = run
-            .claims(kind)
+            .claims_of(source.name(), kind)
             .filter(|claim| {
                 claim.anchor().and_then(Result::ok).is_some_and(|got| overlaps(got, wanted))
             })
             .collect();
-        let label = || {
-            let stem = item.stem.as_ref().map_or(String::new(), |stems| format!("{stems} · "));
-            format!("{stem}`{}` — {}", item.anchor, item.gloss)
-        };
         if meeting.is_empty() {
             recall.missed.push(label());
             continue;
@@ -1026,16 +1326,17 @@ fn recall(items: &[Item], run: &Run, kind: ClaimKind) -> Recall {
 // restemmed — found, and stemmed differently, which is how a survey that is
 // present but wrong reads apart from one that is absent. The names are the
 // survey's own and never graded.
-fn surfaces(expected: &[ExpectedSurface], run: &Run) -> Surfaces {
+fn surfaces(
+    expected: &[ExpectedSurface], observed: &BTreeSet<(&str, &str)>, surveyed: bool,
+) -> Surfaces {
     let wanted: BTreeSet<(&str, &str)> =
         expected.iter().map(|surface| (surface.entry.as_str(), surface.stem.as_str())).collect();
-    let observed = run.pairs();
     let label = |(entry, stem): &(&str, &str)| format!("`{entry}` · {stem}");
 
     let mut open: Vec<(&str, &str)> = observed.difference(&wanted).copied().collect();
     let mut restemmed = Vec::new();
     let mut missed = Vec::new();
-    for pair in wanted.difference(&observed) {
+    for pair in wanted.difference(observed) {
         match open.iter().position(|(entry, _)| *entry == pair.0) {
             Some(at) => {
                 let (_, got) = open.remove(at);
@@ -1046,12 +1347,103 @@ fn surfaces(expected: &[ExpectedSurface], run: &Run) -> Surfaces {
     }
 
     Surfaces {
-        matched: wanted.intersection(&observed).count(),
+        surveyed,
+        matched: wanted.intersection(observed).count(),
         expected: wanted.len(),
         restemmed,
         missed,
         extra: open.iter().map(label).collect(),
     }
+}
+
+// A requirement cites a behaviour when one of its citations — a source and
+// the `path` the claim anchors at, as `emery show --format json` carries
+// them — is from the source of one of the behaviour's claims and overlaps
+// its anchor.
+fn behaviours(expected: &[Behaviour], run: &Run) -> Behaviours {
+    let mut graded = Behaviours {
+        expected: expected.len(),
+        ..Behaviours::default()
+    };
+    let requirements = run.requirements();
+    let subject = |index: usize| {
+        requirements[index]["subject"].as_str().map_or_else(|| index.to_string(), str::to_owned)
+    };
+    let cites = |requirement: &Value, claim: &ExpectedClaim| {
+        let Ok(wanted) = Anchor::parse(&claim.anchor) else { return false };
+        citations(requirement)
+            .any(|(source, anchor)| source == claim.source && overlaps(anchor, wanted))
+    };
+
+    // which requirements cite each behaviour, and which behaviours each
+    // requirement cites
+    let mut citing_each: Vec<BTreeSet<usize>> = vec![BTreeSet::new(); requirements.len()];
+    for (b, behaviour) in expected.iter().enumerate() {
+        let citing: Vec<usize> = requirements
+            .iter()
+            .enumerate()
+            .filter(|(_, requirement)| {
+                behaviour.claims.iter().any(|claim| cites(requirement, claim))
+            })
+            .map(|(index, _)| index)
+            .collect();
+        for &index in &citing {
+            citing_each[index].insert(b);
+        }
+        let label = behaviour.label();
+        if citing.is_empty() {
+            graded.missed.push(label);
+            continue;
+        }
+        graded.met += 1;
+        if citing.len() > 1 {
+            let subjects: Vec<String> = citing.iter().map(|&index| subject(index)).collect();
+            graded.split.push(format!("{label} (requirements {subjects:?})"));
+        }
+        let uncited: Vec<String> = behaviour
+            .claims
+            .iter()
+            .filter(|claim| !citing.iter().any(|&index| cites(&requirements[index], claim)))
+            .map(|claim| format!("{}:`{}`", claim.source, claim.anchor))
+            .collect();
+        if !uncited.is_empty() {
+            graded.partial.push(format!("{label} (uncited {})", uncited.join(", ")));
+        }
+        if let Some(status) = &behaviour.status {
+            graded.status_expected += 1;
+            let found: BTreeSet<&str> =
+                citing.iter().filter_map(|&index| requirements[index]["status"].as_str()).collect();
+            if found.contains(status.as_str()) {
+                graded.status_met += 1;
+            } else {
+                graded.status_wrong.push(format!("{label} (expected `{status}`, got {found:?})"));
+            }
+        }
+    }
+    for (index, cited) in citing_each.iter().enumerate() {
+        if cited.len() > 1 {
+            let glosses: Vec<&str> = cited.iter().map(|&b| expected[b].gloss.as_str()).collect();
+            graded.wrong.push(format!("`{}` cites {glosses:?}", subject(index)));
+        }
+    }
+
+    // the requirements the engine pre-merged on a byte-equal id across sources
+    for (index, requirement) in requirements.iter().enumerate() {
+        let mut by_id: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
+        for cited in requirement["sources"].as_array().into_iter().flatten() {
+            if let (Some(source), Some(claim)) = (cited["source"].as_str(), cited["claim"].as_str())
+            {
+                by_id.entry(claim).or_default().insert(source);
+            }
+        }
+        for (id, sources) in by_id {
+            if sources.len() > 1 {
+                graded.premerged.push(format!("`{}` on `{id}` from {sources:?}", subject(index)));
+            }
+        }
+    }
+
+    graded
 }
 
 fn stem(id: &str) -> Option<&str> {
@@ -1109,23 +1501,32 @@ struct Card<'a> {
 impl Display for Card<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let Report { case, runs } = self.report;
-        writeln!(
-            f,
-            "\n## {}\n\nadapter `{}` · fixture `{}`\n",
-            case.name, case.expected.adapter, case.expected.fixture
-        )?;
+        let sources: Vec<String> = case
+            .expected
+            .sources
+            .iter()
+            .map(|source| {
+                let bound = match (&source.fixture, &source.description) {
+                    (Some(fixture), _) => format!("fixture `{fixture}`"),
+                    _ => "inline".to_owned(),
+                };
+                format!("source `{}` (adapter `{}`, {bound})", source.name(), source.adapter)
+            })
+            .collect();
+        writeln!(f, "\n## {}\n\n{}\n", case.name, sources.join(" · "))?;
 
         // one row per run, at the first rung
         writeln!(
             f,
             "| run | exit | wall | completions | input | cached | output | reasoning | claims | \
-             req | crit | recall req | recall crit | surfaces | stems | conflicts | unknown | \
-             covered | then [unknown] | slices | design blocks (types) |"
+             req | crit | recall req | recall crit | recall dec | surfaces | stems | behaviours | \
+             conflicts | divergences | unknown | covered | then [unknown] | slices | design \
+             blocks (types) |"
         )?;
-        writeln!(f, "|{}", " --- |".repeat(21))?;
+        writeln!(f, "|{}", " --- |".repeat(24))?;
         for attempts in runs {
             if let Some(first) = attempts.first() {
-                row(f, first)?;
+                row(f, first, case.expected.sources.len() > 1)?;
             }
         }
 
@@ -1169,20 +1570,35 @@ impl Display for Card<'_> {
     }
 }
 
-fn row(f: &mut Formatter<'_>, attempt: &Attempt) -> fmt::Result {
+// A cell over every source: each source's reading, led by its name where
+// the case has several.
+fn per_source(
+    grades: &[SourceGrade], named: bool, cell: impl Fn(&SourceGrade) -> String,
+) -> String {
+    grades
+        .iter()
+        .map(|grade| if named { format!("{} {}", grade.name, cell(grade)) } else { cell(grade) })
+        .collect::<Vec<_>>()
+        .join(" · ")
+}
+
+fn row(f: &mut Formatter<'_>, attempt: &Attempt, named: bool) -> fmt::Result {
     let Attempt { run, grade } = attempt;
     let tokens = run.tokens();
     let (blocks, types) = run.design_blocks();
-    let stems = if grade.missing_stems.is_empty() && grade.extra_stems.is_empty() {
-        "exact".to_owned()
-    } else {
-        format!("-{} +{}", grade.missing_stems.len(), grade.extra_stems.len())
-    };
+    let stems = per_source(&grade.sources, named, |source| {
+        if source.missing_stems.is_empty() && source.extra_stems.is_empty() {
+            "exact".to_owned()
+        } else {
+            format!("-{} +{}", source.missing_stems.len(), source.extra_stems.len())
+        }
+    });
+    let surfaces = per_source(&grade.sources, named, |source| source.surfaces.to_string());
 
     writeln!(
         f,
         "| {} | {} | {}s | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | \
-         {} | {} | {} ({}) |",
+         {} | {} | {} | {} | {} | {} ({}) |",
         run.n,
         match (run.exit, run.died_in()) {
             (Some(0), _) => "0".to_owned(),
@@ -1196,14 +1612,17 @@ fn row(f: &mut Formatter<'_>, attempt: &Attempt) -> fmt::Result {
         tokens.cached,
         tokens.output,
         tokens.reasoning,
-        run.evidence.iter().map(|evidence| evidence.claims.len()).sum::<usize>(),
+        run.evidence.iter().map(|(_, evidence)| evidence.claims.len()).sum::<usize>(),
         run.claims(ClaimKind::Requirement).count(),
         run.claims(ClaimKind::Criterion).count(),
         grade.requirements,
         grade.criteria,
-        grade.surfaces,
+        grade.decisions,
+        surfaces,
         stems,
+        grade.behaviours,
         run.status("conflict"),
+        run.status("divergence"),
         run.status("unknown"),
         run.covered(),
         run.unknown_outcomes(),
@@ -1217,8 +1636,15 @@ fn notes(f: &mut Formatter<'_>, attempt: &Attempt, climbed: bool) -> fmt::Result
     let Attempt { run, grade } = attempt;
     let at = if climbed { format!(" @ {}", run.rung) } else { String::new() };
     let graded = !run.evidence.is_empty();
+    let named = grade.sources.len() > 1;
+    let led = |source: &str| if named { format!("{source}: ") } else { String::new() };
     if run.exit == Some(0) {
-        writeln!(f, "\nRun {}{at}: stems {:?}", run.n, run.stems())?;
+        let stems: Vec<String> = grade
+            .sources
+            .iter()
+            .map(|source| format!("{}{:?}", led(&source.name), run.stems_of(&source.name)))
+            .collect();
+        writeln!(f, "\nRun {}{at}: stems {}", run.n, stems.join(" · "))?;
     } else {
         // the turn the run died in, and whether it left claims to grade
         let died = run.died_in().map_or(String::new(), |label| format!(" in `{label}`"));
@@ -1233,50 +1659,19 @@ fn notes(f: &mut Formatter<'_>, attempt: &Attempt, climbed: bool) -> fmt::Result
         writeln!(f, "- put again once: the first attempt {dead}, before any claim")?;
     }
 
-    // the survey
-    if !run.surveyed.is_empty() {
-        let listed: Vec<String> = run
-            .surveyed
-            .iter()
-            .map(|surface| {
-                let ids: Vec<String> = surface.ids.iter().map(|id| format!("`{id}`")).collect();
-                let led = if ids.is_empty() {
-                    String::new()
-                } else {
-                    format!(" (id {})", ids.join(", "))
-                };
-                format!("`{}` @ `{}` as `{}`{led}", surface.name, surface.entry, surface.stem)
-            })
-            .collect();
-        writeln!(f, "- surfaces: {}", listed.join(", "))?;
-    }
-    if let Some(unreached) = run.unreached {
-        writeln!(f, "- unreached: {unreached} modules the survey placed under no surface")?;
-    }
-    for restemmed in &grade.surfaces.restemmed {
-        writeln!(f, "- surface restemmed: {restemmed}")?;
-    }
-    for missed in &grade.surfaces.missed {
-        writeln!(f, "- surface missed: {missed}")?;
-    }
-    if grade.surfaces.expected > 0 {
-        for extra in &grade.surfaces.extra {
-            writeln!(f, "- surface extra: {extra}")?;
-        }
+    for source in &grade.sources {
+        survey_notes(f, run, source, &led(&source.name), graded)?;
     }
     // the claims
     if graded {
         if let Some(landing) = run.landing() {
             writeln!(f, "- requirement anchors: {landing}")?;
         }
-        if !grade.missing_stems.is_empty() {
-            writeln!(f, "- stems missing: {:?}", grade.missing_stems)?;
-        }
-        if !grade.extra_stems.is_empty() {
-            writeln!(f, "- stems extra: {:?}", grade.extra_stems)?;
-        }
-        for (kind, recall) in [("requirement", &grade.requirements), ("criterion", &grade.criteria)]
-        {
+        for (kind, recall) in [
+            ("requirement", &grade.requirements),
+            ("criterion", &grade.criteria),
+            ("decision", &grade.decisions),
+        ] {
             for missed in &recall.missed {
                 writeln!(f, "- {kind} missed: {missed}")?;
             }
@@ -1284,6 +1679,9 @@ fn notes(f: &mut Formatter<'_>, attempt: &Attempt, climbed: bool) -> fmt::Result
                 writeln!(f, "- {kind} misplaced: {misplaced}")?;
             }
         }
+    }
+    if grade.behaviours.expected > 0 && run.spec.is_some() {
+        behaviour_notes(f, &grade.behaviours)?;
     }
 
     // the completions
@@ -1302,6 +1700,89 @@ fn notes(f: &mut Formatter<'_>, attempt: &Attempt, climbed: bool) -> fmt::Result
     }
 
     Ok(())
+}
+
+// One source's survey: the surfaces its adapter logged, what it placed
+// nowhere, and how the (entry, stem) pairs and the stems read against the
+// case; `led` names the source where the case has several.
+fn survey_notes(
+    f: &mut Formatter<'_>, run: &Run, source: &SourceGrade, led: &str, graded: bool,
+) -> fmt::Result {
+    if let Some(surveyed) = run.surveyed.get(&source.name) {
+        let listed: Vec<String> = surveyed
+            .iter()
+            .map(|surface| {
+                let ids: Vec<String> = surface.ids.iter().map(|id| format!("`{id}`")).collect();
+                let ids = if ids.is_empty() {
+                    String::new()
+                } else {
+                    format!(" (id {})", ids.join(", "))
+                };
+                format!("`{}` @ `{}` as `{}`{ids}", surface.name, surface.entry, surface.stem)
+            })
+            .collect();
+        writeln!(f, "- {led}surfaces: {}", listed.join(", "))?;
+    }
+    if let Some(unreached) = run.unreached.get(&source.name) {
+        writeln!(f, "- {led}unreached: {unreached} modules the survey placed under no surface")?;
+    }
+    if source.surfaces.surveyed {
+        for restemmed in &source.surfaces.restemmed {
+            writeln!(f, "- {led}surface restemmed: {restemmed}")?;
+        }
+        for missed in &source.surfaces.missed {
+            writeln!(f, "- {led}surface missed: {missed}")?;
+        }
+        if source.surfaces.expected > 0 {
+            for extra in &source.surfaces.extra {
+                writeln!(f, "- {led}surface extra: {extra}")?;
+            }
+        }
+    } else if source.surfaces.expected > 0 {
+        writeln!(f, "- {led}no survey: the adapter cut its seams without deciding a surface")?;
+    }
+    if graded {
+        if !source.missing_stems.is_empty() {
+            writeln!(f, "- {led}stems missing: {:?}", source.missing_stems)?;
+        }
+        if !source.extra_stems.is_empty() {
+            writeln!(f, "- {led}stems extra: {:?}", source.extra_stems)?;
+        }
+    }
+
+    Ok(())
+}
+
+// The reconciled requirements against the behaviours expected.
+fn behaviour_notes(f: &mut Formatter<'_>, behaviours: &Behaviours) -> fmt::Result {
+    if behaviours.status_expected > 0 {
+        writeln!(
+            f,
+            "- behaviour statuses: {}/{} as expected",
+            behaviours.status_met, behaviours.status_expected
+        )?;
+    }
+    for (what, listed) in [
+        ("missed", &behaviours.missed),
+        ("split", &behaviours.split),
+        ("partial", &behaviours.partial),
+        ("status", &behaviours.status_wrong),
+        ("wrong merge", &behaviours.wrong),
+    ] {
+        for item in listed {
+            writeln!(f, "- behaviour {what}: {item}")?;
+        }
+    }
+    if behaviours.premerged.is_empty() {
+        writeln!(f, "- cross-source pre-merges: none")
+    } else {
+        writeln!(
+            f,
+            "- cross-source pre-merges: {} — {}",
+            behaviours.premerged.len(),
+            behaviours.premerged.join("; ")
+        )
+    }
 }
 
 // One row per run: pass or fail at each rung attempted, `—` past the rung
@@ -1367,8 +1848,8 @@ fn verdict(attempt: &Attempt) -> String {
 fn stability(f: &mut Formatter<'_>, label: &str, runs: &[&Run]) -> fmt::Result {
     writeln!(f, "\nStability {label}:")?;
 
-    // the stems each run's requirements lead with, as sets
-    let sets: BTreeSet<BTreeSet<&str>> = runs.iter().map(|run| run.stems()).collect();
+    // the stems each run's requirements lead with, as sets of (source, stem)
+    let sets: BTreeSet<BTreeSet<(&str, &str)>> = runs.iter().map(|run| run.stems()).collect();
     if sets.len() == 1 {
         writeln!(f, "- stem sets: 1 distinct")?;
     } else {
@@ -1518,12 +1999,33 @@ impl Display for Surfaces {
         if self.expected == 0 {
             return f.write_str("—");
         }
+        if !self.surveyed {
+            return f.write_str("no survey");
+        }
         write!(f, "{}/{}", self.matched, self.expected)?;
         if !self.restemmed.is_empty() {
             write!(f, " ~{}", self.restemmed.len())?;
         }
         if !self.extra.is_empty() {
             write!(f, " +{}", self.extra.len())?;
+        }
+        Ok(())
+    }
+}
+
+// `met/expected`, then `~k` behaviours split across requirements and `!k`
+// requirements merging two, each where any.
+impl Display for Behaviours {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if self.expected == 0 {
+            return f.write_str("—");
+        }
+        write!(f, "{}/{}", self.met, self.expected)?;
+        if !self.split.is_empty() {
+            write!(f, " ~{}", self.split.len())?;
+        }
+        if !self.wrong.is_empty() {
+            write!(f, " !{}", self.wrong.len())?;
         }
         Ok(())
     }
@@ -1598,8 +2100,8 @@ mod tests {
     };
 
     // A run read from the lines the runner parses, as the backend and the
-    // SDK log them.
-    fn run_from(exit: Option<i32>, stderr: &str) -> Run {
+    // SDK log them, with the specification `show` would answer.
+    fn run_from(exit: Option<i32>, stderr: &str, spec: Option<Value>) -> Run {
         Run {
             n: 1,
             rung: RUNG,
@@ -1609,9 +2111,9 @@ mod tests {
             diff: None,
             evidence: accepted(stderr),
             completions: completions(stderr),
-            surveyed: surveyed(stderr).unwrap_or_default(),
-            unreached: None,
-            spec: None,
+            surveyed: surveyed(stderr),
+            unreached: unreached(stderr),
+            spec,
             design: None,
             plan: None,
             dead: None,
@@ -1627,14 +2129,30 @@ mod tests {
         )
     }
 
-    fn accepted_line(claims: &str) -> String {
-        format!("TRACE emery_sdk: accepted source=python evidence={{\"claims\":[{claims}]}}\n")
+    fn accepted_line(source: &str, claims: &str) -> String {
+        format!(
+            "TRACE emery_sdk: accepted source={source} seam=0 evidence={{\"claims\":[{claims}]}}\n"
+        )
     }
 
     fn requirement(id: &str, path: &str) -> String {
         format!(
             "{{\"kind\":\"requirement\",\"id\":\"{id}\",\"path\":\"{path}\",\"statement\":\"s\"}}"
         )
+    }
+
+    fn case(toml: &str) -> Result<Expected, String> {
+        let expected: Expected = toml::from_str(toml).map_err(|error| error.to_string())?;
+        expected.check()?;
+        Ok(expected)
+    }
+
+    // The error a case's text is refused with.
+    fn refused(toml: &str) -> String {
+        match case(toml) {
+            Ok(_) => panic!("the case parsed: {toml}"),
+            Err(error) => error,
+        }
     }
 
     #[test]
@@ -1668,30 +2186,32 @@ mod tests {
         let starved = run_from(
             Some(3),
             &(completion("survey-python", "ok") + &completion("evidence-python-0", "timeout")),
+            None,
         );
         assert!(starved.starved());
         assert!(!starved.passed());
-        let landed = run_from(Some(0), &completion("evidence-python-0", "ok"));
+        let landed = run_from(Some(0), &completion("evidence-python-0", "ok"), None);
         assert!(!landed.starved());
         assert!(landed.passed());
     }
 
     #[test]
     fn stillborn_run() {
-        let refused = run_from(Some(4), &completion("survey-python", "error"));
+        let refused = run_from(Some(4), &completion("survey-python", "error"), None);
         assert!(refused.stillborn());
         assert_eq!(refused.died_in(), Some("survey-python"));
 
         let after_claims = run_from(
             Some(4),
             &(completion("evidence-python-0", "ok")
-                + &accepted_line(&requirement("orders.create", "app.py#L3-L9"))
+                + &accepted_line("python", &requirement("orders.create", "app.py#L3-L9"))
                 + &completion("grouping", "error")),
+            None,
         );
         assert!(!after_claims.stillborn(), "a claim accepted is a run to grade");
         assert_eq!(after_claims.died_in(), Some("grouping"));
 
-        let engine = run_from(Some(1), &completion("survey-python", "ok"));
+        let engine = run_from(Some(1), &completion("survey-python", "ok"), None);
         assert!(!engine.stillborn(), "only the backend's refusal is put again");
     }
 
@@ -1703,7 +2223,7 @@ mod tests {
             + &completion("spec-draft", "exhausted")
             + &completion("design-draft", "abort")
             + &completion("slicing", "abort");
-        let run = run_from(Some(1), &stderr);
+        let run = run_from(Some(1), &stderr, None);
         assert_eq!(run.died_in(), Some("spec-draft"), "the aborted siblings are not where it died");
     }
 
@@ -1722,7 +2242,8 @@ mod tests {
             requirement("start.config", "app/config.py#L1-L3"),
         ]
         .join(",");
-        let run = run_from(Some(0), &(surveyed.to_owned() + &accepted_line(&claims)));
+        let run =
+            run_from(Some(0), &(surveyed.to_owned() + &accepted_line("python", &claims)), None);
         assert_eq!(
             run.landing(),
             Some(Landing {
@@ -1733,7 +2254,167 @@ mod tests {
             "the bootstrap's span is set aside, so `start.boot` at its line is outside"
         );
 
-        let unlined = run_from(Some(0), &accepted_line(&claims));
+        let unlined = run_from(Some(0), &accepted_line("python", &claims), None);
         assert_eq!(unlined.landing(), None, "no surface span logged, nothing to land against");
+    }
+
+    // Two sources' lines are read apart: each source's claims, surfaces, and
+    // unplaced count under its own name, and a span of one source never lands
+    // a claim of the other.
+    #[test]
+    fn two_sources_read_apart() {
+        let stderr = "TRACE typescript: surveyed source=code surfaces=[\
+            {\"name\":\"OrderService\",\"entry\":\"orders.ts\",\"stem\":\"order-service\",\"ids\":[],\"lines\":\"L35-L76\"}]\n\
+            INFO emery_sdk: placed by model source=code surfaces=1 unplaced=0\n\
+            INFO emery_sdk: surveyed by model source=docs surfaces=3 unreached=1\n"
+            .to_owned()
+            + &accepted_line("code", &requirement("order-service.place", "orders.ts#L40-L42"))
+            + &accepted_line("docs", &requirement("orders.place", "orders.md#L10-L16"))
+            + &accepted_line("docs", &requirement("orders.cancel", "orders.ts#L40-L42"));
+        let run = run_from(Some(0), &stderr, None);
+        assert_eq!(run.claims_of("code", ClaimKind::Requirement).count(), 1);
+        assert_eq!(run.claims_of("docs", ClaimKind::Requirement).count(), 2);
+        assert_eq!(run.stems_of("docs"), BTreeSet::from(["orders"]));
+        assert_eq!(run.pairs_of("code"), BTreeSet::from([("orders.ts", "order-service")]));
+        assert!(run.pairs_of("docs").is_empty());
+        assert_eq!(run.unreached.get("code"), Some(&0));
+        assert_eq!(
+            run.unreached.get("docs"),
+            Some(&1),
+            "the SDK's count stands where the adapter logs none"
+        );
+        assert_eq!(
+            run.landing(),
+            Some(Landing {
+                head: 0,
+                inside: 1,
+                outside: 2
+            }),
+            "the docs claim at `orders.ts` lands against no span of its own source"
+        );
+    }
+
+    #[test]
+    fn source_shapes() {
+        let one = case("[[source]]\nadapter = \"python\"\nfixture = \"f\"\nstems = [\"a\"]\n\n[[requirement]]\nanchor = \"a.py#L1\"\ngloss = \"g\"\n")
+            .expect("one source, the item's by default");
+        assert_eq!(one.sources[0].name(), "python", "a source unnamed is named for its adapter");
+        assert_eq!(one.source(None).unwrap().name(), "python");
+
+        let several = refused(
+            "[[source]]\nname = \"docs\"\nadapter = \"documentation\"\nfixture = \"d\"\n\n\
+             [[source]]\nname = \"brief\"\nadapter = \"intent\"\ndescription = \"Ship it.\"\n\n\
+             [[requirement]]\nanchor = \"a.md#L1\"\ngloss = \"g\"\n",
+        );
+        assert!(several.contains("names no source"), "an item of several sources names its own");
+
+        let both =
+            refused("[[source]]\nadapter = \"intent\"\nfixture = \"f\"\ndescription = \"d\"\n");
+        assert!(both.contains("not both or neither"));
+
+        let unknown = refused(
+            "[[source]]\nadapter = \"python\"\nfixture = \"f\"\n\n[[behaviour]]\ngloss = \"g\"\nstatus = \"agreed\"\nclaims = [{ source = \"docs\", anchor = \"a.md#L1\" }]\n",
+        );
+        assert!(unknown.contains("names no source of the case: `docs`"));
+
+        let status = refused(
+            "[[source]]\nadapter = \"python\"\nfixture = \"f\"\n\n[[behaviour]]\ngloss = \"g\"\nstatus = \"settled\"\nclaims = [{ source = \"python\", anchor = \"a.py#L1\" }]\n",
+        );
+        assert!(status.contains("`settled`"));
+    }
+
+    // Every committed case parses under the shape, with every item at a
+    // source of its case.
+    #[test]
+    fn committed_cases_parse() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let mut seen = 0;
+        for entry in fs::read_dir(root.join(CASES)).unwrap() {
+            let dir = entry.unwrap().path();
+            let Ok(text) = fs::read_to_string(dir.join("expected.toml")) else { continue };
+            case(&text).unwrap_or_else(|error| panic!("{}: {error}", dir.display()));
+            seen += 1;
+        }
+        assert!(seen > 0, "the cases are beside the runner");
+    }
+
+    fn spec(requirements: &Value) -> Value {
+        serde_json::json!({ "requirements": requirements })
+    }
+
+    fn cited(source: &str, claim: &str, path: &str) -> Value {
+        serde_json::json!({ "source": source, "claim": claim, "path": path })
+    }
+
+    #[test]
+    fn behaviour_grading() {
+        let expected = case(
+            "[[source]]\nname = \"docs\"\nadapter = \"documentation\"\nfixture = \"d\"\n\n\
+             [[source]]\nname = \"code\"\nadapter = \"typescript\"\nfixture = \"c\"\n\n\
+             [[behaviour]]\ngloss = \"placing an empty order is refused\"\nstatus = \"agreed\"\n\
+             claims = [{ source = \"docs\", anchor = \"orders.md#L12\" }, { source = \"code\", anchor = \"orders.ts#L40-L42\" }]\n\n\
+             [[behaviour]]\ngloss = \"cancelling a shipped order is refused\"\nstatus = \"divergence\"\n\
+             claims = [{ source = \"docs\", anchor = \"orders.md#L30-L32\" }, { source = \"code\", anchor = \"orders.ts#L67-L71\" }]\n\n\
+             [[behaviour]]\ngloss = \"an unknown order is not found\"\n\
+             claims = [{ source = \"code\", anchor = \"orders.ts#L59-L65\" }]\n\n\
+             [[behaviour]]\ngloss = \"the id is opaque\"\nstatus = \"unknown\"\n\
+             claims = [{ source = \"docs\", anchor = \"orders.md#L14\" }]\n",
+        )
+        .unwrap();
+        let spec = spec(&serde_json::json!([
+            // the first behaviour, one requirement citing both sources, agreed
+            { "subject": "orders.place", "status": "agreed",
+              "sources": [cited("docs", "orders.place", "orders.md#L10-L13"), cited("code", "order-service.place.empty", "orders.ts#L40-L42")] },
+            // the second behaviour split across two requirements, the status read off either
+            { "subject": "orders.cancel", "status": "divergence",
+              "sources": [cited("docs", "orders.cancel", "orders.md#L31"), cited("code", "order-service.cancel.state", "orders.ts#L72-L74")] },
+            { "subject": "order-service.cancel", "status": "agreed",
+              "sources": [cited("code", "order-service.cancel.shipped", "orders.ts#L67-L71")] },
+            // the third and fourth merged into one, a pre-merge on a shared id
+            { "subject": "orders.read", "status": "agreed",
+              "sources": [cited("docs", "orders.read", "orders.md#L14"), cited("code", "orders.read", "orders.ts#L59-L65")] },
+        ]));
+        let run = run_from(Some(0), "", Some(spec));
+
+        let graded = behaviours(&expected.behaviours, &run);
+        assert_eq!(graded.met, 4);
+        assert_eq!(graded.split.len(), 1, "{:?}", graded.split);
+        assert!(graded.split[0].contains("cancelling a shipped order"));
+        assert_eq!(graded.wrong.len(), 1, "{:?}", graded.wrong);
+        assert!(graded.wrong[0].starts_with("`orders.read` cites"));
+        assert!(graded.partial.is_empty(), "{:?}", graded.partial);
+        assert_eq!((graded.status_met, graded.status_expected), (2, 3));
+        assert_eq!(graded.status_wrong.len(), 1);
+        assert!(graded.status_wrong[0].contains("expected `unknown`, got {\"agreed\"}"));
+        assert_eq!(
+            graded.premerged,
+            vec!["`orders.read` on `orders.read` from {\"code\", \"docs\"}"]
+        );
+        assert_eq!(graded.to_string(), "4/4 ~1 !1");
+    }
+
+    #[test]
+    fn behaviour_missed_and_partial() {
+        let expected = case(
+            "[[source]]\nname = \"docs\"\nadapter = \"documentation\"\nfixture = \"d\"\n\n\
+             [[source]]\nname = \"code\"\nadapter = \"typescript\"\nfixture = \"c\"\n\n\
+             [[behaviour]]\ngloss = \"both state it\"\n\
+             claims = [{ source = \"docs\", anchor = \"a.md#L1\" }, { source = \"code\", anchor = \"a.ts#L1\" }]\n\n\
+             [[behaviour]]\ngloss = \"neither states it\"\n\
+             claims = [{ source = \"docs\", anchor = \"a.md#L9\" }]\n",
+        )
+        .unwrap();
+        let spec = spec(&serde_json::json!([
+            { "subject": "a", "status": "unknown", "sources": [cited("docs", "a.one", "a.md#L1")] },
+        ]));
+        let run = run_from(Some(0), "", Some(spec));
+
+        let graded = behaviours(&expected.behaviours, &run);
+        assert_eq!(graded.met, 1);
+        assert_eq!(graded.missed.len(), 1);
+        assert_eq!(graded.partial.len(), 1, "{:?}", graded.partial);
+        assert!(graded.partial[0].ends_with("(uncited code:`a.ts#L1`)"));
+        assert_eq!(graded.premerged, Vec::<String>::new());
+        assert_eq!(graded.to_string(), "1/2");
     }
 }

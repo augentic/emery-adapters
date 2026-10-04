@@ -1,12 +1,14 @@
 # One module, one exported service, no manifest: the inline-budget case. The
 # same estate `examples/documentation/docs/orders-api.md` specifies in prose.
 
+[[source]]
+adapter = "typescript"
 fixture = "evals/cases/orders/fixture"
 stems = ["order-service"]
 
 # The one exported class; the error classes beside it are what it throws,
 # not surfaces.
-[[surface]]
+[[source.surface]]
 entry = "orders.ts"
 stem = "order-service"
 
