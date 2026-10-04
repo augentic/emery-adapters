@@ -1,6 +1,5 @@
 //! Reads a document's structure by hand — headings, fences, front matter,
-//! and the blocks between them — for the outline the survey lays and, under
-//! `anchors`, the lines a rule can be stated at.
+//! and the blocks between them — for the outline the survey lays.
 //!
 //! The reader is a line scanner over the Markdown and Gherkin the documents
 //! an adapter meets are written in; it is not a parser, and what it cannot
@@ -62,16 +61,6 @@ pub enum Kind {
     Other,
 }
 
-impl Kind {
-    /// Whether a block of this kind can state a rule: prose a `requirement`
-    /// may anchor at, as against a heading, a fence, or front matter.
-    #[cfg(feature = "anchors")]
-    #[must_use]
-    pub const fn states(self) -> bool {
-        matches!(self, Self::Paragraph | Self::Item | Self::Row | Self::Step | Self::Quote)
-    }
-}
-
 impl Outline {
     /// Reads a document's structure.
     #[must_use]
@@ -104,15 +93,6 @@ impl Outline {
     #[must_use]
     pub fn heading_at(&self, line: u32) -> Option<&Heading> {
         self.headings.iter().find(|heading| heading.line == line)
-    }
-
-    /// The spans within `span` where a rule can be stated, in order.
-    #[cfg(feature = "anchors")]
-    pub fn stating(&self, span: Lines) -> impl Iterator<Item = Lines> + '_ {
-        self.blocks
-            .iter()
-            .filter(move |block| block.kind.states() && span.contains(block.lines))
-            .map(|block| block.lines)
     }
 }
 

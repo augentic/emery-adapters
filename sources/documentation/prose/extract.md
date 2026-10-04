@@ -7,7 +7,6 @@ Mine the seam this call is given — the whole bound documentation tree, or the 
 - `$SOURCE_DIR` — read-only view of the bound documentation tree, whole, whichever part of it this call mines. Absent when the source is an inline `value` (the seam is then in the message).
 - **The documents to mine** — when the message lists them, those documents and no others, each named relative to `$SOURCE_DIR`; otherwise every document under `$SOURCE_DIR`.
 - **The subjects** — when the message lists them: each subject a survey named in the documents, with the lines it spans, its stem, and the id its `requirement` and `criterion` claims lead with. Mine the spans listed and nothing outside them; a document the message says the survey placed under no subject is context, never a `path`. When the message names other stems as other calls', claim nothing under them.
-- **The lines a `requirement` may anchor at** — when the message lists them: the paragraphs, list items, table rows, steps, and quotations within the subjects, by document. A `requirement` at any other line is refused and comes back with the nearest listed lines named; re-anchor it at the line that states the rule, or leave it out.
 - **Source name** — the name the engine passed on the WIT bindings, which the specification cites the source by.
 
 Nothing outside `$SOURCE_DIR` is reachable. Extract mines its seam completely in one pass: every listed document, top to bottom.
@@ -25,11 +24,13 @@ Closed for this adapter:
 
 Other claim kinds are out of scope for this adapter. Ids, `path` anchors, and the gate follow [claims.md](claims.md); derive each id from the docs' own noun phrases (`password-reset.expiry`).
 
+A passage's kind is what the passage is, and one passage can be two. A decision record — a `## Decision` paragraph, a `Decision:` line — is a `decision`, and each rule it decides, stated there or under its consequences, is a `requirement` under the record's stem as well: a record yields both, and neither stands in for the other. A bullet list beneath a rule, the cases a sentence introduces, and an acceptance list under a story are `criterion`s under that rule's id, never requirements of their own.
+
 Lead every id with the domain noun of the subject this seam documents (`password-reset.…`, `orders.…`), never with a file or directory name; where the message gives a subject the id its claims lead with (`returns.late-returns`), lead with that, and put what tells the claim apart after it (`returns.late-returns.grace-period`). Other parts of the same tree are mined by other calls and joined with this one; two calls that name one requirement with reworded statements manufacture a conflict, so scope ids to the subject at hand and state each requirement once, where the docs state it.
 
 ## Anchors
 
-A claim anchors at the lines that state it, never at a heading, which introduces a subject and states nothing. A `requirement` anchors at the paragraph, list item, table row, step, or quotation that states the rule; cite the span of the statement, `#L10-L13` for a paragraph of four lines, `#L15` for one item. A `criterion` anchors at the item that lists it, and the anchor rule does not change its kind: a bullet list beneath a rule, the cases a sentence introduces, an acceptance list under a story, are criteria of that rule under its id, not requirements of their own. A `decision` anchors where the document records it. A rule a heading announces and a paragraph beneath it states anchors at the paragraph.
+A claim anchors at the lines that state it, never at a heading, which introduces a subject and states nothing. A `requirement` anchors at the paragraph, list item, table row, step, or quotation that states the rule; cite the span of the statement, `#L10-L13` for a paragraph of four lines, `#L15` for one item. A `criterion` anchors at the item that lists it, a `decision` where the document records it, and the anchor rule changes no claim's kind: the kinds above decide that. A rule a heading announces and a paragraph beneath it states anchors at the paragraph.
 
 ## Output
 

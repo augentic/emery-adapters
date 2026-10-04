@@ -1,0 +1,96 @@
+# The orders service from the written specification (`docs`, the live
+# example's document) and an operator's inline brief (`brief`, an `intent`
+# description) that disagrees with it on one rule: the document lets a
+# pending or paid order be cancelled, the brief only a pending one. The
+# control card over `orders-triad` showed the one byte-equal pre-merge the
+# engine made was the brief's short id against the document's —
+# `orders.cancel` from {brief, docs} on three runs of three — where the two
+# agreed, so the merge did no harm. This case asks what the pre-merge does
+# when they do not: the brief outranks the document, so the requirement the
+# two ids join should read `divergence` with the brief's statement winning
+# and the document's as the loser note; a pre-merged pair the grouping turn
+# classes together reads `agreed` or `unknown` instead, and the literal rule
+# has hidden a disagreement. The brief anchors nothing, so the status is
+# read off the requirement citing the document's sentence. Everything else
+# the brief states agrees with the document.
+
+[[source]]
+name = "docs"
+adapter = "documentation"
+fixture = "examples/documentation/docs"
+stems = ["orders"]
+
+[[source.surface]]
+entry = "orders-api.md"
+stem = "orders"
+
+[[source]]
+name = "brief"
+adapter = "intent"
+description = "Ship the orders service: place, read, and cancel orders over HTTP. Every order carries at least one line item. Only a pending order can be cancelled; a paid or shipped order cannot. Keep the API platform-neutral."
+stems = ["orders"]
+
+# --- what the document states, as `orders-doc` expects ---
+
+[[requirement]]
+source = "docs"
+stem = "orders"
+anchor = "orders-api.md#L10-L13"
+gloss = "A client places an order with a customer id, line items, and an optional courier note; the service validates, assigns an id, and answers the order"
+
+[[requirement]]
+source = "docs"
+stem = "orders"
+anchor = "orders-api.md#L21-L23"
+gloss = "Every order is in exactly one of four states, starting pending; a shipped order can no longer be cancelled"
+
+[[requirement]]
+source = "docs"
+stem = "orders"
+anchor = "orders-api.md#L25-L27"
+gloss = "Reading an order by id answers its full detail; an unknown id answers not-found"
+
+[[requirement]]
+source = "docs"
+stem = "orders"
+anchor = "orders-api.md#L31-L33"
+gloss = "Cancelling a pending or paid order moves it to cancelled; cancelling a shipped order is refused with a conflict naming the state"
+
+[[criterion]]
+source = "docs"
+stem = "orders"
+anchor = "orders-api.md#L15"
+gloss = "An order with no line items is rejected"
+
+[[criterion]]
+source = "docs"
+stem = "orders"
+anchor = "orders-api.md#L16"
+gloss = "A line quantity below one is rejected"
+
+[[criterion]]
+source = "docs"
+stem = "orders"
+anchor = "orders-api.md#L17"
+gloss = "The order id is opaque to clients"
+
+# --- the planted disagreement: the brief outranks the document ---
+
+[[behaviour]]
+gloss = "which orders can be cancelled (document: pending or paid; brief: pending only)"
+status = "divergence"
+claims = [{ source = "docs", anchor = "orders-api.md#L31-L33" }]
+
+# --- the behaviours both state alike; no status expected ---
+
+[[behaviour]]
+gloss = "a valid order is placed, assigned an id, and answered"
+claims = [{ source = "docs", anchor = "orders-api.md#L10-L13" }]
+
+[[behaviour]]
+gloss = "an order with no line items is refused"
+claims = [{ source = "docs", anchor = "orders-api.md#L15" }]
+
+[[behaviour]]
+gloss = "an order is read by id"
+claims = [{ source = "docs", anchor = "orders-api.md#L25-L27" }]

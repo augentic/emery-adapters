@@ -782,6 +782,72 @@ impl Run {
         self.sourced(kind).filter(move |(of, _)| *of == source).map(|(_, claim)| claim)
     }
 
+    // The id of the accepted criterion through which `requirement` covers
+    // `claim`, when one does: a criterion of the claim's source held to its
+    // lines, under a claim id the requirement cites from that source — the
+    // engine's own reading of `covered`.
+    fn covers(&self, requirement: &Value, claim: &ExpectedClaim) -> Option<String> {
+        let Ok(wanted) = Anchor::parse(&claim.anchor) else { return None };
+        let parents: Vec<&str> = requirement["sources"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|cited| cited["source"].as_str() == Some(claim.source.as_str()))
+            .filter_map(|cited| cited["claim"].as_str())
+            .collect();
+        self.claims_of(&claim.source, ClaimKind::Criterion).find_map(|criterion| {
+            let Some(Ok(anchor)) = criterion.anchor() else { return None };
+            let id = criterion.id.as_deref()?;
+            (held(anchor, wanted) && parents.iter().any(|parent| under(id, parent)))
+                .then(|| id.to_owned())
+        })
+    }
+
+    fn meets(&self, requirement: &Value, claim: &ExpectedClaim) -> bool {
+        cites(requirement, claim) || self.covers(requirement, claim).is_some()
+    }
+
+    // The requirements holding `behaviour`: those citing one of its claims,
+    // and those holding one as a criterion alone.
+    fn holders(&self, behaviour: &Behaviour) -> Holders {
+        let requirements = self.requirements();
+        let citing: Vec<usize> = (0..requirements.len())
+            .filter(|&index| {
+                behaviour.claims.iter().any(|claim| cites(&requirements[index], claim))
+            })
+            .collect();
+        let covering = (0..requirements.len())
+            .filter(|index| !citing.contains(index))
+            .filter(|&index| {
+                behaviour
+                    .claims
+                    .iter()
+                    .any(|claim| self.covers(&requirements[index], claim).is_some())
+            })
+            .collect();
+        Holders { citing, covering }
+    }
+
+    // The criteria through which the requirements at `indices` hold
+    // `behaviour`, each under its requirement's subject.
+    fn criteria_under(&self, indices: &[usize], behaviour: &Behaviour) -> Vec<String> {
+        indices
+            .iter()
+            .flat_map(|&index| {
+                behaviour.claims.iter().filter_map(move |claim| {
+                    self.covers(&self.requirements()[index], claim)
+                        .map(|id| format!("`{id}` under `{}`", self.subject(index)))
+                })
+            })
+            .collect()
+    }
+
+    fn subject(&self, index: usize) -> String {
+        self.requirements()[index]["subject"]
+            .as_str()
+            .map_or_else(|| index.to_string(), str::to_owned)
+    }
+
     // The stems each source's requirement claims lead with, as (source, stem).
     fn stems(&self) -> BTreeSet<(&str, &str)> {
         self.sourced(ClaimKind::Requirement)
@@ -1211,10 +1277,14 @@ struct Surfaces {
 }
 
 // The specification's requirements against the behaviours expected: each
-// behaviour met by a requirement citing one of its claims, split across
-// two or more, or met by none; a requirement citing two behaviours is a
-// wrong merge; a met behaviour whose claims are not all cited is partial;
-// and the status the engine gave is read against the one expected.
+// behaviour met by a requirement citing one of its claims — or holding one
+// as a criterion under a claim it cites — split across two or more citing
+// requirements, or met by none; a requirement citing two behaviours is a
+// wrong merge; a met behaviour whose claims are not all held is partial; and
+// the status the engine gave is read against the one expected. A criterion
+// counts toward neither split nor wrong merge: it is in the specification
+// under its requirement, hidden from no one, and no grouping can join it to
+// a requirement of the other source.
 #[derive(Debug, Default, PartialEq, Eq)]
 struct Behaviours {
     expected: usize,
@@ -1223,6 +1293,12 @@ struct Behaviours {
     wrong: Vec<String>,
     missed: Vec<String>,
     partial: Vec<String>,
+    // the behaviours no requirement cites directly, met through a criterion
+    // alone: the kind the model chose, which the count would otherwise hide
+    by_criterion: Vec<String>,
+    // the behaviours one requirement cites while another holds them as a
+    // criterion: stated across kinds, which the engine cannot reconcile
+    across: Vec<String>,
     status_expected: usize,
     status_met: usize,
     status_wrong: Vec<String>,
@@ -1356,63 +1432,70 @@ fn surfaces(
     }
 }
 
+// The requirements holding one behaviour, by how: `citing` cite one of its
+// claims, `covering` hold one as a criterion and cite none.
+struct Holders {
+    citing: Vec<usize>,
+    covering: Vec<usize>,
+}
+
+impl Holders {
+    fn all(&self) -> impl Iterator<Item = usize> + '_ {
+        self.citing.iter().chain(&self.covering).copied()
+    }
+}
+
 // A requirement cites a behaviour when one of its citations — a source and
 // the `path` the claim anchors at, as `emery show --format json` carries
-// them — is from the source of one of the behaviour's claims and overlaps
-// its anchor.
+// them — is from the source of one of the behaviour's claims and is held to
+// its anchor's lines (`held`); it covers one through a criterion
+// (`Run::covers`). The split and wrong-merge counts read the citations alone;
+// a behaviour met by covering alone, or cited by one requirement and covered
+// by another, is noted, so the kind the model chose still shows.
 fn behaviours(expected: &[Behaviour], run: &Run) -> Behaviours {
     let mut graded = Behaviours {
         expected: expected.len(),
         ..Behaviours::default()
     };
     let requirements = run.requirements();
-    let subject = |index: usize| {
-        requirements[index]["subject"].as_str().map_or_else(|| index.to_string(), str::to_owned)
-    };
-    let cites = |requirement: &Value, claim: &ExpectedClaim| {
-        let Ok(wanted) = Anchor::parse(&claim.anchor) else { return false };
-        citations(requirement)
-            .any(|(source, anchor)| source == claim.source && overlaps(anchor, wanted))
-    };
 
-    // which requirements cite each behaviour, and which behaviours each
-    // requirement cites
+    // which behaviours each requirement cites
     let mut citing_each: Vec<BTreeSet<usize>> = vec![BTreeSet::new(); requirements.len()];
     for (b, behaviour) in expected.iter().enumerate() {
-        let citing: Vec<usize> = requirements
-            .iter()
-            .enumerate()
-            .filter(|(_, requirement)| {
-                behaviour.claims.iter().any(|claim| cites(requirement, claim))
-            })
-            .map(|(index, _)| index)
-            .collect();
-        for &index in &citing {
+        let holders = run.holders(behaviour);
+        for &index in &holders.citing {
             citing_each[index].insert(b);
         }
         let label = behaviour.label();
-        if citing.is_empty() {
+        if holders.citing.is_empty() && holders.covering.is_empty() {
             graded.missed.push(label);
             continue;
         }
         graded.met += 1;
-        if citing.len() > 1 {
-            let subjects: Vec<String> = citing.iter().map(|&index| subject(index)).collect();
+        let subjects: Vec<String> =
+            holders.citing.iter().map(|&index| run.subject(index)).collect();
+        if subjects.len() > 1 {
             graded.split.push(format!("{label} (requirements {subjects:?})"));
         }
-        let uncited: Vec<String> = behaviour
+        let criteria = run.criteria_under(&holders.covering, behaviour).join(", ");
+        if holders.citing.is_empty() {
+            graded.by_criterion.push(format!("{label} ({criteria})"));
+        } else if !holders.covering.is_empty() {
+            graded.across.push(format!("{label} ({criteria}; cited by {subjects:?})"));
+        }
+        let unheld: Vec<String> = behaviour
             .claims
             .iter()
-            .filter(|claim| !citing.iter().any(|&index| cites(&requirements[index], claim)))
+            .filter(|claim| !holders.all().any(|index| run.meets(&requirements[index], claim)))
             .map(|claim| format!("{}:`{}`", claim.source, claim.anchor))
             .collect();
-        if !uncited.is_empty() {
-            graded.partial.push(format!("{label} (uncited {})", uncited.join(", ")));
+        if !unheld.is_empty() {
+            graded.partial.push(format!("{label} (uncited {})", unheld.join(", ")));
         }
         if let Some(status) = &behaviour.status {
             graded.status_expected += 1;
             let found: BTreeSet<&str> =
-                citing.iter().filter_map(|&index| requirements[index]["status"].as_str()).collect();
+                holders.all().filter_map(|index| requirements[index]["status"].as_str()).collect();
             if found.contains(status.as_str()) {
                 graded.status_met += 1;
             } else {
@@ -1423,7 +1506,7 @@ fn behaviours(expected: &[Behaviour], run: &Run) -> Behaviours {
     for (index, cited) in citing_each.iter().enumerate() {
         if cited.len() > 1 {
             let glosses: Vec<&str> = cited.iter().map(|&b| expected[b].gloss.as_str()).collect();
-            graded.wrong.push(format!("`{}` cites {glosses:?}", subject(index)));
+            graded.wrong.push(format!("`{}` cites {glosses:?}", run.subject(index)));
         }
     }
 
@@ -1438,7 +1521,9 @@ fn behaviours(expected: &[Behaviour], run: &Run) -> Behaviours {
         }
         for (id, sources) in by_id {
             if sources.len() > 1 {
-                graded.premerged.push(format!("`{}` on `{id}` from {sources:?}", subject(index)));
+                graded
+                    .premerged
+                    .push(format!("`{}` on `{id}` from {sources:?}", run.subject(index)));
             }
         }
     }
@@ -1448,6 +1533,34 @@ fn behaviours(expected: &[Behaviour], run: &Run) -> Behaviours {
 
 fn stem(id: &str) -> Option<&str> {
     id.split('.').next().filter(|stem| !stem.is_empty())
+}
+
+// `id` is `parent` or a dotted child of it, as the engine reads a criterion
+// covering a requirement.
+fn under(id: &str, parent: &str) -> bool {
+    id.strip_prefix(parent).is_some_and(|rest| rest.is_empty() || rest.starts_with('.'))
+}
+
+// Whether a requirement cites `claim`: a citation from the claim's source
+// held to its lines.
+fn cites(requirement: &Value, claim: &ExpectedClaim) -> bool {
+    let Ok(wanted) = Anchor::parse(&claim.anchor) else { return false };
+    citations(requirement).any(|(source, anchor)| source == claim.source && held(anchor, wanted))
+}
+
+// A citation is held to a behaviour's lines when it shares at least as many
+// lines with them as it spends outside them: a whole-method anchor is not a
+// statement of each branch within it, while one a line wider than the
+// behaviour's is. An anchor naming no lines is held to any in its file.
+fn held(citation: Anchor<'_>, lines: Anchor<'_>) -> bool {
+    citation.path == lines.path
+        && match (citation.lines, lines.lines) {
+            (Some((from, to)), Some((start, end))) => {
+                let shared = to.min(end).saturating_add(1).saturating_sub(from.max(start));
+                shared.saturating_mul(2) >= to.saturating_sub(from).saturating_add(1)
+            }
+            _ => true,
+        }
 }
 
 // Two anchors meet in one file when either names no lines or their ranges
@@ -1766,6 +1879,8 @@ fn behaviour_notes(f: &mut Formatter<'_>, behaviours: &Behaviours) -> fmt::Resul
         ("missed", &behaviours.missed),
         ("split", &behaviours.split),
         ("partial", &behaviours.partial),
+        ("met by criterion", &behaviours.by_criterion),
+        ("across kinds", &behaviours.across),
         ("status", &behaviours.status_wrong),
         ("wrong merge", &behaviours.wrong),
     ] {
@@ -2141,6 +2256,12 @@ mod tests {
         )
     }
 
+    fn criterion(id: &str, path: &str) -> String {
+        format!(
+            "{{\"kind\":\"criterion\",\"id\":\"{id}\",\"path\":\"{path}\",\"criterion\":\"c\"}}"
+        )
+    }
+
     fn case(toml: &str) -> Result<Expected, String> {
         let expected: Expected = toml::from_str(toml).map_err(|error| error.to_string())?;
         expected.check()?;
@@ -2364,7 +2485,7 @@ mod tests {
         let spec = spec(&serde_json::json!([
             // the first behaviour, one requirement citing both sources, agreed
             { "subject": "orders.place", "status": "agreed",
-              "sources": [cited("docs", "orders.place", "orders.md#L10-L13"), cited("code", "order-service.place.empty", "orders.ts#L40-L42")] },
+              "sources": [cited("docs", "orders.place", "orders.md#L12"), cited("code", "order-service.place.empty", "orders.ts#L40-L42")] },
             // the second behaviour split across two requirements, the status read off either
             { "subject": "orders.cancel", "status": "divergence",
               "sources": [cited("docs", "orders.cancel", "orders.md#L31"), cited("code", "order-service.cancel.state", "orders.ts#L72-L74")] },
@@ -2416,5 +2537,147 @@ mod tests {
         assert!(graded.partial[0].ends_with("(uncited code:`a.ts#L1`)"));
         assert_eq!(graded.premerged, Vec::<String>::new());
         assert_eq!(graded.to_string(), "1/2");
+    }
+
+    // A citation over a whole method spans the branches inside it without
+    // stating any; one a line wider than the sentence it cites states it.
+    #[test]
+    fn behaviour_wide_citations() {
+        let expected = case(
+            "[[source]]\nname = \"docs\"\nadapter = \"documentation\"\nfixture = \"d\"\n\n\
+             [[source]]\nname = \"code\"\nadapter = \"typescript\"\nfixture = \"c\"\n\n\
+             [[behaviour]]\ngloss = \"an order with no line items is refused\"\n\
+             claims = [{ source = \"code\", anchor = \"orders.ts#L40-L42\" }]\n\n\
+             [[behaviour]]\ngloss = \"a line quantity below one is refused\"\n\
+             claims = [{ source = \"code\", anchor = \"orders.ts#L43-L45\" }]\n\n\
+             [[behaviour]]\ngloss = \"a valid order is stored pending and answered\"\n\
+             claims = [{ source = \"docs\", anchor = \"orders.md#L10-L13\" }, { source = \"code\", anchor = \"orders.ts#L46-L56\" }]\n\n\
+             [[behaviour]]\ngloss = \"an order is in exactly one of four states\"\n\
+             claims = [{ source = \"docs\", anchor = \"orders.md#L21\" }]\n\n\
+             [[behaviour]]\ngloss = \"the id is opaque\"\n\
+             claims = [{ source = \"docs\", anchor = \"orders.md#L17\" }]\n",
+        )
+        .unwrap();
+        let spec = spec(&serde_json::json!([
+            // the happy path cited over the whole method, validation and all
+            { "subject": "orders.place", "status": "agreed",
+              "sources": [cited("docs", "orders.place", "orders.md#L10-L13"), cited("code", "order-service.place.create-pending-order", "orders.ts#L39-L57")] },
+            { "subject": "order-service.place.empty", "status": "unknown",
+              "sources": [cited("code", "order-service.place.empty", "orders.ts#L40-L42")] },
+            { "subject": "order-service.place.quantity", "status": "unknown",
+              "sources": [cited("code", "order-service.place.quantity", "orders.ts#L43-L45")] },
+            // the sentence runs onto a second line the expected anchor leaves out
+            { "subject": "orders.state", "status": "unknown",
+              "sources": [cited("docs", "orders.state", "orders.md#L21-L22")] },
+            // three asides cited as one, the behaviour one line of the three
+            { "subject": "orders.place.asides", "status": "unknown",
+              "sources": [cited("docs", "orders.place.asides", "orders.md#L15-L17")] },
+        ]));
+        let run = run_from(Some(0), "", Some(spec));
+
+        let graded = behaviours(&expected.behaviours, &run);
+        assert_eq!(graded.met, 4);
+        assert_eq!(graded.missed.len(), 1, "{:?}", graded.missed);
+        assert!(graded.missed[0].contains("the id is opaque"));
+        assert!(graded.split.is_empty(), "{:?}", graded.split);
+        assert!(graded.wrong.is_empty(), "{:?}", graded.wrong);
+        assert!(graded.partial.is_empty(), "{:?}", graded.partial);
+        assert_eq!(graded.to_string(), "4/5");
+    }
+
+    // The model may state a behaviour as a criterion of the rule it qualifies
+    // rather than as a rule of its own; the grader reads it under the
+    // requirement citing the criterion's parent id, and under no other.
+    #[test]
+    fn behaviour_met_by_criterion() {
+        let expected = case(
+            "[[source]]\nname = \"docs\"\nadapter = \"documentation\"\nfixture = \"d\"\n\n\
+             [[source]]\nname = \"code\"\nadapter = \"typescript\"\nfixture = \"c\"\n\n\
+             [[behaviour]]\ngloss = \"the id is opaque\"\n\
+             claims = [{ source = \"docs\", anchor = \"orders.md#L14\" }]\n\n\
+             [[behaviour]]\ngloss = \"a quantity below one is refused\"\n\
+             claims = [{ source = \"docs\", anchor = \"orders.md#L13\" }]\n",
+        )
+        .unwrap();
+        let stderr = accepted_line(
+            "docs",
+            &[
+                requirement("orders.place", "orders.md#L10-L12"),
+                criterion("orders.place.opaque-id", "orders.md#L14"),
+                criterion("orders.state.quantity", "orders.md#L13"),
+            ]
+            .join(","),
+        );
+        let spec = spec(&serde_json::json!([
+            { "subject": "orders.place", "status": "agreed",
+              "sources": [cited("docs", "orders.place", "orders.md#L10-L12")] },
+        ]));
+        let run = run_from(Some(0), &stderr, Some(spec));
+
+        let graded = behaviours(&expected.behaviours, &run);
+        assert_eq!(graded.met, 1);
+        assert_eq!(graded.missed.len(), 1, "{:?}", graded.missed);
+        assert!(graded.missed[0].contains("a quantity below one"));
+        assert_eq!(graded.by_criterion.len(), 1, "{:?}", graded.by_criterion);
+        assert!(
+            graded.by_criterion[0].ends_with("(`orders.place.opaque-id` under `orders.place`)"),
+            "{:?}",
+            graded.by_criterion
+        );
+        assert!(graded.partial.is_empty(), "{:?}", graded.partial);
+        assert!(graded.split.is_empty(), "{:?}", graded.split);
+        assert_eq!(graded.to_string(), "1/2");
+    }
+
+    // A behaviour the document states as a criterion and the code as a
+    // requirement is held twice, in two kinds the engine cannot join: it is
+    // met and noted, and it is neither a split nor a wrong merge of the
+    // requirement holding the criterion.
+    #[test]
+    fn behaviour_across_kinds() {
+        let expected = case(
+            "[[source]]\nname = \"docs\"\nadapter = \"documentation\"\nfixture = \"d\"\n\n\
+             [[source]]\nname = \"code\"\nadapter = \"typescript\"\nfixture = \"c\"\n\n\
+             [[behaviour]]\ngloss = \"a valid order is placed\"\n\
+             claims = [{ source = \"docs\", anchor = \"orders.md#L10-L12\" }]\n\n\
+             [[behaviour]]\ngloss = \"an empty order is refused\"\nstatus = \"unknown\"\n\
+             claims = [{ source = \"docs\", anchor = \"orders.md#L13\" }, { source = \"code\", anchor = \"orders.ts#L40-L42\" }]\n",
+        )
+        .unwrap();
+        let stderr = accepted_line(
+            "docs",
+            &[
+                requirement("orders.place", "orders.md#L10-L12"),
+                criterion("orders.place.empty", "orders.md#L13"),
+            ]
+            .join(","),
+        ) + &accepted_line(
+            "code",
+            &requirement("order-service.place.empty", "orders.ts#L40-L42"),
+        );
+        let spec = spec(&serde_json::json!([
+            { "subject": "orders.place", "status": "agreed",
+              "sources": [cited("docs", "orders.place", "orders.md#L10-L12")] },
+            { "subject": "order-service.place.empty", "status": "unknown",
+              "sources": [cited("code", "order-service.place.empty", "orders.ts#L40-L42")] },
+        ]));
+        let run = run_from(Some(0), &stderr, Some(spec));
+
+        let graded = behaviours(&expected.behaviours, &run);
+        assert_eq!(graded.met, 2);
+        assert!(graded.split.is_empty(), "{:?}", graded.split);
+        assert!(graded.wrong.is_empty(), "{:?}", graded.wrong);
+        assert!(graded.by_criterion.is_empty(), "{:?}", graded.by_criterion);
+        assert!(graded.partial.is_empty(), "{:?}", graded.partial);
+        assert_eq!(graded.across.len(), 1, "{:?}", graded.across);
+        assert!(
+            graded.across[0].ends_with(
+                "(`orders.place.empty` under `orders.place`; cited by [\"order-service.place.empty\"])"
+            ),
+            "{:?}",
+            graded.across
+        );
+        assert_eq!((graded.status_met, graded.status_expected), (1, 1));
+        assert_eq!(graded.to_string(), "2/2");
     }
 }
