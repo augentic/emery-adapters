@@ -8,7 +8,9 @@ Live `specify` journeys via [omnia-cursor](https://github.com/augentic/omnia-bac
 
 1. The [emery](https://github.com/augentic/emery) repository as a sibling checkout
 2. [cursor-sdk-bridge](https://github.com/cursor/sdk-bridge). See [below](#installing-cursor-sdk-bridge) for installation.
-3. `CURSOR_API_KEY`
+3. `CURSOR_API_KEY` in a `.env` file
+
+
 
 ## Build and run
 
@@ -17,6 +19,10 @@ Run from the repository root: `emery` mounts the invocation directory as the pro
 ```bash
 # build source adapters
 cargo build --workspace --target wasm32-wasip2 --release
+
+# copy adpaters to the omnia-managed plugin store using fully qualifed adapter name
+mkdir -p ~/.emery/adapters
+cp "target/wasm32-wasip2/release/typescript.wasm" ~/.emery/adapters/emery_typescript@0.13.0.wasm
 
 # run the example
 set -a; source .env; set +a
@@ -34,18 +40,32 @@ Without `.env`:
 export CURSOR_API_KEY=<Cursor API key>
 ```
 
-Swap the config for [intent](intent/emery.toml), [typescript](typescript/emery.toml), [python](python/emery.toml), or the combined [emery.toml](emery.toml).
+Swap the config for [intent](intent/emery.toml), [typescript](typescript/emery.toml), [python](python/emery.toml), or the combined [emery.toml](emery.toml). A rebuilt component is a `cp` over its `-dev` file: the store never replaces a release by itself, and the run reads whatever the file holds.
 
-### Using `RUST_LOG` to tune output
+### Tuning the log output
 
-RUST_LOG can be composed with the `-v[v]`/`[-q[q]` flags to fine-tune tracing. For example,
+The level is `info` bare; `-v` and `-vv` raise it a step each, `-q` and `-qq` lower it, and `RUST_LOG` refines it per crate:
 
 ```bash
 export RUST_LOG="omnia_core=off,emery_sdk=trace"
 export CURSOR_SDK_BRIDGE_LOG=1
 ```
 
-A rejected candidate shows at each level by what that level is for. Bare, only the `completion` line's `attempts` says a correction round ran. At `-v`, the SDK's gate logs `candidate rejected` with the `findings` it minted — each `path` outside the seam's anchors with the anchors it accepts named, each id off its stems — and the backend logs `check rejected the candidate` with the `round` and the candidate's size, so a run's corrections read as a list of findings rather than a transcript. At `-vv`, the backend's `correction turn` carries the correction whole — the rejected answer echoed with the findings after it, as the model reads it — and the SDK's `accepted` line carries each seam's accepted evidence as JSON. `RUST_LOG=emery_sdk=debug` alone reads the findings without the backend's lines.
+How much of a correction round you see depends on the level:
+
+| Level | What shows |
+| --- | --- |
+| bare | Only the `completion` line's `attempts` says a correction ran |
+| `-v` | The SDK's gate logs `candidate rejected` with its `findings`: each `path` outside the seam's anchors, with the anchors it accepts named, and each id off its stems. The backend logs `check rejected the candidate` with the `round` and the candidate's size. Corrections read as a list of findings, not a transcript |
+| `-vv` | The backend's `correction turn` carries the correction whole, as the model reads it: the rejected answer with the findings after it. The SDK's `accepted` line carries each seam's accepted evidence as JSON |
+
+`RUST_LOG=emery_sdk=debug` alone shows the findings without the backend's lines.
+
+## What is the adapter?
+
+An `adapter` in these configs is a package reference, `emery:<name>@<version>`. Before fetching anything, `emery` looks in its store, `~/.emery/adapters`, for the file `emery_<name>@<version>.wasm`. Whatever sits there is that release on this machine, whoever wrote it.
+
+The examples name the published version (`emery:typescript@0.13.0`), so the `cp` above makes your build stand in for that release: the run reads the file and never the registry. `rm` the file and a project naming the release fetches it again. To keep a build beside the release instead of in its place, name a `-dev` version in both the config and the file (`emery:typescript@0.13.0-dev`, `emery_typescript@0.13.0-dev.wasm`).
 
 ## What to expect
 
@@ -66,6 +86,8 @@ Environment knobs:
 - `CURSOR_INACTIVITY_SECS` (120) — cancels a stream gone silent while waiting on the bridge; not while the model composes.
 - `CURSOR_MAX_AGENTS` (4) — bridge agents live at once; further completions queue.
 - `CURSOR_MODEL` (`auto`) — the model every completion is put to; one that reasons less shortens synthesis most.
+
+
 
 ## Host-to-guest tool calls
 

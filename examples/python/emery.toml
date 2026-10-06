@@ -2,11 +2,14 @@
 #
 #   emery specify --config examples/python/emery.toml
 #
-# `adapter` and `path` resolve relative to this file and must land inside the
-# invocation directory, which emery mounts as the project. The tree is the
-# eval's `fastapi-routers` case: a FastAPI service past the inline budget, so
-# the run opens one `survey-<source>` turn and then one seam per stem.
+# `adapter` is the package reference emery reads from `~/.emery/adapters`
+# before it fetches anything — the component this tree builds, copied there
+# as `emery_python@0.13.0.wasm` (examples/README.md). `path` resolves
+# relative to this file and must land inside the invocation directory, which
+# emery mounts as the project. The tree is the eval's `fastapi-routers`
+# case: a FastAPI service past the inline budget, so the run opens one
+# `survey-<source>` turn and then one seam per stem.
 
 [[source]]
-adapter = "../../target/wasm32-wasip2/release/python.wasm"
+adapter = "emery:python@0.13.0"
 path = "../../evals/cases/fastapi-routers/fixture/"

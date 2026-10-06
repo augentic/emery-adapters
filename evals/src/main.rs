@@ -38,7 +38,12 @@
 //! Environment: `EMERY_BIN` (`../emery/target/release/emery`), one
 //! `<ADAPTER>_WASM` per adapter a selected case runs under —
 //! `TYPESCRIPT_WASM` (`target/wasm32-wasip2/release/typescript.wasm`),
-//! `PYTHON_WASM`, `DOCUMENTATION_WASM`, `INTENT_WASM` — `EVAL_RUNS` (`3`),
+//! `PYTHON_WASM`, `DOCUMENTATION_WASM`, `INTENT_WASM` — each copied into
+//! the binary's store, `~/.emery/adapters`, as the package
+//! `eval:<adapter>@<version>` (the file `eval_<adapter>@<version>.wasm`,
+//! `<version>` this workspace's), which every staged project names, so a
+//! card never stands over a published release or a developer's own build
+//! and `rm ~/.emery/adapters/eval_*` is the cleanup — `EVAL_RUNS` (`3`),
 //! `EVAL_LADDER` (`600/120,1200/240,2400/480`: each rung
 //! `CURSOR_TIMEOUT_SECS/CURSOR_INACTIVITY_SECS`), and the runtime's other
 //! `CURSOR_*` knobs. `RUST_LOG` is set for the run unless the caller sets it:
@@ -203,6 +208,9 @@ struct Settings {
     // the repository root, which every fixture path is relative to
     root: PathBuf,
     emery: PathBuf,
+    // the binary's package store, where each component is staged under its
+    // `eval:` reference
+    store: PathBuf,
     // each adapter a selected case runs under, with its built component
     wasm: BTreeMap<String, PathBuf>,
     runs: usize,
@@ -224,6 +232,9 @@ impl Settings {
         if !emery.is_file() {
             return Err(format!("EMERY_BIN: no file at `{}`", emery.display()));
         }
+        let store = env::var_os("HOME")
+            .map(|home| PathBuf::from(home).join(".emery/adapters"))
+            .ok_or("HOME: unset, so the binary's store `~/.emery/adapters` has no home")?;
         let mut wasm = BTreeMap::new();
         for adapter in adapters {
             let name = format!("{}_WASM", adapter.to_uppercase());
@@ -243,6 +254,7 @@ impl Settings {
         Ok(Self {
             root: root.to_path_buf(),
             emery,
+            store,
             wasm,
             runs,
             ladder,
@@ -257,6 +269,19 @@ impl Settings {
         self.wasm.get(adapter).map(PathBuf::as_path).ok_or_else(|| {
             io::Error::new(io::ErrorKind::NotFound, format!("no component for adapter `{adapter}`"))
         })
+    }
+
+    // Stages an adapter's component in the store as the `eval:` package
+    // every case names it by, replacing the last run's, and answers the
+    // reference: the store serves the file before any registry is asked.
+    fn stage_component(&self, adapter: &str) -> io::Result<String> {
+        let reference = format!("eval:{adapter}@{}", env!("CARGO_PKG_VERSION"));
+        fs::create_dir_all(&self.store)?;
+        fs::copy(
+            self.component(adapter)?,
+            self.store.join(format!("eval_{adapter}@{}.wasm", env!("CARGO_PKG_VERSION"))),
+        )?;
+        Ok(reference)
     }
 
     fn rust_log(&self, case: &Case) -> String {
@@ -552,10 +577,11 @@ fn cases(root: &Path, filter: &BTreeSet<String>) -> Result<Vec<Case>, Box<dyn st
 
 // --- staging ---
 
-// Copies each source's fixture and each adapter's component into a project
-// of their own beneath `dir`: `emery` mounts its invocation directory, so
-// both must sit inside it, and the revision store the run commits under
-// stays with the case. Each source's tree sits under its name.
+// Copies each source's fixture into a project of its own beneath `dir` —
+// `emery` mounts its invocation directory, so the tree must sit inside it,
+// and the revision store the run commits under stays with the case — and
+// each adapter's component into the binary's store under the `eval:`
+// reference the project names. Each source's tree sits under its name.
 fn stage(dir: &Path, case: &Case, settings: &Settings) -> io::Result<PathBuf> {
     let project = dir.join(&case.name);
     if project.exists() {
@@ -564,14 +590,10 @@ fn stage(dir: &Path, case: &Case, settings: &Settings) -> io::Result<PathBuf> {
     fs::create_dir_all(&project)?;
     let mut config = String::new();
     for source in &case.expected.sources {
-        let adapter = &source.adapter;
-        let component = project.join(format!("{adapter}.wasm"));
-        if !component.exists() {
-            fs::copy(settings.component(adapter)?, component)?;
-        }
+        let reference = settings.stage_component(&source.adapter)?;
         let _ = write!(
             config,
-            "[[source]]\nname = \"{}\"\nadapter = \"{adapter}.wasm\"\n",
+            "[[source]]\nname = \"{}\"\nadapter = \"{reference}\"\n",
             toml_escaped(source.name())
         );
         match (&source.fixture, &source.description) {

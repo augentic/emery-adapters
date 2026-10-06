@@ -2,10 +2,13 @@
 #
 #   emery specify --config examples/typescript/emery.toml
 #
-# `adapter` and `path` resolve relative to this file and must land inside the
-# invocation directory, which emery mounts as the project.
+# `adapter` is the package reference emery reads from `~/.emery/adapters`
+# before it fetches anything — the component this tree builds, copied there
+# as `emery_typescript@0.13.0.wasm` (examples/README.md). `path` resolves
+# relative to this file and must land inside the invocation directory, which
+# emery mounts as the project.
 
 [[source]]
-adapter = "../../target/wasm32-wasip2/release/typescript.wasm"
+adapter = "emery:typescript@0.13.0"
 # path = "src/"
 path = "at_r9k_position_adapter/"
