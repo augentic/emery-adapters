@@ -5,22 +5,22 @@
 
 First-party **source** Wasm components for [Emery](https://github.com/augentic/emery)'s specification generator: `documentation`, `intent`, `typescript`, and `python`.
 
-**Using Emery in a project?** You do not need this repository. Name a published adapter by package reference (`emery:<name>@<version>`) or a built `.wasm` by path in the project's `emery.toml`; follow the [Emery README](https://github.com/augentic/emery#readme).
+**Using Emery in a project?** You do not need this repository. Name a published adapter by package reference (`emery:<name>@<version>`) in the project's `emery.toml`; the `emery` binary fetches it on the first run that names it and reads it from `~/.emery/adapters` after. A build of your own goes there by `cp`, under a reference of its own (`~/.emery/adapters/emery_<name>@<version>-dev.wasm`); follow the [Emery README](https://github.com/augentic/emery#readme).
 
 **Authoring or debugging an adapter?** This repo is your home. Edit prose or Rust, run the crate and component tests, then walk the adapter live with its example.
 
-The version operators pin (`documentation@0.13.0`) is this workspace's shared SemVer (`[workspace.package].version`); published components live on GHCR.
+The version operators pin (`emery:documentation@0.13.0`) is this workspace's shared SemVer (`[workspace.package].version`); published components live on GHCR as `ghcr.io/augentic/emery/<name>:<version>`.
 
 ## What an adapter is
 
 An adapter is one Rust crate that ships as one Wasm component exporting the `source-adapter` world (`extract` + `metadata`). The engine names the sources on each `emery specify` invocation, dispatches one `extract` per source, and reconciles the returned Evidence documents into the typed specification and design that `emery show` projects as `spec.md` / `design.md`. Adapters never orchestrate lifecycle.
 
-| Adapter | Kind | Extracts |
-| --- | --- | --- |
-| `sources/documentation` | documentation | written specs, guides, ADRs — requirement / criterion / decision claims |
-| `sources/intent` | intent | the operator's brief, verbatim plus its directives as requirement claims |
-| `sources/typescript` | behaviour | TS/JS estates — requirement claims backed by excerpt / type / call detail |
-| `sources/python` | behaviour | Python estates — FastAPI, Flask, Django, Click, Celery, and plain libraries — requirement claims backed by excerpt / type / call detail |
+| Adapter                 | Kind          | Extracts                                                                                                                                |
+| ----------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `sources/documentation` | documentation | written specs, guides, ADRs — requirement / criterion / decision claims                                                                 |
+| `sources/intent`        | intent        | the operator's brief, verbatim plus its directives as requirement claims                                                                |
+| `sources/typescript`    | behaviour     | TS/JS estates — requirement claims backed by excerpt / type / call detail                                                               |
+| `sources/python`        | behaviour     | Python estates — FastAPI, Flask, Django, Click, Celery, and plain libraries — requirement claims backed by excerpt / type / call detail |
 
 ## Rust-only loop
 
@@ -34,10 +34,12 @@ cargo nextest run -p emery-adapters --test source   # the shipped components alo
 
 ## Live examples
 
-`examples/<name>/` is an `emery.toml` that binds the shipped component by path — `cargo build --workspace --target wasm32-wasip2 --release` builds every one — and the fixture it reads. `emery specify` extracts through the Cursor model backend and commits the revision; `emery show spec` reviews it — the same journey an operator's project takes. Needs an `emery` binary, `cursor-sdk-bridge`, and `CURSOR_API_KEY`; see [examples/README.md](examples/README.md).
+`examples/<name>/` is an `emery.toml` that names the shipped component as the package `emery:<name>@<version>-dev` — `cargo build --workspace --target wasm32-wasip2 --release` builds every one, and a `cp` into `~/.emery/adapters` under that reference stands it beside the published release — and the fixture it reads. `emery specify` extracts through the Cursor model backend and commits the revision; `emery show spec` reviews it — the same journey an operator's project takes. Needs an `emery` binary, `cursor-sdk-bridge`, and `CURSOR_API_KEY`; see [examples/README.md](examples/README.md).
 
 ```bash
 cargo build --workspace --target wasm32-wasip2 --release   # every component
+mkdir -p ~/.emery/adapters
+cp target/wasm32-wasip2/release/documentation.wasm ~/.emery/adapters/emery_documentation@0.13.0.wasm   # one per adapter the example names
 emery specify --config examples/documentation/emery.toml  # or intent, typescript, python; examples/emery.toml runs all four
 emery show spec
 ```
@@ -54,17 +56,17 @@ cargo run -p evals -- python                  # every case under one adapter
 ## Repair loop
 
 1. Edit `sources/<name>/prose/**` (the extract prompt, references, rules).
-2. `cargo nextest run -p emery-adapters` to re-run its component and corpus suites; `cargo build -p <name> --target wasm32-wasip2 --release` to rebuild the shipped component; `emery specify --config examples/<name>/emery.toml` to watch it become a spec.
+2. `cargo nextest run -p emery-adapters` to re-run its component and corpus suites; `cargo build -p <name> --target wasm32-wasip2 --release` to rebuild the shipped component and `cp` it over the `-dev` file in `~/.emery/adapters`; `emery specify --config examples/<name>/emery.toml` to watch it become a spec.
 
 The component suites are the Rust inner loop and prove every component, the adapter's own decisions included; the live examples show one adapter's claims becoming a specification; live eval is for prompt quality.
 
 ## Stuck?
 
-| Symptom | What to check |
-| --- | --- |
-| `make` says mise is not on `PATH` | Install [mise](https://mise.jdx.dev/getting-started.html); the `Makefile` forwards to it and never installs it |
-| `make fmt` fails | Install nightly rustfmt: `rustup toolchain install nightly --component rustfmt` |
-| The first `make test` is slow | `crates/test-programs/build.rs` nested-builds every component for `wasm32-wasip2`; later builds are incremental |
+| Symptom                                                 | What to check                                                                                                                               |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `make` says mise is not on `PATH`                       | Install [mise](https://mise.jdx.dev/getting-started.html); the `Makefile` forwards to it and never installs it                              |
+| `make fmt` fails                                        | Install nightly rustfmt: `rustup toolchain install nightly --component rustfmt`                                                             |
+| The first `make test` is slow                           | `crates/test-programs/build.rs` nested-builds every component for `wasm32-wasip2`; later builds are incremental                             |
 | Patch-resolution errors after editing root `Cargo.toml` | The committed `[patch.crates-io]` git patches fetch `augentic/emery`; uncomment the path patches only when co-developing against `../emery` |
 
 Bugs and questions: [GitHub Issues](https://github.com/augentic/emery-adapters/issues).

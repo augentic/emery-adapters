@@ -23,5 +23,5 @@ description = "Push one release-built component to its GHCR tag: mise run publis
 run = '''
 name="${1:?usage: make publish <name>}"
 version="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version *= *"\(.*\)"/\1/p' Cargo.toml)"
-wkg oci push "ghcr.io/augentic/emery-adapters/$name:$version" "target/wasm32-wasip2/release/$name.wasm"
+wkg oci push "ghcr.io/augentic/emery/$name:$version" "target/wasm32-wasip2/release/$name.wasm"
 '''

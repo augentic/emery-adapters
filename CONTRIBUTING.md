@@ -69,7 +69,7 @@ For sibling co-development against uncommitted engine changes, uncomment the pat
 make ci                    # exactly the CI jobs: fmt-check + lint + nextest + doctests + docs + cargo-vet + cargo-deny
 make check                 # local advisories: audit + fmt (rewrites) + lint + outdated + udeps
 cargo clippy -p documentation -p intent -p typescript -p python -p test-programs --lib --bins --examples --all-features --target wasm32-wasip2 -- -D warnings   # the guest side alone (`WASM32_PACKAGES` in mise.toml)
-cargo build -p <name> --target wasm32-wasip2 --release   # one adapter → target/wasm32-wasip2/release/<name>.wasm (the path the examples bind)
+cargo build -p <name> --target wasm32-wasip2 --release   # one adapter → target/wasm32-wasip2/release/<name>.wasm (the file the examples copy into the store)
 cargo build --workspace --target wasm32-wasip2 --release   # every adapter
 ```
 
@@ -86,12 +86,13 @@ Before a train publishes, these gates must hold:
 3. Every adapter's `emery-version` names the minimum host that can run this train.
 4. Releasing a new SemVer: the GHCR version tag must not already exist for a first-time push of that train.
 
-**Publish Release** runs CI, tags and creates the GitHub Release, then release-builds every adapter and pushes each as a Wasm OCI artifact to `ghcr.io/augentic/emery-adapters/<name>:<version>` via the same build and `make publish <name>` path used locally. The helper derives `<version>` from the workspace manifest.
+**Publish Release** runs CI, tags and creates the GitHub Release, then release-builds every adapter and pushes each as a Wasm OCI artifact to `ghcr.io/augentic/emery/<name>:<version>` — the tag the `augentic.io` registry resolves the package reference `emery:<name>@<version>` to, so the `emery` binary, which routes the `emery` namespace there, fetches it on the first run that names it — via the same build and `make publish <name>` path used locally. The helper derives `<version>` from the workspace manifest.
 
-A brand-new package is created **private**: flip it to public in the GHCR package settings (`https://github.com/orgs/augentic/packages/container/emery-adapters%2F<name>/settings`) so anonymous consumers can pull, then confirm the round-trip:
+A brand-new package is created **private**: flip it to public in the GHCR package settings (`https://github.com/orgs/augentic/packages/container/emery%2F<name>/settings`) so anonymous consumers can pull, then confirm the round-trip both ways — the OCI tag, and the package reference as the binary fetches it:
 
 ```bash
-wkg oci pull ghcr.io/augentic/emery-adapters/<name>:<version> --output /tmp/<name>.wasm
+wkg oci pull ghcr.io/augentic/emery/<name>:<version> --output /tmp/<name>.wasm
+mkdir -p /tmp/store && wkg get emery:<name>@<version> -o /tmp/store/   # writes /tmp/store/emery_<name>@<version>.wasm, the file emery's store reads
 ```
 
 Local breakout (retry a single adapter after GHCR login):

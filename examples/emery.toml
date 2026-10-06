@@ -6,26 +6,29 @@
 # Four sources put the grouping judgment: claims about the same subject
 # from the specification, the behaviour — the service in TypeScript and
 # again in Python — and the brief are reconciled under authority precedence
-# into one requirement each. `adapter` and `path` resolve relative to this
-# file and must land inside the invocation directory, which emery mounts as
-# the project.
+# into one requirement each. Each `adapter` is a package reference, which
+# emery reads from `~/.emery/adapters` before it fetches anything: the
+# `-dev` references here are the components this tree builds, copied there
+# under a version of their own so the published release stays beside them
+# (examples/README.md). `path` resolves relative to this file and must land
+# inside the invocation directory, which emery mounts as the project.
 
 # The orders service specification.
 [[source]]
-adapter = "../target/wasm32-wasip2/release/documentation.wasm"
+adapter = "emery:documentation@0.13.0"
 path = "documentation/docs/"
 
 # The orders service behaviour.
 [[source]]
-adapter = "../target/wasm32-wasip2/release/typescript.wasm"
+adapter = "emery:typescript@0.13.0"
 path = "../evals/cases/orders/fixture/"
 
 # The same service in Python: one FastAPI module under its `__main__` guard.
 [[source]]
-adapter = "../target/wasm32-wasip2/release/python.wasm"
+adapter = "emery:python@0.13.0"
 path = "../evals/cases/fastapi-orders/fixture/"
 
 # The operator's brief, inline.
 [[source]]
-adapter = "../target/wasm32-wasip2/release/intent.wasm"
+adapter = "emery:intent@0.13.0"
 description = "Ship the orders service: place, read, and cancel orders over HTTP. Every order carries at least one line item; a shipped order can no longer be cancelled. Keep the API platform-neutral."

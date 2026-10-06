@@ -1,59 +1,59 @@
 # Graded live eval
 
-`cargo run -p evals -- [case..|adapter..]` grades the shipped components end to end over the live model. It is a public-contract client of the shipped `emery` binary: it spawns a sibling release build over the built components a case names, drives one `specify` per case across the adapter contract — one source or several — reads the committed documents back through `emery show --format json`, and grades what it reads against a reviewer's expectations. Operator-invoked, never CI. The component suites ([tests/source.rs](../tests/source.rs)) are the regression guard CI runs; the eval is for prompt quality, where the model's judgement is the thing measured.
+`cargo run -p evals -- [case|adapter..]` runs the shipped components end to end against the live model and grades what they extract. For each case it stages a project, runs `emery specify` three times, reads the committed documents back through `emery show --format json`, and grades them against a reviewer's `expected.toml`. It drives the shipped `emery` binary alone.
 
-## Cases
-
-Each case under [cases/](cases/) is a directory named for it holding one `expected.toml` and, for each source bound to a tree, a fixture beside it. `expected.toml` names the run's sources as `[[source]]` tables — each the adapter it runs under (`adapter = "typescript"`, `"python"`, `"documentation"`, `"intent"`), a `fixture` path (relative to the repository root) or an inline `description` in a fixture's place, a `name` the specification cites it by (the adapter's name when absent, as `emery` names it), the `stems` every requirement the source's claims lead with, and the `[[source.surface]]` pairs (`entry`, `stem`) its survey must decide — and then the claims a reviewer would write from each source: `[[requirement]]`, `[[criterion]]`, and `[[decision]]` items, each a `stem` (or a list of them), an `anchor` (`path#Ln` or `path#Ln-Lm`, a path under the source's tree), a one-line `gloss`, and a `source` where the case has several. An expected criterion is a boundary the code spells as a value of its own — a named constant, a default, a pattern, at the line that binds it — never a literal written into the branch that uses it, and middleware mounted for every route is expected under `start`. The live [examples](../examples/) and the component suites read the same trees through those paths.
-
-A case of several sources also states the `[[behaviour]]`s the specification should hold once however many sources state them: a `gloss`, the `claims` that contribute — each a `source` and an `anchor` in that source's tree — and, where the engine's authority rule decides it, the `status` the reconciled requirement should carry (`agreed`, `unknown`, `divergence`, `conflict`). The behaviours are graded from `emery show spec --format json`: a behaviour is met when one requirement cites a claim held to one of its anchors — a citation from that source sharing at least as many lines with the anchor as it spends outside it, so a whole-method citation is a statement of none of the branches inside it while one a line wider than the sentence is, and a behaviour's anchor should span the lines that state it whole — or covers it, an accepted `criterion` of that source held there under a claim id the requirement cites, the engine's own reading of `covered`, noted `met by criterion` so the kind the model chose still shows — split when two or more cite it, missed when none holds it; a requirement citing claims of two behaviours is a wrong merge; a criterion counts toward neither split nor wrong merge, and a behaviour one requirement cites while another holds it as a criterion is noted `across kinds`, since no grouping can join the two; and a requirement the engine joined on one byte-equal claim id from two sources is a cross-source pre-merge, counted apart because it is the one grouping the model never revisits.
-
-The eight `typescript` cases: [orders](cases/orders/expected.toml) is one module under one stem (the inline-budget path); [express-orders](cases/express-orders/expected.toml) an Express service (routes under `orders`, `customers`, `health`, and the bootstrap under `start`); [cli-jobs](cases/cli-jobs/expected.toml) a commander CLI with queue workers; [api-routes](cases/api-routes/expected.toml) a Next.js app-router API — four route modules a framework routes by file path, exporting `GET` / `POST` / `DELETE` with no bootstrap and nothing registered, a convention no parser rule read. Four more probe where a parser's conventions read a tree wrongly, each written before any run: [hono-mounted](cases/hono-mounted/expected.toml), a Hono service whose bootstrap mounts three sub-applications with `app.route("/orders", orders)`, so the routes each sub-application registers at `"/"` take their resource from a mount the registration does not spell (`start` and `orders`, `customers`, `health`); [cli-table](cases/cli-table/expected.toml), a commander CLI registering its three commands from a table in one loop, so one registration is three surfaces (`start`, `import`, `reconcile`, `nightly`); [fastify-demo](cases/fastify-demo/expected.toml), the official Fastify demo, whose routes are registered on an untyped plugin parameter in modules `@fastify/autoload` loads by directory — real routes with no receiver or import to find them by (`start`, `home`, `api` for the one route at the `/api` root, `auth`, `users`, `tasks`, and the four `scripts/*.ts` the manifest's `db:*` scripts run, each under its module's stem); and [nestjs-boilerplate](cases/nestjs-boilerplate/expected.toml), a 177-module NestJS application well past the inline budget — the scale case, nine controllers under `@Controller({ path })` and two seed runners the manifest's `seed:run:*` scripts run (`start`, `auth`, `users`, `files`, `home`, `run-seed`). The last two are vendored, not committed: each is fetched at a pinned commit into its case's `fixture/` directory (listed in that case's `.gitignore`), and its `expected.toml` names the commit it was read from.
-
-```bash
-mkdir -p evals/cases/nestjs-boilerplate/fixture evals/cases/fastify-demo/fixture
-curl -sL https://github.com/brocoders/nestjs-boilerplate/archive/9620f159eefe38f47747d02ab162852367c5472c.tar.gz \
-  | tar -xz --strip-components=1 -C evals/cases/nestjs-boilerplate/fixture
-curl -sL https://github.com/fastify/demo/archive/5cd560125b3c2f0d42192bc7f493e8e3b9e75e52.tar.gz \
-  | tar -xz --strip-components=1 -C evals/cases/fastify-demo/fixture
-```
-
-A case whose fixture directory is absent is skipped, so the committed cases run without the vendored ones; naming an absent case is the error.
-
-Six of the eight `python` cases are authored, every fixture committed, each written to mirror a `typescript` case so the two adapters are read against the same shapes: [fastapi-orders](cases/fastapi-orders/expected.toml) is one module, `orders.py`, carrying the application, its routes, and its own `__main__` guard (`start` and `orders` — the inline-budget path, and the one-module bootstrap rule, since nothing else in the tree could run it); [fastapi-routers](cases/fastapi-routers/expected.toml) a FastAPI service past the inline budget — the manifest's console script enters `app.main`, which includes three `APIRouter`s under `/api/v1` and at the root, and a generated postcode table (`app/data/postcodes.py`) puts the module text over `INLINE_BYTES`, so the survey cuts one seam per stem and the `rates.json` the pricing module reads by a computed path is laid as a data file (`start`, `orders`, `customers`, `health`; mirrors `express-orders`); [flask-blueprints](cases/flask-blueprints/expected.toml) a Flask factory — `wsgi.py` constructs the application at load with no guard and no script, the construction-at-load bootstrap, and the factory registers two blueprints under `url_prefix` and one `add_url_rule` (`start`, `health`, `orders`, `auth`), with a `.feature` file read as stated behaviour; [django-shop](cases/django-shop/expected.toml) a Django project — `manage.py` under its guard, the settings and URL modules reached by the strings that name them, function views and class-based views registered in `orders/urls.py` under the `orders/` mount, a DRF router registering a viewset with two `@action`s under `api/`, a management command surfaced by its path, a signal receiver and the admin module unreached without a finding, and a migration the keep skips (`start`, `orders`, `import-orders`); [click-jobs](cases/click-jobs/expected.toml) a Click group with an APScheduler nightly job and two Celery tasks in a `src/` layout the manifest's console script enters, mined whole with a seed script no surface reaches (`start`, `import`, `reconcile`, `nightly`, `serve`, `invoices`; mirrors `cli-jobs`); and [money-library](cases/money-library/expected.toml) a `src/` library with no bootstrap, whose package `__init__` re-exports the surfaces a caller imports (`money`, `parse-csv`, `convert`; mirrors `orders`). Two more are real trees, vendored the way the `typescript` pair is and each written from the survey facts (`--facts`, below) and the code before any run: [fastapi-template](cases/fastapi-template/expected.toml), the `backend/` of FastAPI's own full-stack template — `app = FastAPI(..)` constructed at load with no guard and no script, the API router mounted under a prefix the code does not spell (`settings.API_V1_STR`), five `APIRouter`s of which four carry a prefix of their own and the login router only a tag, shared bearer and superuser guards in `deps.py`, a pydantic settings class whose validators refuse default secrets at startup, and alembic's `versions/` skipped by the keep (`start`, `items`, `users`, `login`, `utils`, `private`; 20 modules within the inline budget, so one seam); and [django-styleguide](cases/django-styleguide/expected.toml), HackSoft's Django styleguide example — `manage.py` naming `config.django.base`, settings assembled from `config/settings/*` by star imports (two of them `setup.py` modules beneath a package), the API included under `api/` with the namespaced `include((module, namespace))` tuple and five applications included under it the same way, class-based `APIView`s registered by `path(..)` with nested inline includes, two `@shared_task`s and one registered through a wrapper of the module's own, a management command, and admin, custom-admin, testing-example, and script modules no surface reaches (`start`, `auth`, `users`, `errors`, `files`, `google-oauth2`, `email-send`, `debug-task`, `test-non-concurrent-task`, `setup-periodic-tasks`; 128 modules past the budget, so one seam per stem — the `python` scale case).
-
-```bash
-mkdir -p evals/cases/fastapi-template/fixture evals/cases/django-styleguide/fixture
-curl -sL https://github.com/fastapi/full-stack-fastapi-template/archive/cb740b656d7a0a6c5e12c7bf8e50343ec94ee9c7.tar.gz \
-  | tar -xz --strip-components=2 -C evals/cases/fastapi-template/fixture '*/backend'
-curl -sL https://github.com/HackSoftware/Django-Styleguide-Example/archive/a70ef43d7df03706c1211d4fcfd70b4b0120ba1e.tar.gz \
-    | tar -xz --strip-components=1 -C evals/cases/django-styleguide/fixture
-```
-
-Six `documentation` cases read prose alone, each written before any run to a shape the shipped survey — one seam per top-level directory — reads differently: [orders-doc](cases/orders-doc/expected.toml) is the live example's one document ([examples/documentation/docs](../examples/documentation/docs), `orders`), the inline-budget path; [stories](cases/stories/expected.toml) user stories in two directories of two documents each (`wishlist`, `invoices`), each story an "As a…" line with its acceptance list and a `Decision:` line, so the directory cut and the subjects agree — the case the two should read alike; [adr](cases/adr/expected.toml) five architecture decision records under one `adr/` directory with an index `README.md`, each record its own decision under its own noun (`entries`, `posting`, `amounts`, `daily-close`, `exports`), which one directory lumps into one seam; [narrative](cases/narrative/expected.toml) three headless prose pieces at the root — a car-share told as three days (`bookings`, `returns`, `membership`), no heading to anchor a subject at and nothing but the first line to name it by; [cross-cut](cases/cross-cut/expected.toml) a tool library's documentation of twenty documents past `INLINE_BYTES`, cut by audience into `guides/`, `reference/`, and `policies/` while its nine subjects cut across them — `returns` is a guide, a reference page, and a late-returns policy; `reference/accounts.md` holds `membership`, `sign-in`, and `password-reset` under three headings — written to break the directory cut; and [nestjs-docs](cases/nestjs-docs/expected.toml), the vendored NestJS boilerplate's own `docs/` read in place (`auth`, `files`, `serialization`, `translations`, `database`, `architecture`), the real-tree case, present when that fixture is fetched. Each names the surfaces (document, stem) its survey must decide, its requirements at the paragraphs, bullets, and sentences that state them, and its decisions where a document records one.
-
-Six cases run several sources through one `specify` and grade the reconciled specification by its `[[behaviour]]`s: [orders-triad](cases/orders-triad/expected.toml) is the example document (`docs`), the `orders` case's module (`code`, under `order-service`), and an inline brief (`brief`, an `intent` description, which anchors nothing and contributes authority alone) — five behaviours both document and code state and two the document alone does, with the two sources' stems disagreeing by name as they would in the wild; [orders-brief](cases/orders-brief/expected.toml) is the document beside a brief that disagrees with it on one rule — only a pending order can be cancelled, where the document allows a paid one too — written because the control card's only byte-equal pre-merges were the brief's short ids against the document's (`orders.cancel` from both) where the two agreed, so it asks whether the pre-merge hides a disagreement: the brief outranks the document, and the requirement the two ids join should read `divergence`; [orders-divergence](cases/orders-divergence/expected.toml) rewrites the document so two of its rules differ from the code's in kind — two line items where the code wants one, no cancellation once paid where the code refuses only shipped — and expects `divergence` on both; [orders-conflict](cases/orders-conflict/expected.toml) adds a support FAQ as a second `documentation` source (`faq`, the same component run twice under two names) that contradicts the document on cancellation, so two sources of one kind disagree and the engine must say `conflict`; [orders-spelled](cases/orders-spelled/expected.toml) rewrites the document under the code's own names (`# OrderService`, `## place`, `## read`, `## cancel`) so the two stems agree by the byte, the one case where a cross-source pre-merge is expected, counted against `orders-triad` where none is; and [nestjs-pair](cases/nestjs-pair/expected.toml), the `nestjs-docs` documents beside the whole `nestjs-boilerplate` tree — fourteen behaviours both state and three the documents alone do, the cross-source scale case, present when that fixture is fetched. A behaviour is anchored at the one span in each source that states it, so a paragraph stating two rules at once would read as a split or a wrong merge; the anchors steer around that where the prose allows, and where it does not (the cancellation rule, which the document states in one sentence and the code in two — the refusal and the transition) the case's reading allows the one split.
+Operator-invoked, never CI. The component suites in [tests/source.rs](../tests/source.rs) are the regression guard; the eval measures prompt quality, where the model's judgement is the thing under test.
 
 ## Running
 
-The prerequisites are the live examples' — a sibling [emery](https://github.com/augentic/emery) checkout, `cursor-sdk-bridge`, and `CURSOR_API_KEY` ([examples/README.md](../examples/README.md)) — and both binaries built first. Run from the repository root: every path the runner resolves is relative to it.
+The prerequisites are the live examples' ([examples/README.md](../examples/README.md)): a sibling [emery](https://github.com/augentic/emery) checkout, `cursor-sdk-bridge`, and `CURSOR_API_KEY`. Build both binaries, then run from the repository root; every path the runner resolves is relative to it.
 
 ```bash
 cargo build --manifest-path ../emery/Cargo.toml --release
 cargo build -p typescript -p python --target wasm32-wasip2 --release
 set -a; source .env; set +a
-EMERY_BIN=../emery/target/release/emery TYPESCRIPT_WASM=target/wasm32-wasip2/release/typescript.wasm \
-  cargo run -p evals -- orders express-orders
-EMERY_BIN=../emery/target/release/emery PYTHON_WASM=target/wasm32-wasip2/release/python.wasm \
-  cargo run -p evals -- python
-cargo run -p evals -- --facts fastapi-routers  # the survey facts alone, no turn spent
+
+cargo run -p evals -- orders express-orders    # two cases
+cargo run -p evals -- python                   # every case with a python source
+cargo run -p evals -- --facts fastapi-routers  # survey facts alone, no model turn
 ```
 
-`--facts [case|adapter..]` stages each named case and runs it once with no `CURSOR_API_KEY` in the binary's environment: the adapter reads the tree and logs the facts it would lay before the model — the bootstrap, the registrations, the decorated definitions, the exports, the packages — and the first turn fails before any is spent, in seconds. The text is printed and written to `target/eval/facts/<case>/facts.md`, and every graded run writes the same beside its log as `run-N.facts.md`. It is how an expectation is written — the facts say which modules locate a surface and what each export is read as — and how a change to the facts or the keep policy is checked before a live run: a line the model should not see (a hook's decorator, a data-only class) is a defect of the adapter's, visible here, not of the model's.
+A positional argument names a case or an adapter; with none, every case runs. A case whose fixture is absent (the vendored ones, until fetched) is skipped; naming it is an error.
 
-Every path is a default, so a sibling `../emery` release build needs no variable — unless `CARGO_TARGET_DIR` points the builds elsewhere, when `EMERY_BIN` and `<ADAPTER>_WASM` (`TYPESCRIPT_WASM`, `PYTHON_WASM`, `DOCUMENTATION_WASM`, `INTENT_WASM`) name the artifacts there; a component is required only when a selected case has a source running under its adapter. A positional argument names a case or an adapter — `python` selects every case with a source under it — and the runner stages each as its own project beneath `target/eval/<card>/` (`<card>` the run's UTC start, the name its scorecard carries, so one card's run files are never overwritten by the next invocation and a card can be read back to its `run-N.evidence-<source>-*.json` and `run-N.facts.md` a week later), with each adapter's component copied in as `<adapter>.wasm`, each source's fixture copied under its name (`project/<name>/`) and nothing of a Python tree's `__pycache__`, virtual environments, tool caches, or `*.egg-info` copied with it, and an `emery.toml` written with one `[[source]]` per source of the case — its `name`, its adapter, and its `path` or `description`; runs `emery specify` over it `EVAL_RUNS` times (three); and reads the committed documents back through `emery show --format json`. `RUST_LOG` is set for the run unless the caller sets it — `emery_sdk=trace,<adapter>=trace,…,omnia_cursor=info,omnia_core=off`, every adapter of the case at trace, since the scorecard reads the SDK's `accepted` trace lines and its `surveyed by model` line, each adapter's `survey facts`, `surveyed`, and `placed by model` lines, and the backend's `completion` lines, each read under the `source=` it carries — and `CURSOR_MODEL` is recorded in the card, so pin it before comparing two (`auto` is a different model run to run). A run the backend's cap ends — a `timeout` or `inactive` completion — is put again one rung up `EVAL_LADDER` (`600/120,1200/240,2400/480`, each rung `CURSOR_TIMEOUT_SECS/CURSOR_INACTIVITY_SECS`), so the card's `Budget ladder` table says at which budget each run landed while the comparison columns stay the first rung's. A run the backend refuses before any claim is accepted — a `bad_gateway` at a turn's opening, the host's failure and not the arm's — is put again once at the same rung, the dead attempt's log kept beside it as `run-N.dead.stderr` and the retry noted on the card; a second refusal stands as the run's failure. A run that fails after its claims are accepted — in the engine's `spec-draft`, `design-draft`, or `slicing` turn — is graded on those claims all the same, with the card naming the turn it died in (`exit 1 in `spec-draft``) and how many seams were accepted, since the extraction those claims measure had finished. Three runs a case is what tells a stable id from a lucky one; `EVAL_RUNS` trades time for confidence. The smallest useful pass is one small case a stem shape — `orders`, `cli-jobs`, `hono-mounted`; `fastapi-orders`, `click-jobs`, `flask-blueprints` — and the full eight `typescript` cases with the vendored fixtures, or the six `python` cases, is the pass a prompt change to that adapter's `survey.md` is judged by.
+| Variable | Default | Role |
+| --- | --- | --- |
+| `EMERY_BIN` | `../emery/target/release/emery` | The binary under test |
+| `TYPESCRIPT_WASM`, `PYTHON_WASM`, `DOCUMENTATION_WASM`, `INTENT_WASM` | `target/wasm32-wasip2/release/<adapter>.wasm` | One per adapter a selected case uses |
+| `EVAL_RUNS` | `3` | Runs per case. Three tells a stable id from a lucky one |
+| `EVAL_LADDER` | `600/120,1200/240,2400/480` | Budget rungs, each `CURSOR_TIMEOUT_SECS/CURSOR_INACTIVITY_SECS` |
+| `CURSOR_MODEL` | `auto` | Recorded in the card. Pin it before comparing two: `auto` differs run to run |
+| `RUST_LOG` | set by the runner | Every adapter at `trace`; the card reads the trace lines. A caller's value is kept |
 
-An arm that is a rule switched off — a local edit to one function, run and never shipped — is built from a detached worktree rather than the working tree, so the tree the maintainer commits from never holds the off state and the shipped component is still at hand for the control. `<ADAPTER>_WASM` points the runner at the arm's build:
+The defaults suit a sibling release build. Set the paths when `CARGO_TARGET_DIR` puts the artifacts elsewhere, or to point at an experiment's build.
+
+### What a run does
+
+For each case the runner stages a project under `target/eval/<card>/<case>/`, runs `emery specify` over it `EVAL_RUNS` times, and reads each revision back through `emery show --format json`. `<card>` is the run's UTC start and the scorecard's name, so invocations never overwrite each other and a card can be read back to its `run-N.evidence-<source>-*.json` and `run-N.facts.md` later.
+
+Staging copies each adapter's component into the binary's store, `~/.emery/adapters`, as the package `eval:<adapter>@<version>` (file `eval_<adapter>@<version>.wasm`, replaced every time), so a card never stands over a published release or a developer's `-dev` copy; `rm ~/.emery/adapters/eval_*` cleans up. Each fixture is copied in under its source's `name`, minus a Python tree's `__pycache__`, virtual environments, tool caches, and `*.egg-info`, and an `emery.toml` names each source by `name`, `eval:` reference, and `path` or `description`.
+
+A failed run is handled by what the failure says about the arm:
+
+- **The backend's cap ended it** (`timeout` or `inactive`): put again one rung up `EVAL_LADDER`. The card's `Budget ladder` says where each run landed; the comparison columns stay the first rung's.
+- **The backend refused it before any claim was accepted** (`bad_gateway` at a turn's opening): the host's failure. Put again once at the same rung, the dead log kept as `run-N.dead.stderr`; a second refusal stands.
+- **It failed after its claims were accepted** (the engine's `spec-draft`, `design-draft`, or `slicing`): graded on those claims, since the extraction being measured had finished. The card names the turn and the seams accepted.
+
+The smallest useful pass is one small case per stem shape: `orders`, `cli-jobs`, `hono-mounted` for `typescript`; `fastapi-orders`, `click-jobs`, `flask-blueprints` for `python`. A change to an adapter's `survey.md` is judged by all eight `typescript` cases with the vendored fixtures fetched, or the six authored `python` cases.
+
+### Survey facts without a model turn
+
+`--facts [case|adapter..]` stages the named cases and runs each once with `CURSOR_API_KEY` stripped. The adapter logs the facts it would lay before the model (bootstrap, registrations, decorated definitions, exports, packages) and the first turn fails before any is spent, in seconds. The text is printed and written to `target/eval/facts/<case>/facts.md`; a graded run writes the same beside its log as `run-N.facts.md`.
+
+This is how an expectation is written, since the facts say which modules locate a surface and how each export is read, and how a change to the facts or the keep policy is checked before a live run. A line the model should not see (a hook's decorator, a data-only class) is the adapter's defect, visible here.
+
+### Experiment arms
+
+An arm that switches a rule off is a local edit to one function, run and never shipped. Build it from a detached worktree, so the tree you commit from never holds the off state and the shipped component stays at hand as the control:
 
 ```bash
 git worktree add --detach ../emery-adapters-arm HEAD
@@ -64,9 +64,10 @@ PYTHON_WASM=/tmp/emery-adapters-arm-target/wasm32-wasip2/release/python.wasm car
 git worktree remove --force ../emery-adapters-arm
 ```
 
-An arm that is new code rather than a rule switched off is a Cargo feature of its adapter, off by default so the shipped component and the root suite stay the control: `documentation` carries `model-survey` (the model names the tree's subjects before the extraction, code cutting the seams from the anchors it names). Each arm is built into a path of its own under `target/eval/arms/<arm>/`, so a later build never overwrites the component an earlier card was run over, and `DOCUMENTATION_WASM` names the arm:
+An arm that is new code is a Cargo feature of its adapter, off by default so the shipped component and the root suite stay the control. `documentation` carries `model-survey`: the model names the tree's subjects before extraction and code cuts the seams from them. Build each arm into its own path under `target/eval/arms/<arm>/`, so a later build never overwrites what an earlier card ran over:
 
 ```bash
+mkdir -p target/eval/arms/{control,model-survey}
 cargo build -p documentation --target wasm32-wasip2 --release
 cp target/wasm32-wasip2/release/documentation.wasm target/eval/arms/control/
 cargo build -p documentation --target wasm32-wasip2 --release --features model-survey
@@ -74,12 +75,131 @@ cp target/wasm32-wasip2/release/documentation.wasm target/eval/arms/model-survey
 DOCUMENTATION_WASM=target/eval/arms/model-survey/documentation.wasm cargo run -p evals -- orders-doc cross-cut
 ```
 
-## What a card shows
+## Cases
 
-It prints and writes a dated scorecard to `target/eval/<timestamp>.md`, with every run's files under `target/eval/<timestamp>/<case>/`; compare two by hand. Each run is graded: an expected item is found when an accepted claim of its source's anchor overlaps its lines (the `recall req`, `recall crit`, and `recall dec` columns), and a matched requirement naming a stem — or a list of them, where the code is shared (a guard two routers declare, one declared in the bootstrap's module and applied per route) and a requirement at it is rightly placed under any — is counted `in stem` when a meeting claim's id leads with one; a stem is a miss when the source's requirements do not lead with it; a surface is found when the adapter's `surveyed` line names a surface at its entry under its stem, restemmed when it names one at the entry under another stem (the `surfaces` column, `matched/expected ~restemmed +extra`, and a `surface restemmed` note saying which — what tells a survey that is present and wrong from one that is absent), and `no survey` when the adapter logged no `surveyed` line at all, as the shipped `documentation` component does not, having cut its seams by directory without deciding a surface; the token and wall-clock figures come from the backend's `completion` lines on stderr; and the adapter's `placed by model` line says how many modules it placed under no surface, which the run's notes carry as `unreached`. The `surfaces` and `stems` cells and the survey notes read per source, each led by the source's name where the case has several. A case stating behaviours adds the `behaviours` column — `met/expected`, then `~k` split across requirements and `!k` wrong merges where any — and notes for each miss, split, partial citation (a met behaviour one of whose claims no requirement cites), behaviour met by criterion alone, behaviour stated across kinds (cited by one requirement, a criterion of another), status mismatch, and wrong merge, with the `behaviour statuses` count and the `cross-source pre-merges` line beneath them. The `requirement anchors` note says where the accepted requirement claims landed against the registered and declared surfaces the `surveyed` line spans, the bootstrap set aside since its span is its module or its guard — covering a surface's head (a claim over a whole handler, from its decorator or registration), inside a surface past its head (at a decision, a `return`, a call), or outside every surface (the bootstrap's own lines among them) — which is the figure an arm over the anchor set is read by, and which the misses-by-anchor cannot show. The `Stability` lines count the stem sets across the runs and the (entry, stem) pairs, requirement ids, and spec subjects every pair of runs shares. The requirement-id figure measures the model's naming run to run — the revision diff is positional and the model names each id's second segment — and is not a target the survey holds: the stems, the surfaces, the anchors, and the files a seam lays are what the survey fixes, and [tests/source.rs](../tests/source.rs) pins those over `evals/cases/cli-jobs/fixture/` and `evals/cases/express-orders/fixture/` for `typescript`, and over `evals/cases/click-jobs/fixture/` and `evals/cases/fastapi-routers/fixture/` for `python`, with the survey's answer scripted and no model judgement in it.
+Each case is a directory under [cases/](cases/) holding an `expected.toml` and, for each source bound to a tree, a `fixture/` beside it. The header comment of each `expected.toml` tells the case's story; the tables below say what each probes. The live [examples](../examples/) and the component suites read the same trees.
 
-Each `typescript` or `python` run opens one survey turn per source before the mining turns: the parser reads the tree and the model names the surfaces, their anchors, and their stems from the facts it read, under the adapter's `survey.md` ([typescript](../sources/typescript/prose/survey.md), [python](../sources/python/prose/survey.md)), and code holds the answer to the tree and derives the rest — the stem the code spells at an anchor, the ids, the closures, the seams — from the accepted anchors. The adapter's `surveyed` trace line carries the surfaces the seams were cut from, and a card's `surfaces` column grades those against the case's `expected.toml` by `(entry, stem)`.
+`expected.toml` names the run's sources, then the claims a reviewer would write from each:
 
-Read a card column by column, since each points at one place in the adapter. `surfaces` short of `n/n`, and every `~k` restem, is the survey's: `survey.md` for a surface the model did not name or named under the wrong convention, the SDK's `survey::seams` check for a finding that sent the answer back, and the stem rules — the mounts and the `derive` rules in the adapter's `survey/surface.rs`, and the SDK's `survey::route` under the adapter's `DIALECT.route` — for a stem code derived wrongly from an anchor the model got right. Recall and `in stem` are the extraction's: `extract.md` for a requirement the model did not state, and the SDK's `skeleton` anchor and decision lists for one it stated at a line the gate refused. `stems exact` points at the mounts and the bootstrap rule — a stem invented is a surface the code read a stem into, a stem missed is one whose surfaces were restemmed. The `Stability` Jaccard over `(entry, stem)` pairs is the derivation's determinism — two runs that accept the same anchors must cut the same seams — and the requirement-id figure the model's naming. The `Budget ladder` points at seam size and the order a seam lays its files in: a run that climbs is one whose turn did not fit. A failed run's `exit` cell names the turn it died in: a `survey-*` or `evidence-*` label is the adapter's turn and the run is short; `spec-draft`, `design-draft`, `grouping`, or `slicing` is the engine's, after every claim was accepted, and the row's recall is read as any other's.
+- `[[source]]`: the `adapter` (`typescript`, `python`, `documentation`, `intent`); a `fixture` path from the repository root, or an inline `description`; a `name` the specification cites it by (the adapter's name when absent); the `stems` the source's requirements lead with; and the `[[source.surface]]` pairs (`entry`, `stem`) its survey must decide.
+- `[[requirement]]`, `[[criterion]]`, `[[decision]]`: each a `stem` (or a list), an `anchor` (`path#Ln` or `path#Ln-Lm`, under the source's tree), a one-line `gloss`, and a `source` where the case has several.
 
-`target/` is gitignored and `make sweep` drops what sits there untouched for a week, so a card is kept by its record: [cards/README.md](cards/README.md) states the protocol an arm follows, writes each experiment's predictions and decision rule before its arms are built, reads each card's figures against them, records the experiment that made the survey by model the default over the parser's own detection and the `python` and `documentation` rounds after it, and names the commit each card is read from (`git show <sha>:evals/cards/<card>.md`); no card is in the tree.
+A criterion is a boundary the code spells as a value of its own (a named constant, a default, a pattern) at the line that binds it, never a literal inside the branch that uses it. Middleware mounted for every route is expected under `start`.
+
+### `typescript`
+
+| Case | What it probes | Stems |
+| --- | --- | --- |
+| [orders](cases/orders/expected.toml) | One module, one stem: the inline-budget path | `order-service` |
+| [express-orders](cases/express-orders/expected.toml) | An Express service: a bootstrap and three routers | `start`, `orders`, `customers`, `health` |
+| [cli-jobs](cases/cli-jobs/expected.toml) | A commander CLI with queue workers | `start`, `import`, `reconcile`, `nightly`, `serve`, `invoices` |
+| [api-routes](cases/api-routes/expected.toml) | A Next.js app-router API: handlers routed by file path, no bootstrap, nothing registered | `orders`, `customers`, `health` |
+| [hono-mounted](cases/hono-mounted/expected.toml) | Sub-applications mounted with `app.route("/orders", orders)` and registering at `"/"`: the resource is in the mount | `start`, `orders`, `customers`, `health` |
+| [cli-table](cases/cli-table/expected.toml) | Three commands registered from a table in one loop: one registration, three surfaces | `start`, `import`, `reconcile`, `nightly` |
+| [fastify-demo](cases/fastify-demo/expected.toml) | The official Fastify demo, vendored. Routes registered on an untyped plugin parameter in modules `@fastify/autoload` loads by directory; four scripts the manifest's `db:*` scripts run | `start`, `home`, `api`, `auth`, `users`, `tasks`, `create-database`, `drop-database`, `migrate`, `seed-database` |
+| [nestjs-boilerplate](cases/nestjs-boilerplate/expected.toml) | A 177-module NestJS application, vendored: the scale case. Nine controllers, two seed runners | `start`, `auth`, `users`, `files`, `home`, `run-seed` |
+
+The last four were written before any run to catch a parser's conventions reading a tree wrongly.
+
+### `python`
+
+Six authored cases mirror `typescript` ones so both adapters are read against the same shapes; two vendored real trees were written from `--facts` and the code before any run.
+
+| Case | What it probes | Stems |
+| --- | --- | --- |
+| [fastapi-orders](cases/fastapi-orders/expected.toml) | One module with the application, its routes, and its `__main__` guard: the inline-budget path and the one-module bootstrap rule | `start`, `orders` |
+| [fastapi-routers](cases/fastapi-routers/expected.toml) | Mirrors `express-orders`. A console script enters `app.main`, which includes three routers; a generated table puts the tree past `INLINE_BYTES`, so one seam per stem; a `rates.json` read by a computed path is laid as data | `start`, `orders`, `customers`, `health` |
+| [flask-blueprints](cases/flask-blueprints/expected.toml) | A Flask factory constructed at load with no guard or script; two blueprints and one `add_url_rule`; a `.feature` file read as stated behaviour | `start`, `health`, `orders`, `auth` |
+| [django-shop](cases/django-shop/expected.toml) | A Django project: settings and URL modules reached by the strings that name them, views under the `orders/` mount, a DRF viewset with `@action`s, a management command, a migration skipped | `start`, `orders`, `import-orders` |
+| [click-jobs](cases/click-jobs/expected.toml) | Mirrors `cli-jobs`. A Click group, an APScheduler job, and two Celery tasks in a `src/` layout, mined whole | `start`, `import`, `reconcile`, `nightly`, `serve`, `invoices` |
+| [money-library](cases/money-library/expected.toml) | Mirrors `orders`. A `src/` library with no bootstrap whose `__init__` re-exports the surfaces | `money`, `parse-csv`, `convert` |
+| [fastapi-template](cases/fastapi-template/expected.toml) | FastAPI's full-stack template `backend/`, vendored. Construction at load, a router prefix the code does not spell, a prefix-less router stemmed by its tag. Twenty modules, one seam | `start`, `items`, `users`, `login`, `utils`, `private` |
+| [django-styleguide](cases/django-styleguide/expected.toml) | HackSoft's styleguide example, vendored: the `python` scale case. Settings by star imports, namespaced `include((module, namespace))`, nested inline includes, a task registered through a wrapper. 128 modules, one seam per stem | `start`, `auth`, `users`, `errors`, `files`, `google-oauth2`, `email-send`, `debug-task`, `test-non-concurrent-task`, `setup-periodic-tasks` |
+
+### `documentation`
+
+Six cases read prose alone, each written before any run to a shape the shipped survey (one seam per top-level directory) reads differently. Each names its surfaces (document, stem), its requirements at the paragraphs, bullets, and sentences that state them, and its decisions where a document records one.
+
+| Case | What it probes | Stems |
+| --- | --- | --- |
+| [orders-doc](cases/orders-doc/expected.toml) | The live example's one document ([examples/documentation/docs](../examples/documentation/docs)): the inline-budget path | `orders` |
+| [stories](cases/stories/expected.toml) | User stories, two directories of two. The directory cut and the subjects agree | `wishlist`, `invoices` |
+| [adr](cases/adr/expected.toml) | Five decision records in one `adr/` directory, each its own subject, which one directory lumps into one seam | `entries`, `posting`, `amounts`, `daily-close`, `exports` |
+| [narrative](cases/narrative/expected.toml) | Three headless prose pieces at the root: no heading to anchor at, only a first line to name by | `bookings`, `returns`, `membership` |
+| [cross-cut](cases/cross-cut/expected.toml) | Twenty documents past `INLINE_BYTES`, cut by audience into `guides/`, `reference/`, `policies/` while the subjects cut across them. Written to break the directory cut | `membership`, `sign-in`, `password-reset`, `catalogue`, `loans`, `reservations`, `returns`, `damage`, `notifications` |
+| [nestjs-docs](cases/nestjs-docs/expected.toml) | The vendored NestJS boilerplate's own `docs/`: the real-tree case | `auth`, `files`, `serialization`, `translations`, `database`, `architecture` |
+
+### Several sources
+
+Six cases run several sources through one `specify` and grade the reconciled specification by its behaviours (below).
+
+| Case | What it probes | Expects |
+| --- | --- | --- |
+| [orders-triad](cases/orders-triad/expected.toml) | The example document (`docs`), the `orders` module (`code`), and an inline `intent` brief (`brief`, anchoring nothing, contributing authority alone), their stems disagreeing by name | Five behaviours both state, two the document alone |
+| [orders-brief](cases/orders-brief/expected.toml) | The document beside a brief that disagrees on one rule. Does a byte-equal pre-merge hide a disagreement? | `divergence`, the brief outranking the document |
+| [orders-divergence](cases/orders-divergence/expected.toml) | The document rewritten so two rules differ from the code's in kind | `divergence` on both |
+| [orders-conflict](cases/orders-conflict/expected.toml) | A support FAQ as a second `documentation` source (`faq`) contradicting the document: two sources of one kind disagree | `conflict` |
+| [orders-spelled](cases/orders-spelled/expected.toml) | The document rewritten under the code's own names, so the stems agree by the byte | The one cross-source pre-merge, against `orders-triad` where none is |
+| [nestjs-pair](cases/nestjs-pair/expected.toml) | `nestjs-docs` beside the whole `nestjs-boilerplate` tree: the cross-source scale case | Fourteen behaviours both state, three the documents alone |
+
+A `[[behaviour]]` is one thing the specification should hold once, however many sources state it: a `gloss`, the contributing `claims` (each a `source` and an `anchor` in its tree), and, where the engine's authority rule decides it, the `status` the reconciled requirement should carry (`agreed`, `unknown`, `divergence`, `conflict`).
+
+Grading reads `emery show spec --format json`. A requirement cites a behaviour when its citation shares at least as many lines with the anchor as it spends outside it, so a whole-method citation states none of the branches inside it. Anchor a behaviour at the lines that state it whole.
+
+| Outcome | Meaning |
+| --- | --- |
+| met | one requirement cites it |
+| met by criterion | none cites it, but a requirement `covers` an accepted criterion held there. Noted so the kind the model chose shows |
+| split | two or more requirements cite it |
+| missed | none holds it |
+| wrong merge | one requirement cites two behaviours |
+| across kinds | one requirement cites it, another holds it as a criterion; no grouping can join them |
+| cross-source pre-merge | the engine joined a requirement on a byte-equal claim id from two sources. Counted apart: the one grouping the model never revisits |
+
+A criterion counts toward neither split nor wrong merge. Prose stating two rules in one sentence would read as a split or a wrong merge; the anchors steer around it where they can, and where they cannot (the cancellation rule, one sentence in the document and two branches in the code) the case allows the one split.
+
+### Vendored fixtures
+
+Four real trees are not committed. Each is fetched at a pinned commit into its case's gitignored `fixture/`, and the `expected.toml` names the commit. `nestjs-docs` and `nestjs-pair` read the `nestjs-boilerplate` fixture too.
+
+```bash
+mkdir -p evals/cases/{nestjs-boilerplate,fastify-demo,fastapi-template,django-styleguide}/fixture
+curl -sL https://github.com/brocoders/nestjs-boilerplate/archive/9620f159eefe38f47747d02ab162852367c5472c.tar.gz \
+  | tar -xz --strip-components=1 -C evals/cases/nestjs-boilerplate/fixture
+curl -sL https://github.com/fastify/demo/archive/5cd560125b3c2f0d42192bc7f493e8e3b9e75e52.tar.gz \
+  | tar -xz --strip-components=1 -C evals/cases/fastify-demo/fixture
+curl -sL https://github.com/fastapi/full-stack-fastapi-template/archive/cb740b656d7a0a6c5e12c7bf8e50343ec94ee9c7.tar.gz \
+  | tar -xz --strip-components=2 -C evals/cases/fastapi-template/fixture '*/backend'
+curl -sL https://github.com/HackSoftware/Django-Styleguide-Example/archive/a70ef43d7df03706c1211d4fcfd70b4b0120ba1e.tar.gz \
+  | tar -xz --strip-components=1 -C evals/cases/django-styleguide/fixture
+```
+
+## Reading a card
+
+The scorecard is printed and written to `target/eval/<card>.md`, every run's files under `target/eval/<card>/<case>/`. Compare two by hand.
+
+In a `typescript` or `python` run the model names each source's surfaces, anchors, and stems in one survey turn, from the facts the parser read, under the adapter's `survey.md` ([typescript](../sources/typescript/prose/survey.md), [python](../sources/python/prose/survey.md)); code derives the stems it spells, the ids, the closures, and the seams from the anchors it accepts. The adapter's `surveyed` line reports those surfaces, and the `surfaces` column grades them.
+
+Each figure points at one place in the adapter:
+
+- **`recall req` / `crit` / `dec`**: an expected item is found when an accepted claim of its source overlaps its anchor. A miss is the extraction's: `extract.md` for a requirement the model did not state, the SDK's `skeleton` anchor and decision lists for one stated at a line the gate refused.
+- **`in stem`**: a found requirement whose claim id leads with the expected stem, or any of several where the expectation lists them for shared code. The extraction's too.
+- **`stems`**: `exact`, or the stems missed and invented. The mounts' and the bootstrap rule's: a stem invented is a surface the code read a stem into, a stem missed one whose surfaces were restemmed.
+- **`surfaces`**: `matched/expected ~restemmed +extra`. Matched is the right entry under the right stem; restemmed the right entry under another (a note says which), telling a survey that is present and wrong from one that is absent; `no survey` is an adapter that logs no `surveyed` line, as the shipped `documentation` component does not. Anything short of `n/n` is the survey's: `survey.md` for a surface not named or named under the wrong convention; the SDK's `survey::seams` check for a finding that sent the answer back; the stem rules (the mounts and `derive` in `survey/surface.rs`, the SDK's `survey::route` under `DIALECT.route`) for a stem derived wrongly from an anchor the model got right.
+- **`behaviours`**, on several sources: `met/expected`, then `~k` split and `!k` wrong merges.
+- **`exit`**, on a failed run: the turn it died in. `survey-*` or `evidence-*` is the adapter's and the run is short; `spec-draft`, `design-draft`, `grouping`, or `slicing` is the engine's, after every claim was accepted, and the row's recall reads as any other's.
+- **Tokens and wall clock**: from the backend's `completion` lines.
+
+`surfaces`, `stems`, and the survey notes read per source where the case has several. Beneath the rows:
+
+- The misses by anchor, and `unreached`, the modules the adapter placed under no surface.
+- For behaviours: each miss, split, partial citation (a met behaviour one of whose claims no requirement cites), met by criterion, across kinds, status mismatch, and wrong merge; then `behaviour statuses` and `cross-source pre-merges`.
+- **`requirement anchors`**: where the accepted requirement claims landed against the surveyed surfaces (the bootstrap set aside): covering a surface's head, inside it past the head (a decision, a `return`, a call), or outside every surface. An arm over the anchor set is read by this figure; the misses by anchor cannot show it.
+- **`Budget ladder`**: the rung each run landed on. A run that climbs is a seam whose turn did not fit: its size, or the order it lays its files.
+- **`Stability`**: the stem sets across runs, and the `(entry, stem)` pairs, requirement ids, and spec subjects every pair of runs shares. The pairs measure the derivation's determinism: same anchors, same seams. The ids measure the model's naming, not a target the survey holds.
+
+What the survey does fix (stems, surfaces, anchors, the files a seam lays) is pinned by [tests/source.rs](../tests/source.rs) with the survey's answer scripted, over the `cli-jobs` and `express-orders` fixtures for `typescript` and `click-jobs` and `fastapi-routers` for `python`.
+
+### The record
+
+`target/` is gitignored and `make sweep` drops what sits there untouched for a week, so no card is in the tree. [cards/README.md](cards/README.md) is the record: the protocol an arm follows, each experiment's predictions and decision rule written before its arms are built, each card's figures read against them, and the commit each card is read from (`git show <sha>:evals/cards/<card>.md`).

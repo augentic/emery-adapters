@@ -57,5 +57,5 @@ jobs:
           version="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version *= *"\(.*\)"/\1/p' Cargo.toml)"
           for dir in sources/*/; do
             name="$(basename "$dir")"
-            wkg oci push "ghcr.io/augentic/emery-adapters/$name:$version" "target/wasm32-wasip2/release/$name.wasm"
+            wkg oci push "ghcr.io/augentic/emery/$name:$version" "target/wasm32-wasip2/release/$name.wasm"
           done
