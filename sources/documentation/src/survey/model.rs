@@ -46,9 +46,9 @@ pub struct Subject {
 /// within the rounds or the budget, `server_error` when `survey.md` is not
 /// embedded, `bad_gateway` when a tool or transport fails.
 pub async fn subjects<P: Model>(
-    ctx: &Context<'_, P>, docs: &'static [emery_sdk::Doc], prepared: &Prepared,
+    ctx: &Context<'_, P>, docs: &'static [emery_sdk::Doc], prepared: &Prepared<'_>,
 ) -> Result<Inventory, Error> {
-    let source = &prepared.source;
+    let source = prepared.source();
     let modules: Vec<String> = prepared.documents.iter().map(|doc| doc.path.clone()).collect();
     let text = facts(prepared);
 
@@ -69,7 +69,7 @@ pub async fn subjects<P: Model>(
 // The documents in path order, each with its outline: its length, each
 // heading at its line, and what its body holds. The message's own nouns are
 // the SDK's — module, surface — so the facts say first what each is here.
-fn facts(prepared: &Prepared) -> String {
+fn facts(prepared: &Prepared<'_>) -> String {
     let mut text = String::from(
         "This source is a documentation tree. In this message a module is one of its documents \
          and a surface is a subject — a feature, a resource, a flow the documents describe — as \
@@ -122,7 +122,7 @@ fn clipped(text: &str) -> String {
 // What the tree alone can hold the answer to, past the SDK's own checks:
 // every document is a subject's entry or listed unreached, and no two
 // subjects anchor at one line.
-fn check(prepared: &Prepared, answer: &Inventory) -> Vec<String> {
+fn check(prepared: &Prepared<'_>, answer: &Inventory) -> Vec<String> {
     let mut findings = Vec::new();
 
     let mut entries = BTreeSet::new();
@@ -168,7 +168,7 @@ fn start_line(lines: Option<(u64, u64)>) -> u32 {
 /// document order, then by line, so two answers naming the same anchors
 /// derive the same subjects.
 #[must_use]
-pub fn build(prepared: &Prepared, inventory: &Inventory) -> Vec<Subject> {
+pub fn build(prepared: &Prepared<'_>, inventory: &Inventory) -> Vec<Subject> {
     // the accepted anchors by document, each at its start line
     let mut by_doc: BTreeMap<&str, Vec<(u32, &Surface)>> = BTreeMap::new();
     for surface in &inventory.surfaces {
@@ -210,7 +210,7 @@ pub fn build(prepared: &Prepared, inventory: &Inventory) -> Vec<Subject> {
 // The lead of each subject: the stem alone where it is the one subject
 // under its stem, else the stem and the first slug candidate no other
 // subject under the stem has taken.
-fn leads(prepared: &Prepared, subjects: &mut [Subject]) {
+fn leads(prepared: &Prepared<'_>, subjects: &mut [Subject]) {
     let mut under: BTreeMap<String, usize> = BTreeMap::new();
     for subject in subjects.iter() {
         *under.entry(subject.stem.clone()).or_default() += 1;

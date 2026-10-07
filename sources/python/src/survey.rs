@@ -1,47 +1,43 @@
 //! Reads a Python source into the tree the SDK surveys.
 //!
 //! An inline value is one seam mined whole, its declarations copied
-//! unanchored, with no survey turn. A workspace is listed under this
-//! adapter's keep — the production modules, the data files a string may
-//! name, and the tree's own tests — every module parsed, and the tree
-//! settled through the adapter's recogniser ([`surface`]) for the SDK's
-//! `seams` to survey and cut. Only a tree with no production module is
-//! refused.
+//! unanchored, with no survey turn.
+//!
+//! A workspace is listed under this adapter's keep:
+//!
+//! - the production modules
+//! - the data files a string may name
+//! - the tree's own tests
+//!
+//! Every module is parsed, and the tree is settled through the adapter's
+//! recogniser ([`surface`]) for the SDK's `seams` to survey and cut. Only a
+//! tree with no production module is refused.
 
-use std::path::Path;
-
-use emery_sdk::survey::code::{Listing, Parsed, Tree};
-use emery_sdk::survey::route::Spelling;
-use emery_sdk::survey::{ClassSyntax, Dialect, Survey};
-use emery_sdk::workspace::Entry;
-use emery_sdk::{Error, Seam, SourceContent, SourceInput, bad_request};
-
-use self::parse::Module;
-use self::surface::Python;
-
+mod dialect;
 mod parse;
 mod resolve;
 mod surface;
 
-pub enum Preparation {
-    // An inline value needs no survey turn: one seam, its declarations
-    // unanchored.
-    Value(Survey),
-    Workspace(Tree<Python>),
-}
+use std::path::Path;
 
-// Refuses a workspace with no production module, and nothing else.
-pub fn prepare(input: &SourceInput) -> Result<Preparation, Error> {
-    let source = &input.name;
+use emery_sdk::survey::Survey;
+use emery_sdk::survey::code::{Listing, Parsed};
+use emery_sdk::workspace::Entry;
+use emery_sdk::{Context, Error, Model, SourceContent, bad_request};
+
+use self::dialect::DIALECT;
+use self::parse::Module;
+use self::surface::Python;
+use crate::PROSE;
+
+pub async fn survey<P: Model>(ctx: &Context<'_, P>) -> Result<Survey, Error> {
+    let source = &ctx.input.name;
 
     // an inline value is one seam, with no survey
-    let workspace = match &input.content {
+    let workspace = match &ctx.input.content {
         SourceContent::Value(text) => {
             let module = Module::parse("value.py", text.clone());
-            return Ok(Preparation::Value(Survey {
-                seams: vec![Seam::whole()],
-                types: emery_sdk::survey::types(&DIALECT, [&*module], false),
-            }));
+            return Ok(Survey::value(&DIALECT, &module));
         }
         SourceContent::Workspace(workspace) => workspace,
     };
@@ -57,178 +53,18 @@ pub fn prepare(input: &SourceInput) -> Result<Preparation, Error> {
              virtualenvs, caches, build output, and migrations."
         ));
     }
-    let tests = emery_sdk::workspace::list(workspace, is_test)?;
 
-    let root = Path::new(workspace);
+    // the settled tree is the model's to survey
     let listing = Listing {
         modules,
         data,
-        tests: tests.clone(),
+        tests: emery_sdk::workspace::list(workspace, is_test)?,
     };
-    let parsed = Parsed::read(root, &DIALECT, listing, Module::parse);
-    let recogniser = Python::new(root, &parsed, tests);
-    Ok(Preparation::Workspace(parsed.settle(recogniser)))
+    let parsed = Parsed::read(Path::new(workspace), &DIALECT, listing, Module::parse);
+    let recogniser = Python::new(&parsed);
+    let tree = parsed.settle(recogniser);
+    emery_sdk::survey::seams(ctx, PROSE, &tree).await
 }
-
-// What the SDK's lookups read of Python.
-static DIALECT: Dialect = Dialect {
-    self_name: "self",
-    generic_stems: &[
-        "__init__",
-        "__main__",
-        "main",
-        "app",
-        "views",
-        "urls",
-        "routes",
-        "api",
-        "handlers",
-        "endpoints",
-        "tasks",
-    ],
-    structural: &[
-        "map",
-        "filter",
-        "sorted",
-        "sort",
-        "reduce",
-        "partial",
-        "wraps",
-        "run",
-        "run_until_complete",
-        "create_task",
-        "gather",
-        "ensure_future",
-        "run_in_executor",
-        "to_thread",
-        "register_blueprint",
-        "include_router",
-        "add_middleware",
-        "mount",
-        "setdefault",
-        "Depends",
-        "Security",
-        "raises",
-        "fixture",
-        "parametrize",
-        "field",
-        "Field",
-        "Column",
-        "mapped_column",
-        "relationship",
-    ],
-    listeners: &[],
-    lifecycle_events: &[],
-    // `patch` by its spelling whole: the same name on an application, a
-    // router, or an HTTP client is a verb.
-    mocking: &["patch", "mock.patch", "unittest.mock.patch", "mocker.patch"],
-    // Django's admin site among them: it serves what it registers on the
-    // source's behalf, by call or by decorator.
-    lifecycle: &[
-        "signal.signal",
-        "atexit.register",
-        "add_signal_handler",
-        "on_event",
-        "add_event_handler",
-        "add_exception_handler",
-        "register_error_handler",
-        "teardown_appcontext",
-        "teardown_request",
-        "lifespan",
-        "site.register",
-        "admin.register",
-        "admin.action",
-        "admin.display",
-    ],
-    decorator_noise: &[
-        "dataclass",
-        "define",
-        "frozen",
-        "property",
-        "setter",
-        "getter",
-        "deleter",
-        "staticmethod",
-        "classmethod",
-        "cached_property",
-        "lru_cache",
-        "cache",
-        "wraps",
-        "overload",
-        "abstractmethod",
-        "override",
-        "final",
-        "contextmanager",
-        "asynccontextmanager",
-        "login_required",
-        "permission_required",
-        "csrf_exempt",
-        "require_http_methods",
-        "require_POST",
-        "require_GET",
-        "atomic",
-        "retry",
-        "validator",
-        "field_validator",
-        "model_validator",
-        "root_validator",
-        "computed_field",
-        "total_ordering",
-        "unique",
-        "fixture",
-        "parametrize",
-        "mark",
-        "skip",
-        "skipif",
-    ],
-    decorator_noise_prefixes: &[],
-    decorator_hooks: &[
-        "connect",
-        "receiver",
-        "listens_for",
-        "exception_handler",
-        "errorhandler",
-        "error_handler",
-        "before_request",
-        "after_request",
-        "before_first_request",
-        "middleware",
-        "context_processor",
-        "template_filter",
-        "url_value_preprocessor",
-        "url_defaults",
-    ],
-    hook_keywords: &[
-        "lifespan",
-        "on_startup",
-        "on_shutdown",
-        "exception_handlers",
-        "default_factory",
-        "default",
-        "key",
-        "callback",
-        "dependencies",
-        "middleware",
-        "result_callback",
-    ],
-    type_imports_reach: false,
-    openers: &['[', '{', '('],
-    comment_prefixes: &["#"],
-    globals: &["open"],
-    options: &["add_argument", "add_option", "option", "argument", "Option", "Argument"],
-    manifests: &["pyproject.toml", "setup.cfg"],
-    barrels: &["__init__"],
-    constructs: None,
-    env_object: None,
-    enum_bases: &["Enum", "Flag"],
-    class_syntax: ClassSyntax::INDENTED,
-    described: "a test's docstring or name under its class's",
-    // A pattern spells a wildcard, a brace, a `<converter>`, or a regex.
-    route: Spelling {
-        pattern: &['*', '{', '(', '[', '<', '?', '\\'],
-        param_name: surface::param_name,
-    },
-};
 
 // Never a production module's: dependencies, environments, caches, build
 // output, coverage, documentation, tests, and schema history.
@@ -258,21 +94,6 @@ const SKIP_FILES: &[&str] = &["conftest.py", "noxfile.py"];
 const SKIP_ROOT_FILES: &[&str] = &["setup.py"];
 const EXTENSIONS: &[&str] = &["py"];
 const DATA_EXTENSIONS: &[&str] = &["json", "yaml", "yml", "toml", "csv", "ini"];
-
-fn push_unique<T: PartialEq>(into: &mut Vec<T>, item: T) {
-    if !into.contains(&item) {
-        into.push(item);
-    }
-}
-
-// First-occurrence order.
-fn unique<T: PartialEq>(items: impl IntoIterator<Item = T>) -> Vec<T> {
-    let mut list = Vec::new();
-    for item in items {
-        push_unique(&mut list, item);
-    }
-    list
-}
 
 // Alembic's `versions` is schema history, not a package.
 fn skipped_dir(entry: Entry<'_>) -> bool {

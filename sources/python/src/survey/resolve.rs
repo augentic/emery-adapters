@@ -22,9 +22,9 @@ use std::path::Path;
 
 use emery_sdk::survey::code::{self, Imported};
 use emery_sdk::survey::resolve::{Target, normalize};
+use emery_sdk::unique;
 
 use super::parse::Module;
-use super::unique;
 
 #[derive(Debug)]
 pub struct Resolver {
@@ -41,13 +41,12 @@ pub struct Resolver {
 }
 
 impl Resolver {
-    // A top-level package is one whose parent directory is no package.
-    // `owned` is the manifest's name, when it has one.
-    pub fn new(
-        modules: impl IntoIterator<Item = String>, data: impl IntoIterator<Item = String>,
-        tests: impl IntoIterator<Item = String>, owned: Option<&str>,
-    ) -> Self {
-        let modules: BTreeSet<String> = modules.into_iter().collect();
+    // Over the parsed tree's modules, data files, and the test modules the
+    // keep set aside, which an import may still reach. A top-level package
+    // is one whose parent directory is no package. `owned` is the manifest's
+    // name, when it has one.
+    pub fn new(parsed: &code::Parsed<Module>, owned: Option<&str>) -> Self {
+        let modules: BTreeSet<String> = parsed.modules.keys().cloned().collect();
         let packages: BTreeSet<&str> =
             modules.iter().filter_map(|path| path.strip_suffix("/__init__.py")).collect();
         let mut roots = vec![String::new(), "src".to_owned()];
@@ -86,8 +85,8 @@ impl Resolver {
 
         Self {
             modules,
-            tests: tests.into_iter().collect(),
-            data: data.into_iter().collect(),
+            tests: parsed.tests.iter().cloned().collect(),
+            data: parsed.data.iter().cloned().collect(),
             roots,
             owned,
         }

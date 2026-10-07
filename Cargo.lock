@@ -1118,7 +1118,7 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 [[package]]
 name = "emery-adapter"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#b3c4eb8031da9008783f5c9d94bbc3e73c0c30d8"
+source = "git+https://github.com/augentic/emery#3117d8ae0910ee1f4bc84cdbc2a11995bdeda43d"
 dependencies = [
  "omnia-sdk",
  "schemars",
@@ -1151,12 +1151,12 @@ dependencies = [
 [[package]]
 name = "emery-prose"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#b3c4eb8031da9008783f5c9d94bbc3e73c0c30d8"
+source = "git+https://github.com/augentic/emery#3117d8ae0910ee1f4bc84cdbc2a11995bdeda43d"
 
 [[package]]
 name = "emery-sdk"
 version = "0.38.0"
-source = "git+https://github.com/augentic/emery#b3c4eb8031da9008783f5c9d94bbc3e73c0c30d8"
+source = "git+https://github.com/augentic/emery#3117d8ae0910ee1f4bc84cdbc2a11995bdeda43d"
 dependencies = [
  "anyhow",
  "emery-adapter",
@@ -6330,18 +6330,18 @@ dependencies = [
 
 [[package]]
 name = "zerocopy"
-version = "0.8.60"
+version = "0.8.61"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6400fc4bb7426f6faac3fb07566122bb18622e3022bd2c36426a92ed489b1dbe"
+checksum = "879fb705ce98c32e41ebdb970fbe1204f8492423b314c6ab0354c3e7b5542866"
 dependencies = [
  "zerocopy-derive",
 ]
 
 [[package]]
 name = "zerocopy-derive"
-version = "0.8.60"
+version = "0.8.61"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99c27cc7525bad4df59a45e073c45b2c2aa820efb588234cc23a547ec69a34db"
+checksum = "708882a28301d604fa039cc7727607a98d04c4b86dc76ec9cc683f805d709759"
 dependencies = [
  "proc-macro2",
  "quote",

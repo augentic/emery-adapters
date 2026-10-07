@@ -1,28 +1,34 @@
 //! Extracts claims from an operator's written brief.
 //!
-//! The adapter accepts inline text or a workspace containing one regular
-//! file. The brief must not be empty and is always mined as a single unit.
-//! Emery's generated files and hidden entries, names beginning with a dot,
-//! are ignored when counting workspace files.
+//! The source is inline text or a workspace holding one regular file. The
+//! brief is mined whole, in one call.
+//!
+//! # Refusals
+//!
+//! - an empty brief
+//! - a workspace holding no file, or more than one, hidden entries and
+//!   Emery's own files left out of the count
 
 #[cfg(target_arch = "wasm32")]
 mod survey;
 
 #[cfg(target_arch = "wasm32")]
 mod guest {
-    use emery_sdk::{AdapterMetadata, Context, Error, Evidence, Model, SourceKind};
+    use emery_sdk::{Context, Error, Evidence, Model, SourceAdapter, SourceKind};
 
     use crate::{PROSE, survey};
 
-    emery_sdk::source_adapter!(metadata, extract);
+    struct Adapter;
 
-    fn metadata() -> AdapterMetadata {
-        emery_sdk::metadata(SourceKind::Intent)
-    }
+    emery_sdk::source_adapter!(Adapter);
 
-    async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {
-        let seams = survey::survey(ctx.input)?;
-        emery_sdk::extract(ctx, PROSE, &seams).await
+    impl SourceAdapter for Adapter {
+        const KIND: SourceKind = SourceKind::Intent;
+
+        async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {
+            let seams = survey::survey(ctx.input)?;
+            emery_sdk::extract(ctx, PROSE, &seams).await
+        }
     }
 }
 

@@ -22,19 +22,18 @@
 //! is.
 
 use std::collections::BTreeMap;
-use std::path::Path;
 
-use emery_sdk::kebab;
 use emery_sdk::survey::code::{
     Arg, BindingKind, Bootstrap, Call, ClassDecl, Decorated, Derived, Export, ExportKind, Imported,
     Init, Manifest, MemberKind, Parsed, Recogniser, Runs, Scope, Tree,
 };
 use emery_sdk::survey::tests::Statement;
 use emery_sdk::survey::{Lines, route};
+use emery_sdk::{kebab, push_unique, unique};
 
+use super::DIALECT;
 use super::parse::{self, Module};
 use super::resolve::{self, Resolver};
-use super::{DIALECT, push_unique, unique};
 
 // Looked for in this order when the manifest's scripts name no entry:
 // Django's, a package run as a script, the conventional entries at the root
@@ -105,16 +104,10 @@ enum At<'m> {
 
 impl Python {
     // The manifest read and the resolver built over the parsed tree, before
-    // any import is settled. `tests` are the test modules the keep set
-    // aside, which an import may still reach.
-    pub(super) fn new(root: &Path, parsed: &Parsed<Module>, tests: Vec<String>) -> Self {
-        let manifest = resolve::Manifest::read(root);
-        let resolver = Resolver::new(
-            parsed.modules.keys().cloned(),
-            parsed.data.iter().cloned(),
-            tests,
-            manifest.name.as_deref(),
-        );
+    // any import is settled.
+    pub(super) fn new(parsed: &Parsed<Module>) -> Self {
+        let manifest = resolve::Manifest::read(&parsed.root);
+        let resolver = Resolver::new(parsed, manifest.name.as_deref());
         Self { resolver, manifest }
     }
 
@@ -216,11 +209,10 @@ impl Python {
     // and what its module references are reached too.
     fn at_registration(
         &self, tree: &Tree<Self>, module: &Module, call: &Call, stem: &str,
-        mounts: &BTreeMap<String, String>,
     ) -> Derived {
         let (method, literal) = call.registered(tree.led(module, call));
         let literal = literal.as_deref();
-        let route = routed(module, method, literal, mounts);
+        let route = routed(tree.mount(&module.path), method, literal);
         let derived = route.as_deref().map_or_else(
             || literal.and_then(route::literal_stem),
             |route| DIALECT.route.stem(route),
@@ -541,7 +533,6 @@ impl Recogniser for Python {
     // the first line is read, for an anchor within a handler.
     fn derive(
         &self, tree: &Tree<Self>, module: &Module, lines: Lines, name: &str, stem: &str,
-        mounts: &BTreeMap<String, String>,
     ) -> Derived {
         if let Some(derived) = at_command(tree, module) {
             return derived;
@@ -567,26 +558,21 @@ impl Recogniser for Python {
                 .or_else(|| export_enclosing(module, lines).map(At::Export))
         };
         match first.or_else(enclosing) {
-            Some(At::Registration(call)) => self.at_registration(tree, module, call, stem, mounts),
-            Some(At::Class(class)) => at_decorated_class(tree, module, class, mounts),
-            Some(At::Def(decorated)) => at_decorated_def(tree, module, decorated, mounts),
+            Some(At::Registration(call)) => self.at_registration(tree, module, call, stem),
+            Some(At::Class(class)) => at_decorated_class(tree, module, class),
+            Some(At::Def(decorated)) => at_decorated_def(tree, module, decorated),
             Some(At::Export(export)) => at_export(tree, module, export),
             None => Derived::named(tree, module, lines, name, stem),
         }
     }
 }
 
-// Under the module's mount. A verb's literal is a path only when it leads
+// Under the module's `mount`. A verb's literal is a path only when it leads
 // with a slash; a router's (`path("orders/", ..)`) however spelled.
-fn routed(
-    module: &Module, method: &str, literal: Option<&str>, mounts: &BTreeMap<String, String>,
-) -> Option<String> {
+fn routed(mount: &str, method: &str, literal: Option<&str>) -> Option<String> {
     let literal = literal?;
     let verb = VERBS.contains(&method) && literal.starts_with('/');
-    (verb || ROUTERS.contains(&method)).then(|| {
-        let prefix = mounts.get(&module.path).map_or("", String::as_str);
-        route::join(prefix, &strip_pattern(literal))
-    })
+    (verb || ROUTERS.contains(&method)).then(|| route::join(mount, &strip_pattern(literal)))
 }
 
 // The method's own name when it is a verb, else the first verb of its
@@ -631,12 +617,10 @@ fn at_command(tree: &Tree<Python>, module: &Module) -> Option<Derived> {
 
 // The stem is what the decorator's prefix spells under the module's mount;
 // the tell is the class's name.
-fn at_decorated_class(
-    tree: &Tree<Python>, module: &Module, class: &Decorated, mounts: &BTreeMap<String, String>,
-) -> Derived {
+fn at_decorated_class(tree: &Tree<Python>, module: &Module, class: &Decorated) -> Derived {
     let name = class.class.as_deref().unwrap_or_default();
-    let prefix = mounts.get(&module.path).map_or("", String::as_str);
-    let route = route::join(prefix, &strip_pattern(class.literal.as_deref().unwrap_or("")));
+    let mount = tree.mount(&module.path);
+    let route = route::join(mount, &strip_pattern(class.literal.as_deref().unwrap_or("")));
     let methods = unique(
         module
             .decorated
@@ -661,9 +645,7 @@ fn at_decorated_class(
 // the command group the `def` is under, else the literal's first word. The
 // tell is the verb and the path past the resource, else the literal's tail,
 // else the `def`'s name.
-fn at_decorated_def(
-    tree: &Tree<Python>, module: &Module, decorated: &Decorated, mounts: &BTreeMap<String, String>,
-) -> Derived {
+fn at_decorated_def(tree: &Tree<Python>, module: &Module, decorated: &Decorated) -> Derived {
     let member = decorated.member.as_deref().unwrap_or_default();
     let mut detail = vec![decorated.class.as_ref().map_or_else(
         || format!("def `{member}` {}", decorated.lines),
@@ -671,12 +653,13 @@ fn at_decorated_def(
     )];
     detail.push(format!("under `@{}`", spelled(decorated)));
     detail.extend(through(tree, module, decorated));
-    let route = decorated_route(module, decorated, mounts);
+    let mount = tree.mount(&module.path);
+    let route = decorated_route(mount, module, decorated);
     let group = group_of(module, decorated);
     let literal = || decorated.literal.as_deref().and_then(route::literal_stem);
     let stem = route.as_deref().map_or_else(
         || group.clone().or_else(literal),
-        |route| under(module, decorated, mounts).or_else(|| DIALECT.route.stem(route)),
+        |route| under(mount, module, decorated).or_else(|| DIALECT.route.stem(route)),
     );
     let discriminator = match (&route, &stem) {
         (Some(route), Some(stem)) => {
@@ -734,10 +717,7 @@ fn at_export(tree: &Tree<Python>, module: &Module, export: &Export) -> Derived {
 // declared on — `APIRouter(tags=["login"])` with no prefix groups its routes
 // as `login`, however each spells its path. `None` where only the literal
 // names one.
-fn under(
-    module: &Module, decorated: &Decorated, mounts: &BTreeMap<String, String>,
-) -> Option<String> {
-    let mount = mounts.get(&module.path).map_or("", String::as_str);
+fn under(mount: &str, module: &Module, decorated: &Decorated) -> Option<String> {
     let prefix = decorated
         .class
         .as_deref()
@@ -812,16 +792,13 @@ fn class_prefix<'m>(module: &'m Module, class: &str) -> Option<&'m Decorated> {
         .find(|d| d.registering(&DIALECT))
 }
 
-// Under the module's mount and, for a method, its class's prefix.
-fn decorated_route(
-    module: &Module, decorated: &Decorated, mounts: &BTreeMap<String, String>,
-) -> Option<String> {
+// Under the module's `mount` and, for a method, its class's prefix.
+fn decorated_route(mount: &str, module: &Module, decorated: &Decorated) -> Option<String> {
     let method = decorated.name.last()?.to_ascii_lowercase();
     if !(VERBS.contains(&method.as_str()) || ROUTERS.contains(&method.as_str())) {
         return None;
     }
     let literal = decorated.literal.as_deref().unwrap_or("");
-    let mount = mounts.get(&module.path).map_or("", String::as_str);
     let prefix = decorated
         .class
         .as_deref()
@@ -922,22 +899,6 @@ fn view_methods<'m>(module: &'m Module, name: &str) -> Vec<(&'m str, Lines)> {
 // Less the regex anchors `re_path` spells a pattern with.
 fn strip_pattern(route: &str) -> String {
     route.trim_start_matches('^').trim_end_matches('$').to_owned()
-}
-
-// `<int:pk>` and `(?P<pk>\d+)` are `pk`; `{id}` and `:id` are `id`; any
-// other segment is as written.
-pub(super) fn param_name(segment: &str) -> &str {
-    if let Some(inner) = segment.strip_prefix('{').and_then(|rest| rest.strip_suffix('}')) {
-        return inner.split_once(':').map_or(inner, |(name, _)| name);
-    }
-    if let Some(inner) = segment.strip_prefix('<').and_then(|rest| rest.strip_suffix('>')) {
-        return inner.rsplit_once(':').map_or(inner, |(_, name)| name);
-    }
-    if let Some(start) = segment.find("(?P<") {
-        let rest = &segment[start + 4..];
-        return rest.split_once('>').map_or(rest, |(name, _)| name);
-    }
-    segment.trim_start_matches(':')
 }
 
 // `invoices.remind` is told from `invoices.void` by `remind`. Nothing for a
