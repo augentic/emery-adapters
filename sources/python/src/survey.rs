@@ -23,7 +23,7 @@ use std::path::Path;
 use emery_sdk::survey::Survey;
 use emery_sdk::survey::code::{Listing, Parsed};
 use emery_sdk::workspace::Entry;
-use emery_sdk::{Context, Error, Model, Seam, SourceContent, bad_request};
+use emery_sdk::{Context, Error, Model, SourceContent, bad_request};
 
 use self::dialect::DIALECT;
 use self::parse::Module;
@@ -37,10 +37,7 @@ pub async fn survey<P: Model>(ctx: &Context<'_, P>) -> Result<Survey, Error> {
     let workspace = match &ctx.input.content {
         SourceContent::Value(text) => {
             let module = Module::parse("value.py", text.clone());
-            return Ok(Survey {
-                seams: vec![Seam::whole()],
-                types: emery_sdk::survey::types(&DIALECT, [&*module], false),
-            });
+            return Ok(Survey::value(&DIALECT, &module));
         }
         SourceContent::Workspace(workspace) => workspace,
     };
@@ -97,21 +94,6 @@ const SKIP_FILES: &[&str] = &["conftest.py", "noxfile.py"];
 const SKIP_ROOT_FILES: &[&str] = &["setup.py"];
 const EXTENSIONS: &[&str] = &["py"];
 const DATA_EXTENSIONS: &[&str] = &["json", "yaml", "yml", "toml", "csv", "ini"];
-
-fn push_unique<T: PartialEq>(into: &mut Vec<T>, item: T) {
-    if !into.contains(&item) {
-        into.push(item);
-    }
-}
-
-// First-occurrence order.
-fn unique<T: PartialEq>(items: impl IntoIterator<Item = T>) -> Vec<T> {
-    let mut list = Vec::new();
-    for item in items {
-        push_unique(&mut list, item);
-    }
-    list
-}
 
 // Alembic's `versions` is schema history, not a package.
 fn skipped_dir(entry: Entry<'_>) -> bool {

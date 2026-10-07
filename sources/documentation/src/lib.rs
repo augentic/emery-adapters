@@ -56,11 +56,11 @@ mod guest {
         match survey::prepare(ctx.input)? {
             survey::Preparation::Value => Ok(vec![Seam::whole()]),
             survey::Preparation::Workspace(prepared) if prepared.documents.is_empty() => {
-                survey::survey(ctx.input)
+                survey::survey(prepared.input)
             }
             survey::Preparation::Workspace(prepared) => {
                 let inventory = survey::model::subjects(ctx, PROSE, &prepared).await?;
-                survey::seams(ctx.input, &prepared, &inventory)
+                survey::seams(&prepared, &inventory)
             }
         }
     }

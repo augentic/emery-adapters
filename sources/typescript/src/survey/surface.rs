@@ -20,7 +20,6 @@
 
 use std::collections::BTreeMap;
 
-use emery_sdk::kebab;
 use emery_sdk::survey::code::{
     Arg, BindingKind, Bootstrap, Call, Decorated, Derived, Export, ExportKind, Imported, Init,
     Manifest, MemberKind, Parsed, Recogniser, Runs, Tree,
@@ -28,10 +27,11 @@ use emery_sdk::survey::code::{
 use emery_sdk::survey::resolve::{Target, normalize};
 use emery_sdk::survey::tests::Statement;
 use emery_sdk::survey::{Lines, route};
+use emery_sdk::{kebab, unique};
 
+use super::DIALECT;
 use super::parse::Module;
 use super::resolve::{self, Resolver};
-use super::{DIALECT, unique};
 
 // Looked for in this order when the manifest names no entry.
 const BOOTSTRAPS: &[&str] =
@@ -53,16 +53,10 @@ pub struct TypeScript {
 
 impl TypeScript {
     // The manifest read and the resolver built over the parsed tree, before
-    // any import is settled. The tree's tests are the test modules the keep
-    // set aside, which an import may still reach.
+    // any import is settled.
     pub(super) fn new(parsed: &Parsed<Module>) -> Self {
         Self {
-            resolver: Resolver::new(
-                parsed.modules.keys().cloned(),
-                parsed.data.iter().cloned(),
-                parsed.tests.iter().cloned(),
-                &parsed.root,
-            ),
+            resolver: Resolver::new(parsed),
             manifest: resolve::Manifest::read(&parsed.root),
         }
     }
@@ -81,11 +75,10 @@ impl TypeScript {
     // resource, else the registering method.
     fn at_registration(
         &self, tree: &Tree<Self>, module: &Module, call: &Call, stem: &str,
-        mounts: &BTreeMap<String, String>,
     ) -> Derived {
         let (method, literal) = call.registered(tree.led(module, call));
         let literal = literal.as_deref();
-        let route = routed(module, method, literal, mounts);
+        let route = routed(tree.mount(&module.path), method, literal);
         let derived = route.as_deref().map_or_else(
             || literal.and_then(route::literal_stem),
             |route| DIALECT.route.stem(route),
@@ -271,13 +264,12 @@ impl Recogniser for TypeScript {
     // `lines` is read, the first of those found.
     fn derive(
         &self, tree: &Tree<Self>, module: &Module, lines: Lines, name: &str, stem: &str,
-        mounts: &BTreeMap<String, String>,
     ) -> Derived {
         if let Some(call) = tree
             .registration_at(module, lines)
             .or_else(|| tree.registration_enclosing(module, lines))
         {
-            return self.at_registration(tree, module, call, stem, mounts);
+            return self.at_registration(tree, module, call, stem);
         }
         if let Some(class) = decorated_class_at(module, lines) {
             return at_decorated_class(tree, module, class);
@@ -292,16 +284,11 @@ impl Recogniser for TypeScript {
     }
 }
 
-// Under the module's mount. A verb's literal is a path only when it leads
+// Under the module's `mount`. A verb's literal is a path only when it leads
 // with a slash.
-fn routed(
-    module: &Module, method: &str, literal: Option<&str>, mounts: &BTreeMap<String, String>,
-) -> Option<String> {
+fn routed(mount: &str, method: &str, literal: Option<&str>) -> Option<String> {
     let path = literal.filter(|literal| literal.starts_with('/'))?;
-    VERBS.contains(&method).then(|| {
-        let prefix = mounts.get(&module.path).map_or("", String::as_str);
-        route::join(prefix, path)
-    })
+    VERBS.contains(&method).then(|| route::join(mount, path))
 }
 
 // The stem its registering decorator's prefix spells, its name, and its

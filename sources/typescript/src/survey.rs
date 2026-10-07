@@ -23,7 +23,7 @@ use std::path::Path;
 use emery_sdk::survey::code::{Listing, Parsed};
 use emery_sdk::survey::{self, Survey};
 use emery_sdk::workspace::{self, Entry};
-use emery_sdk::{Context, Error, Model, Seam, SourceContent, bad_request};
+use emery_sdk::{Context, Error, Model, SourceContent, bad_request};
 
 use self::dialect::DIALECT;
 use self::parse::Module;
@@ -37,10 +37,7 @@ pub async fn survey<P: Model>(ctx: &Context<'_, P>) -> Result<Survey, Error> {
     let workspace = match &ctx.input.content {
         SourceContent::Value(text) => {
             let module = Module::parse("value.ts", text.clone());
-            return Ok(Survey {
-                seams: vec![Seam::whole()],
-                types: survey::types(&DIALECT, [&*module], false),
-            });
+            return Ok(Survey::value(&DIALECT, &module));
         }
         SourceContent::Workspace(workspace) => workspace,
     };
@@ -76,21 +73,6 @@ const SKIP_DIRS: &[&str] =
 // A declaration's or a test's file, by the infix before its extension.
 const SKIP_INFIXES: &[&str] = &["d", "spec", "test"];
 const EXTENSIONS: &[&str] = &["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"];
-
-fn push_unique<T: PartialEq>(into: &mut Vec<T>, item: T) {
-    if !into.contains(&item) {
-        into.push(item);
-    }
-}
-
-// First-occurrence order.
-fn unique<T: PartialEq>(items: impl IntoIterator<Item = T>) -> Vec<T> {
-    let mut list = Vec::new();
-    for item in items {
-        push_unique(&mut list, item);
-    }
-    list
-}
 
 fn include(entry: Entry<'_>) -> bool {
     if entry.hidden() {

@@ -82,8 +82,7 @@ mod survey;
 
 #[cfg(target_arch = "wasm32")]
 mod guest {
-    use emery_sdk::survey::Survey;
-    use emery_sdk::{AdapterMetadata, ClaimKind, Context, Error, Evidence, Model, SourceKind};
+    use emery_sdk::{AdapterMetadata, Context, Error, Evidence, Model, SourceKind};
 
     use crate::{PROSE, survey};
 
@@ -94,21 +93,9 @@ mod guest {
     }
 
     async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {
-        let Survey { seams, types } = survey::survey(ctx).await?;
-        let mut evidence = emery_sdk::extract(ctx, PROSE, &seams).await?;
-
-        // replace the model's type claims with the parsed declarations
-        let answered = evidence.claims.len();
-        evidence.claims.retain(|claim| claim.kind != ClaimKind::Type);
-        let dropped = answered - evidence.claims.len();
-        if dropped > 0 {
-            emery_sdk::tracing::debug!(
-                dropped,
-                "type claims the model answered give way to the parsed declarations"
-            );
-        }
-        evidence.claims.extend(types);
-        Ok(evidence)
+        let survey = survey::survey(ctx).await?;
+        let evidence = emery_sdk::extract(ctx, PROSE, &survey.seams).await?;
+        Ok(survey.join(evidence))
     }
 }
 

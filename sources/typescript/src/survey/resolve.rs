@@ -18,9 +18,10 @@ use std::path::Path;
 use emery_sdk::serde_json::{self, Value};
 use emery_sdk::survey::code;
 use emery_sdk::survey::resolve::{Target, normalize};
+use emery_sdk::unique;
 
+use super::EXTENSIONS;
 use super::parse::Module;
-use super::{EXTENSIONS, unique};
 
 // The build outputs a manifest may point at in place of their sources.
 const OUTPUT_DIRS: &[&str] = &["dist", "build", "lib", "out"];
@@ -40,20 +41,18 @@ pub struct Resolver {
 }
 
 impl Resolver {
-    // One relative `extends` of `tsconfig.json` is followed where it can be
-    // read.
-    pub fn new(
-        modules: impl IntoIterator<Item = String>, data: impl IntoIterator<Item = String>,
-        tests: impl IntoIterator<Item = String>, root: &Path,
-    ) -> Self {
+    // Over the parsed tree's modules, data files, and the test modules the
+    // keep set aside, which an import may still reach. One relative
+    // `extends` of `tsconfig.json` is followed where it can be read.
+    pub fn new(parsed: &code::Parsed<Module>) -> Self {
         let mut resolver = Self {
-            modules: modules.into_iter().collect(),
-            tests: tests.into_iter().collect(),
-            data: data.into_iter().collect(),
+            modules: parsed.modules.keys().cloned().collect(),
+            tests: parsed.tests.iter().cloned().collect(),
+            data: parsed.data.iter().cloned().collect(),
             base_url: None,
             paths: Vec::new(),
         };
-        let Some(config) = tsconfig(root, "tsconfig.json", true) else { return resolver };
+        let Some(config) = tsconfig(&parsed.root, "tsconfig.json", true) else { return resolver };
         let options = config.get("compilerOptions");
         resolver.base_url = options
             .and_then(|o| o.get("baseUrl"))

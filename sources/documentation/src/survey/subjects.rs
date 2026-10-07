@@ -13,17 +13,17 @@ use super::model::{self, Subject};
 use super::structure::Outline;
 
 // What an input is to the survey.
-pub enum Preparation {
+pub enum Preparation<'i> {
     // an inline value, mined whole and never surveyed
     Value,
     // a workspace, its documents read
-    Workspace(Prepared),
+    Workspace(Prepared<'i>),
 }
 
-// A workspace read for the survey: the source's name and every document
-// of the tree in path order.
-pub struct Prepared {
-    pub source: String,
+// A workspace read for the survey: the input it was read from and every
+// document of the tree in path order.
+pub struct Prepared<'i> {
+    pub input: &'i SourceInput,
     pub documents: Vec<Document>,
 }
 
@@ -34,7 +34,11 @@ pub struct Document {
     pub outline: Outline,
 }
 
-impl Prepared {
+impl Prepared<'_> {
+    pub fn source(&self) -> &str {
+        &self.input.name
+    }
+
     pub fn document(&self, path: &str) -> Option<&Document> {
         self.documents.iter().find(|doc| doc.path == path)
     }
@@ -43,7 +47,7 @@ impl Prepared {
 // Reads the workspace: every file the directory cut would list that
 // reads as text is a document, with its outline. A file that does not —
 // an image beside the documents — is no document and no module.
-pub fn prepare(input: &SourceInput) -> Result<Preparation, Error> {
+pub fn prepare(input: &SourceInput) -> Result<Preparation<'_>, Error> {
     let SourceContent::Workspace(root) = &input.content else {
         return Ok(Preparation::Value);
     };
@@ -56,19 +60,14 @@ pub fn prepare(input: &SourceInput) -> Result<Preparation, Error> {
             Some(Document { path, text, outline })
         })
         .collect();
-    Ok(Preparation::Workspace(Prepared {
-        source: input.name.clone(),
-        documents,
-    }))
+    Ok(Preparation::Workspace(Prepared { input, documents }))
 }
 
 // Cuts the seams from the subjects the model named: one seam over every
 // subject's document within the inline budget, one per stem past it, and
 // the directory cut — told no subject was found — when it named none.
-pub fn seams(
-    input: &SourceInput, prepared: &Prepared, inventory: &Inventory,
-) -> Result<Vec<Seam>, Error> {
-    let source = &prepared.source;
+pub fn seams(prepared: &Prepared<'_>, inventory: &Inventory) -> Result<Vec<Seam>, Error> {
+    let source = prepared.source();
     let subjects = model::build(prepared, inventory);
     tracing::info!(
         %source,
@@ -80,7 +79,7 @@ pub fn seams(
 
     if subjects.is_empty() {
         tracing::info!(%source, "no subject named; the tree is cut by directory");
-        let seams = super::survey(input)?;
+        let seams = super::survey(prepared.input)?;
         return Ok(seams
             .into_iter()
             .map(|seam| Seam {
@@ -98,16 +97,22 @@ pub fn seams(
         let set: BTreeSet<&str> = subjects.iter().map(|subject| subject.stem.as_str()).collect();
         set.into_iter().collect()
     };
+    let cut = Cut {
+        prepared,
+        stems: &stems,
+        unreached: &inventory.unreached,
+    };
 
     Ok(if fits {
-        vec![cut(prepared, &subjects, &stems, None, &inventory.unreached)]
+        let all: Vec<&Subject> = subjects.iter().collect();
+        vec![cut.seam(&all, None)]
     } else {
         stems
             .iter()
             .map(|stem| {
-                let under: Vec<Subject> =
-                    subjects.iter().filter(|subject| subject.stem == *stem).cloned().collect();
-                cut(prepared, &under, &stems, Some(stem), &inventory.unreached)
+                let under: Vec<&Subject> =
+                    subjects.iter().filter(|subject| subject.stem == *stem).collect();
+                cut.seam(&under, Some(stem))
             })
             .collect()
     })
@@ -118,112 +123,125 @@ const UNSURVEYED: &str = "No subject was found in this tree: the survey named no
                           rule where it is stated, under the domain noun the documents spell for \
                           what it governs — and lead every id with that noun.";
 
-// One seam: over the documents the subjects anchor in, in path order,
-// held to its stems, led by the subjects and the rules of the turn.
-fn cut(
-    prepared: &Prepared, subjects: &[Subject], stems: &[&str], stem: Option<&str>,
-    unreached: &[String],
-) -> Seam {
-    let files: Vec<String> = prepared
-        .documents
-        .iter()
-        .filter(|doc| subjects.iter().any(|subject| subject.entry == doc.path))
-        .map(|doc| doc.path.clone())
-        .collect();
-    let held: Vec<String> = stem.map_or_else(
-        || stems.iter().map(|stem| (*stem).to_owned()).collect(),
-        |stem| vec![stem.to_owned()],
-    );
-    let text = text(&prepared.source, subjects, &files, stems, stem, unreached);
-    Seam {
-        text,
-        files,
-        stems: held,
-        anchors: Vec::new(),
-    }
+// What every seam of a surveyed tree is told: the tree, every stem the
+// subjects carry, and the documents the survey placed under no subject.
+struct Cut<'a> {
+    prepared: &'a Prepared<'a>,
+    stems: &'a [&'a str],
+    unreached: &'a [String],
 }
 
-// The brief: the subjects and their spans, the documents under no
-// subject, the other stems where the seam is one of several, and the
-// anchor rule.
-fn text(
-    source: &str, subjects: &[Subject], files: &[String], stems: &[&str], stem: Option<&str>,
-    unreached: &[String],
-) -> String {
-    let plural =
-        |n: usize, one: &str, many: &str| if n == 1 { one.to_owned() } else { many.to_owned() };
-    let counted = format!(
-        "{} {} in {} {}",
-        subjects.len(),
-        plural(subjects.len(), "subject", "subjects"),
-        files.len(),
-        plural(files.len(), "document", "documents"),
-    );
-    let mut text = stem.map_or_else(
-        || {
-            format!(
-                "Every subject of the source `{source}` — {counted} under the {} {}.",
-                plural(stems.len(), "stem", "stems"),
-                stems.iter().map(|stem| format!("`{stem}`")).collect::<Vec<_>>().join(", "),
-            )
-        },
-        |stem| format!("Stem `{stem}` of the source `{source}` — {counted}."),
-    );
-
-    text.push_str(
-        "\n\nEach subject the survey named, the lines it spans, its stem, and the id its \
-         `requirement` and `criterion` claims lead with. Mine the spans listed and nothing \
-         outside them:\n",
-    );
-    for subject in subjects {
-        let _ = write!(
-            text,
-            "\n- `{}` — `{}#{}` — stem `{}` — ids lead with `{}`",
-            subject.name,
-            subject.entry,
-            subject.span.anchor(),
-            subject.stem,
-            subject.lead
-        );
-    }
-
-    if !unreached.is_empty() {
-        let listed: Vec<String> = unreached.iter().map(|path| format!("`{path}`")).collect();
-        let _ = write!(
-            text,
-            "\n\nThe survey placed {} under no subject — an index, a readme, a glossary, a \
-             changelog: {}. {} in `$SOURCE_DIR` for context and never a `path`.",
-            plural(unreached.len(), "this document", "these documents"),
-            listed.join(", "),
-            plural(unreached.len(), "It is", "They are"),
-        );
-    }
-
-    if let Some(stem) = stem {
-        let others: Vec<String> = stems
+impl Cut<'_> {
+    // One seam: over the documents the subjects anchor in, in path order,
+    // held to `stem` or to every stem, led by the subjects and the rules
+    // of the turn.
+    fn seam(&self, subjects: &[&Subject], stem: Option<&str>) -> Seam {
+        let files: Vec<String> = self
+            .prepared
+            .documents
             .iter()
-            .filter(|other| **other != stem)
-            .map(|other| format!("`{other}`"))
+            .filter(|doc| subjects.iter().any(|subject| subject.entry == doc.path))
+            .map(|doc| doc.path.clone())
             .collect();
-        if !others.is_empty() {
-            let _ = write!(
-                text,
-                "\n\nThe other {} of this tree — {} — {} other calls'; claim nothing under {}, \
-                 and nothing from a document this call does not list.",
-                plural(others.len(), "stem", "stems"),
-                others.join(", "),
-                plural(others.len(), "is", "are"),
-                plural(others.len(), "it", "them"),
-            );
+        let held: Vec<String> = stem.map_or_else(
+            || self.stems.iter().map(|stem| (*stem).to_owned()).collect(),
+            |stem| vec![stem.to_owned()],
+        );
+        Seam {
+            text: self.text(subjects, &files, stem),
+            files,
+            stems: held,
+            anchors: Vec::new(),
         }
     }
 
-    text.push_str(
-        "\n\nA claim anchors at the lines that state it, never at a heading, and keeps the kind \
-         the prompt gives it whatever line it anchors at.",
-    );
+    // The brief: the subjects and their spans, the documents under no
+    // subject, the other stems where the seam is one of several, and the
+    // anchor rule.
+    fn text(&self, subjects: &[&Subject], files: &[String], stem: Option<&str>) -> String {
+        let source = self.prepared.source();
+        let plural = |n: usize, one: &str, many: &str| {
+            if n == 1 { one.to_owned() } else { many.to_owned() }
+        };
+        let counted = format!(
+            "{} {} in {} {}",
+            subjects.len(),
+            plural(subjects.len(), "subject", "subjects"),
+            files.len(),
+            plural(files.len(), "document", "documents"),
+        );
+        let mut text = stem.map_or_else(
+            || {
+                format!(
+                    "Every subject of the source `{source}` — {counted} under the {} {}.",
+                    plural(self.stems.len(), "stem", "stems"),
+                    self.stems
+                        .iter()
+                        .map(|stem| format!("`{stem}`"))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                )
+            },
+            |stem| format!("Stem `{stem}` of the source `{source}` — {counted}."),
+        );
 
-    text
+        text.push_str(
+            "\n\nEach subject the survey named, the lines it spans, its stem, and the id its \
+             `requirement` and `criterion` claims lead with. Mine the spans listed and nothing \
+             outside them:\n",
+        );
+        for subject in subjects {
+            let _ = write!(
+                text,
+                "\n- `{}` — `{}#{}` — stem `{}` — ids lead with `{}`",
+                subject.name,
+                subject.entry,
+                subject.span.anchor(),
+                subject.stem,
+                subject.lead
+            );
+        }
+
+        if !self.unreached.is_empty() {
+            let listed: Vec<String> =
+                self.unreached.iter().map(|path| format!("`{path}`")).collect();
+            let _ = write!(
+                text,
+                "\n\nThe survey placed {} under no subject — an index, a readme, a glossary, a \
+                 changelog: {}. {} in `$SOURCE_DIR` for context and never a `path`.",
+                plural(self.unreached.len(), "this document", "these documents"),
+                listed.join(", "),
+                plural(self.unreached.len(), "It is", "They are"),
+            );
+        }
+
+        if let Some(stem) = stem {
+            let others: Vec<String> = self
+                .stems
+                .iter()
+                .filter(|other| **other != stem)
+                .map(|other| format!("`{other}`"))
+                .collect();
+            if !others.is_empty() {
+                let _ = write!(
+                    text,
+                    "\n\nThe other {} of this tree — {} — {} other calls'; claim nothing under \
+                     {}, and nothing from a document this call does not list.",
+                    plural(others.len(), "stem", "stems"),
+                    others.join(", "),
+                    plural(others.len(), "is", "are"),
+                    plural(others.len(), "it", "them"),
+                );
+            }
+        }
+
+        text.push_str(
+            "\n\nA claim anchors at the lines that state it, never at a heading, and keeps the \
+             kind the prompt gives it whatever line it anchors at.",
+        );
+
+        text
+    }
 }
 
 // The `surveyed` trace line the eval reads, in the shape the SDK logs
