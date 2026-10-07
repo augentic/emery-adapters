@@ -1417,11 +1417,11 @@ version = "0.8.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.zerocopy]]
-version = "0.8.60"
+version = "0.8.61"
 criteria = "safe-to-deploy"
 
 [[exemptions.zerocopy-derive]]
-version = "0.8.60"
+version = "0.8.61"
 criteria = "safe-to-deploy"
 
 [[exemptions.zerofrom]]
