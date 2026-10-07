@@ -5,15 +5,17 @@
 
 use std::future::{Future, ready};
 
-use emery_sdk::{AdapterMetadata, Context, Error, Evidence, SourceKind};
+use emery_sdk::{Context, Error, Evidence, SourceAdapter, SourceKind};
 use test_programs::maximal;
 
-emery_sdk::source_adapter!(metadata, extract);
+struct Adapter;
 
-fn metadata() -> AdapterMetadata {
-    emery_sdk::metadata(SourceKind::Behaviour)
-}
+emery_sdk::source_adapter!(Adapter);
 
-fn extract<P>(_ctx: &Context<'_, P>) -> impl Future<Output = Result<Evidence, Error>> {
-    ready(Ok(maximal()))
+impl SourceAdapter for Adapter {
+    const KIND: SourceKind = SourceKind::Behaviour;
+
+    fn extract<P>(_ctx: &Context<'_, P>) -> impl Future<Output = Result<Evidence, Error>> {
+        ready(Ok(maximal()))
+    }
 }

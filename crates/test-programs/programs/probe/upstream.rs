@@ -5,14 +5,16 @@
 
 use std::future::{Future, ready};
 
-use emery_sdk::{AdapterMetadata, Context, Error, Evidence, SourceKind, bad_gateway};
+use emery_sdk::{Context, Error, Evidence, SourceAdapter, SourceKind, bad_gateway};
 
-emery_sdk::source_adapter!(metadata, extract);
+struct Adapter;
 
-fn metadata() -> AdapterMetadata {
-    emery_sdk::metadata(SourceKind::Documentation)
-}
+emery_sdk::source_adapter!(Adapter);
 
-fn extract<P>(ctx: &Context<'_, P>) -> impl Future<Output = Result<Evidence, Error>> {
-    ready(Err(bad_gateway!("the probe's upstream failed for source `{}`", ctx.input.name)))
+impl SourceAdapter for Adapter {
+    const KIND: SourceKind = SourceKind::Documentation;
+
+    fn extract<P>(ctx: &Context<'_, P>) -> impl Future<Output = Result<Evidence, Error>> {
+        ready(Err(bad_gateway!("the probe's upstream failed for source `{}`", ctx.input.name)))
+    }
 }

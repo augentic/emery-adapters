@@ -39,14 +39,24 @@ mod survey;
 
 #[cfg(target_arch = "wasm32")]
 mod guest {
-    use emery_sdk::{AdapterMetadata, Context, Error, Evidence, Model, Seam, SourceKind};
+    use emery_sdk::{Context, Error, Evidence, Model, Seam, SourceAdapter, SourceKind};
 
     use crate::{PROSE, survey};
 
-    emery_sdk::source_adapter!(metadata, extract);
+    struct Adapter;
 
-    fn metadata() -> AdapterMetadata {
-        emery_sdk::metadata(SourceKind::Documentation)
+    emery_sdk::source_adapter!(Adapter);
+
+    impl SourceAdapter for Adapter {
+        const KIND: SourceKind = SourceKind::Documentation;
+
+        async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {
+            #[cfg(not(feature = "model-survey"))]
+            let seams: Vec<Seam> = survey::survey(ctx.input)?;
+            #[cfg(feature = "model-survey")]
+            let seams = seams(ctx).await?;
+            emery_sdk::extract(ctx, PROSE, &seams).await
+        }
     }
 
     // An inline value is one seam at once; a workspace's subjects are named
@@ -63,14 +73,6 @@ mod guest {
                 survey::seams(&prepared, &inventory)
             }
         }
-    }
-
-    async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {
-        #[cfg(not(feature = "model-survey"))]
-        let seams: Vec<Seam> = survey::survey(ctx.input)?;
-        #[cfg(feature = "model-survey")]
-        let seams = seams(ctx).await?;
-        emery_sdk::extract(ctx, PROSE, &seams).await
     }
 }
 
