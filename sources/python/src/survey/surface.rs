@@ -22,7 +22,6 @@
 //! is.
 
 use std::collections::BTreeMap;
-use std::path::Path;
 
 use emery_sdk::kebab;
 use emery_sdk::survey::code::{
@@ -105,14 +104,14 @@ enum At<'m> {
 
 impl Python {
     // The manifest read and the resolver built over the parsed tree, before
-    // any import is settled. `tests` are the test modules the keep set
-    // aside, which an import may still reach.
-    pub(super) fn new(root: &Path, parsed: &Parsed<Module>, tests: Vec<String>) -> Self {
-        let manifest = resolve::Manifest::read(root);
+    // any import is settled. The tree's tests are the test modules the keep
+    // set aside, which an import may still reach.
+    pub(super) fn new(parsed: &Parsed<Module>) -> Self {
+        let manifest = resolve::Manifest::read(&parsed.root);
         let resolver = Resolver::new(
             parsed.modules.keys().cloned(),
             parsed.data.iter().cloned(),
-            tests,
+            parsed.tests.iter().cloned(),
             manifest.name.as_deref(),
         );
         Self { resolver, manifest }

@@ -56,17 +56,15 @@ pub async fn survey<P: Model>(ctx: &Context<'_, P>) -> Result<Survey, Error> {
              virtualenvs, caches, build output, and migrations."
         ));
     }
-    let tests = emery_sdk::workspace::list(workspace, is_test)?;
 
     // the settled tree is the model's to survey
-    let root = Path::new(workspace);
     let listing = Listing {
         modules,
         data,
-        tests: tests.clone(),
+        tests: emery_sdk::workspace::list(workspace, is_test)?,
     };
-    let parsed = Parsed::read(root, &DIALECT, listing, Module::parse);
-    let recogniser = Python::new(root, &parsed, tests);
+    let parsed = Parsed::read(Path::new(workspace), &DIALECT, listing, Module::parse);
+    let recogniser = Python::new(&parsed);
     let tree = parsed.settle(recogniser);
     emery_sdk::survey::seams(ctx, PROSE, &tree).await
 }

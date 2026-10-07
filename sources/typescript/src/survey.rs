@@ -22,7 +22,8 @@ use std::path::Path;
 
 use emery_sdk::survey::code::{Listing, Parsed};
 use emery_sdk::survey::{self, Survey};
-use emery_sdk::{Context, Error, Model, Seam, SourceContent, bad_request, workspace};
+use emery_sdk::workspace::{self, Entry};
+use emery_sdk::{Context, Error, Model, Seam, SourceContent, bad_request};
 
 use self::dialect::DIALECT;
 use self::parse::Module;
@@ -55,18 +56,17 @@ pub async fn survey<P: Model>(ctx: &Context<'_, P>) -> Result<Survey, Error> {
              tests, declarations, dependencies, and build output."
         ));
     }
-    let tests = workspace::list(workspace, is_test)?;
 
     // the settled tree is the model's to survey
-    let root = Path::new(workspace);
     let listing = Listing {
         modules,
         data,
-        tests: tests.clone(),
+        tests: workspace::list(workspace, is_test)?,
     };
-    let parsed = Parsed::read(root, &DIALECT, listing, Module::parse);
-    let recogniser = TypeScript::new(root, &parsed, tests);
+    let parsed = Parsed::read(Path::new(workspace), &DIALECT, listing, Module::parse);
+    let recogniser = TypeScript::new(&parsed);
     let tree = parsed.settle(recogniser);
+
     survey::seams(ctx, PROSE, &tree).await
 }
 

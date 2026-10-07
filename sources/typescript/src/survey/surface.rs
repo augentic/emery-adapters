@@ -19,7 +19,6 @@
 //! verb decorator beneath one of them the surface.
 
 use std::collections::BTreeMap;
-use std::path::Path;
 
 use emery_sdk::kebab;
 use emery_sdk::survey::code::{
@@ -54,17 +53,17 @@ pub struct TypeScript {
 
 impl TypeScript {
     // The manifest read and the resolver built over the parsed tree, before
-    // any import is settled. `tests` are the test modules the keep set
-    // aside, which an import may still reach.
-    pub(super) fn new(root: &Path, parsed: &Parsed<Module>, tests: Vec<String>) -> Self {
+    // any import is settled. The tree's tests are the test modules the keep
+    // set aside, which an import may still reach.
+    pub(super) fn new(parsed: &Parsed<Module>) -> Self {
         Self {
             resolver: Resolver::new(
                 parsed.modules.keys().cloned(),
                 parsed.data.iter().cloned(),
-                tests,
-                root,
+                parsed.tests.iter().cloned(),
+                &parsed.root,
             ),
-            manifest: resolve::Manifest::read(root),
+            manifest: resolve::Manifest::read(&parsed.root),
         }
     }
 
