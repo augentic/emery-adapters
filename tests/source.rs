@@ -375,7 +375,7 @@ async fn intent() {
     project.write(".DS_Store", "");
     project.write("spec.md", "# Spec");
     project.write("design.md", "# Design");
-    project.write(".omnia/store.json", "{}");
+    project.write(".emery/store.json", "{}");
 
     let model = extract(test_programs::ADAPTER_INTENT, &project, 1).await;
 

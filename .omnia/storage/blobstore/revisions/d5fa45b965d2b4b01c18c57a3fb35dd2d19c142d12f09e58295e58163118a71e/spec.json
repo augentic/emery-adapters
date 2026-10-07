@@ -1,0 +1,2247 @@
+{
+  "emery": 4,
+  "preamble": [
+    "This specification captures bootstrap and HTTP surface behaviour inferred from the bound Python behaviour source for shopapi: configuration loading, application lifespan, middleware, domain exception mapping, router mounting, authentication wiring, and the uvicorn serve entrypoint.",
+    "Requirements below are ordered by engine id; scenarios express triggers and observable outcomes drawn from requirement statements and evidenced criteria where present."
+  ],
+  "requirements": [
+    {
+      "id": "REQ-001",
+      "subject": "start.settings-load",
+      "status": "agreed",
+      "covered": true,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "start.settings-load",
+          "path": "app/settings.py#L23"
+        }
+      ],
+      "body": [
+        "Bootstrap instantiates Settings so configuration is read from environment variables with prefix SHOPAPI_ and from the .env file."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Bootstrap loads configuration",
+          "given": [],
+          "when": "The application bootstrap instantiates Settings",
+          "then": "Configuration is read from environment variables with prefix SHOPAPI_ and from the .env file",
+          "and": [
+            "Settings uses env_prefix SHOPAPI_ and env_file .env"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "REQ-002",
+      "subject": "start.shipping-client-construct",
+      "status": "agreed",
+      "covered": true,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "start.shipping-client-construct",
+          "path": "app/services/shipping.py#L19-L24"
+        }
+      ],
+      "body": [
+        "Bootstrap constructs the orders module ShippingClient with an httpx AsyncClient using settings.shipping_api_url, settings.request_timeout_s, and a Bearer token from settings.shipping_api_key."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Shipping client uses configured HTTP settings",
+          "given": [],
+          "when": "Bootstrap constructs the orders module ShippingClient with an httpx AsyncClient",
+          "then": "The client uses settings.shipping_api_url, settings.request_timeout_s, and a Bearer token from settings.shipping_api_key",
+          "and": [
+            "The shipping API base URL defaults to https://rates.courier.example/v2 when unset",
+            "The shipping HTTP client timeout defaults to 5.0 seconds when unset",
+            "The shipping API key defaults to an empty string when unset"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "REQ-003",
+      "subject": "start.lifespan-logging",
+      "status": "agreed",
+      "covered": true,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "start.lifespan-logging",
+          "path": "app/main.py#L20"
+        }
+      ],
+      "body": [
+        "Before serving, the lifespan configures logging at the level from settings.log_level."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Lifespan configures logging before serve",
+          "given": [],
+          "when": "The lifespan context runs before the server accepts traffic",
+          "then": "Logging is configured at the level from settings.log_level",
+          "and": [
+            "The log level defaults to info when unset"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "REQ-004",
+      "subject": "start.lifespan-cache-connect",
+      "status": "agreed",
+      "covered": true,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "start.lifespan-cache-connect",
+          "path": "app/main.py#L21"
+        }
+      ],
+      "body": [
+        "Before serving, the lifespan connects the shared cache to Redis."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Lifespan connects cache to Redis",
+          "given": [],
+          "when": "The lifespan runs cache connect before serving",
+          "then": "The shared cache is connected to Redis",
+          "and": [
+            "The Redis URL defaults to redis://localhost:6379/0 when unset"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "REQ-005",
+      "subject": "start.lifespan-cache-connect.ping",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "start.lifespan-cache-connect.ping",
+          "path": "app/cache.py#L15-L17"
+        }
+      ],
+      "body": [
+        "Cache connect creates a Redis client from settings.redis_url with decode_responses True and pings Redis."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Cache connect builds client and pings Redis",
+          "given": [],
+          "when": "Cache connect runs during lifespan startup",
+          "then": "[unknown]",
+          "and": [
+            "A Redis client is created from settings.redis_url with decode_responses True and Redis is pinged"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "REQ-006",
+      "subject": "start.lifespan-ready-log",
+      "status": "agreed",
+      "covered": true,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "start.lifespan-ready-log",
+          "path": "app/main.py#L22"
+        }
+      ],
+      "body": [
+        "After cache connect, the lifespan logs that shopapi is ready on settings.port."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Readiness log after cache connect",
+          "given": [],
+          "when": "Cache connect completes during lifespan startup",
+          "then": "An info log reports that shopapi is ready on settings.port",
+          "and": [
+            "The listen port defaults to 8000 when unset"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "REQ-007",
+      "subject": "start.lifespan-shutdown-shipping",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "start.lifespan-shutdown-shipping",
+          "path": "app/main.py#L24"
+        }
+      ],
+      "body": [
+        "On shutdown, the lifespan closes the orders module shipping HTTP client."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Shutdown closes shipping HTTP client",
+          "given": [],
+          "when": "The application lifespan shuts down",
+          "then": "The orders module shipping HTTP client is closed",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-008",
+      "subject": "start.lifespan-shutdown-cache",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "start.lifespan-shutdown-cache",
+          "path": "app/main.py#L25"
+        }
+      ],
+      "body": [
+        "On shutdown, the lifespan closes the shared cache connection."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Shutdown closes shared cache",
+          "given": [],
+          "when": "The application lifespan shuts down",
+          "then": "The shared cache connection is closed",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-009",
+      "subject": "start.lifespan-shutdown-cache.close",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "start.lifespan-shutdown-cache.close",
+          "path": "app/cache.py#L19-L22"
+        }
+      ],
+      "body": [
+        "Cache close acloses the Redis client when one is open and clears the client reference."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Cache close releases Redis client",
+          "given": [],
+          "when": "Cache close runs on shutdown with an open Redis client",
+          "then": "The Redis client is aclosed and the client reference is cleared",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-010",
+      "subject": "start.fastapi-app",
+      "status": "agreed",
+      "covered": true,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "start.fastapi-app",
+          "path": "app/main.py#L28"
+        }
+      ],
+      "body": [
+        "Bootstrap builds a FastAPI application titled shopapi at version 1.2.0 with the lifespan context manager."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "FastAPI app metadata and lifespan",
+          "given": [],
+          "when": "Bootstrap builds the FastAPI application",
+          "then": "The app is titled shopapi at version 1.2.0 and uses the lifespan context manager",
+          "and": [
+            "The application title is shopapi and the version is 1.2.0"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "REQ-011",
+      "subject": "start.cors-middleware",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "start.cors-middleware",
+          "path": "app/main.py#L30-L35"
+        }
+      ],
+      "body": [
+        "Bootstrap applies CORSMiddleware allowing settings.cors_origins, methods GET POST and PUT, and headers authorization and content-type on every request."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "CORS applied on every request",
+          "given": [],
+          "when": "Any HTTP request is handled by the application",
+          "then": "CORSMiddleware allows settings.cors_origins with methods GET, POST, and PUT and headers authorization and content-type",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-012",
+      "subject": "start.server-timing-middleware",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "start.server-timing-middleware",
+          "path": "app/main.py#L38-L43"
+        }
+      ],
+      "body": [
+        "Every HTTP response includes a server-timing header reporting app duration in milliseconds."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Responses include server timing",
+          "given": [],
+          "when": "The application returns an HTTP response",
+          "then": "The response includes a server-timing header reporting app duration in milliseconds",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-013",
+      "subject": "start.exception-not-found",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "start.exception-not-found",
+          "path": "app/main.py#L46-L48"
+        }
+      ],
+      "body": [
+        "A NotFoundError raised during a request returns 404 with error not_found and the exception detail."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "NotFoundError maps to 404",
+          "given": [],
+          "when": "A handler raises NotFoundError during a request",
+          "then": "The response is 404 with error not_found and the exception detail",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-014",
+      "subject": "start.exception-conflict",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "start.exception-conflict",
+          "path": "app/main.py#L51-L53"
+        }
+      ],
+      "body": [
+        "A ConflictError raised during a request returns 409 with error conflict, the conflict state, and the exception detail."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "ConflictError maps to 409",
+          "given": [],
+          "when": "A handler raises ConflictError during a request",
+          "then": "The response is 409 with error conflict, the conflict state, and the exception detail",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-015",
+      "subject": "start.exception-validation",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "start.exception-validation",
+          "path": "app/main.py#L56-L58"
+        }
+      ],
+      "body": [
+        "A ValidationError raised during a request returns 422 with error validation, the field name, and the exception detail."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "ValidationError maps to 422",
+          "given": [],
+          "when": "A handler raises ValidationError during a request",
+          "then": "The response is 422 with error validation, the field name, and the exception detail",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-016",
+      "subject": "start.exception-upstream",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "start.exception-upstream",
+          "path": "app/main.py#L61-L64"
+        }
+      ],
+      "body": [
+        "An UpstreamError raised during a request is logged as an upstream failure and returns 502 with error upstream, the system name, and the exception detail."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "UpstreamError maps to 502",
+          "given": [],
+          "when": "A handler raises UpstreamError during a request",
+          "then": "The response is 502 with error upstream, the system name, and the exception detail",
+          "and": [
+            "The failure is logged as an upstream failure"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "REQ-017",
+      "subject": "start.include-health-router",
+      "status": "agreed",
+      "covered": true,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "start.include-health-router",
+          "path": "app/main.py#L67"
+        }
+      ],
+      "body": [
+        "Bootstrap mounts the health router at its /health prefix without an API version prefix."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Health router mounted without API version",
+          "given": [],
+          "when": "Bootstrap registers routers on the FastAPI app",
+          "then": "The health router is mounted at /health without an /api/v1 prefix",
+          "and": [
+            "The health router prefix is /health"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "REQ-018",
+      "subject": "start.include-orders-router",
+      "status": "agreed",
+      "covered": true,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "start.include-orders-router",
+          "path": "app/main.py#L68"
+        }
+      ],
+      "body": [
+        "Bootstrap mounts the orders router under the /api/v1 prefix."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Orders router under API v1",
+          "given": [],
+          "when": "Bootstrap registers API routers",
+          "then": "The orders router is mounted under the /api/v1 prefix at /orders",
+          "and": [
+            "The orders router prefix is /orders"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "REQ-019",
+      "subject": "start.orders-router-authed",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "start.orders-router-authed",
+          "path": "app/routers/orders.py#L14"
+        }
+      ],
+      "body": [
+        "The orders router is registered with the Authed dependency on every route."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Orders routes require Authed",
+          "given": [],
+          "when": "An orders router route is registered",
+          "then": "The route is registered with the Authed dependency on every route",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-020",
+      "subject": "start.include-customers-router",
+      "status": "agreed",
+      "covered": true,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "start.include-customers-router",
+          "path": "app/main.py#L69"
+        }
+      ],
+      "body": [
+        "Bootstrap mounts the customers router under the /api/v1 prefix."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Customers router under API v1",
+          "given": [],
+          "when": "Bootstrap registers API routers",
+          "then": "The customers router is mounted under the /api/v1 prefix at /customers",
+          "and": [
+            "The customers router prefix is /customers"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "REQ-021",
+      "subject": "start.customers-router-authed",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "start.customers-router-authed",
+          "path": "app/routers/customers.py#L9"
+        }
+      ],
+      "body": [
+        "The customers router is registered with the Authed dependency on every route."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Customers routes require Authed",
+          "given": [],
+          "when": "A customers router route is registered",
+          "then": "The route is registered with the Authed dependency on every route",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-022",
+      "subject": "start.serve-uvicorn",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "start.serve-uvicorn",
+          "path": "app/main.py#L72-L73"
+        }
+      ],
+      "body": [
+        "The serve entrypoint runs uvicorn on app.main:app at host 0.0.0.0 on settings.port with log level settings.log_level."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Serve entrypoint runs uvicorn",
+          "given": [],
+          "when": "The serve entrypoint is invoked",
+          "then": "Uvicorn runs app.main:app at host 0.0.0.0 on settings.port with log level settings.log_level",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-023",
+      "subject": "customers.bearer-rejects-missing-or-unknown-token",
+      "status": "conflict",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "customers.bearer-rejects-missing-or-unknown-token",
+          "path": "app/deps.py#L12-L13"
+        },
+        {
+          "source": "python",
+          "claim": "orders.bearer-rejects-missing-or-unknown-token",
+          "path": "app/deps.py#L12-L13"
+        }
+      ],
+      "body": [],
+      "losers": [
+        {
+          "sources": [
+            "python"
+          ],
+          "kind": "behaviour",
+          "claim": "customers.bearer-rejects-missing-or-unknown-token",
+          "statement": "Customers routes reject a request whose bearer token is missing or not listed in settings.api_tokens with a 401 response and detail missing or unknown bearer token."
+        },
+        {
+          "sources": [
+            "python"
+          ],
+          "kind": "behaviour",
+          "claim": "orders.bearer-rejects-missing-or-unknown-token",
+          "statement": "Every orders route rejects a request whose bearer token is missing or not listed in settings.api_tokens with a 401 response."
+        }
+      ],
+      "scenarios": [
+        {
+          "name": "Bearer token missing or not configured",
+          "given": [
+            "The request targets a customers route protected by Authed"
+          ],
+          "when": "No Authorization bearer is sent, or the bearer value is absent from settings.api_tokens",
+          "then": "Whether rejection is a 401 alone or a 401 that includes a detail of missing or unknown bearer token must be decided for customers versus orders routes",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-024",
+      "subject": "customers.post",
+      "status": "agreed",
+      "covered": true,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "customers.post",
+          "path": "app/routers/customers.py#L26-L30"
+        }
+      ],
+      "body": [
+        "POST /customers accepts a CustomerIn body, registers the customer through CustomerService, returns 201 with a CustomerOut body, and sets the Location header to /api/v1/customers/{id}."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Register new customer",
+          "given": [],
+          "when": "Client POSTs /customers with a body that passes CustomerIn validation",
+          "then": "The handler registers via CustomerService and the API responds with 201, a CustomerOut body, and Location /api/v1/customers/{id}",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-025",
+      "subject": "customers.post.body-validation",
+      "status": "agreed",
+      "covered": true,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "customers.post.body-validation",
+          "path": "app/schemas/customers.py#L8-L11"
+        }
+      ],
+      "body": [
+        "Registration requires a valid EmailStr email, a name, and an optional tier before the handler runs."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Name length bounds",
+          "given": [],
+          "when": "The registration body has a name shorter than 1 character or longer than 120 characters",
+          "then": "Validation fails before the register handler runs",
+          "and": []
+        },
+        {
+          "name": "Tier omitted on register",
+          "given": [],
+          "when": "The registration body omits tier",
+          "then": "The request is treated as tier standard before the handler runs",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-026",
+      "subject": "customers.post.normalize-email",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "customers.post.normalize-email",
+          "path": "app/services/customers.py#L29-L30"
+        }
+      ],
+      "body": [
+        "Registration compares and persists the email in lowercase."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Mixed-case email on register",
+          "given": [],
+          "when": "Client POSTs a new customer whose email contains uppercase letters",
+          "then": "The created customer's email field matches the submitted address with every letter lowercased",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-027",
+      "subject": "customers.post.reject-duplicate-email",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "customers.post.reject-duplicate-email",
+          "path": "app/services/customers.py#L31-L32"
+        }
+      ],
+      "body": [
+        "Registration raises ConflictError with state registered when the lowercase email is already stored."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Email already registered",
+          "given": [
+            "A customer row already exists for the lowercase form of the submitted email"
+          ],
+          "when": "Client POSTs registration with that email",
+          "then": "Registration raises ConflictError with state registered",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-028",
+      "subject": "customers.post.create-customer",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "customers.post.create-customer",
+          "path": "app/services/customers.py#L33"
+        }
+      ],
+      "body": [
+        "Registration assigns a new string uuid id, the request name and tier, and created_at from datetime.now(UTC) before insert."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Fields assigned before insert",
+          "given": [],
+          "when": "Registration accepts a new unique email",
+          "then": "The new customer receives a string uuid id, the request name and tier, and created_at from datetime.now(UTC) before insert",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-029",
+      "subject": "customers.post.persist",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "customers.post.persist",
+          "path": "app/services/customers.py#L34"
+        }
+      ],
+      "body": [
+        "Registration adds the new customer through CustomerRepository.insert before returning it."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Insert before response",
+          "given": [],
+          "when": "Registration builds a new customer entity",
+          "then": "CustomerRepository.insert adds the customer before the handler returns it",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-030",
+      "subject": "customers.post.audit-log",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "customers.post.audit-log",
+          "path": "app/services/customers.py#L35"
+        }
+      ],
+      "body": [
+        "Registration emits an info log naming the new customer id and tier."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Info log on register",
+          "given": [],
+          "when": "A customer is successfully inserted",
+          "then": "An info log names the new customer id and tier",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-031",
+      "subject": "customers.post.response-mapping",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "customers.post.response-mapping",
+          "path": "app/routers/customers.py#L16-L23"
+        }
+      ],
+      "body": [
+        "Customer responses expose id, email, name, tier, and created_at as an ISO 8601 string from the stored customer."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "CustomerOut shape",
+          "given": [],
+          "when": "A customer is returned from register or get",
+          "then": "The response exposes id, email, name, tier, and created_at as an ISO 8601 string from the stored customer",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-032",
+      "subject": "customers.get-customer-id",
+      "status": "agreed",
+      "covered": true,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "customers.get-customer-id",
+          "path": "app/routers/customers.py#L33-L35"
+        }
+      ],
+      "body": [
+        "GET /customers/{customer_id} loads the customer through CustomerService.get and returns CustomerOut."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Load by id",
+          "given": [],
+          "when": "Client GETs /customers/{customer_id}",
+          "then": "CustomerService.get loads the customer and the API returns CustomerOut",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-033",
+      "subject": "customers.get-customer-id.cache-hit",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "customers.get-customer-id.cache-hit",
+          "path": "app/services/customers.py#L20-L22"
+        }
+      ],
+      "body": [
+        "Get returns a Customer rebuilt from the cache entry when cache.get for customer:{customer_id} is not None."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Redis entry present",
+          "given": [
+            "cache.get for customer:{customer_id} returns a non-None payload"
+          ],
+          "when": "Client GETs that customer_id",
+          "then": "The handler returns a Customer rebuilt from the cache entry without requiring a repository miss path",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-034",
+      "subject": "customers.get-customer-id.not-found",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "customers.get-customer-id.not-found",
+          "path": "app/services/customers.py#L24-L25"
+        }
+      ],
+      "body": [
+        "Get raises NotFoundError for kind customer when the repository find returns None."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Unknown customer id",
+          "given": [
+            "CustomerRepository.find returns None for the id"
+          ],
+          "when": "Client GETs /customers/{customer_id}",
+          "then": "CustomerService.get raises NotFoundError for kind customer",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-035",
+      "subject": "customers.get-customer-id.cache-store",
+      "status": "agreed",
+      "covered": true,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "customers.get-customer-id.cache-store",
+          "path": "app/services/customers.py#L26-L27"
+        }
+      ],
+      "body": [
+        "Get stores a dumped customer dict under customer:{customer_id} with TTL settings.cache_ttl_s after a repository hit."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Populate cache after repository hit",
+          "given": [
+            "Cache miss and repository returns a customer"
+          ],
+          "when": "Get completes for that customer_id",
+          "then": "A dumped customer dict is stored under customer:{customer_id} with TTL settings.cache_ttl_s",
+          "and": []
+        },
+        {
+          "name": "Default cache TTL",
+          "given": [
+            "settings.cache_ttl_s is unset"
+          ],
+          "when": "Get stores a customer in cache after a repository hit",
+          "then": "The entry TTL is 300 seconds",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-036",
+      "subject": "customers.get-customer-id.cache-disabled",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "customers.get-customer-id.cache-disabled",
+          "path": "app/cache.py#L25-L26"
+        }
+      ],
+      "body": [
+        "Get treats a disconnected cache as a miss because cache.get returns None when Cache.client is None."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Redis disconnected",
+          "given": [
+            "Cache.client is None"
+          ],
+          "when": "Get invokes cache.get for customer:{customer_id}",
+          "then": "cache.get returns None and get treats the request as a cache miss",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-037",
+      "subject": "customers.get-customer-id.cache-payload",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "customers.get-customer-id.cache-payload",
+          "path": "app/services/customers.py#L50-L57"
+        }
+      ],
+      "body": [
+        "Cached customer payloads include id, email, name, tier, and created_at from the Customer instance."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Cached customer fields",
+          "given": [],
+          "when": "Get writes a customer to cache after a repository hit",
+          "then": "The cached payload includes id, email, name, tier, and created_at from the Customer instance",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-038",
+      "subject": "customers.post-customer-id-tier-tier",
+      "status": "agreed",
+      "covered": true,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "customers.post-customer-id-tier-tier",
+          "path": "app/routers/customers.py#L38-L40"
+        }
+      ],
+      "body": [
+        "POST /customers/{customer_id}/tier/{tier} promotes the customer through CustomerService.promote and returns CustomerOut."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Promote tier",
+          "given": [],
+          "when": "Client POSTs /customers/{customer_id}/tier/{tier} with arguments accepted by promote",
+          "then": "CustomerService.promote runs and the API returns CustomerOut",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-039",
+      "subject": "customers.post-customer-id-tier-tier.reject-unknown-tier",
+      "status": "agreed",
+      "covered": true,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "customers.post-customer-id-tier-tier.reject-unknown-tier",
+          "path": "app/services/customers.py#L39-L40"
+        }
+      ],
+      "body": [
+        "Promote raises ConflictError with the requested tier as state when tier is not in TIERS."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Tier not in catalogue",
+          "given": [],
+          "when": "The path tier is outside standard, silver, and gold",
+          "then": "Promote raises ConflictError with the requested tier as state",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-040",
+      "subject": "customers.post-customer-id-tier-tier.reject-no-upgrade",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "customers.post-customer-id-tier-tier.reject-no-upgrade",
+          "path": "app/services/customers.py#L42-L43"
+        }
+      ],
+      "body": [
+        "Promote raises ConflictError with the customer's current tier as state when TIERS.index(tier) is not greater than TIERS.index(customer.tier)."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Non-increasing tier rank",
+          "given": [
+            "The customer's current tier rank is not lower than the requested tier"
+          ],
+          "when": "Client POSTs promote for that tier",
+          "then": "Promote raises ConflictError with the customer's current tier as state",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-041",
+      "subject": "customers.post-customer-id-tier-tier.apply-tier",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "customers.post-customer-id-tier-tier.apply-tier",
+          "path": "app/services/customers.py#L44-L47"
+        }
+      ],
+      "body": [
+        "Promote sets customer.tier to the requested tier, persists through CustomerRepository.insert, invalidates cache key customer:{customer_id}, and returns the customer."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Successful promotion",
+          "given": [],
+          "when": "Promote accepts the requested tier",
+          "then": "customer.tier is set to the requested tier, CustomerRepository.insert persists the row, cache key customer:{customer_id} is invalidated, and the updated customer is returned",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-042",
+      "subject": "customers.db-session-commit",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "customers.db-session-commit",
+          "path": "app/db.py#L20-L21"
+        },
+        {
+          "source": "python",
+          "claim": "orders.post.commits-session-on-success",
+          "path": "app/db.py#L21"
+        }
+      ],
+      "body": [
+        "A customers handler that completes without error commits the SQLAlchemy session before the response is returned."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Successful customers request",
+          "given": [],
+          "when": "A customers route handler finishes without raising",
+          "then": "The SQLAlchemy session is committed before the HTTP response is returned",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-043",
+      "subject": "customers.db-session-rollback",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "customers.db-session-rollback",
+          "path": "app/db.py#L22-L24"
+        }
+      ],
+      "body": [
+        "A customers handler that raises rolls back the SQLAlchemy session and re-raises the exception."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Handler error",
+          "given": [],
+          "when": "A customers route handler raises before completing",
+          "then": "The SQLAlchemy session is rolled back and the same exception is re-raised",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-044",
+      "subject": "health.get.dependency-checks",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "health.get.dependency-checks",
+          "path": "app/routers/health.py#L12"
+        }
+      ],
+      "body": [
+        "Liveness includes a database check and a cache check keyed as database and cache in the checks object."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Liveness response includes dependency keys",
+          "given": [],
+          "when": "GET /health is invoked",
+          "then": "the response body includes a checks object with database and cache entries",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-045",
+      "subject": "health.get.sets-503-when-degraded",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "health.get.sets-503-when-degraded",
+          "path": "app/routers/health.py#L13-L14"
+        }
+      ],
+      "body": [
+        "Liveness sets the response status to 503 when any dependency check is false."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Degraded liveness uses 503",
+          "given": [],
+          "when": "liveness runs with at least one dependency check evaluating false",
+          "then": "the HTTP response status is 503",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-046",
+      "subject": "health.get.status-body",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "health.get.status-body",
+          "path": "app/routers/health.py#L15"
+        }
+      ],
+      "body": [
+        "Liveness returns status ok when every check is true and status degraded otherwise, with the checks map in the body."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "All dependencies healthy",
+          "given": [],
+          "when": "GET /health runs and every dependency check is true",
+          "then": "the response body has status ok and includes the checks map",
+          "and": []
+        },
+        {
+          "name": "Any dependency unhealthy",
+          "given": [],
+          "when": "GET /health runs and at least one dependency check is false",
+          "then": "the response body has status degraded and includes the checks map",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-047",
+      "subject": "health.get.database-check",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "health.get.database-check",
+          "path": "app/routers/health.py#L23"
+        }
+      ],
+      "body": [
+        "The database dependency check opens a connection on the shared engine and runs select 1."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Database probe mechanism",
+          "given": [],
+          "when": "the liveness handler performs the database dependency check",
+          "then": "[unknown]",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-048",
+      "subject": "health.get.database-check-failure",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "health.get.database-check-failure",
+          "path": "app/routers/health.py#L27-L28"
+        }
+      ],
+      "body": [
+        "The database dependency check reports false when any exception occurs during connect or execute."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Database connect or query error",
+          "given": [],
+          "when": "connecting on the shared engine or executing the database probe raises an exception",
+          "then": "the database entry in checks is false",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-049",
+      "subject": "health.get.cache-unconnected",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "health.get.cache-unconnected",
+          "path": "app/routers/health.py#L33-L34"
+        }
+      ],
+      "body": [
+        "The cache dependency check reports false when cache.client is None."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Cache client absent",
+          "given": [],
+          "when": "cache.client is None during the liveness cache check",
+          "then": "the cache entry in checks is false",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-050",
+      "subject": "health.get.cache-ping",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "health.get.cache-ping",
+          "path": "app/routers/health.py#L36"
+        }
+      ],
+      "body": [
+        "The cache dependency check reports the boolean result of await cache.client.ping() when a client is present."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Cache client present",
+          "given": [],
+          "when": "cache.client is set and the liveness cache check runs",
+          "then": "the cache entry in checks matches the boolean result of await cache.client.ping()",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-051",
+      "subject": "health.get.cache-check-failure",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "health.get.cache-check-failure",
+          "path": "app/routers/health.py#L37-L38"
+        }
+      ],
+      "body": [
+        "The cache dependency check reports false when ping raises any exception."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Cache ping error",
+          "given": [],
+          "when": "await cache.client.ping() raises an exception during the liveness cache check",
+          "then": "the cache entry in checks is false",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-052",
+      "subject": "health.get-ready.returns-ready",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "health.get-ready.returns-ready",
+          "path": "app/routers/health.py#L18-L20"
+        }
+      ],
+      "body": [
+        "Readiness always returns ready true with no dependency probes."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Readiness without probes",
+          "given": [],
+          "when": "GET /health/ready is invoked",
+          "then": "the response body is ready true and no dependency probes are run",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-053",
+      "subject": "orders.get.lists-orders-page",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "orders.get.lists-orders-page",
+          "path": "app/routers/orders.py#L40-L49"
+        }
+      ],
+      "body": [
+        "List orders returns a page of orders with optional filters for customer_id and state, plus page and size echoing the request."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "List orders with query parameters",
+          "given": [],
+          "when": "An authenticated client sends GET to list orders with optional customer_id, state, page, and size query parameters",
+          "then": "[unknown]",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-054",
+      "subject": "orders.get.pagination-bounds",
+      "status": "agreed",
+      "covered": true,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "orders.get.pagination-bounds",
+          "path": "app/routers/orders.py#L44-L45"
+        }
+      ],
+      "body": [
+        "List orders accepts page at least 1 and size between 1 and settings.max_page_size inclusive, defaulting size to settings.default_page_size."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Default list page size",
+          "given": [],
+          "when": "An authenticated client lists orders without a size query parameter",
+          "then": "The effective page size is settings.default_page_size (20 when unset)",
+          "and": []
+        },
+        {
+          "name": "Maximum list page size cap",
+          "given": [],
+          "when": "An authenticated client lists orders with size equal to settings.max_page_size",
+          "then": "The request is accepted with size at most settings.max_page_size (100 when unset)",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-055",
+      "subject": "orders.get.filters-by-customer-and-state",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "orders.get.filters-by-customer-and-state",
+          "path": "app/repositories/orders.py#L14-L21"
+        }
+      ],
+      "body": [
+        "List orders restricts results to the given customer_id and/or state when those query parameters are provided and orders by created_at descending before offset and limit."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Filter list by customer and state",
+          "given": [],
+          "when": "An authenticated client lists orders providing customer_id and/or state query parameters",
+          "then": "[unknown]",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-056",
+      "subject": "orders.post.rejects-duplicate-skus",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "orders.post.rejects-duplicate-skus",
+          "path": "app/schemas/orders.py#L34-L35"
+        }
+      ],
+      "body": [
+        "Place order rejects a body whose lines repeat the same sku with a validation error stating each sku appears once."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Duplicate SKU in order lines",
+          "given": [],
+          "when": "A client posts a place-order body whose lines include the same sku more than once",
+          "then": "[unknown]",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-057",
+      "subject": "orders.post.validates-line-and-address-fields",
+      "status": "agreed",
+      "covered": true,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "orders.post.validates-line-and-address-fields",
+          "path": "app/schemas/orders.py#L11-L28"
+        }
+      ],
+      "body": [
+        "Place order validates each line sku, quantity, and ship-to address fields through PlaceOrder and LineIn before the handler runs."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Line count within bounds",
+          "given": [],
+          "when": "A client posts a place-order body with a number of lines outside 1 through MAX_LINES inclusive",
+          "then": "Validation fails before the place-order handler runs",
+          "and": []
+        },
+        {
+          "name": "Line SKU format",
+          "given": [],
+          "when": "A client posts a place-order line whose sku is not 1–32 characters matching ^[A-Z0-9-]+$",
+          "then": "Validation fails before the place-order handler runs",
+          "and": []
+        },
+        {
+          "name": "Line quantity bounds",
+          "given": [],
+          "when": "A client posts a place-order line whose quantity is outside 1 through MAX_QUANTITY inclusive",
+          "then": "Validation fails before the place-order handler runs",
+          "and": []
+        },
+        {
+          "name": "Ship-to postcode format",
+          "given": [],
+          "when": "A client posts a place-order body whose ship_to postcode does not match ^\\d{4}$",
+          "then": "Validation fails before the place-order handler runs",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-058",
+      "subject": "orders.post.creates-pending-order",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "orders.post.creates-pending-order",
+          "path": "app/services/orders.py#L39-L58"
+        }
+      ],
+      "body": [
+        "Place order loads the customer, prices lines, quotes shipping, persists a new order in pending state with priced lines and computed totals, and returns the created order."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Successful placement persists pending order",
+          "given": [],
+          "when": "A client posts a valid place-order request for an existing customer with catalogue SKUs and sufficient stock",
+          "then": "The handler returns the created order",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-059",
+      "subject": "orders.post.responds-201-with-location",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "orders.post.responds-201-with-location",
+          "path": "app/routers/orders.py#L52-L56"
+        }
+      ],
+      "body": [
+        "Place order responds with 201 and sets the Location header to /api/v1/orders/{order.id}."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Created order response headers",
+          "given": [],
+          "when": "Place order completes successfully and persists the new order",
+          "then": "The HTTP response status is 201",
+          "and": []
+        },
+        {
+          "name": "Location header for new order",
+          "given": [],
+          "when": "Place order completes successfully and persists the new order",
+          "then": "The Location header is /api/v1/orders/{order.id}",
+          "and": [
+            "The new order id is the one assigned at placement"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "REQ-060",
+      "subject": "orders.post.rejects-unknown-customer",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "orders.post.rejects-unknown-customer",
+          "path": "app/services/customers.py#L24-L25"
+        }
+      ],
+      "body": [
+        "Place order fails when the customer_id does not exist."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Non-existent customer_id",
+          "given": [],
+          "when": "A client posts place order with a customer_id that does not exist",
+          "then": "[unknown]",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-061",
+      "subject": "orders.post.rejects-unknown-sku",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "orders.post.rejects-unknown-sku",
+          "path": "app/services/orders.py#L97-L98"
+        }
+      ],
+      "body": [
+        "Place order rejects a line whose sku is not in the catalogue."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "SKU absent from catalogue",
+          "given": [],
+          "when": "A client posts place order including a line sku not present in the catalogue",
+          "then": "[unknown]",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-062",
+      "subject": "orders.post.rejects-insufficient-stock",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "orders.post.rejects-insufficient-stock",
+          "path": "app/services/orders.py#L99-L100"
+        }
+      ],
+      "body": [
+        "Place order rejects a line whose quantity exceeds the product stock on hand."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Quantity above stock on hand",
+          "given": [],
+          "when": "A client posts place order with a line quantity greater than the product stock on hand",
+          "then": "[unknown]",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-063",
+      "subject": "orders.post.quotes-cheapest-shipping-rate",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "orders.post.quotes-cheapest-shipping-rate",
+          "path": "app/services/shipping.py#L29-L43"
+        }
+      ],
+      "body": [
+        "Place order obtains a shipping quote by resolving the ship-to postcode to a zone, calling the rates API, and selecting the lowest price_cents quote."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Lowest priced shipping quote selected",
+          "given": [],
+          "when": "Place order resolves the ship-to postcode to a zone and the rates API returns multiple quotes",
+          "then": "[unknown]",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-064",
+      "subject": "orders.post.rejects-postcode-outside-zones",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "orders.post.rejects-postcode-outside-zones",
+          "path": "app/services/shipping.py#L31-L32"
+        }
+      ],
+      "body": [
+        "Place order fails when the ship-to postcode is not digits or matches no delivery zone."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Postcode not mappable to a zone",
+          "given": [],
+          "when": "A client posts place order whose ship_to postcode is not digits or matches no delivery zone",
+          "then": "[unknown]",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-065",
+      "subject": "orders.post.rates-api-retries",
+      "status": "agreed",
+      "covered": true,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "orders.post.rates-api-retries",
+          "path": "app/services/shipping.py#L45-L62"
+        }
+      ],
+      "body": [
+        "Shipping rate fetches retry up to MAX_ATTEMPTS on transport errors or 5xx responses, sleeping RETRY_BACKOFF_S times the attempt between tries, and fail on 4xx or exhausted retries."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Retry limit on rate fetch",
+          "given": [],
+          "when": "Shipping rate GET encounters transport errors or 5xx responses on successive attempts",
+          "then": "At most MAX_ATTEMPTS fetch attempts are made (3)",
+          "and": []
+        },
+        {
+          "name": "Backoff between rate fetch retries",
+          "given": [],
+          "when": "A shipping rate fetch fails with a retriable error before the final attempt",
+          "then": "The wait before the next attempt is RETRY_BACKOFF_S seconds multiplied by the attempt number (0.25 seconds per attempt step)",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-066",
+      "subject": "orders.post.applies-tier-and-bulk-discount",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "orders.post.applies-tier-and-bulk-discount",
+          "path": "app/services/pricing.py#L23-L28"
+        }
+      ],
+      "body": [
+        "Place order discount_cents applies the customer tier discount in basis points and raises it to the bulk discount when total line quantity reaches BULK_UNITS."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Tier and bulk discount on discount_cents",
+          "given": [],
+          "when": "Place order prices lines for a customer whose tier defines a discount and line quantities may reach bulk threshold",
+          "then": "[unknown]",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-067",
+      "subject": "orders.post.waives-shipping-at-threshold",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "orders.post.waives-shipping-at-threshold",
+          "path": "app/services/pricing.py#L31-L33"
+        }
+      ],
+      "body": [
+        "Place order sets shipping_cents to 0 when subtotal after discount is at least FREE_SHIPPING_THRESHOLD_CENTS."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Free shipping when subtotal after discount qualifies",
+          "given": [],
+          "when": "Place order computes subtotal after discount at or above FREE_SHIPPING_THRESHOLD_CENTS",
+          "then": "shipping_cents is 0",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-068",
+      "subject": "orders.post.adds-rural-surcharge",
+      "status": "agreed",
+      "covered": true,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "orders.post.adds-rural-surcharge",
+          "path": "app/services/pricing.py#L31-L36"
+        }
+      ],
+      "body": [
+        "Place order adds RURAL_SURCHARGE_CENTS to quoted shipping when the postcode zone is rural and free shipping does not apply."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Rural surcharge amount",
+          "given": [],
+          "when": "Quoted shipping applies to a rural postcode zone and free shipping does not apply",
+          "then": "RURAL_SURCHARGE_CENTS (650) is added to quoted shipping",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-069",
+      "subject": "orders.post.totals-sum-parts",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "orders.post.totals-sum-parts",
+          "path": "app/services/pricing.py#L39-L48"
+        }
+      ],
+      "body": [
+        "Place order total_cents equals subtotal_cents minus discount_cents plus shipping_cents."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Order total from components",
+          "given": [],
+          "when": "Place order has computed subtotal_cents, discount_cents, and shipping_cents",
+          "then": "total_cents equals subtotal_cents minus discount_cents plus shipping_cents",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-070",
+      "subject": "orders.get-order-id.returns-cached-order",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "orders.get-order-id.returns-cached-order",
+          "path": "app/services/orders.py#L27-L29"
+        }
+      ],
+      "body": [
+        "Get order returns the order deserialized from cache when key order:{order_id} is present."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Cache hit for order key",
+          "given": [],
+          "when": "An authenticated client requests an order by id while cache key order:{order_id} is present",
+          "then": "[unknown]",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-071",
+      "subject": "orders.get-order-id.loads-and-caches-miss",
+      "status": "agreed",
+      "covered": true,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "orders.get-order-id.loads-and-caches-miss",
+          "path": "app/services/orders.py#L30-L34"
+        }
+      ],
+      "body": [
+        "Get order loads the order from the store on cache miss, stores it under order:{order_id} for settings.order_cache_ttl_s seconds, and returns it."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Cache TTL after load on miss",
+          "given": [],
+          "when": "An authenticated client requests an order by id and cache key order:{order_id} is absent",
+          "then": "The loaded order is stored under order:{order_id} for settings.order_cache_ttl_s seconds (60 when unset)",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-072",
+      "subject": "orders.get-order-id.not-found",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "orders.get-order-id.not-found",
+          "path": "app/services/orders.py#L31-L32"
+        }
+      ],
+      "body": [
+        "Get order fails when no order exists for the given order_id."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Missing order id",
+          "given": [],
+          "when": "An authenticated client requests an order id that does not exist in the store",
+          "then": "[unknown]",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-073",
+      "subject": "orders.put-order-id-lines.amends-pending-only",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "orders.put-order-id-lines.amends-pending-only",
+          "path": "app/services/orders.py#L62-L63"
+        }
+      ],
+      "body": [
+        "Amend lines rejects an order whose state is not pending."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Amend on non-pending order",
+          "given": [],
+          "when": "A client amends lines on an order whose state is not pending",
+          "then": "[unknown]",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-074",
+      "subject": "orders.put-order-id-lines.replaces-lines-and-totals",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "orders.put-order-id-lines.replaces-lines-and-totals",
+          "path": "app/services/orders.py#L60-L73"
+        }
+      ],
+      "body": [
+        "Amend lines reprices the request lines, requotes shipping, replaces order lines and monetary fields, updates the order, invalidates order cache, and returns the order."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Successful line amendment",
+          "given": [],
+          "when": "A client amends lines on a pending order with valid replacement lines",
+          "then": "[unknown]",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-075",
+      "subject": "orders.put-order-id-lines.validates-lines",
+      "status": "agreed",
+      "covered": true,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "orders.put-order-id-lines.validates-lines",
+          "path": "app/schemas/orders.py#L39-L40"
+        }
+      ],
+      "body": [
+        "Amend lines validates replacement lines through AmendLines before the handler runs."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Amend line count within bounds",
+          "given": [],
+          "when": "A client sends amend-lines with a number of replacement lines outside 1 through MAX_LINES inclusive",
+          "then": "Validation fails before the amend-lines handler runs",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-076",
+      "subject": "orders.put-order-id-lines.rates-api-retries",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "orders.put-order-id-lines.rates-api-retries",
+          "path": "app/services/shipping.py#L45-L62"
+        }
+      ],
+      "body": [
+        "Amend lines uses the same shipping rate fetch retry and error rules as place order when requoting."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Requote uses place-order retry rules",
+          "given": [],
+          "when": "Amend lines requotes shipping and the rates API returns retriable transport or 5xx errors",
+          "then": "[unknown]",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-077",
+      "subject": "orders.post-order-id-transitions.rejects-terminal",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "orders.post-order-id-transitions.rejects-terminal",
+          "path": "app/services/orders.py#L77-L78"
+        }
+      ],
+      "body": [
+        "Transition rejects an order already in a terminal state delivered or cancelled."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Transition from terminal state",
+          "given": [],
+          "when": "A client requests a state transition on an order already in delivered or cancelled",
+          "then": "[unknown]",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-078",
+      "subject": "orders.post-order-id-transitions.rejects-invalid-target",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "orders.post-order-id-transitions.rejects-invalid-target",
+          "path": "app/services/orders.py#L79-L80"
+        }
+      ],
+      "body": [
+        "Transition rejects a requested state not listed in TRANSITIONS for the order current state, including pending to shipped."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Disallowed target state for current state",
+          "given": [
+            "An order exists in pending state"
+          ],
+          "when": "The client POSTs a transition requesting state shipped",
+          "then": "[unknown]",
+          "and": []
+        },
+        {
+          "name": "Target not in TRANSITIONS map",
+          "given": [
+            "An order exists in a non-terminal state"
+          ],
+          "when": "The client POSTs a transition to a state that TRANSITIONS does not allow from the order's current state",
+          "then": "[unknown]",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-079",
+      "subject": "orders.post-order-id-transitions.cancel-requires-reason",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "orders.post-order-id-transitions.cancel-requires-reason",
+          "path": "app/services/orders.py#L81-L82"
+        }
+      ],
+      "body": [
+        "Transition to cancelled requires a non-empty reason."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Cancel without a reason",
+          "given": [
+            "An order exists that may transition to cancelled"
+          ],
+          "when": "The client POSTs a transition to cancelled with no reason field",
+          "then": "[unknown]",
+          "and": []
+        },
+        {
+          "name": "Cancel with empty reason",
+          "given": [
+            "An order exists that may transition to cancelled"
+          ],
+          "when": "The client POSTs a transition to cancelled with a blank reason",
+          "then": "[unknown]",
+          "and": []
+        }
+      ]
+    },
+    {
+      "id": "REQ-080",
+      "subject": "orders.post-order-id-transitions.records-transition",
+      "status": "unknown",
+      "covered": false,
+      "sources": [
+        {
+          "source": "python",
+          "claim": "orders.post-order-id-transitions.records-transition",
+          "path": "app/services/orders.py#L75-L90"
+        }
+      ],
+      "body": [
+        "Transition sets the new state, appends a transition record with timestamp and reason, persists the order, invalidates cache, and returns the order."
+      ],
+      "losers": [],
+      "scenarios": [
+        {
+          "name": "Successful state change",
+          "given": [
+            "An order in a non-terminal state and a valid transition target"
+          ],
+          "when": "The client POSTs an allowed transition with any required fields supplied",
+          "then": "The response carries the order with state updated to the requested value",
+          "and": [
+            "The order's transition history includes a new entry with a timestamp and the supplied reason when provided",
+            "The order row is updated in the store",
+            "The cached entry for that order id is removed"
+          ]
+        }
+      ]
+    }
+  ]
+}
