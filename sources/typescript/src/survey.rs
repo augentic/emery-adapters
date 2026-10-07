@@ -1,47 +1,46 @@
-//! Reads a TypeScript / JavaScript source into the tree the SDK surveys.
+//! Reads a TypeScript or JavaScript source into the tree the SDK surveys.
 //!
 //! An inline value is one seam mined whole, its declarations copied
-//! unanchored, with no survey turn. A workspace is listed under this
-//! adapter's keep — the production modules, the `.json` files an import may
-//! name, and the tree's own tests — every module parsed, and the tree
-//! settled through the adapter's recogniser ([`surface`]) for the SDK's
-//! `seams` to survey and cut. Only a tree with no production module is
-//! refused.
+//! unanchored, with no survey turn.
+//!
+//! A workspace is listed under this adapter's keep:
+//!
+//! - the production modules
+//! - the `.json` files an import may name
+//! - the tree's own tests
+//!
+//! Every module is parsed, and the tree is settled through the adapter's
+//! recogniser ([`surface`]) for the SDK's `seams` to survey and cut. Only a
+//! tree with no production module is refused.
 
-use std::path::Path;
-
-use emery_sdk::survey::code::{Listing, Parsed, Tree};
-use emery_sdk::survey::route::Spelling;
-use emery_sdk::survey::{ClassSyntax, Dialect, Survey};
-use emery_sdk::workspace::Entry;
-use emery_sdk::{Error, Seam, SourceContent, SourceInput, bad_request};
-
-use self::parse::Module;
-use self::surface::TypeScript;
-
+mod dialect;
 mod parse;
 mod resolve;
 mod surface;
 
-pub enum Preparation {
-    // An inline value needs no survey turn: one seam, its declarations
-    // unanchored.
-    Value(Survey),
-    Workspace(Tree<TypeScript>),
-}
+use std::path::Path;
 
-// Refuses a workspace with no production module, and nothing else.
-pub fn prepare(input: &SourceInput) -> Result<Preparation, Error> {
-    let source = &input.name;
+use emery_sdk::survey::Survey;
+use emery_sdk::survey::code::{Listing, Parsed};
+use emery_sdk::workspace::Entry;
+use emery_sdk::{Context, Error, Model, Seam, SourceContent, bad_request};
+
+use self::dialect::DIALECT;
+use self::parse::Module;
+use self::surface::TypeScript;
+use crate::PROSE;
+
+pub async fn survey<P: Model>(ctx: &Context<'_, P>) -> Result<Survey, Error> {
+    let source = &ctx.input.name;
 
     // an inline value is one seam, with no survey
-    let workspace = match &input.content {
+    let workspace = match &ctx.input.content {
         SourceContent::Value(text) => {
             let module = Module::parse("value.ts", text.clone());
-            return Ok(Preparation::Value(Survey {
+            return Ok(Survey {
                 seams: vec![Seam::whole()],
                 types: emery_sdk::survey::types(&DIALECT, [&*module], false),
-            }));
+            });
         }
         SourceContent::Workspace(workspace) => workspace,
     };
@@ -59,6 +58,7 @@ pub fn prepare(input: &SourceInput) -> Result<Preparation, Error> {
     }
     let tests = emery_sdk::workspace::list(workspace, is_test)?;
 
+    // the settled tree is the model's to survey
     let root = Path::new(workspace);
     let listing = Listing {
         modules,
@@ -67,123 +67,9 @@ pub fn prepare(input: &SourceInput) -> Result<Preparation, Error> {
     };
     let parsed = Parsed::read(root, &DIALECT, listing, Module::parse);
     let recogniser = TypeScript::new(root, &parsed, tests);
-    Ok(Preparation::Workspace(parsed.settle(recogniser)))
+    let tree = parsed.settle(recogniser);
+    emery_sdk::survey::seams(ctx, PROSE, &tree).await
 }
-
-// What the SDK's lookups read of TypeScript and JavaScript.
-static DIALECT: Dialect = Dialect {
-    self_name: "this",
-    generic_stems: &["index", "main"],
-    structural: &[
-        "use",
-        "register",
-        "mount",
-        "plugin",
-        "decorate",
-        "addHook",
-        "hook",
-        "listen",
-        "connect",
-        "disconnect",
-        "close",
-        "end",
-        "then",
-        "catch",
-        "finally",
-        "start",
-        "stop",
-        "init",
-        "initialize",
-        "forEach",
-        "map",
-        "filter",
-        "reduce",
-        "find",
-        "findIndex",
-        "some",
-        "every",
-        "sort",
-        "flatMap",
-        "Promise",
-        "setTimeout",
-        "setInterval",
-        "setImmediate",
-        "nextTick",
-        "queueMicrotask",
-        "describe",
-        "it",
-        "test",
-        "beforeEach",
-        "afterEach",
-        "beforeAll",
-        "afterAll",
-    ],
-    listeners: &["on", "once", "addListener", "addEventListener", "prependListener"],
-    lifecycle_events: &[
-        "error",
-        "close",
-        "connect",
-        "connecting",
-        "disconnect",
-        "end",
-        "ready",
-        "open",
-        "listening",
-        "exit",
-        "warning",
-        "drain",
-        "finish",
-        "timeout",
-        "reconnecting",
-        "SIGINT",
-        "SIGTERM",
-        "SIGHUP",
-        "unhandledRejection",
-        "uncaughtException",
-        "beforeExit",
-    ],
-    mocking: &[],
-    lifecycle: &[],
-    decorator_noise: &[
-        "UseGuards",
-        "UseInterceptors",
-        "UsePipes",
-        "UseFilters",
-        "HttpCode",
-        "Header",
-        "Redirect",
-        "Bind",
-        "SetMetadata",
-        "Roles",
-        "Public",
-        "Version",
-        "Transactional",
-        "Injectable",
-        "Inject",
-        "SerializeOptions",
-    ],
-    decorator_noise_prefixes: &["Api"],
-    decorator_hooks: &[],
-    hook_keywords: &[],
-    type_imports_reach: true,
-    openers: &['[', '{'],
-    comment_prefixes: &["//", "*"],
-    globals: &["fetch"],
-    options: &[],
-    manifests: &["package.json"],
-    barrels: &["index"],
-    constructs: Some("new"),
-    env_object: Some("process.env"),
-    enum_bases: &[],
-    class_syntax: ClassSyntax::BRACED,
-    described: "a case's title under its suites'",
-    // A parameter is `:id`; a pattern spells a wildcard, a regex group, or a
-    // bracketed segment.
-    route: Spelling {
-        pattern: &['*', '{', '(', '['],
-        param_name: |segment| segment.trim_start_matches(':'),
-    },
-};
 
 // Never a production module's: dependencies, build output, and tests.
 const SKIP_DIRS: &[&str] =

@@ -1,53 +1,81 @@
 //! Extracts behavioural claims from TypeScript and JavaScript source.
 //!
-//! A workspace's production modules — its `.ts`, `.tsx`, `.js`, and sibling
-//! files outside tests, declarations, dependencies, and build output — are
-//! parsed, and the surfaces a caller enters the source through are named in
-//! one survey call from what the code says: the manifest, the bootstrap —
-//! the first entry `package.json` names, or conventional entry the tree
-//! holds, that runs something when loaded, which the adapter names `start`
-//! itself — every call that hands a function to something a package
-//! provides, every method under a package's registering decorator, and what
-//! the entry modules export, each at its lines, with the modules laid into the call as
-//! far as they fit. The answer names each surface — a route, a command, a
-//! job, an exported API — at the lines that register or declare it and the
-//! modules no surface reaches, and is held to the tree before anything rests
-//! on it: an anchor names a module the tree holds, no surface leads with
-//! `start`, and every module the facts locate a surface in is reached by a
-//! named surface or listed as unreached. From the accepted anchors the code
-//! reads the rest: the stem its `requirement` and `criterion` ids lead with
-//! — the resource a route spells, a literal's first word, where the code
-//! spells one, else the survey's — the id that tells it from the other
-//! surfaces under that stem (a handler's name, a route's verb and path, a
-//! method), an exported class's public methods, and the modules it reaches.
+//! The source is a workspace or an inline value. A workspace's production
+//! modules are its `.ts`, `.tsx`, `.js`, and sibling files outside tests,
+//! declarations, dependencies, and build output. An inline value is mined
+//! whole, in one call, with no survey.
 //!
-//! A tree whose modules fit within the SDK's inline budget is mined in one
-//! call over every module, laid into the turn, held to every surface's stem;
-//! a larger tree is mined one call per stem, over the modules its surfaces
-//! reach, each held to that stem alone — and, where one of those imports a
-//! module the tree does not hold or loads one by a computed name, over the
-//! rest of the tree after them, so what the import names stays within reach.
-//! Each call is told its surfaces, each with its id and what it reaches; the
-//! boundaries its modules spell as values of their own — literals and
-//! expressions over them, patterns, `process.env` reads with whatever the
-//! code does to them, definitions handed literals, at module level, in a
-//! class, or as a constant-named local — the packages they import, the calls
-//! they make through those packages, grouped by callee at their sites, the
-//! `.json` files they import, laid as the seam's data — a small one directly
-//! after the first module importing it, a large one after them all — and
-//! what could not be followed. Inline input is mined whole, with no survey
-//! call.
+//! # Survey
 //!
-//! The `type` claims of the source are copied from its declarations —
-//! every `interface`, `type`, `enum`, and class the seams' modules export,
-//! verbatim — and joined after the model's answer, which is held to the other
-//! kinds; a declaration a module keeps to itself is none.
+//! A workspace is surveyed before it is mined. The parser reads the tree,
+//! and one survey call has the model name the surfaces a caller enters the
+//! source through, each at the lines that register or declare it:
 //!
-//! A workspace with no production module is rejected; one whose survey names
-//! no surface is mined under a mechanical cut — one call under the package's
-//! or the root directory's name, or one per top-level directory past the
-//! budget — and read as a library is. A module the parser cannot read is
-//! walked as far as it got and never fails the run.
+//! - a function handed to something a package provides: a route, a command,
+//!   a job
+//! - a method under a decorator a package provides
+//! - what the entry modules export, where nothing is registered
+//!
+//! The bootstrap is the first entry `package.json` names, or a conventional
+//! entry the tree holds, that runs something when loaded. It is the
+//! adapter's own surface, `start`, and never the model's to name.
+//!
+//! The answer is held to the tree before anything rests on it:
+//!
+//! - every anchor names a module the tree holds
+//! - no surface leads with `start`
+//! - every module the facts locate a surface in is reached by a named
+//!   surface or listed as unreached
+//!
+//! From the accepted anchors the code derives the rest:
+//!
+//! - the stem each surface's `requirement` and `criterion` ids lead with:
+//!   the resource a route spells or a literal's first word, where the code
+//!   spells one, else the survey's
+//! - the id that tells a surface from the others under its stem: a
+//!   handler's name, a route's verb and path, a method
+//! - an exported class's public methods
+//! - the modules the surface reaches
+//!
+//! # Seams
+//!
+//! The seams follow the surfaces:
+//!
+//! - a tree within the SDK's inline budget is one call over every module,
+//!   held to every surface's stem
+//! - a larger tree is one call per stem, over the modules its surfaces
+//!   reach, held to that stem alone
+//! - where a module imports one the tree does not hold, or loads one by a
+//!   computed name, the modules of the directory the import leads into
+//!   follow
+//! - a tree whose survey names no surface is cut mechanically, by package
+//!   or by top-level directory, and read as a library is
+//!
+//! Each call is told:
+//!
+//! - its surfaces, each with its id and what it reaches
+//! - the boundaries its modules spell as values of their own: literals and
+//!   expressions over them, patterns, `process.env` reads, and definitions
+//!   handed literals, whether at module level, in a class, or as a
+//!   constant-named local
+//! - the packages they import, and the calls made through them, grouped by
+//!   callee
+//! - the `.json` files they import, laid as the seam's data
+//! - what the tree's own tests state
+//! - what could not be followed
+//!
+//! # Type claims
+//!
+//! The `type` claims are copied from the declarations, never answered by
+//! the model: every `interface`, `type`, and `enum` the seams' modules
+//! export, verbatim, and every exported class as its header and member
+//! signatures. A declaration a module keeps to itself is none.
+//!
+//! # Refusals
+//!
+//! A workspace with no production module is refused. Nothing else is: a
+//! module the parser cannot read is walked as far as it got and never fails
+//! the run.
 
 #[cfg(target_arch = "wasm32")]
 mod survey;
@@ -65,19 +93,8 @@ mod guest {
         emery_sdk::metadata(SourceKind::Behaviour)
     }
 
-    // An inline value is one seam at once; a workspace's surfaces are named
-    // in one turn from what the parser read, and its seams cut from them.
-    async fn surveyed<P: Model>(ctx: &Context<'_, P>) -> Result<Survey, Error> {
-        match survey::prepare(ctx.input)? {
-            survey::Preparation::Value(survey) => Ok(survey),
-            survey::Preparation::Workspace(tree) => {
-                emery_sdk::survey::seams(ctx, PROSE, &tree).await
-            }
-        }
-    }
-
     async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {
-        let Survey { seams, types } = surveyed(ctx).await?;
+        let Survey { seams, types } = survey::survey(ctx).await?;
         let mut evidence = emery_sdk::extract(ctx, PROSE, &seams).await?;
 
         // the declarations are the code's to state: what the model answered

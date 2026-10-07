@@ -1,9 +1,13 @@
 //! Extracts claims from an operator's written brief.
 //!
-//! The adapter accepts inline text or a workspace containing one regular
-//! file. The brief must not be empty and is always mined as a single unit.
-//! Emery's generated files and hidden entries, names beginning with a dot,
-//! are ignored when counting workspace files.
+//! The source is inline text or a workspace holding one regular file. The
+//! brief is mined whole, in one call.
+//!
+//! # Refusals
+//!
+//! - an empty brief
+//! - a workspace holding no file, or more than one, hidden entries and
+//!   Emery's own files left out of the count
 
 #[cfg(target_arch = "wasm32")]
 mod survey;

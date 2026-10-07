@@ -5,6 +5,8 @@
 //! caches, build output, and migrations. An inline value is mined whole, in
 //! one call, with no survey.
 //!
+//! # Survey
+//!
 //! A workspace is surveyed before it is mined. The parser reads the tree,
 //! and one survey call has the model name the surfaces a caller enters the
 //! source through, each at the lines that register or declare it:
@@ -14,20 +16,48 @@
 //! - a function or class under a decorator a package provides
 //! - what the entry modules export, where nothing is registered
 //!
-//! The bootstrap is the adapter's own surface, `start`, and is never the
-//! model's to name. The answer is held to the tree before anything rests on
-//! it. From the accepted anchors the code derives the rest: the stem each
-//! surface's `requirement` and `criterion` ids lead with, the id that tells
-//! it from the other surfaces under that stem, an exported class's public
-//! methods, and the modules it reaches.
+//! The bootstrap is the first module that runs when loaded: a console
+//! script's target, a module under a `__main__` guard, or one constructing
+//! an application at module level. It is the adapter's own surface,
+//! `start`, and never the model's to name.
 //!
-//! The seams follow the surfaces. A tree within the SDK's inline budget is
-//! one call over every module. A larger tree is one call per stem, over the
-//! modules the surfaces under it reach; where one of those imports what the
-//! tree does not hold, the rest of the tree is laid after them. Each call is
-//! told its surfaces, the boundaries its modules spell as values of their
-//! own, the packages they import, the calls made through those packages,
-//! the data files they name, and what the tree's own tests state.
+//! The answer is held to the tree before anything rests on it:
+//!
+//! - every anchor names a module the tree holds
+//! - no surface leads with `start`
+//! - every module the facts locate a surface in is reached by a named
+//!   surface or listed as unreached
+//!
+//! From the accepted anchors the code derives the rest:
+//!
+//! - the stem each surface's `requirement` and `criterion` ids lead with
+//! - the id that tells a surface from the others under its stem
+//! - an exported class's public methods
+//! - the modules the surface reaches
+//!
+//! # Seams
+//!
+//! The seams follow the surfaces:
+//!
+//! - a tree within the SDK's inline budget is one call over every module,
+//!   held to every surface's stem
+//! - a larger tree is one call per stem, over the modules its surfaces
+//!   reach, held to that stem alone
+//! - where a module imports one the tree does not hold, the modules of the
+//!   directory the import leads into follow
+//! - a tree whose survey names no surface is cut mechanically, by package
+//!   or by top-level directory, and read as a library is
+//!
+//! Each call is told:
+//!
+//! - its surfaces, each with its id and what it reaches
+//! - the boundaries its modules spell as values of their own
+//! - the packages they import, and the calls made through them
+//! - the data files they name
+//! - what the tree's own tests state
+//! - what could not be followed
+//!
+//! # Type claims
 //!
 //! The `type` claims are copied from the declarations, never answered by
 //! the model: every public class, type alias, and enumeration the seams'
@@ -35,10 +65,11 @@
 //! name led by an underscore, or left out of a declared `__all__`, is not
 //! public.
 //!
-//! A workspace with no production module is refused. One whose survey names
-//! no surface is mined under a mechanical cut, by package or by top-level
-//! directory, and read as a library is. A module the parser cannot read is
-//! walked as far as it got and never fails the run.
+//! # Refusals
+//!
+//! A workspace with no production module is refused. Nothing else is: a
+//! module the parser cannot read is walked as far as it got and never fails
+//! the run.
 
 #![expect(
     clippy::multiple_crate_versions,
@@ -62,19 +93,8 @@ mod guest {
         emery_sdk::metadata(SourceKind::Behaviour)
     }
 
-    // An inline value is one seam at once; a workspace's surfaces are named
-    // in one turn from what the parser read, and its seams cut from them.
-    async fn surveyed<P: Model>(ctx: &Context<'_, P>) -> Result<Survey, Error> {
-        match survey::prepare(ctx.input)? {
-            survey::Preparation::Value(survey) => Ok(survey),
-            survey::Preparation::Workspace(tree) => {
-                emery_sdk::survey::seams(ctx, PROSE, &tree).await
-            }
-        }
-    }
-
     async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {
-        let Survey { seams, types } = surveyed(ctx).await?;
+        let Survey { seams, types } = survey::survey(ctx).await?;
         let mut evidence = emery_sdk::extract(ctx, PROSE, &seams).await?;
 
         // replace the model's type claims with the parsed declarations

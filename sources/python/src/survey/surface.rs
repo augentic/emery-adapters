@@ -924,22 +924,6 @@ fn strip_pattern(route: &str) -> String {
     route.trim_start_matches('^').trim_end_matches('$').to_owned()
 }
 
-// `<int:pk>` and `(?P<pk>\d+)` are `pk`; `{id}` and `:id` are `id`; any
-// other segment is as written.
-pub(super) fn param_name(segment: &str) -> &str {
-    if let Some(inner) = segment.strip_prefix('{').and_then(|rest| rest.strip_suffix('}')) {
-        return inner.split_once(':').map_or(inner, |(name, _)| name);
-    }
-    if let Some(inner) = segment.strip_prefix('<').and_then(|rest| rest.strip_suffix('>')) {
-        return inner.rsplit_once(':').map_or(inner, |(_, name)| name);
-    }
-    if let Some(start) = segment.find("(?P<") {
-        let rest = &segment[start + 4..];
-        return rest.split_once('>').map_or(rest, |(name, _)| name);
-    }
-    segment.trim_start_matches(':')
-}
-
 // `invoices.remind` is told from `invoices.void` by `remind`. Nothing for a
 // literal of one segment or one naming nothing.
 fn literal_tail(literal: &str) -> Option<String> {
