@@ -20,10 +20,9 @@ mod surface;
 
 use std::path::Path;
 
-use emery_sdk::survey::Survey;
 use emery_sdk::survey::code::{Listing, Parsed};
-use emery_sdk::workspace::Entry;
-use emery_sdk::{Context, Error, Model, Seam, SourceContent, bad_request};
+use emery_sdk::survey::{self, Survey};
+use emery_sdk::{Context, Error, Model, Seam, SourceContent, bad_request, workspace};
 
 use self::dialect::DIALECT;
 use self::parse::Module;
@@ -39,7 +38,7 @@ pub async fn survey<P: Model>(ctx: &Context<'_, P>) -> Result<Survey, Error> {
             let module = Module::parse("value.ts", text.clone());
             return Ok(Survey {
                 seams: vec![Seam::whole()],
-                types: emery_sdk::survey::types(&DIALECT, [&*module], false),
+                types: survey::types(&DIALECT, [&*module], false),
             });
         }
         SourceContent::Workspace(workspace) => workspace,
@@ -47,7 +46,7 @@ pub async fn survey<P: Model>(ctx: &Context<'_, P>) -> Result<Survey, Error> {
 
     // one walk lists the modules and the data files an import may name
     let (data, modules): (Vec<String>, Vec<String>) =
-        emery_sdk::workspace::list(workspace, |entry| include(entry) || is_data(entry))?
+        workspace::list(workspace, |entry| include(entry) || is_data(entry))?
             .into_iter()
             .partition(|path| Path::new(path).extension().is_some_and(|ext| ext == "json"));
     if modules.is_empty() {
@@ -56,7 +55,7 @@ pub async fn survey<P: Model>(ctx: &Context<'_, P>) -> Result<Survey, Error> {
              tests, declarations, dependencies, and build output."
         ));
     }
-    let tests = emery_sdk::workspace::list(workspace, is_test)?;
+    let tests = workspace::list(workspace, is_test)?;
 
     // the settled tree is the model's to survey
     let root = Path::new(workspace);
@@ -68,7 +67,7 @@ pub async fn survey<P: Model>(ctx: &Context<'_, P>) -> Result<Survey, Error> {
     let parsed = Parsed::read(root, &DIALECT, listing, Module::parse);
     let recogniser = TypeScript::new(root, &parsed, tests);
     let tree = parsed.settle(recogniser);
-    emery_sdk::survey::seams(ctx, PROSE, &tree).await
+    survey::seams(ctx, PROSE, &tree).await
 }
 
 // Never a production module's: dependencies, build output, and tests.
