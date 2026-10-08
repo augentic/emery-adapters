@@ -60,6 +60,7 @@
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{self, Display, Formatter, Write as _};
+use std::num::NonZeroU32;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -356,6 +357,9 @@ struct Source {
     fixture: Option<String>,
     // an inline value in the fixture's place
     description: Option<String>,
+    // the `[[source]] rank` the staged `emery.toml` carries; absent, the
+    // adapter's kind decides
+    rank: Option<NonZeroU32>,
     #[serde(default)]
     stems: Vec<String>,
     #[serde(default, rename = "surface")]
@@ -605,6 +609,9 @@ fn stage(dir: &Path, case: &Case, settings: &Settings) -> io::Result<PathBuf> {
                 let _ = writeln!(config, "description = \"{}\"", toml_escaped(description));
             }
             (None, None) => {}
+        }
+        if let Some(rank) = source.rank {
+            let _ = writeln!(config, "rank = {rank}");
         }
         config.push('\n');
     }
@@ -2443,6 +2450,18 @@ mod tests {
             .expect("one source, the item's by default");
         assert_eq!(one.sources[0].name(), "python", "a source unnamed is named for its adapter");
         assert_eq!(one.source(None).unwrap().name(), "python");
+        assert_eq!(one.sources[0].rank, None, "a source unranked leaves the rank to its kind");
+
+        let ranked = case(
+            "[[source]]\nname = \"docs\"\nadapter = \"documentation\"\nfixture = \"d\"\n\n\
+             [[source]]\nname = \"faq\"\nadapter = \"documentation\"\nfixture = \"f\"\nrank = 4\n",
+        )
+        .expect("a ranked source");
+        assert_eq!(ranked.sources[0].rank, None);
+        assert_eq!(ranked.sources[1].rank, NonZeroU32::new(4));
+
+        let zero = refused("[[source]]\nadapter = \"python\"\nfixture = \"f\"\nrank = 0\n");
+        assert!(zero.contains("nonzero"), "zero is no rank, as the engine has it: {zero}");
 
         let several = refused(
             "[[source]]\nname = \"docs\"\nadapter = \"documentation\"\nfixture = \"d\"\n\n\
