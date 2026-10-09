@@ -1284,9 +1284,13 @@ fn run(
         )?;
     }
 
-    // the plan is built once the revision it is read from landed
+    // the plan is built once the specify landed, as the ladder reads it: a
+    // starved run climbs a rung instead, and a failed one has no plan
     let revision = envelope.as_ref().and_then(|out| out["revision"].as_str());
-    if let (Some(_), Some(revision)) = (&settings.target, revision) {
+    if let Some(revision) = revision
+        && settings.target.is_some()
+        && run.passed()
+    {
         eprintln!("eval: `{}` run {n} at {rung} building", case.name);
         run.build = Some(build(project, settings, &rust_log, rung, tag, revision)?);
     }
@@ -1357,6 +1361,8 @@ struct Failure {
 struct Landed {
     commit: String,
     subject: String,
+    // the `Revision:` trailer a merge and a seal carry; the root none
+    revision: Option<String>,
     slice: Option<String>,
     wave: Option<usize>,
     requirements: Vec<String>,
@@ -1608,34 +1614,46 @@ fn failure(stderr: &str) -> Option<Failure> {
 
 // The chain the build left, read where it stands: the integration copy a
 // failed run leaves for inspection, else the label a landed run pushed to
-// `target.git`. A chain nowhere, a run that ended before any was cut, is
-// empty.
+// `target.git`. The project is staged once for every run of a case, so the
+// copy standing may be an earlier run's, left by a build that failed after
+// cutting it, when this run's failed before it cut one: the copy is this
+// run's only where its chain holds a commit under this run's revision. A
+// chain nowhere, a run that ended before any was cut, is empty.
 fn history(project: &Path, revision: &str) -> Vec<Landed> {
     let integration = project.join(".emery/vcs/integration");
-    let (at, tip) = if integration.is_dir() {
-        (integration, "HEAD".to_owned())
-    } else {
-        (project.join("target.git"), format!("refs/heads/emery/{revision}"))
-    };
-    if !at.is_dir() {
+    if integration.is_dir() {
+        let left = log(&integration, "HEAD");
+        if left.iter().any(|landed| landed.revision.as_deref() == Some(revision)) {
+            return left;
+        }
+    }
+    let bare = project.join("target.git");
+    if !bare.is_dir() {
         return Vec::new();
     }
-    let format = "--format=%x1e%H%x1f%s%x1f%(trailers:key=Slice,valueonly)%x1f\
-                  %(trailers:key=Wave,valueonly)%x1f%(trailers:key=Requirements,valueonly)%x1f\
-                  %(trailers:key=Covered,valueonly)%x1f";
-    let log = git(&at, &["log", "--first-parent", "--name-only", format, &tip]);
+    log(&bare, &format!("refs/heads/emery/{revision}"))
+}
+
+// The first-parent chain from `tip`, newest first; empty where `tip` is
+// nothing the repository holds.
+fn log(at: &Path, tip: &str) -> Vec<Landed> {
+    let format = "--format=%x1e%H%x1f%s%x1f%(trailers:key=Revision,valueonly)%x1f\
+                  %(trailers:key=Slice,valueonly)%x1f%(trailers:key=Wave,valueonly)%x1f\
+                  %(trailers:key=Requirements,valueonly)%x1f%(trailers:key=Covered,valueonly)%x1f";
+    let log = git(at, &["log", "--first-parent", "--name-only", format, tip]);
     log.map(|text| chain(&text)).unwrap_or_default()
 }
 
-// The chain as `history` asks git to spell it: one record per commit led
-// by `\x1e`, its fields split by `\x1f`, the files it changed against its
+// The chain as `log` asks git to spell it: one record per commit led by
+// `\x1e`, its fields split by `\x1f`, the files it changed against its
 // first parent after the last.
 fn chain(text: &str) -> Vec<Landed> {
     text.split('\x1e')
         .filter(|record| !record.trim().is_empty())
         .filter_map(|record| {
             let fields: Vec<&str> = record.split('\x1f').collect();
-            let [commit, subject, slice, wave, requirements, covered, files] = fields[..] else {
+            let [commit, subject, revision, slice, wave, requirements, covered, files] = fields[..]
+            else {
                 return None;
             };
             let ids = |text: &str| {
@@ -1645,10 +1663,12 @@ fn chain(text: &str) -> Vec<Landed> {
                     .map(str::to_owned)
                     .collect::<Vec<_>>()
             };
+            let revision = revision.trim();
             let slice = slice.trim();
             Some(Landed {
                 commit: commit.trim().to_owned(),
                 subject: subject.trim().to_owned(),
+                revision: (!revision.is_empty()).then(|| revision.to_owned()),
                 slice: (!slice.is_empty()).then(|| slice.to_owned()),
                 wave: wave.trim().parse().ok(),
                 requirements: ids(requirements),
@@ -3287,6 +3307,7 @@ mod tests {
             Landed {
                 commit: "bbbbbbbbbbbb".to_owned(),
                 subject: "SLICE-002 orders".to_owned(),
+                revision: Some("feb4bd36".to_owned()),
                 slice: Some("SLICE-002".to_owned()),
                 wave: Some(2),
                 requirements: vec!["REQ-002".to_owned(), "REQ-003".to_owned()],
@@ -3296,6 +3317,7 @@ mod tests {
             Landed {
                 commit: "aaaaaaaaaaaa".to_owned(),
                 subject: "SLICE-001 start".to_owned(),
+                revision: Some("feb4bd36".to_owned()),
                 slice: Some("SLICE-001".to_owned()),
                 wave: Some(1),
                 requirements: vec!["REQ-001".to_owned()],
@@ -3305,6 +3327,7 @@ mod tests {
             Landed {
                 commit: "000000000000".to_owned(),
                 subject: "Greenfield".to_owned(),
+                revision: None,
                 slice: None,
                 wave: None,
                 requirements: Vec::new(),
@@ -3348,20 +3371,24 @@ mod tests {
 
     #[test]
     fn build_chain() {
-        let text = "\x1ecccc\x1fWave 2 verified\x1f\x1f\x1f\x1f\x1f\n\npackage-lock.json\n\
-                    \x1ebbbb\x1fSLICE-002 orders\x1fSLICE-002\n\x1f2\n\x1fREQ-002, REQ-003\n\x1fREQ-002\n\
-                    \x1f\n\nsrc/index.ts\nsrc/orders/index.ts\n\
-                    \x1eaaaa\x1fGreenfield\x1f\x1f\x1f\x1f\x1f\n\n.gitignore\nREADME.md\n";
+        let text = "\x1ecccc\x1fWave 2 verified\x1ffeb4bd36\n\x1f\x1f\x1f\x1f\x1f\n\n\
+                    package-lock.json\n\
+                    \x1ebbbb\x1fSLICE-002 orders\x1ffeb4bd36\n\x1fSLICE-002\n\x1f2\n\
+                    \x1fREQ-002, REQ-003\n\x1fREQ-002\n\x1f\n\nsrc/index.ts\nsrc/orders/index.ts\n\
+                    \x1eaaaa\x1fGreenfield\x1f\x1f\x1f\x1f\x1f\x1f\n\n.gitignore\nREADME.md\n";
         let chain = chain(text);
         assert_eq!(chain.len(), 3);
         assert_eq!(chain[0].slice, None);
+        assert_eq!(chain[0].revision.as_deref(), Some("feb4bd36"), "a seal is under the revision");
         assert_eq!(chain[0].files, ["package-lock.json"]);
         assert_eq!(chain[1].slice.as_deref(), Some("SLICE-002"));
+        assert_eq!(chain[1].revision.as_deref(), Some("feb4bd36"));
         assert_eq!(chain[1].wave, Some(2));
         assert_eq!(chain[1].requirements, ["REQ-002", "REQ-003"]);
         assert_eq!(chain[1].covered, ["REQ-002"]);
         assert_eq!(chain[1].files, ["src/index.ts", "src/orders/index.ts"]);
         assert_eq!(chain[2].subject, "Greenfield");
+        assert_eq!(chain[2].revision, None, "the root is under no revision");
         assert_eq!(chain[2].files.len(), 2);
     }
 
