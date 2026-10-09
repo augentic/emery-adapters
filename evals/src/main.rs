@@ -452,10 +452,11 @@ impl Behaviour {
         if self.loser.is_none() {
             return Some(status.to_owned());
         }
-        let losers: Vec<&str> = losers_of(requirement).collect();
+        let losers: BTreeSet<&str> = losers_of(requirement).collect();
         if losers.is_empty() {
             return Some(status.to_owned());
         }
+        let losers: Vec<&str> = losers.into_iter().collect();
         Some(format!("{status} losing {}", losers.join(", ")))
     }
 }
@@ -2715,6 +2716,17 @@ mod tests {
         ]));
         assert_eq!((ranked.status_met, ranked.status_expected), (1, 1));
         assert!(ranked.status_wrong.is_empty(), "{:?}", ranked.status_wrong);
+
+        // a source losing twice is named once
+        let twice = graded(serde_json::json!([
+            { "subject": "orders.cancel", "status": "conflict", "losers": losing(&["code", "docs", "code"]),
+              "sources": [docs, faq, code] },
+        ]));
+        assert!(
+            twice.status_wrong[0].ends_with("got {\"conflict losing code, docs\"})"),
+            "{}",
+            twice.status_wrong[0]
+        );
 
         // the FAQ's claim grouped in and the code still the one loser
         let unturned = graded(serde_json::json!([

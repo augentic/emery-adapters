@@ -79,6 +79,7 @@ gloss = "The order id is opaque to clients"
 [[behaviour]]
 gloss = "which orders can be cancelled (document: pending or paid; brief: pending only)"
 status = "divergence"
+loser = "docs"
 claims = [{ source = "docs", anchor = "orders-api.md#L31-L33" }]
 
 # --- the behaviours both state alike; no status expected ---
