@@ -695,7 +695,7 @@ fn toml_escaped(text: &str) -> String {
 const UNCOPIED: &[&str] = &[
     "node_modules",
     ".git",
-    ".omnia",
+    ".emery",
     "dist",
     "__pycache__",
     ".venv",
@@ -735,6 +735,9 @@ struct Run {
     exit: Option<i32>,
     tail: String,
     diff: Option<Value>,
+    // the committed plan's slices grouped into the sets ready to build at
+    // once, as the specify envelope reports them
+    waves: Option<Value>,
     // each seam's accepted evidence, under the source it was mined from
     evidence: Vec<(String, Evidence)>,
     completions: Vec<Completion>,
@@ -1029,6 +1032,24 @@ impl Run {
         self.plan.as_ref().and_then(|plan| plan["slices"].as_array()).map_or(0, Vec::len)
     }
 
+    // The plan's shape: how many waves, then each wave's width, so `3 (1/2/1)`
+    // is three waves of one, two, and one slices; `0` where no plan was committed.
+    fn waves(&self) -> String {
+        let widths: Vec<String> = self
+            .waves
+            .as_ref()
+            .and_then(Value::as_array)
+            .map(|waves| {
+                waves.iter().map(|wave| wave.as_array().map_or(0, Vec::len).to_string()).collect()
+            })
+            .unwrap_or_default();
+        if widths.is_empty() {
+            "0".to_owned()
+        } else {
+            format!("{} ({})", widths.len(), widths.join("/"))
+        }
+    }
+
     fn tokens(&self) -> Tokens {
         self.completions
             .iter()
@@ -1106,13 +1127,15 @@ fn run(
     tail.reverse();
 
     // what the run committed, read back through `show`
+    let envelope: Option<Value> = serde_json::from_str(&stdout).ok();
     let mut run = Run {
         n,
         rung,
         wall,
         exit: output.status.code(),
         tail: tail.join("\n"),
-        diff: serde_json::from_str::<Value>(&stdout).ok().and_then(|out| out.get("diff").cloned()),
+        diff: envelope.as_ref().and_then(|out| out.get("diff").cloned()),
+        waves: envelope.as_ref().and_then(|out| out.get("waves").cloned()),
         evidence: accepted(&stderr),
         completions: completions(&stderr),
         surveyed: surveyed(&stderr),
@@ -1729,10 +1752,10 @@ impl Display for Card<'_> {
             f,
             "| run | exit | wall | completions | input | cached | output | reasoning | claims | \
              req | crit | recall req | recall crit | recall dec | surfaces | stems | behaviours | \
-             conflicts | divergences | unknown | covered | then [unknown] | slices | design \
-             blocks (types) |"
+             conflicts | divergences | unknown | covered | then [unknown] | slices | waves | \
+             design blocks (types) |"
         )?;
-        writeln!(f, "|{}", " --- |".repeat(24))?;
+        writeln!(f, "|{}", " --- |".repeat(25))?;
         for attempts in runs {
             if let Some(first) = attempts.first() {
                 row(f, first, case.expected.sources.len() > 1)?;
@@ -1807,7 +1830,7 @@ fn row(f: &mut Formatter<'_>, attempt: &Attempt, named: bool) -> fmt::Result {
     writeln!(
         f,
         "| {} | {} | {}s | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | \
-         {} | {} | {} | {} | {} | {} ({}) |",
+         {} | {} | {} | {} | {} | {} | {} ({}) |",
         run.n,
         match (run.exit, run.died_in()) {
             (Some(0), _) => "0".to_owned(),
@@ -1836,6 +1859,7 @@ fn row(f: &mut Formatter<'_>, attempt: &Attempt, named: bool) -> fmt::Result {
         run.covered(),
         run.unknown_outcomes(),
         run.slices(),
+        run.waves(),
         blocks,
         types,
     )
@@ -2320,6 +2344,7 @@ mod tests {
             exit,
             tail: String::new(),
             diff: None,
+            waves: None,
             evidence: accepted(stderr),
             completions: completions(stderr),
             surveyed: surveyed(stderr),
