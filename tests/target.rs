@@ -3,7 +3,7 @@
 //! Each target runs under the omnia runtime behind the `builder_build` driver
 //! against a strict model script, over a scratch tree mounted writable.
 //! Assertions use what the adapter declares and what the driver's slice
-//! carries rather than SDK prompt wording; the turn's shape, the `write_file`
+//! carries rather than SDK prompt wording; the turn's shape, the `write_files`
 //! tool, and the gates are the SDK's, asserted in its own suite.
 
 #![cfg(not(target_arch = "wasm32"))]
@@ -20,8 +20,12 @@ const REPORT: &str = r#"{"covered": ["REQ-001"], "written": ["src/orders/index.t
 const PASSED: &str = r#"{"passed": true, "failures": []}"#;
 const FAILED: &str = r#"{"passed": false, "failures": ["check 3 (npm test): 1 failing: an order with no items is refused"]}"#;
 
-fn write(path: &str, content: &str) -> String {
-    serde_json::json!({ "path": path, "content": content }).to_string()
+fn write_files(files: &[(&str, &str)]) -> String {
+    let files: Vec<_> = files
+        .iter()
+        .map(|(path, content)| serde_json::json!({ "path": path, "content": content }))
+        .collect();
+    serde_json::json!({ "files": files }).to_string()
 }
 
 fn prompt(docs: &[Doc], path: &str) -> &'static str {
@@ -29,23 +33,23 @@ fn prompt(docs: &[Doc], path: &str) -> &'static str {
 }
 
 // The build turn opens under the embedded `build.md` with the tree lent and
-// `write_file` beside the reference tools, its brief carrying the driver's
-// slice; what the model wrote through the tool is what the tree holds and the
-// report names. The verify turn then opens under `verify.md` over the same
-// tree with the reference tools alone.
+// `write_files` beside the reference tools, its brief carrying the driver's
+// slice; what the model wrote through the tool in one call is what the tree
+// holds and the report names. The verify turn then opens under `verify.md`
+// over the same tree with the reference tools alone.
 #[tokio::test]
 async fn typescript_target() {
     let project = scratch();
     let model = ScriptedModel::answering([REPORT, PASSED]).calling(
         0,
-        [
-            ("write_file", write("src/orders/index.ts", "export function createOrder() {}\n")),
-            (
-                "write_file",
-                write("src/index.ts", "export * as orders from \"./orders/index.ts\";\n"),
-            ),
-            ("write_file", write("test/orders.test.ts", "import { test } from \"node:test\";\n")),
-        ],
+        [(
+            "write_files",
+            write_files(&[
+                ("src/orders/index.ts", "export function createOrder() {}\n"),
+                ("src/index.ts", "export * as orders from \"./orders/index.ts\";\n"),
+                ("test/orders.test.ts", "import { test } from \"node:test\";\n"),
+            ]),
+        )],
     );
 
     let model = support::build(test_programs::TARGET_TYPESCRIPT_TARGET, &project, &[], model).await;
@@ -62,8 +66,8 @@ async fn typescript_target() {
     );
     assert!(build.workspace.is_some(), "the tree is lent to the build");
     assert!(
-        build.tools.iter().any(|tool| tool == "write_file"),
-        "the build writes through `write_file`: {:?}",
+        build.tools.iter().any(|tool| tool == "write_files"),
+        "the build writes through `write_files`: {:?}",
         build.tools
     );
     for carried in [
@@ -87,18 +91,18 @@ async fn typescript_target() {
     );
     assert!(verify.workspace.is_some(), "the integrated tree is lent to the verify");
     assert!(
-        !verify.tools.iter().any(|tool| tool == "write_file"),
-        "a verify turn has no `write_file`: {:?}",
+        !verify.tools.iter().any(|tool| tool == "write_files"),
+        "a verify turn has no `write_files`: {:?}",
         verify.tools
     );
 
     let written: Vec<_> =
-        model.exchanges().into_iter().filter(|exchange| exchange.tool == "write_file").collect();
-    assert_eq!(written.len(), 3, "each scripted write reached the tool: {written:?}");
-    assert!(
-        written.iter().all(|exchange| exchange.outcome.is_ok()),
-        "every write landed: {written:?}"
-    );
+        model.exchanges().into_iter().filter(|exchange| exchange.tool == "write_files").collect();
+    assert_eq!(written.len(), 1, "the one scripted call reached the tool: {written:?}");
+    assert!(written[0].outcome.is_ok(), "the call landed: {written:?}");
+    for path in ["src/orders/index.ts", "src/index.ts", "test/orders.test.ts"] {
+        assert!(project.read(path).is_some(), "the tree holds `{path}` from the one call");
+    }
     assert_eq!(
         project.read("src/index.ts").as_deref(),
         Some("export * as orders from \"./orders/index.ts\";\n".as_bytes()),

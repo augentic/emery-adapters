@@ -4,7 +4,7 @@ Build one slice of the plan into the lent project tree as strict TypeScript on N
 
 ## Inputs
 
-- `$WORKSPACE` — the project tree, lent writable, sitting on the commit the brief names. Read it through the workspace tools; write it through this call's `write_file` tool, one file per call, created or replaced whole, at a `/`-separated path relative to `$WORKSPACE`. Run the checks below through the shell, in `$WORKSPACE`. Nothing outside `$WORKSPACE` is reachable.
+- `$WORKSPACE` — the project tree, lent writable, sitting on the commit the brief names. Read it through the workspace tools; write it through this call's `write_files` tool, one or more files per call, each created or replaced whole, at a `/`-separated path relative to `$WORKSPACE`. Lay the module, its entry line, its test, and any manifest in one call; a fix the loop below asks for is a later call rewriting the file whole. Run the checks below through the shell, in `$WORKSPACE`. Nothing outside `$WORKSPACE` is reachable.
 - **The slice's plan entry** — its id, name, requirements, the design types it owns, and the slices it depends on.
 - **The specification, cut to the slice** — the requirements to implement, each with its acceptance scenarios.
 - **The design, whole** — the types and sections every slice shares.
@@ -38,7 +38,7 @@ Fix what a check reports and run it again until all three pass. Report only once
 Answer with one JSON object:
 
 - `covered` — each requirement id the specification above holds that your module now implements and its test confirms, once each. Leave an id out rather than claim what the tree does not hold or a test does not pass.
-- `written` — each file `write_file` wrote, once each, as a `/`-separated path relative to `$WORKSPACE`, and no file the tree does not hold. A file a check wrote, `package-lock.json`, is the tree's whether or not you list it.
+- `written` — each file `write_files` wrote, once each, as a `/`-separated path relative to `$WORKSPACE`, and no file the tree does not hold. A file a check wrote, `package-lock.json`, is the tree's whether or not you list it.
 
 ## Worked example
 

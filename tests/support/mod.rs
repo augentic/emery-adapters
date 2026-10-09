@@ -181,7 +181,7 @@ pub async fn run<M: Strict>(adapter: &str, project: &Scratch, args: &[&str], mod
 /// Runs the target driver in the mode `args` names against `adapter`.
 ///
 /// `project` is mounted writable as `.`, since a build writes the lent tree
-/// through the adapter's `write_file` tool. A clean exit and an exactly
+/// through the adapter's `write_files` tool. A clean exit and an exactly
 /// consumed script are required; the model's record is returned.
 ///
 /// # Panics

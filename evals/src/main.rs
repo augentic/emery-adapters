@@ -59,7 +59,8 @@
 //! `EVAL_JOBS` (unset: the width cap `--build` passes as `--jobs`),
 //! `EVAL_LADDER` (`600/120,1200/240,2400/480`: each rung
 //! `CURSOR_TIMEOUT_SECS/CURSOR_INACTIVITY_SECS`), and the runtime's other
-//! `CURSOR_*` knobs. `RUST_LOG` is set for the run unless the caller sets it:
+//! `CURSOR_*` knobs, `CURSOR_MAX_TOOL_CALLS` named in the card's header when
+//! the caller sets it. `RUST_LOG` is set for the run unless the caller sets it:
 //! the scorecard needs the SDK's `accepted` trace lines and `surveyed by
 //! model` line, the adapters' `survey facts` and `surveyed` trace lines and
 //! `placed by model` line, and the backend's `completion` lines.
@@ -244,6 +245,9 @@ struct Settings {
     model: String,
     // the caller's `RUST_LOG`, when set, over the per-case default
     rust_log: Option<String>,
+    // the caller's `CURSOR_MAX_TOOL_CALLS`, when set; the runner inherits it,
+    // the card names it
+    max_tool_calls: Option<String>,
 }
 
 impl Settings {
@@ -297,6 +301,7 @@ impl Settings {
             ladder,
             model: env::var("CURSOR_MODEL").unwrap_or_else(|_| "auto".to_owned()),
             rust_log: env::var("RUST_LOG").ok(),
+            max_tool_calls: env::var("CURSOR_MAX_TOOL_CALLS").ok(),
         })
     }
 
@@ -2192,10 +2197,15 @@ fn scorecard(settings: &Settings, reports: &[Report<'_>], started: &str, name: &
              {jobs}"
         )
     });
+    let budget = settings
+        .max_tool_calls
+        .as_deref()
+        .map_or_else(String::new, |calls| format!(" · `CURSOR_MAX_TOOL_CALLS={calls}`"));
     let mut card = format!(
         "# Eval {started}\n\nmodel `{}` · emery `{}` · {} · {} runs per case · ladder {} \
          (`CURSOR_TIMEOUT_SECS`/`CURSOR_INACTIVITY_SECS`, climbed on a `timeout` or `inactive` \
-         completion; the columns are the first rung's){built} · runs under `target/eval/{name}/`\n",
+         completion; the columns are the first rung's){budget}{built} · runs under \
+         `target/eval/{name}/`\n",
         settings.model,
         settings.emery.display(),
         adapters.join(" · "),
