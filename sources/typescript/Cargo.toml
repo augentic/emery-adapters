@@ -19,8 +19,8 @@ workspace = true
 emery-sdk.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-oxc_allocator = "0.152.0"
-oxc_ast = "0.152.0"
-oxc_ast_visit = "0.152.0"
-oxc_parser = "0.152.0"
-oxc_span = "0.152.0"
+oxc_allocator = "0.153.0"
+oxc_ast = "0.153.0"
+oxc_ast_visit = "0.153.0"
+oxc_parser = "0.153.0"
+oxc_span = "0.153.0"

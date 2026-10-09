@@ -17,14 +17,16 @@ Closed for this adapter:
 
 | Kind | Required body field | When to emit |
 |---|---|---|
-| `requirement` | `statement` | A behavioural claim the docs state about the system (one sentence, present tense). |
+| `requirement` | `statement` | A behavioural claim the docs state about the system, in the present tense: the behaviour and the conditions under which it succeeds or is refused, as the passage states them. |
 | `criterion` | `criterion` | An acceptance criterion the docs list (often under "Acceptance:" or a bullet list under a requirement). |
 | `decision` | `decision` | A design or product decision the docs record (often "Decision:" lines or paragraphs). |
 | `section` | (free-form) | A bounded prose section worth carrying into synthesis verbatim when no finer-grained claim fits. |
 
 Other claim kinds are out of scope for this adapter. Ids, `path` anchors, and the gate follow [claims.md](claims.md); derive each id from the docs' own noun phrases (`password-reset.expiry`).
 
-A passage's kind is what the passage is, and one passage can be two. A decision record — a `## Decision` paragraph, a `Decision:` line — is a `decision`, and each rule it decides, stated there or under its consequences, is a `requirement` under the record's stem as well: a record yields both, and neither stands in for the other. A bullet list beneath a rule, the cases a sentence introduces, and an acceptance list under a story are `criterion`s under that rule's id, never requirements of their own.
+A passage's kind is what the passage is, and one passage can be two. A decision record — a `## Decision` paragraph, a `Decision:` line — is a `decision`, and each rule it decides, stated there or under its consequences, is a `requirement` under the record's stem as well: a record yields both, and neither stands in for the other. A bullet list beneath a rule, the items a sentence introduces with a colon, and an acceptance list under a story are `criterion`s under that rule's id, never requirements of their own.
+
+A requirement's statement is the rule whole. A sentence that qualifies the one before it — which cases succeed, which are refused, a value or a threshold — is part of that requirement's statement, however many sentences the paragraph spends on it: never a second requirement under the same stem, and never a criterion, which is what the docs list beneath the rule, not what they state in its own paragraph. Cut the statement at its first sentence and the condition that tells this source from another is lost to reconciliation, which compares statements alone.
 
 Lead every id with the domain noun of the subject this seam documents (`password-reset.…`, `orders.…`), never with a file or directory name; where the message gives a subject the id its claims lead with (`returns.late-returns`), lead with that, and put what tells the claim apart after it (`returns.late-returns.grace-period`). Other parts of the same tree are mined by other calls and joined with this one; two calls that name one requirement with reworded statements manufacture a conflict, so scope ids to the subject at hand and state each requirement once, where the docs state it.
 
@@ -59,6 +61,10 @@ Acceptance:
 - Unknown email addresses receive the same outward response as known users.
 - Reset links expire after 30 minutes.
 
+A user resets the password by following the link. Following an unexpired
+link sets the new password and signs the user in; following an expired
+link is refused with an answer that says the link has expired.
+
 Decision: use the existing transactional email provider rather than introducing a new notification service.
 ```
 
@@ -70,10 +76,13 @@ Output:
     { "kind": "requirement", "id": "password-reset.request", "path": "password-reset.md#L3", "statement": "The account service should let a registered user request a password reset link by email." },
     { "kind": "criterion", "id": "password-reset.request.response-privacy", "path": "password-reset.md#L6", "criterion": "Unknown email addresses receive the same outward response as known users." },
     { "kind": "criterion", "id": "password-reset.request.expiry", "path": "password-reset.md#L7", "criterion": "Reset links expire after 30 minutes." },
-    { "kind": "decision", "path": "password-reset.md#L9", "decision": "Use the existing transactional email provider rather than introducing a new notification service." }
+    { "kind": "requirement", "id": "password-reset.complete", "path": "password-reset.md#L9-L11", "statement": "A user resets the password by following the link. Following an unexpired link sets the new password and signs the user in; following an expired link is refused with an answer that says the link has expired." },
+    { "kind": "decision", "path": "password-reset.md#L13", "decision": "Use the existing transactional email provider rather than introducing a new notification service." }
   ]
 }
 ```
+
+The second paragraph is one requirement: its second sentence states the conditions of the first, so the statement runs to the end of the paragraph and the expired-link refusal is no criterion.
 
 ## Determinism
 

@@ -1,0 +1,90 @@
+# `orders-conflict`'s three sources, with the support FAQ (`faq`) ranked
+# beneath the code: `rank = 4`, under the code's default 3 as a behaviour
+# source, while the specification (`docs`) keeps documentation's default 2.
+# The same inputs, the same one disagreement — the specification lets a
+# pending or paid order be cancelled, the FAQ only a pending one — and the
+# status turned by the key alone: the specification's class stands alone at
+# the top rank, so the requirement is a `divergence` carrying its statement
+# as the body and the FAQ's as the loser note, where `orders-conflict`
+# expects a `conflict`. The case asks whether a configured rank, not the
+# kind, decides the status, and whether the grouping still lands the
+# planted pair in one requirement when it does. The behaviour names the
+# FAQ as the `loser`, since the document outranks the code by kind alone:
+# a `divergence` the code lost, in a requirement the FAQ's claim never
+# reached, is one the key had no part in and does not pass. No fixture of
+# its own: the three trees are the ones `orders-conflict` reads.
+
+[[source]]
+name = "docs"
+adapter = "documentation"
+fixture = "examples/documentation/docs"
+stems = ["orders"]
+
+[[source.surface]]
+entry = "orders-api.md"
+stem = "orders"
+
+[[source]]
+name = "faq"
+adapter = "documentation"
+fixture = "evals/cases/orders-conflict/fixture/faq"
+rank = 4
+stems = ["orders"]
+
+[[source.surface]]
+entry = "support-faq.md"
+stem = "orders"
+
+[[source]]
+name = "code"
+adapter = "typescript"
+fixture = "evals/cases/orders/fixture"
+stems = ["order-service"]
+
+[[source.surface]]
+entry = "orders.ts"
+stem = "order-service"
+
+# --- the planted disagreement, resolved by rank ---
+
+[[behaviour]]
+gloss = "which orders can be cancelled (specification: pending or paid; FAQ, ranked beneath the code: pending only)"
+status = "divergence"
+loser = "faq"
+claims = [
+  { source = "docs", anchor = "orders-api.md#L31-L33" },
+  { source = "faq", anchor = "support-faq.md#L9-L12" },
+  { source = "code", anchor = "orders.ts#L67-L74" },
+]
+
+# --- the behaviours all three state alike ---
+
+# the FAQ states the two placing rules in one sentence, so it is left out
+# of each: a citation of it would read as merging the two
+[[behaviour]]
+gloss = "an order with no line items is refused"
+claims = [
+  { source = "docs", anchor = "orders-api.md#L15" },
+  { source = "code", anchor = "orders.ts#L40-L42" },
+]
+
+[[behaviour]]
+gloss = "a line quantity below one is refused"
+claims = [
+  { source = "docs", anchor = "orders-api.md#L16" },
+  { source = "code", anchor = "orders.ts#L43-L45" },
+]
+
+[[behaviour]]
+gloss = "reading an unknown order is not-found"
+claims = [
+  { source = "docs", anchor = "orders-api.md#L25-L27" },
+  { source = "faq", anchor = "support-faq.md#L21-L23" },
+  { source = "code", anchor = "orders.ts#L59-L65" },
+]
+
+# --- the FAQ's alone ---
+
+[[behaviour]]
+gloss = "an order's lines and courier note cannot be changed after it is placed"
+claims = [{ source = "faq", anchor = "support-faq.md#L33-L34" }]
