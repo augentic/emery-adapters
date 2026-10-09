@@ -1223,6 +1223,14 @@ struct Completion {
     tokens: Tokens,
 }
 
+impl Completion {
+    // Whether the turn closed with an answer the gate accepted, on its
+    // first round or a correction.
+    fn answered(&self) -> bool {
+        matches!(self.outcome.as_str(), "ok" | "corrected")
+    }
+}
+
 #[expect(clippy::disallowed_methods, reason = "the eval is a native operator tool, not a guest")]
 fn run(
     project: &Path, settings: &Settings, case: &Case, n: usize, rung: Rung, tag: &str,
@@ -1502,12 +1510,18 @@ impl Build {
     }
 
     // The waves whose verify passed: every one the envelope lists, else
-    // every wave before the one the failure names.
+    // every wave whose verify answered, less the one whose verdict failed
+    // the run — a `verify-failed` is an answered verify, and the last.
     fn verified(&self) -> usize {
         if let Some(verified) = self.envelope.as_ref().and_then(|out| out["verified"].as_array()) {
             return verified.len();
         }
-        self.wave_failed().map_or(0, |wave| wave.saturating_sub(1))
+        let answered = self
+            .wave_turns()
+            .iter()
+            .filter(|wave| wave.verifies.last().is_some_and(|verify| verify.answered()))
+            .count();
+        answered.saturating_sub(usize::from(self.code() == Some("verify-failed")))
     }
 
     // The wave the failure names, read from the engine's description:
@@ -3293,9 +3307,12 @@ mod tests {
         assert_eq!(build.waves(), 2);
     }
 
+    // Wave 2's verify answered, so its completion is `ok`: the verdict is what failed.
     #[test]
     fn build_failure_envelope() {
         let stderr = timed("build-SLICE-001", "ok", 1_000)
+            + &timed("verify", "ok", 1_000)
+            + &timed("build-SLICE-002", "ok", 1_000)
             + &timed("verify", "ok", 1_000)
             + "2026-10-09T03:53:16Z  INFO emery_sdk::target: verified passed=false failures=2\n\
                {\n  \"error\": \"verify-failed\",\n  \"message\": \"wave 2 failed; SLICE-002 merged \
@@ -3339,6 +3356,7 @@ mod tests {
         assert!(!build.landed());
         assert_eq!(build.code(), Some("verify-failed"));
         assert_eq!(build.wave_failed(), Some(2));
+        assert_eq!(build.waves(), 2);
         assert_eq!(build.verified(), 1);
         assert_eq!(
             build.verify_failures(),
@@ -3357,16 +3375,45 @@ mod tests {
 
     #[test]
     fn build_slice_conflict_wave() {
-        let stderr = "{\n  \"error\": \"slice-conflict\",\n  \"message\": \"slice `SLICE-003` \
-                      (payments) failed in wave 3; SLICE-002 merged before it stays committed in \
-                      `.emery/vcs/integration`: its merge conflicts at package.json, src/index.ts \
-                      on its build 2\",\n  \"exit-code\": 1\n}\n";
-        let build = build_from(1, "", stderr, Vec::new());
-        assert_eq!(build.code(), Some("slice-conflict"));
-        assert_eq!(build.wave_failed(), Some(3));
+        let envelope = "{\n  \"error\": \"slice-conflict\",\n  \"message\": \"slice `SLICE-003` \
+                        (payments) failed in wave 3; SLICE-002 merged before it stays committed in \
+                        `.emery/vcs/integration`: its merge conflicts at package.json, src/index.ts \
+                        on its build 2\",\n  \"exit-code\": 1\n}\n";
+        let bare = build_from(1, "", envelope, Vec::new());
+        assert_eq!(bare.code(), Some("slice-conflict"));
+        assert_eq!(bare.wave_failed(), Some(3));
+        assert_eq!(bare.verify_failures(), [] as [&str; 0]);
+        assert_eq!(bare.speedup(), None, "no turn read, no path to measure");
+        assert_eq!(bare.verified(), 0, "no verify read, none passed");
+
+        // SLICE-003 conflicted in wave 2 and again in wave 3, whose verify never opened
+        let stderr = completion("build-SLICE-001", "ok")
+            + &completion("verify", "ok")
+            + &completion("build-SLICE-002", "ok")
+            + &completion("build-SLICE-003", "ok")
+            + &completion("verify", "corrected")
+            + &completion("build-SLICE-003", "ok")
+            + envelope;
+        let build = build_from(1, "", &stderr, Vec::new());
+        assert_eq!(build.waves(), 3);
         assert_eq!(build.verified(), 2);
-        assert_eq!(build.verify_failures(), [] as [&str; 0]);
-        assert_eq!(build.speedup(), None, "no turn read, no path to measure");
+    }
+
+    // The push fails once every wave is verified, and its message names none.
+    #[test]
+    fn build_push_refused() {
+        let stderr = completion("build-SLICE-001", "ok")
+            + &completion("verify", "ok")
+            + &completion("build-SLICE-002", "ok")
+            + &completion("verify", "ok")
+            + "{\n  \"error\": \"label-diverged\",\n  \"message\": \"pushing `emery/feb4` to \
+               `origin` failed; `emery/feb4` stays at `bbbb` and nothing was forced: the remote's \
+               `emery/feb4` holds commits this build does not\",\n  \"exit-code\": 1\n}\n";
+        let build = build_from(1, "", &stderr, Vec::new());
+        assert_eq!(build.code(), Some("label-diverged"));
+        assert_eq!(build.wave_failed(), None);
+        assert_eq!(build.waves(), 2);
+        assert_eq!(build.verified(), 2);
     }
 
     #[test]
