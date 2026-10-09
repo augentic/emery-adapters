@@ -28,6 +28,5 @@ impl SourceAdapter for Adapter {
 /// The prompt embedded in the adapter.
 pub static PROSE: &[emery_sdk::Doc] = emery_sdk::prose!["../prose/extract.md"];
 
-// Export the adapter as a WASM module.
 #[cfg(target_arch = "wasm32")]
-emery_sdk::source_adapter!(Adapter);
+emery_sdk::export_source!(Adapter);

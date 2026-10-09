@@ -58,6 +58,5 @@ impl TargetAdapter for Adapter {
 pub static PROSE: &[emery_sdk::Doc] =
     emery_sdk::prose!["../prose/build.md", "../prose/verify.md", "../prose/references/layout.md",];
 
-// Export the adapter as a WASM module.
 #[cfg(target_arch = "wasm32")]
-emery_sdk::target_adapter!(Adapter);
+emery_sdk::export_target!(Adapter);
