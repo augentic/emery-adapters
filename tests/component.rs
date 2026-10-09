@@ -3,11 +3,8 @@
 //! One scenario per component, over what a native call cannot show: the
 //! export, the lift and lower of the input and the answer, the metadata, the
 //! lend resolved against the mount, and the parser running as a guest. What
-//! each adapter decides is `source.rs`'s and `target.rs`'s, natively, except
-//! `documentation`'s, asserted here whole: its `model-survey` arm is a Cargo
-//! feature, which the workspace's `--all-features` turns on in the native
-//! rlib, while the component build keeps the crate's default, the control.
-//! The boundary's own rules are `probe.rs`'s.
+//! each adapter decides is `source.rs`'s and `target.rs`'s, natively; the
+//! boundary's own rules are `probe.rs`'s.
 
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -69,137 +66,36 @@ fn led(request: &Seen, docs: &[Doc], prompt: &str) {
     assert!(system.starts_with(body), "the compiled-in `{prompt}` leads the system");
 }
 
-fn tree(project: &Scratch, files: &[&str]) {
-    for file in files {
-        project.write(file, "");
-    }
-}
-
-// A `documentation` run over `project`: one answer per seam and one for the
-// inline value, answering the workspace seams' turns under `extract.md`.
-async fn documented(project: &Scratch, seams: usize) -> Vec<String> {
-    let answers = std::iter::repeat_n(CLAIM, seams + 1);
-    let seen = extracted(
-        test_programs::ADAPTER_DOCUMENTATION,
-        documentation::PROSE,
-        project,
-        ScriptedModel::answering(answers),
-        seams,
-    )
-    .await;
-    for request in &seen[..seams] {
-        led(request, documentation::PROSE, "extract.md");
-    }
-    seen[..seams].iter().map(|request| request.messages[0].clone()).collect()
-}
-
-// Every group appears together in exactly one turn.
-fn partitioned(turns: &[String], groups: &[&[&str]]) {
-    assert_eq!(turns.len(), groups.len(), "one turn per seam");
-    for group in groups {
-        let naming: Vec<&String> =
-            turns.iter().filter(|turn| group.iter().any(|file| turn.contains(file))).collect();
-        assert_eq!(naming.len(), 1, "{group:?} is one seam's alone, got {naming:?}");
-        assert!(
-            group.iter().all(|file| naming[0].contains(file)),
-            "{group:?} is listed together: {}",
-            naming[0]
-        );
-    }
-}
-
-// A tree of one directory cuts no finer than itself.
+// The survey turn opens first under `survey.md`, and the subject the code
+// derives at the anchor the answer named reaches the seam: the outline
+// reader ran as a guest over the lent tree.
 #[tokio::test]
 async fn documentation() {
     let project = scratch();
     project.write("docs/orders.md", "# Orders\n\nPOST /orders creates an order.\n");
+    let survey = inventory("Orders", "docs/orders.md#L1", "orders");
 
-    let turns = documented(&project, 1).await;
-
-    assert_eq!(turns.len(), 1, "the whole tree is the one seam");
-}
-
-// The cut is the first path segment: `guide/advanced/` has two documents of its
-// own but is no seam, and the root's own document folds in with a directory of one.
-#[tokio::test]
-async fn documentation_directories() {
-    let project = scratch();
-    tree(
+    let seen = extracted(
+        test_programs::ADAPTER_DOCUMENTATION,
+        documentation::PROSE,
         &project,
-        &[
-            "README.md",
-            "api/orders.md",
-            "api/users.md",
-            "guide/advanced/setup.md",
-            "guide/advanced/topics.md",
-            "guide/intro.md",
-            "notes/todo.md",
-            ".github/workflows/ci.yml",
-            "guide/.draft.md",
-        ],
+        ScriptedModel::answering([&survey, CLAIM, CLAIM]),
+        2,
+    )
+    .await;
+
+    led(&seen[0], documentation::PROSE, "survey.md");
+    assert!(
+        seen[0].messages[0].contains("- `docs/orders.md` — 3 lines; prose alone"),
+        "the outline read from the lent tree: {}",
+        seen[0].messages[0]
     );
-
-    let turns = documented(&project, 3).await;
-
-    partitioned(
-        &turns,
-        &[
-            &["README.md", "notes/todo.md"],
-            &["api/orders.md", "api/users.md"],
-            &["guide/advanced/setup.md", "guide/advanced/topics.md", "guide/intro.md"],
-        ],
+    let subject = "- `Orders` — `docs/orders.md#L1-L3` — stem `orders` — ids lead with `orders`";
+    assert!(
+        seen[1].messages[0].contains(subject),
+        "derived from the lent tree: {}",
+        seen[1].messages[0]
     );
-    for turn in &turns {
-        assert!(
-            !turn.contains(".github") && !turn.contains(".draft.md"),
-            "a dot entry is in no seam: {turn}"
-        );
-    }
-}
-
-// A directory of more than sixteen documents is cut once more by its
-// subdirectories, one level only and only where it can.
-#[tokio::test]
-async fn documentation_large_directory() {
-    let v1: Vec<String> = (0..10).map(|i| format!("api/v1/endpoint-{i:02}.md")).collect();
-    let v2: Vec<String> = (0..8).map(|i| format!("api/v2/endpoint-{i:02}.md")).collect();
-    let v1: Vec<&str> = v1.iter().map(String::as_str).collect();
-    let v2: Vec<&str> = v2.iter().map(String::as_str).collect();
-
-    // nested: the directory's own documents and the folded subdirectory of one are a seam
-    let project = scratch();
-    let own = ["api/README.md", "api/CHANGELOG.md", "api/misc/glossary.md"];
-    tree(&project, &own);
-    tree(&project, &v1);
-    tree(&project, &v2);
-    tree(&project, &["guide/intro.md", "guide/setup.md"]);
-
-    let turns = documented(&project, 4).await;
-
-    partitioned(&turns, &[&own, &v1, &v2, &["guide/intro.md", "guide/setup.md"]]);
-
-    // flat: nothing cuts, so the directory stays one seam whatever its size
-    let flat: Vec<String> = (0..20).map(|i| format!("api/endpoint-{i:02}.md")).collect();
-    let flat: Vec<&str> = flat.iter().map(String::as_str).collect();
-    let project = scratch();
-    tree(&project, &flat);
-    tree(&project, &["guide/intro.md", "guide/setup.md"]);
-
-    let turns = documented(&project, 2).await;
-
-    partitioned(&turns, &[&flat, &["guide/intro.md", "guide/setup.md"]]);
-
-    // a remainder of one joins the first subdirectory's seam
-    let project = scratch();
-    tree(&project, &["api/misc/glossary.md"]);
-    tree(&project, &v1);
-    tree(&project, &v2);
-    tree(&project, &["guide/intro.md", "guide/setup.md"]);
-
-    let turns = documented(&project, 3).await;
-
-    let joined: Vec<&str> = v1.iter().copied().chain(["api/misc/glossary.md"]).collect();
-    partitioned(&turns, &[&joined, &v2, &["guide/intro.md", "guide/setup.md"]]);
 }
 
 // The brief is read through the mount, so the file reaches the turn whole.

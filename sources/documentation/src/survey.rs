@@ -1,20 +1,30 @@
-//! Divides a documentation tree into independently mined groups: by its
-//! directories, or — under `model-survey` — by the subjects the model names
-//! in it, from the outline code read of every document.
+//! Divides a documentation tree into independently mined seams: by the
+//! subjects the model names in it, from the outline code read of every
+//! document, or by its directories where it names none.
+
+mod model;
+mod structure;
+mod subjects;
 
 use std::collections::BTreeMap;
 
-use emery_sdk::{Error, Seam, SourceContent, SourceInput};
+use emery_sdk::{Context, Error, Model, Seam, SourceContent, SourceInput};
 
-#[cfg(feature = "model-survey")]
-pub mod model;
-#[cfg(feature = "model-survey")]
-mod structure;
-#[cfg(feature = "model-survey")]
-mod subjects;
+use self::subjects::Preparation;
+use crate::PROSE;
 
-#[cfg(feature = "model-survey")]
-pub use self::subjects::{Document, Preparation, Prepared, prepare, seams};
+pub async fn survey<P: Model>(ctx: &Context<'_, P>) -> Result<Vec<Seam>, Error> {
+    match subjects::prepare(ctx.input)? {
+        Preparation::Value => Ok(vec![Seam::whole()]),
+        Preparation::Workspace(prepared) if prepared.documents.is_empty() => {
+            directories(prepared.input)
+        }
+        Preparation::Workspace(prepared) => {
+            let inventory = model::subjects(ctx, PROSE, &prepared).await?;
+            subjects::seams(&prepared, &inventory)
+        }
+    }
+}
 
 const MIN_SIZE: usize = 2;
 
@@ -22,7 +32,8 @@ const MIN_SIZE: usize = 2;
 // run behind one turn.
 const MAX_SIZE: usize = 16;
 
-pub fn survey(input: &SourceInput) -> Result<Vec<Seam>, Error> {
+// The directory cut, where no subject leads the seams.
+fn directories(input: &SourceInput) -> Result<Vec<Seam>, Error> {
     let SourceContent::Workspace(root) = &input.content else {
         return Ok(vec![Seam::whole()]);
     };

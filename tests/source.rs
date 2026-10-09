@@ -1,10 +1,10 @@
-//! Verifies what the shipped source adapters decide, natively.
+//! Verifies what every shipped source adapter decides, natively.
 //!
 //! Each adapter's `Adapter` is called as the component's export calls it,
 //! over a scratch tree and a strict model script, and the turns it opened are
 //! read back. Assertions use adapter-owned source data rather than SDK prompt
-//! wording. `documentation` is `component.rs`'s whole, beside the component
-//! boundary itself; shared SDK and boundary behaviour is `probe.rs`'s.
+//! wording. The component boundary itself is `component.rs`'s; shared SDK and
+//! boundary behaviour is `probe.rs`'s.
 
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -49,6 +49,8 @@ struct Shipped<A> {
     adapter: PhantomData<fn() -> A>,
 }
 
+const DOCUMENTATION: Shipped<documentation::Adapter> =
+    Shipped::new("documentation", documentation::PROSE);
 const INTENT: Shipped<intent::Adapter> = Shipped::new("intent", intent::PROSE);
 const TYPESCRIPT: Shipped<typescript::Adapter> = Shipped::new("typescript", typescript::PROSE);
 const PYTHON: Shipped<python::Adapter> = Shipped::new("python", python::PROSE);
@@ -341,6 +343,395 @@ fn turn_for<'t>(turns: &'t [String], surface: &str) -> &'t String {
         turns.iter().filter(|turn| turn.contains(&format!("- Surface `{surface}`"))).collect();
     assert_eq!(naming.len(), 1, "`{surface}` is one seam's alone, got {naming:?}");
     naming[0]
+}
+
+// The survey answer that names no subject, every document listed under
+// `unreached`, so the documentation tree falls to the directory cut.
+fn unplaced(files: &[&str]) -> String {
+    inventory(&[], files)
+}
+
+// Every group appears together in exactly one turn.
+fn partitioned(turns: &[String], groups: &[&[&str]]) {
+    assert_eq!(turns.len(), groups.len(), "one turn per seam");
+    for group in groups {
+        let naming: Vec<&String> =
+            turns.iter().filter(|turn| group.iter().any(|file| turn.contains(file))).collect();
+        assert_eq!(naming.len(), 1, "{group:?} is one seam's alone, got {naming:?}");
+        assert!(
+            group.iter().all(|file| naming[0].contains(file)),
+            "{group:?} is listed together: {}",
+            naming[0]
+        );
+    }
+}
+
+// Every seam of a tree the survey named no subject in is told so.
+fn unsurveyed(turns: &[String]) {
+    for turn in turns {
+        assert!(
+            turn.contains("No subject was found in this tree"),
+            "the seam is told no subject was found: {turn}"
+        );
+    }
+}
+
+// One document, one subject at its title: the survey turn opens first, over
+// the document's outline, and the one seam is told the subject, the lines
+// it spans, the stem, and the id its claims lead with, the document laid.
+#[tokio::test]
+async fn documentation() {
+    let project = scratch();
+    project.write("docs/orders.md", "# Orders\n\nPOST /orders creates an order.\n");
+    let survey = inventory(&[("Orders", "docs/orders.md#L1", "orders")], &[]);
+
+    let model = DOCUMENTATION.mined(&project, &survey, 1).await;
+
+    let turns = DOCUMENTATION.surveyed(&model, 1);
+    let facts = &model.seen()[0].messages[0];
+    for fact in ["- `docs/orders.md` — 3 lines; prose alone", "  - L1 # Orders"] {
+        assert!(facts.contains(fact), "{fact} is among the facts: {facts}");
+    }
+    assert!(
+        turns[0].contains(
+            "Every subject of the source `source` — 1 subject in 1 document under the stem \
+             `orders`."
+        ),
+        "the seam is led by its subjects: {}",
+        turns[0]
+    );
+    assert!(
+        turns[0].contains(
+            "- `Orders` — `docs/orders.md#L1-L3` — stem `orders` — ids lead with `orders`"
+        ),
+        "the seam is told the subject: {}",
+        turns[0]
+    );
+    assert!(
+        turns[0].contains("### `docs/orders.md` (3 lines)"),
+        "the document is laid: {}",
+        turns[0]
+    );
+}
+
+// The survey turn carries every document that reads as text with its
+// outline — its length, each heading at its line, what its body holds, or
+// where it opens when it has no heading — and never a file that does not;
+// from the accepted anchors the code derives each subject's span and lead,
+// and the one seam within the budget is held to every stem, the document
+// placed under no subject named as context and laid for no call.
+#[tokio::test]
+async fn documentation_subjects() {
+    let project = scratch();
+    modules(
+        &project,
+        &[
+            (
+                "README.md",
+                "# Toolshed docs\n\n- [Returning a tool](guides/returning-a-tool.md)\n- \
+                 [Accounts](reference/accounts.md)\n",
+            ),
+            (
+                "features/invoices.feature",
+                "Feature: Invoices\n\n  Scenario: Paying an invoice\n    Given an open invoice\n    \
+                 When it is paid\n    Then it is closed\n",
+            ),
+            (
+                "guides/returning-a-tool.md",
+                "# Returning a tool\n\nBring the tool back to the counter.\n\n## At the \
+                 counter\n\nStaff check it in.\n\n## Returning late\n\nA fee applies after the due \
+                 date.\n",
+            ),
+            ("joining.md", "Members join at the counter.\n\nThey pay a fee.\n"),
+            (
+                "policies/late-returns.md",
+                "# Late returns policy\n\n| Days late | Fee |\n| --- | --- |\n| 1 | 2 |\n",
+            ),
+            (
+                "reference/accounts.md",
+                "# Accounts\n\nEvery member has an account.\n\n## Membership\n\n- Members join at \
+                 the counter.\n\n## Signing in\n\nA member signs in with a password.\n",
+            ),
+        ],
+    );
+    project.write("logo.png", [0x89, b'P', b'N', b'G', 0xFF, 0xFE]);
+    let survey = inventory(
+        &[
+            ("Invoices", "features/invoices.feature#L1", "invoices"),
+            ("Returning a tool", "guides/returning-a-tool.md#L1", "returns"),
+            ("Joining", "joining.md#L1", "membership"),
+            ("Late returns policy", "policies/late-returns.md#L1", "returns"),
+            ("Membership", "reference/accounts.md#L5", "membership"),
+            ("Signing in", "reference/accounts.md#L9", "sign-in"),
+        ],
+        &["README.md"],
+    );
+    let answer = claim("returns.late-returns-policy.fee");
+
+    let model = DOCUMENTATION.run(&project, Scripted::answering([&survey, &answer, &answer])).await;
+
+    let turns = DOCUMENTATION.surveyed(&model, 1);
+    let facts = &model.seen()[0].messages[0];
+    for fact in [
+        "- `README.md` — 4 lines; lists",
+        "  - L1 # Toolshed docs",
+        "- `features/invoices.feature` — 6 lines; steps",
+        "  - L1 # Invoices",
+        "  - L3 ### Paying an invoice",
+        "- `joining.md` — 3 lines; prose alone",
+        "  - no heading; opens at L1: Members join at the counter.",
+        "- `policies/late-returns.md` — 5 lines; tables",
+        "- `reference/accounts.md` — 11 lines; lists",
+        "  - L5 ## Membership",
+        "  - L9 ## Signing in",
+        "### `reference/accounts.md` (11 lines)",
+    ] {
+        assert!(facts.contains(fact), "{fact} is among the facts: {facts}");
+    }
+    assert!(!facts.contains("logo.png"), "a file that is not text is no document: {facts}");
+    let turn = &turns[0];
+    assert!(
+        turn.contains(
+            "Every subject of the source `source` — 6 subjects in 5 documents under the stems \
+             `invoices`, `membership`, `returns`, `sign-in`."
+        ),
+        "the one seam is held to every stem: {turn}"
+    );
+    for subject in [
+        "- `Invoices` — `features/invoices.feature#L1-L6` — stem `invoices` — ids lead with \
+         `invoices`",
+        "- `Returning a tool` — `guides/returning-a-tool.md#L1-L11` — stem `returns` — ids lead \
+         with `returns.returning-a-tool`",
+        "- `Joining` — `joining.md#L1-L3` — stem `membership` — ids lead with `membership.joining`",
+        "- `Late returns policy` — `policies/late-returns.md#L1-L5` — stem `returns` — ids lead \
+         with `returns.late-returns-policy`",
+        "- `Membership` — `reference/accounts.md#L1-L8` — stem `membership` — ids lead with \
+         `membership.accounts`",
+        "- `Signing in` — `reference/accounts.md#L9-L11` — stem `sign-in` — ids lead with \
+         `sign-in`",
+    ] {
+        assert!(turn.contains(subject), "{subject} is among the subjects: {turn}");
+    }
+    assert!(
+        turn.contains(
+            "The survey placed this document under no subject — an index, a readme, a glossary, a \
+             changelog: `README.md`. It is in `$SOURCE_DIR` for context and never a `path`."
+        ),
+        "the unreached document is context: {turn}"
+    );
+    assert!(turn.contains("### `joining.md` (3 lines)"), "a subject's document is laid: {turn}");
+    assert!(!turn.contains("### `README.md`"), "an unreached document is laid for no call: {turn}");
+}
+
+// A tree past the inline budget is one seam per stem, each over the documents
+// its subjects anchor in, held to that stem alone and told the others are
+// other calls'.
+#[tokio::test]
+async fn documentation_stems() {
+    let project = scratch();
+    padded(&project, "orders.md", "# Orders\n\n", "Orders are placed at the counter.\n");
+    project.write("returns.md", "# Returns\n\nA tool is returned at the counter.\n");
+    let survey = inventory(
+        &[("Orders", "orders.md#L1", "orders"), ("Returns", "returns.md#L1", "returns")],
+        &[],
+    );
+    let decision = decision();
+
+    let model = DOCUMENTATION
+        .run(&project, Scripted::answering([&survey, &decision, &decision, &decision]))
+        .await;
+
+    let turns = DOCUMENTATION.surveyed(&model, 2);
+    for (stem, other, subject) in [
+        ("orders", "returns", "- `Orders` — `orders.md#L1-L"),
+        (
+            "returns",
+            "orders",
+            "- `Returns` — `returns.md#L1-L3` — stem `returns` — ids lead with `returns`",
+        ),
+    ] {
+        let led = format!("Stem `{stem}` of the source `source` — 1 subject in 1 document.");
+        let turn = turns
+            .iter()
+            .find(|turn| turn.contains(&led))
+            .unwrap_or_else(|| panic!("one seam is `{stem}`'s: {turns:?}"));
+        assert!(turn.contains(subject), "the seam is told its subject: {turn}");
+        assert!(
+            turn.contains(&format!(
+                "The other stem of this tree — `{other}` — is other calls'; claim nothing under \
+                 it, and nothing from a document this call does not list."
+            )),
+            "the other stem is other calls': {turn}"
+        );
+        assert!(
+            !turn.contains(&format!("### `{other}.md`")),
+            "the other stem's document is not laid: {turn}"
+        );
+    }
+}
+
+// Two subjects at one line, and a document neither named as a subject's
+// entry nor listed as unreached, are findings the answer comes back with
+// together; the corrected answer is accepted, and the run goes on to mine.
+#[tokio::test]
+async fn documentation_survey_check() {
+    let project = scratch();
+    modules(
+        &project,
+        &[
+            ("api/orders.md", "# Orders\n\nPlace an order.\n"),
+            ("guide/intro.md", "# Intro\n\nStart here.\n"),
+            ("guide/setup.md", "# Setup\n\nInstall it.\n"),
+        ],
+    );
+    let strayed = inventory(
+        &[("Orders", "api/orders.md#L1", "orders"), ("Placing", "api/orders.md#L1", "orders")],
+        &["guide/intro.md"],
+    );
+    let corrected = inventory(
+        &[("Orders", "api/orders.md#L1", "orders"), ("Setup", "guide/setup.md#L1", "setup")],
+        &["guide/intro.md"],
+    );
+    let answer = answer();
+
+    let model = DOCUMENTATION
+        .run(&project, Scripted::answering([&strayed, &corrected, &answer, &answer]))
+        .await;
+
+    let seen = model.seen();
+    assert_eq!(seen.len(), 4, "two survey rounds, one seam, one for the inline value");
+    for request in &seen[..2] {
+        system(request, prompt::survey(documentation::PROSE));
+    }
+    system(&seen[2], prompt::extract(documentation::PROSE));
+    let exchanges = model.exchanges();
+    let finding = exchanges[0].outcome.as_ref().expect_err("the strayed answer is refused");
+    for named in [
+        "- subjects `Orders` and `Placing` both anchor at `api/orders.md#L1`; a subject anchors at \
+         the heading, or the first line, that introduces it, one subject to a line",
+        "- `guide/setup.md` is neither a subject's entry nor listed under `unreached`; name the \
+         subject it introduces, anchored at its heading or first line, or list it",
+    ] {
+        assert!(finding.contains(named), "the finding names it: {finding}");
+    }
+    assert_eq!(exchanges[1].outcome, Ok(String::new()), "the corrected inventory is accepted");
+    let turn = &seen[2].messages[0];
+    assert!(
+        turn.contains("- `Setup` — `guide/setup.md#L1-L3` — stem `setup` — ids lead with `setup`"),
+        "the corrected subject reaches the seam: {turn}"
+    );
+}
+
+// A survey that names no subject falls to the directory cut, every seam told
+// so. The cut is the first path segment: `guide/advanced/` has two documents
+// of its own but is no seam, and the root's own document folds in with a
+// directory of one; a dot entry is no document.
+#[tokio::test]
+async fn documentation_fallback_directories() {
+    let project = scratch();
+    let docs = [
+        "README.md",
+        "api/orders.md",
+        "api/users.md",
+        "guide/advanced/setup.md",
+        "guide/advanced/topics.md",
+        "guide/intro.md",
+        "notes/todo.md",
+    ];
+    tree(&project, &docs);
+    tree(&project, &[".github/workflows/ci.yml", "guide/.draft.md"]);
+
+    let model = DOCUMENTATION.mined(&project, &unplaced(&docs), 3).await;
+
+    let turns = DOCUMENTATION.surveyed(&model, 3);
+    unsurveyed(&turns);
+    partitioned(
+        &turns,
+        &[
+            &["README.md", "notes/todo.md"],
+            &["api/orders.md", "api/users.md"],
+            &["guide/advanced/setup.md", "guide/advanced/topics.md", "guide/intro.md"],
+        ],
+    );
+    for turn in &turns {
+        assert!(
+            !turn.contains(".github") && !turn.contains(".draft.md"),
+            "a dot entry is in no seam: {turn}"
+        );
+    }
+    let facts = &model.seen()[0].messages[0];
+    assert!(!facts.contains(".draft.md"), "a dot entry is no document: {facts}");
+}
+
+// Under the directory cut, a directory of more than sixteen documents is cut
+// once more by its subdirectories, one level only and only where it can.
+#[tokio::test]
+async fn documentation_fallback_large_directory() {
+    let v1: Vec<String> = (0..10).map(|i| format!("api/v1/endpoint-{i:02}.md")).collect();
+    let v2: Vec<String> = (0..8).map(|i| format!("api/v2/endpoint-{i:02}.md")).collect();
+    let v1: Vec<&str> = v1.iter().map(String::as_str).collect();
+    let v2: Vec<&str> = v2.iter().map(String::as_str).collect();
+    let guide = ["guide/intro.md", "guide/setup.md"];
+
+    // nested: the directory's own documents and the folded subdirectory of one are a seam
+    let project = scratch();
+    let own = ["api/README.md", "api/CHANGELOG.md", "api/misc/glossary.md"];
+    tree(&project, &own);
+    tree(&project, &v1);
+    tree(&project, &v2);
+    tree(&project, &guide);
+    let docs: Vec<&str> = own.iter().chain(&v1).chain(&v2).chain(&guide).copied().collect();
+
+    let model = DOCUMENTATION.mined(&project, &unplaced(&docs), 4).await;
+
+    let turns = DOCUMENTATION.surveyed(&model, 4);
+    unsurveyed(&turns);
+    partitioned(&turns, &[&own, &v1, &v2, &guide]);
+
+    // flat: nothing cuts, so the directory stays one seam whatever its size
+    let flat: Vec<String> = (0..20).map(|i| format!("api/endpoint-{i:02}.md")).collect();
+    let flat: Vec<&str> = flat.iter().map(String::as_str).collect();
+    let project = scratch();
+    tree(&project, &flat);
+    tree(&project, &guide);
+    let docs: Vec<&str> = flat.iter().chain(&guide).copied().collect();
+
+    let model = DOCUMENTATION.mined(&project, &unplaced(&docs), 2).await;
+
+    let turns = DOCUMENTATION.surveyed(&model, 2);
+    unsurveyed(&turns);
+    partitioned(&turns, &[&flat, &guide]);
+
+    // a remainder of one joins the first subdirectory's seam
+    let project = scratch();
+    tree(&project, &["api/misc/glossary.md"]);
+    tree(&project, &v1);
+    tree(&project, &v2);
+    tree(&project, &guide);
+    let docs: Vec<&str> = std::iter::once("api/misc/glossary.md")
+        .chain(v1.iter().copied())
+        .chain(v2.iter().copied())
+        .chain(guide)
+        .collect();
+
+    let model = DOCUMENTATION.mined(&project, &unplaced(&docs), 3).await;
+
+    let turns = DOCUMENTATION.surveyed(&model, 3);
+    unsurveyed(&turns);
+    let joined: Vec<&str> = v1.iter().copied().chain(["api/misc/glossary.md"]).collect();
+    partitioned(&turns, &[&joined, &v2, &guide]);
+}
+
+// A tree holding no document that reads as text puts no survey turn: it is
+// cut by directory, and a tree of one file is one seam over the whole.
+#[tokio::test]
+async fn documentation_no_documents() {
+    let project = scratch();
+    project.write("logo.png", [0x89, b'P', b'N', b'G', 0xFF, 0xFE]);
+
+    let model = DOCUMENTATION.extract(&project, 1).await;
+
+    DOCUMENTATION.prompted(&model, 1);
 }
 
 // Every module is laid out in the turn, and nothing else is.

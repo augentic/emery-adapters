@@ -9,7 +9,7 @@ use emery_sdk::survey::{Facts, Inventory, Lines, Surface};
 use emery_sdk::{Context, Error, Model, serde_json, tracing};
 
 use super::structure::{self, Kind};
-use super::{Document, Prepared};
+use super::subjects::{Document, Prepared};
 
 /// One subject the survey named, with what code derived from its anchor.
 #[derive(Clone, Debug, Eq, PartialEq)]

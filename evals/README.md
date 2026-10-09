@@ -50,7 +50,7 @@ The smallest useful pass is one small case per stem shape: `orders`, `cli-jobs`,
 
 ### Survey facts without a model turn
 
-`--facts [case|adapter..]` stages the named cases and runs each once with `CURSOR_API_KEY` stripped. The adapter logs the facts it would lay before the model (bootstrap, registrations, decorated definitions, exports, packages) and the first turn fails before any is spent, in seconds. The text is printed and written to `target/eval/facts/<case>/facts.md`; a graded run writes the same beside its log as `run-N.facts.md`.
+`--facts [case|adapter..]` stages the named cases and runs each once with `CURSOR_API_KEY` stripped. The adapter logs the facts it would lay before the model (bootstrap, registrations, decorated definitions, exports, packages; for `documentation`, each document's outline) and the first turn fails before any is spent, in seconds. The text is printed and written to `target/eval/facts/<case>/facts.md`; a graded run writes the same beside its log as `run-N.facts.md`.
 
 This is how an expectation is written, since the facts say which modules locate a surface and how each export is read, and how a change to the facts or the keep policy is checked before a live run. A line the model should not see (a hook's decorator, a data-only class) is the adapter's defect, visible here.
 
@@ -80,15 +80,16 @@ PYTHON_WASM=/tmp/emery-adapters-arm-target/wasm32-wasip2/release/python.wasm car
 git worktree remove --force ../emery-adapters-arm
 ```
 
-An arm that is new code is a Cargo feature of its adapter, off by default so the shipped component and the root suite stay the control. `documentation` carries `model-survey`: the model names the tree's subjects before extraction and code cuts the seams from them. Build each arm into its own path under `target/eval/arms/<arm>/`, so a later build never overwrites what an earlier card ran over:
+An arm that is new code is built the same way, from the worktree the code is written in, and never as a Cargo feature: `make test` runs the workspace under `--all-features`, which would turn the arm on in the native suite while the component build kept the default, so the two rungs would assert two behaviours. Build each arm into its own path under `target/eval/arms/<arm>/`, so a later build never overwrites what an earlier card ran over:
 
 ```bash
-mkdir -p target/eval/arms/{control,model-survey}
+mkdir -p target/eval/arms/{control,subjects}
 cargo build -p documentation --target wasm32-wasip2 --release
 cp target/wasm32-wasip2/release/documentation.wasm target/eval/arms/control/
-cargo build -p documentation --target wasm32-wasip2 --release --features model-survey
-cp target/wasm32-wasip2/release/documentation.wasm target/eval/arms/model-survey/
-DOCUMENTATION_WASM=target/eval/arms/model-survey/documentation.wasm cargo run -p evals -- orders-doc cross-cut
+cargo build --manifest-path ../emery-adapters-arm/Cargo.toml -p documentation --target wasm32-wasip2 --release \
+  --target-dir /tmp/emery-adapters-arm-target
+cp /tmp/emery-adapters-arm-target/wasm32-wasip2/release/documentation.wasm target/eval/arms/subjects/
+DOCUMENTATION_WASM=target/eval/arms/subjects/documentation.wasm cargo run -p evals -- orders-doc cross-cut
 ```
 
 ## Cases
@@ -139,7 +140,7 @@ Six cases read prose alone, each written before any run to a shape the shipped s
 | Case | What it probes | Stems |
 | --- | --- | --- |
 | [orders-doc](cases/orders-doc/expected.toml) | The live example's one document ([examples/documentation/docs](../examples/documentation/docs)): the inline-budget path | `orders` |
-| [stories](cases/stories/expected.toml) | User stories, two directories of two. The directory cut and the subjects agree | `wishlist`, `invoices` |
+| [stories](cases/stories/expected.toml) | User stories, two directories of two. The directories and the subjects agree | `wishlist`, `invoices` |
 | [adr](cases/adr/expected.toml) | Five decision records in one `adr/` directory, each its own subject, which one directory lumps into one seam | `entries`, `posting`, `amounts`, `daily-close`, `exports` |
 | [narrative](cases/narrative/expected.toml) | Three headless prose pieces at the root: no heading to anchor at, only a first line to name by | `bookings`, `returns`, `membership` |
 | [cross-cut](cases/cross-cut/expected.toml) | Twenty documents past `INLINE_BYTES`, cut by audience into `guides/`, `reference/`, `policies/` while the subjects cut across them. Written to break the directory cut | `membership`, `sign-in`, `password-reset`, `catalogue`, `loans`, `reservations`, `returns`, `damage`, `notifications` |

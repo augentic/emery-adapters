@@ -1,6 +1,5 @@
-//! The subject survey under `model-survey`: what code reads of the tree
-//! before the one turn, and the seams it cuts from the subjects the model
-//! names.
+//! The subject survey: what code reads of the tree before the one turn, and
+//! the seams it cuts from the subjects the model names.
 
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
@@ -79,7 +78,7 @@ pub fn seams(prepared: &Prepared<'_>, inventory: &Inventory) -> Result<Vec<Seam>
 
     if subjects.is_empty() {
         tracing::info!(%source, "no subject named; the tree is cut by directory");
-        let seams = super::survey(prepared.input)?;
+        let seams = super::directories(prepared.input)?;
         return Ok(seams
             .into_iter()
             .map(|seam| Seam {
