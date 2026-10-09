@@ -34,44 +34,37 @@
 //! and their spans. A survey naming no subject falls back to the groups
 //! above.
 
-#[cfg(target_arch = "wasm32")]
 mod survey;
 
-#[cfg(target_arch = "wasm32")]
-mod guest {
-    use emery_sdk::{Context, Error, Evidence, Model, Seam, SourceAdapter, SourceKind};
+use emery_sdk::{Context, Error, Evidence, Model, Seam, SourceAdapter, SourceKind};
 
-    use crate::{PROSE, survey};
+/// The adapter implementation.
+pub struct Adapter;
 
-    struct Adapter;
+impl SourceAdapter for Adapter {
+    const KIND: SourceKind = SourceKind::Documentation;
 
-    emery_sdk::source_adapter!(Adapter);
-
-    impl SourceAdapter for Adapter {
-        const KIND: SourceKind = SourceKind::Documentation;
-
-        async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {
-            #[cfg(not(feature = "model-survey"))]
-            let seams: Vec<Seam> = survey::survey(ctx.input)?;
-            #[cfg(feature = "model-survey")]
-            let seams = seams(ctx).await?;
-            emery_sdk::extract(ctx, PROSE, &seams).await
-        }
+    async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {
+        #[cfg(not(feature = "model-survey"))]
+        let seams: Vec<Seam> = survey::survey(ctx.input)?;
+        #[cfg(feature = "model-survey")]
+        let seams = seams(ctx).await?;
+        emery_sdk::extract(ctx, PROSE, &seams).await
     }
+}
 
-    // An inline value is one seam at once; a workspace's subjects are named
-    // in one turn from the outlines code read, and its seams cut from them.
-    #[cfg(feature = "model-survey")]
-    async fn seams<P: Model>(ctx: &Context<'_, P>) -> Result<Vec<Seam>, Error> {
-        match survey::prepare(ctx.input)? {
-            survey::Preparation::Value => Ok(vec![Seam::whole()]),
-            survey::Preparation::Workspace(prepared) if prepared.documents.is_empty() => {
-                survey::survey(prepared.input)
-            }
-            survey::Preparation::Workspace(prepared) => {
-                let inventory = survey::model::subjects(ctx, PROSE, &prepared).await?;
-                survey::seams(&prepared, &inventory)
-            }
+// An inline value is one seam at once; a workspace's subjects are named
+// in one turn from the outlines code read, and its seams cut from them.
+#[cfg(feature = "model-survey")]
+async fn seams<P: Model>(ctx: &Context<'_, P>) -> Result<Vec<Seam>, Error> {
+    match survey::prepare(ctx.input)? {
+        survey::Preparation::Value => Ok(vec![Seam::whole()]),
+        survey::Preparation::Workspace(prepared) if prepared.documents.is_empty() => {
+            survey::survey(prepared.input)
+        }
+        survey::Preparation::Workspace(prepared) => {
+            let inventory = survey::model::subjects(ctx, PROSE, &prepared).await?;
+            survey::seams(&prepared, &inventory)
         }
     }
 }
@@ -79,3 +72,7 @@ mod guest {
 /// The prompts embedded in the adapter.
 pub static PROSE: &[emery_sdk::Doc] =
     emery_sdk::prose!["../prose/extract.md", "../prose/survey.md"];
+
+// Export the adapter as a WASM module.
+#[cfg(target_arch = "wasm32")]
+emery_sdk::source_adapter!(Adapter);

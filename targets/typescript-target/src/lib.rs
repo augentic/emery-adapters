@@ -19,47 +19,45 @@
 //! - `package.json` is unruled, so two slices that both change it conflict
 //!   and the second is rebuilt over the first.
 
-#[cfg(target_arch = "wasm32")]
-mod guest {
-    use std::borrow::Cow;
+use std::borrow::Cow;
 
-    use emery_sdk::target::{
-        Context, MergeRule, MergeStrategy, Report, TargetAdapter, Verdict, VerifyContext,
-    };
-    use emery_sdk::{Error, Model};
+use emery_sdk::target::{
+    Context, MergeRule, MergeStrategy, Report, TargetAdapter, Verdict, VerifyContext,
+};
+use emery_sdk::{Error, Model};
 
-    use crate::PROSE;
+/// The adapter implementation.
+pub struct Adapter;
 
-    struct Adapter;
+impl TargetAdapter for Adapter {
+    const MERGE_RULES: &'static [MergeRule] = &[
+        MergeRule {
+            paths: Cow::Borrowed("package-lock.json"),
+            strategy: MergeStrategy::Ours,
+        },
+        MergeRule {
+            paths: Cow::Borrowed("src/index.ts"),
+            strategy: MergeStrategy::Union,
+        },
+        MergeRule {
+            paths: Cow::Borrowed("**/index.ts"),
+            strategy: MergeStrategy::Union,
+        },
+    ];
 
-    emery_sdk::target_adapter!(Adapter);
+    async fn build<P: Model>(ctx: &Context<'_, P>) -> Result<Report, Error> {
+        emery_sdk::target::build(ctx, PROSE).await
+    }
 
-    impl TargetAdapter for Adapter {
-        const MERGE_RULES: &'static [MergeRule] = &[
-            MergeRule {
-                paths: Cow::Borrowed("package-lock.json"),
-                strategy: MergeStrategy::Ours,
-            },
-            MergeRule {
-                paths: Cow::Borrowed("src/index.ts"),
-                strategy: MergeStrategy::Union,
-            },
-            MergeRule {
-                paths: Cow::Borrowed("**/index.ts"),
-                strategy: MergeStrategy::Union,
-            },
-        ];
-
-        async fn build<P: Model>(ctx: &Context<'_, P>) -> Result<Report, Error> {
-            emery_sdk::target::build(ctx, PROSE).await
-        }
-
-        async fn verify<P: Model>(ctx: &VerifyContext<'_, P>) -> Result<Verdict, Error> {
-            emery_sdk::target::verify(ctx, PROSE).await
-        }
+    async fn verify<P: Model>(ctx: &VerifyContext<'_, P>) -> Result<Verdict, Error> {
+        emery_sdk::target::verify(ctx, PROSE).await
     }
 }
 
 /// The prompts and the reference embedded in the adapter.
 pub static PROSE: &[emery_sdk::Doc] =
     emery_sdk::prose!["../prose/build.md", "../prose/verify.md", "../prose/references/layout.md",];
+
+// Export the adapter as a WASM module.
+#[cfg(target_arch = "wasm32")]
+emery_sdk::target_adapter!(Adapter);

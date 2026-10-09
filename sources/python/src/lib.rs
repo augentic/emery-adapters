@@ -77,27 +77,20 @@
               neither is this crate's to unify"
 )]
 
-#[cfg(target_arch = "wasm32")]
 mod survey;
 
-#[cfg(target_arch = "wasm32")]
-mod guest {
-    use emery_sdk::{Context, Error, Evidence, Model, SourceAdapter, SourceKind};
+use emery_sdk::{Context, Error, Evidence, Model, SourceAdapter, SourceKind};
 
-    use crate::{PROSE, survey};
+/// The adapter implementation.
+pub struct Adapter;
 
-    struct Adapter;
+impl SourceAdapter for Adapter {
+    const KIND: SourceKind = SourceKind::Behaviour;
 
-    emery_sdk::source_adapter!(Adapter);
-
-    impl SourceAdapter for Adapter {
-        const KIND: SourceKind = SourceKind::Behaviour;
-
-        async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {
-            let survey = survey::survey(ctx).await?;
-            let evidence = emery_sdk::extract(ctx, PROSE, &survey.seams).await?;
-            Ok(survey.join(evidence))
-        }
+    async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {
+        let survey = survey::survey(ctx).await?;
+        let evidence = emery_sdk::extract(ctx, PROSE, &survey.seams).await?;
+        Ok(survey.join(evidence))
     }
 }
 
@@ -110,3 +103,7 @@ pub static PROSE: &[emery_sdk::Doc] = emery_sdk::prose![
     "../prose/references/examples/outbound-http.md",
     "../prose/references/examples/parallel-execution.md",
 ];
+
+// Export the adapter as a WASM module.
+#[cfg(target_arch = "wasm32")]
+emery_sdk::source_adapter!(Adapter);
