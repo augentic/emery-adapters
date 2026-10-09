@@ -34,6 +34,7 @@ stem = "order-service"
 [[behaviour]]
 gloss = "the minimum number of line items an order needs (doc: two; code: one)"
 status = "divergence"
+loser = "code"
 claims = [
   { source = "docs", anchor = "orders-api.md#L15" },
   { source = "code", anchor = "orders.ts#L40-L42" },
@@ -42,6 +43,7 @@ claims = [
 [[behaviour]]
 gloss = "which orders can be cancelled (doc: pending only; code: all but shipped)"
 status = "divergence"
+loser = "code"
 claims = [
   { source = "docs", anchor = "orders-api.md#L30-L32" },
   { source = "code", anchor = "orders.ts#L67-L74" },

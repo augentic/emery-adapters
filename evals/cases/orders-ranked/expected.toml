@@ -8,8 +8,11 @@
 # as the body and the FAQ's as the loser note, where `orders-conflict`
 # expects a `conflict`. The case asks whether a configured rank, not the
 # kind, decides the status, and whether the grouping still lands the
-# planted pair in one requirement when it does. No fixture of its own: the
-# three trees are the ones `orders-conflict` reads.
+# planted pair in one requirement when it does. The behaviour names the
+# FAQ as the `loser`, since the document outranks the code by kind alone:
+# a `divergence` the code lost, in a requirement the FAQ's claim never
+# reached, is one the key had no part in and does not pass. No fixture of
+# its own: the three trees are the ones `orders-conflict` reads.
 
 [[source]]
 name = "docs"
@@ -47,6 +50,7 @@ stem = "order-service"
 [[behaviour]]
 gloss = "which orders can be cancelled (specification: pending or paid; FAQ, ranked beneath the code: pending only)"
 status = "divergence"
+loser = "faq"
 claims = [
   { source = "docs", anchor = "orders-api.md#L31-L33" },
   { source = "faq", anchor = "support-faq.md#L9-L12" },

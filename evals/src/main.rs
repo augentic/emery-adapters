@@ -394,14 +394,18 @@ struct Item {
 }
 
 // One behaviour the specification states once, however many sources state
-// it: the claims that contribute, each at its source and anchor, and the
-// status the engine's authority rule gives the requirement.
+// it: the claims that contribute, each at its source and anchor, the status
+// the engine's authority rule gives the requirement, and, where the status
+// is a disagreement, the source whose statement loses — so a `divergence`
+// between two other sources does not pass for the one planted.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Behaviour {
     gloss: String,
     #[serde(default)]
     status: Option<String>,
+    #[serde(default)]
+    loser: Option<String>,
     claims: Vec<ExpectedClaim>,
 }
 
@@ -421,6 +425,52 @@ impl Behaviour {
             .collect();
         format!("{} — {}", claims.join(", "), self.gloss)
     }
+
+    // The status expected, with the loser where one is named: `divergence`,
+    // `divergence losing faq`.
+    fn expected_status(&self) -> Option<String> {
+        let status = self.status.as_ref()?;
+        Some(
+            self.loser
+                .as_ref()
+                .map_or_else(|| status.clone(), |loser| format!("{status} losing {loser}")),
+        )
+    }
+
+    // Whether a requirement holding the behaviour carries the status
+    // expected and, where a loser is named, a loser note from that source.
+    fn decided(&self, requirement: &Value) -> bool {
+        let Some(status) = &self.status else { return true };
+        requirement["status"] == status.as_str()
+            && self.loser.as_deref().is_none_or(|loser| losers_of(requirement).any(|s| s == loser))
+    }
+
+    // What a requirement holding the behaviour decided, read the way
+    // `expected_status` spells it, so a mismatch reads against it.
+    fn outcome(&self, requirement: &Value) -> Option<String> {
+        let status = requirement["status"].as_str()?;
+        if self.loser.is_none() {
+            return Some(status.to_owned());
+        }
+        let losers: BTreeSet<&str> = losers_of(requirement).collect();
+        if losers.is_empty() {
+            return Some(status.to_owned());
+        }
+        let losers: Vec<&str> = losers.into_iter().collect();
+        Some(format!("{status} losing {}", losers.join(", ")))
+    }
+}
+
+// The sources whose statements a requirement lists as losers, as `emery show
+// --format json` carries them.
+fn losers_of(requirement: &Value) -> impl Iterator<Item = &str> {
+    requirement["losers"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|loser| loser["sources"].as_array())
+        .flatten()
+        .filter_map(Value::as_str)
 }
 
 // One stem, or a list where the code is shared — a guard two routers
@@ -513,6 +563,21 @@ impl Expected {
                      `unknown`, `divergence`, and `conflict`",
                     behaviour.gloss
                 ));
+            }
+            if let Some(loser) = &behaviour.loser {
+                if !matches!(behaviour.status.as_deref(), Some("divergence" | "conflict")) {
+                    return Err(format!(
+                        "behaviour `{}` names a loser under no disagreement; `loser` goes with \
+                         status `divergence` or `conflict`",
+                        behaviour.gloss
+                    ));
+                }
+                if !behaviour.claims.iter().any(|claim| &claim.source == loser) {
+                    return Err(format!(
+                        "behaviour `{}` names loser `{loser}`, which none of its claims is from",
+                        behaviour.gloss
+                    ));
+                }
             }
         }
         Ok(())
@@ -1521,13 +1586,15 @@ fn behaviours(expected: &[Behaviour], run: &Run) -> Behaviours {
         if !unheld.is_empty() {
             graded.partial.push(format!("{label} (uncited {})", unheld.join(", ")));
         }
-        if let Some(status) = &behaviour.status {
+        if let Some(status) = behaviour.expected_status() {
             graded.status_expected += 1;
-            let found: BTreeSet<&str> =
-                holders.all().filter_map(|index| requirements[index]["status"].as_str()).collect();
-            if found.contains(status.as_str()) {
+            if holders.all().any(|index| behaviour.decided(&requirements[index])) {
                 graded.status_met += 1;
             } else {
+                let found: BTreeSet<String> = holders
+                    .all()
+                    .filter_map(|index| behaviour.outcome(&requirements[index]))
+                    .collect();
                 graded.status_wrong.push(format!("{label} (expected `{status}`, got {found:?})"));
             }
         }
@@ -2483,6 +2550,29 @@ mod tests {
             "[[source]]\nadapter = \"python\"\nfixture = \"f\"\n\n[[behaviour]]\ngloss = \"g\"\nstatus = \"settled\"\nclaims = [{ source = \"python\", anchor = \"a.py#L1\" }]\n",
         );
         assert!(status.contains("`settled`"));
+
+        let two = "[[source]]\nname = \"docs\"\nadapter = \"documentation\"\nfixture = \"d\"\n\n\
+                   [[source]]\nname = \"faq\"\nadapter = \"documentation\"\nfixture = \"f\"\n\n";
+        let unlosing = refused(&format!(
+            "{two}[[behaviour]]\ngloss = \"g\"\nstatus = \"agreed\"\nloser = \"faq\"\n\
+             claims = [{{ source = \"docs\", anchor = \"a.md#L1\" }}, {{ source = \"faq\", anchor = \"b.md#L1\" }}]\n"
+        ));
+        assert!(unlosing.contains("under no disagreement"), "{unlosing}");
+        let unstated = refused(&format!(
+            "{two}[[behaviour]]\ngloss = \"g\"\nloser = \"faq\"\n\
+             claims = [{{ source = \"docs\", anchor = \"a.md#L1\" }}, {{ source = \"faq\", anchor = \"b.md#L1\" }}]\n"
+        ));
+        assert!(unstated.contains("under no disagreement"), "{unstated}");
+        let stranger = refused(&format!(
+            "{two}[[behaviour]]\ngloss = \"g\"\nstatus = \"divergence\"\nloser = \"faq\"\n\
+             claims = [{{ source = \"docs\", anchor = \"a.md#L1\" }}]\n"
+        ));
+        assert!(stranger.contains("none of its claims is from"), "{stranger}");
+        case(&format!(
+            "{two}[[behaviour]]\ngloss = \"g\"\nstatus = \"divergence\"\nloser = \"faq\"\n\
+             claims = [{{ source = \"docs\", anchor = \"a.md#L1\" }}, {{ source = \"faq\", anchor = \"b.md#L1\" }}]\n"
+        ))
+        .expect("a loser among the claims' sources under a disagreement");
     }
 
     // Every committed case parses under the shape, with every item at a
@@ -2578,6 +2668,72 @@ mod tests {
         assert!(graded.partial[0].ends_with("(uncited code:`a.ts#L1`)"));
         assert_eq!(graded.premerged, Vec::<String>::new());
         assert_eq!(graded.to_string(), "1/2");
+    }
+
+    // The planted disagreement is between the document and the FAQ, so a
+    // divergence the code lost, in a requirement the FAQ's claim never
+    // reached, is not the status expected.
+    #[test]
+    fn behaviour_status_loser() {
+        let expected = case(
+            "[[source]]\nname = \"docs\"\nadapter = \"documentation\"\nfixture = \"d\"\n\n\
+             [[source]]\nname = \"faq\"\nadapter = \"documentation\"\nfixture = \"f\"\nrank = 4\n\n\
+             [[source]]\nname = \"code\"\nadapter = \"typescript\"\nfixture = \"c\"\n\n\
+             [[behaviour]]\ngloss = \"which orders can be cancelled\"\nstatus = \"divergence\"\nloser = \"faq\"\n\
+             claims = [{ source = \"docs\", anchor = \"orders.md#L31-L33\" }, { source = \"faq\", anchor = \"faq.md#L9-L12\" }, { source = \"code\", anchor = \"orders.ts#L67-L74\" }]\n",
+        )
+        .unwrap();
+        let graded = |requirements: Value| {
+            behaviours(&expected.behaviours, &run_from(Some(0), "", Some(spec(&requirements))))
+        };
+        let losing = |sources: &[&str]| -> Value {
+            sources.iter().map(|source| serde_json::json!({ "sources": [source] })).collect()
+        };
+        let docs = cited("docs", "orders.cancel", "orders.md#L31");
+        let faq = cited("faq", "orders.cancellation", "faq.md#L9-L10");
+        let code = cited("code", "order-service.cancel", "orders.ts#L72-L74");
+
+        // the code the loser, the FAQ's claim apart: the key never decided it
+        let apart = graded(serde_json::json!([
+            { "subject": "orders.cancel", "status": "divergence", "losers": losing(&["code"]),
+              "sources": [docs, code] },
+            { "subject": "orders.cancellation", "status": "unknown", "losers": [], "sources": [faq] },
+        ]));
+        assert_eq!((apart.status_met, apart.status_expected), (0, 1));
+        assert_eq!(apart.status_wrong.len(), 1);
+        assert!(
+            apart.status_wrong[0].ends_with(
+                "(expected `divergence losing faq`, got {\"divergence losing code\", \"unknown\"})"
+            ),
+            "{}",
+            apart.status_wrong[0]
+        );
+
+        // the FAQ the loser beside another: the key decided it
+        let ranked = graded(serde_json::json!([
+            { "subject": "orders.cancel", "status": "divergence", "losers": losing(&["code", "faq"]),
+              "sources": [docs, faq, code] },
+        ]));
+        assert_eq!((ranked.status_met, ranked.status_expected), (1, 1));
+        assert!(ranked.status_wrong.is_empty(), "{:?}", ranked.status_wrong);
+
+        // a source losing twice is named once
+        let twice = graded(serde_json::json!([
+            { "subject": "orders.cancel", "status": "conflict", "losers": losing(&["code", "docs", "code"]),
+              "sources": [docs, faq, code] },
+        ]));
+        assert!(
+            twice.status_wrong[0].ends_with("got {\"conflict losing code, docs\"})"),
+            "{}",
+            twice.status_wrong[0]
+        );
+
+        // the FAQ's claim grouped in and the code still the one loser
+        let unturned = graded(serde_json::json!([
+            { "subject": "orders.cancel", "status": "divergence", "losers": losing(&["code"]),
+              "sources": [docs, faq] },
+        ]));
+        assert_eq!((unturned.status_met, unturned.status_expected), (0, 1));
     }
 
     // A citation over a whole method spans the branches inside it without
