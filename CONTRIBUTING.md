@@ -30,7 +30,7 @@ sources/
       survey.md       # the one survey prompt, where the model names the surfaces (typescript, python)
       references/     # lazy reference corpus; the shared runtime references are the SDK's, linked as <doc>.md
     Cargo.toml        # `<name>` — adapter identity semver is its `version`
-    src/              # lib.rs (PROSE, then the wasm32-only `mod survey` and `mod guest`) + survey.rs, the guest's survey, and whatever the survey reads its source with as its children under survey/ (typescript and python alike: parse.rs and parse/walk.rs, resolve.rs, surface.rs — the SDK's `Recogniser`, which the SDK's `survey::seams` surveys and cuts through)
+    src/              # lib.rs (`mod survey`, `Adapter` and its trait impl, PROSE, then the wasm32-only export macro) + survey.rs, the adapter's survey, and whatever the survey reads its source with as its children under survey/ (typescript and python alike: parse.rs and parse/walk.rs, resolve.rs, surface.rs — the SDK's `Recogniser`, which the SDK's `survey::seams` surveys and cuts through)
 crates/test-programs/ # omnia's test-programs pattern: guest programs + the nested wasm32 build of every component
   programs/<group>/   # one scenario per file: source/extract.rs drives the component boundary, probe/ are fixture adapters
   src/                # lib.rs: the generated artifact table (native) / helpers.rs (wasm32)
