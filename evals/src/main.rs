@@ -35,18 +35,32 @@
 //! `target/eval/facts/<case>/facts.md`. A graded run writes the same beside
 //! its log as `run-N.facts.md`.
 //!
+//! `cargo run -p evals -- --build [case|adapter..]` builds each plan a run
+//! commits: the project gains a `[target]` table naming the `typescript-target`
+//! component and a greenfield repository the runner lays beside the sources,
+//! `target.git`, bare, its `main` one root commit; after a specify that
+//! landed and its `show`s, `emery build --config emery.toml` runs over it,
+//! its log and envelope kept as `run-N.build.stderr` / `.stdout`, and the
+//! card gains five columns — what the build merged, verified, took, saved
+//! over a serial walk of the same turns, and covered — with the waves, the
+//! conflicts, the verify's refusals, the uncovered ids, and the chain the
+//! repository holds beneath the run's notes.
+//!
 //! Environment: `EMERY_BIN` (`../emery/target/release/emery`), one
 //! `<ADAPTER>_WASM` per adapter a selected case runs under —
 //! `TYPESCRIPT_WASM` (`target/wasm32-wasip2/release/typescript.wasm`),
-//! `PYTHON_WASM`, `DOCUMENTATION_WASM`, `INTENT_WASM` — each copied into
-//! the binary's store, `~/.emery/adapters`, as the package
-//! `eval:<adapter>@<version>` (the file `eval_<adapter>@<version>.wasm`,
+//! `PYTHON_WASM`, `DOCUMENTATION_WASM`, `INTENT_WASM`, and under `--build`
+//! `TYPESCRIPT_TARGET_WASM` (`typescript_target.wasm`, as cargo spells the
+//! crate) — each copied into the binary's store, `~/.emery/adapters`, as the
+//! package `eval:<adapter>@<version>` (the file `eval_<adapter>@<version>.wasm`,
 //! `<version>` this workspace's), which every staged project names, so a
 //! card never stands over a published release or a developer's own build
 //! and `rm ~/.emery/adapters/eval_*` is the cleanup — `EVAL_RUNS` (`3`),
+//! `EVAL_JOBS` (unset: the width cap `--build` passes as `--jobs`),
 //! `EVAL_LADDER` (`600/120,1200/240,2400/480`: each rung
 //! `CURSOR_TIMEOUT_SECS/CURSOR_INACTIVITY_SECS`), and the runtime's other
-//! `CURSOR_*` knobs. `RUST_LOG` is set for the run unless the caller sets it:
+//! `CURSOR_*` knobs, `CURSOR_MAX_TOOL_CALLS` named in the card's header when
+//! the caller sets it. `RUST_LOG` is set for the run unless the caller sets it:
 //! the scorecard needs the SDK's `accepted` trace lines and `surveyed by
 //! model` line, the adapters' `survey facts` and `surveyed` trace lines and
 //! `placed by model` line, and the backend's `completion` lines.
@@ -60,7 +74,7 @@
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{self, Display, Formatter, Write as _};
-use std::num::NonZeroU32;
+use std::num::{NonZeroU32, NonZeroUsize};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -73,6 +87,8 @@ use serde_json::Value;
 const CASES: &str = "evals/cases";
 const LADDER: &str = "600/120,1200/240,2400/480";
 const BOOTSTRAP: &str = "start";
+// The target adapter a `--build` run builds through, by its crate's name.
+const TARGET: &str = "typescript-target";
 
 // The run's log filter unless the caller sets one: every adapter the case
 // runs under at trace beside the SDK's.
@@ -103,15 +119,19 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
         .ok_or("CARGO_MANIFEST_DIR: no parent directory")?;
     let mut filter: BTreeSet<String> = env::args().skip(1).collect();
     let facts_only = filter.remove("--facts");
+    let build = filter.remove("--build");
     if facts_only && filter.is_empty() {
         return Err("`--facts` names a case or an adapter".into());
+    }
+    if facts_only && build {
+        return Err("`--facts` spends no turn, so it cannot `--build`".into());
     }
     let cases = cases(root, &filter)?;
     if cases.is_empty() {
         return Err(format!("no case under `{CASES}` matches").into());
     }
     let adapters: BTreeSet<&str> = cases.iter().flat_map(|case| case.expected.adapters()).collect();
-    let settings = Settings::from_env(root, &adapters)?;
+    let settings = Settings::from_env(root, &adapters, build)?;
 
     let eval_dir = root.join("target/eval");
     if facts_only {
@@ -212,17 +232,26 @@ struct Settings {
     // the binary's package store, where each component is staged under its
     // `eval:` reference
     store: PathBuf,
-    // each adapter a selected case runs under, with its built component
+    // every component the run stages: each adapter a selected case runs
+    // under and, on `--build`, the target
     wasm: BTreeMap<String, PathBuf>,
+    // the target adapter a `--build` run builds every plan through
+    target: Option<String>,
+    // the width cap a `--build` run passes as `--jobs`; none leaves the
+    // engine's default
+    jobs: Option<NonZeroUsize>,
     runs: usize,
     ladder: Vec<Rung>,
     model: String,
     // the caller's `RUST_LOG`, when set, over the per-case default
     rust_log: Option<String>,
+    // the caller's `CURSOR_MAX_TOOL_CALLS`, when set; the runner inherits it,
+    // the card names it
+    max_tool_calls: Option<String>,
 }
 
 impl Settings {
-    fn from_env(root: &Path, adapters: &BTreeSet<&str>) -> Result<Self, String> {
+    fn from_env(root: &Path, adapters: &BTreeSet<&str>, build: bool) -> Result<Self, String> {
         // a relative path is from the repository root, the directory the
         // runner is run from; the binary runs with each staged project as
         // its directory, so the path it is spawned by must be absolute
@@ -236,18 +265,27 @@ impl Settings {
         let store = env::var_os("HOME")
             .map(|home| PathBuf::from(home).join(".emery/adapters"))
             .ok_or("HOME: unset, so the binary's store `~/.emery/adapters` has no home")?;
+        let target = build.then(|| TARGET.to_owned());
         let mut wasm = BTreeMap::new();
-        for adapter in adapters {
-            let name = format!("{}_WASM", adapter.to_uppercase());
-            let path = given(&name, format!("target/wasm32-wasip2/release/{adapter}.wasm"));
+        for component in adapters.iter().copied().chain(target.as_deref()) {
+            // cargo spells a hyphenated crate's artifact with underscores
+            let artifact = component.replace('-', "_");
+            let name = format!("{}_WASM", artifact.to_uppercase());
+            let path = given(&name, format!("target/wasm32-wasip2/release/{artifact}.wasm"));
             if !path.is_file() {
                 return Err(format!("{name}: no file at `{}`", path.display()));
             }
-            wasm.insert((*adapter).to_owned(), path);
+            wasm.insert(component.to_owned(), path);
         }
         let runs = match env::var("EVAL_RUNS") {
             Ok(runs) => runs.parse().map_err(|error| format!("EVAL_RUNS: `{runs}`: {error}"))?,
             Err(_) => 3,
+        };
+        let jobs = match env::var("EVAL_JOBS") {
+            Ok(jobs) => {
+                Some(jobs.parse().map_err(|error| format!("EVAL_JOBS: `{jobs}`: {error}"))?)
+            }
+            Err(_) => None,
         };
         let ladder = env::var("EVAL_LADDER").unwrap_or_else(|_| LADDER.to_owned());
         let ladder: Vec<Rung> = ladder.split(',').map(Rung::parse).collect::<Result<_, _>>()?;
@@ -257,10 +295,13 @@ impl Settings {
             emery,
             store,
             wasm,
+            target,
+            jobs,
             runs,
             ladder,
             model: env::var("CURSOR_MODEL").unwrap_or_else(|_| "auto".to_owned()),
             rust_log: env::var("RUST_LOG").ok(),
+            max_tool_calls: env::var("CURSOR_MAX_TOOL_CALLS").ok(),
         })
     }
 
@@ -680,6 +721,15 @@ fn stage(dir: &Path, case: &Case, settings: &Settings) -> io::Result<PathBuf> {
         }
         config.push('\n');
     }
+    if let Some(target) = &settings.target {
+        let reference = settings.stage_component(target)?;
+        let url = greenfield(&project, &case.name)?;
+        let _ = write!(
+            config,
+            "[target]\nadapter = \"{reference}\"\nrepository = \"{url}\"\nbranch = \"main\"\n\
+             remote = \"origin\"\n"
+        );
+    }
     fs::write(project.join("emery.toml"), config)?;
 
     Ok(project)
@@ -687,6 +737,62 @@ fn stage(dir: &Path, case: &Case, settings: &Settings) -> io::Result<PathBuf> {
 
 fn toml_escaped(text: &str) -> String {
     text.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n")
+}
+
+// The repository a `--build` run builds into, and the URL the project names
+// it by: `target.git` beneath the project, bare, so the engine clones it
+// and pushes the label back, its `main` one root commit holding an ignore
+// rule for what a Node build leaves and a README naming the case. The
+// engine never initialises a repository, so the commit is sealed here,
+// through a seed clone the host's git pushes and the runner removes.
+fn greenfield(project: &Path, case: &str) -> io::Result<String> {
+    let bare = project.join("target.git");
+    fs::create_dir_all(&bare)?;
+    git(&bare, &["init", "--quiet", "--bare", "--initial-branch=main"])?;
+    let url = format!("file://{}", bare.display());
+
+    let seed = project.join("target.seed");
+    fs::create_dir_all(&seed)?;
+    fs::write(seed.join(".gitignore"), "node_modules/\ndist/\n.emery/\n")?;
+    fs::write(
+        seed.join("README.md"),
+        format!("# {case}\n\nThe tree the eval's `--build` run builds the `{case}` plan into.\n"),
+    )?;
+    git(&seed, &["init", "--quiet", "--initial-branch=main"])?;
+    git(&seed, &["add", "--all"])?;
+    git(&seed, &["commit", "--quiet", "--message", "Greenfield"])?;
+    git(&seed, &["push", "--quiet", "--", &url, "HEAD:refs/heads/main"])?;
+    fs::remove_dir_all(&seed)?;
+
+    Ok(url)
+}
+
+// One host git over a repository the runner laid or reads, under an
+// identity of the runner's own so no operator configuration is needed;
+// its stdout trimmed, its stderr the error when it fails.
+#[expect(
+    clippy::disallowed_types,
+    reason = "the eval lays and reads its repositories with the host's git"
+)]
+fn git(at: &Path, args: &[&str]) -> io::Result<String> {
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(at)
+        .args(["-c", "commit.gpgsign=false"])
+        .args(args)
+        .env("GIT_AUTHOR_NAME", "emery eval")
+        .env("GIT_AUTHOR_EMAIL", "eval@emery.invalid")
+        .env("GIT_COMMITTER_NAME", "emery eval")
+        .env("GIT_COMMITTER_EMAIL", "eval@emery.invalid")
+        .output()?;
+    if !output.status.success() {
+        return Err(io::Error::other(format!(
+            "git {args:?} at `{}`: {}",
+            at.display(),
+            String::from_utf8_lossy(&output.stderr).trim()
+        )));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
 }
 
 // What a fixture's checkout may hold that no run reads: dependencies,
@@ -752,6 +858,8 @@ struct Run {
     plan: Option<Value>,
     // the summary of a stillborn attempt this run was put again after
     dead: Option<String>,
+    // the build of the committed plan, on `--build` after a specify that landed
+    build: Option<Build>,
 }
 
 // One surface as an adapter's `surveyed` line spells it; `lines` is its
@@ -778,7 +886,7 @@ impl Surveyed {
 
 impl Run {
     fn summary(&self) -> String {
-        match self.exit {
+        let specified = match self.exit {
             Some(0) => format!(
                 "ok in {}s, {} completions, {} claims",
                 self.wall.as_secs(),
@@ -790,6 +898,10 @@ impl Run {
                 format!("exit {code}{died} after {}s", self.wall.as_secs())
             }
             None => format!("killed after {}s", self.wall.as_secs()),
+        };
+        match &self.build {
+            Some(build) => format!("{specified}; build {}", build.summary(self.slices())),
+            None => specified,
         }
     }
 
@@ -1032,6 +1144,10 @@ impl Run {
         self.plan.as_ref().and_then(|plan| plan["slices"].as_array()).map_or(0, Vec::len)
     }
 
+    fn wave_count(&self) -> usize {
+        self.waves.as_ref().and_then(Value::as_array).map_or(0, Vec::len)
+    }
+
     // The plan's shape: how many waves, then each wave's width, so `3 (1/2/1)`
     // is three waves of one, two, and one slices; `0` where no plan was committed.
     fn waves(&self) -> String {
@@ -1107,6 +1223,14 @@ struct Completion {
     tokens: Tokens,
 }
 
+impl Completion {
+    // Whether the turn closed with an answer the gate accepted, on its
+    // first round or a correction.
+    fn answered(&self) -> bool {
+        matches!(self.outcome.as_str(), "ok" | "corrected")
+    }
+}
+
 #[expect(clippy::disallowed_methods, reason = "the eval is a native operator tool, not a guest")]
 fn run(
     project: &Path, settings: &Settings, case: &Case, n: usize, rung: Rung, tag: &str,
@@ -1144,6 +1268,7 @@ fn run(
         design: None,
         plan: None,
         dead: None,
+        build: None,
     };
     if run.exit == Some(0) {
         for (artifact, slot) in
@@ -1167,10 +1292,406 @@ fn run(
         )?;
     }
 
+    // the plan is built once the specify landed, as the ladder reads it: a
+    // starved run climbs a rung instead, and a failed one has no plan
+    let revision = envelope.as_ref().and_then(|out| out["revision"].as_str());
+    if let Some(revision) = revision
+        && settings.target.is_some()
+        && run.passed()
+    {
+        eprintln!("eval: `{}` run {n} at {rung} building", case.name);
+        run.build = Some(build(project, settings, &rust_log, rung, tag, revision)?);
+    }
+
     Ok(run)
 }
 
 const SPECIFY: &[&str] = &["specify", "--config", "emery.toml"];
+
+// One `emery build` of the revision the run committed, into the case's
+// greenfield repository; its log and envelope are kept as
+// `<tag>.build.stderr` / `<tag>.build.stdout`.
+#[expect(clippy::disallowed_methods, reason = "the eval is a native operator tool, not a guest")]
+fn build(
+    project: &Path, settings: &Settings, rust_log: &str, rung: Rung, tag: &str, revision: &str,
+) -> io::Result<Build> {
+    let jobs = settings.jobs.map(|jobs| jobs.to_string());
+    let mut args = vec!["build", "--config", "emery.toml"];
+    if let Some(jobs) = &jobs {
+        args.extend(["--jobs", jobs]);
+    }
+    let started = Instant::now();
+    let output = emery(project, settings, rust_log, rung, &args, Turns::Live)?;
+    let wall = started.elapsed();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    fs::write(project.join(format!("{tag}.build.stderr")), stderr.as_bytes())?;
+    fs::write(project.join(format!("{tag}.build.stdout")), stdout.as_bytes())?;
+    let mut tail: Vec<&str> = stderr.lines().rev().take(5).collect();
+    tail.reverse();
+
+    Ok(Build {
+        wall,
+        exit: output.status.code(),
+        envelope: serde_json::from_str(&stdout).ok(),
+        failure: failure(&stderr),
+        completions: completions(&stderr),
+        history: history(project, revision),
+        tail: tail.join("\n"),
+    })
+}
+
+// What one `emery build` did, read from its envelope, its log, and the
+// repository it built into.
+struct Build {
+    wall: Duration,
+    exit: Option<i32>,
+    // the `build` envelope on success
+    envelope: Option<Value>,
+    // the failure envelope the binary wrote among its log lines
+    failure: Option<Failure>,
+    completions: Vec<Completion>,
+    // the first-parent chain the build left, newest first: the label the
+    // run pushed, or the integration copy a failed run left behind
+    history: Vec<Landed>,
+    tail: String,
+}
+
+// The failure envelope: its code and message.
+struct Failure {
+    code: String,
+    message: String,
+}
+
+// One commit on the build's first-parent chain: a slice's merge, read
+// from its trailers, a `Wave <k> verified` seal, or the greenfield root.
+#[derive(Debug, PartialEq, Eq)]
+struct Landed {
+    commit: String,
+    subject: String,
+    // the `Revision:` trailer a merge and a seal carry; the root none
+    revision: Option<String>,
+    slice: Option<String>,
+    wave: Option<usize>,
+    requirements: Vec<String>,
+    covered: Vec<String>,
+    files: Vec<String>,
+}
+
+// One slice as the build landed it: from the envelope when the run landed,
+// else from the merge commit's trailers.
+struct Integrated {
+    id: String,
+    name: String,
+    wave: usize,
+    requirements: Vec<String>,
+    covered: Vec<String>,
+    files: Vec<String>,
+    commit: Option<String>,
+    conflicts: Vec<String>,
+}
+
+impl Integrated {
+    fn uncovered(&self) -> Vec<&str> {
+        self.requirements
+            .iter()
+            .filter(|id| !self.covered.contains(id))
+            .map(String::as_str)
+            .collect()
+    }
+}
+
+// The build turns of one wave with the verify that closed it: the
+// completions between two `verify` completions, since a wave's builds all
+// finish before its verify opens and the next wave's open after it.
+#[derive(Default)]
+struct WaveTurns<'a> {
+    builds: Vec<&'a Completion>,
+    verifies: Vec<&'a Completion>,
+}
+
+impl WaveTurns<'_> {
+    // The wave's time on the critical path: the slowest build, every
+    // round of it, then the verify.
+    fn critical(&self) -> Duration {
+        let mut per_slice: BTreeMap<&str, Duration> = BTreeMap::new();
+        for build in &self.builds {
+            *per_slice.entry(&build.label).or_default() += build.duration;
+        }
+        let slowest = per_slice.values().max().copied().unwrap_or_default();
+        slowest + self.verifies.iter().map(|verify| verify.duration).sum::<Duration>()
+    }
+}
+
+impl Build {
+    fn summary(&self, slices: usize) -> String {
+        match self.exit {
+            Some(0) => format!(
+                "ok in {}s, {}/{slices} merged in {} waves",
+                self.wall.as_secs(),
+                self.integrated().len(),
+                self.waves()
+            ),
+            Some(code) => {
+                let failed = self.failure.as_ref().map_or(String::new(), |failure| {
+                    let wave =
+                        self.wave_failed().map_or(String::new(), |k| format!(" in wave {k}"));
+                    format!(" `{}`{wave}", failure.code)
+                });
+                format!("exit {code}{failed} after {}s", self.wall.as_secs())
+            }
+            None => format!("killed after {}s", self.wall.as_secs()),
+        }
+    }
+
+    fn landed(&self) -> bool {
+        self.exit == Some(0)
+    }
+
+    fn code(&self) -> Option<&str> {
+        self.failure.as_ref().map(|failure| failure.code.as_str())
+    }
+
+    // The slices the build merged, in build order.
+    fn integrated(&self) -> Vec<Integrated> {
+        if let Some(slices) = self.envelope.as_ref().and_then(|out| out["slices"].as_array()) {
+            return slices
+                .iter()
+                .map(|slice| {
+                    let covered = strings(&slice["covered"]);
+                    let mut requirements = covered.clone();
+                    requirements.extend(strings(&slice["uncovered"]));
+                    Integrated {
+                        id: slice["id"].as_str().unwrap_or("").to_owned(),
+                        name: slice["name"].as_str().unwrap_or("").to_owned(),
+                        wave: slice["wave"]
+                            .as_u64()
+                            .and_then(|wave| wave.try_into().ok())
+                            .unwrap_or(0),
+                        requirements,
+                        covered,
+                        files: strings(&slice["written"]),
+                        commit: slice["commit"].as_str().map(str::to_owned),
+                        conflicts: strings(&slice["conflicts"]),
+                    }
+                })
+                .collect();
+        }
+        let mut merged: Vec<Integrated> = self
+            .history
+            .iter()
+            .rev()
+            .filter_map(|landed| {
+                let id = landed.slice.clone()?;
+                let name = landed.subject.split_once(' ').map_or("", |(_, name)| name).to_owned();
+                Some(Integrated {
+                    id,
+                    name,
+                    wave: landed.wave.unwrap_or(0),
+                    requirements: landed.requirements.clone(),
+                    covered: landed.covered.clone(),
+                    files: landed.files.clone(),
+                    commit: Some(landed.commit.clone()),
+                    conflicts: Vec::new(),
+                })
+            })
+            .collect();
+        merged.sort_by_key(|slice| (slice.wave, slice.id.clone()));
+        merged
+    }
+
+    // How many waves the build ran: the last one merged in when it landed,
+    // else the waves its turns fell into.
+    fn waves(&self) -> usize {
+        if self.landed() {
+            return self.integrated().iter().map(|slice| slice.wave).max().unwrap_or(0);
+        }
+        self.wave_turns().len()
+    }
+
+    // The waves whose verify passed: every one the envelope lists, else
+    // every wave whose verify answered, less the one whose verdict failed
+    // the run — a `verify-failed` is an answered verify, and the last.
+    fn verified(&self) -> usize {
+        if let Some(verified) = self.envelope.as_ref().and_then(|out| out["verified"].as_array()) {
+            return verified.len();
+        }
+        let answered = self
+            .wave_turns()
+            .iter()
+            .filter(|wave| wave.verifies.last().is_some_and(|verify| verify.answered()))
+            .count();
+        answered.saturating_sub(usize::from(self.code() == Some("verify-failed")))
+    }
+
+    // The wave the failure names, read from the engine's description:
+    // `slice ... failed in wave <k>` or `wave <k> failed`.
+    fn wave_failed(&self) -> Option<usize> {
+        let message = &self.failure.as_ref()?.message;
+        let (_, rest) = message.split_once("wave ")?;
+        rest.split(|c: char| !c.is_ascii_digit()).next()?.parse().ok()
+    }
+
+    // The failures a `verify-failed` run quotes, one per `- ` line.
+    fn verify_failures(&self) -> Vec<&str> {
+        match &self.failure {
+            Some(failure) if failure.code == "verify-failed" => {
+                failure.message.lines().filter_map(|line| line.strip_prefix("- ")).collect()
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    // The completions grouped into the waves they were spent in; a wave
+    // whose verify never opened, the one a failure ended, is the last.
+    fn wave_turns(&self) -> Vec<WaveTurns<'_>> {
+        let mut waves: Vec<WaveTurns<'_>> = Vec::new();
+        let mut current = WaveTurns::default();
+        for completion in &self.completions {
+            if completion.label.starts_with("build-") {
+                current.builds.push(completion);
+            } else if completion.label == "verify" {
+                match waves.last_mut() {
+                    // a correction round of the verify that closed the last wave
+                    Some(last) if current.builds.is_empty() => last.verifies.push(completion),
+                    _ => {
+                        current.verifies.push(completion);
+                        waves.push(std::mem::take(&mut current));
+                    }
+                }
+            }
+        }
+        if !current.builds.is_empty() {
+            waves.push(current);
+        }
+        waves
+    }
+
+    // Every turn's time, as a serial build would have spent it.
+    fn serial(&self) -> Duration {
+        self.completions
+            .iter()
+            .filter(|c| c.label == "verify" || c.label.starts_with("build-"))
+            .map(|completion| completion.duration)
+            .sum()
+    }
+
+    // The time the waves took end to end, each at its slowest slice.
+    fn critical(&self) -> Duration {
+        self.wave_turns().iter().map(WaveTurns::critical).sum()
+    }
+
+    // How much shorter the waves ran than the same turns in a row, in
+    // hundredths.
+    fn speedup(&self) -> Option<usize> {
+        let critical = self.critical().as_millis();
+        if critical == 0 {
+            return None;
+        }
+        usize::try_from(self.serial().as_millis() * 100 / critical).ok()
+    }
+
+    // The requirements covered over the requirements of the slices merged.
+    fn covered(&self) -> (usize, usize) {
+        self.integrated().iter().fold((0, 0), |(covered, all), slice| {
+            (covered + slice.covered.len(), all + slice.requirements.len())
+        })
+    }
+
+    fn tokens(&self) -> Tokens {
+        self.completions
+            .iter()
+            .map(|completion| completion.tokens)
+            .fold(Tokens::default(), Tokens::add)
+    }
+}
+
+fn strings(value: &Value) -> Vec<String> {
+    value
+        .as_array()
+        .map(|items| items.iter().filter_map(Value::as_str).map(str::to_owned).collect())
+        .unwrap_or_default()
+}
+
+// The failure envelope the binary prints among its log lines: pretty JSON,
+// so its braces stand alone at the margin where no log line starts.
+fn failure(stderr: &str) -> Option<Failure> {
+    let lines: Vec<&str> = stderr.lines().collect();
+    let open = lines.iter().rposition(|line| *line == "{")?;
+    let close = open + lines[open..].iter().position(|line| *line == "}")?;
+    let envelope: Value = serde_json::from_str(&lines[open..=close].join("\n")).ok()?;
+    Some(Failure {
+        code: envelope["error"].as_str()?.to_owned(),
+        message: envelope["message"].as_str().unwrap_or("").to_owned(),
+    })
+}
+
+// The chain the build left, read where it stands: the integration copy a
+// failed run leaves for inspection, else the label a landed run pushed to
+// `target.git`. The project is staged once for every run of a case, so the
+// copy standing may be an earlier run's, left by a build that failed after
+// cutting it, when this run's failed before it cut one: the copy is this
+// run's only where its chain holds a commit under this run's revision. A
+// chain nowhere, a run that ended before any was cut, is empty.
+fn history(project: &Path, revision: &str) -> Vec<Landed> {
+    let integration = project.join(".emery/vcs/integration");
+    if integration.is_dir() {
+        let left = log(&integration, "HEAD");
+        if left.iter().any(|landed| landed.revision.as_deref() == Some(revision)) {
+            return left;
+        }
+    }
+    let bare = project.join("target.git");
+    if !bare.is_dir() {
+        return Vec::new();
+    }
+    log(&bare, &format!("refs/heads/emery/{revision}"))
+}
+
+// The first-parent chain from `tip`, newest first; empty where `tip` is
+// nothing the repository holds.
+fn log(at: &Path, tip: &str) -> Vec<Landed> {
+    let format = "--format=%x1e%H%x1f%s%x1f%(trailers:key=Revision,valueonly)%x1f\
+                  %(trailers:key=Slice,valueonly)%x1f%(trailers:key=Wave,valueonly)%x1f\
+                  %(trailers:key=Requirements,valueonly)%x1f%(trailers:key=Covered,valueonly)%x1f";
+    let log = git(at, &["log", "--first-parent", "--name-only", format, tip]);
+    log.map(|text| chain(&text)).unwrap_or_default()
+}
+
+// The chain as `log` asks git to spell it: one record per commit led by
+// `\x1e`, its fields split by `\x1f`, the files it changed against its
+// first parent after the last.
+fn chain(text: &str) -> Vec<Landed> {
+    text.split('\x1e')
+        .filter(|record| !record.trim().is_empty())
+        .filter_map(|record| {
+            let fields: Vec<&str> = record.split('\x1f').collect();
+            let [commit, subject, revision, slice, wave, requirements, covered, files] = fields[..]
+            else {
+                return None;
+            };
+            let ids = |text: &str| {
+                text.trim()
+                    .split(", ")
+                    .filter(|id| !id.is_empty())
+                    .map(str::to_owned)
+                    .collect::<Vec<_>>()
+            };
+            let revision = revision.trim();
+            let slice = slice.trim();
+            Some(Landed {
+                commit: commit.trim().to_owned(),
+                subject: subject.trim().to_owned(),
+                revision: (!revision.is_empty()).then(|| revision.to_owned()),
+                slice: (!slice.is_empty()).then(|| slice.to_owned()),
+                wave: wave.trim().parse().ok(),
+                requirements: ids(requirements),
+                covered: ids(covered),
+                files: files.lines().filter(|line| !line.is_empty()).map(str::to_owned).collect(),
+            })
+        })
+        .collect()
+}
 
 // Whether a run may put a turn to the model: `None` strips `CURSOR_API_KEY`
 // from the binary's environment, so the backend refuses the first turn
@@ -1701,10 +2222,24 @@ fn scorecard(settings: &Settings, reports: &[Report<'_>], started: &str, name: &
         .iter()
         .map(|(adapter, path)| format!("adapter `{adapter}` `{}`", path.display()))
         .collect();
+    let built = settings.target.as_deref().map_or_else(String::new, |target| {
+        let jobs = settings
+            .jobs
+            .map_or_else(|| "the engine's default".to_owned(), |jobs| format!("`--jobs {jobs}`"));
+        format!(
+            " · each landed plan built through `{target}` into a greenfield `target.git` under \
+             {jobs}"
+        )
+    });
+    let budget = settings
+        .max_tool_calls
+        .as_deref()
+        .map_or_else(String::new, |calls| format!(" · `CURSOR_MAX_TOOL_CALLS={calls}`"));
     let mut card = format!(
         "# Eval {started}\n\nmodel `{}` · emery `{}` · {} · {} runs per case · ladder {} \
          (`CURSOR_TIMEOUT_SECS`/`CURSOR_INACTIVITY_SECS`, climbed on a `timeout` or `inactive` \
-         completion; the columns are the first rung's) · runs under `target/eval/{name}/`\n",
+         completion; the columns are the first rung's){budget}{built} · runs under \
+         `target/eval/{name}/`\n",
         settings.model,
         settings.emery.display(),
         adapters.join(" · "),
@@ -1718,6 +2253,7 @@ fn scorecard(settings: &Settings, reports: &[Report<'_>], started: &str, name: &
             Card {
                 report,
                 ladder: &settings.ladder,
+                built: settings.target.is_some(),
             }
         );
     }
@@ -1728,6 +2264,8 @@ fn scorecard(settings: &Settings, reports: &[Report<'_>], started: &str, name: &
 struct Card<'a> {
     report: &'a Report<'a>,
     ladder: &'a [Rung],
+    // whether the run built each plan, so the rows carry the build columns
+    built: bool,
 }
 
 impl Display for Card<'_> {
@@ -1748,17 +2286,23 @@ impl Display for Card<'_> {
         writeln!(f, "\n## {}\n\n{}\n", case.name, sources.join(" · "))?;
 
         // one row per run, at the first rung
+        let build_columns =
+            if self.built { " built | verified | build wall | speedup | covered |" } else { "" };
         writeln!(
             f,
             "| run | exit | wall | completions | input | cached | output | reasoning | claims | \
              req | crit | recall req | recall crit | recall dec | surfaces | stems | behaviours | \
              conflicts | divergences | unknown | covered | then [unknown] | slices | waves | \
-             design blocks (types) |"
+             design blocks (types) |{build_columns}"
         )?;
-        writeln!(f, "|{}", " --- |".repeat(25))?;
+        writeln!(f, "|{}", " --- |".repeat(if self.built { 30 } else { 25 }))?;
         for attempts in runs {
             if let Some(first) = attempts.first() {
                 row(f, first, case.expected.sources.len() > 1)?;
+                if self.built {
+                    build_cells(f, first)?;
+                }
+                writeln!(f)?;
             }
         }
 
@@ -1827,7 +2371,7 @@ fn row(f: &mut Formatter<'_>, attempt: &Attempt, named: bool) -> fmt::Result {
     });
     let surfaces = per_source(&grade.sources, named, |source| source.surfaces.to_string());
 
-    writeln!(
+    write!(
         f,
         "| {} | {} | {}s | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | \
          {} | {} | {} | {} | {} | {} | {} ({}) |",
@@ -1863,6 +2407,50 @@ fn row(f: &mut Formatter<'_>, attempt: &Attempt, named: bool) -> fmt::Result {
         blocks,
         types,
     )
+}
+
+// The five build cells after a row's own: what the build merged, verified,
+// took, saved over a serial walk, and covered; `—` where no plan was built.
+fn build_cells(f: &mut Formatter<'_>, attempt: &Attempt) -> fmt::Result {
+    let run = &attempt.run;
+    let Some(build) = &run.build else {
+        return write!(f, " — | — | — | — | — |");
+    };
+    let integrated = build.integrated();
+    let conflicted = integrated.iter().filter(|slice| !slice.conflicts.is_empty()).count();
+    let mut merged = format!("{}/{}", integrated.len(), run.slices());
+    if conflicted > 0 {
+        let _ = write!(merged, " -{conflicted}");
+    }
+    if build.code() == Some("slice-conflict") {
+        merged.push_str(" !1");
+    }
+    if let Some(code) = build.code() {
+        let _ = write!(merged, " `{code}`");
+    }
+    let verified = format!("{}/{}", build.verified(), build.waves());
+    let wall = match build.exit {
+        Some(0) => format!("{}s", build.wall.as_secs()),
+        Some(code) => format!("{}s exit {code}", build.wall.as_secs()),
+        None => format!("{}s killed", build.wall.as_secs()),
+    };
+    // a landed build reads against the plan's factor; one that did not says
+    // how far it got, since a partial path compares with nothing
+    let against = match (build.landed(), run.wave_count()) {
+        (_, 0) => String::new(),
+        (true, waves) => format!(" (plan {})", factor(run.slices() * 100 / waves)),
+        (false, waves) => format!(" ({} of {waves} waves)", build.waves()),
+    };
+    let speedup = build
+        .speedup()
+        .map_or_else(|| "—".to_owned(), |speedup| format!("{}{against}", factor(speedup)));
+    let (covered, all) = build.covered();
+    write!(f, " {merged} | {verified} | {wall} | {speedup} | {covered}/{all} |")
+}
+
+// A ratio in hundredths as the card spells it, `1.40×`.
+fn factor(hundredths: usize) -> String {
+    format!("{}.{:02}×", hundredths / 100, hundredths % 100)
 }
 
 fn notes(f: &mut Formatter<'_>, attempt: &Attempt, climbed: bool) -> fmt::Result {
@@ -1931,8 +2519,161 @@ fn notes(f: &mut Formatter<'_>, attempt: &Attempt, climbed: bool) -> fmt::Result
             completion.tokens.reasoning,
         )?;
     }
+    if let Some(build) = &run.build {
+        build_notes(f, run, build)?;
+    }
 
     Ok(())
+}
+
+// The build beneath its run: how it ended, each wave's slices as they
+// merged, what conflicted, what the verify refused, what was left
+// uncovered, the chain the repository holds, and the turns it spent.
+fn build_notes(f: &mut Formatter<'_>, run: &Run, build: &Build) -> fmt::Result {
+    let integrated = build.integrated();
+    let tokens = build.tokens();
+    build_ending(f, run, build, integrated.len())?;
+
+    // each wave's slices, as they merged
+    let waves: BTreeSet<usize> = integrated.iter().map(|slice| slice.wave).collect();
+    let turns = build.wave_turns();
+    for wave in waves {
+        let slices: Vec<String> = integrated
+            .iter()
+            .filter(|slice| slice.wave == wave)
+            .map(|slice| {
+                let merged = slice.commit.as_deref().map_or_else(
+                    || "nothing to merge".to_owned(),
+                    |c| format!("merged {}", short(c)),
+                );
+                format!(
+                    "{} {} (covered {}/{}, {} files, {merged})",
+                    slice.id,
+                    slice.name,
+                    slice.covered.len(),
+                    slice.requirements.len(),
+                    slice.files.len()
+                )
+            })
+            .collect();
+        let spent =
+            wave.checked_sub(1).and_then(|k| turns.get(k)).map_or_else(String::new, |turns| {
+                let builds: Vec<String> =
+                    turns.builds.iter().map(|b| format!("{}s", b.duration.as_secs())).collect();
+                let verify: Duration = turns.verifies.iter().map(|v| v.duration).sum();
+                format!("; builds {} then verify {}s", builds.join(" / "), verify.as_secs())
+            });
+        writeln!(f, "- wave {wave}: {}{spent}", slices.join(", "))?;
+    }
+    for slice in integrated.iter().filter(|slice| !slice.conflicts.is_empty()) {
+        writeln!(
+            f,
+            "- conflicted: {} at {}, merged on its second build",
+            slice.id,
+            slice.conflicts.join(", ")
+        )?;
+    }
+    for failure in build.verify_failures() {
+        writeln!(f, "- verify refused: {failure}")?;
+    }
+    for slice in integrated.iter().filter(|slice| !slice.uncovered().is_empty()) {
+        writeln!(f, "- uncovered: {} {}", slice.id, slice.uncovered().join(", "))?;
+    }
+
+    // the chain, newest first
+    if !build.history.is_empty() {
+        let lines: Vec<String> = build
+            .history
+            .iter()
+            .map(|landed| {
+                let files = match landed.files.len() {
+                    0 => String::new(),
+                    n => format!(" ({n} files)"),
+                };
+                format!("{} {}{files}", short(&landed.commit), landed.subject)
+            })
+            .collect();
+        writeln!(f, "- history: {}", lines.join(" · "))?;
+    }
+
+    // the turns
+    writeln!(
+        f,
+        "- build turns: {} completions, {} input, {} cached, {} output ({} reasoning); serial {}s, \
+         critical path {}s",
+        build.completions.len(),
+        tokens.input,
+        tokens.cached,
+        tokens.output,
+        tokens.reasoning,
+        build.serial().as_secs(),
+        build.critical().as_secs(),
+    )?;
+    for completion in &build.completions {
+        writeln!(
+            f,
+            "- build completion `{}` {} in {}s: {} input, {} cached, {} output ({} reasoning)",
+            completion.label,
+            completion.outcome,
+            completion.duration.as_secs(),
+            completion.tokens.input,
+            completion.tokens.cached,
+            completion.tokens.output,
+            completion.tokens.reasoning,
+        )?;
+    }
+
+    Ok(())
+}
+
+// How the build ended: where the label stands and whether it was pushed,
+// or the failure's code, exit, and first line.
+fn build_ending(f: &mut Formatter<'_>, run: &Run, build: &Build, merged: usize) -> fmt::Result {
+    let exit = build.exit.map_or_else(|| "killed".to_owned(), |code| format!("exit {code}"));
+    match (&build.failure, build.exit) {
+        (_, Some(0)) => {
+            let envelope = build.envelope.as_ref();
+            let label = envelope.and_then(|out| out["label"].as_str()).unwrap_or("");
+            let head = envelope.and_then(|out| out["head"].as_str()).unwrap_or("");
+            let pushed = envelope
+                .and_then(|out| out["pushed"].as_str())
+                .map_or_else(String::new, |remote| format!(", pushed to `{remote}`"));
+            let resumed = envelope
+                .and_then(|out| out["resumed"].as_array())
+                .filter(|resumed| !resumed.is_empty())
+                .map_or_else(String::new, |resumed| format!(", {} resumed", resumed.len()));
+            writeln!(
+                f,
+                "\nBuild: {merged}/{} slices merged in {} waves in {}s{resumed}; `{label}` at \
+                 `{}`{pushed}",
+                run.slices(),
+                build.waves(),
+                build.wall.as_secs(),
+                short(head),
+            )
+        }
+        (Some(failure), _) => {
+            let first = failure.message.lines().next().unwrap_or("");
+            writeln!(
+                f,
+                "\nBuild failed `{}` ({exit}) after {}s, {merged}/{} slices merged: {first}",
+                failure.code,
+                build.wall.as_secs(),
+                run.slices(),
+            )
+        }
+        (None, _) => writeln!(
+            f,
+            "\nBuild failed ({exit}) after {}s with no envelope:\n\n```\n{}\n```",
+            build.wall.as_secs(),
+            build.tail
+        ),
+    }
+}
+
+// A commit as the card spells it: its first eight characters.
+fn short(commit: &str) -> &str {
+    commit.get(..8).unwrap_or(commit)
 }
 
 // One source's survey: the surfaces its adapter logged, what it placed
@@ -2353,17 +3094,54 @@ mod tests {
             design: None,
             plan: None,
             dead: None,
+            build: None,
         }
     }
 
     fn completion(label: &str, outcome: &str) -> String {
+        timed(label, outcome, 10)
+    }
+
+    fn timed(label: &str, outcome: &str, duration_ms: u64) -> String {
         format!(
             "INFO complete{{n=1 model=\"m\" format=schema label=\"{label}\"}}: \
              omnia_cursor::model::observe: completion outcome=\"{outcome}\" attempts=1 \
-             duration_ms=10 input_tokens=5 cache_read_tokens=0 output_tokens=2 \
+             duration_ms={duration_ms} input_tokens=5 cache_read_tokens=0 output_tokens=2 \
              reasoning_tokens=0\n"
         )
     }
+
+    // A build read from its log and envelope, as `build` reads them, over
+    // the chain `history` would answer.
+    fn build_from(exit: i32, stdout: &str, stderr: &str, history: Vec<Landed>) -> Build {
+        Build {
+            wall: Duration::ZERO,
+            exit: Some(exit),
+            envelope: serde_json::from_str(stdout).ok(),
+            failure: failure(stderr),
+            completions: completions(stderr),
+            history,
+            tail: String::new(),
+        }
+    }
+
+    const LANDED: &str = r#"{
+  "revision": "feb4bd36",
+  "waves": [["SLICE-001"], ["SLICE-002", "SLICE-003"]],
+  "base": "1111111111111111111111111111111111111111",
+  "slices": [
+    {"id": "SLICE-001", "name": "start", "wave": 1, "covered": ["REQ-001"], "uncovered": [],
+     "written": ["src/index.ts", "src/start/index.ts"], "commit": "aaaaaaaa"},
+    {"id": "SLICE-002", "name": "orders", "wave": 2, "covered": ["REQ-002"], "uncovered": ["REQ-003"],
+     "written": ["src/orders/index.ts"], "commit": "bbbbbbbb"},
+    {"id": "SLICE-003", "name": "payments", "wave": 3, "covered": ["REQ-004", "REQ-005"], "uncovered": [],
+     "written": ["src/payments/index.ts"], "commit": "cccccccc", "conflicts": ["src/index.ts"]}
+  ],
+  "verified": ["aaaaaaaa", "bbbbbbbb", "cccccccc"],
+  "head": "cccccccc",
+  "label": "emery/feb4bd36",
+  "pushed": "origin"
+}"#;
 
     fn accepted_line(source: &str, claims: &str) -> String {
         format!(
@@ -2467,6 +3245,198 @@ mod tests {
             + &completion("slicing", "abort");
         let run = run_from(Some(1), &stderr, None);
         assert_eq!(run.died_in(), Some("spec-draft"), "the aborted siblings are not where it died");
+    }
+
+    #[test]
+    fn build_landed() {
+        let stderr = timed("build-SLICE-001", "ok", 100_000)
+            + &timed("verify", "ok", 20_000)
+            + &timed("build-SLICE-002", "ok", 60_000)
+            + &timed("build-SLICE-003", "ok", 90_000)
+            + &timed("verify", "ok", 30_000)
+            + &timed("build-SLICE-003", "corrected", 50_000)
+            + &timed("verify", "ok", 10_000);
+        let build = build_from(0, LANDED, &stderr, Vec::new());
+        assert!(build.landed());
+        assert_eq!(build.code(), None);
+        let integrated = build.integrated();
+        assert_eq!(integrated.len(), 3);
+        assert_eq!(integrated[1].uncovered(), ["REQ-003"]);
+        assert_eq!(integrated[2].conflicts, ["src/index.ts"]);
+        assert_eq!(build.waves(), 3);
+        assert_eq!(build.verified(), 3);
+        assert_eq!(build.covered(), (4, 5));
+        assert_eq!(build.verify_failures(), [] as [&str; 0]);
+    }
+
+    // The serial walk is every turn in a row; the critical path takes each
+    // wave at its slowest slice, then its verify.
+    #[test]
+    fn build_critical_path() {
+        let stderr = timed("build-SLICE-001", "ok", 100_000)
+            + &timed("verify", "ok", 20_000)
+            + &timed("build-SLICE-002", "ok", 60_000)
+            + &timed("build-SLICE-003", "ok", 90_000)
+            + &timed("verify", "ok", 30_000)
+            + &timed("verify", "corrected", 5_000);
+        let build = build_from(0, "{}", &stderr, Vec::new());
+        let waves = build.wave_turns();
+        assert_eq!(waves.len(), 2);
+        assert_eq!(waves[1].builds.len(), 2);
+        assert_eq!(waves[1].verifies.len(), 2, "a verify's correction round closes the same wave");
+        assert_eq!(build.serial(), Duration::from_secs(305));
+        assert_eq!(build.critical(), Duration::from_secs(100 + 20 + 90 + 35));
+        assert_eq!(build.speedup(), Some(124));
+        assert_eq!(factor(124), "1.24×");
+        assert_eq!(factor(300), "3.00×");
+    }
+
+    // Two rounds of one slice's build add up on its wave's path; a wave
+    // the failure ended has builds and no verify.
+    #[test]
+    fn build_rounds_and_open_wave() {
+        let stderr = timed("build-SLICE-001", "corrected", 40_000)
+            + &timed("build-SLICE-001", "ok", 30_000)
+            + &timed("verify", "ok", 10_000)
+            + &timed("build-SLICE-002", "ok", 25_000);
+        let build = build_from(1, "", &stderr, Vec::new());
+        let waves = build.wave_turns();
+        assert_eq!(waves.len(), 2);
+        assert_eq!(waves[0].critical(), Duration::from_secs(80));
+        assert_eq!(waves[1].critical(), Duration::from_secs(25));
+        assert_eq!(build.waves(), 2);
+    }
+
+    // Wave 2's verify answered, so its completion is `ok`: the verdict is what failed.
+    #[test]
+    fn build_failure_envelope() {
+        let stderr = timed("build-SLICE-001", "ok", 1_000)
+            + &timed("verify", "ok", 1_000)
+            + &timed("build-SLICE-002", "ok", 1_000)
+            + &timed("verify", "ok", 1_000)
+            + "2026-10-09T03:53:16Z  INFO emery_sdk::target: verified passed=false failures=2\n\
+               {\n  \"error\": \"verify-failed\",\n  \"message\": \"wave 2 failed; SLICE-002 merged \
+               in it stays committed in `.emery/vcs/integration`; `emery/feb4` stays at `aaaa`: \
+               verification failed:\\n- check 2 (tsc): src/orders/index.ts(3,1): error TS2304\\n- \
+               check 3 (npm test): not run\",\n  \"exit-code\": 1\n}\n\
+               2026-10-09T03:53:17Z  INFO omnia_core::runtime::command: wasi:cli/run exited code=1\n";
+        let history = vec![
+            Landed {
+                commit: "bbbbbbbbbbbb".to_owned(),
+                subject: "SLICE-002 orders".to_owned(),
+                revision: Some("feb4bd36".to_owned()),
+                slice: Some("SLICE-002".to_owned()),
+                wave: Some(2),
+                requirements: vec!["REQ-002".to_owned(), "REQ-003".to_owned()],
+                covered: vec!["REQ-002".to_owned()],
+                files: vec!["src/orders/index.ts".to_owned()],
+            },
+            Landed {
+                commit: "aaaaaaaaaaaa".to_owned(),
+                subject: "SLICE-001 start".to_owned(),
+                revision: Some("feb4bd36".to_owned()),
+                slice: Some("SLICE-001".to_owned()),
+                wave: Some(1),
+                requirements: vec!["REQ-001".to_owned()],
+                covered: vec!["REQ-001".to_owned()],
+                files: vec!["src/index.ts".to_owned()],
+            },
+            Landed {
+                commit: "000000000000".to_owned(),
+                subject: "Greenfield".to_owned(),
+                revision: None,
+                slice: None,
+                wave: None,
+                requirements: Vec::new(),
+                covered: Vec::new(),
+                files: vec![".gitignore".to_owned(), "README.md".to_owned()],
+            },
+        ];
+        let build = build_from(1, "", &stderr, history);
+        assert!(!build.landed());
+        assert_eq!(build.code(), Some("verify-failed"));
+        assert_eq!(build.wave_failed(), Some(2));
+        assert_eq!(build.waves(), 2);
+        assert_eq!(build.verified(), 1);
+        assert_eq!(
+            build.verify_failures(),
+            [
+                "check 2 (tsc): src/orders/index.ts(3,1): error TS2304",
+                "check 3 (npm test): not run"
+            ]
+        );
+        let integrated = build.integrated();
+        assert_eq!(integrated.len(), 2, "the greenfield root is no slice");
+        assert_eq!(integrated[0].id, "SLICE-001");
+        assert_eq!(integrated[1].name, "orders");
+        assert_eq!(integrated[1].uncovered(), ["REQ-003"]);
+        assert_eq!(build.covered(), (2, 3));
+    }
+
+    #[test]
+    fn build_slice_conflict_wave() {
+        let envelope = "{\n  \"error\": \"slice-conflict\",\n  \"message\": \"slice `SLICE-003` \
+                        (payments) failed in wave 3; SLICE-002 merged before it stays committed in \
+                        `.emery/vcs/integration`: its merge conflicts at package.json, src/index.ts \
+                        on its build 2\",\n  \"exit-code\": 1\n}\n";
+        let bare = build_from(1, "", envelope, Vec::new());
+        assert_eq!(bare.code(), Some("slice-conflict"));
+        assert_eq!(bare.wave_failed(), Some(3));
+        assert_eq!(bare.verify_failures(), [] as [&str; 0]);
+        assert_eq!(bare.speedup(), None, "no turn read, no path to measure");
+        assert_eq!(bare.verified(), 0, "no verify read, none passed");
+
+        // SLICE-003 conflicted in wave 2 and again in wave 3, whose verify never opened
+        let stderr = completion("build-SLICE-001", "ok")
+            + &completion("verify", "ok")
+            + &completion("build-SLICE-002", "ok")
+            + &completion("build-SLICE-003", "ok")
+            + &completion("verify", "corrected")
+            + &completion("build-SLICE-003", "ok")
+            + envelope;
+        let build = build_from(1, "", &stderr, Vec::new());
+        assert_eq!(build.waves(), 3);
+        assert_eq!(build.verified(), 2);
+    }
+
+    // The push fails once every wave is verified, and its message names none.
+    #[test]
+    fn build_push_refused() {
+        let stderr = completion("build-SLICE-001", "ok")
+            + &completion("verify", "ok")
+            + &completion("build-SLICE-002", "ok")
+            + &completion("verify", "ok")
+            + "{\n  \"error\": \"label-diverged\",\n  \"message\": \"pushing `emery/feb4` to \
+               `origin` failed; `emery/feb4` stays at `bbbb` and nothing was forced: the remote's \
+               `emery/feb4` holds commits this build does not\",\n  \"exit-code\": 1\n}\n";
+        let build = build_from(1, "", &stderr, Vec::new());
+        assert_eq!(build.code(), Some("label-diverged"));
+        assert_eq!(build.wave_failed(), None);
+        assert_eq!(build.waves(), 2);
+        assert_eq!(build.verified(), 2);
+    }
+
+    #[test]
+    fn build_chain() {
+        let text = "\x1ecccc\x1fWave 2 verified\x1ffeb4bd36\n\x1f\x1f\x1f\x1f\x1f\n\n\
+                    package-lock.json\n\
+                    \x1ebbbb\x1fSLICE-002 orders\x1ffeb4bd36\n\x1fSLICE-002\n\x1f2\n\
+                    \x1fREQ-002, REQ-003\n\x1fREQ-002\n\x1f\n\nsrc/index.ts\nsrc/orders/index.ts\n\
+                    \x1eaaaa\x1fGreenfield\x1f\x1f\x1f\x1f\x1f\x1f\n\n.gitignore\nREADME.md\n";
+        let chain = chain(text);
+        assert_eq!(chain.len(), 3);
+        assert_eq!(chain[0].slice, None);
+        assert_eq!(chain[0].revision.as_deref(), Some("feb4bd36"), "a seal is under the revision");
+        assert_eq!(chain[0].files, ["package-lock.json"]);
+        assert_eq!(chain[1].slice.as_deref(), Some("SLICE-002"));
+        assert_eq!(chain[1].revision.as_deref(), Some("feb4bd36"));
+        assert_eq!(chain[1].wave, Some(2));
+        assert_eq!(chain[1].requirements, ["REQ-002", "REQ-003"]);
+        assert_eq!(chain[1].covered, ["REQ-002"]);
+        assert_eq!(chain[1].files, ["src/index.ts", "src/orders/index.ts"]);
+        assert_eq!(chain[2].subject, "Greenfield");
+        assert_eq!(chain[2].revision, None, "the root is under no revision");
+        assert_eq!(chain[2].files.len(), 2);
     }
 
     #[test]

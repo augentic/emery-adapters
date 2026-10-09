@@ -1,11 +1,14 @@
-//! Compiles every adapter and every guest program under `programs/` to a
-//! `wasm32-wasip2` component and generates `gen.rs`: one path constant per
-//! component plus a `foreach_<group>!` completeness macro per group.
+//! Compiles every source adapter, every target adapter, and every guest
+//! program under `programs/` to a `wasm32-wasip2` component and generates
+//! `gen.rs`: one path constant per component plus a `foreach_<group>!`
+//! completeness macro per group.
 
 fn main() {
     omnia_test::build::Components::in_workspace("../..")
         .scan_packages("sources")
         .group("adapter")
+        .scan_packages("targets")
+        .group("target")
         .package("test-programs")
         .scan("crates/test-programs/programs")
         .sync_examples("crates/test-programs/Cargo.toml")

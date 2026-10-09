@@ -23,12 +23,13 @@ test-programs.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 typescript = { path = "sources/typescript" }
+typescript-target = { path = "targets/typescript-target" }
 
 [lints]
 workspace = true
 
 [workspace]
-members = ["crates/*", "evals", "sources/*"]
+members = ["crates/*", "evals", "sources/*", "targets/*"]
 resolver = "3"
 
 [workspace.package]
@@ -118,6 +119,7 @@ intent = { opt-level = 2 }
 python = { opt-level = 2 }
 test-programs = { opt-level = 2 }
 typescript = { opt-level = 2 }
+typescript-target = { opt-level = 2 }
 
 cranelift-assembler-x64 = { opt-level = 2 }
 cranelift-bforest = { opt-level = 2 }

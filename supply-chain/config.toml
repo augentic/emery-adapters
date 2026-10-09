@@ -1253,7 +1253,7 @@ version = "0.7.19"
 criteria = "safe-to-deploy"
 
 [[exemptions.toml]]
-version = "1.1.7+spec-1.1.0"
+version = "1.1.8+spec-1.1.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.toml_writer]]
