@@ -55,7 +55,8 @@ jobs:
         run: |
           set -euo pipefail
           version="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version *= *"\(.*\)"/\1/p' Cargo.toml)"
-          for dir in sources/*/; do
+          for dir in sources/*/ targets/*/; do
             name="$(basename "$dir")"
-            wkg oci push "ghcr.io/augentic/emery/$name:$version" "target/wasm32-wasip2/release/$name.wasm"
+            # cargo spells a hyphenated crate's artifact with underscores
+            wkg oci push "ghcr.io/augentic/emery/$name:$version" "target/wasm32-wasip2/release/${name//-/_}.wasm"
           done

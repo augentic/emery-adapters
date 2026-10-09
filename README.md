@@ -3,17 +3,17 @@
 [![CI](https://github.com/augentic/emery-adapters/actions/workflows/ci.yaml/badge.svg)](https://github.com/augentic/emery-adapters/actions/workflows/ci.yaml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
-First-party **source** Wasm components for [Emery](https://github.com/augentic/emery)'s specification generator: `documentation`, `intent`, `typescript`, and `python`.
+First-party Wasm components for [Emery](https://github.com/augentic/emery): the **source** adapters its specification generator reads — `documentation`, `intent`, `typescript`, and `python` — and the **target** adapter `emery build` builds through, `typescript-target`.
 
 **Using Emery in a project?** You do not need this repository. Name a published adapter by package reference (`emery:<name>@<version>`) in the project's `emery.toml`; the `emery` binary fetches it on the first run that names it and reads it from `~/.emery/adapters` after. A build of your own goes there by `cp`, under a reference of its own (`~/.emery/adapters/emery_<name>@<version>-dev.wasm`); follow the [Emery README](https://github.com/augentic/emery#readme).
 
-**Authoring or debugging an adapter?** This repo is your home. Edit prose or Rust, run the crate and component tests, then walk the adapter live with its example.
+**Authoring or debugging an adapter?** This repo is your home. Edit prose or Rust, run the crate and component tests, then walk the adapter live with its example or the eval's build arm.
 
 The version operators pin (`emery:documentation@0.13.0`) is this workspace's shared SemVer (`[workspace.package].version`); published components live on GHCR as `ghcr.io/augentic/emery/<name>:<version>`.
 
 ## What an adapter is
 
-An adapter is one Rust crate that ships as one Wasm component exporting the `source-adapter` world (`extract` + `metadata`). The engine names the sources on each `emery specify` invocation, dispatches one `extract` per source, and reconciles the returned Evidence documents into the typed specification and design that `emery show` projects as `spec.md` / `design.md`. Adapters never orchestrate lifecycle.
+A source adapter is one Rust crate that ships as one Wasm component exporting the `source-adapter` world (`extract` + `metadata`). The engine names the sources on each `emery specify` invocation, dispatches one `extract` per source, and reconciles the returned Evidence documents into the typed specification and design that `emery show` projects as `spec.md` / `design.md`. A target adapter exports the `target-adapter` world (`build` + `verify` + `metadata`): `emery build` hands it each slice of the plan with a working copy to build into, verifies each merged wave through it, and merges slices under the rules its metadata declares. Adapters never orchestrate lifecycle.
 
 | Adapter                 | Kind          | Extracts                                                                                                                                |
 | ----------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
@@ -22,6 +22,10 @@ An adapter is one Rust crate that ships as one Wasm component exporting the `sou
 | `sources/typescript`    | behaviour     | TS/JS estates — requirement claims backed by excerpt / type / call detail                                                               |
 | `sources/python`        | behaviour     | Python estates — FastAPI, Flask, Django, Click, Celery, and plain libraries — requirement claims backed by excerpt / type / call detail |
 
+| Target                      | Builds                                                                                                                                                          |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `targets/typescript-target` | strict TypeScript on Node (22.18 or later): one module per slice under `src/<stem>/`, `node:test` tests per scenario, checked with `tsc --noEmit` and `npm test` |
+
 ## Rust-only loop
 
 The suites need no model credentials. Every test is the root package's: the component suites run every built component under the omnia runtime over a scripted model (the components are built by `crates/test-programs` on the first `make test`) and assert what each adapter decides through what the host sees of it, the fixture probes prove the boundary, and every adapter's corpus is checked natively:
@@ -29,7 +33,8 @@ The suites need no model credentials. Every test is the root package's: the comp
 ```bash
 make ci                                             # exactly the CI gate: fmt-check, lint (host + wasm32), tests, doctests, docs, vet, deny
 cargo nextest run -p emery-adapters                 # the root suites: every component, the probes, the corpora
-cargo nextest run -p emery-adapters --test source   # the shipped components alone
+cargo nextest run -p emery-adapters --test source   # the shipped source components alone
+cargo nextest run -p emery-adapters --test target   # the shipped target components alone
 ```
 
 ## Live examples
@@ -46,16 +51,17 @@ emery show spec
 
 ## Graded live eval
 
-The live rung is a **public-contract client**: `evals/` spawns the sibling shipped `emery` binary over the built `typescript` or `python` component a case names, drives one `specify` per case across the adapter contract, grades the accepted claims and the surveyed surfaces against the case's `expected.toml` through `emery show`, and writes the dated scorecard. Operator-invoked, never CI; see [evals/README.md](evals/README.md).
+The live rung is a **public-contract client**: `evals/` spawns the sibling shipped `emery` binary over the built `typescript` or `python` component a case names, drives one `specify` per case across the adapter contract, grades the accepted claims and the surveyed surfaces against the case's `expected.toml` through `emery show`, and writes the dated scorecard. `--build` follows each graded `specify` with one `emery build` through the built `typescript-target` into a bare repository the harness lays, and the card reads what was built, verified, and merged. Operator-invoked, never CI; see [evals/README.md](evals/README.md).
 
 ```bash
 cargo run -p evals -- orders express-orders   # the named cases; none names every case whose fixture the checkout holds
 cargo run -p evals -- python                  # every case under one adapter
+cargo run -p evals -- --build express-orders  # specify, then build the plan through typescript-target
 ```
 
 ## Repair loop
 
-1. Edit `sources/<name>/prose/**` (the extract prompt, references, rules).
+1. Edit `sources/<name>/prose/**` (the extract prompt, references, rules) or `targets/<name>/prose/**` (the build and verify prompts, the layout).
 2. `cargo nextest run -p emery-adapters` to re-run its component and corpus suites; `cargo build -p <name> --target wasm32-wasip2 --release` to rebuild the shipped component and `cp` it over the `-dev` file in `~/.emery/adapters`; `emery specify --config examples/<name>/emery.toml` to watch it become a spec.
 
 The component suites are the Rust inner loop and prove every component, the adapter's own decisions included; the live examples show one adapter's claims becoming a specification; live eval is for prompt quality.

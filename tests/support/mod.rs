@@ -1,8 +1,9 @@
 //! Provides the runtime harness shared by component suites.
 //!
-//! The harness runs a component behind the `source_extract` driver with a
-//! scripted host model. [`Barrier`] can hold completions until a required
-//! number of requests are pending together.
+//! The harness runs a component behind the `source_extract` driver, or a
+//! target behind the `builder_build` driver, with a scripted host model.
+//! [`Barrier`] can hold completions until a required number of requests are
+//! pending together.
 
 #![allow(dead_code, reason = "shared by suites that each use a subset")]
 
@@ -153,16 +154,18 @@ impl<M: WasiModelCtx + Clone> Provides<WasiOtel> for Traced<M> {
 }
 
 // No level is named: command mode's `info` default is the shipped runtime's on a bare run.
-fn deployment(adapter: &str, project: &Scratch, args: &[&str]) -> Deployment {
+fn deployment(
+    driver: &str, adapter: &str, project: &Scratch, writable: bool, args: &[&str],
+) -> Deployment {
     Deployment::new()
-        .guest("caller", test_programs::SOURCE_EXTRACT)
+        .guest("caller", driver)
         .guest(test_programs::ADAPTER, adapter)
         .command("caller")
-        .mount(project.mount(false))
+        .mount(project.mount(writable))
         .args(args.iter().copied())
 }
 
-/// Runs the driver in the mode `args` names against `adapter`.
+/// Runs the source driver in the mode `args` names against `adapter`.
 ///
 /// `project` is mounted read-only as `.`. A clean exit and an exactly
 /// consumed script are required; the model's record is returned.
@@ -172,8 +175,28 @@ fn deployment(adapter: &str, project: &Scratch, args: &[&str]) -> Deployment {
 /// Panics when deployment fails, the driver exits unsuccessfully, or the
 /// model script is not consumed exactly.
 pub async fn run<M: Strict>(adapter: &str, project: &Scratch, args: &[&str], model: M) -> M {
+    drive(test_programs::SOURCE_EXTRACT, adapter, project, false, args, model).await
+}
+
+/// Runs the target driver in the mode `args` names against `adapter`.
+///
+/// `project` is mounted writable as `.`, since a build writes the lent tree
+/// through the adapter's `write_file` tool. A clean exit and an exactly
+/// consumed script are required; the model's record is returned.
+///
+/// # Panics
+///
+/// Panics when deployment fails, the driver exits unsuccessfully, or the
+/// model script is not consumed exactly.
+pub async fn build<M: Strict>(adapter: &str, project: &Scratch, args: &[&str], model: M) -> M {
+    drive(test_programs::BUILDER_BUILD, adapter, project, true, args, model).await
+}
+
+async fn drive<M: Strict>(
+    driver: &str, adapter: &str, project: &Scratch, writable: bool, args: &[&str], model: M,
+) -> M {
     let backends = Backends::defaults().await.model(model.clone());
-    let status = deployment(adapter, project, args)
+    let status = deployment(driver, adapter, project, writable, args)
         .run_host::<WasiModel, _>(backends)
         .await
         .expect("the caller runs");
@@ -203,7 +226,7 @@ pub async fn traced<M: Strict>(
         model: model.clone(),
         otel: otel.clone(),
     };
-    let status = deployment(adapter, project, args)
+    let status = deployment(test_programs::SOURCE_EXTRACT, adapter, project, false, args)
         .run(backends, |deployment| {
             deployment.host::<WasiModel, Traced<M>>()?;
             deployment.host::<WasiOtel, Traced<M>>()?;

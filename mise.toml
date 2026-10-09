@@ -7,9 +7,10 @@ includes = ["git::https://github.com/augentic/toolkit.git//mise/rust.toml?ref=v0
 # The shared `lint-wasm` pass is over the guest side alone — every adapter
 # and the guest programs — because the root package and the `evals` harness
 # are native: the suites and the runner name host-only dependencies.
-# Add a new adapter here when it ships as a wasm32 guest component.
+# Add a new adapter here when it ships as a wasm32 guest component, a
+# source under `sources/` or a target under `targets/`.
 [env]
-WASM32_PACKAGES = "documentation intent python typescript test-programs"
+WASM32_PACKAGES = "documentation intent python typescript typescript-target test-programs"
 
 # -------------------------------------
 # Adapter overrides
@@ -23,5 +24,5 @@ description = "Push one release-built component to its GHCR tag: mise run publis
 run = '''
 name="${1:?usage: make publish <name>}"
 version="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version *= *"\(.*\)"/\1/p' Cargo.toml)"
-wkg oci push "ghcr.io/augentic/emery/$name:$version" "target/wasm32-wasip2/release/$name.wasm"
+wkg oci push "ghcr.io/augentic/emery/$name:$version" "target/wasm32-wasip2/release/${name//-/_}.wasm"
 '''

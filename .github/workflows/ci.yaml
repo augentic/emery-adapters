@@ -16,4 +16,4 @@ jobs:
     secrets: inherit
     with:
       targets: wasm32-wasip2
-      wasm-packages: documentation intent python typescript test-programs
+      wasm-packages: documentation intent python typescript typescript-target test-programs

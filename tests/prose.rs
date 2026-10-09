@@ -1,28 +1,25 @@
 //! Verifies every shipped adapter's embedded prompt corpus.
 //!
 //! The checks run natively over each adapter's `PROSE` and its `prose/` tree.
-//! Runtime use of each embedded prompt is covered by `source.rs`.
+//! Runtime use of each embedded prompt is covered by `source.rs` and
+//! `target.rs`.
 
 #![cfg(not(target_arch = "wasm32"))]
 
 use std::path::Path;
 
 use emery_sdk::survey::Inventory;
+use emery_sdk::target::{Report, Verdict};
 use emery_sdk::{Doc, Evidence, RUNTIME, body, check};
 
-// Every `sources/*` component must have a matching test here.
+// Every `sources/*` and `targets/*` component must have a matching test here.
 test_programs::foreach_adapter!();
+test_programs::foreach_target!();
 
 // `prompts` are the documents the SDK puts to the model: `extract.md` for every
 // adapter, and `survey.md` for one that has the model name its surfaces.
 fn corpus(docs: &[Doc], name: &str, prompts: &[&str]) {
-    let tree = Path::new(env!("CARGO_MANIFEST_DIR")).join("sources").join(name).join("prose");
-    let findings = check(docs, &tree, prompts, RUNTIME);
-    assert!(
-        findings.is_empty(),
-        "`{name}`'s PROSE disagree with its tree:\n{}",
-        findings.join("\n")
-    );
+    held(docs, "sources", name, prompts);
 
     let prompt = body(docs, "extract.md").expect("the extraction prompt is listed");
     capped("extract.md", prompt);
@@ -34,6 +31,49 @@ fn corpus(docs: &[Doc], name: &str, prompts: &[&str]) {
     for example in examples {
         gated(example.path, fenced_json(example.body, "## Evidence"));
     }
+}
+
+// A target puts two prompts, `build.md` and `verify.md`, and its worked
+// examples are the SDK's `Report` and `Verdict`.
+fn target_corpus(docs: &[Doc], name: &str) {
+    held(docs, "targets", name, &["build.md", "verify.md"]);
+
+    let prompt = body(docs, "build.md").expect("the build prompt is listed");
+    capped("build.md", prompt);
+    let report: Report = serde_json::from_str(fenced_json(prompt, "## Worked example"))
+        .unwrap_or_else(|err| {
+            panic!("`build.md`: the worked example is not the SDK's Report: {err}")
+        });
+    assert!(!report.written.is_empty(), "`build.md`: the worked example wrote nothing");
+    for path in &report.written {
+        emery_sdk::beneath(path)
+            .unwrap_or_else(|bad| panic!("`build.md`: the worked example's `{path}` {bad}"));
+    }
+
+    let prompt = body(docs, "verify.md").expect("the verify prompt is listed");
+    capped("verify.md", prompt);
+    let verdict: Verdict = serde_json::from_str(fenced_json(prompt, "## Worked example"))
+        .unwrap_or_else(|err| {
+            panic!("`verify.md`: the worked example is not the SDK's Verdict: {err}")
+        });
+    let findings = verdict.findings();
+    assert!(
+        findings.is_empty(),
+        "`verify.md`: the worked example fails the gate:\n{}",
+        findings.join("\n")
+    );
+}
+
+// The list is held to the tree under `<axis>/<name>/prose` and to the
+// prompts the SDK puts, with the SDK's runtime references as the imports.
+fn held(docs: &[Doc], axis: &str, name: &str, prompts: &[&str]) {
+    let tree = Path::new(env!("CARGO_MANIFEST_DIR")).join(axis).join(name).join("prose");
+    let findings = check(docs, &tree, prompts, RUNTIME);
+    assert!(
+        findings.is_empty(),
+        "`{name}`'s PROSE disagree with its tree:\n{}",
+        findings.join("\n")
+    );
 }
 
 fn gated(path: &str, json: &str) {
@@ -87,6 +127,11 @@ fn typescript() {
 fn python() {
     corpus(python::PROSE, "python", &["extract.md", "survey.md"]);
     surveying(python::PROSE);
+}
+
+#[test]
+fn typescript_target() {
+    target_corpus(typescript_target::PROSE, "typescript-target");
 }
 
 fn surveying(docs: &[Doc]) {

@@ -1,13 +1,34 @@
+use emery_sdk::target::{Slice, Target};
 use emery_sdk::{AdapterMetadata, Backing, Claim, ClaimKind, Evidence, Source, SourceInput};
 use serde_json::json;
 
 /// The source name every probe input carries.
 pub const KEY: &str = "source";
 
-/// The caller every driver dispatches through: a `Source` with no state.
+/// The caller every driver dispatches through: a `Source` and a `Target` with no state.
 pub struct Caller;
 
 impl Source for Caller {}
+
+impl Target for Caller {}
+
+/// Returns the slice every target driver builds: one requirement under the `orders` stem.
+#[must_use]
+pub fn slice() -> Slice {
+    Slice {
+        id: "SLICE-001".to_owned(),
+        name: "orders".to_owned(),
+        base: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+        requirements: vec!["REQ-001".to_owned()],
+        spec: "# Specification\n\n## Requirement: orders.create\n\nID: REQ-001\n\nAn order is \
+               created from at least one item.\n"
+            .to_owned(),
+        design: "# Design\n\n## Type: Order\n\nAn id and its items.\n".to_owned(),
+        plan: "## Slice: orders\n\nID: SLICE-001\nRequirements: REQ-001\nTypes: Order\nDepends \
+               on: none\n"
+            .to_owned(),
+    }
+}
 
 /// Returns the program's arguments past its own name.
 #[must_use]
@@ -33,7 +54,16 @@ pub fn value(text: &str) -> SourceInput {
 ///
 /// Panics when `emery_version` is present and not an exact semver.
 pub fn check_metadata(metadata: &AdapterMetadata) {
-    if let Some(version) = &metadata.emery_version {
+    check_version(metadata.emery_version.as_deref());
+}
+
+/// Asserts an `emery-version` pin, where there is one, is exact semver.
+///
+/// # Panics
+///
+/// Panics when `version` is present and not an exact semver.
+pub fn check_version(version: Option<&str>) {
+    if let Some(version) = version {
         assert!(
             semver::Version::parse(version).is_ok(),
             "emery-version `{version}` is not an exact semver"

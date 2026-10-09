@@ -1146,6 +1146,7 @@ dependencies = [
  "tokio",
  "tracing",
  "typescript",
+ "typescript-target",
 ]
 
 [[package]]
@@ -5015,6 +5016,13 @@ dependencies = [
  "oxc_ast_visit",
  "oxc_parser",
  "oxc_span",
+]
+
+[[package]]
+name = "typescript-target"
+version = "0.13.0"
+dependencies = [
+ "emery-sdk",
 ]
 
 [[package]]

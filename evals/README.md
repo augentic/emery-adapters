@@ -1,6 +1,6 @@
 # Graded live eval
 
-`cargo run -p evals -- [case|adapter..]` runs the shipped components end to end against the live model and grades what they extract. For each case it stages a project, runs `emery specify` three times, reads the committed documents back through `emery show --format json`, and grades them against a reviewer's `expected.toml`. It drives the shipped `emery` binary alone.
+`cargo run -p evals -- [case|adapter..]` runs the shipped components end to end against the live model and grades what they extract. For each case it stages a project, runs `emery specify` three times, reads the committed documents back through `emery show --format json`, and grades them against a reviewer's `expected.toml`. With `--build` it also builds each committed plan through the `typescript-target` component into a greenfield repository and reads what landed. It drives the shipped `emery` binary alone.
 
 Operator-invoked, never CI. The component suites in [tests/source.rs](../tests/source.rs) are the regression guard; the eval measures prompt quality, where the model's judgement is the thing under test.
 
@@ -16,6 +16,7 @@ set -a; source .env; set +a
 cargo run -p evals -- orders express-orders    # two cases
 cargo run -p evals -- python                   # every case with a python source
 cargo run -p evals -- --facts fastapi-routers  # survey facts alone, no model turn
+cargo run -p evals -- --build express-orders   # specify, then build the plan
 ```
 
 A positional argument names a case or an adapter; with none, every case runs. A case whose fixture is absent (the vendored ones, until fetched) is skipped; naming it is an error.
@@ -24,7 +25,9 @@ A positional argument names a case or an adapter; with none, every case runs. A 
 | --- | --- | --- |
 | `EMERY_BIN` | `../emery/target/release/emery` | The binary under test |
 | `TYPESCRIPT_WASM`, `PYTHON_WASM`, `DOCUMENTATION_WASM`, `INTENT_WASM` | `target/wasm32-wasip2/release/<adapter>.wasm` | One per adapter a selected case uses |
+| `TYPESCRIPT_TARGET_WASM` | `target/wasm32-wasip2/release/typescript_target.wasm` | The target `--build` builds through; cargo spells the hyphenated crate's artifact with an underscore |
 | `EVAL_RUNS` | `3` | Runs per case. Three tells a stable id from a lucky one |
+| `EVAL_JOBS` | unset | Passed to `emery build` as `--jobs`, the width cap; unset leaves the engine's default |
 | `EVAL_LADDER` | `600/120,1200/240,2400/480` | Budget rungs, each `CURSOR_TIMEOUT_SECS/CURSOR_INACTIVITY_SECS` |
 | `CURSOR_MODEL` | `auto` | Recorded in the card. Pin it before comparing two: `auto` differs run to run |
 | `RUST_LOG` | set by the runner | Every adapter at `trace`; the card reads the trace lines. A caller's value is kept |
@@ -50,6 +53,19 @@ The smallest useful pass is one small case per stem shape: `orders`, `cli-jobs`,
 `--facts [case|adapter..]` stages the named cases and runs each once with `CURSOR_API_KEY` stripped. The adapter logs the facts it would lay before the model (bootstrap, registrations, decorated definitions, exports, packages) and the first turn fails before any is spent, in seconds. The text is printed and written to `target/eval/facts/<case>/facts.md`; a graded run writes the same beside its log as `run-N.facts.md`.
 
 This is how an expectation is written, since the facts say which modules locate a surface and how each export is read, and how a change to the facts or the keep policy is checked before a live run. A line the model should not see (a hook's decorator, a data-only class) is the adapter's defect, visible here.
+
+### Building the plan
+
+`--build [case|adapter..]` builds each plan a run commits, through the [`typescript-target`](../targets/typescript-target/) component into a greenfield repository, and reads what landed. Staging lays `target.git` beside the case's sources — a bare repository whose `main` is one root commit holding a `.gitignore` (`node_modules/`, `dist/`, `.emery/`) and a README naming the case, sealed through a seed clone the host's `git` pushes and the runner removes — and the project's `emery.toml` gains a `[target]` table naming the component as `eval:typescript-target@<version>`, the repository by its `file://` URL, `branch = "main"`, and `remote = "origin"`. After a specify that landed and its `show`s, `emery build --config emery.toml` runs over the project (`--jobs` from `EVAL_JOBS` when set), so the engine clones `target.git` under `.emery/vcs/repos/`, builds the waves in working copies there, and pushes the label `emery/<revision>` back; the build's log and envelope are kept as `run-N.build.stderr` and `run-N.build.stdout`. A specify that failed builds nothing, and the build cells read `—`.
+
+The build needs what the target's prompts run: `node` and `npm` of Node 22.18 or later (native type stripping), on `PATH` where `emery` runs, and the release `emery` at `EMERY_BIN`. Build the component first:
+
+```bash
+cargo build -p typescript-target --target wasm32-wasip2 --release
+EVAL_RUNS=1 cargo run -p evals -- --build express-orders nestjs-pair
+```
+
+The runner reads the build three ways: the envelope on success (each slice's wave, merge commit, covered and uncovered ids, written files, and the paths an earlier build of it conflicted at; the verified heads; the label and the remote it was pushed to) or the failure envelope the binary prints among its log lines (`slice-conflict`, `verify-failed`, the wave named in the message); the backend's `completion` lines, labelled `build-<slice>` and `verify`, for the turns' durations and tokens; and the host's `git log --first-parent` over the chain the build left — the label in `target.git` when the run landed, the integration copy `.emery/vcs/integration` a failed run leaves for inspection — each merge commit read for its `Slice:`, `Wave:`, `Requirements:`, and `Covered:` trailers and the files it brought in. Where the envelope and the chain disagree, the chain is what the repository holds.
 
 ### Experiment arms
 
@@ -191,6 +207,16 @@ Each figure points at one place in the adapter:
 - **`waves`**: the committed plan's shape as the `specify` envelope reports it — how many sets of slices are ready to build at once, then each set's width, `3 (1/2/1)`; `0` where no plan was committed. The waves are the slicing turn's `depends-on` lines read as a dependency order: their count is the longest chain, the widest the most a concurrent build could run at once, and a plan of one wave as wide as its slices declares no dependency at all.
 - **`exit`**, on a failed run: the turn it died in. `survey-*` or `evidence-*` is the adapter's and the run is short; `spec-draft`, `design-draft`, `grouping`, or `slicing` is the engine's, after every claim was accepted, and the row's recall reads as any other's.
 - **Tokens and wall clock**: from the backend's `completion` lines.
+
+Under `--build`, five columns follow, each the build's and none the extraction's:
+
+- **`built`**: `merged/slices`, then `-k` for the slices that conflicted once and merged on their second build, `!1` where a second conflict ended the run, and the failure's code where the build did not land (`2/4 !1 `slice-conflict``). Merged is the envelope's count on a landed run and the merge commits the integration copy holds on a failed one, so a slice that changed nothing is counted only where the run landed.
+- **`verified`**: `passed/waves` — the waves whose verify passed over the waves the build ran, the latter the last wave a slice merged in on a landed run and the waves the turns fell into on a failed one. `1/2` with `verify-failed` is the second wave's tree refused.
+- **`build wall`**: the `emery build` process end to end, with its exit where it failed.
+- **`speedup`**: the serial walk over the critical path, then the plan's own factor. Serial is every build and verify turn in a row; the critical path takes each wave at its slowest slice — every round of its build — then the wave's verify, the waves told apart by the `verify` completions between them. The plan's factor, `slices ÷ waves`, is what [the plan widths](cards/README.md#the-plan-widths) measured with slices of equal cost and the verify free, so the gap between the two is what the width is worth once the slowest slice and the verify are paid for. A build that did not land reads how far it got instead, `1.66× (1 of 6 waves)`, since a partial path compares with nothing.
+- **`covered`**: the requirement ids the merged slices' reports covered over the requirements those slices hold. An uncovered id is one the adapter left out of `covered`, never one it invented.
+
+Beneath the rows, after the completions: the build's ending (the label and where it stands, pushed to which remote; or the failure's code, exit, and first line); each wave's slices as they merged, with covered and files per slice and the wave's build durations against its verify; the conflicted slices and their paths; the verify's refusals, quoted; the uncovered ids per slice; the chain the repository holds, newest first, each commit with its subject and the files it brought; and the build's turns with their tokens, the serial sum, and the critical path.
 
 `surfaces`, `stems`, and the survey notes read per source where the case has several. Beneath the rows:
 
