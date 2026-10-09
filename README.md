@@ -28,13 +28,14 @@ A source adapter is one Rust crate that ships as one Wasm component exporting th
 
 ## Rust-only loop
 
-The suites need no model credentials. Every test is the root package's: the component suites run every built component under the omnia runtime over a scripted model (the components are built by `crates/test-programs` on the first `make test`) and assert what each adapter decides through what the host sees of it, the fixture probes prove the boundary, and every adapter's corpus is checked natively:
+The suites need no model credentials. Every test is the root package's: the native suites call every adapter's `Adapter` over a scratch tree and a scripted model and assert what it decides, the component suite runs every built component under the omnia runtime once (the components are built by `crates/test-programs` on the first `make test`), the fixture probes prove the boundary, and every adapter's corpus is checked natively:
 
 ```bash
-make ci                                             # exactly the CI gate: fmt-check, lint (host + wasm32), tests, doctests, docs, vet, deny
-cargo nextest run -p emery-adapters                 # the root suites: every component, the probes, the corpora
-cargo nextest run -p emery-adapters --test source   # the shipped source components alone
-cargo nextest run -p emery-adapters --test target   # the shipped target components alone
+make ci                                               # exactly the CI gate: fmt-check, lint (host + wasm32), tests, doctests, docs, vet, deny
+cargo nextest run -p emery-adapters                   # the root suites: every adapter, every component, the probes, the corpora
+cargo nextest run -p emery-adapters --test source     # what the shipped source adapters decide, natively
+cargo nextest run -p emery-adapters --test target     # what the shipped target adapters decide, natively
+cargo nextest run -p emery-adapters --test component  # the shipped components alone, under the runtime
 ```
 
 ## Live examples
@@ -62,9 +63,9 @@ cargo run -p evals -- --build express-orders  # specify, then build the plan thr
 ## Repair loop
 
 1. Edit `sources/<name>/prose/**` (the extract prompt, references, rules) or `targets/<name>/prose/**` (the build and verify prompts, the layout).
-2. `cargo nextest run -p emery-adapters` to re-run its component and corpus suites; `cargo build -p <name> --target wasm32-wasip2 --release` to rebuild the shipped component and `cp` it over the `-dev` file in `~/.emery/adapters`; `emery specify --config examples/<name>/emery.toml` to watch it become a spec.
+2. `cargo nextest run -p emery-adapters` to re-run its suites; `cargo build -p <name> --target wasm32-wasip2 --release` to rebuild the shipped component and `cp` it over the `-dev` file in `~/.emery/adapters`; `emery specify --config examples/<name>/emery.toml` to watch it become a spec.
 
-The component suites are the Rust inner loop and prove every component, the adapter's own decisions included; the live examples show one adapter's claims becoming a specification; live eval is for prompt quality.
+The native suites are the Rust inner loop and prove every adapter's own decisions, the component suite proves every built component once; the live examples show one adapter's claims becoming a specification; live eval is for prompt quality.
 
 ## Stuck?
 

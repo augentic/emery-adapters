@@ -35,8 +35,8 @@ crates/test-programs/ # omnia's test-programs pattern: guest programs + the nest
   programs/<group>/   # one scenario per file: source/extract.rs drives the component boundary, probe/ are fixture adapters
   src/                # lib.rs: the generated artifact table (native) / helpers.rs (wasm32)
   build.rs            # one omnia_test::build::Components build → gen.rs (every adapter + every program)
-tests/                # root component suites: source.rs (every shipped component, and what each adapter decides), probe.rs (the error arms, the lowering, the SDK's side of the boundary), prose.rs (every adapter's corpus)
-  support/            # mod.rs — the one runner source.rs and probe.rs share (the deployment under the omnia runtime)
+tests/                # root suites: source.rs and target.rs (what each adapter decides, natively over its `Adapter`), component.rs (every built component once, under the runtime), probe.rs (the error arms, the lowering, the SDK's side of the boundary), prose.rs (every adapter's corpus)
+  support/            # mod.rs — the one runner component.rs and probe.rs share (the deployment under the omnia runtime)
 examples/             # live walks: one emery.toml per adapter (plus one over all four) the shipped `emery` binary runs, and the fixtures they lend
 Cargo.toml            # the tests `emery-adapters` root package over crates/* + sources/*
 ```
@@ -167,7 +167,7 @@ All contributions are made via pull request. All patches from all contributors g
 
 Normally, all pull requests must include tests that cover your change. Occasionally, a change will be very difficult to test for; in those cases, include a note in your commit message explaining why.
 
-Tests here cover a change at its public boundary: a behaviour the adapter itself decides goes in the root `tests/source.rs`, asserted through the built component; the component boundary is `tests/probe.rs`'s. Never pin a prompt phrase, and never widen `pub` surface — or compile a module natively — solely for a test. Do not commit built `.wasm` artifacts.
+Tests here cover a change at its public boundary: a behaviour the adapter itself decides goes in the root `tests/source.rs` or `tests/target.rs`, asserted natively through its `Adapter`; what only the built component shows is `tests/component.rs`'s, and the component boundary itself `tests/probe.rs`'s. Never pin a prompt phrase, and never widen `pub` surface solely for a test. Do not commit built `.wasm` artifacts.
 
 ## Conduct
 
