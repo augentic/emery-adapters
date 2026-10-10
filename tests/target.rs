@@ -19,9 +19,20 @@ use omnia_sdk::model::ToolCall;
 use omnia_test::guest::Scripted;
 use omnia_test::host::{Scratch, scratch};
 
-const REPORT: &str = r#"{"covered": ["REQ-001"], "written": ["src/orders/index.ts", "src/index.ts", "test/orders.test.ts"]}"#;
+const REPORT: &str = r#"{"covered": ["REQ-001"], "written": ["src/orders/reading/package.json", "src/orders/reading/index.ts", "src/orders/index.ts", "src/index.ts", "test/orders/reading.test.ts"]}"#;
 const PASSED: &str = r#"{"passed": true, "failures": []}"#;
 const FAILED: &str = r#"{"passed": false, "failures": ["check 3 (npm test): 1 failing: an order with no items is refused"]}"#;
+
+// The files the one scripted `write_files` call lays: a part of the `orders`
+// stem in its own directory, with its manifest, its line in the stem's list
+// and the stem's in the entry, and its test beside the stem's.
+const WRITTEN: [(&str, &str); 5] = [
+    ("src/orders/reading/package.json", "{ \"name\": \"@app/orders-reading\" }\n"),
+    ("src/orders/reading/index.ts", "export function getOrder() {}\n"),
+    ("src/orders/index.ts", "export * as reading from \"./reading/index.ts\";\n"),
+    ("src/index.ts", "export * as orders from \"./orders/index.ts\";\n"),
+    ("test/orders/reading.test.ts", "import { test } from \"node:test\";\n"),
+];
 
 // A shipped target adapter: its name, the prose its turns open under, and
 // the `Adapter` every call goes through.
@@ -71,19 +82,20 @@ impl<A: TargetAdapter> Shipped<A> {
     }
 }
 
-// The slice every build is handed: one requirement under the `orders` stem.
+// The slice every build is handed: one requirement under the `orders` stem,
+// in a slice named for a part of it.
 fn slice() -> Slice {
     Slice {
         id: "SLICE-001".to_owned(),
-        name: "orders".to_owned(),
+        name: "orders-reading".to_owned(),
         base: "0123456789abcdef0123456789abcdef01234567".to_owned(),
         requirements: vec!["REQ-001".to_owned()],
-        spec: "# Specification\n\n## Requirement: orders.create\n\nID: REQ-001\n\nAn order is \
-               created from at least one item.\n"
+        spec: "# Specification\n\n## Requirement: orders.get-id.return-order\n\nID: REQ-001\n\nAn \
+               order is returned by its id.\n"
             .to_owned(),
         design: "# Design\n\n## Type: Order\n\nAn id and its items.\n".to_owned(),
-        plan: "## Slice: orders\n\nID: SLICE-001\nRequirements: REQ-001\nTypes: Order\nDepends \
-               on: none\n"
+        plan: "## Slice: orders-reading\n\nID: SLICE-001\nRequirements: REQ-001\nTypes: \
+               Order\nDepends on: none\n"
             .to_owned(),
     }
 }
@@ -109,18 +121,11 @@ fn root(project: &Scratch) -> &str {
 // `write_files` beside the reference tools, its brief carrying the slice;
 // what the model wrote through the tool in one call is what the tree holds
 // and the report names. The verify turn then opens under `verify.md` over
-// the same tree with the reference tools alone.
+// the same tree, `write_files` declared for its repairs.
 #[tokio::test]
 async fn typescript_target() {
     let project = scratch();
-    let model = Scripted::answering([REPORT, PASSED]).calling(
-        0,
-        [write_files(&[
-            ("src/orders/index.ts", "export function createOrder() {}\n"),
-            ("src/index.ts", "export * as orders from \"./orders/index.ts\";\n"),
-            ("test/orders.test.ts", "import { test } from \"node:test\";\n"),
-        ])],
-    );
+    let model = Scripted::answering([REPORT, PASSED]).calling(0, [write_files(&WRITTEN)]);
 
     let report = TYPESCRIPT_TARGET.build(&project, &model).await.expect("build over the lent tree");
     let verdict =
@@ -150,7 +155,7 @@ async fn typescript_target() {
     );
     for carried in [
         "SLICE-001",
-        "orders",
+        "orders-reading",
         "REQ-001",
         "0123456789abcdef0123456789abcdef01234567",
         "## Type: Order",
@@ -176,8 +181,8 @@ async fn typescript_target() {
         "the integrated tree is lent to the verify"
     );
     assert!(
-        !verify.tools.iter().any(|tool| tool == "write_files"),
-        "a verify turn has no `write_files`: {:?}",
+        verify.tools.iter().any(|tool| tool == "write_files"),
+        "a verify turn repairs through `write_files`: {:?}",
         verify.tools
     );
 
@@ -185,20 +190,25 @@ async fn typescript_target() {
         model.exchanges().into_iter().filter(|exchange| exchange.tool == "write_files").collect();
     assert_eq!(written.len(), 1, "the one scripted call reached the tool: {written:?}");
     assert!(written[0].outcome.is_ok(), "the call landed: {written:?}");
-    for path in ["src/orders/index.ts", "src/index.ts", "test/orders.test.ts"] {
+    for (path, _) in WRITTEN {
         assert!(project.read(path).is_some(), "the tree holds `{path}` from the one call");
         assert!(report.written.iter().any(|written| written == path), "the report names `{path}`");
     }
     assert_eq!(
         project.read("src/index.ts").as_deref(),
         Some("export * as orders from \"./orders/index.ts\";\n".as_bytes()),
-        "the entry holds the slice's one line"
+        "the entry holds the stem's one line"
+    );
+    assert_eq!(
+        project.read("src/orders/index.ts").as_deref(),
+        Some("export * as reading from \"./reading/index.ts\";\n".as_bytes()),
+        "the stem's list holds the part's one line"
     );
 }
 
 // The rules a wave's slices merge under: the lockfile kept from the
-// integrated side, the entry and every barrel as a union, and `package.json`
-// under none.
+// integrated side, the entry and every list beneath it as a union, and every
+// manifest under none.
 #[test]
 fn typescript_target_rules() {
     let declared: Vec<(&str, MergeStrategy)> = typescript_target::Adapter::MERGE_RULES
@@ -244,8 +254,8 @@ async fn typescript_target_verify() {
         "the compiled-in verify prompt leads the system"
     );
     assert!(
-        !seen[0].tools.iter().any(|tool| tool == "write_files"),
-        "a verify turn has no `write_files`: {:?}",
+        seen[0].tools.iter().any(|tool| tool == "write_files"),
+        "a verify turn repairs through `write_files`: {:?}",
         seen[0].tools
     );
 }

@@ -1,23 +1,30 @@
 //! Builds each slice of a plan as strict TypeScript on Node, and verifies the integrated tree.
 //!
-//! A slice lands as one module directory, `src/<stem>/`, with its acceptance
-//! scenarios as tests under `test/<stem>.test.ts`, and is exported from the
-//! package entry `src/index.ts` by one line of its own. The slice that owns
-//! the bootstrap lays the manifests; every other slice lays the same bytes
-//! when it finds none, and adds a dependency only when its module needs one.
-//! A build runs `npm install`, `tsc --noEmit`, and `npm test` through the
-//! shell before it reports, and a wave is verified by the same checks over
-//! the integrated tree, with `git status` for what the checks wrote outside
-//! the lockfile.
+//! A slice lands in a directory of its own: `src/<stem>/` when the slice is
+//! named by its stem and builds it whole, `src/<stem>/<part>/` otherwise, so
+//! the slices a stem is cut into never write one file. Each directory holds
+//! its module, its `index.ts`, and a `package.json` naming the packages its
+//! files import, which the static root manifest's `workspaces` installs; its
+//! acceptance scenarios are tests under `test/<stem>.test.ts` or
+//! `test/<stem>/<part>.test.ts`. The entry `src/index.ts`, and a cut stem's
+//! `src/<stem>/index.ts`, are lists of one line per module. A module the
+//! application reaches exports `register(app)`, and the `start` module's
+//! `main()` calls every one the entry reaches, so no slice edits another's
+//! directory to be wired. A build writes through `write_files`, runs
+//! `npm install`, `tsc --noEmit`, and `npm test` through the shell, and
+//! reports once they pass; a wave is verified by the same checks over the
+//! integrated tree, repaired where they fail, and run again before the
+//! verdict.
 //!
 //! # Merge rules
 //!
 //! - `package-lock.json` keeps the integrated side; the next check
 //!   regenerates it.
 //! - `src/index.ts`, and every `index.ts` beneath it, keeps both sides'
-//!   lines: the entry is a list of one line per module.
-//! - `package.json` is unruled, so two slices that both change it conflict
-//!   and the second is rebuilt over the first.
+//!   lines: each is a list of one line per module.
+//! - Every other path is unruled: the root manifests are static and each
+//!   directory's manifest is its slice's alone, so a conflict is a slice
+//!   writing outside its directory, rebuilt over the merged tree.
 
 use std::borrow::Cow;
 
