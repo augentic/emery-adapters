@@ -41,10 +41,24 @@
 //! `target.git`, bare, its `main` one root commit; after a specify that
 //! landed and its `show`s, `emery build --config emery.toml` runs over it,
 //! its log and envelope kept as `run-N.build.stderr` / `.stdout`, and the
-//! card gains five columns — what the build merged, verified, took, saved
-//! over a serial walk of the same turns, and covered — with the waves, the
-//! conflicts, the verify's refusals, the uncovered ids, and the chain the
-//! repository holds beneath the run's notes.
+//! card gains seven columns — what the build merged, verified, took, saved
+//! over a serial walk of the same turns, and covered, then what the host's
+//! own checks and the tests say of the tree it left — with the waves, the
+//! conflicts, the repairs, the verify's refusals, the uncovered ids, and the
+//! chain the repository holds beneath the run's notes. The host's pass
+//! exports the tree the build left (the label, or the integration copy a
+//! failed build leaves), runs `npm install`, `npx tsc --noEmit`, and
+//! `node --test` in it, matches the merged slices' acceptance scenarios
+//! against the `test(` names, lists the tracked files outside the layout,
+//! and writes it all to `run-N.fidelity.md`.
+//!
+//! `cargo run -p evals -- --rebuild <card> [case|adapter..]` builds the plan
+//! `run-1` of each named case committed under an earlier card again, under
+//! this invocation's binary, target, model, and width: the staged project
+//! is copied under the new card, the label its build pushed deleted, and
+//! the build run afresh over the greenfield root, so one revision is built
+//! under several arms and the plan's own variance is out of the comparison;
+//! the specify columns repeat the earlier card's.
 //!
 //! Environment: `EMERY_BIN` (`../emery/target/release/emery`), one
 //! `<ADAPTER>_WASM` per adapter a selected case runs under —
@@ -117,23 +131,60 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .ok_or("CARGO_MANIFEST_DIR: no parent directory")?;
-    let mut filter: BTreeSet<String> = env::args().skip(1).collect();
+    let mut args = env::args().skip(1);
+    let mut filter: BTreeSet<String> = BTreeSet::new();
+    let mut rebuild: Option<String> = None;
+    while let Some(arg) = args.next() {
+        if arg == "--rebuild" {
+            rebuild = Some(args.next().ok_or("`--rebuild` names a card")?);
+        } else {
+            filter.insert(arg);
+        }
+    }
     let facts_only = filter.remove("--facts");
-    let build = filter.remove("--build");
+    let build = filter.remove("--build") || rebuild.is_some();
     if facts_only && filter.is_empty() {
         return Err("`--facts` names a case or an adapter".into());
     }
     if facts_only && build {
         return Err("`--facts` spends no turn, so it cannot `--build`".into());
     }
+    if rebuild.is_some() && filter.is_empty() {
+        return Err("`--rebuild` names a case or an adapter".into());
+    }
     let cases = cases(root, &filter)?;
     if cases.is_empty() {
         return Err(format!("no case under `{CASES}` matches").into());
     }
     let adapters: BTreeSet<&str> = cases.iter().flat_map(|case| case.expected.adapters()).collect();
-    let settings = Settings::from_env(root, &adapters, build)?;
+    let mut settings = Settings::from_env(root, &adapters, build)?;
+    settings.rebuild = rebuild;
 
     let eval_dir = root.join("target/eval");
+    if let Some(card) = settings.rebuild.clone() {
+        let started = now();
+        let card_name = started.replace(':', "-");
+        let mut reports = Vec::with_capacity(cases.len());
+        for case in &cases {
+            eprintln!("eval: case `{}` rebuilt from `{card}`", case.name);
+            let run = rebuilt(&eval_dir, &card, &card_name, case, &settings)?;
+            eprintln!("eval: `{}` {}", case.name, run.summary());
+            let attempt = Attempt {
+                grade: grade(&case.expected, &run),
+                run,
+            };
+            reports.push(Report {
+                case,
+                runs: vec![vec![attempt]],
+            });
+        }
+        let card = scorecard(&settings, &reports, &started, &card_name);
+        let out = eval_dir.join(format!("{card_name}.md"));
+        fs::write(&out, &card)?;
+        print!("{card}");
+        eprintln!("eval: scorecard at {}", out.display());
+        return Ok(());
+    }
     if facts_only {
         for case in &cases {
             let project = stage(&eval_dir.join("facts"), case, &settings)?;
@@ -248,6 +299,8 @@ struct Settings {
     // the caller's `CURSOR_MAX_TOOL_CALLS`, when set; the runner inherits it,
     // the card names it
     max_tool_calls: Option<String>,
+    // the card whose committed plans this invocation builds again
+    rebuild: Option<String>,
 }
 
 impl Settings {
@@ -302,6 +355,7 @@ impl Settings {
             model: env::var("CURSOR_MODEL").unwrap_or_else(|_| "auto".to_owned()),
             rust_log: env::var("RUST_LOG").ok(),
             max_tool_calls: env::var("CURSOR_MAX_TOOL_CALLS").ok(),
+            rebuild: None,
         })
     }
 
@@ -1300,7 +1354,8 @@ fn run(
         && run.passed()
     {
         eprintln!("eval: `{}` run {n} at {rung} building", case.name);
-        run.build = Some(build(project, settings, &rust_log, rung, tag, revision)?);
+        let built = build(project, settings, &rust_log, rung, tag, revision, run.spec.as_ref())?;
+        run.build = Some(built);
     }
 
     Ok(run)
@@ -1309,11 +1364,13 @@ fn run(
 const SPECIFY: &[&str] = &["specify", "--config", "emery.toml"];
 
 // One `emery build` of the revision the run committed, into the case's
-// greenfield repository; its log and envelope are kept as
-// `<tag>.build.stderr` / `<tag>.build.stdout`.
+// greenfield repository, then the host's own pass over the tree it left; the
+// build's log and envelope are kept as `<tag>.build.stderr` /
+// `<tag>.build.stdout`, the pass as `<tag>.fidelity.md`.
 #[expect(clippy::disallowed_methods, reason = "the eval is a native operator tool, not a guest")]
 fn build(
     project: &Path, settings: &Settings, rust_log: &str, rung: Rung, tag: &str, revision: &str,
+    spec: Option<&Value>,
 ) -> io::Result<Build> {
     let jobs = settings.jobs.map(|jobs| jobs.to_string());
     let mut args = vec!["build", "--config", "emery.toml"];
@@ -1330,7 +1387,7 @@ fn build(
     let mut tail: Vec<&str> = stderr.lines().rev().take(5).collect();
     tail.reverse();
 
-    Ok(Build {
+    let mut build = Build {
         wall,
         exit: output.status.code(),
         envelope: serde_json::from_str(&stdout).ok(),
@@ -1338,7 +1395,144 @@ fn build(
         completions: completions(&stderr),
         history: history(project, revision),
         tail: tail.join("\n"),
-    })
+        fidelity: None,
+    };
+    // the host's pass is read beside the build, never in its place: a
+    // toolchain the host lacks leaves the cells empty and the card whole
+    if let Some(tree) = Tree::left(project, revision, &build) {
+        eprintln!("eval: `{tag}` host checks over {tree}");
+        match Fidelity::read(project, tag, &tree, &build, spec) {
+            Ok(fidelity) => {
+                fs::write(project.join(&fidelity.file), fidelity.to_string())?;
+                build.fidelity = Some(fidelity);
+            }
+            Err(error) => eprintln!("eval: `{tag}` host checks not read: {error}"),
+        }
+    }
+
+    Ok(build)
+}
+
+// Builds the plan `run-1` of `case` committed under `card` again. The staged
+// project is copied whole under the new card, less the engine's clones and
+// working copies, its `emery.toml` pointed at the copied `target.git`, and
+// the label the earlier build pushed deleted, so the engine clones afresh
+// and builds every slice over the greenfield root; the run's specify is
+// read back from the files the earlier run kept, exactly as `run` read
+// them, so the card's specify columns repeat the source card's.
+fn rebuilt(
+    eval_dir: &Path, card: &str, card_name: &str, case: &Case, settings: &Settings,
+) -> io::Result<Run> {
+    const TAG: &str = "run-1";
+    let source = eval_dir.join(card).join(&case.name);
+    let project = eval_dir.join(card_name).join(&case.name);
+    if !source.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("no staged project at `{}`", source.display()),
+        ));
+    }
+    let stdout = fs::read_to_string(source.join(format!("{TAG}.stdout")))?;
+    let stderr = fs::read_to_string(source.join(format!("{TAG}.stderr")))?;
+    let envelope: Option<Value> = serde_json::from_str(&stdout).ok();
+    let revision = envelope
+        .as_ref()
+        .and_then(|out| out["revision"].as_str())
+        .ok_or_else(|| {
+            io::Error::other(format!("`{TAG}` of `{}` committed no revision", case.name))
+        })?
+        .to_owned();
+
+    // the project copied, the engine's clones and the earlier build's files left behind
+    if project.exists() {
+        fs::remove_dir_all(&project)?;
+    }
+    fs::create_dir_all(&project)?;
+    for entry in fs::read_dir(&source)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        if name_str.contains(".build") || name_str.contains(".fidelity") {
+            continue;
+        }
+        let target = project.join(&name);
+        if entry.file_type()?.is_dir() {
+            if name == ".emery" {
+                copy_tree_whole(&entry.path().join("storage"), &target.join("storage"))?;
+            } else {
+                copy_tree_whole(&entry.path(), &target)?;
+            }
+        } else {
+            fs::copy(entry.path(), target)?;
+        }
+    }
+
+    // the config pointed at the copied repository, the label deleted so the
+    // build is fresh, the target staged under this invocation's component
+    let config = fs::read_to_string(source.join("emery.toml"))?;
+    let old_url = format!("file://{}", source.join("target.git").display());
+    let new_url = format!("file://{}", project.join("target.git").display());
+    fs::write(project.join("emery.toml"), config.replace(&old_url, &new_url))?;
+    let bare = project.join("target.git");
+    let label = format!("refs/heads/emery/{revision}");
+    if git(&bare, &["show-ref", "--verify", "--quiet", &label]).is_ok() {
+        git(&bare, &["update-ref", "-d", &label])?;
+    }
+    if let Some(target) = &settings.target {
+        settings.stage_component(target)?;
+    }
+
+    // the run as the earlier specify left it, then this invocation's build
+    let rung =
+        settings.ladder.first().copied().ok_or_else(|| io::Error::other("EVAL_LADDER: no rung"))?;
+    let mut tail: Vec<&str> = stderr.lines().rev().take(5).collect();
+    tail.reverse();
+    let mut run = Run {
+        n: 1,
+        rung,
+        wall: Duration::ZERO,
+        exit: Some(0),
+        tail: tail.join("\n"),
+        diff: envelope.as_ref().and_then(|out| out.get("diff").cloned()),
+        waves: envelope.as_ref().and_then(|out| out.get("waves").cloned()),
+        evidence: accepted(&stderr),
+        completions: completions(&stderr),
+        surveyed: surveyed(&stderr),
+        unreached: unreached(&stderr),
+        spec: None,
+        design: None,
+        plan: None,
+        dead: None,
+        build: None,
+    };
+    for (artifact, slot) in
+        [("spec", &mut run.spec), ("design", &mut run.design), ("plan", &mut run.plan)]
+    {
+        let text = fs::read_to_string(source.join(format!("{TAG}.{artifact}.json")))?;
+        *slot = Some(serde_json::from_str(&text)?);
+    }
+    let rust_log = settings.rust_log(case);
+    eprintln!("eval: `{}` rebuilding revision `{revision}`", case.name);
+    run.build =
+        Some(build(&project, settings, &rust_log, rung, TAG, &revision, run.spec.as_ref())?);
+
+    Ok(run)
+}
+
+// A copy of a directory tree skipping nothing, for a staged project's
+// sources, `target.git`, and `.emery/storage`.
+fn copy_tree_whole(from: &Path, to: &Path) -> io::Result<()> {
+    fs::create_dir_all(to)?;
+    for entry in fs::read_dir(from)? {
+        let entry = entry?;
+        let target = to.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_tree_whole(&entry.path(), &target)?;
+        } else {
+            fs::copy(entry.path(), target)?;
+        }
+    }
+    Ok(())
 }
 
 // What one `emery build` did, read from its envelope, its log, and the
@@ -1355,6 +1549,9 @@ struct Build {
     // run pushed, or the integration copy a failed run left behind
     history: Vec<Landed>,
     tail: String,
+    // the host's own pass over the tree the chain stands at; none where the
+    // build left no tree
+    fidelity: Option<Fidelity>,
 }
 
 // The failure envelope: its code and message.
@@ -1524,6 +1721,18 @@ impl Build {
         answered.saturating_sub(usize::from(self.code() == Some("verify-failed")))
     }
 
+    // The waves whose verify changed the tree before it passed, as the
+    // envelope lists them.
+    fn repaired(&self) -> Vec<usize> {
+        self.envelope
+            .as_ref()
+            .and_then(|out| out["repaired"].as_array())
+            .map(|waves| {
+                waves.iter().filter_map(Value::as_u64).filter_map(|k| k.try_into().ok()).collect()
+            })
+            .unwrap_or_default()
+    }
+
     // The wave the failure names, read from the engine's description:
     // `slice ... failed in wave <k>` or `wave <k> failed`.
     fn wave_failed(&self) -> Option<usize> {
@@ -1691,6 +1900,481 @@ fn chain(text: &str) -> Vec<Landed> {
             })
         })
         .collect()
+}
+
+// --- the host's pass over the tree a build left ---
+
+// Where a build left its tree: the label in `target.git` once the run
+// landed, else the integration copy's head a failed run leaves, read only
+// where its chain is this run's.
+enum Tree {
+    Label { bare: PathBuf, label: String },
+    Integration(PathBuf),
+}
+
+impl Tree {
+    fn left(project: &Path, revision: &str, build: &Build) -> Option<Self> {
+        if build.landed() {
+            return Some(Self::Label {
+                bare: project.join("target.git"),
+                label: format!("emery/{revision}"),
+            });
+        }
+        let integration = project.join(".emery/vcs/integration");
+        (!build.history.is_empty() && integration.is_dir())
+            .then_some(Self::Integration(integration))
+    }
+
+    // The repository to read and the tip within it.
+    fn at(&self) -> (&Path, &str) {
+        match self {
+            Self::Label { bare, label } => (bare, label),
+            Self::Integration(copy) => (copy, "HEAD"),
+        }
+    }
+}
+
+impl Display for Tree {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Label { label, .. } => write!(f, "the label `{label}`"),
+            Self::Integration(_) => f.write_str("the integration copy's head"),
+        }
+    }
+}
+
+// The root files, directories, and test files the layout admits; a tracked
+// file anywhere else is outside it.
+const ROOT_FILES: &[&str] = &["package.json", "package-lock.json", "tsconfig.json", ".gitignore"];
+
+// What the host's own checks say of the tree a build left: the layout's
+// three checks run in a fresh export of the tip, the tests they ran, the
+// scenarios of the merged slices a test is named by, the tracked files
+// outside the layout, and what the checks wrote besides the lockfile.
+struct Fidelity {
+    // the file beside the run's log the pass is written to
+    file: String,
+    tree: String,
+    checks: Vec<HostCheck>,
+    // the tests the runner reported passed and failed
+    passed: usize,
+    failed: usize,
+    // the `test(` names the tree's test files declare
+    tests: usize,
+    scenarios: Vec<Scenario>,
+    outside: Vec<String>,
+    wrote: Vec<String>,
+}
+
+// One command the host ran in the exported tree: its exit, or none where an
+// earlier check's failure left it unrun, and the tail of what it printed.
+struct HostCheck {
+    name: &'static str,
+    exit: Option<i32>,
+    note: String,
+}
+
+impl HostCheck {
+    fn passed(&self) -> bool {
+        self.exit == Some(0)
+    }
+
+    // The one line of the note the table shows: the TAP counts for the test
+    // runner, the last line printed for the rest.
+    fn summary(&self) -> String {
+        let lines: Vec<&str> =
+            self.note.lines().map(str::trim).filter(|line| !line.is_empty()).collect();
+        if self.name == "node --test" {
+            let counts: Vec<&str> = lines
+                .iter()
+                .copied()
+                .filter(|line| {
+                    ["# tests", "# pass", "# fail"].iter().any(|key| line.starts_with(key))
+                })
+                .collect();
+            if !counts.is_empty() {
+                return counts.join(" · ");
+            }
+        }
+        lines.last().copied().unwrap_or("").to_owned()
+    }
+}
+
+// One acceptance scenario of a merged slice's requirement, and the test
+// named by it, if any.
+struct Scenario {
+    stem: String,
+    unknown: bool,
+    named: Option<Named>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Named {
+    Exact,
+    Fuzzy,
+}
+
+impl Fidelity {
+    #[expect(clippy::disallowed_types, reason = "the eval runs the host's toolchain over the tree")]
+    fn read(
+        project: &Path, tag: &str, tree: &Tree, build: &Build, spec: Option<&Value>,
+    ) -> io::Result<Self> {
+        let (repo, tip) = tree.at();
+        let export = project.join(format!("{tag}.fidelity"));
+        if export.exists() {
+            fs::remove_dir_all(&export)?;
+        }
+        fs::create_dir_all(&export)?;
+
+        // the tip exported whole, and listed
+        let archive = project.join(format!("{tag}.fidelity.tar"));
+        git(repo, &["archive", "--format=tar", "-o", &archive.display().to_string(), tip])?;
+        let untar = std::process::Command::new("tar")
+            .arg("-xf")
+            .arg(&archive)
+            .arg("-C")
+            .arg(&export)
+            .output()?;
+        fs::remove_file(&archive)?;
+        if !untar.status.success() {
+            return Err(io::Error::other(format!(
+                "tar over the exported tree: {}",
+                String::from_utf8_lossy(&untar.stderr).trim()
+            )));
+        }
+        let tracked: Vec<String> =
+            git(repo, &["ls-tree", "-r", "--name-only", tip])?.lines().map(str::to_owned).collect();
+
+        // the layout's checks, each unrun once an earlier one fails to leave
+        // what it needs
+        let mut checks = vec![host_check(&export, "npm install", &["--no-audit", "--no-fund"])];
+        let installed = checks[0].passed();
+        checks.push(if installed {
+            host_check(&export, "npx tsc", &["--noEmit"])
+        } else {
+            unrun("npx tsc")
+        });
+        checks.push(if installed {
+            host_check(
+                &export,
+                "node --test",
+                &[
+                    "--test-force-exit",
+                    "--test-timeout=5000",
+                    "--test-reporter=tap",
+                    "test/**/*.test.ts",
+                ],
+            )
+        } else {
+            unrun("node --test")
+        });
+        let (passed, failed) = tap_counts(&checks[2].note);
+
+        // the tests the tree declares, against the merged slices' scenarios
+        let mut names = Vec::new();
+        test_names(&export.join("test"), &mut names)?;
+        let merged: BTreeSet<String> =
+            build.integrated().into_iter().flat_map(|slice| slice.requirements).collect();
+        let requirements = spec
+            .and_then(|spec| spec["requirements"].as_array())
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        let mut scenarios = Vec::new();
+        for requirement in requirements {
+            let Some(id) = requirement["id"].as_str() else {
+                continue;
+            };
+            if !merged.is_empty() && !merged.contains(id) {
+                continue;
+            }
+            let stem = requirement["subject"].as_str().and_then(stem).unwrap_or("").to_owned();
+            let listed = requirement["scenarios"].as_array().map(Vec::as_slice).unwrap_or_default();
+            for scenario in listed {
+                scenarios.push(Scenario {
+                    stem: stem.clone(),
+                    unknown: scenario["then"].as_str() == Some("[unknown]"),
+                    named: named_by(scenario["name"].as_str().unwrap_or(""), &names),
+                });
+            }
+        }
+
+        // the files outside the layout, and what the checks wrote
+        let stems: BTreeSet<&str> =
+            requirements.iter().filter_map(|r| r["subject"].as_str().and_then(stem)).collect();
+        let outside = tracked.iter().filter(|path| !within_layout(path, &stems)).cloned().collect();
+        let mut present = Vec::new();
+        files_under(&export, &export, &mut present)?;
+        let wrote = present
+            .into_iter()
+            .filter(|path| path != "package-lock.json" && !tracked.contains(path))
+            .collect();
+        fs::remove_dir_all(&export)?;
+
+        Ok(Self {
+            file: format!("{tag}.fidelity.md"),
+            tree: tree.to_string(),
+            checks,
+            passed,
+            failed,
+            tests: names.len(),
+            scenarios,
+            outside,
+            wrote,
+        })
+    }
+
+    // Whether the host's three checks all passed, with every test.
+    fn clean(&self) -> bool {
+        self.checks.iter().all(HostCheck::passed) && self.failed == 0
+    }
+
+    fn named(&self) -> usize {
+        self.scenarios.iter().filter(|scenario| scenario.named.is_some()).count()
+    }
+
+    // The `host checks` cell: `ok` with the tests' count, else each check
+    // that failed or was left unrun.
+    fn host_cell(&self) -> String {
+        let tests = format!("{}/{}", self.passed, self.passed + self.failed);
+        if self.clean() {
+            return format!("ok {tests}");
+        }
+        let mut parts = Vec::new();
+        for check in &self.checks {
+            let runner = check.name == "node --test";
+            match check.exit {
+                Some(0) if !runner || self.failed == 0 => {}
+                Some(_) if runner => parts.push(format!("tests {tests}")),
+                Some(_) => parts.push(format!("{} ✗", check.name)),
+                None => parts.push(format!("{} unrun", check.name)),
+            }
+        }
+        parts.join(" · ")
+    }
+
+    // The `scenarios named` cell: the scenarios a test is named by, and the
+    // tracked files outside the layout.
+    fn scenarios_cell(&self) -> String {
+        let total = self.scenarios.len();
+        let percent = (self.named() * 100).checked_div(total).unwrap_or(0);
+        format!("{}/{total} ({percent}%) · {} outside", self.named(), self.outside.len())
+    }
+}
+
+impl Display for Fidelity {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        writeln!(f, "# Fidelity\n\nTree: {}.\n\n## The host's checks\n", self.tree)?;
+        writeln!(f, "| check | exit | note |\n| --- | --- | --- |")?;
+        for check in &self.checks {
+            let exit = check.exit.map_or_else(|| "unrun".to_owned(), |code| code.to_string());
+            writeln!(f, "| `{}` | {exit} | {} |", check.name, check.summary())?;
+        }
+        writeln!(
+            f,
+            "\n## Tests\n\n- {} `test(` names in the tree; the runner reports {} passed, {} \
+             failed.",
+            self.tests, self.passed, self.failed
+        )?;
+
+        // the scenarios, by stem
+        let total = self.scenarios.len();
+        let exact = self.scenarios.iter().filter(|s| s.named == Some(Named::Exact)).count();
+        let unknown = self.scenarios.iter().filter(|s| s.unknown).count();
+        writeln!(
+            f,
+            "\n## Scenarios named by a test\n\n- {}/{total} scenarios of the merged slices have a \
+             test named by them: {exact} by the scenario's name exactly, {} by a test name \
+             containing it or contained in it.\n- {unknown} scenarios have `then [unknown]`.\n",
+            self.named(),
+            self.named() - exact,
+        )?;
+        writeln!(
+            f,
+            "| stem | scenarios | exact | fuzzy | then [unknown] |\n| --- | --- | --- | --- | --- |"
+        )?;
+        let stems: BTreeSet<&str> = self.scenarios.iter().map(|s| s.stem.as_str()).collect();
+        for stem in stems {
+            let of: Vec<&Scenario> = self.scenarios.iter().filter(|s| s.stem == stem).collect();
+            writeln!(
+                f,
+                "| `{stem}` | {} | {} | {} | {} |",
+                of.len(),
+                of.iter().filter(|s| s.named == Some(Named::Exact)).count(),
+                of.iter().filter(|s| s.named == Some(Named::Fuzzy)).count(),
+                of.iter().filter(|s| s.unknown).count(),
+            )?;
+        }
+
+        // the files
+        listed(f, "## Files outside the layout", "tracked files outside it", &self.outside)?;
+        listed(f, "## What the checks wrote", "paths besides the lockfile", &self.wrote)
+    }
+}
+
+// A section counting `paths` and listing them, `none` where there are none.
+fn listed(f: &mut fmt::Formatter<'_>, heading: &str, what: &str, paths: &[String]) -> fmt::Result {
+    if paths.is_empty() {
+        return writeln!(f, "\n{heading}\n\n- none: 0 {what}.");
+    }
+    writeln!(f, "\n{heading}\n\n- {} {what}:", paths.len())?;
+    for path in paths {
+        writeln!(f, "  - `{path}`")?;
+    }
+    Ok(())
+}
+
+// One command of the host's toolchain run in `at`, its stdout and stderr
+// read together for the note.
+#[expect(clippy::disallowed_types, reason = "the eval runs the host's toolchain over the tree")]
+fn host_check(at: &Path, command: &'static str, args: &[&str]) -> HostCheck {
+    let mut words = command.split(' ');
+    let program = words.next().unwrap_or(command);
+    let output = std::process::Command::new(program)
+        .args(words)
+        .args(args)
+        .current_dir(at)
+        .env_remove("CURSOR_API_KEY")
+        .output();
+    match output {
+        Ok(output) => {
+            let mut text = String::from_utf8_lossy(&output.stdout).into_owned();
+            text.push_str(&String::from_utf8_lossy(&output.stderr));
+            let mut tail: Vec<&str> =
+                text.lines().filter(|line| !line.trim().is_empty()).rev().take(12).collect();
+            tail.reverse();
+            HostCheck {
+                name: command,
+                exit: output.status.code(),
+                note: tail.join("\n"),
+            }
+        }
+        Err(error) => HostCheck {
+            name: command,
+            exit: None,
+            note: format!("not run: {error}"),
+        },
+    }
+}
+
+fn unrun(command: &'static str) -> HostCheck {
+    HostCheck {
+        name: command,
+        exit: None,
+        note: "not run: the install failed".to_owned(),
+    }
+}
+
+// The `# pass N` and `# fail N` lines of a TAP summary.
+fn tap_counts(note: &str) -> (usize, usize) {
+    let count = |key: &str| {
+        note.lines()
+            .rev()
+            .filter_map(|line| line.trim().strip_prefix(key))
+            .find_map(|rest| rest.trim().parse::<usize>().ok())
+            .unwrap_or(0)
+    };
+    (count("# pass"), count("# fail"))
+}
+
+// Every `test("…")` and `it("…")` name under `dir`, read from the files'
+// text; a name over a template or an expression is passed over.
+fn test_names(dir: &Path, names: &mut Vec<String>) -> io::Result<()> {
+    if !dir.is_dir() {
+        return Ok(());
+    }
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if entry.file_type()?.is_dir() {
+            test_names(&path, names)?;
+        } else if path.extension().is_some_and(|ext| ext == "ts") {
+            let text = fs::read_to_string(&path)?;
+            names.extend(declared_tests(&text));
+        }
+    }
+    Ok(())
+}
+
+fn declared_tests(text: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    for opener in ["test(", "it("] {
+        for (at, _) in text.match_indices(opener) {
+            let led = text[..at].chars().next_back();
+            if led.is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '.') {
+                continue;
+            }
+            let rest = text[at + opener.len()..].trim_start();
+            let Some(quote) = rest.chars().next().filter(|c| matches!(c, '"' | '\'')) else {
+                continue;
+            };
+            if let Some(end) = rest[1..].find(quote) {
+                names.push(rest[1..=end].to_owned());
+            }
+        }
+    }
+    names
+}
+
+// The test named by a scenario: one spelled exactly as it is, else one that
+// contains it or that it contains, both read without case; a short name is
+// never contained, since a word is not a scenario.
+fn named_by(scenario: &str, tests: &[String]) -> Option<Named> {
+    let scenario = scenario.trim().to_lowercase();
+    if scenario.is_empty() {
+        return None;
+    }
+    let lowered: Vec<String> = tests.iter().map(|test| test.trim().to_lowercase()).collect();
+    if lowered.contains(&scenario) {
+        return Some(Named::Exact);
+    }
+    let fuzzy = lowered.iter().any(|test| {
+        (test.len() >= 12 && scenario.contains(test.as_str()))
+            || (scenario.len() >= 12 && test.contains(scenario.as_str()))
+    });
+    fuzzy.then_some(Named::Fuzzy)
+}
+
+// Whether a tracked path is one the layout admits: a root manifest, the
+// entry or the runner, a file under a stem's directory, or a stem's test
+// file or directory.
+fn within_layout(path: &str, stems: &BTreeSet<&str>) -> bool {
+    if ROOT_FILES.contains(&path) || path == "README.md" {
+        return true;
+    }
+    if let Some(rest) = path.strip_prefix("src/") {
+        if rest == "index.ts" || rest == "main.ts" {
+            return true;
+        }
+        return rest.split_once('/').is_some_and(|(dir, _)| stems.contains(dir));
+    }
+    if let Some(rest) = path.strip_prefix("test/") {
+        return rest.strip_suffix(".test.ts").is_some_and(|name| stems.contains(name))
+            || rest.split_once('/').is_some_and(|(dir, _)| stems.contains(dir));
+    }
+    false
+}
+
+// Every file beneath `dir` as a `/`-separated path relative to `root`,
+// `node_modules` and `.git` passed over.
+fn files_under(root: &Path, dir: &Path, found: &mut Vec<String>) -> io::Result<()> {
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        if name == "node_modules" || name == ".git" {
+            continue;
+        }
+        let path = entry.path();
+        if entry.file_type()?.is_dir() {
+            files_under(root, &path, found)?;
+        } else if let Ok(relative) = path.strip_prefix(root) {
+            let parts: Vec<String> = relative
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                .collect();
+            found.push(parts.join("/"));
+        }
+    }
+    Ok(())
 }
 
 // Whether a run may put a turn to the model: `None` strips `CURSOR_API_KEY`
@@ -2235,10 +2919,16 @@ fn scorecard(settings: &Settings, reports: &[Report<'_>], started: &str, name: &
         .max_tool_calls
         .as_deref()
         .map_or_else(String::new, |calls| format!(" · `CURSOR_MAX_TOOL_CALLS={calls}`"));
+    let rebuilt = settings.rebuild.as_deref().map_or_else(String::new, |card| {
+        format!(
+            " · REBUILD: each plan is `run-1`'s of `target/eval/{card}/`, built again fresh; the \
+             specify columns and completions repeat that card's"
+        )
+    });
     let mut card = format!(
         "# Eval {started}\n\nmodel `{}` · emery `{}` · {} · {} runs per case · ladder {} \
          (`CURSOR_TIMEOUT_SECS`/`CURSOR_INACTIVITY_SECS`, climbed on a `timeout` or `inactive` \
-         completion; the columns are the first rung's){budget}{built} · runs under \
+         completion; the columns are the first rung's){budget}{built}{rebuilt} · runs under \
          `target/eval/{name}/`\n",
         settings.model,
         settings.emery.display(),
@@ -2286,8 +2976,11 @@ impl Display for Card<'_> {
         writeln!(f, "\n## {}\n\n{}\n", case.name, sources.join(" · "))?;
 
         // one row per run, at the first rung
-        let build_columns =
-            if self.built { " built | verified | build wall | speedup | covered |" } else { "" };
+        let build_columns = if self.built {
+            " built | verified | build wall | speedup | covered | host checks | scenarios named |"
+        } else {
+            ""
+        };
         writeln!(
             f,
             "| run | exit | wall | completions | input | cached | output | reasoning | claims | \
@@ -2295,7 +2988,7 @@ impl Display for Card<'_> {
              conflicts | divergences | unknown | covered | then [unknown] | slices | waves | \
              design blocks (types) |{build_columns}"
         )?;
-        writeln!(f, "|{}", " --- |".repeat(if self.built { 30 } else { 25 }))?;
+        writeln!(f, "|{}", " --- |".repeat(if self.built { 32 } else { 25 }))?;
         for attempts in runs {
             if let Some(first) = attempts.first() {
                 row(f, first, case.expected.sources.len() > 1)?;
@@ -2409,12 +3102,14 @@ fn row(f: &mut Formatter<'_>, attempt: &Attempt, named: bool) -> fmt::Result {
     )
 }
 
-// The five build cells after a row's own: what the build merged, verified,
-// took, saved over a serial walk, and covered; `—` where no plan was built.
+// The seven build cells after a row's own: what the build merged, verified,
+// took, saved over a serial walk, and covered, then what the host's checks
+// and the tests say of the tree it left; `—` where no plan was built, and
+// in the last two where the build left no tree.
 fn build_cells(f: &mut Formatter<'_>, attempt: &Attempt) -> fmt::Result {
     let run = &attempt.run;
     let Some(build) = &run.build else {
-        return write!(f, " — | — | — | — | — |");
+        return write!(f, " — | — | — | — | — | — | — |");
     };
     let integrated = build.integrated();
     let conflicted = integrated.iter().filter(|slice| !slice.conflicts.is_empty()).count();
@@ -2445,7 +3140,14 @@ fn build_cells(f: &mut Formatter<'_>, attempt: &Attempt) -> fmt::Result {
         .speedup()
         .map_or_else(|| "—".to_owned(), |speedup| format!("{}{against}", factor(speedup)));
     let (covered, all) = build.covered();
-    write!(f, " {merged} | {verified} | {wall} | {speedup} | {covered}/{all} |")
+    let (host, scenarios) = build.fidelity.as_ref().map_or_else(
+        || ("—".to_owned(), "—".to_owned()),
+        |fidelity| (fidelity.host_cell(), fidelity.scenarios_cell()),
+    );
+    write!(
+        f,
+        " {merged} | {verified} | {wall} | {speedup} | {covered}/{all} | {host} | {scenarios} |"
+    )
 }
 
 // A ratio in hundredths as the card spells it, `1.40×`.
@@ -2565,20 +3267,7 @@ fn build_notes(f: &mut Formatter<'_>, run: &Run, build: &Build) -> fmt::Result {
             });
         writeln!(f, "- wave {wave}: {}{spent}", slices.join(", "))?;
     }
-    for slice in integrated.iter().filter(|slice| !slice.conflicts.is_empty()) {
-        writeln!(
-            f,
-            "- conflicted: {} at {}, merged on its second build",
-            slice.id,
-            slice.conflicts.join(", ")
-        )?;
-    }
-    for failure in build.verify_failures() {
-        writeln!(f, "- verify refused: {failure}")?;
-    }
-    for slice in integrated.iter().filter(|slice| !slice.uncovered().is_empty()) {
-        writeln!(f, "- uncovered: {} {}", slice.id, slice.uncovered().join(", "))?;
-    }
+    build_findings(f, build, &integrated)?;
 
     // the chain, newest first
     if !build.history.is_empty() {
@@ -2623,6 +3312,48 @@ fn build_notes(f: &mut Formatter<'_>, run: &Run, build: &Build) -> fmt::Result {
         )?;
     }
 
+    Ok(())
+}
+
+// What the build's waves left to read: the conflicted slices and their
+// paths, the waves the verify repaired, the verify's refusals, the
+// uncovered ids per slice, and what the host's checks say of the tree.
+fn build_findings(f: &mut Formatter<'_>, build: &Build, integrated: &[Integrated]) -> fmt::Result {
+    for slice in integrated.iter().filter(|slice| !slice.conflicts.is_empty()) {
+        writeln!(
+            f,
+            "- conflicted: {} at {}, merged on a later build",
+            slice.id,
+            slice.conflicts.join(", ")
+        )?;
+    }
+    let repaired = build.repaired();
+    if !repaired.is_empty() {
+        let waves: Vec<String> = repaired.iter().map(ToString::to_string).collect();
+        writeln!(f, "- repaired by the verify: wave {}", waves.join(", wave "))?;
+    }
+    for failure in build.verify_failures() {
+        writeln!(f, "- verify refused: {failure}")?;
+    }
+    for slice in integrated.iter().filter(|slice| !slice.uncovered().is_empty()) {
+        writeln!(f, "- uncovered: {} {}", slice.id, slice.uncovered().join(", "))?;
+    }
+    if let Some(fidelity) = &build.fidelity {
+        let agree = match (build.landed(), fidelity.clean()) {
+            (true, true) => "the host's checks agree with the verdicts",
+            (true, false) => "the host's checks disagree with the passed verdicts",
+            (false, true) => "the host's checks pass the tree the run left",
+            (false, false) => "the host's checks fail the tree the run left",
+        };
+        writeln!(
+            f,
+            "- host checks over {}: {}; scenarios named {}; {agree} (`{}`)",
+            fidelity.tree,
+            fidelity.host_cell(),
+            fidelity.scenarios_cell(),
+            fidelity.file,
+        )?;
+    }
     Ok(())
 }
 
@@ -3122,6 +3853,7 @@ mod tests {
             completions: completions(stderr),
             history,
             tail: String::new(),
+            fidelity: None,
         }
     }
 
@@ -3138,6 +3870,7 @@ mod tests {
      "written": ["src/payments/index.ts"], "commit": "cccccccc", "conflicts": ["src/index.ts"]}
   ],
   "verified": ["aaaaaaaa", "bbbbbbbb", "cccccccc"],
+  "repaired": [2],
   "head": "cccccccc",
   "label": "emery/feb4bd36",
   "pushed": "origin"
@@ -3267,6 +4000,105 @@ mod tests {
         assert_eq!(build.verified(), 3);
         assert_eq!(build.covered(), (4, 5));
         assert_eq!(build.verify_failures(), [] as [&str; 0]);
+        assert_eq!(build.repaired(), [2]);
+    }
+
+    #[test]
+    fn host_checks_cells() {
+        let check = |name, exit| HostCheck {
+            name,
+            exit,
+            note: String::new(),
+        };
+        let mut fidelity = Fidelity {
+            file: "run-1.fidelity.md".to_owned(),
+            tree: "the label `emery/feb4bd36`".to_owned(),
+            checks: vec![
+                check("npm install", Some(0)),
+                check("npx tsc", Some(0)),
+                check("node --test", Some(0)),
+            ],
+            passed: 12,
+            failed: 0,
+            tests: 12,
+            scenarios: vec![
+                Scenario {
+                    stem: "orders".to_owned(),
+                    unknown: false,
+                    named: Some(Named::Exact),
+                },
+                Scenario {
+                    stem: "orders".to_owned(),
+                    unknown: true,
+                    named: None,
+                },
+                Scenario {
+                    stem: "start".to_owned(),
+                    unknown: false,
+                    named: Some(Named::Fuzzy),
+                },
+            ],
+            outside: vec!["scripts/check.mjs".to_owned()],
+            wrote: Vec::new(),
+        };
+        assert!(fidelity.clean());
+        assert_eq!(fidelity.host_cell(), "ok 12/12");
+        assert_eq!(fidelity.scenarios_cell(), "2/3 (66%) · 1 outside");
+
+        fidelity.checks[1].exit = Some(2);
+        fidelity.checks[2].exit = Some(1);
+        fidelity.failed = 2;
+        assert!(!fidelity.clean());
+        assert_eq!(fidelity.host_cell(), "npx tsc ✗ · tests 12/14");
+
+        fidelity.checks[0].exit = Some(1);
+        fidelity.checks[1] = unrun("npx tsc");
+        fidelity.checks[2] = unrun("node --test");
+        assert_eq!(fidelity.host_cell(), "npm install ✗ · npx tsc unrun · node --test unrun");
+    }
+
+    #[test]
+    fn tap_summary() {
+        let note = "TAP version 13\nok 1 - a\nnot ok 2 - b\n# tests 2\n# pass 1\n# fail 1\n";
+        assert_eq!(tap_counts(note), (1, 1));
+        assert_eq!(tap_counts("not run: the install failed"), (0, 0));
+    }
+
+    #[test]
+    fn tests_named_by_scenarios() {
+        let text = "import { test } from \"node:test\";\n\
+                    test(\"an order with no items is refused\", () => {});\n\
+                    it('a paid order ships', () => {});\n\
+                    subtest(\"not a test\", () => {});\n\
+                    test(`a template ${name}`, () => {});\n";
+        let names = declared_tests(text);
+        assert_eq!(names, ["an order with no items is refused", "a paid order ships"]);
+        assert_eq!(named_by("An order with no items is refused", &names), Some(Named::Exact));
+        assert_eq!(named_by("a paid order ships to the address", &names), Some(Named::Fuzzy));
+        assert_eq!(named_by("ships", &names), None);
+        assert_eq!(named_by("an order is cancelled", &names), None);
+    }
+
+    #[test]
+    fn layout_membership() {
+        let stems: BTreeSet<&str> = ["orders", "start"].into_iter().collect();
+        for path in [
+            "package.json",
+            "README.md",
+            "src/index.ts",
+            "src/main.ts",
+            "src/orders/index.ts",
+            "src/orders/reading/package.json",
+            "test/orders.test.ts",
+            "test/orders/reading.test.ts",
+        ] {
+            assert!(within_layout(path, &stems), "`{path}` is within the layout");
+        }
+        for path in
+            ["scripts/check.mjs", "src/orders-reading/index.ts", "test/helpers.ts", "src/x.ts"]
+        {
+            assert!(!within_layout(path, &stems), "`{path}` is outside the layout");
+        }
     }
 
     // The serial walk is every turn in a row; the critical path takes each
