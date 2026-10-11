@@ -86,6 +86,9 @@ Environment knobs:
 - `CURSOR_INACTIVITY_SECS` (120) — cancels a stream gone silent while waiting on the bridge; not while the model composes.
 - `CURSOR_MAX_AGENTS` (4) — bridge agents live at once; further completions queue.
 - `CURSOR_MODEL` (`auto`) — the model every completion is put to; one that reasons less shortens synthesis most.
+- `CURSOR_EGRESS` (unset) — hosts a build's confined worker may reach beside Cursor's own, `,`-separated, `*.suffix` for a domain: `registry.npmjs.org` for `typescript-target`'s `npm install`, which otherwise fails inside the boundary naming the host the proxy refused.
+- `CURSOR_READ_ROOTS` (unset) — directories the worker may read beside the system's own, `:`-separated: the root of a `node` installed under `$HOME` (nvm, volta, fnm), which the worker's private `HOME` hides.
+- `CURSOR_WORKER_ENV` (unset) — variable names the worker's environment carries from yours, `,`-separated, the environment being otherwise built from nothing; `npm_config_registry` points the install at a mirror.
 
 
 
