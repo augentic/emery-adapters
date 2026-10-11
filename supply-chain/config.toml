@@ -109,11 +109,11 @@ version = "0.7.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.attribute-derive]]
-version = "0.10.5"
+version = "0.11.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.attribute-derive-macro]]
-version = "0.10.5"
+version = "0.11.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.auditable-serde]]
@@ -193,7 +193,7 @@ version = "0.2.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.cc]]
-version = "1.6.0"
+version = "1.8.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.cfg-if]]
@@ -340,10 +340,6 @@ criteria = "safe-to-deploy"
 version = "0.8.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.derive-where]]
-version = "1.7.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.derive_builder]]
 version = "0.20.2"
 criteria = "safe-to-deploy"
@@ -457,11 +453,11 @@ version = "0.14.5"
 criteria = "safe-to-deploy"
 
 [[exemptions.get-size-derive2]]
-version = "0.11.0"
+version = "0.11.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.get-size2]]
-version = "0.11.0"
+version = "0.11.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.getopts]]
@@ -685,11 +681,11 @@ version = "0.3.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.manyhow]]
-version = "0.11.4"
+version = "0.14.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.manyhow-macros]]
-version = "0.11.4"
+version = "0.14.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.matchit]]
@@ -909,7 +905,7 @@ version = "0.10.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.proptest]]
-version = "1.11.0"
+version = "1.12.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.prost]]
@@ -941,11 +937,11 @@ version = "0.5.16"
 criteria = "safe-to-deploy"
 
 [[exemptions.quote-use]]
-version = "0.8.4"
+version = "0.9.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.quote-use-macros]]
-version = "0.8.4"
+version = "0.9.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.r-efi]]
@@ -974,6 +970,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.rand_pcg]]
 version = "0.10.2"
+criteria = "safe-to-deploy"
+
+[[exemptions.rand_xorshift]]
+version = "0.5.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.rayon]]
@@ -1133,7 +1133,7 @@ version = "0.4.12"
 criteria = "safe-to-deploy"
 
 [[exemptions.smallvec]]
-version = "1.16.2"
+version = "1.16.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.smawk]]
@@ -1333,7 +1333,7 @@ version = "0.9.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.uuid]]
-version = "1.27.0"
+version = "1.28.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.version_check]]
