@@ -1,11 +1,11 @@
 //! Drives one adapter through the `source-adapter` world under the omnia
 //! runtime and asserts what the host sees: the metadata, the evidence over a
-//! lent workspace and an inline value, a refusal's class, the echoed answer,
-//! or the `type` claims the adapter joins by its own reading.
+//! lent workspace and an inline value, a refusal's class, or the echoed
+//! answer.
 
 #![cfg(target_arch = "wasm32")]
 
-use emery_sdk::{ClaimKind, Evidence, Source, SourceKind};
+use emery_sdk::{Source, SourceKind};
 use test_programs::{
     ADAPTER, Caller, arguments, check_evidence, check_metadata, check_same, maximal, value,
     workspace,
@@ -59,54 +59,10 @@ async fn scenario() {
             check_evidence(&first.expect("the first extract, dispatched beside the second"));
             check_evidence(&second.expect("the second extract, dispatched beside the first"));
         }
-        ["types", inline, exported, names @ ..] => {
-            let evidence = Caller
-                .extract(ADAPTER, &workspace())
-                .await
-                .expect("extract over the lent workspace");
-            check_evidence(&evidence);
-            let mut expected: Vec<&str> = names.to_vec();
-            expected.sort_unstable();
-            assert_eq!(types(&evidence), expected, "the workspace's declarations, and no other");
-            for claim in evidence.claims.iter().filter(|claim| claim.kind == ClaimKind::Type) {
-                let path = claim.path.as_deref().expect("a declaration of the tree is anchored");
-                assert!(path.contains("#L"), "anchored at its lines: {path}");
-            }
-
-            let evidence = Caller
-                .extract(ADAPTER, &value(inline))
-                .await
-                .expect("extract over an inline value");
-            check_evidence(&evidence);
-            assert_eq!(
-                types(&evidence),
-                [*exported],
-                "the value's exported declaration, and no other"
-            );
-            let inline = evidence.claims.iter().find(|claim| claim.kind == ClaimKind::Type);
-            assert_eq!(inline.and_then(|claim| claim.path.clone()), None, "a value has no file");
-        }
         other => {
             panic!(
-                "no argument, `refused <code> [<value>]`, `echoed`, `together`, or `types <value> \
-                 <exported> <name>..`; got {other:?}"
+                "no argument, `refused <code> [<value>]`, `echoed`, or `together`; got {other:?}"
             )
         }
     }
-}
-
-// The `type` claims' declared names, sorted; every one carries a signature.
-fn types(evidence: &Evidence) -> Vec<&str> {
-    let mut names: Vec<&str> = evidence
-        .claims
-        .iter()
-        .filter(|claim| claim.kind == ClaimKind::Type)
-        .map(|claim| {
-            let signature = claim.extras.get("signature").and_then(|s| s.as_str());
-            assert!(signature.is_some_and(|s| !s.is_empty()), "a declaration carries its text");
-            claim.extras.get("name").and_then(|n| n.as_str()).expect("a declaration is named")
-        })
-        .collect();
-    names.sort_unstable();
-    names
 }

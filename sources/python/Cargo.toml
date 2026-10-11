@@ -17,8 +17,6 @@ workspace = true
 
 [dependencies]
 emery-sdk.workspace = true
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
 ruff_python_ast = { version = "0.0.16", default-features = false }
 ruff_python_parser = { version = "0.0.16", default-features = false }
 ruff_text_size = { version = "0.0.16", default-features = false }

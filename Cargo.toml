@@ -13,7 +13,8 @@ documentation = { path = "sources/documentation" }
 emery-sdk.workspace = true
 intent = { path = "sources/intent" }
 omnia.workspace = true
-omnia-test = { workspace = true, features = ["host"] }
+omnia-sdk.workspace = true
+omnia-test = { workspace = true, features = ["guest", "host"] }
 omnia-wasi-model.workspace = true
 omnia-wasi-otel.workspace = true
 opentelemetry-proto.workspace = true

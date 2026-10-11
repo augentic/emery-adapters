@@ -17,6 +17,7 @@ cargo run -p evals -- orders express-orders    # two cases
 cargo run -p evals -- python                   # every case with a python source
 cargo run -p evals -- --facts fastapi-routers  # survey facts alone, no model turn
 cargo run -p evals -- --build express-orders   # specify, then build the plan
+cargo run -p evals -- --rebuild 2026-10-09T18-15-59Z express-orders  # build that card's plan again
 ```
 
 A positional argument names a case or an adapter; with none, every case runs. A case whose fixture is absent (the vendored ones, until fetched) is skipped; naming it is an error.
@@ -27,9 +28,12 @@ A positional argument names a case or an adapter; with none, every case runs. A 
 | `TYPESCRIPT_WASM`, `PYTHON_WASM`, `DOCUMENTATION_WASM`, `INTENT_WASM` | `target/wasm32-wasip2/release/<adapter>.wasm` | One per adapter a selected case uses |
 | `TYPESCRIPT_TARGET_WASM` | `target/wasm32-wasip2/release/typescript_target.wasm` | The target `--build` builds through; cargo spells the hyphenated crate's artifact with an underscore |
 | `EVAL_RUNS` | `3` | Runs per case. Three tells a stable id from a lucky one |
-| `EVAL_JOBS` | unset | Passed to `emery build` as `--jobs`, the width cap; unset leaves the engine's default |
+| `EVAL_JOBS` | unset | Passed to `emery build` as `--jobs`, the width cap; unset leaves the engine's default, which the backend's agent pool (`CURSOR_MAX_AGENTS`, 8) bounds in practice |
 | `EVAL_LADDER` | `600/120,1200/240,2400/480` | Budget rungs, each `CURSOR_TIMEOUT_SECS/CURSOR_INACTIVITY_SECS` |
 | `CURSOR_MODEL` | `auto` | Recorded in the card. Pin it before comparing two: `auto` differs run to run |
+| `CURSOR_EGRESS` | unset | Hosts (`,`-separated; `*.suffix` for a domain) a build's confined worker may reach beside Cursor's own: `registry.npmjs.org` for the target's `npm install`. Named in the card's header when set |
+| `CURSOR_READ_ROOTS` | unset | Directories (`:`-separated) the worker may read beside the system's own: the root of a `node` installed under `$HOME` (nvm, volta, fnm), which the worker's private `HOME` hides. Named in the card's header when set |
+| `CURSOR_WORKER_ENV` | unset | Variable names (`,`-separated) the worker's environment carries from the caller's, which is otherwise built from nothing: `npm_config_registry` points the install at a loopback mirror listed in `CURSOR_EGRESS` by its address. Named in the card's header when set |
 | `RUST_LOG` | set by the runner | Every adapter at `trace`; the card reads the trace lines. A caller's value is kept |
 
 The defaults suit a sibling release build. Set the paths when `CARGO_TARGET_DIR` puts the artifacts elsewhere, or to point at an experiment's build.
@@ -50,7 +54,7 @@ The smallest useful pass is one small case per stem shape: `orders`, `cli-jobs`,
 
 ### Survey facts without a model turn
 
-`--facts [case|adapter..]` stages the named cases and runs each once with `CURSOR_API_KEY` stripped. The adapter logs the facts it would lay before the model (bootstrap, registrations, decorated definitions, exports, packages) and the first turn fails before any is spent, in seconds. The text is printed and written to `target/eval/facts/<case>/facts.md`; a graded run writes the same beside its log as `run-N.facts.md`.
+`--facts [case|adapter..]` stages the named cases and runs each once with `CURSOR_API_KEY` stripped. The adapter logs the facts it would lay before the model (bootstrap, registrations, decorated definitions, exports, packages; for `documentation`, each document's outline) and the first turn fails before any is spent, in seconds. The text is printed and written to `target/eval/facts/<case>/facts.md`; a graded run writes the same beside its log as `run-N.facts.md`.
 
 This is how an expectation is written, since the facts say which modules locate a surface and how each export is read, and how a change to the facts or the keep policy is checked before a live run. A line the model should not see (a hook's decorator, a data-only class) is the adapter's defect, visible here.
 
@@ -58,14 +62,20 @@ This is how an expectation is written, since the facts say which modules locate 
 
 `--build [case|adapter..]` builds each plan a run commits, through the [`typescript-target`](../targets/typescript-target/) component into a greenfield repository, and reads what landed. Staging lays `target.git` beside the case's sources — a bare repository whose `main` is one root commit holding a `.gitignore` (`node_modules/`, `dist/`, `.emery/`) and a README naming the case, sealed through a seed clone the host's `git` pushes and the runner removes — and the project's `emery.toml` gains a `[target]` table naming the component as `eval:typescript-target@<version>`, the repository by its `file://` URL, `branch = "main"`, and `remote = "origin"`. After a specify that landed and its `show`s, `emery build --config emery.toml` runs over the project (`--jobs` from `EVAL_JOBS` when set), so the engine clones `target.git` under `.emery/vcs/repos/`, builds the waves in working copies there, and pushes the label `emery/<revision>` back; the build's log and envelope are kept as `run-N.build.stderr` and `run-N.build.stdout`. A specify that failed builds nothing, and the build cells read `—`.
 
-The build needs what the target's prompts run: `node` and `npm` of Node 22.18 or later (native type stripping), on `PATH` where `emery` runs, and the release `emery` at `EMERY_BIN`. Build the component first:
+The build needs what the target's prompts run: `node` and `npm` of Node 22.18 or later (native type stripping; the layout's `@types/node` is `^24`), on `PATH` where `emery` runs, and the release `emery` at `EMERY_BIN`. Every build and verify turn runs inside the worker boundary the `emery` binary compiles in ([Deployment profiles](https://github.com/augentic/emery/blob/main/docs/reference/deployment-profiles.md#what-a-builds-worker-may-reach)): the worker reads the system, the working copy, and a private `HOME`, and reaches the network through the backend's proxy alone, so the install's registry is named in `CURSOR_EGRESS`, a `node` under `$HOME` in `CURSOR_READ_ROOTS`, and the runner inherits both from its environment and names them in the card's header. Build the component first:
 
 ```bash
 cargo build -p typescript-target --target wasm32-wasip2 --release
-EVAL_RUNS=1 cargo run -p evals -- --build express-orders nestjs-pair
+CURSOR_EGRESS=registry.npmjs.org EVAL_RUNS=1 cargo run -p evals -- --build express-orders nestjs-pair
 ```
 
-The runner reads the build three ways: the envelope on success (each slice's wave, merge commit, covered and uncovered ids, written files, and the paths an earlier build of it conflicted at; the verified heads; the label and the remote it was pushed to) or the failure envelope the binary prints among its log lines (`slice-conflict`, `verify-failed`, the wave named in the message); the backend's `completion` lines, labelled `build-<slice>` and `verify`, for the turns' durations and tokens; and the host's `git log --first-parent` over the chain the build left — the label in `target.git` when the run landed, the integration copy `.emery/vcs/integration` a failed run leaves for inspection — each merge commit read for its `Slice:`, `Wave:`, `Requirements:`, and `Covered:` trailers and the files it brought in. Where the envelope and the chain disagree, the chain is what the repository holds.
+The runner reads the build three ways: the envelope on success (each slice's wave, merge commit, covered and uncovered ids, the paths its commit changed, and the paths an earlier build of it conflicted at; the verified heads and the waves the verify repaired; the label and the remote it was pushed to) or the failure envelope the binary prints among its log lines (`slice-conflict`, `verify-failed`, the wave named in the message); the backend's `completion` lines, labelled `build-<slice>` and `verify`, for the turns' durations and tokens; and the host's `git log --first-parent` over the chain the build left — the label in `target.git` when the run landed, the integration copy `.emery/vcs/integration` a failed run leaves for inspection — each merge commit read for its `Slice:`, `Wave:`, `Requirements:`, and `Covered:` trailers and the files it brought in. Where the envelope and the chain disagree, the chain is what the repository holds.
+
+After each build the runner reads the tree itself, since `covered` and a verdict are the model's claims: the tip the chain stands at is exported to `run-N.fidelity/` (removed once read), and the host runs `npm install`, `npx tsc --noEmit`, and `node --test --test-force-exit --test-timeout=5000 --test-reporter=tap 'test/**/*.test.ts'` in it, a check left unrun once the install fails. It then matches the acceptance scenarios of the merged slices' requirements against the `test(` and `it(` names the tree's test files declare — exactly, or one name containing the other — lists the tracked files outside the layout (the root manifests, `src/index.ts`, `src/main.ts`, a stem's directory, a stem's test file or directory), and what the checks wrote besides the lockfile. The pass is written to `run-N.fidelity.md` beside the log and read into the last two build columns; a host without the toolchain leaves them empty and the card whole.
+
+### Building a plan again
+
+`--rebuild <card> [case|adapter..]` builds the plan `run-1` of each named case committed under an earlier card again, under this invocation's `EMERY_BIN`, `TYPESCRIPT_TARGET_WASM`, `CURSOR_MODEL`, and `EVAL_JOBS`, so one revision is built under several arms and the plan's own variance is out of the comparison. The staged project is copied whole under the new card, less the engine's clones and working copies and the earlier build's files; its `emery.toml` is pointed at the copied `target.git`; the label the earlier build pushed is deleted, so the engine clones afresh and builds every slice over the greenfield root; and the run's specify is read back from the files the earlier run kept, so the card's specify columns and completions repeat the source card's, which its header says. The card the rebuild stands on must still be under `target/eval/`.
 
 ### Experiment arms
 
@@ -80,15 +90,16 @@ PYTHON_WASM=/tmp/emery-adapters-arm-target/wasm32-wasip2/release/python.wasm car
 git worktree remove --force ../emery-adapters-arm
 ```
 
-An arm that is new code is a Cargo feature of its adapter, off by default so the shipped component and the root suite stay the control. `documentation` carries `model-survey`: the model names the tree's subjects before extraction and code cuts the seams from them. Build each arm into its own path under `target/eval/arms/<arm>/`, so a later build never overwrites what an earlier card ran over:
+An arm that is new code is built the same way, from the worktree the code is written in, and never as a Cargo feature: `make test` runs the workspace under `--all-features`, which would turn the arm on in the native suite while the component build kept the default, so the two rungs would assert two behaviours. Build each arm into its own path under `target/eval/arms/<arm>/`, so a later build never overwrites what an earlier card ran over:
 
 ```bash
-mkdir -p target/eval/arms/{control,model-survey}
+mkdir -p target/eval/arms/{control,subjects}
 cargo build -p documentation --target wasm32-wasip2 --release
 cp target/wasm32-wasip2/release/documentation.wasm target/eval/arms/control/
-cargo build -p documentation --target wasm32-wasip2 --release --features model-survey
-cp target/wasm32-wasip2/release/documentation.wasm target/eval/arms/model-survey/
-DOCUMENTATION_WASM=target/eval/arms/model-survey/documentation.wasm cargo run -p evals -- orders-doc cross-cut
+cargo build --manifest-path ../emery-adapters-arm/Cargo.toml -p documentation --target wasm32-wasip2 --release \
+  --target-dir /tmp/emery-adapters-arm-target
+cp /tmp/emery-adapters-arm-target/wasm32-wasip2/release/documentation.wasm target/eval/arms/subjects/
+DOCUMENTATION_WASM=target/eval/arms/subjects/documentation.wasm cargo run -p evals -- orders-doc cross-cut
 ```
 
 ## Cases
@@ -139,7 +150,7 @@ Six cases read prose alone, each written before any run to a shape the shipped s
 | Case | What it probes | Stems |
 | --- | --- | --- |
 | [orders-doc](cases/orders-doc/expected.toml) | The live example's one document ([examples/documentation/docs](../examples/documentation/docs)): the inline-budget path | `orders` |
-| [stories](cases/stories/expected.toml) | User stories, two directories of two. The directory cut and the subjects agree | `wishlist`, `invoices` |
+| [stories](cases/stories/expected.toml) | User stories, two directories of two. The directories and the subjects agree | `wishlist`, `invoices` |
 | [adr](cases/adr/expected.toml) | Five decision records in one `adr/` directory, each its own subject, which one directory lumps into one seam | `entries`, `posting`, `amounts`, `daily-close`, `exports` |
 | [narrative](cases/narrative/expected.toml) | Three headless prose pieces at the root: no heading to anchor at, only a first line to name by | `bookings`, `returns`, `membership` |
 | [cross-cut](cases/cross-cut/expected.toml) | Twenty documents past `INLINE_BYTES`, cut by audience into `guides/`, `reference/`, `policies/` while the subjects cut across them. Written to break the directory cut | `membership`, `sign-in`, `password-reset`, `catalogue`, `loans`, `reservations`, `returns`, `damage`, `notifications` |
@@ -208,15 +219,17 @@ Each figure points at one place in the adapter:
 - **`exit`**, on a failed run: the turn it died in. `survey-*` or `evidence-*` is the adapter's and the run is short; `spec-draft`, `design-draft`, `grouping`, or `slicing` is the engine's, after every claim was accepted, and the row's recall reads as any other's.
 - **Tokens and wall clock**: from the backend's `completion` lines.
 
-Under `--build`, five columns follow, each the build's and none the extraction's:
+Under `--build`, seven columns follow, each the build's and none the extraction's:
 
-- **`built`**: `merged/slices`, then `-k` for the slices that conflicted once and merged on their second build, `!1` where a second conflict ended the run, and the failure's code where the build did not land (`2/4 !1 `slice-conflict``). Merged is the envelope's count on a landed run and the merge commits the integration copy holds on a failed one, so a slice that changed nothing is counted only where the run landed.
+- **`built`**: `merged/slices`, then `-k` for the slices that conflicted and merged on a later build, `!1` where a third conflict ended the run, and the failure's code where the build did not land (`2/4 !1 `slice-conflict``). Merged is the envelope's count on a landed run and the merge commits the integration copy holds on a failed one, so a slice that changed nothing is counted only where the run landed.
 - **`verified`**: `passed/waves` — the waves whose verify passed over the waves the build ran, the latter the last wave a slice merged in on a landed run and the waves the turns fell into on a failed one. `1/2` with `verify-failed` is the second wave's tree refused.
 - **`build wall`**: the `emery build` process end to end, with its exit where it failed.
 - **`speedup`**: the serial walk over the critical path, then the plan's own factor. Serial is every build and verify turn in a row; the critical path takes each wave at its slowest slice — every round of its build — then the wave's verify, the waves told apart by the `verify` completions between them. The plan's factor, `slices ÷ waves`, is what [the plan widths](cards/README.md#the-plan-widths) measured with slices of equal cost and the verify free, so the gap between the two is what the width is worth once the slowest slice and the verify are paid for. A build that did not land reads how far it got instead, `1.66× (1 of 6 waves)`, since a partial path compares with nothing.
 - **`covered`**: the requirement ids the merged slices' reports covered over the requirements those slices hold. An uncovered id is one the adapter left out of `covered`, never one it invented.
+- **`host checks`**: what the host's own run of the layout's checks says of the tree the build left — `ok 123/123` when the install, `tsc`, and every test pass, the tests' passed over run; else each check that failed (`npx tsc ✗ · tests 118/123`) or was left unrun after a failed install. A passed verdict beside a failing cell is the verify answering what the tree does not hold; `—` where the build left no tree.
+- **`scenarios named`**: `named/scenarios (p%) · k outside` — the acceptance scenarios of the merged slices' requirements a test is named by, and the tracked files outside the layout. A scenario-named test says a test exists, not what it asserts; a file outside the layout is a slice writing where the merge rules do not reach.
 
-Beneath the rows, after the completions: the build's ending (the label and where it stands, pushed to which remote; or the failure's code, exit, and first line); each wave's slices as they merged, with covered and files per slice and the wave's build durations against its verify; the conflicted slices and their paths; the verify's refusals, quoted; the uncovered ids per slice; the chain the repository holds, newest first, each commit with its subject and the files it brought; and the build's turns with their tokens, the serial sum, and the critical path.
+Beneath the rows, after the completions: the build's ending (the label and where it stands, pushed to which remote; or the failure's code, exit, and first line); each wave's slices as they merged, with covered and files per slice and the wave's build durations against its verify; the conflicted slices and their paths; the waves the verify repaired; the verify's refusals, quoted; the uncovered ids per slice; the host's checks, whether they agree with the verdicts, and the `run-N.fidelity.md` they are written to; the chain the repository holds, newest first, each commit with its subject and the files it brought; and the build's turns with their tokens, the serial sum, and the critical path.
 
 `surfaces`, `stems`, and the survey notes read per source where the case has several. Beneath the rows:
 

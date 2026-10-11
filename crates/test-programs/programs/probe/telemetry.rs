@@ -9,7 +9,7 @@ use tracing::Level;
 
 struct Adapter;
 
-emery_sdk::source_adapter!(Adapter);
+emery_sdk::export_source!(Adapter);
 
 impl SourceAdapter for Adapter {
     const KIND: SourceKind = SourceKind::Documentation;

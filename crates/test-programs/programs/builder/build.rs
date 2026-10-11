@@ -1,7 +1,7 @@
 //! Drives one target adapter through the `target-adapter` world under the
 //! omnia runtime and asserts what the host sees: the metadata's merge rules,
-//! the report of one build over the lent workspace held to the report gate
-//! and to the tree, and the verdict of one verification held to its gate.
+//! or the report of one build over the lent workspace held to the report
+//! gate and to the tree, and the verdict of one verification held to its gate.
 
 #![cfg(target_arch = "wasm32")]
 
@@ -50,16 +50,6 @@ async fn scenario() {
                 .collect();
             assert_eq!(declared, rules, "the merge rules the metadata declares, in order");
         }
-        ["verify", "failed"] => {
-            let verdict =
-                Caller.verify(ADAPTER, ".").await.expect("verify over the lent workspace");
-            let findings = verdict.findings();
-            assert!(findings.is_empty(), "verdict gate findings:\n{}", findings.join("\n"));
-            assert!(!verdict.passed, "a failed verdict is an answer, not an error");
-            assert!(!verdict.failures.is_empty(), "the failures the checks found are listed");
-        }
-        other => {
-            panic!("no argument, `rules <glob>=<strategy>..`, or `verify failed`; got {other:?}")
-        }
+        other => panic!("no argument or `rules <glob>=<strategy>..`; got {other:?}"),
     }
 }
