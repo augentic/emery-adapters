@@ -134,6 +134,30 @@ fn typescript_target() {
     target_corpus(typescript_target::PROSE, "typescript-target");
 }
 
+// The layout pins omnia once: every `omnia` crate the root manifest it spells
+// names is at one version, so a bump is one edit and the tree it lays
+// resolves.
+#[test]
+fn omnia_target() {
+    target_corpus(omnia_target::PROSE, "omnia-target");
+
+    let layout = body(omnia_target::PROSE, "references/layout.md").expect("the layout is listed");
+    let pins: Vec<(&str, &str)> = layout
+        .lines()
+        .filter(|line| line.starts_with("omnia"))
+        .filter_map(|line| {
+            let (name, rest) = line.split_once(" = ")?;
+            let (_, version) = rest.split_once("version = \"").or_else(|| rest.split_once('"'))?;
+            let (version, _) = version.split_once('"')?;
+            Some((name.trim(), version))
+        })
+        .collect();
+    assert!(pins.len() >= 2, "the layout pins the sdk and the host crates: {pins:?}");
+    let versions: std::collections::BTreeSet<&str> =
+        pins.iter().map(|(_, version)| *version).collect();
+    assert_eq!(versions.len(), 1, "every omnia pin in the layout is one version: {pins:?}");
+}
+
 fn surveying(docs: &[Doc]) {
     let prompt = body(docs, "survey.md").expect("the survey prompt is listed");
     capped("survey.md", prompt);

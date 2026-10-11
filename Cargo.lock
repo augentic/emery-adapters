@@ -1125,6 +1125,7 @@ dependencies = [
  "intent",
  "omnia",
  "omnia-sdk",
+ "omnia-target",
  "omnia-test",
  "omnia-wasi-model",
  "omnia-wasi-otel",
@@ -2590,6 +2591,13 @@ dependencies = [
  "tracing",
  "wasip3",
  "wit-bindgen 0.62.0",
+]
+
+[[package]]
+name = "omnia-target"
+version = "0.13.0"
+dependencies = [
+ "emery-sdk",
 ]
 
 [[package]]
