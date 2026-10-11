@@ -71,9 +71,9 @@
 //! `TYPESCRIPT_WASM` (`target/wasm32-wasip2/release/typescript.wasm`),
 //! `PYTHON_WASM`, `DOCUMENTATION_WASM`, `INTENT_WASM`, and under `--build`
 //! the target's, `TYPESCRIPT_TARGET_WASM` or `OMNIA_TARGET_WASM`
-//! (`typescript_target.wasm`, as cargo spells the crate) — each copied into
-//! the binary's store, `~/.emery/adapters`, as the
-//! package `eval:<adapter>@<version>` (the file `eval_<adapter>@<version>.wasm`,
+//! (`typescript_target.wasm`, `omnia_target.wasm`, as cargo spells the
+//! crates) — each copied into the binary's store, `~/.emery/adapters`, as
+//! the package `eval:<adapter>@<version>` (the file `eval_<adapter>@<version>.wasm`,
 //! `<version>` this workspace's), which every staged project names, so a
 //! card never stands over a published release or a developer's own build
 //! and `rm ~/.emery/adapters/eval_*` is the cleanup — `EVAL_RUNS` (`3`),
