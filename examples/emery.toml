@@ -1,34 +1,36 @@
-# Every first-party adapter over the one orders service. Run from the
-# repository root:
+# Two sources and a target: the TypeScript and documentation adapters under
+# `specify`, the omnia target under `build`. Run from the repository root:
 #
 #   emery specify --config examples/emery.toml
+#   emery build --config examples/emery.toml
 #
-# Four sources put the grouping judgment: claims about the same subject
-# from the specification, the behaviour — the service in TypeScript and
-# again in Python — and the brief are reconciled under authority precedence
-# into one requirement each. Each `adapter` is a package reference, which
-# emery reads from `~/.emery/adapters` before it fetches anything: the
-# `-dev` references here are the components this tree builds, copied there
-# under a version of their own so the published release stays beside them
+# Each `adapter` is a package reference, which emery reads from
+# `~/.emery/adapters` before it fetches anything: the components this tree
+# builds, copied there as `emery_typescript@0.13.0.wasm`,
+# `emery_documentation@0.13.0.wasm`, and `emery_omnia-target@0.13.0.wasm`
 # (examples/README.md). `path` resolves relative to this file and must land
 # inside the invocation directory, which emery mounts as the project.
 
-# The orders service specification.
+# The r9k position adapter: a multi-module Node service, gitignored under
+# examples/typescript/, so the run opens one `survey-<source>` turn over the
+# facts the parser read and cuts the seams from the anchors it accepts.
+[[source]]
+adapter = "emery:typescript@0.13.0"
+path = "typescript/at_r9k_position_adapter/"
+
+# The orders service specification: one document, surveyed for its subjects
+# and the stem each one's ids lead with.
 [[source]]
 adapter = "emery:documentation@0.13.0"
 path = "documentation/docs/"
 
-# The orders service behaviour.
-[[source]]
-adapter = "emery:typescript@0.13.0"
-path = "../evals/cases/orders/fixture/"
-
-# The same service in Python: one FastAPI module under its `__main__` guard.
-[[source]]
-adapter = "emery:python@0.13.0"
-path = "../evals/cases/fastapi-orders/fixture/"
-
-# The operator's brief, inline.
-[[source]]
-adapter = "emery:intent@0.13.0"
-description = "Ship the orders service: place, read, and cancel orders over HTTP. Every order carries at least one line item; a shipped order can no longer be cancelled. Keep the API platform-neutral."
+# The target `emery build` builds every slice of the plan through: an omnia
+# HTTP guest in Rust, one crate per stem, built into this repository from its
+# sealed head unless `repository` and `branch` name another. Its checks run
+# `cargo` inside the worker's boundary, so `CURSOR_EGRESS` opens the crates.io
+# hosts and `CURSOR_READ_ROOTS` the rustup toolchain (examples/README.md).
+[target]
+adapter = "emery:omnia-target@0.13.0"
+# repository = "git@github.com:acme/shop.git"
+# branch = "main"
+# remote = "origin"

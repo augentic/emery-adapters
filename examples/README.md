@@ -10,8 +10,6 @@ Live `specify` journeys via [omnia-cursor](https://github.com/augentic/omnia-bac
 2. [cursor-sdk-bridge](https://github.com/cursor/sdk-bridge). See [below](#installing-cursor-sdk-bridge) for installation.
 3. `CURSOR_API_KEY` in a `.env` file
 
-
-
 ## Build and run
 
 Run from the repository root: `emery` mounts the invocation directory as the project, and every path an `emery.toml` names must sit inside it.
@@ -42,6 +40,32 @@ export CURSOR_API_KEY=<Cursor API key>
 
 Swap the config for [intent](intent/emery.toml), [typescript](typescript/emery.toml), [python](python/emery.toml), or the combined [emery.toml](emery.toml). A rebuilt component is a `cp` over its `-dev` file: the store never replaces a release by itself, and the run reads whatever the file holds.
 
+### Combined `specify` -> `build`
+
+The combined [emery.toml](emery.toml) names the `typescript` source over the r9k tree, the `documentation` source over the orders specification, and `omnia-target` as the `[target]`, so it runs `specify` and then `build`. The build's checks run `cargo` inside the worker's boundary, which reaches nothing of yours until the [environment knobs](#what-to-expect) open the crates.io hosts and the rustup toolchain to it:
+
+```bash
+# copy the two further components the config names
+cp "target/wasm32-wasip2/release/documentation.wasm" ~/.emery/adapters/emery_documentation@0.13.0.wasm
+cp "target/wasm32-wasip2/release/omnia_target.wasm" ~/.emery/adapters/emery_omnia-target@0.13.0.wasm
+
+# let the build's worker reach crates.io and the rustup toolchain
+export CURSOR_EGRESS=index.crates.io,static.crates.io
+export CURSOR_READ_ROOTS=$HOME/.rustup:$HOME/.cargo/bin
+export CURSOR_WORKER_ENV=RUSTUP_HOME
+export RUSTUP_HOME=$HOME/.rustup
+
+# specify, then build the plan: one merge commit per slice, a verified wave at a time, labelled emery/<revision>
+cargo run --manifest-path ../emery/Cargo.toml -- specify -v --config examples/emery.toml
+cargo run --manifest-path ../emery/Cargo.toml -- build -v --config examples/emery.toml
+
+# read the build; the checkout itself is untouched
+git log --oneline --first-parent HEAD..emery/<revision>
+git diff --stat HEAD emery/<revision>
+```
+
+The build lands as commits under `.emery/vcs/`, never in the checkout, and starts from this repository's sealed head: a checkout with an uncommitted change is refused as `base-not-sealed`, naming the paths. To build into another repository instead, uncomment the `repository`, `branch`, and `remote` keys of the `[target]` table in [emery.toml](emery.toml).
+
 ### Tuning the log output
 
 The level is `info` bare; `-v` and `-vv` raise it a step each, `-q` and `-qq` lower it, and `RUST_LOG` refines it per crate:
@@ -53,11 +77,13 @@ export CURSOR_SDK_BRIDGE_LOG=1
 
 How much of a correction round you see depends on the level:
 
-| Level | What shows |
-| --- | --- |
-| bare | Only the `completion` line's `attempts` says a correction ran |
-| `-v` | The SDK's gate logs `candidate rejected` with its `findings`: each `path` outside the seam's anchors, with the anchors it accepts named, and each id off its stems. The backend logs `check rejected the candidate` with the `round` and the candidate's size. Corrections read as a list of findings, not a transcript |
-| `-vv` | The backend's `correction turn` carries the correction whole, as the model reads it: the rejected answer with the findings after it. The SDK's `accepted` line carries each seam's accepted evidence as JSON |
+
+| Level | What shows                                                                                                                                                                                                                                                                                                              |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| bare  | Only the `completion` line's `attempts` says a correction ran                                                                                                                                                                                                                                                           |
+| `-v`  | The SDK's gate logs `candidate rejected` with its `findings`: each `path` outside the seam's anchors, with the anchors it accepts named, and each id off its stems. The backend logs `check rejected the candidate` with the `round` and the candidate's size. Corrections read as a list of findings, not a transcript |
+| `-vv` | The backend's `correction turn` carries the correction whole, as the model reads it: the rejected answer with the findings after it. The SDK's `accepted` line carries each seam's accepted evidence as JSON                                                                                                            |
+
 
 `RUST_LOG=emery_sdk=debug` alone shows the findings without the backend's lines.
 
@@ -74,7 +100,7 @@ A run is a few model completions with long silences between log lines. The `in p
 The shape follows the config:
 
 - `path = "src/"` — one module under one stem, so three completions and no slicing turn: `evidence` 155–195 s over 140–200 K context, `spec-draft` 40–50 s, `design-draft` 60–110 s. Reasoning is about 90% of the output and 95% of the wall time.
-- The combined [emery.toml](emery.toml) adds a `grouping` completion and, across more than one stem, a `slicing` one; its Python source — the same orders service as one FastAPI module under its `__main__` guard — is one `survey-<source>` completion and one `evidence` seam over the module, and its documentation source one `survey-<source>` completion over the document's outline, in which the model names the subjects and the stem each one's ids lead with, and one `evidence` seam over them, so the grouping reconciles two behaviour sources' claims about the same routes beside the specification's and the brief's.
+- The combined [emery.toml](emery.toml) adds a `grouping` completion and, across more than one stem, a `slicing` one; its TypeScript source runs as [typescript/emery.toml](typescript/emery.toml) does below, and its documentation source is one `survey-<source>` completion over the document's outline, in which the model names the subjects and the stem each one's ids lead with, and one `evidence` seam over them. The `build` that follows is one `build` completion per slice, every slice of a wave at once, and one `verify` completion per wave.
 - [typescript/emery.toml](typescript/emery.toml) points at a multi-module tree (a gitignored Node service under `at_r9k_position_adapter/`), so the adapter parses it and opens one `survey-<source>` completion over the facts it read — the manifest, the bootstrap, every call that hands a function to a package's receiver, the packages — in which the model names the surfaces at the lines that register them: `start` for the bootstrap and everything it reaches is the adapter's own, the one message handler the model's, whose stem the code reads from its registration where it spells one. From the accepted anchors the rest is decided by code — the id each surface's requirements lead with, the modules each seam lays, and the lines a `requirement` may anchor at — so two runs that accept the same anchors cut the same seams. Each seam's message lists what its modules spell — the boundaries a criterion cites, the packages they import and the calls made through them, the decision points, the behaviours the tree's tests state — before the modules themselves. Under `composer-2.5` the tree fits one message, so both stems share one `evidence` seam and a run is seven completions: the survey at 40–60 s, `evidence` 85–120 s, nearly always with one correction round in which the gate sends back the two to five requirements anchored at a line that only wires — a bare `await main.start()`, a call into the tree's own module — with the anchors it accepts in that file named, then `grouping`, one `spec-draft` per stem, `design-draft`, and `slicing` at 15–25 s each. The graded eval ([evals/README.md](../evals/README.md)) is where the current numbers live, and [evals/cards/README.md](../evals/cards/README.md) records the experiment that made the survey by model the default over the parser's own detection.
 - [python/emery.toml](python/emery.toml) points at the eval's `fastapi-routers` fixture — a FastAPI service whose generated postcode table puts its modules past the inline budget — so the adapter parses it, opens one `survey-<source>` completion over the manifest's console script, the bootstrap, the three routers' decorated `def`s, and the packages, and then one `evidence` seam per stem (`start`, `orders`, `customers`, `health`), each laying its closure in order until the postcode table ends the laid run and listing the modules after it, the `rates.json` the pricing module reads laid as a data file. The six `python` eval cases ([evals/README.md](../evals/README.md)) are the graded walks over the same adapter.
 
@@ -89,8 +115,6 @@ Environment knobs:
 - `CURSOR_EGRESS` (unset) — hosts a build's confined worker may reach beside Cursor's own, `,`-separated, `*.suffix` for a domain: `registry.npmjs.org` for `typescript-target`'s `npm install`, `index.crates.io,static.crates.io` for `omnia-target`'s `cargo`, which otherwise fail inside the boundary naming the host the proxy refused.
 - `CURSOR_READ_ROOTS` (unset) — directories the worker may read beside the system's own, `:`-separated: the root of a `node` installed under `$HOME` (nvm, volta, fnm), which the worker's private `HOME` hides; `$HOME/.rustup:$HOME/.cargo/bin` for a rustup toolchain.
 - `CURSOR_WORKER_ENV` (unset) — variable names the worker's environment carries from yours, `,`-separated, the environment being otherwise built from nothing but `PATH`; `npm_config_registry` points the install at a mirror; `RUSTUP_HOME`, exported as `$HOME/.rustup`, lets rustup's `cargo` find the toolchain the private `HOME` hides.
-
-
 
 ## Host-to-guest tool calls
 
