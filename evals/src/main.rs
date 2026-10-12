@@ -46,17 +46,19 @@
 //! `.stdout`, and the card gains seven columns — what the build merged,
 //! verified, took, saved over a serial walk of the same turns, and covered,
 //! then what the host's own checks and the tests say of the tree it left —
-//! with the waves, the conflicts, the repairs, the verify's refusals, the
-//! uncovered ids, and the chain the repository holds beneath the run's
-//! notes. The host's pass exports the tree the build left (the label, or the
-//! integration copy a failed build leaves), runs the target's checks in it
-//! (`npm install`, `npx tsc --noEmit`, and `node --test` for
-//! `typescript-target`; `cargo clippy`, `cargo test`, and `cargo build
-//! --target wasm32-wasip2` for `omnia-target`), matches the merged slices'
-//! acceptance scenarios against the test names the tree declares (`test(`
-//! names, or `#[test]` fns with their underscores read as spaces), lists the
-//! tracked files outside the target's layout, and writes it all to
-//! `run-N.fidelity.md`.
+//! with the waves, each with what its verify sealed besides the lockfile,
+//! the conflicts, the repairs, the verify's refusals, the uncovered ids, and
+//! the chain the repository holds beneath the run's notes. The host's pass
+//! exports the tree the build left (the label, or the integration copy a
+//! failed build leaves), runs the target's checks in it (`npm install`,
+//! `npx tsc --noEmit`, and `node --test` for `typescript-target`; `cargo
+//! clippy`, `cargo test`, and `cargo build --target wasm32-wasip2` for
+//! `omnia-target`), matches the merged slices' acceptance scenarios against
+//! the test names the tree declares (`test(` names, or `#[test]` fns with
+//! their underscores read as spaces), lists the modules the layout's lists
+//! do not reach (a `mount` the router list does not name; an `index.ts` no
+//! list re-exports) and the tracked files outside the target's layout, and
+//! writes it all to `run-N.fidelity.md`.
 //!
 //! `cargo run -p evals -- --rebuild <card> [case|adapter..]` builds the plan
 //! `run-1` of each named case committed under an earlier card again, under
@@ -87,7 +89,11 @@
 //! bridge's calls go, is theirs. `RUST_LOG` is set for the run unless the caller sets it:
 //! the scorecard needs the SDK's `accepted` trace lines and `surveyed by
 //! model` line, the adapters' `survey facts` and `surveyed` trace lines and
-//! `placed by model` line, and the backend's `completion` lines.
+//! `placed by model` line, and the backend's `completion` lines. The filter
+//! opens `omnia_cursor::tools` at trace beside them, the target the backend
+//! logs each tool call's arguments whole under, so a build's log reads what
+//! every turn asked of its tools without the stream's frames; a binary over
+//! an `omnia-cursor` without the target logs nothing for it.
 
 #![allow(
     clippy::print_stdout,
@@ -113,13 +119,14 @@ const LADDER: &str = "600/120,1200/240,2400/480";
 const BOOTSTRAP: &str = "start";
 
 // The run's log filter unless the caller sets one: every adapter the case
-// runs under at trace beside the SDK's.
+// runs under at trace beside the SDK's, and the backend's tool-call
+// arguments whole, which it logs under a target of their own.
 fn rust_log<'a>(adapters: impl IntoIterator<Item = &'a str>) -> String {
     let mut filter = "emery_sdk=trace".to_owned();
     for adapter in adapters {
         let _ = write!(filter, ",{adapter}=trace");
     }
-    filter + ",omnia_cursor=info,omnia_core=off"
+    filter + ",omnia_cursor=info,omnia_cursor::tools=trace,omnia_core=off"
 }
 
 fn main() -> ExitCode {
@@ -1262,6 +1269,33 @@ impl Run {
         (blocks.len(), types)
     }
 
+    // The design's type names: each `type` block's key, the name alone where
+    // the key carries an anchor beside it.
+    fn design_types(&self) -> BTreeSet<&str> {
+        self.design
+            .as_ref()
+            .and_then(|design| design["sections"].as_array())
+            .into_iter()
+            .flatten()
+            .filter_map(|section| section["blocks"].as_array())
+            .flatten()
+            .filter_map(|block| block["type"]["key"].as_str())
+            .filter_map(|key| key.split([' ', '(']).next())
+            .collect()
+    }
+
+    fn mechanism(&self) -> Vec<Stated> {
+        mechanism(self.requirements(), &self.design_types())
+    }
+
+    // The requirements citing `source`.
+    fn citing(&self, source: &str) -> usize {
+        self.requirements()
+            .iter()
+            .filter(|requirement| citations(requirement).any(|(of, _)| of == source))
+            .count()
+    }
+
     fn slices(&self) -> usize {
         self.plan.as_ref().and_then(|plan| plan["slices"].as_array()).map_or(0, Vec::len)
     }
@@ -1454,8 +1488,11 @@ fn build(
     fs::write(project.join(format!("{tag}.build.stdout")), stdout.as_bytes())?;
     let mut tail: Vec<&str> = stderr.lines().rev().take(5).collect();
     tail.reverse();
+    let target =
+        settings.target.ok_or_else(|| io::Error::other("a build runs through a target"))?;
 
     let mut build = Build {
+        target,
         wall,
         exit: output.status.code(),
         envelope: serde_json::from_str(&stdout).ok(),
@@ -1467,9 +1504,7 @@ fn build(
     };
     // the host's pass is read beside the build, never in its place: a
     // toolchain the host lacks leaves the cells empty and the card whole
-    if let Some(tree) = Tree::left(project, revision, &build)
-        && let Some(target) = settings.target
-    {
+    if let Some(tree) = Tree::left(project, revision, &build) {
         eprintln!("eval: `{tag}` host checks over {tree}");
         match Fidelity::read(project, tag, &tree, &build, spec, target) {
             Ok(fidelity) => {
@@ -1605,6 +1640,7 @@ fn copy_tree_whole(from: &Path, to: &Path) -> io::Result<()> {
 // What one `emery build` did, read from its envelope, its log, and the
 // repository it built into.
 struct Build {
+    target: Target,
     wall: Duration,
     exit: Option<i32>,
     // the `build` envelope on success
@@ -1640,6 +1676,13 @@ struct Landed {
     requirements: Vec<String>,
     covered: Vec<String>,
     files: Vec<String>,
+}
+
+impl Landed {
+    // The wave a `Wave <k> verified` seal closed; a merge and the root none.
+    fn sealed(&self) -> Option<usize> {
+        self.subject.strip_prefix("Wave ")?.strip_suffix(" verified")?.parse().ok()
+    }
 }
 
 // One slice as the build landed it: from the envelope when the run landed,
@@ -1798,6 +1841,24 @@ impl Build {
                 waves.iter().filter_map(Value::as_u64).filter_map(|k| k.try_into().ok()).collect()
             })
             .unwrap_or_default()
+    }
+
+    // What each wave's verify sealed besides the lockfile, by wave, read
+    // from the `Wave <k> verified` commits on the chain: an empty list is a
+    // seal of the lock rewrite alone, and a wave with no seal changed nothing.
+    fn repairs(&self) -> BTreeMap<usize, Vec<String>> {
+        self.history
+            .iter()
+            .filter_map(|landed| {
+                let files = landed
+                    .files
+                    .iter()
+                    .filter(|file| *file != self.target.lockfile())
+                    .cloned()
+                    .collect();
+                Some((landed.sealed()?, files))
+            })
+            .collect()
     }
 
     // The wave the failure names, read from the engine's description:
@@ -2064,6 +2125,18 @@ impl Target {
         }
     }
 
+    // A configuration file the checks find by walking up from the tree,
+    // laid empty at the export's root for the checks when the tree holds
+    // none, so the export, which sits beneath this repository, is read
+    // under the tree's own configuration as the worker under the fence
+    // reads it, and never under this repository's.
+    const fn config_shim(self) -> Option<&'static str> {
+        match self {
+            Self::TypeScript => None,
+            Self::Omnia => Some("clippy.toml"),
+        }
+    }
+
     // The check whose exit stands for the tests, and whose output counts them.
     const fn runner(self) -> &'static str {
         match self {
@@ -2199,12 +2272,104 @@ impl Target {
         }
         Ok(names)
     }
+
+    // Every module the layout's lists do not reach, sorted: a `pub fn mount`
+    // under `crates/<stem>/src/<part>.rs` no `app_<stem>::<part>::mount(`
+    // line of the router list names, or a stem's or a part's `index.ts` the
+    // list above it does not re-export. A module's own tests pass without
+    // the list, so the checks cannot see it.
+    fn unreached(self, export: &Path) -> io::Result<Vec<String>> {
+        let mut unreached = Vec::new();
+        match self {
+            Self::TypeScript => {
+                let src = export.join("src");
+                let entry = fs::read_to_string(src.join("index.ts")).unwrap_or_default();
+                for stem in directories(&src)? {
+                    let stem_dir = src.join(&stem);
+                    if !stem_dir.join("index.ts").is_file() {
+                        continue;
+                    }
+                    if !reexported(&entry, &stem) {
+                        unreached.push(format!("src/{stem}/index.ts"));
+                    }
+                    let list = fs::read_to_string(stem_dir.join("index.ts"))?;
+                    for part in directories(&stem_dir)? {
+                        if stem_dir.join(&part).join("index.ts").is_file()
+                            && !reexported(&list, &part)
+                        {
+                            unreached.push(format!("src/{stem}/{part}/index.ts"));
+                        }
+                    }
+                }
+            }
+            Self::Omnia => {
+                let routes =
+                    fs::read_to_string(export.join("app/src/routes.rs")).unwrap_or_default();
+                let crates = export.join("crates");
+                for stem in directories(&crates)? {
+                    let src = crates.join(&stem).join("src");
+                    if !src.is_dir() {
+                        continue;
+                    }
+                    for entry in fs::read_dir(&src)? {
+                        let path = entry?.path();
+                        let Some(part) = path.file_stem().and_then(|part| part.to_str()) else {
+                            continue;
+                        };
+                        if part == "lib" || path.extension().is_none_or(|ext| ext != "rs") {
+                            continue;
+                        }
+                        if !fs::read_to_string(&path)?.contains("pub fn mount") {
+                            continue;
+                        }
+                        let call = format!("app_{}::{part}::mount(", stem.replace('-', "_"));
+                        if !routes.lines().any(|line| line.contains(&call)) {
+                            unreached.push(format!("crates/{stem}/src/{part}.rs"));
+                        }
+                    }
+                }
+            }
+        }
+        unreached.sort();
+        Ok(unreached)
+    }
+}
+
+// The names of the directories under `dir`; none where `dir` is no directory.
+fn directories(dir: &Path) -> io::Result<Vec<String>> {
+    if !dir.is_dir() {
+        return Ok(Vec::new());
+    }
+    let mut names = Vec::new();
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        if entry.file_type()?.is_dir()
+            && let Some(name) = entry.file_name().to_str()
+        {
+            names.push(name.to_owned());
+        }
+    }
+    Ok(names)
+}
+
+// Whether a list re-exports the directory `name` beside it: an
+// `export * as … from "./<name>/index.ts"` line, the specifier read
+// whatever it names within the directory.
+fn reexported(list: &str, name: &str) -> bool {
+    list.lines().map(str::trim).filter(|line| line.starts_with("export * as")).any(|line| {
+        let Some((_, from)) = line.split_once(" from ") else {
+            return false;
+        };
+        let specifier = from.trim().trim_end_matches(';').trim_matches(|c| c == '"' || c == '\'');
+        specifier == format!("./{name}") || specifier.starts_with(&format!("./{name}/"))
+    })
 }
 
 // What the host's own checks say of the tree a build left: the layout's
 // three checks run in a fresh export of the tip, the tests they ran, the
-// scenarios of the merged slices a test is named by, the tracked files
-// outside the layout, and what the checks wrote besides the lockfile.
+// scenarios of the merged slices a test is named by, the modules the
+// layout's lists do not reach, the tracked files outside the layout, and
+// what the checks wrote besides the lockfile.
 struct Fidelity {
     // the file beside the run's log the pass is written to
     file: String,
@@ -2217,6 +2382,7 @@ struct Fidelity {
     // the test names the tree's test files declare
     tests: usize,
     scenarios: Vec<Scenario>,
+    unreached: Vec<String>,
     outside: Vec<String>,
     wrote: Vec<String>,
 }
@@ -2306,8 +2472,16 @@ impl Fidelity {
         let tracked: Vec<String> =
             git(repo, &["ls-tree", "-r", "--name-only", tip])?.lines().map(str::to_owned).collect();
 
-        // the layout's checks, then the tests the runner counted
+        // the layout's checks under the tree's own configuration, then the
+        // tests the runner counted
+        let shim = target.config_shim().map(|name| export.join(name)).filter(|path| !path.exists());
+        if let Some(shim) = &shim {
+            fs::write(shim, "")?;
+        }
         let checks = target.checks(&export);
+        if let Some(shim) = &shim {
+            fs::remove_file(shim)?;
+        }
         let (passed, failed) = checks
             .iter()
             .find(|check| check.name == target.runner())
@@ -2340,7 +2514,9 @@ impl Fidelity {
             }
         }
 
-        // the files outside the layout, and what the checks wrote
+        // the modules the lists do not reach, the files outside the layout,
+        // and what the checks wrote
+        let unreached = target.unreached(&export)?;
         let stems: BTreeSet<&str> =
             requirements.iter().filter_map(|r| r["subject"].as_str().and_then(stem)).collect();
         let outside =
@@ -2362,6 +2538,7 @@ impl Fidelity {
             failed,
             tests: names.len(),
             scenarios,
+            unreached,
             outside,
             wrote,
         })
@@ -2396,12 +2573,18 @@ impl Fidelity {
         parts.join(" · ")
     }
 
-    // The `scenarios named` cell: the scenarios a test is named by, and the
-    // tracked files outside the layout.
+    // The `scenarios named` cell: the scenarios a test is named by, the
+    // tracked files outside the layout, and the modules the lists do not
+    // reach.
     fn scenarios_cell(&self) -> String {
         let total = self.scenarios.len();
         let percent = (self.named() * 100).checked_div(total).unwrap_or(0);
-        format!("{}/{total} ({percent}%) · {} outside", self.named(), self.outside.len())
+        format!(
+            "{}/{total} ({percent}%) · {} outside · {} unreached",
+            self.named(),
+            self.outside.len(),
+            self.unreached.len()
+        )
     }
 }
 
@@ -2452,6 +2635,7 @@ impl Display for Fidelity {
         }
 
         // the files
+        listed(f, "## Modules the lists do not reach", "modules no list names", &self.unreached)?;
         listed(f, "## Files outside the layout", "tracked files outside it", &self.outside)?;
         listed(f, "## What the checks wrote", "paths besides the lockfile", &self.wrote)
     }
@@ -3188,6 +3372,136 @@ fn overlaps(a: Anchor<'_>, b: Anchor<'_>) -> bool {
         }
 }
 
+// A requirement stated through a platform's mechanism: the code
+// identifiers its body names that the design owns no type for, with the
+// sources it cites.
+#[derive(Debug, PartialEq, Eq)]
+struct Stated {
+    id: String,
+    sources: Vec<String>,
+    identifiers: Vec<String>,
+}
+
+// The requirements naming a code identifier the design owns no type for,
+// in specification order. A body names one in backticks or bare, since one
+// adapter's model sets code apart and another's does not. The figure is a
+// proxy for a requirement stated through a platform's mechanism rather than
+// its behaviour, and the list beside the count is its reading: a product
+// name (`TypeORM`) has the shape, and a platform-neutral requirement names
+// neither.
+fn mechanism(requirements: &[Value], types: &BTreeSet<&str>) -> Vec<Stated> {
+    requirements
+        .iter()
+        .filter_map(|requirement| {
+            let body: Vec<&str> = requirement["body"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .collect();
+            let mut identifiers: Vec<String> = Vec::new();
+            for span in body.iter().flat_map(|line| spans(line)) {
+                if identifier(span).is_some_and(|name| !types.contains(name))
+                    && !identifiers.iter().any(|seen| seen == span)
+                {
+                    identifiers.push(span.to_owned());
+                }
+            }
+            if identifiers.is_empty() {
+                return None;
+            }
+            let mut sources: Vec<String> = Vec::new();
+            for source in citations(requirement).map(|(source, _)| source) {
+                if !sources.iter().any(|seen| seen == source) {
+                    sources.push(source.to_owned());
+                }
+            }
+            Some(Stated {
+                id: requirement["id"].as_str().unwrap_or_default().to_owned(),
+                sources,
+                identifiers,
+            })
+        })
+        .collect()
+}
+
+// The spans of a line an identifier may stand in: each span set in backticks,
+// whole, and each bare word between them, its surrounding punctuation
+// stripped and a call's parentheses kept.
+fn spans(line: &str) -> impl Iterator<Item = &str> {
+    line.split('`').enumerate().flat_map(|(index, part)| {
+        let quoted = index % 2 == 1;
+        let words: Box<dyn Iterator<Item = &str>> = if quoted {
+            Box::new(std::iter::once(part))
+        } else {
+            Box::new(part.split_whitespace().map(bare))
+        };
+        words.filter(|span| !span.is_empty())
+    })
+}
+
+fn bare(word: &str) -> &str {
+    let mut word = word.trim_start_matches(['(', '[', '"', '\'', '*']);
+    loop {
+        let trimmed = word.trim_end_matches(['.', ',', ';', ':', '!', '?', ']', '"', '\'', '*']);
+        let unbalanced =
+            trimmed.ends_with(')') && trimmed.matches(')').count() > trimmed.matches('(').count();
+        let trimmed = if unbalanced { &trimmed[..trimmed.len() - 1] } else { trimmed };
+        if trimmed.len() == word.len() {
+            return word;
+        }
+        word = trimmed;
+    }
+}
+
+// The name a span spells a platform's code identifier by, when it does: a
+// decorator (`@Exclude({ toPlainOnly: true })`), a call (`AuthGuard('jwt')`,
+// `validate()`, `I18nContext.current()`; an English plural, `token(s)`, is
+// none), or a type's name in CamelCase (`FileInterceptor`, `TypeORM`). The
+// name is the span's first segment, the one a design type is known by. A
+// field, an error key, a configuration key, and a function of the program's
+// own (`refreshToken`, `errors.email`, `auth.secret`, `setTier`) are its
+// vocabulary on any platform and none of these, nor is a single capitalised
+// word, an acronym, a `SCREAMING_SNAKE` setting, a path, a route, or a
+// value.
+fn identifier(span: &str) -> Option<&str> {
+    let (decorated, span) = span.strip_prefix('@').map_or((false, span), |rest| (true, rest));
+    let (arguments, head) = match (span.find('('), span.ends_with(')')) {
+        (Some(open), true) => (Some(&span[open + 1..span.len() - 1]), &span[..open]),
+        (None, false) => (None, span),
+        _ => return None,
+    };
+    let segment = |text: &str| {
+        let mut chars = text.chars();
+        chars.next().is_some_and(|first| first.is_ascii_alphabetic() || first == '_')
+            && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+    };
+    let segments: Vec<&str> = head.split('.').collect();
+    if !segments.iter().all(|part| segment(part)) {
+        return None;
+    }
+    let name = segments.first().copied()?;
+    let typed = segments.len() == 1
+        && name.starts_with(|c: char| c.is_ascii_uppercase())
+        && camel_case(name);
+    let called = arguments.is_some_and(|arguments| {
+        arguments.is_empty()
+            || arguments.starts_with(['\'', '"', '{', '[', '`'])
+            || arguments.starts_with(|c: char| c.is_ascii_digit())
+            || segments.len() > 1
+            || camel_case(name)
+    });
+    (decorated || called || typed).then_some(name)
+}
+
+// A name in CamelCase: a lowercase letter directly followed by an uppercase
+// one, which `Authorization`, `JWTs`, and `S3` lack.
+fn camel_case(name: &str) -> bool {
+    name.as_bytes()
+        .windows(2)
+        .any(|pair| pair[0].is_ascii_lowercase() && pair[1].is_ascii_uppercase())
+}
+
 // --- the scorecard ---
 
 fn scorecard(settings: &Settings, reports: &[Report<'_>], started: &str, name: &str) -> String {
@@ -3281,9 +3595,9 @@ impl Display for Card<'_> {
             "| run | exit | wall | completions | input | cached | output | reasoning | claims | \
              req | crit | recall req | recall crit | recall dec | surfaces | stems | behaviours | \
              conflicts | divergences | unknown | covered | then [unknown] | slices | waves | \
-             design blocks (types) |{build_columns}"
+             design blocks (types) | mechanism |{build_columns}"
         )?;
-        writeln!(f, "|{}", " --- |".repeat(if self.built { 32 } else { 25 }))?;
+        writeln!(f, "|{}", " --- |".repeat(if self.built { 33 } else { 26 }))?;
         for attempts in runs {
             if let Some(first) = attempts.first() {
                 row(f, first, case.expected.sources.len() > 1)?;
@@ -3358,11 +3672,16 @@ fn row(f: &mut Formatter<'_>, attempt: &Attempt, named: bool) -> fmt::Result {
         }
     });
     let surfaces = per_source(&grade.sources, named, |source| source.surfaces.to_string());
+    let stated = run.mechanism();
+    let mechanism = per_source(&grade.sources, named, |source| {
+        let named = stated.iter().filter(|stated| stated.sources.contains(&source.name)).count();
+        format!("{named}/{}", run.citing(&source.name))
+    });
 
     write!(
         f,
         "| {} | {} | {}s | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | \
-         {} | {} | {} | {} | {} | {} | {} ({}) |",
+         {} | {} | {} | {} | {} | {} | {} ({}) | {mechanism} |",
         run.n,
         match (run.exit, run.died_in()) {
             (Some(0), _) => "0".to_owned(),
@@ -3498,6 +3817,9 @@ fn notes(f: &mut Formatter<'_>, attempt: &Attempt, climbed: bool) -> fmt::Result
             }
         }
     }
+    if run.spec.is_some() {
+        mechanism_notes(f, run, &grade.sources, &led)?;
+    }
     if grade.behaviours.expected > 0 && run.spec.is_some() {
         behaviour_notes(f, &grade.behaviours)?;
     }
@@ -3523,6 +3845,36 @@ fn notes(f: &mut Formatter<'_>, attempt: &Attempt, climbed: bool) -> fmt::Result
     Ok(())
 }
 
+// The requirements each source stated through a mechanism, with the
+// identifiers each names, one line per source naming any.
+fn mechanism_notes(
+    f: &mut Formatter<'_>, run: &Run, sources: &[SourceGrade], led: &dyn Fn(&str) -> String,
+) -> fmt::Result {
+    let stated = run.mechanism();
+    for source in sources {
+        let listed: Vec<String> = stated
+            .iter()
+            .filter(|stated| stated.sources.contains(&source.name))
+            .map(|stated| {
+                let identifiers: Vec<String> =
+                    stated.identifiers.iter().map(|name| format!("`{name}`")).collect();
+                format!("{} ({})", stated.id, identifiers.join(", "))
+            })
+            .collect();
+        if !listed.is_empty() {
+            writeln!(
+                f,
+                "- {}mechanism {}/{}: {}",
+                led(&source.name),
+                listed.len(),
+                run.citing(&source.name),
+                listed.join(", ")
+            )?;
+        }
+    }
+    Ok(())
+}
+
 // The build beneath its run: how it ended, each wave's slices as they
 // merged, what conflicted, what the verify refused, what was left
 // uncovered, the chain the repository holds, and the turns it spent.
@@ -3531,9 +3883,10 @@ fn build_notes(f: &mut Formatter<'_>, run: &Run, build: &Build) -> fmt::Result {
     let tokens = build.tokens();
     build_ending(f, run, build, integrated.len())?;
 
-    // each wave's slices, as they merged
+    // each wave's slices, as they merged, and what its verify sealed
     let waves: BTreeSet<usize> = integrated.iter().map(|slice| slice.wave).collect();
     let turns = build.wave_turns();
+    let repairs = build.repairs();
     for wave in waves {
         let slices: Vec<String> = integrated
             .iter()
@@ -3558,11 +3911,16 @@ fn build_notes(f: &mut Formatter<'_>, run: &Run, build: &Build) -> fmt::Result {
                 let builds: Vec<String> =
                     turns.builds.iter().map(|b| format!("{}s", b.duration.as_secs())).collect();
                 let verify: Duration = turns.verifies.iter().map(|v| v.duration).sum();
-                format!("; builds {} then verify {}s", builds.join(" / "), verify.as_secs())
+                let sealed = match repairs.get(&wave) {
+                    Some(files) if files.is_empty() => " (lock only)".to_owned(),
+                    Some(files) => format!(", repaired {}", files.join(", ")),
+                    None => String::new(),
+                };
+                format!("; builds {} then verify {}s{sealed}", builds.join(" / "), verify.as_secs())
             });
         writeln!(f, "- wave {wave}: {}{spent}", slices.join(", "))?;
     }
-    build_findings(f, build, &integrated)?;
+    build_findings(f, build, &integrated, &repairs)?;
 
     // the chain, newest first
     if !build.history.is_empty() {
@@ -3611,9 +3969,13 @@ fn build_notes(f: &mut Formatter<'_>, run: &Run, build: &Build) -> fmt::Result {
 }
 
 // What the build's waves left to read: the conflicted slices and their
-// paths, the waves the verify repaired, the verify's refusals, the
-// uncovered ids per slice, and what the host's checks say of the tree.
-fn build_findings(f: &mut Formatter<'_>, build: &Build, integrated: &[Integrated]) -> fmt::Result {
+// paths, the waves the verify repaired and the files each sealed, the
+// verify's refusals, the uncovered ids per slice, and what the host's
+// checks say of the tree.
+fn build_findings(
+    f: &mut Formatter<'_>, build: &Build, integrated: &[Integrated],
+    repairs: &BTreeMap<usize, Vec<String>>,
+) -> fmt::Result {
     for slice in integrated.iter().filter(|slice| !slice.conflicts.is_empty()) {
         writeln!(
             f,
@@ -3624,8 +3986,15 @@ fn build_findings(f: &mut Formatter<'_>, build: &Build, integrated: &[Integrated
     }
     let repaired = build.repaired();
     if !repaired.is_empty() {
-        let waves: Vec<String> = repaired.iter().map(ToString::to_string).collect();
-        writeln!(f, "- repaired by the verify: wave {}", waves.join(", wave "))?;
+        let waves: Vec<String> = repaired
+            .iter()
+            .map(|wave| match repairs.get(wave) {
+                Some(files) if files.is_empty() => format!("wave {wave} (lock only)"),
+                Some(files) => format!("wave {wave} ({})", files.join(", ")),
+                None => format!("wave {wave}"),
+            })
+            .collect();
+        writeln!(f, "- repaired by the verify: {}", waves.join(", "))?;
     }
     for failure in build.verify_failures() {
         writeln!(f, "- verify refused: {failure}")?;
@@ -4141,6 +4510,7 @@ mod tests {
     // the chain `history` would answer.
     fn build_from(exit: i32, stdout: &str, stderr: &str, history: Vec<Landed>) -> Build {
         Build {
+            target: Target::TypeScript,
             wall: Duration::ZERO,
             exit: Some(exit),
             envelope: serde_json::from_str(stdout).ok(),
@@ -4338,12 +4708,16 @@ mod tests {
                     named: Some(Named::Fuzzy),
                 },
             ],
+            unreached: vec!["src/orders/index.ts".to_owned()],
             outside: vec!["scripts/check.mjs".to_owned()],
             wrote: Vec::new(),
         };
         assert!(fidelity.clean());
         assert_eq!(fidelity.host_cell(), "ok 12/12");
-        assert_eq!(fidelity.scenarios_cell(), "2/3 (66%) · 1 outside");
+        assert_eq!(fidelity.scenarios_cell(), "2/3 (66%) · 1 outside · 1 unreached");
+        assert!(
+            fidelity.to_string().contains("- 1 modules no list names:\n  - `src/orders/index.ts`")
+        );
 
         fidelity.checks[1].exit = Some(2);
         fidelity.checks[2].exit = Some(1);
@@ -4374,11 +4748,13 @@ mod tests {
             failed: 0,
             tests: 7,
             scenarios: Vec::new(),
+            unreached: Vec::new(),
             outside: Vec::new(),
             wrote: Vec::new(),
         };
         assert!(fidelity.clean());
         assert_eq!(fidelity.host_cell(), "ok 7/7");
+        assert_eq!(fidelity.scenarios_cell(), "0/0 (0%) · 0 outside · 0 unreached");
 
         fidelity.checks[1].exit = Some(101);
         fidelity.checks[2] = unrun("cargo build", "the tests failed");
@@ -4395,6 +4771,8 @@ mod tests {
         assert_eq!(Target::Omnia.ignore(), "target/\n.emery/\n");
         assert_eq!(Target::Omnia.lockfile(), "Cargo.lock");
         assert_eq!(Target::TypeScript.runner(), "node --test");
+        assert_eq!(Target::Omnia.config_shim(), Some("clippy.toml"));
+        assert_eq!(Target::TypeScript.config_shim(), None);
     }
 
     #[test]
@@ -4448,6 +4826,124 @@ mod tests {
         assert_eq!(named_by("An order with no items is refused", &names), Some(Named::Exact));
         assert_eq!(named_by("a paid order ships to the address", &names), Some(Named::Fuzzy));
         assert_eq!(named_by("an order is cancelled", &names), None);
+    }
+
+    // A scratch tree of the test's own under the host's temp dir, laid from
+    // `(path, text)` pairs and removed first where an earlier run left it.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "a unit test lays its tree under the host's temp dir"
+    )]
+    fn scratch(name: &str, files: &[(&str, &str)]) -> PathBuf {
+        let root = std::env::temp_dir().join(format!("emery-evals-{name}-{}", std::process::id()));
+        if root.exists() {
+            fs::remove_dir_all(&root).unwrap();
+        }
+        for (path, text) in files {
+            let path = root.join(path);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, text).unwrap();
+        }
+        root
+    }
+
+    // A `mount` the router list names is reached whatever the stem's
+    // spelling; one it does not name is listed, `lib.rs` and a module with
+    // no `mount` aside.
+    #[test]
+    fn omnia_modules_unreached_by_the_router_list() {
+        let root = scratch(
+            "omnia-unreached",
+            &[
+                (
+                    "app/src/routes.rs",
+                    "let router = axum::Router::new();\n\
+                     let router = app_start::bootstrap_api::mount(router);\n\
+                     let router = app_order_items::reading::mount(router);\n",
+                ),
+                ("crates/start/src/lib.rs", "pub mod bootstrap_api;\npub fn mount() {}\n"),
+                ("crates/start/src/bootstrap_api.rs", "pub fn mount<P>(router: R) -> R {}\n"),
+                ("crates/order-items/src/lib.rs", "pub mod reading;\npub mod placing;\n"),
+                ("crates/order-items/src/reading.rs", "pub fn mount<P>(router: R) -> R {}\n"),
+                ("crates/order-items/src/placing.rs", "pub fn mount<P>(router: R) -> R {}\n"),
+                ("crates/order-items/src/types.rs", "pub struct Order;\n"),
+                ("crates/health/src/health.rs", "pub fn mount<P>(router: R) -> R {}\n"),
+            ],
+        );
+        let unreached = Target::Omnia.unreached(&root).unwrap();
+        fs::remove_dir_all(&root).unwrap();
+        assert_eq!(unreached, ["crates/health/src/health.rs", "crates/order-items/src/placing.rs"]);
+    }
+
+    // A stem's `index.ts` the entry re-exports is reached, and a part's its
+    // stem's list re-exports; a stem the entry lacks and a part the stem's
+    // list lacks are listed, a directory with no `index.ts` aside.
+    #[test]
+    fn typescript_modules_unreached_by_the_lists() {
+        let root = scratch(
+            "typescript-unreached",
+            &[
+                (
+                    "src/index.ts",
+                    "export * as orders from \"./orders/index.ts\";\n\
+                     export * as start from './start/index.ts';\n",
+                ),
+                ("src/orders/index.ts", "export * as reading from \"./reading/index.ts\";\n"),
+                ("src/orders/reading/index.ts", "export const read = 1;\n"),
+                ("src/orders/placing/index.ts", "export const place = 1;\n"),
+                ("src/orders/shared/types.ts", "export type Order = {};\n"),
+                ("src/start/index.ts", "export const main = () => {};\n"),
+                ("src/health/index.ts", "export const register = () => {};\n"),
+                ("src/main.ts", "import { main } from \"./start/index.ts\";\nawait main();\n"),
+            ],
+        );
+        let unreached = Target::TypeScript.unreached(&root).unwrap();
+        fs::remove_dir_all(&root).unwrap();
+        assert_eq!(unreached, ["src/health/index.ts", "src/orders/placing/index.ts"]);
+        assert!(reexported("export * as a from \"./a\";", "a"));
+        assert!(!reexported("export { main } from \"./bootstrap/index.ts\";", "bootstrap"));
+    }
+
+    // The files a wave's seal holds are read from the chain the repository
+    // answers: a seal of the lock rewrite alone reads `lock only`, a seal of
+    // repairs names them, and a wave sealing nothing has no line.
+    #[test]
+    fn wave_seals_read_from_the_chain() {
+        let root = scratch("wave-seals", &[(".gitignore", "target/\n"), ("Cargo.lock", "v1\n")]);
+        let commit = |message: &str| {
+            git(&root, &["add", "--all"]).unwrap();
+            git(&root, &["commit", "--quiet", "--message", message]).unwrap();
+        };
+        git(&root, &["init", "--quiet", "--initial-branch=main"]).unwrap();
+        commit("Greenfield");
+        fs::create_dir_all(root.join("crates/start/src")).unwrap();
+        fs::write(root.join("crates/start/src/lib.rs"), "pub mod api;\n").unwrap();
+        commit("SLICE-001 start\n\nSlice: SLICE-001\nRevision: feb4bd36\nWave: 1");
+        fs::write(root.join("Cargo.lock"), "v2\n").unwrap();
+        commit("Wave 1 verified\n\nRevision: feb4bd36\nSlices: SLICE-001");
+        fs::write(root.join("crates/start/src/api.rs"), "pub fn mount() {}\n").unwrap();
+        commit("SLICE-002 start-api\n\nSlice: SLICE-002\nRevision: feb4bd36\nWave: 2");
+        fs::write(root.join("Cargo.lock"), "v3\n").unwrap();
+        fs::write(root.join("Cargo.toml"), "[workspace]\n").unwrap();
+        fs::write(root.join("crates/start/Cargo.toml"), "[package]\n").unwrap();
+        commit("Wave 2 verified\n\nRevision: feb4bd36\nSlices: SLICE-002");
+        fs::write(root.join("crates/start/src/more.rs"), "pub fn mount() {}\n").unwrap();
+        commit("SLICE-003 start-more\n\nSlice: SLICE-003\nRevision: feb4bd36\nWave: 3");
+        let history = log(&root, "HEAD");
+        fs::remove_dir_all(&root).unwrap();
+
+        assert_eq!(history.len(), 6);
+        assert_eq!(history[1].sealed(), Some(2));
+        assert_eq!(history[0].sealed(), None, "a merge seals no wave");
+        let mut build = build_from(0, "{}", "", history);
+        build.target = Target::Omnia;
+        let repairs = build.repairs();
+        assert_eq!(repairs.get(&1), Some(&Vec::new()), "wave 1 sealed the lock rewrite alone");
+        assert_eq!(
+            repairs.get(&2).map(Vec::as_slice),
+            Some(&["Cargo.toml".to_owned(), "crates/start/Cargo.toml".to_owned()][..])
+        );
+        assert_eq!(repairs.get(&3), None, "wave 3 sealed nothing");
     }
 
     #[test]
@@ -4848,6 +5344,73 @@ mod tests {
 
     fn cited(source: &str, claim: &str, path: &str) -> Value {
         serde_json::json!({ "source": source, "claim": claim, "path": path })
+    }
+
+    // The figure reads each body's spans, in backticks or bare, by shape
+    // alone, and leaves out the names the design owns a type for.
+    #[test]
+    fn mechanism_figure() {
+        let spec = spec(&serde_json::json!([
+            { "id": "REQ-001", "body": ["Requests pass `AuthGuard('jwt')` and read `request.user.id`."],
+              "sources": [cited("docs", "auth.guard", "auth.md#L10")] },
+            { "id": "REQ-002", "body": ["`RolesGuard` reads `user.role` against the `Roles` metadata."],
+              "sources": [cited("code", "roles.guard", "roles.ts#L5")] },
+            { "id": "REQ-003", "body": ["Set `AUTH_JWT_SECRET` in `.env`;", "`POST /api/v1/auth/login` answers `201` with `refreshToken` and `tokenExpires`."],
+              "sources": [cited("docs", "auth.login", "auth.md#L20")] },
+            { "id": "REQ-004", "body": ["`@Exclude({ toPlainOnly: true })` hides `password`; `UserMapper.toDomain()` maps the row."],
+              "sources": [cited("code", "users.mapper", "users.ts#L8"), cited("docs", "users.mapper", "users.md#L3")] },
+            { "id": "REQ-005", "body": ["The `Session` entity, a `JWT`, `user.mapper.ts`, `S3`, the token(s), and `x-custom-lang`."],
+              "sources": [cited("docs", "session", "session.md#L1")] },
+            { "id": "REQ-006", "body": ["Local upload accepts one multipart field via FileInterceptor, keyed by a Nest randomStringGenerator value (e.g. file.awsDefaultS3Bucket) on TypeORM; see validate()."],
+              "sources": [cited("code", "files.local", "files.ts#L20")] },
+        ]));
+        let design = serde_json::json!({ "sections": [{ "kind": "domain-model", "blocks": [
+            { "type": { "key": "RolesGuard", "signature": "class RolesGuard {}" } },
+            { "type": { "key": "UserMapper (src/users/user.mapper.ts#L8-L72)", "signature": "class UserMapper {}" } },
+        ] }] });
+        let mut run = run_from(Some(0), "", Some(spec));
+        run.design = Some(design);
+
+        assert_eq!(run.design_types(), BTreeSet::from(["RolesGuard", "UserMapper"]));
+        let stated = run.mechanism();
+        let listed: Vec<(&str, Vec<&str>, Vec<&str>)> = stated
+            .iter()
+            .map(|stated| {
+                (
+                    stated.id.as_str(),
+                    stated.sources.iter().map(String::as_str).collect(),
+                    stated.identifiers.iter().map(String::as_str).collect(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            listed,
+            vec![
+                ("REQ-001", vec!["docs"], vec!["AuthGuard('jwt')"]),
+                ("REQ-004", vec!["code", "docs"], vec!["@Exclude({ toPlainOnly: true })"]),
+                ("REQ-006", vec!["code"], vec!["FileInterceptor", "TypeORM", "validate()"]),
+            ],
+            "the design's own `RolesGuard` and `UserMapper.toDomain()` left out, with the \
+             program's own fields, keys, and functions"
+        );
+        assert_eq!((run.citing("docs"), run.citing("code")), (4, 3));
+        for span in [
+            "Authorization",
+            "JWTs",
+            "T",
+            "sessionId (id)",
+            "'true' | 'false'",
+            "30d",
+            "token(s)",
+            "e.g.",
+            "api.example.com",
+        ] {
+            assert_eq!(identifier(span), None, "{span}");
+        }
+        assert_eq!(identifier("I18nContext.current()"), Some("I18nContext"));
+        assert_eq!(identifier("redis.ping()"), Some("redis"));
+        assert_eq!(identifier("createApp(config)"), Some("createApp"));
+        assert_eq!(identifier("@Injectable"), Some("Injectable"));
     }
 
     #[test]
