@@ -59,7 +59,8 @@ fn adapter_crate(adapter: &str) -> &str {
 fn rust_log<'a>(adapters: impl IntoIterator<Item = &'a str>) -> String {
     let mut filter = "emery_sdk=trace".to_owned();
     for adapter in adapters {
-        let _ = write!(filter, ",{adapter}=trace");
+        let crate_name = adapter_crate(adapter).replace('-', "_");
+        let _ = write!(filter, ",{crate_name}=trace");
     }
     filter + ",omnia_cursor=info,omnia_cursor::tools=trace,omnia_core=off"
 }
@@ -5044,6 +5045,16 @@ mod tests {
         assert_eq!(ladder[1].to_string(), "1200/240");
         assert!(Rung::parse("1200").is_err());
         assert!(Rung::parse("a/b").is_err());
+    }
+
+    #[test]
+    fn rust_log_traces_adapter_crates() {
+        let filter = rust_log(["documentation", "typescript", "node"]);
+        let targets: Vec<_> = filter.split(',').map(|part| part.split('=').next().unwrap()).collect();
+        assert!(targets.iter().any(|&target| target == "src_documentation"));
+        assert!(targets.iter().any(|&target| target == "src_typescript"));
+        assert!(targets.iter().any(|&target| target == "tgt_node"));
+        assert!(!targets.iter().any(|&target| target == "documentation"));
     }
 
     #[test]
