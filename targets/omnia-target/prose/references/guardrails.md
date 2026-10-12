@@ -36,7 +36,7 @@ A crate compiles for `wasm32-wasip2` when it is pure Rust and reaches nothing in
 
 ## The files a slice never edits
 
-- `[workspace.dependencies]`, `[profile.release]`, the target tables, and the `host` feature of the root manifest, and the dev-dependencies of any stem's manifest: a pinned version is the tree's, and a crate the pins lack is named with its version in the stem's manifest alone.
-- `rust-toolchain.toml`, `.gitignore`, `tests/routes.rs`, `examples/runtime.rs`, and the static text of `src/lib.rs` and `Cargo.toml` around their lists, once laid.
+- The root `Cargo.toml`, whole: a pinned version is the tree's, and a crate the pins lack is named with its version in the stem's manifest alone, never as a `git` or `registry` source.
+- `app/src/lib.rs`, `app/tests/routes.rs`, `app/examples/runtime.rs`, `rust-toolchain.toml`, and `.gitignore`, once laid; the static text of `app/Cargo.toml`, `app/src/routes.rs`, and a stem's manifest around their lists, the `host` feature, the target tables, and the dev-dependencies among it.
 - `Cargo.lock`, which cargo writes.
 - Another slice's module or test file, and anything under `.emery/` or `target/`.

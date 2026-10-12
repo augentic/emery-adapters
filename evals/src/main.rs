@@ -80,10 +80,11 @@
 //! `EVAL_JOBS` (unset: the width cap `--build` passes as `--jobs`),
 //! `EVAL_LADDER` (`600/120,1200/240,2400/480`: each rung
 //! `CURSOR_TIMEOUT_SECS/CURSOR_INACTIVITY_SECS`), and the runtime's other
-//! `CURSOR_*` knobs, `CURSOR_MAX_TOOL_CALLS` and the worker boundary's
-//! `CURSOR_EGRESS`, `CURSOR_READ_ROOTS`, and `CURSOR_WORKER_ENV` each named
-//! in the card's header when the caller sets it, since what a build's
-//! install may reach is theirs. `RUST_LOG` is set for the run unless the caller sets it:
+//! `CURSOR_*` knobs, `CURSOR_MAX_TOOL_CALLS`, the worker boundary's
+//! `CURSOR_EGRESS`, `CURSOR_READ_ROOTS`, and `CURSOR_WORKER_ENV`, and the
+//! backend's `CURSOR_BACKEND_URL`, each named in the card's header when the
+//! caller sets it, since what a build's install may reach, and where the
+//! bridge's calls go, is theirs. `RUST_LOG` is set for the run unless the caller sets it:
 //! the scorecard needs the SDK's `accepted` trace lines and `surveyed by
 //! model` line, the adapters' `survey facts` and `surveyed` trace lines and
 //! `placed by model` line, and the backend's `completion` lines.
@@ -342,15 +343,17 @@ struct Settings {
     // the card names it
     max_tool_calls: Option<String>,
     // what the caller opened to the confined worker — `CURSOR_EGRESS`,
-    // `CURSOR_READ_ROOTS`, `CURSOR_WORKER_ENV` — each named in the card when
-    // set, since a build's install depends on them
+    // `CURSOR_READ_ROOTS`, `CURSOR_WORKER_ENV` — and the backend the
+    // relay forwards to, each named in the card when set, since a build's
+    // install and the bridge's calls depend on them
     boundary: Vec<(&'static str, String)>,
     // the card whose committed plans this invocation builds again
     rebuild: Option<String>,
 }
 
 // The worker-boundary variables the card names when set.
-const BOUNDARY: [&str; 3] = ["CURSOR_EGRESS", "CURSOR_READ_ROOTS", "CURSOR_WORKER_ENV"];
+const BOUNDARY: [&str; 4] =
+    ["CURSOR_EGRESS", "CURSOR_READ_ROOTS", "CURSOR_WORKER_ENV", "CURSOR_BACKEND_URL"];
 
 impl Settings {
     fn from_env(
@@ -2080,9 +2083,11 @@ impl Target {
                 "Cargo.lock",
                 "rust-toolchain.toml",
                 ".gitignore",
-                "src/lib.rs",
-                "tests/routes.rs",
-                "examples/runtime.rs",
+                "app/Cargo.toml",
+                "app/src/lib.rs",
+                "app/src/routes.rs",
+                "app/tests/routes.rs",
+                "app/examples/runtime.rs",
             ],
         }
     }
@@ -2183,7 +2188,7 @@ impl Target {
         match self {
             Self::TypeScript => test_names(&export.join("test"), &mut names)?,
             Self::Omnia => {
-                rust_test_names(&export.join("tests"), &mut names)?;
+                rust_test_names(&export.join("app").join("tests"), &mut names)?;
                 let crates = export.join("crates");
                 if crates.is_dir() {
                     for entry in fs::read_dir(crates)? {
@@ -4497,9 +4502,11 @@ mod tests {
             "rust-toolchain.toml",
             ".gitignore",
             "README.md",
-            "src/lib.rs",
-            "tests/routes.rs",
-            "examples/runtime.rs",
+            "app/Cargo.toml",
+            "app/src/lib.rs",
+            "app/src/routes.rs",
+            "app/tests/routes.rs",
+            "app/examples/runtime.rs",
             "crates/orders/Cargo.toml",
             "crates/orders/src/reading.rs",
             "crates/orders/tests/reading.rs",
@@ -4508,9 +4515,9 @@ mod tests {
             assert!(Target::Omnia.within_layout(path, &stems), "`{path}` is within the layout");
         }
         for path in [
-            "src/orders.rs",
-            "src/main.rs",
-            "tests/orders.rs",
+            "src/lib.rs",
+            "app/src/main.rs",
+            "tests/routes.rs",
             "crates/payments/src/lib.rs",
             "scripts/check.sh",
             "package.json",

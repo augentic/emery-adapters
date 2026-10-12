@@ -36,13 +36,13 @@ const TYPESCRIPT_WRITTEN: [(&str, &str); 5] = [
     ("test/orders/reading.test.ts", "import { test } from \"node:test\";\n"),
 ];
 
-const OMNIA_REPORT: &str = r#"{"covered": ["REQ-001"], "written": ["crates/orders/Cargo.toml", "crates/orders/src/lib.rs", "crates/orders/src/reading.rs", "crates/orders/tests/reading.rs", "Cargo.toml", "src/lib.rs"]}"#;
+const OMNIA_REPORT: &str = r#"{"covered": ["REQ-001"], "written": ["crates/orders/Cargo.toml", "crates/orders/src/lib.rs", "crates/orders/src/reading.rs", "crates/orders/tests/reading.rs", "app/Cargo.toml", "app/src/routes.rs"]}"#;
 const OMNIA_FAILED: &str = r#"{"passed": false, "failures": ["check 2 (cargo test --workspace): crates/orders/tests/reading.rs — `an_order_with_no_items_is_refused` fails: expected 400, got 201"]}"#;
 
 // The files the one scripted `write_files` call lays for the omnia target: a
 // part of the `orders` stem as a module of the stem's crate, with the stem's
-// manifest, its line in the stem's list, its lines in the two root lists, and
-// its test in the stem's `tests/`.
+// manifest, its line in the stem's list, its lines in the root crate's two
+// lists, and its test in the stem's `tests/`.
 const OMNIA_WRITTEN: [(&str, &str); 6] = [
     ("crates/orders/Cargo.toml", "[package]\nname = \"app-orders\"\n"),
     ("crates/orders/src/lib.rs", "pub mod reading;\n"),
@@ -51,8 +51,8 @@ const OMNIA_WRITTEN: [(&str, &str); 6] = [
         "crates/orders/tests/reading.rs",
         "#[tokio::test]\nasync fn an_order_is_returned_by_its_id() {}\n",
     ),
-    ("Cargo.toml", "[dependencies]\napp-orders = { path = \"crates/orders\" }\n"),
-    ("src/lib.rs", "    let router = app_orders::reading::mount(router);\n"),
+    ("app/Cargo.toml", "[dependencies]\napp-orders = { path = \"../crates/orders\" }\n"),
+    ("app/src/routes.rs", "    let router = app_orders::reading::mount(router);\n"),
 ];
 
 // A shipped target adapter: its name, the prose its turns open under, and
@@ -314,21 +314,22 @@ async fn omnia_target() {
         "the stem's list holds the part's one line"
     );
     assert_eq!(
-        project.read("src/lib.rs").as_deref(),
+        project.read("app/src/routes.rs").as_deref(),
         Some("    let router = app_orders::reading::mount(router);\n".as_bytes()),
         "the router list holds the part's one line"
     );
     assert_eq!(
-        project.read("Cargo.toml").as_deref(),
-        Some("[dependencies]\napp-orders = { path = \"crates/orders\" }\n".as_bytes()),
-        "the root manifest holds the stem's one line"
+        project.read("app/Cargo.toml").as_deref(),
+        Some("[dependencies]\napp-orders = { path = \"../crates/orders\" }\n".as_bytes()),
+        "the root crate's manifest holds the stem's one line"
     );
 }
 
 // The rules a wave's slices merge under: the lockfile kept from the
-// integrated side, the root manifest and every stem's as a union over their
-// dependency lists, the root's router list and every stem's module list as a
-// union, and every module and test under none.
+// integrated side, the root crate's manifest and every stem's as a union over
+// their dependency lists, the router list and every stem's module list as a
+// union, and every other path under none, the root manifest holding the pins
+// and the application's `lib.rs` among them.
 #[test]
 fn omnia_target_rules() {
     let declared: Vec<(&str, MergeStrategy)> = omnia_target::Adapter::MERGE_RULES
@@ -340,8 +341,9 @@ fn omnia_target_rules() {
         declared,
         [
             ("Cargo.lock", MergeStrategy::Ours),
-            ("Cargo.toml", MergeStrategy::Union),
-            ("src/lib.rs", MergeStrategy::Union),
+            ("app/Cargo.toml", MergeStrategy::Union),
+            ("crates/*/Cargo.toml", MergeStrategy::Union),
+            ("app/src/routes.rs", MergeStrategy::Union),
             ("crates/*/src/lib.rs", MergeStrategy::Union),
         ],
         "the merge rules the adapter declares, in order"

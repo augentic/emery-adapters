@@ -4,7 +4,7 @@ One test per acceptance scenario, in the stem's `tests/` as the [layout](layout.
 
 ## The file
 
-`crates/<stem>/tests/<part>.rs` (or `tests/<stem>.rs` for a stem built whole) mounts the module alone on a fresh router over a `Client` and drives it with tower's `oneshot`:
+`crates/<stem>/tests/<part>.rs` mounts the module alone on a fresh router over a `Client` and drives it with tower's `oneshot`:
 
 ```rust
 use axum::Router;

@@ -29,7 +29,7 @@ const CLAIM: &str =
 const REPORT: &str =
     r#"{"covered": ["REQ-001"], "written": ["src/orders/index.ts", "src/index.ts"]}"#;
 const OMNIA_REPORT: &str =
-    r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/lib.rs", "src/lib.rs"]}"#;
+    r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/lib.rs", "app/src/routes.rs"]}"#;
 const PASSED: &str = r#"{"passed": true, "failures": []}"#;
 
 // The survey answer a surveying adapter's first turn is scripted with: one
@@ -222,9 +222,9 @@ async fn typescript_target() {
     }
 }
 
-// The metadata lowers the four rules in order; the build writes a stem's list
-// and the root's router list through `write_files`, and its report and the
-// verdict lift back to the driver.
+// The metadata lowers the five rules in order; the build writes a stem's list
+// and the root crate's router list through `write_files`, and its report and
+// the verdict lift back to the driver.
 #[tokio::test]
 async fn omnia_target() {
     support::build(
@@ -233,8 +233,9 @@ async fn omnia_target() {
         &[
             "rules",
             "Cargo.lock=ours",
-            "Cargo.toml=union",
-            "src/lib.rs=union",
+            "app/Cargo.toml=union",
+            "crates/*/Cargo.toml=union",
+            "app/src/routes.rs=union",
             "crates/*/src/lib.rs=union",
         ],
         ScriptedModel::default(),
@@ -244,7 +245,7 @@ async fn omnia_target() {
     let project = scratch();
     let written = serde_json::json!({ "files": [
         { "path": "crates/orders/src/lib.rs", "content": "pub mod reading;\n" },
-        { "path": "src/lib.rs", "content": "    let router = app_orders::reading::mount(router);\n" },
+        { "path": "app/src/routes.rs", "content": "    let router = app_orders::reading::mount(router);\n" },
     ]})
     .to_string();
     let model =
@@ -257,7 +258,7 @@ async fn omnia_target() {
     led(&seen[0], omnia_target::PROSE, "build.md");
     led(&seen[1], omnia_target::PROSE, "verify.md");
     assert!(seen.iter().all(|request| request.workspace.is_some()), "the mount is lent to both");
-    for path in ["crates/orders/src/lib.rs", "src/lib.rs"] {
+    for path in ["crates/orders/src/lib.rs", "app/src/routes.rs"] {
         assert!(project.read(path).is_some(), "the tree holds `{path}` written through the lend");
     }
 }

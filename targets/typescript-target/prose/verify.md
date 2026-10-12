@@ -15,7 +15,7 @@ The tree is strict TypeScript on Node in the [layout](references/layout.md): one
 1. **It installs.** `npm install` exits 0. The merge may have kept one slice's `package-lock.json` over another's; this regenerates it.
 2. **It compiles.** `npx tsc --noEmit` exits 0 over the whole tree: every module, the entry, and the tests, under `strict`.
 3. **The tests pass.** `npm test` exits 0, every test in `test/` passing. Run them through the script alone, never `node --test` by hand: its flags end the run when the tests do.
-4. **The checks wrote nothing else.** `git status --porcelain` in `$WORKSPACE` names `package-lock.json` and what you repaired at most. Any other path is something a check or a test wrote into the tree.
+4. **The checks wrote nothing else.** Mark the time before step 1 (`touch "$TMPDIR/before"`) and, once the checks have run, `find . -type f -not -path './node_modules/*' -newer "$TMPDIR/before"` names `package-lock.json` and what you repaired at most. Any other path is something a check or a test wrote into the tree. No repository is reachable from `$WORKSPACE`, so `git` cannot answer this.
 
 A check that fails ends the sequence where it is useful: a tree that does not install cannot compile, one that does not compile cannot run its tests, and the fourth runs whatever came before.
 
