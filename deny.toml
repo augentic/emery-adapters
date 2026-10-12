@@ -2,6 +2,7 @@
 
 [graph]
 all-features = true
+exclude-dev = true
 
 targets = [
   "aarch64-apple-darwin",
