@@ -125,11 +125,11 @@ version = "1.5.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.aws-lc-rs]]
-version = "1.18.1"
+version = "1.18.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.aws-lc-sys]]
-version = "0.45.0"
+version = "0.46.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.axum]]
@@ -458,10 +458,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.get-size2]]
 version = "0.11.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.getopts]]
-version = "0.2.24"
 criteria = "safe-to-deploy"
 
 [[exemptions.getrandom]]
@@ -1001,23 +997,31 @@ version = "0.1.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.ruff_python_ast]]
-version = "0.0.16"
+version = "0.0.17"
 criteria = "safe-to-deploy"
 
 [[exemptions.ruff_python_parser]]
-version = "0.0.16"
+version = "0.0.17"
 criteria = "safe-to-deploy"
 
 [[exemptions.ruff_python_trivia]]
-version = "0.0.16"
+version = "0.0.17"
 criteria = "safe-to-deploy"
 
 [[exemptions.ruff_source_file]]
-version = "0.0.16"
+version = "0.0.17"
 criteria = "safe-to-deploy"
 
 [[exemptions.ruff_text_size]]
-version = "0.0.16"
+version = "0.0.17"
+criteria = "safe-to-deploy"
+
+[[exemptions.ruff_unicode_names2]]
+version = "0.0.17"
+criteria = "safe-to-deploy"
+
+[[exemptions.ruff_unicode_names2_generator]]
+version = "0.0.17"
 criteria = "safe-to-deploy"
 
 [[exemptions.rusqlite]]
@@ -1061,11 +1065,11 @@ version = "0.1.29"
 criteria = "safe-to-deploy"
 
 [[exemptions.schemars]]
-version = "1.2.2"
+version = "1.2.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.schemars_derive]]
-version = "1.2.2"
+version = "1.2.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.secrecy]]
@@ -1113,7 +1117,7 @@ version = "0.11.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.sha2]]
-version = "0.11.0"
+version = "0.11.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.simd-adler32]]
@@ -1318,14 +1322,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.unicode-id-start]]
 version = "1.5.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.unicode_names2]]
-version = "1.3.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.unicode_names2_generator]]
-version = "1.3.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.untrusted]]
