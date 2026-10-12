@@ -9,29 +9,29 @@ rust-version.workspace = true
 publish.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-documentation = { path = "sources/documentation" }
 emery-sdk.workspace = true
-intent = { path = "sources/intent" }
-omnia-runtime.workspace = true
+omnia.workspace = true
 omnia-sdk.workspace = true
 omnia-test = { workspace = true, features = ["guest", "host"] }
-omnia = { path = "targets/omnia" }
 omnia-wasi-model.workspace = true
 omnia-wasi-otel.workspace = true
 opentelemetry-proto.workspace = true
-python = { path = "sources/python" }
 serde_json.workspace = true
+src-documentation = { path = "adapters/src-documentation" }
+src-intent = { path = "adapters/src-intent" }
+src-python = { path = "adapters/src-python" }
+src-typescript = { path = "adapters/src-typescript" }
+tgt-node = { path = "adapters/tgt-node" }
+tgt-omnia = { path = "adapters/tgt-omnia" }
 test-programs.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-typescript = { path = "sources/typescript" }
-node = { path = "targets/node" }
 
 [lints]
 workspace = true
 
 [workspace]
-members = ["crates/*", "evals", "sources/*", "targets/*"]
+members = ["adapters/*", "crates/*", "evals"]
 resolver = "3"
 
 [workspace.package]
@@ -81,7 +81,7 @@ toml = "1.1.8"
 tracing = "0.1.44"
 wasip3 = "0.9.0"
 
-omnia-runtime = { version = "0.37.0", package = "omnia", default-features = false, features = ["jit"] }
+omnia = { version = "0.37.0", default-features = false, features = ["jit"] }
 omnia-sdk = { version = "0.37.0", default-features = false }
 omnia-test = { version = "0.37.0", default-features = false }
 omnia-wasi-model = "0.37.0"
@@ -97,7 +97,7 @@ emery-sdk = { git = "https://github.com/augentic/emery" }
 # emery-prose = { path = "../emery/crates/prose" }
 # emery-sdk = { path = "../emery/crates/sdk" }
 
-omnia-runtime = { git = "https://github.com/augentic/omnia", package = "omnia" }
+omnia = { git = "https://github.com/augentic/omnia" }
 omnia-sdk = { git = "https://github.com/augentic/omnia" }
 omnia-test = { git = "https://github.com/augentic/omnia" }
 omnia-wasi-model = { git = "https://github.com/augentic/omnia" }
@@ -116,13 +116,13 @@ strip = true
 # Optimise Cranelift debug builds — the unoptimised codegen is ~10x slower.
 [profile.dev.package]
 "*" = { debug = "line-tables-only" }
-documentation = { opt-level = 2 }
-intent = { opt-level = 2 }
-# omnia = { opt-level = 2 }
-python = { opt-level = 2 }
+src-documentation = { opt-level = 2 }
+src-intent = { opt-level = 2 }
+src-python = { opt-level = 2 }
+src-typescript = { opt-level = 2 }
+tgt-node = { opt-level = 2 }
+tgt-omnia = { opt-level = 2 }
 test-programs = { opt-level = 2 }
-typescript = { opt-level = 2 }
-node = { opt-level = 2 }
 
 cranelift-assembler-x64 = { opt-level = 2 }
 cranelift-bforest = { opt-level = 2 }

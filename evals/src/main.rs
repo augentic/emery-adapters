@@ -40,6 +40,19 @@ const CASES: &str = "evals/cases";
 const LADDER: &str = "600/120,1200/240,2400/480";
 const BOOTSTRAP: &str = "start";
 
+// Wasm package names in cases and configs; Cargo crate names under `adapters/`.
+fn adapter_crate(adapter: &str) -> &str {
+    match adapter {
+        "documentation" => "src-documentation",
+        "intent" => "src-intent",
+        "typescript" => "src-typescript",
+        "python" => "src-python",
+        "node" => "tgt-node",
+        "omnia" => "tgt-omnia",
+        _ => adapter,
+    }
+}
+
 // The run's log filter unless the caller sets one: every adapter the case
 // runs under at trace beside the SDK's, and the backend's tool-call
 // arguments whole, which it logs under a target of their own.
@@ -304,7 +317,7 @@ impl Settings {
         let mut wasm = BTreeMap::new();
         for component in adapters.iter().copied().chain(target.map(Target::name)) {
             // cargo spells a hyphenated crate's artifact with underscores
-            let artifact = component.replace('-', "_");
+            let artifact = adapter_crate(component).replace('-', "_");
             let name = format!("{}_WASM", artifact.to_uppercase());
             let path = given(&name, format!("target/wasm32-wasip2/release/{artifact}.wasm"));
             if !path.is_file() {

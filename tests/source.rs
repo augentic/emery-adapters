@@ -49,11 +49,12 @@ struct Shipped<A> {
     adapter: PhantomData<fn() -> A>,
 }
 
-const DOCUMENTATION: Shipped<documentation::Adapter> =
-    Shipped::new("documentation", documentation::PROSE);
-const INTENT: Shipped<intent::Adapter> = Shipped::new("intent", intent::PROSE);
-const TYPESCRIPT: Shipped<typescript::Adapter> = Shipped::new("typescript", typescript::PROSE);
-const PYTHON: Shipped<python::Adapter> = Shipped::new("python", python::PROSE);
+const DOCUMENTATION: Shipped<src_documentation::Adapter> =
+    Shipped::new("documentation", src_documentation::PROSE);
+const INTENT: Shipped<src_intent::Adapter> = Shipped::new("intent", src_intent::PROSE);
+const TYPESCRIPT: Shipped<src_typescript::Adapter> =
+    Shipped::new("typescript", src_typescript::PROSE);
+const PYTHON: Shipped<src_python::Adapter> = Shipped::new("python", src_python::PROSE);
 
 impl<A: SourceAdapter> Shipped<A> {
     const fn new(name: &'static str, docs: &'static [Doc]) -> Self {
@@ -601,9 +602,9 @@ async fn documentation_survey_check() {
     let seen = model.seen();
     assert_eq!(seen.len(), 4, "two survey rounds, one seam, one for the inline value");
     for request in &seen[..2] {
-        system(request, prompt::survey(documentation::PROSE));
+        system(request, prompt::survey(src_documentation::PROSE));
     }
-    system(&seen[2], prompt::extract(documentation::PROSE));
+    system(&seen[2], prompt::extract(src_documentation::PROSE));
     let exchanges = model.exchanges();
     let finding = exchanges[0].outcome.as_ref().expect_err("the strayed answer is refused");
     for named in [
@@ -1584,9 +1585,9 @@ async fn typescript_survey_start_stem() {
     let seen = model.seen();
     assert_eq!(seen.len(), 4, "two survey rounds, one seam, one for the inline value");
     for request in &seen[..2] {
-        system(request, prompt::survey(typescript::PROSE));
+        system(request, prompt::survey(src_typescript::PROSE));
     }
-    system(&seen[2], prompt::extract(typescript::PROSE));
+    system(&seen[2], prompt::extract(src_typescript::PROSE));
     let exchanges = model.exchanges();
     let finding = exchanges[0].outcome.as_ref().expect_err("the `start` stem is refused");
     assert!(
@@ -4160,9 +4161,9 @@ async fn python_survey_start_stem() {
     let seen = model.seen();
     assert_eq!(seen.len(), 4, "two survey rounds, one seam, one for the inline value");
     for request in &seen[..2] {
-        system(request, prompt::survey(python::PROSE));
+        system(request, prompt::survey(src_python::PROSE));
     }
-    system(&seen[2], prompt::extract(python::PROSE));
+    system(&seen[2], prompt::extract(src_python::PROSE));
     let exchanges = model.exchanges();
     let finding = exchanges[0].outcome.as_ref().expect_err("the `start` stem is refused");
     assert!(

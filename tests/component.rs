@@ -15,7 +15,7 @@ use emery_sdk::{Doc, body};
 use omnia_test::Seen;
 use omnia_test::host::{Scratch, ScriptedModel, scratch};
 
-// Every `sources/*` and `targets/*` component must have a matching test here.
+// Every shipped adapter component must have a matching test here.
 test_programs::foreach_adapter!();
 test_programs::foreach_target!();
 
@@ -71,21 +71,21 @@ fn led(request: &Seen, docs: &[Doc], prompt: &str) {
 // derives at the anchor the answer named reaches the seam: the outline
 // reader ran as a guest over the lent tree.
 #[tokio::test]
-async fn documentation() {
+async fn src_documentation() {
     let project = scratch();
     project.write("docs/orders.md", "# Orders\n\nPOST /orders creates an order.\n");
     let survey = inventory("Orders", "docs/orders.md#L1", "orders");
 
     let seen = extracted(
-        test_programs::ADAPTER_DOCUMENTATION,
-        documentation::PROSE,
+        test_programs::ADAPTER_SRC_DOCUMENTATION,
+        src_documentation::PROSE,
         &project,
         ScriptedModel::answering([&survey, CLAIM, CLAIM]),
         2,
     )
     .await;
 
-    led(&seen[0], documentation::PROSE, "survey.md");
+    led(&seen[0], src_documentation::PROSE, "survey.md");
     assert!(
         seen[0].messages[0].contains("- `docs/orders.md` — 3 lines; prose alone"),
         "the outline read from the lent tree: {}",
@@ -101,13 +101,13 @@ async fn documentation() {
 
 // The brief is read through the mount, so the file reaches the turn whole.
 #[tokio::test]
-async fn intent() {
+async fn src_intent() {
     let project = scratch();
     project.write("brief/intent.md", BRIEF);
 
     let seen = extracted(
-        test_programs::ADAPTER_INTENT,
-        intent::PROSE,
+        test_programs::ADAPTER_SRC_INTENT,
+        src_intent::PROSE,
         &project,
         ScriptedModel::answering([CLAIM, CLAIM]),
         1,
@@ -121,7 +121,7 @@ async fn intent() {
 // derives at the anchor the answer named reaches the seam: the parser and
 // the recogniser ran as a guest over the lent tree.
 #[tokio::test]
-async fn typescript() {
+async fn src_typescript() {
     let project = scratch();
     project.write(
         "src/index.ts",
@@ -137,15 +137,15 @@ async fn typescript() {
     let survey = inventory("POST /api/orders", "src/routes.ts#L5-L7", "orders");
 
     let seen = extracted(
-        test_programs::ADAPTER_TYPESCRIPT,
-        typescript::PROSE,
+        test_programs::ADAPTER_SRC_TYPESCRIPT,
+        src_typescript::PROSE,
         &project,
         ScriptedModel::answering([&survey, CLAIM, CLAIM]),
         2,
     )
     .await;
 
-    led(&seen[0], typescript::PROSE, "survey.md");
+    led(&seen[0], src_typescript::PROSE, "survey.md");
     let surface = "- Surface `POST /api/orders` — entry `src/routes.ts` — stem `orders`";
     assert!(
         seen[1].messages[0].contains(surface),
@@ -155,7 +155,7 @@ async fn typescript() {
 }
 
 #[tokio::test]
-async fn python() {
+async fn src_python() {
     let project = scratch();
     project.write("app/__init__.py", "");
     project.write(
@@ -172,15 +172,15 @@ async fn python() {
     let survey = inventory("POST /api/orders", "app/routers/orders.py#L6-L8", "orders");
 
     let seen = extracted(
-        test_programs::ADAPTER_PYTHON,
-        python::PROSE,
+        test_programs::ADAPTER_SRC_PYTHON,
+        src_python::PROSE,
         &project,
         ScriptedModel::answering([&survey, CLAIM, CLAIM]),
         2,
     )
     .await;
 
-    led(&seen[0], python::PROSE, "survey.md");
+    led(&seen[0], src_python::PROSE, "survey.md");
     let surface = "- Surface `POST /api/orders` — entry `app/routers/orders.py` — stem `orders`";
     assert!(
         seen[1].messages[0].contains(surface),
@@ -192,9 +192,9 @@ async fn python() {
 // The metadata lowers the merge rules; the build writes the mount through
 // `write_files`, and its report and the verdict lift back to the driver.
 #[tokio::test]
-async fn node() {
+async fn tgt_node() {
     support::build(
-        test_programs::TARGET_NODE,
+        test_programs::TARGET_TGT_NODE,
         &scratch(),
         &["rules", "package-lock.json=ours", "src/index.ts=union", "**/index.ts=union"],
         ScriptedModel::default(),
@@ -209,12 +209,12 @@ async fn node() {
     .to_string();
     let model = ScriptedModel::answering([REPORT, PASSED]).calling(0, [("write_files", written)]);
 
-    let model = support::build(test_programs::TARGET_NODE, &project, &[], model).await;
+    let model = support::build(test_programs::TARGET_TGT_NODE, &project, &[], model).await;
 
     let seen = model.seen();
     assert_eq!(seen.len(), 2, "the build opens one completion, the verify one");
-    led(&seen[0], node::PROSE, "build.md");
-    led(&seen[1], node::PROSE, "verify.md");
+    led(&seen[0], tgt_node::PROSE, "build.md");
+    led(&seen[1], tgt_node::PROSE, "verify.md");
     assert!(seen.iter().all(|request| request.workspace.is_some()), "the mount is lent to both");
     for path in ["src/orders/index.ts", "src/index.ts"] {
         assert!(project.read(path).is_some(), "the tree holds `{path}` written through the lend");
@@ -225,9 +225,9 @@ async fn node() {
 // the lent tree before its turn and writes a stem's list through
 // `write_files`, and its report and the verdict lift back to the driver.
 #[tokio::test]
-async fn omnia() {
+async fn tgt_omnia() {
     support::build(
-        test_programs::TARGET_OMNIA,
+        test_programs::TARGET_TGT_OMNIA,
         &scratch(),
         &[
             "rules",
@@ -249,18 +249,18 @@ async fn omnia() {
     let model =
         ScriptedModel::answering([OMNIA_REPORT, PASSED]).calling(0, [("write_files", written)]);
 
-    let model = support::build(test_programs::TARGET_OMNIA, &project, &[], model).await;
+    let model = support::build(test_programs::TARGET_TGT_OMNIA, &project, &[], model).await;
 
     let seen = model.seen();
     assert_eq!(seen.len(), 2, "the build opens one completion, the verify one");
-    led(&seen[0], omnia::PROSE, "build.md");
-    led(&seen[1], omnia::PROSE, "verify.md");
+    led(&seen[0], tgt_omnia::PROSE, "build.md");
+    led(&seen[1], tgt_omnia::PROSE, "verify.md");
     assert!(seen.iter().all(|request| request.workspace.is_some()), "the mount is lent to both");
     assert!(
         project.read("crates/orders/src/lib.rs").is_some(),
         "the tree holds the stem's list written through the lend"
     );
-    let routes = omnia::SEED
+    let routes = tgt_omnia::SEED
         .iter()
         .find(|seed| seed.path == "app/src/routes.rs")
         .expect("the router list is a seed");

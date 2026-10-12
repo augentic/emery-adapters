@@ -12,14 +12,14 @@ use emery_sdk::survey::Inventory;
 use emery_sdk::target::{Report, Verdict};
 use emery_sdk::{Doc, Evidence, RUNTIME, body, check};
 
-// Every `sources/*` and `targets/*` component must have a matching test here.
+// Every shipped adapter component must have a matching test here.
 test_programs::foreach_adapter!();
 test_programs::foreach_target!();
 
 // `prompts` are the documents the SDK puts to the model: `extract.md` for every
 // adapter, and `survey.md` for one that has the model name its surfaces.
-fn corpus(docs: &[Doc], name: &str, prompts: &[&str]) {
-    held(docs, "sources", name, prompts);
+fn corpus(docs: &[Doc], crate_dir: &str, prompts: &[&str]) {
+    held(docs, crate_dir, prompts);
 
     let prompt = body(docs, "extract.md").expect("the extraction prompt is listed");
     capped("extract.md", prompt);
@@ -35,8 +35,8 @@ fn corpus(docs: &[Doc], name: &str, prompts: &[&str]) {
 
 // A target puts two prompts, `build.md` and `verify.md`, and its worked
 // examples are the SDK's `Report` and `Verdict`.
-fn target_corpus(docs: &[Doc], name: &str) {
-    held(docs, "targets", name, &["build.md", "verify.md"]);
+fn target_corpus(docs: &[Doc], crate_dir: &str) {
+    held(docs, crate_dir, &["build.md", "verify.md"]);
 
     let prompt = body(docs, "build.md").expect("the build prompt is listed");
     capped("build.md", prompt);
@@ -64,14 +64,14 @@ fn target_corpus(docs: &[Doc], name: &str) {
     );
 }
 
-// The list is held to the tree under `<axis>/<name>/prose` and to the
+// The list is held to the tree under `adapters/<crate>/prose` and to the
 // prompts the SDK puts, with the SDK's runtime references as the imports.
-fn held(docs: &[Doc], axis: &str, name: &str, prompts: &[&str]) {
-    let tree = Path::new(env!("CARGO_MANIFEST_DIR")).join(axis).join(name).join("prose");
+fn held(docs: &[Doc], crate_dir: &str, prompts: &[&str]) {
+    let tree = Path::new(env!("CARGO_MANIFEST_DIR")).join("adapters").join(crate_dir).join("prose");
     let findings = check(docs, &tree, prompts, RUNTIME);
     assert!(
         findings.is_empty(),
-        "`{name}`'s PROSE disagree with its tree:\n{}",
+        "`{crate_dir}`'s PROSE disagree with its tree:\n{}",
         findings.join("\n")
     );
 }
@@ -104,44 +104,44 @@ fn fenced_json<'d>(doc: &'d str, heading: &str) -> &'d str {
 }
 
 #[test]
-fn documentation() {
-    corpus(documentation::PROSE, "documentation", &["extract.md", "survey.md"]);
-    surveying(documentation::PROSE);
+fn src_documentation() {
+    corpus(src_documentation::PROSE, "src-documentation", &["extract.md", "survey.md"]);
+    surveying(src_documentation::PROSE);
 }
 
 #[test]
-fn intent() {
-    corpus(intent::PROSE, "intent", &["extract.md"]);
+fn src_intent() {
+    corpus(src_intent::PROSE, "src-intent", &["extract.md"]);
 }
 
 // `survey.md` is the prompt of the one survey turn a workspace opens, so its
 // worked example is held to the SDK's survey answer the same way
 // `extract.md`'s is held to its Evidence.
 #[test]
-fn typescript() {
-    corpus(typescript::PROSE, "typescript", &["extract.md", "survey.md"]);
-    surveying(typescript::PROSE);
+fn src_typescript() {
+    corpus(src_typescript::PROSE, "src-typescript", &["extract.md", "survey.md"]);
+    surveying(src_typescript::PROSE);
 }
 
 #[test]
-fn python() {
-    corpus(python::PROSE, "python", &["extract.md", "survey.md"]);
-    surveying(python::PROSE);
+fn src_python() {
+    corpus(src_python::PROSE, "src-python", &["extract.md", "survey.md"]);
+    surveying(src_python::PROSE);
 }
 
 #[test]
-fn node() {
-    target_corpus(node::PROSE, "node");
+fn tgt_node() {
+    target_corpus(tgt_node::PROSE, "tgt-node");
 }
 
 // The layout pins omnia once: every `omnia` crate the root manifest it spells
 // names is at one version, so a bump is one edit and the tree it lays
 // resolves.
 #[test]
-fn omnia() {
-    target_corpus(omnia::PROSE, "omnia");
+fn tgt_omnia() {
+    target_corpus(tgt_omnia::PROSE, "tgt-omnia");
 
-    let layout = body(omnia::PROSE, "references/layout.md").expect("the layout is listed");
+    let layout = body(tgt_omnia::PROSE, "references/layout.md").expect("the layout is listed");
     let pins: Vec<(&str, &str)> = layout
         .lines()
         .filter(|line| line.starts_with("omnia"))
@@ -159,7 +159,7 @@ fn omnia() {
 
     // the seed is the layout's nine root files, each fenced in it byte for byte
     let paths: std::collections::BTreeSet<&str> =
-        omnia::SEED.iter().map(|seed| seed.path.as_ref()).collect();
+        tgt_omnia::SEED.iter().map(|seed| seed.path.as_ref()).collect();
     assert_eq!(
         paths,
         [
@@ -176,8 +176,8 @@ fn omnia() {
         .into_iter()
         .collect()
     );
-    assert_eq!(paths.len(), omnia::SEED.len(), "a seed path is declared once");
-    for seed in omnia::SEED {
+    assert_eq!(paths.len(), tgt_omnia::SEED.len(), "a seed path is declared once");
+    for seed in tgt_omnia::SEED {
         assert!(
             layout.contains(&format!("`{}`", seed.path)),
             "the layout names the seed `{}`",

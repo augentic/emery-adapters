@@ -7,10 +7,10 @@ includes = ["git::https://github.com/augentic/toolkit.git//mise/rust.toml?ref=v0
 # The shared `lint-wasm` pass is over the guest side alone — every adapter
 # and the guest programs — because the root package and the `evals` harness
 # are native: the suites and the runner name host-only dependencies.
-# Add a new adapter here when it ships as a wasm32 guest component, a
-# source under `sources/` or a target under `targets/`.
+# Add a new adapter here when it ships as a wasm32 guest component under
+# `adapters/`.
 [env]
-WASM32_PACKAGES = "documentation intent python typescript node omnia test-programs"
+WASM32_PACKAGES = "src-documentation src-intent src-python src-typescript tgt-node tgt-omnia test-programs"
 
 # -------------------------------------
 # Adapter overrides
@@ -24,5 +24,24 @@ description = "Push one release-built component to its GHCR tag: mise run publis
 run = '''
 name="${1:?usage: make publish <name>}"
 version="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version *= *"\(.*\)"/\1/p' Cargo.toml)"
-wkg oci push "ghcr.io/augentic/emery/$name:$version" "target/wasm32-wasip2/release/${name//-/_}.wasm"
+case "$name" in
+  documentation|intent|typescript|python|node|omnia) package="$name" ;;
+  src-documentation) package=documentation ;;
+  src-intent) package=intent ;;
+  src-typescript) package=typescript ;;
+  src-python) package=python ;;
+  tgt-node) package=node ;;
+  tgt-omnia) package=omnia ;;
+  *) echo "unknown adapter: $name (use a crate or wasm package name)" >&2; exit 1 ;;
+esac
+crate="${name}"
+case "$crate" in
+  documentation) crate=src-documentation ;;
+  intent) crate=src-intent ;;
+  typescript) crate=src-typescript ;;
+  python) crate=src-python ;;
+  node) crate=tgt-node ;;
+  omnia) crate=tgt-omnia ;;
+esac
+wkg oci push "ghcr.io/augentic/emery/$package:$version" "target/wasm32-wasip2/release/${crate//-/_}.wasm"
 '''

@@ -1,5 +1,5 @@
 [package]
-name = "python"
+name = "src-python"
 description = "Python source-adapter"
 
 version.workspace = true

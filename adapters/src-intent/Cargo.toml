@@ -1,5 +1,5 @@
 [package]
-name = "intent"
+name = "src-intent"
 description = "Intent source-adapter"
 version.workspace = true
 edition.workspace = true

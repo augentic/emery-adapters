@@ -1,6 +1,6 @@
 [package]
-name = "node"
-description = "Node target-adapter: strict TypeScript on Node, one directory per slice, checked with tsc and node:test"
+name = "tgt-node"
+description = "Node target-adapter"
 
 version.workspace = true
 edition.workspace = true

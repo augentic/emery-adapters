@@ -1,5 +1,5 @@
 [package]
-name = "documentation"
+name = "src-documentation"
 description = "Documentation source-adapter"
 version.workspace = true
 edition.workspace = true

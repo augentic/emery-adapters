@@ -20,7 +20,7 @@ cargo build --workspace --target wasm32-wasip2 --release
 
 # copy adpaters to the omnia-managed plugin store using fully qualifed adapter name
 mkdir -p ~/.emery/adapters
-cp "target/wasm32-wasip2/release/typescript.wasm" ~/.emery/adapters/emery_typescript@0.13.0.wasm
+cp "target/wasm32-wasip2/release/src_typescript.wasm" ~/.emery/adapters/emery_typescript@0.13.0.wasm
 
 # run the example
 set -a; source .env; set +a
@@ -46,8 +46,8 @@ The combined [emery.toml](emery.toml) names the `typescript` source over the r9k
 
 ```bash
 # copy the two further components the config names
-cp "target/wasm32-wasip2/release/documentation.wasm" ~/.emery/adapters/emery_documentation@0.13.0.wasm
-cp "target/wasm32-wasip2/release/omnia.wasm" ~/.emery/adapters/emery_omnia@0.13.0.wasm
+cp "target/wasm32-wasip2/release/src_documentation.wasm" ~/.emery/adapters/emery_documentation@0.13.0.wasm
+cp "target/wasm32-wasip2/release/tgt_omnia.wasm" ~/.emery/adapters/emery_omnia@0.13.0.wasm
 
 # let the build's worker reach crates.io and the rustup toolchain
 export CURSOR_EGRESS=index.crates.io,static.crates.io

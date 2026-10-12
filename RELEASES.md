@@ -4,7 +4,7 @@ Unreleased
 
 ### Changed
 
-- The target adapters are renamed: `typescript-target` → `node` and `omnia-target` → `omnia` (crate, directory, package reference `emery:<name>@<version>`, and `--target` name). The workspace dependency on the omnia runtime is `omnia-runtime` (`package = "omnia"`) so it does not collide with the `omnia` target crate.
+- The target adapters are renamed: `typescript-target` → `node` and `omnia-target` → `omnia` (crate, directory, package reference `emery:<name>@<version>`, and `--target` name). The workspace dependency on the omnia runtime is `omnia` (`package = "omnia"`) so it does not collide with the `omnia` target crate.
 
 ### Added
 
