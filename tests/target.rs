@@ -19,19 +19,40 @@ use omnia_sdk::model::ToolCall;
 use omnia_test::guest::Scripted;
 use omnia_test::host::{Scratch, scratch};
 
-const REPORT: &str = r#"{"covered": ["REQ-001"], "written": ["src/orders/reading/package.json", "src/orders/reading/index.ts", "src/orders/index.ts", "src/index.ts", "test/orders/reading.test.ts"]}"#;
 const PASSED: &str = r#"{"passed": true, "failures": []}"#;
-const FAILED: &str = r#"{"passed": false, "failures": ["check 3 (npm test): 1 failing: an order with no items is refused"]}"#;
 
-// The files the one scripted `write_files` call lays: a part of the `orders`
-// stem in its own directory, with its manifest, its line in the stem's list
-// and the stem's in the entry, and its test beside the stem's.
-const WRITTEN: [(&str, &str); 5] = [
+const TYPESCRIPT_REPORT: &str = r#"{"covered": ["REQ-001"], "written": ["src/orders/reading/package.json", "src/orders/reading/index.ts", "src/orders/index.ts", "src/index.ts", "test/orders/reading.test.ts"]}"#;
+const TYPESCRIPT_FAILED: &str = r#"{"passed": false, "failures": ["check 3 (npm test): 1 failing: an order with no items is refused"]}"#;
+
+// The files the one scripted `write_files` call lays for the TypeScript
+// target: a part of the `orders` stem in its own directory, with its
+// manifest, its line in the stem's list and the stem's in the entry, and its
+// test beside the stem's.
+const TYPESCRIPT_WRITTEN: [(&str, &str); 5] = [
     ("src/orders/reading/package.json", "{ \"name\": \"@app/orders-reading\" }\n"),
     ("src/orders/reading/index.ts", "export function getOrder() {}\n"),
     ("src/orders/index.ts", "export * as reading from \"./reading/index.ts\";\n"),
     ("src/index.ts", "export * as orders from \"./orders/index.ts\";\n"),
     ("test/orders/reading.test.ts", "import { test } from \"node:test\";\n"),
+];
+
+const OMNIA_REPORT: &str = r#"{"covered": ["REQ-001"], "written": ["crates/orders/Cargo.toml", "crates/orders/src/lib.rs", "crates/orders/src/reading.rs", "crates/orders/tests/reading.rs", "app/Cargo.toml", "app/src/routes.rs"]}"#;
+const OMNIA_FAILED: &str = r#"{"passed": false, "failures": ["check 2 (cargo test --workspace): crates/orders/tests/reading.rs — `an_order_with_no_items_is_refused` fails: expected 400, got 201"]}"#;
+
+// The files the one scripted `write_files` call lays for the omnia target: a
+// part of the `orders` stem as a module of the stem's crate, with the stem's
+// manifest, its line in the stem's list, its lines in the root crate's two
+// lists, and its test in the stem's `tests/`.
+const OMNIA_WRITTEN: [(&str, &str); 6] = [
+    ("crates/orders/Cargo.toml", "[package]\nname = \"app-orders\"\n"),
+    ("crates/orders/src/lib.rs", "pub mod reading;\n"),
+    ("crates/orders/src/reading.rs", "pub fn mount() {}\n"),
+    (
+        "crates/orders/tests/reading.rs",
+        "#[tokio::test]\nasync fn an_order_is_returned_by_its_id() {}\n",
+    ),
+    ("app/Cargo.toml", "[dependencies]\napp-orders = { path = \"../crates/orders\" }\n"),
+    ("app/src/routes.rs", "    let router = app_orders::reading::mount(router);\n"),
 ];
 
 // A shipped target adapter: its name, the prose its turns open under, and
@@ -44,6 +65,9 @@ struct Shipped<A> {
 
 const TYPESCRIPT_TARGET: Shipped<typescript_target::Adapter> =
     Shipped::new("typescript-target", typescript_target::PROSE);
+
+const OMNIA_TARGET: Shipped<omnia_target::Adapter> =
+    Shipped::new("omnia-target", omnia_target::PROSE);
 
 impl<A: TargetAdapter> Shipped<A> {
     const fn new(name: &'static str, docs: &'static [Doc]) -> Self {
@@ -79,6 +103,127 @@ impl<A: TargetAdapter> Shipped<A> {
     // The prompt at `path` as this build compiled it in.
     fn prompt(&self, path: &str) -> &'static str {
         body(self.docs, path).unwrap_or_else(|| panic!("`{path}` is in `{}`'s PROSE", self.name))
+    }
+
+    // One build laying `written` through one `write_files` call and answering
+    // `report`, then one verify passing, with what every target shares
+    // asserted: the build turn opens under the embedded `build.md` with the
+    // tree lent and `write_files` beside the reference tools, its brief
+    // carrying the slice; what the model wrote through the tool in one call is
+    // what the tree holds and the report names; the verify turn opens under
+    // `verify.md` over the same tree, `write_files` declared for its repairs.
+    // Answers the tree, for what the target's own lists must hold.
+    async fn built(&self, written: &[(&str, &str)], report: &str) -> Scratch {
+        let project = scratch();
+        let model = Scripted::answering([report, PASSED]).calling(0, [write_files(written)]);
+
+        let report = self.build(&project, &model).await.expect("build over the lent tree");
+        let verdict = self.verify(&project, &model).await.expect("verify over the built tree");
+        model.assert_exhausted();
+
+        let findings = report.findings(&slice());
+        assert!(findings.is_empty(), "report gate findings:\n{}", findings.join("\n"));
+        assert_eq!(report.covered, ["REQ-001"], "the slice's one requirement is covered");
+        assert!(verdict.passed, "the scripted verdict passes");
+
+        let seen = model.seen();
+        assert_eq!(seen.len(), 2, "the build opens one completion, the verify one");
+        let build = &seen[0];
+        assert!(
+            build
+                .system
+                .as_deref()
+                .is_some_and(|system| system.starts_with(self.prompt("build.md"))),
+            "the compiled-in build prompt leads the system"
+        );
+        assert_eq!(
+            build.workspace.as_deref(),
+            Some(root(&project)),
+            "the tree is lent to the build"
+        );
+        assert!(
+            build.tools.iter().any(|tool| tool == "write_files"),
+            "the build writes through `write_files`: {:?}",
+            build.tools
+        );
+        for carried in [
+            "SLICE-001",
+            "orders-reading",
+            "REQ-001",
+            "0123456789abcdef0123456789abcdef01234567",
+            "## Type: Order",
+        ] {
+            assert!(
+                build.messages[0].contains(carried),
+                "the brief carries `{carried}`: {}",
+                build.messages[0]
+            );
+        }
+
+        let verify = &seen[1];
+        assert!(
+            verify
+                .system
+                .as_deref()
+                .is_some_and(|system| system.starts_with(self.prompt("verify.md"))),
+            "the compiled-in verify prompt leads the system"
+        );
+        assert_eq!(
+            verify.workspace.as_deref(),
+            Some(root(&project)),
+            "the integrated tree is lent to the verify"
+        );
+        assert!(
+            verify.tools.iter().any(|tool| tool == "write_files"),
+            "a verify turn repairs through `write_files`: {:?}",
+            verify.tools
+        );
+
+        let calls: Vec<_> = model
+            .exchanges()
+            .into_iter()
+            .filter(|exchange| exchange.tool == "write_files")
+            .collect();
+        assert_eq!(calls.len(), 1, "the one scripted call reached the tool: {calls:?}");
+        assert!(calls[0].outcome.is_ok(), "the call landed: {calls:?}");
+        for (path, _) in written {
+            assert!(project.read(path).is_some(), "the tree holds `{path}` from the one call");
+            assert!(report.written.iter().any(|named| named == path), "the report names `{path}`");
+        }
+        project
+    }
+
+    // One verify over a tree seeded with `manifest`, answering `failed`: a
+    // verdict that fails is the adapter's answer, carried whole to the caller.
+    async fn failed(&self, manifest: (&str, &str), failed: &str) {
+        let project = scratch();
+        project.write(manifest.0, manifest.1);
+        let model = Scripted::answering([failed]);
+
+        let verdict = self
+            .verify(&project, &model)
+            .await
+            .expect("a failed verdict is an answer, not an error");
+        model.assert_exhausted();
+
+        let findings = verdict.findings();
+        assert!(findings.is_empty(), "verdict gate findings:\n{}", findings.join("\n"));
+        assert!(!verdict.passed, "the checks failed");
+        assert_eq!(verdict.failures.len(), 1, "the failure the checks found is listed");
+        let seen = model.seen();
+        assert_eq!(seen.len(), 1, "one verify turn");
+        assert!(
+            seen[0]
+                .system
+                .as_deref()
+                .is_some_and(|system| system.starts_with(self.prompt("verify.md"))),
+            "the compiled-in verify prompt leads the system"
+        );
+        assert!(
+            seen[0].tools.iter().any(|tool| tool == "write_files"),
+            "a verify turn repairs through `write_files`: {:?}",
+            seen[0].tools
+        );
     }
 }
 
@@ -117,83 +262,10 @@ fn root(project: &Scratch) -> &str {
     project.path().to_str().expect("a UTF-8 scratch root")
 }
 
-// The build turn opens under the embedded `build.md` with the tree lent and
-// `write_files` beside the reference tools, its brief carrying the slice;
-// what the model wrote through the tool in one call is what the tree holds
-// and the report names. The verify turn then opens under `verify.md` over
-// the same tree, `write_files` declared for its repairs.
 #[tokio::test]
 async fn typescript_target() {
-    let project = scratch();
-    let model = Scripted::answering([REPORT, PASSED]).calling(0, [write_files(&WRITTEN)]);
+    let project = TYPESCRIPT_TARGET.built(&TYPESCRIPT_WRITTEN, TYPESCRIPT_REPORT).await;
 
-    let report = TYPESCRIPT_TARGET.build(&project, &model).await.expect("build over the lent tree");
-    let verdict =
-        TYPESCRIPT_TARGET.verify(&project, &model).await.expect("verify over the built tree");
-    model.assert_exhausted();
-
-    let findings = report.findings(&slice());
-    assert!(findings.is_empty(), "report gate findings:\n{}", findings.join("\n"));
-    assert_eq!(report.covered, ["REQ-001"], "the slice's one requirement is covered");
-    assert!(verdict.passed, "the scripted verdict passes");
-
-    let seen = model.seen();
-    assert_eq!(seen.len(), 2, "the build opens one completion, the verify one");
-    let build = &seen[0];
-    assert!(
-        build
-            .system
-            .as_deref()
-            .is_some_and(|system| system.starts_with(TYPESCRIPT_TARGET.prompt("build.md"))),
-        "the compiled-in build prompt leads the system"
-    );
-    assert_eq!(build.workspace.as_deref(), Some(root(&project)), "the tree is lent to the build");
-    assert!(
-        build.tools.iter().any(|tool| tool == "write_files"),
-        "the build writes through `write_files`: {:?}",
-        build.tools
-    );
-    for carried in [
-        "SLICE-001",
-        "orders-reading",
-        "REQ-001",
-        "0123456789abcdef0123456789abcdef01234567",
-        "## Type: Order",
-    ] {
-        assert!(
-            build.messages[0].contains(carried),
-            "the brief carries `{carried}`: {}",
-            build.messages[0]
-        );
-    }
-
-    let verify = &seen[1];
-    assert!(
-        verify
-            .system
-            .as_deref()
-            .is_some_and(|system| system.starts_with(TYPESCRIPT_TARGET.prompt("verify.md"))),
-        "the compiled-in verify prompt leads the system"
-    );
-    assert_eq!(
-        verify.workspace.as_deref(),
-        Some(root(&project)),
-        "the integrated tree is lent to the verify"
-    );
-    assert!(
-        verify.tools.iter().any(|tool| tool == "write_files"),
-        "a verify turn repairs through `write_files`: {:?}",
-        verify.tools
-    );
-
-    let written: Vec<_> =
-        model.exchanges().into_iter().filter(|exchange| exchange.tool == "write_files").collect();
-    assert_eq!(written.len(), 1, "the one scripted call reached the tool: {written:?}");
-    assert!(written[0].outcome.is_ok(), "the call landed: {written:?}");
-    for (path, _) in WRITTEN {
-        assert!(project.read(path).is_some(), "the tree holds `{path}` from the one call");
-        assert!(report.written.iter().any(|written| written == path), "the report names `{path}`");
-    }
     assert_eq!(
         project.read("src/index.ts").as_deref(),
         Some("export * as orders from \"./orders/index.ts\";\n".as_bytes()),
@@ -227,35 +299,58 @@ fn typescript_target_rules() {
     );
 }
 
-// A verdict that fails is the adapter's answer, carried whole to the caller.
 #[tokio::test]
 async fn typescript_target_verify() {
-    let project = scratch();
-    project.write("package.json", "{}");
-    let model = Scripted::answering([FAILED]);
+    TYPESCRIPT_TARGET.failed(("package.json", "{}"), TYPESCRIPT_FAILED).await;
+}
 
-    let verdict = TYPESCRIPT_TARGET
-        .verify(&project, &model)
-        .await
-        .expect("a failed verdict is an answer, not an error");
-    model.assert_exhausted();
+#[tokio::test]
+async fn omnia_target() {
+    let project = OMNIA_TARGET.built(&OMNIA_WRITTEN, OMNIA_REPORT).await;
 
-    let findings = verdict.findings();
-    assert!(findings.is_empty(), "verdict gate findings:\n{}", findings.join("\n"));
-    assert!(!verdict.passed, "the checks failed");
-    assert_eq!(verdict.failures.len(), 1, "the failure the checks found is listed");
-    let seen = model.seen();
-    assert_eq!(seen.len(), 1, "one verify turn");
-    assert!(
-        seen[0]
-            .system
-            .as_deref()
-            .is_some_and(|system| system.starts_with(TYPESCRIPT_TARGET.prompt("verify.md"))),
-        "the compiled-in verify prompt leads the system"
+    assert_eq!(
+        project.read("crates/orders/src/lib.rs").as_deref(),
+        Some(b"pub mod reading;\n".as_slice()),
+        "the stem's list holds the part's one line"
     );
-    assert!(
-        seen[0].tools.iter().any(|tool| tool == "write_files"),
-        "a verify turn repairs through `write_files`: {:?}",
-        seen[0].tools
+    assert_eq!(
+        project.read("app/src/routes.rs").as_deref(),
+        Some("    let router = app_orders::reading::mount(router);\n".as_bytes()),
+        "the router list holds the part's one line"
     );
+    assert_eq!(
+        project.read("app/Cargo.toml").as_deref(),
+        Some("[dependencies]\napp-orders = { path = \"../crates/orders\" }\n".as_bytes()),
+        "the root crate's manifest holds the stem's one line"
+    );
+}
+
+// The rules a wave's slices merge under: the lockfile kept from the
+// integrated side, the root crate's manifest and every stem's as a union over
+// their dependency lists, the router list and every stem's module list as a
+// union, and every other path under none, the root manifest holding the pins
+// and the application's `lib.rs` among them.
+#[test]
+fn omnia_target_rules() {
+    let declared: Vec<(&str, MergeStrategy)> = omnia_target::Adapter::MERGE_RULES
+        .iter()
+        .map(|rule| (rule.paths.as_ref(), rule.strategy))
+        .collect();
+
+    assert_eq!(
+        declared,
+        [
+            ("Cargo.lock", MergeStrategy::Ours),
+            ("app/Cargo.toml", MergeStrategy::Union),
+            ("crates/*/Cargo.toml", MergeStrategy::Union),
+            ("app/src/routes.rs", MergeStrategy::Union),
+            ("crates/*/src/lib.rs", MergeStrategy::Union),
+        ],
+        "the merge rules the adapter declares, in order"
+    );
+}
+
+#[tokio::test]
+async fn omnia_target_verify() {
+    OMNIA_TARGET.failed(("Cargo.toml", "[workspace]\n"), OMNIA_FAILED).await;
 }

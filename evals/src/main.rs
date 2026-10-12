@@ -35,48 +35,56 @@
 //! `target/eval/facts/<case>/facts.md`. A graded run writes the same beside
 //! its log as `run-N.facts.md`.
 //!
-//! `cargo run -p evals -- --build [case|adapter..]` builds each plan a run
-//! commits: the project gains a `[target]` table naming the `typescript-target`
-//! component and a greenfield repository the runner lays beside the sources,
-//! `target.git`, bare, its `main` one root commit; after a specify that
-//! landed and its `show`s, `emery build --config emery.toml` runs over it,
-//! its log and envelope kept as `run-N.build.stderr` / `.stdout`, and the
-//! card gains seven columns — what the build merged, verified, took, saved
-//! over a serial walk of the same turns, and covered, then what the host's
-//! own checks and the tests say of the tree it left — with the waves, the
-//! conflicts, the repairs, the verify's refusals, the uncovered ids, and the
-//! chain the repository holds beneath the run's notes. The host's pass
-//! exports the tree the build left (the label, or the integration copy a
-//! failed build leaves), runs `npm install`, `npx tsc --noEmit`, and
-//! `node --test` in it, matches the merged slices' acceptance scenarios
-//! against the `test(` names, lists the tracked files outside the layout,
-//! and writes it all to `run-N.fidelity.md`.
+//! `cargo run -p evals -- --build [--target <name>] [case|adapter..]` builds
+//! each plan a run commits through the target adapter `--target` names
+//! (`typescript-target` unless told otherwise; `omnia-target` the other): the
+//! project gains a `[target]` table naming the target's component and a
+//! greenfield repository the runner lays beside the sources, `target.git`,
+//! bare, its `main` one root commit carrying the target's ignore rule; after
+//! a specify that landed and its `show`s, `emery build --config emery.toml`
+//! runs over it, its log and envelope kept as `run-N.build.stderr` /
+//! `.stdout`, and the card gains seven columns — what the build merged,
+//! verified, took, saved over a serial walk of the same turns, and covered,
+//! then what the host's own checks and the tests say of the tree it left —
+//! with the waves, the conflicts, the repairs, the verify's refusals, the
+//! uncovered ids, and the chain the repository holds beneath the run's
+//! notes. The host's pass exports the tree the build left (the label, or the
+//! integration copy a failed build leaves), runs the target's checks in it
+//! (`npm install`, `npx tsc --noEmit`, and `node --test` for
+//! `typescript-target`; `cargo clippy`, `cargo test`, and `cargo build
+//! --target wasm32-wasip2` for `omnia-target`), matches the merged slices'
+//! acceptance scenarios against the test names the tree declares (`test(`
+//! names, or `#[test]` fns with their underscores read as spaces), lists the
+//! tracked files outside the target's layout, and writes it all to
+//! `run-N.fidelity.md`.
 //!
 //! `cargo run -p evals -- --rebuild <card> [case|adapter..]` builds the plan
 //! `run-1` of each named case committed under an earlier card again, under
 //! this invocation's binary, target, model, and width: the staged project
-//! is copied under the new card, the label its build pushed deleted, and
-//! the build run afresh over the greenfield root, so one revision is built
-//! under several arms and the plan's own variance is out of the comparison;
-//! the specify columns repeat the earlier card's.
+//! is copied under the new card, its `target.git` laid afresh for the
+//! target `--target` names, and the build run over that greenfield root, so
+//! one revision is built under several arms and the plan's own variance is
+//! out of the comparison; the specify columns repeat the earlier card's.
 //!
 //! Environment: `EMERY_BIN` (`../emery/target/release/emery`), one
 //! `<ADAPTER>_WASM` per adapter a selected case runs under —
 //! `TYPESCRIPT_WASM` (`target/wasm32-wasip2/release/typescript.wasm`),
 //! `PYTHON_WASM`, `DOCUMENTATION_WASM`, `INTENT_WASM`, and under `--build`
-//! `TYPESCRIPT_TARGET_WASM` (`typescript_target.wasm`, as cargo spells the
-//! crate) — each copied into the binary's store, `~/.emery/adapters`, as the
-//! package `eval:<adapter>@<version>` (the file `eval_<adapter>@<version>.wasm`,
+//! the target's, `TYPESCRIPT_TARGET_WASM` or `OMNIA_TARGET_WASM`
+//! (`typescript_target.wasm`, `omnia_target.wasm`, as cargo spells the
+//! crates) — each copied into the binary's store, `~/.emery/adapters`, as
+//! the package `eval:<adapter>@<version>` (the file `eval_<adapter>@<version>.wasm`,
 //! `<version>` this workspace's), which every staged project names, so a
 //! card never stands over a published release or a developer's own build
 //! and `rm ~/.emery/adapters/eval_*` is the cleanup — `EVAL_RUNS` (`3`),
 //! `EVAL_JOBS` (unset: the width cap `--build` passes as `--jobs`),
 //! `EVAL_LADDER` (`600/120,1200/240,2400/480`: each rung
 //! `CURSOR_TIMEOUT_SECS/CURSOR_INACTIVITY_SECS`), and the runtime's other
-//! `CURSOR_*` knobs, `CURSOR_MAX_TOOL_CALLS` and the worker boundary's
-//! `CURSOR_EGRESS`, `CURSOR_READ_ROOTS`, and `CURSOR_WORKER_ENV` each named
-//! in the card's header when the caller sets it, since what a build's
-//! install may reach is theirs. `RUST_LOG` is set for the run unless the caller sets it:
+//! `CURSOR_*` knobs, `CURSOR_MAX_TOOL_CALLS`, the worker boundary's
+//! `CURSOR_EGRESS`, `CURSOR_READ_ROOTS`, and `CURSOR_WORKER_ENV`, and the
+//! backend's `CURSOR_BACKEND_URL`, each named in the card's header when the
+//! caller sets it, since what a build's install may reach, and where the
+//! bridge's calls go, is theirs. `RUST_LOG` is set for the run unless the caller sets it:
 //! the scorecard needs the SDK's `accepted` trace lines and `surveyed by
 //! model` line, the adapters' `survey facts` and `surveyed` trace lines and
 //! `placed by model` line, and the backend's `completion` lines.
@@ -103,8 +111,6 @@ use serde_json::Value;
 const CASES: &str = "evals/cases";
 const LADDER: &str = "600/120,1200/240,2400/480";
 const BOOTSTRAP: &str = "start";
-// The target adapter a `--build` run builds through, by its crate's name.
-const TARGET: &str = "typescript-target";
 
 // The run's log filter unless the caller sets one: every adapter the case
 // runs under at trace beside the SDK's.
@@ -126,6 +132,56 @@ fn main() -> ExitCode {
     }
 }
 
+// What the command line asks for: the cases or adapters named, and the
+// mode (`--facts`, `--build`, `--rebuild <card>`) with the target a build
+// goes through.
+struct Args {
+    filter: BTreeSet<String>,
+    facts_only: bool,
+    rebuild: Option<String>,
+    // the target a build runs through; none where no build runs
+    target: Option<Target>,
+}
+
+impl Args {
+    fn parse(argv: impl Iterator<Item = String>) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut argv = argv;
+        let mut filter: BTreeSet<String> = BTreeSet::new();
+        let mut rebuild: Option<String> = None;
+        let mut target: Option<Target> = None;
+        while let Some(arg) = argv.next() {
+            if arg == "--rebuild" {
+                rebuild = Some(argv.next().ok_or("`--rebuild` names a card")?);
+            } else if arg == "--target" {
+                let name = argv.next().ok_or("`--target` names a target adapter")?;
+                target = Some(Target::parse(&name)?);
+            } else {
+                filter.insert(arg);
+            }
+        }
+        let facts_only = filter.remove("--facts");
+        let build = filter.remove("--build") || rebuild.is_some();
+        if facts_only && filter.is_empty() {
+            return Err("`--facts` names a case or an adapter".into());
+        }
+        if facts_only && build {
+            return Err("`--facts` spends no turn, so it cannot `--build`".into());
+        }
+        if rebuild.is_some() && filter.is_empty() {
+            return Err("`--rebuild` names a case or an adapter".into());
+        }
+        if target.is_some() && !build {
+            return Err("`--target` chooses what `--build` or `--rebuild` builds through".into());
+        }
+        Ok(Self {
+            filter,
+            facts_only,
+            rebuild,
+            target: build.then(|| target.unwrap_or_default()),
+        })
+    }
+}
+
 #[expect(clippy::disallowed_methods, reason = "the eval is a native operator tool, not a guest")]
 fn eval() -> Result<(), Box<dyn std::error::Error>> {
     // the crate sits one level beneath the repository root, which every
@@ -133,33 +189,18 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .ok_or("CARGO_MANIFEST_DIR: no parent directory")?;
-    let mut args = env::args().skip(1);
-    let mut filter: BTreeSet<String> = BTreeSet::new();
-    let mut rebuild: Option<String> = None;
-    while let Some(arg) = args.next() {
-        if arg == "--rebuild" {
-            rebuild = Some(args.next().ok_or("`--rebuild` names a card")?);
-        } else {
-            filter.insert(arg);
-        }
-    }
-    let facts_only = filter.remove("--facts");
-    let build = filter.remove("--build") || rebuild.is_some();
-    if facts_only && filter.is_empty() {
-        return Err("`--facts` names a case or an adapter".into());
-    }
-    if facts_only && build {
-        return Err("`--facts` spends no turn, so it cannot `--build`".into());
-    }
-    if rebuild.is_some() && filter.is_empty() {
-        return Err("`--rebuild` names a case or an adapter".into());
-    }
+    let Args {
+        filter,
+        facts_only,
+        rebuild,
+        target,
+    } = Args::parse(env::args().skip(1))?;
     let cases = cases(root, &filter)?;
     if cases.is_empty() {
         return Err(format!("no case under `{CASES}` matches").into());
     }
     let adapters: BTreeSet<&str> = cases.iter().flat_map(|case| case.expected.adapters()).collect();
-    let mut settings = Settings::from_env(root, &adapters, build)?;
+    let mut settings = Settings::from_env(root, &adapters, target)?;
     settings.rebuild = rebuild;
 
     let eval_dir = root.join("target/eval");
@@ -289,7 +330,7 @@ struct Settings {
     // under and, on `--build`, the target
     wasm: BTreeMap<String, PathBuf>,
     // the target adapter a `--build` run builds every plan through
-    target: Option<String>,
+    target: Option<Target>,
     // the width cap a `--build` run passes as `--jobs`; none leaves the
     // engine's default
     jobs: Option<NonZeroUsize>,
@@ -302,18 +343,22 @@ struct Settings {
     // the card names it
     max_tool_calls: Option<String>,
     // what the caller opened to the confined worker — `CURSOR_EGRESS`,
-    // `CURSOR_READ_ROOTS`, `CURSOR_WORKER_ENV` — each named in the card when
-    // set, since a build's install depends on them
+    // `CURSOR_READ_ROOTS`, `CURSOR_WORKER_ENV` — and the backend the
+    // relay forwards to, each named in the card when set, since a build's
+    // install and the bridge's calls depend on them
     boundary: Vec<(&'static str, String)>,
     // the card whose committed plans this invocation builds again
     rebuild: Option<String>,
 }
 
 // The worker-boundary variables the card names when set.
-const BOUNDARY: [&str; 3] = ["CURSOR_EGRESS", "CURSOR_READ_ROOTS", "CURSOR_WORKER_ENV"];
+const BOUNDARY: [&str; 4] =
+    ["CURSOR_EGRESS", "CURSOR_READ_ROOTS", "CURSOR_WORKER_ENV", "CURSOR_BACKEND_URL"];
 
 impl Settings {
-    fn from_env(root: &Path, adapters: &BTreeSet<&str>, build: bool) -> Result<Self, String> {
+    fn from_env(
+        root: &Path, adapters: &BTreeSet<&str>, target: Option<Target>,
+    ) -> Result<Self, String> {
         // a relative path is from the repository root, the directory the
         // runner is run from; the binary runs with each staged project as
         // its directory, so the path it is spawned by must be absolute
@@ -327,9 +372,8 @@ impl Settings {
         let store = env::var_os("HOME")
             .map(|home| PathBuf::from(home).join(".emery/adapters"))
             .ok_or("HOME: unset, so the binary's store `~/.emery/adapters` has no home")?;
-        let target = build.then(|| TARGET.to_owned());
         let mut wasm = BTreeMap::new();
-        for component in adapters.iter().copied().chain(target.as_deref()) {
+        for component in adapters.iter().copied().chain(target.map(Target::name)) {
             // cargo spells a hyphenated crate's artifact with underscores
             let artifact = component.replace('-', "_");
             let name = format!("{}_WASM", artifact.to_uppercase());
@@ -788,18 +832,25 @@ fn stage(dir: &Path, case: &Case, settings: &Settings) -> io::Result<PathBuf> {
         }
         config.push('\n');
     }
-    if let Some(target) = &settings.target {
-        let reference = settings.stage_component(target)?;
-        let url = greenfield(&project, &case.name)?;
-        let _ = write!(
-            config,
-            "[target]\nadapter = \"{reference}\"\nrepository = \"{url}\"\nbranch = \"main\"\n\
-             remote = \"origin\"\n"
-        );
+    if let Some(target) = settings.target {
+        config.push_str(&target_table(&project, case, settings, target)?);
     }
     fs::write(project.join("emery.toml"), config)?;
 
     Ok(project)
+}
+
+// The `[target]` table of a staged project: the target's component staged
+// in the store, and a greenfield repository laid for it beneath the project.
+fn target_table(
+    project: &Path, case: &Case, settings: &Settings, target: Target,
+) -> io::Result<String> {
+    let reference = settings.stage_component(target.name())?;
+    let url = greenfield(project, &case.name, target)?;
+    Ok(format!(
+        "[target]\nadapter = \"{reference}\"\nrepository = \"{url}\"\nbranch = \"main\"\n\
+         remote = \"origin\"\n"
+    ))
 }
 
 fn toml_escaped(text: &str) -> String {
@@ -809,18 +860,21 @@ fn toml_escaped(text: &str) -> String {
 // The repository a `--build` run builds into, and the URL the project names
 // it by: `target.git` beneath the project, bare, so the engine clones it
 // and pushes the label back, its `main` one root commit holding an ignore
-// rule for what a Node build leaves and a README naming the case. The
+// rule for what the target's build leaves and a README naming the case. The
 // engine never initialises a repository, so the commit is sealed here,
 // through a seed clone the host's git pushes and the runner removes.
-fn greenfield(project: &Path, case: &str) -> io::Result<String> {
+fn greenfield(project: &Path, case: &str, target: Target) -> io::Result<String> {
     let bare = project.join("target.git");
+    if bare.exists() {
+        fs::remove_dir_all(&bare)?;
+    }
     fs::create_dir_all(&bare)?;
     git(&bare, &["init", "--quiet", "--bare", "--initial-branch=main"])?;
     let url = format!("file://{}", bare.display());
 
     let seed = project.join("target.seed");
     fs::create_dir_all(&seed)?;
-    fs::write(seed.join(".gitignore"), "node_modules/\ndist/\n.emery/\n")?;
+    fs::write(seed.join(".gitignore"), target.ignore())?;
     fs::write(
         seed.join("README.md"),
         format!("# {case}\n\nThe tree the eval's `--build` run builds the `{case}` plan into.\n"),
@@ -870,6 +924,7 @@ const UNCOPIED: &[&str] = &[
     ".git",
     ".emery",
     "dist",
+    "target",
     "__pycache__",
     ".venv",
     "venv",
@@ -1412,9 +1467,11 @@ fn build(
     };
     // the host's pass is read beside the build, never in its place: a
     // toolchain the host lacks leaves the cells empty and the card whole
-    if let Some(tree) = Tree::left(project, revision, &build) {
+    if let Some(tree) = Tree::left(project, revision, &build)
+        && let Some(target) = settings.target
+    {
         eprintln!("eval: `{tag}` host checks over {tree}");
-        match Fidelity::read(project, tag, &tree, &build, spec) {
+        match Fidelity::read(project, tag, &tree, &build, spec, target) {
             Ok(fidelity) => {
                 fs::write(project.join(&fidelity.file), fidelity.to_string())?;
                 build.fidelity = Some(fidelity);
@@ -1428,11 +1485,12 @@ fn build(
 
 // Builds the plan `run-1` of `case` committed under `card` again. The staged
 // project is copied whole under the new card, less the engine's clones and
-// working copies, its `emery.toml` pointed at the copied `target.git`, and
-// the label the earlier build pushed deleted, so the engine clones afresh
-// and builds every slice over the greenfield root; the run's specify is
-// read back from the files the earlier run kept, exactly as `run` read
-// them, so the card's specify columns repeat the source card's.
+// working copies and the earlier build's repository, and its `emery.toml`
+// gains a `[target]` table over a greenfield laid afresh for this
+// invocation's target, so the engine clones a repository with no label and
+// builds every slice over its root; the run's specify is read back from the
+// files the earlier run kept, exactly as `run` read them, so the card's
+// specify columns repeat the source card's.
 fn rebuilt(
     eval_dir: &Path, card: &str, card_name: &str, case: &Case, settings: &Settings,
 ) -> io::Result<Run> {
@@ -1465,7 +1523,7 @@ fn rebuilt(
         let entry = entry?;
         let name = entry.file_name();
         let name_str = name.to_string_lossy();
-        if name_str.contains(".build") || name_str.contains(".fidelity") {
+        if name_str.contains(".build") || name_str.contains(".fidelity") || name == "target.git" {
             continue;
         }
         let target = project.join(&name);
@@ -1480,20 +1538,16 @@ fn rebuilt(
         }
     }
 
-    // the config pointed at the copied repository, the label deleted so the
-    // build is fresh, the target staged under this invocation's component
+    // the config's `[target]` table rewritten over a greenfield laid afresh
+    // for this invocation's target, its component staged
     let config = fs::read_to_string(source.join("emery.toml"))?;
-    let old_url = format!("file://{}", source.join("target.git").display());
-    let new_url = format!("file://{}", project.join("target.git").display());
-    fs::write(project.join("emery.toml"), config.replace(&old_url, &new_url))?;
-    let bare = project.join("target.git");
-    let label = format!("refs/heads/emery/{revision}");
-    if git(&bare, &["show-ref", "--verify", "--quiet", &label]).is_ok() {
-        git(&bare, &["update-ref", "-d", &label])?;
-    }
-    if let Some(target) = &settings.target {
-        settings.stage_component(target)?;
-    }
+    let (sources, _) = config.split_once("[target]").ok_or_else(|| {
+        io::Error::other(format!("`{TAG}` of `{}` was staged with no `[target]`", case.name))
+    })?;
+    let target =
+        settings.target.ok_or_else(|| io::Error::other("a rebuild builds through a target"))?;
+    let table = target_table(&project, case, settings, target)?;
+    fs::write(project.join("emery.toml"), format!("{sources}{table}"))?;
 
     // the run as the earlier specify left it, then this invocation's build
     let rung =
@@ -1956,9 +2010,196 @@ impl Display for Tree {
     }
 }
 
-// The root files, directories, and test files the layout admits; a tracked
-// file anywhere else is outside it.
-const ROOT_FILES: &[&str] = &["package.json", "package-lock.json", "tsconfig.json", ".gitignore"];
+// A target adapter a `--build` run builds through, and what the host reads
+// of the tree it leaves: the ignore rule its greenfield root carries, the
+// files its layout admits, the checks its toolchain runs, and how its tests
+// are counted and named.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+enum Target {
+    #[default]
+    TypeScript,
+    Omnia,
+}
+
+impl Target {
+    const ALL: [Self; 2] = [Self::TypeScript, Self::Omnia];
+
+    fn parse(name: &str) -> Result<Self, String> {
+        Self::ALL.into_iter().find(|target| target.name() == name).ok_or_else(|| {
+            let names: Vec<&str> = Self::ALL.iter().map(|target| target.name()).collect();
+            format!("--target: `{name}` is no target adapter; one of {}", names.join(", "))
+        })
+    }
+
+    // The crate's name: the component's, and the `eval:` package's.
+    const fn name(self) -> &'static str {
+        match self {
+            Self::TypeScript => "typescript-target",
+            Self::Omnia => "omnia-target",
+        }
+    }
+
+    // The ignore rule the greenfield root carries for what a build leaves.
+    const fn ignore(self) -> &'static str {
+        match self {
+            Self::TypeScript => "node_modules/\ndist/\n.emery/\n",
+            Self::Omnia => "target/\n.emery/\n",
+        }
+    }
+
+    // The one file the checks may write into the tree without it counting.
+    const fn lockfile(self) -> &'static str {
+        match self {
+            Self::TypeScript => "package-lock.json",
+            Self::Omnia => "Cargo.lock",
+        }
+    }
+
+    // The directory the checks leave beside the tree, passed over when the
+    // export is listed.
+    const fn scratch(self) -> &'static str {
+        match self {
+            Self::TypeScript => "node_modules",
+            Self::Omnia => "target",
+        }
+    }
+
+    // The check whose exit stands for the tests, and whose output counts them.
+    const fn runner(self) -> &'static str {
+        match self {
+            Self::TypeScript => "node --test",
+            Self::Omnia => "cargo test",
+        }
+    }
+
+    // The root files the layout admits.
+    const fn root_files(self) -> &'static [&'static str] {
+        match self {
+            Self::TypeScript => {
+                &["package.json", "package-lock.json", "tsconfig.json", ".gitignore"]
+            }
+            Self::Omnia => &[
+                "Cargo.toml",
+                "Cargo.lock",
+                "rust-toolchain.toml",
+                ".gitignore",
+                "app/Cargo.toml",
+                "app/src/lib.rs",
+                "app/src/routes.rs",
+                "app/tests/routes.rs",
+                "app/examples/runtime.rs",
+            ],
+        }
+    }
+
+    // Whether a tracked path is one the layout admits: a root file, the entry
+    // or the runner, a file under a stem's directory, or a stem's test file
+    // or directory.
+    fn within_layout(self, path: &str, stems: &BTreeSet<&str>) -> bool {
+        if self.root_files().contains(&path) || path == "README.md" {
+            return true;
+        }
+        match self {
+            Self::TypeScript => {
+                if let Some(rest) = path.strip_prefix("src/") {
+                    if rest == "index.ts" || rest == "main.ts" {
+                        return true;
+                    }
+                    return rest.split_once('/').is_some_and(|(dir, _)| stems.contains(dir));
+                }
+                if let Some(rest) = path.strip_prefix("test/") {
+                    return rest.strip_suffix(".test.ts").is_some_and(|name| stems.contains(name))
+                        || rest.split_once('/').is_some_and(|(dir, _)| stems.contains(dir));
+                }
+                false
+            }
+            Self::Omnia => path
+                .strip_prefix("crates/")
+                .and_then(|rest| rest.split_once('/'))
+                .is_some_and(|(dir, _)| stems.contains(dir)),
+        }
+    }
+
+    // The layout's checks run in `export`, each unrun once an earlier one
+    // fails to leave what it needs.
+    fn checks(self, export: &Path) -> Vec<HostCheck> {
+        match self {
+            Self::TypeScript => {
+                let install = host_check(export, "npm install", &["--no-audit", "--no-fund"]);
+                let installed = install.passed();
+                let compile = if installed {
+                    host_check(export, "npx tsc", &["--noEmit"])
+                } else {
+                    unrun("npx tsc", "the install failed")
+                };
+                let tests = if installed {
+                    host_check(
+                        export,
+                        "node --test",
+                        &[
+                            "--test-force-exit",
+                            "--test-timeout=5000",
+                            "--test-reporter=tap",
+                            "test/**/*.test.ts",
+                        ],
+                    )
+                } else {
+                    unrun("node --test", "the install failed")
+                };
+                vec![install, compile, tests]
+            }
+            Self::Omnia => {
+                let lint = host_check(
+                    export,
+                    "cargo clippy",
+                    &["--workspace", "--all-targets", "--", "-D", "warnings"],
+                );
+                let linted = lint.passed();
+                let tests = if linted {
+                    host_check(export, "cargo test", &["--workspace"])
+                } else {
+                    unrun("cargo test", "the lint failed")
+                };
+                let guest = if tests.passed() {
+                    host_check(export, "cargo build", &["--target", "wasm32-wasip2"])
+                } else if linted {
+                    unrun("cargo build", "the tests failed")
+                } else {
+                    unrun("cargo build", "the lint failed")
+                };
+                vec![lint, tests, guest]
+            }
+        }
+    }
+
+    // The tests the runner's output counts as passed and failed.
+    fn test_counts(self, runner: &HostCheck) -> (usize, usize) {
+        match self {
+            Self::TypeScript => tap_counts(&runner.note),
+            Self::Omnia => cargo_test_counts(&runner.output),
+        }
+    }
+
+    // Every test name the tree's test files declare, spelled as a scenario
+    // is: a `test(` or `it(` string, or a `#[test]` fn's name with its
+    // underscores as spaces.
+    fn test_names(self, export: &Path) -> io::Result<Vec<String>> {
+        let mut names = Vec::new();
+        match self {
+            Self::TypeScript => test_names(&export.join("test"), &mut names)?,
+            Self::Omnia => {
+                rust_test_names(&export.join("app").join("tests"), &mut names)?;
+                let crates = export.join("crates");
+                if crates.is_dir() {
+                    for entry in fs::read_dir(crates)? {
+                        rust_test_names(&entry?.path().join("tests"), &mut names)?;
+                    }
+                }
+            }
+        }
+        Ok(names)
+    }
+}
 
 // What the host's own checks say of the tree a build left: the layout's
 // three checks run in a fresh export of the tip, the tests they ran, the
@@ -1968,11 +2209,12 @@ struct Fidelity {
     // the file beside the run's log the pass is written to
     file: String,
     tree: String,
+    target: Target,
     checks: Vec<HostCheck>,
     // the tests the runner reported passed and failed
     passed: usize,
     failed: usize,
-    // the `test(` names the tree's test files declare
+    // the test names the tree's test files declare
     tests: usize,
     scenarios: Vec<Scenario>,
     outside: Vec<String>,
@@ -1980,10 +2222,11 @@ struct Fidelity {
 }
 
 // One command the host ran in the exported tree: its exit, or none where an
-// earlier check's failure left it unrun, and the tail of what it printed.
+// earlier check's failure left it unrun, what it printed, and the tail of it.
 struct HostCheck {
     name: &'static str,
     exit: Option<i32>,
+    output: String,
     note: String,
 }
 
@@ -1992,8 +2235,9 @@ impl HostCheck {
         self.exit == Some(0)
     }
 
-    // The one line of the note the table shows: the TAP counts for the test
-    // runner, the last line printed for the rest.
+    // The one line of the note the table shows: the TAP counts for Node's
+    // runner, the summed `test result` counts for cargo's, the last line
+    // printed for the rest.
     fn summary(&self) -> String {
         let lines: Vec<&str> =
             self.note.lines().map(str::trim).filter(|line| !line.is_empty()).collect();
@@ -2008,6 +2252,10 @@ impl HostCheck {
             if !counts.is_empty() {
                 return counts.join(" · ");
             }
+        }
+        if self.name == "cargo test" && self.output.contains("test result:") {
+            let (passed, failed) = cargo_test_counts(&self.output);
+            return format!("{passed} passed · {failed} failed");
         }
         lines.last().copied().unwrap_or("").to_owned()
     }
@@ -2030,7 +2278,7 @@ enum Named {
 impl Fidelity {
     #[expect(clippy::disallowed_types, reason = "the eval runs the host's toolchain over the tree")]
     fn read(
-        project: &Path, tag: &str, tree: &Tree, build: &Build, spec: Option<&Value>,
+        project: &Path, tag: &str, tree: &Tree, build: &Build, spec: Option<&Value>, target: Target,
     ) -> io::Result<Self> {
         let (repo, tip) = tree.at();
         let export = project.join(format!("{tag}.fidelity"));
@@ -2058,34 +2306,15 @@ impl Fidelity {
         let tracked: Vec<String> =
             git(repo, &["ls-tree", "-r", "--name-only", tip])?.lines().map(str::to_owned).collect();
 
-        // the layout's checks, each unrun once an earlier one fails to leave
-        // what it needs
-        let mut checks = vec![host_check(&export, "npm install", &["--no-audit", "--no-fund"])];
-        let installed = checks[0].passed();
-        checks.push(if installed {
-            host_check(&export, "npx tsc", &["--noEmit"])
-        } else {
-            unrun("npx tsc")
-        });
-        checks.push(if installed {
-            host_check(
-                &export,
-                "node --test",
-                &[
-                    "--test-force-exit",
-                    "--test-timeout=5000",
-                    "--test-reporter=tap",
-                    "test/**/*.test.ts",
-                ],
-            )
-        } else {
-            unrun("node --test")
-        });
-        let (passed, failed) = tap_counts(&checks[2].note);
+        // the layout's checks, then the tests the runner counted
+        let checks = target.checks(&export);
+        let (passed, failed) = checks
+            .iter()
+            .find(|check| check.name == target.runner())
+            .map_or((0, 0), |runner| target.test_counts(runner));
 
         // the tests the tree declares, against the merged slices' scenarios
-        let mut names = Vec::new();
-        test_names(&export.join("test"), &mut names)?;
+        let names = target.test_names(&export)?;
         let merged: BTreeSet<String> =
             build.integrated().into_iter().flat_map(|slice| slice.requirements).collect();
         let requirements = spec
@@ -2114,18 +2343,20 @@ impl Fidelity {
         // the files outside the layout, and what the checks wrote
         let stems: BTreeSet<&str> =
             requirements.iter().filter_map(|r| r["subject"].as_str().and_then(stem)).collect();
-        let outside = tracked.iter().filter(|path| !within_layout(path, &stems)).cloned().collect();
+        let outside =
+            tracked.iter().filter(|path| !target.within_layout(path, &stems)).cloned().collect();
         let mut present = Vec::new();
-        files_under(&export, &export, &mut present)?;
+        files_under(&export, &export, target.scratch(), &mut present)?;
         let wrote = present
             .into_iter()
-            .filter(|path| path != "package-lock.json" && !tracked.contains(path))
+            .filter(|path| path != target.lockfile() && !tracked.contains(path))
             .collect();
         fs::remove_dir_all(&export)?;
 
         Ok(Self {
             file: format!("{tag}.fidelity.md"),
             tree: tree.to_string(),
+            target,
             checks,
             passed,
             failed,
@@ -2154,7 +2385,7 @@ impl Fidelity {
         }
         let mut parts = Vec::new();
         for check in &self.checks {
-            let runner = check.name == "node --test";
+            let runner = check.name == self.target.runner();
             match check.exit {
                 Some(0) if !runner || self.failed == 0 => {}
                 Some(_) if runner => parts.push(format!("tests {tests}")),
@@ -2184,9 +2415,11 @@ impl Display for Fidelity {
         }
         writeln!(
             f,
-            "\n## Tests\n\n- {} `test(` names in the tree; the runner reports {} passed, {} \
-             failed.",
-            self.tests, self.passed, self.failed
+            "\n## Tests\n\n- {} test names in the tree; `{}` reports {} passed, {} failed.",
+            self.tests,
+            self.target.runner(),
+            self.passed,
+            self.failed
         )?;
 
         // the scenarios, by stem
@@ -2259,21 +2492,24 @@ fn host_check(at: &Path, command: &'static str, args: &[&str]) -> HostCheck {
                 name: command,
                 exit: output.status.code(),
                 note: tail.join("\n"),
+                output: text,
             }
         }
         Err(error) => HostCheck {
             name: command,
             exit: None,
+            output: String::new(),
             note: format!("not run: {error}"),
         },
     }
 }
 
-fn unrun(command: &'static str) -> HostCheck {
+fn unrun(command: &'static str, why: &str) -> HostCheck {
     HostCheck {
         name: command,
         exit: None,
-        note: "not run: the install failed".to_owned(),
+        output: String::new(),
+        note: format!("not run: {why}"),
     }
 }
 
@@ -2287,6 +2523,68 @@ fn tap_counts(note: &str) -> (usize, usize) {
             .unwrap_or(0)
     };
     (count("# pass"), count("# fail"))
+}
+
+// The `N passed` and `M failed` of every `test result:` line cargo's runner
+// prints, one per test binary, summed.
+fn cargo_test_counts(output: &str) -> (usize, usize) {
+    let mut passed = 0;
+    let mut failed = 0;
+    for line in output.lines().filter_map(|line| line.trim().strip_prefix("test result:")) {
+        for field in line.split(';') {
+            let words: Vec<&str> = field.split_whitespace().collect();
+            if let [.., count, kind] = words.as_slice()
+                && let Ok(count) = count.parse::<usize>()
+            {
+                match *kind {
+                    "passed" => passed += count,
+                    "failed" => failed += count,
+                    _ => {}
+                }
+            }
+        }
+    }
+    (passed, failed)
+}
+
+// Every `#[test]` or `#[tokio::test]` fn under `dir`, read from the files'
+// text and spelled as a scenario, its underscores as spaces.
+fn rust_test_names(dir: &Path, names: &mut Vec<String>) -> io::Result<()> {
+    if !dir.is_dir() {
+        return Ok(());
+    }
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if entry.file_type()?.is_dir() {
+            rust_test_names(&path, names)?;
+        } else if path.extension().is_some_and(|ext| ext == "rs") {
+            let text = fs::read_to_string(&path)?;
+            names.extend(declared_rust_tests(&text));
+        }
+    }
+    Ok(())
+}
+
+fn declared_rust_tests(text: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    let mut lines = text.lines().map(str::trim);
+    while let Some(line) = lines.next() {
+        if line != "#[test]" && !line.starts_with("#[tokio::test") {
+            continue;
+        }
+        // the fn head follows, past any further attribute
+        let head = lines.by_ref().find(|line| !line.starts_with("#["));
+        let Some(rest) = head.and_then(|head| head.split_once("fn ")) else {
+            continue;
+        };
+        let name: String =
+            rest.1.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+        if !name.is_empty() {
+            names.push(name.replace('_', " "));
+        }
+    }
+    names
 }
 
 // Every `test("…")` and `it("…")` name under `dir`, read from the files'
@@ -2347,38 +2645,18 @@ fn named_by(scenario: &str, tests: &[String]) -> Option<Named> {
     fuzzy.then_some(Named::Fuzzy)
 }
 
-// Whether a tracked path is one the layout admits: a root manifest, the
-// entry or the runner, a file under a stem's directory, or a stem's test
-// file or directory.
-fn within_layout(path: &str, stems: &BTreeSet<&str>) -> bool {
-    if ROOT_FILES.contains(&path) || path == "README.md" {
-        return true;
-    }
-    if let Some(rest) = path.strip_prefix("src/") {
-        if rest == "index.ts" || rest == "main.ts" {
-            return true;
-        }
-        return rest.split_once('/').is_some_and(|(dir, _)| stems.contains(dir));
-    }
-    if let Some(rest) = path.strip_prefix("test/") {
-        return rest.strip_suffix(".test.ts").is_some_and(|name| stems.contains(name))
-            || rest.split_once('/').is_some_and(|(dir, _)| stems.contains(dir));
-    }
-    false
-}
-
-// Every file beneath `dir` as a `/`-separated path relative to `root`,
-// `node_modules` and `.git` passed over.
-fn files_under(root: &Path, dir: &Path, found: &mut Vec<String>) -> io::Result<()> {
+// Every file beneath `dir` as a `/`-separated path relative to `root`, the
+// checks' `scratch` directory and `.git` passed over.
+fn files_under(root: &Path, dir: &Path, scratch: &str, found: &mut Vec<String>) -> io::Result<()> {
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
         let name = entry.file_name();
-        if name == "node_modules" || name == ".git" {
+        if name == scratch || name == ".git" {
             continue;
         }
         let path = entry.path();
         if entry.file_type()?.is_dir() {
-            files_under(root, &path, found)?;
+            files_under(root, &path, scratch, found)?;
         } else if let Ok(relative) = path.strip_prefix(root) {
             let parts: Vec<String> = relative
                 .components()
@@ -2919,13 +3197,13 @@ fn scorecard(settings: &Settings, reports: &[Report<'_>], started: &str, name: &
         .iter()
         .map(|(adapter, path)| format!("adapter `{adapter}` `{}`", path.display()))
         .collect();
-    let built = settings.target.as_deref().map_or_else(String::new, |target| {
+    let built = settings.target.map_or_else(String::new, |target| {
         let jobs = settings
             .jobs
             .map_or_else(|| "the engine's default".to_owned(), |jobs| format!("`--jobs {jobs}`"));
         format!(
-            " · each landed plan built through `{target}` into a greenfield `target.git` under \
-             {jobs}"
+            " · each landed plan built through `{}` into a greenfield `target.git` under {jobs}",
+            target.name()
         )
     });
     let budget = settings
@@ -4020,16 +4298,21 @@ mod tests {
         assert_eq!(build.repaired(), [2]);
     }
 
-    #[test]
-    fn host_checks_cells() {
-        let check = |name, exit| HostCheck {
+    fn check(name: &'static str, exit: Option<i32>) -> HostCheck {
+        HostCheck {
             name,
             exit,
+            output: String::new(),
             note: String::new(),
-        };
+        }
+    }
+
+    #[test]
+    fn host_checks_cells() {
         let mut fidelity = Fidelity {
             file: "run-1.fidelity.md".to_owned(),
             tree: "the label `emery/feb4bd36`".to_owned(),
+            target: Target::TypeScript,
             checks: vec![
                 check("npm install", Some(0)),
                 check("npx tsc", Some(0)),
@@ -4069,9 +4352,49 @@ mod tests {
         assert_eq!(fidelity.host_cell(), "npx tsc ✗ · tests 12/14");
 
         fidelity.checks[0].exit = Some(1);
-        fidelity.checks[1] = unrun("npx tsc");
-        fidelity.checks[2] = unrun("node --test");
+        fidelity.checks[1] = unrun("npx tsc", "the install failed");
+        fidelity.checks[2] = unrun("node --test", "the install failed");
         assert_eq!(fidelity.host_cell(), "npm install ✗ · npx tsc unrun · node --test unrun");
+    }
+
+    // The omnia profile's runner is `cargo test`, so its failures read as
+    // the tests' and the guest build's name stands beside them.
+    #[test]
+    fn omnia_host_checks_cells() {
+        let mut fidelity = Fidelity {
+            file: "run-1.fidelity.md".to_owned(),
+            tree: "the label `emery/feb4bd36`".to_owned(),
+            target: Target::Omnia,
+            checks: vec![
+                check("cargo clippy", Some(0)),
+                check("cargo test", Some(0)),
+                check("cargo build", Some(0)),
+            ],
+            passed: 7,
+            failed: 0,
+            tests: 7,
+            scenarios: Vec::new(),
+            outside: Vec::new(),
+            wrote: Vec::new(),
+        };
+        assert!(fidelity.clean());
+        assert_eq!(fidelity.host_cell(), "ok 7/7");
+
+        fidelity.checks[1].exit = Some(101);
+        fidelity.checks[2] = unrun("cargo build", "the tests failed");
+        fidelity.failed = 1;
+        assert!(!fidelity.clean());
+        assert_eq!(fidelity.host_cell(), "tests 7/8 · cargo build unrun");
+    }
+
+    #[test]
+    fn target_names() {
+        assert_eq!(Target::default(), Target::TypeScript);
+        assert_eq!(Target::parse("omnia-target"), Ok(Target::Omnia));
+        Target::parse("omnia").unwrap_err();
+        assert_eq!(Target::Omnia.ignore(), "target/\n.emery/\n");
+        assert_eq!(Target::Omnia.lockfile(), "Cargo.lock");
+        assert_eq!(Target::TypeScript.runner(), "node --test");
     }
 
     #[test]
@@ -4079,6 +4402,52 @@ mod tests {
         let note = "TAP version 13\nok 1 - a\nnot ok 2 - b\n# tests 2\n# pass 1\n# fail 1\n";
         assert_eq!(tap_counts(note), (1, 1));
         assert_eq!(tap_counts("not run: the install failed"), (0, 0));
+    }
+
+    // Cargo prints one `test result` line per test binary; the counts sum
+    // over them, and a check that did not run counts nothing.
+    #[test]
+    fn cargo_test_summary() {
+        let output = "     Running tests/reading.rs\n\
+                      test an_order_is_returned_by_its_id ... ok\n\
+                      test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; \
+                      finished in 0.00s\n\
+                      \n     Running tests/placing.rs\n\
+                      test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered \
+                      out; finished in 0.01s\n";
+        assert_eq!(cargo_test_counts(output), (3, 1));
+        assert_eq!(cargo_test_counts("not run: the lint failed"), (0, 0));
+        let runner = HostCheck {
+            name: "cargo test",
+            exit: Some(101),
+            output: output.to_owned(),
+            note: String::new(),
+        };
+        assert_eq!(runner.summary(), "3 passed · 1 failed");
+    }
+
+    // A `#[test]` or `#[tokio::test]` fn is a scenario with its underscores
+    // as spaces; a helper fn, and an attribute between, are passed over.
+    #[test]
+    fn rust_tests_named_by_scenarios() {
+        let text = "fn app(provider: Provider) -> Router {}\n\
+                    \n#[tokio::test]\n\
+                    async fn an_order_with_no_items_is_refused() {}\n\
+                    \n#[test]\n#[should_panic]\nfn a_paid_order_ships() {}\n\
+                    \n#[tokio::test(flavor = \"current_thread\")]\n\
+                    async fn the_service_reports_it_is_up<P>() {}\n";
+        let names = declared_rust_tests(text);
+        assert_eq!(
+            names,
+            [
+                "an order with no items is refused",
+                "a paid order ships",
+                "the service reports it is up"
+            ]
+        );
+        assert_eq!(named_by("An order with no items is refused", &names), Some(Named::Exact));
+        assert_eq!(named_by("a paid order ships to the address", &names), Some(Named::Fuzzy));
+        assert_eq!(named_by("an order is cancelled", &names), None);
     }
 
     #[test]
@@ -4109,12 +4478,51 @@ mod tests {
             "test/orders.test.ts",
             "test/orders/reading.test.ts",
         ] {
-            assert!(within_layout(path, &stems), "`{path}` is within the layout");
+            assert!(
+                Target::TypeScript.within_layout(path, &stems),
+                "`{path}` is within the layout"
+            );
         }
         for path in
             ["scripts/check.mjs", "src/orders-reading/index.ts", "test/helpers.ts", "src/x.ts"]
         {
-            assert!(!within_layout(path, &stems), "`{path}` is outside the layout");
+            assert!(
+                !Target::TypeScript.within_layout(path, &stems),
+                "`{path}` is outside the layout"
+            );
+        }
+    }
+
+    #[test]
+    fn omnia_layout_membership() {
+        let stems: BTreeSet<&str> = ["orders", "start"].into_iter().collect();
+        for path in [
+            "Cargo.toml",
+            "Cargo.lock",
+            "rust-toolchain.toml",
+            ".gitignore",
+            "README.md",
+            "app/Cargo.toml",
+            "app/src/lib.rs",
+            "app/src/routes.rs",
+            "app/tests/routes.rs",
+            "app/examples/runtime.rs",
+            "crates/orders/Cargo.toml",
+            "crates/orders/src/reading.rs",
+            "crates/orders/tests/reading.rs",
+            "crates/start/src/lib.rs",
+        ] {
+            assert!(Target::Omnia.within_layout(path, &stems), "`{path}` is within the layout");
+        }
+        for path in [
+            "src/lib.rs",
+            "app/src/main.rs",
+            "tests/routes.rs",
+            "crates/payments/src/lib.rs",
+            "scripts/check.sh",
+            "package.json",
+        ] {
+            assert!(!Target::Omnia.within_layout(path, &stems), "`{path}` is outside the layout");
         }
     }
 

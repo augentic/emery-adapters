@@ -3,7 +3,7 @@
 [![CI](https://github.com/augentic/emery-adapters/actions/workflows/ci.yaml/badge.svg)](https://github.com/augentic/emery-adapters/actions/workflows/ci.yaml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
-First-party Wasm components for [Emery](https://github.com/augentic/emery): the **source** adapters its specification generator reads — `documentation`, `intent`, `typescript`, and `python` — and the **target** adapter `emery build` builds through, `typescript-target`.
+First-party Wasm components for [Emery](https://github.com/augentic/emery): the **source** adapters its specification generator reads — `documentation`, `intent`, `typescript`, and `python` — and the **target** adapters `emery build` builds through, `typescript-target` and `omnia-target`.
 
 **Using Emery in a project?** You do not need this repository. Name a published adapter by package reference (`emery:<name>@<version>`) in the project's `emery.toml`; the `emery` binary fetches it on the first run that names it and reads it from `~/.emery/adapters` after. A build of your own goes there by `cp`, under a reference of its own (`~/.emery/adapters/emery_<name>@<version>-dev.wasm`); follow the [Emery README](https://github.com/augentic/emery#readme).
 
@@ -25,6 +25,7 @@ A source adapter is one Rust crate that ships as one Wasm component exporting th
 | Target                      | Builds                                                                                                                                                          |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `targets/typescript-target` | strict TypeScript on Node (22.18 or later): one module per slice under `src/<stem>/`, `node:test` tests per scenario, checked with `tsc --noEmit` and `npm test` |
+| `targets/omnia-target`      | an [omnia](https://github.com/augentic/omnia) HTTP guest in Rust: one crate per stem under `crates/<stem>/`, a part per slice, `#[tokio::test]` tests per scenario over the SDK's doubles, checked with `cargo clippy`, `cargo test`, and a `wasm32-wasip2` build |
 
 ## Rust-only loop
 
@@ -52,12 +53,13 @@ emery show spec
 
 ## Graded live eval
 
-The live rung is a **public-contract client**: `evals/` spawns the sibling shipped `emery` binary over the built `typescript` or `python` component a case names, drives one `specify` per case across the adapter contract, grades the accepted claims and the surveyed surfaces against the case's `expected.toml` through `emery show`, and writes the dated scorecard. `--build` follows each graded `specify` with one `emery build` through the built `typescript-target` into a bare repository the harness lays, and the card reads what was built, verified, and merged. Operator-invoked, never CI; see [evals/README.md](evals/README.md).
+The live rung is a **public-contract client**: `evals/` spawns the sibling shipped `emery` binary over the built `typescript` or `python` component a case names, drives one `specify` per case across the adapter contract, grades the accepted claims and the surveyed surfaces against the case's `expected.toml` through `emery show`, and writes the dated scorecard. `--build` follows each graded `specify` with one `emery build` through the built target `--target` names (`typescript-target` unless told otherwise, `omnia-target` the other) into a bare repository the harness lays, and the card reads what was built, verified, and merged. Operator-invoked, never CI; see [evals/README.md](evals/README.md).
 
 ```bash
 cargo run -p evals -- orders express-orders   # the named cases; none names every case whose fixture the checkout holds
 cargo run -p evals -- python                  # every case under one adapter
 cargo run -p evals -- --build express-orders  # specify, then build the plan through typescript-target
+cargo run -p evals -- --build --target omnia-target express-orders  # the same plan built as an omnia guest
 ```
 
 ## Repair loop

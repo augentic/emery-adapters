@@ -1,0 +1,19 @@
+[package]
+name = "omnia-target"
+description = "Omnia target-adapter: an omnia HTTP guest in Rust, one crate per stem, checked with clippy, cargo test, and a wasm32-wasip2 build"
+
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[lints]
+workspace = true
+
+[dependencies]
+emery-sdk.workspace = true

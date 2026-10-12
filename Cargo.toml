@@ -15,6 +15,7 @@ intent = { path = "sources/intent" }
 omnia.workspace = true
 omnia-sdk.workspace = true
 omnia-test = { workspace = true, features = ["guest", "host"] }
+omnia-target = { path = "targets/omnia-target" }
 omnia-wasi-model.workspace = true
 omnia-wasi-otel.workspace = true
 opentelemetry-proto.workspace = true
@@ -117,6 +118,7 @@ strip = true
 "*" = { debug = "line-tables-only" }
 documentation = { opt-level = 2 }
 intent = { opt-level = 2 }
+omnia-target = { opt-level = 2 }
 python = { opt-level = 2 }
 test-programs = { opt-level = 2 }
 typescript = { opt-level = 2 }
