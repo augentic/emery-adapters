@@ -16,10 +16,6 @@ feature-depth = 1
 unmaintained = "workspace"
 ignore = []
 
-# Mirrors the emery engine's allowlist: the omnia host graph the component
-# suites pull in (rustls / aws-lc-rs / opentelemetry) carries the
-# ISC / LLVM-exception / CDLA / CC0 entries beyond this repo's original
-# extension-only set.
 [licenses]
 allow = [
   "Apache-2.0 WITH LLVM-exception",
@@ -33,13 +29,8 @@ allow = [
   "MIT",
   "MIT-0",
   "Unicode-3.0",
+  "Unicode-DFS-2016",
   "Zlib",
-]
-
-exceptions = [
-  # the Unicode character-name table `ruff_python_parser` reads identifiers
-  # with, under the Unicode data-files licence beside MIT OR Apache-2.0
-  { allow = ["Unicode-DFS-2016"], crate = "unicode_names2" },
 ]
 
 [licenses.private]
@@ -60,5 +51,5 @@ unused = "warn"
 [sources]
 allow-git = [
   "https://github.com/augentic/emery.git",
-  "https://github.com/augentic/omnia.git"
+  "https://github.com/augentic/omnia.git",
 ]
