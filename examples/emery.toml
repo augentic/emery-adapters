@@ -7,7 +7,7 @@
 # Each `adapter` is a package reference, which emery reads from
 # `~/.emery/adapters` before it fetches anything: the components this tree
 # builds, copied there as `emery_typescript@0.13.0.wasm`,
-# `emery_documentation@0.13.0.wasm`, and `emery_omnia-target@0.13.0.wasm`
+# `emery_documentation@0.13.0.wasm`, and `emery_omnia@0.13.0.wasm`
 # (examples/README.md). `path` resolves relative to this file and must land
 # inside the invocation directory, which emery mounts as the project.
 
@@ -30,7 +30,7 @@ path = "documentation/docs/"
 # `cargo` inside the worker's boundary, so `CURSOR_EGRESS` opens the crates.io
 # hosts and `CURSOR_READ_ROOTS` the rustup toolchain (examples/README.md).
 [target]
-adapter = "emery:omnia-target@0.13.0"
+adapter = "emery:omnia@0.13.0"
 # repository = "git@github.com:acme/shop.git"
 # branch = "main"
 # remote = "origin"

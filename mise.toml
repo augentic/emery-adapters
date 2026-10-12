@@ -10,7 +10,7 @@ includes = ["git::https://github.com/augentic/toolkit.git//mise/rust.toml?ref=v0
 # Add a new adapter here when it ships as a wasm32 guest component, a
 # source under `sources/` or a target under `targets/`.
 [env]
-WASM32_PACKAGES = "documentation intent python typescript typescript-target omnia-target test-programs"
+WASM32_PACKAGES = "documentation intent python typescript node omnia test-programs"
 
 # -------------------------------------
 # Adapter overrides

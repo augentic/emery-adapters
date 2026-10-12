@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use omnia::{ExitStatus, FutureResult, HostCtx, Provides, Telemetry};
+use omnia_runtime::{ExitStatus, FutureResult, HostCtx, Provides, Telemetry};
 use omnia_test::host::{Backends, Deployment, Scratch, ScriptedModel};
 use omnia_wasi_model::{Answer, Error, Limits, Request, ToolHost, WasiModel, WasiModelCtx};
 use omnia_wasi_otel::{WasiOtel, WasiOtelCtx};

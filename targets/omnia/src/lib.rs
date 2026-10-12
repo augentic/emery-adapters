@@ -2,16 +2,19 @@
 //!
 //! The tree is one cargo workspace: a root manifest holding every shared pin,
 //! a root crate `app/` whose component serves every route over one provider,
-//! and one crate per stem under `crates/<stem>/`. Every slice builds one
+//! and one crate per stem under `crates/<stem>/`. The nine root files are
+//! the adapter's [`SEED`], laid in a tree that lacks them before any slice's
+//! turn, so no slice copies them from the layout. Every slice builds one
 //! module of its stem's crate, `src/<part>.rs` with its tests under
 //! `tests/<part>.rs`, so two slices never write one module. Each slice
 //! reaches the application through a `mount` fn and one line in the router
 //! list, and edits nothing outside `crates/` beyond that line and the stem's
-//! line in the root crate's manifest. A build writes through `write_files`,
-//! runs `cargo clippy`, `cargo test`, and a `wasm32-wasip2` check through the
-//! shell, and reports once they pass; a wave is verified by the same checks
-//! over the integrated tree, with the files no slice edits held to the
-//! layout, repaired where they fail, and run again before the verdict.
+//! line in the root crate's manifest. A build writes through `write_files`
+//! and `edit_files`, runs `cargo clippy`, `cargo test`, and a `wasm32-wasip2`
+//! check through the shell, and reports once they pass; a wave is verified
+//! by the same checks over the integrated tree, with the files no slice
+//! edits held to the layout, repaired where they fail, and run again before
+//! the verdict.
 //!
 //! # Merge rules
 //!
@@ -29,7 +32,7 @@
 use std::borrow::Cow;
 
 use emery_sdk::target::{
-    Context, MergeRule, MergeStrategy, Report, TargetAdapter, Verdict, VerifyContext,
+    Context, MergeRule, MergeStrategy, Report, Seed, TargetAdapter, Verdict, VerifyContext,
 };
 use emery_sdk::{Error, Model};
 
@@ -61,7 +64,7 @@ impl TargetAdapter for Adapter {
     ];
 
     async fn build<P: Model>(ctx: &Context<'_, P>) -> Result<Report, Error> {
-        emery_sdk::target::build(ctx, PROSE).await
+        emery_sdk::target::build(ctx, PROSE, SEED).await
     }
 
     async fn verify<P: Model>(ctx: &VerifyContext<'_, P>) -> Result<Verdict, Error> {
@@ -75,8 +78,27 @@ pub static PROSE: &[emery_sdk::Doc] = emery_sdk::prose![
     "../prose/verify.md",
     "../prose/references/layout.md",
     "../prose/references/handlers.md",
+    "../prose/references/omnia-api.md",
     "../prose/references/testing.md",
     "../prose/references/guardrails.md",
+];
+
+/// The root files every tree of the layout starts from, laid where a working copy lacks them.
+///
+/// Byte for byte the files the layout's reference spells: the workspace
+/// manifest and its pins, the root crate's manifest, entry, router list,
+/// route test, and local host, the toolchain, the lint configuration, and
+/// the ignore rules. A slice finds them in place and copies none.
+pub static SEED: &[Seed] = &[
+    Seed::new("Cargo.toml", include_str!("../seed/Cargo.toml")),
+    Seed::new("rust-toolchain.toml", include_str!("../seed/rust-toolchain.toml")),
+    Seed::new("clippy.toml", include_str!("../seed/clippy.toml")),
+    Seed::new(".gitignore", include_str!("../seed/.gitignore")),
+    Seed::new("app/Cargo.toml", include_str!("../seed/app/Cargo.toml")),
+    Seed::new("app/src/lib.rs", include_str!("../seed/app/src/lib.rs")),
+    Seed::new("app/src/routes.rs", include_str!("../seed/app/src/routes.rs")),
+    Seed::new("app/tests/routes.rs", include_str!("../seed/app/tests/routes.rs")),
+    Seed::new("app/examples/runtime.rs", include_str!("../seed/app/examples/runtime.rs")),
 ];
 
 #[cfg(target_arch = "wasm32")]

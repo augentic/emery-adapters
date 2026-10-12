@@ -4,7 +4,7 @@ Verify the integrated project tree after a wave of slices has merged into it, re
 
 ## Inputs
 
-- `$WORKSPACE` — the integrated tree, lent writable with the shell. Read it through the workspace tools, run the checks below in it, and repair what they find through this call's `write_files` tool, each file rewritten whole and a file removed through `delete`; then run the checks again. The shell runs the checks and nothing else: a file it writes is not a repair. What you write, and what a check leaves behind, is sealed as the wave's own commit by the engine, never by you.
+- `$WORKSPACE` — the integrated tree, lent writable with the shell. Read it through the workspace tools, run the checks below in it, and repair what they find through this call's two tools: `edit_files` for a change within a file, each edit the one place its `find` matches and the text to put there, which is what a repair almost always is — a line added to a list file, a type's shape put back to the design's; `write_files` for a file laid whole, and a file removed through its `delete`. Then run the checks again. The shell runs the checks and nothing else: a file it writes is not a repair. What you write, and what a check leaves behind, is sealed as the wave's own commit by the engine, never by you.
 
 Nothing outside `$WORKSPACE` is reachable.
 

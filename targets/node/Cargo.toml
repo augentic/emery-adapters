@@ -1,6 +1,6 @@
 [package]
-name = "typescript-target"
-description = "TypeScript target-adapter: strict TypeScript on Node, one directory per slice, checked with tsc and node:test"
+name = "node"
+description = "Node target-adapter: strict TypeScript on Node, one directory per slice, checked with tsc and node:test"
 
 version.workspace = true
 edition.workspace = true

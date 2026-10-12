@@ -1123,9 +1123,10 @@ dependencies = [
  "documentation",
  "emery-sdk",
  "intent",
- "omnia",
+ "node",
+ "omnia 0.13.0",
+ "omnia 0.37.0",
  "omnia-sdk",
- "omnia-target",
  "omnia-test",
  "omnia-wasi-model",
  "omnia-wasi-otel",
@@ -1136,7 +1137,6 @@ dependencies = [
  "tokio",
  "tracing",
  "typescript",
- "typescript-target",
 ]
 
 [[package]]
@@ -2303,6 +2303,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "743fb55ba31b18fb1ecef6bdc9aa2743314978ac084044301a7eee33fb99a20d"
 
 [[package]]
+name = "node"
+version = "0.13.0"
+dependencies = [
+ "emery-sdk",
+]
+
+[[package]]
 name = "nonmax"
 version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2460,6 +2467,13 @@ dependencies = [
 
 [[package]]
 name = "omnia"
+version = "0.13.0"
+dependencies = [
+ "emery-sdk",
+]
+
+[[package]]
+name = "omnia"
 version = "0.37.0"
 source = "git+https://github.com/augentic/omnia#c163bde5606348d7c5398bec1d1f3dc1ebfec881"
 dependencies = [
@@ -2605,13 +2619,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "omnia-target"
-version = "0.13.0"
-dependencies = [
- "emery-sdk",
-]
-
-[[package]]
 name = "omnia-test"
 version = "0.37.0"
 source = "git+https://github.com/augentic/omnia#c163bde5606348d7c5398bec1d1f3dc1ebfec881"
@@ -2622,7 +2629,7 @@ dependencies = [
  "http",
  "http-body",
  "http-body-util",
- "omnia",
+ "omnia 0.37.0",
  "omnia-sdk",
  "omnia-wasi-blobstore",
  "omnia-wasi-config",
@@ -5032,13 +5039,6 @@ dependencies = [
  "oxc_ast_visit",
  "oxc_parser",
  "oxc_span",
-]
-
-[[package]]
-name = "typescript-target"
-version = "0.13.0"
-dependencies = [
- "emery-sdk",
 ]
 
 [[package]]

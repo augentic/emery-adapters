@@ -4,7 +4,7 @@ Build one slice of the plan into the lent project tree as strict TypeScript on N
 
 ## Inputs
 
-- `$WORKSPACE` — the project tree, lent writable, sitting on the commit the brief names. Read it through the workspace tools; write it through this call's `write_files` tool alone, one or more files per call, each created or replaced whole, at a `/`-separated path relative to `$WORKSPACE`, and remove a file through the same call's `delete`. Lay the module, its lines, its test, and any manifest in one call; a fix the loop below asks for is a later call rewriting the file whole. The shell runs the checks below in `$WORKSPACE` and nothing else: a file the shell writes, through a redirect, a heredoc, `cp`, or a script, is outside the tool and is not yours. Nothing outside `$WORKSPACE` is reachable.
+- `$WORKSPACE` — the project tree, lent writable, sitting on the commit the brief names. Read it through the workspace tools; write it through this call's two tools alone: `write_files` lays a file whole, one or more per call, each created or replaced at a `/`-separated path relative to `$WORKSPACE`, and removes a file through the same call's `delete`; `edit_files` changes within a file the tree holds, each edit the one place its `find` matches and the text to put there. Lay the module, its lines, its test, and any manifest in one `write_files` call; a fix the loop below asks for is an `edit_files` call where it is a change within a file, a `write_files` call where the file is rewritten whole. The shell runs the checks below in `$WORKSPACE` and nothing else: a file the shell writes, through a redirect, a heredoc, `cp`, or a script, is outside the tools and is not yours. Nothing outside `$WORKSPACE` is reachable.
 - **The slice's plan entry** — its id, name, requirements, the design types it owns, and the slices it depends on.
 - **The specification, cut to the slice** — the requirements to implement, each with its acceptance scenarios.
 - **The design, whole** — the types and sections every slice shares.
@@ -34,14 +34,14 @@ Once the tree holds your files, run each check in `$WORKSPACE` and read what it 
 2. `npx tsc --noEmit` — the whole tree under `strict`; a failure in a module not yours is a type the design names and your module misuses, or a module that is not there yet, which you work around in yours.
 3. `npm test` — every test in `test/`; your tests fail only for what your module does not yet do. Run the tests through this script alone, never `node --test` by hand: its flags end the run when the tests do.
 
-Fix what a check reports, through `write_files`, and run it again until all three pass. Report only once they pass, or once a check fails for a reason outside your slice, which the report then leaves uncovered.
+Fix what a check reports, through `edit_files` within a file or `write_files` for a file whole, and run it again until all three pass. Report only once they pass, or once a check fails for a reason outside your slice, which the report then leaves uncovered.
 
 ## Report
 
 Answer with one JSON object:
 
 - `covered` — each requirement id the specification above holds that your module now implements and its test confirms, once each. Leave an id out rather than claim what the tree does not hold or a test does not pass.
-- `written` — the files `write_files` wrote, once each, as a `/`-separated path relative to `$WORKSPACE`. A file a check wrote, `package-lock.json`, is the tree's whether or not you list it.
+- `written` — the files the two tools wrote, once each, as a `/`-separated path relative to `$WORKSPACE`. A file a check wrote, `package-lock.json`, is the tree's whether or not you list it.
 
 ## Worked example
 

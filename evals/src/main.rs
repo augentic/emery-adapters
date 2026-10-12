@@ -1,99 +1,21 @@
 //! Grades the shipped components end to end over the live model.
-//! Operator-invoked, never CI.
 //!
-//! `cargo run -p evals -- [case|adapter..]` stages every case under
-//! `evals/cases/` (or the named ones, and every case of a named adapter) as
-//! its own project beneath `target/eval/<card>/`, runs `emery specify` over
-//! it three times, reads the committed documents back through `emery show`,
-//! grades the accepted claims, the surveyed surfaces, and the reconciled
-//! requirements against the case's `expected.toml`, and writes the scorecard
-//! to `target/eval/<card>.md` — `<card>` the run's UTC start, so every run's
-//! files outlive the next invocation and a card can be read back to its
-//! anchors. A case names one `[[source]]` or several, each under the adapter
-//! it runs (`adapter = "python"`) over a `fixture` tree or an inline
-//! `description`; a case of several sources grades the specification's
-//! `[[behaviour]]`s — which requirements the engine reconciled from which
-//! sources, under which status. Every path — a source's `fixture`, the
-//! binaries' defaults and a relative `EMERY_BIN` or `<ADAPTER>_WASM`, the
-//! scorecard's — is relative to the repository root. A case whose fixture
-//! the checkout lacks is skipped unless it is named.
+//! Operator-invoked, never CI. Each case under `evals/cases/` is staged as a
+//! project of its own beneath `target/eval/<card>/`, `<card>` the run's UTC
+//! start, and the scorecard is written to `target/eval/<card>.md`;
+//! `evals/README.md` is the reference for the cases, the environment, the
+//! columns, and the record the cards leave.
 //!
-//! A run that hits the backend's time cap — a `timeout` or `inactive`
-//! completion — is put again one rung up the budget ladder, so the card says
-//! at which budget it landed; the comparison columns are the first rung's. A
-//! run the backend refuses before any claim is accepted — a `bad_gateway` at
-//! a turn's opening — is put again once at the same rung, the dead attempt's
-//! log kept as `run-N.dead.stderr`. A run that fails after its claims are
-//! accepted — in the engine's own turns — is graded on them, and the card
-//! names the turn it died in.
-//!
-//! `cargo run -p evals -- --facts [case|adapter..]` stages the named cases
-//! and runs each once with no `CURSOR_API_KEY` in the environment, so each
-//! adapter reads its tree and lays its survey facts — the text the model
-//! would be asked to name surfaces from — and the first turn fails before
-//! any is spent; the facts are printed and written to
-//! `target/eval/facts/<case>/facts.md`. A graded run writes the same beside
-//! its log as `run-N.facts.md`.
-//!
-//! `cargo run -p evals -- --build [--target <name>] [case|adapter..]` builds
-//! each plan a run commits through the target adapter `--target` names
-//! (`typescript-target` unless told otherwise; `omnia-target` the other): the
-//! project gains a `[target]` table naming the target's component and a
-//! greenfield repository the runner lays beside the sources, `target.git`,
-//! bare, its `main` one root commit carrying the target's ignore rule; after
-//! a specify that landed and its `show`s, `emery build --config emery.toml`
-//! runs over it, its log and envelope kept as `run-N.build.stderr` /
-//! `.stdout`, and the card gains seven columns — what the build merged,
-//! verified, took, saved over a serial walk of the same turns, and covered,
-//! then what the host's own checks and the tests say of the tree it left —
-//! with the waves, each with what its verify sealed besides the lockfile,
-//! the conflicts, the repairs, the verify's refusals, the uncovered ids, and
-//! the chain the repository holds beneath the run's notes. The host's pass
-//! exports the tree the build left (the label, or the integration copy a
-//! failed build leaves), runs the target's checks in it (`npm install`,
-//! `npx tsc --noEmit`, and `node --test` for `typescript-target`; `cargo
-//! clippy`, `cargo test`, and `cargo build --target wasm32-wasip2` for
-//! `omnia-target`), matches the merged slices' acceptance scenarios against
-//! the test names the tree declares (`test(` names, or `#[test]` fns with
-//! their underscores read as spaces), lists the modules the layout's lists
-//! do not reach (a `mount` the router list does not name; an `index.ts` no
-//! list re-exports) and the tracked files outside the target's layout, and
-//! writes it all to `run-N.fidelity.md`.
-//!
-//! `cargo run -p evals -- --rebuild <card> [case|adapter..]` builds the plan
-//! `run-1` of each named case committed under an earlier card again, under
-//! this invocation's binary, target, model, and width: the staged project
-//! is copied under the new card, its `target.git` laid afresh for the
-//! target `--target` names, and the build run over that greenfield root, so
-//! one revision is built under several arms and the plan's own variance is
-//! out of the comparison; the specify columns repeat the earlier card's.
-//!
-//! Environment: `EMERY_BIN` (`../emery/target/release/emery`), one
-//! `<ADAPTER>_WASM` per adapter a selected case runs under —
-//! `TYPESCRIPT_WASM` (`target/wasm32-wasip2/release/typescript.wasm`),
-//! `PYTHON_WASM`, `DOCUMENTATION_WASM`, `INTENT_WASM`, and under `--build`
-//! the target's, `TYPESCRIPT_TARGET_WASM` or `OMNIA_TARGET_WASM`
-//! (`typescript_target.wasm`, `omnia_target.wasm`, as cargo spells the
-//! crates) — each copied into the binary's store, `~/.emery/adapters`, as
-//! the package `eval:<adapter>@<version>` (the file `eval_<adapter>@<version>.wasm`,
-//! `<version>` this workspace's), which every staged project names, so a
-//! card never stands over a published release or a developer's own build
-//! and `rm ~/.emery/adapters/eval_*` is the cleanup — `EVAL_RUNS` (`3`),
-//! `EVAL_JOBS` (unset: the width cap `--build` passes as `--jobs`),
-//! `EVAL_LADDER` (`600/120,1200/240,2400/480`: each rung
-//! `CURSOR_TIMEOUT_SECS/CURSOR_INACTIVITY_SECS`), and the runtime's other
-//! `CURSOR_*` knobs, `CURSOR_MAX_TOOL_CALLS`, the worker boundary's
-//! `CURSOR_EGRESS`, `CURSOR_READ_ROOTS`, and `CURSOR_WORKER_ENV`, and the
-//! backend's `CURSOR_BACKEND_URL`, each named in the card's header when the
-//! caller sets it, since what a build's install may reach, and where the
-//! bridge's calls go, is theirs. `RUST_LOG` is set for the run unless the caller sets it:
-//! the scorecard needs the SDK's `accepted` trace lines and `surveyed by
-//! model` line, the adapters' `survey facts` and `surveyed` trace lines and
-//! `placed by model` line, and the backend's `completion` lines. The filter
-//! opens `omnia_cursor::tools` at trace beside them, the target the backend
-//! logs each tool call's arguments whole under, so a build's log reads what
-//! every turn asked of its tools without the stream's frames; a binary over
-//! an `omnia-cursor` without the target logs nothing for it.
+//! - `cargo run -p evals -- [case|adapter..]` runs `emery specify` over each
+//!   case `EVAL_RUNS` times and grades what `emery show` reads back.
+//! - `--facts [case|adapter..]` lays each adapter's survey facts with no
+//!   turn spent.
+//! - `--build [--target <name>] [case|adapter..]` builds each committed plan
+//!   into a greenfield repository through a target adapter and reads what
+//!   landed, the host's own checks beside the build's claims.
+//! - `--rebuild <card> [--target <name>] [case|adapter..]` builds the plan an
+//!   earlier card committed again under this invocation's binary, target,
+//!   model, and width.
 
 #![allow(
     clippy::print_stdout,
@@ -1377,6 +1299,55 @@ struct Completion {
     outcome: String,
     duration: Duration,
     tokens: Tokens,
+    shell: ShellUse,
+    writes: Writes,
+}
+
+// The shell calls one completion made: how many, their summed wall time
+// from the call to its completion, and the bytes their results carried back.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+struct ShellUse {
+    calls: usize,
+    time: Duration,
+    bytes: u64,
+}
+
+// What one turn's `write_files` and `edit_files` calls did, read from the
+// SDK's `responded` lines: the `write_files` calls answered, and among the
+// files they wrote those the turn had written before, those written empty,
+// and those rewritten at under half their last size; the `edit_files` calls
+// answered; and the calls of either tool refused.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+struct Writes {
+    calls: usize,
+    rewrites: usize,
+    empty: usize,
+    shrinking: usize,
+    edits: usize,
+    refused: usize,
+}
+
+impl Writes {
+    const fn any(&self) -> bool {
+        self.calls + self.edits + self.refused > 0
+    }
+}
+
+impl Display for Writes {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "write_files {} calls, {} rewrites, {} empty, {} shrinking",
+            self.calls, self.rewrites, self.empty, self.shrinking
+        )?;
+        if self.edits > 0 {
+            write!(f, "; edit_files {} calls", self.edits)?;
+        }
+        if self.refused > 0 {
+            write!(f, "; {} refused", self.refused)?;
+        }
+        Ok(())
+    }
 }
 
 impl Completion {
@@ -1718,6 +1689,41 @@ struct WaveTurns<'a> {
 }
 
 impl WaveTurns<'_> {
+    // The wave's line tail: its build durations, its verify's duration with
+    // the shell part, and what the verify sealed — `(lock only)` for the
+    // lock rewrite alone, else `repaired` with the files.
+    fn spent(&self, sealed: Option<&Vec<String>>) -> String {
+        let builds: Vec<String> =
+            self.builds.iter().map(|b| format!("{}s", b.duration.as_secs())).collect();
+        let verify: Duration = self.verifies.iter().map(|v| v.duration).sum();
+        let shell = self.verifies.iter().fold(ShellUse::default(), |mut sum, v| {
+            sum.calls += v.shell.calls;
+            sum.time += v.shell.time;
+            sum.bytes += v.shell.bytes;
+            sum
+        });
+        let shelled = if shell.calls == 0 {
+            String::new()
+        } else {
+            format!(
+                " (shell {}s over {} calls, {} KB back)",
+                shell.time.as_secs(),
+                shell.calls,
+                shell.bytes / 1024
+            )
+        };
+        let sealed = match sealed {
+            Some(files) if files.is_empty() => " (lock only)".to_owned(),
+            Some(files) => format!(", repaired {}", files.join(", ")),
+            None => String::new(),
+        };
+        format!(
+            "; builds {} then verify {}s{shelled}{sealed}",
+            builds.join(" / "),
+            verify.as_secs()
+        )
+    }
+
     // The wave's time on the critical path: the slowest build, every
     // round of it, then the verify.
     fn critical(&self) -> Duration {
@@ -1843,21 +1849,26 @@ impl Build {
             .unwrap_or_default()
     }
 
-    // What each wave's verify sealed besides the lockfile, by wave, read
-    // from the `Wave <k> verified` commits on the chain: an empty list is a
-    // seal of the lock rewrite alone, and a wave with no seal changed nothing.
+    // What each wave's verify sealed besides the lockfile, by wave: the
+    // envelope's `sealed` where the engine reports it, else the `Wave <k>
+    // verified` commits on the chain. An empty list is a seal of the lock
+    // rewrite alone, and a wave with no seal changed nothing.
     fn repairs(&self) -> BTreeMap<usize, Vec<String>> {
+        let besides = |paths: &[String]| -> Vec<String> {
+            paths.iter().filter(|path| *path != self.target.lockfile()).cloned().collect()
+        };
+        if let Some(sealed) = self.envelope.as_ref().and_then(|out| out["sealed"].as_array()) {
+            return sealed
+                .iter()
+                .filter_map(|seal| {
+                    let wave = seal["wave"].as_u64()?.try_into().ok()?;
+                    Some((wave, besides(&strings(&seal["paths"]))))
+                })
+                .collect();
+        }
         self.history
             .iter()
-            .filter_map(|landed| {
-                let files = landed
-                    .files
-                    .iter()
-                    .filter(|file| *file != self.target.lockfile())
-                    .cloned()
-                    .collect();
-                Some((landed.sealed()?, files))
-            })
+            .filter_map(|landed| Some((landed.sealed()?, besides(&landed.files))))
             .collect()
     }
 
@@ -2078,12 +2089,12 @@ impl Display for Tree {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 enum Target {
     #[default]
-    TypeScript,
+    Node,
     Omnia,
 }
 
 impl Target {
-    const ALL: [Self; 2] = [Self::TypeScript, Self::Omnia];
+    const ALL: [Self; 2] = [Self::Node, Self::Omnia];
 
     fn parse(name: &str) -> Result<Self, String> {
         Self::ALL.into_iter().find(|target| target.name() == name).ok_or_else(|| {
@@ -2095,15 +2106,15 @@ impl Target {
     // The crate's name: the component's, and the `eval:` package's.
     const fn name(self) -> &'static str {
         match self {
-            Self::TypeScript => "typescript-target",
-            Self::Omnia => "omnia-target",
+            Self::Node => "node",
+            Self::Omnia => "omnia",
         }
     }
 
     // The ignore rule the greenfield root carries for what a build leaves.
     const fn ignore(self) -> &'static str {
         match self {
-            Self::TypeScript => "node_modules/\ndist/\n.emery/\n",
+            Self::Node => "node_modules/\ndist/\n.emery/\n",
             Self::Omnia => "target/\n.emery/\n",
         }
     }
@@ -2111,7 +2122,7 @@ impl Target {
     // The one file the checks may write into the tree without it counting.
     const fn lockfile(self) -> &'static str {
         match self {
-            Self::TypeScript => "package-lock.json",
+            Self::Node => "package-lock.json",
             Self::Omnia => "Cargo.lock",
         }
     }
@@ -2120,7 +2131,7 @@ impl Target {
     // export is listed.
     const fn scratch(self) -> &'static str {
         match self {
-            Self::TypeScript => "node_modules",
+            Self::Node => "node_modules",
             Self::Omnia => "target",
         }
     }
@@ -2132,7 +2143,7 @@ impl Target {
     // reads it, and never under this repository's.
     const fn config_shim(self) -> Option<&'static str> {
         match self {
-            Self::TypeScript => None,
+            Self::Node => None,
             Self::Omnia => Some("clippy.toml"),
         }
     }
@@ -2140,7 +2151,7 @@ impl Target {
     // The check whose exit stands for the tests, and whose output counts them.
     const fn runner(self) -> &'static str {
         match self {
-            Self::TypeScript => "node --test",
+            Self::Node => "node --test",
             Self::Omnia => "cargo test",
         }
     }
@@ -2148,13 +2159,12 @@ impl Target {
     // The root files the layout admits.
     const fn root_files(self) -> &'static [&'static str] {
         match self {
-            Self::TypeScript => {
-                &["package.json", "package-lock.json", "tsconfig.json", ".gitignore"]
-            }
+            Self::Node => &["package.json", "package-lock.json", "tsconfig.json", ".gitignore"],
             Self::Omnia => &[
                 "Cargo.toml",
                 "Cargo.lock",
                 "rust-toolchain.toml",
+                "clippy.toml",
                 ".gitignore",
                 "app/Cargo.toml",
                 "app/src/lib.rs",
@@ -2173,7 +2183,7 @@ impl Target {
             return true;
         }
         match self {
-            Self::TypeScript => {
+            Self::Node => {
                 if let Some(rest) = path.strip_prefix("src/") {
                     if rest == "index.ts" || rest == "main.ts" {
                         return true;
@@ -2197,7 +2207,7 @@ impl Target {
     // fails to leave what it needs.
     fn checks(self, export: &Path) -> Vec<HostCheck> {
         match self {
-            Self::TypeScript => {
+            Self::Node => {
                 let install = host_check(export, "npm install", &["--no-audit", "--no-fund"]);
                 let installed = install.passed();
                 let compile = if installed {
@@ -2248,7 +2258,7 @@ impl Target {
     // The tests the runner's output counts as passed and failed.
     fn test_counts(self, runner: &HostCheck) -> (usize, usize) {
         match self {
-            Self::TypeScript => tap_counts(&runner.note),
+            Self::Node => tap_counts(&runner.note),
             Self::Omnia => cargo_test_counts(&runner.output),
         }
     }
@@ -2259,7 +2269,7 @@ impl Target {
     fn test_names(self, export: &Path) -> io::Result<Vec<String>> {
         let mut names = Vec::new();
         match self {
-            Self::TypeScript => test_names(&export.join("test"), &mut names)?,
+            Self::Node => test_names(&export.join("test"), &mut names)?,
             Self::Omnia => {
                 rust_test_names(&export.join("app").join("tests"), &mut names)?;
                 let crates = export.join("crates");
@@ -2281,7 +2291,7 @@ impl Target {
     fn unreached(self, export: &Path) -> io::Result<Vec<String>> {
         let mut unreached = Vec::new();
         match self {
-            Self::TypeScript => {
+            Self::Node => {
                 let src = export.join("src");
                 let entry = fs::read_to_string(src.join("index.ts")).unwrap_or_default();
                 for stem in directories(&src)? {
@@ -2333,6 +2343,181 @@ impl Target {
         unreached.sort();
         Ok(unreached)
     }
+
+    // Every route the tree's modules mount, by module then source order: for
+    // `omnia`, each `.route("<path>", ..)` under
+    // `crates/<stem>/src/<part>.rs` with the method each route fn, or
+    // `MethodFilter`, in its second argument spells. The TypeScript layout
+    // registers routes on an app a slice is handed, which no one file
+    // spells, so it lists none.
+    fn routes(self, export: &Path) -> io::Result<Vec<(String, String, String)>> {
+        let mut routes = Vec::new();
+        if self == Self::Node {
+            return Ok(routes);
+        }
+        let crates = export.join("crates");
+        let mut stems = directories(&crates)?;
+        stems.sort();
+        for stem in stems {
+            let src = crates.join(&stem).join("src");
+            if !src.is_dir() {
+                continue;
+            }
+            let mut modules: Vec<PathBuf> = fs::read_dir(&src)?
+                .filter_map(Result::ok)
+                .map(|entry| entry.path())
+                .filter(|path| path.extension().is_some_and(|ext| ext == "rs"))
+                .collect();
+            modules.sort();
+            for path in modules {
+                let Some(part) = path.file_stem().and_then(|part| part.to_str()) else {
+                    continue;
+                };
+                let module = format!("crates/{stem}/src/{part}.rs");
+                for (route, methods) in mounted(&fs::read_to_string(&path)?) {
+                    for method in methods {
+                        routes.push((module.clone(), method, route.clone()));
+                    }
+                }
+            }
+        }
+        Ok(routes)
+    }
+}
+
+// Each `.route(<path>, <methods>)` call in a module's source, in order:
+// the path, a literal there or the `const` it names, `?` where it is
+// neither; and the methods the second argument spells, one per route fn
+// (`get(..)`, `post(..).merge(delete(..))`) or `MethodFilter::<M>` under
+// `handle_with`, read through the nearest `let` above for each bare name
+// it merges (`me_get.merge(me_patch)`), `?` where it spells none.
+fn mounted(source: &str) -> Vec<(String, Vec<String>)> {
+    let mut routes = Vec::new();
+    let mut from = 0;
+    while let Some(found) = source[from..].find(".route(") {
+        let open = from + found + ".route(".len();
+        let Some(close) = closing(&source[open..]).map(|at| open + at) else {
+            break;
+        };
+        let call = &source[open..close];
+        let (first, second) =
+            top_level_comma(call).map_or((call, ""), |at| (&call[..at], &call[at + 1..]));
+        let first = first.trim();
+        let path = literal(first)
+            .or_else(|| {
+                let named = !first.is_empty()
+                    && first.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+                let declared = named.then(|| source.find(&format!("const {first}:")))??;
+                literal(source[declared..].split_once('=')?.1.split(';').next()?.trim())
+            })
+            .unwrap_or("?")
+            .to_owned();
+        let mut methods = methods_in(second);
+        for name in bare_names(second) {
+            let Some(bound) = source[..open].rfind(&format!("let {name} =")) else {
+                continue;
+            };
+            methods.extend(methods_in(source[bound..].split(';').next().unwrap_or("")));
+        }
+        if methods.is_empty() {
+            methods.push("?".to_owned());
+        }
+        routes.push((path, methods));
+        from = close;
+    }
+    routes
+}
+
+// The offset of the `)` closing a call whose `(` is just before `text`,
+// string literals skipped; none where the call is unclosed.
+fn closing(text: &str) -> Option<usize> {
+    let mut depth = 1usize;
+    let mut quoted = false;
+    let mut escaped = false;
+    for (index, byte) in text.bytes().enumerate() {
+        match byte {
+            _ if escaped => escaped = false,
+            b'\\' if quoted => escaped = true,
+            b'"' => quoted = !quoted,
+            _ if quoted => {}
+            b'(' => depth += 1,
+            b')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(index);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+// The offset of the first `,` of `text` outside every bracket and string.
+fn top_level_comma(text: &str) -> Option<usize> {
+    let mut depth = 0usize;
+    let mut quoted = false;
+    for (index, byte) in text.bytes().enumerate() {
+        match byte {
+            b'"' => quoted = !quoted,
+            _ if quoted => {}
+            b'(' | b'[' | b'{' => depth += 1,
+            b')' | b']' | b'}' => depth = depth.saturating_sub(1),
+            b',' if depth == 0 => return Some(index),
+            _ => {}
+        }
+    }
+    None
+}
+
+// The text of a plain string literal, `"…"`, with nothing around it.
+fn literal(text: &str) -> Option<&str> {
+    let inner = text.strip_prefix('"')?.strip_suffix('"')?;
+    (!inner.contains('"')).then_some(inner)
+}
+
+// The identifiers an expression names bare: not called, not a path's
+// segment, not a field, so a route bound by a `let` above is found by name.
+fn bare_names(expression: &str) -> Vec<&str> {
+    let mut names = Vec::new();
+    let mut at = 0;
+    while let Some(found) = expression[at..].find(|c: char| c.is_ascii_alphabetic() || c == '_') {
+        let start = at + found;
+        let end = expression[start..]
+            .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+            .map_or(expression.len(), |len| start + len);
+        let before = &expression[..start];
+        let after = &expression[end..];
+        if !after.starts_with('(') && !before.ends_with('.') && !before.ends_with("::") {
+            names.push(&expression[start..end]);
+        }
+        at = end;
+    }
+    names
+}
+
+// The methods a route expression spells, in order: each route fn called
+// bare (`get(..)`, never `map.get(..)`) and each `MethodFilter::<M>`.
+fn methods_in(expression: &str) -> Vec<String> {
+    const VERBS: [&str; 7] = ["get", "post", "put", "patch", "delete", "head", "options"];
+    let mut methods = Vec::new();
+    let mut at = 0;
+    while let Some(found) = expression[at..].find(|c: char| c.is_ascii_alphabetic() || c == '_') {
+        let start = at + found;
+        let end = expression[start..]
+            .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+            .map_or(expression.len(), |len| start + len);
+        let word = &expression[start..end];
+        let before = &expression[..start];
+        let called = expression[end..].starts_with('(');
+        if before.ends_with("MethodFilter::") && word.bytes().all(|b| b.is_ascii_uppercase()) {
+            methods.push(word.to_owned());
+        } else if VERBS.contains(&word) && called && !before.ends_with('.') {
+            methods.push(word.to_ascii_uppercase());
+        }
+        at = end;
+    }
+    methods
 }
 
 // The names of the directories under `dir`; none where `dir` is no directory.
@@ -2383,8 +2568,20 @@ struct Fidelity {
     tests: usize,
     scenarios: Vec<Scenario>,
     unreached: Vec<String>,
+    routes: Vec<Route>,
     outside: Vec<String>,
     wrote: Vec<String>,
+}
+
+// One route a module of the tree mounts, as its source spells it; a probe
+// is a route whose module's requirements state no method and path, so the
+// surface is the layout's shape and not the specification's.
+#[derive(Debug, PartialEq, Eq)]
+struct Route {
+    module: String,
+    method: String,
+    path: String,
+    probe: bool,
 }
 
 // One command the host ran in the exported tree: its exit, or none where an
@@ -2514,9 +2711,10 @@ impl Fidelity {
             }
         }
 
-        // the modules the lists do not reach, the files outside the layout,
-        // and what the checks wrote
+        // the modules the lists do not reach, the routes they mount, the
+        // files outside the layout, and what the checks wrote
         let unreached = target.unreached(&export)?;
+        let routes = routes(target.routes(&export)?, &build.integrated(), requirements);
         let stems: BTreeSet<&str> =
             requirements.iter().filter_map(|r| r["subject"].as_str().and_then(stem)).collect();
         let outside =
@@ -2539,9 +2737,14 @@ impl Fidelity {
             tests: names.len(),
             scenarios,
             unreached,
+            routes,
             outside,
             wrote,
         })
+    }
+
+    fn probes(&self) -> usize {
+        self.routes.iter().filter(|route| route.probe).count()
     }
 
     // Whether the host's three checks all passed, with every test.
@@ -2574,18 +2777,122 @@ impl Fidelity {
     }
 
     // The `scenarios named` cell: the scenarios a test is named by, the
-    // tracked files outside the layout, and the modules the lists do not
-    // reach.
+    // tracked files outside the layout, the modules the lists do not
+    // reach, and the probe routes.
     fn scenarios_cell(&self) -> String {
         let total = self.scenarios.len();
         let percent = (self.named() * 100).checked_div(total).unwrap_or(0);
         format!(
-            "{}/{total} ({percent}%) · {} outside · {} unreached",
+            "{}/{total} ({percent}%) · {} outside · {} unreached · {} probes",
             self.named(),
             self.outside.len(),
-            self.unreached.len()
+            self.unreached.len(),
+            self.probes()
         )
     }
+
+    // The routes the tree mounts, per module, each probe marked.
+    fn routes_section(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if self.routes.is_empty() {
+            return writeln!(f, "\n## Routes\n\n- none: 0 routes mounted.");
+        }
+        let modules: BTreeSet<&str> =
+            self.routes.iter().map(|route| route.module.as_str()).collect();
+        writeln!(
+            f,
+            "\n## Routes\n\n- {} routes under {} modules; {} probes, a route whose module's \
+             requirements state no method and path.",
+            self.routes.len(),
+            modules.len(),
+            self.probes()
+        )?;
+        for module in modules {
+            let of: Vec<String> = self
+                .routes
+                .iter()
+                .filter(|route| route.module == module)
+                .map(|route| {
+                    let probe = if route.probe { " (probe)" } else { "" };
+                    format!("`{} {}`{probe}", route.method, route.path)
+                })
+                .collect();
+            writeln!(f, "  - `{module}`: {}", of.join(", "))?;
+        }
+        Ok(())
+    }
+}
+
+// The routes a tree mounts, each marked a probe where the merged slice
+// owning its module has no requirement stating a method and path.
+fn routes(
+    mounted: Vec<(String, String, String)>, slices: &[Integrated], requirements: &[Value],
+) -> Vec<Route> {
+    mounted
+        .into_iter()
+        .map(|(module, method, path)| {
+            let probe = slice_of(slices, &module)
+                .is_some_and(|slice| !states_route(&slice.requirements, requirements));
+            Route {
+                module,
+                method,
+                path,
+                probe,
+            }
+        })
+        .collect()
+}
+
+// The merged slice whose module `crates/<stem>/src/<part>.rs` is: the one
+// named `<stem>-<part>`, or `<stem>` where the part is the stem itself, or
+// `<part>` where the slice's name went in whole under another crate, as
+// the bootstrap's under `start`; the module spells the name's hyphens as
+// underscores.
+fn slice_of<'a>(slices: &'a [Integrated], module: &str) -> Option<&'a Integrated> {
+    let rest = module.strip_prefix("crates/")?;
+    let (stem, rest) = rest.split_once("/src/")?;
+    let part = rest.strip_suffix(".rs")?;
+    let stem = stem.replace('-', "_");
+    let name = if part == stem { stem } else { format!("{stem}_{part}") };
+    let named = |wanted: &str| slices.iter().find(|slice| slice.name.replace('-', "_") == wanted);
+    named(&name).or_else(|| named(part))
+}
+
+// Whether any of the requirements `ids` name, among `requirements`, states
+// an HTTP surface: a method in capitals followed by a path, `GET
+// /orders/{id}`, in backticks or bare, in its body or in a scenario's
+// given, when, then, or and.
+fn states_route(ids: &[String], requirements: &[Value]) -> bool {
+    const METHODS: [&str; 7] = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
+    let texts = |value: &Value| -> Vec<String> {
+        match value {
+            Value::String(text) => vec![text.clone()],
+            Value::Array(items) => {
+                items.iter().filter_map(Value::as_str).map(str::to_owned).collect()
+            }
+            _ => Vec::new(),
+        }
+    };
+    requirements
+        .iter()
+        .filter(|requirement| {
+            requirement["id"].as_str().is_some_and(|id| ids.iter().any(|x| x == id))
+        })
+        .flat_map(|requirement| {
+            let mut lines = texts(&requirement["body"]);
+            for scenario in requirement["scenarios"].as_array().into_iter().flatten() {
+                for clause in ["given", "when", "then", "and"] {
+                    lines.extend(texts(&scenario[clause]));
+                }
+            }
+            lines
+        })
+        .any(|line| {
+            let words: Vec<&str> = line
+                .split(|c: char| c.is_whitespace() || c == '`')
+                .filter(|w| !w.is_empty())
+                .collect();
+            words.windows(2).any(|pair| METHODS.contains(&pair[0]) && pair[1].starts_with('/'))
+        })
 }
 
 impl Display for Fidelity {
@@ -2636,6 +2943,7 @@ impl Display for Fidelity {
 
         // the files
         listed(f, "## Modules the lists do not reach", "modules no list names", &self.unreached)?;
+        self.routes_section(f)?;
         listed(f, "## Files outside the layout", "tracked files outside it", &self.outside)?;
         listed(f, "## What the checks wrote", "paths besides the lockfile", &self.wrote)
     }
@@ -2985,12 +3293,19 @@ fn unreached(stderr: &str) -> BTreeMap<String, usize> {
 }
 
 // The backend's one line per completion: `label="…"` in the span, then
-// `key=value` pairs after the message.
+// `key=value` pairs after the message. The lines before it fill the rest:
+// the completion's shell calls, under its `complete{n=…}` span, paired
+// start to completion by subject; and the SDK's `responded` lines of the
+// turn it ran, `turn=<slice id>` for a build and `turn=verify` for a
+// verify, which the outcome line closes, since a wave's verifies never
+// overlap.
 fn completions(stderr: &str) -> Vec<Completion> {
-    stderr
-        .lines()
-        .filter_map(|line| line.split_once(": completion outcome="))
-        .map(|(head, tail)| {
+    let mut completions = Vec::new();
+    let mut shells: BTreeMap<u64, ShellUse> = BTreeMap::new();
+    let mut started: BTreeMap<(u64, String), Vec<u64>> = BTreeMap::new();
+    let mut open: BTreeMap<String, (Writes, BTreeMap<String, Option<u64>>)> = BTreeMap::new();
+    for line in stderr.lines() {
+        if let Some((head, tail)) = line.split_once(": completion outcome=") {
             let label = head
                 .split_once("label=\"")
                 .and_then(|(_, rest)| rest.split_once('"'))
@@ -3003,7 +3318,8 @@ fn completions(stderr: &str) -> Vec<Completion> {
             let count = |key: &str| {
                 fields.get(key).and_then(|value| value.parse::<u64>().ok()).unwrap_or(0)
             };
-            Completion {
+            let turn = label.strip_prefix("build-").unwrap_or(label);
+            completions.push(Completion {
                 label: label.to_owned(),
                 outcome: tail.split(' ').next().unwrap_or("").trim_matches('"').to_owned(),
                 duration: Duration::from_millis(count("duration_ms")),
@@ -3013,9 +3329,129 @@ fn completions(stderr: &str) -> Vec<Completion> {
                     output: count("output_tokens"),
                     reasoning: count("reasoning_tokens"),
                 },
+                shell: span_n(head).and_then(|n| shells.remove(&n)).unwrap_or_default(),
+                writes: open.remove(turn).map(|(writes, _)| writes).unwrap_or_default(),
+            });
+        } else if let Some((head, tail)) = line.split_once(" tool call tool=shell") {
+            if let (Some(n), Some(at)) = (span_n(head), instant(line)) {
+                let subject = field(tail, "subject=").unwrap_or("").to_owned();
+                started.entry((n, subject)).or_default().push(at);
             }
-        })
-        .collect()
+        } else if let Some((head, tail)) = line.split_once(" tool call completed tool=shell") {
+            if let (Some(n), Some(at)) = (span_n(head), instant(line)) {
+                let subject = field(tail, "subject=").unwrap_or("").to_owned();
+                let use_ = shells.entry(n).or_default();
+                use_.calls += 1;
+                use_.bytes +=
+                    field(tail, "result_bytes=").and_then(|b| b.parse::<u64>().ok()).unwrap_or(0);
+                if let Some(from) = started
+                    .get_mut(&(n, subject))
+                    .and_then(|starts| (!starts.is_empty()).then(|| starts.remove(0)))
+                {
+                    use_.time += Duration::from_micros(at.saturating_sub(from));
+                }
+            }
+        } else if let Some((_, tail)) = line.split_once("target::write: responded turn=") {
+            let (turn, rest) = tail.split_once(' ').unwrap_or((tail, ""));
+            let (writes, sizes) = open.entry(turn.to_owned()).or_default();
+            responded(rest, writes, sizes);
+        }
+    }
+    completions
+}
+
+// The `n` of the `complete{n=…}` span a backend line sits under.
+fn span_n(head: &str) -> Option<u64> {
+    field(head, "complete{n=")?.trim_end_matches(|c: char| !c.is_ascii_digit()).parse().ok()
+}
+
+// One `responded` line of the SDK's writer, after `turn=<id> `, folded into
+// the turn's counts: a `write_files` call (`wrote=Some(["path"=bytes, ..])`,
+// or `files=Some(["path", ..]) … bytes=<total>` before the SDK logged each
+// file, where a one-file call's total is the file's), an `edit_files` call
+// (`edited=Some([..])`), or either refused (`error=Some(..)`).
+fn responded(rest: &str, writes: &mut Writes, sizes: &mut BTreeMap<String, Option<u64>>) {
+    if rest.contains("error=Some(") {
+        writes.refused += 1;
+        return;
+    }
+    if rest.contains("tool=\"edit_files\"") {
+        writes.edits += 1;
+        return;
+    }
+    writes.calls += 1;
+    for (path, bytes) in written_in(rest) {
+        if let Some(last) = sizes.get(&path) {
+            writes.rewrites += 1;
+            if let (Some(bytes), Some(last)) = (bytes, *last)
+                && last > 0
+                && bytes * 2 < last
+            {
+                writes.shrinking += 1;
+            }
+        }
+        if bytes == Some(0) {
+            writes.empty += 1;
+        }
+        sizes.insert(path, bytes);
+    }
+}
+
+// The files a `write_files` line wrote, each with its bytes where the line
+// says: `wrote=Some(["path"=bytes, ..])`, or the earlier `files=Some(["path",
+// ..]) … bytes=<total>`, whose total is the file's when the call wrote one.
+fn written_in(rest: &str) -> Vec<(String, Option<u64>)> {
+    if let Some(list) = between(rest, "wrote=Some([") {
+        return list
+            .split(", ")
+            .filter_map(|entry| {
+                let (path, bytes) = entry.trim().rsplit_once("\"=")?;
+                Some((path.trim_start_matches('"').to_owned(), bytes.trim().parse().ok()))
+            })
+            .collect();
+    }
+    let Some(list) = between(rest, "files=Some([") else {
+        return Vec::new();
+    };
+    let paths: Vec<String> = list
+        .split(',')
+        .map(|path| path.trim().trim_matches('"').to_owned())
+        .filter(|path| !path.is_empty())
+        .collect();
+    let total = field(rest, "bytes=").and_then(|b| b.parse::<u64>().ok());
+    let one = (paths.len() == 1).then_some(total).flatten();
+    paths.into_iter().map(|path| (path, one)).collect()
+}
+
+// The text between `key` and the `])` closing its list.
+fn between<'l>(line: &'l str, key: &str) -> Option<&'l str> {
+    let (_, rest) = line.split_once(key)?;
+    let end = rest.find("])")?;
+    Some(&rest[..end])
+}
+
+// The microseconds since the epoch a backend line's leading timestamp
+// names, `2026-10-12T07:13:44.434540Z`, for differences within one run.
+fn instant(line: &str) -> Option<u64> {
+    let stamp = line.split_whitespace().next()?.strip_suffix('Z')?;
+    let (date, time) = stamp.split_once('T')?;
+    let mut ymd = date.split('-').map(str::parse::<i64>);
+    let (year, month, day) = (ymd.next()?.ok()?, ymd.next()?.ok()?, ymd.next()?.ok()?);
+    let mut hms = time.split(':');
+    let hour: u64 = hms.next()?.parse().ok()?;
+    let minute: u64 = hms.next()?.parse().ok()?;
+    let seconds = hms.next()?;
+    let (second, fraction) = seconds.split_once('.').unwrap_or((seconds, "0"));
+    let second: u64 = second.parse().ok()?;
+    let micros: u64 = format!("{fraction:0<6}")[..6].parse().ok()?;
+    // days from civil, proleptic Gregorian
+    let (y, m) = if month <= 2 { (year - 1, month + 9) } else { (year, month - 3) };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * m + 2) / 5 + day - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let days: u64 = (era * 146_097 + doe - 719_468).try_into().ok()?;
+    Some((((days * 24 + hour) * 60 + minute) * 60 + second) * 1_000_000 + micros)
 }
 
 // --- grading ---
@@ -3906,18 +4342,10 @@ fn build_notes(f: &mut Formatter<'_>, run: &Run, build: &Build) -> fmt::Result {
                 )
             })
             .collect();
-        let spent =
-            wave.checked_sub(1).and_then(|k| turns.get(k)).map_or_else(String::new, |turns| {
-                let builds: Vec<String> =
-                    turns.builds.iter().map(|b| format!("{}s", b.duration.as_secs())).collect();
-                let verify: Duration = turns.verifies.iter().map(|v| v.duration).sum();
-                let sealed = match repairs.get(&wave) {
-                    Some(files) if files.is_empty() => " (lock only)".to_owned(),
-                    Some(files) => format!(", repaired {}", files.join(", ")),
-                    None => String::new(),
-                };
-                format!("; builds {} then verify {}s{sealed}", builds.join(" / "), verify.as_secs())
-            });
+        let spent = wave
+            .checked_sub(1)
+            .and_then(|k| turns.get(k))
+            .map_or_else(String::new, |turns| turns.spent(repairs.get(&wave)));
         writeln!(f, "- wave {wave}: {}{spent}", slices.join(", "))?;
     }
     build_findings(f, build, &integrated, &repairs)?;
@@ -3952,9 +4380,15 @@ fn build_notes(f: &mut Formatter<'_>, run: &Run, build: &Build) -> fmt::Result {
         build.critical().as_secs(),
     )?;
     for completion in &build.completions {
+        let writes = if completion.writes.any() {
+            format!("; {}", completion.writes)
+        } else {
+            String::new()
+        };
         writeln!(
             f,
-            "- build completion `{}` {} in {}s: {} input, {} cached, {} output ({} reasoning)",
+            "- build completion `{}` {} in {}s: {} input, {} cached, {} output ({} \
+             reasoning){writes}",
             completion.label,
             completion.outcome,
             completion.duration.as_secs(),
@@ -4510,7 +4944,7 @@ mod tests {
     // the chain `history` would answer.
     fn build_from(exit: i32, stdout: &str, stderr: &str, history: Vec<Landed>) -> Build {
         Build {
-            target: Target::TypeScript,
+            target: Target::Node,
             wall: Duration::ZERO,
             exit: Some(exit),
             envelope: serde_json::from_str(stdout).ok(),
@@ -4682,7 +5116,7 @@ mod tests {
         let mut fidelity = Fidelity {
             file: "run-1.fidelity.md".to_owned(),
             tree: "the label `emery/feb4bd36`".to_owned(),
-            target: Target::TypeScript,
+            target: Target::Node,
             checks: vec![
                 check("npm install", Some(0)),
                 check("npx tsc", Some(0)),
@@ -4709,12 +5143,26 @@ mod tests {
                 },
             ],
             unreached: vec!["src/orders/index.ts".to_owned()],
+            routes: vec![
+                Route {
+                    module: "crates/orders/src/reading.rs".to_owned(),
+                    method: "GET".to_owned(),
+                    path: "/orders/{id}".to_owned(),
+                    probe: false,
+                },
+                Route {
+                    module: "crates/architecture/src/layering.rs".to_owned(),
+                    method: "GET".to_owned(),
+                    path: "/architecture/layering".to_owned(),
+                    probe: true,
+                },
+            ],
             outside: vec!["scripts/check.mjs".to_owned()],
             wrote: Vec::new(),
         };
         assert!(fidelity.clean());
         assert_eq!(fidelity.host_cell(), "ok 12/12");
-        assert_eq!(fidelity.scenarios_cell(), "2/3 (66%) · 1 outside · 1 unreached");
+        assert_eq!(fidelity.scenarios_cell(), "2/3 (66%) · 1 outside · 1 unreached · 1 probes");
         assert!(
             fidelity.to_string().contains("- 1 modules no list names:\n  - `src/orders/index.ts`")
         );
@@ -4749,12 +5197,13 @@ mod tests {
             tests: 7,
             scenarios: Vec::new(),
             unreached: Vec::new(),
+            routes: Vec::new(),
             outside: Vec::new(),
             wrote: Vec::new(),
         };
         assert!(fidelity.clean());
         assert_eq!(fidelity.host_cell(), "ok 7/7");
-        assert_eq!(fidelity.scenarios_cell(), "0/0 (0%) · 0 outside · 0 unreached");
+        assert_eq!(fidelity.scenarios_cell(), "0/0 (0%) · 0 outside · 0 unreached · 0 probes");
 
         fidelity.checks[1].exit = Some(101);
         fidelity.checks[2] = unrun("cargo build", "the tests failed");
@@ -4765,14 +5214,16 @@ mod tests {
 
     #[test]
     fn target_names() {
-        assert_eq!(Target::default(), Target::TypeScript);
-        assert_eq!(Target::parse("omnia-target"), Ok(Target::Omnia));
-        Target::parse("omnia").unwrap_err();
+        assert_eq!(Target::default(), Target::Node);
+        assert_eq!(Target::parse("node"), Ok(Target::Node));
+        Target::parse("typescript-target").unwrap_err();
+        assert_eq!(Target::parse("omnia"), Ok(Target::Omnia));
+        Target::parse("omnia-target").unwrap_err();
         assert_eq!(Target::Omnia.ignore(), "target/\n.emery/\n");
         assert_eq!(Target::Omnia.lockfile(), "Cargo.lock");
-        assert_eq!(Target::TypeScript.runner(), "node --test");
+        assert_eq!(Target::Node.runner(), "node --test");
         assert_eq!(Target::Omnia.config_shim(), Some("clippy.toml"));
-        assert_eq!(Target::TypeScript.config_shim(), None);
+        assert_eq!(Target::Node.config_shim(), None);
     }
 
     #[test]
@@ -4875,6 +5326,98 @@ mod tests {
         assert_eq!(unreached, ["crates/health/src/health.rs", "crates/order-items/src/placing.rs"]);
     }
 
+    // Each `.route(` of a module is one entry per method its second argument
+    // spells, two route fns merged on one path being two, a `MethodFilter`
+    // under `handle_with` read through the nearest `let` above by name, a
+    // `const` path read by its name; a route is a probe when the slice
+    // owning the module, found by the module's spelling of its name, has no
+    // requirement stating a method and path in its body or scenarios, and a
+    // module no merged slice owns is no probe.
+    #[test]
+    fn omnia_routes_per_module() {
+        let root = scratch(
+            "omnia-routes",
+            &[
+                ("crates/orders/src/lib.rs", "pub mod reading;\npub mod placing;\n"),
+                (
+                    "crates/orders/src/reading.rs",
+                    "pub fn mount<P>(router: R) -> R {\n    router.merge(\n        Router::new()\n            \
+                     .route(\"/orders/{id}\", get(get_order).merge(delete(cancel_order)))\n            \
+                     .route(\"/orders\", get(list_orders)),\n    )\n}\nfn other() { map.get(\"x\"); }\n",
+                ),
+                (
+                    "crates/orders/src/placing.rs",
+                    "pub const PLACE_PATH: &str = \"/orders\";\n\
+                     fn other() { let place = \"not this\"; }\n\
+                     let place = handle_with(MethodFilter::POST, place_order, decode, encode);\n\
+                     let me_get = handle_with(MethodFilter::GET, me, decode, encode);\n\
+                     let me_patch = handle_with(\n    MethodFilter::PATCH,\n    patch_me, decode, encode);\n\
+                     router.merge(Router::new().route(PLACE_PATH, place)\n    \
+                     .route(\"/orders/me\", me_get.merge(me_patch)))\n",
+                ),
+                (
+                    "crates/architecture/src/architecture.rs",
+                    "r.route(\"/architecture/layering\", get(describe))",
+                ),
+                ("crates/health/src/health.rs", "r.route(\"/health/ready\", get(ready))"),
+                ("crates/order-items/src/order_items.rs", "r.route(\"/order-items\", get(list))"),
+                (
+                    "crates/start/src/application_bootstrap.rs",
+                    "r.route(\"/bootstrap/lifecycle\", get(lifecycle))",
+                ),
+            ],
+        );
+        let routes_read = Target::Omnia.routes(&root).unwrap();
+        fs::remove_dir_all(&root).unwrap();
+        let owned = |name: &str, requirements: &[&str]| Integrated {
+            id: format!("SLICE-{name}"),
+            name: name.to_owned(),
+            wave: 1,
+            requirements: requirements.iter().map(|id| (*id).to_owned()).collect(),
+            covered: Vec::new(),
+            files: Vec::new(),
+            commit: None,
+            conflicts: Vec::new(),
+        };
+        let slices = [
+            owned("orders-reading", &["REQ-001"]),
+            owned("orders-placing", &["REQ-002"]),
+            owned("architecture", &["REQ-003"]),
+            owned("order-items", &["REQ-004"]),
+            owned("application-bootstrap", &["REQ-005"]),
+        ];
+        let spec = serde_json::json!([
+            {"id": "REQ-001", "body": ["`GET /orders/{id}` answers the order."]},
+            {"id": "REQ-002", "body": ["A client places an order."],
+             "scenarios": [{"when": "POST /orders with valid fields", "then": "201"}]},
+            {"id": "REQ-003", "body": ["Controllers never import repositories directly."]},
+            {"id": "REQ-004", "body": ["Items are listed."], "scenarios": [{"given": ["GET /order-items is called"]}]},
+            {"id": "REQ-005", "body": ["The application enables shutdown hooks."]},
+        ]);
+        let requirements = spec.as_array().unwrap();
+        let read: Vec<(String, String, String, bool)> = routes(routes_read, &slices, requirements)
+            .into_iter()
+            .map(|route| (route.module, route.method, route.path, route.probe))
+            .collect();
+        let expected = [
+            ("crates/architecture/src/architecture.rs", "GET", "/architecture/layering", true),
+            ("crates/health/src/health.rs", "GET", "/health/ready", false),
+            ("crates/order-items/src/order_items.rs", "GET", "/order-items", false),
+            ("crates/orders/src/placing.rs", "POST", "/orders", false),
+            ("crates/orders/src/placing.rs", "GET", "/orders/me", false),
+            ("crates/orders/src/placing.rs", "PATCH", "/orders/me", false),
+            ("crates/orders/src/reading.rs", "GET", "/orders/{id}", false),
+            ("crates/orders/src/reading.rs", "DELETE", "/orders/{id}", false),
+            ("crates/orders/src/reading.rs", "GET", "/orders", false),
+            ("crates/start/src/application_bootstrap.rs", "GET", "/bootstrap/lifecycle", true),
+        ];
+        let expected: Vec<(String, String, String, bool)> = expected
+            .iter()
+            .map(|(m, v, p, probe)| ((*m).to_owned(), (*v).to_owned(), (*p).to_owned(), *probe))
+            .collect();
+        assert_eq!(read, expected);
+    }
+
     // A stem's `index.ts` the entry re-exports is reached, and a part's its
     // stem's list re-exports; a stem the entry lacks and a part the stem's
     // list lacks are listed, a directory with no `index.ts` aside.
@@ -4897,7 +5440,7 @@ mod tests {
                 ("src/main.ts", "import { main } from \"./start/index.ts\";\nawait main();\n"),
             ],
         );
-        let unreached = Target::TypeScript.unreached(&root).unwrap();
+        let unreached = Target::Node.unreached(&root).unwrap();
         fs::remove_dir_all(&root).unwrap();
         assert_eq!(unreached, ["src/health/index.ts", "src/orders/placing/index.ts"]);
         assert!(reexported("export * as a from \"./a\";", "a"));
@@ -4946,6 +5489,122 @@ mod tests {
         assert_eq!(repairs.get(&3), None, "wave 3 sealed nothing");
     }
 
+    // Two builds interleave and a verify follows: each completion's writes
+    // are the `responded` lines of its own turn, closed by its outcome
+    // line, a file written again is a rewrite, one at zero bytes is empty,
+    // one at under half its last size is shrinking, both the SDK's per-file
+    // `wrote=` form and the earlier `files=` with a call total read, the
+    // total a file's size only when the call wrote one file, a refused call
+    // counted apart; a completion's shell use is its own calls, paired by
+    // subject, with the result bytes summed.
+    #[test]
+    fn writes_and_shell_read_per_completion() {
+        let log = "\
+2026-10-12T07:13:44.000000Z DEBUG complete{n=1 model=\"m\" format=schema label=\"build-SLICE-001\"}:send{round=1}: omnia_cursor::model::observe: tool call tool=shell subject=\"cargo clippy\"
+2026-10-12T07:13:45.000000Z DEBUG emery_sdk::target::write: responded turn=SLICE-001 tool=\"write_files\" wrote=Some([\"crates/a/src/a.rs\"=1000, \"crates/a/Cargo.toml\"=200]) deleted=Some([]) error=None
+2026-10-12T07:13:45.500000Z DEBUG emery_sdk::target::write: responded turn=SLICE-002 tool=\"write_files\" files=Some([\"crates/b/src/b.rs\", \"crates/b/Cargo.toml\"]) deleted=Some([]) bytes=1500
+2026-10-12T07:13:46.000000Z DEBUG emery_sdk::target::write: responded turn=SLICE-002 tool=\"write_files\" files=Some([\"crates/b/src/b.rs\"]) deleted=Some([]) bytes=900
+2026-10-12T07:13:47.500000Z DEBUG complete{n=1 model=\"m\" format=schema label=\"build-SLICE-001\"}:send{round=1}: omnia_cursor::model::observe: tool call completed tool=shell subject=\"cargo clippy\" result_bytes=1024
+2026-10-12T07:13:48.000000Z DEBUG emery_sdk::target::write: responded turn=SLICE-001 tool=\"write_files\" wrote=Some([\"crates/a/src/a.rs\"=400]) deleted=Some([]) error=None
+2026-10-12T07:13:49.000000Z DEBUG emery_sdk::target::write: responded turn=SLICE-001 tool=\"write_files\" wrote=None deleted=None error=Some(\"write_files: `crates/a/src/a.rs` would shrink\")
+2026-10-12T07:13:50.000000Z DEBUG emery_sdk::target::write: responded turn=SLICE-001 tool=\"edit_files\" edited=Some([\"app/src/routes.rs\"]) error=None
+2026-10-12T07:13:51.000000Z DEBUG emery_sdk::target::write: responded turn=SLICE-002 tool=\"write_files\" files=Some([\"crates/b/src/b.rs\"]) deleted=Some([]) bytes=0
+2026-10-12T07:13:52.000000Z DEBUG complete{n=2 model=\"m\" format=schema label=\"build-SLICE-002\"}:send{round=1}: omnia_cursor::model::observe: tool call tool=shell subject=\"cargo test\"
+2026-10-12T07:13:53.000000Z  INFO complete{n=1 model=\"m\" format=schema label=\"build-SLICE-001\"}: omnia_cursor::model::observe: completion outcome=\"ok\" attempts=1 duration_ms=9000 input_tokens=5 cache_read_tokens=0 output_tokens=2 reasoning_tokens=0
+2026-10-12T07:13:55.000000Z DEBUG complete{n=2 model=\"m\" format=schema label=\"build-SLICE-002\"}:send{round=1}: omnia_cursor::model::observe: tool call completed tool=shell subject=\"cargo test\" result_bytes=2048
+2026-10-12T07:13:56.000000Z  INFO complete{n=2 model=\"m\" format=schema label=\"build-SLICE-002\"}: omnia_cursor::model::observe: completion outcome=\"ok\" attempts=1 duration_ms=10000 input_tokens=5 cache_read_tokens=0 output_tokens=2 reasoning_tokens=0
+2026-10-12T07:13:57.000000Z DEBUG complete{n=3 model=\"m\" format=schema label=\"verify\"}:send{round=1}: omnia_cursor::model::observe: tool call tool=shell subject=\"cargo build\"
+2026-10-12T07:13:58.000000Z DEBUG emery_sdk::target::write: responded turn=verify tool=\"write_files\" wrote=Some([\"crates/a/src/a.rs\"=0]) deleted=Some([]) error=None
+2026-10-12T07:14:00.000000Z DEBUG complete{n=3 model=\"m\" format=schema label=\"verify\"}:send{round=1}: omnia_cursor::model::observe: tool call completed tool=shell subject=\"cargo build\" result_bytes=10
+2026-10-12T07:14:01.000000Z  INFO complete{n=3 model=\"m\" format=schema label=\"verify\"}: omnia_cursor::model::observe: completion outcome=\"ok\" attempts=1 duration_ms=4000 input_tokens=5 cache_read_tokens=0 output_tokens=2 reasoning_tokens=0
+";
+        let completions = completions(log);
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+        assert_eq!(labels, ["build-SLICE-001", "build-SLICE-002", "verify"]);
+        assert_eq!(
+            completions[0].writes,
+            Writes {
+                calls: 2,
+                rewrites: 1,
+                empty: 0,
+                shrinking: 1,
+                edits: 1,
+                refused: 1
+            }
+        );
+        assert_eq!(
+            completions[0].writes.to_string(),
+            "write_files 2 calls, 1 rewrites, 0 empty, 1 shrinking; edit_files 1 calls; 1 refused"
+        );
+        assert_eq!(
+            completions[0].shell,
+            ShellUse {
+                calls: 1,
+                time: Duration::from_millis(3500),
+                bytes: 1024
+            }
+        );
+        assert_eq!(
+            completions[1].writes,
+            Writes {
+                calls: 3,
+                rewrites: 2,
+                empty: 1,
+                shrinking: 1,
+                edits: 0,
+                refused: 0
+            },
+            "a size a many-file call leaves unknown makes the next write a rewrite, not shrinking"
+        );
+        assert_eq!(
+            completions[1].shell,
+            ShellUse {
+                calls: 1,
+                time: Duration::from_secs(3),
+                bytes: 2048
+            }
+        );
+        assert_eq!(
+            completions[2].writes,
+            Writes {
+                calls: 1,
+                rewrites: 0,
+                empty: 1,
+                shrinking: 0,
+                edits: 0,
+                refused: 0
+            },
+            "a verify's sizes start afresh, so its first write of a path is no rewrite"
+        );
+        assert_eq!(
+            completions[2].shell,
+            ShellUse {
+                calls: 1,
+                time: Duration::from_secs(3),
+                bytes: 10
+            }
+        );
+    }
+
+    // An envelope carrying `sealed` is read before the chain: each seal's
+    // paths less the lockfile, a lock-only seal an empty list.
+    #[test]
+    fn wave_seals_read_from_the_envelope() {
+        let stdout = r#"{"slices": [], "sealed": [
+            {"wave": 1, "commit": "aaaa", "paths": ["Cargo.lock"]},
+            {"wave": 3, "commit": "cccc", "paths": ["Cargo.lock", "crates/start/src/api.rs"]}
+        ]}"#;
+        let mut build = build_from(0, stdout, "", Vec::new());
+        build.target = Target::Omnia;
+        let repairs = build.repairs();
+        assert_eq!(repairs.get(&1), Some(&Vec::new()));
+        assert_eq!(repairs.get(&2), None);
+        assert_eq!(
+            repairs.get(&3).map(Vec::as_slice),
+            Some(&["crates/start/src/api.rs".to_owned()][..])
+        );
+    }
+
     #[test]
     fn tests_named_by_scenarios() {
         let text = "import { test } from \"node:test\";\n\
@@ -4974,18 +5633,12 @@ mod tests {
             "test/orders.test.ts",
             "test/orders/reading.test.ts",
         ] {
-            assert!(
-                Target::TypeScript.within_layout(path, &stems),
-                "`{path}` is within the layout"
-            );
+            assert!(Target::Node.within_layout(path, &stems), "`{path}` is within the layout");
         }
         for path in
             ["scripts/check.mjs", "src/orders-reading/index.ts", "test/helpers.ts", "src/x.ts"]
         {
-            assert!(
-                !Target::TypeScript.within_layout(path, &stems),
-                "`{path}` is outside the layout"
-            );
+            assert!(!Target::Node.within_layout(path, &stems), "`{path}` is outside the layout");
         }
     }
 
@@ -4996,6 +5649,7 @@ mod tests {
             "Cargo.toml",
             "Cargo.lock",
             "rust-toolchain.toml",
+            "clippy.toml",
             ".gitignore",
             "README.md",
             "app/Cargo.toml",

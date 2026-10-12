@@ -50,11 +50,13 @@ async fn an_order_with_no_items_is_refused() {
 - One `#[tokio::test]` per scenario, named by the scenario in snake_case: `an_order_with_no_items_is_refused`. A scenario the specification gives you is a test; invent none.
 - The `WHEN` is the request and the state the doubles start in; the `THEN` is the status, the body read through `to_bytes(response.into_body(), usize::MAX)` and deserialised into the module's own type, and what the doubles hold after.
 - The tests reach the module as another crate would, through `app_<stem>::<part>::..`; a `pub fn key` the module shares with its readers is how a test names what the handler stored.
-- The four dev-dependencies the stem's manifest carries are everything a test uses: `omnia-test`, `serde_json`, `tokio`, `tower`. No mocking crate, no test framework, no fixture file.
+- A module with no route — its `mount` answering the router unchanged — is tested through the `pub fn`s it exports, each scenario a call and an assertion over its result, with no router and no request.
+- A rule another stem exports and your handler calls at its top — `app_start::authentication::authenticate` — is asserted where the call stands: `a_request_without_a_token_is_refused` is a test of the stem whose route it is, driven through that route over the double the rule reads, `FixedIdentity` for a token; the rule's own stem tests the function directly.
+- The four dev-dependencies the stem's manifest carries are the doubles and the runtime every test uses: `omnia-test`, `serde_json`, `tokio`, `tower`. A crate an arrangement needs beyond them, `bytes` or `http`, is one line in the stem's `[dependencies]`, never a fifth dev-dependency. No mocking crate, no test framework, no fixture file.
 
 ## The doubles
 
-`Provider::default()` answers every capability; each is set with a builder method, and read back after the call through the field of the same name. Clone the provider before handing it to `app`, so the test still holds it:
+`Provider::default()` answers every capability; each is set with a builder method, and read back after the call through the field of the same name. Clone the provider before handing it to `app`, so the test still holds it. The builders and readers of each double, with their full signatures, are in [the omnia API](omnia-api.md); the ones a scenario reaches for:
 
 | Capability | Set with | Read back |
 | --- | --- | --- |

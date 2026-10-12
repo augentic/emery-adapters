@@ -42,12 +42,12 @@ Swap the config for [intent](intent/emery.toml), [typescript](typescript/emery.t
 
 ### Combined `specify` -> `build`
 
-The combined [emery.toml](emery.toml) names the `typescript` source over the r9k tree, the `documentation` source over the orders specification, and `omnia-target` as the `[target]`, so it runs `specify` and then `build`. The build's checks run `cargo` inside the worker's boundary, which reaches nothing of yours until the [environment knobs](#what-to-expect) open the crates.io hosts and the rustup toolchain to it:
+The combined [emery.toml](emery.toml) names the `typescript` source over the r9k tree, the `documentation` source over the orders specification, and `omnia` as the `[target]`, so it runs `specify` and then `build`. The build's checks run `cargo` inside the worker's boundary, which reaches nothing of yours until the [environment knobs](#what-to-expect) open the crates.io hosts and the rustup toolchain to it:
 
 ```bash
 # copy the two further components the config names
 cp "target/wasm32-wasip2/release/documentation.wasm" ~/.emery/adapters/emery_documentation@0.13.0.wasm
-cp "target/wasm32-wasip2/release/omnia_target.wasm" ~/.emery/adapters/emery_omnia-target@0.13.0.wasm
+cp "target/wasm32-wasip2/release/omnia.wasm" ~/.emery/adapters/emery_omnia@0.13.0.wasm
 
 # let the build's worker reach crates.io and the rustup toolchain
 export CURSOR_EGRESS=index.crates.io,static.crates.io
@@ -112,7 +112,7 @@ Environment knobs:
 - `CURSOR_INACTIVITY_SECS` (120) — cancels a stream gone silent while waiting on the bridge; not while the model composes.
 - `CURSOR_MAX_AGENTS` (4) — bridge agents live at once; further completions queue.
 - `CURSOR_MODEL` (`auto`) — the model every completion is put to; one that reasons less shortens synthesis most.
-- `CURSOR_EGRESS` (unset) — hosts a build's confined worker may reach beside Cursor's own, `,`-separated, `*.suffix` for a domain: `registry.npmjs.org` for `typescript-target`'s `npm install`, `index.crates.io,static.crates.io` for `omnia-target`'s `cargo`, which otherwise fail inside the boundary naming the host the proxy refused.
+- `CURSOR_EGRESS` (unset) — hosts a build's confined worker may reach beside Cursor's own, `,`-separated, `*.suffix` for a domain: `registry.npmjs.org` for `node`'s `npm install`, `index.crates.io,static.crates.io` for `omnia`'s `cargo`, which otherwise fail inside the boundary naming the host the proxy refused.
 - `CURSOR_READ_ROOTS` (unset) — directories the worker may read beside the system's own, `:`-separated: the root of a `node` installed under `$HOME` (nvm, volta, fnm), which the worker's private `HOME` hides; `$HOME/.rustup:$HOME/.cargo/bin` for a rustup toolchain.
 - `CURSOR_WORKER_ENV` (unset) — variable names the worker's environment carries from yours, `,`-separated, the environment being otherwise built from nothing but `PATH`; `npm_config_registry` points the install at a mirror; `RUSTUP_HOME`, exported as `$HOME/.rustup`, lets rustup's `cargo` find the toolchain the private `HOME` hides.
 

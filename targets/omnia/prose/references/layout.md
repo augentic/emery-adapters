@@ -95,7 +95,11 @@ where
 
 `mount` merges a router of its own, so a layer applies to the module's routes alone and the order of the list never matters. Two modules may route one path with different methods; one method twice on one path is the panic `app/tests/routes.rs` catches. So a slice wires itself into the application by exporting `mount` and adding its line to the router list, and never edits `crates/start/` or another stem's crate to be reached.
 
-Where the plan has a `start` stem, its slice owns `crates/start/` as any stem for what is code — a health route, a layer on its own routes — and the root files are the rest of it: the component the host runs, the provider, the router. A `start` requirement the root files and the host satisfy is covered by the slice that laid them; one nothing in the tree satisfies is left uncovered. A tree with no `start` stem is the same program with no module under that name.
+`mount` may return the router unchanged. A module none of whose requirements states an HTTP surface — a method and a path — has no route to mount: its behaviour is the `pub fn`s it exports, its tests call them directly, and `mount` answers `router` as it came, so the router list still names the module. A route is never laid to give a description a surface: a probe route answering a requirement that states none is a surface the specification does not hold.
+
+A rule every route obeys — authentication, a body limit, a request log — is a function, not a route. The stem that owns the rule exports it from its module as a `pub fn` (`app_start::authentication::authenticate(&headers) -> Result<Claims, omnia_sdk::Error>`), and every handler the rule covers calls it at its top, through the owning stem's crate named in its own stem's manifest. The owning stem lays no route under another stem's prefix and no placeholder for one. `app/tests/routes.rs` stays the one static test over the router; a request the rule refuses is asserted in the tests of the stem whose route it is, where the call stands, as [testing](testing.md) spells it.
+
+Where the plan has a `start` stem, its slice owns `crates/start/` as any stem for what is code — a health route, a layer on its own routes, a rule every route calls — and the root files are the rest of it: the component the host runs, the provider, the router. A `start` requirement the root files and the host satisfy is the `start` slice's to cover, whichever slice's brief named the files laid; one nothing in the tree satisfies is left uncovered. A tree with no `start` stem is the same program with no module under that name.
 
 ## The tests
 
@@ -138,7 +142,7 @@ The root crate's `app/tests/routes.rs` is the one test over the whole router, wr
 
 ## The root files
 
-Eight files lie outside `crates/` beside `Cargo.lock`, which cargo writes, and any slice that finds them missing writes them. Six are written byte for byte as below and no slice edits one after: the root `Cargo.toml`, `app/src/lib.rs`, `app/tests/routes.rs`, `app/examples/runtime.rs`, `rust-toolchain.toml`, and `.gitignore`. Two hold a list, `app/Cargo.toml` and `app/src/routes.rs`, written as below with the slice's line in the list, and a slice that finds them adds its line and changes nothing else. So two slices laying the root files at once lay the same six files and one list line each. The root manifest pins every crate the tree shares under `[workspace.dependencies]`, which no slice edits: a stem's manifest names a pinned crate as `<crate>.workspace = true`, and a crate the pins lack with its version in that stem's manifest alone.
+Nine files lie outside `crates/` beside `Cargo.lock`, which cargo writes. The adapter lays them in a tree that lacks them before any slice's turn, byte for byte as below, so every slice finds them in place and writes none: a slice's brief names the ones laid for it, and they count as its files. Seven are static and no slice edits one: the root `Cargo.toml`, `app/src/lib.rs`, `app/tests/routes.rs`, `app/examples/runtime.rs`, `rust-toolchain.toml`, `clippy.toml`, and `.gitignore`. Two hold a list, `app/Cargo.toml` and `app/src/routes.rs`, laid with the lists empty, and a slice adds its line to each through `edit_files` and changes nothing else. The fences below are the reference the verify holds the static files to. The root manifest pins every crate the tree shares under `[workspace.dependencies]`, which no slice edits: a stem's manifest names a pinned crate as `<crate>.workspace = true`, and a crate the pins lack with its version in that stem's manifest alone.
 
 The root `Cargo.toml`, the workspace and nothing of any crate's own:
 
@@ -177,7 +181,7 @@ opt-level = "s"
 strip = true
 ```
 
-`app/Cargo.toml`, its `[dependencies]` the list above, holding the stem lines of whoever writes it; every crate it names is a pin of the root manifest's, so no version stands in it:
+`app/Cargo.toml`, its `[dependencies]` the list above, laid with no stem line and holding one per stem as slices add theirs; every crate it names is a pin of the root manifest's, so no version stands in it:
 
 ```toml
 [package]
@@ -325,7 +329,7 @@ impl wasip3::exports::http::handler::Guest for Http {
 }
 ```
 
-`app/src/routes.rs`, its router list holding the lines of whoever writes it:
+`app/src/routes.rs`, its router list laid empty and holding one line per slice as slices add theirs:
 
 ```rust
 //! The router list: every stem's routes on one router, one line per slice.
@@ -417,6 +421,12 @@ components = ["clippy"]
 targets = ["wasm32-wasip2"]
 ```
 
+`clippy.toml`, one comment and no setting, so the tree lints under its own configuration wherever it is checked and no file above it is read:
+
+```toml
+# The tree lints under its own configuration wherever it is checked: no file above it is read.
+```
+
 `.gitignore`:
 
 ```
@@ -428,7 +438,7 @@ The `host` feature keeps the local host out of every check: the host crates are 
 
 ## The stem's manifest
 
-`crates/<stem>/Cargo.toml` is written by the first slice to lay the stem, its `[dependencies]` the list above, holding that slice's lines; a slice that finds it in the tree adds its lines there and changes nothing else. The dev-dependencies are the doubles every test uses and are never edited: `omnia_test::guest` stands in for every mocking crate.
+`crates/<stem>/Cargo.toml` is written by the first slice to lay the stem, its `[dependencies]` the list above, holding that slice's lines; a slice that finds it in the tree adds its lines there and changes nothing else. The `[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]` block is the four lines below, the doubles and the runtime every test uses, and is never edited or extended: `omnia_test::guest` stands in for every mocking crate, and a crate a test alone needs beyond the four — `bytes` or `http` for an arrangement — is one line in the stem's `[dependencies]` like any crate the stem's files use. So two slices creating one stem in one wave differ under `[dependencies]` alone, which the merge unions.
 
 ```toml
 [package]

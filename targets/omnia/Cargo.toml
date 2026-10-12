@@ -1,5 +1,5 @@
 [package]
-name = "omnia-target"
+name = "omnia"
 description = "Omnia target-adapter: an omnia HTTP guest in Rust, one crate per stem, checked with clippy, cargo test, and a wasm32-wasip2 build"
 
 version.workspace = true

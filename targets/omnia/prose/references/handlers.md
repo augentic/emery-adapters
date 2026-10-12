@@ -1,6 +1,6 @@
 # Handlers
 
-A requirement lands as a route and the handler behind it, over the `omnia-sdk` the root manifest of the [layout](layout.md) pins. The shapes below compile against that pin; use them as they stand.
+A requirement lands as a route and the handler behind it, over the `omnia-sdk` the root manifest of the [layout](layout.md) pins. The shapes below compile against that pin; use them as they stand, and read the signatures behind them in [the omnia API](omnia-api.md) rather than probing the crates.
 
 ## The route
 
@@ -23,7 +23,7 @@ where
 }
 ```
 
-- `get` and `delete` decode the handler's input from the path parameters and the query string; `post`, `put`, and `patch` decode it from the JSON body with the path parameters merged in. A path parameter is `{name}` in the path and a field of that name on the input. Two methods on one path are two route functions merged, as above.
+- A path parameter is `{name}` in the path and a field of that name on the input; which route function decodes the input from where is stated beside its signature in [the omnia API](omnia-api.md). Two methods on one path are two route functions merged, as above.
 - The handler's `Ok` is answered `200` with the output as JSON. For another status or body, `handle_with(filter, handler, decode, encode)` takes the method, a decoder from the raw request to the input, and an encoder from the output to the response:
 
 ```rust
@@ -112,19 +112,19 @@ impl From<CancelError> for HttpError {
 
 ## The capabilities
 
-Each capability is a trait on the provider, bounded where it is used and called through `context.provider()`; every call is `async`, and `?` carries its failure into the handler's error.
+Each capability is a trait on the provider, bounded where it is used and called through `context.provider()`; every call is `async`, and `?` carries its failure into the handler's error. The methods, their arguments, and the types they carry are in [the omnia API](omnia-api.md), one block per trait.
 
-| Capability | What it reaches | The calls |
-| --- | --- | --- |
-| `Config` | a setting of the deployment | `get(key) -> String` |
-| `StateStore` | a key-value store of bytes | `get(key) -> Option<Vec<u8>>`, `set(key, value, ttl_secs: Option<u64>)`, `delete(key)`, `cas(key, expected: Option<&[u8]>, value)`, `increment(key, delta: i64) -> i64` |
-| `BlobStore` | objects in named containers | `get(container, name) -> Option<Vec<u8>>`, `put(container, name, data)`, `delete(container, name)`, `list(container) -> Vec<String>` |
-| `DocumentStore` | JSON documents by id in a named store | `get(store, id) -> Option<Document>`, `insert(store, &Document)`, `put(store, &Document)`, `delete(store, id) -> bool`, `query(store, QueryOptions) -> QueryResult`; a `Document` is `{ id: String, data: Vec<u8> }` from `omnia_sdk::document_store` |
-| `TableStore` | SQL over a named connection | `query(conn, sql, params) -> Vec<Row>`, `exec(conn, sql, params) -> u32`; `Row` and `DataType` are the `omnia-wasi-sql` crate's, named in the stem's manifest at the version the root pins `omnia-sdk` |
-| `HttpRequest` | an outbound HTTP call | `fetch(http::Request<T>) -> http::Response<Bytes>` |
-| `Identity` | an access token for a named identity | `access_token(identity: String) -> String` |
-| `Publish` | a message to a topic | `send(topic, &Message)`, the `Message::new(&bytes)` of `omnia_sdk` |
-| `Broadcast` | an event to connected WebSocket clients | `send(name, data, sockets: Option<Vec<String>>)` |
+| Capability | What it reaches |
+| --- | --- |
+| `Config` | a setting of the deployment |
+| `StateStore` | a key-value store of bytes |
+| `BlobStore` | objects in named containers |
+| `DocumentStore` | JSON documents by id in a named store |
+| `TableStore` | SQL over a named connection; `Row` and `DataType` are the `omnia-wasi-sql` crate's, named in the stem's manifest at the version the root pins `omnia-sdk` |
+| `HttpRequest` | an outbound HTTP call |
+| `Identity` | an access token for a named identity |
+| `Publish` | a message to a topic |
+| `Broadcast` | an event to connected WebSocket clients |
 
 A handler that fetches, reads a setting, and publishes:
 

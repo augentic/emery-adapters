@@ -10,11 +10,11 @@
 //! `src/<stem>/index.ts`, are lists of one line per module. A module the
 //! application reaches exports `register(app)`, and the `start` module's
 //! `main()` calls every one the entry reaches, so no slice edits another's
-//! directory to be wired. A build writes through `write_files`, runs
-//! `npm install`, `tsc --noEmit`, and `npm test` through the shell, and
-//! reports once they pass; a wave is verified by the same checks over the
-//! integrated tree, repaired where they fail, and run again before the
-//! verdict.
+//! directory to be wired. A build writes through `write_files` and
+//! `edit_files`, runs `npm install`, `tsc --noEmit`, and `npm test` through
+//! the shell, and reports once they pass; a wave is verified by the same
+//! checks over the integrated tree, repaired where they fail, and run again
+//! before the verdict.
 //!
 //! # Merge rules
 //!
@@ -53,7 +53,7 @@ impl TargetAdapter for Adapter {
     ];
 
     async fn build<P: Model>(ctx: &Context<'_, P>) -> Result<Report, Error> {
-        emery_sdk::target::build(ctx, PROSE).await
+        emery_sdk::target::build(ctx, PROSE, &[]).await
     }
 
     async fn verify<P: Model>(ctx: &VerifyContext<'_, P>) -> Result<Verdict, Error> {

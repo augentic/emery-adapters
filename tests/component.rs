@@ -28,8 +28,7 @@ const CLAIM: &str =
 
 const REPORT: &str =
     r#"{"covered": ["REQ-001"], "written": ["src/orders/index.ts", "src/index.ts"]}"#;
-const OMNIA_REPORT: &str =
-    r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/lib.rs", "app/src/routes.rs"]}"#;
+const OMNIA_REPORT: &str = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/lib.rs"]}"#;
 const PASSED: &str = r#"{"passed": true, "failures": []}"#;
 
 // The survey answer a surveying adapter's first turn is scripted with: one
@@ -193,9 +192,9 @@ async fn python() {
 // The metadata lowers the merge rules; the build writes the mount through
 // `write_files`, and its report and the verdict lift back to the driver.
 #[tokio::test]
-async fn typescript_target() {
+async fn node() {
     support::build(
-        test_programs::TARGET_TYPESCRIPT_TARGET,
+        test_programs::TARGET_NODE,
         &scratch(),
         &["rules", "package-lock.json=ours", "src/index.ts=union", "**/index.ts=union"],
         ScriptedModel::default(),
@@ -210,25 +209,25 @@ async fn typescript_target() {
     .to_string();
     let model = ScriptedModel::answering([REPORT, PASSED]).calling(0, [("write_files", written)]);
 
-    let model = support::build(test_programs::TARGET_TYPESCRIPT_TARGET, &project, &[], model).await;
+    let model = support::build(test_programs::TARGET_NODE, &project, &[], model).await;
 
     let seen = model.seen();
     assert_eq!(seen.len(), 2, "the build opens one completion, the verify one");
-    led(&seen[0], typescript_target::PROSE, "build.md");
-    led(&seen[1], typescript_target::PROSE, "verify.md");
+    led(&seen[0], node::PROSE, "build.md");
+    led(&seen[1], node::PROSE, "verify.md");
     assert!(seen.iter().all(|request| request.workspace.is_some()), "the mount is lent to both");
     for path in ["src/orders/index.ts", "src/index.ts"] {
         assert!(project.read(path).is_some(), "the tree holds `{path}` written through the lend");
     }
 }
 
-// The metadata lowers the five rules in order; the build writes a stem's list
-// and the root crate's router list through `write_files`, and its report and
-// the verdict lift back to the driver.
+// The metadata lowers the five rules in order; the build lays the seed in
+// the lent tree before its turn and writes a stem's list through
+// `write_files`, and its report and the verdict lift back to the driver.
 #[tokio::test]
-async fn omnia_target() {
+async fn omnia() {
     support::build(
-        test_programs::TARGET_OMNIA_TARGET,
+        test_programs::TARGET_OMNIA,
         &scratch(),
         &[
             "rules",
@@ -245,20 +244,29 @@ async fn omnia_target() {
     let project = scratch();
     let written = serde_json::json!({ "files": [
         { "path": "crates/orders/src/lib.rs", "content": "pub mod reading;\n" },
-        { "path": "app/src/routes.rs", "content": "    let router = app_orders::reading::mount(router);\n" },
     ]})
     .to_string();
     let model =
         ScriptedModel::answering([OMNIA_REPORT, PASSED]).calling(0, [("write_files", written)]);
 
-    let model = support::build(test_programs::TARGET_OMNIA_TARGET, &project, &[], model).await;
+    let model = support::build(test_programs::TARGET_OMNIA, &project, &[], model).await;
 
     let seen = model.seen();
     assert_eq!(seen.len(), 2, "the build opens one completion, the verify one");
-    led(&seen[0], omnia_target::PROSE, "build.md");
-    led(&seen[1], omnia_target::PROSE, "verify.md");
+    led(&seen[0], omnia::PROSE, "build.md");
+    led(&seen[1], omnia::PROSE, "verify.md");
     assert!(seen.iter().all(|request| request.workspace.is_some()), "the mount is lent to both");
-    for path in ["crates/orders/src/lib.rs", "app/src/routes.rs"] {
-        assert!(project.read(path).is_some(), "the tree holds `{path}` written through the lend");
-    }
+    assert!(
+        project.read("crates/orders/src/lib.rs").is_some(),
+        "the tree holds the stem's list written through the lend"
+    );
+    let routes = omnia::SEED
+        .iter()
+        .find(|seed| seed.path == "app/src/routes.rs")
+        .expect("the router list is a seed");
+    assert_eq!(
+        project.read("app/src/routes.rs").as_deref(),
+        Some(routes.content.as_bytes()),
+        "the seed reached the host's tree through the lend before the turn"
+    );
 }

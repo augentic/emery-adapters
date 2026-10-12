@@ -68,7 +68,7 @@ For sibling co-development against uncommitted engine changes, uncomment the pat
 ```bash
 make ci                    # exactly the CI jobs: fmt-check + lint + nextest + doctests + docs + cargo-vet + cargo-deny
 make check                 # local advisories: audit + fmt (rewrites) + lint + outdated + udeps
-cargo clippy -p documentation -p intent -p typescript -p python -p typescript-target -p omnia-target -p test-programs --lib --bins --examples --all-features --target wasm32-wasip2 -- -D warnings   # the guest side alone (`WASM32_PACKAGES` in mise.toml)
+cargo clippy -p documentation -p intent -p typescript -p python -p node -p omnia -p test-programs --lib --bins --examples --all-features --target wasm32-wasip2 -- -D warnings   # the guest side alone (`WASM32_PACKAGES` in mise.toml)
 cargo build -p <name> --target wasm32-wasip2 --release   # one adapter → target/wasm32-wasip2/release/<name>.wasm (the file the examples copy into the store)
 cargo build --workspace --target wasm32-wasip2 --release   # every adapter
 ```

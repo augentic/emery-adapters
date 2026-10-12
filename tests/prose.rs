@@ -130,18 +130,18 @@ fn python() {
 }
 
 #[test]
-fn typescript_target() {
-    target_corpus(typescript_target::PROSE, "typescript-target");
+fn node() {
+    target_corpus(node::PROSE, "node");
 }
 
 // The layout pins omnia once: every `omnia` crate the root manifest it spells
 // names is at one version, so a bump is one edit and the tree it lays
 // resolves.
 #[test]
-fn omnia_target() {
-    target_corpus(omnia_target::PROSE, "omnia-target");
+fn omnia() {
+    target_corpus(omnia::PROSE, "omnia");
 
-    let layout = body(omnia_target::PROSE, "references/layout.md").expect("the layout is listed");
+    let layout = body(omnia::PROSE, "references/layout.md").expect("the layout is listed");
     let pins: Vec<(&str, &str)> = layout
         .lines()
         .filter(|line| line.starts_with("omnia"))
@@ -156,6 +156,39 @@ fn omnia_target() {
     let versions: std::collections::BTreeSet<&str> =
         pins.iter().map(|(_, version)| *version).collect();
     assert_eq!(versions.len(), 1, "every omnia pin in the layout is one version: {pins:?}");
+
+    // the seed is the layout's nine root files, each fenced in it byte for byte
+    let paths: std::collections::BTreeSet<&str> =
+        omnia::SEED.iter().map(|seed| seed.path.as_ref()).collect();
+    assert_eq!(
+        paths,
+        [
+            ".gitignore",
+            "Cargo.toml",
+            "app/Cargo.toml",
+            "app/examples/runtime.rs",
+            "app/src/lib.rs",
+            "app/src/routes.rs",
+            "app/tests/routes.rs",
+            "clippy.toml",
+            "rust-toolchain.toml",
+        ]
+        .into_iter()
+        .collect()
+    );
+    assert_eq!(paths.len(), omnia::SEED.len(), "a seed path is declared once");
+    for seed in omnia::SEED {
+        assert!(
+            layout.contains(&format!("`{}`", seed.path)),
+            "the layout names the seed `{}`",
+            seed.path
+        );
+        assert!(
+            layout.contains(&format!("\n{}```", seed.content)),
+            "the layout fences the seed `{}` byte for byte",
+            seed.path
+        );
+    }
 }
 
 fn surveying(docs: &[Doc]) {
