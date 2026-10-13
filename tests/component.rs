@@ -221,7 +221,7 @@ async fn emery_node() {
     }
 }
 
-// The metadata lowers the five rules in order; the build lays the seed in
+// The metadata lowers the eleven rules in order; the build lays the seed in
 // the lent tree before its turn and writes a stem's list through
 // `write_files`, and its report and the verdict lift back to the driver.
 #[tokio::test]
@@ -232,9 +232,15 @@ async fn emery_omnia() {
         &[
             "rules",
             "Cargo.lock=ours",
-            "app/Cargo.toml=union",
+            "Cargo.toml=union",
+            "clippy.toml=union",
+            "src/routes.rs=union",
+            "src/messaging.rs=union",
+            "tests/routes.rs=union",
+            "tests/messaging.rs=union",
+            "crates/common/src/routes/*.rs=union",
+            "crates/common/src/config.rs=union",
             "crates/*/Cargo.toml=union",
-            "app/src/routes.rs=union",
             "crates/*/src/lib.rs=union",
         ],
         ScriptedModel::default(),
@@ -243,7 +249,7 @@ async fn emery_omnia() {
 
     let project = scratch();
     let written = serde_json::json!({ "files": [
-        { "path": "crates/orders/src/lib.rs", "content": "pub mod reading;\n" },
+        { "path": "crates/orders/src/lib.rs", "content": "//! The `orders` stem.\n\npub mod reading;\n" },
     ]})
     .to_string();
     let model =
@@ -262,11 +268,15 @@ async fn emery_omnia() {
     );
     let routes = emery_omnia::SEED
         .iter()
-        .find(|seed| seed.path == "app/src/routes.rs")
-        .expect("the router list is a seed");
+        .find(|seed| seed.path == "src/routes.rs")
+        .expect("the route list is a seed");
     assert_eq!(
-        project.read("app/src/routes.rs").as_deref(),
+        project.read("src/routes.rs").as_deref(),
         Some(routes.content.as_bytes()),
         "the seed reached the host's tree through the lend before the turn"
+    );
+    assert!(
+        project.read(".github/workflows/ci.yaml").is_some(),
+        "a seed under a hidden directory reached the host's tree"
     );
 }

@@ -134,61 +134,253 @@ fn emery_node() {
     target_corpus(emery_node::PROSE, "node");
 }
 
-// The layout pins omnia once: every `omnia` crate the root manifest it spells
+// The commit of the omnia exemplar the seed renders, named by the layout and
+// the seed document, and the one `emery_omnia_exemplar` reads a checkout at.
+const OMNIA_EXEMPLAR_COMMIT: &str = "31d89ab45c61c30f9df76ad6e11ca46982b3d239";
+
+// The root manifest the seed lays pins omnia once: every `omnia` crate it
 // names is at one version, so a bump is one edit and the tree it lays
 // resolves.
 #[test]
 fn emery_omnia() {
     target_corpus(emery_omnia::PROSE, "omnia");
 
-    let layout = body(emery_omnia::PROSE, "references/layout.md").expect("the layout is listed");
-    let pins: Vec<(&str, &str)> = layout
+    let manifest = omnia_seed("Cargo.toml");
+    let pins: Vec<(&str, &str)> = manifest
         .lines()
         .filter(|line| line.starts_with("omnia"))
         .filter_map(|line| {
             let (name, rest) = line.split_once(" = ")?;
-            let (_, version) = rest.split_once("version = \"").or_else(|| rest.split_once('"'))?;
+            let version = rest
+                .split_once("version = \"")
+                .map(|(_, version)| version)
+                .or_else(|| rest.strip_prefix('"'))?;
             let (version, _) = version.split_once('"')?;
             Some((name.trim(), version))
         })
         .collect();
-    assert!(pins.len() >= 2, "the layout pins the sdk and the host crates: {pins:?}");
+    assert!(pins.len() >= 2, "the seed pins the sdk and the host crates: {pins:?}");
     let versions: std::collections::BTreeSet<&str> =
         pins.iter().map(|(_, version)| *version).collect();
-    assert_eq!(versions.len(), 1, "every omnia pin in the layout is one version: {pins:?}");
+    assert_eq!(versions.len(), 1, "every omnia pin in the seed is one version: {pins:?}");
 
-    // the seed is the layout's nine root files, each fenced in it byte for byte
+    // the seed is every file of the layout outside `crates/<stem>/`, each
+    // fenced in the seed document byte for byte
     let paths: std::collections::BTreeSet<&str> =
         emery_omnia::SEED.iter().map(|seed| seed.path.as_ref()).collect();
     assert_eq!(
         paths,
         [
+            ".github/dependabot.yml",
+            ".github/workflows/audit.yaml",
+            ".github/workflows/ci.yaml",
+            ".github/workflows/patch.yaml",
+            ".github/workflows/publish.yaml",
+            ".github/workflows/release.yaml",
             ".gitignore",
+            ".vscode/settings.json",
             "Cargo.toml",
-            "app/Cargo.toml",
-            "app/examples/runtime.rs",
-            "app/src/lib.rs",
-            "app/src/routes.rs",
-            "app/tests/routes.rs",
+            "Makefile",
             "clippy.toml",
+            "crates/common/Cargo.toml",
+            "crates/common/src/config.rs",
+            "crates/common/src/lib.rs",
+            "crates/common/src/routes.rs",
+            "crates/common/src/routes/http.rs",
+            "crates/common/src/routes/topic.rs",
+            "deny.toml",
+            "examples/runtime.rs",
+            "mise.toml",
             "rust-toolchain.toml",
+            "rustfmt.toml",
+            "src/lib.rs",
+            "src/messaging.rs",
+            "src/routes.rs",
+            "supply-chain/README.md",
+            "supply-chain/audits.toml",
+            "supply-chain/config.toml",
+            "taplo.toml",
+            "tests/messaging.rs",
+            "tests/routes.rs",
         ]
         .into_iter()
         .collect()
     );
     assert_eq!(paths.len(), emery_omnia::SEED.len(), "a seed path is declared once");
+    let document = body(emery_omnia::PROSE, "references/seed.md").expect("the seed is listed");
     for seed in emery_omnia::SEED {
+        emery_sdk::beneath(&seed.path)
+            .unwrap_or_else(|bad| panic!("the seed path `{}` {bad}", seed.path));
         assert!(
-            layout.contains(&format!("`{}`", seed.path)),
-            "the layout names the seed `{}`",
+            document.contains(&format!("\n## `{}`\n", seed.path)),
+            "the seed document heads `{}`",
             seed.path
         );
         assert!(
-            layout.contains(&format!("\n{}```", seed.content)),
-            "the layout fences the seed `{}` byte for byte",
+            document.contains(&format!("\n{}```", seed.content)),
+            "the seed document fences `{}` byte for byte",
             seed.path
         );
     }
+
+    let layout = body(emery_omnia::PROSE, "references/layout.md").expect("the layout is listed");
+    for doc in [layout, document] {
+        assert!(doc.contains(OMNIA_EXEMPLAR_COMMIT), "the document names the exemplar's commit");
+    }
+
+    // the workflows and the task runner pin one toolkit tag
+    let tags: std::collections::BTreeSet<&str> = emery_omnia::SEED
+        .iter()
+        .flat_map(|seed| seed.content.lines())
+        .filter_map(|line| {
+            let (_, rest) = line.split_once("augentic/toolkit")?;
+            let tag = rest.split_once("@v").or_else(|| rest.split_once("?ref=v"))?.1;
+            Some(tag.trim_end_matches(['"', ']']))
+        })
+        .collect();
+    assert_eq!(tags.len(), 1, "every toolkit reference in the seed names one tag: {tags:?}");
+    let publish = omnia_seed(".github/workflows/publish.yaml");
+    assert!(!publish.contains("secrets: inherit"), "the publish workflow names each secret");
+    assert!(
+        publish.contains("\npermissions: {}\n"),
+        "the publish workflow grants nothing by default"
+    );
+}
+
+// Holds the seed to the exemplar's guest template at `OMNIA_EXEMPLAR`, a
+// checkout of `augentic/omnia-exemplar` at `OMNIA_EXEMPLAR_COMMIT`; unset,
+// the scenario passes with nothing read, so CI needs no clone. An `exact`
+// entry is laid byte for byte; a `seed` entry is rendered for the package
+// `guest` and every line of it is in the seed, save where the layout states
+// a departure: the ignore file adds `.emery/`; the root manifest pins
+// `omnia-test` through the workspace; the entry and the route rung keep the
+// template's wiring around the lists that replace its sample route; and the
+// publish workflow calls the toolkit at the tag the other workflows pin,
+// naming its secrets in place of `inherit`.
+#[test]
+fn emery_omnia_exemplar() {
+    let Some(checkout) = std::env::var_os("OMNIA_EXEMPLAR") else {
+        return;
+    };
+    let checkout = Path::new(&checkout);
+    let read = |path: &str| {
+        std::fs::read_to_string(checkout.join(path))
+            .unwrap_or_else(|err| panic!("the exemplar's `{path}`: {err}"))
+    };
+    let render =
+        |text: String| text.replace("<PACKAGE_NAME>", "guest").replace("<CRATE_NAME>", "guest");
+
+    let manifest = read("templates/guest/manifest.yaml");
+    let mut entries: Vec<(String, String, String)> = Vec::new();
+    let (mut source, mut target) = (None, None);
+    for line in manifest.lines().map(str::trim) {
+        if let Some(value) = line.strip_prefix("- source:") {
+            source = Some(value.trim().to_owned());
+        } else if let Some(value) = line.strip_prefix("target:") {
+            target = Some(value.trim().to_owned());
+        } else if let Some(value) = line.strip_prefix("proof:") {
+            let source = source.take().expect("an entry's source precedes its proof");
+            let target = target.take().expect("an entry's target precedes its proof");
+            entries.push((source, target, value.trim().to_owned()));
+        }
+    }
+    assert!(entries.len() >= 20, "the manifest lists the template: {}", entries.len());
+
+    for (source, target, proof) in &entries {
+        let template = render(read(source));
+        let seed = omnia_seed(target);
+        match (proof.as_str(), target.as_str()) {
+            ("exact", ".gitignore") => {
+                assert_eq!(
+                    seed,
+                    format!("{template}.emery/\n"),
+                    "`{target}` is the exemplar's with the engine's directory after it"
+                );
+            }
+            ("exact", _) => {
+                assert_eq!(seed, template, "`{target}` is the exemplar's byte for byte");
+            }
+            ("seed", ".github/workflows/publish.yaml") => {
+                let pinned =
+                    toolkit_tag(&seed).expect("the seed's publish workflow pins the toolkit");
+                for line in template.lines().filter(|line| line.trim() != "secrets: inherit") {
+                    match toolkit_tag(line) {
+                        Some(tag) => held_line(&seed, target, &line.replace(&tag, &pinned)),
+                        None => held_line(&seed, target, line),
+                    }
+                }
+            }
+            ("seed", "Cargo.toml") => {
+                for line in template.lines().filter(|line| !line.starts_with('#')) {
+                    if let Some(rest) = line.strip_prefix("omnia-test = { version = ") {
+                        let (version, _) = rest.split_once(',').expect("the pin closes");
+                        let pin = format!("omnia-test = {version}");
+                        assert!(
+                            seed.contains(&pin),
+                            "`{target}` pins `{pin}` through the workspace"
+                        );
+                    } else {
+                        held_line(&seed, target, line);
+                    }
+                }
+            }
+            ("seed", "src/lib.rs") => {
+                let (wiring, _) = template
+                    .split_once("/// Build the HTTP router")
+                    .expect("the template's entry holds the router after the exports");
+                for line in wiring
+                    .lines()
+                    .filter(|line| !line.starts_with("//") && !line.starts_with("use "))
+                {
+                    held_line(&seed, target, line);
+                }
+            }
+            ("seed", "tests/routes.rs") => {
+                for line in [
+                    "use axum::body::{Body, to_bytes};",
+                    "use tower::ServiceExt as _;",
+                    "#[tokio::test]",
+                ] {
+                    held_line(&seed, target, line);
+                }
+                assert!(seed.contains("guest::router("), "`{target}` drives the crate's router");
+                assert!(
+                    seed.contains(".oneshot("),
+                    "`{target}` drives the router through `oneshot`"
+                );
+            }
+            ("seed", _) => {
+                for line in template.lines() {
+                    held_line(&seed, target, line);
+                }
+            }
+            (proof, _) => panic!("`{target}` has the proof `{proof}` this scenario does not read"),
+        }
+    }
+}
+
+fn omnia_seed(path: &str) -> String {
+    emery_omnia::SEED
+        .iter()
+        .find(|seed| seed.path == path)
+        .unwrap_or_else(|| panic!("the seed lays `{path}`"))
+        .content
+        .to_string()
+}
+
+fn held_line(seed: &str, target: &str, line: &str) {
+    if line.trim().is_empty() {
+        return;
+    }
+    assert!(seed.lines().any(|held| held == line), "`{target}` holds the template's line `{line}`");
+}
+
+// The tag after `@` of the first toolkit workflow `text` calls.
+fn toolkit_tag(text: &str) -> Option<String> {
+    text.lines()
+        .find(|line| line.contains("uses: augentic/toolkit/"))
+        .and_then(|line| line.rsplit_once('@'))
+        .map(|(_, tag)| tag.to_owned())
 }
 
 fn surveying(docs: &[Doc]) {

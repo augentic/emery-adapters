@@ -1,465 +1,252 @@
 # Layout
 
-The one shape every slice of an omnia build follows, so that slices built beside one another in a wave merge clean and the integrated workspace lints, tests, and builds for `wasm32-wasip2` as a whole.
+The one shape every slice of an omnia build follows, so that slices built beside one another in a wave merge clean and the integrated tree lints, tests, and builds for `wasm32-wasip2` as a whole. It is the root-package guest the [omnia exemplar](https://github.com/augentic/omnia-exemplar) teaches, at its commit `31d89ab45c61c30f9df76ad6e11ca46982b3d239`: the root package is the component, a `common` crate holds the tables every stem shares, and each stem is a crate of handlers under `crates/`.
 
 ## The tree
 
 ```
-.gitignore
-Cargo.toml               the workspace: its members, every shared pin, the release profile
+Cargo.toml               the root package `guest` and the workspace: every shared pin, the lints, two lists
 Cargo.lock               written by cargo, never by hand
-rust-toolchain.toml
-app/                     the root crate `app`: the component the host runs
-  Cargo.toml             its manifest: one line per stem
-  src/
-    lib.rs               the application: the provider, the HTTP export, the capability bound
-    routes.rs            the router list: one line per slice
-  tests/
-    routes.rs            the smoke test: every slice's routes mount together
-  examples/
-    runtime.rs           the local host, behind the `host` feature
+src/
+  lib.rs                 the guest: the provider, the HTTP and messaging exports, the capability bound
+  routes.rs              the route list: one statement per HTTP route
+  messaging.rs           the topic list: one statement per topic consumed
+tests/
+  routes.rs              the route rung: every route of the list reaches its handler
+  messaging.rs           the messaging rung: every topic of the list is routed
+examples/
+  runtime.rs             the local host, behind the `host` feature
 crates/
-  <stem>/                one crate per stem, `app-<stem>`
+  common/                the crate every stem shares
+    src/
+      routes/http.rs     the path table: one constant per HTTP route
+      routes/topic.rs    the topic table: one constant per topic
+      config.rs          the configuration catalog: one constant per key, and the helpers
+  <stem>/                one crate per stem, the package `<stem>`
     Cargo.toml           the stem's manifest: the crates its files use
     src/
       lib.rs             a list alone: one `pub mod` line per slice
-      <part>.rs          a slice's module: `mount`, the handlers, the types it owns
+      <part>.rs          a slice's module: the handlers and the types it owns
     tests/
       <part>.rs          one test per acceptance scenario of a slice
+Makefile  mise.toml  rust-toolchain.toml  rustfmt.toml  taplo.toml  clippy.toml  deny.toml  .gitignore
+.vscode/  supply-chain/  .github/          the operator's tooling, laid once and never edited
 ```
 
-- `<stem>` is the first segment of a requirement's dotted id: `orders` for `orders.create`, `start` for `start.listen`. It names the directory `crates/<stem>/` and the package `app-<stem>`, which Rust spells `app_<stem>` with every hyphen an underscore: `app_payment_methods` for `payment-methods`.
-- Every slice builds a part of each stem its requirements lead with and owns `crates/<stem>/src/<part>.rs` and `crates/<stem>/tests/<part>.rs`, where `<part>` is the slice's name less the stem and the hyphen after it where the name leads with them, else the name whole, spelled in snake_case: `reading` for the slice `orders-reading`, `application_bootstrap` for the slice of that name under `start`, and `orders` for the slice `orders` itself, the one slice of a stem the plan did not cut. A part whose name is a Rust keyword takes a trailing underscore: `match_`, `type_`. Under the stem, a slice writes those two files, its lines in the stem's two lists, and nothing else.
+- `<stem>` is the first segment of a requirement's dotted id: `orders` for `orders.create`, `start` for `start.listen`. It names the directory `crates/<stem>/` and the package `<stem>`, which Rust spells with every hyphen an underscore: `payment_methods::..` for `payment-methods`. A stem named as a crate the root manifest pins, or `common` or `guest`, takes the package name `<stem>-stem` so the names never collide; its directory stays `crates/<stem>/`.
+- Every slice builds a part of each stem its requirements lead with and owns `crates/<stem>/src/<part>.rs` and `crates/<stem>/tests/<part>.rs`, where `<part>` is the slice's name less the stem and the hyphen after it where the name leads with them, else the name whole, spelled in snake_case: `reading` for the slice `orders-reading`, `application_bootstrap` for the slice of that name under `start`, and `orders` for the slice `orders` itself, the one slice of a stem the plan did not cut. A part whose name is a Rust keyword takes a trailing underscore: `match_`, `type_`. Under the stem, a slice writes those two files, its lines in the lists, and nothing else.
 - Slice names are unique in the plan, so two slices never own one module.
-- A stem's crate holds everything its requirements need: its modules, and its manifest naming the crates they use. A part is private to its stem until the stem's `src/lib.rs` lists it, and `pub` items of a part are reachable at `app_<stem>::<part>::Item`.
-- A module uses another stem through its crate, named in its own stem's manifest (`app-<other> = { path = "../<other>" }`) and imported as `use app_<other>::<part>::..`; a part reaches a sibling part through `crate::<part>::..`. A crate never depends on the root crate `app`.
+- A stem's crate holds everything its requirements need: its modules, and its manifest naming the crates they use. A part is private to its stem until the stem's `src/lib.rs` lists it, and `pub` items of a part are reachable at `<stem>::<part>::Item`.
+- A module uses another stem through its crate, named in its own stem's manifest as `<other>.workspace = true` once the root manifest's path list names it, and imported as `use <other>::<part>::..`; a part reaches a sibling part through `crate::<part>::..`. Every stem uses `common`. A crate never depends on the root package `guest`.
 - A module another slice owns is not yours to change. Where the design has yours depend on it and the tree lacks it, implement against the design's types in your own module and leave the dependency for the slice that lands it.
 
 ## The lists
 
-Four files hold a list slices add lines to, and hold nothing a slice has any other reason to touch. Each list is one block, every slice adds its line at the end of it, and nothing else in the file is edited: the engine keeps both sides' lines of such a file, so two slices adding a line each at once merge clean, and two slices adding the same line add it once. A line that does anything but what the list is for, or an edit outside the block, breaks that.
+Eleven files hold a list slices add lines to, and hold nothing a slice has any other reason to touch. Each list is one block; a slice adds its lines at the end of it, where the table below says, and edits nothing else in the file: the engine keeps both sides' lines of such a file, so two slices adding a line each at once merge clean, and two slices adding the same line add it once. A line that does anything but what the list is for, or an edit outside the block, breaks that. A list file is never written whole: the root's are in the tree before you start, and a stem's two you lay hold your lines alone.
 
-The root crate's `[dependencies]`, the last table of `app/Cargo.toml`, one line per stem, the same line whichever slice writes it:
+| List | File | One entry is | Added |
+| --- | --- | --- | --- |
+| the path table | `crates/common/src/routes/http.rs` | `/// <doc>` and `pub const <NAME>: &str = "<path>";` | at the end of the file |
+| the topic table | `crates/common/src/routes/topic.rs` | `/// <doc>` and `pub const <NAME>: &str = "<suffix>";` | at the end of the file |
+| the configuration catalog | `crates/common/src/config.rs` | `/// <doc>` and `pub const <KEY>: &str = "<KEY>";` | after `ENV`, before `env` |
+| the route list | `src/routes.rs` | `let router = router.route(<path>, <method>(<handler>));` | before `router.with_state(..)` |
+| the topic list | `src/messaging.rs` | `let router = router.route(config::topic_for(&env, <suffix>), messaging::consume(<handler>));` | before `tracing::debug!(..)` |
+| the route rung's table | `tests/routes.rs` | `(Method::<VERB>, <path>),` | before the table's `];` |
+| the messaging rung's table | `tests/messaging.rs` | `<suffix>,` | before the table's `];` |
+| the workspace's path crates | `Cargo.toml`, `[workspace.dependencies]` | `<stem> = { path = "crates/<stem>" }` | after `common = { path = "crates/common" }` |
+| the guest's crates | `Cargo.toml`, `[dependencies]` | `<stem>.workspace = true` | at the end of the file |
+| a stem's modules | `crates/<stem>/src/lib.rs` | `pub mod <part>;` | at the end of the file |
+| a stem's crates | `crates/<stem>/Cargo.toml`, `[dependencies]` | `<crate>.workspace = true` | at the end of the file |
 
-```toml
-[dependencies]
-axum.workspace = true
-omnia-sdk.workspace = true
-app-health = { path = "../crates/health" }
-app-orders = { path = "../crates/orders" }
-```
-
-The router list in `app/src/routes.rs`, between `let router = axum::Router::new();` and `router.with_state(..)`, one line per slice:
-
-```rust
-    let router = axum::Router::new();
-    let router = app_health::health::mount(router);
-    let router = app_orders::placing::mount(router);
-    let router = app_orders::reading::mount(router);
-    router.with_state(Client::new(OWNER, provider))
-```
-
-A stem's module list, `crates/<stem>/src/lib.rs`, one line per slice and nothing else, so a stem of one slice lists one module:
+`<path>` and `<suffix>` are the constants of the two tables spelled in full, `common::routes::http::ORDERS` and `common::routes::topic::ORDER_PLACED`; `<method>` is a route function of `omnia_sdk::api::http` spelled in full, `omnia_sdk::api::http::post`; `<handler>` is the handler's path through its stem's crate, `orders::placing::place_order`. The two root lists import nothing a statement needs, so a statement names its paths whole, and the formatter may wrap one over several lines: it is still one entry, and it is added as one. The two root lists, with their lists empty:
 
 ```rust
-pub mod placing;
-pub mod reading;
-```
-
-And every stem's manifest ends with its `[dependencies]`, the four static lines, then one line per crate a module uses that the four do not cover, added by the slice whose files use it: `<crate>.workspace = true` where the root manifest's `[workspace.dependencies]` pins the crate, `<crate> = "<version>"` with its features where it does not, `app-<other> = { path = "../<other>" }` for another stem:
-
-```toml
-[dependencies]
-axum.workspace = true
-omnia-sdk.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-chrono.workspace = true
-uuid.workspace = true
-```
-
-## The wiring
-
-The application is `app/src/lib.rs`: the production provider, the HTTP export the host calls, and the `Capabilities` bound. The router in `app/src/routes.rs` mounts every module its list names over one `Client<P>` and one owner; `Capabilities` bounds `P` on every capability a module may ask for, so neither file changes for a new one, and `app/src/lib.rs` never changes at all. Nothing runs `main`: the host instantiates the component and hands it each request.
-
-The wiring is one surface. A module the application reaches exports `mount`, which takes the router and returns it with the module's routes merged in, bounding `P` on the capabilities its handlers use and nothing more:
-
-```rust
-pub fn mount<P>(router: Router<Client<P>>) -> Router<Client<P>>
-where
-    P: StateStore + Send + Sync + 'static,
-{
-    router.merge(Router::new().route("/orders/{id}", get(get_order)))
-}
-```
-
-`mount` merges a router of its own, so a layer applies to the module's routes alone and the order of the list never matters. Two modules may route one path with different methods; one method twice on one path is the panic `app/tests/routes.rs` catches. So a slice wires itself into the application by exporting `mount` and adding its line to the router list, and never edits `crates/start/` or another stem's crate to be reached.
-
-`mount` may return the router unchanged. A module none of whose requirements states an HTTP surface — a method and a path — has no route to mount: its behaviour is the `pub fn`s it exports, its tests call them directly, and `mount` answers `router` as it came, so the router list still names the module. A route is never laid to give a description a surface: a probe route answering a requirement that states none is a surface the specification does not hold.
-
-A rule every route obeys — authentication, a body limit, a request log — is a function, not a route. The stem that owns the rule exports it from its module as a `pub fn` (`app_start::authentication::authenticate(&headers) -> Result<Claims, omnia_sdk::Error>`), and every handler the rule covers calls it at its top, through the owning stem's crate named in its own stem's manifest. The owning stem lays no route under another stem's prefix and no placeholder for one. `app/tests/routes.rs` stays the one static test over the router; a request the rule refuses is asserted in the tests of the stem whose route it is, where the call stands, as [testing](testing.md) spells it.
-
-Where the plan has a `start` stem, its slice owns `crates/start/` as any stem for what is code — a health route, a layer on its own routes, a rule every route calls — and the root files are the rest of it: the component the host runs, the provider, the router. A `start` requirement the root files and the host satisfy is the `start` slice's to cover, whichever slice's brief named the files laid; one nothing in the tree satisfies is left uncovered. A tree with no `start` stem is the same program with no module under that name.
-
-## The tests
-
-`crates/<stem>/tests/<part>.rs`, over tokio's test macro and the doubles of `omnia_test::guest`:
-
-```rust
-use axum::Router;
-use axum::body::{Body, to_bytes};
-use axum::http::{Request, StatusCode};
-use omnia_sdk::api::Client;
-use omnia_test::guest::Provider;
-use tower::ServiceExt as _;
-
-fn app(provider: Provider) -> Router {
-    app_orders::reading::mount(Router::new()).with_state(Client::new("test", provider))
-}
-
-#[tokio::test]
-async fn an_order_is_returned_by_its_id() {
-    let provider = Provider::default();
-    provider.storage.insert_state(
-        "orders/o-1",
-        br#"{"id":"o-1","items":["widget"],"placed_at":"2026-10-12T00:00:00Z"}"#,
-    );
-    let request = Request::get("/orders/o-1").body(Body::empty()).expect("request");
-
-    let response = app(provider).oneshot(request).await.expect("response");
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = to_bytes(response.into_body(), usize::MAX).await.expect("body");
-    let order: app_orders::reading::Order = serde_json::from_slice(&body).expect("json");
-    assert_eq!(order.id, "o-1");
-    assert_eq!(order.items, ["widget"]);
-}
-```
-
-One test per acceptance scenario, named by the scenario in snake_case, its `WHEN` the arrangement and its `THEN` the assertion. A test mounts the module alone on a fresh router over the doubles and drives it in process with `oneshot`, as [testing](testing.md) spells out; it never listens on a port, and a service the tree does not run is a double handed to the provider, never a live connection.
-
-The root crate's `app/tests/routes.rs` is the one test over the whole router, written once with the root files: it proves every module mounts together.
-
-## The root files
-
-Nine files lie outside `crates/` beside `Cargo.lock`, which cargo writes. The adapter lays them in a tree that lacks them before any slice's turn, byte for byte as below, so every slice finds them in place and writes none: a slice's brief names the ones laid for it, and they count as its files. Seven are static and no slice edits one: the root `Cargo.toml`, `app/src/lib.rs`, `app/tests/routes.rs`, `app/examples/runtime.rs`, `rust-toolchain.toml`, `clippy.toml`, and `.gitignore`. Two hold a list, `app/Cargo.toml` and `app/src/routes.rs`, laid with the lists empty, and a slice adds its line to each through `edit_files` and changes nothing else. The fences below are the reference the verify holds the static files to. The root manifest pins every crate the tree shares under `[workspace.dependencies]`, which no slice edits: a stem's manifest names a pinned crate as `<crate>.workspace = true`, and a crate the pins lack with its version in that stem's manifest alone.
-
-The root `Cargo.toml`, the workspace and nothing of any crate's own:
-
-```toml
-[workspace]
-members = ["app", "crates/*"]
-resolver = "3"
-
-[workspace.dependencies]
-axum = { version = "0.8.9", default-features = false, features = ["json"] }
-chrono = { version = "0.4.45", default-features = false, features = ["clock", "serde"] }
-omnia = "0.36.0"
-omnia-sdk = "0.36.0"
-omnia-test = { version = "0.36.0", features = ["guest"] }
-omnia-wasi-blobstore = "0.36.0"
-omnia-wasi-config = "0.36.0"
-omnia-wasi-docstore = "0.36.0"
-omnia-wasi-http = "0.36.0"
-omnia-wasi-identity = { version = "0.36.0", default-features = false }
-omnia-wasi-keyvalue = "0.36.0"
-omnia-wasi-messaging = "0.36.0"
-omnia-wasi-otel = "0.36.0"
-omnia-wasi-sql = "0.36.0"
-omnia-wasi-websocket = "0.36.0"
-serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.151"
-thiserror = "2.0.20"
-tokio = { version = "1.53.1", default-features = false, features = ["macros", "rt"] }
-tower = { version = "0.5.3", default-features = false, features = ["util"] }
-uuid = { version = "1.24.0", features = ["serde", "v4"] }
-wasip3 = { version = "0.9.0", features = ["http-compat"] }
-
-[profile.release]
-lto = true
-opt-level = "s"
-strip = true
-```
-
-`app/Cargo.toml`, its `[dependencies]` the list above, laid with no stem line and holding one per stem as slices add theirs; every crate it names is a pin of the root manifest's, so no version stands in it:
-
-```toml
-[package]
-name = "app"
-version = "0.1.0"
-edition = "2024"
-publish = false
-
-[lib]
-crate-type = ["cdylib", "rlib"]
-
-[features]
-# The local host, `cargo run -p app --features host --example runtime -- run <wasm>`.
-host = [
-    "dep:omnia",
-    "dep:omnia-wasi-blobstore",
-    "dep:omnia-wasi-config",
-    "dep:omnia-wasi-docstore",
-    "dep:omnia-wasi-http",
-    "dep:omnia-wasi-identity",
-    "dep:omnia-wasi-keyvalue",
-    "dep:omnia-wasi-messaging",
-    "dep:omnia-wasi-otel",
-    "dep:omnia-wasi-sql",
-    "dep:omnia-wasi-websocket",
-]
-
-[[example]]
-name = "runtime"
-required-features = ["host"]
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-wasip3.workspace = true
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-omnia = { workspace = true, optional = true }
-omnia-wasi-blobstore = { workspace = true, optional = true }
-omnia-wasi-config = { workspace = true, optional = true }
-omnia-wasi-docstore = { workspace = true, optional = true }
-omnia-wasi-http = { workspace = true, optional = true }
-omnia-wasi-identity = { workspace = true, optional = true }
-omnia-wasi-keyvalue = { workspace = true, optional = true }
-omnia-wasi-messaging = { workspace = true, optional = true }
-omnia-wasi-otel = { workspace = true, optional = true }
-omnia-wasi-sql = { workspace = true, optional = true }
-omnia-wasi-websocket = { workspace = true, optional = true }
-
-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-omnia-test.workspace = true
-tokio.workspace = true
-tower.workspace = true
-
-# One line per stem after the two below, each added at the end.
-[dependencies]
-axum.workspace = true
-omnia-sdk.workspace = true
-```
-
-`app/src/lib.rs`, which holds no list and no slice edits:
-
-```rust
-//! The application: every stem's routes on one router over one provider.
-
-mod routes;
-
-use omnia_sdk::{
-    BlobStore, Broadcast, Config, DocumentStore, HttpRequest, Identity, Publish, StateStore,
-    TableStore,
-};
-pub use routes::router;
-
-/// The tenant that owns this deployment.
-pub const OWNER: &str = "app";
-
-/// Every capability a stem may bound its provider on.
-pub trait Capabilities:
-    BlobStore
-    + Broadcast
-    + Config
-    + DocumentStore
-    + HttpRequest
-    + Identity
-    + Publish
-    + StateStore
-    + TableStore
-    + Send
-    + Sync
-    + 'static
-{
-}
-
-impl<P> Capabilities for P where
-    P: BlobStore
-        + Broadcast
-        + Config
-        + DocumentStore
-        + HttpRequest
-        + Identity
-        + Publish
-        + StateStore
-        + TableStore
-        + Send
-        + Sync
-        + 'static
-{
-}
-
-/// The production provider: WASI's own implementation of every capability.
-#[cfg(target_arch = "wasm32")]
-pub struct Provider;
-
-#[cfg(target_arch = "wasm32")]
-impl BlobStore for Provider {}
-#[cfg(target_arch = "wasm32")]
-impl Broadcast for Provider {}
-#[cfg(target_arch = "wasm32")]
-impl Config for Provider {}
-#[cfg(target_arch = "wasm32")]
-impl DocumentStore for Provider {}
-#[cfg(target_arch = "wasm32")]
-impl HttpRequest for Provider {}
-#[cfg(target_arch = "wasm32")]
-impl Identity for Provider {}
-#[cfg(target_arch = "wasm32")]
-impl Publish for Provider {}
-#[cfg(target_arch = "wasm32")]
-impl StateStore for Provider {}
-#[cfg(target_arch = "wasm32")]
-impl TableStore for Provider {}
-
-/// The WASI HTTP export.
-#[cfg(target_arch = "wasm32")]
-pub struct Http;
-
-#[cfg(target_arch = "wasm32")]
-wasip3::http::service::export!(Http);
-
-#[cfg(target_arch = "wasm32")]
-impl wasip3::exports::http::handler::Guest for Http {
-    async fn handle(
-        request: wasip3::http::types::Request,
-    ) -> Result<wasip3::http::types::Response, wasip3::http::types::ErrorCode> {
-        omnia_sdk::api::http::serve(router(Provider), request).await
-    }
-}
-```
-
-`app/src/routes.rs`, its router list laid empty and holding one line per slice as slices add theirs:
-
-```rust
-//! The router list: every stem's routes on one router, one line per slice.
+//! The route list: every stem's HTTP routes on one router, one statement per route.
 
 use omnia_sdk::api::Client;
 
 use crate::{Capabilities, OWNER};
 
-/// The router: every stem's routes over one [`Client`].
+/// Build the HTTP router over one provider-owning [`Client`].
 ///
-/// One line per slice after `Router::new()`, each added at the end.
+/// Omnia creates one component instance per request, so the router and the
+/// client are built inside each call. One statement per route between
+/// `Router::new()` and `with_state`, each added at the end of the list:
+/// `let router = router.route(<path>, <method>(<handler>));` over a constant
+/// of `common::routes::http` and a route function of `omnia_sdk::api::http`,
+/// both spelled in full.
 pub fn router<P: Capabilities>(provider: P) -> axum::Router {
     let router = axum::Router::new();
     router.with_state(Client::new(OWNER, provider))
 }
 ```
 
-`app/tests/routes.rs`:
-
 ```rust
-//! The whole router over the test doubles: every slice's routes mount together.
+//! The topic list: every stem's topics on one messaging router, one statement per topic.
 
-use axum::body::Body;
-use axum::http::{Request, StatusCode};
-use omnia_test::guest::Provider;
-use tower::ServiceExt as _;
+use common::config;
+use omnia_sdk::api::{Client, messaging};
 
-#[tokio::test]
-async fn an_unknown_path_is_not_found() {
-    let request = Request::get("/nothing-here").body(Body::empty()).expect("request");
+use crate::{Capabilities, OWNER};
 
-    let response = app::router(Provider::default()).oneshot(request).await.expect("response");
-
-    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+/// Build the exact-topic messaging router over one provider-owning [`Client`].
+///
+/// Each topic is registered under its `{env}-` qualified name, so a delivery
+/// from another environment is unhandled rather than consumed. One statement
+/// per topic between `Router::new(..)` and the trace, each added at the end
+/// of the list: `let router = router.route(config::topic_for(&env, <suffix>),
+/// messaging::consume(<handler>));` over a constant of `common::routes::topic`,
+/// spelled in full.
+pub async fn messaging_router<P: Capabilities>(provider: P) -> messaging::Router<P> {
+    let env = config::env(&provider).await;
+    let router = messaging::Router::new(Client::new(OWNER, provider));
+    tracing::debug!(env, "messaging topics qualified");
+    router
 }
 ```
 
-`app/examples/runtime.rs`:
+The route list with one route, and the topic list with one topic, as the formatter leaves them:
 
 ```rust
-//! The local host: serves the built component over WASI's default backends,
-//! SQLite in memory for tables and a fixed token for identity.
+    let router = axum::Router::new();
+    let router = router.route(
+        common::routes::http::ORDERS,
+        omnia_sdk::api::http::post(orders::placing::place_order),
+    );
+    router.with_state(Client::new(OWNER, provider))
+```
+
+```rust
+    let router = messaging::Router::new(Client::new(OWNER, provider));
+    let router = router.route(
+        config::topic_for(&env, common::routes::topic::ORDER_PLACED),
+        messaging::consume(orders::fulfilment::on_placed),
+    );
+    tracing::debug!(env, "messaging topics qualified");
+```
+
+A topic whose payload is not JSON is registered through `messaging::consume_with(<handler>, <decode>)`, the decoder a `fn(&Delivery) -> Result<I, DecodeError>` the stem exports beside the handler, as [handlers](handlers.md) spells it.
+
+The two tables of `common`, with their lists empty, each a file holding its `//!` and nothing else until a slice adds a constant; a constant is documented, as every `pub` item of the tree is:
+
+```rust
+//! HTTP ingress paths served by the guest: one constant per route, each added at the end.
+```
+
+```rust
+//! Environment-agnostic topic suffixes: one constant per topic, each added at the end.
 //!
-//! ```shell
-//! cargo build --target wasm32-wasip2 --release
-//! cargo run -p app --features host --example runtime -- run target/wasm32-wasip2/release/app.wasm
-//! ```
-
-cfg_select! {
-    not(target_arch = "wasm32") => {
-        use omnia_wasi_blobstore::{BlobstoreDefault, WasiBlobstore};
-        use omnia_wasi_config::{ConfigDefault, WasiConfig};
-        use omnia_wasi_docstore::{DocStoreDefault, WasiDocStore};
-        use omnia_wasi_http::{HttpDefault, WasiHttp};
-        use omnia_wasi_identity::{IdentityStub, WasiIdentity};
-        use omnia_wasi_keyvalue::{KeyValueDefault, WasiKeyValue};
-        use omnia_wasi_messaging::{MessagingDefault, WasiMessaging};
-        use omnia_wasi_otel::{OtelDefault, WasiOtel};
-        use omnia_wasi_sql::{SqlDefault, WasiSql};
-        use omnia_wasi_websocket::{WasiWebSocket, WebSocketDefault};
-
-        omnia::runtime!({
-            hosts: {
-                WasiBlobstore: BlobstoreDefault,
-                WasiConfig: ConfigDefault,
-                WasiDocStore: DocStoreDefault,
-                WasiHttp: HttpDefault,
-                WasiIdentity: IdentityStub,
-                WasiKeyValue: KeyValueDefault,
-                WasiMessaging: MessagingDefault,
-                WasiOtel: OtelDefault,
-                WasiSql: SqlDefault,
-                WasiWebSocket: WebSocketDefault,
-            }
-        });
-    }
-    _ => {
-        fn main() {}
-    }
-}
+//! Prefix a suffix with `{env}-` through [`crate::config::topic`] or
+//! [`crate::config::topic_for`] before publishing or subscribing.
 ```
 
-`rust-toolchain.toml`:
+A path is axum's, `/orders/{id}`; a topic suffix is a kebab-case noun phrase with a version, `orders-placed.v1`, and never carries the environment, which `config::topic` and `config::topic_for` prefix as `{env}-`. A constant is declared once, by the slice that owns the route or the topic — the slice that consumes a topic, where another slice publishes to it — and referenced everywhere else; the handler that publishes names the same constant its consumer is registered under. The configuration catalog opens with `ENV`, the one key the root reads, and holds every other key the tree reads after it, each spelled as its name and documented with what the deployment provides under it:
+
+```rust
+/// Deployment environment (`dev`, `prod`). Prefixes every messaging topic;
+/// see [`topic`]. One constant per key after this one, each added at the end
+/// of the list, before [`env`].
+pub const ENV: &str = "ENV";
+
+/// Base URL of the rates upstream.
+pub const RATES_URL: &str = "RATES_URL";
+```
+
+The two root tables are the rungs' lists. `tests/routes.rs` holds `ROUTES`, every `(method, path)` the route list registers, driven by its `dispatch` test, which sends each an empty request and fails on the ones the router answers itself with an empty `404` or a `405`; `tests/messaging.rs` holds `TOPICS`, every suffix the topic list registers, driven by `routed`, which delivers an empty payload to each under the test's environment and fails on the ones the router reports unhandled. Both check wiring, never semantics, so a handler validates its input before it reaches the host and answers an empty request itself:
+
+```rust
+const ROUTES: &[(Method, &str)] = &[
+    // one entry per route, each added at the end
+    (Method::POST, common::routes::http::ORDERS),
+];
+```
+
+```rust
+const TOPICS: &[&str] = &[
+    // one entry per topic, each added at the end
+    common::routes::topic::ORDER_PLACED,
+];
+```
+
+The root manifest's two lists, with one stem added to each, the path list under `[workspace.dependencies]` and the guest's `[dependencies]` closing the file:
 
 ```toml
-[toolchain]
-channel = "stable"
-components = ["clippy"]
-targets = ["wasm32-wasip2"]
+# The crates of this tree: `common`, then one line per stem, each added at the end.
+common = { path = "crates/common" }
+orders = { path = "crates/orders" }
+
+# What the guest wires: the four below, then one line per stem, each added at the end.
+[dependencies]
+axum.workspace = true
+common.workspace = true
+omnia-sdk.workspace = true
+tracing.workspace = true
+orders.workspace = true
 ```
 
-`clippy.toml`, one comment and no setting, so the tree lints under its own configuration wherever it is checked and no file above it is read:
+A stem's module list, `crates/<stem>/src/lib.rs`, is the crate's one-line doc and one `pub mod` line per slice, so a stem of one slice lists one module; the doc is the same line whichever slice lays it:
 
-```toml
-# The tree lints under its own configuration wherever it is checked: no file above it is read.
+```rust
+//! The `orders` stem.
+
+pub mod placing;
+pub mod reading;
 ```
 
-`.gitignore`:
+## The wiring
 
-```
-target/
-.emery/
-```
+The guest is `src/lib.rs`: the production provider, the HTTP and messaging exports the host calls, the `Capabilities` bound, and `OWNER`, the tenant, `guest`. `router` builds the HTTP router from the route list and `messaging_router` the messaging router from the topic list, each over one `Client<P>`; `Capabilities` bounds `P` on every capability a stem may ask for, so neither list's signature changes for a new one, and `src/lib.rs` never changes at all. Nothing runs `main`: the host instantiates the component and hands it each request or delivery, one instance apiece.
 
-The `host` feature keeps the local host out of every check: the host crates are optional, native-only dependencies, and the example runs only with the feature on, so neither `cargo test --workspace` nor the guest build compiles a runtime. `Capabilities` names the nine capability traits the provider answers, every one of them WASI's own on `wasm32` through an empty `impl`; the local host wires a backend for each of the nine, SQLite in memory behind `TableStore` and a fixed token behind `Identity`, with `otel` for the traces; and `omnia_test::guest::Provider` answers all nine natively, so the root compiles and tests on both sides as it stands.
+So a slice wires itself into the guest by adding statements to the two root lists, one per route and one per topic, and never through a `mount` of its own, a router of its own, or a line in any file but the lists. A requirement that states a method and a path is one route: a constant in the path table, a statement in the route list, an entry in the route rung's table, and the handler in the slice's module. A requirement that consumes a topic is one topic: a constant in the topic table, a statement in the topic list, an entry in the messaging rung's table, and the handler. A requirement that publishes names the topic table's constant from its handler through `config::topic(provider, <suffix>)`, and adds the constant where no slice has. A slice none of whose requirements states a route or a topic adds nothing to the root lists: its behaviour is the `pub fn`s its module exports, its tests call them directly, and no route is laid to give a description a surface, since a probe route answering a requirement that states none is a surface the specification does not hold.
 
-## The stem's manifest
+Two routes may share one path with different methods; one method twice on one path, or one topic twice, is the panic the root rungs catch, and the owner is whichever slice's requirement states it.
 
-`crates/<stem>/Cargo.toml` is written by the first slice to lay the stem, its `[dependencies]` the list above, holding that slice's lines; a slice that finds it in the tree adds its lines there and changes nothing else. The `[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]` block is the four lines below, the doubles and the runtime every test uses, and is never edited or extended: `omnia_test::guest` stands in for every mocking crate, and a crate a test alone needs beyond the four — `bytes` or `http` for an arrangement — is one line in the stem's `[dependencies]` like any crate the stem's files use. So two slices creating one stem in one wave differ under `[dependencies]` alone, which the merge unions.
+A rule every route obeys — authentication, a body limit, a request log — is a function, not a route. The stem that owns the rule exports it from its module as a `pub fn` (`start::authentication::authenticate(&headers) -> Result<Claims, omnia_sdk::Error>`), and every handler the rule covers calls it at its top, through the owning stem's crate named in its own stem's manifest. The owning stem lays no route under another stem's prefix and no placeholder for one; a request the rule refuses is asserted in the tests of the stem whose route it is, where the call stands, as [testing](testing.md) spells it.
+
+Where the plan has a `start` stem, its slice owns `crates/start/` as any stem for what is code — a health route, a rule every route calls — and the seed is the rest of it: the component the host runs, the provider, the routers, the environment the topics are qualified for. A `start` requirement the seed and the host satisfy is the `start` slice's to cover, whichever slice's brief named the files laid; one the host satisfies by not needing it — a process to start, a listener to bind, a client to connect, a loop to keep alive, a graceful stop — is covered by nothing in the tree and left uncovered, never simulated, as the [guardrails](guardrails.md) spell out. A tree with no `start` stem is the same program with no module under that name.
+
+## The stem's crate
+
+`crates/<stem>/Cargo.toml` is written by the first slice to lay the stem, its `[dependencies]` holding that slice's lines; a slice that finds it in the tree adds its lines there and changes nothing else. The `[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]` block is the three lines below, the doubles and the runtime every test uses, and is never edited or extended: `omnia_test::guest` stands in for every mocking crate, and a crate a test alone needs beyond the three — `bytes` or `http` for an arrangement — is one line in the stem's `[dependencies]` like any crate the stem's files use. So two slices creating one stem in one wave differ under `[dependencies]` alone, which the merge unions. A pinned crate is `<crate>.workspace = true`; one the root's pins lack carries its version in this manifest alone and never a `git` or `registry` source; another stem is `<other>.workspace = true` once the root manifest's path list names it.
 
 ```toml
 [package]
-name = "app-orders"
-version = "0.1.0"
-edition = "2024"
-publish = false
+name = "orders"
+description = "The `orders` stem"
+publish.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+version.workspace = true
 
+[lints]
+workspace = true
+
+# Target-gated so the guest's wasm32 dependency graph never sees the doubles.
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-omnia-test.workspace = true
+omnia-test = { workspace = true, features = ["guest"] }
 serde_json.workspace = true
 tokio.workspace = true
-tower.workspace = true
 
-# One line per crate the stem's files use after the four below, each added at the end.
+# One line per crate the stem's files use, each added at the end.
 [dependencies]
-axum.workspace = true
+common.workspace = true
 omnia-sdk.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 ```
+
+The crate lints under the workspace's `[workspace.lints]`, the exemplar's: every `pub` item carries a `///`, a module its `//!`, a fallible `pub fn` its `# Errors`, a `pub fn` answering a value and reaching nothing its `#[must_use]`, and clippy's `pedantic` and `nursery` groups are warnings the checks deny. A module is `crates/<stem>/src/<part>.rs`: its `//!`, the handlers, and the design types the slice owns, `pub` where another module may use them, as [handlers](handlers.md) spells them. Its tests are `crates/<stem>/tests/<part>.rs`, one `#[tokio::test]` per acceptance scenario calling the handler through `Client::call` over the doubles of `omnia_test::guest`, as [testing](testing.md) spells them; a test file opens with a `//!` and declares nothing `pub`.
+
+## The static files
+
+The seed is every file outside `crates/<stem>/` beside `Cargo.lock`, which cargo writes: the exemplar's guest template rendered for the package `guest`, with the two root lists, the two root rungs, the local host, and `common` beside it. The adapter lays it in a tree that lacks it before any slice's turn, byte for byte as [seed](seed.md) fences it, so every slice finds it in place and writes none: a slice's brief names the files laid for it, and they count as its files. The eleven lists above are the only parts of it a slice edits, and the text around each list is static. Everything else is laid once and never edited, by a slice or a repair that is not putting it back as the seed spells it:
+
+- `src/lib.rs`, `crates/common/Cargo.toml`, `crates/common/src/lib.rs`, `crates/common/src/routes.rs`, and the helpers of `crates/common/src/config.rs`: the program's entry and the shared crate's shape.
+- The root `Cargo.toml` outside its two lists: `[workspace.package]`, `[workspace.lints]`, the pins under `[workspace.dependencies]`, the `host` feature, and the target tables. A pinned version is the tree's; a crate the pins lack is named with its version in a stem's manifest, never added to the pins. The adapter holds this file itself, not through the merge: once a slice's turn ends, every line that is neither the seed's nor a stem's entry in one of the two lists is put back as the seed spells it, with the entries kept, so a pin, a lint, or a feature changed there never reaches the slice's commit, and a check the slice passed through such a change fails at the wave's verify; a verify restores it the same way before its checks run, and one whose repairs change it fails the wave with the lines named.
+- `examples/runtime.rs`, the local host behind the `host` feature, so no check compiles a runtime.
+- `rust-toolchain.toml`, `rustfmt.toml`, `taplo.toml`, `clippy.toml`, `deny.toml`, `.gitignore`, `Makefile`, `mise.toml`, `.vscode/settings.json`, `supply-chain/`, and `.github/`: the operator's toolchain, formatter, lints, dependency policy, vet state, task runner, and workflows, which the checks read and the operator maintains. `clippy.toml` holds two lists of its own, `doc-valid-idents` and `allowed-duplicate-crates`, which a slice extends by one line where a check names an identifier or a duplicate crate its files brought in, and changes no other way.
+
+The tree departs from the exemplar's root in four stated ways, each so that slices built at once merge clean: `Capabilities` bounds the two routers in place of a bound listing each handler's capabilities, so the entry never changes; the `.route` statements live in the two root lists in place of the entry's own chain; `crates/common` is named `common` in place of an organisation's prefix; and the local host sits behind the `host` feature with the host crates optional, so neither `cargo test --workspace` nor the guest build compiles a runtime. Two more are for the tree a build lands in: `.gitignore` ignores `.emery/`, the directory the build's own engine keeps beside the tree, after the exemplar's rules; and `.github/workflows/publish.yaml` calls the toolkit at the one tag every other workflow and `mise.toml` pin, grants nothing by default and each job the permissions the toolkit workflow it calls needs, and names the three Azure secrets its deploy needs in place of inheriting every secret. The deployment values of that workflow, `<STORAGE_ACCOUNT>` and `<RESOURCE_GROUP>`, stay as the template spells them, for the operator to fill.
 
 ## Merging
 
@@ -468,10 +255,13 @@ The engine merges each slice's commit into the integrated tree under these rules
 | Path | Rule | Why |
 | --- | --- | --- |
 | `Cargo.lock` | the integrated side kept | the next cargo run regenerates it |
-| `app/Cargo.toml` | both sides' lines kept | its `[dependencies]` list |
+| `Cargo.toml` | both sides' lines kept | its two lists |
+| `clippy.toml` | both sides' lines kept | its two lists |
+| `src/routes.rs`, `src/messaging.rs` | both sides' lines kept | the route and topic lists |
+| `tests/routes.rs`, `tests/messaging.rs` | both sides' lines kept | the rungs' tables |
+| `crates/common/src/routes/*.rs`, `crates/common/src/config.rs` | both sides' lines kept | the tables and the catalog |
 | `crates/*/Cargo.toml` | both sides' lines kept | a stem's `[dependencies]` list |
-| `app/src/routes.rs` | both sides' lines kept | the router list |
 | `crates/*/src/lib.rs` | both sides' lines kept | a stem's `pub mod` list |
 | everything else | a conflict | the slice is rebuilt over the merged tree |
 
-A path one slice alone changed takes that slice's change under no rule, so two slices that keep to their own modules never conflict. The root `Cargo.toml` and `app/src/lib.rs` are under no rule on purpose: no slice edits them once laid, so two slices changing one at once is a conflict rather than a merge, and the pins and the component's entry are never merged line by line; the verify holds the six static files to this document. The rules keep lines; they do not reconcile edits: a slice that changes a static line of a list file, or another slice's module, is the one conflict the layout leaves possible, and it is the slice's to avoid.
+A path one slice alone changed takes that slice's change under no rule, so two slices that keep to their own modules never conflict. `src/lib.rs` and the rest of the seed outside the lists are under no rule on purpose: no slice edits them once laid, so two slices changing one at once is a conflict rather than a merge, and the entry is never merged line by line; the verify holds them to [seed](seed.md). The rules keep lines; they do not reconcile edits, and a rule is a file's, not a line's: the root `Cargo.toml` is kept as a union for its two lists, and what its union would also keep, a pin or a lint one slice changed, the adapter puts back itself, as the static files above say. A slice that changes a static line of any other list file, or another slice's module, is the one conflict the layout leaves possible, and it is the slice's to avoid.

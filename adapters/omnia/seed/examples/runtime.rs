@@ -1,9 +1,11 @@
-//! The local host: serves the built component over WASI's default backends,
-//! SQLite in memory for tables and a fixed token for identity.
+//! Host runtime for the WASM guest: WASI's default backends, SQLite in
+//! memory for tables and a fixed token for identity.
+//!
+//! Build the guest for `wasm32-wasip2` and run it with:
 //!
 //! ```shell
 //! cargo build --target wasm32-wasip2 --release
-//! cargo run -p app --features host --example runtime -- run target/wasm32-wasip2/release/app.wasm
+//! cargo run --features host --example runtime -- run target/wasm32-wasip2/release/guest.wasm
 //! ```
 
 cfg_select! {
