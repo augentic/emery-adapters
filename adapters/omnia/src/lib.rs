@@ -16,6 +16,14 @@
 //! tree, with the files no slice edits held to the seed, repaired where they
 //! fail, and run again before the verdict.
 //!
+//! The root `Cargo.toml` is held to the seed by the adapter itself, outside
+//! its two stem lists: once a slice's turn ends, every line of it that is
+//! neither the seed's nor a stem's entry is put back as the seed spells it
+//! and the entries kept, so a pin, a lint, the `host` feature, or a target
+//! table a slice changed never reaches its commit; a wave's verify restores
+//! it the same way before the checks run, and a verify whose repairs changed
+//! it fails with the lines named.
+//!
 //! # Merge rules
 //!
 //! - `Cargo.lock` keeps the integrated side; the next check regenerates it.
@@ -28,12 +36,18 @@
 //!   merge; a module and its tests are one slice's alone, so a conflict there
 //!   is a slice writing outside its part, rebuilt over the merged tree.
 
+mod manifest;
+
 use std::borrow::Cow;
 
 use emery_sdk::target::{
     Context, MergeRule, MergeStrategy, Report, Seed, TargetAdapter, Verdict, VerifyContext,
 };
-use emery_sdk::{Error, Model};
+use emery_sdk::{Error, Model, tracing};
+
+use self::manifest::Manifest;
+
+const ROOT_MANIFEST: &str = include_str!("../seed/Cargo.toml");
 
 /// The adapter implementation.
 pub struct Adapter;
@@ -87,11 +101,49 @@ impl TargetAdapter for Adapter {
     ];
 
     async fn build<P: Model>(ctx: &Context<'_, P>) -> Result<Report, Error> {
-        emery_sdk::target::build(ctx, PROSE, SEED).await
+        let mut report = emery_sdk::target::build(ctx, PROSE, SEED).await?;
+
+        // the slice's commit carries the seed's pins whatever its turn did to them
+        let restored = Manifest::new(ctx.workspace, ROOT_MANIFEST).restore()?;
+        if !restored.is_empty() {
+            tracing::warn!(
+                slice = %ctx.slice.id,
+                lines = restored.len(),
+                "the root manifest changed outside its lists; restored"
+            );
+            tracing::debug!(slice = %ctx.slice.id, %restored, "the lines restored");
+            if !report.written.iter().any(|path| path == manifest::FILE) {
+                report.written.push(manifest::FILE.to_owned());
+                report.written.sort();
+            }
+        }
+
+        Ok(report)
     }
 
     async fn verify<P: Model>(ctx: &VerifyContext<'_, P>) -> Result<Verdict, Error> {
-        emery_sdk::target::verify(ctx, PROSE).await
+        let manifest = Manifest::new(ctx.workspace, ROOT_MANIFEST);
+
+        // the checks run over the seed's pins, so a drift inherited from the
+        // integrated tree is a repair the wave seals
+        let restored = manifest.restore()?;
+        if !restored.is_empty() {
+            tracing::warn!(lines = restored.len(), "the root manifest restored before the checks");
+            tracing::debug!(%restored, "the lines restored");
+        }
+
+        let mut verdict = emery_sdk::target::verify(ctx, PROSE).await?;
+
+        // a repair that changed the pins voids the checks that ran over them
+        let drift = manifest.drift()?;
+        if !drift.is_empty() {
+            verdict.passed = false;
+            verdict
+                .failures
+                .push(format!("the root `Cargo.toml` changed outside its two lists:\n{drift}"));
+        }
+
+        Ok(verdict)
     }
 }
 
@@ -116,7 +168,7 @@ pub static PROSE: &[emery_sdk::Doc] = emery_sdk::prose![
 /// lists, the two root test tables, the local host, and the `common` crate
 /// beside them. A slice finds them in place and copies none.
 pub static SEED: &[Seed] = &[
-    Seed::new("Cargo.toml", include_str!("../seed/Cargo.toml")),
+    Seed::new("Cargo.toml", ROOT_MANIFEST),
     Seed::new("src/lib.rs", include_str!("../seed/src/lib.rs")),
     Seed::new("src/routes.rs", include_str!("../seed/src/routes.rs")),
     Seed::new("src/messaging.rs", include_str!("../seed/src/messaging.rs")),

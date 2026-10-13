@@ -2112,11 +2112,12 @@ impl Target {
         }
     }
 
-    // The ignore rule the greenfield root carries for what a build leaves.
+    // The ignore rule the greenfield root carries for what a build leaves:
+    // the omnia seed's own, since its verify holds the file to the seed.
     const fn ignore(self) -> &'static str {
         match self {
             Self::Node => "node_modules/\ndist/\n.emery/\n",
-            Self::Omnia => "target/\n.emery/\n",
+            Self::Omnia => include_str!("../../adapters/omnia/seed/.gitignore"),
         }
     }
 
@@ -5298,7 +5299,12 @@ mod tests {
         Target::parse("typescript-target").unwrap_err();
         assert_eq!(Target::parse("omnia"), Ok(Target::Omnia));
         Target::parse("omnia-target").unwrap_err();
-        assert_eq!(Target::Omnia.ignore(), "target/\n.emery/\n");
+        for rule in ["target/", ".emery/"] {
+            assert!(
+                Target::Omnia.ignore().lines().any(|line| line == rule),
+                "the omnia root ignores `{rule}`"
+            );
+        }
         assert_eq!(Target::Omnia.lockfile(), "Cargo.lock");
         assert_eq!(Target::Node.runner(), "node --test");
         assert_eq!(Target::Omnia.config_shim(), Some("clippy.toml"));

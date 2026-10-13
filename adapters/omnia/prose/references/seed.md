@@ -854,6 +854,7 @@ target/
 **/*.rs.bk
 rustc-ice-*
 .DS_Store
+.emery/
 ```
 
 ## `Makefile`
@@ -1140,11 +1141,14 @@ name: Publish Release
 on:
   workflow_dispatch:
 
+permissions: {}
+
 jobs:
   skip:
     name: Skipped
     if: ${{ !startsWith(github.ref_name, 'release-') }}
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - run: |
           echo "This workflow only runs on the 'release-*' branches"
@@ -1153,21 +1157,30 @@ jobs:
   ci:
     name: CI
     if: ${{ startsWith(github.ref_name, 'release-') }}
-    uses: augentic/toolkit/.github/workflows/ci.yaml@v0.5.0
-    secrets: inherit
+    permissions:
+      contents: read
+    uses: augentic/toolkit/.github/workflows/ci.yaml@v0.6.0
     with:
       targets: wasm32-wasip2
 
   publish:
     name: Publish
     needs: ci
-    uses: augentic/toolkit/.github/workflows/publish.yaml@v0.5.0
+    permissions:
+      contents: write
+    uses: augentic/toolkit/.github/workflows/publish.yaml@v0.6.0
 
   deploy:
     name: Deploy
     needs: publish
-    uses: augentic/toolkit/.github/workflows/wasm.yaml@v0.5.0
-    secrets: inherit
+    permissions:
+      contents: read
+      id-token: write
+    uses: augentic/toolkit/.github/workflows/wasm.yaml@v0.6.0
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
     with:
       package: guest
       storage-account: <STORAGE_ACCOUNT>

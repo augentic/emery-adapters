@@ -227,6 +227,24 @@ fn emery_omnia() {
     for doc in [layout, document] {
         assert!(doc.contains(OMNIA_EXEMPLAR_COMMIT), "the document names the exemplar's commit");
     }
+
+    // the workflows and the task runner pin one toolkit tag
+    let tags: std::collections::BTreeSet<&str> = emery_omnia::SEED
+        .iter()
+        .flat_map(|seed| seed.content.lines())
+        .filter_map(|line| {
+            let (_, rest) = line.split_once("augentic/toolkit")?;
+            let tag = rest.split_once("@v").or_else(|| rest.split_once("?ref=v"))?.1;
+            Some(tag.trim_end_matches(['"', ']']))
+        })
+        .collect();
+    assert_eq!(tags.len(), 1, "every toolkit reference in the seed names one tag: {tags:?}");
+    let publish = omnia_seed(".github/workflows/publish.yaml");
+    assert!(!publish.contains("secrets: inherit"), "the publish workflow names each secret");
+    assert!(
+        publish.contains("\npermissions: {}\n"),
+        "the publish workflow grants nothing by default"
+    );
 }
 
 // Holds the seed to the exemplar's guest template at `OMNIA_EXEMPLAR`, a
@@ -234,9 +252,11 @@ fn emery_omnia() {
 // the scenario passes with nothing read, so CI needs no clone. An `exact`
 // entry is laid byte for byte; a `seed` entry is rendered for the package
 // `guest` and every line of it is in the seed, save where the layout states
-// a departure: the root manifest pins `omnia-test` through the workspace,
-// and the entry and the route rung keep the template's wiring around the
-// lists that replace its sample route.
+// a departure: the ignore file adds `.emery/`; the root manifest pins
+// `omnia-test` through the workspace; the entry and the route rung keep the
+// template's wiring around the lists that replace its sample route; and the
+// publish workflow calls the toolkit at the tag the other workflows pin,
+// naming its secrets in place of `inherit`.
 #[test]
 fn emery_omnia_exemplar() {
     let Some(checkout) = std::env::var_os("OMNIA_EXEMPLAR") else {
@@ -270,8 +290,25 @@ fn emery_omnia_exemplar() {
         let template = render(read(source));
         let seed = omnia_seed(target);
         match (proof.as_str(), target.as_str()) {
+            ("exact", ".gitignore") => {
+                assert_eq!(
+                    seed,
+                    format!("{template}.emery/\n"),
+                    "`{target}` is the exemplar's with the engine's directory after it"
+                );
+            }
             ("exact", _) => {
                 assert_eq!(seed, template, "`{target}` is the exemplar's byte for byte");
+            }
+            ("seed", ".github/workflows/publish.yaml") => {
+                let pinned =
+                    toolkit_tag(&seed).expect("the seed's publish workflow pins the toolkit");
+                for line in template.lines().filter(|line| line.trim() != "secrets: inherit") {
+                    match toolkit_tag(line) {
+                        Some(tag) => held_line(&seed, target, &line.replace(&tag, &pinned)),
+                        None => held_line(&seed, target, line),
+                    }
+                }
             }
             ("seed", "Cargo.toml") => {
                 for line in template.lines().filter(|line| !line.starts_with('#')) {
@@ -336,6 +373,14 @@ fn held_line(seed: &str, target: &str, line: &str) {
         return;
     }
     assert!(seed.lines().any(|held| held == line), "`{target}` holds the template's line `{line}`");
+}
+
+// The tag after `@` of the first toolkit workflow `text` calls.
+fn toolkit_tag(text: &str) -> Option<String> {
+    text.lines()
+        .find(|line| line.contains("uses: augentic/toolkit/"))
+        .and_then(|line| line.rsplit_once('@'))
+        .map(|(_, tag)| tag.to_owned())
 }
 
 fn surveying(docs: &[Doc]) {

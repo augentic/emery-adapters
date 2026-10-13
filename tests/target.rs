@@ -58,6 +58,9 @@ const OMNIA_PATH_CRATE_LINE: &str = "orders = { path = \"crates/orders\" }\n";
 const OMNIA_STEM_ANCHOR: &str = "tracing.workspace = true\n";
 const OMNIA_STEM_LINE: &str = "orders.workspace = true\n";
 const OMNIA_FAILED: &str = r#"{"passed": false, "failures": ["check 4 (cargo test --workspace): crates/orders/tests/reading.rs — `an_order_with_no_items_is_refused` fails: expected `bad_request`, got Ok"]}"#;
+// A pin of the root manifest and the edit a turn might put to it.
+const OMNIA_PIN: &str = "omnia-sdk = \"0.36.0\"\n";
+const OMNIA_PIN_EDITED: &str = "omnia-sdk = \"0.37.0\"\n";
 
 // The files the one scripted `write_files` call lays for the omnia target: a
 // part of the `orders` stem as a module of the stem's crate, with the stem's
@@ -428,7 +431,9 @@ fn text(project: &Scratch, path: &str) -> String {
 }
 
 // A tree that already holds the seed keeps it: the seed lays none, and the
-// slice's brief is told of none.
+// slice's brief is told of none. The root manifest is the one exception,
+// since the adapter holds its static text to the seed whatever the tree
+// held, and reports the file it put back.
 #[tokio::test]
 async fn omnia_seeded() {
     let project = scratch();
@@ -441,17 +446,20 @@ async fn omnia_seeded() {
     model.assert_exhausted();
 
     for seed in emery_omnia::SEED {
+        let expected =
+            if seed.path == "Cargo.toml" { seed.content.as_bytes() } else { b"# held\n" };
         assert_eq!(
             project.read(&seed.path).as_deref(),
-            Some(b"# held\n".as_slice()),
-            "`{}` stands as the tree held it",
+            Some(expected),
+            "`{}` stands as the tree held it, the root manifest as the seed spells it",
             seed.path
         );
     }
+    let mut written = OMNIA_WRITTEN.map(|(path, _)| path.to_owned()).to_vec();
+    written.insert(0, "Cargo.toml".to_owned());
     assert_eq!(
-        report.written,
-        OMNIA_WRITTEN.map(|(path, _)| path.to_owned()),
-        "the report names the stem's files and no seed the tree held"
+        report.written, written,
+        "the report names the stem's files, the manifest put back, and no seed the tree held"
     );
 }
 
@@ -486,5 +494,117 @@ fn omnia_rules() {
 
 #[tokio::test]
 async fn omnia_verify() {
-    OMNIA.failed(("Cargo.toml", "[workspace]\n"), OMNIA_FAILED).await;
+    OMNIA.failed(("Cargo.toml", omnia_seed("Cargo.toml")), OMNIA_FAILED).await;
+}
+
+// The root manifest is held to the seed outside its two lists by the
+// adapter, not by the merge: a slice that edits a pin beside its stem's
+// lines ends its turn with the pin as the seed spells it and the lines kept.
+#[tokio::test]
+async fn omnia_manifest_restored() {
+    let project = scratch();
+    let edits = [
+        (
+            "Cargo.toml",
+            OMNIA_PATH_CRATE_ANCHOR,
+            &*format!("{OMNIA_PATH_CRATE_ANCHOR}{OMNIA_PATH_CRATE_LINE}"),
+        ),
+        ("Cargo.toml", OMNIA_STEM_ANCHOR, &*format!("{OMNIA_STEM_ANCHOR}{OMNIA_STEM_LINE}")),
+        ("Cargo.toml", OMNIA_PIN, OMNIA_PIN_EDITED),
+    ];
+    let model = Scripted::answering([OMNIA_REPORT])
+        .calling(0, [write_files(&OMNIA_WRITTEN), edit_files(&edits)]);
+
+    let report = OMNIA.build(&project, &model).await.expect("build over the lent tree");
+    model.assert_exhausted();
+
+    assert!(report.written.iter().any(|path| path == "Cargo.toml"), "the manifest is reported");
+    assert_eq!(
+        text(&project, "Cargo.toml"),
+        omnia_manifest_with_orders(),
+        "the pin stands as the seed spells it and the stem's lines are kept"
+    );
+}
+
+// A verify restores the manifest before its checks run: a tree whose pin
+// drifted is verified over the seed's pin with its stem lines kept, and the
+// restoration is left in the tree for the wave to seal.
+#[tokio::test]
+async fn omnia_manifest_restored_before_verify() {
+    let project = scratch();
+    project.write("Cargo.toml", omnia_manifest_with_orders().replace(OMNIA_PIN, OMNIA_PIN_EDITED));
+    let model = Scripted::answering([PASSED]);
+
+    let verdict = OMNIA.verify(&project, &model).await.expect("verify over the drifted tree");
+    model.assert_exhausted();
+
+    assert!(verdict.passed, "the checks ran over the restored manifest");
+    assert_eq!(
+        text(&project, "Cargo.toml"),
+        omnia_manifest_with_orders(),
+        "the pin is the seed's again and the stem's lines stand"
+    );
+}
+
+// A tree with no root manifest at all is given the seed's before the checks
+// run, as a drifted one is put back.
+#[tokio::test]
+async fn omnia_manifest_missing_at_verify() {
+    let project = scratch();
+    let model = Scripted::answering([PASSED]);
+
+    let verdict = OMNIA.verify(&project, &model).await.expect("verify over the bare tree");
+    model.assert_exhausted();
+
+    assert!(verdict.passed, "the checks ran over the laid manifest");
+    assert_eq!(
+        text(&project, "Cargo.toml"),
+        omnia_seed("Cargo.toml"),
+        "the seed's manifest is laid"
+    );
+}
+
+// A verify whose repair changed a pin fails the wave, since the checks ran
+// over a manifest the tree may not keep; the tree is left as the repair
+// wrote it, for inspection.
+#[tokio::test]
+async fn omnia_manifest_edited_by_verify() {
+    let project = scratch();
+    project.write("Cargo.toml", omnia_seed("Cargo.toml"));
+    let model = Scripted::answering([PASSED])
+        .calling(0, [edit_files(&[("Cargo.toml", OMNIA_PIN, OMNIA_PIN_EDITED)])]);
+
+    let verdict = OMNIA.verify(&project, &model).await.expect("a drifted manifest is an answer");
+    model.assert_exhausted();
+
+    assert!(!verdict.passed, "the wave fails");
+    let findings = verdict.findings();
+    assert!(findings.is_empty(), "verdict gate findings:\n{}", findings.join("\n"));
+    let [failure] = verdict.failures.as_slice() else {
+        panic!("one failure names the drift: {:?}", verdict.failures);
+    };
+    for line in ["- omnia-sdk = \"0.36.0\"", "+ omnia-sdk = \"0.37.0\""] {
+        assert!(failure.contains(line), "the failure names `{line}`: {failure}");
+    }
+    assert_eq!(
+        text(&project, "Cargo.toml"),
+        omnia_seed("Cargo.toml").replace(OMNIA_PIN, OMNIA_PIN_EDITED),
+        "the tree is left as the repair wrote it"
+    );
+}
+
+fn omnia_seed(path: &str) -> &'static str {
+    &emery_omnia::SEED
+        .iter()
+        .find(|seed| seed.path == path)
+        .unwrap_or_else(|| panic!("the seed lays `{path}`"))
+        .content
+}
+
+// The seed's root manifest with the `orders` stem's line in each list.
+fn omnia_manifest_with_orders() -> String {
+    omnia_seed("Cargo.toml").replace(
+        OMNIA_PATH_CRATE_ANCHOR,
+        &format!("{OMNIA_PATH_CRATE_ANCHOR}{OMNIA_PATH_CRATE_LINE}"),
+    ) + OMNIA_STEM_LINE
 }
