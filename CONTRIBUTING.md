@@ -1,6 +1,6 @@
 # Contributing to emery-adapters
 
-Human-facing contributor guide (toolchain, layout, prompts, pin, publishing). The adapter shape, the contract rules, and test ownership live in [`AGENTS.md`](AGENTS.md); an existing `adapters/emery-<kind>` crate is the template for a new one.
+Human-facing contributor guide (toolchain, layout, prompts, pin, publishing). The adapter shape, the contract rules, and test ownership live in [`AGENTS.md`](AGENTS.md); an existing `adapters/<kind>` crate is the template for a new one.
 
 ## Getting started
 
@@ -24,14 +24,14 @@ Every source adapter shares the same guest anatomy:
 
 ```text
 adapters/
-  emery-<kind>/         # emery-documentation, emery-intent, emery-typescript, emery-python
+  <kind>/               # documentation, intent, typescript, python — crate `emery-<kind>`
     prose/            # agent-facing markdown (listed in src/lib.rs, embedded into the component)
       extract.md      # the one extraction pass, and the one extraction prompt
       survey.md       # the one survey prompt, where the model names the surfaces (typescript, python)
       references/     # lazy reference corpus; the shared runtime references are the SDK's, linked as <doc>.md
     Cargo.toml        # crate `emery-<kind>`, package `emery:<kind>@<version>`
     src/              # lib.rs (`mod survey`, `Adapter` and its trait impl, PROSE, then the wasm32-only export macro) + survey.rs, the adapter's survey, and whatever the survey reads its source with as its children under survey/ (typescript and python alike: parse.rs and parse/walk.rs, resolve.rs, surface.rs — the SDK's `Recogniser`, which the SDK's `survey::seams` surveys and cuts through)
-  emery-<kind>/         # emery-node, emery-omnia — build.md, verify.md, seed/ where applicable
+  <kind>/               # node, omnia — crate `emery-<kind>`; build.md, verify.md, seed/ where applicable
 crates/test-programs/ # omnia's test-programs pattern: guest programs + the nested wasm32 build of every component
   programs/<group>/   # one scenario per file: source/extract.rs drives the component boundary, probe/ are fixture adapters
   src/                # lib.rs: the generated artifact table (native) / helpers.rs (wasm32)

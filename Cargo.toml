@@ -17,12 +17,12 @@ omnia-wasi-model.workspace = true
 omnia-wasi-otel.workspace = true
 opentelemetry-proto.workspace = true
 serde_json.workspace = true
-emery-documentation = { path = "adapters/emery-documentation" }
-emery-intent = { path = "adapters/emery-intent" }
-emery-python = { path = "adapters/emery-python" }
-emery-typescript = { path = "adapters/emery-typescript" }
-emery-node = { path = "adapters/emery-node" }
-emery-omnia = { path = "adapters/emery-omnia" }
+emery-documentation = { path = "adapters/documentation" }
+emery-intent = { path = "adapters/intent" }
+emery-python = { path = "adapters/python" }
+emery-typescript = { path = "adapters/typescript" }
+emery-node = { path = "adapters/node" }
+emery-omnia = { path = "adapters/omnia" }
 test-programs.workspace = true
 tokio.workspace = true
 tracing.workspace = true

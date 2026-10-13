@@ -105,13 +105,13 @@ fn fenced_json<'d>(doc: &'d str, heading: &str) -> &'d str {
 
 #[test]
 fn emery_documentation() {
-    corpus(emery_documentation::PROSE, "emery-documentation", &["extract.md", "survey.md"]);
+    corpus(emery_documentation::PROSE, "documentation", &["extract.md", "survey.md"]);
     surveying(emery_documentation::PROSE);
 }
 
 #[test]
 fn emery_intent() {
-    corpus(emery_intent::PROSE, "emery-intent", &["extract.md"]);
+    corpus(emery_intent::PROSE, "intent", &["extract.md"]);
 }
 
 // `survey.md` is the prompt of the one survey turn a workspace opens, so its
@@ -119,19 +119,19 @@ fn emery_intent() {
 // `extract.md`'s is held to its Evidence.
 #[test]
 fn emery_typescript() {
-    corpus(emery_typescript::PROSE, "emery-typescript", &["extract.md", "survey.md"]);
+    corpus(emery_typescript::PROSE, "typescript", &["extract.md", "survey.md"]);
     surveying(emery_typescript::PROSE);
 }
 
 #[test]
 fn emery_python() {
-    corpus(emery_python::PROSE, "emery-python", &["extract.md", "survey.md"]);
+    corpus(emery_python::PROSE, "python", &["extract.md", "survey.md"]);
     surveying(emery_python::PROSE);
 }
 
 #[test]
 fn emery_node() {
-    target_corpus(emery_node::PROSE, "emery-node");
+    target_corpus(emery_node::PROSE, "node");
 }
 
 // The layout pins omnia once: every `omnia` crate the root manifest it spells
@@ -139,7 +139,7 @@ fn emery_node() {
 // resolves.
 #[test]
 fn emery_omnia() {
-    target_corpus(emery_omnia::PROSE, "emery-omnia");
+    target_corpus(emery_omnia::PROSE, "omnia");
 
     let layout = body(emery_omnia::PROSE, "references/layout.md").expect("the layout is listed");
     let pins: Vec<(&str, &str)> = layout
