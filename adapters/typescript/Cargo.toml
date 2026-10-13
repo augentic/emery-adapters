@@ -17,8 +17,8 @@ workspace = true
 
 [dependencies]
 emery-sdk.workspace = true
-oxc_allocator = "0.153.0"
-oxc_ast = "0.153.0"
-oxc_ast_visit = "0.153.0"
-oxc_parser = "0.153.0"
-oxc_span = "0.153.0"
+oxc_allocator = "0.154.0"
+oxc_ast = "0.154.0"
+oxc_ast_visit = "0.154.0"
+oxc_parser = "0.154.0"
+oxc_span = "0.154.0"
