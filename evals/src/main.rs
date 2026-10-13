@@ -5052,10 +5052,10 @@ mod tests {
         let filter = rust_log(["documentation", "typescript", "node"]);
         let targets: Vec<_> =
             filter.split(',').map(|part| part.split('=').next().unwrap()).collect();
-        assert!(targets.iter().any(|&target| target == "src_documentation"));
-        assert!(targets.iter().any(|&target| target == "src_typescript"));
-        assert!(targets.iter().any(|&target| target == "tgt_node"));
-        assert!(!targets.iter().any(|&target| target == "documentation"));
+        assert!(targets.contains(&"src_documentation"));
+        assert!(targets.contains(&"src_typescript"));
+        assert!(targets.contains(&"tgt_node"));
+        assert!(!targets.contains(&"documentation"));
     }
 
     #[test]
