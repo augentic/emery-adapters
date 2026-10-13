@@ -5,9 +5,9 @@
 
 fn main() {
     omnia_test::build::Components::in_workspace("../..")
-        .scan_packages("sources")
+        .packages(["emery-documentation", "emery-intent", "emery-typescript", "emery-python"])
         .group("adapter")
-        .scan_packages("targets")
+        .packages(["emery-node", "emery-omnia"])
         .group("target")
         .package("test-programs")
         .scan("crates/test-programs/programs")

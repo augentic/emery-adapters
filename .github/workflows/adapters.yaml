@@ -55,8 +55,11 @@ jobs:
         run: |
           set -euo pipefail
           version="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version *= *"\(.*\)"/\1/p' Cargo.toml)"
-          for dir in sources/*/ targets/*/; do
-            name="$(basename "$dir")"
-            # cargo spells a hyphenated crate's artifact with underscores
-            wkg oci push "ghcr.io/augentic/emery/$name:$version" "target/wasm32-wasip2/release/${name//-/_}.wasm"
+          publish() {
+            local kind="$1"
+            wkg oci push "ghcr.io/augentic/emery/${kind}:${version}" \
+              "target/wasm32-wasip2/release/emery_${kind}.wasm"
+          }
+          for kind in documentation intent typescript python node omnia; do
+            publish "$kind"
           done

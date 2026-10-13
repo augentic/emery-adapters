@@ -1,6 +1,6 @@
 # Contributing to emery-adapters
 
-Human-facing contributor guide (toolchain, layout, prompts, pin, publishing). The adapter shape, the contract rules, and test ownership live in [`AGENTS.md`](AGENTS.md); an existing `sources/<name>` is the template for a new one.
+Human-facing contributor guide (toolchain, layout, prompts, pin, publishing). The adapter shape, the contract rules, and test ownership live in [`AGENTS.md`](AGENTS.md); an existing `adapters/<kind>` crate is the template for a new one.
 
 ## Getting started
 
@@ -23,14 +23,15 @@ Unless you are fixing a known bug, discuss larger changes in a GitHub issue firs
 Every source adapter shares the same guest anatomy:
 
 ```text
-sources/
-  <name>/             # documentation, intent, typescript, python
+adapters/
+  <kind>/               # documentation, intent, typescript, python — crate `emery-<kind>`
     prose/            # agent-facing markdown (listed in src/lib.rs, embedded into the component)
       extract.md      # the one extraction pass, and the one extraction prompt
       survey.md       # the one survey prompt, where the model names the surfaces (typescript, python)
       references/     # lazy reference corpus; the shared runtime references are the SDK's, linked as <doc>.md
-    Cargo.toml        # `<name>` — adapter identity semver is its `version`
+    Cargo.toml        # crate `emery-<kind>`, package `emery:<kind>@<version>`
     src/              # lib.rs (`mod survey`, `Adapter` and its trait impl, PROSE, then the wasm32-only export macro) + survey.rs, the adapter's survey, and whatever the survey reads its source with as its children under survey/ (typescript and python alike: parse.rs and parse/walk.rs, resolve.rs, surface.rs — the SDK's `Recogniser`, which the SDK's `survey::seams` surveys and cuts through)
+  <kind>/               # node, omnia — crate `emery-<kind>`; build.md, verify.md, seed/ where applicable
 crates/test-programs/ # omnia's test-programs pattern: guest programs + the nested wasm32 build of every component
   programs/<group>/   # one scenario per file: source/extract.rs drives the component boundary, probe/ are fixture adapters
   src/                # lib.rs: the generated artifact table (native) / helpers.rs (wasm32)
@@ -38,7 +39,7 @@ crates/test-programs/ # omnia's test-programs pattern: guest programs + the nest
 tests/                # root suites: source.rs and target.rs (what each adapter decides, natively over its `Adapter`), component.rs (every built component once, under the runtime), probe.rs (the error arms, the lowering, the SDK's side of the boundary), prose.rs (every adapter's corpus)
   support/            # mod.rs — the one runner component.rs and probe.rs share (the deployment under the omnia runtime)
 examples/             # live walks: one emery.toml per adapter (plus one over all four) the shipped `emery` binary runs, and the fixtures they lend
-Cargo.toml            # the tests `emery-adapters` root package over crates/* + sources/*
+Cargo.toml            # the tests `emery-adapters` root package over adapters/* + crates/*
 ```
 
 Identity lives in the guest crate's `Cargo.toml` `version` (the shared `[workspace.package]` SemVer) and the package reference it publishes under (`emery:<name>@<semver>`). The compatibility floor is compiled into the `metadata` operation's record.
@@ -68,8 +69,8 @@ For sibling co-development against uncommitted engine changes, uncomment the pat
 ```bash
 make ci                    # exactly the CI jobs: fmt-check + lint + nextest + doctests + docs + cargo-vet + cargo-deny
 make check                 # local advisories: audit + fmt (rewrites) + lint + outdated + udeps
-cargo clippy -p documentation -p intent -p typescript -p python -p typescript-target -p omnia-target -p test-programs --lib --bins --examples --all-features --target wasm32-wasip2 -- -D warnings   # the guest side alone (`WASM32_PACKAGES` in mise.toml)
-cargo build -p <name> --target wasm32-wasip2 --release   # one adapter → target/wasm32-wasip2/release/<name>.wasm (the file the examples copy into the store)
+cargo clippy -p emery-documentation -p emery-intent -p emery-typescript -p emery-python -p emery-node -p emery-omnia -p test-programs --lib --bins --examples --all-features --target wasm32-wasip2 -- -D warnings   # the guest side alone (`WASM32_PACKAGES` in mise.toml)
+cargo build -p emery-<kind> --target wasm32-wasip2 --release   # one adapter → target/wasm32-wasip2/release/emery_<kind>.wasm (the file the examples copy into the store)
 cargo build --workspace --target wasm32-wasip2 --release   # every adapter
 ```
 

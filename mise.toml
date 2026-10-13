@@ -7,10 +7,10 @@ includes = ["git::https://github.com/augentic/toolkit.git//mise/rust.toml?ref=v0
 # The shared `lint-wasm` pass is over the guest side alone — every adapter
 # and the guest programs — because the root package and the `evals` harness
 # are native: the suites and the runner name host-only dependencies.
-# Add a new adapter here when it ships as a wasm32 guest component, a
-# source under `sources/` or a target under `targets/`.
+# Add a new adapter here when it ships as a wasm32 guest component under
+# `adapters/`.
 [env]
-WASM32_PACKAGES = "documentation intent python typescript typescript-target omnia-target test-programs"
+WASM32_PACKAGES = "emery-documentation emery-intent emery-python emery-typescript emery-node emery-omnia test-programs"
 
 # -------------------------------------
 # Adapter overrides
@@ -20,9 +20,12 @@ WASM32_PACKAGES = "documentation intent python typescript typescript-target omni
 # publishes to crates.io, and the train ships as Wasm OCI packages instead —
 # the same `wkg oci push` `.github/workflows/adapters.yaml` runs per component.
 [tasks.publish]
-description = "Push one release-built component to its GHCR tag: mise run publish <name>"
+description = "Push one release-built component to its GHCR tag: mise run publish <kind>"
 run = '''
-name="${1:?usage: make publish <name>}"
+kind="${1:?usage: make publish <kind>}"
+kind="${kind#emery-}"
 version="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version *= *"\(.*\)"/\1/p' Cargo.toml)"
-wkg oci push "ghcr.io/augentic/emery/$name:$version" "target/wasm32-wasip2/release/${name//-/_}.wasm"
+wasm="target/wasm32-wasip2/release/emery_${kind}.wasm"
+[ -f "$wasm" ] || { echo "no component at $wasm" >&2; exit 1; }
+wkg oci push "ghcr.io/augentic/emery/$kind:$version" "$wasm"
 '''

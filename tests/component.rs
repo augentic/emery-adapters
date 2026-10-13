@@ -15,7 +15,7 @@ use emery_sdk::{Doc, body};
 use omnia_test::Seen;
 use omnia_test::host::{Scratch, ScriptedModel, scratch};
 
-// Every `sources/*` and `targets/*` component must have a matching test here.
+// Every shipped adapter component must have a matching test here.
 test_programs::foreach_adapter!();
 test_programs::foreach_target!();
 
@@ -28,8 +28,7 @@ const CLAIM: &str =
 
 const REPORT: &str =
     r#"{"covered": ["REQ-001"], "written": ["src/orders/index.ts", "src/index.ts"]}"#;
-const OMNIA_REPORT: &str =
-    r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/lib.rs", "app/src/routes.rs"]}"#;
+const OMNIA_REPORT: &str = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/lib.rs"]}"#;
 const PASSED: &str = r#"{"passed": true, "failures": []}"#;
 
 // The survey answer a surveying adapter's first turn is scripted with: one
@@ -72,21 +71,21 @@ fn led(request: &Seen, docs: &[Doc], prompt: &str) {
 // derives at the anchor the answer named reaches the seam: the outline
 // reader ran as a guest over the lent tree.
 #[tokio::test]
-async fn documentation() {
+async fn emery_documentation() {
     let project = scratch();
     project.write("docs/orders.md", "# Orders\n\nPOST /orders creates an order.\n");
     let survey = inventory("Orders", "docs/orders.md#L1", "orders");
 
     let seen = extracted(
-        test_programs::ADAPTER_DOCUMENTATION,
-        documentation::PROSE,
+        test_programs::ADAPTER_EMERY_DOCUMENTATION,
+        emery_documentation::PROSE,
         &project,
         ScriptedModel::answering([&survey, CLAIM, CLAIM]),
         2,
     )
     .await;
 
-    led(&seen[0], documentation::PROSE, "survey.md");
+    led(&seen[0], emery_documentation::PROSE, "survey.md");
     assert!(
         seen[0].messages[0].contains("- `docs/orders.md` — 3 lines; prose alone"),
         "the outline read from the lent tree: {}",
@@ -102,13 +101,13 @@ async fn documentation() {
 
 // The brief is read through the mount, so the file reaches the turn whole.
 #[tokio::test]
-async fn intent() {
+async fn emery_intent() {
     let project = scratch();
     project.write("brief/intent.md", BRIEF);
 
     let seen = extracted(
-        test_programs::ADAPTER_INTENT,
-        intent::PROSE,
+        test_programs::ADAPTER_EMERY_INTENT,
+        emery_intent::PROSE,
         &project,
         ScriptedModel::answering([CLAIM, CLAIM]),
         1,
@@ -122,7 +121,7 @@ async fn intent() {
 // derives at the anchor the answer named reaches the seam: the parser and
 // the recogniser ran as a guest over the lent tree.
 #[tokio::test]
-async fn typescript() {
+async fn emery_typescript() {
     let project = scratch();
     project.write(
         "src/index.ts",
@@ -138,15 +137,15 @@ async fn typescript() {
     let survey = inventory("POST /api/orders", "src/routes.ts#L5-L7", "orders");
 
     let seen = extracted(
-        test_programs::ADAPTER_TYPESCRIPT,
-        typescript::PROSE,
+        test_programs::ADAPTER_EMERY_TYPESCRIPT,
+        emery_typescript::PROSE,
         &project,
         ScriptedModel::answering([&survey, CLAIM, CLAIM]),
         2,
     )
     .await;
 
-    led(&seen[0], typescript::PROSE, "survey.md");
+    led(&seen[0], emery_typescript::PROSE, "survey.md");
     let surface = "- Surface `POST /api/orders` — entry `src/routes.ts` — stem `orders`";
     assert!(
         seen[1].messages[0].contains(surface),
@@ -156,7 +155,7 @@ async fn typescript() {
 }
 
 #[tokio::test]
-async fn python() {
+async fn emery_python() {
     let project = scratch();
     project.write("app/__init__.py", "");
     project.write(
@@ -173,15 +172,15 @@ async fn python() {
     let survey = inventory("POST /api/orders", "app/routers/orders.py#L6-L8", "orders");
 
     let seen = extracted(
-        test_programs::ADAPTER_PYTHON,
-        python::PROSE,
+        test_programs::ADAPTER_EMERY_PYTHON,
+        emery_python::PROSE,
         &project,
         ScriptedModel::answering([&survey, CLAIM, CLAIM]),
         2,
     )
     .await;
 
-    led(&seen[0], python::PROSE, "survey.md");
+    led(&seen[0], emery_python::PROSE, "survey.md");
     let surface = "- Surface `POST /api/orders` — entry `app/routers/orders.py` — stem `orders`";
     assert!(
         seen[1].messages[0].contains(surface),
@@ -193,9 +192,9 @@ async fn python() {
 // The metadata lowers the merge rules; the build writes the mount through
 // `write_files`, and its report and the verdict lift back to the driver.
 #[tokio::test]
-async fn typescript_target() {
+async fn emery_node() {
     support::build(
-        test_programs::TARGET_TYPESCRIPT_TARGET,
+        test_programs::TARGET_EMERY_NODE,
         &scratch(),
         &["rules", "package-lock.json=ours", "src/index.ts=union", "**/index.ts=union"],
         ScriptedModel::default(),
@@ -210,25 +209,25 @@ async fn typescript_target() {
     .to_string();
     let model = ScriptedModel::answering([REPORT, PASSED]).calling(0, [("write_files", written)]);
 
-    let model = support::build(test_programs::TARGET_TYPESCRIPT_TARGET, &project, &[], model).await;
+    let model = support::build(test_programs::TARGET_EMERY_NODE, &project, &[], model).await;
 
     let seen = model.seen();
     assert_eq!(seen.len(), 2, "the build opens one completion, the verify one");
-    led(&seen[0], typescript_target::PROSE, "build.md");
-    led(&seen[1], typescript_target::PROSE, "verify.md");
+    led(&seen[0], emery_node::PROSE, "build.md");
+    led(&seen[1], emery_node::PROSE, "verify.md");
     assert!(seen.iter().all(|request| request.workspace.is_some()), "the mount is lent to both");
     for path in ["src/orders/index.ts", "src/index.ts"] {
         assert!(project.read(path).is_some(), "the tree holds `{path}` written through the lend");
     }
 }
 
-// The metadata lowers the five rules in order; the build writes a stem's list
-// and the root crate's router list through `write_files`, and its report and
-// the verdict lift back to the driver.
+// The metadata lowers the five rules in order; the build lays the seed in
+// the lent tree before its turn and writes a stem's list through
+// `write_files`, and its report and the verdict lift back to the driver.
 #[tokio::test]
-async fn omnia_target() {
+async fn emery_omnia() {
     support::build(
-        test_programs::TARGET_OMNIA_TARGET,
+        test_programs::TARGET_EMERY_OMNIA,
         &scratch(),
         &[
             "rules",
@@ -245,20 +244,29 @@ async fn omnia_target() {
     let project = scratch();
     let written = serde_json::json!({ "files": [
         { "path": "crates/orders/src/lib.rs", "content": "pub mod reading;\n" },
-        { "path": "app/src/routes.rs", "content": "    let router = app_orders::reading::mount(router);\n" },
     ]})
     .to_string();
     let model =
         ScriptedModel::answering([OMNIA_REPORT, PASSED]).calling(0, [("write_files", written)]);
 
-    let model = support::build(test_programs::TARGET_OMNIA_TARGET, &project, &[], model).await;
+    let model = support::build(test_programs::TARGET_EMERY_OMNIA, &project, &[], model).await;
 
     let seen = model.seen();
     assert_eq!(seen.len(), 2, "the build opens one completion, the verify one");
-    led(&seen[0], omnia_target::PROSE, "build.md");
-    led(&seen[1], omnia_target::PROSE, "verify.md");
+    led(&seen[0], emery_omnia::PROSE, "build.md");
+    led(&seen[1], emery_omnia::PROSE, "verify.md");
     assert!(seen.iter().all(|request| request.workspace.is_some()), "the mount is lent to both");
-    for path in ["crates/orders/src/lib.rs", "app/src/routes.rs"] {
-        assert!(project.read(path).is_some(), "the tree holds `{path}` written through the lend");
-    }
+    assert!(
+        project.read("crates/orders/src/lib.rs").is_some(),
+        "the tree holds the stem's list written through the lend"
+    );
+    let routes = emery_omnia::SEED
+        .iter()
+        .find(|seed| seed.path == "app/src/routes.rs")
+        .expect("the router list is a seed");
+    assert_eq!(
+        project.read("app/src/routes.rs").as_deref(),
+        Some(routes.content.as_bytes()),
+        "the seed reached the host's tree through the lend before the turn"
+    );
 }

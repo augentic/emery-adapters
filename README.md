@@ -3,7 +3,7 @@
 [![CI](https://github.com/augentic/emery-adapters/actions/workflows/ci.yaml/badge.svg)](https://github.com/augentic/emery-adapters/actions/workflows/ci.yaml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
-First-party Wasm components for [Emery](https://github.com/augentic/emery): the **source** adapters its specification generator reads — `documentation`, `intent`, `typescript`, and `python` — and the **target** adapters `emery build` builds through, `typescript-target` and `omnia-target`.
+First-party Wasm components for [Emery](https://github.com/augentic/emery): the **source** adapters its specification generator reads — `documentation`, `intent`, `typescript`, and `python` — and the **target** adapters `emery build` builds through, `node` and `omnia`.
 
 **Using Emery in a project?** You do not need this repository. Name a published adapter by package reference (`emery:<name>@<version>`) in the project's `emery.toml`; the `emery` binary fetches it on the first run that names it and reads it from `~/.emery/adapters` after. A build of your own goes there by `cp`, under a reference of its own (`~/.emery/adapters/emery_<name>@<version>-dev.wasm`); follow the [Emery README](https://github.com/augentic/emery#readme).
 
@@ -17,15 +17,15 @@ A source adapter is one Rust crate that ships as one Wasm component exporting th
 
 | Adapter                 | Kind          | Extracts                                                                                                                                |
 | ----------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `sources/documentation` | documentation | written specs, guides, ADRs — requirement / criterion / decision claims                                                                 |
-| `sources/intent`        | intent        | the operator's brief, verbatim plus its directives as requirement claims                                                                |
-| `sources/typescript`    | behaviour     | TS/JS estates — requirement claims backed by excerpt / type / call detail                                                               |
-| `sources/python`        | behaviour     | Python estates — FastAPI, Flask, Django, Click, Celery, and plain libraries — requirement claims backed by excerpt / type / call detail |
+| `adapters/documentation` | documentation | written specs, guides, ADRs — requirement / criterion / decision claims                                                                 |
+| `adapters/intent`        | intent        | the operator's brief, verbatim plus its directives as requirement claims                                                                |
+| `adapters/typescript`    | behaviour     | TS/JS estates — requirement claims backed by excerpt / type / call detail                                                               |
+| `adapters/python`        | behaviour     | Python estates — FastAPI, Flask, Django, Click, Celery, and plain libraries — requirement claims backed by excerpt / type / call detail |
 
 | Target                      | Builds                                                                                                                                                          |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `targets/typescript-target` | strict TypeScript on Node (22.18 or later): one module per slice under `src/<stem>/`, `node:test` tests per scenario, checked with `tsc --noEmit` and `npm test` |
-| `targets/omnia-target`      | an [omnia](https://github.com/augentic/omnia) HTTP guest in Rust: one crate per stem under `crates/<stem>/`, a part per slice, `#[tokio::test]` tests per scenario over the SDK's doubles, checked with `cargo clippy`, `cargo test`, and a `wasm32-wasip2` build |
+| `adapters/node` | strict TypeScript on Node (22.18 or later): one module per slice under `src/<stem>/`, `node:test` tests per scenario, checked with `tsc --noEmit` and `npm test` |
+| `adapters/omnia`      | an [omnia](https://github.com/augentic/omnia) HTTP guest in Rust: one crate per stem under `crates/<stem>/`, a part per slice, `#[tokio::test]` tests per scenario over the SDK's doubles, checked with `cargo clippy`, `cargo test`, and a `wasm32-wasip2` build |
 
 ## Rust-only loop
 
@@ -46,26 +46,26 @@ cargo nextest run -p emery-adapters --test component  # the shipped components a
 ```bash
 cargo build --workspace --target wasm32-wasip2 --release   # every component
 mkdir -p ~/.emery/adapters
-cp target/wasm32-wasip2/release/documentation.wasm ~/.emery/adapters/emery_documentation@0.13.0.wasm   # one per adapter the example names
+cp target/wasm32-wasip2/release/emery_documentation.wasm ~/.emery/adapters/emery_documentation@0.13.0.wasm   # one per adapter the example names
 emery specify --config examples/documentation/emery.toml  # or intent, typescript, python; examples/emery.toml runs all four
 emery show spec
 ```
 
 ## Graded live eval
 
-The live rung is a **public-contract client**: `evals/` spawns the sibling shipped `emery` binary over the built `typescript` or `python` component a case names, drives one `specify` per case across the adapter contract, grades the accepted claims and the surveyed surfaces against the case's `expected.toml` through `emery show`, and writes the dated scorecard. `--build` follows each graded `specify` with one `emery build` through the built target `--target` names (`typescript-target` unless told otherwise, `omnia-target` the other) into a bare repository the harness lays, and the card reads what was built, verified, and merged. Operator-invoked, never CI; see [evals/README.md](evals/README.md).
+The live rung is a **public-contract client**: `evals/` spawns the sibling shipped `emery` binary over the built `typescript` or `python` component a case names, drives one `specify` per case across the adapter contract, grades the accepted claims and the surveyed surfaces against the case's `expected.toml` through `emery show`, and writes the dated scorecard. `--build` follows each graded `specify` with one `emery build` through the built target `--target` names (`node` unless told otherwise, `omnia` the other) into a bare repository the harness lays, and the card reads what was built, verified, and merged. Operator-invoked, never CI; see [evals/README.md](evals/README.md).
 
 ```bash
 cargo run -p evals -- orders express-orders   # the named cases; none names every case whose fixture the checkout holds
 cargo run -p evals -- python                  # every case under one adapter
-cargo run -p evals -- --build express-orders  # specify, then build the plan through typescript-target
-cargo run -p evals -- --build --target omnia-target express-orders  # the same plan built as an omnia guest
+cargo run -p evals -- --build express-orders  # specify, then build the plan through node
+cargo run -p evals -- --build --target omnia express-orders  # the same plan built as an omnia guest
 ```
 
 ## Repair loop
 
-1. Edit `sources/<name>/prose/**` (the extract prompt, references, rules) or `targets/<name>/prose/**` (the build and verify prompts, the layout).
-2. `cargo nextest run -p emery-adapters` to re-run its suites; `cargo build -p <name> --target wasm32-wasip2 --release` to rebuild the shipped component and `cp` it over the `-dev` file in `~/.emery/adapters`; `emery specify --config examples/<name>/emery.toml` to watch it become a spec.
+1. Edit `adapters/<crate>/prose/**` — `src-*` adapters carry extract (and survey where applicable); `tgt-*` adapters carry build and verify prompts and the layout.
+2. `cargo nextest run -p emery-adapters` to re-run its suites; `cargo build -p <crate> --target wasm32-wasip2 --release` to rebuild the shipped component and `cp` it over the `-dev` file in `~/.emery/adapters`; `emery specify --config examples/<name>/emery.toml` to watch it become a spec.
 
 The native suites are the Rust inner loop and prove every adapter's own decisions, the component suite proves every built component once; the live examples show one adapter's claims becoming a specification; live eval is for prompt quality.
 

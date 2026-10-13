@@ -1,0 +1,18 @@
+[package]
+name = "emery-documentation"
+description = "Documentation source-adapter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[lints]
+workspace = true
+
+[dependencies]
+emery-sdk.workspace = true
