@@ -24,6 +24,11 @@
 //! it the same way before the checks run, and a verify whose repairs changed
 //! it fails with the lines named.
 //!
+//! The worker a turn's checks run in reaches the Rust toolchain beneath the
+//! operator's home, `~/.rustup` and `~/.cargo/bin`, with `RUSTUP_HOME` set
+//! to the former, and the crates.io index and its downloads through the
+//! backend's proxy; nothing else beyond the lent tree.
+//!
 //! # Merge rules
 //!
 //! - `Cargo.lock` keeps the integrated side; the next check regenerates it.
@@ -41,7 +46,7 @@ mod manifest;
 use std::borrow::Cow;
 
 use emery_sdk::target::{
-    Context, MergeRule, MergeStrategy, Report, Seed, TargetAdapter, Verdict, VerifyContext,
+    Context, MergeRule, MergeStrategy, Report, Seed, TargetAdapter, Verdict, VerifyContext, Worker,
 };
 use emery_sdk::{Error, Model, tracing};
 
@@ -99,6 +104,11 @@ impl TargetAdapter for Adapter {
             strategy: MergeStrategy::Union,
         },
     ];
+    const WORKER: Worker = Worker {
+        egress: &["index.crates.io", "static.crates.io"],
+        read: &["~/.rustup", "~/.cargo/bin"],
+        env: &[("RUSTUP_HOME", "~/.rustup")],
+    };
 
     async fn build<P: Model>(ctx: &Context<'_, P>) -> Result<Report, Error> {
         let mut report = emery_sdk::target::build(ctx, PROSE, SEED).await?;

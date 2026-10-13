@@ -11,9 +11,10 @@
 mod support;
 
 use emery_sdk::survey::{Inventory, Surface};
+use emery_sdk::target::TargetAdapter;
 use emery_sdk::{Doc, body};
-use omnia_test::Seen;
 use omnia_test::host::{Scratch, ScriptedModel, scratch};
+use omnia_test::{Seen, SeenWorker};
 
 // Every shipped adapter component must have a matching test here.
 test_programs::foreach_adapter!();
@@ -65,6 +66,16 @@ fn led(request: &Seen, docs: &[Doc], prompt: &str) {
     let body = body(docs, prompt).unwrap_or_else(|| panic!("`{prompt}` is in the adapter's PROSE"));
     let system = request.system.as_deref().expect("a system prompt");
     assert!(system.starts_with(body), "the compiled-in `{prompt}` leads the system");
+}
+
+// The worker grant a target's `WORKER` lowers through the world onto each
+// of its turns, as the host records it.
+fn granted<A: TargetAdapter>(seen: &[Seen]) {
+    let grant = A::WORKER.grant().map(SeenWorker::from);
+    assert!(grant.is_some(), "the shipped target spells what its worker reaches");
+    for request in seen {
+        assert_eq!(request.worker, grant, "the turn carries the adapter's worker grant");
+    }
 }
 
 // The survey turn opens first under `survey.md`, and the subject the code
@@ -190,7 +201,8 @@ async fn emery_python() {
 }
 
 // The metadata lowers the merge rules; the build writes the mount through
-// `write_files`, and its report and the verdict lift back to the driver.
+// `write_files`, its turns carry the worker grant, and its report and the
+// verdict lift back to the driver.
 #[tokio::test]
 async fn emery_node() {
     support::build(
@@ -216,6 +228,7 @@ async fn emery_node() {
     led(&seen[0], emery_node::PROSE, "build.md");
     led(&seen[1], emery_node::PROSE, "verify.md");
     assert!(seen.iter().all(|request| request.workspace.is_some()), "the mount is lent to both");
+    granted::<emery_node::Adapter>(&seen);
     for path in ["src/orders/index.ts", "src/index.ts"] {
         assert!(project.read(path).is_some(), "the tree holds `{path}` written through the lend");
     }
@@ -223,7 +236,8 @@ async fn emery_node() {
 
 // The metadata lowers the eleven rules in order; the build lays the seed in
 // the lent tree before its turn and writes a stem's list through
-// `write_files`, and its report and the verdict lift back to the driver.
+// `write_files`, its turns carry the worker grant, and its report and the
+// verdict lift back to the driver.
 #[tokio::test]
 async fn emery_omnia() {
     support::build(
@@ -262,6 +276,7 @@ async fn emery_omnia() {
     led(&seen[0], emery_omnia::PROSE, "build.md");
     led(&seen[1], emery_omnia::PROSE, "verify.md");
     assert!(seen.iter().all(|request| request.workspace.is_some()), "the mount is lent to both");
+    granted::<emery_omnia::Adapter>(&seen);
     assert!(
         project.read("crates/orders/src/lib.rs").is_some(),
         "the tree holds the stem's list written through the lend"

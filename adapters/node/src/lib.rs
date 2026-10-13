@@ -16,6 +16,11 @@
 //! checks over the integrated tree, repaired where they fail, and run again
 //! before the verdict.
 //!
+//! The worker a turn's checks run in reaches a Node installed beneath the
+//! operator's home by nvm, Volta, or fnm, with `VOLTA_HOME` set to Volta's
+//! root, and the npm registry through the backend's proxy; nothing else
+//! beyond the lent tree.
+//!
 //! # Merge rules
 //!
 //! - `package-lock.json` keeps the integrated side; the next check
@@ -29,7 +34,7 @@
 use std::borrow::Cow;
 
 use emery_sdk::target::{
-    Context, MergeRule, MergeStrategy, Report, TargetAdapter, Verdict, VerifyContext,
+    Context, MergeRule, MergeStrategy, Report, TargetAdapter, Verdict, VerifyContext, Worker,
 };
 use emery_sdk::{Error, Model};
 
@@ -51,6 +56,11 @@ impl TargetAdapter for Adapter {
             strategy: MergeStrategy::Union,
         },
     ];
+    const WORKER: Worker = Worker {
+        egress: &["registry.npmjs.org"],
+        read: &["~/.nvm/versions/node", "~/.volta", "~/.local/share/fnm"],
+        env: &[("VOLTA_HOME", "~/.volta")],
+    };
 
     async fn build<P: Model>(ctx: &Context<'_, P>) -> Result<Report, Error> {
         emery_sdk::target::build(ctx, PROSE, &[]).await
