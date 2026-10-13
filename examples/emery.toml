@@ -25,12 +25,16 @@ adapter = "emery:documentation@0.13.0"
 path = "documentation/docs/"
 
 # The target `emery build` builds every slice of the plan through: an omnia
-# HTTP guest in Rust, one crate per stem, built into this repository from its
-# sealed head unless `repository` and `branch` name another. Its checks run
+# HTTP guest in Rust, one crate per stem. The adapter lays a whole tree, so it
+# builds into a fresh repository — one whose root holds files alone — and a
+# build pointed at this checkout is refused as `base-not-fresh`. `repository`
+# and `branch` name that repository, and `remote` is where the label
+# `emery/<revision>` is pushed once every slice is merged; the bare repository
+# below is the one examples/README.md lays before the build. Its checks run
 # `cargo` inside the worker's boundary, which the adapter's worker grant opens
 # to the crates.io hosts and the rustup toolchain under `~/` (examples/README.md).
 [target]
 adapter = "emery:omnia@0.13.0"
-# repository = "git@github.com:acme/shop.git"
-# branch = "main"
-# remote = "origin"
+repository = "file:///tmp/emery-build.git"
+branch = "main"
+remote = "origin"

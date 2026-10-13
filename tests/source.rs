@@ -1400,6 +1400,111 @@ async fn typescript_survey_facts() {
     assert!(seen[2].workspace.is_none(), "the inline value lends nothing and is not surveyed");
 }
 
+// A module the bootstrap alone reaches that imports a package and registers
+// nothing — an upstream API client handed to the routes as a value, a
+// secret retriever — is laid among the facts as a service module with its
+// exports and packages, where a module importing no package and one a
+// registration locates are not; named at its export, it is a surface under
+// the survey's stem with an id per public method, so `start` no longer
+// carries it.
+#[tokio::test]
+async fn emery_typescript_service_modules() {
+    let project = scratch();
+    modules(
+        &project,
+        &[
+            ("package.json", "{\"name\":\"feed\",\"main\":\"src/index.ts\"}\n"),
+            (
+                "src/index.ts",
+                "import express from \"express\";\nimport { loadConfig } from \"./config\";\n\
+                 import { GtfsApi } from \"./gtfs\";\nimport { stopsRouter } from \"./routes\";\n\
+                 import { SecretRetriever } from \"./secrets\";\n\nconst config = \
+                 loadConfig();\nconst secrets = new SecretRetriever(config.vault);\nconst gtfs = \
+                 new GtfsApi(config.gtfsUrl, secrets);\nconst app = express();\napp.use(\"/api\", \
+                 stopsRouter(gtfs));\napp.listen(3000);\n",
+            ),
+            (
+                "src/gtfs.ts",
+                "import axios from \"axios\";\nimport type { SecretRetriever } from \
+                 \"./secrets\";\n\nexport class GtfsApi {\n  constructor(private readonly url: \
+                 string, private readonly secrets: SecretRetriever) {}\n\n  async stops(): \
+                 Promise<string[]> {\n    const token = await this.secrets.token();\n    const \
+                 response = await axios.get(this.url, { headers: { token } });\n    return \
+                 response.data;\n  }\n}\n",
+            ),
+            (
+                "src/secrets.ts",
+                "import { SecretClient } from \"@azure/keyvault-secrets\";\n\nexport class \
+                 SecretRetriever {\n  private readonly client: SecretClient;\n\n  \
+                 constructor(url: string) {\n    this.client = new SecretClient(url);\n  }\n\n  \
+                 async token(): Promise<string> {\n    return (await \
+                 this.client.getSecret(\"token\")).value ?? \"\";\n  }\n}\n",
+            ),
+            (
+                "src/config.ts",
+                "export function loadConfig() {\n  return { vault: process.env.VAULT_URL ?? \
+                 \"\", gtfsUrl: process.env.GTFS_URL ?? \"\" };\n}\n",
+            ),
+            (
+                "src/routes.ts",
+                "import { Router } from \"express\";\n\nexport function stopsRouter(gtfs: { \
+                 stops(): Promise<string[]> }) {\n  const router = Router();\n  \
+                 router.get(\"/stops\", async (req, res) => {\n    res.json(await \
+                 gtfs.stops());\n  });\n  return router;\n}\n",
+            ),
+        ],
+    );
+    let survey = inventory(
+        &[
+            ("GET /api/stops", "src/routes.ts#L5-L7", "stops"),
+            ("GtfsApi", "src/gtfs.ts#L4-L12", "gtfs-api"),
+            ("SecretRetriever", "src/secrets.ts#L3-L13", "secret-retriever"),
+        ],
+        &[],
+    );
+    let answer = claim("gtfs-api.stops");
+
+    let model = TYPESCRIPT.run(&project, Scripted::answering([&survey, &answer, &answer])).await;
+
+    let seen = model.seen();
+    let facts = &seen[0].messages[0];
+    for fact in [
+        "The bootstrap — the entry that runs something — is `src/index.ts`",
+        "- `src/gtfs.ts` exports `GtfsApi` (class) L4–L12, through `axios`\n",
+        "- `src/secrets.ts` exports `SecretRetriever` (class) L3–L13, through \
+         `@azure/keyvault-secrets`\n",
+    ] {
+        assert!(facts.contains(fact), "{fact} is among the facts: {facts}");
+    }
+    assert!(
+        !facts.contains("- `src/config.ts` exports"),
+        "a module importing no package is no service module: {facts}"
+    );
+    assert!(
+        !facts.contains("- `src/routes.ts` exports"),
+        "a module a registration locates is no service module: {facts}"
+    );
+    let turns = TYPESCRIPT.surveyed(&model, 1);
+    assert_eq!(
+        surfaces(&turns[0]),
+        [
+            ("start", "src/index.ts", "start"),
+            ("GET /api/stops", "src/routes.ts", "stops"),
+            ("GtfsApi", "src/gtfs.ts", "gtfs-api"),
+            ("SecretRetriever", "src/secrets.ts", "secret-retriever"),
+        ]
+    );
+    for note in [
+        ": exported class L4–L12; methods `stops` L7–L11; ids `gtfs-api`, `gtfs-api.stops`; \
+         reaches `src/secrets.ts`.",
+        ": exported class L3–L13; methods `token` L10–L12; ids `secret-retriever`, \
+         `secret-retriever.token`; reaches nothing beyond its entry.",
+        "; id `start`; reaches `src/config.ts`, `src/secrets.ts`, `src/gtfs.ts`, `src/routes.ts`.",
+    ] {
+        assert!(turns[0].contains(note), "{note} is in the brief: {}", turns[0]);
+    }
+}
+
 // The survey's stem stands where the code spells none at the anchor — a
 // route on `/`, a schedule led by a pattern — and gives way where it does:
 // a route's resource under its mount replaces the survey's reading, so the
@@ -3163,6 +3268,109 @@ async fn python_bootstrap() {
         "{}",
         turns[0]
     );
+}
+
+// A module the bootstrap alone reaches that imports a package and registers
+// nothing — an upstream API client, a secret retriever, and a settings
+// reader over the standard library alike, since the parser tells no library
+// from another — is laid among the facts as a service module with its
+// exports and the packages as imported, where one a decorator locates is
+// not; named at its export, it is a surface under the survey's stem with an
+// id per public method, so `start` no longer carries it.
+#[tokio::test]
+async fn emery_python_service_modules() {
+    let project = scratch();
+    modules(
+        &project,
+        &[
+            (
+                "pyproject.toml",
+                "[project]\nname = \"feed\"\n\n[project.scripts]\nfeed = \"feed.main:run\"\n",
+            ),
+            ("feed/__init__.py", ""),
+            (
+                "feed/main.py",
+                "from fastapi import FastAPI\n\nfrom .config import load_config\nfrom .gtfs \
+                 import GtfsApi\nfrom .routes import router\nfrom .secrets import \
+                 SecretRetriever\n\nconfig = load_config()\nsecrets = \
+                 SecretRetriever(config[\"vault\"])\ngtfs = GtfsApi(config[\"gtfs_url\"], \
+                 secrets)\napp = FastAPI()\napp.include_router(router)\n\n\ndef run() -> \
+                 None:\n    app.run()\n",
+            ),
+            (
+                "feed/gtfs.py",
+                "import httpx\n\nfrom .secrets import SecretRetriever\n\n\nclass GtfsApi:\n    \
+                 def __init__(self, url: str, secrets: SecretRetriever) -> None:\n        \
+                 self.url = url\n        self.secrets = secrets\n\n    def stops(self) -> \
+                 list[str]:\n        token = self.secrets.token()\n        response = \
+                 httpx.get(self.url, headers={\"token\": token})\n        return \
+                 response.json()\n",
+            ),
+            (
+                "feed/secrets.py",
+                "from azure.keyvault.secrets import SecretClient\n\n\nclass \
+                 SecretRetriever:\n    def __init__(self, url: str) -> None:\n        \
+                 self.client = SecretClient(url)\n\n    def token(self) -> str:\n        return \
+                 self.client.get_secret(\"token\").value or \"\"\n",
+            ),
+            (
+                "feed/config.py",
+                "import os\n\n\ndef load_config() -> dict[str, str]:\n    return {\"vault\": \
+                 os.environ.get(\"VAULT_URL\", \"\"), \"gtfs_url\": \
+                 os.environ.get(\"GTFS_URL\", \"\")}\n",
+            ),
+            (
+                "feed/routes.py",
+                "from fastapi import APIRouter\n\nrouter = APIRouter(prefix=\"/api\")\n\n\n\
+                 @router.get(\"/stops\")\ndef list_stops() -> list[str]:\n    return []\n",
+            ),
+        ],
+    );
+    let survey = inventory(
+        &[
+            ("GET /api/stops", "feed/routes.py#L6-L8", "stops"),
+            ("GtfsApi", "feed/gtfs.py#L6-L14", "gtfs-api"),
+            ("SecretRetriever", "feed/secrets.py#L4-L9", "secret-retriever"),
+        ],
+        &[],
+    );
+    let answer = claim("gtfs-api.stops");
+
+    let model = PYTHON.run(&project, Scripted::answering([&survey, &answer, &answer])).await;
+
+    let seen = model.seen();
+    let facts = &seen[0].messages[0];
+    for fact in [
+        "The bootstrap — the entry that runs something — is `feed/main.py`",
+        "- `feed/config.py` exports `load_config` (function) L4–L5, through `os`\n",
+        "- `feed/gtfs.py` exports `GtfsApi` (class) L6–L14, through `httpx`\n",
+        "- `feed/secrets.py` exports `SecretRetriever` (class) L4–L9, through \
+         `azure.keyvault.secrets`\n",
+    ] {
+        assert!(facts.contains(fact), "{fact} is among the facts: {facts}");
+    }
+    assert!(
+        !facts.contains("- `feed/routes.py` exports"),
+        "a module a decorator locates is no service module: {facts}"
+    );
+    let turns = PYTHON.surveyed(&model, 1);
+    assert_eq!(
+        surfaces(&turns[0]),
+        [
+            ("start", "feed/main.py", "start"),
+            ("GET /api/stops", "feed/routes.py", "stops"),
+            ("GtfsApi", "feed/gtfs.py", "gtfs-api"),
+            ("SecretRetriever", "feed/secrets.py", "secret-retriever"),
+        ]
+    );
+    for note in [
+        ": exported class L6–L14; methods `stops` L11–L14; ids `gtfs-api`, `gtfs-api.stops`; \
+         reaches `feed/secrets.py`.",
+        ": exported class L4–L9; methods `token` L8–L9; ids `secret-retriever`, \
+         `secret-retriever.token`; reaches nothing beyond its entry.",
+    ] {
+        assert!(turns[0].contains(note), "{note} is in the brief: {}", turns[0]);
+    }
 }
 
 // A console script whose function the entry module imports from a module of

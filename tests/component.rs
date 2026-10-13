@@ -200,15 +200,15 @@ async fn emery_python() {
     );
 }
 
-// The metadata lowers the merge rules; the build writes the mount through
-// `write_files`, its turns carry the worker grant, and its report and the
-// verdict lift back to the driver.
+// The metadata lowers the fresh base and the merge rules; the build writes
+// the mount through `write_files`, its turns carry the worker grant, and its
+// report and the verdict lift back to the driver.
 #[tokio::test]
 async fn emery_node() {
     support::build(
         test_programs::TARGET_EMERY_NODE,
         &scratch(),
-        &["rules", "package-lock.json=ours", "src/index.ts=union", "**/index.ts=union"],
+        &["metadata", "fresh", "package-lock.json=ours", "src/index.ts=union", "**/index.ts=union"],
         ScriptedModel::default(),
     )
     .await;
@@ -234,17 +234,18 @@ async fn emery_node() {
     }
 }
 
-// The metadata lowers the eleven rules in order; the build lays the seed in
-// the lent tree before its turn and writes a stem's list through
-// `write_files`, its turns carry the worker grant, and its report and the
-// verdict lift back to the driver.
+// The metadata lowers the fresh base and the eleven rules in order; the
+// build lays the seed in the lent tree before its turn and writes a stem's
+// list through `write_files`, its turns carry the worker grant, and its
+// report and the verdict lift back to the driver.
 #[tokio::test]
 async fn emery_omnia() {
     support::build(
         test_programs::TARGET_EMERY_OMNIA,
         &scratch(),
         &[
-            "rules",
+            "metadata",
+            "fresh",
             "Cargo.lock=ours",
             "Cargo.toml=union",
             "clippy.toml=union",

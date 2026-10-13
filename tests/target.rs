@@ -12,7 +12,7 @@
 use std::marker::PhantomData;
 
 use emery_sdk::target::{
-    Context, MergeStrategy, Report, Slice, TargetAdapter, Verdict, VerifyContext, Worker,
+    Base, Context, MergeStrategy, Report, Slice, TargetAdapter, Verdict, VerifyContext, Worker,
 };
 use emery_sdk::{Doc, Error, body};
 use omnia_sdk::model::ToolCall;
@@ -58,7 +58,7 @@ const OMNIA_PATH_CRATE_ANCHOR: &str = "common = { path = \"crates/common\" }\n";
 const OMNIA_PATH_CRATE_LINE: &str = "orders = { path = \"crates/orders\" }\n";
 const OMNIA_STEM_ANCHOR: &str = "tracing.workspace = true\n";
 const OMNIA_STEM_LINE: &str = "orders.workspace = true\n";
-const OMNIA_FAILED: &str = r#"{"passed": false, "failures": ["check 4 (cargo test --workspace): crates/orders/tests/reading.rs — `an_order_with_no_items_is_refused` fails: expected `bad_request`, got Ok"]}"#;
+const OMNIA_FAILED: &str = r#"{"passed": false, "failures": ["check 5 (cargo test --workspace): crates/orders/tests/reading.rs — `an_order_with_no_items_is_refused` fails: expected `bad_request`, got Ok"]}"#;
 // A pin of the root manifest and the edit a turn might put to it.
 const OMNIA_PIN: &str = "omnia-sdk = \"0.36.0\"\n";
 const OMNIA_PIN_EDITED: &str = "omnia-sdk = \"0.37.0\"\n";
@@ -361,6 +361,13 @@ fn node_rules() {
     );
 }
 
+// The layout is the whole of what the adapter lays, so it builds into a
+// fresh tree and never over a project.
+#[test]
+fn node_base() {
+    assert_eq!(emery_node::Adapter::BASE, Base::Fresh, "the base the adapter declares");
+}
+
 // What a build's or verify's worker reaches beyond the tree: the npm
 // registry, a Node installed beneath the home by nvm, Volta, or fnm, and
 // Volta's root named for it.
@@ -516,6 +523,13 @@ fn omnia_rules() {
         ],
         "the merge rules the adapter declares, in order"
     );
+}
+
+// The seed and the slices are the whole of what the adapter lays, so it
+// builds into a fresh tree and never over a project.
+#[test]
+fn omnia_base() {
+    assert_eq!(emery_omnia::Adapter::BASE, Base::Fresh, "the base the adapter declares");
 }
 
 // What a build's or verify's worker reaches beyond the tree: the crates.io

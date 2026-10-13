@@ -21,6 +21,10 @@
 //! root, and the npm registry through the backend's proxy; nothing else
 //! beyond the lent tree.
 //!
+//! The adapter builds into a fresh tree: the layout is the whole of what it
+//! lays, so it declares a [`Base::Fresh`] and the build refuses a base whose
+//! root holds a directory rather than lay the layout over a project.
+//!
 //! # Merge rules
 //!
 //! - `package-lock.json` keeps the integrated side; the next check
@@ -34,7 +38,7 @@
 use std::borrow::Cow;
 
 use emery_sdk::target::{
-    Context, MergeRule, MergeStrategy, Report, TargetAdapter, Verdict, VerifyContext, Worker,
+    Base, Context, MergeRule, MergeStrategy, Report, TargetAdapter, Verdict, VerifyContext, Worker,
 };
 use emery_sdk::{Error, Model};
 
@@ -42,6 +46,7 @@ use emery_sdk::{Error, Model};
 pub struct Adapter;
 
 impl TargetAdapter for Adapter {
+    const BASE: Base = Base::Fresh;
     const MERGE_RULES: &'static [MergeRule] = &[
         MergeRule {
             paths: Cow::Borrowed("package-lock.json"),

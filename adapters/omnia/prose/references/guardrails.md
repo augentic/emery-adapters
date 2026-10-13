@@ -31,7 +31,24 @@ The source a specification was read from may have been a process: a server that 
 - No route laid to stand for a lifecycle — `GET /ready`, `POST /start`, a probe that reports a flag — unless a requirement states the route itself; a route answering a requirement that states none is a surface the specification does not hold.
 - A requirement of this kind is covered where the host satisfies it as stated — a request is answered, a delivery is consumed — and left out of `covered` where the host satisfies it by needing nothing, never reported covered over a stub. The report says what the tree holds.
 
-The `start` stem's slice lays what is code under it, a health route a requirement states or a rule every handler calls, and the seed's entry, provider, and routers are the rest of `start`; it edits none of them, and it writes no module to stand for the program starting.
+## What `start` becomes
+
+The `start` stem is where a specification read from a process keeps what that process did at start-up: read its settings, build its clients, connect, listen, wire its monitoring, catch its signals. Each of those is one row below, and the row says what the `start` slice lays for it and how its report reads. The seed's entry, provider, and routers are the rest of `start`; the slice edits none of them, and it writes no module to stand for the program starting.
+
+| The source's `start` did | The slice lays | The requirement is |
+| --- | --- | --- |
+| read its configuration — environment variables, a settings file, a config object handed to every component | one `pub const` per setting after `ENV` in `crates/common/src/config.rs`, named for what it is, read by the handler that uses it through `Config::get` at the moment of use; no settings struct, no load at start | covered by the catalog and the reads |
+| held a credential or a secret retriever — a vault client, a key-vault reader, a token exchanged at start and refreshed | nothing of its own: the handler that needs the value reads it through `Config::get` or `Identity::access_token` where it uses it; no cache, no refresh, no watcher | covered where a handler reads it; left uncovered where the requirement states the retriever, the cache, or the refresh itself |
+| constructed a client to an upstream and handed it on — an API client, a gateway, a store connection | nothing under `start`: the stem that calls the upstream owns the call, as a function over `HttpRequest::fetch` or the store capability, constructed nowhere | that stem's; `start` covers nothing of it |
+| listened, bound a port, served, connected to a broker, subscribed | nothing: the host answers HTTP and deliveries through the two root lists | covered, by the seed and the host, as stated |
+| initialised monitoring — an APM agent, a metrics exporter, a logger, a tracer | nothing: the host collects what `tracing` emits | covered, where the requirement states that the program is observed; left uncovered where it states the agent or the exporter |
+| handled a signal, drained, stopped | nothing | left uncovered |
+| ran a periodic job — a poller, a scheduler, a cron | nothing, unless a requirement states a route or a topic the host calls for it, which is that requirement's handler | left uncovered otherwise |
+| declared a lifecycle type — a `Main`, an `App` with a `started` flag, a `Server` struct with `start` and `stop` | nothing: the type is not laid, whatever the design calls it | left uncovered |
+| answered a health or readiness route a requirement states by method and path | that route, in `crates/start/`, as any stem's | covered |
+| enforced a rule every route obeys — authentication, a body limit, a request log | a `pub fn` the module exports, called at the top of the handlers it guards through the `start` crate | covered, with the handlers' tests |
+
+So the `start` slice writes `crates/start/src/<part>.rs` and `crates/start/tests/<part>.rs` for the last two rows, the constants of the first in the catalog, and its lines in the lists, and nothing for any other row: a `crates/start/` holding a client, a connection, a loop, a scheduler, or a struct that starts and stops is a module the verify refuses, however its tests pass. A `start` slice whose requirements are all of the kind the host satisfies writes its catalog constants and reports `covered` for the rows that say so, with no module at all.
 
 ## Errors
 

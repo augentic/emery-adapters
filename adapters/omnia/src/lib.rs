@@ -29,6 +29,11 @@
 //! to the former, and the crates.io index and its downloads through the
 //! backend's proxy; nothing else beyond the lent tree.
 //!
+//! The adapter builds into a fresh tree: the seed and the slices are the
+//! whole of what it lays, so it declares a [`Base::Fresh`] and the build
+//! refuses a base whose root holds a directory rather than let the seed and
+//! the verify rewrite a project it was pointed at.
+//!
 //! # Merge rules
 //!
 //! - `Cargo.lock` keeps the integrated side; the next check regenerates it.
@@ -46,7 +51,8 @@ mod manifest;
 use std::borrow::Cow;
 
 use emery_sdk::target::{
-    Context, MergeRule, MergeStrategy, Report, Seed, TargetAdapter, Verdict, VerifyContext, Worker,
+    Base, Context, MergeRule, MergeStrategy, Report, Seed, TargetAdapter, Verdict, VerifyContext,
+    Worker,
 };
 use emery_sdk::{Error, Model, tracing};
 
@@ -58,6 +64,7 @@ const ROOT_MANIFEST: &str = include_str!("../seed/Cargo.toml");
 pub struct Adapter;
 
 impl TargetAdapter for Adapter {
+    const BASE: Base = Base::Fresh;
     const MERGE_RULES: &'static [MergeRule] = &[
         MergeRule {
             paths: Cow::Borrowed("Cargo.lock"),

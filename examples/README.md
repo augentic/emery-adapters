@@ -34,20 +34,35 @@ Swap the config for [intent](intent/emery.toml), [python](python/emery.toml), [d
 
 ### Build
 
-[emery.toml](emery.toml) names `emery:omnia` as the `[target]`. After the `specify` above, build the current plan through it:
+[emery.toml](emery.toml) names `emery:omnia` as the `[target]`. The adapter lays a whole tree, so it builds into a fresh repository: one whose root holds files alone, a `README.md` and a `.gitignore`. Lay a bare one with a root commit at the path the `[target]` table names:
+
+```bash
+git init --bare --initial-branch=main /tmp/emery-build.git
+git init --initial-branch=main /tmp/emery-build.seed
+cd /tmp/emery-build.seed
+printf '.emery/\ntarget/\n' > .gitignore
+printf '# shop\n' > README.md
+git add --all && git commit --message "Greenfield"
+git push -- /tmp/emery-build.git HEAD:refs/heads/main
+cd - && rm -rf /tmp/emery-build.seed
+```
+
+After the `specify` above, build the current plan into it:
 
 ```bash
 cp target/wasm32-wasip2/release/emery_omnia.wasm ~/.emery/adapters/emery_omnia@0.13.0.wasm
 
 cargo run --manifest-path ../emery/Cargo.toml -- build -v --config examples/emery.toml
 
-git log --oneline --first-parent HEAD..emery/<revision>
-git diff --stat HEAD emery/<revision>
+git -C /tmp/emery-build.git log --oneline --first-parent main..emery/<revision>
+git clone --branch emery/<revision> /tmp/emery-build.git /tmp/emery-build
 ```
 
-The result is the branch `emery/<revision>`. The checkout stays as it is. A checkout with changes outside `.emery/` and `.git/` is refused as `base-not-sealed`, with the paths named. To build into another repository, uncomment `repository`, `branch`, and `remote` in the `[target]` table.
+The result is the branch `emery/<revision>`, pushed to the bare repository as the `remote`. This checkout stays as it is. A `[target]` naming no `repository` builds from the checkout's own head, which the adapter refuses as `base-not-fresh` with the directories named, as it refuses any repository whose root holds a directory. A checkout with changes outside `.emery/` and `.git/` is refused as `base-not-sealed`, with the paths named.
 
 The checks run `cargo` inside the worker boundary: `index.crates.io` and `static.crates.io` through the proxy, and the toolchain under `~/.rustup` and `~/.cargo/bin` with `RUSTUP_HOME` set. A rustup install in those paths is enough.
+
+A build turn runs the toolchain as well as composing, so one can outlast `CURSOR_TIMEOUT_SECS`. Smaller slices are the fix — the engine floors a stem past twelve requirements at its sub-stems — and raising the variable for a build run is the fallback; it is process-wide, so it raises every turn's cap.
 
 ## Logging
 
@@ -87,7 +102,7 @@ Wall time varies. Pin `CURSOR_MODEL` when comparing prompts. Current numbers are
 
 | Variable                 | Default | Effect                                                       |
 | ------------------------ | ------- | ------------------------------------------------------------ |
-| `CURSOR_TIMEOUT_SECS`    | 600     | Cap per completion. A seam that hits it should be cut finer. |
+| `CURSOR_TIMEOUT_SECS`    | 600     | Cap per completion, build turns included. A seam that hits it should be cut finer; a build turn, sliced smaller. |
 | `CURSOR_INACTIVITY_SECS` | 120     | Cancels a stream silent while waiting on the bridge.         |
 | `CURSOR_MAX_AGENTS`      | 4       | Live bridge agents. Further completions queue.               |
 | `CURSOR_MODEL`           | `auto`  | Model for every completion.                                  |
