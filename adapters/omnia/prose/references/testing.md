@@ -90,11 +90,12 @@ let provider = Provider::default()
     .http(MatchedHttp::default().on(Method::GET, "https://rates.example/v1/NZD", upstream))
     .publish(Sink::default());
 
-let rate = Client::new("test", provider.clone())
+let seen = Client::new("test", provider.clone())
     .call(rate, RateQuery { currency: "NZD".to_owned() }, &Metadata::default())
     .await
     .expect("rated");
 
+assert_eq!(seen.currency, "NZD");
 assert_eq!(provider.http.requests().len(), 1);
 assert_eq!(provider.publish.sent()[0].0, "test-rates-seen.v1");
 ```

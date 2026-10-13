@@ -87,8 +87,8 @@ pub const ORDER_PLACED: &str = "orders-placed.v1";
 The handler is a `Handler` as a route's is, its input the payload decoded as JSON and its output dropped:
 
 ```rust
-use omnia_sdk::StateStore;
 use omnia_sdk::api::Context;
+use omnia_sdk::{StateStore, server_error};
 
 /// Reserve stock for a placed order.
 ///

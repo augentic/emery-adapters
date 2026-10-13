@@ -271,7 +271,7 @@ fn emery_omnia_exemplar() {
         let seed = omnia_seed(target);
         match (proof.as_str(), target.as_str()) {
             ("exact", _) => {
-                assert_eq!(seed, template, "`{target}` is the exemplar's byte for byte")
+                assert_eq!(seed, template, "`{target}` is the exemplar's byte for byte");
             }
             ("seed", "Cargo.toml") => {
                 for line in template.lines().filter(|line| !line.starts_with('#')) {
